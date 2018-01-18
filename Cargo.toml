@@ -1,0 +1,6 @@
+[package]
+name = "rtps"
+version = "0.1.0"
+authors = ["Klapeyron <tomasz.bartos@protonmail.com>"]
+
+[dependencies]
