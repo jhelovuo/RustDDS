@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["Klapeyron <tomasz.bartos@protonmail.com>"]
 
 [dependencies]
+cdr = { git = "https://github.com/hrektts/cdr-rs" }

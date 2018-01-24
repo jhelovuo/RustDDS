@@ -1,3 +1,5 @@
+extern crate cdr;
+
 mod common;
 mod history_cache;
 mod participant;
