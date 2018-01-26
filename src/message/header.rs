@@ -2,6 +2,8 @@ use common::protocol_id;
 use common::protocol_version;
 use common::vendor_id;
 use common::guid_prefix;
+use common::locator;
+use common::time;
 
 enum SubmessageKind {
     PAD = 0x01,
@@ -26,6 +28,55 @@ struct Header {
     guid_prefix: guid_prefix::GuidPrefix_t,
 }
 
+impl Header {
+    fn new(guid: guid_prefix::GuidPrefix_t) -> Header {
+        Header {
+            protocol_id: protocol_id::ProtocolId_t::PROTOCOL_RTPS,
+            protocol_version: protocol_version::PROTOCOLVERSION,
+            vendor_id: vendor_id::VENDOR_UNKNOWN,
+            guid_prefix: guid
+        }
+    }
+}
+
 struct SubmessageHeader {
-    
+    submessage_id: SubmessageKind,
+    // flags: SubmessageFlag, // TODO: finish type
+    submessage_length: usize
+}
+
+struct Receiver {
+    source_version: protocol_version::ProtocolVersion_t,
+    source_vendor_id: vendor_id::VendorId_t,
+    source_guid_prefix: guid_prefix::GuidPrefix_t,
+    dest_guid_pregix: guid_prefix::GuidPrefix_t,
+    unicast_reply_locator_list: locator::Locator_t,
+    multicast_reply_locator_list: locator::Locator_t,
+    have_timestamp: bool,
+    timestapm: time::Time_t
+}
+
+impl Receiver {
+    fn new(destination_guid_prefix: guid_prefix::GuidPrefix_t,
+           unicast_reply_locator: locator::Locator_t,
+           multicast_reply_locator: locator::Locator_t) -> Receiver {
+        Receiver {
+            source_version: protocol_version::PROTOCOLVERSION,
+            source_vendor_id: vendor_id::VENDOR_UNKNOWN,
+            source_guid_prefix: guid_prefix::GUIDPREFIX_UNKNOWN,
+            dest_guid_pregix: destination_guid_prefix,
+            unicast_reply_locator_list: locator::Locator_t {
+                kind: unicast_reply_locator.kind,
+                port: locator::LOCATOR_PORT_INVALID, // TODO: check if it is correct, page 35
+                address: unicast_reply_locator.address
+            },
+            multicast_reply_locator_list: locator::Locator_t {
+                kind: multicast_reply_locator.kind,
+                port: locator::LOCATOR_PORT_INVALID, // TODO: check if it is correct, page 35
+                address: multicast_reply_locator.address
+            },
+            have_timestamp: false,
+            timestapm: time::TIME_INVALID
+        }
+    }
 }
