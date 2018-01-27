@@ -4,6 +4,7 @@ use common::vendor_id;
 use common::guid_prefix;
 use common::locator;
 use common::time;
+use message::validity_trait::Validity;
 
 enum SubmessageKind {
     PAD = 0x01,
@@ -37,6 +38,35 @@ impl Header {
             guid_prefix: guid
         }
     }
+}
+
+impl Validity for Header {
+    fn valid(&self) -> bool {
+        !(self.protocol_id != protocol_id::ProtocolId_t::PROTOCOL_RTPS ||
+          self.protocol_version.major > protocol_version::PROTOCOLVERSION.major)
+    }
+}
+
+#[test]
+fn header_protocol_version_major() {
+    let mut header = Header::new(guid_prefix::GUIDPREFIX_UNKNOWN);
+
+    header.protocol_version = protocol_version::PROTOCOLVERSION_1_0;
+    assert!(header.valid());
+
+    header.protocol_version = protocol_version::PROTOCOLVERSION;
+    assert!(header.valid());
+
+    header.protocol_version.major += 1;
+    assert!(!header.valid());
+}
+
+#[test]
+fn header_protocol_id_same_as_rtps() {
+    let mut header = Header::new(guid_prefix::GUIDPREFIX_UNKNOWN);
+
+    header.protocol_id = protocol_id::ProtocolId_t::PROTOCOL_RTPS;
+    assert!(header.valid());
 }
 
 struct SubmessageHeader {
