@@ -4,4 +4,5 @@ version = "0.1.0"
 authors = ["Klapeyron <tomasz.bartos@protonmail.com>"]
 
 [dependencies]
+bit-set = "0.4.0"
 cdr = { git = "https://github.com/hrektts/cdr-rs" }

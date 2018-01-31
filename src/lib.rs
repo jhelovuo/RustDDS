@@ -1,4 +1,5 @@
 extern crate cdr;
+extern crate bit_set;
 
 mod common;
 mod history_cache;

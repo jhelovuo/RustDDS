@@ -1,2 +1,2 @@
 pub mod header;
-mod validity_trait;
+pub mod validity_trait;

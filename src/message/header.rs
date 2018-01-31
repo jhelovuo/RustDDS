@@ -32,7 +32,7 @@ struct Header {
 impl Header {
     fn new(guid: guid_prefix::GuidPrefix_t) -> Header {
         Header {
-            protocol_id: protocol_id::ProtocolId_t::PROTOCOL_RTPS,
+            protocol_id: protocol_id::PROTOCOL_RTPS,
             protocol_version: protocol_version::PROTOCOLVERSION,
             vendor_id: vendor_id::VENDOR_UNKNOWN,
             guid_prefix: guid
@@ -42,7 +42,7 @@ impl Header {
 
 impl Validity for Header {
     fn valid(&self) -> bool {
-        !(self.protocol_id != protocol_id::ProtocolId_t::PROTOCOL_RTPS ||
+        !(self.protocol_id != protocol_id::PROTOCOL_RTPS ||
           self.protocol_version.major > protocol_version::PROTOCOLVERSION.major)
     }
 }
@@ -65,7 +65,7 @@ fn header_protocol_version_major() {
 fn header_protocol_id_same_as_rtps() {
     let mut header = Header::new(guid_prefix::GUIDPREFIX_UNKNOWN);
 
-    header.protocol_id = protocol_id::ProtocolId_t::PROTOCOL_RTPS;
+    header.protocol_id = protocol_id::PROTOCOL_RTPS;
     assert!(header.valid());
 }
 

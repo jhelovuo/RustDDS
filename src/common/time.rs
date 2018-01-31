@@ -1,7 +1,7 @@
 #[derive(PartialOrd, PartialEq, Ord, Eq)]
 pub struct Time_t {
-    seconds: i64,
-    fraction: u64
+    seconds: i32,
+    fraction: u32
 }
 
 pub const TIME_ZERO: Time_t = Time_t { seconds: 0, fraction: 0 };
@@ -10,6 +10,6 @@ pub const TIME_INFINITE: Time_t = Time_t { seconds: 0x7FFFFFFF, fraction: 0xFFFF
 
 impl Time_t {
     fn value(&self) -> i64 {
-        self.seconds + ((self.fraction as i64) << 32)
+        self.seconds as i64 + ((self.fraction as i64) << 32)
     }
 }
