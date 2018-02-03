@@ -4,6 +4,7 @@ use common::vendor_id;
 use common::guid_prefix;
 use common::locator;
 use common::time;
+use common::submessage_flag;
 use message::validity_trait::Validity;
 
 enum SubmessageKind {
@@ -71,7 +72,7 @@ fn header_protocol_id_same_as_rtps() {
 
 struct SubmessageHeader {
     submessage_id: SubmessageKind,
-    // flags: SubmessageFlag, // TODO: finish type
+    flags: submessage_flag::SubmessageFlag,
     submessage_length: usize
 }
 
