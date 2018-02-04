@@ -1,6 +1,7 @@
 use std::ops::Add;
 use std::ops::Sub;
 use bit_set::BitSet;
+use message::validity_trait::Validity;
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct SequenceNumber_t {
@@ -91,6 +92,12 @@ impl SequenceNumberSet_t {
             return true;
         }
         return false;
+    }
+}
+
+impl Validity for SequenceNumberSet_t {
+    fn valid(&self) -> bool {
+        unimplemented!(); // TODO: finish me
     }
 }
 

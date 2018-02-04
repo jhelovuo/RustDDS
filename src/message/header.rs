@@ -7,22 +7,6 @@ use common::time;
 use common::submessage_flag;
 use message::validity_trait::Validity;
 
-enum SubmessageKind {
-    PAD = 0x01,
-    ACKNACK = 0x06,
-    HEARTBEAT = 0x07,
-    GAP = 0x08,
-    INFO_TS = 0x09,
-    INFO_SRC = 0x0c,
-    INFO_REPLAY_IP4 = 0x0d,
-    INFO_DST = 0x0e,
-    INFO_REPLAY = 0x0f,
-    NACK_FRAG = 0x12,
-    HEARTBEAT_FRAG = 0x13,
-    DATA = 0x15,
-    DATA_FRAG = 0x16
-}
-
 struct Header {
     protocol_id: protocol_id::ProtocolId_t,
     protocol_version: protocol_version::ProtocolVersion_t,
@@ -68,12 +52,6 @@ fn header_protocol_id_same_as_rtps() {
 
     header.protocol_id = protocol_id::PROTOCOL_RTPS;
     assert!(header.valid());
-}
-
-struct SubmessageHeader {
-    submessage_id: SubmessageKind,
-    flags: submessage_flag::SubmessageFlag,
-    submessage_length: usize
 }
 
 struct Receiver {
