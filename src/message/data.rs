@@ -25,26 +25,26 @@ impl Data {
     /// Indicates endianness. Returns true if big-endian,
     /// false if little-endian
     pub fn endianness_flag(&self) -> bool {
-        self.submessage_header.flags.flags[7]
+        self.submessage_header.flags.flags[0]
     }
 
     /// Indicates to the Reader the presence of a ParameterList
     /// containing QoS parameters that should be used to interpret
     /// the message
     pub fn inline_qos_flag(&self) -> bool {
-        self.submessage_header.flags.flags[6]
+        self.submessage_header.flags.flags[1]
     }
 
     /// Indicates to the Reader that the dataPayload submessage element
     /// contains the serialized value of the data-object
     pub fn data_flag(&self) -> bool {
-        self.submessage_header.flags.flags[5]
+        self.submessage_header.flags.flags[2]
     }
 
     /// Indicates to the Reader that the dataPayload submessage element
     /// contains the serialized value of the key of the data-object.
     pub fn key_flag(&self) -> bool {
-        self.submessage_header.flags.flags[4]
+        self.submessage_header.flags.flags[3]
     }
 }
 

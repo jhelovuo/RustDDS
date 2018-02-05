@@ -16,7 +16,7 @@ fn serialize_deserialize() {
     assert_eq!(encoded_be, encoded_le);
 
     /// verify order of bits
-    assert_eq!(0b10110100, encoded_be[0]);
+    assert_eq!(0b00101101_u8, encoded_be[0]);
 
     /// should serialize to single u8 value
     assert_eq!(1, encoded_le.len());
