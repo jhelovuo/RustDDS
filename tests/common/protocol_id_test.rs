@@ -5,6 +5,7 @@ extern crate cdr;
 use self::cdr::{CdrLe, CdrBe, Infinite, serialize, deserialize};
 use self::rtps::common::protocol_id::{ProtocolId_t, PROTOCOL_RTPS};
 use common::protocol_id_test::rtps::message::validity_trait::Validity;
+use common::tests::{remove_cdr_header};
 
 #[test]
 fn serialize_deserialize() {
@@ -14,10 +15,10 @@ fn serialize_deserialize() {
     let encoded_be = serialize::<_, _, CdrBe>(&protocol_id, Infinite).unwrap();
 
     /// serialization should not be endianness sensitive
-    // assert_eq!(encoded_be, encoded_le); // TODO: add serialize without cdr header
+    assert_eq!(remove_cdr_header(&encoded_be), remove_cdr_header(&encoded_le));
 
     /// verify sample from wireshark
-    assert_eq!(vec![0x52, 0x54, 0x50, 0x53], encoded_be);
+    assert_eq!(vec![0x52, 0x54, 0x50, 0x53], remove_cdr_header(&encoded_be));
 
     let decoded_le = deserialize::<ProtocolId_t>(&encoded_le[..]).unwrap();
     let decoded_be = deserialize::<ProtocolId_t>(&encoded_be[..]).unwrap();
