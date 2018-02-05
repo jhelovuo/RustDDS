@@ -40,6 +40,12 @@ impl Data {
     pub fn data_flag(&self) -> bool {
         self.submessage_header.flags.flags[5]
     }
+
+    /// Indicates to the Reader that the dataPayload submessage element
+    /// contains the serialized value of the key of the data-object.
+    pub fn key_flag(&self) -> bool {
+        self.submessage_header.flags.flags[4]
+    }
 }
 
 impl Validity for Data {

@@ -1,8 +1,8 @@
 use message::validity_trait::Validity;
 
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct ProtocolId_t {
-    protocol_id: [char;4]
+    pub protocol_id: [char;4]
 }
 
 pub const PROTOCOL_RTPS: ProtocolId_t = ProtocolId_t { protocol_id: ['R','T','P','S'] };

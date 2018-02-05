@@ -4,10 +4,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-mod common;
+pub mod common;
 mod history_cache;
 mod participant;
-mod message;
+pub mod message;
 
 #[cfg(test)]
 mod tests {
