@@ -8,7 +8,7 @@ use common::tests::{remove_cdr_header};
 
 #[test]
 fn serialize_deserialize() {
-    let submessage_flag = SubmessageFlag { flags: [true,false,true,true,false,true,false,false] };
+    let submessage_flag = SubmessageFlag { flags: 0b10110100_u8 };
 
     let encoded_le = serialize::<_, _, CdrLe>(&submessage_flag, Infinite).unwrap();
     let encoded_be = serialize::<_, _, CdrBe>(&submessage_flag, Infinite).unwrap();
@@ -17,7 +17,7 @@ fn serialize_deserialize() {
     assert_eq!(remove_cdr_header(&encoded_be), remove_cdr_header(&encoded_le));
 
     /// verify order of bits
-    assert_eq!(0b00101101_u8, remove_cdr_header(&encoded_be)[0]);
+    assert_eq!(0b10110100_u8, remove_cdr_header(&encoded_be)[0]);
 
     /// should serialize to single u8 value
     assert_eq!(1, remove_cdr_header(&encoded_le).len());
@@ -32,7 +32,7 @@ fn serialize_deserialize() {
 
 #[test]
 fn correct_bits_order() {
-    let submessage_flag = SubmessageFlag { flags: [true,false,true,true,false,true,false,false] };
-    assert!(submessage_flag.flags[0]);
-    assert!(!submessage_flag.flags[7]);
+    let submessage_flag = SubmessageFlag { flags: 0b10110100_u8 };
+    assert!(submessage_flag.flags & 0x01 == 0);
+    assert!(submessage_flag.flags & (1 << 7) != 0);
 }

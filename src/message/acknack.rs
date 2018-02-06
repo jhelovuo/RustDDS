@@ -24,7 +24,7 @@ struct AckNack {
 impl AckNack {
     /// Indicates endianness. Returns true if big-endian, false if little-endian
     pub fn endianness_flag(&self) -> bool {
-        self.submessage_header.flags.flags[0]
+        self.submessage_header.flags.flags & 0x01 != 0
     }
 }
 

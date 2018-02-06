@@ -21,5 +21,5 @@ pub enum SubmessageKind {
 pub struct SubmessageHeader {
     pub submessage_id: SubmessageKind,
     pub flags: submessage_flag::SubmessageFlag,
-    pub submessage_length: usize
+    pub submessage_length: u16
 }
