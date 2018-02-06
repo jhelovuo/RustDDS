@@ -5,7 +5,7 @@ pub struct Locator_t {
     pub address: [u8; 16]
 }
 
-type LocatorList_t = Vec<Locator_t>;
+pub type LocatorList_t = Vec<Locator_t>;
 
 pub const LOCATOR_INVALID: Locator_t = Locator_t { kind: LOCATOR_KIND_INVALID,
                                                    port: LOCATOR_PORT_INVALID,
