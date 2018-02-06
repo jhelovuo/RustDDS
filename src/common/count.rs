@@ -1,4 +1,4 @@
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Count_t {
-    value: i32
+    pub value: i32
 }

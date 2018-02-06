@@ -5,8 +5,8 @@ use self::time::Timespec;
 
 #[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Time_t {
-    seconds: i32,
-    fraction: u32
+    pub seconds: i32,
+    pub fraction: u32
 }
 
 pub const TIME_ZERO: Time_t = Time_t { seconds: 0, fraction: 0 };
