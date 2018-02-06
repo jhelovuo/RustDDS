@@ -14,10 +14,10 @@ use message::validity_trait::Validity;
 /// of the data-object.
 struct Data {
     submessage_header: SubmessageHeader,
-    reader_id: EntityId_t,
-    writer_id: EntityId_t,
-    writer_sn: SequenceNumber_t,
-    inline_qos: ParameterList,
+    pub reader_id: EntityId_t,
+    pub writer_id: EntityId_t,
+    pub writer_sn: SequenceNumber_t,
+    pub inline_qos: ParameterList,
     // serialized_payload: SerializedPayload // TODO: add type
 }
 
