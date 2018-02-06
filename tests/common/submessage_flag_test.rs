@@ -33,6 +33,10 @@ fn serialize_deserialize() {
 #[test]
 fn correct_bits_order() {
     let submessage_flag = SubmessageFlag { flags: 0b10110100_u8 };
+
     assert!(submessage_flag.flags & 0x01 == 0);
+    assert!(submessage_flag.flags & (1 << 0) == 0);
+
+    assert!(submessage_flag.flags & 0x80 != 0);
     assert!(submessage_flag.flags & (1 << 7) != 0);
 }
