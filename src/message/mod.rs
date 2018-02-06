@@ -5,5 +5,6 @@ pub mod header;
 pub mod heartbeat;
 pub mod info_destination;
 pub mod info_reply;
+pub mod info_source;
 pub mod submessage_header;
 pub mod validity_trait;
