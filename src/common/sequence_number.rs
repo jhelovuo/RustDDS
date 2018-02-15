@@ -1,9 +1,10 @@
 use std::ops::Add;
 use std::ops::Sub;
+use std::cmp::Ordering;
 use bit_set::BitSet;
 use message::validity_trait::Validity;
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SequenceNumber_t {
     pub high: i32,
     pub low: u32
@@ -65,6 +66,22 @@ impl Sub<SequenceNumber_t> for SequenceNumber_t {
         SequenceNumber_t {
             high: self.high - other.high,
             low: self.low - other.low
+        }
+    }
+}
+
+impl PartialOrd for SequenceNumber_t {
+    fn partial_cmp(&self, other: &SequenceNumber_t) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SequenceNumber_t {
+    fn cmp(&self, other: &SequenceNumber_t) -> Ordering {
+        match self.high.cmp(&other.high) {
+            Ordering::Equal => self.low.cmp(&other.low),
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater
         }
     }
 }
@@ -153,6 +170,30 @@ fn sequeance_number_subtraction_with_other_sequence_number_with_wrap() {
     let left = SequenceNumber_t { high: 0, low: 0 };
     let right = SequenceNumber_t { high: 0, low: 10 };
     left - right;
+}
+
+#[test]
+fn sequeance_number_compare_with_other_sequence_number() {
+    assert!(SequenceNumber_t { high: 0, low: 0 } == SequenceNumber_t { high: 0, low: 0 });
+    assert!(SequenceNumber_t { high: 0, low: 0 } != SequenceNumber_t { high: 0, low: 1 });
+    assert!(SequenceNumber_t { high: 0, low: 0 } != SequenceNumber_t { high: 1, low: 0 });
+    assert!(SequenceNumber_t { high: 0, low: 0 } != SequenceNumber_t { high: 1, low: 1 });
+
+    assert!(SequenceNumber_t { high: 0, low: 0 } < SequenceNumber_t { high: 0, low: 1 });
+    assert!(SequenceNumber_t { high: 0, low: 0 } < SequenceNumber_t { high: 1, low: 0 });
+    assert!(SequenceNumber_t { high: 0, low: 0 } < SequenceNumber_t { high: 1, low: 1 });
+    assert!(SequenceNumber_t { high: 0, low: 1 } > SequenceNumber_t { high: 0, low: 0 });
+    assert!(SequenceNumber_t { high: 0, low: 1 } == SequenceNumber_t { high: 0, low: 1 });
+    assert!(SequenceNumber_t { high: 0, low: 1 } < SequenceNumber_t { high: 1, low: 0 });
+    assert!(SequenceNumber_t { high: 0, low: 1 } < SequenceNumber_t { high: 1, low: 1 });
+
+    assert!(SequenceNumber_t { high: 1, low: 0 } > SequenceNumber_t { high: 0, low: 0 });
+    assert!(SequenceNumber_t { high: 1, low: 0 } > SequenceNumber_t { high: 0, low: 1 });
+    assert!(SequenceNumber_t { high: 1, low: 0 } == SequenceNumber_t { high: 1, low: 0 });
+    assert!(SequenceNumber_t { high: 1, low: 0 } < SequenceNumber_t { high: 1, low: 1 });
+    assert!(SequenceNumber_t { high: 1, low: 1 } > SequenceNumber_t { high: 0, low: 0 });
+    assert!(SequenceNumber_t { high: 1, low: 1 } > SequenceNumber_t { high: 0, low: 1 });
+    assert!(SequenceNumber_t { high: 1, low: 1 } > SequenceNumber_t { high: 1, low: 0 });
 }
 
 #[test]

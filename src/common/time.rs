@@ -1,9 +1,10 @@
 extern crate time;
 
 use std::convert::{From, Into};
+use std::cmp::Ordering;
 use self::time::Timespec;
 
-#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Time_t {
     pub seconds: i32,
     pub fraction: u32
@@ -35,6 +36,22 @@ impl Into<time::Timespec> for Time_t {
         time::Timespec {
             sec: self.seconds as i64,
             nsec: self.fraction as i32
+        }
+    }
+}
+
+impl PartialOrd for Time_t {
+    fn partial_cmp(&self, other: &Time_t) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Time_t {
+    fn cmp(&self, other: &Time_t) -> Ordering {
+        match self.seconds.cmp(&other.seconds) {
+            Ordering::Equal => self.fraction.cmp(&other.fraction),
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater
         }
     }
 }
