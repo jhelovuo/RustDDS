@@ -114,7 +114,7 @@ impl SequenceNumberSet_t {
 
 impl Validity for SequenceNumberSet_t {
     fn valid(&self) -> bool {
-        unimplemented!(); // TODO: finish me
+        true // no need to check as long as insert verifies max value
     }
 }
 

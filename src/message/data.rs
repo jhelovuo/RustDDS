@@ -50,8 +50,8 @@ impl Data {
 
 impl Validity for Data {
     fn valid(&self) -> bool {
-        // TODO: finish validity self.writer_sn >= 0 && self.inline_qos.valid()
-        // TODO: add D=1 and K=1 is an invalid combination in this version of the protocol.
-        unimplemented!();
+        self.writer_sn.low >= 0 &&
+        // TODO: self.inline_qos.valid() &&
+            !(self.data_flag() && self.key_flag())
     }
 }

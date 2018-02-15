@@ -36,6 +36,6 @@ impl Gap {
 
 impl Validity for Gap {
     fn valid(&self) -> bool {
-        self.gap_list.valid() && self.gap_start.value() > 0 // TODO: check value to operators
+        self.gap_list.valid() && self.gap_start.value() > 0 // TODO: change value to operators
     }
 }
