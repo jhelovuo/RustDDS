@@ -23,7 +23,7 @@ impl InfoTimestamp {
     /// Indicates whether subsequent Submessages should be considered 
     /// as having a timestamp or not.
     pub fn invalidate_flag(&self) -> bool {
-        self.submessage_header.flags.flags & 0x01 != 0
+        self.submessage_header.flags.flags & 0x02 != 0
     }
 }
 
