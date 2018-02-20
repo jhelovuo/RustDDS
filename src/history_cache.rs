@@ -57,7 +57,7 @@ fn add_change_test() {
     let cache_change = CacheChange {
         kind: change_kind::ChangeKind_t::ALIVE,
         writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t {},
+        instanceHandle: instance_handle::InstanceHandle_t::default(),
         sequenceNumber: sequence_number::SEQUENCENUMBER_UNKNOWN,
         data_value: Data {}
     };
@@ -77,7 +77,7 @@ fn remove_change_test() {
     let cache_change = CacheChange {
         kind: change_kind::ChangeKind_t::ALIVE,
         writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t {},
+        instanceHandle: instance_handle::InstanceHandle_t::default(),
         sequenceNumber: sequence_number::SequenceNumber_t { high: 5, low: 1 },
         data_value: Data {}
     };
@@ -87,7 +87,7 @@ fn remove_change_test() {
     let cache_change = CacheChange {
         kind: change_kind::ChangeKind_t::ALIVE,
         writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t {},
+        instanceHandle: instance_handle::InstanceHandle_t::default(),
         sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
         data_value: Data {}
     };
@@ -105,7 +105,7 @@ fn get_seq_num_min() {
     let small_cache_change = CacheChange {
         kind: change_kind::ChangeKind_t::ALIVE,
         writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t {},
+        instanceHandle: instance_handle::InstanceHandle_t::default(),
         sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
         data_value: Data {}
     };
@@ -114,7 +114,7 @@ fn get_seq_num_min() {
     let big_cache_change = CacheChange {
         kind: change_kind::ChangeKind_t::ALIVE,
         writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t {},
+        instanceHandle: instance_handle::InstanceHandle_t::default(),
         sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
         data_value: Data {}
     };
@@ -133,7 +133,7 @@ fn get_seq_num_max() {
     let small_cache_change = CacheChange {
         kind: change_kind::ChangeKind_t::ALIVE,
         writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t {},
+        instanceHandle: instance_handle::InstanceHandle_t::default(),
         sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
         data_value: Data {}
     };
@@ -150,7 +150,7 @@ fn get_seq_num_max() {
                 entityKey: [0x00; 12]
             }
         },
-        instanceHandle: instance_handle::InstanceHandle_t {},
+        instanceHandle: instance_handle::InstanceHandle_t::default(),
         sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
         data_value: Data {}
     };
