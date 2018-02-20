@@ -56,7 +56,7 @@ impl HeartBeat {
     /// Indicates that the DDS DataWriter associated with the RTPS
     /// Writer of the message has manually asserted its LIVELINESS
     pub fn liveliness_flag(&self) -> bool {
-        self.submessage_header.flags.flags & 0x02 != 0
+        self.submessage_header.flags.flags & 0x04 != 0
     }
 }
 
