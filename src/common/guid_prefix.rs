@@ -4,3 +4,11 @@ pub struct GuidPrefix_t {
 }
 
 pub const GUIDPREFIX_UNKNOWN: GuidPrefix_t = GuidPrefix_t { entityKey: [0x00; 12] };
+
+impl Default for GuidPrefix_t {
+    fn default() -> GuidPrefix_t {
+        GuidPrefix_t {
+            entityKey: [0x00; 12]
+        }
+    }
+}
