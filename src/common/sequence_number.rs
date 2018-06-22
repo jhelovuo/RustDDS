@@ -123,7 +123,9 @@ impl SequenceNumberSet_t {
 
 impl Validity for SequenceNumberSet_t {
     fn valid(&self) -> bool {
-        true // no need to check as long as insert verifies max value
+        self.base.value() >= 1 &&
+            0 < self.num_bits &&
+            self.num_bits <= 256
     }
 }
 
