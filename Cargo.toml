@@ -7,5 +7,5 @@ authors = ["Klapeyron <tomasz.bartos@protonmail.com>"]
 time = "0.1.39"
 serde = "1.0.27"
 serde_derive = "1.0.27"
-bit-set = "0.4.0"
+bit-set = "0.5.0"
 cdr = { git = "https://github.com/hrektts/cdr-rs" }

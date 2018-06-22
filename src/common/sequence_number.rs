@@ -18,6 +18,15 @@ impl SequenceNumber_t {
     }
 }
 
+impl Default for SequenceNumber_t {
+    fn default() -> SequenceNumber_t {
+        SequenceNumber_t {
+            high: 0,
+            low: 1
+        }
+    }
+}
+
 impl Add<u32> for SequenceNumber_t {
     type Output = SequenceNumber_t;
 
@@ -93,11 +102,11 @@ pub struct SequenceNumberSet_t {
 }
 
 impl SequenceNumberSet_t {
-    pub fn new(new_base: SequenceNumber_t, number_of_bits: usize) -> SequenceNumberSet_t {
+    pub fn new(new_base: SequenceNumber_t) -> SequenceNumberSet_t {
         SequenceNumberSet_t {
             base: new_base,
-            num_bits: number_of_bits as u32,
-            set: BitSet::with_capacity(number_of_bits)
+            num_bits: 256,
+            set: BitSet::with_capacity(256)
         }
     }
 
@@ -116,6 +125,14 @@ impl Validity for SequenceNumberSet_t {
     fn valid(&self) -> bool {
         true // no need to check as long as insert verifies max value
     }
+}
+
+#[test]
+fn sequence_number_starts_by_default_from_one() {
+    let default_sequence_number = SequenceNumber_t::default();
+    assert_eq!(SequenceNumber_t { high: 0, low: 1}, default_sequence_number);
+    assert_eq!(SequenceNumber_t { high: 0, low: 1}, default_sequence_number);
+    assert_eq!(1, default_sequence_number.value());
 }
 
 #[test]
@@ -198,10 +215,11 @@ fn sequeance_number_compare_with_other_sequence_number() {
 
 #[test]
 fn sequence_number_set_insert() {
-    let mut sequence_number_set = SequenceNumberSet_t::new(SequenceNumber_t{
-        high: 0,
-        low: 10
-    }, 32);
+    let mut sequence_number_set = SequenceNumberSet_t::new(
+        SequenceNumber_t{
+            high: 0,
+            low: 10
+    });
 
     assert!(sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 20 }));
     assert!(sequence_number_set.set.contains(20-10));
