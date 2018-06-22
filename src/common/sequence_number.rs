@@ -32,6 +32,7 @@ impl Add<u32> for SequenceNumber_t {
 
     fn add(self, other: u32) -> SequenceNumber_t {
         let (new_low, overflow) = self.low.overflowing_add(other);
+
         SequenceNumber_t {
             high: match overflow {
                 true => self.high + 1,
@@ -46,9 +47,13 @@ impl Add<SequenceNumber_t> for SequenceNumber_t {
     type Output = SequenceNumber_t;
 
     fn add(self, other: SequenceNumber_t) -> SequenceNumber_t {
+        let (new_low, overflow) = self.low.overflowing_add(other.low);
         SequenceNumber_t {
-            high: self.high + other.high,
-            low: self.low + other.low
+            high: match overflow {
+                true => self.high + other.high + 1,
+                false => self.high + other.high
+            },
+            low: new_low
         }
     }
 }
@@ -72,9 +77,13 @@ impl Sub<SequenceNumber_t> for SequenceNumber_t {
     type Output = SequenceNumber_t;
 
     fn sub(self, other: SequenceNumber_t) -> SequenceNumber_t {
+        let (new_low, overflow) = self.low.overflowing_sub(other.low);
         SequenceNumber_t {
-            high: self.high - other.high,
-            low: self.low - other.low
+            high: match overflow {
+                true => self.high - other.high - 1,
+                false => self.high - other.high
+            },
+            low: new_low
         }
     }
 }

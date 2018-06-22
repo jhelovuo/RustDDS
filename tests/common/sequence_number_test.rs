@@ -29,11 +29,18 @@ fn sequence_number_addition_with_other_sequence_number() {
 }
 
 #[test]
+fn sequeance_number_addition_with_other_sequence_number_with_low_wrap() {
+    let left = SequenceNumber_t { high: 0, low: <u32>::max_value() };
+    let right = SequenceNumber_t { high: 0, low: 1 };
+    assert_eq!(SequenceNumber_t { high: 1, low: 0 }, left+right);
+}
+
+#[test]
 #[should_panic]
-fn sequeance_number_addition_with_other_sequence_number_with_wrap() {
+fn sequeance_number_addition_with_other_sequence_number_with_high_wrap() {
     let left = SequenceNumber_t { high: <i32>::max_value(), low: <u32>::max_value() };
     let right = SequenceNumber_t { high: 0, low: 1 };
-    left + right;
+    left+right;
 }
 
 #[test]
@@ -56,11 +63,18 @@ fn sequence_number_subtraction_with_other_sequence_number() {
 }
 
 #[test]
+fn sequeance_number_subtraction_with_other_sequence_number_with_low_wrap() {
+    let left = SequenceNumber_t { high: 0, low: <u32>::min_value() };
+    let right = SequenceNumber_t { high: 0, low: 1 };
+    assert_eq!(SequenceNumber_t { high: -1, low: <u32>::max_value() }, left-right);
+}
+
+#[test]
 #[should_panic]
-fn sequeance_number_subtraction_with_other_sequence_number_with_wrap() {
-    let left = SequenceNumber_t { high: 0, low: 0 };
-    let right = SequenceNumber_t { high: 0, low: 10 };
-    left - right;
+fn sequeance_number_subtraction_with_other_sequence_number_with_high_wrap() {
+    let left = SequenceNumber_t { high: <i32>::min_value(), low: <u32>::min_value() };
+    let right = SequenceNumber_t { high: 0, low: 1 };
+    left-right;
 }
 
 #[test]
