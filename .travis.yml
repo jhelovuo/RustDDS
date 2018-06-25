@@ -8,3 +8,7 @@ rust:
 script:
   - cargo build
   - cargo test
+matrix:
+  allow_failures:
+    - rust: nightly
+
