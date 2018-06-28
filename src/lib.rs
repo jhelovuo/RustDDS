@@ -7,6 +7,7 @@ extern crate serde_derive;
 pub mod common;
 mod history_cache;
 mod participant;
+pub mod message_receiver;
 pub mod message;
 
 #[cfg(test)]

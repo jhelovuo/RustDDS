@@ -1,4 +1,4 @@
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct VendorId_t {
     pub vendorId: [u8; 2]
 }

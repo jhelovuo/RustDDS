@@ -1,4 +1,4 @@
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct GuidPrefix_t {
     pub entityKey: [u8; 12],
 }
