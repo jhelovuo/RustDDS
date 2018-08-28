@@ -1,10 +1,17 @@
 use std::ops::Add;
 use std::ops::Sub;
+use std::ops::{Deref, DerefMut};
 use std::cmp::Ordering;
 use bit_set::BitSet;
+use bit_vec::BitVec;
 use message::validity_trait::Validity;
+use serde::ser::{Serialize, Serializer, SerializeStruct, SerializeSeq};
+use serde::de::{self, Deserialize, Deserializer, Visitor, SeqAccess};
+use std::{cmp, fmt};
+use std::convert::{From, Into};
+use std::marker::PhantomData;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SequenceNumber_t {
     pub high: i32,
     pub low: u32
@@ -104,18 +111,80 @@ impl Ord for SequenceNumber_t {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct SequenceNumberSet_t {
     base: SequenceNumber_t,
-    num_bits: u32,
-    set: BitSet
+    set: BitSetRef
+}
+
+struct BitSetRef(BitSet);
+
+impl From<BitSet> for BitSetRef {
+    fn from(bit_set: BitSet) -> Self {
+        BitSetRef(bit_set)
+    }
+}
+
+impl Deref for BitSetRef {
+    type Target = BitSet;
+
+    fn deref(&self) -> &BitSet {
+        &self.0
+    }
+}
+
+impl DerefMut for BitSetRef {
+    fn deref_mut(&mut self) -> &mut BitSet {
+        &mut self.0
+    }
+}
+
+impl Serialize for BitSetRef {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut sequence = serializer.serialize_seq(Some(self.capacity()))?;
+        for byte in self.iter()
+        {
+            sequence.serialize_element(&byte)?;
+        }
+        sequence.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for BitSetRef {
+    fn deserialize<D>(deserializer: D) -> Result<BitSetRef, D::Error>
+        where D: Deserializer<'de>
+{
+        struct BitSetRefVisitor;
+
+        impl<'de> Visitor<'de> for BitSetRefVisitor {
+            type Value = BitSetRef;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a nonempty sequence of numbers")
+            }
+
+            fn visit_seq<S>(self, mut seq: S) -> Result<BitSetRef, S::Error>
+                where S: SeqAccess<'de>
+            {
+                let mut bit_set: BitSetRef = BitSet::with_capacity(seq.size_hint().unwrap_or(0)).into();
+
+                while let Some(value) = seq.next_element()? {
+                    bit_set.insert(value);
+                }
+
+                Ok(bit_set)
+            }
+        }
+
+        deserializer.deserialize_seq(BitSetRefVisitor)
+    }
 }
 
 impl SequenceNumberSet_t {
     pub fn new(new_base: SequenceNumber_t) -> SequenceNumberSet_t {
         SequenceNumberSet_t {
             base: new_base,
-            num_bits: 256,
-            set: BitSet::with_capacity(256)
+            set: BitSet::with_capacity(256).into()
         }
     }
 
@@ -133,8 +202,8 @@ impl SequenceNumberSet_t {
 impl Validity for SequenceNumberSet_t {
     fn valid(&self) -> bool {
         self.base.value() >= 1 &&
-            0 < self.num_bits &&
-            self.num_bits <= 256
+            0 < self.set.capacity() &&
+            self.set.capacity() <= 256
     }
 }
 
