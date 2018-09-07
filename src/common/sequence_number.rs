@@ -117,11 +117,14 @@ pub struct SequenceNumberSet_t {
     set: BitSetRef
 }
 
-struct BitSetRef(BitSet);
+struct BitSetRef(BitSet, usize);
 
-impl From<BitSet> for BitSetRef {
-    fn from(bit_set: BitSet) -> Self {
-        BitSetRef(bit_set)
+impl BitSetRef {
+    pub fn new(number_of_bits: usize) -> BitSetRef {
+        BitSetRef(
+            BitSet::with_capacity(number_of_bits),
+            number_of_bits
+        )
     }
 }
 
@@ -141,7 +144,7 @@ impl DerefMut for BitSetRef {
 
 impl Serialize for BitSetRef {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut sequence = serializer.serialize_seq(Some(self.capacity()))?;
+        let mut sequence = serializer.serialize_seq(Some(self.1))?;
         for byte in self.iter()
         {
             sequence.serialize_element(&byte)?;
@@ -166,13 +169,13 @@ impl<'de> Deserialize<'de> for BitSetRef {
             fn visit_seq<S>(self, mut seq: S) -> Result<BitSetRef, S::Error>
                 where S: SeqAccess<'de>
             {
-                let mut bit_set: BitSetRef = BitSet::with_capacity(seq.size_hint().unwrap_or(0)).into();
+                let mut bit_set_ref = BitSetRef::new(seq.size_hint().unwrap_or(0));
 
                 while let Some(value) = seq.next_element()? {
-                    bit_set.insert(value);
+                    bit_set_ref.insert(value);
                 }
 
-                Ok(bit_set)
+                Ok(bit_set_ref)
             }
         }
 
@@ -184,7 +187,7 @@ impl SequenceNumberSet_t {
     pub fn new(new_base: SequenceNumber_t) -> SequenceNumberSet_t {
         SequenceNumberSet_t {
             base: new_base,
-            set: BitSet::with_capacity(256).into()
+            set: BitSetRef::new(256)
         }
     }
 
