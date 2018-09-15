@@ -1,24 +1,77 @@
 extern crate rtps;
-extern crate serde;
-extern crate cdr;
 
-use self::cdr::{CdrLe, CdrBe, Infinite, serialize, deserialize};
-use self::rtps::common::entity_id::{EntityId_t, ENTITY_PARTICIPANT};
-use common::tests::{remove_cdr_header};
+use self::rtps::common::entity_id::*;
 
-#[test]
-fn serialize_deserialize() {
-    let entity_id = ENTITY_PARTICIPANT;
-
-    let encoded_le = serialize::<_, _, CdrLe>(&entity_id, Infinite).unwrap();
-    let encoded_be = serialize::<_, _, CdrBe>(&entity_id, Infinite).unwrap();
-
-    /// verify sample from wireshark
-    assert_eq!(vec![0x00, 0x00, 0x01, 0xC1], remove_cdr_header(&encoded_be));
-
-    let decoded_le = deserialize::<EntityId_t>(&encoded_le[..]).unwrap();
-    let decoded_be = deserialize::<EntityId_t>(&encoded_be[..]).unwrap();
-
-    assert!(entity_id == decoded_le);
-    assert!(entity_id == decoded_be);
-}
+assert_ser_de!({
+                   entity_unknown,
+                   ENTITY_UNKNOWN,
+                   le = [0x00, 0x00, 0x00, 0x00],
+                   be = [0x00, 0x00, 0x00, 0x00]
+               },
+               {
+                   entity_participant,
+                   ENTITY_PARTICIPANT,
+                   le = [0x00, 0x00, 0x01, 0xC1],
+                   be = [0x00, 0x00, 0x01, 0xC1]
+               },
+               {
+                   entity_sedp_builtin_topic_writer,
+                   ENTITY_SEDP_BUILTIN_TOPIC_WRITER,
+                   le = [0x00, 0x00, 0x02, 0xC2],
+                   be = [0x00, 0x00, 0x02, 0xC2]
+               },
+               {
+                   entity_sedp_builtin_topic_reader,
+                   ENTITY_SEDP_BUILTIN_TOPIC_READER,
+                   le = [0x00, 0x00, 0x02, 0xC7],
+                   be = [0x00, 0x00, 0x02, 0xC7]
+               },
+               {
+                   entity_sedp_builtin_publications_writer,
+                   ENTITY_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+                   le = [0x00, 0x00, 0x03, 0xC2],
+                   be = [0x00, 0x00, 0x03, 0xC2]
+               },
+               {
+                   entity_sedp_builtin_publications_reader,
+                   ENTITY_SEDP_BUILTIN_PUBLICATIONS_READER,
+                   le = [0x00, 0x00, 0x03, 0xC7],
+                   be = [0x00, 0x00, 0x03, 0xC7]
+               },
+               {
+                   entity_sedp_builtin_subscriptions_writer,
+                   ENTITY_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
+                   le = [0x00, 0x00, 0x04, 0xC2],
+                   be = [0x00, 0x00, 0x04, 0xC2]
+               },
+               {
+                   entity_sedp_builtin_subscriptions_reader,
+                   ENTITY_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+                   le = [0x00, 0x00, 0x04, 0xC7],
+                   be = [0x00, 0x00, 0x04, 0xC7]
+               },
+               {
+                   entity_spdp_builtin_participant_writer,
+                   ENTITY_SPDP_BUILTIN_PARTICIPANT_WRITER,
+                   le = [0x00, 0x01, 0x00, 0xC2],
+                   be = [0x00, 0x01, 0x00, 0xC2]
+               },
+               {
+                   entity_spdp_builtin_participant_reader,
+                   ENTITY_SPDP_BUILTIN_PARTICIPANT_READER,
+                   le = [0x00, 0x01, 0x00, 0xC7],
+                   be = [0x00, 0x01, 0x00, 0xC7]
+               },
+               {
+                   entity_p2p_builtin_participant_message_writer,
+                   ENTITY_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+                   le = [0x00, 0x02, 0x00, 0xC2],
+                   be = [0x00, 0x02, 0x00, 0xC2]
+               },
+               {
+                   entity_p2p_builtin_participant_message_reader,
+                   ENTITY_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+                   le = [0x00, 0x02, 0x00, 0xC7],
+                   be = [0x00, 0x02, 0x00, 0xC7]
+               }
+);

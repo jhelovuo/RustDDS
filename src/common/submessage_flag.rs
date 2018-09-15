@@ -5,7 +5,7 @@
 /// endianness used to encapsulate the Submessage. The remaining
 /// flags are interpreted differently depending on the kind
 /// of Submessage and are described separately for each Submessage.
-#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct SubmessageFlag {
     pub flags: u8
 }

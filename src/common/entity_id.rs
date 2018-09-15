@@ -1,4 +1,4 @@
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct EntityId_t {
     pub entityKey: [u8; 3],
     pub entityKind: u8

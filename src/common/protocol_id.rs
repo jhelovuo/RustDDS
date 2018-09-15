@@ -1,6 +1,6 @@
 use message::validity_trait::Validity;
 
-#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct ProtocolId_t {
     pub protocol_id: [char;4]
 }
