@@ -32,26 +32,31 @@ impl Validity for Header {
     }
 }
 
-#[test]
-fn header_protocol_version_major() {
-    let mut header = Header::new(guid_prefix::GUIDPREFIX_UNKNOWN);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    header.protocol_version = protocol_version::PROTOCOLVERSION_1_0;
-    assert!(header.valid());
+    #[test]
+    fn header_protocol_version_major() {
+        let mut header = Header::new(guid_prefix::GUIDPREFIX_UNKNOWN);
 
-    header.protocol_version = protocol_version::PROTOCOLVERSION;
-    assert!(header.valid());
+        header.protocol_version = protocol_version::PROTOCOLVERSION_1_0;
+        assert!(header.valid());
 
-    header.protocol_version.major += 1;
-    assert!(!header.valid());
-}
+        header.protocol_version = protocol_version::PROTOCOLVERSION;
+        assert!(header.valid());
 
-#[test]
-fn header_protocol_id_same_as_rtps() {
-    let mut header = Header::new(guid_prefix::GUIDPREFIX_UNKNOWN);
+        header.protocol_version.major += 1;
+        assert!(!header.valid());
+    }
 
-    header.protocol_id = protocol_id::PROTOCOL_RTPS;
-    assert!(header.valid());
+    #[test]
+    fn header_protocol_id_same_as_rtps() {
+        let mut header = Header::new(guid_prefix::GUIDPREFIX_UNKNOWN);
+
+        header.protocol_id = protocol_id::PROTOCOL_RTPS;
+        assert!(header.valid());
+    }
 }
 
 struct Receiver {

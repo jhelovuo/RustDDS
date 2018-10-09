@@ -98,66 +98,71 @@ fn remove_change_test() {
     assert_eq!(1, history_cache.changes.len());
 }
 
-#[test]
-fn get_seq_num_min() {
-    let mut history_cache = HistoryCache::new();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let small_cache_change = CacheChange {
-        kind: change_kind::ChangeKind_t::ALIVE,
-        writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t::default(),
-        sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
-        data_value: Data {}
-    };
-    history_cache.add_change(small_cache_change);
+    #[test]
+    fn get_seq_num_min() {
+        let mut history_cache = HistoryCache::new();
 
-    let big_cache_change = CacheChange {
-        kind: change_kind::ChangeKind_t::ALIVE,
-        writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t::default(),
-        sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
-        data_value: Data {}
-    };
-    history_cache.add_change(big_cache_change);
+        let small_cache_change = CacheChange {
+            kind: change_kind::ChangeKind_t::ALIVE,
+            writerGuid: guid::GUID_UNKNOWN,
+            instanceHandle: instance_handle::InstanceHandle_t::default(),
+            sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
+            data_value: Data {}
+        };
+        history_cache.add_change(small_cache_change);
 
-    let smalles_cache_change = history_cache.get_seq_num_min();
+        let big_cache_change = CacheChange {
+            kind: change_kind::ChangeKind_t::ALIVE,
+            writerGuid: guid::GUID_UNKNOWN,
+            instanceHandle: instance_handle::InstanceHandle_t::default(),
+            sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
+            data_value: Data {}
+        };
+        history_cache.add_change(big_cache_change);
 
-    assert_eq!(true, smalles_cache_change.is_some());
-    assert_eq!(&sequence_number::SequenceNumber_t { high: 1, low: 1 }, smalles_cache_change.unwrap());
-}
+        let smalles_cache_change = history_cache.get_seq_num_min();
 
-#[test]
-fn get_seq_num_max() {
-    let mut history_cache = HistoryCache::new();
+        assert_eq!(true, smalles_cache_change.is_some());
+        assert_eq!(&sequence_number::SequenceNumber_t { high: 1, low: 1 }, smalles_cache_change.unwrap());
+    }
 
-    let small_cache_change = CacheChange {
-        kind: change_kind::ChangeKind_t::ALIVE,
-        writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t::default(),
-        sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
-        data_value: Data {}
-    };
-    history_cache.add_change(small_cache_change);
+    #[test]
+    fn get_seq_num_max() {
+        let mut history_cache = HistoryCache::new();
 
-    let big_cache_change = CacheChange {
-        kind: change_kind::ChangeKind_t::ALIVE,
-        writerGuid: guid::Guid_t {
-            entityId: entity_id::EntityId_t {
-                entityKey: [0x00; 3],
-                entityKind: 0
+        let small_cache_change = CacheChange {
+            kind: change_kind::ChangeKind_t::ALIVE,
+            writerGuid: guid::GUID_UNKNOWN,
+            instanceHandle: instance_handle::InstanceHandle_t::default(),
+            sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
+            data_value: Data {}
+        };
+        history_cache.add_change(small_cache_change);
+
+        let big_cache_change = CacheChange {
+            kind: change_kind::ChangeKind_t::ALIVE,
+            writerGuid: guid::Guid_t {
+                entityId: entity_id::EntityId_t {
+                    entityKey: [0x00; 3],
+                    entityKind: 0
+                },
+                guidPrefix: guid_prefix::GuidPrefix_t {
+                    entityKey: [0x00; 12]
+                }
             },
-            guidPrefix: guid_prefix::GuidPrefix_t {
-                entityKey: [0x00; 12]
-            }
-        },
-        instanceHandle: instance_handle::InstanceHandle_t::default(),
-        sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
-        data_value: Data {}
-    };
-    history_cache.add_change(big_cache_change);
+            instanceHandle: instance_handle::InstanceHandle_t::default(),
+            sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
+            data_value: Data {}
+        };
+        history_cache.add_change(big_cache_change);
 
-    let biggest_cache_change = history_cache.get_seq_num_max();
+        let biggest_cache_change = history_cache.get_seq_num_max();
 
-    assert_eq!(true, biggest_cache_change.is_some());
-    assert_eq!(&sequence_number::SequenceNumber_t { high: 7, low: 1 }, biggest_cache_change.unwrap());
+        assert_eq!(true, biggest_cache_change.is_some());
+        assert_eq!(&sequence_number::SequenceNumber_t { high: 7, low: 1 }, biggest_cache_change.unwrap());
+    }
 }

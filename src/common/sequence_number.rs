@@ -210,26 +210,31 @@ impl Validity for SequenceNumberSet_t {
     }
 }
 
-#[test]
-fn sequence_number_set_insert() {
-    let mut sequence_number_set = SequenceNumberSet_t::new(
-        SequenceNumber_t{
-            high: 0,
-            low: 10
-    });
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    assert!(sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 20 }));
-    assert!(sequence_number_set.set.contains(20-10));
+    #[test]
+    fn sequence_number_set_insert() {
+        let mut sequence_number_set = SequenceNumberSet_t::new(
+            SequenceNumber_t{
+                high: 0,
+                low: 10
+            });
 
-    assert!(!sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 5 }));
-    assert!(!sequence_number_set.set.contains(5));
+        assert!(sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 20 }));
+        assert!(sequence_number_set.set.contains(20-10));
 
-    assert!(!sequence_number_set.insert(SequenceNumber_t{ high: 1000, low: 7 }));
-    assert!(!sequence_number_set.set.contains(7));
+        assert!(!sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 5 }));
+        assert!(!sequence_number_set.set.contains(5));
 
-    assert!(sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 10 + 200 }));
-    assert_eq!(true, sequence_number_set.set.contains(200));
+        assert!(!sequence_number_set.insert(SequenceNumber_t{ high: 1000, low: 7 }));
+        assert!(!sequence_number_set.set.contains(7));
 
-    assert!(!sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 10 + 255 }));
-    assert_eq!(false, sequence_number_set.set.contains(10 + 255));
+        assert!(sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 10 + 200 }));
+        assert_eq!(true, sequence_number_set.set.contains(200));
+
+        assert!(!sequence_number_set.insert(SequenceNumber_t{ high: 0, low: 10 + 255 }));
+        assert_eq!(false, sequence_number_set.set.contains(10 + 255));
+    }
 }
