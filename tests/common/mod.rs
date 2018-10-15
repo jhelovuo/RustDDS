@@ -1,6 +1,11 @@
 mod count_test;
 mod entity_id_test;
 mod fragment_number_test;
+mod guid_test;
+mod guid_prefix_test;
+mod instance_handle_test;
+mod locator_test;
+mod locator_kind_test;
 mod protocol_id_test;
 mod sequence_number_test;
 mod submessage_flag_test;

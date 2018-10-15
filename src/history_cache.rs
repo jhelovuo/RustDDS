@@ -51,56 +51,56 @@ impl HistoryCache {
     }
 }
 
-#[test]
-fn add_change_test() {
-    let mut history_cache = HistoryCache::new();
-    let cache_change = CacheChange {
-        kind: change_kind::ChangeKind_t::ALIVE,
-        writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t::default(),
-        sequenceNumber: sequence_number::SEQUENCENUMBER_UNKNOWN,
-        data_value: Data {}
-    };
-
-    assert_eq!(0, history_cache.changes.len());
-
-    history_cache.add_change(cache_change);
-    assert_eq!(1, history_cache.changes.len());
-}
-
-#[test]
-fn remove_change_test() {
-    let mut history_cache = HistoryCache::new();
-
-    assert_eq!(0, history_cache.changes.len());
-
-    let cache_change = CacheChange {
-        kind: change_kind::ChangeKind_t::ALIVE,
-        writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t::default(),
-        sequenceNumber: sequence_number::SequenceNumber_t { high: 5, low: 1 },
-        data_value: Data {}
-    };
-    history_cache.add_change(cache_change);
-    assert_eq!(1, history_cache.changes.len());
-
-    let cache_change = CacheChange {
-        kind: change_kind::ChangeKind_t::ALIVE,
-        writerGuid: guid::GUID_UNKNOWN,
-        instanceHandle: instance_handle::InstanceHandle_t::default(),
-        sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
-        data_value: Data {}
-    };
-    history_cache.add_change(cache_change);
-    assert_eq!(2, history_cache.changes.len());
-
-    history_cache.remove_change(sequence_number::SequenceNumber_t { high: 7, low: 1 });
-    assert_eq!(1, history_cache.changes.len());
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn add_change_test() {
+        let mut history_cache = HistoryCache::new();
+        let cache_change = CacheChange {
+            kind: change_kind::ChangeKind_t::ALIVE,
+            writerGuid: guid::GUID_UNKNOWN,
+            instanceHandle: instance_handle::InstanceHandle_t::default(),
+            sequenceNumber: sequence_number::SEQUENCENUMBER_UNKNOWN,
+            data_value: Data {}
+        };
+
+        assert_eq!(0, history_cache.changes.len());
+
+        history_cache.add_change(cache_change);
+        assert_eq!(1, history_cache.changes.len());
+    }
+
+    #[test]
+    fn remove_change_test() {
+        let mut history_cache = HistoryCache::new();
+
+        assert_eq!(0, history_cache.changes.len());
+
+        let cache_change = CacheChange {
+            kind: change_kind::ChangeKind_t::ALIVE,
+            writerGuid: guid::GUID_UNKNOWN,
+            instanceHandle: instance_handle::InstanceHandle_t::default(),
+            sequenceNumber: sequence_number::SequenceNumber_t { high: 5, low: 1 },
+            data_value: Data {}
+        };
+        history_cache.add_change(cache_change);
+        assert_eq!(1, history_cache.changes.len());
+
+        let cache_change = CacheChange {
+            kind: change_kind::ChangeKind_t::ALIVE,
+            writerGuid: guid::GUID_UNKNOWN,
+            instanceHandle: instance_handle::InstanceHandle_t::default(),
+            sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
+            data_value: Data {}
+        };
+        history_cache.add_change(cache_change);
+        assert_eq!(2, history_cache.changes.len());
+
+        history_cache.remove_change(sequence_number::SequenceNumber_t { high: 7, low: 1 });
+        assert_eq!(1, history_cache.changes.len());
+    }
 
     #[test]
     fn get_seq_num_min() {

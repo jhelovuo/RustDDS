@@ -6,6 +6,7 @@ pub mod guid_prefix;
 pub mod guid;
 pub mod instance_handle;
 pub mod locator;
+pub mod locator_kind;
 pub mod reliability_kind;
 pub mod parameter;
 pub mod protocol_id;

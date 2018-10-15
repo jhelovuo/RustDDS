@@ -4,6 +4,12 @@ pub struct EntityId_t {
     pub entityKind: u8
 }
 
+impl Default for EntityId_t {
+    fn default() -> EntityId_t {
+        ENTITY_UNKNOWN
+    }
+}
+
 pub const ENTITY_UNKNOWN: EntityId_t = EntityId_t { entityKey: [0x00; 3], entityKind: 0x00 };
 pub const ENTITY_PARTICIPANT: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x01], entityKind: 0xC1 };
 pub const ENTITY_SEDP_BUILTIN_TOPIC_WRITER: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x02], entityKind: 0xC2 };

@@ -1,20 +1,13 @@
-use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
+pub use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
 use std::convert::{From, Into};
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+pub use common::locator_kind::{LocatorKind_t};
+
+#[derive(Serialize, Deserialize, Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Locator_t {
     pub kind: LocatorKind_t,
     pub port: u32,
     pub address: [u8; 16]
-}
-
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
-#[repr(i32)]
-pub enum LocatorKind_t {
-    LOCATOR_KIND_INVALID = -1,
-    LOCATOR_KIND_RESERVED = 0,
-    LOCATOR_KIND_UDPv4 = 1,
-    LOCATOR_KIND_UDPv6 = 2
 }
 
 pub type LocatorList_t = Vec<Locator_t>;

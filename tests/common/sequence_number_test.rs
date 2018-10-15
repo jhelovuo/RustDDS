@@ -1,5 +1,7 @@
 extern crate rtps;
+
 use self::rtps::common::sequence_number::{SequenceNumber_t};
+use std::panic;
 
 #[test]
 fn sequence_number_starts_by_default_from_one() {
@@ -36,11 +38,10 @@ fn sequeance_number_addition_with_other_sequence_number_with_low_wrap() {
 }
 
 #[test]
-#[should_panic]
 fn sequeance_number_addition_with_other_sequence_number_with_high_wrap() {
     let left = SequenceNumber_t { high: <i32>::max_value(), low: <u32>::max_value() };
     let right = SequenceNumber_t { high: 0, low: 1 };
-    left+right;
+    assert!(panic::catch_unwind(|| { left+right }).is_err());
 }
 
 #[test]
@@ -70,11 +71,10 @@ fn sequeance_number_subtraction_with_other_sequence_number_with_low_wrap() {
 }
 
 #[test]
-#[should_panic]
 fn sequeance_number_subtraction_with_other_sequence_number_with_high_wrap() {
     let left = SequenceNumber_t { high: <i32>::min_value(), low: <u32>::min_value() };
     let right = SequenceNumber_t { high: 0, low: 1 };
-    left-right;
+    assert!(panic::catch_unwind(|| { left-right }).is_err());
 }
 
 #[test]

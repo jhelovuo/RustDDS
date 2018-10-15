@@ -9,6 +9,12 @@ assert_ser_de!({
                    be = [0x00, 0x00, 0x00, 0x00]
                },
                {
+                   entity_default,
+                   EntityId_t::default(),
+                   le = [0x00, 0x00, 0x00, 0x00],
+                   be = [0x00, 0x00, 0x00, 0x00]
+               },
+               {
                    entity_participant,
                    ENTITY_PARTICIPANT,
                    le = [0x00, 0x00, 0x01, 0xC1],

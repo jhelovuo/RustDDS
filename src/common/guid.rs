@@ -1,7 +1,7 @@
 use common::guid_prefix;
 use common::entity_id;
 
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Guid_t {
     pub guidPrefix: guid_prefix::GuidPrefix_t,
     pub entityId: entity_id::EntityId_t

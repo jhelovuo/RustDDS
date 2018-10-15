@@ -1,0 +1,630 @@
+diff --git a/src/common/entity_id.rs b/src/common/entity_id.rs
+index e0c02a8..b37af0a 100644
+--- a/src/common/entity_id.rs
++++ b/src/common/entity_id.rs
+@@ -4,6 +4,12 @@ pub struct EntityId_t {
+     pub entityKind: u8
+ }
+ 
++impl Default for EntityId_t {
++    fn default() -> EntityId_t {
++        ENTITY_UNKNOWN
++    }
++}
++
+ pub const ENTITY_UNKNOWN: EntityId_t = EntityId_t { entityKey: [0x00; 3], entityKind: 0x00 };
+ pub const ENTITY_PARTICIPANT: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x01], entityKind: 0xC1 };
+ pub const ENTITY_SEDP_BUILTIN_TOPIC_WRITER: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x02], entityKind: 0xC2 };
+diff --git a/src/common/guid.rs b/src/common/guid.rs
+index 2c9f5a1..50419bd 100644
+--- a/src/common/guid.rs
++++ b/src/common/guid.rs
+@@ -1,7 +1,7 @@
+ use common::guid_prefix;
+ use common::entity_id;
+ 
+-#[derive(PartialOrd, PartialEq, Ord, Eq)]
++#[derive(Debug, Default, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+ pub struct Guid_t {
+     pub guidPrefix: guid_prefix::GuidPrefix_t,
+     pub entityId: entity_id::EntityId_t
+diff --git a/src/common/guid_prefix.rs b/src/common/guid_prefix.rs
+index 3b29179..2c2923e 100644
+--- a/src/common/guid_prefix.rs
++++ b/src/common/guid_prefix.rs
+@@ -1,4 +1,4 @@
+-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
++#[derive(Serialize, Deserialize, Debug, PartialOrd, PartialEq, Ord, Eq)]
+ pub struct GuidPrefix_t {
+     pub entityKey: [u8; 12],
+ }
+@@ -7,8 +7,6 @@ pub const GUIDPREFIX_UNKNOWN: GuidPrefix_t = GuidPrefix_t { entityKey: [0x00; 12
+ 
+ impl Default for GuidPrefix_t {
+     fn default() -> GuidPrefix_t {
+-        GuidPrefix_t {
+-            entityKey: [0x00; 12]
+-        }
++        GUIDPREFIX_UNKNOWN
+     }
+ }
+diff --git a/src/common/instance_handle.rs b/src/common/instance_handle.rs
+index 4ae09a8..92e27af 100644
+--- a/src/common/instance_handle.rs
++++ b/src/common/instance_handle.rs
+@@ -1,6 +1,6 @@
+ /// Type used to represent the identity of a data-object whose changes in value are
+ /// communicated by the RTPS protocol.
+-#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
++#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+ pub struct InstanceHandle_t {
+     pub entityKey: [u8; 16],
+ }
+diff --git a/src/common/locator.rs b/src/common/locator.rs
+index 3849b8d..3a1f57f 100644
+--- a/src/common/locator.rs
++++ b/src/common/locator.rs
+@@ -1,22 +1,15 @@
+-use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
++pub use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
+ use std::convert::{From, Into};
+ 
+-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
++pub use common::locator_kind::{LocatorKind_t};
++
++#[derive(Serialize, Deserialize, Debug, PartialOrd, PartialEq, Ord, Eq)]
+ pub struct Locator_t {
+     pub kind: LocatorKind_t,
+     pub port: u32,
+     pub address: [u8; 16]
+ }
+ 
+-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
+-#[repr(i32)]
+-pub enum LocatorKind_t {
+-    LOCATOR_KIND_INVALID = -1,
+-    LOCATOR_KIND_RESERVED = 0,
+-    LOCATOR_KIND_UDPv4 = 1,
+-    LOCATOR_KIND_UDPv6 = 2
+-}
+-
+ pub type LocatorList_t = Vec<Locator_t>;
+ 
+ pub const LOCATOR_INVALID: Locator_t = Locator_t { kind: LocatorKind_t::LOCATOR_KIND_INVALID,
+diff --git a/src/common/locator_kind.rs b/src/common/locator_kind.rs
+new file mode 100644
+index 0000000..8b18808
+--- /dev/null
++++ b/src/common/locator_kind.rs
+@@ -0,0 +1,50 @@
++use serde::{Deserialize, Deserializer, Serialize, Serializer};
++use serde::de::{Error, Visitor};
++use std::{fmt};
++
++#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
++#[repr(i32)]
++pub enum LocatorKind_t {
++    LOCATOR_KIND_INVALID = -1,
++    LOCATOR_KIND_RESERVED = 0,
++    LOCATOR_KIND_UDPv4 = 1,
++    LOCATOR_KIND_UDPv6 = 2
++}
++
++impl Serialize for LocatorKind_t {
++    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++        serializer.serialize_i32(*self as i32)
++    }
++}
++
++impl<'de> Deserialize<'de> for LocatorKind_t {
++    fn deserialize<D>(deserializer: D) -> Result<LocatorKind_t, D::Error>
++    where
++        D: Deserializer<'de>,
++    {
++        struct I32Visitor;
++
++        impl<'de> Visitor<'de> for I32Visitor {
++            type Value = LocatorKind_t;
++
++            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
++                formatter.write_str("an integer between -1 and 2")
++            }
++
++            fn visit_i32<E>(self, value: i32) -> Result<LocatorKind_t, E>
++            where
++                E: Error,
++            {
++                match value {
++                    -1 => Ok(LocatorKind_t::LOCATOR_KIND_INVALID),
++                    0 => Ok(LocatorKind_t::LOCATOR_KIND_RESERVED),
++                    1 => Ok(LocatorKind_t::LOCATOR_KIND_UDPv4),
++                    2 => Ok(LocatorKind_t::LOCATOR_KIND_UDPv6),
++                    _ => Err(E::custom(format!("LocatorKind_t out of range: {}", value)))
++                }
++            }
++        }
++
++        deserializer.deserialize_i32(I32Visitor)
++    }
++}
+diff --git a/src/common/mod.rs b/src/common/mod.rs
+index 3b4da27..b174075 100644
+--- a/src/common/mod.rs
++++ b/src/common/mod.rs
+@@ -6,6 +6,7 @@ pub mod guid_prefix;
+ pub mod guid;
+ pub mod instance_handle;
+ pub mod locator;
++pub mod locator_kind;
+ pub mod reliability_kind;
+ pub mod parameter;
+ pub mod protocol_id;
+diff --git a/src/history_cache.rs b/src/history_cache.rs
+index cb66651..28cc1a0 100644
+--- a/src/history_cache.rs
++++ b/src/history_cache.rs
+@@ -98,71 +98,66 @@ fn remove_change_test() {
+     assert_eq!(1, history_cache.changes.len());
+ }
+ 
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn get_seq_num_min() {
+-        let mut history_cache = HistoryCache::new();
+-
+-        let small_cache_change = CacheChange {
+-            kind: change_kind::ChangeKind_t::ALIVE,
+-            writerGuid: guid::GUID_UNKNOWN,
+-            instanceHandle: instance_handle::InstanceHandle_t::default(),
+-            sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
+-            data_value: Data {}
+-        };
+-        history_cache.add_change(small_cache_change);
+-
+-        let big_cache_change = CacheChange {
+-            kind: change_kind::ChangeKind_t::ALIVE,
+-            writerGuid: guid::GUID_UNKNOWN,
+-            instanceHandle: instance_handle::InstanceHandle_t::default(),
+-            sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
+-            data_value: Data {}
+-        };
+-        history_cache.add_change(big_cache_change);
+-
+-        let smalles_cache_change = history_cache.get_seq_num_min();
+-
+-        assert_eq!(true, smalles_cache_change.is_some());
+-        assert_eq!(&sequence_number::SequenceNumber_t { high: 1, low: 1 }, smalles_cache_change.unwrap());
+-    }
++#[test]
++fn get_seq_num_min() {
++    let mut history_cache = HistoryCache::new();
++
++    let small_cache_change = CacheChange {
++        kind: change_kind::ChangeKind_t::ALIVE,
++        writerGuid: guid::GUID_UNKNOWN,
++        instanceHandle: instance_handle::InstanceHandle_t::default(),
++        sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
++        data_value: Data {}
++    };
++    history_cache.add_change(small_cache_change);
++
++    let big_cache_change = CacheChange {
++        kind: change_kind::ChangeKind_t::ALIVE,
++        writerGuid: guid::GUID_UNKNOWN,
++        instanceHandle: instance_handle::InstanceHandle_t::default(),
++        sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
++        data_value: Data {}
++    };
++    history_cache.add_change(big_cache_change);
++
++    let smalles_cache_change = history_cache.get_seq_num_min();
+ 
+-    #[test]
+-    fn get_seq_num_max() {
+-        let mut history_cache = HistoryCache::new();
+-
+-        let small_cache_change = CacheChange {
+-            kind: change_kind::ChangeKind_t::ALIVE,
+-            writerGuid: guid::GUID_UNKNOWN,
+-            instanceHandle: instance_handle::InstanceHandle_t::default(),
+-            sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
+-            data_value: Data {}
+-        };
+-        history_cache.add_change(small_cache_change);
+-
+-        let big_cache_change = CacheChange {
+-            kind: change_kind::ChangeKind_t::ALIVE,
+-            writerGuid: guid::Guid_t {
+-                entityId: entity_id::EntityId_t {
+-                    entityKey: [0x00; 3],
+-                    entityKind: 0
+-                },
+-                guidPrefix: guid_prefix::GuidPrefix_t {
+-                    entityKey: [0x00; 12]
+-                }
++    assert_eq!(true, smalles_cache_change.is_some());
++    assert_eq!(&sequence_number::SequenceNumber_t { high: 1, low: 1 }, smalles_cache_change.unwrap());
++}
++
++#[test]
++fn get_seq_num_max() {
++    let mut history_cache = HistoryCache::new();
++
++    let small_cache_change = CacheChange {
++        kind: change_kind::ChangeKind_t::ALIVE,
++        writerGuid: guid::GUID_UNKNOWN,
++        instanceHandle: instance_handle::InstanceHandle_t::default(),
++        sequenceNumber: sequence_number::SequenceNumber_t { high: 1, low: 1 },
++        data_value: Data {}
++    };
++    history_cache.add_change(small_cache_change);
++
++    let big_cache_change = CacheChange {
++        kind: change_kind::ChangeKind_t::ALIVE,
++        writerGuid: guid::Guid_t {
++            entityId: entity_id::EntityId_t {
++                entityKey: [0x00; 3],
++                entityKind: 0
+             },
+-            instanceHandle: instance_handle::InstanceHandle_t::default(),
+-            sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
+-            data_value: Data {}
+-        };
+-        history_cache.add_change(big_cache_change);
++            guidPrefix: guid_prefix::GuidPrefix_t {
++                entityKey: [0x00; 12]
++            }
++        },
++        instanceHandle: instance_handle::InstanceHandle_t::default(),
++        sequenceNumber: sequence_number::SequenceNumber_t { high: 7, low: 1 },
++        data_value: Data {}
++    };
++    history_cache.add_change(big_cache_change);
+ 
+-        let biggest_cache_change = history_cache.get_seq_num_max();
++    let biggest_cache_change = history_cache.get_seq_num_max();
+ 
+-        assert_eq!(true, biggest_cache_change.is_some());
+-        assert_eq!(&sequence_number::SequenceNumber_t { high: 7, low: 1 }, biggest_cache_change.unwrap());
+-    }
++    assert_eq!(true, biggest_cache_change.is_some());
++    assert_eq!(&sequence_number::SequenceNumber_t { high: 7, low: 1 }, biggest_cache_change.unwrap());
+ }
+diff --git a/tests/assert_ser_de.rs b/tests/assert_ser_de.rs
+index 758b78c..fdb9686 100644
+--- a/tests/assert_ser_de.rs
++++ b/tests/assert_ser_de.rs
+@@ -19,7 +19,7 @@ macro_rules! assert_ser_de {
+                 assert_eq!($le, remove_cdr_header(&encoded));
+ 
+                 let decoded = deserialize(&encoded[..]).unwrap();
+-                assert_eq!($structure, decoded);
++                 assert_eq!($structure, decoded);
+             }
+ 
+             #[test]
+diff --git a/tests/common/entity_id_test.rs b/tests/common/entity_id_test.rs
+index ca382f7..735942b 100644
+--- a/tests/common/entity_id_test.rs
++++ b/tests/common/entity_id_test.rs
+@@ -8,6 +8,12 @@ assert_ser_de!({
+                    le = [0x00, 0x00, 0x00, 0x00],
+                    be = [0x00, 0x00, 0x00, 0x00]
+                },
++               {
++                   entity_default,
++                   EntityId_t::default(),
++                   le = [0x00, 0x00, 0x00, 0x00],
++                   be = [0x00, 0x00, 0x00, 0x00]
++               },
+                {
+                    entity_participant,
+                    ENTITY_PARTICIPANT,
+diff --git a/tests/common/guid_prefix_test.rs b/tests/common/guid_prefix_test.rs
+new file mode 100644
+index 0000000..83a6bce
+--- /dev/null
++++ b/tests/common/guid_prefix_test.rs
+@@ -0,0 +1,28 @@
++extern crate rtps;
++
++use self::rtps::common::guid_prefix::{GuidPrefix_t, GUIDPREFIX_UNKNOWN};
++
++assert_ser_de!({
++                   guid_prefix_unknown,
++                   GUIDPREFIX_UNKNOWN,
++                   le = [0x00; 12],
++                   be = [0x00; 12]
++               },
++               {
++                   guid_prefix_default,
++                   GuidPrefix_t::default(),
++                   le = [0x00; 12],
++                   be = [0x00; 12]
++               },
++               {
++                   guid_prefix_endianness_insensitive,
++                   GuidPrefix_t {
++                       entityKey: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
++                                   0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB]
++                   },
++                   le = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
++                         0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB],
++                   be = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
++                         0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB]
++               }
++);
+diff --git a/tests/common/guid_test.rs b/tests/common/guid_test.rs
+new file mode 100644
+index 0000000..2b1e523
+--- /dev/null
++++ b/tests/common/guid_test.rs
+@@ -0,0 +1,36 @@
++extern crate rtps;
++
++use self::rtps::common::guid::{Guid_t, GUID_UNKNOWN};
++use self::rtps::common::guid_prefix::{GUIDPREFIX_UNKNOWN};
++use self::rtps::common::entity_id::{ENTITY_UNKNOWN, ENTITY_PARTICIPANT};
++
++assert_ser_de!({
++                   guid_unknown,
++                   GUID_UNKNOWN,
++                   le = [0x00; 16],
++                   be = [0x00; 16]
++               },
++               {
++                   guid_default,
++                   Guid_t::default(),
++                   le = [0x00; 16],
++                   be = [0x00; 16]
++               },
++               {
++                   guid_entity_id_on_the_last_position,
++                   Guid_t {
++                       entityId: ENTITY_PARTICIPANT,
++                       ..Default::default()
++                   },
++                   le = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xC1],
++                   be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xC1]
++               }
++);
++
++#[test]
++fn guid_unknown_is_a_combination_of_unknown_members() {
++    assert_eq!(Guid_t {
++        entityId: ENTITY_UNKNOWN,
++        guidPrefix: GUIDPREFIX_UNKNOWN
++    }, GUID_UNKNOWN);
++}
+diff --git a/tests/common/instance_handle_test.rs b/tests/common/instance_handle_test.rs
+new file mode 100644
+index 0000000..a2455c9
+--- /dev/null
++++ b/tests/common/instance_handle_test.rs
+@@ -0,0 +1,22 @@
++extern crate rtps;
++
++use self::rtps::common::instance_handle::{InstanceHandle_t};
++
++assert_ser_de!({
++                   instance_handle_default,
++                   InstanceHandle_t::default(),
++                   le = [0x00; 16],
++                   be = [0x00; 16]
++               },
++               {
++                   instance_handle_endianness_insensitive,
++                   InstanceHandle_t {
++                       entityKey: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
++                                   0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]
++                   },
++                   le = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
++                         0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
++                   be = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
++                         0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]
++               }
++);
+diff --git a/tests/common/locator_kind_test.rs b/tests/common/locator_kind_test.rs
+new file mode 100644
+index 0000000..1515643
+--- /dev/null
++++ b/tests/common/locator_kind_test.rs
+@@ -0,0 +1,29 @@
++extern crate rtps;
++
++use self::rtps::common::locator_kind;
++
++assert_ser_de!({
++                   locator_kind_invalid,
++                   locator_kind::LocatorKind_t::LOCATOR_KIND_INVALID,
++                   le = [0xFF, 0xFF, 0xFF, 0xFF],
++                   be = [0xFF, 0xFF, 0xFF, 0xFF]
++               },
++               {
++                   locator_kind_reserved,
++                   locator_kind::LocatorKind_t::LOCATOR_KIND_RESERVED,
++                   le = [0x00, 0x00, 0x00, 0x00],
++                   be = [0x00, 0x00, 0x00, 0x00]
++               },
++               {
++                   locator_kind_udpv4,
++                   locator_kind::LocatorKind_t::LOCATOR_KIND_UDPv4,
++                   le = [0x01, 0x00, 0x00, 0x00],
++                   be = [0x00, 0x00, 0x00, 0x01]
++               },
++               {
++                   locator_kind_udpv6,
++                   locator_kind::LocatorKind_t::LOCATOR_KIND_UDPv6,
++                   le = [0x02, 0x00, 0x00, 0x00],
++                   be = [0x00, 0x00, 0x00, 0x02]
++               }
++);
+diff --git a/tests/common/locator_test.rs b/tests/common/locator_test.rs
+new file mode 100644
+index 0000000..aac91dc
+--- /dev/null
++++ b/tests/common/locator_test.rs
+@@ -0,0 +1,106 @@
++extern crate rtps;
++
++use self::rtps::common::locator;
++use self::rtps::common::locator::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
++
++#[test]
++fn verify_locator_address_invalid() {
++    assert_eq!([0x00; 16], locator::LOCATOR_ADDRESS_INVALID);
++}
++
++#[test]
++fn verify_locator_port_invalid() {
++    assert_eq!(0, locator::LOCATOR_PORT_INVALID);
++}
++
++#[test]
++fn locator_invalid_is_a_concatenation_of_invalid_members() {
++    assert_eq!(locator::Locator_t {
++        kind: locator::LocatorKind_t::LOCATOR_KIND_INVALID,
++        port: locator::LOCATOR_PORT_INVALID,
++        address: locator::LOCATOR_ADDRESS_INVALID
++    }, locator::LOCATOR_INVALID);
++}
++
++assert_ser_de!(
++    {
++        locator_invalid,
++        locator::LOCATOR_INVALID,
++        le = [
++            0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
++            0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
++        ],
++        be = [
++            0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_UDPv4
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
++            0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
++        ]
++    },
++    {
++        locator_invalid_ipv6,
++        locator::Locator_t::from(SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 7171)),
++        le = [
++            0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
++            0x03, 0x1C, 0x00, 0x00,  // Locator_t::port(7171),
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
++            0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
++        ],
++        be = [
++            0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
++            0x00, 0x00, 0x1C, 0x03,  // Locator_t::port(7171),
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
++            0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
++        ]
++    },
++    {
++        locator_localhost_ipv4,
++        locator::Locator_t::from(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
++        le = [
++            0x01, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDPv4
++            0x90, 0x1F, 0x00, 0x00,  // Locator_t::port(8080),
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
++            0x7F, 0x00, 0x00, 0x01   // Locator_t::address[12:15]
++        ],
++        be = [
++            0x00, 0x00, 0x00, 0x01,  // LocatorKind_t::LOCATOR_KIND_UDPv4
++            0x00, 0x00, 0x1F, 0x90,  // Locator_t::port(8080),
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
++            0x7F, 0x00, 0x00, 0x01   // Locator_t::address[12:15]
++        ]
++    },
++    {
++        locator_ipv6,
++        locator::Locator_t::from(SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xFF00, 0x4501, 0, 0, 0, 0, 0, 0x0032)), 7171)),
++        le = [
++            0x02, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDPv6
++            0x03, 0x1C, 0x00, 0x00,  // Locator_t::port(7171),
++            0xFF, 0x00, 0x45, 0x01,  // Locator_t::address[0:3]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
++            0x00, 0x00, 0x00, 0x32   // Locator_t::address[12:15]
++        ],
++        be = [
++            0x00, 0x00, 0x00, 0x02,  // LocatorKind_t::LOCATOR_KIND_UDPv6
++            0x00, 0x00, 0x1C, 0x03,  // Locator_t::port(7171),
++            0xFF, 0x00, 0x45, 0x01,  // Locator_t::address[0:3]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
++            0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
++            0x00, 0x00, 0x00, 0x32   // Locator_t::address[12:15]
++        ]
++    }
++);
+diff --git a/tests/common/mod.rs b/tests/common/mod.rs
+index e5db621..b33421c 100644
+--- a/tests/common/mod.rs
++++ b/tests/common/mod.rs
+@@ -1,6 +1,11 @@
+ mod count_test;
+ mod entity_id_test;
+ mod fragment_number_test;
++mod guid_test;
++mod guid_prefix_test;
++mod instance_handle_test;
++mod locator_test;
++mod locator_kind_test;
+ mod protocol_id_test;
+ mod sequence_number_test;
+ mod submessage_flag_test;
+diff --git a/tests/common/sequence_number_test.rs b/tests/common/sequence_number_test.rs
+index 8ab5e69..84cbfac 100644
+--- a/tests/common/sequence_number_test.rs
++++ b/tests/common/sequence_number_test.rs
+@@ -1,5 +1,7 @@
+ extern crate rtps;
++
+ use self::rtps::common::sequence_number::{SequenceNumber_t};
++use std::panic;
+ 
+ #[test]
+ fn sequence_number_starts_by_default_from_one() {
+@@ -36,11 +38,10 @@ fn sequeance_number_addition_with_other_sequence_number_with_low_wrap() {
+ }
+ 
+ #[test]
+-#[should_panic]
+ fn sequeance_number_addition_with_other_sequence_number_with_high_wrap() {
+     let left = SequenceNumber_t { high: <i32>::max_value(), low: <u32>::max_value() };
+     let right = SequenceNumber_t { high: 0, low: 1 };
+-    left+right;
++    assert!(panic::catch_unwind(|| { left+right }).is_err());
+ }
+ 
+ #[test]
+@@ -70,11 +71,10 @@ fn sequeance_number_subtraction_with_other_sequence_number_with_low_wrap() {
+ }
+ 
+ #[test]
+-#[should_panic]
+ fn sequeance_number_subtraction_with_other_sequence_number_with_high_wrap() {
+     let left = SequenceNumber_t { high: <i32>::min_value(), low: <u32>::min_value() };
+     let right = SequenceNumber_t { high: 0, low: 1 };
+-    left-right;
++    assert!(panic::catch_unwind(|| { left-right }).is_err());
+ }
+ 
+ #[test]
