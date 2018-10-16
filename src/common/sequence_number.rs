@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 use std::cmp::Ordering;
 use bit_set::BitSet;
 use bit_vec::BitVec;
-use message::validity_trait::Validity;
+use crate::message::validity_trait::Validity;
 use serde::ser::{Serialize, Serializer, SerializeStruct, SerializeSeq};
 use serde::de::{self, Deserialize, Deserializer, Visitor, SeqAccess};
 use std::{cmp, fmt};
@@ -192,7 +192,7 @@ impl SequenceNumberSet_t {
     }
 
     pub fn insert(&mut self, sequence_number: SequenceNumber_t) -> bool {
-        if (sequence_number >= self.base && sequence_number < self.base + 255)
+        if sequence_number >= self.base && sequence_number < self.base + 255
         {
             let result = (sequence_number - self.base).value();
             self.set.insert(result as usize);

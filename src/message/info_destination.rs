@@ -1,7 +1,7 @@
-use common::submessage_flag::{SubmessageFlag};
-use common::guid_prefix::{GuidPrefix_t};
-use message::submessage_header::{SubmessageHeader};
-use message::validity_trait::Validity;
+use crate::common::submessage_flag::{SubmessageFlag};
+use crate::common::guid_prefix::{GuidPrefix_t};
+use crate::message::submessage_header::{SubmessageHeader};
+use crate::message::validity_trait::Validity;
 
 /// This message is sent from an RTPS Writer to an RTPS Reader
 /// to modify the GuidPrefix used to interpret the Reader entityIds

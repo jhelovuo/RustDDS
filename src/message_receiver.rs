@@ -1,8 +1,8 @@
-use common::protocol_version;
-use common::vendor_id;
-use common::guid_prefix;
-use common::locator;
-use common::time;
+use crate::common::protocol_version;
+use crate::common::vendor_id;
+use crate::common::guid_prefix;
+use crate::common::locator;
+use crate::common::time;
 
 pub struct MessageReceiver {
     pub source_version: protocol_version::ProtocolVersion_t,

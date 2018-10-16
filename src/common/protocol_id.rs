@@ -1,4 +1,4 @@
-use message::validity_trait::Validity;
+use crate::message::validity_trait::Validity;
 
 #[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct ProtocolId_t {

@@ -1,11 +1,11 @@
-use common::protocol_id;
-use common::protocol_version;
-use common::vendor_id;
-use common::guid_prefix;
-use common::locator;
-use common::time;
-use common::submessage_flag;
-use message::validity_trait::Validity;
+use crate::common::protocol_id;
+use crate::common::protocol_version;
+use crate::common::vendor_id;
+use crate::common::guid_prefix;
+use crate::common::locator;
+use crate::common::time;
+use crate::common::submessage_flag;
+use crate::message::validity_trait::Validity;
 
 struct Header {
     protocol_id: protocol_id::ProtocolId_t,

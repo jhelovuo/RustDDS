@@ -1,9 +1,9 @@
-use common::submessage_flag::{SubmessageFlag};
-use common::entity_id::{EntityId_t};
-use common::sequence_number::{SequenceNumber_t, SequenceNumberSet_t};
+use crate::common::submessage_flag::{SubmessageFlag};
+use crate::common::entity_id::{EntityId_t};
+use crate::common::sequence_number::{SequenceNumber_t, SequenceNumberSet_t};
 
-use message::submessage_header::{SubmessageHeader};
-use message::validity_trait::Validity;
+use crate::message::submessage_header::{SubmessageHeader};
+use crate::message::validity_trait::Validity;
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers

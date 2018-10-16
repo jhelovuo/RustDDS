@@ -1,4 +1,4 @@
-use common::submessage_flag;
+use crate::common::submessage_flag;
 
 #[derive(Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub enum SubmessageKind {

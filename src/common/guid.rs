@@ -1,5 +1,5 @@
-use common::guid_prefix;
-use common::entity_id;
+use crate::common::guid_prefix;
+use crate::common::entity_id;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Guid_t {

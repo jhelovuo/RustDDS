@@ -1,7 +1,7 @@
-use common::submessage_flag::{SubmessageFlag};
-use common::time::{Timestamp};
-use message::submessage_header::{SubmessageHeader};
-use message::validity_trait::Validity;
+use crate::common::submessage_flag::{SubmessageFlag};
+use crate::common::time::{Timestamp};
+use crate::message::submessage_header::{SubmessageHeader};
+use crate::message::validity_trait::Validity;
 
 /// This message modifies the logical source of the Submessages
 /// that follow.

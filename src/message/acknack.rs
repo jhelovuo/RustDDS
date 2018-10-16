@@ -1,10 +1,10 @@
-use common::submessage_flag::{SubmessageFlag};
-use common::entity_id::{EntityId_t};
-use common::sequence_number::{SequenceNumberSet_t};
-use common::count::{Count_t};
+use crate::common::submessage_flag::{SubmessageFlag};
+use crate::common::entity_id::{EntityId_t};
+use crate::common::sequence_number::{SequenceNumberSet_t};
+use crate::common::count::{Count_t};
 
-use message::submessage_header::{SubmessageHeader};
-use message::validity_trait::Validity;
+use crate::message::submessage_header::{SubmessageHeader};
+use crate::message::validity_trait::Validity;
 
 /// This Submessage is used to communicate the state of a Reader to a
 /// Writer.

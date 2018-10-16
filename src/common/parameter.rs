@@ -1,4 +1,4 @@
-use message::validity_trait::Validity;
+use crate::message::validity_trait::Validity;
 
 #[derive(PartialOrd, PartialEq, Ord, Eq)]
 pub enum ParameterId {

@@ -1,9 +1,9 @@
-use common::change_kind;
-use common::entity_id;
-use common::instance_handle;
-use common::guid_prefix;
-use common::guid;
-use common::sequence_number;
+use crate::common::change_kind;
+use crate::common::entity_id;
+use crate::common::instance_handle;
+use crate::common::guid_prefix;
+use crate::common::guid;
+use crate::common::sequence_number;
 
 #[derive(PartialOrd, PartialEq, Ord, Eq)]
 struct Data {

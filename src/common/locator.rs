@@ -1,7 +1,7 @@
 pub use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
 use std::convert::{From, Into};
 
-pub use common::locator_kind::{LocatorKind_t};
+pub use crate::common::locator_kind::{LocatorKind_t};
 
 #[derive(Serialize, Deserialize, Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Locator_t {

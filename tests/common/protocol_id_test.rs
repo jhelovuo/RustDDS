@@ -1,7 +1,7 @@
 extern crate rtps;
 
 use self::rtps::common::protocol_id::{ProtocolId_t, PROTOCOL_RTPS};
-use common::protocol_id_test::rtps::message::validity_trait::Validity;
+use crate::common::protocol_id_test::rtps::message::validity_trait::Validity;
 
 assert_ser_de!({
     protocol_rtps,
