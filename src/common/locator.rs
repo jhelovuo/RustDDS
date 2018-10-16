@@ -38,17 +38,3 @@ impl From<SocketAddr> for Locator_t {
         }
     }
 }
-
-impl Into<SocketAddr> for Locator_t {
-    fn into(self) -> SocketAddr {
-        match self.kind {
-            LocatorKind_t::LOCATOR_KIND_UDPv4 =>
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(self.address[12],
-                                                         self.address[13],
-                                                         self.address[14],
-                                                         self.address[15])), self.port as u16),
-            _ =>
-                SocketAddr::new(IpAddr::V6(Ipv6Addr::from(self.address)), self.port as u16)
-        }
-    }
-}
