@@ -3,7 +3,7 @@ use std::convert::{From, Into};
 
 pub use crate::common::locator_kind::{LocatorKind_t};
 
-#[derive(Serialize, Deserialize, Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Locator_t {
     pub kind: LocatorKind_t,
     pub port: u32,

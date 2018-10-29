@@ -13,5 +13,6 @@ pub mod protocol_id;
 pub mod protocol_version;
 pub mod sequence_number;
 pub mod submessage_flag;
+pub mod topic_kind;
 pub mod time;
 pub mod vendor_id;

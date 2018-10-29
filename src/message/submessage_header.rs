@@ -1,7 +1,7 @@
 use crate::common::submessage_flag;
+use crate::enum_number;
 
-#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
-pub enum SubmessageKind {
+enum_number_u8!(SubmessageKind {
     PAD = 0x01,
     ACKNACK = 0x06,
     HEARTBEAT = 0x07,
@@ -14,10 +14,10 @@ pub enum SubmessageKind {
     NACK_FRAG = 0x12,
     HEARTBEAT_FRAG = 0x13,
     DATA = 0x15,
-    DATA_FRAG = 0x16
-}
+    DATA_FRAG = 0x16,
+});
 
-#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub struct SubmessageHeader {
     pub submessage_id: SubmessageKind,
     pub flags: submessage_flag::SubmessageFlag,

@@ -5,6 +5,8 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+#[macro_use]
+mod enum_number;
 pub mod common;
 mod history_cache;
 mod participant;

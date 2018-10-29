@@ -7,7 +7,6 @@ use std::panic;
 fn sequence_number_starts_by_default_from_one() {
     let default_sequence_number = SequenceNumber_t::default();
     assert_eq!(SequenceNumber_t { high: 0, low: 1}, default_sequence_number);
-    assert_eq!(SequenceNumber_t { high: 0, low: 1}, default_sequence_number);
     assert_eq!(1, default_sequence_number.value());
 }
 
