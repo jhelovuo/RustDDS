@@ -6,17 +6,11 @@ extern crate serde;
 extern crate serde_derive;
 
 #[macro_use]
+mod assert_ser_de;
+#[macro_use]
 mod enum_number;
-pub mod common;
+mod common;
 mod history_cache;
 mod participant;
-pub mod message_receiver;
-pub mod message;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+mod message_receiver;
+mod message;

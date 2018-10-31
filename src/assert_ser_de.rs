@@ -16,10 +16,12 @@ macro_rules! assert_ser_de {
                 let structure = $structure;
 
                 let encoded = serialize::<_, _, CdrLe>(&structure, Infinite).unwrap();
-                assert_eq!($le, remove_cdr_header(&encoded));
+                assert!($le == remove_cdr_header(&encoded),
+                           "Serialization error,\n expected: {:?},\n found:    {:?}", $le, remove_cdr_header(&encoded));
 
                 let decoded = deserialize(&encoded[..]).unwrap();
-                assert_eq!($structure, decoded);
+                assert!($structure == decoded,
+                           "Deserialization error, expected {:?}, found {:?}", $structure, decoded);
             }
 
             #[test]
@@ -27,10 +29,12 @@ macro_rules! assert_ser_de {
                 let structure = $structure;
 
                 let encoded = serialize::<_, _, CdrBe>(&structure, Infinite).unwrap();
-                assert_eq!($be, remove_cdr_header(&encoded));
+                assert!($be == remove_cdr_header(&encoded),
+                        "Serialization error,\n expected: {:?},\n found:    {:?}", $be, remove_cdr_header(&encoded));
 
                 let decoded = deserialize(&encoded[..]).unwrap();
-                assert_eq!($structure, decoded);
+                assert!($structure == decoded,
+                        "Deserialization error, expected {:?}, found {:?}", $structure, decoded);
             }
         })+
     }
