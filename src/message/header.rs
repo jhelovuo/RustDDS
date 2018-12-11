@@ -7,6 +7,7 @@ use crate::common::time;
 use crate::common::vendor_id;
 use crate::message::validity_trait::Validity;
 
+#[derive(Debug, Readable, Writable, PartialEq)]
 struct Header {
     protocol_id: protocol_id::ProtocolId_t,
     protocol_version: protocol_version::ProtocolVersion_t,
@@ -57,6 +58,24 @@ mod tests {
         header.protocol_id = protocol_id::PROTOCOL_RTPS;
         assert!(header.valid());
     }
+
+    serialization_test!( type = Header,
+    {
+        header_with_unknown_guid_prefix,
+        Header::new(guid_prefix::GUIDPREFIX_UNKNOWN),
+        le = [0x52, 0x54, 0x50, 0x53, // protocol_id
+              0x02, 0x02,             // protocol_verison
+              0x00, 0x00,             // vendor_id
+              0x00, 0x00, 0x00, 0x00, // guid_prefix
+              0x00, 0x00, 0x00, 0x00,
+              0x00, 0x00, 0x00, 0x00],
+        be = [0x52, 0x54, 0x50, 0x53,
+              0x02, 0x02,
+              0x00, 0x00, 0x00, 0x00,
+              0x00, 0x00, 0x00, 0x00,
+              0x00, 0x00, 0x00, 0x00,
+              0x00, 0x00]
+    });
 }
 
 struct Receiver {

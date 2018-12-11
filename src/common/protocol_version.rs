@@ -1,4 +1,4 @@
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct ProtocolVersion_t {
     pub major: u8,
     pub minor: u8,
@@ -11,3 +11,46 @@ pub const PROTOCOLVERSION_2_1: ProtocolVersion_t = ProtocolVersion_t { major: 2,
 pub const PROTOCOLVERSION_2_2: ProtocolVersion_t = ProtocolVersion_t { major: 2, minor: 2 };
 
 pub const PROTOCOLVERSION: ProtocolVersion_t = PROTOCOLVERSION_2_2;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    serialization_test!( type = ProtocolVersion_t,
+    {
+        protocol_version,
+        PROTOCOLVERSION,
+        le = [0x02, 0x02],
+        be = [0x02, 0x02]
+    },
+    {
+        protocol_version_1_0,
+        PROTOCOLVERSION_1_0,
+        le = [0x01, 0x00],
+        be = [0x01, 0x00]
+    },
+    {
+        protocol_version_1_1,
+        PROTOCOLVERSION_1_1,
+        le = [0x01, 0x01],
+        be = [0x01, 0x01]
+    },
+    {
+        protocol_version_2_0,
+        PROTOCOLVERSION_2_0,
+        le = [0x02, 0x00],
+        be = [0x02, 0x00]
+    },
+    {
+        protocol_version_2_1,
+        PROTOCOLVERSION_2_1,
+        le = [0x02, 0x01],
+        be = [0x02, 0x01]
+    },
+    {
+        protocol_version_2_2,
+        PROTOCOLVERSION_2_2,
+        le = [0x02, 0x02],
+        be = [0x02, 0x02]
+    });
+}
