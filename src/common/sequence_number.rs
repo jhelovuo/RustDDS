@@ -1,16 +1,16 @@
 use bit_set::BitSet;
-use bit_vec::{BitVec, BitBlock};
+use bit_vec::{BitBlock, BitVec};
 use crate::message::Validity;
+use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::cmp::Ordering;
 use std::convert::{From, Into};
+use std::io::Result;
 use std::marker::PhantomData;
+use std::mem::size_of;
 use std::ops::Add;
 use std::ops::Sub;
 use std::ops::{Deref, DerefMut};
 use std::{cmp, fmt};
-use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::io::Result;
-use std::mem::size_of;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Readable, Writable)]
 pub struct SequenceNumber_t {
@@ -145,7 +145,7 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
         let mut bit_vec = BitVec::with_capacity(number_of_bits as usize);
         unsafe {
             let mut inner = bit_vec.storage_mut();
-            for _ in 0..(number_of_bits/32) {
+            for _ in 0..(number_of_bits / 32) {
                 inner.push(reader.read_u32()?);
             }
         }
@@ -162,7 +162,7 @@ impl<C: Context> Writable<C> for BitSetRef {
     #[inline]
     fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
         let bytes = self.0.get_ref().storage();
-        writer.write_u32((bytes.len()*32) as u32)?;
+        writer.write_u32((bytes.len() * 32) as u32)?;
         for byte in bytes {
             writer.write_u32(*byte)?;
         }
