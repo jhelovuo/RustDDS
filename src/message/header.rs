@@ -1,10 +1,10 @@
-use crate::common::protocol_id;
-use crate::common::protocol_version;
-use crate::common::vendor_id;
 use crate::common::guid_prefix;
 use crate::common::locator;
-use crate::common::time;
+use crate::common::protocol_id;
+use crate::common::protocol_version;
 use crate::common::submessage_flag;
+use crate::common::time;
+use crate::common::vendor_id;
 use crate::message::validity_trait::Validity;
 
 struct Header {
@@ -20,15 +20,15 @@ impl Header {
             protocol_id: protocol_id::PROTOCOL_RTPS,
             protocol_version: protocol_version::PROTOCOLVERSION,
             vendor_id: vendor_id::VENDOR_UNKNOWN,
-            guid_prefix: guid
+            guid_prefix: guid,
         }
     }
 }
 
 impl Validity for Header {
     fn valid(&self) -> bool {
-        !(self.protocol_id != protocol_id::PROTOCOL_RTPS ||
-          self.protocol_version.major > protocol_version::PROTOCOLVERSION.major)
+        !(self.protocol_id != protocol_id::PROTOCOL_RTPS
+            || self.protocol_version.major > protocol_version::PROTOCOLVERSION.major)
     }
 }
 
@@ -67,13 +67,15 @@ struct Receiver {
     unicast_reply_locator_list: locator::Locator_t,
     multicast_reply_locator_list: locator::Locator_t,
     have_timestamp: bool,
-    timestapm: time::Time_t
+    timestapm: time::Time_t,
 }
 
 impl Receiver {
-    fn new(destination_guid_prefix: guid_prefix::GuidPrefix_t,
-           unicast_reply_locator: locator::Locator_t,
-           multicast_reply_locator: locator::Locator_t) -> Receiver {
+    fn new(
+        destination_guid_prefix: guid_prefix::GuidPrefix_t,
+        unicast_reply_locator: locator::Locator_t,
+        multicast_reply_locator: locator::Locator_t,
+    ) -> Receiver {
         Receiver {
             source_version: protocol_version::PROTOCOLVERSION,
             source_vendor_id: vendor_id::VENDOR_UNKNOWN,
@@ -82,15 +84,15 @@ impl Receiver {
             unicast_reply_locator_list: locator::Locator_t {
                 kind: unicast_reply_locator.kind,
                 port: locator::LOCATOR_PORT_INVALID, // TODO: check if it is correct, page 35
-                address: unicast_reply_locator.address
+                address: unicast_reply_locator.address,
             },
             multicast_reply_locator_list: locator::Locator_t {
                 kind: multicast_reply_locator.kind,
                 port: locator::LOCATOR_PORT_INVALID, // TODO: check if it is correct, page 35
-                address: multicast_reply_locator.address
+                address: multicast_reply_locator.address,
             },
             have_timestamp: false,
-            timestapm: time::TIME_INVALID
+            timestapm: time::TIME_INVALID,
         }
     }
 }

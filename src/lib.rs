@@ -1,16 +1,14 @@
-extern crate cdr;
 extern crate bit_set;
 extern crate bit_vec;
-extern crate serde;
+extern crate tokio_core;
 #[macro_use]
-extern crate serde_derive;
+extern crate speedy_derive;
+extern crate speedy;
 
 #[macro_use]
-mod assert_ser_de;
-#[macro_use]
-mod enum_number;
+mod serialization_test;
 mod common;
 mod history_cache;
-mod participant;
-mod message_receiver;
 mod message;
+mod message_receiver;
+mod participant;

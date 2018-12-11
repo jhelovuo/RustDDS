@@ -1,6 +1,10 @@
+use speedy::{Context, Readable, Reader, Writable, Writer};
+use std::io::Result;
+use std::mem::size_of;
+
 /// Type used to represent the identity of a data-object whose changes in value are
 /// communicated by the RTPS protocol.
-#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct InstanceHandle_t {
     pub entityKey: [u8; 16],
 }
@@ -8,8 +12,29 @@ pub struct InstanceHandle_t {
 impl Default for InstanceHandle_t {
     fn default() -> InstanceHandle_t {
         InstanceHandle_t {
-            entityKey: [0x00; 16]
+            entityKey: [0x00; 16],
         }
+    }
+}
+
+impl<'a, C: Context> Readable<'a, C> for InstanceHandle_t {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+        let mut instance_handle = InstanceHandle_t::default();
+        for i in 0..instance_handle.entityKey.len() {
+            instance_handle.entityKey[i] = reader.read_u8()?;
+        }
+        Ok(instance_handle)
+    }
+}
+
+impl<C: Context> Writable<C> for InstanceHandle_t {
+    #[inline]
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+        for elem in &self.entityKey {
+            writer.write_u8(*elem)?;
+        }
+        Ok(())
     }
 }
 
@@ -17,7 +42,7 @@ impl Default for InstanceHandle_t {
 mod tests {
     use super::*;
 
-    assert_ser_de!(
+    serialization_test!( type = InstanceHandle_t,
         {
             instance_handle_default,
             InstanceHandle_t::default(),

@@ -1,7 +1,10 @@
-#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+use speedy::{Context, Readable, Reader, Writable, Writer};
+use std::io::Result;
+
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct EntityId_t {
-    pub entityKey: [u8; 3],
-    pub entityKind: u8
+    entityKey: [u8; 3],
+    entityKind: u8,
 }
 
 impl Default for EntityId_t {
@@ -10,24 +13,82 @@ impl Default for EntityId_t {
     }
 }
 
-pub const ENTITY_UNKNOWN: EntityId_t = EntityId_t { entityKey: [0x00; 3], entityKind: 0x00 };
-pub const ENTITY_PARTICIPANT: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x01], entityKind: 0xC1 };
-pub const ENTITY_SEDP_BUILTIN_TOPIC_WRITER: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x02], entityKind: 0xC2 };
-pub const ENTITY_SEDP_BUILTIN_TOPIC_READER: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x02], entityKind: 0xC7 };
-pub const ENTITY_SEDP_BUILTIN_PUBLICATIONS_WRITER: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x03], entityKind: 0xC2 };
-pub const ENTITY_SEDP_BUILTIN_PUBLICATIONS_READER: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x03], entityKind: 0xC7 };
-pub const ENTITY_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x04], entityKind: 0xC2 };
-pub const ENTITY_SEDP_BUILTIN_SUBSCRIPTIONS_READER: EntityId_t = EntityId_t { entityKey: [0x00, 0x00, 0x04], entityKind: 0xC7 };
-pub const ENTITY_SPDP_BUILTIN_PARTICIPANT_WRITER: EntityId_t = EntityId_t { entityKey: [0x00, 0x01, 0x00], entityKind: 0xC2 };
-pub const ENTITY_SPDP_BUILTIN_PARTICIPANT_READER: EntityId_t = EntityId_t { entityKey: [0x00, 0x01, 0x00], entityKind: 0xC7 };
-pub const ENTITY_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER: EntityId_t = EntityId_t { entityKey: [0x00, 0x02, 0x00], entityKind: 0xC2 };
-pub const ENTITY_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: EntityId_t = EntityId_t { entityKey: [0x00, 0x02, 0x00], entityKind: 0xC7 };
+pub const ENTITY_UNKNOWN: EntityId_t = EntityId_t {
+    entityKey: [0x00; 3],
+    entityKind: 0x00,
+};
+pub const ENTITY_PARTICIPANT: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x00, 0x01],
+    entityKind: 0xC1,
+};
+pub const ENTITY_SEDP_BUILTIN_TOPIC_WRITER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x00, 0x02],
+    entityKind: 0xC2,
+};
+pub const ENTITY_SEDP_BUILTIN_TOPIC_READER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x00, 0x02],
+    entityKind: 0xC7,
+};
+pub const ENTITY_SEDP_BUILTIN_PUBLICATIONS_WRITER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x00, 0x03],
+    entityKind: 0xC2,
+};
+pub const ENTITY_SEDP_BUILTIN_PUBLICATIONS_READER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x00, 0x03],
+    entityKind: 0xC7,
+};
+pub const ENTITY_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x00, 0x04],
+    entityKind: 0xC2,
+};
+pub const ENTITY_SEDP_BUILTIN_SUBSCRIPTIONS_READER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x00, 0x04],
+    entityKind: 0xC7,
+};
+pub const ENTITY_SPDP_BUILTIN_PARTICIPANT_WRITER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x01, 0x00],
+    entityKind: 0xC2,
+};
+pub const ENTITY_SPDP_BUILTIN_PARTICIPANT_READER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x01, 0x00],
+    entityKind: 0xC7,
+};
+pub const ENTITY_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x02, 0x00],
+    entityKind: 0xC2,
+};
+pub const ENTITY_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: EntityId_t = EntityId_t {
+    entityKey: [0x00, 0x02, 0x00],
+    entityKind: 0xC7,
+};
+
+impl<'a, C: Context> Readable<'a, C> for EntityId_t {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+        let entityKey = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
+        let entityKind = reader.read_u8()?;
+        Ok(EntityId_t {
+            entityKey: entityKey,
+            entityKind: entityKind,
+        })
+    }
+}
+
+impl<C: Context> Writable<C> for EntityId_t {
+    #[inline]
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+        for elem in &self.entityKey {
+            writer.write_u8(*elem)?
+        }
+        writer.write_u8(self.entityKind)
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    assert_ser_de!(
+    serialization_test!( type = EntityId_t,
         {
             entity_unknown,
             ENTITY_UNKNOWN,

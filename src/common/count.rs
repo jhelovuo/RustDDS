@@ -1,13 +1,15 @@
-#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+use speedy::{Endianness, Readable, Writable};
+
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct Count_t {
-    pub value: i32
+    pub value: i32,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    assert_ser_de!(
+    serialization_test!( type = Count_t,
         {
             count_test_one,
             Count_t { value: 1 },

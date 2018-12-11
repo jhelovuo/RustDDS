@@ -1,9 +1,9 @@
-use crate::common::submessage_flag::{SubmessageFlag};
-use crate::common::entity_id::{EntityId_t};
-use crate::common::sequence_number::{SequenceNumber_t};
-use crate::common::count::{Count_t};
+use crate::common::count::Count_t;
+use crate::common::entity_id::EntityId_t;
+use crate::common::sequence_number::SequenceNumber_t;
+use crate::common::submessage_flag::SubmessageFlag;
 
-use crate::message::submessage_header::{SubmessageHeader};
+use crate::message::submessage_header::SubmessageHeader;
 use crate::message::validity_trait::Validity;
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
@@ -38,7 +38,7 @@ struct HeartBeat {
     /// Provides the means for a Reader to detect duplicate Heartbeat
     /// messages that can result from the presence of redundant
     /// communication paths.
-    pub count: Count_t
+    pub count: Count_t,
 }
 
 impl HeartBeat {
@@ -62,8 +62,8 @@ impl HeartBeat {
 
 impl Validity for HeartBeat {
     fn valid(&self) -> bool {
-        self.first_sn.value() > 0 &&
-            self.last_sn.value() > 0 &&
-            self.last_sn.value() >= self.first_sn.value()
+        self.first_sn.value() > 0
+            && self.last_sn.value() > 0
+            && self.last_sn.value() >= self.first_sn.value()
     }
 }

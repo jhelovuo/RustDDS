@@ -1,8 +1,8 @@
-use crate::common::submessage_flag::{SubmessageFlag};
-use crate::common::entity_id::{EntityId_t};
-use crate::common::sequence_number::{SequenceNumber_t, SequenceNumberSet_t};
+use crate::common::entity_id::EntityId_t;
+use crate::common::sequence_number::{SequenceNumberSet_t, SequenceNumber_t};
+use crate::common::submessage_flag::SubmessageFlag;
 
-use crate::message::submessage_header::{SubmessageHeader};
+use crate::message::submessage_header::SubmessageHeader;
 use crate::message::validity_trait::Validity;
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
@@ -24,7 +24,7 @@ struct Gap {
     ///
     /// Identifies an additional list of sequence numbers that are
     /// irrelevant.
-    gap_list: SequenceNumberSet_t
+    gap_list: SequenceNumberSet_t,
 }
 
 impl Gap {

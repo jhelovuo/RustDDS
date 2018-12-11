@@ -1,6 +1,6 @@
 use crate::common::locator;
-use crate::common::vendor_id;
 use crate::common::protocol_version;
+use crate::common::vendor_id;
 
 struct Participant {
     protocol_version: protocol_version::ProtocolVersion_t,

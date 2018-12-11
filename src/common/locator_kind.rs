@@ -1,17 +1,17 @@
-use crate::enum_number;
-
-enum_number_i32!(LocatorKind_t {
-    LOCATOR_KIND_INVALID = -1,
+#[derive(Clone, Debug, Eq, PartialEq, Readable, Writable)]
+#[repr(u32)]
+pub enum LocatorKind_t {
+    LOCATOR_KIND_INVALID = 0xFFFFFFFF,
     LOCATOR_KIND_RESERVED = 0,
     LOCATOR_KIND_UDPv4 = 1,
     LOCATOR_KIND_UDPv6 = 2,
-});
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    assert_ser_de!(
+    serialization_test!( type = LocatorKind_t,
         {
             locator_kind_invalid,
             LocatorKind_t::LOCATOR_KIND_INVALID,

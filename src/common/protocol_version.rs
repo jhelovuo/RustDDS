@@ -1,7 +1,7 @@
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct ProtocolVersion_t {
     pub major: u8,
-    pub minor: u8
+    pub minor: u8,
 }
 
 pub const PROTOCOLVERSION_1_0: ProtocolVersion_t = ProtocolVersion_t { major: 1, minor: 0 };

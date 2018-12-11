@@ -53,7 +53,7 @@ pub enum ParameterId {
     PID_TYPE_MAX_SIZE_SERIALIZED = 0x0060,
     PID_ENTITY_NAME = 0x0062,
     PID_KEY_HASH = 0x0070,
-    PID_STATUS_INFO = 0x0071
+    PID_STATUS_INFO = 0x0071,
 }
 
 #[derive(PartialOrd, PartialEq, Ord, Eq)]
@@ -63,7 +63,7 @@ pub struct Parameter {
     /// Length of the parameter value
     length: i16, // TODO: change to function
     /// Parameter value of size self.length
-    value: Vec<u8>
+    value: Vec<u8>,
 }
 
 pub type ParameterList = Vec<Parameter>;

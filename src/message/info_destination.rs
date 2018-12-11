@@ -1,6 +1,6 @@
-use crate::common::submessage_flag::{SubmessageFlag};
-use crate::common::guid_prefix::{GuidPrefix_t};
-use crate::message::submessage_header::{SubmessageHeader};
+use crate::common::guid_prefix::GuidPrefix_t;
+use crate::common::submessage_flag::SubmessageFlag;
+use crate::message::submessage_header::SubmessageHeader;
 use crate::message::validity_trait::Validity;
 
 /// This message is sent from an RTPS Writer to an RTPS Reader
@@ -8,7 +8,7 @@ use crate::message::validity_trait::Validity;
 /// appearing in the Submessages that follow it.
 struct InfoDestination {
     submessage_header: SubmessageHeader,
-    pub guid_prefix: GuidPrefix_t
+    pub guid_prefix: GuidPrefix_t,
 }
 
 impl InfoDestination {

@@ -1,8 +1,8 @@
-use crate::common::submessage_flag::{SubmessageFlag};
-use crate::common::protocol_version::{ProtocolVersion_t};
-use crate::common::vendor_id::{VendorId_t};
-use crate::common::guid_prefix::{GuidPrefix_t};
-use crate::message::submessage_header::{SubmessageHeader};
+use crate::common::guid_prefix::GuidPrefix_t;
+use crate::common::protocol_version::ProtocolVersion_t;
+use crate::common::submessage_flag::SubmessageFlag;
+use crate::common::vendor_id::VendorId_t;
+use crate::message::submessage_header::SubmessageHeader;
 use crate::message::validity_trait::Validity;
 
 /// This message modifies the logical source of the Submessages
@@ -11,7 +11,7 @@ struct InfoSource {
     submessage_header: SubmessageHeader,
     pub protocol_version: ProtocolVersion_t,
     pub vendor_id: VendorId_t,
-    pub guid_prefix: GuidPrefix_t
+    pub guid_prefix: GuidPrefix_t,
 }
 
 impl InfoSource {

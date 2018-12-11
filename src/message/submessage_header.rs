@@ -1,7 +1,10 @@
 use crate::common::submessage_flag;
-use crate::enum_number;
+use speedy::{Context, Readable, Reader, Writable, Writer};
+use std::io::{Error, ErrorKind, Result};
+use std::mem::size_of;
 
-enum_number_u8!(SubmessageKind {
+#[derive(Debug, Eq, PartialEq)]
+pub enum SubmessageKind {
     PAD = 0x01,
     ACKNACK = 0x06,
     HEARTBEAT = 0x07,
@@ -15,20 +18,66 @@ enum_number_u8!(SubmessageKind {
     HEARTBEAT_FRAG = 0x13,
     DATA = 0x15,
     DATA_FRAG = 0x16,
-});
+}
 
-#[derive(Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Readable, Writable)]
 pub struct SubmessageHeader {
     pub submessage_id: SubmessageKind,
     pub flags: submessage_flag::SubmessageFlag,
-    pub submessage_length: u16
+    pub submessage_length: u16,
+}
+
+impl<'a, C: Context> Readable<'a, C> for SubmessageKind {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+        let id = reader.read_u8()?;
+        match id {
+            0x01 => Ok(SubmessageKind::PAD),
+            0x06 => Ok(SubmessageKind::ACKNACK),
+            0x07 => Ok(SubmessageKind::HEARTBEAT),
+            0x08 => Ok(SubmessageKind::GAP),
+            0x09 => Ok(SubmessageKind::INFO_TS),
+            0x0c => Ok(SubmessageKind::INFO_SRC),
+            0x0d => Ok(SubmessageKind::INFO_REPLAY_IP4),
+            0x0e => Ok(SubmessageKind::INFO_DST),
+            0x0f => Ok(SubmessageKind::INFO_REPLAY),
+            0x12 => Ok(SubmessageKind::NACK_FRAG),
+            0x13 => Ok(SubmessageKind::HEARTBEAT_FRAG),
+            0x15 => Ok(SubmessageKind::DATA),
+            0x16 => Ok(SubmessageKind::DATA_FRAG),
+            _ => Err(Error::new(ErrorKind::InvalidData, "unknown SubmessageKind")),
+        }
+    }
+}
+
+impl<C: Context> Writable<C> for SubmessageKind {
+    #[inline]
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+        use self::SubmessageKind::*;
+        let id = match self {
+            PAD => 0x01,
+            ACKNACK => 0x06,
+            HEARTBEAT => 0x07,
+            GAP => 0x08,
+            INFO_TS => 0x09,
+            INFO_SRC => 0x0c,
+            INFO_REPLAY_IP4 => 0x0d,
+            INFO_DST => 0x0e,
+            INFO_REPLAY => 0x0f,
+            NACK_FRAG => 0x12,
+            HEARTBEAT_FRAG => 0x13,
+            DATA => 0x15,
+            DATA_FRAG => 0x16,
+        };
+        writer.write_u8(id)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    assert_ser_de!(
+    serialization_test!( type = SubmessageKind,
         {
             submessage_kind_pad,
             SubmessageKind::PAD,

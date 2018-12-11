@@ -1,15 +1,47 @@
 use crate::message::Validity;
+use speedy::{Context, Readable, Reader, Writable, Writer};
+use std::io::Result;
+use std::mem::size_of;
 
-#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct ProtocolId_t {
-    pub protocol_id: [char;4]
+    protocol_id: [char; 4],
 }
 
-pub const PROTOCOL_RTPS: ProtocolId_t = ProtocolId_t { protocol_id: ['R','T','P','S'] };
+pub const PROTOCOL_RTPS: ProtocolId_t = ProtocolId_t {
+    protocol_id: ['R', 'T', 'P', 'S'],
+};
+
+impl Default for ProtocolId_t {
+    fn default() -> Self {
+        PROTOCOL_RTPS
+    }
+}
 
 impl Validity for ProtocolId_t {
     fn valid(&self) -> bool {
-        self.protocol_id == PROTOCOL_RTPS.protocol_id
+        *self == PROTOCOL_RTPS
+    }
+}
+
+impl<'a, C: Context> Readable<'a, C> for ProtocolId_t {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+        let mut protocol_id = ProtocolId_t::default();
+        for i in 0..protocol_id.protocol_id.len() {
+            protocol_id.protocol_id[i] = reader.read_u8()? as char;
+        }
+        Ok(protocol_id)
+    }
+}
+
+impl<C: Context> Writable<C> for ProtocolId_t {
+    #[inline]
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+        for elem in &self.protocol_id {
+            writer.write_u8(*elem as u8)?
+        }
+        Ok(())
     }
 }
 
@@ -21,11 +53,14 @@ mod tests {
     fn validity() {
         let protocol_id = PROTOCOL_RTPS;
         assert!(protocol_id.valid());
-        let protocol_id = ProtocolId_t { protocol_id: ['S','P','T','R'] };
+        let protocol_id = ProtocolId_t {
+            protocol_id: ['S', 'P', 'T', 'R'],
+        };
         assert!(!protocol_id.valid());
     }
 
-    assert_ser_de!({
+    serialization_test!( type = ProtocolId_t,
+    {
         protocol_rtps,
         PROTOCOL_RTPS,
         le = [0x52, 0x54, 0x50, 0x53],

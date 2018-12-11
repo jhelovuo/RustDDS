@@ -6,8 +6,8 @@ edition = "2018"
 
 [dependencies]
 time = "0.1.39"
-serde = "1.0.70"
-serde_derive = "1.0.27"
+tokio-core = "0.1.17"
 bit-set = "0.5.0"
 bit-vec = "0.5.0"
-cdr = { git = "https://github.com/hrektts/cdr-rs" }
+speedy = "0.4.1"
+speedy-derive = "0.3.1"

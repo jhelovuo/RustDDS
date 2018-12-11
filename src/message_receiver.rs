@@ -1,8 +1,12 @@
-use crate::common::protocol_version;
-use crate::common::vendor_id;
 use crate::common::guid_prefix;
 use crate::common::locator;
+use crate::common::protocol_version;
 use crate::common::time;
+use crate::common::vendor_id;
+
+use std::io::Error;
+use std::net::SocketAddr;
+use tokio_core::net::UdpCodec;
 
 pub struct MessageReceiver {
     pub source_version: protocol_version::ProtocolVersion_t,
@@ -12,7 +16,7 @@ pub struct MessageReceiver {
     pub unicast_reply_locator_list: locator::LocatorList_t,
     pub multicast_reply_locator_list: locator::LocatorList_t,
     pub have_timestamp: bool,
-    pub timestamp: time::Time_t
+    pub timestamp: time::Time_t,
 }
 
 impl MessageReceiver {
@@ -23,17 +27,30 @@ impl MessageReceiver {
             source_guid_prefix: guid_prefix::GUIDPREFIX_UNKNOWN,
             dest_guid_prefix: guid_prefix::GUIDPREFIX_UNKNOWN,
             unicast_reply_locator_list: vec![locator::Locator_t {
-                kind: locator_kind,
+                kind: locator_kind.clone(),
                 address: locator::LOCATOR_ADDRESS_INVALID,
-                port: locator::LOCATOR_PORT_INVALID
+                port: locator::LOCATOR_PORT_INVALID,
             }],
             multicast_reply_locator_list: vec![locator::Locator_t {
                 kind: locator_kind,
                 address: locator::LOCATOR_ADDRESS_INVALID,
-                port: locator::LOCATOR_PORT_INVALID
+                port: locator::LOCATOR_PORT_INVALID,
             }],
             have_timestamp: false,
-            timestamp: time::TIME_INVALID
+            timestamp: time::TIME_INVALID,
         }
+    }
+}
+
+impl UdpCodec for MessageReceiver {
+    type In = Self;
+    type Out = Self;
+
+    fn encode(&mut self, msg: Self::Out, buf: &mut Vec<u8>) -> SocketAddr {
+        unimplemented!();
+    }
+
+    fn decode(&mut self, src: &SocketAddr, buf: &[u8]) -> Result<Self::In, std::io::Error> {
+        unimplemented!();
     }
 }

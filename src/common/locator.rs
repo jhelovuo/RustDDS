@@ -1,24 +1,34 @@
-pub use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
+use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::convert::{From, Into};
+use std::io::Result;
+use std::mem::size_of;
+pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-pub use crate::common::locator_kind::{LocatorKind_t};
+pub use crate::common::locator_kind::LocatorKind_t;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Locator_t {
     pub kind: LocatorKind_t,
     pub port: u32,
-    pub address: [u8; 16]
+    pub address: [u8; 16],
 }
 
 pub type LocatorList_t = Vec<Locator_t>;
 
-pub const LOCATOR_INVALID: Locator_t = Locator_t { kind: LocatorKind_t::LOCATOR_KIND_INVALID,
-                                                   port: LOCATOR_PORT_INVALID,
-                                                   address: LOCATOR_ADDRESS_INVALID
+pub const LOCATOR_INVALID: Locator_t = Locator_t {
+    kind: LocatorKind_t::LOCATOR_KIND_INVALID,
+    port: LOCATOR_PORT_INVALID,
+    address: LOCATOR_ADDRESS_INVALID,
 };
 
 pub const LOCATOR_ADDRESS_INVALID: [u8; 16] = [0x00; 16];
 pub const LOCATOR_PORT_INVALID: u32 = 0;
+
+impl Default for Locator_t {
+    fn default() -> Self {
+        LOCATOR_INVALID
+    }
+}
 
 impl From<SocketAddr> for Locator_t {
     fn from(socket_address: SocketAddr) -> Self {
@@ -27,15 +37,40 @@ impl From<SocketAddr> for Locator_t {
                 true => LocatorKind_t::LOCATOR_KIND_INVALID,
                 false => match socket_address.ip().is_ipv4() {
                     true => LocatorKind_t::LOCATOR_KIND_UDPv4,
-                    false => LocatorKind_t::LOCATOR_KIND_UDPv6
-                }
+                    false => LocatorKind_t::LOCATOR_KIND_UDPv6,
+                },
             },
             port: socket_address.port() as u32,
             address: match socket_address.ip() {
                 IpAddr::V4(ip4) => ip4.to_ipv6_compatible().octets(),
-                IpAddr::V6(ip6) => ip6.octets()
-            }
+                IpAddr::V6(ip6) => ip6.octets(),
+            },
         }
+    }
+}
+
+impl<'a, C: Context> Readable<'a, C> for Locator_t {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+        let mut locator = Locator_t::default();
+        locator.kind = reader.read_value()?;
+        locator.port = reader.read_value()?;
+        for i in 0..locator.address.len() {
+            locator.address[i] = reader.read_u8()?;
+        }
+        Ok(locator)
+    }
+}
+
+impl<C: Context> Writable<C> for Locator_t {
+    #[inline]
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+        writer.write_value(&self.kind)?;
+        writer.write_value(&self.port)?;
+        for elem in &self.address {
+            writer.write_u8(*elem)?;
+        }
+        Ok(())
     }
 }
 
@@ -55,14 +90,17 @@ mod tests {
 
     #[test]
     fn locator_invalid_is_a_concatenation_of_invalid_members() {
-        assert_eq!(Locator_t {
-            kind: LocatorKind_t::LOCATOR_KIND_INVALID,
-            port: LOCATOR_PORT_INVALID,
-            address: LOCATOR_ADDRESS_INVALID
-        }, LOCATOR_INVALID);
+        assert_eq!(
+            Locator_t {
+                kind: LocatorKind_t::LOCATOR_KIND_INVALID,
+                port: LOCATOR_PORT_INVALID,
+                address: LOCATOR_ADDRESS_INVALID
+            },
+            LOCATOR_INVALID
+        );
     }
 
-    assert_ser_de!(
+    serialization_test!( type = Locator_t,
         {
             locator_invalid,
             LOCATOR_INVALID,

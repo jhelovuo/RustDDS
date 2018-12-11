@@ -5,9 +5,9 @@
 /// endianness used to encapsulate the Submessage. The remaining
 /// flags are interpreted differently depending on the kind
 /// of Submessage and are described separately for each Submessage.
-#[derive(Debug, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct SubmessageFlag {
-    pub flags: u8
+    pub flags: u8,
 }
 
 #[cfg(test)]
@@ -16,7 +16,9 @@ mod tests {
 
     #[test]
     fn correct_bits_order() {
-        let submessage_flag = SubmessageFlag { flags: 0b10110100_u8 };
+        let submessage_flag = SubmessageFlag {
+            flags: 0b10110100_u8,
+        };
 
         assert!(submessage_flag.flags & 0x01 == 0);
         assert!(submessage_flag.flags & (1 << 0) == 0);
@@ -25,10 +27,11 @@ mod tests {
         assert!(submessage_flag.flags & (1 << 7) != 0);
     }
 
-    assert_ser_de!({
-        submessage_flag,
-                   SubmessageFlag { flags: 0b10110100_u8 },
-        le = [0b10110100_u8],
-        be = [0b10110100_u8]
-    });
+    serialization_test!(type = SubmessageFlag,
+        {
+            submessage_flag,
+            SubmessageFlag { flags: 0b10110100_u8 },
+            le = [0b10110100_u8],
+            be = [0b10110100_u8]
+        });
 }
