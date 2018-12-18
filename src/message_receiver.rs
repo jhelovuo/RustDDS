@@ -6,7 +6,8 @@ use crate::common::vendor_id;
 
 use std::io::Error;
 use std::net::SocketAddr;
-use tokio_core::net::UdpCodec;
+use tokio::codec::{Decoder, Encoder};
+use bytes::BytesMut;
 
 pub struct MessageReceiver {
     pub source_version: protocol_version::ProtocolVersion_t,
@@ -42,15 +43,11 @@ impl MessageReceiver {
     }
 }
 
-impl UdpCodec for MessageReceiver {
-    type In = Self;
-    type Out = Self;
+impl Decoder for MessageReceiver {
+    type Item = Self;
+    type Error = std::io::Error;
 
-    fn encode(&mut self, msg: Self::Out, buf: &mut Vec<u8>) -> SocketAddr {
-        unimplemented!();
-    }
-
-    fn decode(&mut self, src: &SocketAddr, buf: &[u8]) -> Result<Self::In, std::io::Error> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         unimplemented!();
     }
 }

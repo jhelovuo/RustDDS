@@ -6,8 +6,9 @@ edition = "2018"
 
 [dependencies]
 time = "0.1.39"
-tokio-core = "0.1.17"
+bytes = "0.4.11"
+tokio = "0.1.13"
 bit-set = "0.5.0"
 bit-vec = "0.5.0"
 speedy = "0.4.1"
-speedy-derive = "0.3.1"
+speedy-derive = "0.3.2"
