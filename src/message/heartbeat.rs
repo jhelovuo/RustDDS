@@ -8,7 +8,7 @@ use crate::message::validity_trait::Validity;
 /// is no longer relevant. The set may be a contiguous range of
 /// sequence numbers or a specific set of sequence numbers.
 #[derive(Debug, PartialEq)]
-pub struct HeartBeat {
+pub struct Heartbeat {
     /// Identifies the Reader Entity that is being informed of the
     /// availability of a set of sequence numbers.
     ///

@@ -4,7 +4,8 @@ use crate::common::vendor_id::VendorId_t;
 
 /// This message modifies the logical source of the Submessages
 /// that follow.
-struct InfoSource {
+#[derive(Debug, PartialEq)]
+pub struct InfoSource {
     pub protocol_version: ProtocolVersion_t,
     pub vendor_id: VendorId_t,
     pub guid_prefix: GuidPrefix_t,
