@@ -86,7 +86,7 @@ struct Receiver {
     unicast_reply_locator_list: locator::Locator_t,
     multicast_reply_locator_list: locator::Locator_t,
     have_timestamp: bool,
-    timestapm: time::Time_t,
+    timestamp: time::Time_t,
 }
 
 impl Receiver {
@@ -111,7 +111,7 @@ impl Receiver {
                 address: multicast_reply_locator.address,
             },
             have_timestamp: false,
-            timestapm: time::TIME_INVALID,
+            timestamp: time::TIME_INVALID,
         }
     }
 }
