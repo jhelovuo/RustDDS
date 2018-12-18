@@ -1,3 +1,4 @@
+mod bit_set;
 pub mod change_kind;
 pub mod count;
 pub mod entity_id;
