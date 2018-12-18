@@ -10,7 +10,8 @@ use crate::message::validity_trait::Validity;
 /// a data-object belonging to the RTPS Writer. The possible changes
 /// include both changes in value as well as changes to the lifecycle
 /// of the data-object.
-struct Data {
+#[derive(Debug, PartialEq)]
+pub struct Data {
     pub reader_id: EntityId_t,
     pub writer_id: EntityId_t,
     pub writer_sn: SequenceNumber_t,

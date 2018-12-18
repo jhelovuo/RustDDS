@@ -2,9 +2,9 @@ use crate::common::guid_prefix;
 use crate::common::locator;
 use crate::common::protocol_id;
 use crate::common::protocol_version;
-use crate::common::submessage_flag;
 use crate::common::time;
 use crate::common::vendor_id;
+use crate::message::submessage_flag;
 use crate::message::validity_trait::Validity;
 
 #[derive(Debug, Readable, Writable, PartialEq)]

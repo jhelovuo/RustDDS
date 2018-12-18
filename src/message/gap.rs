@@ -6,7 +6,8 @@ use crate::message::validity_trait::Validity;
 /// indicates to the RTPS Reader that a range of sequence numbers
 /// is no longer relevant. The set may be a contiguous range of
 /// sequence numbers or a specific set of sequence numbers.
-struct Gap {
+#[derive(Debug, PartialEq)]
+pub struct Gap {
     /// Identifies the Reader Entity that is being informed of the
     /// irrelevance of a set of sequence numbers.
     pub reader_id: EntityId_t,

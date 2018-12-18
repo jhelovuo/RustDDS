@@ -11,7 +11,7 @@ use crate::message::validity_trait::Validity;
 /// missing. This Submessage can be used to do both positive
 /// and negative acknowledgments
 #[derive(Debug, PartialEq, Readable, Writable)]
-struct AckNack {
+pub struct AckNack {
     pub reader_id: EntityId_t,
     pub writer_id: EntityId_t,
     pub reader_sn_state: SequenceNumberSet_t,

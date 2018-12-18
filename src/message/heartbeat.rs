@@ -7,7 +7,8 @@ use crate::message::validity_trait::Validity;
 /// indicates to the RTPS Reader that a range of sequence numbers
 /// is no longer relevant. The set may be a contiguous range of
 /// sequence numbers or a specific set of sequence numbers.
-struct HeartBeat {
+#[derive(Debug, PartialEq)]
+pub struct HeartBeat {
     /// Identifies the Reader Entity that is being informed of the
     /// availability of a set of sequence numbers.
     ///

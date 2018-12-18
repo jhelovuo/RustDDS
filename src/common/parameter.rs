@@ -1,6 +1,6 @@
 use crate::message::Validity;
 
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub enum ParameterId {
     PID_PAD = 0x0000,
     PID_SENTINEL = 0x0001,
@@ -56,7 +56,7 @@ pub enum ParameterId {
     PID_STATUS_INFO = 0x0071,
 }
 
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Parameter {
     /// Uniquely identifies a parameter
     parameter_id: ParameterId,

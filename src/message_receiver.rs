@@ -3,11 +3,12 @@ use crate::common::locator;
 use crate::common::protocol_version;
 use crate::common::time;
 use crate::common::vendor_id;
+use crate::message::submessage;
 
+use bytes::BytesMut;
 use std::io::Error;
 use std::net::SocketAddr;
 use tokio::codec::{Decoder, Encoder};
-use bytes::BytesMut;
 
 pub struct MessageReceiver {
     pub source_version: protocol_version::ProtocolVersion_t,
@@ -44,10 +45,16 @@ impl MessageReceiver {
 }
 
 impl Decoder for MessageReceiver {
-    type Item = Self;
+    type Item = submessage::Submessage;
     type Error = std::io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         unimplemented!();
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
 }

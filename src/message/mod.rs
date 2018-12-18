@@ -1,13 +1,16 @@
-mod acknack;
-mod data;
-mod gap;
-mod header;
-mod heartbeat;
-mod info_destination;
-mod info_reply;
-mod info_source;
-mod info_timestamp;
-mod submessage_header;
-mod validity_trait;
+pub mod acknack;
+pub mod data;
+pub mod gap;
+pub mod header;
+pub mod heartbeat;
+pub mod info_destination;
+pub mod info_reply;
+pub mod info_source;
+pub mod info_timestamp;
+pub mod submessage;
+pub mod submessage_flag;
+pub mod submessage_header;
+pub mod submessage_kind;
+pub mod validity_trait;
 
 pub use self::validity_trait::Validity;
