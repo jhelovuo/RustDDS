@@ -1,8 +1,5 @@
 use crate::common::entity_id::EntityId_t;
 use crate::common::sequence_number::{SequenceNumberSet_t, SequenceNumber_t};
-use crate::common::submessage_flag::SubmessageFlag;
-
-use crate::message::submessage_header::SubmessageHeader;
 use crate::message::validity_trait::Validity;
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
@@ -10,32 +7,18 @@ use crate::message::validity_trait::Validity;
 /// is no longer relevant. The set may be a contiguous range of
 /// sequence numbers or a specific set of sequence numbers.
 struct Gap {
-    submessage_header: SubmessageHeader,
     /// Identifies the Reader Entity that is being informed of the
     /// irrelevance of a set of sequence numbers.
-    reader_id: EntityId_t,
+    pub reader_id: EntityId_t,
     /// Identifies the Writer Entity to which the range of sequence
     /// numbers applies.
-    writer_id: EntityId_t,
+    pub writer_id: EntityId_t,
     /// Identifies the first sequence number in the interval of
     /// irrelevant sequence numbers
-    gap_start: SequenceNumber_t,
+    pub gap_start: SequenceNumber_t,
     /// Identifies the last sequence number in the interval of irrelevant sequence numbers.
     ///
     /// Identifies an additional list of sequence numbers that are
     /// irrelevant.
-    gap_list: SequenceNumberSet_t,
-}
-
-impl Gap {
-    /// Indicates endianness. Returns true if big-endian, false if little-endian
-    pub fn endianness_flag(&self) -> bool {
-        self.submessage_header.flags.flags & 0x01 != 0
-    }
-}
-
-impl Validity for Gap {
-    fn valid(&self) -> bool {
-        self.gap_list.valid() && self.gap_start.value() > 0 // TODO: change value to operators
-    }
+    pub gap_list: SequenceNumberSet_t,
 }

@@ -10,6 +10,13 @@ pub struct SubmessageFlag {
     pub flags: u8,
 }
 
+impl SubmessageFlag {
+    /// Indicates endianness. Returns true if big-endian, false if little-endian
+    pub fn endianness_flag(&self) -> bool {
+        self.flags & 0x01 != 0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -25,6 +32,15 @@ mod tests {
 
         assert!(submessage_flag.flags & 0x80 != 0);
         assert!(submessage_flag.flags & (1 << 7) != 0);
+    }
+
+    #[test]
+    fn endianness_flag() {
+        let flag_with_big_endian = SubmessageFlag { flags: 0x01 };
+        assert!(flag_with_big_endian.endianness_flag());
+
+        let flag_with_little_endian = SubmessageFlag { flags: 0x00 };
+        assert!(!flag_with_little_endian.endianness_flag());
     }
 
     serialization_test!(type = SubmessageFlag,
