@@ -2,6 +2,7 @@ use crate::message::acknack::AckNack;
 use crate::message::data::Data;
 use crate::message::gap::Gap;
 use crate::message::heartbeat::Heartbeat;
+use crate::message::heartbeat_frag::HeartbeatFrag;
 use crate::message::info_destination::InfoDestination;
 use crate::message::info_reply::InfoReply;
 use crate::message::info_source::InfoSource;
@@ -14,7 +15,7 @@ pub enum EntitySubmessage {
     // DataFrag(DataFrag),
     Gap(Gap),
     Heartbeat(Heartbeat),
-    // HeartbeatFrag(HeartbeatFrag),
+    HeartbeatFrag(HeartbeatFrag),
     // NackFrag(NackFrag),
 }
 

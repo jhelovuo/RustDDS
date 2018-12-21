@@ -3,6 +3,7 @@ pub mod data;
 pub mod gap;
 pub mod header;
 pub mod heartbeat;
+pub mod heartbeat_frag;
 pub mod info_destination;
 pub mod info_reply;
 pub mod info_source;
