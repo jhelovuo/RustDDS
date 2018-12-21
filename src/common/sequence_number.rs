@@ -295,30 +295,6 @@ mod tests {
         be = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
     });
 
-    serialization_test!( type = BitSetRef,
-    {
-        bit_set_empty,
-        BitSetRef::new(),
-        le = [0x00, 0x00, 0x00, 0x00],
-        be = [0x00, 0x00, 0x00, 0x00]
-    },
-    {
-        bit_set_non_zero_size,
-        (|| {
-            let mut set = BitSetRef::new();
-            set.insert(0);
-            set.insert(42);
-            set.insert(7);
-            set
-        })(),
-        le = [0x40, 0x00, 0x00, 0x00,
-              0x81, 0x00, 0x00, 0x00,
-              0x00, 0x04, 0x00, 0x00],
-        be = [0x00, 0x00, 0x00, 0x40,
-              0x00, 0x00, 0x00, 0x81,
-              0x00, 0x00, 0x04, 0x00]
-    });
-
     serialization_test!( type = SequenceNumberSet_t,
     {
         sequence_number_set_empty,
