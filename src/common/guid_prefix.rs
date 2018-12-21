@@ -26,6 +26,11 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix_t {
         }
         Ok(guid_prefix)
     }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        size_of::<Self>()
+    }
 }
 
 impl<C: Context> Writable<C> for GuidPrefix_t {
@@ -41,6 +46,15 @@ impl<C: Context> Writable<C> for GuidPrefix_t {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use speedy::Endianness;
+
+    #[test]
+    fn minimum_bytes_needed() {
+        assert_eq!(
+            12,
+            <GuidPrefix_t as Readable<Endianness>>::minimum_bytes_needed()
+        );
+    }
 
     serialization_test!( type = GuidPrefix_t,
     {

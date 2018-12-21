@@ -33,6 +33,11 @@ impl<'a, C: Context> Readable<'a, C> for ProtocolId_t {
         }
         Ok(protocol_id)
     }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        4
+    }
 }
 
 impl<C: Context> Writable<C> for ProtocolId_t {
@@ -48,6 +53,7 @@ impl<C: Context> Writable<C> for ProtocolId_t {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use speedy::Endianness;
 
     #[test]
     fn validity() {
@@ -57,6 +63,14 @@ mod tests {
             protocol_id: ['S', 'P', 'T', 'R'],
         };
         assert!(!protocol_id.valid());
+    }
+
+    #[test]
+    fn minimum_bytes_needed() {
+        assert_eq!(
+            4,
+            <ProtocolId_t as Readable<Endianness>>::minimum_bytes_needed()
+        );
     }
 
     serialization_test!( type = ProtocolId_t,
