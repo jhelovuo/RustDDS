@@ -6,9 +6,7 @@ use crate::common::vendor_id;
 use crate::message::submessage;
 
 use bytes::BytesMut;
-use std::io::Error;
-use std::net::SocketAddr;
-use tokio::codec::{Decoder, Encoder};
+use tokio::codec::Decoder;
 
 pub struct MessageReceiver {
     pub source_version: protocol_version::ProtocolVersion_t,

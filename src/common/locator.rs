@@ -1,7 +1,6 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::convert::{From, Into};
+use std::convert::From;
 use std::io::Result;
-use std::mem::size_of;
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 pub use crate::common::locator_kind::LocatorKind_t;

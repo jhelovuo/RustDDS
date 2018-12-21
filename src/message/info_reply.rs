@@ -1,5 +1,4 @@
 use crate::common::locator::LocatorList_t;
-use crate::message::validity_trait::Validity;
 
 /// This message is sent from an RTPS Reader to an RTPS Writer.
 /// It contains explicit information on where to send a reply

@@ -1,7 +1,6 @@
 use crate::message::Validity;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::io::Result;
-use std::mem::size_of;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct ProtocolId_t {

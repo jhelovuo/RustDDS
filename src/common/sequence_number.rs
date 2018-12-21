@@ -3,7 +3,6 @@ use crate::message::Validity;
 use std::cmp::Ordering;
 use std::ops::Add;
 use std::ops::Sub;
-use std::{cmp, fmt};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Readable, Writable)]
 pub struct SequenceNumber_t {

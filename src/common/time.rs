@@ -1,6 +1,5 @@
 extern crate time;
 
-use self::time::Timespec;
 use std::cmp::Ordering;
 use std::convert::{From, Into};
 

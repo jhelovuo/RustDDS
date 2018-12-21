@@ -1,7 +1,6 @@
 use crate::common::count::Count_t;
 use crate::common::entity_id::EntityId_t;
-use crate::common::sequence_number::{SequenceNumberSet_t, SequenceNumber_t};
-use crate::message::validity_trait::Validity;
+use crate::common::sequence_number::SequenceNumberSet_t;
 
 /// This Submessage is used to communicate the state of a Reader to a
 /// Writer.

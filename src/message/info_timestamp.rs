@@ -1,5 +1,4 @@
 use crate::common::time::Timestamp;
-use crate::message::validity_trait::Validity;
 
 /// This message modifies the logical source of the Submessages
 /// that follow.
