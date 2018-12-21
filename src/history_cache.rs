@@ -1,7 +1,5 @@
 use crate::common::change_kind;
-use crate::common::entity_id;
 use crate::common::guid;
-use crate::common::guid_prefix;
 use crate::common::instance_handle;
 use crate::common::sequence_number;
 
@@ -63,6 +61,8 @@ impl HistoryCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::guid_prefix;
+    use crate::common::entity_id;
 
     #[test]
     fn add_change_test() {

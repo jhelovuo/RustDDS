@@ -33,7 +33,7 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
         let number_of_bits = reader.read_u32()?;
         let mut bit_vec = BitVec::with_capacity(number_of_bits as usize);
         unsafe {
-            let mut inner = bit_vec.storage_mut();
+            let inner = bit_vec.storage_mut();
             for _ in 0..(number_of_bits / 32) {
                 inner.push(reader.read_u32()?);
             }
