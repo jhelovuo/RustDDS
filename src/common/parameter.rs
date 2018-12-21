@@ -1,75 +1,123 @@
+use crate::common::parameter_id::ParameterId;
 use crate::message::Validity;
+use speedy::{Context, Readable, Reader, Writable, Writer};
+use std::io::Result;
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
-pub enum ParameterId {
-    PID_PAD = 0x0000,
-    PID_SENTINEL = 0x0001,
-    PID_USER_DATA = 0x002c,
-    PID_TOPIC_NAME = 0x0005,
-    PID_TYPE_NAME = 0x0007,
-    PID_GROUP_DATA = 0x002d,
-    PID_TOPIC_DATA = 0x002e,
-    PID_DURABILITY = 0x001d,
-    PID_DURABILITY_SERVICE = 0x001e,
-    PID_DEADLINE = 0x0023,
-    PID_LATENCY_BUDGET = 0x0027,
-    PID_LIVELINESS = 0x001b,
-    PID_RELIABILITY = 0x001a,
-    PID_LIFESPAN = 0x002b,
-    PID_DESTINATION_ORDER = 0x0025,
-    PID_HISTORY = 0x0040,
-    PID_RESOURCE_LIMITS = 0x0041,
-    PID_OWNERSHIP = 0x001f,
-    PID_OWNERSHIP_STRENGTH = 0x0006,
-    PID_PRESENTATION = 0x0021,
-    PID_PARTITION = 0x0029,
-    PID_TIME_BASED_FILTER = 0x0004,
-    PID_TRANSPORT_PRIO = 0x0049,
-    PID_PROTOCOL_VERSION = 0x0015,
-    PID_VENDORID = 0x0016,
-    PID_UNICAST_LOCATOR = 0x002f,
-    PID_MULTICAST_LOCATOR = 0x0030,
-    PID_MULTICAST_IPADDRESS = 0x0011,
-    PID_DEFAULT_UNICAST_LOCATOR = 0x0031,
-    PID_DEFAULT_MULTICAST_LOCATOR = 0x0048,
-    PID_METATRAFFIC_UNICAST_LOCATOR = 0x0032,
-    PID_METATRAFFIC_MULTICAST_LOCATOR = 0x0033,
-    PID_DEFAULT_UNICAST_IPADDRESS = 0x000c,
-    PID_DEFAULT_UNICAST_PORT = 0x000e,
-    PID_METATRAFFIC_UNICAST_IPADDRESS = 0x0045,
-    PID_METATRAFFIC_UNICAST_PORT = 0x000d,
-    PID_METATRAFFIC_MULTICAST_IPADDRESS = 0x000b,
-    PID_METATRAFFIC_MULTICAST_PORT = 0x0046,
-    PID_EXPECTS_INLINE_QOS = 0x0043,
-    PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT = 0x0034,
-    PID_PARTICIPANT_BUILTIN_ENDPOINTS = 0x0044,
-    PID_PARTICIPANT_LEASE_DURATION = 0x0002,
-    PID_CONTENT_FILTER_PROPERTY = 0x0035,
-    PID_PARTICIPANT_GUID = 0x0050,
-    PID_GROUP_GUID = 0x0052,
-    PID_GROUP_ENTITYID = 0x0053,
-    PID_BUILTIN_ENDPOINT_SET = 0x0058,
-    PID_PROPERTY_LIST = 0x0059,
-    PID_TYPE_MAX_SIZE_SERIALIZED = 0x0060,
-    PID_ENTITY_NAME = 0x0062,
-    PID_KEY_HASH = 0x0070,
-    PID_STATUS_INFO = 0x0071,
-}
-
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Parameter {
-    /// Uniquely identifies a parameter
+    /// Uniquely identifies the type of parameter
     parameter_id: ParameterId,
-    /// Length of the parameter value
-    length: i16, // TODO: change to function
-    /// Parameter value of size self.length
+    /// Contains the CDR encapsulation of the Parameter type
+    /// that corresponds to the specified parameterId
     value: Vec<u8>,
 }
 
-pub type ParameterList = Vec<Parameter>;
+impl<'a, C: Context> Readable<'a, C> for Parameter {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+        let parameter_id: ParameterId = reader.read_value()?;
+        let length = reader.read_u16()?;
+        let alignment = length % 4;
 
-impl Validity for Parameter {
-    fn valid(&self) -> bool {
-        self.value.len() == self.length as usize
+        let mut value = Vec::with_capacity((length + alignment) as usize);
+
+        for _ in 0..(length + alignment) {
+            let byte = reader.read_u8()?;
+            value.push(byte);
+        }
+
+        Ok(Parameter {
+            parameter_id: parameter_id,
+            value: value,
+        })
     }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        32
+    }
+}
+
+impl<C: Context> Writable<C> for Parameter {
+    #[inline]
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+        writer.write_value(&self.parameter_id)?;
+
+        let length = self.value.len();
+        let alignment = length % 4;
+        writer.write_u16((length + alignment) as u16)?;
+
+        for byte in &self.value {
+            writer.write_u8(*byte)?;
+        }
+
+        for _ in 0..alignment {
+            writer.write_u8(0x00)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    serialization_test!( type = Parameter,
+    {
+        pid_protocol_version,
+        Parameter {
+            parameter_id: ParameterId::PID_PROTOCOL_VERSION,
+            value: vec![0x02, 0x01, 0x00, 0x00],
+        },
+        le = [0x15, 0x00, 0x04, 0x00,
+              0x02, 0x01, 0x00, 0x00],
+        be = [0x00, 0x15, 0x00, 0x04,
+              0x02, 0x01, 0x00, 0x00]
+    },
+    {
+        pid_vendor_id,
+        Parameter {
+            parameter_id: ParameterId::PID_VENDOR_ID,
+            value: vec![0x01, 0x02, 0x03, 0x04],
+        },
+        le = [0x16, 0x00, 0x04, 0x00,
+              0x01, 0x02, 0x03, 0x04],
+        be = [0x00, 0x16, 0x00, 0x04,
+              0x01, 0x02, 0x03, 0x04]
+    },
+    {
+        pid_participant_guid,
+        Parameter {
+            parameter_id: ParameterId::PID_PARTICIPANT_GUID,
+            value: vec![0x01, 0x0F, 0xBB, 0x1D,
+                        0xDF, 0x2B, 0x00, 0x00,
+                        0x00, 0x00, 0x00, 0x00,
+                        0x00, 0x00, 0x01, 0xC1],
+        },
+        le = [0x50, 0x00, 0x10, 0x00,
+              0x01, 0x0F, 0xBB, 0x1D,
+              0xDF, 0x2B, 0x00, 0x00,
+              0x00, 0x00, 0x00, 0x00,
+              0x00, 0x00, 0x01, 0xC1],
+        be = [0x00, 0x50, 0x00, 0x10,
+              0x01, 0x0F, 0xBB, 0x1D,
+              0xDF, 0x2B, 0x00, 0x00,
+              0x00, 0x00, 0x00, 0x00,
+              0x00, 0x00, 0x01, 0xC1]
+    },
+    {
+        pid_participant_lease_duration,
+        Parameter {
+            parameter_id: ParameterId::PID_PARTICIPANT_LEASE_DURATION,
+            value: vec![0xFF, 0xFF, 0xFF, 0x7F,
+                        0xFF, 0xFF, 0xFF, 0xFF],
+        },
+        le = [0x02, 0x00, 0x08, 0x00,
+              0xFF, 0xFF, 0xFF, 0x7F,
+              0xFF, 0xFF, 0xFF, 0xFF],
+        be = [0x00, 0x02, 0x00, 0x08,
+              0xFF, 0xFF, 0xFF, 0x7F,
+              0xFF, 0xFF, 0xFF, 0xFF]
+    });
 }

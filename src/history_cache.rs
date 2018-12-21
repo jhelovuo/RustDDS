@@ -61,8 +61,8 @@ impl HistoryCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::guid_prefix;
     use crate::common::entity_id;
+    use crate::common::guid_prefix;
 
     #[test]
     fn add_change_test() {
