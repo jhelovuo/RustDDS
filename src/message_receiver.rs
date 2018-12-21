@@ -48,7 +48,7 @@ impl Decoder for MessageReceiver {
     type Item = submessage::EntitySubmessage;
     type Error = std::io::Error;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, _src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         unimplemented!();
     }
 }
