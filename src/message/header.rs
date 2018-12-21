@@ -8,15 +8,15 @@ use crate::message::submessage_flag;
 use crate::message::validity_trait::Validity;
 
 #[derive(Debug, Readable, Writable, PartialEq)]
-struct Header {
-    protocol_id: protocol_id::ProtocolId_t,
-    protocol_version: protocol_version::ProtocolVersion_t,
-    vendor_id: vendor_id::VendorId_t,
-    guid_prefix: guid_prefix::GuidPrefix_t,
+pub struct Header {
+    pub protocol_id: protocol_id::ProtocolId_t,
+    pub protocol_version: protocol_version::ProtocolVersion_t,
+    pub vendor_id: vendor_id::VendorId_t,
+    pub guid_prefix: guid_prefix::GuidPrefix_t,
 }
 
 impl Header {
-    fn new(guid: guid_prefix::GuidPrefix_t) -> Header {
+    pub fn new(guid: guid_prefix::GuidPrefix_t) -> Header {
         Header {
             protocol_id: protocol_id::PROTOCOL_RTPS,
             protocol_version: protocol_version::PROTOCOLVERSION,
