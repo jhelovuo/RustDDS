@@ -1,5 +1,5 @@
 [package]
-name = "rtps"
+name = "rtps-rs"
 version = "0.1.0"
 authors = ["Klapeyron <tomasz.bartos@protonmail.com>"]
 description = "Real Time Publish Subscribe protocol"
