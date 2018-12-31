@@ -1,6 +1,3 @@
-use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::io::{Error, ErrorKind, Result};
-
 #[derive(Debug, PartialEq, Eq, Readable, Writable)]
 pub struct SubmessageKind {
     value: u8,

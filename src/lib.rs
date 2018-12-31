@@ -12,13 +12,13 @@ extern crate speedy;
 
 #[macro_use]
 mod serialization_test;
+mod behavior;
 mod common;
+mod dds;
+mod discovery;
 mod history_cache;
 mod message;
 mod message_receiver;
-mod participant;
-mod dds;
-mod structure;
 mod messages;
-mod behavior;
-mod discovery;
+mod participant;
+mod structure;

@@ -1,6 +1,6 @@
-use crate::structure::guid_prefix::GuidPrefix_t;
 use crate::messages::protocol_version::ProtocolVersion_t;
 use crate::messages::vendor_id::VendorId_t;
+use crate::structure::guid_prefix::GuidPrefix_t;
 
 /// This message modifies the logical source of the Submessages
 /// that follow.

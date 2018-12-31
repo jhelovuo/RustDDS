@@ -1,6 +1,3 @@
-use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::io::{Error, ErrorKind, Result};
-
 #[derive(Debug, PartialEq, Readable, Writable)]
 pub struct ParameterId {
     value: u16,
