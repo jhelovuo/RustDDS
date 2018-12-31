@@ -1,10 +1,13 @@
 #[derive(Clone, Debug, Eq, PartialEq, Readable, Writable)]
-#[repr(u32)]
-pub enum LocatorKind_t {
-    LOCATOR_KIND_INVALID = 0xFFFFFFFF,
-    LOCATOR_KIND_RESERVED = 0,
-    LOCATOR_KIND_UDPv4 = 1,
-    LOCATOR_KIND_UDPv6 = 2,
+pub struct LocatorKind_t {
+    value: i32,
+}
+
+impl LocatorKind_t {
+    pub const LOCATOR_KIND_INVALID: LocatorKind_t = LocatorKind_t { value: -1 };
+    pub const LOCATOR_KIND_RESERVED: LocatorKind_t = LocatorKind_t { value: 0 };
+    pub const LOCATOR_KIND_UDPv4: LocatorKind_t = LocatorKind_t { value: 1 };
+    pub const LOCATOR_KIND_UDPv6: LocatorKind_t = LocatorKind_t { value: 2 };
 }
 
 #[cfg(test)]

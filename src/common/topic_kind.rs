@@ -1,7 +1,11 @@
-#[derive(Debug, PartialEq, Readable, Writable)]
-enum TopicKind_t {
-    NO_KEY = 1,
-    WITH_KEY = 2,
+#[derive(Debug, PartialEq, Eq, Readable, Writable)]
+pub struct TopicKind_t {
+    value: u32,
+}
+
+impl TopicKind_t {
+    pub const NO_KEY: TopicKind_t = TopicKind_t { value: 1 };
+    pub const WITH_KEY: TopicKind_t = TopicKind_t { value: 2 };
 }
 
 #[cfg(test)]

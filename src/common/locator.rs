@@ -14,18 +14,20 @@ pub struct Locator_t {
 
 pub type LocatorList_t = Vec<Locator_t>;
 
-pub const LOCATOR_INVALID: Locator_t = Locator_t {
-    kind: LocatorKind_t::LOCATOR_KIND_INVALID,
-    port: LOCATOR_PORT_INVALID,
-    address: LOCATOR_ADDRESS_INVALID,
-};
+impl Locator_t {
+    pub const LOCATOR_INVALID: Locator_t = Locator_t {
+        kind: LocatorKind_t::LOCATOR_KIND_INVALID,
+        port: Locator_t::LOCATOR_PORT_INVALID,
+        address: Locator_t::LOCATOR_ADDRESS_INVALID,
+    };
 
-pub const LOCATOR_ADDRESS_INVALID: [u8; 16] = [0x00; 16];
-pub const LOCATOR_PORT_INVALID: u32 = 0;
+    pub const LOCATOR_ADDRESS_INVALID: [u8; 16] = [0x00; 16];
+    pub const LOCATOR_PORT_INVALID: u32 = 0;
+}
 
 impl Default for Locator_t {
     fn default() -> Self {
-        LOCATOR_INVALID
+        Locator_t::LOCATOR_INVALID
     }
 }
 
@@ -79,12 +81,12 @@ mod tests {
 
     #[test]
     fn verify_locator_address_invalid() {
-        assert_eq!([0x00; 16], LOCATOR_ADDRESS_INVALID);
+        assert_eq!([0x00; 16], Locator_t::LOCATOR_ADDRESS_INVALID);
     }
 
     #[test]
     fn verify_locator_port_invalid() {
-        assert_eq!(0, LOCATOR_PORT_INVALID);
+        assert_eq!(0, Locator_t::LOCATOR_PORT_INVALID);
     }
 
     #[test]
@@ -92,17 +94,17 @@ mod tests {
         assert_eq!(
             Locator_t {
                 kind: LocatorKind_t::LOCATOR_KIND_INVALID,
-                port: LOCATOR_PORT_INVALID,
-                address: LOCATOR_ADDRESS_INVALID
+                port: Locator_t::LOCATOR_PORT_INVALID,
+                address: Locator_t::LOCATOR_ADDRESS_INVALID
             },
-            LOCATOR_INVALID
+            Locator_t::LOCATOR_INVALID
         );
     }
 
     serialization_test!( type = Locator_t,
         {
             locator_invalid,
-            LOCATOR_INVALID,
+            Locator_t::LOCATOR_INVALID,
             le = [
                 0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
                 0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,

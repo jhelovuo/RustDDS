@@ -1,185 +1,64 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::io::{Error, ErrorKind, Result};
 
-#[derive(Debug, PartialEq)]
-pub enum ParameterId {
-    PID_PAD = 0x0000,
-    PID_SENTINEL = 0x0001,
-    PID_USER_DATA = 0x002c,
-    PID_TOPIC_NAME = 0x0005,
-    PID_TYPE_NAME = 0x0007,
-    PID_GROUP_DATA = 0x002d,
-    PID_TOPIC_DATA = 0x002e,
-    PID_DURABILITY = 0x001d,
-    PID_DURABILITY_SERVICE = 0x001e,
-    PID_DEADLINE = 0x0023,
-    PID_LATENCY_BUDGET = 0x0027,
-    PID_LIVELINESS = 0x001b,
-    PID_RELIABILITY = 0x001a,
-    PID_LIFESPAN = 0x002b,
-    PID_DESTINATION_ORDER = 0x0025,
-    PID_HISTORY = 0x0040,
-    PID_RESOURCE_LIMITS = 0x0041,
-    PID_OWNERSHIP = 0x001f,
-    PID_OWNERSHIP_STRENGTH = 0x0006,
-    PID_PRESENTATION = 0x0021,
-    PID_PARTITION = 0x0029,
-    PID_TIME_BASED_FILTER = 0x0004,
-    PID_TRANSPORT_PRIO = 0x0049,
-    PID_PROTOCOL_VERSION = 0x0015,
-    PID_VENDOR_ID = 0x0016,
-    PID_UNICAST_LOCATOR = 0x002f,
-    PID_MULTICAST_LOCATOR = 0x0030,
-    PID_MULTICAST_IPADDRESS = 0x0011,
-    PID_DEFAULT_UNICAST_LOCATOR = 0x0031,
-    PID_DEFAULT_MULTICAST_LOCATOR = 0x0048,
-    PID_METATRAFFIC_UNICAST_LOCATOR = 0x0032,
-    PID_METATRAFFIC_MULTICAST_LOCATOR = 0x0033,
-    PID_DEFAULT_UNICAST_IPADDRESS = 0x000c,
-    PID_DEFAULT_UNICAST_PORT = 0x000e,
-    PID_METATRAFFIC_UNICAST_IPADDRESS = 0x0045,
-    PID_METATRAFFIC_UNICAST_PORT = 0x000d,
-    PID_METATRAFFIC_MULTICAST_IPADDRESS = 0x000b,
-    PID_METATRAFFIC_MULTICAST_PORT = 0x0046,
-    PID_EXPECTS_INLINE_QOS = 0x0043,
-    PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT = 0x0034,
-    PID_PARTICIPANT_BUILTIN_ENDPOINTS = 0x0044,
-    PID_PARTICIPANT_LEASE_DURATION = 0x0002,
-    PID_CONTENT_FILTER_PROPERTY = 0x0035,
-    PID_PARTICIPANT_GUID = 0x0050,
-    PID_GROUP_GUID = 0x0052,
-    PID_GROUP_ENTITYID = 0x0053,
-    PID_BUILTIN_ENDPOINT_SET = 0x0058,
-    PID_PROPERTY_LIST = 0x0059,
-    PID_TYPE_MAX_SIZE_SERIALIZED = 0x0060,
-    PID_ENTITY_NAME = 0x0062,
-    PID_KEY_HASH = 0x0070,
-    PID_STATUS_INFO = 0x0071,
+#[derive(Debug, PartialEq, Readable, Writable)]
+pub struct ParameterId {
+    value: u16,
 }
 
-impl<'a, C: Context> Readable<'a, C> for ParameterId {
-    #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
-        use self::ParameterId::*;
-        let id = reader.read_u16()?;
-        match id {
-            0x0000 => Ok(PID_PAD),
-            0x0001 => Ok(PID_SENTINEL),
-            0x002c => Ok(PID_USER_DATA),
-            0x0005 => Ok(PID_TOPIC_NAME),
-            0x0007 => Ok(PID_TYPE_NAME),
-            0x002d => Ok(PID_GROUP_DATA),
-            0x002e => Ok(PID_TOPIC_DATA),
-            0x001d => Ok(PID_DURABILITY),
-            0x001e => Ok(PID_DURABILITY_SERVICE),
-            0x0023 => Ok(PID_DEADLINE),
-            0x0027 => Ok(PID_LATENCY_BUDGET),
-            0x001b => Ok(PID_LIVELINESS),
-            0x001a => Ok(PID_RELIABILITY),
-            0x002b => Ok(PID_LIFESPAN),
-            0x0025 => Ok(PID_DESTINATION_ORDER),
-            0x0040 => Ok(PID_HISTORY),
-            0x0041 => Ok(PID_RESOURCE_LIMITS),
-            0x001f => Ok(PID_OWNERSHIP),
-            0x0006 => Ok(PID_OWNERSHIP_STRENGTH),
-            0x0021 => Ok(PID_PRESENTATION),
-            0x0029 => Ok(PID_PARTITION),
-            0x0004 => Ok(PID_TIME_BASED_FILTER),
-            0x0049 => Ok(PID_TRANSPORT_PRIO),
-            0x0015 => Ok(PID_PROTOCOL_VERSION),
-            0x0016 => Ok(PID_VENDOR_ID),
-            0x002f => Ok(PID_UNICAST_LOCATOR),
-            0x0030 => Ok(PID_MULTICAST_LOCATOR),
-            0x0011 => Ok(PID_MULTICAST_IPADDRESS),
-            0x0031 => Ok(PID_DEFAULT_UNICAST_LOCATOR),
-            0x0048 => Ok(PID_DEFAULT_MULTICAST_LOCATOR),
-            0x0032 => Ok(PID_METATRAFFIC_UNICAST_LOCATOR),
-            0x0033 => Ok(PID_METATRAFFIC_MULTICAST_LOCATOR),
-            0x000c => Ok(PID_DEFAULT_UNICAST_IPADDRESS),
-            0x000e => Ok(PID_DEFAULT_UNICAST_PORT),
-            0x0045 => Ok(PID_METATRAFFIC_UNICAST_IPADDRESS),
-            0x000d => Ok(PID_METATRAFFIC_UNICAST_PORT),
-            0x000b => Ok(PID_METATRAFFIC_MULTICAST_IPADDRESS),
-            0x0046 => Ok(PID_METATRAFFIC_MULTICAST_PORT),
-            0x0043 => Ok(PID_EXPECTS_INLINE_QOS),
-            0x0034 => Ok(PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT),
-            0x0044 => Ok(PID_PARTICIPANT_BUILTIN_ENDPOINTS),
-            0x0002 => Ok(PID_PARTICIPANT_LEASE_DURATION),
-            0x0035 => Ok(PID_CONTENT_FILTER_PROPERTY),
-            0x0050 => Ok(PID_PARTICIPANT_GUID),
-            0x0052 => Ok(PID_GROUP_GUID),
-            0x0053 => Ok(PID_GROUP_ENTITYID),
-            0x0058 => Ok(PID_BUILTIN_ENDPOINT_SET),
-            0x0059 => Ok(PID_PROPERTY_LIST),
-            0x0060 => Ok(PID_TYPE_MAX_SIZE_SERIALIZED),
-            0x0062 => Ok(PID_ENTITY_NAME),
-            0x0070 => Ok(PID_KEY_HASH),
-            0x0071 => Ok(PID_STATUS_INFO),
-            _ => Err(Error::new(ErrorKind::InvalidData, "unknown ParameterId")),
-        }
-    }
-}
-
-impl<C: Context> Writable<C> for ParameterId {
-    #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
-        use self::ParameterId::*;
-        let id = match self {
-            PID_PAD => 0x0000,
-            PID_SENTINEL => 0x0001,
-            PID_USER_DATA => 0x002c,
-            PID_TOPIC_NAME => 0x0005,
-            PID_TYPE_NAME => 0x0007,
-            PID_GROUP_DATA => 0x002d,
-            PID_TOPIC_DATA => 0x002e,
-            PID_DURABILITY => 0x001d,
-            PID_DURABILITY_SERVICE => 0x001e,
-            PID_DEADLINE => 0x0023,
-            PID_LATENCY_BUDGET => 0x0027,
-            PID_LIVELINESS => 0x001b,
-            PID_RELIABILITY => 0x001a,
-            PID_LIFESPAN => 0x002b,
-            PID_DESTINATION_ORDER => 0x0025,
-            PID_HISTORY => 0x0040,
-            PID_RESOURCE_LIMITS => 0x0041,
-            PID_OWNERSHIP => 0x001f,
-            PID_OWNERSHIP_STRENGTH => 0x0006,
-            PID_PRESENTATION => 0x0021,
-            PID_PARTITION => 0x0029,
-            PID_TIME_BASED_FILTER => 0x0004,
-            PID_TRANSPORT_PRIO => 0x0049,
-            PID_PROTOCOL_VERSION => 0x0015,
-            PID_VENDOR_ID => 0x0016,
-            PID_UNICAST_LOCATOR => 0x002f,
-            PID_MULTICAST_LOCATOR => 0x0030,
-            PID_MULTICAST_IPADDRESS => 0x0011,
-            PID_DEFAULT_UNICAST_LOCATOR => 0x0031,
-            PID_DEFAULT_MULTICAST_LOCATOR => 0x0048,
-            PID_METATRAFFIC_UNICAST_LOCATOR => 0x0032,
-            PID_METATRAFFIC_MULTICAST_LOCATOR => 0x0033,
-            PID_DEFAULT_UNICAST_IPADDRESS => 0x000c,
-            PID_DEFAULT_UNICAST_PORT => 0x000e,
-            PID_METATRAFFIC_UNICAST_IPADDRESS => 0x0045,
-            PID_METATRAFFIC_UNICAST_PORT => 0x000d,
-            PID_METATRAFFIC_MULTICAST_IPADDRESS => 0x000b,
-            PID_METATRAFFIC_MULTICAST_PORT => 0x0046,
-            PID_EXPECTS_INLINE_QOS => 0x0043,
-            PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT => 0x0034,
-            PID_PARTICIPANT_BUILTIN_ENDPOINTS => 0x0044,
-            PID_PARTICIPANT_LEASE_DURATION => 0x0002,
-            PID_CONTENT_FILTER_PROPERTY => 0x0035,
-            PID_PARTICIPANT_GUID => 0x0050,
-            PID_GROUP_GUID => 0x0052,
-            PID_GROUP_ENTITYID => 0x0053,
-            PID_BUILTIN_ENDPOINT_SET => 0x0058,
-            PID_PROPERTY_LIST => 0x0059,
-            PID_TYPE_MAX_SIZE_SERIALIZED => 0x0060,
-            PID_ENTITY_NAME => 0x0062,
-            PID_KEY_HASH => 0x0070,
-            PID_STATUS_INFO => 0x0071,
-        };
-        writer.write_u16(id)
-    }
+impl ParameterId {
+    pub const PID_PAD: ParameterId = ParameterId { value: 0x0000 };
+    pub const PID_SENTINEL: ParameterId = ParameterId { value: 0x0001 };
+    pub const PID_USER_DATA: ParameterId = ParameterId { value: 0x002c };
+    pub const PID_TOPIC_NAME: ParameterId = ParameterId { value: 0x0005 };
+    pub const PID_TYPE_NAME: ParameterId = ParameterId { value: 0x0007 };
+    pub const PID_GROUP_DATA: ParameterId = ParameterId { value: 0x002d };
+    pub const PID_TOPIC_DATA: ParameterId = ParameterId { value: 0x002e };
+    pub const PID_DURABILITY: ParameterId = ParameterId { value: 0x001d };
+    pub const PID_DURABILITY_SERVICE: ParameterId = ParameterId { value: 0x001e };
+    pub const PID_DEADLINE: ParameterId = ParameterId { value: 0x0023 };
+    pub const PID_LATENCY_BUDGET: ParameterId = ParameterId { value: 0x0027 };
+    pub const PID_LIVELINESS: ParameterId = ParameterId { value: 0x001b };
+    pub const PID_RELIABILITY: ParameterId = ParameterId { value: 0x001a };
+    pub const PID_LIFESPAN: ParameterId = ParameterId { value: 0x002b };
+    pub const PID_DESTINATION_ORDER: ParameterId = ParameterId { value: 0x0025 };
+    pub const PID_HISTORY: ParameterId = ParameterId { value: 0x0040 };
+    pub const PID_RESOURCE_LIMITS: ParameterId = ParameterId { value: 0x0041 };
+    pub const PID_OWNERSHIP: ParameterId = ParameterId { value: 0x001f };
+    pub const PID_OWNERSHIP_STRENGTH: ParameterId = ParameterId { value: 0x0006 };
+    pub const PID_PRESENTATION: ParameterId = ParameterId { value: 0x0021 };
+    pub const PID_PARTITION: ParameterId = ParameterId { value: 0x0029 };
+    pub const PID_TIME_BASED_FILTER: ParameterId = ParameterId { value: 0x0004 };
+    pub const PID_TRANSPORT_PRIO: ParameterId = ParameterId { value: 0x0049 };
+    pub const PID_PROTOCOL_VERSION: ParameterId = ParameterId { value: 0x0015 };
+    pub const PID_VENDOR_ID: ParameterId = ParameterId { value: 0x0016 };
+    pub const PID_UNICAST_LOCATOR: ParameterId = ParameterId { value: 0x002f };
+    pub const PID_MULTICAST_LOCATOR: ParameterId = ParameterId { value: 0x0030 };
+    pub const PID_MULTICAST_IPADDRESS: ParameterId = ParameterId { value: 0x0011 };
+    pub const PID_DEFAULT_UNICAST_LOCATOR: ParameterId = ParameterId { value: 0x0031 };
+    pub const PID_DEFAULT_MULTICAST_LOCATOR: ParameterId = ParameterId { value: 0x0048 };
+    pub const PID_METATRAFFIC_UNICAST_LOCATOR: ParameterId = ParameterId { value: 0x0032 };
+    pub const PID_METATRAFFIC_MULTICAST_LOCATOR: ParameterId = ParameterId { value: 0x0033 };
+    pub const PID_DEFAULT_UNICAST_IPADDRESS: ParameterId = ParameterId { value: 0x000c };
+    pub const PID_DEFAULT_UNICAST_PORT: ParameterId = ParameterId { value: 0x000e };
+    pub const PID_METATRAFFIC_UNICAST_IPADDRESS: ParameterId = ParameterId { value: 0x0045 };
+    pub const PID_METATRAFFIC_UNICAST_PORT: ParameterId = ParameterId { value: 0x000d };
+    pub const PID_METATRAFFIC_MULTICAST_IPADDRESS: ParameterId = ParameterId { value: 0x000b };
+    pub const PID_METATRAFFIC_MULTICAST_PORT: ParameterId = ParameterId { value: 0x0046 };
+    pub const PID_EXPECTS_INLINE_QOS: ParameterId = ParameterId { value: 0x0043 };
+    pub const PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT: ParameterId = ParameterId { value: 0x0034 };
+    pub const PID_PARTICIPANT_BUILTIN_ENDPOINTS: ParameterId = ParameterId { value: 0x0044 };
+    pub const PID_PARTICIPANT_LEASE_DURATION: ParameterId = ParameterId { value: 0x0002 };
+    pub const PID_CONTENT_FILTER_PROPERTY: ParameterId = ParameterId { value: 0x0035 };
+    pub const PID_PARTICIPANT_GUID: ParameterId = ParameterId { value: 0x0050 };
+    pub const PID_GROUP_GUID: ParameterId = ParameterId { value: 0x0052 };
+    pub const PID_GROUP_ENTITYID: ParameterId = ParameterId { value: 0x0053 };
+    pub const PID_BUILTIN_ENDPOINT_SET: ParameterId = ParameterId { value: 0x0058 };
+    pub const PID_PROPERTY_LIST: ParameterId = ParameterId { value: 0x0059 };
+    pub const PID_TYPE_MAX_SIZE_SERIALIZED: ParameterId = ParameterId { value: 0x0060 };
+    pub const PID_ENTITY_NAME: ParameterId = ParameterId { value: 0x0062 };
+    pub const PID_KEY_HASH: ParameterId = ParameterId { value: 0x0070 };
+    pub const PID_STATUS_INFO: ParameterId = ParameterId { value: 0x0071 };
 }
 
 #[cfg(test)]

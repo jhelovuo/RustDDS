@@ -7,13 +7,15 @@ pub struct VendorId_t {
     pub vendorId: [u8; 2],
 }
 
-pub const VENDOR_UNKNOWN: VendorId_t = VendorId_t {
-    vendorId: [0x00; 2],
-};
+impl VendorId_t {
+    pub const VENDOR_UNKNOWN: VendorId_t = VendorId_t {
+        vendorId: [0x00; 2],
+    };
+}
 
 impl Default for VendorId_t {
     fn default() -> Self {
-        VENDOR_UNKNOWN
+        VendorId_t::VENDOR_UNKNOWN
     }
 }
 
@@ -59,7 +61,7 @@ mod tests {
     serialization_test!( type = VendorId_t,
     {
         vendor_unknown,
-        VENDOR_UNKNOWN,
+        VendorId_t::VENDOR_UNKNOWN,
         le = [0x00, 0x00],
         be = [0x00, 0x00]
     });

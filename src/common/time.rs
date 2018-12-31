@@ -11,23 +11,19 @@ pub struct Time_t {
 
 pub type Timestamp = Time_t;
 
-pub const TIME_ZERO: Time_t = Time_t {
-    seconds: 0,
-    fraction: 0,
-};
-pub const TIME_INVALID: Time_t = Time_t {
-    seconds: -1,
-    fraction: 0xFFFFFFFF,
-};
-pub const TIME_INFINITE: Time_t = Time_t {
-    seconds: 0x7FFFFFFF,
-    fraction: 0xFFFFFFFF,
-};
-
 impl Time_t {
-    pub fn value(&self) -> i64 {
-        self.seconds as i64 + ((self.fraction as i64) << 32)
-    }
+    pub const TIME_ZERO: Time_t = Time_t {
+        seconds: 0,
+        fraction: 0,
+    };
+    pub const TIME_INVALID: Time_t = Time_t {
+        seconds: -1,
+        fraction: 0xFFFFFFFF,
+    };
+    pub const TIME_INFINITE: Time_t = Time_t {
+        seconds: 0x7FFFFFFF,
+        fraction: 0xFFFFFFFF,
+    };
 }
 
 impl From<time::Timespec> for Time_t {
@@ -71,19 +67,19 @@ mod tests {
     serialization_test!( type = Time_t,
     {
         time_zero,
-        TIME_ZERO,
+        Time_t::TIME_ZERO,
         le = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
         be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     },
     {
         time_invalid,
-        TIME_INVALID,
+        Time_t::TIME_INVALID,
         le = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
         be = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
     },
     {
         time_infinite,
-        TIME_INFINITE,
+        Time_t::TIME_INFINITE,
         le = [0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF],
         be = [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
     },

@@ -7,19 +7,21 @@ pub struct ProtocolId_t {
     protocol_id: [char; 4],
 }
 
-pub const PROTOCOL_RTPS: ProtocolId_t = ProtocolId_t {
-    protocol_id: ['R', 'T', 'P', 'S'],
-};
+impl ProtocolId_t {
+    pub const PROTOCOL_RTPS: ProtocolId_t = ProtocolId_t {
+        protocol_id: ['R', 'T', 'P', 'S'],
+    };
+}
 
 impl Default for ProtocolId_t {
     fn default() -> Self {
-        PROTOCOL_RTPS
+        ProtocolId_t::PROTOCOL_RTPS
     }
 }
 
 impl Validity for ProtocolId_t {
     fn valid(&self) -> bool {
-        *self == PROTOCOL_RTPS
+        *self == ProtocolId_t::PROTOCOL_RTPS
     }
 }
 
@@ -56,7 +58,7 @@ mod tests {
 
     #[test]
     fn validity() {
-        let protocol_id = PROTOCOL_RTPS;
+        let protocol_id = ProtocolId_t::PROTOCOL_RTPS;
         assert!(protocol_id.valid());
         let protocol_id = ProtocolId_t {
             protocol_id: ['S', 'P', 'T', 'R'],
@@ -75,7 +77,7 @@ mod tests {
     serialization_test!( type = ProtocolId_t,
     {
         protocol_rtps,
-        PROTOCOL_RTPS,
+        ProtocolId_t::PROTOCOL_RTPS,
         le = [0x52, 0x54, 0x50, 0x53],
         be = [0x52, 0x54, 0x50, 0x53]
     });

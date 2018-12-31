@@ -10,7 +10,9 @@ pub struct SequenceNumber_t {
     pub low: u32,
 }
 
-pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t = SequenceNumber_t { high: -1, low: 0 };
+impl SequenceNumber_t {
+    pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t = SequenceNumber_t { high: -1, low: 0 };
+}
 
 impl SequenceNumber_t {
     pub fn value(&self) -> u64 {
@@ -290,7 +292,7 @@ mod tests {
     },
     {
         sequence_number_unknown,
-        SEQUENCENUMBER_UNKNOWN,
+        SequenceNumber_t::SEQUENCENUMBER_UNKNOWN,
         le = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00],
         be = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
     });

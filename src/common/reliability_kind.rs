@@ -1,7 +1,11 @@
-#[derive(Debug, Eq, PartialEq, Readable, Writable)]
-pub enum ReliabilityKind_t {
-    BEST_EFFORT = 1,
-    RELIABLE = 3,
+#[derive(Debug, PartialEq, Eq, Readable, Writable)]
+pub struct ReliabilityKind_t {
+    value: u32,
+}
+
+impl ReliabilityKind_t {
+    pub const BEST_EFFORT: ReliabilityKind_t = ReliabilityKind_t { value: 1 };
+    pub const RELIABLE: ReliabilityKind_t = ReliabilityKind_t { value: 3 };
 }
 
 #[cfg(test)]
