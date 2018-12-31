@@ -11,7 +11,6 @@ pub mod info_timestamp;
 pub mod submessage;
 pub mod submessage_flag;
 pub mod submessage_header;
-pub mod submessage_kind;
 pub mod validity_trait;
 
 pub use self::validity_trait::Validity;

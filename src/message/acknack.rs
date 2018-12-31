@@ -1,6 +1,6 @@
-use crate::common::count::Count_t;
-use crate::common::entity_id::EntityId_t;
-use crate::common::sequence_number::SequenceNumberSet_t;
+use crate::structure::count::Count_t;
+use crate::structure::entity_id::EntityId_t;
+use crate::structure::sequence_number::SequenceNumberSet_t;
 
 /// This Submessage is used to communicate the state of a Reader to a
 /// Writer.

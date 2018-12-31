@@ -1,6 +1,6 @@
-use crate::common::entity_id::EntityId_t;
+use crate::structure::entity_id::EntityId_t;
 use crate::common::parameter_list::ParameterList;
-use crate::common::sequence_number::SequenceNumber_t;
+use crate::structure::sequence_number::SequenceNumber_t;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)

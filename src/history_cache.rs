@@ -1,7 +1,7 @@
-use crate::common::change_kind::ChangeKind_t;
-use crate::common::guid::Guid_t;
-use crate::common::instance_handle::InstanceHandle_t;
-use crate::common::sequence_number::SequenceNumber_t;
+use crate::structure::change_kind::ChangeKind_t;
+use crate::structure::guid::Guid_t;
+use crate::structure::instance_handle::InstanceHandle_t;
+use crate::structure::sequence_number::SequenceNumber_t;
 
 #[derive(PartialOrd, PartialEq, Ord, Eq)]
 struct Data {}
@@ -58,8 +58,8 @@ impl HistoryCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::entity_id::EntityId_t;
-    use crate::common::guid_prefix::GuidPrefix_t;
+    use crate::structure::entity_id::EntityId_t;
+    use crate::structure::guid_prefix::GuidPrefix_t;
 
     #[test]
     fn add_change_test() {

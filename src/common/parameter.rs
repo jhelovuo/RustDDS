@@ -1,4 +1,4 @@
-use crate::common::parameter_id::ParameterId;
+use crate::structure::parameter_id::ParameterId;
 use crate::message::Validity;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::io::Result;

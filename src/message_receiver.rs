@@ -1,8 +1,8 @@
-use crate::common::guid_prefix::GuidPrefix_t;
-use crate::common::locator::{LocatorKind_t, LocatorList_t, Locator_t};
-use crate::common::protocol_version::ProtocolVersion_t;
-use crate::common::time::Time_t;
-use crate::common::vendor_id::VendorId_t;
+use crate::structure::guid_prefix::GuidPrefix_t;
+use crate::structure::locator::{LocatorKind_t, LocatorList_t, Locator_t};
+use crate::messages::protocol_version::ProtocolVersion_t;
+use crate::structure::time::Time_t;
+use crate::messages::vendor_id::VendorId_t;
 use crate::message::submessage::EntitySubmessage;
 
 use bytes::BytesMut;

@@ -1,5 +1,5 @@
-use crate::common::entity_id::EntityId_t;
-use crate::common::sequence_number::{SequenceNumberSet_t, SequenceNumber_t};
+use crate::structure::entity_id::EntityId_t;
+use crate::structure::sequence_number::{SequenceNumberSet_t, SequenceNumber_t};
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers

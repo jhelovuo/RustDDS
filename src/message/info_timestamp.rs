@@ -1,4 +1,4 @@
-use crate::common::time::Timestamp;
+use crate::structure::time::Timestamp;
 
 /// This message modifies the logical source of the Submessages
 /// that follow.
