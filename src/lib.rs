@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
 
 extern crate bit_set;
 extern crate bit_vec;
@@ -16,9 +17,5 @@ mod behavior;
 mod common;
 mod dds;
 mod discovery;
-mod history_cache;
-mod message;
-mod message_receiver;
 mod messages;
-mod participant;
 mod structure;

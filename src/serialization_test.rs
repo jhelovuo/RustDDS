@@ -1,3 +1,4 @@
+#[allow(unused_macros)]
 macro_rules! serialization_test {
     (type = $type:ty, $({ $name:ident , $original:expr, le = $le:expr, be = $be:expr }),+) => {
         $(mod $name {

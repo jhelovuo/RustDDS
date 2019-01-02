@@ -1,5 +1,5 @@
 use crate::common::bit_set::BitSetRef;
-use crate::message::Validity;
+use crate::common::validity_trait::Validity;
 use std::cmp::Ordering;
 use std::ops::Add;
 use std::ops::Sub;

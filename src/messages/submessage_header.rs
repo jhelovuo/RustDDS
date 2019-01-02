@@ -1,4 +1,4 @@
-use crate::message::submessage_flag::SubmessageFlag;
+use crate::messages::submessage_flag::SubmessageFlag;
 use crate::messages::submessage_kind::SubmessageKind;
 
 #[derive(Debug, PartialEq, Readable, Writable)]

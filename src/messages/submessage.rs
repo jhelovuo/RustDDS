@@ -1,12 +1,12 @@
-use crate::message::acknack::AckNack;
-use crate::message::data::Data;
-use crate::message::gap::Gap;
-use crate::message::heartbeat::Heartbeat;
-use crate::message::heartbeat_frag::HeartbeatFrag;
-use crate::message::info_destination::InfoDestination;
-use crate::message::info_reply::InfoReply;
-use crate::message::info_source::InfoSource;
-use crate::message::info_timestamp::InfoTimestamp;
+use crate::messages::ack_nack::AckNack;
+use crate::messages::data::Data;
+use crate::messages::gap::Gap;
+use crate::messages::heartbeat::Heartbeat;
+use crate::messages::heartbeat_frag::HeartbeatFrag;
+use crate::messages::info_destination::InfoDestination;
+use crate::messages::info_reply::InfoReply;
+use crate::messages::info_source::InfoSource;
+use crate::messages::info_timestamp::InfoTimestamp;
 
 #[derive(Debug)]
 pub enum EntitySubmessage {

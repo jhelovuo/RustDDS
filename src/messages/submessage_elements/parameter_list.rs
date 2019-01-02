@@ -1,4 +1,4 @@
-use crate::common::parameter::Parameter;
+use crate::messages::submessage_elements::parameter::Parameter;
 
 /// ParameterList is used as part of several messages to encapsulate
 /// QoS parameters that may affect the interpretation of the message.

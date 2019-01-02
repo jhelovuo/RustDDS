@@ -1,6 +1,6 @@
-use common::topic_kind;
-use common::reliability_kind;
-use common::locator;
+use crate::structure::locator;
+use crate::structure::reliability_kind;
+use crate::structure::topic_kind;
 
 struct Endpoint {
     topic_kind: topic_kind::TopicKind_t,

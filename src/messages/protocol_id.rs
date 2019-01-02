@@ -1,4 +1,4 @@
-use crate::message::Validity;
+use crate::common::validity_trait::Validity;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::io::Result;
 

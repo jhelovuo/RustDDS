@@ -3,7 +3,7 @@ use std::convert::From;
 use std::io::Result;
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-pub use crate::common::locator_kind::LocatorKind_t;
+pub use crate::structure::locator_kind::LocatorKind_t;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Locator_t {
