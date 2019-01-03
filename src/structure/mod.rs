@@ -8,6 +8,7 @@ pub mod history_cache;
 pub mod instance_handle;
 pub mod locator;
 pub mod locator_kind;
+pub mod locator_udp_v4;
 pub mod parameter_id;
 pub mod participant;
 pub mod reliability_kind;
