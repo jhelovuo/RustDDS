@@ -5,20 +5,59 @@ use crate::structure::sequence_number::{SequenceNumberSet_t, SequenceNumber_t};
 /// indicates to the RTPS Reader that a range of sequence numbers
 /// is no longer relevant. The set may be a contiguous range of
 /// sequence numbers or a specific set of sequence numbers.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Readable, Writable)]
 pub struct Gap {
     /// Identifies the Reader Entity that is being informed of the
     /// irrelevance of a set of sequence numbers.
     pub reader_id: EntityId_t,
+
     /// Identifies the Writer Entity to which the range of sequence
     /// numbers applies.
     pub writer_id: EntityId_t,
+
     /// Identifies the first sequence number in the interval of
     /// irrelevant sequence numbers
     pub gap_start: SequenceNumber_t,
+
     /// Identifies the last sequence number in the interval of irrelevant sequence numbers.
     ///
     /// Identifies an additional list of sequence numbers that are
     /// irrelevant.
     pub gap_list: SequenceNumberSet_t,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    serialization_test!( type = Gap,
+    {
+        gap,
+        Gap {
+            reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+            writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+            gap_start: SequenceNumber_t {
+                high: 42,
+                low: 7
+            },
+            gap_list: SequenceNumberSet_t::new(SequenceNumber_t {
+                high: 9,
+                low: 5
+            })
+        },
+        le = [0x00, 0x00, 0x03, 0xC7,
+              0x00, 0x00, 0x03, 0xC2,
+              0x2A, 0x00, 0x00, 0x00,
+              0x07, 0x00, 0x00, 0x00,
+              0x09, 0x00, 0x00, 0x00,
+              0x05, 0x00, 0x00, 0x00,
+              0x00, 0x00, 0x00, 0x00],
+        be = [0x00, 0x00, 0x03, 0xC7,
+              0x00, 0x00, 0x03, 0xC2,
+              0x00, 0x00, 0x00, 0x2A,
+              0x00, 0x00, 0x00, 0x07,
+              0x00, 0x00, 0x00, 0x09,
+              0x00, 0x00, 0x00, 0x05,
+              0x00, 0x00, 0x00, 0x00]
+    });
 }
