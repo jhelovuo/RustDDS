@@ -24,7 +24,7 @@ mod tests {
             count_test_high,
             Count_t { value: 0x3BCDEF01 },
             le = [0x01, 0xEF, 0xCD, 0x3B],
-                   be = [0x3B, 0xCD, 0xEF, 0x01]
+            be = [0x3B, 0xCD, 0xEF, 0x01]
         },
         {
             count_test_random,
