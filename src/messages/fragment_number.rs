@@ -1,4 +1,4 @@
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct FragmentNumber_t {
     pub vendor_id: u32,
 }
@@ -20,4 +20,28 @@ mod tests {
             FragmentNumber_t::default()
         );
     }
+
+    serialization_test!( type = FragmentNumber_t,
+    {
+        fragment_number_zero,
+        FragmentNumber_t {
+            vendor_id: 0
+        },
+        le = [0x00, 0x00, 0x00, 0x00],
+        be = [0x00, 0x00, 0x00, 0x00]
+    },
+    {
+        fragment_number_default,
+        FragmentNumber_t::default(),
+        le = [0x01, 0x00, 0x00, 0x00],
+        be = [0x00, 0x00, 0x00, 0x01]
+    },
+    {
+        fragment_number_non_zero,
+        FragmentNumber_t {
+            vendor_id: 0xDEADBEEF
+        },
+        le = [0xEF, 0xBE, 0xAD, 0xDE],
+        be = [0xDE, 0xAD, 0xBE, 0xEF]
+    });
 }
