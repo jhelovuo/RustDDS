@@ -24,7 +24,7 @@ mod tests {
 
     serialization_test!( type = InfoSource,
     {
-        info_source_empty,
+        info_source,
         InfoSource {
             protocol_version: ProtocolVersion_t::PROTOCOLVERSION_2_2,
             vendor_id: VendorId_t {
