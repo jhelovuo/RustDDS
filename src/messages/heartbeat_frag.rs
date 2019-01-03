@@ -9,7 +9,7 @@ use crate::structure::sequence_number::SequenceNumber_t;
 /// communication at the fragment level.
 ///
 /// Once all fragments are available, a regular Heartbeat message is used.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Readable, Writable)]
 pub struct HeartbeatFrag {
     /// Identifies the Reader Entity that is being informed of the availability
     /// of fragments. Can be set to ENTITYID_UNKNOWN to indicate all readers for
@@ -32,4 +32,40 @@ pub struct HeartbeatFrag {
     /// messages that can result from the presence of redundant communication
     /// paths.
     pub count: Count_t,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    serialization_test!( type = HeartbeatFrag,
+    {
+        heartbeat_frag,
+        HeartbeatFrag {
+            reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+            writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+            writer_sn: SequenceNumber_t {
+                high: 42,
+                low: 7
+            },
+            last_fragment_num: FragmentNumber_t {
+                value: 99
+            },
+            count: Count_t {
+                value: 6
+            }
+        },
+        le = [0x00, 0x00, 0x03, 0xC7,
+              0x00, 0x00, 0x03, 0xC2,
+              0x2A, 0x00, 0x00, 0x00,
+              0x07, 0x00, 0x00, 0x00,
+              0x63, 0x00, 0x00, 0x00,
+              0x06, 0x00, 0x00, 0x00],
+        be = [0x00, 0x00, 0x03, 0xC7,
+              0x00, 0x00, 0x03, 0xC2,
+              0x00, 0x00, 0x00, 0x2A,
+              0x00, 0x00, 0x00, 0x07,
+              0x00, 0x00, 0x00, 0x63,
+              0x00, 0x00, 0x00, 0x06]
+    });
 }
