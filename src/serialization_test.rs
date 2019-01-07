@@ -1,6 +1,6 @@
-#[allow(unused_macros)]
+#[cfg(test)]
 macro_rules! serialization_test {
-    (type = $type:ty, $({ $name:ident , $original:expr, le = $le:expr, be = $be:expr }),+) => {
+    (type = $type:ty, $({ $name:ident, $original:expr, le = $le:expr, be = $be:expr }),+) => {
         $(mod $name {
             extern crate speedy;
 
@@ -8,24 +8,21 @@ macro_rules! serialization_test {
             use self::speedy::{Readable, Writable, Endianness};
 
             #[test]
-            fn serialize_little_endian()
-            {
+            fn serialize_little_endian() {
                 let original: $type = $original;
                 let serialized = original.write_to_vec(Endianness::LittleEndian).unwrap();
                 assert_eq!(serialized, $le);
             }
 
             #[test]
-            fn serialize_big_endian()
-            {
+            fn serialize_big_endian() {
                 let original: $type = $original;
                 let serialized = original.write_to_vec(Endianness::BigEndian).unwrap();
                 assert_eq!(serialized, $be);
             }
 
             #[test]
-            fn serialize_deserialize_little_endian()
-            {
+            fn serialize_deserialize_little_endian() {
                 let original: $type = $original;
 
                 let serialized = original.write_to_vec(Endianness::LittleEndian).unwrap();

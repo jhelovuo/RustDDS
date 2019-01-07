@@ -6,8 +6,6 @@
 extern crate bit_set;
 extern crate bit_vec;
 extern crate bytes;
-#[macro_use]
-extern crate log;
 extern crate tokio;
 #[macro_use]
 extern crate speedy_derive;
