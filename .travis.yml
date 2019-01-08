@@ -11,6 +11,6 @@ before_script:
 script:
   - cargo fmt --all -- --check
   - cargo build
-  - cargo test
   - cargo build --release
+  - cargo test
   - cargo test --release
