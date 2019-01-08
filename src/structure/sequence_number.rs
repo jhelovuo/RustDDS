@@ -8,7 +8,7 @@ pub struct SequenceNumber_t {
 
 impl SequenceNumber_t {
     pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t = SequenceNumber_t {
-        value: (-1 as i64) << 32,
+        value: (std::u32::MAX as i64) << 32,
     };
 }
 
@@ -50,7 +50,6 @@ impl Default for SequenceNumber_t {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::panic;
 
     #[test]
     fn sequence_number_starts_by_default_from_one() {
