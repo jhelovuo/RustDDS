@@ -2,10 +2,8 @@
 macro_rules! serialization_test {
     (type = $type:ty, $({ $name:ident, $original:expr, le = $le:expr, be = $be:expr }),+) => {
         $(mod $name {
-            extern crate speedy;
-
             use super::*;
-            use self::speedy::{Readable, Writable, Endianness};
+            use speedy::{Readable, Writable, Endianness};
 
             #[test]
             fn serialize_little_endian() {

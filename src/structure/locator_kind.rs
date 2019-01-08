@@ -1,3 +1,5 @@
+use speedy_derive::{Readable, Writable};
+
 #[derive(Clone, Debug, Eq, PartialEq, Readable, Writable)]
 pub struct LocatorKind_t {
     value: i32,

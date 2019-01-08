@@ -1,6 +1,7 @@
 use crate::common::bit_set::BitSetRef;
 use crate::common::validity_trait::Validity;
 use crate::structure::sequence_number::SequenceNumber_t;
+use speedy_derive::{Readable, Writable};
 
 #[derive(Debug, PartialEq, Readable, Writable)]
 pub struct SequenceNumberSet_t {

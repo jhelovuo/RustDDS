@@ -1,3 +1,5 @@
+use speedy_derive::{Readable, Writable};
+
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct FragmentNumber_t {
     pub value: u32,

@@ -6,10 +6,9 @@
 extern crate bit_set;
 extern crate bit_vec;
 extern crate bytes;
-extern crate tokio;
-#[macro_use]
-extern crate speedy_derive;
 extern crate speedy;
+extern crate speedy_derive;
+extern crate tokio;
 
 #[macro_use]
 mod serialization_test;

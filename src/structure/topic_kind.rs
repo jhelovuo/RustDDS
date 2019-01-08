@@ -1,3 +1,5 @@
+use speedy_derive::{Readable, Writable};
+
 #[derive(Debug, PartialEq, Eq, Readable, Writable)]
 pub struct TopicKind_t {
     value: u32,

@@ -2,6 +2,7 @@ use crate::messages::fragment_number::FragmentNumber_t;
 use crate::structure::count::Count_t;
 use crate::structure::entity_id::EntityId_t;
 use crate::structure::sequence_number::SequenceNumber_t;
+use speedy_derive::{Readable, Writable};
 
 /// When fragmenting data and until all fragments are available, the
 /// HeartbeatFrag Submessage is sent from an RTPS Writer to an RTPS Reader to

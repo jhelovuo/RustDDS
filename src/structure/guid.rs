@@ -1,5 +1,6 @@
 use crate::structure::entity_id::EntityId_t;
 use crate::structure::guid_prefix::GuidPrefix_t;
+use speedy_derive::{Readable, Writable};
 
 #[derive(Debug, Default, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct Guid_t {

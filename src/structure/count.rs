@@ -1,3 +1,5 @@
+use speedy_derive::{Readable, Writable};
+
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct Count_t {
     pub value: i32,

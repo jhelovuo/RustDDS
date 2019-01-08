@@ -1,5 +1,4 @@
-extern crate time;
-
+use speedy_derive::{Readable, Writable};
 use std::cmp::Ordering;
 use std::convert::From;
 
