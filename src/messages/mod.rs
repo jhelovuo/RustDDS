@@ -1,6 +1,7 @@
 pub mod ack_nack;
 pub mod data;
 pub mod fragment_number;
+pub mod fragment_number_set;
 pub mod gap;
 pub mod header;
 pub mod heartbeat;
