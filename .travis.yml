@@ -1,6 +1,7 @@
 sudo: false
 dist: trusty
 language: rust
+cache: cargo
 rust:
   - nightly
   - beta
@@ -8,3 +9,5 @@ rust:
 script:
   - cargo build
   - cargo test
+  - cargo build --release
+  - cargo test --release
