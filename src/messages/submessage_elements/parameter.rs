@@ -1,6 +1,5 @@
 use crate::structure::parameter_id::ParameterId;
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::io::Result;
 
 #[derive(Debug, PartialEq)]
 pub struct Parameter {
@@ -13,7 +12,7 @@ pub struct Parameter {
 
 impl<'a, C: Context> Readable<'a, C> for Parameter {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
         let parameter_id: ParameterId = reader.read_value()?;
         let length = reader.read_u16()?;
         let alignment = length % 4;
@@ -39,7 +38,10 @@ impl<'a, C: Context> Readable<'a, C> for Parameter {
 
 impl<C: Context> Writable<C> for Parameter {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
+        &'a self,
+        writer: &mut T,
+    ) -> Result<(), std::io::Error> {
         writer.write_value(&self.parameter_id)?;
 
         let length = self.value.len();

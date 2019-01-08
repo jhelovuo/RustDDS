@@ -1,6 +1,5 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::convert::From;
-use std::io::Result;
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 pub use crate::structure::locator_kind::LocatorKind_t;
@@ -52,7 +51,7 @@ impl From<SocketAddr> for Locator_t {
 
 impl<'a, C: Context> Readable<'a, C> for Locator_t {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
         let mut locator = Locator_t::default();
         locator.kind = reader.read_value()?;
         locator.port = reader.read_value()?;
@@ -65,7 +64,10 @@ impl<'a, C: Context> Readable<'a, C> for Locator_t {
 
 impl<C: Context> Writable<C> for Locator_t {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
+        &'a self,
+        writer: &mut T,
+    ) -> Result<(), std::io::Error> {
         writer.write_value(&self.kind)?;
         writer.write_value(&self.port)?;
         for elem in &self.address {

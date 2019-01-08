@@ -1,6 +1,4 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::io::Result;
-use std::mem::size_of;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct GuidPrefix_t {
@@ -21,7 +19,7 @@ impl Default for GuidPrefix_t {
 
 impl<'a, C: Context> Readable<'a, C> for GuidPrefix_t {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
         let mut guid_prefix = GuidPrefix_t::default();
         for i in 0..guid_prefix.entityKey.len() {
             guid_prefix.entityKey[i] = reader.read_u8()?;
@@ -31,13 +29,16 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix_t {
 
     #[inline]
     fn minimum_bytes_needed() -> usize {
-        size_of::<Self>()
+        std::mem::size_of::<Self>()
     }
 }
 
 impl<C: Context> Writable<C> for GuidPrefix_t {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
+        &'a self,
+        writer: &mut T,
+    ) -> Result<(), std::io::Error> {
         for elem in &self.entityKey {
             writer.write_u8(*elem)?
         }

@@ -1,6 +1,4 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::io::Result;
-use std::mem::size_of;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct VendorId_t {
@@ -21,7 +19,7 @@ impl Default for VendorId_t {
 
 impl<'a, C: Context> Readable<'a, C> for VendorId_t {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
         let mut vendor_id = VendorId_t::default();
         for i in 0..vendor_id.vendorId.len() {
             vendor_id.vendorId[i] = reader.read_u8()?;
@@ -31,13 +29,16 @@ impl<'a, C: Context> Readable<'a, C> for VendorId_t {
 
     #[inline]
     fn minimum_bytes_needed() -> usize {
-        size_of::<Self>()
+        std::mem::size_of::<Self>()
     }
 }
 
 impl<C: Context> Writable<C> for VendorId_t {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
+        &'a self,
+        writer: &mut T,
+    ) -> Result<(), std::io::Error> {
         for elem in &self.vendorId {
             writer.write_u8(*elem)?
         }

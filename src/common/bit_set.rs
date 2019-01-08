@@ -1,7 +1,6 @@
 use bit_set::BitSet;
 use bit_vec::BitVec;
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::io::Result;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, PartialEq)]
@@ -29,7 +28,7 @@ impl DerefMut for BitSetRef {
 
 impl<'a, C: Context> Readable<'a, C> for BitSetRef {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
         let number_of_bits = reader.read_u32()?;
         let mut bit_vec = BitVec::with_capacity(number_of_bits as usize);
         unsafe {
@@ -49,7 +48,10 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
 
 impl<C: Context> Writable<C> for BitSetRef {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(&'a self, writer: &mut T) -> Result<()> {
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
+        &'a self,
+        writer: &mut T,
+    ) -> Result<(), std::io::Error> {
         let bytes = self.0.get_ref().storage();
         writer.write_u32((bytes.len() * 32) as u32)?;
         for byte in bytes {
