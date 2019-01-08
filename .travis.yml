@@ -6,7 +6,10 @@ rust:
   - nightly
   - beta
   - stable
+before_script:
+  - rustup component add rustfmt
 script:
+  - cargo fmt --all -- --check
   - cargo build
   - cargo test
   - cargo build --release
