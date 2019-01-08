@@ -21,9 +21,7 @@ mod tests {
     serialization_test!( type = FragmentNumber_t,
     {
         fragment_number_zero,
-        FragmentNumber_t {
-            value: 0
-        },
+        FragmentNumber_t { value: 0 },
         le = [0x00, 0x00, 0x00, 0x00],
         be = [0x00, 0x00, 0x00, 0x00]
     },
@@ -35,9 +33,7 @@ mod tests {
     },
     {
         fragment_number_non_zero,
-        FragmentNumber_t {
-            value: 0xDEADBEEF
-        },
+        FragmentNumber_t { value: 0xDEADBEEF },
         le = [0xEF, 0xBE, 0xAD, 0xDE],
         be = [0xDE, 0xAD, 0xBE, 0xEF]
     });

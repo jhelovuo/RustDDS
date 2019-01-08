@@ -1,103 +1,49 @@
-use std::cmp::Ordering;
-use std::ops::Add;
-use std::ops::Sub;
+use speedy::{Context, Readable, Reader, Writable, Writer};
+use std::mem::size_of;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Readable, Writable)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SequenceNumber_t {
-    pub high: i32,
-    pub low: u32,
+    pub value: i64,
 }
 
 impl SequenceNumber_t {
-    pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t = SequenceNumber_t { high: -1, low: 0 };
+    pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t = SequenceNumber_t {
+        value: (-1 as i64) << 32,
+    };
 }
 
-impl SequenceNumber_t {
-    pub fn value(&self) -> u64 {
-        ((self.high as u64) << 32) + self.low as u64
+impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
+        let high: i32 = reader.read_value()?;
+        let low: u32 = reader.read_value()?;
+
+        Ok(SequenceNumber_t {
+            value: ((high as i64) << 32) + low as i64,
+        })
+    }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        size_of::<Self>()
+    }
+}
+
+impl<C: Context> Writable<C> for SequenceNumber_t {
+    #[inline]
+    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
+        &'a self,
+        writer: &mut T,
+    ) -> Result<(), std::io::Error> {
+        writer.write_i32((self.value >> 32) as i32)?;
+        writer.write_u32(self.value as u32)?;
+        Ok(())
     }
 }
 
 impl Default for SequenceNumber_t {
     fn default() -> SequenceNumber_t {
-        SequenceNumber_t { high: 0, low: 1 }
-    }
-}
-
-impl Add<u32> for SequenceNumber_t {
-    type Output = SequenceNumber_t;
-
-    fn add(self, other: u32) -> SequenceNumber_t {
-        let (new_low, overflow) = self.low.overflowing_add(other);
-
-        SequenceNumber_t {
-            high: match overflow {
-                true => self.high + 1,
-                false => self.high,
-            },
-            low: new_low,
-        }
-    }
-}
-
-impl Add<SequenceNumber_t> for SequenceNumber_t {
-    type Output = SequenceNumber_t;
-
-    fn add(self, other: SequenceNumber_t) -> SequenceNumber_t {
-        let (new_low, overflow) = self.low.overflowing_add(other.low);
-        SequenceNumber_t {
-            high: match overflow {
-                true => self.high + other.high + 1,
-                false => self.high + other.high,
-            },
-            low: new_low,
-        }
-    }
-}
-
-impl Sub<u32> for SequenceNumber_t {
-    type Output = SequenceNumber_t;
-
-    fn sub(self, other: u32) -> SequenceNumber_t {
-        let (new_low, overflow) = self.low.overflowing_sub(other);
-        SequenceNumber_t {
-            high: match overflow {
-                true => self.high - 1,
-                false => self.high,
-            },
-            low: new_low,
-        }
-    }
-}
-
-impl Sub<SequenceNumber_t> for SequenceNumber_t {
-    type Output = SequenceNumber_t;
-
-    fn sub(self, other: SequenceNumber_t) -> SequenceNumber_t {
-        let (new_low, overflow) = self.low.overflowing_sub(other.low);
-        SequenceNumber_t {
-            high: match overflow {
-                true => self.high - other.high - 1,
-                false => self.high - other.high,
-            },
-            low: new_low,
-        }
-    }
-}
-
-impl PartialOrd for SequenceNumber_t {
-    fn partial_cmp(&self, other: &SequenceNumber_t) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for SequenceNumber_t {
-    fn cmp(&self, other: &SequenceNumber_t) -> Ordering {
-        match self.high.cmp(&other.high) {
-            Ordering::Equal => self.low.cmp(&other.low),
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-        }
+        SequenceNumber_t { value: 1 }
     }
 }
 
@@ -108,120 +54,8 @@ mod tests {
 
     #[test]
     fn sequence_number_starts_by_default_from_one() {
-        let default_sequence_number = SequenceNumber_t::default();
-        assert_eq!(
-            SequenceNumber_t { high: 0, low: 1 },
-            default_sequence_number
-        );
-        assert_eq!(1, default_sequence_number.value());
-    }
-
-    #[test]
-    fn sequence_number_addition_with_other_sequence_number() {
-        {
-            let left = SequenceNumber_t { high: 0, low: 0 };
-            let right = SequenceNumber_t { high: 0, low: 0 };
-            assert_eq!(SequenceNumber_t { high: 0, low: 0 }, left + right);
-        }
-        {
-            let left = SequenceNumber_t { high: 0, low: 20 };
-            let right = SequenceNumber_t { high: 0, low: 10 };
-            assert_eq!(SequenceNumber_t { high: 0, low: 30 }, left + right);
-        }
-        {
-            let left = SequenceNumber_t { high: 1, low: 20 };
-            let right = SequenceNumber_t { high: 0, low: 10 };
-            assert_eq!(SequenceNumber_t { high: 1, low: 30 }, left + right);
-        }
-    }
-
-    #[test]
-    fn sequeance_number_addition_with_other_sequence_number_with_low_wrap() {
-        let left = SequenceNumber_t {
-            high: 0,
-            low: <u32>::max_value(),
-        };
-        let right = SequenceNumber_t { high: 0, low: 1 };
-        assert_eq!(SequenceNumber_t { high: 1, low: 0 }, left + right);
-    }
-
-    #[test]
-    fn sequeance_number_addition_with_other_sequence_number_with_high_wrap() {
-        let left = SequenceNumber_t {
-            high: <i32>::max_value(),
-            low: <u32>::max_value(),
-        };
-        let right = SequenceNumber_t { high: 0, low: 1 };
-        assert!(panic::catch_unwind(|| left + right).is_err());
-    }
-
-    #[test]
-    fn sequence_number_subtraction_with_other_sequence_number() {
-        {
-            let left = SequenceNumber_t { high: 0, low: 0 };
-            let right = SequenceNumber_t { high: 0, low: 0 };
-            assert_eq!(SequenceNumber_t { high: 0, low: 0 }, left - right);
-        }
-        {
-            let left = SequenceNumber_t { high: 0, low: 20 };
-            let right = SequenceNumber_t { high: 0, low: 10 };
-            assert_eq!(SequenceNumber_t { high: 0, low: 10 }, left - right);
-        }
-        {
-            let left = SequenceNumber_t { high: 1, low: 20 };
-            let right = SequenceNumber_t { high: 0, low: 10 };
-            assert_eq!(SequenceNumber_t { high: 1, low: 10 }, left - right);
-        }
-    }
-
-    #[test]
-    fn sequeance_number_subtraction_with_other_sequence_number_with_low_wrap() {
-        let left = SequenceNumber_t {
-            high: 0,
-            low: <u32>::min_value(),
-        };
-        let right = SequenceNumber_t { high: 0, low: 1 };
-        assert_eq!(
-            SequenceNumber_t {
-                high: -1,
-                low: <u32>::max_value()
-            },
-            left - right
-        );
-    }
-
-    #[test]
-    fn sequeance_number_subtraction_with_other_sequence_number_with_high_wrap() {
-        let left = SequenceNumber_t {
-            high: <i32>::min_value(),
-            low: <u32>::min_value(),
-        };
-        let right = SequenceNumber_t { high: 0, low: 1 };
-        assert!(panic::catch_unwind(|| left - right).is_err());
-    }
-
-    #[test]
-    fn sequeance_number_compare_with_other_sequence_number() {
-        assert!(SequenceNumber_t { high: 0, low: 0 } == SequenceNumber_t { high: 0, low: 0 });
-        assert!(SequenceNumber_t { high: 0, low: 0 } != SequenceNumber_t { high: 0, low: 1 });
-        assert!(SequenceNumber_t { high: 0, low: 0 } != SequenceNumber_t { high: 1, low: 0 });
-        assert!(SequenceNumber_t { high: 0, low: 0 } != SequenceNumber_t { high: 1, low: 1 });
-
-        assert!(SequenceNumber_t { high: 0, low: 0 } < SequenceNumber_t { high: 0, low: 1 });
-        assert!(SequenceNumber_t { high: 0, low: 0 } < SequenceNumber_t { high: 1, low: 0 });
-        assert!(SequenceNumber_t { high: 0, low: 0 } < SequenceNumber_t { high: 1, low: 1 });
-        assert!(SequenceNumber_t { high: 0, low: 1 } > SequenceNumber_t { high: 0, low: 0 });
-        assert!(SequenceNumber_t { high: 0, low: 1 } == SequenceNumber_t { high: 0, low: 1 });
-        assert!(SequenceNumber_t { high: 0, low: 1 } < SequenceNumber_t { high: 1, low: 0 });
-        assert!(SequenceNumber_t { high: 0, low: 1 } < SequenceNumber_t { high: 1, low: 1 });
-
-        assert!(SequenceNumber_t { high: 1, low: 0 } > SequenceNumber_t { high: 0, low: 0 });
-        assert!(SequenceNumber_t { high: 1, low: 0 } > SequenceNumber_t { high: 0, low: 1 });
-        assert!(SequenceNumber_t { high: 1, low: 0 } == SequenceNumber_t { high: 1, low: 0 });
-        assert!(SequenceNumber_t { high: 1, low: 0 } < SequenceNumber_t { high: 1, low: 1 });
-        assert!(SequenceNumber_t { high: 1, low: 1 } > SequenceNumber_t { high: 0, low: 0 });
-        assert!(SequenceNumber_t { high: 1, low: 1 } > SequenceNumber_t { high: 0, low: 1 });
-        assert!(SequenceNumber_t { high: 1, low: 1 } > SequenceNumber_t { high: 1, low: 0 });
+        assert_eq!(SequenceNumber_t { value: 1 }, SequenceNumber_t::default());
+        assert_eq!(1, SequenceNumber_t::default().value);
     }
 
     serialization_test!( type = SequenceNumber_t,
@@ -236,5 +70,11 @@ mod tests {
         SequenceNumber_t::SEQUENCENUMBER_UNKNOWN,
         le = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00],
         be = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
+    },
+    {
+        sequence_number_non_zero,
+        SequenceNumber_t { value: 0x0011223344556677 },
+        le = [0x33, 0x22, 0x11, 0x00, 0x77, 0x66, 0x55, 0x44],
+        be = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]
     });
 }
