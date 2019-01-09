@@ -1,5 +1,6 @@
 pub mod ack_nack;
 pub mod data;
+pub mod data_frag;
 pub mod fragment_number;
 pub mod fragment_number_set;
 pub mod gap;
@@ -10,6 +11,7 @@ pub mod info_destination;
 pub mod info_reply;
 pub mod info_source;
 pub mod info_timestamp;
+pub mod pad;
 pub mod protocol_id;
 pub mod protocol_version;
 pub mod receiver;
