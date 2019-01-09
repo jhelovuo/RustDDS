@@ -21,7 +21,8 @@ pub struct Gap {
     /// irrelevant sequence numbers
     pub gap_start: SequenceNumber_t,
 
-    /// Identifies the last sequence number in the interval of irrelevant sequence numbers.
+    /// Identifies the last sequence number in the interval of irrelevant
+    /// sequence numbers.
     ///
     /// Identifies an additional list of sequence numbers that are
     /// irrelevant.

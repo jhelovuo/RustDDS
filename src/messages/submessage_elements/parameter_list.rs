@@ -10,7 +10,8 @@ pub struct ParameterList {
 }
 
 /// The PID_PAD is used to enforce alignment of the parameter
-/// that follows and its length can be anything (as long as it is a multiple of 4)
+/// that follows and its length can be anything (as long as it is a multiple of
+/// 4)
 pub const PID_PAD: u16 = 0x00;
 
 /// The PID_SENTINEL is used to terminate

@@ -1,0 +1,6 @@
+unstable_features = true
+edition = "2018"
+format_doc_comments = true
+normalize_doc_attributes = true
+normalize_comments = true
+wrap_comments = true

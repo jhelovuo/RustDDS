@@ -11,7 +11,8 @@ pub struct InfoReply {
     pub unicast_locator_list: LocatorList_t,
 
     /// Indicates an alternative set of multicast addresses that the Writer
-    /// should use to reach the Readers when replying to the Submessages that follow.
+    /// should use to reach the Readers when replying to the Submessages that
+    /// follow.
     ///
     /// Only present when the MulticastFlag is set.
     pub multicast_locator_list: Option<LocatorList_t>,

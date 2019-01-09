@@ -4,17 +4,18 @@ use crate::structure::entity_id::EntityId_t;
 use crate::structure::sequence_number::SequenceNumber_t;
 use speedy_derive::{Readable, Writable};
 
-/// The NackFrag Submessage is used to communicate the state of a Reader to a Writer.
-/// When a data change is sent as a series of fragments, the NackFrag Submessage
-/// allows the Reader to inform the Writer about specific fragment numbers
-/// it is still missing.
+/// The NackFrag Submessage is used to communicate the state of a Reader to a
+/// Writer. When a data change is sent as a series of fragments, the NackFrag
+/// Submessage allows the Reader to inform the Writer about specific fragment
+/// numbers it is still missing.
 ///
-/// This Submessage can only contain negative acknowledgements. Note this differs
-/// from an AckNack Submessage, which includes both positive and negative
-/// acknowledgements.
+/// This Submessage can only contain negative acknowledgements. Note this
+/// differs from an AckNack Submessage, which includes both positive and
+/// negative acknowledgements.
 #[derive(Debug, PartialEq, Readable, Writable)]
 pub struct NackFrag {
-    ///  Identifies the Reader entity that requests to receive certain fragments.
+    ///  Identifies the Reader entity that requests to receive certain
+    /// fragments.
     pub reader_id: EntityId_t,
 
     /// Identifies the Writer entity that is the target of the NackFrag message.

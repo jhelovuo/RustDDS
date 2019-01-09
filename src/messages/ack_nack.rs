@@ -18,19 +18,21 @@ pub struct AckNack {
 
     /// Identifies the Writer entity that is the target of the AckNack message.
     /// This is the Writer Entity that is being asked to re-send some sequence
-    ///numbers or is being informed of the reception of certain sequence numbers.
+    /// numbers or is being informed of the reception of certain sequence
+    /// numbers.
     pub writer_id: EntityId_t,
 
     /// Communicates the state of the reader to the writer.
     /// All sequence numbers up to the one prior to readerSNState.base
-    /// are confirmed as received by the reader. The sequence numbers that appear
-    /// in the set indicate missing sequence numbers on the reader side.
-    /// The ones that do not appear in the set are undetermined (could be received or not).
+    /// are confirmed as received by the reader. The sequence numbers that
+    /// appear in the set indicate missing sequence numbers on the reader
+    /// side. The ones that do not appear in the set are undetermined (could
+    /// be received or not).
     pub reader_sn_state: SequenceNumberSet_t,
 
     /// A counter that is incremented each time a new AckNack message is sent.
     /// Provides the means for a Writer to detect duplicate AckNack messages
-    ///that can result from the presence of redundant communication paths.
+    /// that can result from the presence of redundant communication paths.
     pub count: Count_t,
 }
 

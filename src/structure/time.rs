@@ -2,9 +2,9 @@ use speedy_derive::{Readable, Writable};
 use std::cmp::Ordering;
 use std::convert::From;
 
-/// The representation of the time is the one defined by the IETF Network Time Protocol (NTP)
-/// Standard (IETF RFC 1305). In this representation, time is expressed in seconds and fraction
-/// of seconds using the formula:
+/// The representation of the time is the one defined by the IETF Network Time
+/// Protocol (NTP) Standard (IETF RFC 1305). In this representation, time is
+/// expressed in seconds and fraction of seconds using the formula:
 /// time = seconds + (fraction / 2^(32))
 #[derive(Debug, PartialEq, Eq, Readable, Writable)]
 pub struct Time_t {
