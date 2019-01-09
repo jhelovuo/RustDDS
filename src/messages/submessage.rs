@@ -7,6 +7,7 @@ use crate::messages::info_destination::InfoDestination;
 use crate::messages::info_reply::InfoReply;
 use crate::messages::info_source::InfoSource;
 use crate::messages::info_timestamp::InfoTimestamp;
+use crate::messages::nack_frag::NackFrag;
 
 #[derive(Debug)]
 pub enum EntitySubmessage {
@@ -16,7 +17,7 @@ pub enum EntitySubmessage {
     Gap(Gap),
     Heartbeat(Heartbeat),
     HeartbeatFrag(HeartbeatFrag),
-    // NackFrag(NackFrag),
+    NackFrag(NackFrag),
 }
 
 #[derive(Debug)]
