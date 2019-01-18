@@ -1,15 +1,15 @@
 use crate::structure::change_kind::ChangeKind_t;
-use crate::structure::guid::Guid_t;
+use crate::structure::guid::GUID_t;
 use crate::structure::instance_handle::InstanceHandle_t;
 use crate::structure::sequence_number::SequenceNumber_t;
 
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 struct Data {}
 
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
-struct CacheChange {
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+pub struct CacheChange {
     kind: ChangeKind_t,
-    writerGuid: Guid_t,
+    writerGuid: GUID_t,
     instanceHandle: InstanceHandle_t,
     sequenceNumber: SequenceNumber_t,
     data_value: Data,
@@ -66,7 +66,7 @@ mod tests {
         let mut history_cache = HistoryCache::new();
         let cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: Guid_t::GUID_UNKNOWN,
+            writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
             sequenceNumber: SequenceNumber_t::SEQUENCENUMBER_UNKNOWN,
             data_value: Data {},
@@ -86,7 +86,7 @@ mod tests {
 
         let cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: Guid_t::GUID_UNKNOWN,
+            writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
             sequenceNumber: SequenceNumber_t { value: 10 },
             data_value: Data {},
@@ -96,7 +96,7 @@ mod tests {
 
         let cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: Guid_t::GUID_UNKNOWN,
+            writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
             sequenceNumber: SequenceNumber_t { value: 7 },
             data_value: Data {},
@@ -114,7 +114,7 @@ mod tests {
 
         let small_cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: Guid_t::GUID_UNKNOWN,
+            writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
             sequenceNumber: SequenceNumber_t { value: 1 },
             data_value: Data {},
@@ -123,7 +123,7 @@ mod tests {
 
         let big_cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: Guid_t::GUID_UNKNOWN,
+            writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
             sequenceNumber: SequenceNumber_t { value: 7 },
             data_value: Data {},
@@ -145,7 +145,7 @@ mod tests {
 
         let small_cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: Guid_t::GUID_UNKNOWN,
+            writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
             sequenceNumber: SequenceNumber_t { value: 1 },
             data_value: Data {},
@@ -154,7 +154,7 @@ mod tests {
 
         let big_cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: Guid_t {
+            writerGuid: GUID_t {
                 entityId: EntityId_t::ENTITYID_UNKNOWN,
                 guidPrefix: GuidPrefix_t {
                     entityKey: [0x00; 12],

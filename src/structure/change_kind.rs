@@ -1,4 +1,4 @@
-#[derive(PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub enum ChangeKind_t {
     ALIVE,
     NOT_ALIVE_DISPOSED,

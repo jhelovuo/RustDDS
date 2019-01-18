@@ -3,13 +3,13 @@ use crate::structure::guid_prefix::GuidPrefix_t;
 use speedy_derive::{Readable, Writable};
 
 #[derive(Debug, Default, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
-pub struct Guid_t {
+pub struct GUID_t {
     pub guidPrefix: GuidPrefix_t,
     pub entityId: EntityId_t,
 }
 
-impl Guid_t {
-    pub const GUID_UNKNOWN: Guid_t = Guid_t {
+impl GUID_t {
+    pub const GUID_UNKNOWN: GUID_t = GUID_t {
         guidPrefix: GuidPrefix_t::GUIDPREFIX_UNKNOWN,
         entityId: EntityId_t::ENTITYID_UNKNOWN,
     };
@@ -22,30 +22,30 @@ mod tests {
     #[test]
     fn guid_unknown_is_a_combination_of_unknown_members() {
         assert_eq!(
-            Guid_t {
+            GUID_t {
                 entityId: EntityId_t::ENTITYID_UNKNOWN,
                 guidPrefix: GuidPrefix_t::GUIDPREFIX_UNKNOWN
             },
-            Guid_t::GUID_UNKNOWN
+            GUID_t::GUID_UNKNOWN
         );
     }
 
-    serialization_test!( type = Guid_t,
+    serialization_test!( type = GUID_t,
         {
             guid_unknown,
-            Guid_t::GUID_UNKNOWN,
+            GUID_t::GUID_UNKNOWN,
             le = [0x00; 16],
             be = [0x00; 16]
         },
         {
             guid_default,
-            Guid_t::default(),
+            GUID_t::default(),
             le = [0x00; 16],
             be = [0x00; 16]
         },
         {
             guid_entity_id_on_the_last_position,
-            Guid_t {
+            GUID_t {
                 entityId: EntityId_t::ENTITYID_PARTICIPANT,
                 ..Default::default()
             },
