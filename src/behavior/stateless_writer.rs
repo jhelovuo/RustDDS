@@ -1,5 +1,4 @@
 use crate::behavior::reader_locator::ReaderLocator;
-use crate::structure::locator::Locator_t;
 use crate::structure::time::Time_t;
 
 /// Specialization of RTPS Writer used for the Stateless Reference
@@ -27,11 +26,11 @@ impl StatelessWriter {
         }
     }
 
-    pub fn reader_locator_add(&mut self, a_locator: ReaderLocator) {
+    pub fn reader_locator_add(&mut self, _a_locator: ReaderLocator) {
         unimplemented!();
     }
 
-    pub fn reader_locator_remove(&mut self, a_locator: ReaderLocator) {
+    pub fn reader_locator_remove(&mut self, _a_locator: ReaderLocator) {
         unimplemented!();
     }
 

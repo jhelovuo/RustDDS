@@ -1,4 +1,5 @@
 use crate::behavior::change_for_reader::ChangeForReader;
+use crate::behavior::change_for_reader_status_kind::ChangeForReaderStatusKind;
 use crate::structure::guid::GUID_t;
 use crate::structure::history_cache::CacheChange;
 use crate::structure::locator::Locator_t;
@@ -9,7 +10,7 @@ use crate::structure::sequence_number::SequenceNumber_t;
 pub struct ReaderProxy {
     /// Identifies the remote matched RTPS Reader that is represented by the
     /// ReaderProxy.
-    remoteReaderGuid: GUID_t,
+    pub remoteReaderGuid: GUID_t,
 
     /// List of unicast locators (transport, address, port combinations) that
     /// can be used to send messages to the matched RTPS Reader.
@@ -23,8 +24,8 @@ pub struct ReaderProxy {
     /// The list may be empty.
     multicastLocatorList: Vec<Locator_t>,
 
-    /// List of CacheChange changes as they  to the matched RTPS Reader.
-    changes_for_reader: Vec<CacheChange>,
+    /// List of CacheChange changes as they to the matched RTPS Reader.
+    changes_for_reader: Vec<(CacheChange, ChangeForReader)>,
 
     /// Specifies whether the remote matched RTPS Reader expects in-line QoS to
     /// be sent along with any data
@@ -35,35 +36,60 @@ pub struct ReaderProxy {
 }
 
 impl ReaderProxy {
-    pub fn new() -> Self {
+    pub fn new(
+        remoteReaderGuid: GUID_t,
+        expectsInlineQos: bool,
+        unicastLocatorList: &[Locator_t],
+        multicastLocatorList: &[Locator_t],
+    ) -> ReaderProxy {
         unimplemented!();
     }
 
     pub fn acked_changes_set(&mut self, committed_seq_num: SequenceNumber_t) {
+        self.changes_for_reader
+            .iter_mut()
+            .filter(move |change| change.0.sequenceNumber <= committed_seq_num)
+            .for_each(|change| change.1.status = ChangeForReaderStatusKind::ACKNOWLEDGED);
+    }
+
+    pub fn next_requested_change(&self) -> &CacheChange {
         unimplemented!();
     }
 
-    pub fn next_requested_change(&self) -> ChangeForReader {
+    pub fn next_unsent_change(&self) -> &CacheChange {
         unimplemented!();
     }
 
-    pub fn next_unsent_change(&self) -> ChangeForReader {
-        unimplemented!();
+    pub fn unsent_changes(&self) -> impl Iterator<Item = &CacheChange> {
+        self.changes_for_reader
+            .iter()
+            .filter(|change| change.1.status == ChangeForReaderStatusKind::UNSENT)
+            .map(|change| &change.0)
     }
 
-    pub fn unsent_changes(&self) -> Vec<ChangeForReader> {
-        unimplemented!();
+    pub fn requested_changes(&self) -> impl Iterator<Item = &CacheChange> {
+        self.changes_for_reader
+            .iter()
+            .filter(|change| change.1.status == ChangeForReaderStatusKind::REQUESTED)
+            .map(|change| &change.0)
     }
 
-    pub fn requested_changes(&self) -> Vec<ChangeForReader> {
-        unimplemented!();
+    pub fn requested_changes_set(&mut self, req_seq_num_set: &[SequenceNumber_t]) {
+        req_seq_num_set.iter().for_each(|seq_num| {
+            if let Some(change_for_reader) = self
+                .changes_for_reader
+                .iter_mut()
+                .find(|change_for_reader| change_for_reader.0.sequenceNumber.value == seq_num.value)
+            {
+                change_for_reader.1.status = ChangeForReaderStatusKind::REQUESTED;
+            }
+        });
     }
 
-    pub fn requested_changes_set(&self, req_seq_num_set: &[SequenceNumber_t]) {
-        unimplemented!();
-    }
-
-    pub fn unacked_changes(&self) -> Vec<ChangeForReader> {
-        unimplemented!();
+    pub fn unacked_changes(&self) -> impl Iterator<Item = &CacheChange> {
+        self.changes_for_reader
+            .iter()
+            .filter(|change| change.1.status == ChangeForReaderStatusKind::UNACKNOWLEDGED)
+            .map(|change| &change.0)
     }
 }

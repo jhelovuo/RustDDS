@@ -4,15 +4,15 @@ use crate::structure::instance_handle::InstanceHandle_t;
 use crate::structure::sequence_number::SequenceNumber_t;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
-struct Data {}
+pub struct Data {}
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct CacheChange {
-    kind: ChangeKind_t,
-    writerGuid: GUID_t,
-    instanceHandle: InstanceHandle_t,
-    sequenceNumber: SequenceNumber_t,
-    data_value: Data,
+    pub kind: ChangeKind_t,
+    pub writerGuid: GUID_t,
+    pub instanceHandle: InstanceHandle_t,
+    pub sequenceNumber: SequenceNumber_t,
+    pub data_value: Data,
 }
 
 struct HistoryCache {

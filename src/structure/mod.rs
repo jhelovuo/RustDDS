@@ -1,6 +1,7 @@
 pub mod change_kind;
 pub mod count;
 pub mod endpoint;
+pub mod entity;
 pub mod entity_id;
 pub mod guid;
 pub mod guid_prefix;
@@ -16,3 +17,4 @@ pub mod sequence_number;
 pub mod sequence_number_set;
 pub mod time;
 pub mod topic_kind;
+pub mod writer;

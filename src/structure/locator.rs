@@ -33,12 +33,12 @@ impl Default for Locator_t {
 impl From<SocketAddr> for Locator_t {
     fn from(socket_address: SocketAddr) -> Self {
         Locator_t {
-            kind: match socket_address.ip().is_unspecified() {
-                true => LocatorKind_t::LOCATOR_KIND_INVALID,
-                false => match socket_address.ip().is_ipv4() {
-                    true => LocatorKind_t::LOCATOR_KIND_UDPv4,
-                    false => LocatorKind_t::LOCATOR_KIND_UDPv6,
-                },
+            kind: if socket_address.ip().is_unspecified() {
+                LocatorKind_t::LOCATOR_KIND_INVALID
+            } else if socket_address.ip().is_ipv4() {
+                LocatorKind_t::LOCATOR_KIND_UDPv4
+            } else {
+                LocatorKind_t::LOCATOR_KIND_UDPv6
             },
             port: socket_address.port() as u32,
             address: match socket_address.ip() {

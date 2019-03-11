@@ -3,8 +3,8 @@
 /// LOCATOR_KIND_UDPv4. Need only be able to hold an IPv4 address and a port
 /// number.
 pub struct LocatorUDPv4_t {
-    /// The mapping between the dot-notation “a.b.c.d” of an IPv4 address and its representation as
-    /// an unsigned long is as follows:
+    /// The mapping between the dot-notation “a.b.c.d” of an IPv4 address and
+    /// its representation as an unsigned long is as follows:
     /// address = (((a*256 + b)*256) + c)*256 + d
     address: u32,
     port: u32,

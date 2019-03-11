@@ -25,7 +25,7 @@ pub struct ReaderLocator {
 }
 
 impl ReaderLocator {
-    pub fn new(locator: Locator_t, expectsInlineQos: bool) -> Self {
+    pub fn new(_locator: Locator_t, _expectsInlineQos: bool) -> Self {
         unimplemented!();
     }
 
@@ -41,7 +41,7 @@ impl ReaderLocator {
         unimplemented!();
     }
 
-    pub fn requested_changes_set(req_seq_num_set: &[SequenceNumber_t]) {
+    pub fn requested_changes_set(_req_seq_num_set: &[SequenceNumber_t]) {
         unimplemented!();
     }
 

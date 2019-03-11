@@ -18,19 +18,19 @@ impl FragmentNumberSet_t {
     }
 
     pub fn insert(&mut self, fragment_number: FragmentNumber_t) -> bool {
-        match self.is_in_range(fragment_number) {
-            true => {
-                let offset = self.base_offset(fragment_number);
-                self.set.insert(offset)
-            }
-            false => false,
+        if self.is_in_range(fragment_number) {
+            let offset = self.base_offset(fragment_number);
+            self.set.insert(offset)
+        } else {
+            false
         }
     }
 
     pub fn contains(&self, fragment_number: FragmentNumber_t) -> bool {
-        match self.is_in_range(fragment_number) {
-            true => self.set.contains(self.base_offset(fragment_number)),
-            false => false,
+        if self.is_in_range(fragment_number) {
+            self.set.contains(self.base_offset(fragment_number))
+        } else {
+            false
         }
     }
 
