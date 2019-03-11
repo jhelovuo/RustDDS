@@ -48,11 +48,9 @@ mod tests {
         NackFrag {
             reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
             writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-            writer_sn: SequenceNumber_t { value: 42 },
-            fragment_number_state: FragmentNumberSet_t::new(FragmentNumber_t {
-                value: 1000
-            }),
-            count: Count_t { value: 6 }
+            writer_sn: SequenceNumber_t::from(42),
+            fragment_number_state: FragmentNumberSet_t::new(FragmentNumber_t::from(1000)),
+            count: Count_t::from(6),
         },
         le = [0x00, 0x00, 0x03, 0xC7,
               0x00, 0x00, 0x03, 0xC2,

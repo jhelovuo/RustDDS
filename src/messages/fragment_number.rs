@@ -1,13 +1,26 @@
 use speedy_derive::{Readable, Writable};
+use std::convert::From;
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct FragmentNumber_t {
-    pub value: u32,
+    value: u32,
 }
 
 impl Default for FragmentNumber_t {
     fn default() -> FragmentNumber_t {
         FragmentNumber_t { value: 1 }
+    }
+}
+
+impl From<u32> for FragmentNumber_t {
+    fn from(value: u32) -> Self {
+        FragmentNumber_t { value }
+    }
+}
+
+impl From<FragmentNumber_t> for u32 {
+    fn from(fragment_number: FragmentNumber_t) -> Self {
+        fragment_number.value
     }
 }
 
@@ -17,13 +30,13 @@ mod tests {
 
     #[test]
     fn fragment_number_starts_by_default_from_one() {
-        assert_eq!(FragmentNumber_t { value: 1 }, FragmentNumber_t::default());
+        assert_eq!(FragmentNumber_t::from(1), FragmentNumber_t::default());
     }
 
     serialization_test!( type = FragmentNumber_t,
     {
         fragment_number_zero,
-        FragmentNumber_t { value: 0 },
+        FragmentNumber_t::from(0),
         le = [0x00, 0x00, 0x00, 0x00],
         be = [0x00, 0x00, 0x00, 0x00]
     },
@@ -35,7 +48,7 @@ mod tests {
     },
     {
         fragment_number_non_zero,
-        FragmentNumber_t { value: 0xDEADBEEF },
+        FragmentNumber_t::from(0xDEADBEEF),
         le = [0xEF, 0xBE, 0xAD, 0xDE],
         be = [0xDE, 0xAD, 0xBE, 0xEF]
     });

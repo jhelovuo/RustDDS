@@ -1,0 +1,23 @@
+use crate::structure::change_kind::ChangeKind_t;
+use crate::structure::history_cache::CacheChange;
+use crate::structure::history_cache::Data;
+use crate::structure::instance_handle::InstanceHandle_t;
+use crate::structure::sequence_number::SequenceNumber_t;
+
+pub struct WriterAttributes {
+    pub push_mode: bool,
+    // pub heartbeatPeriod: Duration_t,
+    // pub nackResponseDelay: Duration_t,
+    // pub nackSuppressionDuration: Duration_t,
+    pub last_change_sequence_number: SequenceNumber_t,
+}
+
+pub trait Writer {
+    fn as_writer(&self) -> &WriterAttributes;
+    fn new_change(
+        &mut self,
+        kind: ChangeKind_t,
+        data: Data,
+        handle: InstanceHandle_t,
+    ) -> CacheChange;
+}

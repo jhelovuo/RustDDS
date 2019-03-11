@@ -88,7 +88,7 @@ mod tests {
             kind: ChangeKind_t::ALIVE,
             writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t { value: 10 },
+            sequenceNumber: SequenceNumber_t::from(10),
             data_value: Data {},
         };
         history_cache.add_change(cache_change);
@@ -98,13 +98,13 @@ mod tests {
             kind: ChangeKind_t::ALIVE,
             writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t { value: 7 },
+            sequenceNumber: SequenceNumber_t::from(7),
             data_value: Data {},
         };
         history_cache.add_change(cache_change);
         assert_eq!(2, history_cache.changes.len());
 
-        history_cache.remove_change(SequenceNumber_t { value: 7 });
+        history_cache.remove_change(SequenceNumber_t::from(7));
         assert_eq!(1, history_cache.changes.len());
     }
 
@@ -116,7 +116,7 @@ mod tests {
             kind: ChangeKind_t::ALIVE,
             writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t { value: 1 },
+            sequenceNumber: SequenceNumber_t::from(1),
             data_value: Data {},
         };
         history_cache.add_change(small_cache_change);
@@ -125,7 +125,7 @@ mod tests {
             kind: ChangeKind_t::ALIVE,
             writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t { value: 7 },
+            sequenceNumber: SequenceNumber_t::from(7),
             data_value: Data {},
         };
         history_cache.add_change(big_cache_change);
@@ -133,10 +133,7 @@ mod tests {
         let smalles_cache_change = history_cache.get_seq_num_min();
 
         assert_eq!(true, smalles_cache_change.is_some());
-        assert_eq!(
-            &SequenceNumber_t { value: 1 },
-            smalles_cache_change.unwrap()
-        );
+        assert_eq!(&SequenceNumber_t::from(1), smalles_cache_change.unwrap());
     }
 
     #[test]
@@ -147,7 +144,7 @@ mod tests {
             kind: ChangeKind_t::ALIVE,
             writerGuid: GUID_t::GUID_UNKNOWN,
             instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t { value: 1 },
+            sequenceNumber: SequenceNumber_t::from(1),
             data_value: Data {},
         };
         history_cache.add_change(small_cache_change);
@@ -161,7 +158,7 @@ mod tests {
                 },
             },
             instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t { value: 7 },
+            sequenceNumber: SequenceNumber_t::from(7),
             data_value: Data {},
         };
         history_cache.add_change(big_cache_change);
@@ -169,9 +166,6 @@ mod tests {
         let biggest_cache_change = history_cache.get_seq_num_max();
 
         assert_eq!(true, biggest_cache_change.is_some());
-        assert_eq!(
-            &SequenceNumber_t { value: 7 },
-            biggest_cache_change.unwrap()
-        );
+        assert_eq!(&SequenceNumber_t::from(7), biggest_cache_change.unwrap());
     }
 }

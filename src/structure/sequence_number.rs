@@ -1,15 +1,28 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
+use std::convert::From;
 use std::mem::size_of;
 
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SequenceNumber_t {
-    pub value: i64,
+    value: i64,
 }
 
 impl SequenceNumber_t {
     pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t = SequenceNumber_t {
         value: (std::u32::MAX as i64) << 32,
     };
+}
+
+impl From<i64> for SequenceNumber_t {
+    fn from(value: i64) -> Self {
+        SequenceNumber_t { value }
+    }
+}
+
+impl From<SequenceNumber_t> for i64 {
+    fn from(sequence_number: SequenceNumber_t) -> Self {
+        sequence_number.value
+    }
 }
 
 impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
@@ -53,8 +66,7 @@ mod tests {
 
     #[test]
     fn sequence_number_starts_by_default_from_one() {
-        assert_eq!(SequenceNumber_t { value: 1 }, SequenceNumber_t::default());
-        assert_eq!(1, SequenceNumber_t::default().value);
+        assert_eq!(SequenceNumber_t::from(1), SequenceNumber_t::default());
     }
 
     serialization_test!( type = SequenceNumber_t,
@@ -72,7 +84,7 @@ mod tests {
     },
     {
         sequence_number_non_zero,
-        SequenceNumber_t { value: 0x0011223344556677 },
+        SequenceNumber_t::from(0x0011223344556677),
         le = [0x33, 0x22, 0x11, 0x00, 0x77, 0x66, 0x55, 0x44],
         be = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]
     });

@@ -18,9 +18,9 @@ impl SequenceNumberSet_t {
     }
 
     pub fn insert(&mut self, sequence_number: SequenceNumber_t) -> bool {
-        if sequence_number >= self.base && sequence_number.value < self.base.value + 255 {
+        if sequence_number >= self.base && i64::from(sequence_number) < i64::from(self.base) + 255 {
             self.set
-                .insert((sequence_number.value - self.base.value) as usize);
+                .insert((i64::from(sequence_number) - i64::from(self.base)) as usize);
             return true;
         }
         return false;
@@ -29,7 +29,7 @@ impl SequenceNumberSet_t {
 
 impl Validity for SequenceNumberSet_t {
     fn valid(&self) -> bool {
-        self.base.value >= 1 && 0 < self.set.len() && self.set.len() <= 256
+        i64::from(self.base) >= 1 && 0 < self.set.len() && self.set.len() <= 256
     }
 }
 
@@ -39,28 +39,28 @@ mod tests {
 
     #[test]
     fn sequence_number_set_insert() {
-        let mut sequence_number_set = SequenceNumberSet_t::new(SequenceNumber_t { value: 10 });
+        let mut sequence_number_set = SequenceNumberSet_t::new(SequenceNumber_t::from(10));
 
-        assert!(sequence_number_set.insert(SequenceNumber_t { value: 20 }));
+        assert!(sequence_number_set.insert(SequenceNumber_t::from(20)));
         assert!(sequence_number_set.set.contains(20 - 10));
 
-        assert!(!sequence_number_set.insert(SequenceNumber_t { value: 5 }));
+        assert!(!sequence_number_set.insert(SequenceNumber_t::from(5)));
         assert!(!sequence_number_set.set.contains(5));
 
-        assert!(!sequence_number_set.insert(SequenceNumber_t { value: 10000 }));
+        assert!(!sequence_number_set.insert(SequenceNumber_t::from(10000)));
         assert!(!sequence_number_set.set.contains(7));
 
-        assert!(sequence_number_set.insert(SequenceNumber_t { value: 10 + 200 }));
+        assert!(sequence_number_set.insert(SequenceNumber_t::from(10 + 200)));
         assert_eq!(true, sequence_number_set.set.contains(200));
 
-        assert!(!sequence_number_set.insert(SequenceNumber_t { value: 10 + 255 }));
+        assert!(!sequence_number_set.insert(SequenceNumber_t::from(10 + 255)));
         assert_eq!(false, sequence_number_set.set.contains(10 + 255));
     }
 
     serialization_test!( type = SequenceNumberSet_t,
     {
         sequence_number_set_empty,
-        SequenceNumberSet_t::new(SequenceNumber_t { value: 42 }),
+        SequenceNumberSet_t::new(SequenceNumber_t::from(42)),
         le = [0x00, 0x00, 0x00, 0x00,  // bitmapBase
               0x2A, 0x00, 0x00, 0x00,
               0x00, 0x00, 0x00, 0x00], // numBits
@@ -71,14 +71,14 @@ mod tests {
     {
         sequence_number_set_manual,
         (|| {
-            let mut set = SequenceNumberSet_t::new(SequenceNumber_t { value: 1000 });
-            set.insert(SequenceNumber_t { value: 1001 });
-            set.insert(SequenceNumber_t { value: 1003 });
-            set.insert(SequenceNumber_t { value: 1004 });
-            set.insert(SequenceNumber_t { value: 1006 });
-            set.insert(SequenceNumber_t { value: 1008 });
-            set.insert(SequenceNumber_t { value: 1010 });
-            set.insert(SequenceNumber_t { value: 1013 });
+            let mut set = SequenceNumberSet_t::new(SequenceNumber_t::from(1000));
+            set.insert(SequenceNumber_t::from(1001));
+            set.insert(SequenceNumber_t::from(1003));
+            set.insert(SequenceNumber_t::from(1004));
+            set.insert(SequenceNumber_t::from(1006));
+            set.insert(SequenceNumber_t::from(1008));
+            set.insert(SequenceNumber_t::from(1010));
+            set.insert(SequenceNumber_t::from(1013));
             set
         })(),
         le = [0x00, 0x00, 0x00, 0x00,

@@ -79,7 +79,7 @@ impl ReaderProxy {
             if let Some(change_for_reader) = self
                 .changes_for_reader
                 .iter_mut()
-                .find(|change_for_reader| change_for_reader.0.sequenceNumber.value == seq_num.value)
+                .find(|change_for_reader| change_for_reader.0.sequenceNumber == *seq_num)
             {
                 change_for_reader.1.status = ChangeForReaderStatusKind::REQUESTED;
             }
