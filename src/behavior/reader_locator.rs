@@ -1,5 +1,5 @@
 use crate::behavior::change_for_reader::ChangeForReader;
-use crate::structure::history_cache::CacheChange;
+use crate::structure::cache_change::CacheChange;
 use crate::structure::locator::Locator_t;
 use crate::structure::sequence_number::SequenceNumber_t;
 

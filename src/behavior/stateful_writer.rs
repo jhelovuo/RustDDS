@@ -1,12 +1,12 @@
 use crate::behavior::reader_proxy::ReaderProxy;
+use crate::behavior::writer::{Writer, WriterAttributes};
+use crate::structure::cache_change::CacheChange;
 use crate::structure::change_kind::ChangeKind_t;
+use crate::structure::data::Data;
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID_t;
-use crate::structure::history_cache::CacheChange;
-use crate::structure::history_cache::Data;
 use crate::structure::instance_handle::InstanceHandle_t;
-use crate::structure::writer::{Writer, WriterAttributes};
 
 pub struct StatefulWriter {
     /// The StatefulWriter keeps track of all the RTPS Readers matched with it.
@@ -39,7 +39,12 @@ impl Writer for StatefulWriter {
     /// Writer’s HistoryCache. The sequence number of the CacheChange is
     /// automatically set to be the sequenceNumber of the previous change plus
     /// one.
-    fn new_change(kind: ChangeKind_t, data: Data, handle: InstanceHandle_t) -> CacheChange {
+    fn new_change(
+        &mut self,
+        kind: ChangeKind_t,
+        data: Data,
+        handle: InstanceHandle_t,
+    ) -> CacheChange {
         unimplemented!();
     }
 }

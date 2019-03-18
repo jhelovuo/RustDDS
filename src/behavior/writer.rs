@@ -1,6 +1,6 @@
+use crate::structure::cache_change::CacheChange;
 use crate::structure::change_kind::ChangeKind_t;
-use crate::structure::history_cache::CacheChange;
-use crate::structure::history_cache::Data;
+use crate::structure::data::Data;
 use crate::structure::instance_handle::InstanceHandle_t;
 use crate::structure::sequence_number::SequenceNumber_t;
 
