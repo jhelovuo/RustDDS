@@ -8,8 +8,8 @@ use std::convert::From;
 /// time = seconds + (fraction / 2^(32))
 #[derive(Debug, PartialEq, Eq, Readable, Writable)]
 pub struct Time_t {
-    pub seconds: i32,
-    pub fraction: u32,
+    seconds: i32,
+    fraction: u32,
 }
 
 pub type Timestamp = Time_t;
@@ -21,11 +21,11 @@ impl Time_t {
     };
     pub const TIME_INVALID: Time_t = Time_t {
         seconds: -1,
-        fraction: 0xFFFFFFFF,
+        fraction: 0xFFFF_FFFF,
     };
     pub const TIME_INFINITE: Time_t = Time_t {
-        seconds: 0x7FFFFFFF,
-        fraction: 0xFFFFFFFF,
+        seconds: 0x7FFF_FFFF,
+        fraction: 0xFFFF_FFFF,
     };
 }
 
@@ -35,7 +35,7 @@ impl From<time::Timespec> for Time_t {
     fn from(timespec: time::Timespec) -> Self {
         Time_t {
             seconds: timespec.sec as i32,
-            fraction: (((timespec.nsec as i64) << 32) / NANOS_PER_SEC) as u32,
+            fraction: ((i64::from(timespec.nsec) << 32) / NANOS_PER_SEC) as u32,
         }
     }
 }
@@ -43,8 +43,8 @@ impl From<time::Timespec> for Time_t {
 impl From<Time_t> for time::Timespec {
     fn from(time: Time_t) -> Self {
         time::Timespec {
-            sec: time.seconds as i64,
-            nsec: (((time.fraction as i64) * NANOS_PER_SEC) >> 32) as i32,
+            sec: i64::from(time.seconds),
+            nsec: ((i64::from(time.fraction) * NANOS_PER_SEC) >> 32) as i32,
         }
     }
 }

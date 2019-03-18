@@ -69,8 +69,8 @@ impl<'a, C: Context> Readable<'a, C> for EntityId_t {
         let entityKey = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
         let entityKind = reader.read_u8()?;
         Ok(EntityId_t {
-            entityKey: entityKey,
-            entityKind: entityKind,
+            entityKey,
+            entityKind,
         })
     }
 }

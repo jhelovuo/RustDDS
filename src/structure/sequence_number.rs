@@ -32,7 +32,7 @@ impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
         let low: u32 = reader.read_value()?;
 
         Ok(SequenceNumber_t {
-            value: ((high as i64) << 32) + low as i64,
+            value: ((i64::from(high)) << 32) + i64::from(low),
         })
     }
 

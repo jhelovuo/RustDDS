@@ -40,7 +40,7 @@ impl From<SocketAddr> for Locator_t {
             } else {
                 LocatorKind_t::LOCATOR_KIND_UDPv6
             },
-            port: socket_address.port() as u32,
+            port: u32::from(socket_address.port()),
             address: match socket_address.ip() {
                 IpAddr::V4(ip4) => ip4.to_ipv6_compatible().octets(),
                 IpAddr::V6(ip6) => ip6.octets(),
