@@ -10,86 +10,149 @@ use crate::structure::sequence_number::SequenceNumber_t;
 pub struct ReaderProxy {
     /// Identifies the remote matched RTPS Reader that is represented by the
     /// ReaderProxy.
-    pub remoteReaderGuid: GUID_t,
-
-    /// List of unicast locators (transport, address, port combinations) that
-    /// can be used to send messages to the matched RTPS Reader.
-    ///
-    /// The list may be empty.
-    unicastLocatorList: Vec<Locator_t>,
-
-    /// List of multicast locators (transport, address, port combinations) that
-    /// can be used to send messages to the matched RTPS Reader.
-    ///
-    /// The list may be empty.
-    multicastLocatorList: Vec<Locator_t>,
-
-    /// List of CacheChange changes as they to the matched RTPS Reader.
-    changes_for_reader: Vec<(CacheChange, ChangeForReader)>,
+    pub remote_reader_guid: GUID_t,
 
     /// Specifies whether the remote matched RTPS Reader expects in-line QoS to
     /// be sent along with any data
-    expectsInlineQos: bool,
+    expects_inline_qos: bool,
 
     /// Specifies whether the remote Reader is responsive to the Writer.
-    isActive: bool,
+    is_active: bool,
+
+    highest_seq_num_sent: SequenceNumber_t,
 }
 
 impl ReaderProxy {
-    pub fn new(
-        remoteReaderGuid: GUID_t,
-        expectsInlineQos: bool,
-        unicastLocatorList: &[Locator_t],
-        multicastLocatorList: &[Locator_t],
-    ) -> ReaderProxy {
-        unimplemented!();
+    pub fn new(remote_reader_guid: GUID_t, expects_inline_qos: bool) -> ReaderProxy {
+        ReaderProxy {
+            remote_reader_guid,
+            expects_inline_qos,
+            is_active: true,
+            highest_seq_num_sent: SequenceNumber_t::from(std::i64::MIN),
+        }
     }
 
-    pub fn acked_changes_set(&mut self, committed_seq_num: SequenceNumber_t) {
-        self.changes_for_reader
-            .iter_mut()
-            .filter(move |change| change.0.sequenceNumber <= committed_seq_num)
-            .for_each(|change| change.1.status = ChangeForReaderStatusKind::ACKNOWLEDGED);
+    pub fn next_unsent_change<'a>(
+        &'a mut self,
+        changes: &'a [CacheChange],
+    ) -> Option<&'a CacheChange> {
+        self.unsent_changes(&changes)
+            .min_by(|x, y| x.sequence_number.cmp(&y.sequence_number))
+            .and_then(|change| {
+                self.highest_seq_num_sent = change.sequence_number;
+                Some(change)
+            })
     }
 
-    pub fn next_requested_change(&self) -> &CacheChange {
-        unimplemented!();
-    }
-
-    pub fn next_unsent_change(&self) -> &CacheChange {
-        unimplemented!();
-    }
-
-    pub fn unsent_changes(&self) -> impl Iterator<Item = &CacheChange> {
-        self.changes_for_reader
+    pub fn unsent_changes<'a>(
+        &self,
+        changes: &'a [CacheChange],
+    ) -> impl Iterator<Item = &'a CacheChange> {
+        let highest_seq_num_sent = self.highest_seq_num_sent;
+        changes
             .iter()
-            .filter(|change| change.1.status == ChangeForReaderStatusKind::UNSENT)
-            .map(|change| &change.0)
+            .filter(move |change| change.sequence_number > highest_seq_num_sent)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::structure::change_kind::ChangeKind_t;
+    use crate::structure::data::Data;
+    use crate::structure::instance_handle::InstanceHandle_t;
+
+    fn default_cache_change(sequence_number: i64) -> CacheChange {
+        CacheChange {
+            kind: ChangeKind_t::ALIVE,
+            writer_guid: GUID_t::GUID_UNKNOWN,
+            instance_handle: InstanceHandle_t::default(),
+            sequence_number: SequenceNumber_t::from(sequence_number),
+            data_value: Data {},
+        }
     }
 
-    pub fn requested_changes(&self) -> impl Iterator<Item = &CacheChange> {
-        self.changes_for_reader
-            .iter()
-            .filter(|change| change.1.status == ChangeForReaderStatusKind::REQUESTED)
-            .map(|change| &change.0)
+    #[test]
+    fn unsent_changes_returns_not_consumed_changes_by_default() {
+        let reader_proxy = ReaderProxy::new(GUID_t::GUID_UNKNOWN, true);
+
+        let changes = vec![
+            default_cache_change(0),
+            default_cache_change(1),
+            default_cache_change(2),
+        ];
+
+        let mut unsent_changes = reader_proxy.unsent_changes(&changes);
+        assert_eq!(Some(&changes[0]), unsent_changes.next());
+        assert_eq!(Some(&changes[1]), unsent_changes.next());
+        assert_eq!(Some(&changes[2]), unsent_changes.next());
+        assert_eq!(None, unsent_changes.next());
     }
 
-    pub fn requested_changes_set(&mut self, req_seq_num_set: &[SequenceNumber_t]) {
-        req_seq_num_set.iter().for_each(|seq_num| {
-            if let Some(change_for_reader) = self
-                .changes_for_reader
-                .iter_mut()
-                .find(|change_for_reader| change_for_reader.0.sequenceNumber == *seq_num)
-            {
-                change_for_reader.1.status = ChangeForReaderStatusKind::REQUESTED;
-            }
-        });
+    #[test]
+    fn next_unsent_change_returns_cache_change_with_smallest_sequence_number() {
+        let mut reader_proxy = ReaderProxy::new(GUID_t::GUID_UNKNOWN, true);
+
+        let changes = vec![
+            default_cache_change(6),
+            default_cache_change(1),
+            default_cache_change(3),
+        ];
+
+        assert_eq!(Some(&changes[1]), reader_proxy.next_unsent_change(&changes));
+        assert_eq!(Some(&changes[2]), reader_proxy.next_unsent_change(&changes));
+        assert_eq!(Some(&changes[0]), reader_proxy.next_unsent_change(&changes));
+        assert_eq!(None, reader_proxy.next_unsent_change(&changes));
     }
 
-    pub fn unacked_changes(&self) -> impl Iterator<Item = &CacheChange> {
-        self.changes_for_reader
-            .iter()
-            .filter(|change| change.1.status == ChangeForReaderStatusKind::UNACKNOWLEDGED)
-            .map(|change| &change.0)
+    #[test]
+    fn next_unsent_change_once_requested_does_not_belong_to_unsent_changes() {
+        let mut reader_proxy = ReaderProxy::new(GUID_t::GUID_UNKNOWN, true);
+
+        let changes = vec![
+            default_cache_change(6),
+            default_cache_change(1),
+            default_cache_change(3),
+        ];
+
+        assert_eq!(3, reader_proxy.unsent_changes(&changes).count());
+        assert!(reader_proxy
+            .unsent_changes(&changes)
+            .any(|change| change == &changes[1]));
+
+        let next_unsent_change = reader_proxy.next_unsent_change(&changes);
+
+        assert_eq!(2, reader_proxy.unsent_changes(&changes).count());
+        assert!(!reader_proxy
+            .unsent_changes(&changes)
+            .any(|change| change == &changes[1]));
+    }
+
+    #[test]
+    fn unsent_changes_returns_only_changes_that_were_not_sent() {
+        let mut reader_proxy = ReaderProxy::new(GUID_t::GUID_UNKNOWN, true);
+
+        let mut changes = vec![
+            default_cache_change(6),
+            default_cache_change(1),
+            default_cache_change(3),
+        ];
+
+        // consume all changes
+        reader_proxy.next_unsent_change(&changes);
+        reader_proxy.next_unsent_change(&changes);
+        reader_proxy.next_unsent_change(&changes);
+
+        // add new changes with smaller sequence numbers than highest sent
+        changes.push(default_cache_change(0));
+        changes.push(default_cache_change(5));
+        changes.push(default_cache_change(3));
+
+        assert_eq!(None, reader_proxy.next_unsent_change(&changes));
+
+        // add new change with sequence number higher than highest sent
+        changes.push(default_cache_change(10));
+
+        assert_eq!(changes.last(), reader_proxy.next_unsent_change(&changes));
     }
 }

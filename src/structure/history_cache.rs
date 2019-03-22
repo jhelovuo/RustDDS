@@ -20,27 +20,28 @@ impl HistoryCache {
         self.changes.push(change)
     }
 
-    fn get_change(&self, sequenceNumber: SequenceNumber_t) -> Option<&CacheChange> {
+    fn get_change(&self, sequence_number: SequenceNumber_t) -> Option<&CacheChange> {
         self.changes
             .iter()
-            .find(|x| x.sequenceNumber == sequenceNumber)
+            .find(|x| x.sequence_number == sequence_number)
     }
 
-    fn remove_change(&mut self, sequenceNumber: SequenceNumber_t) {
-        self.changes.retain(|x| x.sequenceNumber != sequenceNumber)
+    fn remove_change(&mut self, sequence_number: SequenceNumber_t) {
+        self.changes
+            .retain(|x| x.sequence_number != sequence_number)
     }
 
     fn get_seq_num_min(&self) -> Option<&SequenceNumber_t> {
         self.changes
             .iter()
-            .map(|x| &x.sequenceNumber)
+            .map(|x| &x.sequence_number)
             .min_by(|x, y| x.cmp(&y))
     }
 
     fn get_seq_num_max(&self) -> Option<&SequenceNumber_t> {
         self.changes
             .iter()
-            .map(|x| &x.sequenceNumber)
+            .map(|x| &x.sequence_number)
             .max_by(|x, y| x.cmp(&y))
     }
 }
@@ -56,9 +57,9 @@ mod tests {
         let mut history_cache = HistoryCache::new();
         let cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: GUID_t::GUID_UNKNOWN,
-            instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t::SEQUENCENUMBER_UNKNOWN,
+            writer_guid: GUID_t::GUID_UNKNOWN,
+            instance_handle: InstanceHandle_t::default(),
+            sequence_number: SequenceNumber_t::SEQUENCENUMBER_UNKNOWN,
             data_value: Data {},
         };
 
@@ -76,9 +77,9 @@ mod tests {
 
         let cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: GUID_t::GUID_UNKNOWN,
-            instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t::from(10),
+            writer_guid: GUID_t::GUID_UNKNOWN,
+            instance_handle: InstanceHandle_t::default(),
+            sequence_number: SequenceNumber_t::from(10),
             data_value: Data {},
         };
         history_cache.add_change(cache_change);
@@ -86,9 +87,9 @@ mod tests {
 
         let cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: GUID_t::GUID_UNKNOWN,
-            instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t::from(7),
+            writer_guid: GUID_t::GUID_UNKNOWN,
+            instance_handle: InstanceHandle_t::default(),
+            sequence_number: SequenceNumber_t::from(7),
             data_value: Data {},
         };
         history_cache.add_change(cache_change);
@@ -104,18 +105,18 @@ mod tests {
 
         let small_cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: GUID_t::GUID_UNKNOWN,
-            instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t::from(1),
+            writer_guid: GUID_t::GUID_UNKNOWN,
+            instance_handle: InstanceHandle_t::default(),
+            sequence_number: SequenceNumber_t::from(1),
             data_value: Data {},
         };
         history_cache.add_change(small_cache_change);
 
         let big_cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: GUID_t::GUID_UNKNOWN,
-            instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t::from(7),
+            writer_guid: GUID_t::GUID_UNKNOWN,
+            instance_handle: InstanceHandle_t::default(),
+            sequence_number: SequenceNumber_t::from(7),
             data_value: Data {},
         };
         history_cache.add_change(big_cache_change);
@@ -132,23 +133,23 @@ mod tests {
 
         let small_cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: GUID_t::GUID_UNKNOWN,
-            instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t::from(1),
+            writer_guid: GUID_t::GUID_UNKNOWN,
+            instance_handle: InstanceHandle_t::default(),
+            sequence_number: SequenceNumber_t::from(1),
             data_value: Data {},
         };
         history_cache.add_change(small_cache_change);
 
         let big_cache_change = CacheChange {
             kind: ChangeKind_t::ALIVE,
-            writerGuid: GUID_t {
+            writer_guid: GUID_t {
                 entityId: EntityId_t::ENTITYID_UNKNOWN,
                 guidPrefix: GuidPrefix_t {
                     entityKey: [0x00; 12],
                 },
             },
-            instanceHandle: InstanceHandle_t::default(),
-            sequenceNumber: SequenceNumber_t::from(7),
+            instance_handle: InstanceHandle_t::default(),
+            sequence_number: SequenceNumber_t::from(7),
             data_value: Data {},
         };
         history_cache.add_change(big_cache_change);

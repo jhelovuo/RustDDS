@@ -68,7 +68,7 @@ impl StatefulWriter {
     ) -> impl Iterator<Item = &ReaderProxy> {
         self.matched_readers
             .iter()
-            .filter(move |proxy| proxy.remoteReaderGuid == a_reader_guid)
+            .filter(move |proxy| proxy.remote_reader_guid == a_reader_guid)
     }
 
     pub fn is_acked_by_all(&self, _a_change: &CacheChange) {
