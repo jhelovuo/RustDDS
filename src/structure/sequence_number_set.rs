@@ -1,61 +1,30 @@
-use crate::common::bit_set::BitSetRef;
-use crate::common::validity_trait::Validity;
+use crate::common::ranged_bit_set::RangedBitSet;
 use crate::structure::sequence_number::SequenceNumber_t;
 use speedy_derive::{Readable, Writable};
+use std::convert::TryFrom;
+use std::ops::Sub;
 
-#[derive(Debug, PartialEq, Readable, Writable)]
-pub struct SequenceNumberSet_t {
-    base: SequenceNumber_t,
-    set: BitSetRef,
-}
+pub type SequenceNumberSet_t = RangedBitSet<SequenceNumber_t>;
 
-impl SequenceNumberSet_t {
-    pub fn new(new_base: SequenceNumber_t) -> SequenceNumberSet_t {
-        SequenceNumberSet_t {
-            base: new_base,
-            set: BitSetRef::new(),
-        }
-    }
+impl Sub for SequenceNumber_t {
+    type Output = SequenceNumber_t;
 
-    pub fn insert(&mut self, sequence_number: SequenceNumber_t) -> bool {
-        if sequence_number >= self.base && i64::from(sequence_number) < i64::from(self.base) + 255 {
-            self.set
-                .insert((i64::from(sequence_number) - i64::from(self.base)) as usize);
-            return true;
-        }
-        return false;
+    fn sub(self, other: SequenceNumber_t) -> Self::Output {
+        SequenceNumber_t::from(i64::from(self) - i64::from(other))
     }
 }
 
-impl Validity for SequenceNumberSet_t {
-    fn valid(&self) -> bool {
-        i64::from(self.base) >= 1 && 0 < self.set.len() && self.set.len() <= 256
+impl TryFrom<SequenceNumber_t> for u8 {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(value: SequenceNumber_t) -> Result<u8, Self::Error> {
+        u8::try_from(i64::from(value))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn sequence_number_set_insert() {
-        let mut sequence_number_set = SequenceNumberSet_t::new(SequenceNumber_t::from(10));
-
-        assert!(sequence_number_set.insert(SequenceNumber_t::from(20)));
-        assert!(sequence_number_set.set.contains(20 - 10));
-
-        assert!(!sequence_number_set.insert(SequenceNumber_t::from(5)));
-        assert!(!sequence_number_set.set.contains(5));
-
-        assert!(!sequence_number_set.insert(SequenceNumber_t::from(10000)));
-        assert!(!sequence_number_set.set.contains(7));
-
-        assert!(sequence_number_set.insert(SequenceNumber_t::from(10 + 200)));
-        assert_eq!(true, sequence_number_set.set.contains(200));
-
-        assert!(!sequence_number_set.insert(SequenceNumber_t::from(10 + 255)));
-        assert_eq!(false, sequence_number_set.set.contains(10 + 255));
-    }
 
     serialization_test!( type = SequenceNumberSet_t,
     {

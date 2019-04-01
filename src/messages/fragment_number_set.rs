@@ -1,100 +1,30 @@
-use crate::common::bit_set::BitSetRef;
-use crate::common::validity_trait::Validity;
+use crate::common::ranged_bit_set::RangedBitSet;
 use crate::messages::fragment_number::FragmentNumber_t;
 use speedy_derive::{Readable, Writable};
+use std::convert::TryFrom;
+use std::ops::Sub;
 
-#[derive(Debug, PartialEq, Readable, Writable)]
-pub struct FragmentNumberSet_t {
-    base: FragmentNumber_t,
-    set: BitSetRef,
-}
+pub type FragmentNumberSet_t = RangedBitSet<FragmentNumber_t>;
 
-impl FragmentNumberSet_t {
-    pub fn new(new_base: FragmentNumber_t) -> FragmentNumberSet_t {
-        FragmentNumberSet_t {
-            base: new_base,
-            set: BitSetRef::new(),
-        }
-    }
+impl Sub for FragmentNumber_t {
+    type Output = FragmentNumber_t;
 
-    pub fn insert(&mut self, fragment_number: FragmentNumber_t) -> bool {
-        if self.is_in_range(fragment_number) {
-            let offset = self.base_offset(fragment_number);
-            self.set.insert(offset)
-        } else {
-            false
-        }
-    }
-
-    pub fn contains(&self, fragment_number: FragmentNumber_t) -> bool {
-        if self.is_in_range(fragment_number) {
-            self.set.contains(self.base_offset(fragment_number))
-        } else {
-            false
-        }
-    }
-
-    fn is_in_range(&self, fragment_number: FragmentNumber_t) -> bool {
-        fragment_number >= self.base && u32::from(fragment_number) <= u32::from(self.base) + 255
-    }
-
-    fn base_offset(&self, fragment_number: FragmentNumber_t) -> usize {
-        (u32::from(fragment_number) - u32::from(self.base)) as usize
+    fn sub(self, other: FragmentNumber_t) -> Self::Output {
+        FragmentNumber_t::from(u32::from(self) - u32::from(other))
     }
 }
 
-impl Validity for FragmentNumberSet_t {
-    fn valid(&self) -> bool {
-        u32::from(self.base) >= 1 && 0 < self.set.len() && self.set.len() <= 256
+impl TryFrom<FragmentNumber_t> for u8 {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(value: FragmentNumber_t) -> Result<u8, Self::Error> {
+        u8::try_from(u32::from(value))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn fragment_number_set_insert() {
-        let base = 10;
-        let mut fragment_number_set = FragmentNumberSet_t::new(FragmentNumber_t::from(base));
-
-        assert_eq!(
-            false,
-            fragment_number_set.contains(FragmentNumber_t::from(base))
-        );
-
-        assert!(fragment_number_set.insert(FragmentNumber_t::from(base)));
-        assert!(fragment_number_set.contains(FragmentNumber_t::from(base)));
-
-        let max_range = base + 255;
-        assert!(fragment_number_set.insert(FragmentNumber_t::from(max_range)));
-        assert!(fragment_number_set.contains(FragmentNumber_t::from(max_range)));
-
-        let below_range = base - 1;
-        assert_eq!(
-            false,
-            fragment_number_set.insert(FragmentNumber_t::from(below_range))
-        );
-        assert_eq!(
-            false,
-            fragment_number_set.contains(FragmentNumber_t::from(below_range))
-        );
-
-        let above_max_range = max_range + 1;
-        assert_eq!(
-            false,
-            fragment_number_set.insert(FragmentNumber_t::from(above_max_range))
-        );
-        assert_eq!(
-            false,
-            fragment_number_set.contains(FragmentNumber_t::from(above_max_range))
-        );
-
-        assert_eq!(
-            false,
-            fragment_number_set.insert(FragmentNumber_t::from(base))
-        );
-    }
 
     serialization_test!( type = FragmentNumberSet_t,
     {
