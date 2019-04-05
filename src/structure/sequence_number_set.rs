@@ -1,26 +1,8 @@
 use crate::common::ranged_bit_set::RangedBitSet;
 use crate::structure::sequence_number::SequenceNumber_t;
 use speedy_derive::{Readable, Writable};
-use std::convert::TryFrom;
-use std::ops::Sub;
 
-pub type SequenceNumberSet_t = RangedBitSet<SequenceNumber_t>;
-
-impl Sub for SequenceNumber_t {
-    type Output = SequenceNumber_t;
-
-    fn sub(self, other: SequenceNumber_t) -> Self::Output {
-        SequenceNumber_t::from(i64::from(self) - i64::from(other))
-    }
-}
-
-impl TryFrom<SequenceNumber_t> for u8 {
-    type Error = std::num::TryFromIntError;
-
-    fn try_from(value: SequenceNumber_t) -> Result<u8, Self::Error> {
-        u8::try_from(i64::from(value))
-    }
-}
+pub type SequenceNumberSet_t = RangedBitSet<SequenceNumber_t, i64>;
 
 #[cfg(test)]
 mod tests {

@@ -6,6 +6,7 @@
 extern crate bit_set;
 extern crate bit_vec;
 extern crate bytes;
+extern crate num_traits;
 extern crate speedy;
 extern crate speedy_derive;
 extern crate tokio;

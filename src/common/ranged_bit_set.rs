@@ -1,37 +1,39 @@
 use crate::common::bit_set::BitSetRef;
+use num_traits::{NumCast, PrimInt};
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::convert::TryFrom;
-use std::ops::Sub;
+use std::marker::PhantomData;
 
 #[derive(Debug, PartialEq)]
-pub struct RangedBitSet<B>
+pub struct RangedBitSet<B, R = B>
 where
-    B: Sub<Output = B> + Copy + Clone + PartialOrd,
-    u8: TryFrom<B>,
+    B: From<R> + Copy + Clone,
+    R: From<B> + PrimInt,
 {
     base: B,
     set: BitSetRef,
+    repr: PhantomData<R>,
 }
 
-impl<B> RangedBitSet<B>
+impl<B, R> RangedBitSet<B, R>
 where
-    B: Sub<Output = B> + Copy + Clone + PartialOrd,
-    u8: TryFrom<B>,
+    B: From<R> + Copy + Clone,
+    R: From<B> + PrimInt,
 {
     fn normalize(&self, value: B) -> Option<usize> {
-        if self.base <= value {
-            u8::try_from(value - self.base)
-                .ok()
-                .and_then(|normalized| Some(usize::from(normalized)))
-        } else {
-            None
-        }
+        let base: R = std::convert::From::from(self.base);
+        let value: R = std::convert::From::from(value);
+
+        value
+            .checked_sub(&base)
+            .and_then(|diff| NumCast::from(diff))
+            .and_then(|normalized: u8| Some(std::convert::From::from(normalized)))
     }
 
-    pub fn new(base: B) -> RangedBitSet<B> {
+    pub fn new(base: B) -> RangedBitSet<B, R> {
         RangedBitSet {
             base: base,
             set: BitSetRef::new(),
+            repr: PhantomData,
         }
     }
 
@@ -43,10 +45,10 @@ where
     }
 }
 
-impl<'a, C: Context, B> Readable<'a, C> for RangedBitSet<B>
+impl<'a, C: Context, B, V> Readable<'a, C> for RangedBitSet<B, V>
 where
-    B: speedy::Readable<'a, C> + Copy + Clone + Sub<Output = B> + PartialOrd,
-    u8: TryFrom<B>,
+    B: From<V> + speedy::Readable<'a, C> + Copy + Clone,
+    V: From<B> + PrimInt,
 {
     #[inline]
     fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
@@ -55,14 +57,15 @@ where
         Ok(RangedBitSet {
             base: base,
             set: set,
+            repr: PhantomData,
         })
     }
 }
 
-impl<C: Context, B> Writable<C> for RangedBitSet<B>
+impl<C: Context, B, V> Writable<C> for RangedBitSet<B, V>
 where
-    B: speedy::Writable<C> + Copy + Clone + Sub<Output = B> + PartialOrd,
-    u8: TryFrom<B>,
+    B: From<V> + speedy::Writable<C> + Copy + Clone,
+    V: From<B> + PrimInt,
 {
     #[inline]
     fn write_to<'a, T: ?Sized + Writer<'a, C>>(

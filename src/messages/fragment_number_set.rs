@@ -1,26 +1,8 @@
 use crate::common::ranged_bit_set::RangedBitSet;
 use crate::messages::fragment_number::FragmentNumber_t;
 use speedy_derive::{Readable, Writable};
-use std::convert::TryFrom;
-use std::ops::Sub;
 
-pub type FragmentNumberSet_t = RangedBitSet<FragmentNumber_t>;
-
-impl Sub for FragmentNumber_t {
-    type Output = FragmentNumber_t;
-
-    fn sub(self, other: FragmentNumber_t) -> Self::Output {
-        FragmentNumber_t::from(u32::from(self) - u32::from(other))
-    }
-}
-
-impl TryFrom<FragmentNumber_t> for u8 {
-    type Error = std::num::TryFromIntError;
-
-    fn try_from(value: FragmentNumber_t) -> Result<u8, Self::Error> {
-        u8::try_from(u32::from(value))
-    }
-}
+pub type FragmentNumberSet_t = RangedBitSet<FragmentNumber_t, u32>;
 
 #[cfg(test)]
 mod tests {
