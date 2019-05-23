@@ -2,6 +2,7 @@ pub mod cache_change;
 pub mod change_kind;
 pub mod count;
 pub mod data;
+pub mod duration;
 pub mod endpoint;
 pub mod entity;
 pub mod entity_id;
