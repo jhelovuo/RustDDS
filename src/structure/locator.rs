@@ -49,6 +49,27 @@ impl From<SocketAddr> for Locator_t {
     }
 }
 
+impl From<Locator_t> for SocketAddr {
+    fn from(locator: Locator_t) -> Self {
+        match locator.kind {
+            LocatorKind_t::LOCATOR_KIND_UDPv4 => SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(
+                    locator.address[12],
+                    locator.address[13],
+                    locator.address[14],
+                    locator.address[15],
+                )),
+                locator.port as u16,
+            ),
+            LocatorKind_t::LOCATOR_KIND_UDPv6 => SocketAddr::new(
+                IpAddr::V6(Ipv6Addr::from(locator.address)),
+                locator.port as u16,
+            ),
+            _ => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
+        }
+    }
+}
+
 impl<'a, C: Context> Readable<'a, C> for Locator_t {
     #[inline]
     fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
@@ -102,6 +123,61 @@ mod tests {
             Locator_t::LOCATOR_INVALID
         );
     }
+
+    macro_rules! conversion_test {
+        ($({ $name:ident, $left:expr, $right:expr }),+) => {
+            $(mod $name {
+                use super::*;
+
+                #[test]
+                fn left_into_right() {
+                    assert_eq!($right, ($left).into())
+                }
+
+                #[test]
+                fn right_into_left() {
+                    assert_eq!($left, ($right).into());
+                }
+            })+
+        }
+    }
+
+    conversion_test!(
+        {
+            invalid_into_unspecified,
+            Locator_t::LOCATOR_INVALID,
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
+        },
+        {
+            non_empty_ipv4,
+            Locator_t {
+                kind: LocatorKind_t::LOCATOR_KIND_UDPv4,
+                address: [
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x7F, 0x00, 0x00, 0x01
+                ],
+                port: 8080
+            },
+            SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                8080
+            )
+        },
+        {
+            non_empty_ipv6,
+            Locator_t {
+                kind: LocatorKind_t::LOCATOR_KIND_UDPv6,
+                address: [
+                    0xFF, 0x00, 0x45, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x32
+                ],
+                port: 7171
+            },
+            SocketAddr::new(
+                IpAddr::V6(Ipv6Addr::new(0xFF00, 0x4501, 0, 0, 0, 0, 0, 0x0032)),
+                7171
+            )
+        });
 
     serialization_test!( type = Locator_t,
         {
