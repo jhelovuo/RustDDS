@@ -6,7 +6,7 @@ use std::convert::From;
 /// Protocol (NTP) Standard (IETF RFC 1305). In this representation, time is
 /// expressed in seconds and fraction of seconds using the formula:
 /// time = seconds + (fraction / 2^(32))
-#[derive(Debug, PartialEq, Eq, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable)]
 pub struct Time_t {
     seconds: i32,
     fraction: u32,
@@ -45,22 +45,6 @@ impl From<Time_t> for time::Timespec {
         time::Timespec {
             sec: i64::from(time.seconds),
             nsec: ((i64::from(time.fraction) * NANOS_PER_SEC) >> 32) as i32,
-        }
-    }
-}
-
-impl PartialOrd for Time_t {
-    fn partial_cmp(&self, other: &Time_t) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Time_t {
-    fn cmp(&self, other: &Time_t) -> Ordering {
-        match self.seconds.cmp(&other.seconds) {
-            Ordering::Equal => self.fraction.cmp(&other.fraction),
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
         }
     }
 }
