@@ -1,29 +1,33 @@
+use crate::checked_impl;
+use num_derive::{NumOps, ToPrimitive};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::convert::From;
 use std::mem::size_of;
 
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SequenceNumber_t {
-    value: i64,
-}
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, NumOps, ToPrimitive)]
+pub struct SequenceNumber_t(i64);
 
 impl SequenceNumber_t {
-    pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t = SequenceNumber_t {
-        value: (std::u32::MAX as i64) << 32,
-    };
+    pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t =
+        SequenceNumber_t((std::u32::MAX as i64) << 32);
 }
 
 impl From<i64> for SequenceNumber_t {
     fn from(value: i64) -> Self {
-        SequenceNumber_t { value }
+        SequenceNumber_t(value)
     }
 }
 
 impl From<SequenceNumber_t> for i64 {
     fn from(sequence_number: SequenceNumber_t) -> Self {
-        sequence_number.value
+        sequence_number.0
     }
 }
+
+checked_impl!(CheckedAdd, checked_add, SequenceNumber_t);
+checked_impl!(CheckedSub, checked_sub, SequenceNumber_t);
+checked_impl!(CheckedMul, checked_mul, SequenceNumber_t);
+checked_impl!(CheckedDiv, checked_div, SequenceNumber_t);
 
 impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
     #[inline]
@@ -31,9 +35,7 @@ impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
         let high: i32 = reader.read_value()?;
         let low: u32 = reader.read_value()?;
 
-        Ok(SequenceNumber_t {
-            value: ((i64::from(high)) << 32) + i64::from(low),
-        })
+        Ok(SequenceNumber_t(((i64::from(high)) << 32) + i64::from(low)))
     }
 
     #[inline]
@@ -48,15 +50,15 @@ impl<C: Context> Writable<C> for SequenceNumber_t {
         &'a self,
         writer: &mut T,
     ) -> Result<(), std::io::Error> {
-        writer.write_i32((self.value >> 32) as i32)?;
-        writer.write_u32(self.value as u32)?;
+        writer.write_i32((self.0 >> 32) as i32)?;
+        writer.write_u32(self.0 as u32)?;
         Ok(())
     }
 }
 
 impl Default for SequenceNumber_t {
     fn default() -> SequenceNumber_t {
-        SequenceNumber_t { value: 1 }
+        SequenceNumber_t(1)
     }
 }
 

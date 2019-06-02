@@ -1,8 +1,7 @@
 use crate::common::ranged_bit_set::RangedBitSet;
 use crate::structure::sequence_number::SequenceNumber_t;
-use speedy_derive::{Readable, Writable};
 
-pub type SequenceNumberSet_t = RangedBitSet<SequenceNumber_t, i64>;
+pub type SequenceNumberSet_t = RangedBitSet<SequenceNumber_t>;
 
 #[cfg(test)]
 mod tests {

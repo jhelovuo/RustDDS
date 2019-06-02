@@ -1,8 +1,7 @@
 use crate::common::ranged_bit_set::RangedBitSet;
 use crate::messages::fragment_number::FragmentNumber_t;
-use speedy_derive::{Readable, Writable};
 
-pub type FragmentNumberSet_t = RangedBitSet<FragmentNumber_t, u32>;
+pub type FragmentNumberSet_t = RangedBitSet<FragmentNumber_t>;
 
 #[cfg(test)]
 mod tests {

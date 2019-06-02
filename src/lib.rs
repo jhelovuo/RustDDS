@@ -6,6 +6,7 @@
 extern crate bit_set;
 extern crate bit_vec;
 extern crate bytes;
+extern crate num_derive;
 extern crate num_traits;
 extern crate speedy;
 extern crate speedy_derive;
@@ -13,6 +14,8 @@ extern crate tokio;
 
 #[macro_use]
 mod serialization_test;
+#[macro_use]
+mod checked_impl;
 mod behavior;
 mod common;
 mod dds;

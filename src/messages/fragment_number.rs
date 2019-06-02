@@ -1,28 +1,34 @@
+use num_derive::{NumOps, ToPrimitive};
 use speedy_derive::{Readable, Writable};
 use std::convert::From;
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
-pub struct FragmentNumber_t {
-    value: u32,
-}
+#[derive(
+    Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, NumOps, ToPrimitive,
+)]
+pub struct FragmentNumber_t(u32);
 
 impl Default for FragmentNumber_t {
     fn default() -> FragmentNumber_t {
-        FragmentNumber_t { value: 1 }
+        FragmentNumber_t(1)
     }
 }
 
 impl From<u32> for FragmentNumber_t {
     fn from(value: u32) -> Self {
-        FragmentNumber_t { value }
+        FragmentNumber_t(value)
     }
 }
 
 impl From<FragmentNumber_t> for u32 {
     fn from(fragment_number: FragmentNumber_t) -> Self {
-        fragment_number.value
+        fragment_number.0
     }
 }
+
+checked_impl!(CheckedAdd, checked_add, FragmentNumber_t);
+checked_impl!(CheckedSub, checked_sub, FragmentNumber_t);
+checked_impl!(CheckedMul, checked_mul, FragmentNumber_t);
+checked_impl!(CheckedDiv, checked_div, FragmentNumber_t);
 
 #[cfg(test)]
 mod tests {
