@@ -10,7 +10,7 @@ The Data Distribution Service for real-time systems (DDS) is an Object Managemen
 
 ### Intended Features
 The objectives of this implementation are (incomplete list):
-* Implementing RTPS according to specification [[RTPS-2.2]][omg-rtps-url]
+* Implementing RTPS according to specification [[RTPS-2.3]][omg-rtps-url]
 * Integrating into the Rust-Tokio event system for async IO.
 * Interoperability with OpenDDS, and other RTPS/DDS implementations.
 
@@ -21,4 +21,4 @@ The objectives of this implementation are (incomplete list):
 [travis-badge]: https://travis-ci.com/Klapeyron/rtps-rs.svg?branch=master
 [travis-url]: https://travis-ci.com/Klapeyron/rtps-rs
 [wiki-dds-url]: https://en.wikipedia.org/wiki/Data_Distribution_Service
-[omg-rtps-url]:https://www.omg.org/spec/DDSI-RTPS/About-DDSI-RTPS/ 
+[omg-rtps-url]: https://www.omg.org/spec/DDSI-RTPS/2.3
