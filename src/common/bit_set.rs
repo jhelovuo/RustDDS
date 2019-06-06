@@ -10,6 +10,10 @@ impl BitSetRef {
     pub fn new() -> BitSetRef {
         BitSetRef(BitSet::with_capacity(0))
     }
+
+    pub fn into_bit_set(self) -> BitSet {
+        self.0
+    }
 }
 
 impl Deref for BitSetRef {
@@ -64,7 +68,6 @@ impl<C: Context> Writable<C> for BitSetRef {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::panic;
 
     serialization_test!( type = BitSetRef,
     {

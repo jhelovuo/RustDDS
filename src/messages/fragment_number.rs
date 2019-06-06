@@ -1,9 +1,21 @@
-use num_derive::{NumOps, ToPrimitive};
+use num_derive::{FromPrimitive, NumOps, ToPrimitive};
 use speedy_derive::{Readable, Writable};
 use std::convert::From;
 
 #[derive(
-    Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, NumOps, ToPrimitive,
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    PartialOrd,
+    PartialEq,
+    Ord,
+    Eq,
+    Readable,
+    Writable,
+    NumOps,
+    FromPrimitive,
+    ToPrimitive,
 )]
 pub struct FragmentNumber_t(u32);
 

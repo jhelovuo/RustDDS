@@ -1,10 +1,11 @@
-use crate::checked_impl;
-use num_derive::{NumOps, ToPrimitive};
+use num_derive::{FromPrimitive, NumOps, ToPrimitive};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::convert::From;
 use std::mem::size_of;
 
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, NumOps, ToPrimitive)]
+#[derive(
+    Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, NumOps, FromPrimitive, ToPrimitive,
+)]
 pub struct SequenceNumber_t(i64);
 
 impl SequenceNumber_t {
