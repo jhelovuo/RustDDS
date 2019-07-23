@@ -6,7 +6,7 @@ use crate::structure::guid::GUID_t;
 /// referenced inside RTPS messages.
 pub struct EntityAttributes {
     /// Globally and uniquely identifies the RTPS Entity within the DDS domain.
-    guid: GUID_t,
+    pub guid: GUID_t,
 }
 
 pub trait Entity {

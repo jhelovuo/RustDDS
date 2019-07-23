@@ -1,6 +1,6 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct EntityId_t {
     entityKey: [u8; 3],
     entityKind: u8,
