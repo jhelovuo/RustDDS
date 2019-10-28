@@ -1,4 +1,4 @@
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
 pub struct ProtocolVersion_t {

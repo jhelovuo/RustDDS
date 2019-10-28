@@ -1,7 +1,7 @@
 use crate::structure::count::Count_t;
 use crate::structure::entity_id::EntityId_t;
 use crate::structure::sequence_number::SequenceNumber_t;
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers

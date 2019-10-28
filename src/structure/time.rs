@@ -1,4 +1,4 @@
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 use std::convert::From;
 
 /// The representation of the time is the one defined by the IETF Network Time

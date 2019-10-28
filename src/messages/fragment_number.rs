@@ -1,5 +1,5 @@
 use num_derive::{FromPrimitive, NumOps, ToPrimitive};
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 use std::convert::From;
 
 #[derive(

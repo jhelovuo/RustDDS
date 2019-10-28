@@ -1,4 +1,4 @@
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 use crate::messages::protocol_version::ProtocolVersion_t;
 use crate::messages::vendor_id::VendorId_t;

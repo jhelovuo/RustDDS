@@ -1,5 +1,5 @@
 use crate::structure::guid_prefix::GuidPrefix_t;
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 /// This message is sent from an RTPS Writer to an RTPS Reader
 /// to modify the GuidPrefix used to interpret the Reader entityIds

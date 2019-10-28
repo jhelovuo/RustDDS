@@ -1,6 +1,6 @@
 use crate::common::bit_set::BitSetRef;
 use num_traits::{CheckedAdd, CheckedSub, FromPrimitive, NumCast, ToPrimitive};
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 #[derive(Debug, PartialEq, Readable, Writable)]
 pub struct RangedBitSet<B>

@@ -1,6 +1,6 @@
 use crate::messages::submessage_flag::SubmessageFlag;
 use crate::messages::submessage_kind::SubmessageKind;
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 #[derive(Debug, PartialEq, Readable, Writable)]
 pub struct SubmessageHeader {

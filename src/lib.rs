@@ -9,7 +9,6 @@ extern crate bytes;
 extern crate num_derive;
 extern crate num_traits;
 extern crate speedy;
-extern crate speedy_derive;
 extern crate tokio;
 
 #[macro_use]

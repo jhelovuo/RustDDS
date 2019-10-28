@@ -1,4 +1,4 @@
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 #[derive(Debug, PartialEq, Readable, Writable)]
 pub struct ParameterId {

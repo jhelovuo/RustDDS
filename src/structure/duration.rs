@@ -1,6 +1,6 @@
 extern crate time;
 
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 use std::convert::{From, Into};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable)]

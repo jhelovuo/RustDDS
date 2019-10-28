@@ -1,4 +1,4 @@
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 /// Identifies the endianness used to encapsulate the Submessage, the
 /// presence of optional elements with in the Submessage, and possibly

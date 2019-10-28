@@ -1,4 +1,4 @@
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 use std::convert::From;
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]

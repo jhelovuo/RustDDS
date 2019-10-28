@@ -1,4 +1,4 @@
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 #[derive(Debug, PartialEq, Eq, Readable, Writable)]
 pub struct ReliabilityKind_t(u32);

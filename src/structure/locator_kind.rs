@@ -1,4 +1,4 @@
-use speedy_derive::{Readable, Writable};
+use speedy::{Readable, Writable};
 
 #[derive(Clone, Debug, Eq, PartialEq, Readable, Writable)]
 pub struct LocatorKind_t {
