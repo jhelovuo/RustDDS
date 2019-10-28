@@ -79,5 +79,4 @@ impl StatefulWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 }
