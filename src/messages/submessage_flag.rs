@@ -23,10 +23,10 @@ impl SubmessageFlag {
     }
 
     pub fn set_flag(&mut self, bit: u8) {
-        self.flags |= 1 << bit;
+        self.flags |= bit;
     }
     pub fn clear_flag(&mut self, bit: u8) {
-        self.flags &= !(1 << bit);
+        self.flags &= !bit;
     }
     pub fn is_flag_set(&self, bit: u8) -> bool {
         self.flags & bit != 0
@@ -53,11 +53,25 @@ mod tests {
         assert!(submessage_flag.is_flag_set(0b1000_0000));
     }
 
+    #[test]
+    fn helper_functions_test() {
+        for x in 0..7 {
+            let mut flags = SubmessageFlag { flags: 0x00 };
+            let bit = u8::from(2).pow(x);
+
+            assert!(!flags.is_flag_set(bit));
+            flags.set_flag(bit);
+            assert!(flags.is_flag_set(bit));
+            flags.clear_flag(bit);
+            assert!(!flags.is_flag_set(bit));
+        }
+    }
+
     serialization_test!(type = SubmessageFlag,
-        {
-            submessage_flag,
-            SubmessageFlag { flags: 0b10110100_u8 },
-            le = [0b10110100_u8],
-            be = [0b10110100_u8]
-        });
+    {
+        submessage_flag,
+        SubmessageFlag { flags: 0b10110100_u8 },
+        le = [0b10110100_u8],
+        be = [0b10110100_u8]
+    });
 }

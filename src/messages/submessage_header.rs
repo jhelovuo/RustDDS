@@ -15,14 +15,8 @@ impl<'a, C: Context> Readable<'a, C> for SubmessageHeader {
         let submessage_id: SubmessageKind = reader.read_value()?;
         let flags: SubmessageFlag = reader.read_value()?;
         let submessage_length = match flags.endianness_flag() {
-            Endianness::LittleEndian => match reader.context().endianness() {
-                Endianness::LittleEndian => u16::from_le(reader.read_value()?),
-                Endianness::BigEndian => u16::from_be(reader.read_value()?),
-            },
-            Endianness::BigEndian => match reader.context().endianness() {
-                Endianness::LittleEndian => u16::from_be(reader.read_value()?),
-                Endianness::BigEndian => u16::from_le(reader.read_value()?),
-            },
+            Endianness::LittleEndian => u16::from_le_bytes([reader.read_u8()?, reader.read_u8()?]),
+            Endianness::BigEndian => u16::from_be_bytes([reader.read_u8()?, reader.read_u8()?]),
         };
         Ok(SubmessageHeader {
             submessage_id,
@@ -50,10 +44,10 @@ impl<C: Context> Writable<C> for SubmessageHeader {
             // matching via writer.context().endianness() panics
             speedy::Endianness::LittleEndian => {
                 writer.write_u8(self.submessage_length as u8)?;
-                writer.write_u8((self.submessage_length << 8) as u8)?;
+                writer.write_u8((self.submessage_length >> 8) as u8)?;
             }
             speedy::Endianness::BigEndian => {
-                writer.write_u8((self.submessage_length << 8) as u8)?;
+                writer.write_u8((self.submessage_length >> 8) as u8)?;
                 writer.write_u8(self.submessage_length as u8)?;
             }
         };
@@ -109,6 +103,26 @@ mod tests {
         },
         le = [0x06, 0x01, 0x2A, 0x00],
         be = [0x06, 0x01, 0x2A, 0x00]
+    },
+    {
+        submessage_header_big_endian_2_bytes_length,
+        SubmessageHeader {
+            submessage_id: SubmessageKind::ACKNACK,
+            flags: SubmessageFlag { flags: 0x00 },
+            submessage_length: 258,
+        },
+        le = [0x06, 0x00, 0x01, 0x02],
+        be = [0x06, 0x00, 0x01, 0x02]
+    },
+    {
+        submessage_header_little_endian_2_bytes_length,
+        SubmessageHeader {
+            submessage_id: SubmessageKind::ACKNACK,
+            flags: SubmessageFlag { flags: 0x01 },
+            submessage_length: 258,
+        },
+        le = [0x06, 0x01, 0x02, 0x01],
+        be = [0x06, 0x01, 0x02, 0x01]
     },
     {
         submessage_header_wireshark,
