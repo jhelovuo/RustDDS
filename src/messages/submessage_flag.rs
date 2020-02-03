@@ -1,4 +1,4 @@
-use speedy::{Readable, Writable};
+use speedy::{Endianness, Readable, Writable};
 
 /// Identifies the endianness used to encapsulate the Submessage, the
 /// presence of optional elements with in the Submessage, and possibly
@@ -13,9 +13,23 @@ pub struct SubmessageFlag {
 }
 
 impl SubmessageFlag {
-    /// Indicates endianness. Returns true if big-endian, false if little-endian
-    pub fn endianness_flag(&self) -> bool {
-        self.flags & 0x01 != 0
+    /// Indicates endianness
+    pub fn endianness_flag(&self) -> speedy::Endianness {
+        if self.is_flag_set(0x01) {
+            Endianness::LittleEndian
+        } else {
+            Endianness::BigEndian
+        }
+    }
+
+    pub fn set_flag(&mut self, bit: u8) {
+        self.flags |= 1 << bit;
+    }
+    pub fn clear_flag(&mut self, bit: u8) {
+        self.flags &= !(1 << bit);
+    }
+    pub fn is_flag_set(&self, bit: u8) -> bool {
+        self.flags & bit != 0
     }
 }
 
@@ -29,20 +43,14 @@ mod tests {
             flags: 0b10110100_u8,
         };
 
-        assert!(submessage_flag.flags & 0x01 == 0);
-        assert!(submessage_flag.flags & (1 << 0) == 0);
-
-        assert!(submessage_flag.flags & 0x80 != 0);
-        assert!(submessage_flag.flags & (1 << 7) != 0);
-    }
-
-    #[test]
-    fn endianness_flag() {
-        let flag_with_big_endian = SubmessageFlag { flags: 0x01 };
-        assert!(flag_with_big_endian.endianness_flag());
-
-        let flag_with_little_endian = SubmessageFlag { flags: 0x00 };
-        assert!(!flag_with_little_endian.endianness_flag());
+        assert!(!submessage_flag.is_flag_set(0b0000_0001));
+        assert!(!submessage_flag.is_flag_set(0b0000_0010));
+        assert!(submessage_flag.is_flag_set(0b0000_0100));
+        assert!(!submessage_flag.is_flag_set(0b0000_1000));
+        assert!(submessage_flag.is_flag_set(0b0001_0000));
+        assert!(submessage_flag.is_flag_set(0b0010_0000));
+        assert!(!submessage_flag.is_flag_set(0b0100_0000));
+        assert!(submessage_flag.is_flag_set(0b1000_0000));
     }
 
     serialization_test!(type = SubmessageFlag,
