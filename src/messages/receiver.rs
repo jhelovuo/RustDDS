@@ -20,6 +20,7 @@ use std::io::{Error, ErrorKind};
 use bytes::BytesMut;
 use tokio::codec::Decoder;
 
+#[derive(Debug, PartialEq)]
 pub struct Receiver {
     pub source_version: ProtocolVersion_t,
     pub source_vendor_id: VendorId_t,
@@ -29,6 +30,29 @@ pub struct Receiver {
     pub multicast_reply_locator_list: LocatorList_t,
     pub have_timestamp: bool,
     pub timestamp: Time_t,
+}
+
+impl Default for Receiver {
+    fn default() -> Self {
+        Receiver {
+            source_version: ProtocolVersion_t::PROTOCOLVERSION,
+            source_vendor_id: VendorId_t::VENDOR_UNKNOWN,
+            source_guid_prefix: GuidPrefix_t::GUIDPREFIX_UNKNOWN,
+            dest_guid_prefix: GuidPrefix_t::GUIDPREFIX_UNKNOWN,
+            unicast_reply_locator_list: vec![Locator_t {
+                kind: LocatorKind_t::LOCATOR_KIND_INVALID,
+                address: Locator_t::LOCATOR_ADDRESS_INVALID,
+                port: Locator_t::LOCATOR_PORT_INVALID,
+            }],
+            multicast_reply_locator_list: vec![Locator_t {
+                kind: LocatorKind_t::LOCATOR_KIND_INVALID,
+                address: Locator_t::LOCATOR_ADDRESS_INVALID,
+                port: Locator_t::LOCATOR_PORT_INVALID,
+            }],
+            have_timestamp: false,
+            timestamp: Time_t::TIME_INVALID,
+        }
+    }
 }
 
 enum DeserializationState {
@@ -85,13 +109,28 @@ mod tests {
     use super::*;
     use crate::messages::header::Header;
 
+    struct EntitySubmessageIterator {
+        message_receiver: MessageReceiver,
+        bytes: bytes::BytesMut,
+    }
+
+    impl Iterator for EntitySubmessageIterator {
+        type Item = Result<Option<EntitySubmessage>, std::io::Error>;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            Some(self.message_receiver.decode(&mut self.bytes))
+        }
+    }
+
     macro_rules! message_decoding_test {
         (test_name = $name:ident, header = $header:expr,
-        [$(submessage_header = $submessage_header:expr, submessage_entities = { $($entity:expr),* }),+]) => {
+        [$(submessage_header = $submessage_header:expr, submessage_entities = { $($entity:expr),* }),+],
+        expected_notifications = [ $($expected_notification:expr),* ],
+        receiver_state = $receiver_state:expr) => {
             mod $name {
                 use super::*;
 
-                fn convert_to_bytes() -> bytes::BytesMut {
+                fn serialize_into_bytes() -> bytes::BytesMut {
                     let mut serialized_input: Vec<u8> = $header.write_to_vec(Endianness::NATIVE).unwrap();
                     $(
                         let mut submessage_header = $submessage_header;
@@ -110,10 +149,27 @@ mod tests {
                 }
 
                 #[test]
-                fn draft() {
-                    let mut message_receiver = MessageReceiver::new(LocatorKind_t::LOCATOR_KIND_INVALID);
-                    let mut buf = convert_to_bytes();
-                    let result = message_receiver.decode(&mut buf);
+                fn test_submessage_decoding() {
+                    let messages_iterator = EntitySubmessageIterator {
+                        message_receiver: MessageReceiver::new(LocatorKind_t::LOCATOR_KIND_INVALID),
+                        bytes: serialize_into_bytes()
+                    };
+                    let expected_notifications = vec![$($expected_notification),*];
+                    messages_iterator
+                        .take(10*expected_notifications.len())
+                        .filter(|maybe_message| match maybe_message {
+                            Ok(None) => false,
+                            _ => true
+                        })
+                        .zip(expected_notifications.iter())
+                        .inspect(|message_with_expectation| match message_with_expectation {
+                            (Ok(Some(parsed_message)), expected_message) => {
+                                assert_eq!(&parsed_message, expected_message);
+                            },
+                            _ => unreachable!()
+                        })
+                        .for_each(drop);
+                    // assert_eq!(&$receiver_state, messages_iterator.message_receiver.receiver());
                 }
             }
         }
@@ -134,6 +190,17 @@ mod tests {
                 SequenceNumberSet_t::new(SequenceNumber_t::from(0)),
                 Count_t::from(1)
             }
-        ]
+        ],
+        expected_notifications = [
+            EntitySubmessage::AckNack(
+                AckNack {
+                    reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+                    writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+                    reader_sn_state: SequenceNumberSet_t::new(SequenceNumber_t::from(0)),
+                    count: Count_t::from(1)
+                },
+                SubmessageFlag { flags: 0b0000_0000 }
+            )],
+        receiver_state = Receiver::default()
     );
 }
