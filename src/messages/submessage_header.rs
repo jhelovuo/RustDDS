@@ -60,29 +60,6 @@ impl<C: Context> Writable<C> for SubmessageHeader {
 mod tests {
     use super::*;
 
-    #[test]
-    fn endianness_flag() {
-        let header_with_big_endian = SubmessageHeader {
-            submessage_id: SubmessageKind::ACKNACK,
-            flags: SubmessageFlag { flags: 0x00 },
-            submessage_length: 42,
-        };
-        assert_eq!(
-            Endianness::BigEndian,
-            header_with_big_endian.flags.endianness_flag()
-        );
-
-        let header_with_little_endian = SubmessageHeader {
-            submessage_id: SubmessageKind::ACKNACK,
-            flags: SubmessageFlag { flags: 0x01 },
-            submessage_length: 42,
-        };
-        assert_eq!(
-            Endianness::LittleEndian,
-            header_with_little_endian.flags.endianness_flag()
-        );
-    }
-
     serialization_test!( type = SubmessageHeader,
     {
         submessage_header_big_endian_flag,

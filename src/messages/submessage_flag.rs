@@ -38,6 +38,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn endianness_flag() {
+        assert_eq!(
+            Endianness::BigEndian,
+            SubmessageFlag { flags: 0x00 }.endianness_flag()
+        );
+        assert_eq!(
+            Endianness::LittleEndian,
+            SubmessageFlag { flags: 0x01 }.endianness_flag()
+        );
+    }
+
+    #[test]
     fn correct_bits_order() {
         let submessage_flag = SubmessageFlag {
             flags: 0b10110100_u8,
