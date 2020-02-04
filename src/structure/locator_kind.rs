@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-#[derive(Clone, Debug, Eq, PartialEq, Readable, Writable)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Readable, Writable)]
 pub struct LocatorKind_t {
     value: i32,
 }
