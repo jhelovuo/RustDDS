@@ -32,29 +32,6 @@ pub struct Receiver {
     pub timestamp: Time_t,
 }
 
-impl Default for Receiver {
-    fn default() -> Self {
-        Receiver {
-            source_version: ProtocolVersion_t::PROTOCOLVERSION,
-            source_vendor_id: VendorId_t::VENDOR_UNKNOWN,
-            source_guid_prefix: GuidPrefix_t::GUIDPREFIX_UNKNOWN,
-            dest_guid_prefix: GuidPrefix_t::GUIDPREFIX_UNKNOWN,
-            unicast_reply_locator_list: vec![Locator_t {
-                kind: LocatorKind_t::LOCATOR_KIND_INVALID,
-                address: Locator_t::LOCATOR_ADDRESS_INVALID,
-                port: Locator_t::LOCATOR_PORT_INVALID,
-            }],
-            multicast_reply_locator_list: vec![Locator_t {
-                kind: LocatorKind_t::LOCATOR_KIND_INVALID,
-                address: Locator_t::LOCATOR_ADDRESS_INVALID,
-                port: Locator_t::LOCATOR_PORT_INVALID,
-            }],
-            have_timestamp: false,
-            timestamp: Time_t::TIME_INVALID,
-        }
-    }
-}
-
 enum DeserializationState {
     ReadingHeader,
     ReadingSubmessage,
@@ -90,9 +67,6 @@ impl MessageReceiver {
             state: DeserializationState::ReadingHeader,
         }
     }
-    pub fn receiver(&self) -> &Receiver {
-        &self.receiver
-    }
 }
 
 impl Decoder for MessageReceiver {
@@ -125,8 +99,7 @@ mod tests {
     macro_rules! message_decoding_test {
         (test_name = $name:ident, header = $header:expr,
         [$(submessage_header = $submessage_header:expr, submessage_entities = { $($entity:expr),* }),+],
-        expected_notifications = [ $($expected_notification:expr),* ],
-        receiver_state = $receiver_state:expr) => {
+        expected_notifications = [ $($expected_notification:expr),* ]) => {
             mod $name {
                 use super::*;
 
@@ -155,6 +128,7 @@ mod tests {
                         message_receiver: MessageReceiver::new(LocatorKind_t::LOCATOR_KIND_INVALID),
                         bytes: serialize_into_bytes()
                     };
+
                     let expected_notifications = vec![$($expected_notification),*]
                         .into_iter()
                         .inspect(|expectation| {
@@ -178,7 +152,6 @@ mod tests {
                         });
 
                     assert!(decoder_output.eq(expected_notifications));
-                    // assert_eq!(&$receiver_state, messages_iterator.message_receiver.receiver());
                 }
             }
         }
@@ -209,7 +182,7 @@ mod tests {
                     count: Count_t::from(1)
                 },
                 SubmessageFlag { flags: 0b0000_0000 }
-            )],
-        receiver_state = Receiver::default()
+            )
+        ]
     );
 }
