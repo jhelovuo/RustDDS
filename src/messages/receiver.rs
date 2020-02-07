@@ -148,27 +148,36 @@ mod tests {
                     bytes::BytesMut::from(serialized_input)
                 }
 
+                #[ignore]
                 #[test]
                 fn test_submessage_decoding() {
                     let messages_iterator = EntitySubmessageIterator {
                         message_receiver: MessageReceiver::new(LocatorKind_t::LOCATOR_KIND_INVALID),
                         bytes: serialize_into_bytes()
                     };
-                    let expected_notifications = vec![$($expected_notification),*];
-                    messages_iterator
+                    let expected_notifications = vec![$($expected_notification),*]
+                        .into_iter()
+                        .inspect(|expectation| {
+                            println!("Expected notification: {:#?}", expectation)
+                        });
+
+                    let decoder_output = messages_iterator
                         .take(10*expected_notifications.len())
                         .filter(|maybe_message| match maybe_message {
                             Ok(None) => false,
                             _ => true
                         })
-                        .zip(expected_notifications.iter())
-                        .inspect(|message_with_expectation| match message_with_expectation {
-                            (Ok(Some(parsed_message)), expected_message) => {
-                                assert_eq!(&parsed_message, expected_message);
-                            },
-                            _ => unreachable!()
-                        })
-                        .for_each(drop);
+                        .map(|maybe_parsed_message|
+                            match maybe_parsed_message {
+                                Ok(Some(parsed_message)) => parsed_message,
+                                _ => unreachable!()
+                            }
+                        )
+                        .inspect(|parsed_message| {
+                            println!("Parsed message: {:#?}", parsed_message)
+                        });
+
+                    assert!(decoder_output.eq(expected_notifications));
                     // assert_eq!(&$receiver_state, messages_iterator.message_receiver.receiver());
                 }
             }
@@ -181,7 +190,7 @@ mod tests {
         [
             submessage_header = SubmessageHeader {
                 submessage_id: SubmessageKind::ACKNACK,
-                flags: SubmessageFlag { flags: 0b00000000 },
+                flags: SubmessageFlag { flags: 0b0000_0000 },
                 submessage_length: 24,
             },
             submessage_entities = {
