@@ -1,15 +1,12 @@
-extern crate time;
-
 use speedy::{Readable, Writable};
-use std::convert::{From, Into};
+use std::convert::From;
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable)]
 pub struct Duration_t {
-    pub seconds: i32,
-    pub fraction: u32,
+    seconds: i32,
+    fraction: u32,
 }
-
-pub type Duration = Duration_t;
 
 impl Duration_t {
     pub const DURATION_ZERO: Duration_t = Duration_t {
@@ -26,20 +23,18 @@ impl Duration_t {
     };
 }
 
-const NANOS_PER_SEC: i64 = 1_000_000_000;
-
-impl From<time::Duration> for Duration_t {
-    fn from(duration: time::Duration) -> Self {
+impl From<Duration> for Duration_t {
+    fn from(duration: Duration) -> Self {
         Duration_t {
-            seconds: duration.num_seconds() as i32,
-            fraction: (duration.num_nanoseconds().unwrap_or_default() % NANOS_PER_SEC) as u32,
+            seconds: duration.as_secs() as i32,
+            fraction: duration.subsec_nanos() as u32,
         }
     }
 }
 
-impl Into<time::Duration> for Duration_t {
-    fn into(self) -> time::Duration {
-        time::Duration::nanoseconds(self.seconds as i64 * NANOS_PER_SEC + self.fraction as i64)
+impl From<Duration_t> for Duration {
+    fn from(duration: Duration_t) -> Self {
+        Duration::new(duration.seconds as u64, duration.fraction)
     }
 }
 
@@ -79,9 +74,11 @@ mod tests {
         be = [0x5A, 0x8C, 0x6E, 0x78, 0x4F, 0x2A, 0xE0, 0x7E]
     });
 
+    const NANOS_PER_SEC: u64 = 1_000_000_000;
+
     #[test]
     fn convert_from_duration() {
-        let duration = time::Duration::nanoseconds(1_519_152_761 * NANOS_PER_SEC + 328_210_046);
+        let duration = Duration::from_nanos(1_519_152_761 * NANOS_PER_SEC + 328_210_046);
         let duration: Duration_t = duration.into();
 
         assert_eq!(
@@ -99,11 +96,11 @@ mod tests {
             seconds: 1_519_152_760,
             fraction: 1_328_210_046,
         };
-        let duration: time::Duration = duration.into();
+        let duration: Duration = duration.into();
 
         assert_eq!(
             duration,
-            time::Duration::nanoseconds(1_519_152_760 * NANOS_PER_SEC + 1_328_210_046)
+            Duration::from_nanos(1_519_152_760 * NANOS_PER_SEC + 1_328_210_046)
         );
     }
 }

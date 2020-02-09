@@ -1,3 +1,5 @@
+extern crate time;
+
 use speedy::{Readable, Writable};
 use std::convert::From;
 

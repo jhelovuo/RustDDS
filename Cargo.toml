@@ -12,11 +12,11 @@ edition = "2018"
 
 [dependencies]
 time = "0.1.39"
-bytes = "0.4.11"
-tokio = "0.1.13"
-bit-set = "0.5.0"
-bit-vec = "0.5.0"
+bytes = "0.5.4"
+tokio-util = { version = "0.2.0", features = ["codec"] }
+bit-set = "0.5.1"
+bit-vec = "0.5.1"
 speedy = "0.5.0"
-log = "0.4.6"
+log = "0.4.8"
 num-traits = "0.2"
-num-derive = "0.2"
+num-derive = "0.3"

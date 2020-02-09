@@ -18,7 +18,7 @@ use speedy::{Endianness, Readable, Writable};
 use std::io::{Error, ErrorKind};
 
 use bytes::BytesMut;
-use tokio::codec::Decoder;
+use tokio_util::codec::Decoder;
 
 #[derive(Debug, PartialEq)]
 pub struct Receiver {
@@ -118,7 +118,7 @@ mod tests {
                         submessage_header.write_to_vec(submessage_header.flags.endianness_flag()).unwrap();
                         serialized_input.extend(submessage_content.into_iter());
                     )+
-                    bytes::BytesMut::from(serialized_input)
+                    bytes::BytesMut::from(&serialized_input[..])
                 }
 
                 #[ignore]

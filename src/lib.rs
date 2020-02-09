@@ -9,7 +9,7 @@ extern crate bytes;
 extern crate num_derive;
 extern crate num_traits;
 extern crate speedy;
-extern crate tokio;
+extern crate tokio_util;
 
 #[macro_use]
 mod serialization_test;
