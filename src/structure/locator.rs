@@ -143,41 +143,41 @@ mod tests {
     }
 
     conversion_test!(
-        {
-            invalid_into_unspecified,
-            Locator_t::LOCATOR_INVALID,
-            SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
+    {
+        invalid_into_unspecified,
+        Locator_t::LOCATOR_INVALID,
+        SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
+    },
+    {
+        non_empty_ipv4,
+        Locator_t {
+            kind: LocatorKind_t::LOCATOR_KIND_UDPv4,
+            address: [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x7F, 0x00, 0x00, 0x01
+            ],
+            port: 8080
         },
-        {
-            non_empty_ipv4,
-            Locator_t {
-                kind: LocatorKind_t::LOCATOR_KIND_UDPv4,
-                address: [
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x7F, 0x00, 0x00, 0x01
-                ],
-                port: 8080
-            },
-            SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                8080
-            )
+        SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            8080
+        )
+    },
+    {
+        non_empty_ipv6,
+        Locator_t {
+            kind: LocatorKind_t::LOCATOR_KIND_UDPv6,
+            address: [
+                0xFF, 0x00, 0x45, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x32
+            ],
+            port: 7171
         },
-        {
-            non_empty_ipv6,
-            Locator_t {
-                kind: LocatorKind_t::LOCATOR_KIND_UDPv6,
-                address: [
-                    0xFF, 0x00, 0x45, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x32
-                ],
-                port: 7171
-            },
-            SocketAddr::new(
-                IpAddr::V6(Ipv6Addr::new(0xFF00, 0x4501, 0, 0, 0, 0, 0, 0x0032)),
-                7171
-            )
-        });
+        SocketAddr::new(
+            IpAddr::V6(Ipv6Addr::new(0xFF00, 0x4501, 0, 0, 0, 0, 0, 0x0032)),
+            7171
+        )
+    });
 
     serialization_test!( type = Locator_t,
         {
