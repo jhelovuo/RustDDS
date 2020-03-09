@@ -32,7 +32,7 @@ checked_impl!(CheckedDiv, checked_div, SequenceNumber_t);
 
 impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
         let high: i32 = reader.read_value()?;
         let low: u32 = reader.read_value()?;
 
@@ -47,10 +47,7 @@ impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
 
 impl<C: Context> Writable<C> for SequenceNumber_t {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
-        &'a self,
-        writer: &mut T,
-    ) -> Result<(), std::io::Error> {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
         writer.write_i32((self.0 >> 32) as i32)?;
         writer.write_u32(self.0 as u32)?;
         Ok(())

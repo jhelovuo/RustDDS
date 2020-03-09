@@ -65,7 +65,7 @@ impl Default for EntityId_t {
 
 impl<'a, C: Context> Readable<'a, C> for EntityId_t {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
         let entityKey = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
         let entityKind = reader.read_u8()?;
         Ok(EntityId_t {
@@ -77,10 +77,7 @@ impl<'a, C: Context> Readable<'a, C> for EntityId_t {
 
 impl<C: Context> Writable<C> for EntityId_t {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
-        &'a self,
-        writer: &mut T,
-    ) -> Result<(), std::io::Error> {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
         for elem in &self.entityKey {
             writer.write_u8(*elem)?
         }

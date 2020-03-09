@@ -104,18 +104,18 @@ mod tests {
                 use super::*;
 
                 fn serialize_into_bytes() -> bytes::BytesMut {
-                    let mut serialized_input: Vec<u8> = $header.write_to_vec(Endianness::NATIVE).unwrap();
+                    let mut serialized_input: Vec<u8> = $header.write_to_vec_with_ctx(Endianness::NATIVE).unwrap();
                     $(
                         let mut submessage_header = $submessage_header;
                         let mut submessage_content: Vec<u8> = vec![];
                         $(
                             let serialized_submessage =
-                                $entity.write_to_vec(submessage_header.flags.endianness_flag()).unwrap();
+                                $entity.write_to_vec_with_ctx(submessage_header.flags.endianness_flag()).unwrap();
                             submessage_content.extend(serialized_submessage.into_iter());
                         )*
 
                         submessage_header.submessage_length = submessage_content.len() as u16;
-                        submessage_header.write_to_vec(submessage_header.flags.endianness_flag()).unwrap();
+                        submessage_header.write_to_vec_with_ctx(submessage_header.flags.endianness_flag()).unwrap();
                         serialized_input.extend(submessage_content.into_iter());
                     )+
                     bytes::BytesMut::from(&serialized_input[..])

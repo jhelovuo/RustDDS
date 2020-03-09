@@ -19,7 +19,7 @@ impl Default for GuidPrefix_t {
 
 impl<'a, C: Context> Readable<'a, C> for GuidPrefix_t {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
         let mut guid_prefix = GuidPrefix_t::default();
         for i in 0..guid_prefix.entityKey.len() {
             guid_prefix.entityKey[i] = reader.read_u8()?;
@@ -35,10 +35,7 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix_t {
 
 impl<C: Context> Writable<C> for GuidPrefix_t {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
-        &'a self,
-        writer: &mut T,
-    ) -> Result<(), std::io::Error> {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
         for elem in &self.entityKey {
             writer.write_u8(*elem)?
         }

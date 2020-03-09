@@ -12,7 +12,7 @@ pub struct Parameter {
 
 impl<'a, C: Context> Readable<'a, C> for Parameter {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
         let parameter_id: ParameterId = reader.read_value()?;
         let length = reader.read_u16()?;
         let alignment = length % 4;
@@ -32,16 +32,13 @@ impl<'a, C: Context> Readable<'a, C> for Parameter {
 
     #[inline]
     fn minimum_bytes_needed() -> usize {
-        32
+        8
     }
 }
 
 impl<C: Context> Writable<C> for Parameter {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
-        &'a self,
-        writer: &mut T,
-    ) -> Result<(), std::io::Error> {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
         writer.write_value(&self.parameter_id)?;
 
         let length = self.value.len();

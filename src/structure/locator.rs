@@ -72,7 +72,7 @@ impl From<Locator_t> for SocketAddr {
 
 impl<'a, C: Context> Readable<'a, C> for Locator_t {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
         let mut locator = Locator_t::default();
         locator.kind = reader.read_value()?;
         locator.port = reader.read_value()?;
@@ -85,10 +85,7 @@ impl<'a, C: Context> Readable<'a, C> for Locator_t {
 
 impl<C: Context> Writable<C> for Locator_t {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
-        &'a self,
-        writer: &mut T,
-    ) -> Result<(), std::io::Error> {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
         writer.write_value(&self.kind)?;
         writer.write_value(&self.port)?;
         for elem in &self.address {

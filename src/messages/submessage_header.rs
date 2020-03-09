@@ -11,7 +11,7 @@ pub struct SubmessageHeader {
 
 impl<'a, C: Context> Readable<'a, C> for SubmessageHeader {
     #[inline]
-    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, std::io::Error> {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
         let submessage_id: SubmessageKind = reader.read_value()?;
         let flags: SubmessageFlag = reader.read_value()?;
         let submessage_length = match flags.endianness_flag() {
@@ -33,10 +33,7 @@ impl<'a, C: Context> Readable<'a, C> for SubmessageHeader {
 
 impl<C: Context> Writable<C> for SubmessageHeader {
     #[inline]
-    fn write_to<'a, T: ?Sized + Writer<'a, C>>(
-        &'a self,
-        writer: &mut T,
-    ) -> Result<(), std::io::Error> {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
         writer.write_value(&self.submessage_id)?;
         writer.write_value(&self.flags)?;
 

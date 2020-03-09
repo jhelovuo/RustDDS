@@ -8,14 +8,14 @@ macro_rules! serialization_test {
             #[test]
             fn serialize_little_endian() {
                 let original: $type = $original;
-                let serialized = original.write_to_vec(Endianness::LittleEndian).unwrap();
+                let serialized = original.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
                 assert_eq!(serialized, $le);
             }
 
             #[test]
             fn serialize_big_endian() {
                 let original: $type = $original;
-                let serialized = original.write_to_vec(Endianness::BigEndian).unwrap();
+                let serialized = original.write_to_vec_with_ctx(Endianness::BigEndian).unwrap();
                 assert_eq!(serialized, $be);
             }
 
@@ -23,8 +23,8 @@ macro_rules! serialization_test {
             fn serialize_deserialize_little_endian() {
                 let original: $type = $original;
 
-                let serialized = original.write_to_vec(Endianness::LittleEndian).unwrap();
-                let deserialized: $type = Readable::read_from_buffer(Endianness::LittleEndian, &serialized).unwrap();
+                let serialized = original.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
+                let deserialized: $type = Readable::read_from_buffer_with_ctx(Endianness::LittleEndian, &serialized).unwrap();
 
                 assert_eq!(original, deserialized);
             }
@@ -33,8 +33,8 @@ macro_rules! serialization_test {
             fn serialize_deserialize_big_endian() {
                 let original: $type = $original;
 
-                let serialized = original.write_to_vec(Endianness::BigEndian).unwrap();
-                let deserialized: $type = Readable::read_from_buffer(Endianness::BigEndian, &serialized).unwrap();
+                let serialized = original.write_to_vec_with_ctx(Endianness::BigEndian).unwrap();
+                let deserialized: $type = Readable::read_from_buffer_with_ctx(Endianness::BigEndian, &serialized).unwrap();
 
                 assert_eq!(original, deserialized);
             }
