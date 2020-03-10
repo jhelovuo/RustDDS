@@ -14,8 +14,8 @@ edition = "2018"
 time = "0.1.39"
 bytes = "0.5.4"
 tokio-util = { version = "0.2.0", features = ["codec"] }
-bit-set = "0.5.1"
-bit-vec = "0.5.1"
+bit-set = { git = "https://github.com/contain-rs/bit-set", rev ="c27082f" }
+bit-vec = "0.6.1"
 speedy = "0.6.0"
 log = "0.4.8"
 num-traits = "0.2"
