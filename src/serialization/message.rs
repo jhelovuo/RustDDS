@@ -1,5 +1,5 @@
 use crate::messages::header::Header;
-use crate::types::submessage::SubMessage;
+use crate::serialization::submessage::SubMessage;
 
 use speedy::{Readable, Writable, Endianness};
 
@@ -19,11 +19,11 @@ impl<'a> Message {
     buffer.unwrap()
   }
 
-  pub fn addSubmessage(mut self, submessage: SubMessage) {
+  pub fn add_submessage(mut self, submessage: SubMessage) {
     self.submessages.push(submessage);
   }
 
-  pub fn removeSubmessage(mut self, index: usize) {
+  pub fn remove_submessage(mut self, index: usize) {
     self.submessages.remove(index);
   }
 
