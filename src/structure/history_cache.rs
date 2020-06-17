@@ -1,5 +1,13 @@
 use crate::structure::cache_change::CacheChange;
 use crate::structure::sequence_number::SequenceNumber_t;
+#[cfg(test)]
+use crate::structure::change_kind::ChangeKind_t;
+#[cfg(test)]
+use crate::structure::guid::GUID_t;
+#[cfg(test)]
+use crate::structure::instance_handle::InstanceHandle_t;
+#[cfg(test)]
+use crate::structure::data::Data;
 
 struct HistoryCache {
   changes: Vec<CacheChange>,

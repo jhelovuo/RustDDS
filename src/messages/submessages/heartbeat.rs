@@ -48,7 +48,7 @@ mod tests {
           writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
           first_sn: SequenceNumber_t::from(42),
           last_sn: SequenceNumber_t::from(7),
-          count: Count_t::from(9)
+          count: 9,
       },
       le = [0x00, 0x00, 0x03, 0xC7,
             0x00, 0x00, 0x03, 0xC2,

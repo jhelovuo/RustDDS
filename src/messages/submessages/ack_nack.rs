@@ -47,7 +47,7 @@ mod tests {
           reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
           writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
           reader_sn_state: SequenceNumberSet_t::new(SequenceNumber_t::from(0)),
-          count: Count_t::from(1)
+          count: 1,
       },
       le = [0x00, 0x00, 0x03, 0xC7,
             0x00, 0x00, 0x03, 0xC2,

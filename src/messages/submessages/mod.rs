@@ -13,13 +13,15 @@ mod info_timestamp;
 
 pub mod submessage;
 mod submessage_elements;
-mod submessage_flag;
+pub mod submessage_flag;
 pub mod submessage_header;
-mod submessage_kind;
+pub mod submessage_kind;
 
 pub mod submessages {
   pub use super::submessage::*;
   pub use super::submessage_header::*;
+  pub use super::submessage_flag::*;
+  pub use super::submessage_kind::*;
 
   pub use super::ack_nack::*;
   pub use super::data::*;

@@ -46,7 +46,7 @@ mod tests {
           writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
           writer_sn: SequenceNumber_t::from(42),
           last_fragment_num: FragmentNumber_t::from(99),
-          count: Count_t::from(6)
+          count: 6,
       },
       le = [0x00, 0x00, 0x03, 0xC7,
             0x00, 0x00, 0x03, 0xC2,

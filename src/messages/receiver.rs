@@ -1,9 +1,26 @@
 use crate::messages::protocol_version::ProtocolVersion_t;
-use crate::messages::submessages::submessage::{EntitySubmessage};
+use crate::messages::submessages::submessage::EntitySubmessage;
 use crate::messages::vendor_id::VendorId_t;
 use crate::structure::guid_prefix::GuidPrefix_t;
 use crate::structure::locator::{LocatorKind_t, LocatorList_t, Locator_t};
 use crate::structure::time::Time_t;
+
+#[cfg(test)]
+use crate::messages::submessages::submessage_kind::SubmessageKind;
+#[cfg(test)]
+use crate::messages::submessages::submessage_header::SubmessageHeader;
+#[cfg(test)]
+use crate::messages::submessages::submessage_flag::SubmessageFlag;
+#[cfg(test)]
+use crate::messages::submessages::ack_nack::AckNack;
+#[cfg(test)]
+use crate::structure::entity_id::EntityId_t;
+#[cfg(test)]
+use crate::structure::sequence_number::SequenceNumber_t;
+#[cfg(test)]
+use crate::structure::sequence_number_set::SequenceNumberSet_t;
+#[cfg(test)]
+use speedy::{Writable, Endianness};
 
 use bytes::BytesMut;
 use tokio_util::codec::Decoder;
@@ -158,7 +175,7 @@ mod tests {
               EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
               EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
               SequenceNumberSet_t::new(SequenceNumber_t::from(0)),
-              Count_t::from(1)
+              1
           }
       ],
       expected_notifications = [
@@ -167,7 +184,7 @@ mod tests {
                   reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
                   writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
                   reader_sn_state: SequenceNumberSet_t::new(SequenceNumber_t::from(0)),
-                  count: Count_t::from(1)
+                  count: 1
               },
               SubmessageFlag { flags: 0b0000_0000 }
           )
