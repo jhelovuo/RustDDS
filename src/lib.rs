@@ -21,3 +21,4 @@ mod dds;
 mod discovery;
 mod messages;
 mod structure;
+mod serialization;
