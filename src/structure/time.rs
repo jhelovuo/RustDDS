@@ -9,84 +9,84 @@ use std::convert::From;
 /// time = seconds + (fraction / 2^(32))
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable)]
 pub struct Time_t {
-    seconds: i32,
-    fraction: u32,
+  seconds: i32,
+  fraction: u32,
 }
 
 pub type Timestamp = Time_t;
 
 impl Time_t {
-    pub const TIME_ZERO: Time_t = Time_t {
-        seconds: 0,
-        fraction: 0,
-    };
-    pub const TIME_INVALID: Time_t = Time_t {
-        seconds: -1,
-        fraction: 0xFFFF_FFFF,
-    };
-    pub const TIME_INFINITE: Time_t = Time_t {
-        seconds: 0x7FFF_FFFF,
-        fraction: 0xFFFF_FFFF,
-    };
+  pub const TIME_ZERO: Time_t = Time_t {
+    seconds: 0,
+    fraction: 0,
+  };
+  pub const TIME_INVALID: Time_t = Time_t {
+    seconds: -1,
+    fraction: 0xFFFF_FFFF,
+  };
+  pub const TIME_INFINITE: Time_t = Time_t {
+    seconds: 0x7FFF_FFFF,
+    fraction: 0xFFFF_FFFF,
+  };
 }
 
 const NANOS_PER_SEC: i64 = 1_000_000_000;
 
 impl From<time::Timespec> for Time_t {
-    fn from(timespec: time::Timespec) -> Self {
-        Time_t {
-            seconds: timespec.sec as i32,
-            fraction: ((i64::from(timespec.nsec) << 32) / NANOS_PER_SEC) as u32,
-        }
+  fn from(timespec: time::Timespec) -> Self {
+    Time_t {
+      seconds: timespec.sec as i32,
+      fraction: ((i64::from(timespec.nsec) << 32) / NANOS_PER_SEC) as u32,
     }
+  }
 }
 
 impl From<Time_t> for time::Timespec {
-    fn from(time: Time_t) -> Self {
-        time::Timespec {
-            sec: i64::from(time.seconds),
-            nsec: ((i64::from(time.fraction) * NANOS_PER_SEC) >> 32) as i32,
-        }
+  fn from(time: Time_t) -> Self {
+    time::Timespec {
+      sec: i64::from(time.seconds),
+      nsec: ((i64::from(time.fraction) * NANOS_PER_SEC) >> 32) as i32,
     }
+  }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+  use super::*;
 
-    serialization_test!( type = Time_t,
-    {
-        time_zero,
-        Time_t::TIME_ZERO,
-        le = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-        be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-    },
-    {
-        time_invalid,
-        Time_t::TIME_INVALID,
-        le = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
-        be = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
-    },
-    {
-        time_infinite,
-        Time_t::TIME_INFINITE,
-        le = [0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF],
-        be = [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
-    },
-    {
-        time_current_empty_fraction,
-        Time_t { seconds: 1_537_045_491, fraction: 0 },
-        le = [0xF3, 0x73, 0x9D, 0x5B, 0x00, 0x00, 0x00, 0x00],
-        be = [0x5B, 0x9D, 0x73, 0xF3, 0x00, 0x00, 0x00, 0x00]
-    },
-    {
-        time_from_wireshark,
-        Time_t { seconds: 1_519_152_760, fraction: 1_328_210_046 },
-        le = [0x78, 0x6E, 0x8C, 0x5A, 0x7E, 0xE0, 0x2A, 0x4F],
-        be = [0x5A, 0x8C, 0x6E, 0x78, 0x4F, 0x2A, 0xE0, 0x7E]
-    });
+  serialization_test!( type = Time_t,
+  {
+      time_zero,
+      Time_t::TIME_ZERO,
+      le = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+      be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+  },
+  {
+      time_invalid,
+      Time_t::TIME_INVALID,
+      le = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+      be = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+  },
+  {
+      time_infinite,
+      Time_t::TIME_INFINITE,
+      le = [0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF],
+      be = [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+  },
+  {
+      time_current_empty_fraction,
+      Time_t { seconds: 1_537_045_491, fraction: 0 },
+      le = [0xF3, 0x73, 0x9D, 0x5B, 0x00, 0x00, 0x00, 0x00],
+      be = [0x5B, 0x9D, 0x73, 0xF3, 0x00, 0x00, 0x00, 0x00]
+  },
+  {
+      time_from_wireshark,
+      Time_t { seconds: 1_519_152_760, fraction: 1_328_210_046 },
+      le = [0x78, 0x6E, 0x8C, 0x5A, 0x7E, 0xE0, 0x2A, 0x4F],
+      be = [0x5A, 0x8C, 0x6E, 0x78, 0x4F, 0x2A, 0xE0, 0x7E]
+  });
 
-    macro_rules! conversion_test {
+  macro_rules! conversion_test {
         ($({ $name:ident, time = $time:expr, timespec = $timespec:expr, }),+) => {
             $(mod $name {
                 use super::*;
@@ -137,62 +137,62 @@ mod tests {
         }
     }
 
-    conversion_test!(
-    {
-        convert_time_zero,
-        time = Time_t::TIME_ZERO,
-        timespec = time::Timespec {
-            sec: 0,
-            nsec: 0,
-        },
-    },
-    {
-        convert_time_non_zero,
-        time = Time_t {
-            seconds: 1,
-            fraction: 5,
-        },
-        timespec = time::Timespec {
-            sec: 1,
-            nsec: 1,
-        },
-    },
-    {
-        convert_time_invalid,
-        time = Time_t::TIME_INVALID,
-        timespec = time::Timespec {
-            sec: -1,
-            nsec: 999_999_999,
-        },
-    },
-    {
-        convert_time_infinite,
-        time = Time_t::TIME_INFINITE,
-        timespec = time::Timespec {
-            sec: 0x7FFFFFFF,
-            nsec: 999_999_999,
-        },
-    },
-    {
-        convert_time_non_infinite,
-        time = Time_t {
-            seconds: 0x7FFFFFFF,
-            fraction: 0xFFFFFFFA,
-        },
-        timespec = time::Timespec {
-            sec: 0x7FFFFFFF,
-            nsec: 999_999_998,
-        },
-    },
-    {
-        convert_time_half_range,
-        time = Time_t {
-            seconds: 0x40000000,
-            fraction: 0x80000000,
-        },
-        timespec = time::Timespec {
-            sec: 0x40000000,
-            nsec: 500_000_000,
-        },
-    });
+  conversion_test!(
+  {
+      convert_time_zero,
+      time = Time_t::TIME_ZERO,
+      timespec = time::Timespec {
+          sec: 0,
+          nsec: 0,
+      },
+  },
+  {
+      convert_time_non_zero,
+      time = Time_t {
+          seconds: 1,
+          fraction: 5,
+      },
+      timespec = time::Timespec {
+          sec: 1,
+          nsec: 1,
+      },
+  },
+  {
+      convert_time_invalid,
+      time = Time_t::TIME_INVALID,
+      timespec = time::Timespec {
+          sec: -1,
+          nsec: 999_999_999,
+      },
+  },
+  {
+      convert_time_infinite,
+      time = Time_t::TIME_INFINITE,
+      timespec = time::Timespec {
+          sec: 0x7FFFFFFF,
+          nsec: 999_999_999,
+      },
+  },
+  {
+      convert_time_non_infinite,
+      time = Time_t {
+          seconds: 0x7FFFFFFF,
+          fraction: 0xFFFFFFFA,
+      },
+      timespec = time::Timespec {
+          sec: 0x7FFFFFFF,
+          nsec: 999_999_998,
+      },
+  },
+  {
+      convert_time_half_range,
+      time = Time_t {
+          seconds: 0x40000000,
+          fraction: 0x80000000,
+      },
+      timespec = time::Timespec {
+          sec: 0x40000000,
+          nsec: 500_000_000,
+      },
+  });
 }

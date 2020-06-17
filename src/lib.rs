@@ -17,7 +17,13 @@ mod serialization_test;
 mod checked_impl;
 mod behavior;
 mod common;
-mod dds;
 mod discovery;
 mod messages;
 mod structure;
+
+mod dds;
+mod types;
+
+pub use types::message::*;
+pub use types::submessage::*;
+pub use messages::submessages::submessages;

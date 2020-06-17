@@ -1,10 +1,8 @@
 [package]
-name = "rtps-rs"
-version = "0.1.1"
-authors = ["Klapeyron <tomasz.bartos@protonmail.com>"]
-description = "Real Time Publish Subscribe protocol"
-repository = "https://github.com/Klapeyron/rtps-rs"
-homepage = "https://github.com/Klapeyron/rtps-rs"
+name = "atosdds"
+version = "0.0.1"
+authors = [""]
+description = "DSS implementation with RTPS"
 readme = "README.md"
 keywords = ["protocol"]
 license = "Apache-2.0"
@@ -14,7 +12,7 @@ edition = "2018"
 time = "0.1.39"
 bytes = "0.5.4"
 tokio-util = { version = "0.3.1", features = ["codec"] }
-bit-set = { git = "https://github.com/contain-rs/bit-set", rev ="c27082f" }
+bit-set = "0.5.2"
 bit-vec = "0.6.2"
 speedy = "0.6.0"
 log = "0.4.8"

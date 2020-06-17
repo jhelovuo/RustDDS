@@ -4,3 +4,5 @@ format_doc_comments = true
 normalize_doc_attributes = true
 normalize_comments = true
 wrap_comments = true
+tab_spaces = 2
+reorder_imports = false

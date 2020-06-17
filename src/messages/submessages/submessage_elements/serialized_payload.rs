@@ -3,5 +3,5 @@
 /// the value of the key that uniquely identifies the data-object
 #[derive(Debug, PartialEq)]
 pub struct SerializedPayload {
-    pub value: Vec<u8>,
+  pub value: Vec<u8>,
 }
