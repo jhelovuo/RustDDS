@@ -19,6 +19,9 @@ mod common;
 mod discovery;
 mod messages;
 mod structure;
+
+mod network;
+
 pub mod serialization;
 pub use messages::submessages::submessages;
 
