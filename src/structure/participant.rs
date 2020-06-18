@@ -7,21 +7,21 @@ use crate::structure::locator;
 struct Participant {
   /// Identifies the version of the RTPS protocol that the Participant uses to
   /// communicate.
-  protocol_version: protocol_version::ProtocolVersion_t,
+  protocol_version: protocol_version::ProtocolVersion,
 
   /// Identifies the vendor of the RTPS middleware that contains the
   /// Participant.
-  vendor_id: vendor_id::VendorId_t,
+  vendor_id: vendor_id::VendorId,
 
   /// Default list of unicast locators (transport, address, port combinations)
   /// that can be used to send messages to the Endpoints contained in the
   /// Participant.These are the unicast locators that will be used in case the
   /// Endpoint does not specify its own set of Locators.
-  default_unicast_locator_list: locator::Locator_t,
+  default_unicast_locator_list: locator::Locator,
 
   /// Default list of multicast locators (transport, address, port
   /// combinations) that can be used to send messages to the Endpoints
   /// contained in the Participant.These are the multicast locators that will
   /// be used in case the Endpoint does not specify its own set of Locators.
-  default_multicast_locator_list: locator::Locator_t,
+  default_multicast_locator_list: locator::Locator,
 }

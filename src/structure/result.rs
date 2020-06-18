@@ -1,8 +1,7 @@
-
 use std::result;
 
 // This is a spcialized Result, similar to std::io::Result
-pub type Result<T> = result::Result<T,Error>;
+pub type Result<T> = result::Result<T, Error>;
 
 // This roughly corresponds to "Return codes" in DDS spec 2.2.1.1 Format and Conventions
 #[derive(Debug)]

@@ -8,23 +8,23 @@ use std::convert::From;
 /// expressed in seconds and fraction of seconds using the formula:
 /// time = seconds + (fraction / 2^(32))
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable)]
-pub struct Time_t {
+pub struct Time {
   seconds: i32,
   fraction: u32,
 }
 
-pub type Timestamp = Time_t;
+pub type Timestamp = Time;
 
-impl Time_t {
-  pub const TIME_ZERO: Time_t = Time_t {
+impl Time {
+  pub const TIME_ZERO: Time = Time {
     seconds: 0,
     fraction: 0,
   };
-  pub const TIME_INVALID: Time_t = Time_t {
+  pub const TIME_INVALID: Time = Time {
     seconds: -1,
     fraction: 0xFFFF_FFFF,
   };
-  pub const TIME_INFINITE: Time_t = Time_t {
+  pub const TIME_INFINITE: Time = Time {
     seconds: 0x7FFF_FFFF,
     fraction: 0xFFFF_FFFF,
   };
@@ -32,17 +32,17 @@ impl Time_t {
 
 const NANOS_PER_SEC: i64 = 1_000_000_000;
 
-impl From<time::Timespec> for Time_t {
+impl From<time::Timespec> for Time {
   fn from(timespec: time::Timespec) -> Self {
-    Time_t {
+    Time {
       seconds: timespec.sec as i32,
       fraction: ((i64::from(timespec.nsec) << 32) / NANOS_PER_SEC) as u32,
     }
   }
 }
 
-impl From<Time_t> for time::Timespec {
-  fn from(time: Time_t) -> Self {
+impl From<Time> for time::Timespec {
+  fn from(time: Time) -> Self {
     time::Timespec {
       sec: i64::from(time.seconds),
       nsec: ((i64::from(time.fraction) * NANOS_PER_SEC) >> 32) as i32,
@@ -54,34 +54,34 @@ impl From<Time_t> for time::Timespec {
 mod tests {
   use super::*;
 
-  serialization_test!( type = Time_t,
+  serialization_test!( type = Time,
   {
       time_zero,
-      Time_t::TIME_ZERO,
+      Time::TIME_ZERO,
       le = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   },
   {
       time_invalid,
-      Time_t::TIME_INVALID,
+      Time::TIME_INVALID,
       le = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
       be = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
   },
   {
       time_infinite,
-      Time_t::TIME_INFINITE,
+      Time::TIME_INFINITE,
       le = [0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF],
       be = [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
   },
   {
       time_current_empty_fraction,
-      Time_t { seconds: 1_537_045_491, fraction: 0 },
+      Time { seconds: 1_537_045_491, fraction: 0 },
       le = [0xF3, 0x73, 0x9D, 0x5B, 0x00, 0x00, 0x00, 0x00],
       be = [0x5B, 0x9D, 0x73, 0xF3, 0x00, 0x00, 0x00, 0x00]
   },
   {
       time_from_wireshark,
-      Time_t { seconds: 1_519_152_760, fraction: 1_328_210_046 },
+      Time { seconds: 1_519_152_760, fraction: 1_328_210_046 },
       le = [0x78, 0x6E, 0x8C, 0x5A, 0x7E, 0xE0, 0x2A, 0x4F],
       be = [0x5A, 0x8C, 0x6E, 0x78, 0x4F, 0x2A, 0xE0, 0x7E]
   });
@@ -102,7 +102,7 @@ mod tests {
 
                 #[test]
                 fn time_from_timespec() {
-                    let time = Time_t::from($timespec);
+                    let time = Time::from($timespec);
                     let epsilon = (FRACS_PER_SEC / NANOS_PER_SEC) as u32 + 1;
 
                     assert_eq!($time.seconds, time.seconds);
@@ -111,8 +111,8 @@ mod tests {
 
                 #[test]
                 fn time_from_eq_into_time() {
-                    let time_from = Time_t::from($timespec);
-                    let into_time: Time_t = $timespec.into();
+                    let time_from = Time::from($timespec);
+                    let into_time: Time = $timespec.into();
 
                     assert_eq!(time_from, into_time);
                 }
@@ -140,7 +140,7 @@ mod tests {
   conversion_test!(
   {
       convert_time_zero,
-      time = Time_t::TIME_ZERO,
+      time = Time::TIME_ZERO,
       timespec = time::Timespec {
           sec: 0,
           nsec: 0,
@@ -148,7 +148,7 @@ mod tests {
   },
   {
       convert_time_non_zero,
-      time = Time_t {
+      time = Time {
           seconds: 1,
           fraction: 5,
       },
@@ -159,7 +159,7 @@ mod tests {
   },
   {
       convert_time_invalid,
-      time = Time_t::TIME_INVALID,
+      time = Time::TIME_INVALID,
       timespec = time::Timespec {
           sec: -1,
           nsec: 999_999_999,
@@ -167,7 +167,7 @@ mod tests {
   },
   {
       convert_time_infinite,
-      time = Time_t::TIME_INFINITE,
+      time = Time::TIME_INFINITE,
       timespec = time::Timespec {
           sec: 0x7FFFFFFF,
           nsec: 999_999_999,
@@ -175,7 +175,7 @@ mod tests {
   },
   {
       convert_time_non_infinite,
-      time = Time_t {
+      time = Time {
           seconds: 0x7FFFFFFF,
           fraction: 0xFFFFFFFA,
       },
@@ -186,7 +186,7 @@ mod tests {
   },
   {
       convert_time_half_range,
-      time = Time_t {
+      time = Time {
           seconds: 0x40000000,
           fraction: 0x80000000,
       },

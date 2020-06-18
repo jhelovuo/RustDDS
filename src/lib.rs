@@ -16,12 +16,11 @@ mod serialization_test;
 #[macro_use]
 mod checked_impl;
 mod common;
+mod dds;
 mod discovery;
 mod messages;
-mod structure;
-mod dds;
 mod network;
+mod structure;
 
 pub mod serialization;
 pub use messages::submessages::submessages;
-

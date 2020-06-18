@@ -1,8 +1,8 @@
-use crate::messages::fragment_number::FragmentNumber_t;
+use crate::messages::fragment_number::FragmentNumber;
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::structure::entity_id::EntityId_t;
-use crate::structure::sequence_number::SequenceNumber_t;
+use crate::structure::entity::EntityId;
+use crate::structure::sequence_number::SequenceNumber;
 
 /// The DataFrag Submessage extends the Data Submessage by enabling the
 /// serializedData to be fragmented and sent as multiple DataFrag Submessages.
@@ -12,21 +12,21 @@ use crate::structure::sequence_number::SequenceNumber_t;
 pub struct DataFrag {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.
-  reader_id: EntityId_t,
+  reader_id: EntityId,
 
   /// Identifies the RTPS Writer entity that made the change to the
   /// data-object.
-  writer_id: EntityId_t,
+  writer_id: EntityId,
 
   /// Uniquely identifies the change and the relative order for all changes
   /// made by the RTPS Writer identified by the writerGuid.
   /// Each change gets a consecutive sequence number.
   /// Each RTPS Writer maintains is own sequence number.
-  writer_sn: SequenceNumber_t,
+  writer_sn: SequenceNumber,
 
   /// Indicates the starting fragment for the series of fragments in
   /// serialized_data. Fragment numbering starts with number 1.
-  fragment_starting_num: FragmentNumber_t,
+  fragment_starting_num: FragmentNumber,
 
   /// The number of consecutive fragments contained in this Submessage,
   /// starting at fragment_starting_num.

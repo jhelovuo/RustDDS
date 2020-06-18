@@ -1,7 +1,7 @@
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::structure::entity_id::EntityId_t;
-use crate::structure::sequence_number::SequenceNumber_t;
+use crate::structure::entity::EntityId;
+use crate::structure::sequence_number::SequenceNumber;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -14,17 +14,17 @@ use crate::structure::sequence_number::SequenceNumber_t;
 pub struct Data {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.
-  pub reader_id: EntityId_t,
+  pub reader_id: EntityId,
 
   /// Identifies the RTPS Writer entity that made the change to the
   /// data-object.
-  pub writer_id: EntityId_t,
+  pub writer_id: EntityId,
 
   /// Uniquely identifies the change and the relative order for all changes
   /// made by the RTPS Writer identified by the writerGuid. Each change
   /// gets a consecutive sequence number. Each RTPS Writer maintains is
   /// own sequence number.
-  pub writer_sn: SequenceNumber_t,
+  pub writer_sn: SequenceNumber,
 
   /// Contains QoS that may affect the interpretation of the message.
   /// Present only if the InlineQosFlag is set in the header.

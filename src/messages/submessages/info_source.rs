@@ -1,23 +1,23 @@
 use speedy::{Readable, Writable};
 
-use crate::messages::protocol_version::ProtocolVersion_t;
-use crate::messages::vendor_id::VendorId_t;
-use crate::structure::guid_prefix::GuidPrefix_t;
+use crate::messages::protocol_version::ProtocolVersion;
+use crate::messages::vendor_id::VendorId;
+use crate::structure::guid::GuidPrefix;
 
 /// This message modifies the logical source of the Submessages
 /// that follow.
 #[derive(Debug, PartialEq, Readable, Writable)]
 pub struct InfoSource {
   /// Indicates the protocol used to encapsulate subsequent Submessages
-  pub protocol_version: ProtocolVersion_t,
+  pub protocol_version: ProtocolVersion,
 
   /// Indicates the VendorId of the vendor that
   /// encapsulated subsequent Submessage
-  pub vendor_id: VendorId_t,
+  pub vendor_id: VendorId,
 
   /// Identifies the Participant that is the container of the RTPS Writer
   /// entities that are the source of the Submessages that follow
-  pub guid_prefix: GuidPrefix_t,
+  pub guid_prefix: GuidPrefix,
 }
 
 #[cfg(test)]
@@ -28,11 +28,11 @@ mod tests {
   {
       info_source,
       InfoSource {
-          protocol_version: ProtocolVersion_t::PROTOCOLVERSION_2_2,
-          vendor_id: VendorId_t {
+          protocol_version: ProtocolVersion::PROTOCOLVERSION_2_2,
+          vendor_id: VendorId {
               vendorId: [0xFF, 0xAA]
           },
-          guid_prefix: GuidPrefix_t {
+          guid_prefix: GuidPrefix {
               entityKey: [0x01, 0x02, 0x6D, 0x3F,
                           0x7E, 0x07, 0x00, 0x00,
                           0x01, 0x00, 0x00, 0x00]

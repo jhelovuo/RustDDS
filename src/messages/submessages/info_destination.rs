@@ -1,4 +1,4 @@
-use crate::structure::guid_prefix::GuidPrefix_t;
+use crate::structure::guid::GuidPrefix;
 use speedy::{Readable, Writable};
 
 /// This message is sent from an RTPS Writer to an RTPS Reader
@@ -9,7 +9,7 @@ pub struct InfoDestination {
   /// Provides the GuidPrefix that should be used to reconstruct the GUIDs
   /// of all the RTPS Reader entities whose EntityIds appears
   /// in the Submessages that follow.
-  pub guid_prefix: GuidPrefix_t,
+  pub guid_prefix: GuidPrefix,
 }
 
 #[cfg(test)]
@@ -20,7 +20,7 @@ mod tests {
   {
       info_destination,
       InfoDestination {
-          guid_prefix: GuidPrefix_t {
+          guid_prefix: GuidPrefix {
               entityKey: [0x01, 0x02, 0x6D, 0x3F,
                           0x7E, 0x07, 0x00, 0x00,
                           0x01, 0x00, 0x00, 0x00]

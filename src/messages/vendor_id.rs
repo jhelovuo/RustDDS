@@ -1,26 +1,26 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct VendorId_t {
+pub struct VendorId {
   pub vendorId: [u8; 2],
 }
 
-impl VendorId_t {
-  pub const VENDOR_UNKNOWN: VendorId_t = VendorId_t {
+impl VendorId {
+  pub const VENDOR_UNKNOWN: VendorId = VendorId {
     vendorId: [0x00; 2],
   };
 }
 
-impl Default for VendorId_t {
+impl Default for VendorId {
   fn default() -> Self {
-    VendorId_t::VENDOR_UNKNOWN
+    VendorId::VENDOR_UNKNOWN
   }
 }
 
-impl<'a, C: Context> Readable<'a, C> for VendorId_t {
+impl<'a, C: Context> Readable<'a, C> for VendorId {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut vendor_id = VendorId_t::default();
+    let mut vendor_id = VendorId::default();
     for i in 0..vendor_id.vendorId.len() {
       vendor_id.vendorId[i] = reader.read_u8()?;
     }
@@ -33,7 +33,7 @@ impl<'a, C: Context> Readable<'a, C> for VendorId_t {
   }
 }
 
-impl<C: Context> Writable<C> for VendorId_t {
+impl<C: Context> Writable<C> for VendorId {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     for elem in &self.vendorId {
@@ -52,14 +52,14 @@ mod tests {
   fn minimum_bytes_needed() {
     assert_eq!(
       2,
-      <VendorId_t as Readable<Endianness>>::minimum_bytes_needed()
+      <VendorId as Readable<Endianness>>::minimum_bytes_needed()
     );
   }
 
-  serialization_test!( type = VendorId_t,
+  serialization_test!( type = VendorId,
   {
       vendor_unknown,
-      VendorId_t::VENDOR_UNKNOWN,
+      VendorId::VENDOR_UNKNOWN,
       le = [0x00, 0x00],
       be = [0x00, 0x00]
   });

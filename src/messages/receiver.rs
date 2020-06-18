@@ -1,9 +1,9 @@
-use crate::messages::protocol_version::ProtocolVersion_t;
+use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::submessages::submessage::EntitySubmessage;
-use crate::messages::vendor_id::VendorId_t;
-use crate::structure::guid_prefix::GuidPrefix_t;
-use crate::structure::locator::{LocatorKind_t, LocatorList_t, Locator_t};
-use crate::structure::time::Time_t;
+use crate::messages::vendor_id::VendorId;
+use crate::structure::guid::GuidPrefix;
+use crate::structure::locator::{LocatorKind, LocatorList, Locator};
+use crate::structure::time::Time;
 
 #[cfg(test)]
 use crate::messages::submessages::submessage_kind::SubmessageKind;
@@ -14,11 +14,11 @@ use crate::messages::submessages::submessage_flag::SubmessageFlag;
 #[cfg(test)]
 use crate::messages::submessages::ack_nack::AckNack;
 #[cfg(test)]
-use crate::structure::entity_id::EntityId_t;
+use crate::structure::entity::EntityId;
 #[cfg(test)]
-use crate::structure::sequence_number::SequenceNumber_t;
+use crate::structure::sequence_number::SequenceNumber;
 #[cfg(test)]
-use crate::structure::sequence_number_set::SequenceNumberSet_t;
+use crate::structure::sequence_number_set::SequenceNumberSet;
 #[cfg(test)]
 use speedy::{Writable, Endianness};
 
@@ -27,14 +27,14 @@ use tokio_util::codec::Decoder;
 
 #[derive(Debug, PartialEq)]
 pub struct Receiver {
-  pub source_version: ProtocolVersion_t,
-  pub source_vendor_id: VendorId_t,
-  pub source_guid_prefix: GuidPrefix_t,
-  pub dest_guid_prefix: GuidPrefix_t,
-  pub unicast_reply_locator_list: LocatorList_t,
-  pub multicast_reply_locator_list: LocatorList_t,
+  pub source_version: ProtocolVersion,
+  pub source_vendor_id: VendorId,
+  pub source_guid_prefix: GuidPrefix,
+  pub dest_guid_prefix: GuidPrefix,
+  pub unicast_reply_locator_list: LocatorList,
+  pub multicast_reply_locator_list: LocatorList,
   pub have_timestamp: bool,
-  pub timestamp: Time_t,
+  pub timestamp: Time,
 }
 
 enum DeserializationState {
@@ -49,25 +49,25 @@ pub struct MessageReceiver {
 }
 
 impl MessageReceiver {
-  pub fn new(locator_kind: LocatorKind_t) -> Self {
+  pub fn new(locator_kind: LocatorKind) -> Self {
     MessageReceiver {
       receiver: Receiver {
-        source_version: ProtocolVersion_t::PROTOCOLVERSION,
-        source_vendor_id: VendorId_t::VENDOR_UNKNOWN,
-        source_guid_prefix: GuidPrefix_t::GUIDPREFIX_UNKNOWN,
-        dest_guid_prefix: GuidPrefix_t::GUIDPREFIX_UNKNOWN,
-        unicast_reply_locator_list: vec![Locator_t {
+        source_version: ProtocolVersion::PROTOCOLVERSION,
+        source_vendor_id: VendorId::VENDOR_UNKNOWN,
+        source_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
+        dest_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
+        unicast_reply_locator_list: vec![Locator {
           kind: locator_kind,
-          address: Locator_t::LOCATOR_ADDRESS_INVALID,
-          port: Locator_t::LOCATOR_PORT_INVALID,
+          address: Locator::LOCATOR_ADDRESS_INVALID,
+          port: Locator::LOCATOR_PORT_INVALID,
         }],
-        multicast_reply_locator_list: vec![Locator_t {
+        multicast_reply_locator_list: vec![Locator {
           kind: locator_kind,
-          address: Locator_t::LOCATOR_ADDRESS_INVALID,
-          port: Locator_t::LOCATOR_PORT_INVALID,
+          address: Locator::LOCATOR_ADDRESS_INVALID,
+          port: Locator::LOCATOR_PORT_INVALID,
         }],
         have_timestamp: false,
-        timestamp: Time_t::TIME_INVALID,
+        timestamp: Time::TIME_INVALID,
       },
       state: DeserializationState::ReadingHeader,
     }
@@ -130,7 +130,7 @@ mod tests {
                 #[test]
                 fn test_submessage_decoding() {
                     let messages_iterator = EntitySubmessageIterator {
-                        message_receiver: MessageReceiver::new(LocatorKind_t::LOCATOR_KIND_INVALID),
+                        message_receiver: MessageReceiver::new(LocatorKind::LOCATOR_KIND_INVALID),
                         bytes: serialize_into_bytes()
                     };
 
@@ -164,7 +164,7 @@ mod tests {
 
   message_decoding_test!(
       test_name = single_ack_nack,
-      header = Header::new(GuidPrefix_t::GUIDPREFIX_UNKNOWN),
+      header = Header::new(GuidPrefix::GUIDPREFIX_UNKNOWN),
       [
           submessage_header = SubmessageHeader {
               submessage_id: SubmessageKind::ACKNACK,
@@ -172,18 +172,18 @@ mod tests {
               submessage_length: 24,
           },
           submessage_entities = {
-              EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-              EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-              SequenceNumberSet_t::new(SequenceNumber_t::from(0)),
+              EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+              EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+              SequenceNumberSet::new(SequenceNumber::from(0)),
               1
           }
       ],
       expected_notifications = [
           EntitySubmessage::AckNack(
               AckNack {
-                  reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-                  writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-                  reader_sn_state: SequenceNumberSet_t::new(SequenceNumber_t::from(0)),
+                  reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+                  writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+                  reader_sn_state: SequenceNumberSet::new(SequenceNumber::from(0)),
                   count: 1
               },
               SubmessageFlag { flags: 0b0000_0000 }

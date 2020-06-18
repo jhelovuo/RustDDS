@@ -1,6 +1,6 @@
-use crate::messages::fragment_number::FragmentNumber_t;
-use crate::structure::entity_id::EntityId_t;
-use crate::structure::sequence_number::SequenceNumber_t;
+use crate::messages::fragment_number::FragmentNumber;
+use crate::structure::entity::EntityId;
+use crate::structure::sequence_number::SequenceNumber;
 use speedy::{Readable, Writable};
 
 /// When fragmenting data and until all fragments are available, the
@@ -14,18 +14,18 @@ pub struct HeartbeatFrag {
   /// Identifies the Reader Entity that is being informed of the availability
   /// of fragments. Can be set to ENTITYID_UNKNOWN to indicate all readers for
   /// the writer that sent the message.
-  pub reader_id: EntityId_t,
+  pub reader_id: EntityId,
 
   /// Identifies the Writer Entity that sent the Submessage.
-  pub writer_id: EntityId_t,
+  pub writer_id: EntityId,
 
   /// Identifies the sequence number of the data change for which fragments
   /// are available.
-  pub writer_sn: SequenceNumber_t,
+  pub writer_sn: SequenceNumber,
 
   /// All fragments up to and including this last (highest) fragment are
   /// available on the Writer for the change identified by writerSN.
-  pub last_fragment_num: FragmentNumber_t,
+  pub last_fragment_num: FragmentNumber,
 
   /// A counter that is incremented each time a new HeartbeatFrag message is
   /// sent. Provides the means for a Reader to detect duplicate HeartbeatFrag
@@ -42,10 +42,10 @@ mod tests {
   {
       heartbeat_frag,
       HeartbeatFrag {
-          reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-          writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-          writer_sn: SequenceNumber_t::from(42),
-          last_fragment_num: FragmentNumber_t::from(99),
+          reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+          writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          writer_sn: SequenceNumber::from(42),
+          last_fragment_num: FragmentNumber::from(99),
           count: 6,
       },
       le = [0x00, 0x00, 0x03, 0xC7,

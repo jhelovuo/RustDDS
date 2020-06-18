@@ -1,5 +1,5 @@
-pub mod cdrSerializer;
 pub mod cdrDeserializer;
+pub mod cdrSerializer;
 mod error;
 
 mod message;

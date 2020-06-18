@@ -17,30 +17,30 @@ use std::convert::From;
   FromPrimitive,
   ToPrimitive,
 )]
-pub struct FragmentNumber_t(u32);
+pub struct FragmentNumber(u32);
 
-impl Default for FragmentNumber_t {
-  fn default() -> FragmentNumber_t {
-    FragmentNumber_t(1)
+impl Default for FragmentNumber {
+  fn default() -> FragmentNumber {
+    FragmentNumber(1)
   }
 }
 
-impl From<u32> for FragmentNumber_t {
+impl From<u32> for FragmentNumber {
   fn from(value: u32) -> Self {
-    FragmentNumber_t(value)
+    FragmentNumber(value)
   }
 }
 
-impl From<FragmentNumber_t> for u32 {
-  fn from(fragment_number: FragmentNumber_t) -> Self {
+impl From<FragmentNumber> for u32 {
+  fn from(fragment_number: FragmentNumber) -> Self {
     fragment_number.0
   }
 }
 
-checked_impl!(CheckedAdd, checked_add, FragmentNumber_t);
-checked_impl!(CheckedSub, checked_sub, FragmentNumber_t);
-checked_impl!(CheckedMul, checked_mul, FragmentNumber_t);
-checked_impl!(CheckedDiv, checked_div, FragmentNumber_t);
+checked_impl!(CheckedAdd, checked_add, FragmentNumber);
+checked_impl!(CheckedSub, checked_sub, FragmentNumber);
+checked_impl!(CheckedMul, checked_mul, FragmentNumber);
+checked_impl!(CheckedDiv, checked_div, FragmentNumber);
 
 #[cfg(test)]
 mod tests {
@@ -48,25 +48,25 @@ mod tests {
 
   #[test]
   fn fragment_number_starts_by_default_from_one() {
-    assert_eq!(FragmentNumber_t::from(1), FragmentNumber_t::default());
+    assert_eq!(FragmentNumber::from(1), FragmentNumber::default());
   }
 
-  serialization_test!( type = FragmentNumber_t,
+  serialization_test!( type = FragmentNumber,
   {
       fragment_number_zero,
-      FragmentNumber_t::from(0),
+      FragmentNumber::from(0),
       le = [0x00, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x00]
   },
   {
       fragment_number_default,
-      FragmentNumber_t::default(),
+      FragmentNumber::default(),
       le = [0x01, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x01]
   },
   {
       fragment_number_non_zero,
-      FragmentNumber_t::from(0xDEADBEEF),
+      FragmentNumber::from(0xDEADBEEF),
       le = [0xEF, 0xBE, 0xAD, 0xDE],
       be = [0xDE, 0xAD, 0xBE, 0xEF]
   });

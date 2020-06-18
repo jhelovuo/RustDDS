@@ -1,26 +1,26 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
-pub struct GuidPrefix_t {
+pub struct GuidPrefix {
   pub entityKey: [u8; 12],
 }
 
-impl GuidPrefix_t {
-  pub const GUIDPREFIX_UNKNOWN: GuidPrefix_t = GuidPrefix_t {
+impl GuidPrefix {
+  pub const GUIDPREFIX_UNKNOWN: GuidPrefix = GuidPrefix {
     entityKey: [0x00; 12],
   };
 }
 
-impl Default for GuidPrefix_t {
-  fn default() -> GuidPrefix_t {
-    GuidPrefix_t::GUIDPREFIX_UNKNOWN
+impl Default for GuidPrefix {
+  fn default() -> GuidPrefix {
+    GuidPrefix::GUIDPREFIX_UNKNOWN
   }
 }
 
-impl<'a, C: Context> Readable<'a, C> for GuidPrefix_t {
+impl<'a, C: Context> Readable<'a, C> for GuidPrefix {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut guid_prefix = GuidPrefix_t::default();
+    let mut guid_prefix = GuidPrefix::default();
     for i in 0..guid_prefix.entityKey.len() {
       guid_prefix.entityKey[i] = reader.read_u8()?;
     }
@@ -33,7 +33,7 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix_t {
   }
 }
 
-impl<C: Context> Writable<C> for GuidPrefix_t {
+impl<C: Context> Writable<C> for GuidPrefix {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     for elem in &self.entityKey {
@@ -52,26 +52,26 @@ mod tests {
   fn minimum_bytes_needed() {
     assert_eq!(
       12,
-      <GuidPrefix_t as Readable<Endianness>>::minimum_bytes_needed()
+      <GuidPrefix as Readable<Endianness>>::minimum_bytes_needed()
     );
   }
 
-  serialization_test!( type = GuidPrefix_t,
+  serialization_test!( type = GuidPrefix,
   {
       guid_prefix_unknown,
-      GuidPrefix_t::GUIDPREFIX_UNKNOWN,
+      GuidPrefix::GUIDPREFIX_UNKNOWN,
       le = [0x00; 12],
       be = [0x00; 12]
   },
   {
       guid_prefix_default,
-      GuidPrefix_t::default(),
+      GuidPrefix::default(),
       le = [0x00; 12],
       be = [0x00; 12]
   },
   {
       guid_prefix_endianness_insensitive,
-      GuidPrefix_t {
+      GuidPrefix {
           entityKey: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
                       0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB]
       },

@@ -6,37 +6,36 @@ use std::mem::size_of;
 #[derive(
   Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, NumOps, FromPrimitive, ToPrimitive,
 )]
-pub struct SequenceNumber_t(i64);
+pub struct SequenceNumber(i64);
 
-impl SequenceNumber_t {
-  pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber_t =
-    SequenceNumber_t((std::u32::MAX as i64) << 32);
+impl SequenceNumber {
+  pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber = SequenceNumber((std::u32::MAX as i64) << 32);
 }
 
-impl From<i64> for SequenceNumber_t {
+impl From<i64> for SequenceNumber {
   fn from(value: i64) -> Self {
-    SequenceNumber_t(value)
+    SequenceNumber(value)
   }
 }
 
-impl From<SequenceNumber_t> for i64 {
-  fn from(sequence_number: SequenceNumber_t) -> Self {
+impl From<SequenceNumber> for i64 {
+  fn from(sequence_number: SequenceNumber) -> Self {
     sequence_number.0
   }
 }
 
-checked_impl!(CheckedAdd, checked_add, SequenceNumber_t);
-checked_impl!(CheckedSub, checked_sub, SequenceNumber_t);
-checked_impl!(CheckedMul, checked_mul, SequenceNumber_t);
-checked_impl!(CheckedDiv, checked_div, SequenceNumber_t);
+checked_impl!(CheckedAdd, checked_add, SequenceNumber);
+checked_impl!(CheckedSub, checked_sub, SequenceNumber);
+checked_impl!(CheckedMul, checked_mul, SequenceNumber);
+checked_impl!(CheckedDiv, checked_div, SequenceNumber);
 
-impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
+impl<'a, C: Context> Readable<'a, C> for SequenceNumber {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let high: i32 = reader.read_value()?;
     let low: u32 = reader.read_value()?;
 
-    Ok(SequenceNumber_t(((i64::from(high)) << 32) + i64::from(low)))
+    Ok(SequenceNumber(((i64::from(high)) << 32) + i64::from(low)))
   }
 
   #[inline]
@@ -45,7 +44,7 @@ impl<'a, C: Context> Readable<'a, C> for SequenceNumber_t {
   }
 }
 
-impl<C: Context> Writable<C> for SequenceNumber_t {
+impl<C: Context> Writable<C> for SequenceNumber {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_i32((self.0 >> 32) as i32)?;
@@ -54,9 +53,9 @@ impl<C: Context> Writable<C> for SequenceNumber_t {
   }
 }
 
-impl Default for SequenceNumber_t {
-  fn default() -> SequenceNumber_t {
-    SequenceNumber_t(1)
+impl Default for SequenceNumber {
+  fn default() -> SequenceNumber {
+    SequenceNumber(1)
   }
 }
 
@@ -66,25 +65,25 @@ mod tests {
 
   #[test]
   fn sequence_number_starts_by_default_from_one() {
-    assert_eq!(SequenceNumber_t::from(1), SequenceNumber_t::default());
+    assert_eq!(SequenceNumber::from(1), SequenceNumber::default());
   }
 
-  serialization_test!( type = SequenceNumber_t,
+  serialization_test!( type = SequenceNumber,
   {
       sequence_number_default,
-      SequenceNumber_t::default(),
+      SequenceNumber::default(),
       le = [0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]
   },
   {
       sequence_number_unknown,
-      SequenceNumber_t::SEQUENCENUMBER_UNKNOWN,
+      SequenceNumber::SEQUENCENUMBER_UNKNOWN,
       le = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00],
       be = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
   },
   {
       sequence_number_non_zero,
-      SequenceNumber_t::from(0x0011223344556677),
+      SequenceNumber::from(0x0011223344556677),
       le = [0x33, 0x22, 0x11, 0x00, 0x77, 0x66, 0x55, 0x44],
       be = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]
   });

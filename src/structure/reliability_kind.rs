@@ -1,27 +1,27 @@
 use speedy::{Readable, Writable};
 
 #[derive(Debug, PartialEq, Eq, Readable, Writable)]
-pub struct ReliabilityKind_t(u32);
+pub struct ReliabilityKind(u32);
 
-impl ReliabilityKind_t {
-  pub const BEST_EFFORT: ReliabilityKind_t = ReliabilityKind_t(1);
-  pub const RELIABLE: ReliabilityKind_t = ReliabilityKind_t(2);
+impl ReliabilityKind {
+  pub const BEST_EFFORT: ReliabilityKind = ReliabilityKind(1);
+  pub const RELIABLE: ReliabilityKind = ReliabilityKind(2);
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
 
-  serialization_test!( type = ReliabilityKind_t,
+  serialization_test!( type = ReliabilityKind,
   {
       reliability_kind_best_effort,
-      ReliabilityKind_t::BEST_EFFORT,
+      ReliabilityKind::BEST_EFFORT,
       le = [0x01, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x01]
   },
   {
       reliability_kind_reliable,
-      ReliabilityKind_t::RELIABLE,
+      ReliabilityKind::RELIABLE,
       le = [0x02, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x02]
   });

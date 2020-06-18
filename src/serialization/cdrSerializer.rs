@@ -9,7 +9,6 @@ use byteorder::LittleEndian;
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
-
 pub struct SerializerLittleEndian {
   buffer: Vec<u8>,
   stringLogger: String,
@@ -363,7 +362,6 @@ impl<'a> ser::SerializeStructVariant for &'a mut SerializerLittleEndian {
     Ok(())
   }
 }
-
 
 #[cfg(test)]
 mod tests {

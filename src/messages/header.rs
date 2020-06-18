@@ -1,24 +1,24 @@
 use crate::common::validity_trait::Validity;
-use crate::messages::protocol_id::ProtocolId_t;
-use crate::messages::protocol_version::ProtocolVersion_t;
-use crate::messages::vendor_id::VendorId_t;
-use crate::structure::guid_prefix::GuidPrefix_t;
+use crate::messages::protocol_id::ProtocolId;
+use crate::messages::protocol_version::ProtocolVersion;
+use crate::messages::vendor_id::VendorId;
+use crate::structure::guid::GuidPrefix;
 use speedy::{Readable, Writable};
 
 #[derive(Debug, Readable, Writable, PartialEq)]
 pub struct Header {
-  pub protocol_id: ProtocolId_t,
-  pub protocol_version: ProtocolVersion_t,
-  pub vendor_id: VendorId_t,
-  pub guid_prefix: GuidPrefix_t,
+  pub protocol_id: ProtocolId,
+  pub protocol_version: ProtocolVersion,
+  pub vendor_id: VendorId,
+  pub guid_prefix: GuidPrefix,
 }
 
 impl Header {
-  pub fn new(guid: GuidPrefix_t) -> Header {
+  pub fn new(guid: GuidPrefix) -> Header {
     Header {
-      protocol_id: ProtocolId_t::PROTOCOL_RTPS,
-      protocol_version: ProtocolVersion_t::PROTOCOLVERSION,
-      vendor_id: VendorId_t::VENDOR_UNKNOWN,
+      protocol_id: ProtocolId::PROTOCOL_RTPS,
+      protocol_version: ProtocolVersion::PROTOCOLVERSION,
+      vendor_id: VendorId::VENDOR_UNKNOWN,
       guid_prefix: guid,
     }
   }
@@ -26,8 +26,8 @@ impl Header {
 
 impl Validity for Header {
   fn valid(&self) -> bool {
-    !(self.protocol_id != ProtocolId_t::PROTOCOL_RTPS
-      || self.protocol_version.major > ProtocolVersion_t::PROTOCOLVERSION.major)
+    !(self.protocol_id != ProtocolId::PROTOCOL_RTPS
+      || self.protocol_version.major > ProtocolVersion::PROTOCOLVERSION.major)
   }
 }
 
@@ -37,12 +37,12 @@ mod tests {
 
   #[test]
   fn header_protocol_version_major() {
-    let mut header = Header::new(GuidPrefix_t::GUIDPREFIX_UNKNOWN);
+    let mut header = Header::new(GuidPrefix::GUIDPREFIX_UNKNOWN);
 
-    header.protocol_version = ProtocolVersion_t::PROTOCOLVERSION_1_0;
+    header.protocol_version = ProtocolVersion::PROTOCOLVERSION_1_0;
     assert!(header.valid());
 
-    header.protocol_version = ProtocolVersion_t::PROTOCOLVERSION;
+    header.protocol_version = ProtocolVersion::PROTOCOLVERSION;
     assert!(header.valid());
 
     header.protocol_version.major += 1;
@@ -51,16 +51,16 @@ mod tests {
 
   #[test]
   fn header_protocol_id_same_as_rtps() {
-    let mut header = Header::new(GuidPrefix_t::GUIDPREFIX_UNKNOWN);
+    let mut header = Header::new(GuidPrefix::GUIDPREFIX_UNKNOWN);
 
-    header.protocol_id = ProtocolId_t::PROTOCOL_RTPS;
+    header.protocol_id = ProtocolId::PROTOCOL_RTPS;
     assert!(header.valid());
   }
 
   serialization_test!( type = Header,
   {
       header_with_unknown_guid_prefix,
-      Header::new(GuidPrefix_t::GUIDPREFIX_UNKNOWN),
+      Header::new(GuidPrefix::GUIDPREFIX_UNKNOWN),
       le = [0x52, 0x54, 0x50, 0x53, // protocol_id
             0x02, 0x04,             // protocol_verison
             0x00, 0x00,             // vendor_id

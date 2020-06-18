@@ -1,6 +1,6 @@
-use crate::messages::fragment_number_set::FragmentNumberSet_t;
-use crate::structure::entity_id::EntityId_t;
-use crate::structure::sequence_number::SequenceNumber_t;
+use crate::messages::fragment_number_set::FragmentNumberSet;
+use crate::structure::entity::EntityId;
+use crate::structure::sequence_number::SequenceNumber;
 use speedy::{Readable, Writable};
 
 /// The NackFrag Submessage is used to communicate the state of a Reader to a
@@ -15,20 +15,20 @@ use speedy::{Readable, Writable};
 pub struct NackFrag {
   ///  Identifies the Reader entity that requests to receive certain
   /// fragments.
-  pub reader_id: EntityId_t,
+  pub reader_id: EntityId,
 
   /// Identifies the Writer entity that is the target of the NackFrag message.
   /// This is the Writer Entity that is being asked to re-send some fragments.
-  pub writer_id: EntityId_t,
+  pub writer_id: EntityId,
 
   /// The sequence number for which some fragments are missing.
-  pub writer_sn: SequenceNumber_t,
+  pub writer_sn: SequenceNumber,
 
   /// Communicates the state of the reader to the writer.
   /// The fragment numbers that appear in the set indicate missing
   /// fragments on the reader side. The ones that do not appear in the set
   /// are undetermined (could have been received or not).
-  pub fragment_number_state: FragmentNumberSet_t,
+  pub fragment_number_state: FragmentNumberSet,
 
   /// A counter that is incremented each time a new NackFrag message is sent.
   /// Provides the means for a Writer to detect duplicate NackFrag messages
@@ -39,16 +39,16 @@ pub struct NackFrag {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::messages::fragment_number::FragmentNumber_t;
+  use crate::messages::fragment_number::FragmentNumber;
 
   serialization_test!( type = NackFrag,
   {
       nack_frag,
       NackFrag {
-          reader_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-          writer_id: EntityId_t::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-          writer_sn: SequenceNumber_t::from(42),
-          fragment_number_state: FragmentNumberSet_t::new(FragmentNumber_t::from(1000)),
+          reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+          writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          writer_sn: SequenceNumber::from(42),
+          fragment_number_state: FragmentNumberSet::new(FragmentNumber::from(1000)),
           count: 6,
       },
       le = [0x00, 0x00, 0x03, 0xC7,

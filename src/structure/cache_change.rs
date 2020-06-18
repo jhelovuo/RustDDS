@@ -1,14 +1,14 @@
-use crate::structure::change_kind::ChangeKind_t;
+use crate::structure::change_kind::ChangeKind;
 use crate::structure::data::Data;
-use crate::structure::guid::GUID_t;
-use crate::structure::instance_handle::InstanceHandle_t;
-use crate::structure::sequence_number::SequenceNumber_t;
+use crate::structure::guid::GUID;
+use crate::structure::instance_handle::InstanceHandle;
+use crate::structure::sequence_number::SequenceNumber;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct CacheChange {
-  pub kind: ChangeKind_t,
-  pub writer_guid: GUID_t,
-  pub instance_handle: InstanceHandle_t,
-  pub sequence_number: SequenceNumber_t,
+  pub kind: ChangeKind,
+  pub writer_guid: GUID,
+  pub instance_handle: InstanceHandle,
+  pub sequence_number: SequenceNumber,
   pub data_value: Data,
 }
