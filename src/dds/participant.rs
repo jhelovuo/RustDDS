@@ -1,16 +1,16 @@
-use mio::{Poll, Events, Token, Ready,PollOpt};
+use mio::Token;
+use mio_extras::channel as mio_channel;
+
 use std::thread;
 use std::collections::HashMap;
 
 use crate::network::udp_listener::UDPListener;
-use crate::network::constant::STOP_POLL_TOKEN;
+use crate::dds::dp_event_wrapper::DPEventWrapper;
 use crate::structure::result::*;
 use crate::structure::duration::*;
 
-struct DomainParticipant {
-  poll: Poll,
-  events: Events,
-  listeners: HashMap<Token, UDPListener>,
+pub struct DomainParticipant {
+  senders: HashMap<Token, mio_channel::Sender<UDPListener>>,
 }
 
 
@@ -22,59 +22,22 @@ struct TypeDesc {}
 
 impl DomainParticipant {
   pub fn new() -> DomainParticipant {
-    DomainParticipant {
-      poll: Poll::new().expect("Unable to create new poll."),
-      events: Events::with_capacity(1024),
-      listeners: HashMap::new(),
-    }
-  }
-
-  pub fn register_udp_listener(&mut self, mut listener: UDPListener) {
-    let t = *listener.token();
-    self.poll
-      //.registry()
-      .register(listener.mio_socket(), t, Ready::readable(),PollOpt::edge());
-    self.listeners.insert(*listener.token(), listener);
-  }
-
-  pub fn event_loop(&mut self) {
-    loop {
-      self
-        .poll
-        .poll(&mut self.events, None)
-        .expect("Failed in waiting of poll.");
-
-      for event in &self.events {
-        if event.token() == STOP_POLL_TOKEN {
-          return;
-        }
-
-        let listener = self.listeners.get(&event.token());
-        let mut datas: Vec<Vec<u8>> = vec![];
-        match listener {
-          Some(l) => {
-            while let data = l.get_message() {
-              if data.is_empty() {
-                break;
-              }
-              datas.push(data);
-            }
-          }
-          None => continue,
-        }
-      }
-    }
-  } // fn
-
+    let mut senders = HashMap::new();
+    let ev_wrapper = DPEventWrapper::new(&mut senders);
+    thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
+    DomainParticipant { senders: senders }
+   }
   
-  // Published and subscriber creation
+
+
+  // Publisher and subscriber creation
   //
   // There are no delete function for publisher or subscriber. Deletion is performed by
   // deleting the Publisher or Subscriber object, who upon deletion will notify
   // the DomainParticipant.
   pub fn create_publisher(self,  qos: QosPolicies ) -> Result<Publisher> {
     unimplemented!()
-  }
+  } 
 
   pub fn create_subsrciber(self, qos: QosPolicies ) -> Result<Subscriber> {
     unimplemented!()

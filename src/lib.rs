@@ -25,4 +25,3 @@ mod network;
 pub mod serialization;
 pub use messages::submessages::submessages;
 
-
