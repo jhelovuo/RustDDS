@@ -64,7 +64,7 @@ impl UDPListener {
 
   /// Returns all messages that have come from listen_addresses.
   /// Converts/prunes individual results to Vec
-  pub fn get_message(&mut self) -> Vec<u8> {
+  pub fn get_message(&self) -> Vec<u8> {
     let mut message: Vec<u8> = vec![];
     let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
     if let Ok((nbytes, address)) = self.socket.recv_from(&mut buf) {

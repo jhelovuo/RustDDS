@@ -5,6 +5,7 @@ pub mod duration;
 pub mod endpoint;
 pub mod entity;
 pub mod entity_id;
+pub mod result;
 pub mod guid;
 pub mod guid_prefix;
 pub mod history_cache;
