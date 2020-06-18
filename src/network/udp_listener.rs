@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use mio::Token;
 use mio::net::UdpSocket;
@@ -9,8 +8,6 @@ use std::net::UdpSocket as StdUdpSocket;
 // 4 MB buffer size
 // const BUFFER_SIZE: usize = 4294967296;
 const BUFFER_SIZE: usize = 64 * 1024;
-
-static available_token: AtomicUsize = AtomicUsize::new(1);
 
 /// Listens to messages coming to specified host port combination.
 /// Only messages from added listen addressed are read when get_all_messages is called.
@@ -34,22 +31,20 @@ impl UDPListener {
     UDPListener {
       socket: socket,
       listen_addresses: HashSet::new(),
-      token: Token(UDPListener::get_available_token()),
+      token: Token(1),
     }
+  }
+
+  pub fn set_token(&mut self, token: Token) {
+    self.token = token;
+  }
+
+  pub fn get_token(self) -> Token {
+    self.token
   }
 
   pub fn mio_socket(&mut self) -> &mut UdpSocket {
     &mut self.socket
-  }
-
-  fn get_available_token() -> usize {
-    let token = available_token.load(Ordering::Relaxed);
-    available_token.store(token + 1, Ordering::Relaxed);
-    token
-  }
-
-  pub fn token(&self) -> &Token {
-    &self.token
   }
 
   pub fn add_listen_address(&mut self, host: &str, port: u16) {
@@ -64,7 +59,7 @@ impl UDPListener {
 
   /// Returns all messages that have come from listen_addresses.
   /// Converts/prunes individual results to Vec
-  pub fn get_message(&mut self) -> Vec<u8> {
+  pub fn get_message(&self) -> Vec<u8> {
     let mut message: Vec<u8> = vec![];
     let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
     if let Ok((nbytes, address)) = self.socket.recv_from(&mut buf) {
