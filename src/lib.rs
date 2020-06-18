@@ -15,10 +15,10 @@ extern crate tokio_util;
 mod serialization_test;
 #[macro_use]
 mod checked_impl;
-mod behavior;
 mod common;
-mod dds;
 mod discovery;
 mod messages;
 mod structure;
-mod serialization;
+pub mod serialization;
+pub use messages::submessages::submessages;
+

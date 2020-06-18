@@ -1,3 +1,3 @@
 pub trait Validity {
-    fn valid(&self) -> bool;
+  fn valid(&self) -> bool;
 }

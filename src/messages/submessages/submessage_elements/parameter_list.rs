@@ -1,4 +1,4 @@
-use crate::messages::submessage_elements::parameter::Parameter;
+use crate::messages::submessages::submessage_elements::parameter::Parameter;
 
 /// ParameterList is used as part of several messages to encapsulate
 /// QoS parameters that may affect the interpretation of the message.
@@ -6,7 +6,7 @@ use crate::messages::submessage_elements::parameter::Parameter;
 /// extensions to the QoS without breaking backwards compatibility.
 #[derive(Debug, PartialEq)]
 pub struct ParameterList {
-    parameters: Vec<Parameter>,
+  parameters: Vec<Parameter>,
 }
 
 /// The PID_PAD is used to enforce alignment of the parameter
