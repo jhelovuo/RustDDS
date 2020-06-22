@@ -1,5 +1,7 @@
 use crate::structure::guid::GUID;
 
+use speedy::{Context, Readable, Reader, Writable, Writer};
+
 /// Base class for all RTPS entities. RTPS Entity represents the class of
 /// objects that are visible to other RTPS Entities on the network. As such,
 /// RTPS Entity objects have a globally-unique identifier (GUID) and can be
@@ -12,8 +14,6 @@ pub struct EntityAttributes {
 pub trait Entity {
   fn as_entity(&self) -> &EntityAttributes;
 }
-
-use speedy::{Context, Readable, Reader, Writable, Writer};
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct EntityId {
