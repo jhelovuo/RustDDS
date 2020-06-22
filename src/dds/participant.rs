@@ -16,11 +16,11 @@ pub struct DomainParticipant {
   writers: HashMap<Token, mio_channel::Sender<UDPSender>>,
 }
 
-struct Publisher {} // placeholders
-struct Subscriber {}
-struct Topic {}
-struct QosPolicies {}
-struct TypeDesc {}
+pub struct Publisher {} // placeholders
+pub struct Subscriber {}
+pub struct Topic {}
+pub struct QosPolicies {}
+pub struct TypeDesc {}
 
 impl DomainParticipant {
   pub fn new() -> DomainParticipant {
@@ -39,22 +39,22 @@ impl DomainParticipant {
   // There are no delete function for publisher or subscriber. Deletion is performed by
   // deleting the Publisher or Subscriber object, who upon deletion will notify
   // the DomainParticipant.
-  pub fn create_publisher(self, qos: QosPolicies) -> Result<Publisher> {
+  pub fn create_publisher(self, _qos: QosPolicies) -> Result<Publisher> {
     unimplemented!()
   }
 
-  pub fn create_subsrciber(self, qos: QosPolicies) -> Result<Subscriber> {
+  pub fn create_subsrciber(self, _qos: QosPolicies) -> Result<Subscriber> {
     unimplemented!()
   }
 
   // Topic creation. Data types should be handled as something (potentially) more structured than a String.
-  pub fn create_topic(self, name: &str, type_desc: TypeDesc, qos: QosPolicies) -> Result<Topic> {
+  pub fn create_topic(self, _name: &str, _type_desc: TypeDesc, _qos: QosPolicies) -> Result<Topic> {
     unimplemented!()
   }
 
   // Do not implement contentfilteredtopics or multitopics (yet)
 
-  pub fn find_topic(self, name: &str, timeout: Duration) -> Result<Topic> {
+  pub fn find_topic(self, _name: &str, _timeout: Duration) -> Result<Topic> {
     unimplemented!()
   }
 
