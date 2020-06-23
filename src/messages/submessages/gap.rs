@@ -1,6 +1,5 @@
 use crate::structure::entity::EntityId;
-use crate::structure::sequence_number::SequenceNumber;
-use crate::structure::sequence_number_set::SequenceNumberSet;
+use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use speedy::{Readable, Writable};
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and

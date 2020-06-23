@@ -1,5 +1,5 @@
 use crate::structure::entity::EntityId;
-use crate::structure::sequence_number_set::SequenceNumberSet;
+use crate::structure::sequence_number::SequenceNumberSet;
 use speedy::{Readable, Writable};
 
 /// This Submessage is used to communicate the state of a Reader to a

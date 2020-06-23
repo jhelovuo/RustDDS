@@ -6,14 +6,14 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::network::udp_listener::UDPListener;
-use crate::network::udp_sender::UDPSender;
 use crate::network::constant::*;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
+use crate::dds::reader::Reader;
 use crate::structure::result::*;
 
 pub struct DomainParticipant {
-  readers: HashMap<Token, mio_channel::Sender<UDPListener>>,
-  writers: HashMap<Token, mio_channel::Sender<UDPSender>>,
+  add_udp_sender_channel: mio_channel::Sender<(Token, UDPListener)>,
+  reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 }
 
 pub struct Publisher {} // placeholders
@@ -24,13 +24,18 @@ pub struct TypeDesc {}
 
 impl DomainParticipant {
   pub fn new() -> DomainParticipant {
-    let mut readers = HashMap::new();
-    let mut writers = HashMap::new();
-    let ev_wrapper = DPEventWrapper::new(&mut readers, &mut writers);
+    // TODO: add mandatory DDS upd listeners and accompanying targets
+
+    // TODO: send add_listener_channel_sender to all places it's needed
+    let (add_listener_channel_sender, add_listener_channel_receiver) = mio_channel::channel();
+
+    let listeners = HashMap::new();
+    let targets = HashMap::new();
+    let ev_wrapper = DPEventWrapper::new(add_listener_channel_receiver, listeners, targets);
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
     DomainParticipant {
-      readers: readers,
-      writers: writers,
+      add_udp_sender_channel: add_listener_channel_sender,
+      reader_binds: HashMap::new(),
     }
   }
 
@@ -71,20 +76,12 @@ impl DomainParticipant {
     unimplemented!()
   }
 
-  pub fn add_reader(&self, listener: UDPListener) {
-    let readers = self.readers.get(&ADD_UDP_LISTENER_TOKEN);
-    match readers {
-      Some(reader) => reader.send(listener).expect("Failed to add listener."),
-      None => return,
-    };
-  }
-
-  pub fn add_writer(&self, sender: UDPSender) {
-    let writers = self.writers.get(&ADD_UDP_SENDER_TOKEN);
-    match writers {
-      Some(writer) => writer.send(sender).expect("Failed to add writer."),
-      None => return,
-    };
+  pub fn add_listener(&self, token: Token, listener: UDPListener) {
+    let ss = self.add_udp_sender_channel.send((token, listener));
+    match ss {
+      Ok(_) => return,
+      Err(e) => println!("{}", e.to_string()),
+    }
   }
 } // impl
 
@@ -92,23 +89,24 @@ impl DomainParticipant {
 mod tests {
   use super::*;
 
-  // #[test]
-  // fn dp_single_address_listener() {
-  //   let participant = DomainParticipant::new();
+  use std::net::SocketAddr;
+  use crate::network::udp_sender::UDPSender;
 
-  //   let mut listener = UDPListener::new("127.0.0.1", 10001);
-  //   listener.add_listen_address("127.0.0.1", 11001);
-  //   participant.add_udp_listener(listener);
+  // TODO: improve basic test when more or the structure is known
+  #[test]
+  fn dp_basic_domain_participant() {
+    let dp = DomainParticipant::new();
 
-  //   let mut sender = UDPSender::new(11001);
-  //   let data: Vec<u8> = vec![0, 1, 2, 3, 4];
-  //   sender.add_send_address("127.0.0.1", 10001);
-  //   sender.send_to_all(&data);
+    let token = START_FREE_TOKENS;
+    let listener = UDPListener::new(token.clone(), "127.0.0.1", 10401);
+    dp.add_listener(token, listener);
 
-  //   let rec_data = participant.get_last_messages();
+    let mut sender = UDPSender::new(11401);
+    let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
-  //   assert_eq!(rec_data.len(), 1);
-  //   assert_eq!(rec_data[0].len(), 5);
-  //   assert_eq!(rec_data[0], data);
-  // }
+    let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 10401)];
+    sender.send_to_all(&data, &addrs);
+
+    // TODO: get result data from Reader
+  }
 }

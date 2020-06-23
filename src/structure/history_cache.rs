@@ -1,13 +1,5 @@
 use crate::structure::cache_change::CacheChange;
 use crate::structure::sequence_number::SequenceNumber;
-#[cfg(test)]
-use crate::structure::change_kind::ChangeKind;
-#[cfg(test)]
-use crate::structure::guid::GUID;
-#[cfg(test)]
-use crate::structure::instance_handle::InstanceHandle;
-#[cfg(test)]
-use crate::structure::data::Data;
 
 struct HistoryCache {
   changes: Vec<CacheChange>,
@@ -59,6 +51,10 @@ mod tests {
   use super::*;
   use crate::structure::entity::EntityId;
   use crate::structure::guid::GuidPrefix;
+  use crate::structure::cache_change::ChangeKind;
+  use crate::structure::guid::GUID;
+  use crate::structure::instance_handle::InstanceHandle;
+  use crate::structure::cache_change::Data;
 
   #[test]
   fn add_change_test() {

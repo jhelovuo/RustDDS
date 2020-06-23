@@ -1,12 +1,12 @@
 use std::collections::HashSet;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
+use std::io;
 
 use mio::Token;
 use mio::net::UdpSocket;
 use std::net::UdpSocket as StdUdpSocket;
 
-// 4 MB buffer size
-// const BUFFER_SIZE: usize = 4294967296;
+// 64 kB buffer size
 const BUFFER_SIZE: usize = 64 * 1024;
 
 /// Listens to messages coming to specified host port combination.
@@ -14,12 +14,11 @@ const BUFFER_SIZE: usize = 64 * 1024;
 #[derive(Debug)]
 pub struct UDPListener {
   socket: UdpSocket,
-  listen_addresses: HashSet<SocketAddr>,
   token: Token,
 }
 
 impl UDPListener {
-  pub fn new(host: &str, port: u16) -> UDPListener {
+  pub fn new(token: Token, host: &str, port: u16) -> UDPListener {
     let address = SocketAddr::new(host.parse().unwrap(), port);
     let err_msg = format!("Unable to bind address {}", address.to_string());
     let std_socket = StdUdpSocket::bind(address).expect(&err_msg);
@@ -30,31 +29,16 @@ impl UDPListener {
 
     UDPListener {
       socket: socket,
-      listen_addresses: HashSet::new(),
       token: Token(1),
     }
   }
 
-  pub fn set_token(&mut self, token: Token) {
-    self.token = token;
-  }
-
-  pub fn get_token(self) -> Token {
+  pub fn get_token(&self) -> Token {
     self.token
   }
 
   pub fn mio_socket(&mut self) -> &mut UdpSocket {
     &mut self.socket
-  }
-
-  pub fn add_listen_address(&mut self, host: &str, port: u16) {
-    let address = SocketAddr::new(host.parse().unwrap(), port);
-    self.listen_addresses.insert(address);
-  }
-
-  pub fn remove_listen_address(&mut self, host: &str, port: u16) {
-    let address = SocketAddr::new(host.parse().unwrap(), port);
-    self.listen_addresses.remove(&address);
   }
 
   /// Returns all messages that have come from listen_addresses.
@@ -63,11 +47,31 @@ impl UDPListener {
     let mut message: Vec<u8> = vec![];
     let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
     if let Ok((nbytes, address)) = self.socket.recv_from(&mut buf) {
-      if self.listen_addresses.contains(&address) {
-        message = buf[..nbytes].to_vec();
-      }
+      message = buf[..nbytes].to_vec();
     }
     message
+  }
+
+  pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
+    if address.is_multicast() {
+      let inter = Ipv4Addr::new(0, 0, 0, 0);
+      return self.socket.join_multicast_v4(address, &inter);
+    }
+    io::Result::Err(io::Error::new(
+      io::ErrorKind::Other,
+      "Not a multicast address",
+    ))
+  }
+
+  pub fn leave_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
+    if address.is_multicast() {
+      let inter = Ipv4Addr::new(0, 0, 0, 0);
+      return self.socket.leave_multicast_v4(address, &inter);
+    }
+    io::Result::Err(io::Error::new(
+      io::ErrorKind::Other,
+      "Not a multicast address",
+    ))
   }
 }
 
@@ -78,15 +82,13 @@ mod tests {
 
   #[test]
   fn udpl_single_address() {
-    let mut listener = UDPListener::new("127.0.0.1", 10001);
+    let mut listener = UDPListener::new(Token(0), "127.0.0.1", 10001);
     let mut sender = UDPSender::new(11001);
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
-    listener.add_listen_address("127.0.0.1", 11001);
-
-    sender.add_send_address("127.0.0.1", 10001);
-    sender.send_to_all(&data);
+    let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 10001)];
+    sender.send_to_all(&data, &addrs);
 
     let rec_data = listener.get_message();
 
@@ -94,30 +96,26 @@ mod tests {
     assert_eq!(rec_data, data);
   }
 
-  #[test]
-  fn udpl_multi_address() {
-    let mut listener = UDPListener::new("127.0.0.1", 10101);
-    let mut sender_1 = UDPSender::new(11101);
-    let mut sender_2 = UDPSender::new(11102);
+  // TODO: there is something wrong with this test (possibly inability actually send or receive multicast)
+  // #[test]
+  fn udpl_multicast_address() {
+    let mut listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
+    let mut sender = UDPSender::new(11002);
 
-    let data_1: Vec<u8> = vec![0, 1, 2, 3, 4];
+    let data: Vec<u8> = vec![2, 4, 6];
 
-    listener.add_listen_address("127.0.0.1", 11101);
-    listener.add_listen_address("127.0.0.1", 11102);
+    // still need to use the same port
+    let ipmcaddr = Ipv4Addr::new(240, 0, 0, 12);
+    let mcaddr = vec![SocketAddr::new("224.0.0.12".parse().unwrap(), 10002)];
+    listener.join_multicast(&ipmcaddr);
 
-    sender_1.add_send_address("127.0.0.1", 10101);
-    sender_1.send_to_all(&data_1);
-
-    let data_2: Vec<u8> = vec![5, 4, 3, 2, 1, 0];
-    sender_2.add_send_address("127.0.0.1", 10101);
-    sender_2.send_to_all(&data_2);
+    sender.send_to_all(&data, &mcaddr);
 
     let rec_data = listener.get_message();
-    assert_eq!(rec_data.len(), 5);
-    assert_eq!(rec_data, data_1);
 
-    let rec_data = listener.get_message();
-    assert_eq!(rec_data.len(), 6);
-    assert_eq!(rec_data, data_2);
+    listener.leave_multicast(&ipmcaddr);
+
+    assert_eq!(rec_data.len(), 3);
+    assert_eq!(rec_data, data);
   }
 }

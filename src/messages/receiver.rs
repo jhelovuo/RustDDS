@@ -5,23 +5,6 @@ use crate::structure::guid::GuidPrefix;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::structure::time::Time;
 
-#[cfg(test)]
-use crate::messages::submessages::submessage_kind::SubmessageKind;
-#[cfg(test)]
-use crate::messages::submessages::submessage_header::SubmessageHeader;
-#[cfg(test)]
-use crate::messages::submessages::submessage_flag::SubmessageFlag;
-#[cfg(test)]
-use crate::messages::submessages::ack_nack::AckNack;
-#[cfg(test)]
-use crate::structure::entity::EntityId;
-#[cfg(test)]
-use crate::structure::sequence_number::SequenceNumber;
-#[cfg(test)]
-use crate::structure::sequence_number_set::SequenceNumberSet;
-#[cfg(test)]
-use speedy::{Writable, Endianness};
-
 use bytes::BytesMut;
 use tokio_util::codec::Decoder;
 
@@ -87,6 +70,14 @@ impl Decoder for MessageReceiver {
 mod tests {
   use super::*;
   use crate::messages::header::Header;
+  use crate::messages::submessages::submessage_kind::SubmessageKind;
+  use crate::messages::submessages::submessage_header::SubmessageHeader;
+  use crate::messages::submessages::submessage_flag::SubmessageFlag;
+  use crate::messages::submessages::ack_nack::AckNack;
+  use crate::structure::entity::EntityId;
+  use crate::structure::sequence_number::SequenceNumber;
+  use crate::structure::sequence_number::SequenceNumberSet;
+  use speedy::{Writable, Endianness};
 
   struct EntitySubmessageIterator {
     message_receiver: MessageReceiver,
