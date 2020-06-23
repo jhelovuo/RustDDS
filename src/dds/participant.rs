@@ -9,18 +9,28 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
 use crate::dds::reader::Reader;
+use crate::dds::pubsub::*;
 use crate::structure::result::*;
+
 
 pub struct DomainParticipant {
   add_udp_sender_channel: mio_channel::Sender<(Token, UDPListener)>,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 }
 
-pub struct Publisher {} // placeholders
-pub struct Subscriber {}
-pub struct Topic {}
-pub struct QosPolicies {}
-pub struct TypeDesc {}
+// This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
+pub trait HasQoSPolicy {
+  fn get_qos<'a>(self) -> &'a QosPolicies;
+  fn set_qos(self, new_qos: &QosPolicies) -> Result<()>;
+}
+
+
+pub struct Topic {} // placeholders: move these to separate modules as needed
+pub struct QosPolicies {} // placeholders
+pub struct TypeDesc {} // placeholders
+pub struct DataReader {} // placeholders
+pub struct DataWriter {} // placeholders
+
 
 impl DomainParticipant {
   pub fn new() -> DomainParticipant {
@@ -44,11 +54,11 @@ impl DomainParticipant {
   // There are no delete function for publisher or subscriber. Deletion is performed by
   // deleting the Publisher or Subscriber object, who upon deletion will notify
   // the DomainParticipant.
-  pub fn create_publisher(self, _qos: QosPolicies) -> Result<Publisher> {
+  pub fn create_publisher<'a>(&'a self, _qos: QosPolicies) -> Result<Publisher<'a>> {
     unimplemented!()
   }
 
-  pub fn create_subsrciber(self, _qos: QosPolicies) -> Result<Subscriber> {
+  pub fn create_subsrciber<'a>(&'a self, _qos: QosPolicies) -> Result<Subscriber<'a>> {
     unimplemented!()
   }
 
@@ -84,6 +94,8 @@ impl DomainParticipant {
     }
   }
 } // impl
+
+
 
 #[cfg(test)]
 mod tests {
