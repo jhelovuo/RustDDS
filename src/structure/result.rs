@@ -20,3 +20,29 @@ pub enum Error {
   IllegalOperation,
   //NoData,  // this should be encoded as Option<SomeData>, not an error code
 }
+
+pub struct LivelinessLostStatus {
+  total_count: i32,
+  total_count_change: i32,
+}
+
+pub struct OfferedDeadlineMissedStatus {
+  total_count: i32,
+  total_count_change: i32,
+  // last_instance_hadle field should be here  
+}
+
+pub struct OfferedIncompatibelQosStatus {
+  total_count: i32,
+  total_count_change: i32,
+  //TODO: last_policy_id: QosPolicyId_t
+  //TODO: policies: QosPolicyCountSeq
+}
+
+pub struct PublicationMatchedStatus {
+  total_count: i32,
+  total_count_change: i32,
+  current_count: i32,
+  current_count_change: i32,
+  // last_instance_hadle field should be here  
+}

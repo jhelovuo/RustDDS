@@ -1,8 +1,12 @@
 use std::time::Duration;
 
+use serde::{Serialize, Deserialize};
+
 use crate::structure::result::*;
+use crate::structure::time::Timestamp;
 
 use crate::dds::participant::*;
+use crate::dds::key::*;
 
 pub struct Publisher<'a> {
   my_domainparticipant: &'a DomainParticipant,
@@ -18,7 +22,7 @@ pub struct Subscriber<'a> {
 // public interface for Publisher
 impl<'a> Publisher<'a> 
 {
-  pub fn create_datawriter() -> Result<DataWriter> {
+  pub fn create_datawriter<'p,D>() -> Result<DataWriter<'p>> {
     unimplemented!();
   }
 
@@ -52,3 +56,57 @@ impl<'a> Publisher<'a>
 
 } 
 
+pub struct DataReader {
+
+} 
+
+pub struct DataWriter<'p>
+{
+  my_publisher: &'p Publisher<'p>,
+} 
+
+impl<'p> DataWriter<'p>
+{
+  // Instance registration operations:
+  // * register_instance (_with_timestamp)
+  // * unregister_instance (_with_timestamp)
+  // * get_key_value  (InstanceHandle --> Key)
+  // * lookup_instance (Key --> InstanceHandle)
+  // Do not implement these until there is a clear use case.
+
+  // write (with timestamp)
+  // This operation could take also in InstanceHandle, if we would use them.
+  // The _with_timestamp version is covered by the optional timestamp.
+  pub fn write<D>(&self, data: D, source_timestamp: Option<Timestamp>)
+    where D : Serialize + Keyed
+    {}
+
+  // dispose
+  // The data item is given only for identification, i.e. extracting the key
+  pub fn dispose<D>(&self, data: &D, source_timestamp: Option<Timestamp>)
+    where D : Serialize + Keyed
+  {}
+
+  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
+    unimplemented!();
+  }
+
+  // status queries
+  pub fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> { unimplemented!() }
+  pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> { unimplemented!() }
+  pub fn get_offered_incompatibel_qos_status(&self) -> Result<OfferedIncompatibelQosStatus> { unimplemented!() }
+  pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> { unimplemented!() }
+
+  // who are we connected to?
+  pub fn get_topic(&self) -> &Topic { unimplemented!() }
+  pub fn get_publisher(&self) -> &Publisher { self.my_publisher }
+
+  pub fn assert_liveliness(&self) -> Result<()> { unimplemented!() }
+
+  // This shoudl really return InstanceHandles pointing to a BuiltInTopic reader
+  //  but let's see if we can do without those handles.
+  pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> { unimplemented!() }
+  // This one function provides both get_matched_subscrptions and get_matched_subscription_data
+  // TODO: Maybe we could return references to the subscription data to avoid copying?
+  // But then what if the result set changes while the application processes it?
+}

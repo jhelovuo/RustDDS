@@ -2,7 +2,7 @@
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
 use std::hash::Hash;
 
-trait Keyed<T>
+pub trait Keyed
 where
   Self::K: Key,
 {
@@ -10,6 +10,13 @@ where
   fn get_key(self) -> Self::K;
 }
 
-trait Key: Eq + PartialEq + PartialOrd + Ord + Hash {
+pub trait Key: Eq + PartialEq + PartialOrd + Ord + Hash {
   // no methods
+}
+
+
+// Key type to identicy data instances in builtin topics
+pub struct BuiltInTopicKey {
+  // IDL PSM (2.3.3, pg 138) uses array of 3x long to implement this
+  value: [i32;3]
 }

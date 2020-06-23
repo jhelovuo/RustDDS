@@ -33,8 +33,7 @@ pub struct Topic {} // placeholders: move these to separate modules as needed
 pub struct QosPolicies {} // placeholders
 
 pub struct TypeDesc {} // placeholders
-pub struct DataReader {} // placeholders
-pub struct DataWriter {} // placeholders
+pub struct SubscriptionBuiltinTopicData {} // placeholder
 
 
 impl DomainParticipant {
