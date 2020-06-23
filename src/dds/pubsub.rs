@@ -6,7 +6,10 @@ use crate::dds::participant::*;
 
 pub struct Publisher<'a> {
   my_domainparticipant: &'a DomainParticipant,
-} 
+  my_qos_policies: QosPolicies,
+  default_datawriter_qos: QosPolicies,  // used when creating a new DataWriter
+}
+
 pub struct Subscriber<'a> {
   my_domainparticipant: &'a DomainParticipant,
 }
@@ -30,6 +33,7 @@ impl<'a> Publisher<'a>
 
   // coherent change set
   // In case such QoS is not supported, these should be no-ops.
+  // TODO: Implement these when coherent change-sets are supported.
   pub fn begin_coherent_changes(&self) -> Result<()> { Ok(()) }
   pub fn end_coherent_changes(&self) -> Result<()> { Ok(()) }
 
@@ -43,7 +47,8 @@ impl<'a> Publisher<'a>
 
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
 
-  
+  pub fn get_default_datawriter_qos(&self) -> QosPolicies { self.default_datawriter_qos.clone() }
+  pub fn set_default_datawriter_qos(&mut self, q: QosPolicies) { self.default_datawriter_qos = q; }
 
 } 
 

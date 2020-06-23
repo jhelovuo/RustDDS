@@ -26,7 +26,10 @@ pub trait HasQoSPolicy {
 
 
 pub struct Topic {} // placeholders: move these to separate modules as needed
+
+#[derive(Clone)]
 pub struct QosPolicies {} // placeholders
+
 pub struct TypeDesc {} // placeholders
 pub struct DataReader {} // placeholders
 pub struct DataWriter {} // placeholders
