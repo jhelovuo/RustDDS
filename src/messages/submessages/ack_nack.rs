@@ -1,4 +1,4 @@
-use crate::structure::entity::EntityId;
+use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumberSet;
 use speedy::{Readable, Writable};
 

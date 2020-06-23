@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::io;
 
@@ -29,7 +28,7 @@ impl UDPListener {
 
     UDPListener {
       socket: socket,
-      token: Token(1),
+      token: token,
     }
   }
 
@@ -46,7 +45,7 @@ impl UDPListener {
   pub fn get_message(&self) -> Vec<u8> {
     let mut message: Vec<u8> = vec![];
     let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    if let Ok((nbytes, address)) = self.socket.recv_from(&mut buf) {
+    if let Ok((nbytes, _address)) = self.socket.recv_from(&mut buf) {
       message = buf[..nbytes].to_vec();
     }
     message
@@ -82,8 +81,8 @@ mod tests {
 
   #[test]
   fn udpl_single_address() {
-    let mut listener = UDPListener::new(Token(0), "127.0.0.1", 10001);
-    let mut sender = UDPSender::new(11001);
+    let listener = UDPListener::new(Token(0), "127.0.0.1", 10001);
+    let sender = UDPSender::new(11001);
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
@@ -99,21 +98,21 @@ mod tests {
   // TODO: there is something wrong with this test (possibly inability actually send or receive multicast)
   // #[test]
   fn udpl_multicast_address() {
-    let mut listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
-    let mut sender = UDPSender::new(11002);
+    let listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
+    let sender = UDPSender::new(11002);
 
     let data: Vec<u8> = vec![2, 4, 6];
 
     // still need to use the same port
     let ipmcaddr = Ipv4Addr::new(240, 0, 0, 12);
     let mcaddr = vec![SocketAddr::new("224.0.0.12".parse().unwrap(), 10002)];
-    listener.join_multicast(&ipmcaddr);
+    listener.join_multicast(&ipmcaddr).unwrap();
 
     sender.send_to_all(&data, &mcaddr);
 
     let rec_data = listener.get_message();
 
-    listener.leave_multicast(&ipmcaddr);
+    listener.leave_multicast(&ipmcaddr).unwrap();
 
     assert_eq!(rec_data.len(), 3);
     assert_eq!(rec_data, data);

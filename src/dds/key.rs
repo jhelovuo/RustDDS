@@ -4,14 +4,12 @@ use std::hash::Hash;
 
 trait Keyed<T>
 where
-  Self::K : Key,
+  Self::K: Key,
 {
   type K; // key type
   fn get_key(self) -> Self::K;
 }
 
-trait Key : Eq + PartialEq + PartialOrd + Ord + Hash
-{
+trait Key: Eq + PartialEq + PartialOrd + Ord + Hash {
   // no methods
 }
-

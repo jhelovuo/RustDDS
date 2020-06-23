@@ -6,14 +6,16 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::network::udp_listener::UDPListener;
-use crate::network::constant::*;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
 use crate::dds::reader::Reader;
 use crate::dds::pubsub::*;
 use crate::structure::result::*;
+use crate::structure::entity::{Entity, EntityAttributes};
+use crate::structure::guid::GUID;
 
 
 pub struct DomainParticipant {
+  entity_attributes: EntityAttributes,
   add_udp_sender_channel: mio_channel::Sender<(Token, UDPListener)>,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 }
@@ -47,6 +49,7 @@ impl DomainParticipant {
     let ev_wrapper = DPEventWrapper::new(add_listener_channel_receiver, listeners, targets);
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
     DomainParticipant {
+      entity_attributes: EntityAttributes { guid: GUID::new() },
       add_udp_sender_channel: add_listener_channel_sender,
       reader_binds: HashMap::new(),
     }
@@ -98,7 +101,11 @@ impl DomainParticipant {
   }
 } // impl
 
-
+impl Entity for DomainParticipant {
+  fn as_entity(&self) -> &EntityAttributes {
+    &self.entity_attributes
+  }
+}
 
 #[cfg(test)]
 mod tests {
@@ -106,7 +113,7 @@ mod tests {
 
   use std::net::SocketAddr;
   use crate::network::udp_sender::UDPSender;
-
+  use crate::network::constant::START_FREE_TOKENS;
   // TODO: improve basic test when more or the structure is known
   #[test]
   fn dp_basic_domain_participant() {
@@ -116,7 +123,7 @@ mod tests {
     let listener = UDPListener::new(token.clone(), "127.0.0.1", 10401);
     dp.add_listener(token, listener);
 
-    let mut sender = UDPSender::new(11401);
+    let sender = UDPSender::new(11401);
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
     let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 10401)];

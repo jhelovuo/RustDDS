@@ -1,10 +1,9 @@
 use mio::{Poll, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::network::udp_listener::UDPListener;
-use crate::network::udp_sender::UDPSender;
 use crate::network::constant::*;
 
 pub struct DPEventWrapper {

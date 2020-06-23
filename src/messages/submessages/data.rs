@@ -1,6 +1,6 @@
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::structure::entity::EntityId;
+use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)

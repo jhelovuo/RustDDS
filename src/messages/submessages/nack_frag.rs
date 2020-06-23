@@ -1,5 +1,5 @@
 use crate::messages::fragment_number_set::FragmentNumberSet;
-use crate::structure::entity::EntityId;
+use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
 use speedy::{Readable, Writable};
 

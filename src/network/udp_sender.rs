@@ -1,8 +1,6 @@
 use mio::net::UdpSocket;
-use mio::Token;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::collections::HashSet;
 use std::io;
 
 pub struct UDPSender {
@@ -42,11 +40,12 @@ impl UDPSender {
 mod tests {
   use super::*;
   use crate::network::udp_listener::*;
+  use mio::Token;
 
   #[test]
   fn udps_single_send() {
-    let mut listener = UDPListener::new(Token(0), "127.0.0.1", 10201);
-    let mut sender = UDPSender::new(11201);
+    let listener = UDPListener::new(Token(0), "127.0.0.1", 10201);
+    let sender = UDPSender::new(11201);
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
@@ -61,9 +60,9 @@ mod tests {
 
   #[test]
   fn udps_multi_send() {
-    let mut listener_1 = UDPListener::new(Token(0), "127.0.0.1", 10301);
-    let mut listener_2 = UDPListener::new(Token(1), "127.0.0.1", 10302);
-    let mut sender = UDPSender::new(11301);
+    let listener_1 = UDPListener::new(Token(0), "127.0.0.1", 10301);
+    let listener_2 = UDPListener::new(Token(1), "127.0.0.1", 10302);
+    let sender = UDPSender::new(11301);
 
     let data: Vec<u8> = vec![5, 4, 3, 2, 1, 0];
 

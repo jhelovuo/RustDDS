@@ -1,7 +1,7 @@
 use crate::messages::fragment_number::FragmentNumber;
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::structure::entity::EntityId;
+use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
 
 /// The DataFrag Submessage extends the Data Submessage by enabling the

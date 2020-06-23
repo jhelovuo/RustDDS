@@ -49,7 +49,7 @@ impl HistoryCache {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::structure::entity::EntityId;
+  use crate::structure::guid::EntityId;
   use crate::structure::guid::GuidPrefix;
   use crate::structure::cache_change::ChangeKind;
   use crate::structure::guid::GUID;

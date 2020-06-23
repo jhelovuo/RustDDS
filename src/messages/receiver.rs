@@ -74,7 +74,7 @@ mod tests {
   use crate::messages::submessages::submessage_header::SubmessageHeader;
   use crate::messages::submessages::submessage_flag::SubmessageFlag;
   use crate::messages::submessages::ack_nack::AckNack;
-  use crate::structure::entity::EntityId;
+  use crate::structure::guid::EntityId;
   use crate::structure::sequence_number::SequenceNumber;
   use crate::structure::sequence_number::SequenceNumberSet;
   use speedy::{Writable, Endianness};

@@ -10,6 +10,7 @@ extern crate num_derive;
 extern crate num_traits;
 extern crate speedy;
 extern crate tokio_util;
+extern crate uuid;
 
 #[macro_use]
 mod serialization_test;
