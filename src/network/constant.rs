@@ -1,11 +1,13 @@
 use mio::Token;
 
 pub const STOP_POLL_TOKEN: Token = Token(0);
-pub const ADD_UDP_LISTENER_TOKEN: Token = Token(1);
-pub const REMOVE_UDP_LISTENER_TOKEN: Token = Token(2);
-pub const ADD_UDP_SENDER_TOKEN: Token = Token(3);
-pub const REMOVE_UDP_SENDER_TOKEN: Token = Token(4);
+
+pub const DISCOVERY_SENDER_TOKEN: Token = Token(1);
+pub const USER_TRAFFIC_SENDER_TOKEN: Token = Token(2);
 
 pub const DATA_SEND_TOKEN: Token = Token(5);
 
-pub const START_FREE_TOKENS: Token = Token(6);
+pub const DISCOVERY_LISTENER_TOKEN: Token = Token(6);
+pub const DISCOVERY_MUL_LISTENER_TOKEN: Token = Token(7);
+pub const USER_TRAFFIC_LISTENER_TOKEN: Token = Token(8);
+pub const USER_TRAFFIC_MUL_LISTENER_TOKEN: Token = Token(9);

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::network::udp_listener::UDPListener;
+use crate::network::constant::*;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
 use crate::dds::reader::Reader;
 use crate::dds::pubsub::*;
@@ -13,10 +14,10 @@ use crate::dds::topic::*;
 use crate::structure::result::*;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
+use std::net::Ipv4Addr;
 
 pub struct DomainParticipant {
   entity_attributes: EntityAttributes,
-  add_udp_sender_channel: mio_channel::Sender<(Token, UDPListener)>,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 }
 
@@ -35,19 +36,39 @@ pub struct TypeDesc {} // placeholders
 pub struct SubscriptionBuiltinTopicData {} // placeholder
 
 impl DomainParticipant {
+  // TODO: there might be a need to set participant id (thus calculating ports accordingly)
   pub fn new() -> DomainParticipant {
-    // TODO: add mandatory DDS upd listeners and accompanying targets
+    let discovery_multicast_listener =
+      UDPListener::new(DISCOVERY_MUL_LISTENER_TOKEN, "0.0.0.0", 7400);
+    discovery_multicast_listener
+      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
+      .expect("Unable to join multicast 239.255.0.1:7400");
 
-    // TODO: send add_listener_channel_sender to all places it's needed
-    let (add_listener_channel_sender, add_listener_channel_receiver) = mio_channel::channel();
+    let discovery_listener = UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
 
-    let listeners = HashMap::new();
+    let user_traffic_multicast_listener =
+      UDPListener::new(USER_TRAFFIC_MUL_LISTENER_TOKEN, "0.0.0.0", 7401);
+    user_traffic_multicast_listener
+      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
+      .expect("Unable to join multicast 239.255.0.1:7401");
+
+    let user_traffic_listener = UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
+
+    let mut listeners = HashMap::new();
+    listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
+    listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
+    listeners.insert(
+      USER_TRAFFIC_MUL_LISTENER_TOKEN,
+      user_traffic_multicast_listener,
+    );
+    listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
+
     let targets = HashMap::new();
-    let ev_wrapper = DPEventWrapper::new(add_listener_channel_receiver, listeners, targets);
+
+    let ev_wrapper = DPEventWrapper::new(listeners, targets);
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
     DomainParticipant {
       entity_attributes: EntityAttributes { guid: GUID::new() },
-      add_udp_sender_channel: add_listener_channel_sender,
       reader_binds: HashMap::new(),
     }
   }
@@ -88,14 +109,6 @@ impl DomainParticipant {
   pub fn assert_liveliness(self) {
     unimplemented!()
   }
-
-  pub fn add_listener(&self, token: Token, listener: UDPListener) {
-    let ss = self.add_udp_sender_channel.send((token, listener));
-    match ss {
-      Ok(_) => return,
-      Err(e) => println!("{}", e.to_string()),
-    }
-  }
 } // impl
 
 impl Entity for DomainParticipant {
@@ -110,20 +123,15 @@ mod tests {
 
   use std::net::SocketAddr;
   use crate::network::udp_sender::UDPSender;
-  use crate::network::constant::START_FREE_TOKENS;
   // TODO: improve basic test when more or the structure is known
   #[test]
   fn dp_basic_domain_participant() {
     let dp = DomainParticipant::new();
 
-    let token = START_FREE_TOKENS;
-    let listener = UDPListener::new(token.clone(), "127.0.0.1", 10401);
-    dp.add_listener(token, listener);
-
     let sender = UDPSender::new(11401);
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
-    let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 10401)];
+    let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 7412)];
     sender.send_to_all(&data, &addrs);
 
     // TODO: get result data from Reader
