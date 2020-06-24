@@ -17,10 +17,6 @@ pub struct Publisher<'a> {
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
 }
 
-pub struct Subscriber<'a> {
-  my_domainparticipant: &'a DomainParticipant,
-}
-
 // public interface for Publisher
 impl<'a> Publisher<'a> {
   pub fn create_datawriter<'p, D>(

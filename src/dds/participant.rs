@@ -27,8 +27,6 @@ pub trait HasQoSPolicy {
   fn set_qos(self, new_qos: &QosPolicies) -> Result<()>;
 }
 
-pub struct Topic {} // placeholders: move these to separate modules as needed
-
 #[derive(Clone)]
 pub struct QosPolicies {} // placeholders
 
@@ -87,7 +85,12 @@ impl DomainParticipant {
   }
 
   // Topic creation. Data types should be handled as something (potentially) more structured than a String.
-  pub fn create_topic<'a>(&'a self, _name: &str, _type_desc: TypeDesc, _qos: QosPolicies) -> Result<Topic<'a>> {
+  pub fn create_topic<'a>(
+    &'a self,
+    _name: &str,
+    _type_desc: TypeDesc,
+    _qos: QosPolicies,
+  ) -> Result<Topic<'a>> {
     unimplemented!()
   }
 
