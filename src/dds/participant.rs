@@ -9,6 +9,7 @@ use crate::network::udp_listener::UDPListener;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
 use crate::dds::reader::Reader;
 use crate::dds::pubsub::*;
+use crate::dds::topic::*;
 use crate::structure::result::*;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
@@ -27,7 +28,7 @@ pub trait HasQoSPolicy {
 }
 
 
-pub struct Topic {} // placeholders: move these to separate modules as needed
+
 
 #[derive(Clone)]
 pub struct QosPolicies {} // placeholders
@@ -68,7 +69,7 @@ impl DomainParticipant {
   }
 
   // Topic creation. Data types should be handled as something (potentially) more structured than a String.
-  pub fn create_topic(self, _name: &str, _type_desc: TypeDesc, _qos: QosPolicies) -> Result<Topic> {
+  pub fn create_topic<'a>(&'a self, _name: &str, _type_desc: TypeDesc, _qos: QosPolicies) -> Result<Topic<'a>> {
     unimplemented!()
   }
 

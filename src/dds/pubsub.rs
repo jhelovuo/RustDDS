@@ -6,7 +6,11 @@ use crate::structure::result::*;
 use crate::structure::time::Timestamp;
 
 use crate::dds::participant::*;
+use crate::dds::topic::*;
 use crate::dds::key::*;
+
+
+// -------------------------------------------------------------------
 
 pub struct Publisher<'a> {
   my_domainparticipant: &'a DomainParticipant,
@@ -14,15 +18,11 @@ pub struct Publisher<'a> {
   default_datawriter_qos: QosPolicies,  // used when creating a new DataWriter
 }
 
-pub struct Subscriber<'a> {
-  my_domainparticipant: &'a DomainParticipant,
-}
-
 
 // public interface for Publisher
 impl<'a> Publisher<'a> 
 {
-  pub fn create_datawriter<'p,D>() -> Result<DataWriter<'p>> {
+  pub fn create_datawriter<'p,D>(&self, a_topic: &Topic, qos: QosPolicies) -> Result<DataWriter<'p>> {
     unimplemented!();
   }
 
@@ -56,13 +56,30 @@ impl<'a> Publisher<'a>
 
 } 
 
-pub struct DataReader {
+// -------------------------------------------------------------------
 
+pub struct Subscriber<'a> {
+  my_domainparticipant: &'a DomainParticipant,
+}
+
+impl<'a> Subscriber<'a> 
+{
+  pub fn create_datareader<'p,D>(&self, a_topic: &Topic, qos: QosPolicies) -> Result<DataReader<'p>> {
+    unimplemented!();
+  }
+}
+
+// -------------------------------------------------------------------
+
+pub struct DataReader<'s> {
+  my_subscriber: &'s Subscriber<'s>,
+  // TODO: rest of fields
 } 
 
 pub struct DataWriter<'p>
 {
   my_publisher: &'p Publisher<'p>,
+  my_topic: &'p Topic<'p>,
 } 
 
 impl<'p> DataWriter<'p>
@@ -72,9 +89,9 @@ impl<'p> DataWriter<'p>
   // * unregister_instance (_with_timestamp)
   // * get_key_value  (InstanceHandle --> Key)
   // * lookup_instance (Key --> InstanceHandle)
-  // Do not implement these until there is a clear use case.
+  // Do not implement these until there is a clear use case for InstanceHandle type.
 
-  // write (with timestamp)
+  // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
   pub fn write<D>(&self, data: D, source_timestamp: Option<Timestamp>)
