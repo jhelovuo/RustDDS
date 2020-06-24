@@ -2,13 +2,14 @@ use std::time::Duration;
 
 use serde::{Serialize, Deserialize};
 
-use crate::structure::result::*;
 use crate::structure::time::Timestamp;
 
+use crate::dds::result::*;
 use crate::dds::participant::*;
 use crate::dds::topic::*;
 use crate::dds::key::*;
-
+use crate::dds::typedesc::*;
+use crate::dds::qos::*;
 // -------------------------------------------------------------------
 
 pub struct Publisher<'a> {

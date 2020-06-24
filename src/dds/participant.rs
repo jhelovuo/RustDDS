@@ -11,7 +11,9 @@ use crate::dds::dp_event_wrapper::DPEventWrapper;
 use crate::dds::reader::Reader;
 use crate::dds::pubsub::*;
 use crate::dds::topic::*;
-use crate::structure::result::*;
+use crate::dds::typedesc::*;
+use crate::dds::qos::*;
+use crate::dds::result::*;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
 use std::net::Ipv4Addr;
@@ -21,16 +23,8 @@ pub struct DomainParticipant {
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 }
 
-// This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
-pub trait HasQoSPolicy {
-  fn get_qos<'a>(self) -> &'a QosPolicies;
-  fn set_qos(self, new_qos: &QosPolicies) -> Result<()>;
-}
 
-#[derive(Clone)]
-pub struct QosPolicies {} // placeholders
 
-pub struct TypeDesc {} // placeholders
 pub struct SubscriptionBuiltinTopicData {} // placeholder
 
 impl DomainParticipant {
@@ -85,6 +79,9 @@ impl DomainParticipant {
   }
 
   // Topic creation. Data types should be handled as something (potentially) more structured than a String.
+  // NOTE: Here we are using &str for topic name. &str is Unicode string, whereas DDS specifes topic name
+  // to be a sequence of octets, which would be &[u8] in Rust. This may cause problems if there are topic names
+  // with non-ASCII characters. On the other hand, string handling with &str is easier in Rust.
   pub fn create_topic<'a>(
     &'a self,
     _name: &str,
