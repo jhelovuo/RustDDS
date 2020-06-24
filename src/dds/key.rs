@@ -14,9 +14,8 @@ pub trait Key: Eq + PartialEq + PartialOrd + Ord + Hash {
   // no methods
 }
 
-
 // Key type to identicy data instances in builtin topics
 pub struct BuiltInTopicKey {
   // IDL PSM (2.3.3, pg 138) uses array of 3x long to implement this
-  value: [i32;3]
+  value: [i32; 3],
 }

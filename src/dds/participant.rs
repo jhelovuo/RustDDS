@@ -14,7 +14,6 @@ use crate::structure::result::*;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
 
-
 pub struct DomainParticipant {
   entity_attributes: EntityAttributes,
   add_udp_sender_channel: mio_channel::Sender<(Token, UDPListener)>,
@@ -27,15 +26,13 @@ pub trait HasQoSPolicy {
   fn set_qos(self, new_qos: &QosPolicies) -> Result<()>;
 }
 
-
-
+pub struct Topic {} // placeholders: move these to separate modules as needed
 
 #[derive(Clone)]
 pub struct QosPolicies {} // placeholders
 
 pub struct TypeDesc {} // placeholders
 pub struct SubscriptionBuiltinTopicData {} // placeholder
-
 
 impl DomainParticipant {
   pub fn new() -> DomainParticipant {
