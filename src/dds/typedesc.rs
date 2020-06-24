@@ -1,3 +1,5 @@
+// TODO: rename this module to e.g. samples
+
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct TypeDesc {
@@ -7,3 +9,6 @@ pub struct TypeDesc {
 impl TypeDesc {
   pub fn name(&self) -> &str { &self.my_name }
 }
+
+#[derive(Clone)]
+pub struct SampleInfo {}  // placeholder

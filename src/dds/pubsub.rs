@@ -22,8 +22,8 @@ pub struct Publisher<'a> {
 impl<'a> Publisher<'a> {
   pub fn create_datawriter<'p, D>(
     &self,
-    a_topic: &Topic,
-    qos: QosPolicies,
+    _a_topic: &Topic,
+    _qos: QosPolicies,
   ) -> Result<DataWriter<'p>> {
     unimplemented!();
   }
@@ -52,7 +52,7 @@ impl<'a> Publisher<'a> {
   }
 
   // Wait for all matched reliable DataReaders acknowledge data written so far, or timeout.
-  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
+  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     unimplemented!();
   }
 
@@ -80,8 +80,8 @@ pub struct Subscriber<'a> {
 impl<'a> Subscriber<'a> {
   pub fn create_datareader<'p, D>(
     &self,
-    a_topic: &Topic,
-    qos: QosPolicies,
+    _a_topic: &Topic,
+    _qos: QosPolicies,
   ) -> Result<DataReader<'p>> {
     unimplemented!();
   }
@@ -93,6 +93,22 @@ pub struct DataReader<'s> {
   my_subscriber: &'s Subscriber<'s>,
   // TODO: rest of fields
 }
+
+impl <'s> DataReader<'s> {
+  pub fn read<D>(&self, _max_samples: i32) -> Result<Vec<(D,SampleInfo)>>
+  where D: Deserialize<'s> + Keyed, 
+  { 
+    unimplemented!() 
+  }
+
+  pub fn take<D>(&self, _max_samples: i32) -> Result<Vec<(D,SampleInfo)>>
+  where D: Deserialize<'s> + Keyed, 
+  { 
+    unimplemented!() 
+  }
+
+
+} // impl 
 
 pub struct DataWriter<'p> {
   my_publisher: &'p Publisher<'p>,
@@ -110,7 +126,7 @@ impl<'p> DataWriter<'p> {
   // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
-  pub fn write<D>(&self, data: D, source_timestamp: Option<Timestamp>)
+  pub fn write<D>(&self, _data: D, _source_timestamp: Option<Timestamp>)
   where
     D: Serialize + Keyed,
   {
@@ -118,13 +134,13 @@ impl<'p> DataWriter<'p> {
 
   // dispose
   // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose<D>(&self, data: &D, source_timestamp: Option<Timestamp>)
+  pub fn dispose<D>(&self, _data: &D, _source_timestamp: Option<Timestamp>)
   where
     D: Serialize + Keyed,
   {
   }
 
-  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
+  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     unimplemented!();
   }
 
