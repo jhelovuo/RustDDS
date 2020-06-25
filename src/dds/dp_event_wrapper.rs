@@ -42,7 +42,7 @@ impl DPEventWrapper {
     }
   }
 
-  pub fn event_loop(ev_wrapper: DPEventWrapper) {
+  pub fn event_loop(mut ev_wrapper: DPEventWrapper) {
     loop {
       let mut events = Events::with_capacity(1024);
 
@@ -66,7 +66,7 @@ impl DPEventWrapper {
     event.token() == DISCOVERY_SENDER_TOKEN || event.token() == USER_TRAFFIC_SENDER_TOKEN
   }
 
-  pub fn handle_udp_traffic(&self, event: &Event) {
+  pub fn handle_udp_traffic(&mut self, event: &Event) {
     let listener = self.udp_listeners.get(&event.token());
       match listener {
         Some(l) => loop {
