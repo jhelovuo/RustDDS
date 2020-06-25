@@ -4,6 +4,7 @@ use crate::dds::participant::*;
 //use crate::dds::key::*;
 use crate::dds::typedesc::*;
 use crate::dds::qos::*;
+use crate::dds::result::*;
 
 pub trait TopicDescription {
   fn get_participant(&self) -> &DomainParticipant;
@@ -34,4 +35,8 @@ impl<'a> TopicDescription for Topic<'a> {
 }
 
 
-impl<'a> Topic<'a> {}
+impl<'a> Topic<'a> {
+  // DDS spec 2.2.2.3.2 Topic Class
+  // specifies only method get_inconsistent_topic_status
+  pub fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> { unimplemented!() }
+}

@@ -21,28 +21,73 @@ pub enum Error {
   //NoData,  // this should be encoded as Option<SomeData>, not an error code
 }
 
+
+//TODO: Since most of the struct below have (sub)structure (count , count_change), that should be made into
+// a separate structure, which is then a component of these structs.
+
+pub struct InconsistentTopicStatus {
+  pub total_count: i32,
+  pub total_count_change: i32,  
+}
+
+pub struct SampleLostStatus {
+  pub total_count: i32,
+  pub total_count_change: i32,  
+}
+
+// This replaces SampleRejectedStatusKind
+pub enum SampleRejectedReason {
+  InstancesLimit, SamplesLimit, SamplesPerInstanceLimit
+}
+
+pub struct SampleRejectedStatus {
+  pub total_count: i32,
+  pub total_count_change: i32,  
+  pub last_reason: Option<SampleRejectedReason>,  // None == NOT_REJECTED
+  // missing: last_instance_handle: InstanceHandle pointing to last rejected (what?)
+}
+
 pub struct LivelinessLostStatus {
-  total_count: i32,
-  total_count_change: i32,
+  pub total_count: i32,
+  pub total_count_change: i32,
 }
 
 pub struct OfferedDeadlineMissedStatus {
-  total_count: i32,
-  total_count_change: i32,
+  pub total_count: i32,
+  pub total_count_change: i32,
   // last_instance_hadle field should be here  
 }
 
+
+
+
 pub struct OfferedIncompatibelQosStatus {
-  total_count: i32,
-  total_count_change: i32,
+  pub total_count: i32,
+  pub total_count_change: i32,
   //TODO: last_policy_id: QosPolicyId_t
   //TODO: policies: QosPolicyCountSeq
 }
 
+pub struct RequestedIncompatibelQosStatus {
+  pub total_count: i32,
+  pub total_count_change: i32,
+  //TODO: last_policy_id: QosPolicyId_t
+  //TODO: policies: QosPolicyCountSeq
+}
+
+
 pub struct PublicationMatchedStatus {
-  total_count: i32,
-  total_count_change: i32,
-  current_count: i32,
-  current_count_change: i32,
+  pub total_count: i32,
+  pub total_count_change: i32,
+  pub current_count: i32,
+  pub current_count_change: i32,
+  // last_instance_hadle field should be here  
+}
+
+pub struct SubscriptionMatchedStatus {
+  pub total_count: i32,
+  pub total_count_change: i32,
+  pub current_count: i32,
+  pub current_count_change: i32,
   // last_instance_hadle field should be here  
 }
