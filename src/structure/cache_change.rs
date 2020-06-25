@@ -18,5 +18,5 @@ pub struct CacheChange {
   pub writer_guid: GUID,
   pub instance_handle: InstanceHandle,
   pub sequence_number: SequenceNumber,
-  pub data_value: Data,
+  pub data_value: Option<Data>,
 }

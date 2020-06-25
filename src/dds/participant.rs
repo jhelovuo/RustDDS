@@ -23,8 +23,6 @@ pub struct DomainParticipant {
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 }
 
-
-
 pub struct SubscriptionBuiltinTopicData {} // placeholder
 
 impl DomainParticipant {

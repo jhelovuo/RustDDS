@@ -12,7 +12,6 @@ pub trait TopicDescription {
   fn get_name(&self) -> &str;
 }
 
-
 pub struct Topic<'a> {
   my_domainparticipant: &'a DomainParticipant,
   my_name: String,

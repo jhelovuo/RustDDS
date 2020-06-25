@@ -1,6 +1,5 @@
 use crate::dds::result::*;
 
-
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
 pub trait HasQoSPolicy {
   fn get_qos<'a>(self) -> &'a QosPolicies;
