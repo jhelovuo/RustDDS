@@ -2,11 +2,11 @@ use std::ops::{AddAssign, MulAssign, Neg};
 
 use serde::Deserialize;
 use serde::de::{
-  self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess, Visitor,
+  self, DeserializeSeed, EnumAccess, /*IntoDeserializer, MapAccess, SeqAccess,*/  VariantAccess, Visitor,
 };
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
-use serde::Deserializer;
+//use serde::Deserializer;
 
 pub struct DeserializerLittleEndian<'de> {
   input: &'de Vec<u8>,
@@ -75,7 +75,7 @@ impl<'de> DeserializerLittleEndian<'de> {
 impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
   type Error = Error;
 
-  fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
+  fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -194,14 +194,14 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     unimplemented!()
   }
 
-  fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
+  fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
     unimplemented!()
   }
 
-  fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
+  fn deserialize_unit<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -222,7 +222,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     visitor.visit_newtype_struct(self)
   }
 
-  fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value>
+  fn deserialize_seq<V>(/*mut*/ self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -248,7 +248,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     self.deserialize_seq(visitor)
   }
 
-  fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
+  fn deserialize_map<V>(/*mut*/ self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -271,7 +271,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     self,
     _name: &'static str,
     _variants: &'static [&'static str],
-    visitor: V,
+    _visitor: V,
   ) -> Result<V::Value>
   where
     V: Visitor<'de>,
@@ -308,7 +308,7 @@ impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
   type Error = Error;
   type Variant = Self;
 
-  fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
+  fn variant_seed<V>(self, _seed: V) -> Result<(V::Value, Self::Variant)>
   where
     V: DeserializeSeed<'de>,
   {
