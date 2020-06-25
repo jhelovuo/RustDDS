@@ -1,6 +1,6 @@
 use serde::{ser, Serialize};
-use serde::{de};
-use std::fmt::{self, Display};
+//use serde::{de};
+//use std::fmt::{self, Display};
 //use error::{Error, Result};
 extern crate byteorder;
 use crate::serialization::cdrSerializer::byteorder::WriteBytesExt;
@@ -146,19 +146,19 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   }
 
   // TODO FUNCTIONS AFTER THIS ARE NOT IMPLEMENTED
-  fn serialize_f32(self, v: f32) -> Result<()> {
+  fn serialize_f32(self, _v: f32) -> Result<()> {
     Ok(())
   }
-  fn serialize_f64(self, v: f64) -> Result<()> {
+  fn serialize_f64(self, _v: f64) -> Result<()> {
     Ok(())
   }
-  fn serialize_char(self, v: char) -> Result<()> {
+  fn serialize_char(self, _v: char) -> Result<()> {
     Ok(())
   }
-  fn serialize_str(self, v: &str) -> Result<()> {
+  fn serialize_str(self, _v: &str) -> Result<()> {
     Ok(())
   }
-  fn serialize_bytes(self, v: &[u8]) -> Result<()> {
+  fn serialize_bytes(self, _v: &[u8]) -> Result<()> {
     Ok(())
   }
   fn serialize_none(self) -> Result<()> {
@@ -189,7 +189,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   where
     T: ?Sized + Serialize,
   {
-    value.serialize(self);
+    value.serialize(self)?;
     Ok(())
   }
 
@@ -197,8 +197,8 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     self,
     _name: &'static str,
     _variant_index: u32,
-    variant: &'static str,
-    value: &T,
+    _variant: &'static str,
+    _value: &T,
   ) -> Result<()>
   where
     T: ?Sized + Serialize,
@@ -223,7 +223,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     self,
     _name: &'static str,
     _variant_index: u32,
-    variant: &'static str,
+    _variant: &'static str,
     _len: usize,
   ) -> Result<Self::SerializeTupleVariant> {
     Ok(self)
@@ -238,7 +238,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     self,
     _name: &'static str,
     _variant_index: u32,
-    variant: &'static str,
+    _variant: &'static str,
     _len: usize,
   ) -> Result<Self::SerializeStructVariant> {
     Ok(self)
@@ -337,8 +337,9 @@ impl<'a> ser::SerializeStruct for &'a mut SerializerLittleEndian {
   where
     T: ?Sized + Serialize,
   {
-    key.serialize(&mut **self);
-    value.serialize(&mut **self)
+    key.serialize(&mut **self)?;
+    value.serialize(&mut **self)?;
+    Ok(())
   }
 
   fn end(self) -> Result<()> {
@@ -354,8 +355,9 @@ impl<'a> ser::SerializeStructVariant for &'a mut SerializerLittleEndian {
   where
     T: ?Sized + Serialize,
   {
-    key.serialize(&mut **self);
-    value.serialize(&mut **self)
+    key.serialize(&mut **self)?;
+    value.serialize(&mut **self)?;
+    Ok(())
   }
 
   fn end(self) -> Result<()> {
