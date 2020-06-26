@@ -10,6 +10,7 @@ use crate::dds::topic::*;
 use crate::dds::key::*;
 use crate::dds::typedesc::*;
 use crate::dds::qos::*;
+use crate::dds::datasample::*;
 // -------------------------------------------------------------------
 
 pub struct Publisher<'a> {
@@ -95,13 +96,13 @@ pub struct DataReader<'s> {
 }
 
 impl <'s> DataReader<'s> {
-  pub fn read<D>(&self, _max_samples: i32) -> Result<Vec<(D,SampleInfo)>>
+  pub fn read<D>(&self, _max_samples: i32) -> Result<Vec<DataSample<D>>>
   where D: Deserialize<'s> + Keyed, 
   { 
     unimplemented!() 
   }
 
-  pub fn take<D>(&self, _max_samples: i32) -> Result<Vec<(D,SampleInfo)>>
+  pub fn take<D>(&self, _max_samples: i32) -> Result<Vec<DataSample<D>>>
   where D: Deserialize<'s> + Keyed, 
   { 
     unimplemented!() 
