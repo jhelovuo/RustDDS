@@ -32,6 +32,7 @@ enum DeserializationState {
 pub struct MessageReceiver {
   receiver: Receiver,
   state: DeserializationState,
+  pos: usize,
 }
 
 impl MessageReceiver {
@@ -59,6 +60,7 @@ impl MessageReceiver {
         timestamp: Time::TIME_INVALID,
       },
       state: DeserializationState::ReadingHeader,
+      pos: 0,
     }
   }
 
@@ -73,34 +75,49 @@ impl MessageReceiver {
       self.receiver.timestamp = Time::TIME_INVALID;
 
       self.state = DeserializationState::ReadingHeader;
+      self.pos = 0;
   }
 
-  fn is_RTPS_header(&self, msg: &Vec<u8>) -> bool {
-    if msg[0] != 'R' || msg[1] != 'T' || msg[2] != 'P' || msg[3] != 'S' {
-      // Joku viesti?
+  fn is_RTPS_header(&mut self, msg: &Vec<u8>) -> bool {
+    // First 4 bytes 'R' 'T' 'P' 'S'
+    if msg[0] != 52u8 || msg[1] != 54u8 || msg[2] != 50u8 || msg[3] != 53u8 {
+      // Error: Incorrect format
       return false;
     } 
-    true
+    self.pos += 4;
 
+    // Check and set protocl version
+    if msg[self.pos] <= ProtocolVersion::PROTOCOLVERSION.major {
+      self.receiver.source_version = ProtocolVersion {
+        major: msg[self.pos],
+        minor: msg[self.pos+1],
+      };
+      self.pos += 2;
+    } else {
+      // Error: Too new version
+      return false;
+    }
+    // Set vendor id
+    self.receiver.source_vendor_id = VendorId::read_from_buffer(
+      &msg[self.pos..self.pos+2]).unwrap();
+    self.pos += 2;
+
+    // Set source guid prefix
+    self.receiver.source_guid_prefix = GuidPrefix::read_from_buffer(
+      &msg[self.pos..self.pos+12]).unwrap();
+    true
   }
+
+
 
   pub fn handle_discovery_msg(&mut self, msg: Vec<u8>) {
 
     if msg.len() < RTPS_MESSAGE_HEADER_SIZE {
       // Error 
     }
-    
     if !self.is_RTPS_header(&msg) {
       // Error
     }
-    // First 4 bytes 'R' 'T' 'P' 'S'
-    // next 2 protool version
-    let protocol_version = ProtocolVersion { major: msg[4], minor: msg[5]};
-    // next 2 vendor id
-    let vendor_id = VendorId::read_from_buffer(&msg[6..8]).unwrap();
-    // next 12 guid prefix
-    let header = Header::read_from_buffer(&msg[8..20]).unwrap();
-
 
     self.state = DeserializationState::ReadingSubmessage;
 
