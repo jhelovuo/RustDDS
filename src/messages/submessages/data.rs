@@ -2,6 +2,7 @@ use crate::messages::submessages::submessage_elements::parameter_list::Parameter
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
+use speedy::{Readable, Writable};
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -10,7 +11,7 @@ use crate::structure::sequence_number::SequenceNumber;
 /// a data-object belonging to the RTPS Writer. The possible changes
 /// include both changes in value as well as changes to the lifecycle
 /// of the data-object.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Readable, Writable)]
 pub struct Data {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.

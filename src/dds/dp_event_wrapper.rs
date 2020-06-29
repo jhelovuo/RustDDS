@@ -77,7 +77,7 @@ impl DPEventWrapper {
           }
 
           if event.token() == DISCOVERY_SENDER_TOKEN {
-            self.message_receiver.handle_discovery_msg(data);
+            //self.message_receiver.handle_discovery_msg(data);
           } else if event.token() == USER_TRAFFIC_SENDER_TOKEN {
             self.message_receiver.handle_user_msg(data);
           }

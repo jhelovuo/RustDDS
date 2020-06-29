@@ -4,6 +4,7 @@ use crate::structure::history_cache::HistoryCache;
 use crate::messages::submessages::data::Data;
 use crate::messages::submessages::heartbeat::Heartbeat;
 
+#[derive(Debug, PartialEq)]
 pub struct Reader {
   history_cache: HistoryCache,
 } // placeholder

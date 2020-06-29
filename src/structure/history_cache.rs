@@ -1,6 +1,7 @@
 use crate::structure::cache_change::CacheChange;
 use crate::structure::sequence_number::SequenceNumber;
 
+#[derive(Debug, PartialEq)]
 pub struct HistoryCache {
   changes: Vec<CacheChange>,
 }

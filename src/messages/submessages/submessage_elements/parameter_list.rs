@@ -1,12 +1,13 @@
 use crate::messages::submessages::submessage_elements::parameter::Parameter;
+use speedy::{Context, Readable, Reader, Writable, Writer};
 
 /// ParameterList is used as part of several messages to encapsulate
 /// QoS parameters that may affect the interpretation of the message.
 /// The encapsulation of the parameters follows a mechanism that allows
 /// extensions to the QoS without breaking backwards compatibility.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Readable, Writable)]
 pub struct ParameterList {
-  parameters: Vec<Parameter>,
+  pub parameters: Vec<Parameter>,
 }
 
 /// The PID_PAD is used to enforce alignment of the parameter
