@@ -1,4 +1,5 @@
 use crate::messages::submessages::submessage_header::SubmessageHeader;
+use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessage::EntitySubmessage;
 use speedy::{Readable, Writable, Endianness};
 
@@ -8,10 +9,11 @@ use crate::messages::submessages::heartbeat::*;
 use crate::messages::submessages::heartbeat_frag::*;
 use crate::messages::submessages::nack_frag::*;
 
+
 #[derive(Debug, PartialEq)]
 pub struct SubMessage {
-  header: SubmessageHeader,
-  submessage: EntitySubmessage,
+  pub header: SubmessageHeader,
+  pub submessage: EntitySubmessage,
 }
 
 impl<'a> SubMessage
@@ -23,30 +25,37 @@ where
   }
 
   pub fn deserialize_msg(
-    msgtype: EntitySubmessage,
+    msgheader: &SubmessageHeader,
     context: Endianness,
     buffer: &'a [u8],
   ) -> Option<EntitySubmessage> {
-    match msgtype {
-      EntitySubmessage::AckNack(_, flag) => Some(EntitySubmessage::AckNack(
+    match msgheader.submessage_id {
+      SubmessageKind::PAD => None, //Todo
+      SubmessageKind::ACKNACK => Some(EntitySubmessage::AckNack(
         AckNack::read_from_buffer_with_ctx(context, buffer).unwrap(),
-        flag,
+        msgheader.flags.clone(),
       )),
-      EntitySubmessage::Data(_, _) => None,
-      EntitySubmessage::DataFrag(_, _) => None,
-      EntitySubmessage::Gap(_) => Some(EntitySubmessage::Gap(
+      SubmessageKind::HEARTBEAT => Some(EntitySubmessage::Heartbeat(
+        Heartbeat::read_from_buffer_with_ctx(context, buffer).unwrap(),
+        msgheader.flags.clone(),
+      )),
+      SubmessageKind::GAP => Some(EntitySubmessage::Gap(
         Gap::read_from_buffer_with_ctx(context, buffer).unwrap(),
       )),
-      EntitySubmessage::Heartbeat(_, flag) => Some(EntitySubmessage::Heartbeat(
-        Heartbeat::read_from_buffer_with_ctx(context, buffer).unwrap(),
-        flag,
-      )),
-      EntitySubmessage::HeartbeatFrag(_) => Some(EntitySubmessage::HeartbeatFrag(
-        HeartbeatFrag::read_from_buffer_with_ctx(context, buffer).unwrap(),
-      )),
-      EntitySubmessage::NackFrag(_) => Some(EntitySubmessage::NackFrag(
+      SubmessageKind::INFO_TS => None, //Todo
+      SubmessageKind::INFO_SRC => None, //Todo
+      SubmessageKind::INFO_REPLAY_IP4 => None, //Todo
+      SubmessageKind::INFO_DST => None, //Todo
+      SubmessageKind::INFO_REPLAY => None, //Todo
+      SubmessageKind::NACK_FRAG => Some(EntitySubmessage::NackFrag(
         NackFrag::read_from_buffer_with_ctx(context, buffer).unwrap(),
       )),
+      SubmessageKind::HEARTBEAT_FRAG => Some(EntitySubmessage::HeartbeatFrag(
+        HeartbeatFrag::read_from_buffer_with_ctx(context, buffer).unwrap(),
+      )),
+      SubmessageKind::DATA => None,
+      SubmessageKind::DATA_FRAG => None,
+      _ => None, // Tarkista tää?
     }
   }
 

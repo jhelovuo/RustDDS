@@ -55,10 +55,16 @@ impl DomainParticipant {
 
     let targets = HashMap::new();
 
-    let ev_wrapper = DPEventWrapper::new(listeners, targets);
+    let new_guid = GUID::new();
+
+    let ev_wrapper = DPEventWrapper::new(
+      listeners, 
+      targets,
+      new_guid.guidPrefix);
+      
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
     DomainParticipant {
-      entity_attributes: EntityAttributes { guid: GUID::new() },
+      entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
     }
   }

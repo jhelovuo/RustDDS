@@ -3,7 +3,7 @@ pub mod cdrSerializer;
 mod error;
 
 mod message;
-mod submessage;
+pub mod submessage;
 
 pub use message::*;
 pub use submessage::*;

@@ -7,7 +7,7 @@ use speedy::{Endianness, Readable, Writable};
 /// endianness used to encapsulate the Submessage. The remaining
 /// flags are interpreted differently depending on the kind
 /// of Submessage and are described separately for each Submessage.
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Clone)]
 pub struct SubmessageFlag {
   pub flags: u8,
 }

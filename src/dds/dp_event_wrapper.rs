@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::dds::message_receiver::MessageReceiver;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
+use crate::structure::guid::{GuidPrefix};
 
 pub struct DPEventWrapper {
   poll: Poll,
@@ -18,6 +19,7 @@ impl DPEventWrapper {
   pub fn new(
     udp_listeners: HashMap<Token, UDPListener>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
+    participant_guid_prefix: GuidPrefix,
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
 
@@ -38,7 +40,7 @@ impl DPEventWrapper {
       poll: poll,
       udp_listeners: udp_listeners,
       send_targets: send_targets,
-      message_receiver: MessageReceiver::new(),
+      message_receiver: MessageReceiver::new(participant_guid_prefix),
     }
   }
 
@@ -52,7 +54,6 @@ impl DPEventWrapper {
         .expect("Failed in waiting of poll.");
 
       for event in events.into_iter() {
-        println!("Event loop: token {:?}", event.token());
         if event.token() == STOP_POLL_TOKEN {
           return;
         } else if DPEventWrapper::is_udp_traffic(&event) {
