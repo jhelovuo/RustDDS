@@ -49,14 +49,11 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   //15.3.1.5 Boolean
   //  Boolean values are encoded as single octets, where TRUE is the value 1, and FALSE as 0.
   fn serialize_bool(self, v: bool) -> Result<()> {
-    if v {
-      self.buffer.push(1);
-      self.stringLogger += "True";
+    if v == true {
+      self.buffer.push(1u8);
     } else {
-      self.buffer.push(0);
-      self.stringLogger += "False";
+      self.buffer.push(0u8);
     }
-
     Ok(())
   }
 
@@ -145,16 +142,37 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     Ok(())
   }
 
-  // TODO FUNCTIONS AFTER THIS ARE NOT IMPLEMENTED
+  
   fn serialize_f32(self, _v: f32) -> Result<()> {
+    let v_bytes = _v.to_bits().to_le_bytes();
+    self.buffer.push(v_bytes[0]);
+    self.buffer.push(v_bytes[1]);
+    self.buffer.push(v_bytes[2]);
+    self.buffer.push(v_bytes[3]);
     Ok(())
   }
   fn serialize_f64(self, _v: f64) -> Result<()> {
+    let v_bytes = _v.to_bits().to_le_bytes();
+    self.buffer.push(v_bytes[0]);
+    self.buffer.push(v_bytes[1]);
+    self.buffer.push(v_bytes[2]);
+    self.buffer.push(v_bytes[3]);
+    self.buffer.push(v_bytes[4]);
+    self.buffer.push(v_bytes[5]);
+    self.buffer.push(v_bytes[6]);
+    self.buffer.push(v_bytes[7]);
     Ok(())
   }
+
+  // TODO FUNCTIONS AFTER THIS ARE NOT IMPLEMENTED
+
+  //An IDL character is represented as a single octet; the code set used for transmission of
+  //character data (e.g., TCS-C) between a particular client and server ORBs is determined
+  //via the process described in Section 13.10, “Code Set Conversion,” 
   fn serialize_char(self, _v: char) -> Result<()> {
     Ok(())
   }
+
   fn serialize_str(self, _v: &str) -> Result<()> {
     Ok(())
   }
@@ -333,11 +351,10 @@ impl<'a> ser::SerializeStruct for &'a mut SerializerLittleEndian {
   type Ok = ();
   type Error = Error;
 
-  fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
+  fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<()>
   where
     T: ?Sized + Serialize,
   {
-    key.serialize(&mut **self)?;
     value.serialize(&mut **self)?;
     Ok(())
   }
@@ -351,11 +368,10 @@ impl<'a> ser::SerializeStructVariant for &'a mut SerializerLittleEndian {
   type Ok = ();
   type Error = Error;
 
-  fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
+  fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<()>
   where
     T: ?Sized + Serialize,
   {
-    key.serialize(&mut **self)?;
     value.serialize(&mut **self)?;
     Ok(())
   }
@@ -364,6 +380,19 @@ impl<'a> ser::SerializeStructVariant for &'a mut SerializerLittleEndian {
     Ok(())
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #[cfg(test)]
 mod tests {
@@ -379,17 +408,54 @@ mod tests {
       secondvalue: i8,
       thirdValue: i32,
       fourthValue: u64,
+      fifth: bool,
     }
 
     let mikkiHiiri = OmaTyyppi {
       firstValue: 1,
-      secondvalue: -3,
-      thirdValue: -5000,
-      fourthValue: 90909099999999,
+      secondvalue: -1,
+      thirdValue: 23,
+      fourthValue: 3434343,
+      fifth: true,
+
     };
 
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
     let mut file = File::create("serialization_result_from_cdr_test").unwrap();
     file.write_all(&sarjallistettu).unwrap();
   }
+
+
+  #[test]
+  fn CDR_serialization_f32() {
+    #[derive(Serialize)]
+    struct OmaTyyppi {
+      firstValue: f32,
+    }
+
+    let mikkiHiiri = OmaTyyppi {
+      firstValue: 255.255_f32
+    };
+
+    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+    let mut file = File::create("serialization_result_f32").unwrap();
+    file.write_all(&sarjallistettu).unwrap();
+  }
+
+  #[test]
+  fn CDR_serialization_f64() {
+    #[derive(Serialize)]
+    struct OmaTyyppi {
+      firstValue: f64,
+    }
+
+    let mikkiHiiri = OmaTyyppi {
+      firstValue: 255.255_f64
+    };
+
+    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+    let mut file = File::create("serialization_result_f64").unwrap();
+    file.write_all(&sarjallistettu).unwrap();
+  }
+ 
 }
