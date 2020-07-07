@@ -34,7 +34,8 @@ impl DomainParticipant {
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Unable to join multicast 239.255.0.1:7400");
 
-    let discovery_listener = UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
+    let discovery_listener = 
+      UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
 
     let user_traffic_multicast_listener =
       UDPListener::new(USER_TRAFFIC_MUL_LISTENER_TOKEN, "0.0.0.0", 7401);
@@ -42,7 +43,8 @@ impl DomainParticipant {
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Unable to join multicast 239.255.0.1:7401");
 
-    let user_traffic_listener = UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
+    let user_traffic_listener = 
+      UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
 
     let mut listeners = HashMap::new();
     listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
@@ -114,6 +116,12 @@ impl DomainParticipant {
     unimplemented!()
   }
 } // impl
+
+impl Default for DomainParticipant {
+  fn default() -> DomainParticipant {
+    DomainParticipant::new()
+  }
+}
 
 impl Entity for DomainParticipant {
   fn as_entity(&self) -> &EntityAttributes {

@@ -3,6 +3,8 @@ use crate::structure::endpoint::Endpoint;
 use crate::structure::history_cache::HistoryCache;
 use crate::messages::submessages::data::Data;
 use crate::messages::submessages::heartbeat::Heartbeat;
+use crate::structure::entity::EntityAttributes;
+use crate::structure::guid::EntityId;
 
 use crate::serialization::cdrDeserializer;
 use crate::structure::cache_change::CacheChange;
@@ -16,16 +18,28 @@ use crate::structure::sequence_number::SequenceNumber;
 
 #[derive(Debug, PartialEq)]
 pub struct Reader {
+<<<<<<< HEAD
   history_cache: HistoryCache
   //expectedType: str,
+||||||| merged common ancestors
+  history_cache: HistoryCache,
+=======
+  history_cache: HistoryCache,
+  pub entity_attributes: EntityAttributes,
+>>>>>>> MessageReceiver keeping track of available readers.
 } // placeholder
 
 impl Reader {
   pub fn new() -> Reader {
     todo!()
   }
+<<<<<<< HEAD
 
 
+||||||| merged common ancestors
+
+=======
+>>>>>>> MessageReceiver keeping track of available readers.
   // TODO: check if it's necessary to implement different handlers for discovery and user messages
 
   // handles regular data message and updates history cache
@@ -96,8 +110,8 @@ impl Reader {
 
 
 impl Entity for Reader {
-  fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
-    todo!()
+  fn as_entity(&self) -> &EntityAttributes {
+    &self.entity_attributes
   }
 }
 

@@ -15,6 +15,7 @@ use crate::messages::submessages::info_timestamp::InfoTimestamp;
 
 use crate::dds::reader::Reader;
 use crate::structure::guid::EntityId;
+use crate::dds::participant::DomainParticipant;
 
 use speedy::{Readable, Endianness};
 
@@ -23,7 +24,7 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
 #[derive(Debug, PartialEq)]
 pub struct MessageReceiver {
-  available_readers: Vec<EntityId>,
+  available_readers: Vec<Reader>,
 
   participant_guid_prefix: GuidPrefix,
   //submessage_vec: Vec<SubMessage>, //messages should be sent immideately, 
@@ -91,21 +92,25 @@ impl MessageReceiver {
       self.submessage_count = 0;
   }
 
-  pub fn add_reader(&mut self, new_reader_id: EntityId){ // or guidPRefix?
-    self.available_readers.push(new_reader_id);
+  pub fn add_reader(&mut self, new_reader: Reader){ // or guidPRefix?
+    match self.available_readers.iter().find(|&r| *r == new_reader) {
+        None => {self.available_readers.push(new_reader);},
+        Some(_) => {},
+    }
   }
 
-  pub fn remove_reader(&mut self, reader_id_to_be_removed: EntityId){
-    let index = self.available_readers.iter().position(
-      |id| *id == reader_id_to_be_removed
-    ).unwrap(); // handle error?
-    self.available_readers.remove(index);
+  pub fn remove_reader(&mut self, old_reader: Reader){
+    if let Some(pos) = self.available_readers.iter().position(
+      |r| *r == old_reader
+    ) {
+        self.available_readers.remove(pos);
+    }
   }
 
-  pub fn handle_discovery_msg(&mut self) {
+  pub fn handle_discovery_msg(&mut self, _msg: Vec<u8>) {
     // 9.6.2.2
     // The discovery message is just a data message. No need for the 
-    // messageReceiver to handle it any differently
+    // messageReceiver to handle it any differently here?
     unimplemented!();
   }
 
@@ -168,6 +173,7 @@ impl MessageReceiver {
   fn send_submessage(&mut self, submessage: EntitySubmessage) {
 
     if self.dest_guid_prefix != self.participant_guid_prefix{
+      println!("Ofcourse, the example messages are not for this participant");
       return; // Wrong target received
     }
     match submessage {
@@ -188,8 +194,10 @@ impl MessageReceiver {
 
   }
 
-  fn get_reader(&mut self, reader_id: EntityId) -> Option<&mut Reader>{
-    todo!();
+  fn get_reader(&mut self, reader_id: EntityId) -> Option<& mut Reader>{
+    self.available_readers.iter_mut().find(
+      |r| r.entity_attributes.guid.entityId == reader_id
+    )
   }
 
   fn is_interpreter_submessage(

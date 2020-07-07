@@ -60,7 +60,7 @@ where
         HeartbeatFrag::read_from_buffer_with_ctx(context, buffer).unwrap(),
       )),
       SubmessageKind::DATA => 
-        match SubMessage::deserialize_data(&msgheader, &context, &buffer){
+        match SubMessage::deserialize_data(&msgheader, context, &buffer){
           Some(T) => Some(EntitySubmessage::Data(
             T,
             msgheader.flags.clone(),
@@ -68,7 +68,7 @@ where
           None => None,
       },
       SubmessageKind::DATA_FRAG => 
-        match SubMessage::deserialize_data_frag(&msgheader, &context, &buffer){
+        match SubMessage::deserialize_data_frag(&msgheader, context, &buffer){
           Some(T) => Some(EntitySubmessage::DataFrag(
             T,
             msgheader.flags.clone(),
@@ -81,7 +81,7 @@ where
 
   fn deserialize_data(
     msgheader: &SubmessageHeader,
-    _context: &Endianness,
+    _context: Endianness,
     buffer: &'a [u8],
   ) -> Option<Data> {
     let mut pos: usize = 0;
@@ -149,7 +149,7 @@ where
 
   fn deserialize_data_frag(
     msgheader: &SubmessageHeader,
-    _context: &Endianness,
+    _context: Endianness,
     buffer: &'a [u8],
   ) -> Option<DataFrag> {
     let mut pos: usize = 0;

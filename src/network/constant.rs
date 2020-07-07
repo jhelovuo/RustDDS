@@ -11,3 +11,6 @@ pub const DISCOVERY_LISTENER_TOKEN: Token = Token(6);
 pub const DISCOVERY_MUL_LISTENER_TOKEN: Token = Token(7);
 pub const USER_TRAFFIC_LISTENER_TOKEN: Token = Token(8);
 pub const USER_TRAFFIC_MUL_LISTENER_TOKEN: Token = Token(9);
+
+pub const ADD_READER_TOKEN: Token = Token(10);
+pub const REMOVE_READER_TOKEN: Token = Token(11);

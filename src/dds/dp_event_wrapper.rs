@@ -4,6 +4,7 @@ use mio_extras::channel as mio_channel;
 use std::collections::HashMap;
 
 use crate::dds::message_receiver::MessageReceiver;
+use crate::dds::reader::Reader;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix};
@@ -58,6 +59,10 @@ impl DPEventWrapper {
           return;
         } else if DPEventWrapper::is_udp_traffic(&event) {
           ev_wrapper.handle_udp_traffic(&event);
+        } else if event.token() == ADD_READER_TOKEN {
+          ev_wrapper.message_receiver.add_reader(Reader::new());
+        }else if event.token() == REMOVE_READER_TOKEN {
+          ev_wrapper.message_receiver.remove_reader(Reader::new());
         }
       }
     }
@@ -77,7 +82,7 @@ impl DPEventWrapper {
           }
 
           if event.token() == DISCOVERY_SENDER_TOKEN {
-            //self.message_receiver.handle_discovery_msg(data);
+            self.message_receiver.handle_discovery_msg(data);
           } else if event.token() == USER_TRAFFIC_SENDER_TOKEN {
             self.message_receiver.handle_user_msg(data);
           }
