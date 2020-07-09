@@ -164,21 +164,42 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     Ok(())
   }
 
-  // TODO FUNCTIONS AFTER THIS ARE NOT IMPLEMENTED
+  
 
   //An IDL character is represented as a single octet; the code set used for transmission of
   //character data (e.g., TCS-C) between a particular client and server ORBs is determined
   //via the process described in Section 13.10, “Code Set Conversion,” 
   fn serialize_char(self, _v: char) -> Result<()> {
+
+    // TODO how to convert RUST 32 bit char to 8 bit safely???
+    let charAsinteger = _v as u32;  
+    let bytes = charAsinteger.to_le_bytes();
+    self.buffer.push(bytes[0]);
     Ok(())
   }
 
+  //A string is encoded as an unsigned long indicating the length of the string in octets,
+  //followed by the string value in single- or multi-byte form represented as a sequence of
+  //octets. The string contents include a single terminating null character. The string
+  //length includes the null character, so an empty string has a length of 1. 
   fn serialize_str(self, _v: &str) -> Result<()> {
+    let count: u32 = _v.chars().count() as u32;
+    self.serialize_u32(count + 1);
+    for c in _v.chars(){
+      self.serialize_char(c);
+    }
+    self.buffer.push(0u8);
     Ok(())
   }
+   
   fn serialize_bytes(self, _v: &[u8]) -> Result<()> {
+    for by in _v{
+      self.buffer.push(*by);
+    }
     Ok(())
   }
+
+   // TODO FUNCTIONS AFTER THIS ARE NOT IMPLEMENTED
   fn serialize_none(self) -> Result<()> {
     Ok(())
   }
@@ -224,7 +245,11 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     Ok(())
   }
 
+  //Sequences are encoded as an unsigned long value, followed by the elements of the
+  //sequence. The initial unsigned long contains the number of elements in the sequence.
+  //The elements of the sequence are encoded as specified for their type.
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
+    let elementCount = _len as u32;
     Ok(self)
   }
   fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
@@ -458,4 +483,54 @@ mod tests {
     file.write_all(&sarjallistettu).unwrap();
   }
  
+  #[test]
+
+  fn CDR_serialization_char(){
+    #[derive(Serialize)]
+    struct OmaTyyppi {
+      firstValue: char,
+      second: char,
+      third: char,
+    }
+    let mikkiHiiri = OmaTyyppi {
+      firstValue: 'a',
+      second: 'b',
+      third: 'ä'
+    };
+
+    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+    let mut file = File::create("serialization_result_char").unwrap();
+    file.write_all(&sarjallistettu).unwrap();
+
+  }
+  #[test]
+fn CDR_serialization_string(){
+  #[derive(Serialize)]
+    struct OmaTyyppi<'a> {
+      firstValue: &'a str,
+
+    }
+    let mikkiHiiri = OmaTyyppi {
+      firstValue : "BLUE",
+    };
+    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+    let mut file = File::create("serialization_result_string").unwrap();
+    file.write_all(&sarjallistettu).unwrap();
+}
+
+/*
+fn CDR_serialization_bytes(){
+  #[derive(Serialize)]
+  struct OmaTyyppi<'a> {
+    firstValue: bytes,
+
+  }
+  let mikkiHiiri = OmaTyyppi {
+    firstValue : vec![0,2,3,1,2,3,4,]
+  };
+  let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+  let mut file = File::create("serialization_result_string").unwrap();
+  file.write_all(&sarjallistettu).unwrap();
+}
+*/
 }

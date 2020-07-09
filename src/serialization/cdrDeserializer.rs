@@ -49,9 +49,6 @@ impl<'de> DeserializerLittleEndian<'de> {
       Ok(by)
   }
 
-  fn parse_string(&mut self) -> Result<&'de str> {
-    unimplemented!()
-  }
 }
 
 impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
@@ -211,14 +208,38 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
   where
     V: Visitor<'de>,
   {
-    unimplemented!()
+    let by0 = self.next_byte().unwrap();
+    _visitor.visit_char(by0 as char)
   }
 
   fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_borrowed_str(self.parse_string()?)
+    // first is information about how long string is in bytes.
+    let by0 = self.next_byte().unwrap();
+    let by1 = self.next_byte().unwrap();
+    let by2 = self.next_byte().unwrap();
+    let by3 = self.next_byte().unwrap();
+    let bytes :[u8;4] = [by0,by1,by2,by3];
+    let stringByteCount : u32 = LittleEndian::read_u32(&bytes);
+    let buildString : String;
+    let mut chars: Vec<char> = [].to_vec();
+
+    // last byte is always 0 and it can be ignored.
+    for byte in 0..stringByteCount - 1 {
+      let c = self.next_byte().unwrap() as char;
+      chars.push(c);
+    }
+    // here need to call next byte to remove trailing 0 from buffer.
+    self.remove_first_byte_from_input();
+    buildString = chars.into_iter().collect();
+    
+    // TODO check is this correct way to create string literals. This is propably not correct!!!
+    fn string_to_static_str(s: String) -> &'static str {
+      Box::leak(s.into_boxed_str())
+  }
+    visitor.visit_borrowed_str(string_to_static_str(buildString))
   }
 
   fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
@@ -233,6 +254,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     V: Visitor<'de>,
   {
     unimplemented!()
+    // for byte in self.input{
+    //  self.next_byte();
+    //}
+     
   }
 
   fn deserialize_byte_buf<V>(self, _visitor: V) -> Result<V::Value>
@@ -399,6 +424,9 @@ mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use serde::{Serialize, Deserialize};
+  use bytes::{BytesMut, BufMut};
+  use std::any::type_name;
+
 
   #[test]
   fn CDR_Deserialization_struct() {
@@ -417,7 +445,7 @@ mod tests {
       firstValue: 1,
       secondvalue: -3,
       thirdValue: -5000,
-      fourthValue: 90909099999999,
+      fourthValue: 90909099999999u64,
       fifth: true,
       sixth: -23.43f32,
       seventh: 3432343.3423443f64
@@ -542,6 +570,50 @@ fn CDR_Deserialization_f64(){
   assert_eq!(deserialized, 278.35f64);
 
 }
+#[test]
+fn CDR_Deserialization_char(){
+  let c : char = 'a';
+  let mut serialized = to_little_endian_binary(&c).unwrap();
+  let deserialized :char = deserialize_from_little_endian(&mut serialized).unwrap();
+  assert_eq!(c , deserialized);
+  assert_eq!(c , 'a');
+  assert_eq!(deserialized, 'a');
+}
+
+#[test]
+fn CDR_Deserialization_str(){
+  let c : &str = "BLUE";
+  let mut serialized = to_little_endian_binary(&c).unwrap();
+  let deserialized : &str = deserialize_from_little_endian(&mut serialized).unwrap();
+  assert_eq!(c , deserialized);
+  assert_eq!(c , "BLUE");
+  assert_eq!(deserialized, "BLUE");
+}
+
+#[test]
+
+fn CDR_Deserialization_string(){
+  let c : String = String::from("BLUE");
+  let mut serialized = to_little_endian_binary(&c).unwrap();
+  let deserialized : String = deserialize_from_little_endian(&mut serialized).unwrap();
+  assert_eq!(c , deserialized);
+  assert_eq!(c , String::from("BLUE"));
+  assert_eq!(deserialized, String::from("BLUE"));
+}
+
+/*
+#[test]
+fn CDR_Deserialization_bytes(){
+  let mut buf = B::with_capacity(1024);
+  buf.put(&b"hello world"[..]);
+  buf.put_u16(1234);
+
+  let ubuf = buf.into(u8);
+  let mut serialized = to_little_endian_binary(&ubuf).unwrap();
+  let deserialized : Vec<u8> = deserialize_from_little_endian(&mut serialized).unwrap();
+  
+}
+*/
 
 #[test]
 fn CDR_Deserialization_seq(){
@@ -552,6 +624,22 @@ fn CDR_Deserialization_seq(){
   assert_eq!(sequence, [1i32,-2i32,3i32,-4i32].to_vec());
   assert_eq!(deserialized, [1i32,-2i32,3i32,-4i32].to_vec());
 
+}
+
+#[test]
+fn CDR_Deserialization_unknown_type(){
+  let sequence :Vec<i32> = [1i32,-2i32,3i32,-4i32].to_vec();
+  let mut serialized = to_little_endian_binary(&sequence).unwrap();
+  //let TargetType: Vec<i32>;
+  //TargetType = 2;
+
+  fn type_of<T>(_: T) -> &'static str {
+    type_name::<T>()
+}
+  //let tt = type_of(TargetType);
+
+  //let t = type_name_of_val(TargetType);
+  let deserialized :&str  = deserialize_from_little_endian(&mut serialized).unwrap();
 }
 
 }
