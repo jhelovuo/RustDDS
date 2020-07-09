@@ -249,7 +249,8 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-    //let elementCount = _len as u32;
+    let elementCount = _len.unwrap() as u32;
+    self.serialize_u32(elementCount);
     Ok(self)
   }
   fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
@@ -533,4 +534,18 @@ fn CDR_serialization_bytes(){
   file.write_all(&sarjallistettu).unwrap();
 }
 */
+#[test]
+fn CDR_serialize_seq(){
+  #[derive(Serialize)]
+    struct OmaTyyppi {
+      firstValue: Vec<i32>,
+
+    }
+    let mikkiHiiri = OmaTyyppi {
+      firstValue : vec![1,2,3,4,5,6,7,8,9,10,123123],
+    };
+    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+    let mut file = File::create("serialization_result_seq").unwrap();
+    file.write_all(&sarjallistettu).unwrap();
+}
 }

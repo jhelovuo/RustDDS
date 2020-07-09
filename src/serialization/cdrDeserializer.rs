@@ -2,7 +2,7 @@ use std::ops::{AddAssign, MulAssign, Neg};
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Deserialize;
 use serde::de::{
-  self, DeserializeSeed, EnumAccess, /*IntoDeserializer, MapAccess, SeqAccess,*/  VariantAccess, Visitor,
+  self, DeserializeSeed, EnumAccess,/* IntoDeserializer, */MapAccess,  SeqAccess, VariantAccess, Visitor,
 };
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
@@ -39,6 +39,16 @@ impl<'de> DeserializerLittleEndian<'de> {
   // Look at the first byte in the input without consuming it.
   fn peek_byte(&mut self) -> Result<&u8> {
     self.input.first().ok_or(Error::Eof)
+  }
+
+  fn check_if_bytes_left(&mut self) -> bool{
+    let someValueFound = self.input.first().ok_or(Error::Eof);
+    if someValueFound.is_ok(){
+      true
+    }else{
+      false
+    }
+
   }
 
   // Consume the first byte in the input.
@@ -295,12 +305,24 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     visitor.visit_newtype_struct(self)
   }
 
-  fn deserialize_seq<V>(/*mut*/ self, _visitor: V) -> Result<V::Value>
+  ///Sequences are encoded as an unsigned long value, followed by the elements of the
+  //sequence. The initial unsigned long contains the number of elements in the sequence.
+  //The elements of the sequence are encoded as specified for their type.
+  fn deserialize_seq<V>(mut self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    //_visitor.visit_seq(self);
-    unimplemented!()
+    let by0 = self.next_byte().unwrap();
+    let by1 = self.next_byte().unwrap();
+    let by2 = self.next_byte().unwrap();
+    let by3 = self.next_byte().unwrap();
+    let bytes :[u8;4] = [by0,by1,by2,by3];
+    let elementCount : u32 = LittleEndian::read_u32(&bytes);
+
+    
+
+    _visitor.visit_seq(SequenceHelper::new(&mut self))
+    //unimplemented!()
   }
 
   fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value>
@@ -418,6 +440,41 @@ impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
     de::Deserializer::deserialize_map(self.de, visitor)
   }
 }
+
+
+struct SequenceHelper<'a, 'de: 'a> {
+  de: &'a mut DeserializerLittleEndian<'de>,
+  first: bool,
+}
+
+impl<'a, 'de> SequenceHelper<'a, 'de> {
+  fn new(de: &'a mut DeserializerLittleEndian<'de>) -> Self {
+    SequenceHelper {
+          de,
+          first: true,
+      }
+  }
+}
+
+// `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
+// through elements of the sequence.
+impl<'de, 'a> SeqAccess<'de> for SequenceHelper<'a, 'de> {
+  type Error = Error;
+
+  fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+  where
+      T: DeserializeSeed<'de>,
+  {
+      // Check if there are no more elements.
+      if self.de.check_if_bytes_left() == false {
+          return Ok(None);
+      }
+      self.first = false;
+      // Deserialize an array element.
+      seed.deserialize(&mut *self.de).map(Some)
+  }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -623,6 +680,7 @@ fn CDR_Deserialization_seq(){
   assert_eq!(sequence, deserialized);
   assert_eq!(sequence, [1i32,-2i32,3i32,-4i32].to_vec());
   assert_eq!(deserialized, [1i32,-2i32,3i32,-4i32].to_vec());
+
 
 }
 
