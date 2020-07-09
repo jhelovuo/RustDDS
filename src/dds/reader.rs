@@ -18,28 +18,16 @@ use crate::structure::sequence_number::SequenceNumber;
 
 #[derive(Debug, PartialEq)]
 pub struct Reader {
-<<<<<<< HEAD
-  history_cache: HistoryCache
-  //expectedType: str,
-||||||| merged common ancestors
-  history_cache: HistoryCache,
-=======
   history_cache: HistoryCache,
   pub entity_attributes: EntityAttributes,
->>>>>>> MessageReceiver keeping track of available readers.
 } // placeholder
 
 impl Reader {
   pub fn new() -> Reader {
     todo!()
   }
-<<<<<<< HEAD
 
 
-||||||| merged common ancestors
-
-=======
->>>>>>> MessageReceiver keeping track of available readers.
   // TODO: check if it's necessary to implement different handlers for discovery and user messages
 
   // handles regular data message and updates history cache
@@ -100,11 +88,7 @@ impl Reader {
   }
 
   fn test_if_little_endian(representation_identifier :u16) -> bool{
-      if representation_identifier == 0x00{
-        true
-      }else{
-        false
-      }
+      representation_identifier == 0x00
     }
   }
 

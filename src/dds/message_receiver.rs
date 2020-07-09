@@ -24,7 +24,7 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
 #[derive(Debug, PartialEq)]
 pub struct MessageReceiver {
-  available_readers: Vec<Reader>,
+  pub available_readers: Vec<Reader>,
 
   participant_guid_prefix: GuidPrefix,
   //submessage_vec: Vec<SubMessage>, //messages should be sent immideately, 
@@ -111,6 +111,9 @@ impl MessageReceiver {
     // 9.6.2.2
     // The discovery message is just a data message. No need for the 
     // messageReceiver to handle it any differently here?
+
+    // The SPDPbuiltinPArticipantReader receives the SPDPdiscoveredParticipantData
+    // from the remove Participants
     unimplemented!();
   }
 
@@ -145,7 +148,7 @@ impl MessageReceiver {
       }
 
       if !self.is_interpreter_submessage(
-        &submessage_header, 
+        &submessage_header,
         endian,
         &msg[self.pos..(self.pos + submessage_length)],
       ){
@@ -364,5 +367,4 @@ mod tests{
     MessageReceiver::new(guid_new.guidPrefix);
     assert!(message_receiver.handle_RTPS_header(&test_header));
   }
-
 }

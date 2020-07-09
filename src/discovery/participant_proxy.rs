@@ -4,7 +4,7 @@ use crate::messages::vendor_id::VendorId;
 use crate::structure::locator::LocatorList;
 use crate::dds::qos::*;
 
-/// Defines the data exchanged as part of the SPDP
+/// Defines ParticipantProxyAttributes
 pub struct ParticipantProxyAttributes {
   /// Identifies the DDS domainId of the associated DDS DomainParticipant
   pub domain_id: EntityId,
