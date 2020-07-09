@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
-use crate::dds::reader::Reader;
+use crate::dds::reader::*;
 use crate::dds::pubsub::*;
 use crate::dds::topic::*;
 use crate::dds::typedesc::*;

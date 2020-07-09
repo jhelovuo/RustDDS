@@ -6,14 +6,14 @@ pub struct HistoryCache {
   changes: Vec<CacheChange>,
 }
 
-impl HistoryCache {
+impl  HistoryCache {
   fn new() -> HistoryCache {
     HistoryCache {
-      changes: Vec::new(),
+      changes: vec![],
     }
   }
 
-  fn add_change(&mut self, change: CacheChange) {
+  pub fn add_change(&mut self, change: CacheChange) {
     self.changes.push(change)
   }
 
@@ -55,7 +55,7 @@ mod tests {
   use crate::structure::cache_change::ChangeKind;
   use crate::structure::guid::GUID;
   use crate::structure::instance_handle::InstanceHandle;
-  use crate::structure::cache_change::Data;
+  use crate::structure::cache_change::ChangeData;
 
   #[test]
   fn add_change_test() {
@@ -65,7 +65,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::SEQUENCENUMBER_UNKNOWN,
-      data_value: Some(Data {}),
+      data_value: Some(ChangeData {hasLittleEndianData:false}),
     };
 
     assert_eq!(0, history_cache.changes.len());
@@ -85,7 +85,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(10),
-      data_value: Some(Data {}),
+      data_value: Some(ChangeData {hasLittleEndianData:false}),
     };
     history_cache.add_change(cache_change);
     assert_eq!(1, history_cache.changes.len());
@@ -95,7 +95,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(7),
-      data_value: Some(Data {}),
+      data_value: Some(ChangeData {hasLittleEndianData:false}),
     };
     history_cache.add_change(cache_change);
     assert_eq!(2, history_cache.changes.len());
@@ -113,7 +113,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(1),
-      data_value: Some(Data {}),
+      data_value: Some(ChangeData {hasLittleEndianData:false}),
     };
     history_cache.add_change(small_cache_change);
 
@@ -122,7 +122,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(7),
-      data_value: Some(Data {}),
+      data_value: Some(ChangeData {hasLittleEndianData:false}),
     };
     history_cache.add_change(big_cache_change);
 
@@ -141,7 +141,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(1),
-      data_value: Some(Data {}),
+      data_value: Some(ChangeData {hasLittleEndianData:false}),
     };
     history_cache.add_change(small_cache_change);
 
@@ -155,7 +155,7 @@ mod tests {
       },
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(7),
-      data_value: Some(Data {}),
+      data_value: Some(ChangeData {hasLittleEndianData:false}),
     };
     history_cache.add_change(big_cache_change);
 
