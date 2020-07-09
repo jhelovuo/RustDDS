@@ -249,7 +249,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-    let elementCount = _len as u32;
+    //let elementCount = _len as u32;
     Ok(self)
   }
   fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
