@@ -1,4 +1,4 @@
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{ByteOrder, LittleEndian, BigEndian};
 use serde::Deserialize;
 use serde::de::{
   self, DeserializeSeed, EnumAccess,/* IntoDeserializer, */MapAccess,  SeqAccess, VariantAccess, Visitor,
@@ -7,13 +7,24 @@ use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 //use serde::Deserializer;
 
-pub struct DeserializerLittleEndian<'de> {
-  input: &'de mut Vec<u8>,
+#[derive(PartialEq)]
+enum endianess{
+  littleEndian,
+  bigEndian,
 }
 
-impl<'de> DeserializerLittleEndian<'de> {
+pub struct CDR_deserializer<'de> {
+  input: &'de mut Vec<u8>,
+  DeserializationEndianess : endianess,
+}
+
+impl<'de> CDR_deserializer<'de> {
   pub fn deserialize_from_little_endian(input: &'de mut Vec<u8>) -> Self {
-    DeserializerLittleEndian { input }
+    CDR_deserializer { input, DeserializationEndianess : endianess::littleEndian }
+  }
+
+  pub fn deserialize_from_big_endian(input: &'de mut Vec<u8>) -> Self {
+    CDR_deserializer { input, DeserializationEndianess : endianess::bigEndian }
   }
 
   fn remove_first_byte_from_input(&mut self){
@@ -48,16 +59,31 @@ pub fn deserialize_from_little_endian<'a, T>(s: &'a mut Vec<u8>) -> Result<T>
 where
   T: Deserialize<'a>,
 {
-  let mut deserializer = DeserializerLittleEndian::deserialize_from_little_endian( s);
+  let mut deserializer = CDR_deserializer::deserialize_from_little_endian( s);
   let t = T::deserialize(&mut deserializer)?;
   if deserializer.input.is_empty() {
     Ok(t)
   } else {
-    unimplemented!()
+    panic!()
   }
 }
 
-impl<'de> DeserializerLittleEndian<'de> {
+pub fn deserialize_from_big_endian<'a, T>(s: &'a mut Vec<u8>) -> Result<T>
+where
+  T: Deserialize<'a>
+{
+  let mut deserializer=  CDR_deserializer::deserialize_from_big_endian(s);
+  let t = T::deserialize(&mut deserializer)?;
+  if deserializer.input.is_empty() {
+    Ok(t)
+  } else {
+    panic!()
+  }
+}
+
+
+
+impl<'de> CDR_deserializer<'de> {
   // Look at the first byte in the input without consuming it.
   fn peek_byte(&mut self) -> Result<&u8> {
     self.input.first().ok_or(Error::Eof)
@@ -83,7 +109,7 @@ impl<'de> DeserializerLittleEndian<'de> {
 
 }
 
-impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
+impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer<'de> {
   type Error = Error;
 
   fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
@@ -121,42 +147,77 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let bytes :[u8;2] = [by0,by1];
-    let result : i16 = LittleEndian::read_i16(&bytes);
-    self.remove_padding_bytes_from_end(2);
-    visitor.visit_i16(result)
+    if self.DeserializationEndianess == endianess::littleEndian{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let bytes :[u8;2] = [by0,by1];
+      let result : i16 = LittleEndian::read_i16(&bytes);
+      self.remove_padding_bytes_from_end(2);
+      visitor.visit_i16(result)
+    }else{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let bytes :[u8;2] = [by0,by1];
+      let result : i16 = BigEndian::read_i16(&bytes);
+      self.remove_padding_bytes_from_end(2);
+      visitor.visit_i16(result)
+    }
+    
   }
 
   fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let by2 = self.next_byte().unwrap();
-    let by3 = self.next_byte().unwrap();
-    let bytes :[u8;4] = [by0,by1,by2,by3];
-    let result : i32 = LittleEndian::read_i32(&bytes);
-    visitor.visit_i32(result)
+    if self.DeserializationEndianess == endianess::littleEndian{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let bytes :[u8;4] = [by0,by1,by2,by3];
+      let result : i32 = LittleEndian::read_i32(&bytes);
+      visitor.visit_i32(result)
+    }else{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let bytes :[u8;4] = [by0,by1,by2,by3];
+      let result : i32 = BigEndian::read_i32(&bytes);
+      visitor.visit_i32(result)
+    }
+    
   }
 
   fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let by2 = self.next_byte().unwrap();
-    let by3 = self.next_byte().unwrap();
-    let by4 = self.next_byte().unwrap();
-    let by5 = self.next_byte().unwrap();
-    let by6 = self.next_byte().unwrap();
-    let by7 = self.next_byte().unwrap();
-    let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
-    let result : i64 = LittleEndian::read_i64(&bytes);
-    visitor.visit_i64(result)
+    if self.DeserializationEndianess == endianess::littleEndian{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let by4 = self.next_byte().unwrap();
+      let by5 = self.next_byte().unwrap();
+      let by6 = self.next_byte().unwrap();
+      let by7 = self.next_byte().unwrap();
+      let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
+      let result : i64 = LittleEndian::read_i64(&bytes);
+      visitor.visit_i64(result)
+    }else{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let by4 = self.next_byte().unwrap();
+      let by5 = self.next_byte().unwrap();
+      let by6 = self.next_byte().unwrap();
+      let by7 = self.next_byte().unwrap();
+      let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
+      let result : i64 = BigEndian::read_i64(&bytes);
+      visitor.visit_i64(result)
+    }
   }
 
   fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
@@ -172,72 +233,129 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let bytes :[u8;2] = [by0,by1];
-    let result = LittleEndian::read_u16(&bytes);
-    self.remove_padding_bytes_from_end(2);
-    visitor.visit_u16(result)
+    if self.DeserializationEndianess == endianess::littleEndian{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let bytes :[u8;2] = [by0,by1];
+      let result = LittleEndian::read_u16(&bytes);
+      self.remove_padding_bytes_from_end(2);
+      visitor.visit_u16(result)
+    }else{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let bytes :[u8;2] = [by0,by1];
+      let result = BigEndian::read_u16(&bytes);
+      self.remove_padding_bytes_from_end(2);
+      visitor.visit_u16(result)
+    }
   }
 
   fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let by2 = self.next_byte().unwrap();
-    let by3 = self.next_byte().unwrap();
-    let bytes :[u8;4] = [by0,by1,by2,by3];
-    let result = LittleEndian::read_u32(&bytes);
-    visitor.visit_u32(result)
+    if self.DeserializationEndianess == endianess::littleEndian{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let bytes :[u8;4] = [by0,by1,by2,by3];
+      let result = LittleEndian::read_u32(&bytes);
+      visitor.visit_u32(result)
+    }else{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let bytes :[u8;4] = [by0,by1,by2,by3];
+      let result = BigEndian::read_u32(&bytes);
+      visitor.visit_u32(result)
+    }
   }
 
   fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let by2 = self.next_byte().unwrap();
-    let by3 = self.next_byte().unwrap();
-    let by4 = self.next_byte().unwrap();
-    let by5 = self.next_byte().unwrap();
-    let by6 = self.next_byte().unwrap();
-    let by7 = self.next_byte().unwrap();
-    let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
-    let result = LittleEndian::read_u64(&bytes);
-    visitor.visit_u64(result)
+    if self.DeserializationEndianess == endianess::littleEndian{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let by4 = self.next_byte().unwrap();
+      let by5 = self.next_byte().unwrap();
+      let by6 = self.next_byte().unwrap();
+      let by7 = self.next_byte().unwrap();
+      let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
+      let result = LittleEndian::read_u64(&bytes);
+      visitor.visit_u64(result)
+    }else{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let by4 = self.next_byte().unwrap();
+      let by5 = self.next_byte().unwrap();
+      let by6 = self.next_byte().unwrap();
+      let by7 = self.next_byte().unwrap();
+      let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
+      let result = BigEndian::read_u64(&bytes);
+      visitor.visit_u64(result)
+    }
   }
 
   fn deserialize_f32<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let by2 = self.next_byte().unwrap();
-    let by3 = self.next_byte().unwrap();
-    let bytes :[u8;4] = [by0,by1,by2,by3];
-    let result = LittleEndian::read_f32(&bytes);
-    _visitor.visit_f32(result)
+    if self.DeserializationEndianess == endianess::littleEndian{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let bytes :[u8;4] = [by0,by1,by2,by3];
+      let result = LittleEndian::read_f32(&bytes);
+      _visitor.visit_f32(result)
+    }else{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let bytes :[u8;4] = [by0,by1,by2,by3];
+      let result = BigEndian::read_f32(&bytes);
+      _visitor.visit_f32(result)
+    }
   }
 
   fn deserialize_f64<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let by2 = self.next_byte().unwrap();
-    let by3 = self.next_byte().unwrap();
-    let by4 = self.next_byte().unwrap();
-    let by5 = self.next_byte().unwrap();
-    let by6 = self.next_byte().unwrap();
-    let by7 = self.next_byte().unwrap();
-    let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
-    let result:f64 = LittleEndian::read_f64(&bytes);
-    _visitor.visit_f64(result)
+    if self.DeserializationEndianess == endianess::littleEndian{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let by4 = self.next_byte().unwrap();
+      let by5 = self.next_byte().unwrap();
+      let by6 = self.next_byte().unwrap();
+      let by7 = self.next_byte().unwrap();
+      let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
+      let result:f64 = LittleEndian::read_f64(&bytes);
+      _visitor.visit_f64(result)
+    }else{
+      let by0 = self.next_byte().unwrap();
+      let by1 = self.next_byte().unwrap();
+      let by2 = self.next_byte().unwrap();
+      let by3 = self.next_byte().unwrap();
+      let by4 = self.next_byte().unwrap();
+      let by5 = self.next_byte().unwrap();
+      let by6 = self.next_byte().unwrap();
+      let by7 = self.next_byte().unwrap();
+      let bytes :[u8;8] = [by0,by1,by2,by3,by4,by5,by6,by7];
+      let result:f64 = BigEndian::read_f64(&bytes);
+      _visitor.visit_f64(result)
+    }
   }
 
   fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value>
@@ -259,7 +377,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     let by2 = self.next_byte().unwrap();
     let by3 = self.next_byte().unwrap();
     let bytes :[u8;4] = [by0,by1,by2,by3];
-    let stringByteCount : u32 = LittleEndian::read_u32(&bytes);
+    let stringByteCount : u32;
+    if self.DeserializationEndianess == endianess::littleEndian{
+      stringByteCount  = LittleEndian::read_u32(&bytes);
+    }else{
+      stringByteCount  = BigEndian::read_u32(&bytes);
+    }
     let buildString : String;
     let mut chars: Vec<char> = [].to_vec();
 
@@ -278,7 +401,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     fn string_to_static_str(s: String) -> &'static str {
       Box::leak(s.into_boxed_str())
   }
-    self.remove_padding_bytes_from_end( DeserializerLittleEndian::calculate_padding_count_from_written_bytes(stringByteCount as u64));
+    self.remove_padding_bytes_from_end( CDR_deserializer::calculate_padding_count_from_written_bytes(stringByteCount as u64));
     visitor.visit_borrowed_str(string_to_static_str(buildString))
   }
 
@@ -348,7 +471,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     let by2 = self.next_byte().unwrap();
     let by3 = self.next_byte().unwrap();
     let bytes :[u8;4] = [by0,by1,by2,by3];
-    let elementCount : u32 = LittleEndian::read_u32(&bytes);
+    let elementCount : u32;
+    if self.DeserializationEndianess == endianess::littleEndian{
+      elementCount  = LittleEndian::read_u32(&bytes);
+    }else{
+      elementCount  = BigEndian::read_u32(&bytes);
+    }
     println!("seq length: {}", elementCount);
     _visitor.visit_seq(SequenceHelper::new(&mut self))
   }
@@ -426,11 +554,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
 }
 
 struct Enum<'a, 'de: 'a> {
-  de: &'a mut DeserializerLittleEndian<'de>,
+  de: &'a mut CDR_deserializer<'de>,
 }
 
 impl<'a, 'de> Enum<'a, 'de> {
-  fn new(de: &'a mut DeserializerLittleEndian<'de>) -> Self {
+  fn new(de: &'a mut CDR_deserializer<'de>) -> Self {
     Enum { de }
   }
 }
@@ -478,12 +606,12 @@ impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
 
 
 struct SequenceHelper<'a, 'de: 'a> {
-  de: &'a mut DeserializerLittleEndian<'de>,
+  de: &'a mut CDR_deserializer<'de>,
   first: bool,
 }
 
 impl<'a, 'de> SequenceHelper<'a, 'de> {
-  fn new(de: &'a mut DeserializerLittleEndian<'de>) -> Self {
+  fn new(de: &'a mut CDR_deserializer<'de>) -> Self {
     SequenceHelper {
           de,
           first: true,
@@ -543,7 +671,9 @@ impl<'de, 'a> MapAccess<'de> for SequenceHelper<'a, 'de> {
 #[cfg(test)]
 mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
+  use crate::serialization::cdrSerializer::to_big_endian_binary;
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+  use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
   use serde::{Serialize, Deserialize};
   use bytes::{BytesMut, BufMut};
   use std::any::type_name;
@@ -665,21 +795,38 @@ fn CDR_Deserialization_example_struct(){
       b : ['a','b','c','d'],
     };
 
-    let mut serializized: Vec<u8>= vec![
+    let mut serialized_le: Vec<u8>= vec![
       0x01, 0x00, 0x00, 0x00,
       0x61, 0x62, 0x63, 0x64,
     ];
 
-    let deserialized : example = deserialize_from_little_endian(&mut serializized).unwrap();
-    let serializedO = to_little_endian_binary(&o).unwrap();
+    let mut serialized_be: Vec<u8> = vec![
+      0x00, 0x00, 0x00, 0x01,
+      0x61, 0x62, 0x63, 0x64,
+    ];
 
-    assert_eq!(serializedO,vec![
+
+
+    let deserialized_le : example = deserialize_from_little_endian(&mut serialized_le).unwrap();
+    let deserialized_be : example = deserialize_from_big_endian(&mut serialized_be).unwrap();
+    let serializedO_le = to_little_endian_binary(&o).unwrap();
+    let serializedO_be = to_big_endian_binary(&o).unwrap();
+
+
+    assert_eq!(serializedO_le,vec![
       0x01, 0x00, 0x00, 0x00,
       0x61, 0x62, 0x63, 0x64,
     ]);
+
+    assert_eq!(serializedO_be,vec![
+      0x00, 0x00, 0x00, 0x01,
+      0x61, 0x62, 0x63, 0x64,
+    ]);
+
     println!("serialization success");
 
-    assert_eq!(deserialized,o);
+    assert_eq!(deserialized_le,o);
+    assert_eq!(deserialized_be,o);
     println!("deserialition success");
     
 }

@@ -5,17 +5,24 @@ use serde::{ser, Serialize};
 extern crate byteorder;
 use crate::serialization::cdrSerializer::byteorder::WriteBytesExt;
 use byteorder::LittleEndian;
+use byteorder::BigEndian;
 
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
-
-pub struct SerializerLittleEndian {
-  buffer: Vec<u8>,
-  stringLogger: String,
+#[derive(PartialEq)]
+enum endianess{
+  littleEndian,
+  bigEndian,
 }
 
-impl SerializerLittleEndian
+pub struct CDR_serializer {
+  buffer: Vec<u8>,
+  serializationEndianess: endianess,
+}
+
+
+impl CDR_serializer
 {
   // each bytecount needs to be multiple of 4.
   // this writes empty padding 
@@ -39,39 +46,34 @@ impl SerializerLittleEndian
       self.buffer.push(0u8);
     }
   }
-
-  
-
-  fn write_encapsulation_and_options(){
-
-  }
 } 
-// supports now only `to_little_endian_binary`.
+
 pub fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
-  let mut serializerLittleEndian = SerializerLittleEndian {
+  let mut CDR_serializer = CDR_serializer {
     buffer: Vec::new(),
-    stringLogger: String::new(),
+    serializationEndianess : endianess::littleEndian,
   };
-  value.serialize(&mut serializerLittleEndian)?;
-  Ok(serializerLittleEndian.buffer)
+  value.serialize(&mut CDR_serializer)?;
+  Ok(CDR_serializer.buffer)
 }
-pub fn to_little_endian_binary_with_encapsulation_and_options<T>(value: &T) -> Result<Vec<u8>>
+
+pub fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
-  T:Serialize,
-{
-    let mut serializerLittleEndian = SerializerLittleEndian {
+  T: Serialize,
+  {
+    let mut CDR_serializer = CDR_serializer {
       buffer: Vec::new(),
-      stringLogger: String::new(),
+      serializationEndianess : endianess::bigEndian,
     };
-    value.serialize(&mut serializerLittleEndian)?;
-    Ok(serializerLittleEndian.buffer)
-}
+    value.serialize(&mut CDR_serializer)?;
+    Ok(CDR_serializer.buffer)
+  }
 
 
-impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
+impl<'a> ser::Serializer for &'a mut CDR_serializer {
   type Ok = ();
   // The error type when some error occurs during serialization.
   type Error = Error;
@@ -119,36 +121,70 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   }
 
   fn serialize_u16(self, v: u16) -> Result<()> {
-    let mut wtr = vec![];
-    wtr.write_u16::<LittleEndian>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.write_padding(2);
+    if self.serializationEndianess == endianess::littleEndian{
+      let mut wtr = vec![];
+      wtr.write_u16::<LittleEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.write_padding(2);
+    }else{
+      let mut wtr = vec![];
+      wtr.write_u16::<BigEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.write_padding(2);
+    }
     Ok(())
   }
 
   fn serialize_u32(self, v: u32) -> Result<()> {
-    let mut wtr = vec![];
-    wtr.write_u32::<LittleEndian>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
-    Ok(())
+    if self.serializationEndianess == endianess::littleEndian{
+      let mut wtr = vec![];
+      wtr.write_u32::<LittleEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.buffer.push(wtr[2]);
+      self.buffer.push(wtr[3]);
+      Ok(())
+    }else{
+      let mut wtr = vec![];
+      wtr.write_u32::<BigEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.buffer.push(wtr[2]);
+      self.buffer.push(wtr[3]);
+      Ok(())
+    }
+    
   }
 
   fn serialize_u64(self, v: u64) -> Result<()> {
-    let mut wtr = vec![];
-    wtr.write_u64::<LittleEndian>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
-    self.buffer.push(wtr[4]);
-    self.buffer.push(wtr[5]);
-    self.buffer.push(wtr[6]);
-    self.buffer.push(wtr[7]);
-    Ok(())
+    if self.serializationEndianess == endianess::littleEndian{
+      let mut wtr = vec![];
+      wtr.write_u64::<LittleEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.buffer.push(wtr[2]);
+      self.buffer.push(wtr[3]);
+      self.buffer.push(wtr[4]);
+      self.buffer.push(wtr[5]);
+      self.buffer.push(wtr[6]);
+      self.buffer.push(wtr[7]);
+      Ok(())
+    }else{
+      let mut wtr = vec![];
+      wtr.write_u64::<BigEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.buffer.push(wtr[2]);
+      self.buffer.push(wtr[3]);
+      self.buffer.push(wtr[4]);
+      self.buffer.push(wtr[5]);
+      self.buffer.push(wtr[6]);
+      self.buffer.push(wtr[7]);
+      Ok(())
+    }
+    
   }
 
   fn serialize_i8(self, v: i8) -> Result<()> {
@@ -160,58 +196,114 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   }
 
   fn serialize_i16(self, v: i16) -> Result<()> {
-    let mut wtr = vec![];
-    wtr.write_i16::<LittleEndian>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.write_padding(2);
-    Ok(())
+    if self.serializationEndianess == endianess::littleEndian{
+      let mut wtr = vec![];
+      wtr.write_i16::<LittleEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.write_padding(2);
+      Ok(())
+    }else{
+      let mut wtr = vec![];
+      wtr.write_i16::<BigEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.write_padding(2);
+      Ok(())
+    }
+
   }
 
   fn serialize_i32(self, v: i32) -> Result<()> {
-    let mut wtr = vec![];
-    wtr.write_i32::<LittleEndian>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
-    Ok(())
+    if self.serializationEndianess == endianess::littleEndian{
+      let mut wtr = vec![];
+      wtr.write_i32::<LittleEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.buffer.push(wtr[2]);
+      self.buffer.push(wtr[3]);
+      Ok(())
+    }else{
+      let mut wtr = vec![];
+      wtr.write_i32::<BigEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.buffer.push(wtr[2]);
+      self.buffer.push(wtr[3]);
+      Ok(())
+    }
   }
 
   fn serialize_i64(self, v: i64) -> Result<()> {
-    let mut wtr = vec![];
-    wtr.write_i64::<LittleEndian>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
-    self.buffer.push(wtr[4]);
-    self.buffer.push(wtr[5]);
-    self.buffer.push(wtr[6]);
-    self.buffer.push(wtr[7]);
-    Ok(())
+    if self.serializationEndianess == endianess::littleEndian{
+      let mut wtr = vec![];
+      wtr.write_i64::<LittleEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.buffer.push(wtr[2]);
+      self.buffer.push(wtr[3]);
+      self.buffer.push(wtr[4]);
+      self.buffer.push(wtr[5]);
+      self.buffer.push(wtr[6]);
+      self.buffer.push(wtr[7]);
+      Ok(())
+    }else{
+      let mut wtr = vec![];
+      wtr.write_i64::<BigEndian>(v).unwrap();
+      self.buffer.push(wtr[0]);
+      self.buffer.push(wtr[1]);
+      self.buffer.push(wtr[2]);
+      self.buffer.push(wtr[3]);
+      self.buffer.push(wtr[4]);
+      self.buffer.push(wtr[5]);
+      self.buffer.push(wtr[6]);
+      self.buffer.push(wtr[7]);
+      Ok(())
+    }
   }
 
   
   fn serialize_f32(self, _v: f32) -> Result<()> {
-    let v_bytes = _v.to_bits().to_le_bytes();
-    self.buffer.push(v_bytes[0]);
-    self.buffer.push(v_bytes[1]);
-    self.buffer.push(v_bytes[2]);
-    self.buffer.push(v_bytes[3]);
-    Ok(())
+    if self.serializationEndianess == endianess::littleEndian{
+      let v_bytes = _v.to_bits().to_le_bytes();
+      self.buffer.push(v_bytes[0]);
+      self.buffer.push(v_bytes[1]);
+      self.buffer.push(v_bytes[2]);
+      self.buffer.push(v_bytes[3]);
+      Ok(())
+    }else{
+      let v_bytes = _v.to_bits().to_be_bytes();
+      self.buffer.push(v_bytes[0]);
+      self.buffer.push(v_bytes[1]);
+      self.buffer.push(v_bytes[2]);
+      self.buffer.push(v_bytes[3]);
+      Ok(())
+    }
   }
   fn serialize_f64(self, _v: f64) -> Result<()> {
-    let v_bytes = _v.to_bits().to_le_bytes();
-    self.buffer.push(v_bytes[0]);
-    self.buffer.push(v_bytes[1]);
-    self.buffer.push(v_bytes[2]);
-    self.buffer.push(v_bytes[3]);
-    self.buffer.push(v_bytes[4]);
-    self.buffer.push(v_bytes[5]);
-    self.buffer.push(v_bytes[6]);
-    self.buffer.push(v_bytes[7]);
-    Ok(())
+    if self.serializationEndianess == endianess::littleEndian{
+      let v_bytes = _v.to_bits().to_le_bytes();
+      self.buffer.push(v_bytes[0]);
+      self.buffer.push(v_bytes[1]);
+      self.buffer.push(v_bytes[2]);
+      self.buffer.push(v_bytes[3]);
+      self.buffer.push(v_bytes[4]);
+      self.buffer.push(v_bytes[5]);
+      self.buffer.push(v_bytes[6]);
+      self.buffer.push(v_bytes[7]);
+      Ok(())
+    }else{
+      let v_bytes = _v.to_bits().to_be_bytes();
+      self.buffer.push(v_bytes[0]);
+      self.buffer.push(v_bytes[1]);
+      self.buffer.push(v_bytes[2]);
+      self.buffer.push(v_bytes[3]);
+      self.buffer.push(v_bytes[4]);
+      self.buffer.push(v_bytes[5]);
+      self.buffer.push(v_bytes[6]);
+      self.buffer.push(v_bytes[7]);
+      Ok(())
+    }
   }
 
   
@@ -220,13 +312,11 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   //character data (e.g., TCS-C) between a particular client and server ORBs is determined
   //via the process described in Section 13.10, “Code Set Conversion,” 
   fn serialize_char(self, _v: char) -> Result<()> {
-
     // TODO how to convert RUST 32 bit char to 8 bit safely???
     let charAsinteger = _v as u32;  
     let bytes = charAsinteger.to_le_bytes();
     self.buffer.push(bytes[0]);
-    //self.write_padding(1);
-    Ok(())
+    Ok(()) 
   }
 
   //A string is encoded as an unsigned long indicating the length of the string in octets,
@@ -348,7 +438,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   }
 }
 
-impl<'a> ser::SerializeSeq for &'a mut SerializerLittleEndian {
+impl<'a> ser::SerializeSeq for &'a mut CDR_serializer {
   type Ok = ();
   type Error = Error;
 
@@ -364,7 +454,7 @@ impl<'a> ser::SerializeSeq for &'a mut SerializerLittleEndian {
   }
 }
 
-impl<'a> ser::SerializeTuple for &'a mut SerializerLittleEndian {
+impl<'a> ser::SerializeTuple for &'a mut CDR_serializer {
   type Ok = ();
   type Error = Error;
 
@@ -380,7 +470,7 @@ impl<'a> ser::SerializeTuple for &'a mut SerializerLittleEndian {
   }
 }
 
-impl<'a> ser::SerializeTupleStruct for &'a mut SerializerLittleEndian {
+impl<'a> ser::SerializeTupleStruct for &'a mut CDR_serializer {
   type Ok = ();
   type Error = Error;
 
@@ -395,7 +485,7 @@ impl<'a> ser::SerializeTupleStruct for &'a mut SerializerLittleEndian {
   }
 }
 
-impl<'a> ser::SerializeTupleVariant for &'a mut SerializerLittleEndian {
+impl<'a> ser::SerializeTupleVariant for &'a mut CDR_serializer {
   type Ok = ();
   type Error = Error;
 
@@ -410,7 +500,7 @@ impl<'a> ser::SerializeTupleVariant for &'a mut SerializerLittleEndian {
   }
 }
 
-impl<'a> ser::SerializeMap for &'a mut SerializerLittleEndian {
+impl<'a> ser::SerializeMap for &'a mut CDR_serializer {
   type Ok = ();
   type Error = Error;
   fn serialize_key<T>(&mut self, key: &T) -> Result<()>
@@ -432,7 +522,7 @@ impl<'a> ser::SerializeMap for &'a mut SerializerLittleEndian {
   }
 }
 
-impl<'a> ser::SerializeStruct for &'a mut SerializerLittleEndian {
+impl<'a> ser::SerializeStruct for &'a mut CDR_serializer {
   type Ok = ();
   type Error = Error;
 
@@ -449,7 +539,7 @@ impl<'a> ser::SerializeStruct for &'a mut SerializerLittleEndian {
   }
 }
 
-impl<'a> ser::SerializeStructVariant for &'a mut SerializerLittleEndian {
+impl<'a> ser::SerializeStructVariant for &'a mut CDR_serializer {
   type Ok = ();
   type Error = Error;
 
@@ -482,6 +572,7 @@ impl<'a> ser::SerializeStructVariant for &'a mut SerializerLittleEndian {
 #[cfg(test)]
 mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
+  use crate::serialization::cdrSerializer::to_big_endian_binary;
   use std::fs::File;
   use std::io::prelude::*;
   use serde::{Serialize, Deserialize};
@@ -505,13 +596,21 @@ mod tests {
       b : ['a','b','c','d'],
     };
 
-    let expected_serialization: Vec<u8>= vec![
+    let expected_serialization_le: Vec<u8>= vec![
       0x01, 0x00, 0x00, 0x00,
       0x61, 0x62, 0x63, 0x64,
     ];
 
-    let serialized  = to_little_endian_binary(&o).unwrap();
-    assert_eq!(serialized,expected_serialization);
+    let expected_serialization_be: Vec<u8> = vec![
+      0x00, 0x00, 0x00, 0x01,
+      0x61, 0x62, 0x63, 0x64,
+    ];
+
+    let serialized_le  = to_little_endian_binary(&o).unwrap();
+    let serialized_be  = to_big_endian_binary(&o).unwrap();
+    assert_eq!(serialized_le,expected_serialization_le);
+    assert_eq!(serialized_be,expected_serialization_be);
+
   }
 
   #[test]
@@ -607,21 +706,18 @@ fn CDR_serialization_string(){
     file.write_all(&sarjallistettu).unwrap();
 }
 
-/*
-fn CDR_serialization_bytes(){
-  #[derive(Serialize)]
-  struct OmaTyyppi<'a> {
-    firstValue: bytes,
 
-  }
-  let mikkiHiiri = OmaTyyppi {
-    firstValue : vec![0,2,3,1,2,3,4,]
-  };
-  let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-  let mut file = File::create("serialization_result_string").unwrap();
-  file.write_all(&sarjallistettu).unwrap();
+fn CDR_serialization_little(){
+  
+  let number : u16 = 60000;
+  let le = to_little_endian_binary(&number).unwrap();
+  let be = to_big_endian_binary(&number).unwrap();
+
+  assert_ne!(le,be);
+  
+
 }
-*/
+
 #[test]
 fn CDR_serialize_seq(){
   #[derive(Serialize)]

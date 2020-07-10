@@ -1,7 +1,7 @@
 use crate::structure::guid::GUID;
 use crate::structure::instance_handle::InstanceHandle;
 use crate::structure::sequence_number::SequenceNumber;
-use crate::serialization::cdrDeserializer::DeserializerLittleEndian;
+use crate::serialization::cdrDeserializer::CDR_deserializer;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub enum ChangeKind {

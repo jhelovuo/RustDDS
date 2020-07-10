@@ -51,7 +51,7 @@ impl Reader {
       
     let deserializedMessage;
     if isLittleEndian{
-      deserializedMessage = cdrDeserializer::DeserializerLittleEndian::deserialize_from_little_endian(&mut _msg.serialized_payload.value)
+      deserializedMessage = cdrDeserializer::CDR_deserializer::deserialize_from_little_endian(&mut _msg.serialized_payload.value)
     }
     else{
       todo!();
