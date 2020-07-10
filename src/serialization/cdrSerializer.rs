@@ -9,11 +9,43 @@ use byteorder::LittleEndian;
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
+
 pub struct SerializerLittleEndian {
   buffer: Vec<u8>,
   stringLogger: String,
 }
 
+impl SerializerLittleEndian
+{
+  // each bytecount needs to be multiple of 4.
+  // this writes empty padding 
+  fn write_padding(&mut self, countOfWrittenBytes:u64){
+    let modulo = countOfWrittenBytes%4;
+
+    
+    if modulo == 0{
+      println!("written: {} , NO NEED TO PAD",countOfWrittenBytes);
+    }else if modulo == 1 {
+      println!("written: {} , need to pad 3",countOfWrittenBytes);
+      self.buffer.push(0u8);
+      self.buffer.push(0u8);
+      self.buffer.push(0u8);
+    }else if modulo == 2 {
+      println!("written: {} , need to pad 2",countOfWrittenBytes);
+      self.buffer.push(0u8);
+      self.buffer.push(0u8);
+    }else if modulo == 3 {
+      println!("written: {} , need to pad 1",countOfWrittenBytes);
+      self.buffer.push(0u8);
+    }
+  }
+
+  
+
+  fn write_encapsulation_and_options(){
+
+  }
+} 
 // supports now only `to_little_endian_binary`.
 pub fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
@@ -26,6 +58,18 @@ where
   value.serialize(&mut serializerLittleEndian)?;
   Ok(serializerLittleEndian.buffer)
 }
+pub fn to_little_endian_binary_with_encapsulation_and_options<T>(value: &T) -> Result<Vec<u8>>
+where
+  T:Serialize,
+{
+    let mut serializerLittleEndian = SerializerLittleEndian {
+      buffer: Vec::new(),
+      stringLogger: String::new(),
+    };
+    value.serialize(&mut serializerLittleEndian)?;
+    Ok(serializerLittleEndian.buffer)
+}
+
 
 impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   type Ok = ();
@@ -43,6 +87,8 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   type SerializeMap = Self;
   type SerializeStruct = Self;
   type SerializeStructVariant = Self;
+
+  
 
   //Little-Endian endcoding least significant bit is first.
 
@@ -68,6 +114,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
 
   fn serialize_u8(self, v: u8) -> Result<()> {
     self.buffer.push(v);
+    self.write_padding(1);
     Ok(())
   }
 
@@ -76,6 +123,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     wtr.write_u16::<LittleEndian>(v).unwrap();
     self.buffer.push(wtr[0]);
     self.buffer.push(wtr[1]);
+    self.write_padding(2);
     Ok(())
   }
 
@@ -107,6 +155,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     let mut wtr = vec![];
     wtr.write_i8(v).unwrap();
     self.buffer.push(wtr[0]);
+    self.write_padding(1);
     Ok(())
   }
 
@@ -115,6 +164,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     wtr.write_i16::<LittleEndian>(v).unwrap();
     self.buffer.push(wtr[0]);
     self.buffer.push(wtr[1]);
+    self.write_padding(2);
     Ok(())
   }
 
@@ -175,6 +225,7 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     let charAsinteger = _v as u32;  
     let bytes = charAsinteger.to_le_bytes();
     self.buffer.push(bytes[0]);
+    //self.write_padding(1);
     Ok(())
   }
 
@@ -184,11 +235,14 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   //length includes the null character, so an empty string has a length of 1. 
   fn serialize_str(self, _v: &str) -> Result<()> {
     let count: u32 = _v.chars().count() as u32;
-    self.serialize_u32(count + 1);
+    self.serialize_u32(count + 1).unwrap();
     for c in _v.chars(){
-      self.serialize_char(c);
+      let charAsinteger = c as u32;  
+      let bytes = charAsinteger.to_le_bytes();
+      self.buffer.push(bytes[0]);
     }
     self.buffer.push(0u8);
+    self.write_padding(count as u64 + 1);
     Ok(())
   }
    
@@ -249,12 +303,15 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
+    println!("serialize seq");
     let elementCount = _len.unwrap() as u32;
-    self.serialize_u32(elementCount);
+    self.serialize_u32(elementCount).unwrap();
     Ok(self)
   }
-  fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
-    self.serialize_seq(Some(len))
+  // if CDR contains fixed length array then number of elements is not written.
+  fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
+    println!("serialize tuple");
+    Ok(self)
   }
   fn serialize_tuple_struct(
     self,
@@ -273,9 +330,11 @@ impl<'a> ser::Serializer for &'a mut SerializerLittleEndian {
     Ok(self)
   }
   fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
+    println!("serialize map");
     Ok(self)
   }
   fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+    println!("serialize struct");
     self.serialize_map(Some(len))
   }
   fn serialize_struct_variant(
@@ -426,6 +485,35 @@ mod tests {
   use std::fs::File;
   use std::io::prelude::*;
   use serde::{Serialize, Deserialize};
+
+
+
+  #[test]
+  fn CDR_serialization_example(){
+
+    // look this example https://www.omg.org/spec/DDSI-RTPS/2.2/PDF 
+    // 10.2.2 Example
+
+  #[derive(Serialize, Deserialize, Debug, PartialEq)]
+     struct example {
+      a: u32,
+      b: [char;4],
+     }
+
+    let o = example{
+      a :1,
+      b : ['a','b','c','d'],
+    };
+
+    let expected_serialization: Vec<u8>= vec![
+      0x01, 0x00, 0x00, 0x00,
+      0x61, 0x62, 0x63, 0x64,
+    ];
+
+    let serialized  = to_little_endian_binary(&o).unwrap();
+    assert_eq!(serialized,expected_serialization);
+  }
+
   #[test]
   fn CDR_serializationTest() {
     #[derive(Serialize)]

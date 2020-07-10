@@ -1,4 +1,3 @@
-use std::ops::{AddAssign, MulAssign, Neg};
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Deserialize;
 use serde::de::{
@@ -19,6 +18,29 @@ impl<'de> DeserializerLittleEndian<'de> {
 
   fn remove_first_byte_from_input(&mut self){
        self.input.remove(0);
+  }
+
+  fn calculate_padding_count_from_written_bytes(count: u64) -> u8{
+    let modulo = count%4;
+    let mut needToRemoveAmount :u8 = 0;
+    if modulo == 0 {
+      needToRemoveAmount = 0u8
+    }else if modulo == 1 {
+      needToRemoveAmount = 3u8
+    }else if modulo == 2 {
+      needToRemoveAmount = 2u8
+    }else if modulo == 3 {
+      needToRemoveAmount = 1u8
+    }
+    println!("need to remove pad byte count: {}", needToRemoveAmount);
+    return needToRemoveAmount
+  }
+
+  fn remove_padding_bytes_from_end(&mut self, padCount :u8){
+    println!("try to remove padding");
+    for _a in 0..padCount{
+      self.remove_first_byte_from_input();
+    }
   }
 }
 
@@ -91,6 +113,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
   {
     let firstByte = self.next_byte().unwrap();
     let i8Byte =  firstByte as i8;
+    self.remove_padding_bytes_from_end(3);
     visitor.visit_i8( i8Byte)
   }
 
@@ -102,6 +125,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     let by1 = self.next_byte().unwrap();
     let bytes :[u8;2] = [by0,by1];
     let result : i16 = LittleEndian::read_i16(&bytes);
+    self.remove_padding_bytes_from_end(2);
     visitor.visit_i16(result)
   }
 
@@ -140,6 +164,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     V: Visitor<'de>,
   {
     let by = self.next_byte().unwrap();
+    self.remove_padding_bytes_from_end(3);
     visitor.visit_u8(by)
   }
 
@@ -151,6 +176,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     let by1 = self.next_byte().unwrap();
     let bytes :[u8;2] = [by0,by1];
     let result = LittleEndian::read_u16(&bytes);
+    self.remove_padding_bytes_from_end(2);
     visitor.visit_u16(result)
   }
 
@@ -219,6 +245,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     V: Visitor<'de>,
   {
     let by0 = self.next_byte().unwrap();
+    //self.remove_padding_bytes_from_end(3);
     _visitor.visit_char(by0 as char)
   }
 
@@ -236,8 +263,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     let buildString : String;
     let mut chars: Vec<char> = [].to_vec();
 
+    println!("trying to deserialize string of byte length: {}", stringByteCount);
+  
     // last byte is always 0 and it can be ignored.
-    for byte in 0..stringByteCount - 1 {
+    for _byte in 0..stringByteCount - 1 {
       let c = self.next_byte().unwrap() as char;
       chars.push(c);
     }
@@ -249,6 +278,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
     fn string_to_static_str(s: String) -> &'static str {
       Box::leak(s.into_boxed_str())
   }
+    self.remove_padding_bytes_from_end( DeserializerLittleEndian::calculate_padding_count_from_written_bytes(stringByteCount as u64));
     visitor.visit_borrowed_str(string_to_static_str(buildString))
   }
 
@@ -312,24 +342,24 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize seq!");
     let by0 = self.next_byte().unwrap();
     let by1 = self.next_byte().unwrap();
     let by2 = self.next_byte().unwrap();
     let by3 = self.next_byte().unwrap();
     let bytes :[u8;4] = [by0,by1,by2,by3];
     let elementCount : u32 = LittleEndian::read_u32(&bytes);
-
-    
-
+    println!("seq length: {}", elementCount);
     _visitor.visit_seq(SequenceHelper::new(&mut self))
-    //unimplemented!()
   }
 
-  fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value>
+  // if sequence is fixed length array then number of elements is not included
+  fn deserialize_tuple<V>(mut self, _len: usize, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.deserialize_seq(visitor)
+    println!("deserialize tuple!");
+    visitor.visit_seq(SequenceHelper::new(&mut self))
   }
 
   fn deserialize_tuple_struct<V>(
@@ -352,7 +382,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
   }
 
   fn deserialize_struct<V>(
-    self,
+    mut self,
     _name: &'static str,
     _fields: &'static [&'static str],
     visitor: V,
@@ -360,7 +390,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut DeserializerLittleEndian<'de> {
   where
     V: Visitor<'de>,
   {
-    self.deserialize_tuple(_fields.len(), visitor)
+    println!("deserialize struct! it has num of fields: {} ", _fields.len());
+    for f in _fields{
+      println!("field: {} ", f);
+    }
+    visitor.visit_seq(SequenceHelper::new(&mut self))
+    //self.deserialize_tuple(_fields.len(), visitor)
   }
 
   fn deserialize_enum<V>(
@@ -475,6 +510,35 @@ impl<'de, 'a> SeqAccess<'de> for SequenceHelper<'a, 'de> {
   }
 }
 
+// `MapAccess` is provided to the `Visitor` to give it the ability to iterate
+// through entries of the map.
+impl<'de, 'a> MapAccess<'de> for SequenceHelper<'a, 'de> {
+  type Error = Error;
+
+  fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+  where
+      K: DeserializeSeed<'de>,
+  {
+      // Check if there are no more elements.
+      if self.de.check_if_bytes_left() == false {
+        return Ok(None);
+      }
+      
+
+      self.first = false;
+      // Deserialize a map key.
+      seed.deserialize(&mut *self.de).map(Some)
+  }
+
+  fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+  where
+      V: DeserializeSeed<'de>,
+  {
+      // Deserialize a map value.
+      seed.deserialize(&mut *self.de)
+  }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -496,6 +560,7 @@ mod tests {
       fifth: bool,
       sixth: f32,
       seventh: f64,
+      eigth: Vec<i32>
     }
 
     let mikkiHiiri = OmaTyyppi {
@@ -505,13 +570,150 @@ mod tests {
       fourthValue: 90909099999999u64,
       fifth: true,
       sixth: -23.43f32,
-      seventh: 3432343.3423443f64
+      seventh: 3432343.3423443f64,
+      eigth: vec![-1,2,-3,4]
     };
 
     let mut sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+    println!("{:?}",sarjallistettu);
     let rakennettu: OmaTyyppi = deserialize_from_little_endian(&mut sarjallistettu).unwrap();
     assert_eq!(rakennettu, mikkiHiiri);
+    println!("deserialized: {:?}", rakennettu  );
   }
+
+  #[test]
+
+  fn CDR_Deserialization_user_defined_data(){
+    // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
+    //10.7 Example for User-defined Topic Data
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct ShapeType<'a> {
+      color: &'a str,
+      x: i32,
+      y: i32,
+      size: i32,
+    }
+
+    let message = ShapeType {
+      color: "BLUE",
+      x:34,
+      y:100,
+      size:24,
+    };
+
+
+    let expected_serialized_result: Vec<u8> = vec![
+      0x05, 0x00, 0x00, 0x00,
+      0x42, 0x4c, 0x55, 0x45,
+      0x00, 0x00, 0x00, 0x00,
+      0x22, 0x00, 0x00, 0x00,
+      0x64, 0x00, 0x00, 0x00,
+      0x18, 0x00, 0x00, 0x00,
+    ];
+
+    let mut serialized = to_little_endian_binary(&message).unwrap();
+    assert_eq!(serialized, expected_serialized_result);
+    let deserializedMessage :ShapeType = deserialize_from_little_endian(&mut serialized).unwrap();
+    assert_eq!(deserializedMessage,message)
+  }
+
+  #[test]
+
+fn CDR_Deserialization_serialization_topic_name(){
+
+  // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
+  //10.6 Example for Built-in Endpoint Data
+  // this is just CRD topic name strings
+
+  let mut recievedCDRString : Vec<u8> = vec![
+    0x07, 0x00, 0x00, 0x00,
+    0x053, 0x71, 0x75, 0x61,
+    0x72, 0x65, 0x00, 0x00,
+  ];
+
+  let deserializedMessage : &str = deserialize_from_little_endian(&mut  recievedCDRString).unwrap();
+  println!("{:?}",deserializedMessage);
+  assert_eq!("Square",deserializedMessage);
+  
+  let mut recievedCDRString2 : Vec<u8> = vec![
+    0x0A, 0x00, 0x00, 0x00,
+    0x53, 0x68, 0x61, 0x70,
+    0x65, 0x54, 0x79, 0x70,
+    0x65, 0x00, 0x00, 0x00,
+  ];
+
+  let deserializedMessage2 : &str = deserialize_from_little_endian(&mut  recievedCDRString2).unwrap();
+  println!("{:?}",deserializedMessage2);
+  assert_eq!("ShapeType",deserializedMessage2);
+
+}
+
+#[test]
+fn CDR_Deserialization_example_struct(){
+
+  // look this example https://www.omg.org/spec/DDSI-RTPS/2.2/PDF 
+  // 10.2.2 Example
+
+  #[derive(Serialize, Deserialize, Debug, PartialEq)]
+  struct example {
+    a: u32,
+    b: [char;4],
+  }
+
+    let o = example{
+      a :1,
+      b : ['a','b','c','d'],
+    };
+
+    let mut serializized: Vec<u8>= vec![
+      0x01, 0x00, 0x00, 0x00,
+      0x61, 0x62, 0x63, 0x64,
+    ];
+
+    let deserialized : example = deserialize_from_little_endian(&mut serializized).unwrap();
+    let serializedO = to_little_endian_binary(&o).unwrap();
+
+    assert_eq!(serializedO,vec![
+      0x01, 0x00, 0x00, 0x00,
+      0x61, 0x62, 0x63, 0x64,
+    ]);
+    println!("serialization success");
+
+    assert_eq!(deserialized,o);
+    println!("deserialition success");
+    
+}
+
+
+  #[test]
+
+  fn CDR_Deserialization_serialization_payload_shapes(){
+    // This test uses wireshark captured shapes demo part of serialized message as recieved_message.
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct ShapeType<'a> {
+      color: &'a str,
+      x: i32,
+      y: i32,
+      size: i32,
+    }
+    // this message is DataMessages serialized data withoutt encapsulation kind and encapsulation options
+    let mut recieved_message: Vec<u8> = vec![
+      0x04, 0x00, 0x00, 0x00,
+      0x52, 0x45, 0x44, 0x00,
+      0x61, 0x00, 0x00, 0x00,
+      0x1b, 0x00, 0x00, 0x00,
+      0x1e, 0x00, 0x00, 0x00,
+    ];
+
+    let deserializedMessage :ShapeType = deserialize_from_little_endian(&mut  recieved_message).unwrap();
+    println!("{:?}",deserializedMessage);
+    //assert_eq!(deserializedMessage,recieved_message)
+    
+  }
+  
+
+
+
   #[test]
   fn CDR_Deserialization_u8() {
     let numberU8: u8 = 35;
@@ -687,7 +889,7 @@ fn CDR_Deserialization_seq(){
 #[test]
 fn CDR_Deserialization_unknown_type(){
   let sequence :Vec<i32> = [1i32,-2i32,3i32,-4i32].to_vec();
-  let mut serialized = to_little_endian_binary(&sequence).unwrap();
+  let _serialized = to_little_endian_binary(&sequence).unwrap();
   //let TargetType: Vec<i32>;
   //TargetType = 2;
 
@@ -697,7 +899,7 @@ fn CDR_Deserialization_unknown_type(){
   //let tt = type_of(TargetType);
 
   //let t = type_name_of_val(TargetType);
-  let deserialized :&str  = deserialize_from_little_endian(&mut serialized).unwrap();
+  //let deserialized :&str  = deserialize_from_little_endian(&mut serialized).unwrap();
 }
 
 }
