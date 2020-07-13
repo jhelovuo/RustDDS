@@ -7,7 +7,7 @@ pub struct HistoryCache {
 }
 
 impl  HistoryCache {
-  fn new() -> HistoryCache {
+  pub fn new() -> HistoryCache {
     HistoryCache {
       changes: vec![],
     }
@@ -55,17 +55,17 @@ mod tests {
   use crate::structure::cache_change::ChangeKind;
   use crate::structure::guid::GUID;
   use crate::structure::instance_handle::InstanceHandle;
-  use crate::structure::cache_change::ChangeData;
+  use crate::messages::submessages::data::Data;
 
   #[test]
-  fn add_change_test() {
+  fn ch_add_change_test() {
     let mut history_cache = HistoryCache::new();
     let cache_change = CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::SEQUENCENUMBER_UNKNOWN,
-      data_value: Some(ChangeData {hasLittleEndianData:false}),
+      data_value: Some(Data::new()),
     };
 
     assert_eq!(0, history_cache.changes.len());
@@ -75,7 +75,7 @@ mod tests {
   }
 
   #[test]
-  fn remove_change_test() {
+  fn ch_remove_change_test() {
     let mut history_cache = HistoryCache::new();
 
     assert_eq!(0, history_cache.changes.len());
@@ -85,7 +85,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(10),
-      data_value: Some(ChangeData {hasLittleEndianData:false}),
+      data_value: Some(Data::new()),
     };
     history_cache.add_change(cache_change);
     assert_eq!(1, history_cache.changes.len());
@@ -95,7 +95,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(7),
-      data_value: Some(ChangeData {hasLittleEndianData:false}),
+      data_value: Some(Data::new()),
     };
     history_cache.add_change(cache_change);
     assert_eq!(2, history_cache.changes.len());
@@ -105,7 +105,7 @@ mod tests {
   }
 
   #[test]
-  fn get_seq_num_min() {
+  fn ch_get_seq_num_min() {
     let mut history_cache = HistoryCache::new();
 
     let small_cache_change = CacheChange {
@@ -113,7 +113,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(1),
-      data_value: Some(ChangeData {hasLittleEndianData:false}),
+      data_value: Some(Data::new()),
     };
     history_cache.add_change(small_cache_change);
 
@@ -122,7 +122,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(7),
-      data_value: Some(ChangeData {hasLittleEndianData:false}),
+      data_value: Some(Data::new()),
     };
     history_cache.add_change(big_cache_change);
 
@@ -133,7 +133,7 @@ mod tests {
   }
 
   #[test]
-  fn get_seq_num_max() {
+  fn ch_get_seq_num_max() {
     let mut history_cache = HistoryCache::new();
 
     let small_cache_change = CacheChange {
@@ -141,7 +141,7 @@ mod tests {
       writer_guid: GUID::GUID_UNKNOWN,
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(1),
-      data_value: Some(ChangeData {hasLittleEndianData:false}),
+      data_value: Some(Data::new()),
     };
     history_cache.add_change(small_cache_change);
 
@@ -155,7 +155,7 @@ mod tests {
       },
       instance_handle: InstanceHandle::default(),
       sequence_number: SequenceNumber::from(7),
-      data_value: Some(ChangeData {hasLittleEndianData:false}),
+      data_value: Some(Data::new()),
     };
     history_cache.add_change(big_cache_change);
 

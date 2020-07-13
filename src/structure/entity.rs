@@ -1,4 +1,4 @@
-use crate::structure::guid::GUID;
+use crate::structure::guid::{GUID, EntityId, GuidPrefix};
 
 /// Base class for all RTPS entities. RTPS Entity represents the class of
 /// objects that are visible to other RTPS Entities on the network. As such,
@@ -12,4 +12,14 @@ pub struct EntityAttributes {
 
 pub trait Entity {
   fn as_entity(&self) -> &EntityAttributes;
+
+  fn get_guid(&self) -> GUID{
+    self.as_entity().guid
+  }
+  fn get_entity_id(&self) -> EntityId{
+    self.as_entity().guid.entityId
+  }
+  fn get_guid_prefix(&self) -> GuidPrefix{
+    self.as_entity().guid.guidPrefix
+  }
 }

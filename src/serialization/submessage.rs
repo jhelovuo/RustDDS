@@ -112,11 +112,11 @@ where
     if pos != octets_to_inline_qos as usize + 4 {
       pos = octets_to_inline_qos as usize + 4; // Ignore 
     }
-    let mut inline_qos = ParameterList{parameters: vec![]};
+    let mut inline_qos = Some(ParameterList{parameters: vec![]});
     if inline_qoS_flag {
       let inline_qos_size: usize = 4; // Is it this for sure??
-      inline_qos = ParameterList::read_from_buffer(
-        &buffer[pos..pos+inline_qos_size]).unwrap();
+      inline_qos = Some(ParameterList::read_from_buffer(
+        &buffer[pos..pos+inline_qos_size]).unwrap());
         pos += inline_qos_size;
     } 
     let mut serialized_payload = SerializedPayload::new();
@@ -191,11 +191,11 @@ where
       pos = octets_to_inline_qos as usize + 4; // Ignore 
     }
 
-    let mut inline_qos = ParameterList{parameters: vec![]};
+    let mut inline_qos: Option<ParameterList> = None;
     if inline_qoS_flag {
       let inline_qos_size: usize = 4; // Is it this for sure??
-      inline_qos = ParameterList::read_from_buffer(
-        &buffer[pos..pos+inline_qos_size]).unwrap();
+      inline_qos = Some(ParameterList::read_from_buffer(
+        &buffer[pos..pos+inline_qos_size]).unwrap());
         pos += inline_qos_size;
     } 
     let mut serialized_payload = SerializedPayload::new();

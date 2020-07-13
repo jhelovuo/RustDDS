@@ -1,84 +1,55 @@
 use crate::structure::entity::Entity;
-use crate::structure::endpoint::Endpoint;
+use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::structure::history_cache::HistoryCache;
 use crate::messages::submessages::data::Data;
 use crate::messages::submessages::heartbeat::Heartbeat;
 use crate::structure::entity::EntityAttributes;
-use crate::structure::guid::EntityId;
-
-use crate::serialization::cdrDeserializer;
-use crate::structure::cache_change::CacheChange;
-use crate::structure::cache_change::ChangeData;
 use crate::structure::guid::GUID;
-use crate::structure::cache_change::ChangeKind;
-use crate::structure::instance_handle::InstanceHandle;
-use crate::structure::sequence_number::SequenceNumber;
 
-
+use crate::structure::cache_change::CacheChange;
 
 #[derive(Debug, PartialEq)]
 pub struct Reader {
   history_cache: HistoryCache,
-  pub entity_attributes: EntityAttributes,
+  entity_attributes: EntityAttributes,
+  pub enpoint_attributes: EndpointAttributes,
 } // placeholder
 
 impl Reader {
-  pub fn new() -> Reader {
-    todo!()
+  pub fn new(guid: GUID) -> Reader {
+    Reader {
+      history_cache: HistoryCache::new(),
+      entity_attributes: EntityAttributes{guid},
+      enpoint_attributes: EndpointAttributes::default(),
+    }
   }
-
-
-  // TODO: check if it's necessary to implement different handlers for discovery and user messages
+  // TODO: check if it's necessary to implement different handlers for discovery
+  // and user messages
 
   // handles regular data message and updates history cache
-  pub fn handle_data_msg(&mut self, mut _msg: Data) { 
-    
-    // todo how to know expected data type?
-
-
-    self.make_cache_change_for_data_message(_msg);
-
+  pub fn handle_data_msg(&mut self, data: Data) { 
+    let user_data = true; // Different action for discovery data?
+    if user_data {
+      self.make_cache_change(data);
+    }else {
+      // is discovery data
+      todo!();
+    }
   }
 
   // send ack_nack response if necessary
   pub fn handle_heartbeat(&mut self, _heartbeat: Heartbeat) {
     todo!()
-  }
-
-  fn make_cache_change_for_data_message(&mut self, mut _msg: Data){
-
-    let isLittleEndian : bool = Reader::test_if_little_endian(_msg.serialized_payload.representation_identifier);
-      
-    let deserializedMessage;
-    if isLittleEndian{
-      deserializedMessage = cdrDeserializer::CDR_deserializer::deserialize_from_little_endian(&mut _msg.serialized_payload.value)
-    }
-    else{
-      todo!();
-    }
-
-    let g = GUID::new();
-    g.from_prefix(_msg.writer_id);
-    let change =  CacheChange {
-       kind : ChangeKind::ALIVE,
-       writer_guid: g ,
-       instance_handle: InstanceHandle::default(),
-       sequence_number: SequenceNumber::default(),
-       //TODO????
-       //data_value: Some(ChangeData{hasLittleEndianData :true, deserializedLittleEndianData: deserializedMessage})
-       data_value: Some(ChangeData{hasLittleEndianData :true})
-    };
-
-    self.history_cache.add_change(change);
-  }
+  }  
 
   // update history cache
-  fn make_cache_change(&mut self, _msg: Data) {
-
-    
-
-    // TODO send 
-    
+  fn make_cache_change(&mut self, data: Data) {
+    let change =  CacheChange::new(
+      self.get_guid(),
+      data.writer_sn,
+      Some(data),
+    );
+    self.history_cache.add_change(change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
@@ -86,41 +57,33 @@ impl Reader {
   fn notify_cache_change(&self) {
     todo!()
   }
-
-  fn test_if_little_endian(representation_identifier :u16) -> bool{
-      representation_identifier == 0x00
-    }
-  }
-
+}
 
 impl Entity for Reader {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes
   }
 }
-
+  
 impl Endpoint for Reader {
   fn as_endpoint(&self) -> &crate::structure::endpoint::EndpointAttributes {
     todo!()
   }
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use serde::{Serialize, Deserialize};
+  use crate::structure::guid::GUID;
 
   use crate::dds::reader::Reader;
 
   #[test]
   fn test_creating_cache_changes() {
    
-    let reader = Reader::new();
+    let reader = Reader::new(GUID::new());
 
    
   }

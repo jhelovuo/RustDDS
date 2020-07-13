@@ -42,7 +42,7 @@ pub struct DataFrag {
 
   /// Contains QoS that may affect the interpretation of the message.
   /// Present only if the InlineQosFlag is set in the header.
-  pub inline_qos: ParameterList,
+  pub inline_qos: Option<ParameterList>,
 
   /// Encapsulation of a consecutive series of fragments, starting at
   /// fragment_starting_num for a total of fragments_in_submessage.

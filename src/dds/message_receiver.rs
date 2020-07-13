@@ -4,6 +4,7 @@ use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessages::EntitySubmessage;
 use crate::structure::guid::{GuidPrefix, GUID};
+use crate::structure::entity::Entity;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::structure::time::Time;
 use crate::serialization::submessage::SubMessage;
@@ -28,7 +29,7 @@ pub struct MessageReceiver {
 
   participant_guid_prefix: GuidPrefix,
   //submessage_vec: Vec<SubMessage>, //messages should be sent immideately, 
-  //because following interpreter submessages might change some receiver parameters
+  //because subsequent interpreter submessages might change some receiver parameters
 
   pub source_version: ProtocolVersion,
   pub source_vendor_id: VendorId,
@@ -92,19 +93,27 @@ impl MessageReceiver {
       self.submessage_count = 0;
   }
 
-  pub fn add_reader(&mut self, new_reader: Reader){ // or guidPRefix?
-    match self.available_readers.iter().find(|&r| *r == new_reader) {
-        None => {self.available_readers.push(new_reader);},
+  pub fn add_reader(&mut self, new_reader_guid: GUID){ // or guidPRefix?
+    match self.available_readers.iter().find(
+      |&r| r.get_guid() == new_reader_guid
+    ) {
+        None => {self.available_readers.push(Reader::new(new_reader_guid));},
         Some(_) => {},
     }
   }
 
-  pub fn remove_reader(&mut self, old_reader: Reader){
+  pub fn remove_reader(&mut self, old_reader_guid: GUID){
     if let Some(pos) = self.available_readers.iter().position(
-      |r| *r == old_reader
+      |r| r.get_guid() == old_reader_guid
     ) {
         self.available_readers.remove(pos);
     }
+  }
+
+  fn get_reader(&mut self, reader_id: EntityId) -> Option<& mut Reader>{
+    self.available_readers.iter_mut().find(
+      |r| r.get_entity_id() == reader_id
+    )
   }
 
   pub fn handle_discovery_msg(&mut self, _msg: Vec<u8>) {
@@ -176,7 +185,7 @@ impl MessageReceiver {
   fn send_submessage(&mut self, submessage: EntitySubmessage) {
 
     if self.dest_guid_prefix != self.participant_guid_prefix{
-      println!("Ofcourse, the example messages are not for this participant");
+      println!("Ofcourse, the example messages are not for this participant?");
       return; // Wrong target received
     }
     match submessage {
@@ -195,12 +204,6 @@ impl MessageReceiver {
       EntitySubmessage::NackFrag(_) => {},
     }
 
-  }
-
-  fn get_reader(&mut self, reader_id: EntityId) -> Option<& mut Reader>{
-    self.available_readers.iter_mut().find(
-      |r| r.entity_attributes.guid.entityId == reader_id
-    )
   }
 
   fn is_interpreter_submessage(

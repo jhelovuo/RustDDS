@@ -10,6 +10,12 @@ pub struct ParameterList {
   pub parameters: Vec<Parameter>,
 }
 
+impl ParameterList {
+  pub fn new() -> ParameterList {
+    ParameterList {parameters: Vec::new()}
+  }
+}
+
 /// The PID_PAD is used to enforce alignment of the parameter
 /// that follows and its length can be anything (as long as it is a multiple of
 /// 4)

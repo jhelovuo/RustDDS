@@ -29,11 +29,29 @@ pub struct Data {
 
   /// Contains QoS that may affect the interpretation of the message.
   /// Present only if the InlineQosFlag is set in the header.
-  pub inline_qos: ParameterList,
+  pub inline_qos: Option<ParameterList>,
 
   /// If the DataFlag is set, then it contains the encapsulation of
   /// the new value of the data-object after the change.
   /// If the KeyFlag is set, then it contains the encapsulation of
   /// the key of the data-object the message refers to.
   pub serialized_payload: SerializedPayload,
+}
+
+impl Data {
+  pub fn new() -> Data {
+    Data {
+      reader_id: EntityId::default(),
+      writer_id: EntityId::default(),
+      writer_sn: SequenceNumber::default(),
+      inline_qos: None,
+      serialized_payload: SerializedPayload::default(),
+    }
+  }
+}
+
+impl Default for Data {
+  fn default() -> Self {
+    Data::new()
+  }
 }

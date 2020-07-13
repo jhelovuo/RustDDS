@@ -15,12 +15,17 @@ use crate::dds::typedesc::*;
 use crate::dds::qos::*;
 use crate::dds::result::*;
 use crate::structure::entity::{Entity, EntityAttributes};
-use crate::structure::guid::GUID;
+use crate::structure::guid::{GUID, EntityId};
 use std::net::Ipv4Addr;
 
 pub struct DomainParticipant {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
+
+  // Adding Readers
+  reader_adder_sender: (Token, mio_channel::Sender<GUID>),
+  reader_remover_sender: (Token, mio_channel::Sender<GUID>),
+
 }
 
 pub struct SubscriptionBuiltinTopicData {} // placeholder
@@ -57,18 +62,44 @@ impl DomainParticipant {
 
     let targets = HashMap::new();
 
+    // Adding readers
+    let (sender_add_reader, receiver_add) =
+    mio_channel::channel::<GUID>();
+    let (sender_remove_reader, receiver_remove) =
+    mio_channel::channel::<GUID>();
+
+    let mut reader_operators = HashMap::new();
+    reader_operators.insert(ADD_READER_TOKEN, receiver_add);
+    reader_operators.insert(REMOVE_READER_TOKEN, receiver_remove);
+
     let new_guid = GUID::new();
 
     let ev_wrapper = DPEventWrapper::new(
       listeners, 
       targets,
-      new_guid.guidPrefix);
+      new_guid.guidPrefix,
+      reader_operators,
+    );
       
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
     DomainParticipant {
       entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
+
+      // Adding readers
+      reader_adder_sender: (ADD_READER_TOKEN, sender_add_reader),
+      reader_remover_sender: (REMOVE_READER_TOKEN, sender_remove_reader),
     }
+  }
+
+  pub fn create_reader(&self) {
+    let reader_guid = GUID::new();
+    self.reader_adder_sender.1.send(reader_guid).unwrap();
+  }
+
+  pub fn remove_reader(&self) {
+    let reader_guid = GUID::new(); // How to identify reader to be removed?
+    self.reader_adder_sender.1.send(reader_guid).unwrap();
   }
 
   // Publisher and subscriber creation
@@ -127,6 +158,9 @@ impl Entity for DomainParticipant {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes
   }
+  fn get_entity_id(&self) -> EntityId{
+    self.entity_attributes.guid.entityId
+  }
 }
 
 #[cfg(test)]
@@ -148,4 +182,5 @@ mod tests {
 
     // TODO: get result data from Reader
   }
+  
 }

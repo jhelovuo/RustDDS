@@ -7,14 +7,17 @@ use crate::dds::message_receiver::MessageReceiver;
 use crate::dds::reader::Reader;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
-use crate::structure::guid::{GuidPrefix};
+use crate::structure::guid::{GuidPrefix, GUID};
 
 pub struct DPEventWrapper {
   poll: Poll,
   udp_listeners: HashMap<Token, UDPListener>,
   send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
   message_receiver: MessageReceiver,
-  receivers: HashMap<Token, mio_extras::channel::Receiver<i32>>,
+
+  // Adding readers
+  reader_operators: HashMap<Token, mio_channel::Receiver<GUID>>,
+  test_receivers: HashMap<Token, mio_channel::Receiver<i32>>,
 }
 
 impl DPEventWrapper {
@@ -22,6 +25,8 @@ impl DPEventWrapper {
     udp_listeners: HashMap<Token, UDPListener>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
     participant_guid_prefix: GuidPrefix,
+    reader_operators: HashMap<Token, mio_channel::Receiver<GUID>>,
+    
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
 
@@ -37,14 +42,23 @@ impl DPEventWrapper {
         )
         .expect("Failed to register listener.");
     }
+    let mut reader_operators = reader_operators;
+    for (token, receiver) in &mut reader_operators {
+      poll.register(
+        receiver,
+        token.clone(),
+        Ready::readable(),
+        PollOpt::edge(),
+      ).expect("Failed to register reader operators.");
+    }
 
     DPEventWrapper {
-      poll: poll,
-      udp_listeners: udp_listeners,
-      send_targets: send_targets,
+      poll,
+      udp_listeners,
+      send_targets,
       message_receiver: MessageReceiver::new(participant_guid_prefix),
-      receivers: HashMap::new(),
-
+      reader_operators,
+      test_receivers: HashMap::new(),
     }
   }
 
@@ -55,13 +69,12 @@ impl DPEventWrapper {
       ev_wrapper.poll.poll(
         &mut events, None
       ).expect("Failed in waiting of poll.");
-
-      println!("Number of events: {:?}", events.len());
-
       for event in events.into_iter() {
         println!("{:?}", event);
 
         if event.token() == STOP_POLL_TOKEN {
+          // print for testing
+          //println!("{}", ev_wrapper.message_receiver.available_readers.len());
           return;
         } else if DPEventWrapper::is_udp_traffic(&event) {
           ev_wrapper.handle_udp_traffic(&event);
@@ -101,15 +114,15 @@ impl DPEventWrapper {
   }
 
   pub fn handle_reader_action(&mut self, event: &Event) {
-    if let Some(rec) = self.receivers.get(&event.token()){
-      let data = rec.try_recv().unwrap();
-      println!("Received data: {}", data);
+    if let Some(rec) = self.reader_operators.get(&event.token()){
+      let reader_guid = rec.try_recv().unwrap();
+      println!("Received data: {:?}", reader_guid);
       match event.token() {
         ADD_READER_TOKEN =>{
-          //self.message_receiver.add_reader(Reader::new());
+          self.message_receiver.add_reader(reader_guid);
         },
         REMOVE_READER_TOKEN =>{
-          //self.message_receiver.remove_reader(Reader::new());
+          self.message_receiver.remove_reader(reader_guid);
         },
         _ =>{},
       }
@@ -128,48 +141,56 @@ mod tests {
   #[test]
   fn dpew_add_readers() {
 
-    let mut dp_event_wrapper = DPEventWrapper::new(
+    // Adding readers
+    let (sender_add_reader, receiver_add) =
+    mio_channel::channel::<GUID>();
+    let (sender_remove_reader, receiver_remove) =
+    mio_channel::channel::<GUID>();
+
+    let mut reader_operators = HashMap::new();
+    reader_operators.insert(ADD_READER_TOKEN, receiver_add);
+    reader_operators.insert(REMOVE_READER_TOKEN, receiver_remove);
+
+    let dp_event_wrapper = DPEventWrapper::new(
       HashMap::new(),
       HashMap::new(),
       GuidPrefix::default(),
+      reader_operators,
     );
 
-    let (sender_add, receiver) = mio_channel::channel::<i32>();
-    let (sender_remove, receiver1) = mio_channel::channel::<i32>();
-    let (sender_stop, receiver2) = mio_channel::channel::<i32>();
-
-    dp_event_wrapper.receivers.insert(ADD_READER_TOKEN, receiver);
-    dp_event_wrapper.receivers.insert(REMOVE_READER_TOKEN, receiver1);
-    dp_event_wrapper.receivers.insert(STOP_POLL_TOKEN, receiver2);
-
-    for (token, listener) in &mut dp_event_wrapper.receivers {
-      dp_event_wrapper.poll
-        .register(
-          listener,
-          token.clone(),
-          Ready::readable(),
-          PollOpt::edge(),
-        )
-        .expect("Failed to register listener.");
-    }
+    let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
+    dp_event_wrapper.poll.register(
+      &receiver_stop, 
+      STOP_POLL_TOKEN, 
+      Ready::readable(), 
+      PollOpt::edge()
+    ).expect("Failed to register receivers.");
 
     let child = thread::spawn(
       move || DPEventWrapper::event_loop(dp_event_wrapper)
     );
     
     let n = 3;
+
+    let mut reader_guids = Vec::new();
     for i in 0..n {
-      println!("Sent data {}", i);
-      sender_add.send(i).unwrap();
-      std::thread::sleep(Duration::new(0,50));
+      let new_guid = GUID::new();
+      reader_guids.push(new_guid);
+      println!("\nSent reader number {}: {:?}\n", i, new_guid);
+      sender_add_reader.send(new_guid).unwrap();
+      std::thread::sleep(Duration::new(0,100));
+
     }
-    println!("poistetaan eka");
-    sender_remove.send(-1).unwrap();
-    std::thread::sleep(Duration::new(0,50));
-    println!("poistetaan toinen");
-    sender_remove.send(-2).unwrap();
-    println!("Lopetustoken lähtee");
+
+    println!("\npoistetaan toka\n");
+    let some_guid = reader_guids[1];
+    sender_remove_reader.send(some_guid).unwrap();
+    std::thread::sleep(Duration::new(0,100));
+
+    println!("\nLopetustoken lähtee\n");
     sender_stop.send(0).unwrap();
     child.join().unwrap();
+
+    
   }
 }
