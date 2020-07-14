@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-#[derive(Debug, PartialEq, Readable, Writable)]
+#[derive(Debug, PartialEq, Readable, Writable, Clone)]
 pub struct ParameterId {
   value: u16,
 }

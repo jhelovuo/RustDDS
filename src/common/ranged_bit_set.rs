@@ -7,8 +7,8 @@ pub struct RangedBitSet<B>
 where
   B: CheckedAdd + CheckedSub + ToPrimitive + FromPrimitive,
 {
-  base: B,
-  set: BitSetRef,
+  pub base: B,
+  pub set: BitSetRef,
 }
 
 impl<B> RangedBitSet<B>

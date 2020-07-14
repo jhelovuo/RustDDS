@@ -11,7 +11,7 @@ use speedy::{Readable, Writable};
 /// a data-object belonging to the RTPS Writer. The possible changes
 /// include both changes in value as well as changes to the lifecycle
 /// of the data-object.
-#[derive(Debug, PartialEq, Readable, Writable)]
+#[derive(Debug, PartialEq, Readable, Writable, Clone)]
 pub struct Data {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.

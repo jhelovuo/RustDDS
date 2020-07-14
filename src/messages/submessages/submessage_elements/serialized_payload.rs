@@ -3,7 +3,7 @@ use speedy::{Context, Readable, Reader, Writable, Writer};
 /// A SerializedPayload contains the serialized representation of
 /// either value of an application-defined data-object or
 /// the value of the key that uniquely identifies the data-object
-#[derive(Debug, PartialEq, Readable, Writable)]
+#[derive(Debug, PartialEq, Readable, Writable, Clone)]
 pub struct SerializedPayload {
   pub representation_identifier: u16,
   pub representation_options: u16,

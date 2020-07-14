@@ -5,7 +5,7 @@ use speedy::{Context, Readable, Reader, Writable, Writer};
 /// QoS parameters that may affect the interpretation of the message.
 /// The encapsulation of the parameters follows a mechanism that allows
 /// extensions to the QoS without breaking backwards compatibility.
-#[derive(Debug, PartialEq, Readable, Writable)]
+#[derive(Debug, PartialEq, Readable, Writable, Clone)]
 pub struct ParameterList {
   pub parameters: Vec<Parameter>,
 }

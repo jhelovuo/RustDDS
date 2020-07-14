@@ -2,7 +2,7 @@ use speedy::{Context, Readable, Reader, Writable, Writer};
 
 /// Type used to represent the identity of a data-object whose changes in value
 /// are communicated by the RTPS protocol.
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone)]
 pub struct InstanceHandle {
   pub entityKey: [u8; 16],
 }

@@ -1,7 +1,7 @@
 use crate::structure::parameter_id::ParameterId;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Parameter {
   /// Uniquely identifies the type of parameter
   parameter_id: ParameterId,

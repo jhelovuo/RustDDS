@@ -6,12 +6,14 @@ use std::mem::size_of;
 use crate::common::ranged_bit_set::RangedBitSet;
 
 #[derive(
-  Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, NumOps, FromPrimitive, ToPrimitive,
+  Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, NumOps, 
+  FromPrimitive, ToPrimitive,
 )]
 pub struct SequenceNumber(i64);
 
 impl SequenceNumber {
-  pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber = SequenceNumber((std::u32::MAX as i64) << 32);
+  pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber = 
+    SequenceNumber((std::u32::MAX as i64) << 32);
 }
 
 impl From<i64> for SequenceNumber {

@@ -6,7 +6,7 @@ use speedy::{Readable, Writable};
 /// indicates to the RTPS Reader that a range of sequence numbers
 /// is no longer relevant. The set may be a contiguous range of
 /// sequence numbers or a specific set of sequence numbers.
-#[derive(Debug, PartialEq, Readable, Writable)]
+#[derive(Debug, PartialEq, Readable, Writable, Clone)]
 pub struct Heartbeat {
   /// Identifies the Reader Entity that is being informed of the
   /// availability of a set of sequence numbers.
@@ -27,13 +27,15 @@ pub struct Heartbeat {
   /// the Writer.
   pub last_sn: SequenceNumber,
 
-  /// A counter that is increm ented each time a new Heartbeat
+  /// A counter that is incremented each time a new Heartbeat
   /// message is sent.
   ///
   /// Provides the means for a Reader to detect duplicate Heartbeat
   /// messages that can result from the presence of redundant
   /// communication paths.
   pub count: i32,
+
+  // Other present if GroupInfo flag is set
 }
 
 #[cfg(test)]

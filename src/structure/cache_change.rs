@@ -3,14 +3,14 @@ use crate::structure::instance_handle::InstanceHandle;
 use crate::structure::sequence_number::SequenceNumber;
 use crate::messages::submessages::data::Data;
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone)]
 pub enum ChangeKind {
   ALIVE,
   NOT_ALIVE_DISPOSED,
   NOT_ALIVE_UNREGISTERED,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CacheChange {
   pub kind: ChangeKind,
   pub writer_guid: GUID,

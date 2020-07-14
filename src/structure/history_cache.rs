@@ -17,20 +17,20 @@ impl  HistoryCache {
     self.changes.push(change)
   }
 
-  fn get_change(&self, sequence_number: SequenceNumber) -> Option<&CacheChange> {
+  pub fn get_change(&self, sequence_number: SequenceNumber) -> Option<&CacheChange> {
     self
       .changes
       .iter()
       .find(|x| x.sequence_number == sequence_number)
   }
 
-  fn remove_change(&mut self, sequence_number: SequenceNumber) {
+  pub fn remove_change(&mut self, sequence_number: SequenceNumber) {
     self
       .changes
       .retain(|x| x.sequence_number != sequence_number)
   }
 
-  fn get_seq_num_min(&self) -> Option<&SequenceNumber> {
+  pub fn get_seq_num_min(&self) -> Option<&SequenceNumber> {
     self
       .changes
       .iter()
@@ -38,12 +38,22 @@ impl  HistoryCache {
       .min_by(|x, y| x.cmp(&y))
   }
 
-  fn get_seq_num_max(&self) -> Option<&SequenceNumber> {
+  pub fn get_seq_num_max(&self) -> Option<&SequenceNumber> {
     self
       .changes
       .iter()
       .map(|x| &x.sequence_number)
       .max_by(|x, y| x.cmp(&y))
+  }
+
+  pub fn remove_changes_up_to (&mut self, smallest_seqnum: SequenceNumber) {
+    self
+    .changes
+    .retain(|x| x.sequence_number > smallest_seqnum)
+  }
+
+  pub fn len(&self) -> usize{
+    self.changes.len()
   }
 }
 

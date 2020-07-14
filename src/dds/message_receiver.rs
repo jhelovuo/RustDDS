@@ -110,7 +110,7 @@ impl MessageReceiver {
     }
   }
 
-  fn get_reader(&mut self, reader_id: EntityId) -> Option<& mut Reader>{
+  fn get_reader(&mut self, reader_id: EntityId) -> Option<&mut Reader>{
     self.available_readers.iter_mut().find(
       |r| r.get_entity_id() == reader_id
     )
@@ -188,18 +188,25 @@ impl MessageReceiver {
       println!("Ofcourse, the example messages are not for this participant?");
       return; // Wrong target received
     }
+    // TODO! If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
     match submessage {
       EntitySubmessage::Data(data, _) => {
-        let target_reader = self.get_reader(data.reader_id).unwrap();
+        let target_reader = self.get_reader(data.reader_id).unwrap(); 
         target_reader.handle_data_msg(data);
       },
-      EntitySubmessage::Heartbeat(heartbeat,_) => {
+      EntitySubmessage::Heartbeat(heartbeat, flags) => {
         let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
-        target_reader.handle_heartbeat(heartbeat);
+        let ack_nack_sent = target_reader.handle_heartbeat_msg(
+          heartbeat, 
+          flags.is_flag_set(1), // final flag!?
+        );
+      },
+      EntitySubmessage::Gap(gap) => {
+        let target_reader = self.get_reader(gap.reader_id).unwrap();
+        target_reader.handle_gap_msg(gap);
       },
       EntitySubmessage::AckNack(_, _) => {},
       EntitySubmessage::DataFrag(_, _) => {},
-      EntitySubmessage::Gap(_) => {},
       EntitySubmessage::HeartbeatFrag(_) => {},
       EntitySubmessage::NackFrag(_) => {},
     }
