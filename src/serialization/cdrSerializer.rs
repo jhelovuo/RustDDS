@@ -24,25 +24,23 @@ pub struct CDR_serializer {
 
 impl CDR_serializer
 {
-  // each bytecount needs to be multiple of 4.
-  // this writes empty padding 
-  fn write_padding(&mut self, countOfWrittenBytes:u64){
-    let modulo = countOfWrittenBytes%4;
 
-    
-    if modulo == 0{
-      println!("written: {} , NO NEED TO PAD",countOfWrittenBytes);
-    }else if modulo == 1 {
-      println!("written: {} , need to pad 3",countOfWrittenBytes);
-      self.buffer.push(0u8);
-      self.buffer.push(0u8);
-      self.buffer.push(0u8);
-    }else if modulo == 2 {
-      println!("written: {} , need to pad 2",countOfWrittenBytes);
-      self.buffer.push(0u8);
-      self.buffer.push(0u8);
-    }else if modulo == 3 {
-      println!("written: {} , need to pad 1",countOfWrittenBytes);
+  fn calculate_padding_need_and_write_padding(&mut self, typeOctetAlignment : u8){
+    let modulo : u32 = self.buffer.len() as u32 % typeOctetAlignment as u32;
+    if modulo != 0 {
+      let paddingNeed: u32 = (typeOctetAlignment as u32 - modulo); 
+      println!("need padding! {}", paddingNeed);
+      self.write_pad(paddingNeed);
+    }
+    else{
+      return
+    }
+  }
+
+
+  fn write_pad(&mut self, byteCount:u32){
+    println!("PAD byte count: {}", byteCount);
+    for _x in 0..byteCount {
       self.buffer.push(0u8);
     }
   }
@@ -116,28 +114,28 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_u8(self, v: u8) -> Result<()> {
     self.buffer.push(v);
-    self.write_padding(1);
     Ok(())
   }
 
   fn serialize_u16(self, v: u16) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(2);
     if self.serializationEndianess == endianess::littleEndian{
       let mut wtr = vec![];
       wtr.write_u16::<LittleEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
       self.buffer.push(wtr[1]);
-      self.write_padding(2);
+     
     }else{
       let mut wtr = vec![];
       wtr.write_u16::<BigEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
       self.buffer.push(wtr[1]);
-      self.write_padding(2);
     }
     Ok(())
   }
 
   fn serialize_u32(self, v: u32) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(4);
     if self.serializationEndianess == endianess::littleEndian{
       let mut wtr = vec![];
       wtr.write_u32::<LittleEndian>(v).unwrap();
@@ -159,6 +157,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   }
 
   fn serialize_u64(self, v: u64) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(8);
     if self.serializationEndianess == endianess::littleEndian{
       let mut wtr = vec![];
       wtr.write_u64::<LittleEndian>(v).unwrap();
@@ -191,30 +190,29 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
     let mut wtr = vec![];
     wtr.write_i8(v).unwrap();
     self.buffer.push(wtr[0]);
-    self.write_padding(1);
     Ok(())
   }
 
   fn serialize_i16(self, v: i16) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(2);
     if self.serializationEndianess == endianess::littleEndian{
       let mut wtr = vec![];
       wtr.write_i16::<LittleEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
       self.buffer.push(wtr[1]);
-      self.write_padding(2);
       Ok(())
     }else{
       let mut wtr = vec![];
       wtr.write_i16::<BigEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
       self.buffer.push(wtr[1]);
-      self.write_padding(2);
       Ok(())
     }
 
   }
 
   fn serialize_i32(self, v: i32) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(4);
     if self.serializationEndianess == endianess::littleEndian{
       let mut wtr = vec![];
       wtr.write_i32::<LittleEndian>(v).unwrap();
@@ -235,6 +233,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   }
 
   fn serialize_i64(self, v: i64) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(8);
     if self.serializationEndianess == endianess::littleEndian{
       let mut wtr = vec![];
       wtr.write_i64::<LittleEndian>(v).unwrap();
@@ -264,6 +263,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   
   fn serialize_f32(self, _v: f32) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(4);
     if self.serializationEndianess == endianess::littleEndian{
       let v_bytes = _v.to_bits().to_le_bytes();
       self.buffer.push(v_bytes[0]);
@@ -281,6 +281,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
     }
   }
   fn serialize_f64(self, _v: f64) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(8);
     if self.serializationEndianess == endianess::littleEndian{
       let v_bytes = _v.to_bits().to_le_bytes();
       self.buffer.push(v_bytes[0]);
@@ -332,7 +333,6 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
       self.buffer.push(bytes[0]);
     }
     self.buffer.push(0u8);
-    self.write_padding(count as u64 + 1);
     Ok(())
   }
    
@@ -395,6 +395,12 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
     println!("serialize seq");
     let elementCount = _len.unwrap() as u32;
+    if elementCount % 4 != 0{
+      println!("sequence element count: {}", elementCount);
+      //println!("sequence element count is not multiple of 4! need to pad something");
+      //self.write_padding(self.buffer.len() as u64);
+    }
+    
     self.serialize_u32(elementCount).unwrap();
     Ok(self)
   }
