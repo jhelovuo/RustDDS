@@ -8,14 +8,20 @@ use crate::messages::submessages::gap::Gap;
 use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::GUID;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
+use mio::event::Evented;
+use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
 
+use std::io;
 use std::collections::HashSet;
 
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Reader {
+  set_readiness: SetReadiness,
+  registration: Registration,
+
   history_cache: HistoryCache, // atm done with the assumption, that only one writers cache is monitored
   entity_attributes: EntityAttributes,
   pub enpoint_attributes: EndpointAttributes,
@@ -28,8 +34,14 @@ pub struct Reader {
 } // placeholder
 
 impl Reader {
-  pub fn new(guid: GUID) -> Reader {
+  pub fn new(
+    guid: GUID,
+    set_readiness: SetReadiness,
+    registration: Registration,
+  ) -> Reader {
     Reader {
+      set_readiness,
+      registration,
       history_cache: HistoryCache::new(),
       entity_attributes: EntityAttributes{guid},
       enpoint_attributes: EndpointAttributes::default(),
@@ -58,7 +70,8 @@ impl Reader {
 
   // send ack_nack response if necessary. spec page 104
   pub fn handle_heartbeat_msg(
-    &mut self, heartbeat: Heartbeat, final_flag_set: bool
+    &mut self, heartbeat: Heartbeat, 
+    final_flag_set: bool
   ) -> bool {
 
     if heartbeat.count <= self.received_hearbeat_count { 
@@ -68,7 +81,7 @@ impl Reader {
     self.received_hearbeat_count = heartbeat.count;
     
     // remove fragmented changes untill first_sn ???
-    self.history_cache.remove_changes_up_to(heartbeat.first_sn);
+    //self.history_cache.remove_changes_up_to(heartbeat.first_sn);
 
     let last_seq_num: SequenceNumber;
     if let Some(num) = self.history_cache.get_seq_num_max() {
@@ -135,7 +148,8 @@ impl Reader {
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
   // likely use of mio channel
   fn notify_cache_change(&self) {
-    //todo!()
+    println!("Trying to send a notification of cache change...");
+    self.set_readiness.set_readiness(Ready::readable()).unwrap()
   }
 }
 
@@ -151,6 +165,33 @@ impl Endpoint for Reader {
   }
 }
 
+impl PartialEq for Reader {
+    // Ignores registration
+    fn eq(&self, other: &Self) -> bool {
+        self.history_cache == other.history_cache &&
+        self.entity_attributes == other.entity_attributes &&
+        self.enpoint_attributes == other.enpoint_attributes &&
+        self.heartbeat_response_delay == other.heartbeat_response_delay &&
+        self.heartbeat_supression_duration == other.heartbeat_supression_duration &&
+        self.sent_ack_nack_count == other.sent_ack_nack_count &&
+        self.received_hearbeat_count == other.received_hearbeat_count
+    }
+
+}
+
+impl Evented for Reader {
+  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+    self.registration.register(poll, token, interest, opts)
+  }
+  fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+    self.registration.reregister(poll, token, interest, opts)
+  }
+  fn deregister(&self, poll: &Poll) -> io::Result<()> {
+    self.registration.deregister(poll)
+  }
+}
+
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -158,8 +199,18 @@ mod tests {
 
   #[test]
   fn rtpsreader_handle_data() {
+
+
     let new_guid = GUID::new();
-    let mut new_reader = Reader::new(new_guid);
+    let (
+      register_reader, 
+      set_readiness_of_reader) = Registration::new2();
+
+    let mut new_reader = Reader::new(
+      new_guid, 
+      set_readiness_of_reader, 
+      register_reader);
+
     let d = Data::default();
     let d_seqnum = d.writer_sn;
     new_reader.handle_data_msg(d.clone()); 
@@ -178,7 +229,14 @@ mod tests {
   #[test]
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
-    let mut new_reader = Reader::new(new_guid);
+    let (
+      register_reader, 
+      set_readiness_of_reader) = Registration::new2();
+
+    let mut new_reader = Reader::new(
+      new_guid, 
+      set_readiness_of_reader, 
+      register_reader);
 
     let writer_id = EntityId::default();
     let d = Data::default();
@@ -250,8 +308,6 @@ mod tests {
     new_reader.history_cache.add_change(change.clone());
     changes.push(change);
 
-    assert_eq!(&new_reader.history_cache.len(), &(2 as usize));
-
     let hb_none = Heartbeat{
       reader_id: new_reader.get_entity_id(),
       writer_id,
@@ -261,15 +317,20 @@ mod tests {
     };
     assert!(new_reader.handle_heartbeat_msg(hb_none, false)); 
 
-    assert_eq!(&new_reader.history_cache.len(), &(0 as usize));
-
     assert_eq!(new_reader.sent_ack_nack_count, 3);
   }
 
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let mut reader = Reader::new(new_guid);
+    let (
+      register_reader, 
+      set_readiness_of_reader) = Registration::new2();
+
+    let mut reader = Reader::new(
+      new_guid, 
+      set_readiness_of_reader, 
+      register_reader);
 
     let n: i64 = 10;
     let d = Data::default();

@@ -7,6 +7,7 @@ pub struct TypeDesc {
 } // placeholders
 
 impl TypeDesc {
+  pub fn new(my_name: String) -> TypeDesc { TypeDesc{my_name} }
   pub fn name(&self) -> &str { &self.my_name }
 }
 

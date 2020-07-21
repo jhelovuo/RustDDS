@@ -14,3 +14,6 @@ pub const USER_TRAFFIC_MUL_LISTENER_TOKEN: Token = Token(9);
 
 pub const ADD_READER_TOKEN: Token = Token(10);
 pub const REMOVE_READER_TOKEN: Token = Token(11);
+
+pub const READER_CHANGE_TOKEN: Token = Token(12);
+pub const DATAREADER_CHANGE_TOKEN: Token = Token(13);

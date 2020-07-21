@@ -55,6 +55,25 @@ pub struct QosPolicies {
   lifespan: Option<policy::Lifespan>,
 } 
 
+impl QosPolicies {
+  pub fn qos_none() -> QosPolicies {
+    QosPolicies{
+      durability: None,
+      presentation: None,
+      deadline: None,
+      latency_budget: None,
+      ownership: None,
+      liveliness: None,
+      time_based_filter: None,
+      relibility: None,
+      destination_order: None,
+      history: None,
+      resource_limits: None,
+      lifespan: None,
+    }
+  }
+}
+
 // put these into a submodule to avoid repeating the word "policy" or "qospolicy"
 pub mod policy {
   use std::time::Duration;

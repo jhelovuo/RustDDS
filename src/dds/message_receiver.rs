@@ -24,7 +24,7 @@ use speedy::{Readable, Endianness};
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
 #[derive(Debug, PartialEq)]
-pub struct MessageReceiver {
+pub struct MessageReceiver<> {
   pub available_readers: Vec<Reader>,
 
   participant_guid_prefix: GuidPrefix,
@@ -44,7 +44,7 @@ pub struct MessageReceiver {
   pub submessage_count: usize,
 }
 
-impl MessageReceiver {
+impl MessageReceiver{
   pub fn new(participant_guid_prefix: GuidPrefix) -> MessageReceiver {
     // could be passed in as a parameter
     let locator_kind = LocatorKind::LOCATOR_KIND_UDPv4;
@@ -93,11 +93,11 @@ impl MessageReceiver {
       self.submessage_count = 0;
   }
 
-  pub fn add_reader(&mut self, new_reader_guid: GUID){ // or guidPRefix?
+  pub fn add_reader(& mut self, new_reader: Reader){ // or guidPRefix?
     match self.available_readers.iter().find(
-      |&r| r.get_guid() == new_reader_guid
+      |&r| r.get_guid() == new_reader.get_guid()
     ) {
-        None => {self.available_readers.push(Reader::new(new_reader_guid));},
+        None => {self.available_readers.push(new_reader);},
         Some(_) => {},
     }
   }

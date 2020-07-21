@@ -19,6 +19,22 @@ pub struct Topic<'a> {
   my_qos_policies: QosPolicies,
 }
 
+impl<'a> Topic<'a> {
+  pub fn new(
+    my_domainparticipant: &'a DomainParticipant,
+    my_name: String,
+    my_typedesc: TypeDesc,
+    my_qos_policies: QosPolicies,
+  ) -> Topic<'a> {
+    Topic {
+      my_domainparticipant,
+      my_name,
+      my_typedesc,
+      my_qos_policies,
+    }
+  }
+}
+
 impl<'a> TopicDescription for Topic<'a> {
   fn get_participant(&self) -> &DomainParticipant {
     self.my_domainparticipant

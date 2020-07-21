@@ -8,6 +8,7 @@ use crate::dds::reader::Reader;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID};
+use crate::structure::entity::Entity;
 
 pub struct DPEventWrapper {
   poll: Poll,
@@ -16,8 +17,8 @@ pub struct DPEventWrapper {
   message_receiver: MessageReceiver,
 
   // Adding readers
-  reader_operators: HashMap<Token, mio_channel::Receiver<GUID>>,
-  test_receivers: HashMap<Token, mio_channel::Receiver<i32>>,
+  receiver_add_reader: (Token, mio_channel::Receiver<Reader>),
+  receiver_remove_reader: (Token, mio_channel::Receiver<GUID>),
 }
 
 impl DPEventWrapper {
@@ -25,7 +26,8 @@ impl DPEventWrapper {
     udp_listeners: HashMap<Token, UDPListener>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
     participant_guid_prefix: GuidPrefix,
-    reader_operators: HashMap<Token, mio_channel::Receiver<GUID>>,
+    receiver_add_reader: (Token, mio_channel::Receiver<Reader>),
+    receiver_remove_reader: (Token, mio_channel::Receiver<GUID>),
     
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
@@ -42,23 +44,29 @@ impl DPEventWrapper {
         )
         .expect("Failed to register listener.");
     }
-    let mut reader_operators = reader_operators;
-    for (token, receiver) in &mut reader_operators {
-      poll.register(
-        receiver,
-        token.clone(),
-        Ready::readable(),
-        PollOpt::edge(),
-      ).expect("Failed to register reader operators.");
-    }
+
+    poll.register(
+      &receiver_add_reader.1,
+      receiver_add_reader.0.clone(),
+      Ready::readable(),
+      PollOpt::edge(),
+    ).expect("Failed to register reader adder.");
+
+    poll.register(
+      &receiver_remove_reader.1,
+      receiver_remove_reader.0.clone(),
+      Ready::readable(),
+      PollOpt::edge(),
+    ).expect("Failed to register reader remover.");
+    
 
     DPEventWrapper {
       poll,
       udp_listeners,
       send_targets,
       message_receiver: MessageReceiver::new(participant_guid_prefix),
-      reader_operators,
-      test_receivers: HashMap::new(),
+      receiver_add_reader,
+      receiver_remove_reader,
     }
   }
 
@@ -70,7 +78,7 @@ impl DPEventWrapper {
         &mut events, None
       ).expect("Failed in waiting of poll.");
       for event in events.into_iter() {
-        println!("{:?}", event);
+        println!("Dp_eventwrapper poll received: {:?}", event); // for debugging!!!!!!
 
         if event.token() == STOP_POLL_TOKEN {
           // print for testing
@@ -114,18 +122,16 @@ impl DPEventWrapper {
   }
 
   pub fn handle_reader_action(&mut self, event: &Event) {
-    if let Some(rec) = self.reader_operators.get(&event.token()){
-      let reader_guid = rec.try_recv().unwrap();
-      println!("Received data: {:?}", reader_guid);
-      match event.token() {
-        ADD_READER_TOKEN =>{
-          self.message_receiver.add_reader(reader_guid);
-        },
-        REMOVE_READER_TOKEN =>{
-          self.message_receiver.remove_reader(reader_guid);
-        },
-        _ =>{},
-      }
+    match event.token() {
+      ADD_READER_TOKEN => {
+        let new_reader = self.receiver_add_reader.1.try_recv().expect("Can't get new reader");
+        self.message_receiver.add_reader(new_reader);
+      },
+      REMOVE_READER_TOKEN => {
+        let old_reader_guid = self.receiver_remove_reader.1.try_recv().unwrap();
+        self.message_receiver.remove_reader(old_reader_guid);
+      },
+      _ => {},
     }
   }
 }
@@ -136,26 +142,24 @@ mod tests {
   use super::*;
   use std::thread;
   use std::time::Duration;
+  use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
   //use std::sync::mpsc;
   
   #[test]
-  fn dpew_add_readers() {
+  fn dpew_add_and_remove_readers() {
 
     // Adding readers
     let (sender_add_reader, receiver_add) =
-    mio_channel::channel::<GUID>();
+    mio_channel::channel::<Reader>();
     let (sender_remove_reader, receiver_remove) =
     mio_channel::channel::<GUID>();
-
-    let mut reader_operators = HashMap::new();
-    reader_operators.insert(ADD_READER_TOKEN, receiver_add);
-    reader_operators.insert(REMOVE_READER_TOKEN, receiver_remove);
 
     let dp_event_wrapper = DPEventWrapper::new(
       HashMap::new(),
       HashMap::new(),
       GuidPrefix::default(),
-      reader_operators,
+      (ADD_READER_TOKEN, receiver_add),
+      (REMOVE_READER_TOKEN, receiver_remove),
     );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
@@ -175,9 +179,18 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-      reader_guids.push(new_guid);
-      println!("\nSent reader number {}: {:?}\n", i, new_guid);
-      sender_add_reader.send(new_guid).unwrap();
+      let (
+        register_reader, 
+        set_readiness_of_reader) = Registration::new2();
+  
+      let mut new_reader = Reader::new(
+        new_guid, 
+        set_readiness_of_reader, 
+        register_reader);
+
+      reader_guids.push(new_reader.get_guid());
+      println!("\nSent reader number {}: {:?}\n", i, new_reader);
+      sender_add_reader.send(new_reader).unwrap();
       std::thread::sleep(Duration::new(0,100));
 
     }

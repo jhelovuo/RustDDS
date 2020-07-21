@@ -1,8 +1,14 @@
 use std::time::Duration;
+use mio_extras::channel as mio_channel;
+use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness, Event, Events};
 
+use crate::network::constant::*;
 use serde::{Serialize, Deserialize};
 
 use crate::structure::time::Timestamp;
+use crate::structure::guid::{GUID, EntityId};
+use crate::structure::entity::{Entity, EntityAttributes};
+
 
 use crate::dds::result::*;
 use crate::dds::participant::*;
@@ -11,6 +17,12 @@ use crate::dds::key::*;
 use crate::dds::typedesc::*;
 use crate::dds::qos::*;
 use crate::dds::datasample::*;
+use crate::dds::reader::Reader;
+
+use mio::event::Evented;
+use std::sync::Arc;
+use std::io;
+
 // -------------------------------------------------------------------
 
 pub struct Publisher<'a> {
@@ -76,22 +88,92 @@ impl<'a> Publisher<'a> {
 
 pub struct Subscriber<'a> {
   my_domainparticipant: &'a DomainParticipant,
+  poll: Poll,
+  qos: QosPolicies,
 }
 
 impl<'a> Subscriber<'a> {
-  pub fn create_datareader<'p, D>(
-    &self,
-    _a_topic: &Topic,
-    _qos: QosPolicies,
-  ) -> Result<DataReader<'p>> {
-    unimplemented!();
+  pub fn new(
+    my_domainparticipant: &'a DomainParticipant,
+    qos: QosPolicies, 
+  ) -> Subscriber<'a>{
+    let poll = Poll::new().expect("Unable to create new poll.");
+
+    Subscriber{
+      poll,
+      my_domainparticipant,
+      qos,
+    }
   }
+
+  pub fn subscriber_poll(mut subscriber: Subscriber) {
+    loop {
+      let mut events = Events::with_capacity(1024);
+
+      subscriber.poll.poll(
+        &mut events, None
+      ).expect("Subscriber failed in polling");
+
+      for event in events.into_iter() {
+        println!("Subscriber poll received: {:?}", event); // for debugging!!!!!!
+
+        match event.token() {
+          STOP_POLL_TOKEN => return,
+          READER_CHANGE_TOKEN => {
+            println!("Got notification of reader's new change!!!");
+          },
+          _ => {},
+        }
+      }
+    }
+  }
+
+  pub fn create_datareader<'p: 'a>(
+    &'p self,
+    _a_topic: &Topic,
+    qos: QosPolicies,
+  ) -> (Result<DataReader<'p>>, Result<Reader>) {
+
+    let (register_datareader, 
+      set_readiness_of_datareader) = Registration::new2();
+    let (register_reader, 
+      set_readiness_of_reader) = Registration::new2();
+
+    let new_datareader = DataReader {
+      my_subscriber: &self,
+      qos_policy: qos,
+      set_readiness: set_readiness_of_datareader,
+      registration: register_datareader,
+    };
+
+    let matching_reader = Reader::new(
+      GUID{
+        guidPrefix: self.my_domainparticipant.get_guid_prefix(),
+        entityId: EntityId::ENTITYID_PARTICIPANT,
+      },
+      set_readiness_of_reader,
+      register_reader,
+    );
+
+    self.poll.register(
+      &matching_reader,
+      READER_CHANGE_TOKEN, 
+      Ready::readable(),
+       PollOpt::edge()
+      ).expect("Failed to register reader with subscribers poll.");
+
+    (Ok(new_datareader), Ok(matching_reader))
+  }
+
 }
 
 // -------------------------------------------------------------------
 
 pub struct DataReader<'s> {
   my_subscriber: &'s Subscriber<'s>,
+  qos_policy: QosPolicies,
+  set_readiness: SetReadiness,
+  registration: Registration,
   // TODO: rest of fields
 }
 
@@ -110,6 +192,18 @@ impl <'s> DataReader<'s> {
 
 
 } // impl 
+
+impl<'s> Evented for DataReader<'s> {
+  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+    self.registration.register(poll, token, interest, opts)
+  }
+  fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+    self.registration.reregister(poll, token, interest, opts)
+  }
+  fn deregister(&self, poll: &Poll) -> io::Result<()> {
+    self.registration.deregister(poll)
+  }
+}
 
 pub struct DataWriter<'p> {
   my_publisher: &'p Publisher<'p>,
@@ -179,4 +273,53 @@ impl<'p> DataWriter<'p> {
   // This one function provides both get_matched_subscrptions and get_matched_subscription_data
   // TODO: Maybe we could return references to the subscription data to avoid copying?
   // But then what if the result set changes while the application processes it?
+}
+
+
+#[cfg(test)]
+mod tests{
+  use super::*;
+  use crate::dds::topic::Topic;
+  use crate::dds::typedesc::TypeDesc;
+  
+  use std::thread;
+  use std::time::Duration;
+  use crate::messages::submessages::data::Data;
+
+  #[test]
+  fn sub_readers_notification() {
+    let dp = DomainParticipant::new();
+    let sub = dp.create_subsrciber(QosPolicies::qos_none()).unwrap();
+
+    let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
+    sub.poll.register(
+      &receiver_stop, 
+      STOP_POLL_TOKEN, 
+      Ready::readable(), 
+      PollOpt::edge()
+    ).unwrap();
+
+    let a_topic = Topic::new(
+      &dp,
+      ":D".to_string(),
+      TypeDesc::new(":)".to_string()),
+      QosPolicies::qos_none(),
+    );
+    let (dreader_res, reader_res) =
+      sub.create_datareader(&a_topic, QosPolicies::qos_none());
+
+    let mut reader = reader_res.unwrap();
+
+    let child = thread::spawn(
+      move || {
+        std::thread::sleep(Duration::new(0,500));
+        let d = Data::default();
+        reader.handle_data_msg(d);
+        std::thread::sleep(Duration::new(0,500));
+        sender_stop.send(0).unwrap();
+      }
+    );
+    Subscriber::subscriber_poll(sub);
+    child.join().unwrap();
+  }
 }
