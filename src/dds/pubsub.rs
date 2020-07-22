@@ -285,6 +285,7 @@ mod tests{
   use crate::messages::submessages::data::Data;
   use crate::messages::submessages::heartbeat::Heartbeat;
   use crate::structure::sequence_number::SequenceNumber;
+  use mio_extras::channel as mio_channel;
 
   #[test]
   fn sub_readers_notification() {

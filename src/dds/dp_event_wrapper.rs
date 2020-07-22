@@ -141,6 +141,7 @@ mod tests {
   use std::thread;
   use std::time::Duration;
   use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
+  use crate::structure::entity::Entity;
   //use std::sync::mpsc;
   
   #[test]
