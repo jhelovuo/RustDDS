@@ -16,7 +16,6 @@ use crate::messages::submessages::info_timestamp::InfoTimestamp;
 
 use crate::dds::reader::Reader;
 use crate::structure::guid::EntityId;
-use crate::dds::participant::DomainParticipant;
 
 use speedy::{Readable, Endianness};
 
@@ -196,7 +195,7 @@ impl MessageReceiver{
       },
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
         let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
-        let ack_nack_sent = target_reader.handle_heartbeat_msg(
+        let _ack_nack_sent = target_reader.handle_heartbeat_msg(
           heartbeat, 
           flags.is_flag_set(1), // final flag!?
         );

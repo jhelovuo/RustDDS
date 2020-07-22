@@ -8,7 +8,6 @@ use crate::dds::reader::Reader;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID};
-use crate::structure::entity::Entity;
 
 pub struct DPEventWrapper {
   poll: Poll,
@@ -89,10 +88,9 @@ impl DPEventWrapper {
         } else if DPEventWrapper::is_reader_action(&event) {
           ev_wrapper.handle_reader_action(&event);
         }
-          //ev_wrapper.message_receiver.remove_reader(Reader::new());
-        }
       }
     }
+  }
 
   pub fn is_udp_traffic(event: &Event) -> bool {
     event.token() == DISCOVERY_SENDER_TOKEN || event.token() == USER_TRAFFIC_SENDER_TOKEN

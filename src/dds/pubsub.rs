@@ -1,13 +1,12 @@
 use std::time::Duration;
-use mio_extras::channel as mio_channel;
-use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness, Event, Events};
+use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness, Events};
 
 use crate::network::constant::*;
 use serde::{Serialize, Deserialize};
 
 use crate::structure::time::Timestamp;
 use crate::structure::guid::{GUID, EntityId};
-use crate::structure::entity::{Entity, EntityAttributes};
+use crate::structure::entity::{Entity};
 
 
 use crate::dds::result::*;
@@ -20,7 +19,6 @@ use crate::dds::datasample::*;
 use crate::dds::reader::Reader;
 
 use mio::event::Evented;
-use std::sync::Arc;
 use std::io;
 
 // -------------------------------------------------------------------
@@ -106,7 +104,7 @@ impl<'a> Subscriber<'a> {
     }
   }
 
-  pub fn subscriber_poll(mut subscriber: Subscriber) {
+  pub fn subscriber_poll(subscriber: Subscriber) {
     loop {
       let mut events = Events::with_capacity(1024);
 
@@ -285,6 +283,8 @@ mod tests{
   use std::thread;
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
+  use crate::messages::submessages::heartbeat::Heartbeat;
+  use crate::structure::sequence_number::SequenceNumber;
 
   #[test]
   fn sub_readers_notification() {
@@ -315,7 +315,18 @@ mod tests{
         std::thread::sleep(Duration::new(0,500));
         let d = Data::default();
         reader.handle_data_msg(d);
-        std::thread::sleep(Duration::new(0,500));
+
+        /*std::thread::sleep(Duration::new(0,500));
+        let hb = Heartbeat{
+          reader_id: reader.get_entity_id(),
+          writer_id: EntityId::default(),
+          first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
+          last_sn: SequenceNumber::from(0),
+          count: 1,
+        };
+        reader.handle_heartbeat_msg(hb, false);*/
+
+        std::thread::sleep(Duration::new(0,500_000));
         sender_stop.send(0).unwrap();
       }
     );

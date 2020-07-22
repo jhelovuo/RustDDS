@@ -15,7 +15,7 @@ use crate::dds::typedesc::*;
 use crate::dds::qos::*;
 use crate::dds::result::*;
 use crate::structure::entity::{Entity, EntityAttributes};
-use crate::structure::guid::{GUID, EntityId};
+use crate::structure::guid::{GUID};
 use std::net::Ipv4Addr;
 
 pub struct DomainParticipant {

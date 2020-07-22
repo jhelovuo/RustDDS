@@ -101,7 +101,7 @@ impl Reader {
         reader_sn_state.insert(SequenceNumber::from(seq_num));
       }
 
-      let response_ack_nack = AckNack{
+      let _response_ack_nack = AckNack{
         reader_id: self.get_entity_id(),
         writer_id: heartbeat.writer_id,
         reader_sn_state,
