@@ -59,9 +59,24 @@ impl Reader {
   // TODO: check if it's necessary to implement different handlers for discovery
   // and user messages
 
+  // TODO Used for test/debugging purposes
+  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<&Data>{
+    println!("history cache !!!! {:?}",self.history_cache.get_change(sequence_number).unwrap());
+    let a = self.history_cache.get_change(sequence_number).unwrap().data_value.as_ref();
+    return a
+  }
+
+  // TODO Used for test/debugging purposes
+  pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber>{
+    let start = self.history_cache.get_seq_num_min();
+    let end = self.history_cache.get_seq_num_max();    
+    return vec![start.unwrap().clone(), end.unwrap().clone()];
+  }
+
   // handles regular data message and updates history cache
   pub fn handle_data_msg(&mut self, data: Data) { 
     let user_data = true; // Different action for discovery data?
+    println!("handle data msg");
     if user_data {
       // TODO! Sequence number check?
       self.make_cache_change(data);
