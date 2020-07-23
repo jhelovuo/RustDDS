@@ -16,9 +16,13 @@ use std::collections::HashSet;
 
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
+use crate::dds::message_receiver::MessageReceiver;
+//use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct Reader {
+  // Do we need to access information in messageReceiver?? Like reply locators.
+  //my_message_receiver: Option<&'mr MessageReceiver>, 
   set_readiness: SetReadiness,
   registration: Registration,
 
@@ -106,7 +110,8 @@ impl Reader {
         writer_id: heartbeat.writer_id,
         reader_sn_state,
         count: self.sent_ack_nack_count,
-      };// Send this AckNack!!!!!!!!!
+      };
+      // Send this AckNack!!!!!!!!!
       self.sent_ack_nack_count += 1;
 
     }
@@ -166,9 +171,9 @@ impl Endpoint for Reader {
 }
 
 impl PartialEq for Reader {
-    // Ignores registration
+    // Ignores registration and history cache?
     fn eq(&self, other: &Self) -> bool {
-        self.history_cache == other.history_cache &&
+        //self.history_cache == other.history_cache &&
         self.entity_attributes == other.entity_attributes &&
         self.enpoint_attributes == other.enpoint_attributes &&
         self.heartbeat_response_delay == other.heartbeat_response_delay &&

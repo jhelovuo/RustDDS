@@ -23,8 +23,8 @@ pub struct DomainParticipant {
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 
   // Adding Readers
-  sender_add_reader: (Token, mio_channel::Sender<Reader>),
-  sender_remove_reader: (Token, mio_channel::Sender<GUID>),
+  sender_add_reader: mio_channel::Sender<Reader>,
+  sender_remove_reader:  mio_channel::Sender<GUID>,
 
 }
 
@@ -74,28 +74,33 @@ impl DomainParticipant {
       listeners, 
       targets,
       new_guid.guidPrefix,
-      (ADD_READER_TOKEN, receiver_add_reader),
-      (REMOVE_READER_TOKEN, receiver_remove_reader),
+      TokenReceiverPair{
+        token: ADD_READER_TOKEN,
+        receiver: receiver_add_reader,
+      },
+      TokenReceiverPair{
+        token: REMOVE_READER_TOKEN,
+        receiver: receiver_remove_reader,
+      },
     );
       
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
     DomainParticipant {
       entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
-
       // Adding readers
-      sender_add_reader: (ADD_READER_TOKEN, sender_add_reader),
-      sender_remove_reader: (REMOVE_READER_TOKEN, sender_remove_reader),
+      sender_add_reader,
+      sender_remove_reader,
     }
   }
 
   pub fn add_reader(&self, reader: Reader) {
-    self.sender_add_reader.1.send(reader).unwrap();
+    self.sender_add_reader.send(reader).unwrap();
   }
 
   pub fn remove_reader(&self, guid: GUID) {
     let reader_guid = guid; // How to identify reader to be removed?
-    self.sender_remove_reader.1.send(reader_guid).unwrap();
+    self.sender_remove_reader.send(reader_guid).unwrap();
   }
 
   // Publisher and subscriber creation

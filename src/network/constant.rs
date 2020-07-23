@@ -1,4 +1,5 @@
 use mio::Token;
+use mio_extras::channel as mio_channel;
 
 pub const STOP_POLL_TOKEN: Token = Token(0);
 
@@ -17,3 +18,9 @@ pub const REMOVE_READER_TOKEN: Token = Token(11);
 
 pub const READER_CHANGE_TOKEN: Token = Token(12);
 pub const DATAREADER_CHANGE_TOKEN: Token = Token(13);
+
+
+pub struct TokenReceiverPair<T> {
+  pub token: Token,
+  pub receiver: mio_channel::Receiver<T>
+}

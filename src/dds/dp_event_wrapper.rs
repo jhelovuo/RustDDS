@@ -16,8 +16,9 @@ pub struct DPEventWrapper {
   message_receiver: MessageReceiver,
 
   // Adding readers
-  receiver_add_reader: (Token, mio_channel::Receiver<Reader>),
-  receiver_remove_reader: (Token, mio_channel::Receiver<GUID>),
+  
+  receiver_add_reader: TokenReceiverPair<Reader>,
+  receiver_remove_reader: TokenReceiverPair<GUID>,
 }
 
 impl DPEventWrapper {
@@ -25,8 +26,8 @@ impl DPEventWrapper {
     udp_listeners: HashMap<Token, UDPListener>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
     participant_guid_prefix: GuidPrefix,
-    receiver_add_reader: (Token, mio_channel::Receiver<Reader>),
-    receiver_remove_reader: (Token, mio_channel::Receiver<GUID>),
+    receiver_add_reader: TokenReceiverPair<Reader>,
+    receiver_remove_reader: TokenReceiverPair<GUID>,
     
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
@@ -45,15 +46,15 @@ impl DPEventWrapper {
     }
 
     poll.register(
-      &receiver_add_reader.1,
-      receiver_add_reader.0.clone(),
+      &receiver_add_reader.receiver,
+      receiver_add_reader.token.clone(),
       Ready::readable(),
       PollOpt::edge(),
     ).expect("Failed to register reader adder.");
 
     poll.register(
-      &receiver_remove_reader.1,
-      receiver_remove_reader.0.clone(),
+      &receiver_remove_reader.receiver,
+      receiver_remove_reader.token.clone(),
       Ready::readable(),
       PollOpt::edge(),
     ).expect("Failed to register reader remover.");
@@ -122,11 +123,11 @@ impl DPEventWrapper {
   pub fn handle_reader_action(&mut self, event: &Event) {
     match event.token() {
       ADD_READER_TOKEN => {
-        let new_reader = self.receiver_add_reader.1.try_recv().expect("Can't get new reader");
+        let new_reader = self.receiver_add_reader.receiver.try_recv().expect("Can't get new reader");
         self.message_receiver.add_reader(new_reader);
       },
       REMOVE_READER_TOKEN => {
-        let old_reader_guid = self.receiver_remove_reader.1.try_recv().unwrap();
+        let old_reader_guid = self.receiver_remove_reader.receiver.try_recv().unwrap();
         self.message_receiver.remove_reader(old_reader_guid);
       },
       _ => {},
@@ -157,8 +158,14 @@ mod tests {
       HashMap::new(),
       HashMap::new(),
       GuidPrefix::default(),
-      (ADD_READER_TOKEN, receiver_add),
-      (REMOVE_READER_TOKEN, receiver_remove),
+      TokenReceiverPair {
+        token: ADD_READER_TOKEN,
+        receiver: receiver_add,
+      },
+      TokenReceiverPair {
+        token: REMOVE_READER_TOKEN,
+        receiver: receiver_remove,
+      },
     );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();

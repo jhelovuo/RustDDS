@@ -23,7 +23,7 @@ use speedy::{Readable, Endianness};
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
 #[derive(Debug, PartialEq)]
-pub struct MessageReceiver<> {
+pub struct MessageReceiver {
   pub available_readers: Vec<Reader>,
 
   participant_guid_prefix: GuidPrefix,
@@ -257,6 +257,8 @@ impl MessageReceiver{
         ).unwrap();
         if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
           self.dest_guid_prefix = info_dest.guid_prefix;
+        } else {
+          self.dest_guid_prefix = self.participant_guid_prefix;
         }
       },
       _ => return false,
