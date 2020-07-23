@@ -1,4 +1,5 @@
 mod dp_event_wrapper;
+mod sub_event_wrapper;
 pub mod key;
 pub mod typedesc;
 pub mod qos;

@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiver;
-//use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct Reader {
@@ -26,7 +26,7 @@ pub struct Reader {
   set_readiness: SetReadiness,
   registration: Registration,
 
-  history_cache: HistoryCache, // atm done with the assumption, that only one writers cache is monitored
+  history_cache: Arc<Mutex<HistoryCache>>, // atm done with the assumption, that only one writers cache is monitored
   entity_attributes: EntityAttributes,
   pub enpoint_attributes: EndpointAttributes,
 
@@ -42,11 +42,12 @@ impl Reader {
     guid: GUID,
     set_readiness: SetReadiness,
     registration: Registration,
+    history_cache: Arc<Mutex<HistoryCache>>,
   ) -> Reader {
     Reader {
       set_readiness,
       registration,
-      history_cache: HistoryCache::new(),
+      history_cache,
       entity_attributes: EntityAttributes{guid},
       enpoint_attributes: EndpointAttributes::default(),
 
@@ -88,7 +89,7 @@ impl Reader {
     //self.history_cache.remove_changes_up_to(heartbeat.first_sn);
 
     let last_seq_num: SequenceNumber;
-    if let Some(num) = self.history_cache.get_seq_num_max() {
+    if let Some(num) = self.history_cache.lock().unwrap().get_seq_num_max() {
       last_seq_num = *num;
     } else {
       last_seq_num = SequenceNumber::from(0);
@@ -115,6 +116,7 @@ impl Reader {
       self.sent_ack_nack_count += 1;
 
     }
+    drop(last_seq_num);
     self.notify_cache_change();
     need_ack_nack
   }
@@ -134,7 +136,7 @@ impl Reader {
 
     //Remove irrelevant?
     for seqnum in irrelevant_changes_set {
-      self.history_cache.remove_change(seqnum);
+      self.history_cache.lock().unwrap().remove_change(seqnum);
     }
 
     self.notify_cache_change();
@@ -147,7 +149,7 @@ impl Reader {
       data.writer_sn,
       Some(data),
     );
-    self.history_cache.add_change(change);
+    self.history_cache.lock().unwrap().add_change(change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)

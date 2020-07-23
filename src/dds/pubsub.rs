@@ -21,6 +21,9 @@ use crate::dds::reader::Reader;
 use mio::event::Evented;
 use std::io;
 
+use std::sync::{Arc, Mutex};
+use crate::structure::history_cache::HistoryCache;
+
 // -------------------------------------------------------------------
 
 pub struct Publisher<'a> {
@@ -84,23 +87,25 @@ impl<'a> Publisher<'a> {
 
 // -------------------------------------------------------------------
 
-pub struct Subscriber<'a> {
-  my_domainparticipant: &'a DomainParticipant,
+pub struct Subscriber {
+  //my_domainparticipant: &'a DomainParticipant,
   poll: Poll,
   qos: QosPolicies,
+  datareaders: Vec<DataReader>,
 }
 
-impl<'a> Subscriber<'a> {
+impl Subscriber {
   pub fn new(
-    my_domainparticipant: &'a DomainParticipant,
+    //my_domainparticipant: &'a DomainParticipant,
     qos: QosPolicies, 
-  ) -> Subscriber<'a>{
+  ) -> Subscriber{
     let poll = Poll::new().expect("Unable to create new poll.");
 
     Subscriber{
       poll,
-      my_domainparticipant,
+      //my_domainparticipant,
       qos,
+      datareaders: Vec::new(),
     }
   }
 
@@ -126,56 +131,57 @@ impl<'a> Subscriber<'a> {
     }
   }
 
-  pub fn create_datareader<'p: 'a>(
-    &'p self,
+  pub fn create_datareader(
+    participant_guid: GUID,
     _a_topic: &Topic,
     qos: QosPolicies,
-  ) -> (Result<DataReader<'p>>, Result<Reader>) {
+  ) -> (Result<DataReader>, Result<Reader>) {
 
     let (register_datareader, 
       set_readiness_of_datareader) = Registration::new2();
     let (register_reader, 
       set_readiness_of_reader) = Registration::new2();
 
+
+    let history_cache = 
+    Arc::new(Mutex::new(HistoryCache::new()));
+
     let new_datareader = DataReader {
-      my_subscriber: &self,
+      //my_subscriber: &self,
       qos_policy: qos,
       set_readiness: set_readiness_of_datareader,
       registration: register_datareader,
+      history_cache: history_cache.clone(),
     };
 
     let matching_reader = Reader::new(
-      GUID{
-        guidPrefix: self.my_domainparticipant.get_guid_prefix(),
-        entityId: EntityId::ENTITYID_PARTICIPANT,
-      },
+      participant_guid,
       set_readiness_of_reader,
       register_reader,
+      history_cache,
     );
 
-    self.poll.register(
-      &matching_reader,
-      READER_CHANGE_TOKEN, 
-      Ready::readable(),
-       PollOpt::edge()
-      ).expect("Failed to register reader with subscribers poll.");
-
     (Ok(new_datareader), Ok(matching_reader))
+  }
+
+  pub fn add_datareader(&mut self, datareader: DataReader) {
+    self.datareaders.push(datareader);
   }
 
 }
 
 // -------------------------------------------------------------------
 
-pub struct DataReader<'s> {
-  my_subscriber: &'s Subscriber<'s>,
+pub struct DataReader {
+  //my_subscriber: &'s Subscriber<'s>,
   qos_policy: QosPolicies,
   set_readiness: SetReadiness,
   registration: Registration,
+  history_cache: Arc<Mutex<HistoryCache>>,
   // TODO: rest of fields
 }
 
-impl <'s> DataReader<'s> {
+impl <'s> DataReader {
   pub fn read<D>(&self, _max_samples: i32) -> Result<Vec<DataSample<D>>>
   where D: Deserialize<'s> + Keyed, 
   { 
@@ -191,7 +197,7 @@ impl <'s> DataReader<'s> {
 
 } // impl 
 
-impl<'s> Evented for DataReader<'s> {
+impl Evented for DataReader {
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self.registration.register(poll, token, interest, opts)
   }
@@ -307,7 +313,10 @@ mod tests{
       QosPolicies::qos_none(),
     );
     let (dreader_res, reader_res) =
-      sub.create_datareader(&a_topic, QosPolicies::qos_none());
+      Subscriber::create_datareader(
+        GUID::default(), 
+        &a_topic, 
+        QosPolicies::qos_none());
 
     let mut reader = reader_res.unwrap();
 
