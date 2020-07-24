@@ -134,8 +134,6 @@ impl<'a> Subscriber<'a> {
 
     let (register_datareader, 
       set_readiness_of_datareader) = Registration::new2();
-    let (register_reader, 
-      set_readiness_of_reader) = Registration::new2();
 
     let new_datareader = DataReader {
       my_subscriber: &self,
@@ -149,8 +147,6 @@ impl<'a> Subscriber<'a> {
         guidPrefix: self.my_domainparticipant.get_guid_prefix(),
         entityId: EntityId::ENTITYID_PARTICIPANT,
       },
-      set_readiness_of_reader,
-      register_reader,
     );
 
     self.poll.register(

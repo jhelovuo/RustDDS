@@ -364,20 +364,13 @@ mod tests{
     // this guid prefix is set here because exaple message target is this.
     let guiPrefix = GuidPrefix::new(vec![0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8]);
 
-    let (
-      register_reader, 
-      set_readiness_of_reader) = Registration::new2();
-
     let mut message_receiver = 
       MessageReceiver::new(guiPrefix);
 
       let entity = EntityId::createCustomEntityID([0,0,0],7);
       let new_guid = GUID::new_with_prefix_and_id(guiPrefix,entity);
       new_guid.from_prefix(entity);
-      let new_reader = Reader::new(
-        new_guid, 
-        set_readiness_of_reader, 
-        register_reader);
+      let new_reader = Reader::new(new_guid);
   
 
     message_receiver.add_reader(new_reader);

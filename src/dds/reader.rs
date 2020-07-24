@@ -23,8 +23,8 @@ use crate::dds::message_receiver::MessageReceiver;
 pub struct Reader {
   // Do we need to access information in messageReceiver?? Like reply locators.
   //my_message_receiver: Option<&'mr MessageReceiver>, 
-  set_readiness: SetReadiness,
   registration: Registration,
+  set_readiness: SetReadiness,
 
   history_cache: HistoryCache, // atm done with the assumption, that only one writers cache is monitored
   entity_attributes: EntityAttributes,
@@ -40,12 +40,14 @@ pub struct Reader {
 impl Reader {
   pub fn new(
     guid: GUID,
-    set_readiness: SetReadiness,
-    registration: Registration,
   ) -> Reader {
+    let (
+      register_reader, 
+      set_readiness_of_reader
+    ) = Registration::new2();
     Reader {
-      set_readiness,
-      registration,
+      registration: register_reader,
+      set_readiness: set_readiness_of_reader,
       history_cache: HistoryCache::new(),
       entity_attributes: EntityAttributes{guid},
       enpoint_attributes: EndpointAttributes::default(),
@@ -222,14 +224,8 @@ mod tests {
 
 
     let new_guid = GUID::new();
-    let (
-      register_reader, 
-      set_readiness_of_reader) = Registration::new2();
 
-    let mut new_reader = Reader::new(
-      new_guid, 
-      set_readiness_of_reader, 
-      register_reader);
+    let mut new_reader = Reader::new(new_guid,);
 
     let d = Data::default();
     let d_seqnum = d.writer_sn;
@@ -249,14 +245,8 @@ mod tests {
   #[test]
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
-    let (
-      register_reader, 
-      set_readiness_of_reader) = Registration::new2();
 
-    let mut new_reader = Reader::new(
-      new_guid, 
-      set_readiness_of_reader, 
-      register_reader);
+    let mut new_reader = Reader::new(new_guid);
 
     let writer_id = EntityId::default();
     let d = Data::default();
@@ -343,14 +333,8 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let (
-      register_reader, 
-      set_readiness_of_reader) = Registration::new2();
 
-    let mut reader = Reader::new(
-      new_guid, 
-      set_readiness_of_reader, 
-      register_reader);
+    let mut reader = Reader::new(new_guid);
 
     let n: i64 = 10;
     let d = Data::default();

@@ -185,14 +185,8 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-      let (
-        register_reader, 
-        set_readiness_of_reader) = Registration::new2();
   
-      let mut new_reader = Reader::new(
-        new_guid, 
-        set_readiness_of_reader, 
-        register_reader);
+      let mut new_reader = Reader::new(new_guid);
 
       reader_guids.push(new_reader.get_guid());
       println!("\nSent reader number {}: {:?}\n", i, new_reader);
