@@ -14,7 +14,6 @@ use crate::dds::topic::*;
 use crate::dds::typedesc::*;
 use crate::dds::qos::*;
 use crate::dds::result::*;
-use crate::dds::sub_event_wrapper::SubEventWrapper;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::{GUID};
 use std::net::Ipv4Addr;
@@ -26,7 +25,7 @@ pub struct DomainParticipant {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 
-  //subs: Arc<Mutex<Vec<Subscriber>>>,
+  subs: Vec<Arc<Mutex<Subscriber>>>,
 
   // Adding Readers
   sender_add_reader: mio_channel::Sender<Reader>,
@@ -99,7 +98,7 @@ impl DomainParticipant {
     DomainParticipant {
       entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
-      //subs: Arc::new(Mutex::new(Vec::new())),
+      subs: Vec::new(),
       // Adding readers
       sender_add_reader,
       sender_remove_reader,
@@ -156,6 +155,7 @@ impl DomainParticipant {
 
       self.get_guid(),
     );
+    //self.subs.get_mut().unwrap().push(subscriber);
 
     thread::spawn(move || 
       subscriber.subscriber_poll()

@@ -353,6 +353,11 @@ mod tests{
   use crate::structure::history_cache::HistoryCache;
 
   #[test]
+  fn sub_datareader_reader_creation () {
+    
+  }
+
+  #[test]
   fn sub_subpoll_test() {
     let dp_guid = GUID::new();
 
@@ -403,15 +408,15 @@ mod tests{
         let d = Data::default();
         reader.handle_data_msg(d);
 
+        std::thread::sleep(Duration::new(0,500));
+        let d2 = Data::default();
+        reader.handle_data_msg(d2);
+
         std::thread::sleep(Duration::new(0,500_000));
         sender_stop.send(0).unwrap();
       }
     );
-
     sub.subscriber_poll();
     child.join().unwrap();
-
-
-
   }
 }
