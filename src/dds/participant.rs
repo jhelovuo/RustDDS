@@ -26,15 +26,15 @@ pub struct DomainParticipant {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 
-  subs: Arc<Mutex<Vec<Subscriber>>>,
+  //subs: Arc<Mutex<Vec<Subscriber>>>,
 
   // Adding Readers
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader:  mio_channel::Sender<GUID>,
 
   // Adding DataReaders
-  sender_add_datareader: mio_channel::Sender<DataReader>,
-  sender_remove_datareader:  mio_channel::Sender<GUID>,
+  sender_add_datareader_vec: Vec<mio_channel::Sender<()>>,
+  sender_remove_datareader_vec: Vec<mio_channel::Sender<GUID>>,
 
 }
 
@@ -77,7 +77,6 @@ impl DomainParticipant {
     mio_channel::channel::<Reader>();
     let (sender_remove_reader, receiver_remove_reader) =
     mio_channel::channel::<GUID>();
-
     let new_guid = GUID::new();
 
     let ev_wrapper = DPEventWrapper::new(
@@ -93,43 +92,20 @@ impl DomainParticipant {
         receiver: receiver_remove_reader,
       },
     );
-      
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
 
+
     // Addind datareaders
-    let (sender_add_datareader, receiver_add_datareader) =
-    mio_channel::channel::<DataReader>();
-    let (sender_remove_datareader, receiver_remove_datareader) =
-    mio_channel::channel::<GUID>();
-
-    let subscribers = 
-      Arc::new(Mutex::new(Vec::<Subscriber>::new()));
-    let sub_event_wrapper = SubEventWrapper::new(
-      subscribers.clone(),
-      TokenReceiverPair{
-        token: ADD_DATAREADER_TOKEN,
-        receiver: receiver_add_datareader,
-      },
-      TokenReceiverPair{
-        token: REMOVE_DATAREADER_TOKEN,
-        receiver: receiver_remove_datareader,
-      },
-    );
-
-    thread::spawn(move || SubEventWrapper::event_loop(
-      sub_event_wrapper
-    ));
-
     DomainParticipant {
       entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
-      subs: subscribers,
+      //subs: Arc::new(Mutex::new(Vec::new())),
       // Adding readers
       sender_add_reader,
       sender_remove_reader,
       // Adding datareaders
-      sender_add_datareader,
-      sender_remove_datareader,
+      sender_add_datareader_vec: Vec::new(),
+      sender_remove_datareader_vec: Vec::new(),
     }
   }
 
@@ -142,13 +118,13 @@ impl DomainParticipant {
     self.sender_remove_reader.send(reader_guid).unwrap();
   }
 
-  pub fn add_datareader(&self, datareader: DataReader) {
-    self.sender_add_datareader.send(datareader).unwrap();
+  pub fn add_datareader(&self, _datareader: DataReader, pos: usize) {
+    self.sender_add_datareader_vec[pos].send(()).unwrap();
   }
 
-  pub fn remove_datareader(&self, guid: GUID) {
+  pub fn remove_datareader(&self, guid: GUID, pos: usize) {
     let datareader_guid = guid; // How to identify reader to be removed?
-    self.sender_remove_datareader.send(datareader_guid).unwrap();
+    self.sender_remove_datareader_vec[pos].send(datareader_guid).unwrap();
   }
 
   // Publisher and subscriber creation
@@ -160,31 +136,35 @@ impl DomainParticipant {
     unimplemented!()
   }
 
-  pub fn create_subsrciber(&self, qos: QosPolicies) {
-    let subscriber = Subscriber::new(
-      //&self,
+  pub fn create_subsrciber(&mut self, qos: QosPolicies) {
+
+    let (sender_add_datareader, receiver_add_datareader) =
+    mio_channel::channel::<()>();
+    let (sender_remove_datareader, receiver_remove_datareader) =
+    mio_channel::channel::<GUID>();
+
+    self.sender_add_datareader_vec.push(sender_add_datareader);
+    self.sender_remove_datareader_vec.push(sender_remove_datareader);
+
+    let mut subscriber = Subscriber::new(
       qos,
+      self.sender_add_reader.clone(),
+      self.sender_remove_reader.clone(),
+
+      receiver_add_datareader,
+      receiver_remove_datareader,
+
+      self.get_guid(),
     );
-    self.subs.lock().unwrap().push(subscriber);
+
+    thread::spawn(move || 
+      subscriber.subscriber_poll()
+    );
+
   }
 
   pub fn created_datareader(&self, qos: QosPolicies) {
-
-    let a_topic = Topic::new(
-      &self,
-      ":D".to_string(),
-      TypeDesc::new(":)".to_string()),
-      QosPolicies::qos_none(),
-    );
-
-    let (dr, r) = 
-    Subscriber::create_datareader(
-      self.get_guid(),
-      &a_topic,
-      qos,
-    );
-    self.add_datareader(dr.unwrap());
-    self.add_reader(r.unwrap());
+    todo!();
   }
 
   // Topic creation. Data types should be handled as something (potentially) more structured than a String.

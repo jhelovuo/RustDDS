@@ -40,13 +40,16 @@ pub struct Reader {
 impl Reader {
   pub fn new(
     guid: GUID,
-    set_readiness: SetReadiness,
-    registration: Registration,
     history_cache: Arc<Mutex<HistoryCache>>,
   ) -> Reader {
+    let (
+      register_reader,  
+      set_readiness_of_reader
+    ) = Registration::new2();
+    
     Reader {
-      set_readiness,
-      registration,
+      set_readiness: set_readiness_of_reader,
+      registration: register_reader,
       history_cache,
       entity_attributes: EntityAttributes{guid},
       enpoint_attributes: EndpointAttributes::default(),
@@ -116,7 +119,6 @@ impl Reader {
       self.sent_ack_nack_count += 1;
 
     }
-    drop(last_seq_num);
     self.notify_cache_change();
     need_ack_nack
   }
@@ -209,14 +211,10 @@ mod tests {
 
 
     let new_guid = GUID::new();
-    let (
-      register_reader, 
-      set_readiness_of_reader) = Registration::new2();
 
     let mut new_reader = Reader::new(
       new_guid, 
-      set_readiness_of_reader, 
-      register_reader);
+      Arc::new(Mutex::new(HistoryCache::new())));
 
     let d = Data::default();
     let d_seqnum = d.writer_sn;
@@ -228,22 +226,16 @@ mod tests {
       Some(d),
     );
 
-    let res = 
-      new_reader.history_cache.get_change(d_seqnum);
-    assert_eq!(*res.unwrap(),change);
+    assert_eq!(new_reader.history_cache.lock().unwrap().get_change(d_seqnum).unwrap(), &change);
   }
 
   #[test]
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
-    let (
-      register_reader, 
-      set_readiness_of_reader) = Registration::new2();
 
     let mut new_reader = Reader::new(
-      new_guid, 
-      set_readiness_of_reader, 
-      register_reader);
+      new_guid,
+      Arc::new(Mutex::new(HistoryCache::new())));
 
     let writer_id = EntityId::default();
     let d = Data::default();
@@ -275,7 +267,7 @@ mod tests {
       SequenceNumber::from(1),
       Some(d.clone()),
     );
-    new_reader.history_cache.add_change(change.clone());
+    new_reader.history_cache.lock().unwrap().add_change(change.clone());
     changes.push(change);
 
 
@@ -305,14 +297,14 @@ mod tests {
       SequenceNumber::from(2),
       Some(d.clone()),
     );
-    new_reader.history_cache.add_change(change.clone());
+    new_reader.history_cache.lock().unwrap().add_change(change.clone());
     changes.push(change);
     let change =  CacheChange::new(
       new_reader.get_guid(),
       SequenceNumber::from(3),
       Some(d),
     );
-    new_reader.history_cache.add_change(change.clone());
+    new_reader.history_cache.lock().unwrap().add_change(change.clone());
     changes.push(change);
 
     let hb_none = Heartbeat{
@@ -330,14 +322,10 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let (
-      register_reader, 
-      set_readiness_of_reader) = Registration::new2();
 
     let mut reader = Reader::new(
       new_guid, 
-      set_readiness_of_reader, 
-      register_reader);
+      Arc::new(Mutex::new(HistoryCache::new())));
 
     let n: i64 = 10;
     let d = Data::default();
@@ -349,7 +337,7 @@ mod tests {
         SequenceNumber::from(i),
         Some(d.clone()),
       );
-      reader.history_cache.add_change(change.clone());
+      reader.history_cache.lock().unwrap().add_change(change.clone());
       changes.push(change);
     }
 
@@ -370,16 +358,16 @@ mod tests {
 
     reader.handle_gap_msg(gap);
 
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(0)), Some(&changes[0]));
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(1)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(2)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(3)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(4)), Some(&changes[4]));
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(5)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(6)), Some(&changes[6]));
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(7)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(8)), Some(&changes[8]));
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(9)), Some(&changes[9]));
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(0)), Some(&changes[0]));
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(1)), None);
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(2)), None);
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(3)), None);
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(4)), Some(&changes[4]));
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(5)), None);
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(6)), Some(&changes[6]));
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(7)), None);
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(8)), Some(&changes[8]));
+    assert_eq!(reader.history_cache.lock().unwrap().get_change(SequenceNumber::from(9)), Some(&changes[9]));
   }
  
 

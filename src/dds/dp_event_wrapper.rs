@@ -143,6 +143,8 @@ mod tests {
   use std::time::Duration;
   use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
   use crate::structure::entity::Entity;
+  use std::sync::{Arc, Mutex};
+  use crate::structure::history_cache::HistoryCache;
   //use std::sync::mpsc;
   
   #[test]
@@ -185,14 +187,10 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-      let (
-        register_reader, 
-        set_readiness_of_reader) = Registration::new2();
   
       let mut new_reader = Reader::new(
         new_guid, 
-        set_readiness_of_reader, 
-        register_reader);
+        Arc::new(Mutex::new(HistoryCache::new())));
 
       reader_guids.push(new_reader.get_guid());
       println!("\nSent reader number {}: {:?}\n", i, new_reader);

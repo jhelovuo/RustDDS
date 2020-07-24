@@ -6,8 +6,8 @@ use serde::{Serialize, Deserialize};
 
 use crate::structure::time::Timestamp;
 use crate::structure::guid::{GUID, EntityId};
-use crate::structure::entity::{Entity};
-
+use mio_extras::channel as mio_channel;
+use crate::structure::entity::{Entity, EntityAttributes};
 
 use crate::dds::result::*;
 use crate::dds::participant::*;
@@ -92,28 +92,60 @@ pub struct Subscriber {
   poll: Poll,
   qos: QosPolicies,
   datareaders: Vec<DataReader>,
+
+  sender_add_reader: mio_channel::Sender<Reader>,
+  sender_remove_reader:  mio_channel::Sender<GUID>,
+
+  receiver_remove_datareader: mio_channel::Receiver<GUID>,
+  participant_guid: GUID,
 }
 
 impl Subscriber {
   pub fn new(
     //my_domainparticipant: &'a DomainParticipant,
     qos: QosPolicies, 
+    sender_add_reader: mio_channel::Sender<Reader>,
+    sender_remove_reader:  mio_channel::Sender<GUID>,
+
+    receiver_add_datareader: mio_channel::Receiver<()>,
+    receiver_remove_datareader: mio_channel::Receiver<GUID>,
+
+    participant_guid: GUID,
   ) -> Subscriber{
     let poll = Poll::new().expect("Unable to create new poll.");
+
+    poll.register(
+      &receiver_add_datareader,
+      ADD_DATAREADER_TOKEN,
+      Ready::readable(),
+      PollOpt::edge(),
+    ).expect("Failed to register datareader adder.");
+
+    poll.register(
+      &receiver_remove_datareader,
+      REMOVE_DATAREADER_TOKEN,
+      Ready::readable(),
+      PollOpt::edge(),
+    ).expect("Failed to register datareader remover.");
 
     Subscriber{
       poll,
       //my_domainparticipant,
       qos,
       datareaders: Vec::new(),
+      sender_add_reader,
+      sender_remove_reader,
+      receiver_remove_datareader,
+      participant_guid,
     }
   }
 
-  pub fn subscriber_poll(subscriber: Subscriber) {
+  pub fn subscriber_poll(&mut self) {
     loop {
+      println!("Subscriber looping...");
       let mut events = Events::with_capacity(1024);
 
-      subscriber.poll.poll(
+      self.poll.poll(
         &mut events, None
       ).expect("Subscriber failed in polling");
 
@@ -124,6 +156,31 @@ impl Subscriber {
           STOP_POLL_TOKEN => return,
           READER_CHANGE_TOKEN => {
             println!("Got notification of reader's new change!!!");
+            println!("Should get information on who the reader was???, 
+                      and ask for the change?");
+          },
+          ADD_DATAREADER_TOKEN => {
+            let (dr, r) = 
+              self.create_datareader(self.participant_guid, self.qos.clone());
+
+            let reader = r.unwrap();
+            self.poll.register(
+              &reader,
+              READER_CHANGE_TOKEN, 
+              Ready::readable(),
+              PollOpt::edge(),
+            ).expect("Unable to register new Reader for Subscribers poll.");
+            self.datareaders.push(dr.unwrap());
+            self.sender_add_reader.send(reader).unwrap();
+          },
+          REMOVE_DATAREADER_TOKEN => {
+            let old_dr_guid = self.receiver_remove_datareader.try_recv().unwrap();
+            if let Some(pos) = self.datareaders.iter().position(
+              |r| r.get_guid() == old_dr_guid
+            ) {
+                self.datareaders.remove(pos);
+            }
+            self.sender_remove_reader.send(old_dr_guid).unwrap();
           },
           _ => {},
         }
@@ -132,15 +189,13 @@ impl Subscriber {
   }
 
   pub fn create_datareader(
+    &self,
     participant_guid: GUID,
-    _a_topic: &Topic,
     qos: QosPolicies,
   ) -> (Result<DataReader>, Result<Reader>) {
 
     let (register_datareader, 
       set_readiness_of_datareader) = Registration::new2();
-    let (register_reader, 
-      set_readiness_of_reader) = Registration::new2();
 
 
     let history_cache = 
@@ -152,20 +207,15 @@ impl Subscriber {
       set_readiness: set_readiness_of_datareader,
       registration: register_datareader,
       history_cache: history_cache.clone(),
+      entity_attributes: EntityAttributes{guid: participant_guid},
     };
 
     let matching_reader = Reader::new(
       participant_guid,
-      set_readiness_of_reader,
-      register_reader,
       history_cache,
     );
 
     (Ok(new_datareader), Ok(matching_reader))
-  }
-
-  pub fn add_datareader(&mut self, datareader: DataReader) {
-    self.datareaders.push(datareader);
   }
 
 }
@@ -178,6 +228,7 @@ pub struct DataReader {
   set_readiness: SetReadiness,
   registration: Registration,
   history_cache: Arc<Mutex<HistoryCache>>,
+  entity_attributes: EntityAttributes,
   // TODO: rest of fields
 }
 
@@ -196,6 +247,12 @@ impl <'s> DataReader {
 
 
 } // impl 
+
+impl Entity for DataReader {
+  fn as_entity(&self) -> &EntityAttributes {
+    &self.entity_attributes
+  }
+}
 
 impl Evented for DataReader {
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
@@ -292,11 +349,33 @@ mod tests{
   use crate::messages::submessages::heartbeat::Heartbeat;
   use crate::structure::sequence_number::SequenceNumber;
   use mio_extras::channel as mio_channel;
+  use std::sync::{Arc, Mutex};
+  use crate::structure::history_cache::HistoryCache;
 
   #[test]
-  fn sub_readers_notification() {
-    let dp = DomainParticipant::new();
-    let sub = dp.create_subsrciber(QosPolicies::qos_none()).unwrap();
+  fn sub_subpoll_test() {
+    let dp_guid = GUID::new();
+
+    let (sender_add_datareader, receiver_add_datareader) =
+    mio_channel::channel::<()>();
+    let (sender_remove_datareader, receiver_remove_datareader) =
+    mio_channel::channel::<GUID>();
+
+    let (sender_add_reader, receiver_add_reader) =
+    mio_channel::channel::<Reader>();
+    let (sender_remove_reader, receiver_remove_reader) =
+    mio_channel::channel::<GUID>();
+
+    let mut sub = Subscriber::new(
+      QosPolicies::qos_none(),
+      sender_add_reader.clone(),
+      sender_remove_reader.clone(),
+
+      receiver_add_datareader,
+      receiver_remove_datareader,
+
+      dp_guid,
+    );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
     sub.poll.register(
@@ -306,19 +385,17 @@ mod tests{
       PollOpt::edge()
     ).unwrap();
 
-    let a_topic = Topic::new(
-      &dp,
-      ":D".to_string(),
-      TypeDesc::new(":)".to_string()),
-      QosPolicies::qos_none(),
-    );
-    let (dreader_res, reader_res) =
-      Subscriber::create_datareader(
-        GUID::default(), 
-        &a_topic, 
-        QosPolicies::qos_none());
+    let (dr, r) = 
+    sub.create_datareader(sub.participant_guid, sub.qos.clone());
 
-    let mut reader = reader_res.unwrap();
+    let mut reader = r.unwrap();
+    sub.poll.register(
+      &reader,
+      READER_CHANGE_TOKEN, 
+      Ready::readable(),
+      PollOpt::edge(),
+    ).expect("Unable to register new Reader for Subscribers poll.");
+    sub.datareaders.push(dr.unwrap());
 
     let child = thread::spawn(
       move || {
@@ -326,21 +403,15 @@ mod tests{
         let d = Data::default();
         reader.handle_data_msg(d);
 
-        /*std::thread::sleep(Duration::new(0,500));
-        let hb = Heartbeat{
-          reader_id: reader.get_entity_id(),
-          writer_id: EntityId::default(),
-          first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
-          last_sn: SequenceNumber::from(0),
-          count: 1,
-        };
-        reader.handle_heartbeat_msg(hb, false);*/
-
         std::thread::sleep(Duration::new(0,500_000));
         sender_stop.send(0).unwrap();
       }
     );
-    Subscriber::subscriber_poll(sub);
+
+    sub.subscriber_poll();
     child.join().unwrap();
+
+
+
   }
 }
