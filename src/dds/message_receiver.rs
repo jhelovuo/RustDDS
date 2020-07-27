@@ -10,7 +10,6 @@ use crate::structure::time::Time;
 use crate::serialization::submessage::SubMessage;
 use crate::messages::submessages::data::Data;
 
-
 use crate::messages::submessages::info_destination::InfoDestination;
 use crate::messages::submessages::info_source::InfoSource;
 use crate::messages::submessages::info_reply::InfoReply;
@@ -123,9 +122,12 @@ impl MessageReceiver {
       .find(|r| r.get_entity_id() == reader_id)
   }
 
-
   // TODO use for test and debugging only
-  fn get_reader_and_history_cache_change<'a>(self, reader_id: EntityId, sequence_number : SequenceNumber) -> Option<Data>{
+  fn get_reader_and_history_cache_change<'a>(
+    self,
+    reader_id: EntityId,
+    sequence_number: SequenceNumber,
+  ) -> Option<Data> {
     //println!("readers: {:?}", self.available_readers);
     let reader = self.available_readers.iter().find(
       |r| r.get_entity_id() == reader_id
@@ -218,12 +220,12 @@ impl MessageReceiver {
       println!("participant guid: {:?}", self.participant_guid_prefix);
       return; // Wrong target received
     }
-    println!("{:?}",submessage);
+    println!("{:?}", submessage);
     // TODO! If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
     match submessage {
       EntitySubmessage::Data(data, _) => {
         println!("datamessage target reader: {:?}", data.reader_id);
-        let target_reader = self.get_reader(data.reader_id).unwrap(); 
+        let target_reader = self.get_reader(data.reader_id).unwrap();
         target_reader.handle_data_msg(data);
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -332,29 +334,28 @@ mod tests {
 
   #[test]
 
-  fn test_shapes_demo_message_deserialization(){
-
+  fn test_shapes_demo_message_deserialization() {
     // Data message should contain Shapetype values.
     // caprured with wireshark from shapes demo.
     // Udp packet with INFO_DST, INFO_TS, DATA, HEARTBEAT
-    let udp_bits1: Vec<u8> = vec! [
-        0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78,
-        0x34, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03,
-        0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x08, 0x09, 0x01, 0x08,
-        0x00, 0x1a, 0x15, 0xf3, 0x5e, 0x00, 0xcc, 0xfb, 0x13, 0x15, 0x05, 0x2c, 0x00,
-        0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x01, 0x02, 0x00,
-        0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x04, 0x00,
-        0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x69, 0x00, 0x00, 0x00, 0x17, 0x00, 0x00,
-        0x00, 0x1e, 0x00, 0x00, 0x00, 0x07, 0x01, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x07,
-        0x00, 0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00
-      ];
-      
-    // this guid prefix is set here because exaple message target is this.
-    let guiPrefix = GuidPrefix::new(vec![0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8]);
+    let udp_bits1: Vec<u8> = vec![
+      0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
+      0x00, 0x01, 0x00, 0x00, 0x00, 0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d,
+      0x31, 0xa2, 0x28, 0x20, 0x02, 0x08, 0x09, 0x01, 0x08, 0x00, 0x1a, 0x15, 0xf3, 0x5e, 0x00,
+      0xcc, 0xfb, 0x13, 0x15, 0x05, 0x2c, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x07,
+      0x00, 0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+      0x00, 0x04, 0x00, 0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x69, 0x00, 0x00, 0x00, 0x17, 0x00,
+      0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x07, 0x01, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00,
+      0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00,
+    ];
 
-    let mut message_receiver = 
-      MessageReceiver::new(guiPrefix);
+    // this guid prefix is set here because exaple message target is this.
+    let guiPrefix = GuidPrefix::new(vec![
+      0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
+    ]);
+
+    let mut message_receiver = MessageReceiver::new(guiPrefix);
 
       let entity = EntityId::createCustomEntityID([0,0,0],7);
       let new_guid = GUID::new_with_prefix_and_id(guiPrefix,entity);
@@ -364,16 +365,25 @@ mod tests {
 
     message_receiver.add_reader(new_reader);
 
-    message_receiver.handle_user_msg(udp_bits1);  
+    message_receiver.handle_user_msg(udp_bits1);
 
     assert_eq!(message_receiver.submessage_count, 4);
 
     // this is not correct way to read history cache values but it serves as a test
-    let sequenceNumbers = message_receiver.get_reader_history_cache_start_and_end_seq_num(new_guid.entityId);
-    println!("history change sequence number range: {:?}",sequenceNumbers );
+    let sequenceNumbers =
+      message_receiver.get_reader_history_cache_start_and_end_seq_num(new_guid.entityId);
+    println!(
+      "history change sequence number range: {:?}",
+      sequenceNumbers
+    );
 
-    let mut a = message_receiver.get_reader_and_history_cache_change(new_guid.entityId, *sequenceNumbers.first().unwrap()).unwrap();
-    println!("reader history chache DATA: {:?}" , a.serialized_payload.value);
+    let mut a = message_receiver
+      .get_reader_and_history_cache_change(new_guid.entityId, *sequenceNumbers.first().unwrap())
+      .unwrap();
+    println!(
+      "reader history chache DATA: {:?}",
+      a.serialized_payload.value
+    );
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct ShapeType<'a> {
@@ -383,13 +393,11 @@ mod tests {
       size: i32,
     }
 
-    let deserializedShapeType : ShapeType = deserialize_from_little_endian(&mut a.serialized_payload.value).unwrap();
-    println!("deserialized shapeType: {:?}",deserializedShapeType);
+    let deserializedShapeType: ShapeType =
+      deserialize_from_little_endian(&mut a.serialized_payload.value).unwrap();
+    println!("deserialized shapeType: {:?}", deserializedShapeType);
     assert_eq!(deserializedShapeType.color, "RED");
-
   }
-
-
 
   #[test]
   fn mr_test_submsg_count() {

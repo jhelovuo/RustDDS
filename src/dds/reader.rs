@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug)]
 pub struct Reader {
   // Do we need to access information in messageReceiver?? Like reply locators.
-  //my_message_receiver: Option<&'mr MessageReceiver>, 
+  //my_message_receiver: Option<&'mr MessageReceiver>,
   registration: Registration,
   set_readiness: SetReadiness,
 

@@ -24,9 +24,9 @@ impl UDPSender {
     }
   }
 
-  pub fn send_multicast(self, buffer: &[u8], address: Ipv4Addr) -> io::Result<usize> {
+  pub fn send_multicast(self, buffer: &[u8], address: Ipv4Addr, port: u16) -> io::Result<usize> {
     if address.is_multicast() {
-      let address = SocketAddr::new(IpAddr::V4(address), 0);
+      let address = SocketAddr::new(IpAddr::V4(address), port);
       return self.socket.send_to(buffer, &SocketAddr::from(address));
     }
     io::Result::Err(io::Error::new(

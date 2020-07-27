@@ -349,7 +349,6 @@ impl<'p> DataWriter<'p> {
 #[cfg(test)]
 mod tests {
   use super::*;
-
   use std::thread;
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
