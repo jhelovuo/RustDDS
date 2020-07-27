@@ -110,6 +110,13 @@ impl EntityId {
     entityKey: [0x00, 0x02, 0x00],
     entityKind: 0xC7,
   };
+
+  pub fn createCustomEntityID (customEntityKey: [u8; 3], customEntityKind :  u8) -> EntityId{
+    return EntityId {
+      entityKey : customEntityKey,
+      entityKind : customEntityKind,
+    }
+  }
 }
 
 impl Default for EntityId {
@@ -166,6 +173,13 @@ impl GUID {
     GUID {
       guidPrefix: self.guidPrefix.clone(),
       entityId: entity_id,
+    }
+  }
+
+  pub fn new_with_prefix_and_id (prefix : GuidPrefix, entity_id: EntityId) -> GUID{
+    GUID {
+      guidPrefix: prefix,
+      entityId:entity_id,
     }
   }
 }

@@ -22,9 +22,9 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug)]
 pub struct Reader {
   // Do we need to access information in messageReceiver?? Like reply locators.
-  //my_message_receiver: Option<&'mr MessageReceiver>,
-  set_readiness: SetReadiness,
+  //my_message_receiver: Option<&'mr MessageReceiver>, 
   registration: Registration,
+  set_readiness: SetReadiness,
 
   history_cache: Arc<Mutex<HistoryCache>>, // atm done with the assumption, that only one writers cache is monitored
   entity_attributes: EntityAttributes,
@@ -57,9 +57,25 @@ impl Reader {
   // TODO: check if it's necessary to implement different handlers for discovery
   // and user messages
 
+  // TODO Used for test/debugging purposes
+  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<Data>{
+    println!("history cache !!!! {:?}",self.history_cache.lock().unwrap().get_change(sequence_number).unwrap());
+    self.history_cache.lock().unwrap().get_change(sequence_number).unwrap().data_value.clone()
+  }
+
+  // TODO Used for test/debugging purposes
+  pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber>{
+
+    let history_cache = self.history_cache.lock().unwrap();
+    let start =  history_cache.get_seq_num_min();
+    let end = history_cache.get_seq_num_max();    
+    return vec![start.unwrap().clone(), end.unwrap().clone()];
+  }
+
   // handles regular data message and updates history cache
   pub fn handle_data_msg(&mut self, data: Data) {
     let user_data = true; // Different action for discovery data?
+    println!("handle data msg");
     if user_data {
       // TODO! Sequence number check?
       self.make_cache_change(data);

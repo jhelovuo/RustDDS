@@ -116,14 +116,30 @@ where
       pos += 2;
 
       let payload_size: usize = msgheader.submessage_length as usize - pos;
+      
+      //println!("submessage payload size: {:?}", payload_size);
+      //println!("pos: {:?} .. pos+payload_size {:?}", pos, pos+payload_size);
 
-      let vec_value = Vec::read_from_buffer(&buffer[pos..pos + payload_size]).unwrap();
+      // TODO this was previously here. Some bug in readable.rs read_from_buffer function because vec slice is not same size as payloadsize???
+      //println!("{:?}",&buffer[pos..(pos+payload_size)]);
+      /*
+      let vec_value = Vec::read_from_buffer(
+        &buffer[pos..(pos+payload_size)]
+      ).unwrap();
+      */
+      
+      let vec_value: Vec<u8> = buffer[pos..(pos+payload_size)].to_vec().clone();
+
+      if vec_value.len() != payload_size {
+        println!("SUBMESSAGE SERIALIZED PAYLOAD AND VEC SLICE ARE NOT SAME SIZE !!!")
+      }
 
       serialized_payload = SerializedPayload {
         representation_identifier: rep_identifier,
         representation_options: rep_options,
         value: vec_value,
       }
+      
     }
     Some(Data {
       reader_id,

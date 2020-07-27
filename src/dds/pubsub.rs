@@ -5,7 +5,7 @@ use crate::network::constant::*;
 use serde::{Serialize, Deserialize};
 
 use crate::structure::time::Timestamp;
-use crate::structure::guid::{GUID, EntityId};
+use crate::structure::guid::{GUID};
 use mio_extras::channel as mio_channel;
 use crate::structure::entity::{Entity, EntityAttributes};
 
@@ -13,7 +13,6 @@ use crate::dds::result::*;
 use crate::dds::participant::*;
 use crate::dds::topic::*;
 use crate::dds::key::*;
-use crate::dds::typedesc::*;
 use crate::dds::qos::*;
 use crate::dds::datasample::*;
 use crate::dds::reader::Reader;
@@ -350,8 +349,6 @@ impl<'p> DataWriter<'p> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::dds::topic::Topic;
-  use crate::dds::typedesc::TypeDesc;
 
   use std::thread;
   use std::time::Duration;
