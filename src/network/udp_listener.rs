@@ -45,7 +45,7 @@ impl UDPListener {
   pub fn get_message(&self) -> Vec<u8> {
     let mut message: Vec<u8> = vec![];
     let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    if let Ok((nbytes, _address)) = self.socket.recv_from(&mut buf) {
+    if let Ok(nbytes) = self.socket.recv(&mut buf) {
       message = buf[..nbytes].to_vec();
     }
     message
@@ -53,7 +53,9 @@ impl UDPListener {
 
   pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
     if address.is_multicast() {
-      return self.socket.join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
+      return self
+        .socket
+        .join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
     }
     io::Result::Err(io::Error::new(
       io::ErrorKind::Other,
@@ -63,7 +65,9 @@ impl UDPListener {
 
   pub fn leave_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
     if address.is_multicast() {
-      return self.socket.leave_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
+      return self
+        .socket
+        .leave_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
     }
     io::Result::Err(io::Error::new(
       io::ErrorKind::Other,
@@ -76,6 +80,8 @@ impl UDPListener {
 mod tests {
   use super::*;
   use crate::network::udp_sender::*;
+
+  use std::{thread, time};
 
   #[test]
   fn udpl_single_address() {
@@ -94,7 +100,7 @@ mod tests {
   }
 
   // TODO: there is something wrong with this test (possibly inability actually send or receive multicast)
-  // #[test]
+  #[test]
   fn udpl_multicast_address() {
     let listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
     let sender = UDPSender::new(11002);
@@ -102,15 +108,19 @@ mod tests {
     let data: Vec<u8> = vec![2, 4, 6];
 
     // still need to use the same port
-    let ipmcaddr = Ipv4Addr::new(240, 0, 0, 12);
-    let mcaddr = vec![SocketAddr::new("224.0.0.12".parse().unwrap(), 10002)];
-    listener.join_multicast(&ipmcaddr).unwrap();
+    let mcaddr = vec![SocketAddr::new("239.255.0.1".parse().unwrap(), 10002)];
+    listener.join_multicast(&Ipv4Addr::new(239, 255, 0, 1));
 
-    sender.send_to_all(&data, &mcaddr);
+    // sender.send_to_all(&data, &mcaddr);
+    sender.send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002);
+
+    thread::sleep(time::Duration::from_secs(5));
 
     let rec_data = listener.get_message();
 
-    listener.leave_multicast(&ipmcaddr).unwrap();
+    listener
+      .leave_multicast(&Ipv4Addr::new(239, 255, 0, 1))
+      .unwrap();
 
     assert_eq!(rec_data.len(), 3);
     assert_eq!(rec_data, data);

@@ -49,9 +49,10 @@ impl<'a> TopicDescription for Topic<'a> {
   }
 }
 
-
 impl<'a> Topic<'a> {
   // DDS spec 2.2.2.3.2 Topic Class
   // specifies only method get_inconsistent_topic_status
-  pub fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> { unimplemented!() }
+  pub fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> {
+    unimplemented!()
+  }
 }

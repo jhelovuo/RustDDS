@@ -24,8 +24,7 @@ pub struct DomainParticipant {
 
   // Adding Readers
   sender_add_reader: mio_channel::Sender<Reader>,
-  sender_remove_reader:  mio_channel::Sender<GUID>,
-
+  sender_remove_reader: mio_channel::Sender<GUID>,
 }
 
 pub struct SubscriptionBuiltinTopicData {} // placeholder
@@ -39,8 +38,7 @@ impl DomainParticipant {
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Unable to join multicast 239.255.0.1:7400");
 
-    let discovery_listener = 
-      UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
+    let discovery_listener = UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
 
     let user_traffic_multicast_listener =
       UDPListener::new(USER_TRAFFIC_MUL_LISTENER_TOKEN, "0.0.0.0", 7401);
@@ -48,8 +46,7 @@ impl DomainParticipant {
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Unable to join multicast 239.255.0.1:7401");
 
-    let user_traffic_listener = 
-      UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
+    let user_traffic_listener = UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
 
     let mut listeners = HashMap::new();
     listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
@@ -63,27 +60,25 @@ impl DomainParticipant {
     let targets = HashMap::new();
 
     // Adding readers
-    let (sender_add_reader, receiver_add_reader) =
-    mio_channel::channel::<Reader>();
-    let (sender_remove_reader, receiver_remove_reader) =
-    mio_channel::channel::<GUID>();
+    let (sender_add_reader, receiver_add_reader) = mio_channel::channel::<Reader>();
+    let (sender_remove_reader, receiver_remove_reader) = mio_channel::channel::<GUID>();
 
     let new_guid = GUID::new();
 
     let ev_wrapper = DPEventWrapper::new(
-      listeners, 
+      listeners,
       targets,
       new_guid.guidPrefix,
-      TokenReceiverPair{
+      TokenReceiverPair {
         token: ADD_READER_TOKEN,
         receiver: receiver_add_reader,
       },
-      TokenReceiverPair{
+      TokenReceiverPair {
         token: REMOVE_READER_TOKEN,
         receiver: receiver_remove_reader,
       },
     );
-      
+
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
     DomainParticipant {
       entity_attributes: EntityAttributes { guid: new_guid },
@@ -113,10 +108,7 @@ impl DomainParticipant {
   }
 
   pub fn create_subsrciber<'a>(&'a self, qos: QosPolicies) -> Result<Subscriber<'a>> {
-    let subscriber = Subscriber::new(
-      &self,
-      qos,
-    );
+    let subscriber = Subscriber::new(&self, qos);
     Ok(subscriber)
   }
 
@@ -184,5 +176,4 @@ mod tests {
 
     // TODO: get result data from Reader
   }
-  
 }

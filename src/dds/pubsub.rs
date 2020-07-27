@@ -8,7 +8,6 @@ use crate::structure::time::Timestamp;
 use crate::structure::guid::{GUID, EntityId};
 use crate::structure::entity::{Entity};
 
-
 use crate::dds::result::*;
 use crate::dds::participant::*;
 use crate::dds::topic::*;
@@ -91,13 +90,10 @@ pub struct Subscriber<'a> {
 }
 
 impl<'a> Subscriber<'a> {
-  pub fn new(
-    my_domainparticipant: &'a DomainParticipant,
-    qos: QosPolicies, 
-  ) -> Subscriber<'a>{
+  pub fn new(my_domainparticipant: &'a DomainParticipant, qos: QosPolicies) -> Subscriber<'a> {
     let poll = Poll::new().expect("Unable to create new poll.");
 
-    Subscriber{
+    Subscriber {
       poll,
       my_domainparticipant,
       qos,
@@ -108,9 +104,10 @@ impl<'a> Subscriber<'a> {
     loop {
       let mut events = Events::with_capacity(1024);
 
-      subscriber.poll.poll(
-        &mut events, None
-      ).expect("Subscriber failed in polling");
+      subscriber
+        .poll
+        .poll(&mut events, None)
+        .expect("Subscriber failed in polling");
 
       for event in events.into_iter() {
         println!("Subscriber poll received: {:?}", event); // for debugging!!!!!!
@@ -119,8 +116,8 @@ impl<'a> Subscriber<'a> {
           STOP_POLL_TOKEN => return,
           READER_CHANGE_TOKEN => {
             println!("Got notification of reader's new change!!!");
-          },
-          _ => {},
+          }
+          _ => {}
         }
       }
     }
@@ -131,9 +128,7 @@ impl<'a> Subscriber<'a> {
     _a_topic: &Topic,
     qos: QosPolicies,
   ) -> (Result<DataReader<'p>>, Result<Reader>) {
-
-    let (register_datareader, 
-      set_readiness_of_datareader) = Registration::new2();
+    let (register_datareader, set_readiness_of_datareader) = Registration::new2();
 
     let new_datareader = DataReader {
       my_subscriber: &self,
@@ -142,23 +137,23 @@ impl<'a> Subscriber<'a> {
       registration: register_datareader,
     };
 
-    let matching_reader = Reader::new(
-      GUID{
-        guidPrefix: self.my_domainparticipant.get_guid_prefix(),
-        entityId: EntityId::ENTITYID_PARTICIPANT,
-      },
-    );
+    let matching_reader = Reader::new(GUID {
+      guidPrefix: self.my_domainparticipant.get_guid_prefix(),
+      entityId: EntityId::ENTITYID_PARTICIPANT,
+    });
 
-    self.poll.register(
-      &matching_reader,
-      READER_CHANGE_TOKEN, 
-      Ready::readable(),
-       PollOpt::edge()
-      ).expect("Failed to register reader with subscribers poll.");
+    self
+      .poll
+      .register(
+        &matching_reader,
+        READER_CHANGE_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register reader with subscribers poll.");
 
     (Ok(new_datareader), Ok(matching_reader))
   }
-
 }
 
 // -------------------------------------------------------------------
@@ -171,27 +166,33 @@ pub struct DataReader<'s> {
   // TODO: rest of fields
 }
 
-impl <'s> DataReader<'s> {
-  pub fn read<D>(&self, _max_samples: i32) -> Result<Vec<DataSample<D>>>
-  where D: Deserialize<'s> + Keyed, 
-  { 
-    unimplemented!() 
+impl<'s> DataReader<'s> {
+  pub fn read<D>(&self, _max_samples: i32) -> Result<Vec<(D, SampleInfo)>>
+  where
+    D: Deserialize<'s> + Keyed,
+  {
+    unimplemented!()
   }
 
-  pub fn take<D>(&self, _max_samples: i32) -> Result<Vec<DataSample<D>>>
-  where D: Deserialize<'s> + Keyed, 
-  { 
-    unimplemented!() 
+  pub fn take<D>(&self, _max_samples: i32) -> Result<Vec<(D, SampleInfo)>>
+  where
+    D: Deserialize<'s> + Keyed,
+  {
+    unimplemented!()
   }
-
-
-} // impl 
+} // impl
 
 impl<'s> Evented for DataReader<'s> {
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self.registration.register(poll, token, interest, opts)
   }
-  fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+  fn reregister(
+    &self,
+    poll: &Poll,
+    token: Token,
+    interest: Ready,
+    opts: PollOpt,
+  ) -> io::Result<()> {
     self.registration.reregister(poll, token, interest, opts)
   }
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
@@ -269,13 +270,12 @@ impl<'p> DataWriter<'p> {
   // But then what if the result set changes while the application processes it?
 }
 
-
 #[cfg(test)]
-mod tests{
+mod tests {
   use super::*;
   use crate::dds::topic::Topic;
   use crate::dds::typedesc::TypeDesc;
-  
+
   use std::thread;
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
@@ -289,12 +289,15 @@ mod tests{
     let sub = dp.create_subsrciber(QosPolicies::qos_none()).unwrap();
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
-    sub.poll.register(
-      &receiver_stop, 
-      STOP_POLL_TOKEN, 
-      Ready::readable(), 
-      PollOpt::edge()
-    ).unwrap();
+    sub
+      .poll
+      .register(
+        &receiver_stop,
+        STOP_POLL_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
 
     let a_topic = Topic::new(
       &dp,
@@ -302,31 +305,28 @@ mod tests{
       TypeDesc::new(":)".to_string()),
       QosPolicies::qos_none(),
     );
-    let (dreader_res, reader_res) =
-      sub.create_datareader(&a_topic, QosPolicies::qos_none());
+    let (dreader_res, reader_res) = sub.create_datareader(&a_topic, QosPolicies::qos_none());
 
     let mut reader = reader_res.unwrap();
 
-    let child = thread::spawn(
-      move || {
-        std::thread::sleep(Duration::new(0,500));
-        let d = Data::default();
-        reader.handle_data_msg(d);
+    let child = thread::spawn(move || {
+      std::thread::sleep(Duration::new(0, 500));
+      let d = Data::default();
+      reader.handle_data_msg(d);
 
-        /*std::thread::sleep(Duration::new(0,500));
-        let hb = Heartbeat{
-          reader_id: reader.get_entity_id(),
-          writer_id: EntityId::default(),
-          first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
-          last_sn: SequenceNumber::from(0),
-          count: 1,
-        };
-        reader.handle_heartbeat_msg(hb, false);*/
+      /*std::thread::sleep(Duration::new(0,500));
+      let hb = Heartbeat{
+        reader_id: reader.get_entity_id(),
+        writer_id: EntityId::default(),
+        first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
+        last_sn: SequenceNumber::from(0),
+        count: 1,
+      };
+      reader.handle_heartbeat_msg(hb, false);*/
 
-        std::thread::sleep(Duration::new(0,500_000));
-        sender_stop.send(0).unwrap();
-      }
-    );
+      std::thread::sleep(Duration::new(0, 500_000));
+      sender_stop.send(0).unwrap();
+    });
     Subscriber::subscriber_poll(sub);
     child.join().unwrap();
   }

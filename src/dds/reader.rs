@@ -22,7 +22,7 @@ use crate::dds::message_receiver::MessageReceiver;
 #[derive(Debug)]
 pub struct Reader {
   // Do we need to access information in messageReceiver?? Like reply locators.
-  //my_message_receiver: Option<&'mr MessageReceiver>, 
+  //my_message_receiver: Option<&'mr MessageReceiver>,
   registration: Registration,
   set_readiness: SetReadiness,
 
@@ -38,18 +38,13 @@ pub struct Reader {
 } // placeholder
 
 impl Reader {
-  pub fn new(
-    guid: GUID,
-  ) -> Reader {
-    let (
-      register_reader, 
-      set_readiness_of_reader
-    ) = Registration::new2();
+  pub fn new(guid: GUID) -> Reader {
+    let (register_reader, set_readiness_of_reader) = Registration::new2();
     Reader {
       registration: register_reader,
       set_readiness: set_readiness_of_reader,
       history_cache: HistoryCache::new(),
-      entity_attributes: EntityAttributes{guid},
+      entity_attributes: EntityAttributes { guid },
       enpoint_attributes: EndpointAttributes::default(),
 
       heartbeat_response_delay: Duration::new(0, 500_000_000), // 0,5sec
@@ -62,27 +57,35 @@ impl Reader {
   // and user messages
 
   // TODO Used for test/debugging purposes
-  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<&Data>{
-    println!("history cache !!!! {:?}",self.history_cache.get_change(sequence_number).unwrap());
-    let a = self.history_cache.get_change(sequence_number).unwrap().data_value.as_ref();
-    return a
+  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<&Data> {
+    println!(
+      "history cache !!!! {:?}",
+      self.history_cache.get_change(sequence_number).unwrap()
+    );
+    let a = self
+      .history_cache
+      .get_change(sequence_number)
+      .unwrap()
+      .data_value
+      .as_ref();
+    return a;
   }
 
   // TODO Used for test/debugging purposes
-  pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber>{
+  pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
     let start = self.history_cache.get_seq_num_min();
-    let end = self.history_cache.get_seq_num_max();    
+    let end = self.history_cache.get_seq_num_max();
     return vec![start.unwrap().clone(), end.unwrap().clone()];
   }
 
   // handles regular data message and updates history cache
-  pub fn handle_data_msg(&mut self, data: Data) { 
+  pub fn handle_data_msg(&mut self, data: Data) {
     let user_data = true; // Different action for discovery data?
     println!("handle data msg");
     if user_data {
       // TODO! Sequence number check?
       self.make_cache_change(data);
-    }else {
+    } else {
       // is discovery data
       todo!();
     }
@@ -90,17 +93,13 @@ impl Reader {
   }
 
   // send ack_nack response if necessary. spec page 104
-  pub fn handle_heartbeat_msg(
-    &mut self, heartbeat: Heartbeat, 
-    final_flag_set: bool
-  ) -> bool {
-
-    if heartbeat.count <= self.received_hearbeat_count { 
+  pub fn handle_heartbeat_msg(&mut self, heartbeat: Heartbeat, final_flag_set: bool) -> bool {
+    if heartbeat.count <= self.received_hearbeat_count {
       // Already received newer or same
       return false;
     }
     self.received_hearbeat_count = heartbeat.count;
-    
+
     // remove fragmented changes untill first_sn ???
     //self.history_cache.remove_changes_up_to(heartbeat.first_sn);
 
@@ -116,13 +115,12 @@ impl Reader {
     let need_ack_nack = changes_missing || !final_flag_set;
 
     if need_ack_nack {
-      let mut reader_sn_state = 
-       SequenceNumberSet::new(last_seq_num);
+      let mut reader_sn_state = SequenceNumberSet::new(last_seq_num);
       for seq_num in i64::from(last_seq_num)..i64::from(heartbeat.last_sn) {
         reader_sn_state.insert(SequenceNumber::from(seq_num));
       }
 
-      let _response_ack_nack = AckNack{
+      let _response_ack_nack = AckNack {
         reader_id: self.get_entity_id(),
         writer_id: heartbeat.writer_id,
         reader_sn_state,
@@ -130,15 +128,14 @@ impl Reader {
       };
       // Send this AckNack!!!!!!!!!
       self.sent_ack_nack_count += 1;
-
     }
     self.notify_cache_change();
     need_ack_nack
   }
 
-  pub fn handle_gap_msg(&mut self, gap: Gap){
+  pub fn handle_gap_msg(&mut self, gap: Gap) {
     let mut irrelevant_changes_set = HashSet::new();
-    // Irrelevant sequence numbers communicated in the Gap message are 
+    // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups
     // 1. All sequence numbers in the range gapStart <= sequence_number <= gapList.base -1
     for seqnum_i64 in i64::from(gap.gap_start)..i64::from(gap.gap_list.base) {
@@ -159,11 +156,7 @@ impl Reader {
 
   // update history cache
   fn make_cache_change(&mut self, data: Data) {
-    let change =  CacheChange::new(
-      self.get_guid(),
-      data.writer_sn,
-      Some(data),
-    );
+    let change = CacheChange::new(self.get_guid(), data.writer_sn, Some(data));
     self.history_cache.add_change(change);
   }
 
@@ -180,7 +173,7 @@ impl Entity for Reader {
     &self.entity_attributes
   }
 }
-  
+
 impl Endpoint for Reader {
   fn as_endpoint(&self) -> &crate::structure::endpoint::EndpointAttributes {
     &self.enpoint_attributes
@@ -188,31 +181,35 @@ impl Endpoint for Reader {
 }
 
 impl PartialEq for Reader {
-    // Ignores registration and history cache?
-    fn eq(&self, other: &Self) -> bool {
-        //self.history_cache == other.history_cache &&
-        self.entity_attributes == other.entity_attributes &&
-        self.enpoint_attributes == other.enpoint_attributes &&
-        self.heartbeat_response_delay == other.heartbeat_response_delay &&
-        self.heartbeat_supression_duration == other.heartbeat_supression_duration &&
-        self.sent_ack_nack_count == other.sent_ack_nack_count &&
-        self.received_hearbeat_count == other.received_hearbeat_count
-    }
-
+  // Ignores registration and history cache?
+  fn eq(&self, other: &Self) -> bool {
+    //self.history_cache == other.history_cache &&
+    self.entity_attributes == other.entity_attributes
+      && self.enpoint_attributes == other.enpoint_attributes
+      && self.heartbeat_response_delay == other.heartbeat_response_delay
+      && self.heartbeat_supression_duration == other.heartbeat_supression_duration
+      && self.sent_ack_nack_count == other.sent_ack_nack_count
+      && self.received_hearbeat_count == other.received_hearbeat_count
+  }
 }
 
 impl Evented for Reader {
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self.registration.register(poll, token, interest, opts)
   }
-  fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+  fn reregister(
+    &self,
+    poll: &Poll,
+    token: Token,
+    interest: Ready,
+    opts: PollOpt,
+  ) -> io::Result<()> {
     self.registration.reregister(poll, token, interest, opts)
   }
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
     self.registration.deregister(poll)
   }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -221,25 +218,18 @@ mod tests {
 
   #[test]
   fn rtpsreader_handle_data() {
-
-
     let new_guid = GUID::new();
 
-    let mut new_reader = Reader::new(new_guid,);
+    let mut new_reader = Reader::new(new_guid);
 
     let d = Data::default();
     let d_seqnum = d.writer_sn;
-    new_reader.handle_data_msg(d.clone()); 
+    new_reader.handle_data_msg(d.clone());
 
-    let change =  CacheChange::new(
-      new_reader.get_guid(),
-      d_seqnum,
-      Some(d),
-    );
+    let change = CacheChange::new(new_reader.get_guid(), d_seqnum, Some(d));
 
-    let res = 
-      new_reader.history_cache.get_change(d_seqnum);
-    assert_eq!(*res.unwrap(),change);
+    let res = new_reader.history_cache.get_change(d_seqnum);
+    assert_eq!(*res.unwrap(), change);
   }
 
   #[test]
@@ -252,8 +242,7 @@ mod tests {
     let d = Data::default();
     let mut changes = Vec::new();
 
-
-    let hb_new = Heartbeat{
+    let hb_new = Heartbeat {
       reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
@@ -262,8 +251,7 @@ mod tests {
     };
     assert!(!new_reader.handle_heartbeat_msg(hb_new, true)); // should be false, no ack
 
-
-    let hb_one = Heartbeat{
+    let hb_one = Heartbeat {
       reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
@@ -273,7 +261,7 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(hb_one, false)); // Should send an ack_nack
 
     // After ack_nack, will receive the following change
-    let change =  CacheChange::new(
+    let change = CacheChange::new(
       new_reader.get_guid(),
       SequenceNumber::from(1),
       Some(d.clone()),
@@ -281,9 +269,8 @@ mod tests {
     new_reader.history_cache.add_change(change.clone());
     changes.push(change);
 
-
     // Duplicate
-    let hb_one2 = Heartbeat{
+    let hb_one2 = Heartbeat {
       reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
@@ -292,40 +279,35 @@ mod tests {
     };
     assert!(!new_reader.handle_heartbeat_msg(hb_one2, false));
 
-
-    let hb_3_1 = Heartbeat{
+    let hb_3_1 = Heartbeat {
       reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // writer has last 2 in cache
-      last_sn: SequenceNumber::from(3), // writer has written 3 samples
+      last_sn: SequenceNumber::from(3),  // writer has written 3 samples
       count: 3,
     };
     assert!(new_reader.handle_heartbeat_msg(hb_3_1, false)); // Should send an ack_nack
 
     // After ack_nack, will receive the following changes
-    let change =  CacheChange::new(
+    let change = CacheChange::new(
       new_reader.get_guid(),
       SequenceNumber::from(2),
       Some(d.clone()),
     );
     new_reader.history_cache.add_change(change.clone());
     changes.push(change);
-    let change =  CacheChange::new(
-      new_reader.get_guid(),
-      SequenceNumber::from(3),
-      Some(d),
-    );
+    let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), Some(d));
     new_reader.history_cache.add_change(change.clone());
     changes.push(change);
 
-    let hb_none = Heartbeat{
+    let hb_none = Heartbeat {
       reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(4), // writer has no samples available
-      last_sn: SequenceNumber::from(3), // writer has written 3 samples
+      last_sn: SequenceNumber::from(3),  // writer has written 3 samples
       count: 4,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_none, false)); 
+    assert!(new_reader.handle_heartbeat_msg(hb_none, false));
 
     assert_eq!(new_reader.sent_ack_nack_count, 3);
   }
@@ -341,24 +323,19 @@ mod tests {
     let mut changes = Vec::new();
 
     for i in 0..n {
-      let change =  CacheChange::new(
-        reader.get_guid(),
-        SequenceNumber::from(i),
-        Some(d.clone()),
-      );
+      let change = CacheChange::new(reader.get_guid(), SequenceNumber::from(i), Some(d.clone()));
       reader.history_cache.add_change(change.clone());
       changes.push(change);
     }
 
     let writer_id = EntityId::default();
 
-    // make sequence numbers 1-3 and 5 7 irrelevant 
-    let mut gap_list = 
-     SequenceNumberSet::new(SequenceNumber::from(4));
-    gap_list.insert(SequenceNumber::from(5+4)); // TODO! Why do you need to add base!?
-    gap_list.insert(SequenceNumber::from(7+4)); 
+    // make sequence numbers 1-3 and 5 7 irrelevant
+    let mut gap_list = SequenceNumberSet::new(SequenceNumber::from(4));
+    gap_list.insert(SequenceNumber::from(5 + 4)); // TODO! Why do you need to add base!?
+    gap_list.insert(SequenceNumber::from(7 + 4));
 
-    let gap = Gap{
+    let gap = Gap {
       reader_id: reader.get_entity_id(),
       writer_id,
       gap_start: SequenceNumber::from(1),
@@ -367,17 +344,45 @@ mod tests {
 
     reader.handle_gap_msg(gap);
 
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(0)), Some(&changes[0]));
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(1)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(2)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(3)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(4)), Some(&changes[4]));
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(5)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(6)), Some(&changes[6]));
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(7)), None);
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(8)), Some(&changes[8]));
-    assert_eq!(reader.history_cache.get_change(SequenceNumber::from(9)), Some(&changes[9]));
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(0)),
+      Some(&changes[0])
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(1)),
+      None
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(2)),
+      None
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(3)),
+      None
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(4)),
+      Some(&changes[4])
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(5)),
+      None
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(6)),
+      Some(&changes[6])
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(7)),
+      None
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(8)),
+      Some(&changes[8])
+    );
+    assert_eq!(
+      reader.history_cache.get_change(SequenceNumber::from(9)),
+      Some(&changes[9])
+    );
   }
- 
-
 }
