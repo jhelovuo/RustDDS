@@ -53,7 +53,9 @@ impl UDPListener {
 
   pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
     if address.is_multicast() {
-      return self.socket.join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
+      return self
+        .socket
+        .join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
     }
     io::Result::Err(io::Error::new(
       io::ErrorKind::Other,
@@ -63,7 +65,9 @@ impl UDPListener {
 
   pub fn leave_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
     if address.is_multicast() {
-      return self.socket.leave_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
+      return self
+        .socket
+        .leave_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
     }
     io::Result::Err(io::Error::new(
       io::ErrorKind::Other,

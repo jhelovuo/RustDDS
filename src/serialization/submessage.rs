@@ -28,11 +28,10 @@ impl<'a> SubMessage
 where
 // T: Readable<'a, Endianness> + Writable<Endianness>,
 {
-  pub fn deserialize_header(context: Endianness, buffer: &'a [u8]
-  ) -> Option<SubmessageHeader> {
+  pub fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Option<SubmessageHeader> {
     match SubmessageHeader::read_from_buffer_with_ctx(context, buffer) {
       Ok(T) => Some(T),
-      Err(_) => None
+      Err(_) => None,
     }
   }
 
@@ -59,22 +58,16 @@ where
       SubmessageKind::HEARTBEAT_FRAG => Some(EntitySubmessage::HeartbeatFrag(
         HeartbeatFrag::read_from_buffer_with_ctx(context, buffer).unwrap(),
       )),
-      SubmessageKind::DATA => 
-        match SubMessage::deserialize_data(&msgheader, context, &buffer){
-          Some(T) => Some(EntitySubmessage::Data(
-            T,
-            msgheader.flags.clone(),
-          )),
-          None => None,
+      SubmessageKind::DATA => match SubMessage::deserialize_data(&msgheader, context, &buffer) {
+        Some(T) => Some(EntitySubmessage::Data(T, msgheader.flags.clone())),
+        None => None,
       },
-      SubmessageKind::DATA_FRAG => 
-        match SubMessage::deserialize_data_frag(&msgheader, context, &buffer){
-          Some(T) => Some(EntitySubmessage::DataFrag(
-            T,
-            msgheader.flags.clone(),
-          )),
+      SubmessageKind::DATA_FRAG => {
+        match SubMessage::deserialize_data_frag(&msgheader, context, &buffer) {
+          Some(T) => Some(EntitySubmessage::DataFrag(T, msgheader.flags.clone())),
           None => None,
-      },
+        }
+      }
       _ => None, // Unknown id, must be ignored
     }
   }
@@ -95,50 +88,44 @@ where
     }
     pos += 2; // Ignore extra flags for now
 
-    let octets_to_inline_qos = u16::read_from_buffer(
-      &buffer[pos..pos+2]).unwrap();
+    let octets_to_inline_qos = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
     pos += 2;
 
-    let reader_id = EntityId::read_from_buffer(
-      &buffer[pos..pos+4]).unwrap();
+    let reader_id = EntityId::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
     pos += 4;
-    let writer_id = EntityId::read_from_buffer(
-      &buffer[pos..pos+4]).unwrap();
+    let writer_id = EntityId::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
     pos += 4;
-    let writer_sn = SequenceNumber::read_from_buffer(
-      &buffer[pos..pos+8]).unwrap();
+    let writer_sn = SequenceNumber::read_from_buffer(&buffer[pos..pos + 8]).unwrap();
     pos += 8;
 
     if pos != octets_to_inline_qos as usize + 4 {
-      pos = octets_to_inline_qos as usize + 4; // Ignore 
+      pos = octets_to_inline_qos as usize + 4; // Ignore
     }
-    let mut inline_qos = Some(ParameterList{parameters: vec![]});
+    let mut inline_qos = Some(ParameterList { parameters: vec![] });
     if inline_qoS_flag {
       let inline_qos_size: usize = 4; // Is it this for sure??
-      inline_qos = Some(ParameterList::read_from_buffer(
-        &buffer[pos..pos+inline_qos_size]).unwrap());
-        pos += inline_qos_size;
-    } 
+      inline_qos =
+        Some(ParameterList::read_from_buffer(&buffer[pos..pos + inline_qos_size]).unwrap());
+      pos += inline_qos_size;
+    }
     let mut serialized_payload = SerializedPayload::new();
     if data_flag || key_flag {
-      let rep_identifier = u16::read_from_buffer(&buffer[pos..pos+2]).unwrap();
+      let rep_identifier = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
       pos += 2;
-      let rep_options = u16::read_from_buffer(&buffer[pos..pos+2]).unwrap();
+      let rep_options = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
       pos += 2;
 
       let payload_size: usize = msgheader.submessage_length as usize - pos;
 
-      let vec_value = Vec::read_from_buffer(
-        &buffer[pos..pos+payload_size]
-      ).unwrap();
+      let vec_value = Vec::read_from_buffer(&buffer[pos..pos + payload_size]).unwrap();
 
-      serialized_payload = SerializedPayload{
+      serialized_payload = SerializedPayload {
         representation_identifier: rep_identifier,
         representation_options: rep_options,
         value: vec_value,
       }
     }
-    Some(Data{
+    Some(Data {
       reader_id,
       writer_id,
       writer_sn,
@@ -161,63 +148,53 @@ where
 
     pos += 2; // Ignore extra flags for now
 
-    let octets_to_inline_qos = u16::read_from_buffer(
-      &buffer[pos..pos+2]).unwrap();
+    let octets_to_inline_qos = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
     pos += 2;
 
-    let reader_id = EntityId::read_from_buffer(
-      &buffer[pos..pos+4]).unwrap();
+    let reader_id = EntityId::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
     pos += 4;
-    let writer_id = EntityId::read_from_buffer(
-      &buffer[pos..pos+4]).unwrap();
+    let writer_id = EntityId::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
     pos += 4;
-    let writer_sn = SequenceNumber::read_from_buffer(
-      &buffer[pos..pos+8]).unwrap();
+    let writer_sn = SequenceNumber::read_from_buffer(&buffer[pos..pos + 8]).unwrap();
     pos += 8;
-    let fragment_starting_num = FragmentNumber::read_from_buffer(
-      &buffer[pos..pos+4]).unwrap();
+    let fragment_starting_num = FragmentNumber::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
     pos += 4;
-    let fragments_in_submessage = u16::read_from_buffer(
-      &buffer[pos..pos+2]).unwrap();
+    let fragments_in_submessage = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
     pos += 2;
-    let fragment_size = u16::read_from_buffer(
-      &buffer[pos..pos+2]).unwrap();
+    let fragment_size = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
     pos += 2;
-    let data_size = u32::read_from_buffer(
-      &buffer[pos..pos+4]).unwrap();
+    let data_size = u32::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
     pos += 4;
 
     if pos != octets_to_inline_qos as usize + 4 {
-      pos = octets_to_inline_qos as usize + 4; // Ignore 
+      pos = octets_to_inline_qos as usize + 4; // Ignore
     }
 
     let mut inline_qos: Option<ParameterList> = None;
     if inline_qoS_flag {
       let inline_qos_size: usize = 4; // Is it this for sure??
-      inline_qos = Some(ParameterList::read_from_buffer(
-        &buffer[pos..pos+inline_qos_size]).unwrap());
-        pos += inline_qos_size;
-    } 
+      inline_qos =
+        Some(ParameterList::read_from_buffer(&buffer[pos..pos + inline_qos_size]).unwrap());
+      pos += inline_qos_size;
+    }
     let mut serialized_payload = SerializedPayload::new();
     if !key_flag {
-      let rep_identifier = u16::read_from_buffer(&buffer[pos..pos+2]).unwrap();
+      let rep_identifier = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
       pos += 2;
-      let rep_options = u16::read_from_buffer(&buffer[pos..pos+2]).unwrap();
+      let rep_options = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
       pos += 2;
 
       let payload_size: usize = msgheader.submessage_length as usize - pos;
 
-      let vec_value = Vec::read_from_buffer(
-        &buffer[pos..pos+payload_size]
-      ).unwrap();
+      let vec_value = Vec::read_from_buffer(&buffer[pos..pos + payload_size]).unwrap();
 
-      serialized_payload = SerializedPayload{
+      serialized_payload = SerializedPayload {
         representation_identifier: rep_identifier,
         representation_options: rep_options,
         value: vec_value,
       }
     }
-    Some(DataFrag{
+    Some(DataFrag {
       reader_id,
       writer_id,
       writer_sn,
@@ -230,10 +207,8 @@ where
     })
   }
 
-  
   pub fn serialize_header(self) -> Vec<u8> {
-    let buffer = self.header.write_to_vec_with_ctx(
-      Endianness::LittleEndian);
+    let buffer = self.header.write_to_vec_with_ctx(Endianness::LittleEndian);
     buffer.unwrap()
   }
 
@@ -244,8 +219,7 @@ where
       }
       EntitySubmessage::Data(_, _) => vec![],
       EntitySubmessage::DataFrag(_, _) => vec![],
-      EntitySubmessage::Gap(msg) => msg.write_to_vec_with_ctx(
-        Endianness::LittleEndian).unwrap(),
+      EntitySubmessage::Gap(msg) => msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap(),
       EntitySubmessage::Heartbeat(msg, _) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }

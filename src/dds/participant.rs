@@ -20,7 +20,6 @@ use std::net::Ipv4Addr;
 
 use std::sync::{Arc, Mutex};
 
-
 pub struct DomainParticipant {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
@@ -29,12 +28,11 @@ pub struct DomainParticipant {
 
   // Adding Readers
   sender_add_reader: mio_channel::Sender<Reader>,
-  sender_remove_reader:  mio_channel::Sender<GUID>,
+  sender_remove_reader: mio_channel::Sender<GUID>,
 
   // Adding DataReaders
   sender_add_datareader_vec: Vec<mio_channel::Sender<()>>,
   sender_remove_datareader_vec: Vec<mio_channel::Sender<GUID>>,
-
 }
 
 pub struct SubscriptionBuiltinTopicData {} // placeholder
@@ -48,8 +46,7 @@ impl DomainParticipant {
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Unable to join multicast 239.255.0.1:7400");
 
-    let discovery_listener = 
-      UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
+    let discovery_listener = UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
 
     let user_traffic_multicast_listener =
       UDPListener::new(USER_TRAFFIC_MUL_LISTENER_TOKEN, "0.0.0.0", 7401);
@@ -57,8 +54,7 @@ impl DomainParticipant {
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Unable to join multicast 239.255.0.1:7401");
 
-    let user_traffic_listener = 
-      UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
+    let user_traffic_listener = UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
 
     let mut listeners = HashMap::new();
     listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
@@ -72,27 +68,24 @@ impl DomainParticipant {
     let targets = HashMap::new();
 
     // Adding readers
-    let (sender_add_reader, receiver_add_reader) =
-    mio_channel::channel::<Reader>();
-    let (sender_remove_reader, receiver_remove_reader) =
-    mio_channel::channel::<GUID>();
+    let (sender_add_reader, receiver_add_reader) = mio_channel::channel::<Reader>();
+    let (sender_remove_reader, receiver_remove_reader) = mio_channel::channel::<GUID>();
     let new_guid = GUID::new();
 
     let ev_wrapper = DPEventWrapper::new(
-      listeners, 
+      listeners,
       targets,
       new_guid.guidPrefix,
-      TokenReceiverPair{
+      TokenReceiverPair {
         token: ADD_READER_TOKEN,
         receiver: receiver_add_reader,
       },
-      TokenReceiverPair{
+      TokenReceiverPair {
         token: REMOVE_READER_TOKEN,
         receiver: receiver_remove_reader,
       },
     );
     thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
-
 
     // Addind datareaders
     DomainParticipant {
@@ -123,7 +116,9 @@ impl DomainParticipant {
 
   pub fn remove_datareader(&self, guid: GUID, pos: usize) {
     let datareader_guid = guid; // How to identify reader to be removed?
-    self.sender_remove_datareader_vec[pos].send(datareader_guid).unwrap();
+    self.sender_remove_datareader_vec[pos]
+      .send(datareader_guid)
+      .unwrap();
   }
 
   // Publisher and subscriber creation
@@ -136,31 +131,25 @@ impl DomainParticipant {
   }
 
   pub fn create_subsrciber(&mut self, qos: QosPolicies) {
-
-    let (sender_add_datareader, receiver_add_datareader) =
-    mio_channel::channel::<()>();
-    let (sender_remove_datareader, receiver_remove_datareader) =
-    mio_channel::channel::<GUID>();
+    let (sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
+    let (sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
 
     self.sender_add_datareader_vec.push(sender_add_datareader);
-    self.sender_remove_datareader_vec.push(sender_remove_datareader);
+    self
+      .sender_remove_datareader_vec
+      .push(sender_remove_datareader);
 
     let mut subscriber = Subscriber::new(
       qos,
       self.sender_add_reader.clone(),
       self.sender_remove_reader.clone(),
-
       receiver_add_datareader,
       receiver_remove_datareader,
-
       self.get_guid(),
     );
     //self.subs.get_mut().unwrap().push(subscriber);
 
-    thread::spawn(move || 
-      subscriber.subscriber_poll()
-    );
-
+    thread::spawn(move || subscriber.subscriber_poll());
   }
 
   pub fn created_datareader(&self, qos: QosPolicies) {
@@ -231,5 +220,4 @@ mod tests {
 
     // TODO: get result data from Reader
   }
-  
 }

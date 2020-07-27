@@ -34,7 +34,6 @@ pub struct Heartbeat {
   /// messages that can result from the presence of redundant
   /// communication paths.
   pub count: i32,
-
   // Other present if GroupInfo flag is set
 }
 

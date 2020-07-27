@@ -33,8 +33,8 @@ pub struct EndpointAttributes {
 }
 
 impl EndpointAttributes {
-  fn new() -> EndpointAttributes{
-    EndpointAttributes{
+  fn new() -> EndpointAttributes {
+    EndpointAttributes {
       topic_kind: topic_kind::TopicKind::NO_KEY,
       reliability_level: ReliabilityKind::BEST_EFFORT,
       unicast_locator_list: LocatorList::new(),
@@ -44,7 +44,7 @@ impl EndpointAttributes {
 }
 
 impl Default for EndpointAttributes {
-  fn default() -> EndpointAttributes{
+  fn default() -> EndpointAttributes {
     EndpointAttributes::new()
   }
 }

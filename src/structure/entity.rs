@@ -13,13 +13,13 @@ pub struct EntityAttributes {
 pub trait Entity {
   fn as_entity(&self) -> &EntityAttributes;
 
-  fn get_guid(&self) -> GUID{
+  fn get_guid(&self) -> GUID {
     self.as_entity().guid
   }
-  fn get_entity_id(&self) -> EntityId{
+  fn get_entity_id(&self) -> EntityId {
     self.as_entity().guid.entityId
   }
-  fn get_guid_prefix(&self) -> GuidPrefix{
+  fn get_guid_prefix(&self) -> GuidPrefix {
     self.as_entity().guid.guidPrefix
   }
 }

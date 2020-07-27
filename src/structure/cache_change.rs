@@ -22,10 +22,10 @@ pub struct CacheChange {
 
 impl CacheChange {
   pub fn new(
-    writer_guid: GUID, 
-    sequence_number: SequenceNumber, 
-    data_value: Option<Data>
-  ) -> CacheChange{
+    writer_guid: GUID,
+    sequence_number: SequenceNumber,
+    data_value: Option<Data>,
+  ) -> CacheChange {
     CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid,
@@ -46,4 +46,3 @@ impl Default for CacheChange {
     )
   }
 }
-

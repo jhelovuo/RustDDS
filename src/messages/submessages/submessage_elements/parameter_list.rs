@@ -12,7 +12,9 @@ pub struct ParameterList {
 
 impl ParameterList {
   pub fn new() -> ParameterList {
-    ParameterList {parameters: Vec::new()}
+    ParameterList {
+      parameters: Vec::new(),
+    }
   }
 }
 

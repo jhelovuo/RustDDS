@@ -46,7 +46,6 @@ pub struct ParticipantProxyAttributes {
   /// at least one Locator must be present
   default_unicast_locator_list: LocatorList,
 
-
   /// Default list of multicast locators (transport, address,
   /// port combinations) that can be used to send messages to
   /// the user-defined Endpoints contained in the Participant.
@@ -76,7 +75,6 @@ pub struct ParticipantProxyAttributes {
   /// is incremented and a new
   /// SPDPdiscoveredParticipantDatais sent.
   manual_liveliness_count: i32,
-
 }
 
 pub trait ParticipantProxy {

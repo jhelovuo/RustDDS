@@ -6,11 +6,9 @@ pub struct HistoryCache {
   changes: Vec<CacheChange>,
 }
 
-impl  HistoryCache {
+impl HistoryCache {
   pub fn new() -> HistoryCache {
-    HistoryCache {
-      changes: vec![],
-    }
+    HistoryCache { changes: vec![] }
   }
 
   pub fn add_change(&mut self, change: CacheChange) {
@@ -46,13 +44,11 @@ impl  HistoryCache {
       .max_by(|x, y| x.cmp(&y))
   }
 
-  pub fn remove_changes_up_to (&mut self, smallest_seqnum: SequenceNumber) {
-    self
-    .changes
-    .retain(|x| x.sequence_number > smallest_seqnum)
+  pub fn remove_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) {
+    self.changes.retain(|x| x.sequence_number > smallest_seqnum)
   }
 
-  pub fn len(&self) -> usize{
+  pub fn len(&self) -> usize {
     self.changes.len()
   }
 }

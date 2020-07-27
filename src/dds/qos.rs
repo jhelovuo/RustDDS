@@ -10,12 +10,12 @@ pub trait HasQoSPolicy {
 
 // DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.
 // numbering is from IDL PSM, but it should be unnecessary at the Rust application interface
-#[derive(Copy,Clone,PartialEq,Eq,PartialOrd,Ord,Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum QosPolicyId {
   //Invalid  // We should represent this using Option<QosPolicyId> where needed
   //UserData,  // 1
-  Durability,  // 2
-  Presentation,  // 3
+  Durability,   // 2
+  Presentation, // 3
   Deadline,
   LatencyBudget, // 5
   Ownership,
@@ -37,8 +37,6 @@ pub enum QosPolicyId {
   //DurabilityService, // 22
 }
 
-
-
 #[derive(Clone)]
 pub struct QosPolicies {
   durability: Option<policy::Durability>,
@@ -53,11 +51,11 @@ pub struct QosPolicies {
   history: Option<policy::History>,
   resource_limits: Option<policy::ResourceLimits>,
   lifespan: Option<policy::Lifespan>,
-} 
+}
 
 impl QosPolicies {
   pub fn qos_none() -> QosPolicies {
-    QosPolicies{
+    QosPolicies {
       durability: None,
       presentation: None,
       deadline: None,
@@ -102,7 +100,10 @@ pub mod policy {
   // this is a policy
   #[derive(Clone)]
   pub enum Durability {
-    Volatile, TransientLocal, Transient, Persistent,
+    Volatile,
+    TransientLocal,
+    Transient,
+    Persistent,
   }
 
   #[derive(Clone)]
@@ -115,7 +116,9 @@ pub mod policy {
   // This is not an independent QoS Policy but a component of Presentation
   #[derive(Clone)]
   pub enum PresentationAccessScope {
-    Instance, Topic, Group,
+    Instance,
+    Topic,
+    Group,
   }
 
   #[derive(Clone)]
@@ -142,7 +145,9 @@ pub mod policy {
 
   #[derive(Clone)]
   pub enum LivelinessKind {
-    Automatic, ManualByParticipant, ManulByTopic,
+    Automatic,
+    ManualByParticipant,
+    ManulByTopic,
   }
 
   #[derive(Clone)]
@@ -182,15 +187,13 @@ pub mod policy {
   /*
   pub struct EntityFactory {
     autoenable_created_entities: bool,
-  } 
+  }
   */
   // WriterDataLifecycle
   // ReaderDataLifeCycle
 
   // DurabilityService
-
 }
-
 
 // TODO: helper function to combine two QosPolicies: existing and modifications
 // Described in 2.2.2.1.1.1 set_qos (abstract)
