@@ -8,7 +8,6 @@ use crate::structure::entity::Entity;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::structure::time::Time;
 use crate::serialization::submessage::SubMessage;
-use crate::messages::submessages::data::Data;
 
 use crate::messages::submessages::info_destination::InfoDestination;
 use crate::messages::submessages::info_source::InfoSource;
@@ -16,10 +15,15 @@ use crate::messages::submessages::info_reply::InfoReply;
 use crate::messages::submessages::info_timestamp::InfoTimestamp;
 
 use crate::dds::reader::Reader;
+use crate::dds::ddsdata::DDSData;
 use crate::structure::guid::EntityId;
-use crate::structure::{cache_change::CacheChange, sequence_number::{SequenceNumber}};
+use crate::structure::{
+  cache_change::CacheChange,
+  sequence_number::{SequenceNumber},
+};
 
 use speedy::{Readable, Endianness};
+use std::sync::Arc;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
@@ -123,34 +127,46 @@ impl MessageReceiver {
   }
 
   // TODO use for test and debugging only
-  fn get_reader_and_history_cache_change<'a>(&self, reader_id: EntityId, sequence_number : SequenceNumber) -> Option<Data>{
+  fn get_reader_and_history_cache_change<'a>(
+    &self,
+    reader_id: EntityId,
+    sequence_number: SequenceNumber,
+  ) -> Option<Arc<DDSData>> {
     //println!("readers: {:?}", self.available_readers);
-    let reader = self.available_readers.iter().find(
-      |r| r.get_entity_id() == reader_id
-            
-    ).unwrap();
-    let a : Option<Data> = reader.get_history_cache_change_data(sequence_number);
+    let reader = self
+      .available_readers
+      .iter()
+      .find(|r| r.get_entity_id() == reader_id)
+      .unwrap();
+    let a: Option<Arc<DDSData>> = reader.get_history_cache_change_data(sequence_number);
     Some(a.unwrap().clone())
   }
 
-  
   // TODO use for test and debugging only
-  fn get_reader_and_history_cache_change_object<'a>(&self, reader_id: EntityId, sequence_number : SequenceNumber) ->  CacheChange{
+  fn get_reader_and_history_cache_change_object<'a>(
+    &self,
+    reader_id: EntityId,
+    sequence_number: SequenceNumber,
+  ) -> CacheChange {
     //println!("readers: {:?}", self.available_readers);
-    let reader = self.available_readers.iter().find(
-      |r| r.get_entity_id() == reader_id
-            
-    ).unwrap();
+    let reader = self
+      .available_readers
+      .iter()
+      .find(|r| r.get_entity_id() == reader_id)
+      .unwrap();
     let a = reader.get_history_cache_change(sequence_number);
     return a.clone();
   }
-  
 
-  fn get_reader_history_cache_start_and_end_seq_num(&self, reader_id: EntityId) -> Vec<SequenceNumber>{
-    let reader = self.available_readers.iter().find(
-      |r| r.get_entity_id() == reader_id
-            
-    ).unwrap();
+  fn get_reader_history_cache_start_and_end_seq_num(
+    &self,
+    reader_id: EntityId,
+  ) -> Vec<SequenceNumber> {
+    let reader = self
+      .available_readers
+      .iter()
+      .find(|r| r.get_entity_id() == reader_id)
+      .unwrap();
     reader.get_history_cache_sequence_start_and_end_numbers()
   }
 
@@ -178,24 +194,25 @@ impl MessageReceiver {
     }
     let endian = Endianness::LittleEndian; // Should be read from message??
     println!("Header in correct form");
-    
+
     // Go through each submessage
     while self.pos < msg.len() {
-
-      let submessage_header = match SubMessage::deserialize_header(
-      endian,
-      &msg[self.pos..self.pos+4]) {
-        Some(T) => T,
-        None => {print!("could not create submessage header"); return;},// rule 1. Could not create submessage header
-      };
+      let submessage_header =
+        match SubMessage::deserialize_header(endian, &msg[self.pos..self.pos + 4]) {
+          Some(T) => T,
+          None => {
+            print!("could not create submessage header");
+            return;
+          } // rule 1. Could not create submessage header
+        };
       self.pos += 4; // Submessage header lenght is 4 bytes
 
       let mut submessage_length = submessage_header.submessage_length as usize;
       println!("submessage length: {:?}", submessage_length);
       println!("submessage header: {:?}", submessage_header);
-      if submessage_length == 0 { 
+      if submessage_length == 0 {
         submessage_length = msg.len() - self.pos; // RTPS 8.3.3.2.3
-      } else if submessage_length > msg.len() - self.pos { 
+      } else if submessage_length > msg.len() - self.pos {
         println!("submessage is longer than msg len ?????");
         return; // rule 2
       }
@@ -241,8 +258,8 @@ impl MessageReceiver {
     match submessage {
       EntitySubmessage::Data(data, _) => {
         println!("datamessage target reader: {:?}", data.reader_id);
-        println!("{:?}",data);
-        let target_reader = self.get_reader(data.reader_id).unwrap(); 
+        println!("{:?}", data);
+        let target_reader = self.get_reader(data.reader_id).unwrap();
         target_reader.handle_data_msg(data);
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -343,13 +360,14 @@ mod tests {
   use super::*;
   use crate::messages::header::Header;
   use crate::speedy::{Writable, Readable};
-  use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
-  use crate::structure::{history_cache::HistoryCache, sequence_number::{SequenceNumber}};
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use serde::{Serialize, Deserialize};
   use crate::dds::writer::Writer;
   use std::sync::{Mutex, Arc};
+  use crate::dds::datasample::DataSample;
+  use mio_extras::channel as mio_channel;
+  use crate::structure::history_cache::HistoryCache;
 
   #[test]
 
@@ -376,15 +394,14 @@ mod tests {
 
     let mut message_receiver = MessageReceiver::new(guiPrefix);
 
-      let entity = EntityId::createCustomEntityID([0,0,0],7);
-      let new_guid = GUID::new_with_prefix_and_id(guiPrefix,entity);
-      new_guid.from_prefix(entity);
-      let new_reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
-  
+    let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
+    let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
+    new_guid.from_prefix(entity);
+    let new_reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
 
     message_receiver.add_reader(new_reader);
 
-    message_receiver.handle_user_msg(udp_bits1.clone());  
+    message_receiver.handle_user_msg(udp_bits1.clone());
 
     assert_eq!(message_receiver.submessage_count, 4);
 
@@ -396,13 +413,10 @@ mod tests {
       sequenceNumbers
     );
 
-    let mut a = message_receiver
+    let a = message_receiver
       .get_reader_and_history_cache_change(new_guid.entityId, *sequenceNumbers.first().unwrap())
       .unwrap();
-    println!(
-      "reader history chache DATA: {:?}",
-      a.serialized_payload.value
-    );
+    println!("reader history chache DATA: {:?}", a.data().value);
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct ShapeType<'a> {
@@ -412,29 +426,41 @@ mod tests {
       size: i32,
     }
 
-    let deserializedShapeType: ShapeType =
-      deserialize_from_little_endian(&mut a.serialized_payload.value).unwrap();
+    let copy_vec = (*a.data().value.clone()).to_vec();
+    let deserializedShapeType: ShapeType = deserialize_from_little_endian(copy_vec).unwrap();
     println!("deserialized shapeType: {:?}", deserializedShapeType);
     assert_eq!(deserializedShapeType.color, "RED");
 
-    
-    println!();println!();println!();println!();println!();
+    println!();
+    println!();
+    println!();
+    println!();
+    println!();
 
     // now try to serialize same message
- 
-    let _serializedPayload = to_little_endian_binary(&deserializedShapeType);
-    let mut writerObject = Writer::new(guiPrefix, EntityId::createCustomEntityID([0,0,2],2));
-    let mut  change = message_receiver.get_reader_and_history_cache_change_object(new_guid.entityId, *sequenceNumbers.first().unwrap());
-    change.sequence_number = SequenceNumber::from(91);
-    let createdUserMessage = writerObject.write_user_msg(change);
 
-    println!();println!();
+    let _serializedPayload = to_little_endian_binary(&deserializedShapeType);
+    let (_dwcc_upload, hccc_download) = mio_channel::channel::<DataSample<DDSData>>();
+    let mut writerObject = Writer::new(
+      GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], 2)),
+      hccc_download,
+    );
+    let mut change = message_receiver.get_reader_and_history_cache_change_object(
+      new_guid.entityId,
+      *sequenceNumbers.first().unwrap(),
+    );
+    change.sequence_number = SequenceNumber::from(91);
+    let _created_user_message = writerObject.write_user_msg(change);
+
+    println!();
+    println!();
 
     //assert_eq!(udp_bits1,createdUserMessage);
     //message_receiver.handle_user_msg(createdUserMessage);
-    println!("messageReceiver submessageCount: {:?}",message_receiver.submessage_count);
-
-    
+    println!(
+      "messageReceiver submessageCount: {:?}",
+      message_receiver.submessage_count
+    );
   }
 
   #[test]

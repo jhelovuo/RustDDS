@@ -108,11 +108,13 @@ mod tests {
     let data: Vec<u8> = vec![2, 4, 6];
 
     // still need to use the same port
-    let mcaddr = vec![SocketAddr::new("239.255.0.1".parse().unwrap(), 10002)];
-    listener.join_multicast(&Ipv4Addr::new(239, 255, 0, 1));
+    let _mcaddr = vec![SocketAddr::new("239.255.0.1".parse().unwrap(), 10002)];
+    listener
+      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
+      .expect("Failed to join multicast.");
 
     // sender.send_to_all(&data, &mcaddr);
-    sender.send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002);
+    sender.send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002).expect("Failed to send multicast");
 
     thread::sleep(time::Duration::from_secs(5));
 

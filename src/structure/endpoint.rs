@@ -1,4 +1,4 @@
-use crate::structure::locator::{LocatorList, Locator};
+use crate::structure::locator::LocatorList;
 use crate::structure::topic_kind;
 
 use speedy::{Readable, Writable};

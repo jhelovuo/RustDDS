@@ -1,7 +1,7 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use uuid::Uuid;
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
 pub struct GuidPrefix {
   pub entityKey: [u8; 12],
 }
@@ -55,7 +55,7 @@ impl<C: Context> Writable<C> for GuidPrefix {
   }
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
 pub struct EntityId {
   entityKey: [u8; 3],
   entityKind: u8,
@@ -111,11 +111,20 @@ impl EntityId {
     entityKind: 0xC7,
   };
 
-  pub fn createCustomEntityID (customEntityKey: [u8; 3], customEntityKind :  u8) -> EntityId{
+  pub fn createCustomEntityID(customEntityKey: [u8; 3], customEntityKind: u8) -> EntityId {
     return EntityId {
-      entityKey : customEntityKey,
-      entityKind : customEntityKind,
-    }
+      entityKey: customEntityKey,
+      entityKind: customEntityKind,
+    };
+  }
+
+  pub fn as_usize(self) -> usize {
+    let x1 = self.entityKey[0] as usize;
+    let x2 = self.entityKey[1] as usize;
+    let x3 = self.entityKey[2] as usize;
+    let x4 = self.entityKind as usize;
+
+    x1 * 10 ^ 9 + x2 * 10 ^ 6 + x3 * 10 ^ 3 + x4
   }
 }
 
@@ -147,7 +156,7 @@ impl<C: Context> Writable<C> for EntityId {
   }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialOrd, PartialEq, Ord, Eq, Readable, Writable)]
+#[derive(Copy, Clone, Debug, Default, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Hash)]
 pub struct GUID {
   pub guidPrefix: GuidPrefix,
   pub entityId: EntityId,
@@ -176,10 +185,10 @@ impl GUID {
     }
   }
 
-  pub fn new_with_prefix_and_id (prefix : GuidPrefix, entity_id: EntityId) -> GUID{
+  pub fn new_with_prefix_and_id(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
     GUID {
       guidPrefix: prefix,
-      entityId:entity_id,
+      entityId: entity_id,
     }
   }
 }

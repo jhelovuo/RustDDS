@@ -2,26 +2,32 @@ use std::time::Duration;
 use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness, Events};
 
 use crate::network::constant::*;
-use serde::{Serialize, Deserialize};
+use serde::Deserialize;
 
-use crate::structure::time::Timestamp;
 use crate::structure::guid::{GUID};
 use mio_extras::channel as mio_channel;
 use crate::structure::entity::{Entity, EntityAttributes};
 
-use crate::dds::result::*;
+use crate::dds::values::result::*;
 use crate::dds::participant::*;
 use crate::dds::topic::*;
-use crate::dds::key::*;
+use crate::dds::traits::key::*;
 use crate::dds::qos::*;
 use crate::dds::datasample::*;
+use crate::dds::ddsdata::DDSData;
 use crate::dds::reader::Reader;
+use crate::dds::writer::Writer;
+use crate::dds::datawriter::DataWriter;
 
 use mio::event::Evented;
 use std::io;
 
+use rand::Rng;
+
 use std::sync::{Arc, Mutex};
+
 use crate::structure::history_cache::HistoryCache;
+use crate::structure::guid::EntityId;
 
 // -------------------------------------------------------------------
 
@@ -29,16 +35,45 @@ pub struct Publisher<'a> {
   my_domainparticipant: &'a DomainParticipant,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
+  add_writer_sender: mio_channel::Sender<Writer>,
 }
 
 // public interface for Publisher
 impl<'a> Publisher<'a> {
-  pub fn create_datawriter<'p, D>(
-    &self,
-    _a_topic: &Topic,
-    _qos: QosPolicies,
-  ) -> Result<DataWriter<'p>> {
-    unimplemented!();
+  pub fn new(
+    dp: &'a DomainParticipant,
+    qos: QosPolicies,
+    default_dw_qos: QosPolicies,
+    add_writer_sender: mio_channel::Sender<Writer>,
+  ) -> Publisher {
+    Publisher {
+      my_domainparticipant: dp,
+      my_qos_policies: qos,
+      default_datawriter_qos: default_dw_qos,
+      add_writer_sender,
+    }
+  }
+
+  pub fn create_datawriter(&'a self, topic: &'a Topic, _qos: QosPolicies) -> Result<DataWriter> {
+    let (dwcc_upload, hccc_download) = mio_channel::channel::<DataSample<DDSData>>();
+
+    // TODO: generate entity id's in a more systematic way
+    let mut rng = rand::thread_rng();
+    let entity_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
+
+    let guid = GUID::new_with_prefix_and_id(
+      self.get_participant().as_entity().guid.guidPrefix,
+      entity_id,
+    );
+    let new_writer = Writer::new(guid, hccc_download);
+    self
+      .add_writer_sender
+      .send(new_writer)
+      .expect("Adding new writer failed");
+
+    let matching_data_writer = DataWriter::new(&self, topic, dwcc_upload);
+
+    Ok(matching_data_writer)
   }
 
   // delete_datawriter should not be needed. The DataWriter object itself should be deleted to accomplish this.
@@ -276,87 +311,13 @@ impl Evented for DataReader {
   }
 }
 
-pub struct DataWriter<'p> {
-  my_publisher: &'p Publisher<'p>,
-  my_topic: &'p Topic<'p>,
-}
-
-impl<'p> DataWriter<'p> {
-  // Instance registration operations:
-  // * register_instance (_with_timestamp)
-  // * unregister_instance (_with_timestamp)
-  // * get_key_value  (InstanceHandle --> Key)
-  // * lookup_instance (Key --> InstanceHandle)
-  // Do not implement these until there is a clear use case for InstanceHandle type.
-
-  // write (with optional timestamp)
-  // This operation could take also in InstanceHandle, if we would use them.
-  // The _with_timestamp version is covered by the optional timestamp.
-  pub fn write<D>(&self, _data: D, _source_timestamp: Option<Timestamp>)
-  where
-    D: Serialize + Keyed,
-  {
-  }
-
-  // dispose
-  // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose<D>(&self, _data: &D, _source_timestamp: Option<Timestamp>)
-  where
-    D: Serialize + Keyed,
-  {
-  }
-
-  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
-    unimplemented!();
-  }
-
-  // status queries
-  pub fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
-    unimplemented!()
-  }
-  pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
-    unimplemented!()
-  }
-  pub fn get_offered_incompatibel_qos_status(&self) -> Result<OfferedIncompatibelQosStatus> {
-    unimplemented!()
-  }
-  pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
-    unimplemented!()
-  }
-
-  // who are we connected to?
-  pub fn get_topic(&self) -> &Topic {
-    unimplemented!()
-  }
-  pub fn get_publisher(&self) -> &Publisher {
-    self.my_publisher
-  }
-
-  pub fn assert_liveliness(&self) -> Result<()> {
-    unimplemented!()
-  }
-
-  // This shoudl really return InstanceHandles pointing to a BuiltInTopic reader
-  //  but let's see if we can do without those handles.
-  pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
-    unimplemented!()
-  }
-  // This one function provides both get_matched_subscrptions and get_matched_subscription_data
-  // TODO: Maybe we could return references to the subscription data to avoid copying?
-  // But then what if the result set changes while the application processes it?
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
   use std::thread;
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
-  use crate::messages::submessages::heartbeat::Heartbeat;
-  use crate::structure::sequence_number::SequenceNumber;
   use mio_extras::channel as mio_channel;
-  use std::sync::{Arc, Mutex};
-  use crate::structure::history_cache::HistoryCache;
 
   #[test]
   fn sub_datareader_reader_creation() {}
@@ -365,11 +326,11 @@ mod tests {
   fn sub_subpoll_test() {
     let dp_guid = GUID::new();
 
-    let (sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
-    let (sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
+    let (_sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
+    let (_sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
 
-    let (sender_add_reader, receiver_add_reader) = mio_channel::channel::<Reader>();
-    let (sender_remove_reader, receiver_remove_reader) = mio_channel::channel::<GUID>();
+    let (sender_add_reader, _receiver_add_reader) = mio_channel::channel::<Reader>();
+    let (sender_remove_reader, _receiver_remove_reader) = mio_channel::channel::<GUID>();
 
     let mut sub = Subscriber::new(
       QosPolicies::qos_none(),

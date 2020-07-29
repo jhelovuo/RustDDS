@@ -2,7 +2,6 @@ use crate::structure::guid::*;
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::vendor_id::VendorId;
 use crate::structure::locator::LocatorList;
-use crate::dds::qos::*;
 
 /// Defines ParticipantProxyAttributes
 pub struct ParticipantProxyAttributes {

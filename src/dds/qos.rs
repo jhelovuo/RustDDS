@@ -1,11 +1,11 @@
 //use std::time::Duration;
 
-use crate::dds::result::*;
+use crate::dds::values::result::*;
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
-pub trait HasQoSPolicy {
-  fn get_qos<'a>(self) -> &'a QosPolicies;
-  fn set_qos(self, new_qos: &QosPolicies) -> Result<()>;
+pub trait HasQoSPolicy<'a> {
+  fn get_qos(&'a self) -> &'a QosPolicies;
+  fn set_qos(self, new_qos: &'a QosPolicies) -> Result<()>;
 }
 
 // DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.

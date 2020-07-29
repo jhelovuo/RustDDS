@@ -5,9 +5,11 @@ use std::collections::HashMap;
 
 use crate::dds::message_receiver::MessageReceiver;
 use crate::dds::reader::Reader;
+use crate::dds::writer::Writer;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID};
+use crate::structure::entity::Entity;
 
 pub struct DPEventWrapper {
   poll: Poll,
@@ -18,6 +20,10 @@ pub struct DPEventWrapper {
   // Adding readers
   receiver_add_reader: TokenReceiverPair<Reader>,
   receiver_remove_reader: TokenReceiverPair<GUID>,
+
+  // Writers
+  add_writer_receiver: TokenReceiverPair<Writer>,
+  remove_writer_receiver: TokenReceiverPair<GUID>,
 }
 
 impl DPEventWrapper {
@@ -27,6 +33,8 @@ impl DPEventWrapper {
     participant_guid_prefix: GuidPrefix,
     receiver_add_reader: TokenReceiverPair<Reader>,
     receiver_remove_reader: TokenReceiverPair<GUID>,
+    add_writer_receiver: TokenReceiverPair<Writer>,
+    remove_writer_receiver: TokenReceiverPair<GUID>,
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
 
@@ -61,6 +69,24 @@ impl DPEventWrapper {
       )
       .expect("Failed to register reader remover.");
 
+    poll
+      .register(
+        &add_writer_receiver.receiver,
+        add_writer_receiver.token,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register add writer channel");
+
+    poll
+      .register(
+        &remove_writer_receiver.receiver,
+        remove_writer_receiver.token,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register remove writer channel");
+
     DPEventWrapper {
       poll,
       udp_listeners,
@@ -68,10 +94,13 @@ impl DPEventWrapper {
       message_receiver: MessageReceiver::new(participant_guid_prefix),
       receiver_add_reader,
       receiver_remove_reader,
+      add_writer_receiver,
+      remove_writer_receiver,
     }
   }
 
   pub fn event_loop(mut ev_wrapper: DPEventWrapper) {
+    let mut writers: HashMap<GUID, Writer> = HashMap::new();
     loop {
       let mut events = Events::with_capacity(1024);
 
@@ -90,6 +119,8 @@ impl DPEventWrapper {
           ev_wrapper.handle_udp_traffic(&event);
         } else if DPEventWrapper::is_reader_action(&event) {
           ev_wrapper.handle_reader_action(&event);
+        } else if DPEventWrapper::is_writer_action(&event) {
+          ev_wrapper.handle_writer_action(&event, &mut writers);
         }
       }
     }
@@ -101,6 +132,10 @@ impl DPEventWrapper {
 
   pub fn is_reader_action(event: &Event) -> bool {
     event.token() == ADD_READER_TOKEN || event.token() == REMOVE_READER_TOKEN
+  }
+
+  pub fn is_writer_action(event: &Event) -> bool {
+    event.token() == ADD_WRITER_TOKEN || event.token() == REMOVE_WRITER_TOKEN
   }
 
   pub fn handle_udp_traffic(&mut self, event: &Event) {
@@ -139,6 +174,53 @@ impl DPEventWrapper {
       _ => {}
     }
   }
+
+  pub fn handle_writer_action(&mut self, event: &Event, writers: &mut HashMap<GUID, Writer>) {
+    match event.token() {
+      ADD_WRITER_TOKEN => {
+        let new_writer = self
+          .add_writer_receiver
+          .receiver
+          .try_recv()
+          .expect("Failed to receive new add writer message.");
+        &self.poll.register(
+          new_writer.cache_change_receiver(),
+          new_writer.get_entity_token(),
+          Ready::readable(),
+          PollOpt::edge(),
+        );
+        writers.insert(new_writer.as_entity().guid, new_writer);
+      }
+      REMOVE_WRITER_TOKEN => {
+        let writer = writers.remove(
+          &self
+            .remove_writer_receiver
+            .receiver
+            .try_recv()
+            .expect("Failed to get writer reciver guid"),
+        );
+        match writer {
+          Some(w) => {
+            &self.poll.deregister(w.cache_change_receiver());
+          }
+          None => {}
+        };
+      }
+      t => {
+        let found_writer = writers.iter_mut().find(|p| p.1.get_entity_token() == t);
+        match found_writer {
+          Some((_guid, w)) => {
+            let cache_change = w
+              .cache_change_receiver()
+              .try_recv()
+              .expect("Failed to receive cache change");
+            w.insert_to_history_cache(cache_change);
+          }
+          None => {}
+        }
+      }
+    }
+  }
 }
 
 #[cfg(test)]
@@ -158,6 +240,9 @@ mod tests {
     let (sender_add_reader, receiver_add) = mio_channel::channel::<Reader>();
     let (sender_remove_reader, receiver_remove) = mio_channel::channel::<GUID>();
 
+    let (_add_writer_sender, add_writer_receiver) = mio_channel::channel();
+    let (_remove_writer_sender, remove_writer_receiver) = mio_channel::channel();
+
     let dp_event_wrapper = DPEventWrapper::new(
       HashMap::new(),
       HashMap::new(),
@@ -169,6 +254,14 @@ mod tests {
       TokenReceiverPair {
         token: REMOVE_READER_TOKEN,
         receiver: receiver_remove,
+      },
+      TokenReceiverPair {
+        token: ADD_WRITER_TOKEN,
+        receiver: add_writer_receiver,
+      },
+      TokenReceiverPair {
+        token: REMOVE_WRITER_TOKEN,
+        receiver: remove_writer_receiver,
       },
     );
 

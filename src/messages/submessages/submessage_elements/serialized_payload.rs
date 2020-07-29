@@ -1,4 +1,4 @@
-use speedy::{Context, Readable, Writable, Writer, Reader};
+use speedy::{Readable, Writable, Writer, Reader, Context};
 use byteorder::{ByteOrder, BigEndian};
 
 /// A SerializedPayload contains the serialized representation of
@@ -26,42 +26,38 @@ impl Default for SerializedPayload {
   }
 }
 
-impl <'a, C: Context> Readable<'a, C> for SerializedPayload{
-  fn read_from< R: Reader< 'a, C > >( reader: &mut R ) -> Result< Self, C::Error > {
+impl<'a, C: Context> Readable<'a, C> for SerializedPayload {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let mut payload = SerializedPayload::default();
-    let mut representationIentifierBytes : Vec<u8> = vec![];
+    let mut representationIentifierBytes: Vec<u8> = vec![];
     representationIentifierBytes.push(reader.read_u8()?);
     representationIentifierBytes.push(reader.read_u8()?);
     payload.representation_identifier = BigEndian::read_u16(&representationIentifierBytes);
     payload.representation_options = reader.read_value()?;
-    
-    loop{
+
+    loop {
       let res = reader.read_u8();
       let by = match res {
-        Ok(by) => by, 
-        Err(_error) =>  {
+        Ok(by) => by,
+        Err(_error) => {
           break;
-          },
+        }
       };
       payload.value.push(by);
-      }
+    }
     Ok(payload)
-
   }
 }
 
-impl <C: Context> Writable<C> for SerializedPayload{
-  fn write_to<'a, T: ?Sized + Writer< C>>(
-    &'a self,
-    writer: &mut T
-  ) -> Result<(), C::Error>{
+impl<C: Context> Writable<C> for SerializedPayload {
+  fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
     let bigEndianRepresentation = self.representation_identifier.to_be_bytes();
     writer.write_u8(bigEndianRepresentation[0])?;
     writer.write_u8(bigEndianRepresentation[1])?;
     writer.write_u16(self.representation_options)?;
-    for element in &self.value{
+    for element in &self.value {
       writer.write_u8(*element)?;
     }
     Ok(())
-  } 
+  }
 }

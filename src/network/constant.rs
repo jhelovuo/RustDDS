@@ -22,6 +22,12 @@ pub const DATAREADER_CHANGE_TOKEN: Token = Token(13);
 pub const ADD_DATAREADER_TOKEN: Token = Token(14);
 pub const REMOVE_DATAREADER_TOKEN: Token = Token(15);
 
+pub const ADD_WRITER_TOKEN: Token = Token(16);
+pub const REMOVE_WRITER_TOKEN: Token = Token(17);
+
+pub const ADD_DATAWRITER_TOKEN: Token = Token(18);
+pub const REMOVE_DATAWRITER_TOKEN: Token = Token(19);
+
 pub struct TokenReceiverPair<T> {
   pub token: Token,
   pub receiver: mio_channel::Receiver<T>,

@@ -10,6 +10,16 @@ pub struct EntityAttributes {
   pub guid: GUID,
 }
 
+impl EntityAttributes {
+  pub fn new(guid: GUID) -> EntityAttributes {
+    EntityAttributes { guid: guid }
+  }
+
+  pub fn as_usize(&self) -> usize {
+    self.guid.entityId.as_usize()
+  }
+}
+
 pub trait Entity {
   fn as_entity(&self) -> &EntityAttributes;
 

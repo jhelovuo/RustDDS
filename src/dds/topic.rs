@@ -4,7 +4,8 @@ use crate::dds::participant::*;
 //use crate::dds::key::*;
 use crate::dds::typedesc::*;
 use crate::dds::qos::*;
-use crate::dds::result::*;
+use crate::dds::values::result::*;
+use crate::dds::traits::dds_entity::DDSEntity;
 
 pub trait TopicDescription {
   fn get_participant(&self) -> &DomainParticipant;
@@ -56,3 +57,17 @@ impl<'a> Topic<'a> {
     unimplemented!()
   }
 }
+
+impl<'a> HasQoSPolicy<'a> for Topic<'a> {
+  fn set_qos(mut self, policy: &QosPolicies) -> Result<()> {
+    // TODO: check liveliness of qos_policy
+    self.my_qos_policies = policy.clone();
+    Ok(())
+  }
+
+  fn get_qos(&'a self) -> &'a QosPolicies {
+    &self.my_qos_policies
+  }
+}
+
+impl<'a> DDSEntity<'a> for Topic<'a> {}

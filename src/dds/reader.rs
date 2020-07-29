@@ -2,6 +2,8 @@ use crate::structure::entity::Entity;
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::structure::history_cache::HistoryCache;
 use crate::messages::submessages::data::Data;
+use crate::dds::ddsdata::DDSData;
+use crate::dds::traits::key::DefaultKey;
 use crate::messages::submessages::ack_nack::AckNack;
 use crate::messages::submessages::heartbeat::Heartbeat;
 use crate::messages::submessages::gap::Gap;
@@ -57,9 +59,27 @@ impl Reader {
   // and user messages
 
   // TODO Used for test/debugging purposes
-  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<Data>{
-    println!("history cache !!!! {:?}",self.history_cache.lock().unwrap().get_change(sequence_number).unwrap());
-    self.history_cache.lock().unwrap().get_change(sequence_number).unwrap().data_value.clone()
+  pub fn get_history_cache_change_data(
+    &self,
+    sequence_number: SequenceNumber,
+  ) -> Option<Arc<DDSData>> {
+    println!(
+      "history cache !!!! {:?}",
+      self
+        .history_cache
+        .lock()
+        .unwrap()
+        .get_change(sequence_number)
+        .unwrap()
+    );
+    self
+      .history_cache
+      .lock()
+      .unwrap()
+      .get_change(sequence_number)
+      .unwrap()
+      .data_value
+      .clone()
   }
   
   
@@ -71,19 +91,16 @@ impl Reader {
   
 
   // TODO Used for test/debugging purposes
-  pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber>{
-
+  pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
     let history_cache = self.history_cache.lock().unwrap();
-    let start =  history_cache.get_seq_num_min();
-    let end = history_cache.get_seq_num_max();    
+    let start = history_cache.get_seq_num_min();
+    let end = history_cache.get_seq_num_max();
     return vec![start.unwrap().clone(), end.unwrap().clone()];
   }
 
   // handles regular data message and updates history cache
   pub fn handle_data_msg(&mut self, data: Data) {
     let user_data = true; // Different action for discovery data?
-    println!("handle data msg");
-    //println!("{:?}",data);
     if user_data {
       // TODO! Sequence number check?
       self.make_cache_change(data);
@@ -158,7 +175,9 @@ impl Reader {
 
   // update history cache
   fn make_cache_change(&mut self, data: Data) {
-    let change = CacheChange::new(self.get_guid(), data.writer_sn, Some(data));
+    let ddsdata = DDSData::new(DefaultKey::random_key(), data.serialized_payload);
+    let pdata = Arc::new(ddsdata);
+    let change = CacheChange::new(self.get_guid(), data.writer_sn, Some(pdata));
     self.history_cache.lock().unwrap().add_change(change);
   }
 
@@ -217,6 +236,7 @@ impl Evented for Reader {
 mod tests {
   use super::*;
   use crate::structure::guid::{GUID, EntityId};
+  use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 
   #[test]
   fn rtpsreader_handle_data() {
@@ -224,11 +244,15 @@ mod tests {
 
     let mut new_reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
 
-    let d = Data::default();
-    let d_seqnum = d.writer_sn;
+    let d = Data::new();
+    let d_seqnum = SequenceNumber::from(1);
     new_reader.handle_data_msg(d.clone());
 
-    let change = CacheChange::new(new_reader.get_guid(), d_seqnum, Some(d));
+    let change = CacheChange::new(
+      new_reader.get_guid(),
+      d_seqnum,
+      Some(Arc::new(DDSData::from(d))),
+    );
 
     assert_eq!(
       new_reader
@@ -248,7 +272,10 @@ mod tests {
     let mut new_reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
 
     let writer_id = EntityId::default();
-    let d = Data::default();
+    let d = Arc::new(DDSData::new(
+      DefaultKey::random_key(),
+      SerializedPayload::new(),
+    ));
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
@@ -340,7 +367,10 @@ mod tests {
     let mut reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
 
     let n: i64 = 10;
-    let d = Data::default();
+    let d = Arc::new(DDSData::new(
+      DefaultKey::random_key(),
+      SerializedPayload::new(),
+    ));
     let mut changes = Vec::new();
 
     for i in 0..n {
