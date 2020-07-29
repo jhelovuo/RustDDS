@@ -6,6 +6,8 @@ pub mod participant;
 pub mod pubsub;
 pub mod qos;
 mod reader;
-pub mod result;
+mod writer;
 pub mod topic;
 pub mod typedesc;
+mod result;
+

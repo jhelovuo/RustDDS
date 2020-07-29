@@ -17,7 +17,7 @@ use crate::messages::submessages::info_timestamp::InfoTimestamp;
 
 use crate::dds::reader::Reader;
 use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::{SequenceNumber};
+use crate::structure::{cache_change::CacheChange, sequence_number::{SequenceNumber}};
 
 use speedy::{Readable, Endianness};
 
@@ -123,11 +123,7 @@ impl MessageReceiver {
   }
 
   // TODO use for test and debugging only
-  fn get_reader_and_history_cache_change<'a>(
-    self,
-    reader_id: EntityId,
-    sequence_number: SequenceNumber,
-  ) -> Option<Data> {
+  fn get_reader_and_history_cache_change<'a>(&self, reader_id: EntityId, sequence_number : SequenceNumber) -> Option<Data>{
     //println!("readers: {:?}", self.available_readers);
     let reader = self.available_readers.iter().find(
       |r| r.get_entity_id() == reader_id
@@ -136,6 +132,19 @@ impl MessageReceiver {
     let a : Option<Data> = reader.get_history_cache_change_data(sequence_number);
     Some(a.unwrap().clone())
   }
+
+  
+  // TODO use for test and debugging only
+  fn get_reader_and_history_cache_change_object<'a>(&self, reader_id: EntityId, sequence_number : SequenceNumber) ->  CacheChange{
+    //println!("readers: {:?}", self.available_readers);
+    let reader = self.available_readers.iter().find(
+      |r| r.get_entity_id() == reader_id
+            
+    ).unwrap();
+    let a = reader.get_history_cache_change(sequence_number);
+    return a.clone();
+  }
+  
 
   fn get_reader_history_cache_start_and_end_seq_num(&self, reader_id: EntityId) -> Vec<SequenceNumber>{
     let reader = self.available_readers.iter().find(
@@ -156,6 +165,7 @@ impl MessageReceiver {
   }
 
   pub fn handle_user_msg(&mut self, msg: Vec<u8>) {
+    println!("handle user Message");
     if msg.len() < RTPS_MESSAGE_HEADER_SIZE {
       return;
     }
@@ -163,25 +173,30 @@ impl MessageReceiver {
     self.dest_guid_prefix = self.participant_guid_prefix;
 
     if !self.handle_RTPS_header(&msg) {
+      println!("Header not in correct form");
       return; // Header not in correct form
     }
     let endian = Endianness::LittleEndian; // Should be read from message??
-
+    println!("Header in correct form");
+    
     // Go through each submessage
     while self.pos < msg.len() {
-      let submessage_header =
-        match SubMessage::deserialize_header(endian, &msg[self.pos..self.pos + 4]) {
-          Some(T) => T,
-          None => {
-            return;
-          } // rule 1. Could not create submessage header
-        };
+
+      let submessage_header = match SubMessage::deserialize_header(
+      endian,
+      &msg[self.pos..self.pos+4]) {
+        Some(T) => T,
+        None => {print!("could not create submessage header"); return;},// rule 1. Could not create submessage header
+      };
       self.pos += 4; // Submessage header lenght is 4 bytes
 
       let mut submessage_length = submessage_header.submessage_length as usize;
-      if submessage_length == 0 {
+      println!("submessage length: {:?}", submessage_length);
+      println!("submessage header: {:?}", submessage_header);
+      if submessage_length == 0 { 
         submessage_length = msg.len() - self.pos; // RTPS 8.3.3.2.3
-      } else if submessage_length > msg.len() - self.pos {
+      } else if submessage_length > msg.len() - self.pos { 
+        println!("submessage is longer than msg len ?????");
         return; // rule 2
       }
 
@@ -203,10 +218,11 @@ impl MessageReceiver {
 
         let new_submessage = SubMessage {
           header: submessage_header,
-          submessage: entity_submessage,
+          submessage: Some(entity_submessage),
+          intepreterSubmessage: None,
         };
         //self.submessage_vec.push(new_submessage);
-        self.send_submessage(new_submessage.submessage);
+        self.send_submessage(new_submessage.submessage.unwrap());
         self.submessage_count += 1;
       }
       self.pos += submessage_length;
@@ -225,7 +241,8 @@ impl MessageReceiver {
     match submessage {
       EntitySubmessage::Data(data, _) => {
         println!("datamessage target reader: {:?}", data.reader_id);
-        let target_reader = self.get_reader(data.reader_id).unwrap();
+        println!("{:?}",data);
+        let target_reader = self.get_reader(data.reader_id).unwrap(); 
         target_reader.handle_data_msg(data);
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -326,11 +343,13 @@ mod tests {
   use super::*;
   use crate::messages::header::Header;
   use crate::speedy::{Writable, Readable};
-  use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
+  use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
+  use crate::structure::{history_cache::HistoryCache, sequence_number::{SequenceNumber}};
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+  use crate::serialization::cdrSerializer::to_little_endian_binary;
   use serde::{Serialize, Deserialize};
-  use std::sync::{Arc, Mutex};
-  use crate::structure::history_cache::HistoryCache;
+  use crate::dds::writer::Writer;
+  use std::sync::{Mutex, Arc};
 
   #[test]
 
@@ -365,7 +384,7 @@ mod tests {
 
     message_receiver.add_reader(new_reader);
 
-    message_receiver.handle_user_msg(udp_bits1);
+    message_receiver.handle_user_msg(udp_bits1.clone());  
 
     assert_eq!(message_receiver.submessage_count, 4);
 
@@ -397,6 +416,25 @@ mod tests {
       deserialize_from_little_endian(&mut a.serialized_payload.value).unwrap();
     println!("deserialized shapeType: {:?}", deserializedShapeType);
     assert_eq!(deserializedShapeType.color, "RED");
+
+    
+    println!();println!();println!();println!();println!();
+
+    // now try to serialize same message
+ 
+    let _serializedPayload = to_little_endian_binary(&deserializedShapeType);
+    let mut writerObject = Writer::new(guiPrefix, EntityId::createCustomEntityID([0,0,2],2));
+    let mut  change = message_receiver.get_reader_and_history_cache_change_object(new_guid.entityId, *sequenceNumbers.first().unwrap());
+    change.sequence_number = SequenceNumber::from(91);
+    let createdUserMessage = writerObject.write_user_msg(change);
+
+    println!();println!();
+
+    //assert_eq!(udp_bits1,createdUserMessage);
+    //message_receiver.handle_user_msg(createdUserMessage);
+    println!("messageReceiver submessageCount: {:?}",message_receiver.submessage_count);
+
+    
   }
 
   #[test]

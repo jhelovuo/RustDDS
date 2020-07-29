@@ -25,7 +25,7 @@ impl CDR_serializer {
   fn calculate_padding_need_and_write_padding(&mut self, typeOctetAlignment: u8) {
     let modulo: u32 = self.buffer.len() as u32 % typeOctetAlignment as u32;
     if modulo != 0 {
-      let paddingNeed: u32 = (typeOctetAlignment as u32 - modulo);
+      let paddingNeed: u32 = typeOctetAlignment as u32 - modulo; 
       println!("need padding! {}", paddingNeed);
       self.write_pad(paddingNeed);
     } else {
@@ -382,8 +382,6 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
     let elementCount = _len.unwrap() as u32;
     if elementCount % 4 != 0 {
       println!("sequence element count: {}", elementCount);
-      //println!("sequence element count is not multiple of 4! need to pad something");
-      //self.write_padding(self.buffer.len() as u64);
     }
 
     self.serialize_u32(elementCount).unwrap();

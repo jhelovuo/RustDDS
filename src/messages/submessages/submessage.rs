@@ -10,8 +10,9 @@ use crate::messages::submessages::info_source::InfoSource;
 use crate::messages::submessages::info_timestamp::InfoTimestamp;
 use crate::messages::submessages::nack_frag::NackFrag;
 use crate::messages::submessages::submessage_flag::SubmessageFlag;
+use speedy::{Writable};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Writable)]
 pub enum EntitySubmessage {
   AckNack(AckNack, SubmessageFlag),
   Data(Data, SubmessageFlag),
@@ -22,7 +23,39 @@ pub enum EntitySubmessage {
   NackFrag(NackFrag),
 }
 
-#[derive(Debug, PartialEq)]
+impl EntitySubmessage{
+  pub fn get_data_submessage(&self) -> Option<&Data>{
+    match self {
+      EntitySubmessage::Data(data,_) => {
+        Some(data)
+      }
+      _ => {
+        None
+      }
+    }
+  }
+  pub fn get_submessage_flag(&self) -> Option<&SubmessageFlag>{
+    match self {
+      EntitySubmessage::AckNack(_,flag) => {
+        Some(flag)
+      }
+      EntitySubmessage::Data(_,flag) => {
+        Some(flag)
+      }
+      EntitySubmessage::DataFrag(_,flag) => {
+        Some(flag)
+      }
+      EntitySubmessage::Heartbeat(_,flag) => {
+        Some(flag)
+      }
+      _ => {
+        None
+      }
+    }
+  }
+}
+
+#[derive(Debug, PartialEq, Writable)]
 pub enum InterpreterSubmessage {
   InfoSource(InfoSource),
   InfoDestination(InfoDestination),

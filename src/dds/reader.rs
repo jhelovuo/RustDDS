@@ -16,7 +16,6 @@ use std::collections::HashSet;
 
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
-use crate::dds::message_receiver::MessageReceiver;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
@@ -62,6 +61,14 @@ impl Reader {
     println!("history cache !!!! {:?}",self.history_cache.lock().unwrap().get_change(sequence_number).unwrap());
     self.history_cache.lock().unwrap().get_change(sequence_number).unwrap().data_value.clone()
   }
+  
+  
+  // Used for test/debugging purposes
+  pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> CacheChange{
+    println!("history cache !!!! {:?}",self.history_cache.lock().unwrap().get_change(sequence_number).unwrap());
+    self.history_cache.lock().unwrap().get_change(sequence_number).unwrap().clone()
+  }
+  
 
   // TODO Used for test/debugging purposes
   pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber>{
@@ -76,6 +83,7 @@ impl Reader {
   pub fn handle_data_msg(&mut self, data: Data) {
     let user_data = true; // Different action for discovery data?
     println!("handle data msg");
+    //println!("{:?}",data);
     if user_data {
       // TODO! Sequence number check?
       self.make_cache_change(data);

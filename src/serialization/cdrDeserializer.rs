@@ -6,9 +6,6 @@ use serde::de::{
 };
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
-use core::mem::size_of_val;
-
-//use serde::Deserializer;
 
 #[derive(PartialEq)]
 enum endianess {
@@ -48,7 +45,7 @@ impl<'de> CDR_deserializer<'de> {
     let modulo = self.serializedDataCount % typeOctetAligment as u32;
 
     if modulo != 0 {
-      let padding: u32 = (typeOctetAligment as u32 - modulo);
+      let padding : u32 = typeOctetAligment as u32 - modulo; 
       println!("need to remove padding! {}", padding);
       self.remove_padding_bytes_from_end(padding);
     } else {
@@ -506,7 +503,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer<'de> {
     self,
     _name: &'static str,
     _len: usize,
-    visitor: V,
+    _visitor: V,
   ) -> Result<V::Value>
   where
     V: Visitor<'de>,
@@ -732,7 +729,6 @@ mod tests {
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
   use serde::{Serialize, Deserialize};
-  use bytes::{BytesMut, BufMut};
   use std::any::type_name;
 
   #[test]
@@ -816,11 +812,11 @@ mod tests {
       0x00, 0x04, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x00,
     ];
 
-    let mut sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
     //println!("{:?}",sarjallistettu);
-
-    for x in 0..expected_serialized_result.len() {
-      if (expected_serialized_result[x] != sarjallistettu[x]) {
+    
+    for x in 0..expected_serialized_result.len(){
+      if expected_serialized_result[x] != sarjallistettu[x] {
         println!("index: {}", x);
       }
     }
@@ -949,10 +945,20 @@ mod tests {
       0x04, 0x00, 0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x61, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00,
       0x00, 0x1e, 0x00, 0x00, 0x00,
     ];
+    let recieved_message2: Vec<u8> = vec![
+      0x04, 0x00, 0x00, 0x00,
+      0x52, 0x45, 0x44, 0x00,
+      0x61, 0x00, 0x00, 0x00,
+      0x1b, 0x00, 0x00, 0x00,
+      0x1e, 0x00, 0x00, 0x00,
+    ];
 
-    let deserializedMessage: ShapeType =
-      deserialize_from_little_endian(&mut recieved_message).unwrap();
-    println!("{:?}", deserializedMessage);
+    let deserializedMessage :ShapeType = deserialize_from_little_endian(&mut  recieved_message).unwrap();
+    println!("{:?}",deserializedMessage);
+
+    let serializedMessage = to_little_endian_binary(&deserializedMessage).unwrap();
+
+    assert_eq!(serializedMessage,recieved_message2 );
     //assert_eq!(deserializedMessage,recieved_message)
   }
 

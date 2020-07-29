@@ -2,7 +2,7 @@ use crate::messages::submessages::submessage_elements::parameter_list::Parameter
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
-use speedy::{Readable, Writable};
+use speedy::{Readable, Writable, Context, Writer, Reader};
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -11,7 +11,7 @@ use speedy::{Readable, Writable};
 /// a data-object belonging to the RTPS Writer. The possible changes
 /// include both changes in value as well as changes to the lifecycle
 /// of the data-object.
-#[derive(Debug, PartialEq, Readable, Writable, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Data {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.
@@ -54,4 +54,60 @@ impl Default for Data {
   fn default() -> Self {
     Data::new()
   }
+}
+
+impl <'a, C: Context> Readable<'a, C> for Data{
+  fn read_from< R: Reader< 'a, C > >( reader: &mut R ) -> Result< Self, C::Error > {
+    let mut dataMessage = Data::default();
+    //ExtraFlags This version of the protocol (2.3) should set all the bits in the extraFlags to zero
+    //just ignore these
+    reader.read_u16()?;
+    //octets to InlineQos
+    reader.read_u16()?;
+    dataMessage.reader_id = reader.read_value()?;
+    dataMessage.writer_id = reader.read_value()?;
+    dataMessage.writer_sn = reader.read_value()?;
+
+    // TODO INLINE QOS ??
+
+    dataMessage.serialized_payload = reader.read_value()?;
+    Ok(dataMessage)
+
+
+  }
+}
+
+impl <C: Context> Writable<C> for Data{
+  fn write_to<'a, T: ?Sized + Writer< C>>(
+    &'a self,
+    writer: &mut T
+) -> Result<(), C::Error>{
+    //This version of the protocol (2.3) should set all the bits in the extraFlags to zero
+    writer.write_u16(0)?;
+    //The octetsToInlineQos field contains the number of octets starting from the first octet immediately following
+    //this field until the first octet of the inlineQos SubmessageElement. If the inlineQos SubmessageElement is not
+    //present (i.e., the InlineQosFlag is not set), then octetsToInlineQos contains the offset to the next field after
+    //the inlineQos.
+
+    // TODO INLINE QOS ??
+    
+    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0{
+      println!("self.inline_qos {:?}", self.inline_qos);
+      todo!()
+    }else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() ==  0{
+      writer.write_u16(16)?;
+    }
+    else if self.inline_qos.is_none(){
+      writer.write_u16(16)?;
+    }
+    writer.write_value(&self.reader_id)?;
+    writer.write_value(&self.writer_id)?;
+    writer.write_value(&self.writer_sn)?;
+    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0{
+      writer.write_value(&self.inline_qos)?;
+    }
+    writer.write_value(&self.serialized_payload)?;
+    Ok(())
+}
+ 
 }

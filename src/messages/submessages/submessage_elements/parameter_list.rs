@@ -1,5 +1,5 @@
 use crate::messages::submessages::submessage_elements::parameter::Parameter;
-use speedy::{Context, Readable, Reader, Writable, Writer};
+use speedy::{Readable, Writable};
 
 /// ParameterList is used as part of several messages to encapsulate
 /// QoS parameters that may affect the interpretation of the message.
