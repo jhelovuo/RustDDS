@@ -1,5 +1,3 @@
-use crate::messages::submessages::data::Data;
-
 use serde::Deserialize;
 
 use crate::structure::instance_handle::InstanceHandle;
@@ -10,6 +8,7 @@ use crate::dds::values::result::*;
 use crate::dds::traits::key::*;
 use crate::dds::qos::*;
 use crate::dds::datasample::*;
+use crate::dds::ddsdata::DDSData;
 
 use crate::dds::datasample_cache::DataSampleCache;
 use crate::structure::guid::{GUID};
@@ -29,6 +28,10 @@ impl<'s> DataReader {
       entity_attributes: EntityAttributes::new(GUID::new()), // todo
       datasample_cache: DataSampleCache::new(),
     }
+  }
+
+  pub fn add_datasample(&self, _datasample:  DataSample<DDSData>) -> Result<()> {
+    Ok(())
   }
 
   pub fn read<D>(
@@ -58,10 +61,6 @@ impl<'s> DataReader {
     unimplemented!()
   }
 
-  fn add_datasample(&self, _data: Data) {
-    todo!()
-  }
-
   pub fn read_next<D>(&self) -> Result<Vec<DataSample<D>>>
   where
     D: Deserialize<'s> + Keyed,
@@ -83,22 +82,3 @@ impl Entity for DataReader {
   }
 }
 
-/*
-impl Evented for DataReader {
-  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
-    self.registration.register(poll, token, interest, opts)
-  }
-  fn reregister(
-    &self,
-    poll: &Poll,
-    token: Token,
-    interest: Ready,
-    opts: PollOpt,
-  ) -> io::Result<()> {
-    self.registration.reregister(poll, token, interest, opts)
-  }
-  fn deregister(&self, poll: &Poll) -> io::Result<()> {
-    poll.deregister(&self.registration)
-  }
-}
-*/

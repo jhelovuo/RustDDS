@@ -7,7 +7,7 @@ use std::convert::From;
 /// Protocol (NTP) Standard (IETF RFC 1305). In this representation, time is
 /// expressed in seconds and fraction of seconds using the formula:
 /// time = seconds + (fraction / 2^(32))
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Copy, Clone)]
 pub struct Time {
   seconds: i32,
   fraction: u32,

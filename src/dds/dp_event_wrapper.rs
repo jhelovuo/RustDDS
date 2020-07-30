@@ -164,7 +164,7 @@ impl DPEventWrapper {
           .receiver_add_reader
           .receiver
           .try_recv()
-          .expect("Can't get new reader");
+          .expect("Can't receive new reader");
         self.message_receiver.add_reader(new_reader);
       }
       REMOVE_READER_TOKEN => {

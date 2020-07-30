@@ -107,4 +107,28 @@ impl<D: Keyed> DataSample<D> {
       value: Ok(Arc::new(value)),
     }
   }
+
+  pub fn new_with_arc(source_timestamp: Timestamp, arc: Arc<D>) -> DataSample<D> {
+    let sample_state = SampleState::Read;
+    let view_state = ViewState::New;
+    let instance_state = InstanceState::Alive;
+    let disposed_generation_count = 0;
+    let no_writers_generation_count = 0;
+    let sample_rank = 0;
+    let generation_rank = 0;
+    let absolute_generation_rank = 0;
+
+    DataSample {
+      sample_state,
+      view_state,
+      instance_state,
+      disposed_generation_count,
+      no_writers_generation_count,
+      sample_rank,
+      generation_rank,
+      absolute_generation_rank,
+      source_timestamp,
+      value: Ok(arc),
+    }
+  }
 }

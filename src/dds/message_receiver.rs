@@ -248,8 +248,9 @@ impl MessageReceiver {
     // TODO! If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
     match submessage {
       EntitySubmessage::Data(data, _) => {
+        let timestamp = self.timestamp;
         let target_reader = self.get_reader(data.reader_id).unwrap();
-        target_reader.handle_data_msg(data);
+        target_reader.handle_data_msg(data, timestamp);
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
         let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
@@ -356,10 +357,8 @@ mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use serde::{Serialize, Deserialize};
   use crate::dds::writer::Writer;
-  use std::sync::{Mutex, Arc};
   use crate::dds::datasample::DataSample;
   use mio_extras::channel as mio_channel;
-  use crate::structure::history_cache::HistoryCache;
 
   #[test]
 

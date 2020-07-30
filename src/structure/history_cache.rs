@@ -51,6 +51,10 @@ impl HistoryCache {
   pub fn len(&self) -> usize {
     self.changes.len()
   }
+
+  pub fn get_latest(&self) -> Option<&CacheChange> {
+    self.changes.last()
+  }
 }
 
 #[cfg(test)]

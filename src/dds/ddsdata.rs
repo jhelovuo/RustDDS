@@ -8,9 +8,9 @@ use crate::structure::sequence_number::SequenceNumber;
 #[derive(Debug, PartialEq)]
 pub struct DDSData {
   key: DefaultKey,
-  reader_id: EntityId,
-  writer_id: EntityId,
-  writer_sn: SequenceNumber,
+  pub reader_id: EntityId,
+  pub writer_id: EntityId,
+  pub writer_sn: SequenceNumber,
   inline_qos: Option<ParameterList>,
   data: SerializedPayload,
 }

@@ -1,5 +1,5 @@
 use std::time::Duration;
-use mio::{Ready, Registration, Poll, PollOpt, Events};
+use mio::{Ready, Poll, PollOpt, Events};
 
 use crate::network::constant::*;
 
@@ -20,10 +20,6 @@ use crate::dds::datawriter::DataWriter;
 use crate::dds::datareader::DataReader;
 
 use rand::Rng;
-
-use std::sync::{Arc, Mutex};
-
-use crate::structure::history_cache::HistoryCache;
 use crate::structure::guid::EntityId;
 
 // -------------------------------------------------------------------
@@ -198,18 +194,9 @@ impl Subscriber {
             );
           }
           ADD_DATAREADER_TOKEN => {
-            let (dr, r, rec) = self.create_datareader(self.participant_guid, self.qos.clone());
+            let (dr, r) = self.create_datareader(self.participant_guid, self.qos.clone());
 
             let reader = r.unwrap();
-            self
-              .poll
-              .register(
-                &rec,
-                READER_CHANGE_TOKEN,
-                Ready::readable(),
-                PollOpt::edge(),
-              )
-              .expect("Unable to register new Reader for Subscribers poll.");
             self.datareaders.push(dr.unwrap());
             self.sender_add_reader.send(reader).unwrap();
           }
@@ -231,24 +218,26 @@ impl Subscriber {
   }
 
   pub fn create_datareader(
-    &self,
+    &mut self,
     participant_guid: GUID,
     qos: QosPolicies,
-  ) -> (
-    Result<DataReader>,
-    Result<Reader>,
-    mio_channel::Receiver<DataSample<DDSData>>,
-  ) {
-    let (_register_datareader, _set_readiness_of_datareader) = Registration::new2();
-
-    let history_cache = Arc::new(Mutex::new(HistoryCache::new()));
-
+  ) -> (Result<DataReader>, Result<Reader>) {
     let new_datareader = DataReader::new(qos);
 
     let (send, rec) = mio_channel::channel::<DataSample<DDSData>>();
     let matching_reader = Reader::new(participant_guid, send);
 
-    (Ok(new_datareader), Ok(matching_reader), rec)
+    self
+      .poll
+      .register(
+        &rec,
+        READER_CHANGE_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Unable to register new Reader for Subscribers poll.");
+
+    (Ok(new_datareader), Ok(matching_reader))
   }
 
   pub fn lookup_datareader(&self, _topic_name: String) -> Option<Vec<&DataReader>> {
@@ -265,8 +254,7 @@ mod tests {
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
   use mio_extras::channel as mio_channel;
-  use crate::dds::datasample::DataSample;
-  use crate::dds::ddsdata::DDSData;
+  use crate::structure::time::Timestamp;
 
   #[test]
   fn sub_subpoll_test() {
@@ -298,28 +286,19 @@ mod tests {
       )
       .unwrap();
 
-    let (dr, r, rec) = sub.create_datareader(sub.participant_guid, sub.qos.clone());
+    let (dr, r) = sub.create_datareader(sub.participant_guid, sub.qos.clone());
 
     let mut reader = r.unwrap();
-    sub
-      .poll
-      .register(
-        &rec,
-        READER_CHANGE_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .expect("Unable to register new Reader for Subscribers poll.");
     sub.datareaders.push(dr.unwrap());
 
     let child = thread::spawn(move || {
       std::thread::sleep(Duration::new(0, 500));
       let d = Data::default();
-      reader.handle_data_msg(d);
+      reader.handle_data_msg(d, Timestamp::TIME_INVALID);
 
       std::thread::sleep(Duration::new(0, 500));
       let d2 = Data::default();
-      reader.handle_data_msg(d2);
+      reader.handle_data_msg(d2, Timestamp::TIME_INVALID);
 
       std::thread::sleep(Duration::new(0, 500_000));
       sender_stop.send(0).unwrap();

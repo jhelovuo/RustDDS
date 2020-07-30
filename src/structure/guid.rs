@@ -112,10 +112,10 @@ impl EntityId {
   };
 
   pub fn createCustomEntityID(customEntityKey: [u8; 3], customEntityKind: u8) -> EntityId {
-    return EntityId {
+    EntityId {
       entityKey: customEntityKey,
       entityKind: customEntityKind,
-    };
+    }
   }
 
   pub fn as_usize(self) -> usize {

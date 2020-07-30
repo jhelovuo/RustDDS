@@ -29,10 +29,7 @@ impl PartialEq for CacheChange {
         Some(d2) => **d1 == **d2,
         None => false,
       },
-      None => match other.data_value {
-        Some(_) => false,
-        None => true,
-      },
+      None => other.data_value.is_none(),
     };
 
     self.kind == other.kind

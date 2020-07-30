@@ -3,7 +3,6 @@ use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::structure::history_cache::HistoryCache;
 use crate::messages::submessages::data::Data;
 
-use crate::dds::traits::key::DefaultKey;
 use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
 use crate::messages::submessages::ack_nack::AckNack;
@@ -12,12 +11,10 @@ use crate::messages::submessages::gap::Gap;
 use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::GUID;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
-use mio::event::Evented;
-use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
+use crate::structure::time::Timestamp;
 use mio_extras::channel as mio_channel;
 use std::fmt;
 
-use std::io;
 use std::collections::HashSet;
 
 use std::time::Duration;
@@ -95,16 +92,32 @@ impl Reader {
   }
 
   // handles regular data message and updates history cache
-  pub fn handle_data_msg(&mut self, data: Data) {
+  pub fn handle_data_msg(&mut self, data: Data, timestamp: Timestamp) {
     let user_data = true; // Different action for discovery data?
     if user_data {
       // TODO! Sequence number check for statefull Reader?
       self.make_cache_change(data);
+      self.send_datasample(timestamp);
     } else {
       // is discovery data
       todo!();
     }
     self.notify_cache_change();
+  }
+
+  fn send_datasample(&self, timestamp: Timestamp) {
+    let arc = self
+      .history_cache
+      .get_latest()
+      .unwrap()
+      .data_value
+      .as_ref()
+      .unwrap()
+      .clone();
+    self
+      .datasample_channel
+      .send(DataSample::new_with_arc(timestamp, arc))
+      .expect("Unable to send DataSample from Reader");
   }
 
   // send ack_nack response if necessary. spec page 104
@@ -179,16 +192,17 @@ impl Reader {
 
   // update history cache
   fn make_cache_change(&mut self, data: Data) {
-    let ddsdata = DDSData::new(DefaultKey::random_key(), data.serialized_payload);
+    let ddsdata = DDSData::from(data);
     let pdata = Arc::new(ddsdata);
-    let change = CacheChange::new(self.get_guid(), data.writer_sn, Some(pdata));
+    let change = CacheChange::new(self.get_guid(), pdata.writer_sn, Some(pdata));
     self.history_cache.add_change(change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
   // likely use of mio channel
   fn notify_cache_change(&self) {
-    todo!()
+    println!("No notification atm...")
+    // Do we need some other channel to notify about changes in history_cache?
   }
 }
 
@@ -236,6 +250,28 @@ mod tests {
   use super::*;
   use crate::structure::guid::{GUID, EntityId};
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+  use crate::dds::traits::key::DefaultKey;
+
+  #[test]
+  fn rtpsreader_send_DataSample() {
+    let guid = GUID::new();
+
+    let (send, rec) = mio_channel::channel::<DataSample<DDSData>>();
+    let mut reader = Reader::new(guid, send);
+
+    let mut data = Data::default();
+    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data.writer_id = EntityId::createCustomEntityID([4, 5, 6], 222);
+
+    reader.handle_data_msg(data.clone(), Timestamp::from(time::get_time()));
+
+    let datasample = rec.try_recv().unwrap();
+    assert!(datasample.value.is_ok());
+
+    print!("{:?}", datasample.value.as_ref().unwrap());
+    assert_eq!(datasample.value.as_ref().unwrap().reader_id, data.reader_id);
+    assert_eq!(datasample.value.as_ref().unwrap().writer_id, data.writer_id);
+  }
 
   #[test]
   fn rtpsreader_handle_data() {
@@ -246,7 +282,7 @@ mod tests {
 
     let d = Data::new();
     let d_seqnum = SequenceNumber::from(1);
-    new_reader.handle_data_msg(d.clone());
+    new_reader.handle_data_msg(d.clone(), Timestamp::TIME_INVALID);
 
     let change = CacheChange::new(
       new_reader.get_guid(),
