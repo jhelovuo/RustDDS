@@ -12,7 +12,6 @@ use crate::structure::guid::GUID;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use mio::event::Evented;
 use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
-
 use std::io;
 use std::collections::HashSet;
 
@@ -102,7 +101,7 @@ impl Reader {
   pub fn handle_data_msg(&mut self, data: Data) {
     let user_data = true; // Different action for discovery data?
     if user_data {
-      // TODO! Sequence number check?
+      // TODO! Sequence number check for statefull Reader?
       self.make_cache_change(data);
     } else {
       // is discovery data
@@ -112,15 +111,23 @@ impl Reader {
   }
 
   // send ack_nack response if necessary. spec page 104
-  pub fn handle_heartbeat_msg(&mut self, heartbeat: Heartbeat, final_flag_set: bool) -> bool {
+  // Steteless readers shouldn't react to hearbeat_messages
+  pub fn handle_heartbeat_msg(
+    &mut self,
+    heartbeat: Heartbeat,
+    final_flag_set: bool,
+  ) -> Option<AckNack> {
+    // This is done just for stetefull reader. The hearbeat count is maintained
+    // separately for all mathched writers
     if heartbeat.count <= self.received_hearbeat_count {
       // Already received newer or same
-      return false;
+      return None;
     }
     self.received_hearbeat_count = heartbeat.count;
 
     // remove fragmented changes untill first_sn ???
-    //self.history_cache.remove_changes_up_to(heartbeat.first_sn);
+    // self.history_cache.remove_changes_up_to(heartbeat.first_sn);
+    // self.notify_cache_change();
 
     let last_seq_num: SequenceNumber;
     if let Some(num) = self.history_cache.lock().unwrap().get_seq_num_max() {
@@ -139,17 +146,17 @@ impl Reader {
         reader_sn_state.insert(SequenceNumber::from(seq_num));
       }
 
-      let _response_ack_nack = AckNack {
+      let response_ack_nack = AckNack {
         reader_id: self.get_entity_id(),
         writer_id: heartbeat.writer_id,
         reader_sn_state,
         count: self.sent_ack_nack_count,
       };
-      // Send this AckNack!!!!!!!!!
       self.sent_ack_nack_count += 1;
+      // The messageReceiver has the information on where to send this returned acknack.
+      return Some(response_ack_nack);
     }
-    self.notify_cache_change();
-    need_ack_nack
+    None
   }
 
   pub fn handle_gap_msg(&mut self, gap: Gap) {
@@ -228,7 +235,7 @@ impl Evented for Reader {
     self.registration.reregister(poll, token, interest, opts)
   }
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
-    self.registration.deregister(poll)
+    poll.deregister(&self.registration)
   }
 }
 
@@ -285,7 +292,7 @@ mod tests {
       last_sn: SequenceNumber::from(0),
       count: 1,
     };
-    assert!(!new_reader.handle_heartbeat_msg(hb_new, true)); // should be false, no ack
+    assert!(new_reader.handle_heartbeat_msg(hb_new, true).is_none()); // should be false, no ack
 
     let hb_one = Heartbeat {
       reader_id: new_reader.get_entity_id(),
@@ -294,7 +301,7 @@ mod tests {
       last_sn: SequenceNumber::from(1),
       count: 2,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_one, false)); // Should send an ack_nack
+    assert!(new_reader.handle_heartbeat_msg(hb_one, false).is_some()); // Should send an ack_nack
 
     // After ack_nack, will receive the following change
     let change = CacheChange::new(
@@ -317,7 +324,7 @@ mod tests {
       last_sn: SequenceNumber::from(1),
       count: 2,
     };
-    assert!(!new_reader.handle_heartbeat_msg(hb_one2, false));
+    assert!(new_reader.handle_heartbeat_msg(hb_one2, false).is_none()); // No acknack
 
     let hb_3_1 = Heartbeat {
       reader_id: new_reader.get_entity_id(),
@@ -326,7 +333,7 @@ mod tests {
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
       count: 3,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_3_1, false)); // Should send an ack_nack
+    assert!(new_reader.handle_heartbeat_msg(hb_3_1, false).is_some()); // Should send an ack_nack
 
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(
@@ -355,7 +362,7 @@ mod tests {
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
       count: 4,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_none, false));
+    assert!(new_reader.handle_heartbeat_msg(hb_none, false).is_some()); // Should sen acknack
 
     assert_eq!(new_reader.sent_ack_nack_count, 3);
   }

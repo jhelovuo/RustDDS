@@ -1,6 +1,6 @@
 // TODO: rename this module to e.g. samples
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypeDesc {
   my_name: String, // this is a rather minimal implementation
 } // placeholders

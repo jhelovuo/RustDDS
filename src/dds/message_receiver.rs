@@ -32,8 +32,6 @@ pub struct MessageReceiver {
   pub available_readers: Vec<Reader>,
 
   participant_guid_prefix: GuidPrefix,
-  //submessage_vec: Vec<SubMessage>, //messages should be sent immideately,
-  //because subsequent interpreter submessages might change some receiver parameters
   pub source_version: ProtocolVersion,
   pub source_vendor_id: VendorId,
   pub source_guid_prefix: GuidPrefix,
@@ -56,7 +54,6 @@ impl MessageReceiver {
       available_readers: Vec::new(),
       participant_guid_prefix,
 
-      //submessage_vec: Vec::new(),
       source_version: ProtocolVersion::PROTOCOLVERSION,
       source_vendor_id: VendorId::VENDOR_UNKNOWN,
       source_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
@@ -80,14 +77,12 @@ impl MessageReceiver {
   }
 
   pub fn reset(&mut self) {
-    //self.submessage_vec.clear();
-
     self.source_version = ProtocolVersion::PROTOCOLVERSION;
     self.source_vendor_id = VendorId::VENDOR_UNKNOWN;
     self.source_guid_prefix = GuidPrefix::GUIDPREFIX_UNKNOWN;
     self.dest_guid_prefix = GuidPrefix::GUIDPREFIX_UNKNOWN;
-    //self.unicast_reply_locator_list.clear();
-    //self.multicast_reply_locator_list.clear();
+    self.unicast_reply_locator_list.clear();
+    self.multicast_reply_locator_list.clear();
     self.have_timestamp = false;
     self.timestamp = Time::TIME_INVALID;
 
@@ -96,7 +91,6 @@ impl MessageReceiver {
   }
 
   pub fn add_reader(&mut self, new_reader: Reader) {
-    // or guidPRefix?
     match self
       .available_readers
       .iter()
@@ -174,9 +168,6 @@ impl MessageReceiver {
     // 9.6.2.2
     // The discovery message is just a data message. No need for the
     // messageReceiver to handle it any differently here?
-
-    // The SPDPbuiltinPArticipantReader receives the SPDPdiscoveredParticipantData
-    // from the remove Participants
     unimplemented!();
   }
 
@@ -217,7 +208,7 @@ impl MessageReceiver {
         return; // rule 2
       }
 
-      if !self.is_interpreter_submessage(
+      if !self.handle_interpreter_submessage(
         &submessage_header,
         endian,
         &msg[self.pos..(self.pos + submessage_length)],
@@ -227,10 +218,10 @@ impl MessageReceiver {
           endian,
           &msg[self.pos..(self.pos + submessage_length)],
         ) {
-          Some(T) => T,
+          Some(entity_sm) => entity_sm,
           None => {
-            continue;
-          } // rule 3
+            continue; // rule 3
+          }
         };
 
         let new_submessage = SubMessage {
@@ -238,7 +229,7 @@ impl MessageReceiver {
           submessage: Some(entity_submessage),
           intepreterSubmessage: None,
         };
-        //self.submessage_vec.push(new_submessage);
+
         self.send_submessage(new_submessage.submessage.unwrap());
         self.submessage_count += 1;
       }
@@ -253,6 +244,7 @@ impl MessageReceiver {
       println!("participant guid: {:?}", self.participant_guid_prefix);
       return; // Wrong target received
     }
+
     println!("{:?}", submessage);
     // TODO! If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
     match submessage {
@@ -264,10 +256,13 @@ impl MessageReceiver {
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
         let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
-        let _ack_nack_sent = target_reader.handle_heartbeat_msg(
+        let ack_nack = target_reader.handle_heartbeat_msg(
           heartbeat,
           flags.is_flag_set(1), // final flag!?
         );
+        if let Some(_a) = ack_nack {
+          // Send the response _a to correct place
+        }
       }
       EntitySubmessage::Gap(gap) => {
         let target_reader = self.get_reader(gap.reader_id).unwrap();
@@ -280,7 +275,7 @@ impl MessageReceiver {
     }
   }
 
-  fn is_interpreter_submessage(
+  fn handle_interpreter_submessage(
     &mut self,
     msgheader: &SubmessageHeader,
     context: Endianness,

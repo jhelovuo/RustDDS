@@ -41,10 +41,32 @@ pub struct DataSample<D: Keyed> {
   pub sample_state: SampleState,
   pub view_state: ViewState,
   pub instance_state: InstanceState,
+  // For each instance the middleware internally maintains these counts relative
+  // to each DataReader. The counts capture snapshots if the corresponding
+  // counters at the time the sample was received.
   pub disposed_generation_count: i32,
   pub no_writers_generation_count: i32,
+  // The ranks are are computed based solely on the actual samples in the
+  // ordered collection returned by the read or take.
+  // The sample_rank indicates the number of samples of the same instance that
+  // follow the current one in the collection.
   pub sample_rank: i32,
+  // The generation_rank indicates the difference in generations between the
+  // samples S and the Most Recent Sample of the same instance that appears In
+  // the returned Collection (MRSIC). It counts the number of times the instance
+  // transitioned from not-alive to alive in the time from the reception of the
+  // S to the  reception of MRSIC. The generation rank is computed with:
+  // generation_rank =
+  //(MRSIC.disposed_generation_count + MRSIC.no_writers_generation_count)
+  //- (S.disposed_generation_count + S.no_writers_generation_count)
   pub generation_rank: i32,
+  // The absolute_generation_rank indicates the difference in "generations"
+  // between sample S and the Most Recent Sample of the instance that the
+  // middlware has received (MRS). It counts the number of times the instance
+  // transitioned from not-alive to alive in the time from the reception of the
+  // S to the time when the read or take was called. absolute_generation_rank =
+  //(MRS.disposed_generation_count + MRS.no_writers_generation_count)
+  //- (S.disposed_generation_count + S.no_writers_generation_count)
   pub absolute_generation_rank: i32,
   pub source_timestamp: Timestamp,
   // instance handle

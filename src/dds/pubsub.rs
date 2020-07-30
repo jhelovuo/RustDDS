@@ -1,26 +1,23 @@
 use std::time::Duration;
-use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness, Events};
+use mio::{Ready, Registration, Poll, PollOpt, Events};
 
 use crate::network::constant::*;
-use serde::Deserialize;
 
 use crate::structure::guid::{GUID};
+
 use mio_extras::channel as mio_channel;
-use crate::structure::entity::{Entity, EntityAttributes};
+use crate::structure::entity::{Entity};
 
 use crate::dds::values::result::*;
 use crate::dds::participant::*;
 use crate::dds::topic::*;
-use crate::dds::traits::key::*;
 use crate::dds::qos::*;
 use crate::dds::datasample::*;
 use crate::dds::ddsdata::DDSData;
 use crate::dds::reader::Reader;
 use crate::dds::writer::Writer;
 use crate::dds::datawriter::DataWriter;
-
-use mio::event::Evented;
-use std::io;
+use crate::dds::datareader::DataReader;
 
 use rand::Rng;
 
@@ -197,7 +194,7 @@ impl Subscriber {
             println!("Got notification of reader's new change!!!");
             println!(
               "Should get information on who the reader was???, 
-                      and ask for the change?"
+              and ask for the change?"
             );
           }
           ADD_DATAREADER_TOKEN => {
@@ -238,78 +235,23 @@ impl Subscriber {
     participant_guid: GUID,
     qos: QosPolicies,
   ) -> (Result<DataReader>, Result<Reader>) {
-    let (register_datareader, set_readiness_of_datareader) = Registration::new2();
+    let (_register_datareader, _set_readiness_of_datareader) = Registration::new2();
 
     let history_cache = Arc::new(Mutex::new(HistoryCache::new()));
 
-    let new_datareader = DataReader {
-      //my_subscriber: &self,
-      qos_policy: qos,
-      set_readiness: set_readiness_of_datareader,
-      registration: register_datareader,
-      history_cache: history_cache.clone(),
-      entity_attributes: EntityAttributes {
-        guid: participant_guid,
-      },
-    };
+    let new_datareader = DataReader::new(qos,);
 
     let matching_reader = Reader::new(participant_guid, history_cache);
 
     (Ok(new_datareader), Ok(matching_reader))
   }
+
+  pub fn lookup_datareader(&self, _topic_name: String) -> Option<Vec<&DataReader>> {
+    todo!()
+  }
 }
 
 // -------------------------------------------------------------------
-
-pub struct DataReader {
-  //my_subscriber: &'s Subscriber<'s>,
-  qos_policy: QosPolicies,
-  set_readiness: SetReadiness,
-  registration: Registration,
-  history_cache: Arc<Mutex<HistoryCache>>,
-  entity_attributes: EntityAttributes,
-  // TODO: rest of fields
-}
-
-impl<'s> DataReader {
-  pub fn read<D>(&self, _max_samples: i32) -> Result<Vec<DataSample<D>>>
-  where
-    D: Deserialize<'s> + Keyed,
-  {
-    unimplemented!()
-  }
-
-  pub fn take<D>(&self, _max_samples: i32) -> Result<Vec<DataSample<D>>>
-  where
-    D: Deserialize<'s> + Keyed,
-  {
-    unimplemented!()
-  }
-} // impl
-
-impl Entity for DataReader {
-  fn as_entity(&self) -> &EntityAttributes {
-    &self.entity_attributes
-  }
-}
-
-impl Evented for DataReader {
-  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
-    self.registration.register(poll, token, interest, opts)
-  }
-  fn reregister(
-    &self,
-    poll: &Poll,
-    token: Token,
-    interest: Ready,
-    opts: PollOpt,
-  ) -> io::Result<()> {
-    self.registration.reregister(poll, token, interest, opts)
-  }
-  fn deregister(&self, poll: &Poll) -> io::Result<()> {
-    self.registration.deregister(poll)
-  }
-}
 
 #[cfg(test)]
 mod tests {
@@ -318,9 +260,59 @@ mod tests {
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
   use mio_extras::channel as mio_channel;
+  //use crate::dds::ddsdata::DDSData;
 
   #[test]
-  fn sub_datareader_reader_creation() {}
+  fn sub_datareader_reader_historycache() {
+    // NEeds fixing
+    /*
+    let dp_guid = GUID::new();
+
+    let (_sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
+    let (_sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
+
+    let (sender_add_reader, _receiver_add_reader) = mio_channel::channel::<Reader>();
+    let (sender_remove_reader, _receiver_remove_reader) = mio_channel::channel::<GUID>();
+
+    let mut sub = Subscriber::new(
+      QosPolicies::qos_none(),
+      sender_add_reader,
+      sender_remove_reader,
+      receiver_add_datareader,
+      receiver_remove_datareader,
+      dp_guid,
+    );
+
+    let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
+    sub
+      .poll
+      .register(
+        &receiver_stop,
+        STOP_POLL_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+
+    let (dr, r) = sub.create_datareader(sub.participant_guid, sub.qos.clone());
+    let data_reader = dr.unwrap();
+    let mut reader = r.unwrap();
+
+    let data1 = Data::default();
+    let sn = data1.writer_sn;
+
+    reader.handle_data_msg(data1.clone());
+    let hist_cache = data_reader.history_cache.lock().unwrap();
+    let data2 = hist_cache
+      .get_change(sn)
+      .unwrap()
+      .data_value
+      .clone()
+      .unwrap();
+
+    assert_eq!(DDSData::from(data1), *data2);
+    */
+  }
 
   #[test]
   fn sub_subpoll_test() {
@@ -334,8 +326,8 @@ mod tests {
 
     let mut sub = Subscriber::new(
       QosPolicies::qos_none(),
-      sender_add_reader.clone(),
-      sender_remove_reader.clone(),
+      sender_add_reader,
+      sender_remove_reader,
       receiver_add_datareader,
       receiver_remove_datareader,
       dp_guid,

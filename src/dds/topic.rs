@@ -12,7 +12,7 @@ pub trait TopicDescription {
   fn get_type(&self) -> TypeDesc; // This replaces get_type_name() from spec
   fn get_name(&self) -> &str;
 }
-
+#[derive(Debug)]
 pub struct Topic<'a> {
   my_domainparticipant: &'a DomainParticipant,
   my_name: String,

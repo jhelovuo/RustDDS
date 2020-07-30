@@ -15,17 +15,16 @@ use crate::dds::topic::*;
 use crate::dds::typedesc::*;
 use crate::dds::qos::*;
 use crate::dds::values::result::*;
+use crate::dds::datareader::DataReader;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
 use std::net::Ipv4Addr;
-
-use std::sync::{Arc, Mutex};
 
 pub struct DomainParticipant {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 
-  subs: Vec<Arc<Mutex<Subscriber>>>,
+  sub_threads: Vec<thread::JoinHandle<()>>,
 
   // Adding Readers
   sender_add_reader: mio_channel::Sender<Reader>,
@@ -109,7 +108,7 @@ impl DomainParticipant {
     DomainParticipant {
       entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
-      subs: Vec::new(),
+      sub_threads: Vec::new(),
       // Adding readers
       sender_add_reader,
       sender_remove_reader,
@@ -169,9 +168,9 @@ impl DomainParticipant {
       receiver_remove_datareader,
       self.get_guid(),
     );
-    //self.subs.get_mut().unwrap().push(subscriber);
 
-    thread::spawn(move || subscriber.subscriber_poll());
+    let handle = thread::spawn(move || subscriber.subscriber_poll());
+    self.sub_threads.push(handle);
   }
 
   pub fn created_datareader(&self, _qos: QosPolicies) {
@@ -223,6 +222,15 @@ impl Default for DomainParticipant {
 impl Entity for DomainParticipant {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes
+  }
+}
+
+impl std::fmt::Debug for DomainParticipant {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("DomainParticipant")
+      .field("Guid", &self.get_guid())
+      .field("Sub_threads len", &self.sub_threads.len())
+      .finish()
   }
 }
 

@@ -1,8 +1,10 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
+use crate::dds::traits::key::*;
+
 
 /// Type used to represent the identity of a data-object whose changes in value
 /// are communicated by the RTPS protocol.
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Hash)]
 pub struct InstanceHandle {
   pub entityKey: [u8; 16],
 }
@@ -14,6 +16,8 @@ impl Default for InstanceHandle {
     }
   }
 }
+
+impl Key for InstanceHandle {}
 
 impl<'a, C: Context> Readable<'a, C> for InstanceHandle {
   #[inline]

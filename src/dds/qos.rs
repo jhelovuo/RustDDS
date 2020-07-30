@@ -37,7 +37,7 @@ pub enum QosPolicyId {
   //DurabilityService, // 22
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct QosPolicies {
   durability: Option<policy::Durability>,
   presentation: Option<policy::Presentation>,
@@ -92,13 +92,13 @@ pub mod policy {
     pub value: i32,
   }
   */
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub struct Lifespan {
     pub duration: Duration,
   }
 
   // this is a policy
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub enum Durability {
     Volatile,
     TransientLocal,
@@ -106,7 +106,7 @@ pub mod policy {
     Persistent,
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub struct Presentation {
     pub access_scope: PresentationAccessScope,
     pub coherent_access: bool,
@@ -114,43 +114,43 @@ pub mod policy {
   }
 
   // This is not an independent QoS Policy but a component of Presentation
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub enum PresentationAccessScope {
     Instance,
     Topic,
     Group,
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub struct Deadline {
     pub period: Duration,
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub struct LatencyBudget {
     pub duration: Duration,
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub enum Ownership {
     Shared,
     Exclusive { strength: i32 }, // This also implements OwnershipStrength
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub struct Liveliness {
     kind: LivelinessKind,
     lease_duration: Duration,
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub enum LivelinessKind {
     Automatic,
     ManualByParticipant,
     ManulByTopic,
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub struct TimeBasedFilter {
     pub minimum_separation: Duration,
   }
@@ -160,25 +160,25 @@ pub mod policy {
     pub name: Vec<Vec<u8>>,
   }
   */
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub enum DestinationOrder {
     ByReceptionTimestamp,
     BySourceTimeStamp,
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub enum History {
     KeepLast { depth: i32 },
     KeepAll,
   }
 
-  #[derive(Clone)]
+  #[derive(Clone, Debug)]
   pub struct ResourceLimits {
     max_samples: i32,
     max_instances: i32,
