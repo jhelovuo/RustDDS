@@ -23,7 +23,6 @@ use crate::structure::{
 };
 
 use speedy::{Readable, Endianness};
-use std::sync::Arc;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
@@ -121,23 +120,23 @@ impl MessageReceiver {
   }
 
   // TODO use for test and debugging only
-  fn get_reader_and_history_cache_change<'a>(
+  fn get_reader_and_history_cache_change(
     &self,
     reader_id: EntityId,
     sequence_number: SequenceNumber,
-  ) -> Option<Arc<DDSData>> {
+  ) -> Option<DDSData> {
     //println!("readers: {:?}", self.available_readers);
     let reader = self
       .available_readers
       .iter()
       .find(|r| r.get_entity_id() == reader_id)
       .unwrap();
-    let a: Option<Arc<DDSData>> = reader.get_history_cache_change_data(sequence_number);
+    let a: Option<DDSData> = reader.get_history_cache_change_data(sequence_number);
     Some(a.unwrap().clone())
   }
 
   // TODO use for test and debugging only
-  fn get_reader_and_history_cache_change_object<'a>(
+  fn get_reader_and_history_cache_change_object(
     &self,
     reader_id: EntityId,
     sequence_number: SequenceNumber,
@@ -357,7 +356,6 @@ mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use serde::{Serialize, Deserialize};
   use crate::dds::writer::Writer;
-  use crate::dds::datasample::DataSample;
   use mio_extras::channel as mio_channel;
 
   #[test]
@@ -388,7 +386,7 @@ mod tests {
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
     new_guid.from_prefix(entity);
-    let (send, _rec) = mio_channel::channel::<DataSample<DDSData>>();
+    let (send, _rec) = mio_channel::channel::<DDSData>();
     let new_reader = Reader::new(new_guid, send);
 
     message_receiver.add_reader(new_reader);
@@ -408,7 +406,7 @@ mod tests {
     let a = message_receiver
       .get_reader_and_history_cache_change(new_guid.entityId, *sequenceNumbers.first().unwrap())
       .unwrap();
-    println!("reader history chache DATA: {:?}", a.data().value);
+    println!("reader history chache DATA: {:?}", a.data());
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct ShapeType<'a> {
@@ -418,7 +416,7 @@ mod tests {
       size: i32,
     }
 
-    let copy_vec = (*a.data().value.clone()).to_vec();
+    let copy_vec = (*a.data().clone()).to_vec();
     let deserializedShapeType: ShapeType = deserialize_from_little_endian(copy_vec).unwrap();
     println!("deserialized shapeType: {:?}", deserializedShapeType);
     assert_eq!(deserializedShapeType.color, "RED");
@@ -432,7 +430,7 @@ mod tests {
     // now try to serialize same message
 
     let _serializedPayload = to_little_endian_binary(&deserializedShapeType);
-    let (_dwcc_upload, hccc_download) = mio_channel::channel::<DataSample<DDSData>>();
+    let (_dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
     let mut writerObject = Writer::new(
       GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], 2)),
       hccc_download,

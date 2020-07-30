@@ -230,8 +230,6 @@ mod tests {
   use std::time::Duration;
   use mio::{Ready, PollOpt};
   use crate::structure::entity::Entity;
-  use std::sync::{Arc, Mutex};
-  use crate::dds::datasample::DataSample;
   use crate::dds::ddsdata::DDSData;
   //use std::sync::mpsc;
 
@@ -284,7 +282,7 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-      let (send, _rec) = mio_channel::channel::<DataSample<DDSData>>();
+      let (send, _rec) = mio_channel::channel::<DDSData>();
       let new_reader = Reader::new(new_guid, send);
 
       reader_guids.push(new_reader.get_guid());

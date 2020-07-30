@@ -1,23 +1,17 @@
 use std::time::Duration;
 use serde::Serialize;
 use mio_extras::channel as mio_channel;
-use rand::Rng;
 
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::{GUID, EntityId};
 
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-
-use crate::serialization::cdrSerializer::to_little_endian_binary;
-
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
 use crate::dds::participant::SubscriptionBuiltinTopicData;
-use crate::dds::traits::key::{Keyed, DefaultKey};
-use crate::dds::traits::named::Named;
+use crate::dds::traits::key::Keyed;
 use crate::dds::values::result::{
-  Result, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibelQosStatus,
+  Result, Error, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibelQosStatus,
   PublicationMatchedStatus,
 };
 use crate::dds::traits::dds_entity::DDSEntity;
@@ -31,7 +25,7 @@ pub struct DataWriter<'p> {
   my_topic: &'p Topic<'p>,
   qos_policy: &'p QosPolicies,
   entity_attributes: EntityAttributes,
-  cc_upload: mio_channel::Sender<DataSample<DDSData>>,
+  cc_upload: mio_channel::Sender<DDSData>,
   datasample_cache: DataSampleCache,
 }
 
@@ -39,7 +33,7 @@ impl<'p> DataWriter<'p> {
   pub fn new(
     publisher: &'p Publisher,
     topic: &'p Topic,
-    cc_upload: mio_channel::Sender<DataSample<DDSData>>,
+    cc_upload: mio_channel::Sender<DDSData>,
   ) -> DataWriter<'p> {
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
       publisher.get_participant().get_guid_prefix(),
@@ -68,33 +62,20 @@ impl<'p> DataWriter<'p> {
   // The _with_timestamp version is covered by the optional timestamp.
   pub fn write<D>(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
   where
-    D: Serialize + Keyed + Named,
+    D: Keyed + Serialize,
   {
-    // TODO: handle unwrap
-    let serialized_payload = to_little_endian_binary(&data).unwrap();
-    let serialized_payload = SerializedPayload {
-      representation_identifier: D::identifier(),
-      representation_options: 0,
-      value: serialized_payload,
+    let ddsdata = DDSData::from(data);
+    let data_sample = match source_timestamp {
+      Some(t) => DataSample::new(t, Some(ddsdata.clone())),
+      None => DataSample::new(Timestamp::from(time::get_time()), Some(ddsdata.clone())),
     };
 
-    // implement systematic way to generate keys
-    let mut rng = rand::thread_rng();
-    let ddsdata = if serialized_payload.value.len() > 0 {
-      Some(DDSData::new(DefaultKey::new(rng.gen()), serialized_payload))
-    } else {
-      None
-    };
-    let datasample = match source_timestamp {
-      Some(t) => DataSample::new(t, ddsdata),
-      None => DataSample::new(Timestamp::from(time::get_time()), ddsdata),
-    };
+    let _key = self.datasample_cache.add_data_sample(data_sample)?;
 
-    self
-      .cc_upload
-      .send(datasample)
-      .expect("Unable to send new cache change");
-    Ok(())
+    match self.cc_upload.send(ddsdata) {
+      Ok(_) => Ok(()),
+      _ => Err(Error::OutOfResources),
+    }
   }
 
   // dispose
@@ -191,16 +172,6 @@ mod tests {
         a: 0,
         b: "".to_string(),
       }
-    }
-  }
-
-  impl Named for RandomData {
-    fn name() -> String {
-      "RandomData".to_string()
-    }
-
-    fn identifier() -> u16 {
-      1
     }
   }
 

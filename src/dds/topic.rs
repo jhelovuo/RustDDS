@@ -26,7 +26,7 @@ impl<'a> Topic<'a> {
     my_name: String,
     my_typedesc: TypeDesc,
     my_qos_policies: QosPolicies,
-  ) -> Topic<'a> {
+  ) -> Topic {
     Topic {
       my_domainparticipant,
       my_name,

@@ -145,7 +145,7 @@ impl DomainParticipant {
   // There are no delete function for publisher or subscriber. Deletion is performed by
   // deleting the Publisher or Subscriber object, who upon deletion will notify
   // the DomainParticipant.
-  pub fn create_publisher<'a>(&'a self, qos: QosPolicies) -> Result<Publisher<'a>> {
+  pub fn create_publisher<'a>(&'a self, qos: QosPolicies) -> Result<Publisher> {
     let add_writer_sender = self.add_writer_sender.clone();
 
     Ok(Publisher::new(&self, qos.clone(), qos, add_writer_sender))
@@ -186,7 +186,7 @@ impl DomainParticipant {
     name: &str,
     type_desc: TypeDesc,
     qos: QosPolicies,
-  ) -> Result<Topic<'a>> {
+  ) -> Result<Topic> {
     let topic = Topic::new(&self, name.to_string(), type_desc, qos);
     Ok(topic)
 
@@ -243,7 +243,7 @@ mod tests {
   // TODO: improve basic test when more or the structure is known
   #[test]
   fn dp_basic_domain_participant() {
-    let _dp = DomainParticipant::new();
+    // let _dp = DomainParticipant::new();
 
     let sender = UDPSender::new(11401);
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::structure::guid::GUID;
 use crate::structure::instance_handle::InstanceHandle;
 use crate::structure::sequence_number::SequenceNumber;
@@ -18,7 +16,7 @@ pub struct CacheChange {
   pub writer_guid: GUID,
   pub instance_handle: InstanceHandle,
   pub sequence_number: SequenceNumber,
-  pub data_value: Option<Arc<DDSData>>,
+  pub data_value: Option<DDSData>,
   //pub inline_qos: ParameterList,
 }
 
@@ -26,7 +24,7 @@ impl PartialEq for CacheChange {
   fn eq(&self, other: &Self) -> bool {
     let dataeq = match &self.data_value {
       Some(d1) => match &other.data_value {
-        Some(d2) => **d1 == **d2,
+        Some(d2) => d1 == d2,
         None => false,
       },
       None => other.data_value.is_none(),
@@ -44,7 +42,7 @@ impl CacheChange {
   pub fn new(
     writer_guid: GUID,
     sequence_number: SequenceNumber,
-    data_value: Option<Arc<DDSData>>,
+    data_value: Option<DDSData>,
   ) -> CacheChange {
     CacheChange {
       kind: ChangeKind::ALIVE,

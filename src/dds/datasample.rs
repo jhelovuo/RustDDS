@@ -5,7 +5,7 @@ use crate::structure::time::Timestamp;
 
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SampleState {
   Read,
   NotRead,
@@ -13,7 +13,7 @@ pub enum SampleState {
 
 /// DDS spec 2.2.2.5.1.8
 ///
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ViewState {
   ///  indicates that either this is the first time that the DataReader has ever
   /// accessed samples of that instance, or else that the DataReader has accessed previous
@@ -25,7 +25,7 @@ pub enum ViewState {
   NotNew,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InstanceState {
   Alive,
   /// A DataWriter has actively disposed this instance
@@ -36,7 +36,7 @@ pub enum InstanceState {
 
 /// DDS spec 2.2.2.5.4
 /// This combines SampleInfo and Data
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataSample<D: Keyed> {
   pub sample_state: SampleState,
   pub view_state: ViewState,

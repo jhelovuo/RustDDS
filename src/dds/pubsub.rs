@@ -12,7 +12,6 @@ use crate::dds::values::result::*;
 use crate::dds::participant::*;
 use crate::dds::topic::*;
 use crate::dds::qos::*;
-use crate::dds::datasample::*;
 use crate::dds::ddsdata::DDSData;
 use crate::dds::reader::Reader;
 use crate::dds::writer::Writer;
@@ -48,7 +47,7 @@ impl<'a> Publisher<'a> {
   }
 
   pub fn create_datawriter(&'a self, topic: &'a Topic, _qos: QosPolicies) -> Result<DataWriter> {
-    let (dwcc_upload, hccc_download) = mio_channel::channel::<DataSample<DDSData>>();
+    let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
     // TODO: generate entity id's in a more systematic way
     let mut rng = rand::thread_rng();
@@ -224,7 +223,7 @@ impl Subscriber {
   ) -> (Result<DataReader>, Result<Reader>) {
     let new_datareader = DataReader::new(qos);
 
-    let (send, rec) = mio_channel::channel::<DataSample<DDSData>>();
+    let (send, rec) = mio_channel::channel::<DDSData>();
     let matching_reader = Reader::new(participant_guid, send);
 
     self
@@ -304,6 +303,9 @@ mod tests {
       sender_stop.send(0).unwrap();
     });
     sub.subscriber_poll();
-    child.join().unwrap();
+    
+    match child.join() {
+      _ => {}
+    }
   }
 }

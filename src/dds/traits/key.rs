@@ -2,7 +2,7 @@
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
 use std::hash::Hash;
 use rand::Rng;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 pub trait Keyed
 where
@@ -10,7 +10,6 @@ where
 {
   type K; // key type
   fn get_key(&self) -> &Self::K;
-
   fn default() -> Self;
 }
 
@@ -25,7 +24,7 @@ pub struct BuiltInTopicKey {
   value: [i32; 3],
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, Clone)]
 pub struct DefaultKey {
   value: i64,
 }

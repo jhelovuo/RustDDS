@@ -19,12 +19,10 @@ use crate::{
 use speedy::{Writable, Endianness};
 use time::Timespec;
 use time::get_time;
-use std::sync::Arc;
 
 use mio_extras::channel as mio_channel;
 use mio::Token;
 
-use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
@@ -43,14 +41,11 @@ pub struct Writer {
   heartbeatMessageCounter: i32,
 
   entity_attributes: EntityAttributes,
-  cache_change_receiver: mio_channel::Receiver<DataSample<DDSData>>,
+  cache_change_receiver: mio_channel::Receiver<DDSData>,
 }
 
 impl Writer {
-  pub fn new(
-    guid: GUID,
-    cache_change_receiver: mio_channel::Receiver<DataSample<DDSData>>,
-  ) -> Writer {
+  pub fn new(guid: GUID, cache_change_receiver: mio_channel::Receiver<DDSData>) -> Writer {
     let entity_attributes = EntityAttributes::new(guid);
     Writer {
       history_cache: HistoryCache::new(),
@@ -71,21 +66,18 @@ impl Writer {
     Token(id)
   }
 
-  pub fn cache_change_receiver(&self) -> &mio_channel::Receiver<DataSample<DDSData>> {
+  pub fn cache_change_receiver(&self) -> &mio_channel::Receiver<DDSData> {
     &self.cache_change_receiver
   }
 
-  pub fn insert_to_history_cache(&mut self, datasample: DataSample<DDSData>) {
+  pub fn insert_to_history_cache(&mut self, data: DDSData) {
     let seq_num_max = self
       .history_cache
       .get_seq_num_max()
       .unwrap_or(&SequenceNumber::from(0))
       .clone();
 
-    let datavalue = match datasample.value {
-      Ok(val) => Some(val),
-      _ => None,
-    };
+    let datavalue = Some(data);
 
     let new_cache_change = CacheChange::new(self.as_entity().guid, seq_num_max, datavalue);
     self.history_cache.add_change(new_cache_change);
@@ -188,7 +180,7 @@ impl Writer {
       LittleEndian::read_u16(&representationIdentifierBytes);
     //The current version of the protocol (2.3) does not use the representation_options: The sender shall set the representation_options to zero.
     data_message.serialized_payload.representation_options = 0u16;
-    data_message.serialized_payload.value = change.data_value.unwrap().data().value.clone();
+    data_message.serialized_payload.value = (*change.data_value.unwrap().data()).clone();
 
     let size = data_message
       .write_to_vec_with_ctx(self.endianness)
@@ -290,10 +282,7 @@ impl Writer {
   }
 
   // TODO Used for test/debugging purposes
-  pub fn get_history_cache_change_data(
-    &self,
-    sequence_number: SequenceNumber,
-  ) -> Option<Arc<DDSData>> {
+  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
     println!(
       "history cache !!!! {:?}",
       self.history_cache.get_change(sequence_number).unwrap()
