@@ -23,34 +23,20 @@ pub enum EntitySubmessage {
   NackFrag(NackFrag),
 }
 
-impl EntitySubmessage{
-  pub fn get_data_submessage(&self) -> Option<&Data>{
+impl EntitySubmessage {
+  pub fn get_data_submessage(&self) -> Option<&Data> {
     match self {
-      EntitySubmessage::Data(data,_) => {
-        Some(data)
-      }
-      _ => {
-        None
-      }
+      EntitySubmessage::Data(data, _) => Some(data),
+      _ => None,
     }
   }
-  pub fn get_submessage_flag(&self) -> Option<&SubmessageFlag>{
+  pub fn get_submessage_flag(&self) -> Option<&SubmessageFlag> {
     match self {
-      EntitySubmessage::AckNack(_,flag) => {
-        Some(flag)
-      }
-      EntitySubmessage::Data(_,flag) => {
-        Some(flag)
-      }
-      EntitySubmessage::DataFrag(_,flag) => {
-        Some(flag)
-      }
-      EntitySubmessage::Heartbeat(_,flag) => {
-        Some(flag)
-      }
-      _ => {
-        None
-      }
+      EntitySubmessage::AckNack(_, flag) => Some(flag),
+      EntitySubmessage::Data(_, flag) => Some(flag),
+      EntitySubmessage::DataFrag(_, flag) => Some(flag),
+      EntitySubmessage::Heartbeat(_, flag) => Some(flag),
+      _ => None,
     }
   }
 }

@@ -245,12 +245,9 @@ impl MessageReceiver {
       return; // Wrong target received
     }
 
-    println!("{:?}", submessage);
     // TODO! If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
     match submessage {
       EntitySubmessage::Data(data, _) => {
-        println!("datamessage target reader: {:?}", data.reader_id);
-        println!("{:?}", data);
         let target_reader = self.get_reader(data.reader_id).unwrap();
         target_reader.handle_data_msg(data);
       }
@@ -392,7 +389,8 @@ mod tests {
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
     new_guid.from_prefix(entity);
-    let new_reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
+    let (send, _rec) = mio_channel::channel::<DataSample<DDSData>>();
+    let new_reader = Reader::new(new_guid, send);
 
     message_receiver.add_reader(new_reader);
 

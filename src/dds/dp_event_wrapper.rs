@@ -231,7 +231,8 @@ mod tests {
   use mio::{Ready, PollOpt};
   use crate::structure::entity::Entity;
   use std::sync::{Arc, Mutex};
-  use crate::structure::history_cache::HistoryCache;
+  use crate::dds::datasample::DataSample;
+  use crate::dds::ddsdata::DDSData;
   //use std::sync::mpsc;
 
   #[test]
@@ -283,8 +284,8 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-
-      let new_reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
+      let (send, _rec) = mio_channel::channel::<DataSample<DDSData>>();
+      let new_reader = Reader::new(new_guid, send);
 
       reader_guids.push(new_reader.get_guid());
       println!("\nSent reader number {}: {:?}\n", i, new_reader);

@@ -1,7 +1,7 @@
+mod datareader;
 pub mod datasample;
 mod datasample_cache;
 mod datawriter;
-mod datareader;
 pub mod ddsdata;
 mod dp_event_wrapper;
 mod message_receiver;

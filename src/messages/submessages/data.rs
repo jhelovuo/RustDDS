@@ -56,8 +56,8 @@ impl Default for Data {
   }
 }
 
-impl <'a, C: Context> Readable<'a, C> for Data{
-  fn read_from< R: Reader< 'a, C > >( reader: &mut R ) -> Result< Self, C::Error > {
+impl<'a, C: Context> Readable<'a, C> for Data {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let mut dataMessage = Data::default();
     //ExtraFlags This version of the protocol (2.3) should set all the bits in the extraFlags to zero
     //just ignore these
@@ -72,16 +72,11 @@ impl <'a, C: Context> Readable<'a, C> for Data{
 
     dataMessage.serialized_payload = reader.read_value()?;
     Ok(dataMessage)
-
-
   }
 }
 
-impl <C: Context> Writable<C> for Data{
-  fn write_to<'a, T: ?Sized + Writer< C>>(
-    &'a self,
-    writer: &mut T
-) -> Result<(), C::Error>{
+impl<C: Context> Writable<C> for Data {
+  fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
     //This version of the protocol (2.3) should set all the bits in the extraFlags to zero
     writer.write_u16(0)?;
     //The octetsToInlineQos field contains the number of octets starting from the first octet immediately following
@@ -90,24 +85,22 @@ impl <C: Context> Writable<C> for Data{
     //the inlineQos.
 
     // TODO INLINE QOS ??
-    
-    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0{
+
+    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0 {
       println!("self.inline_qos {:?}", self.inline_qos);
       todo!()
-    }else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() ==  0{
+    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() == 0 {
       writer.write_u16(16)?;
-    }
-    else if self.inline_qos.is_none(){
+    } else if self.inline_qos.is_none() {
       writer.write_u16(16)?;
     }
     writer.write_value(&self.reader_id)?;
     writer.write_value(&self.writer_id)?;
     writer.write_value(&self.writer_sn)?;
-    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0{
+    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0 {
       writer.write_value(&self.inline_qos)?;
     }
     writer.write_value(&self.serialized_payload)?;
     Ok(())
-}
- 
+  }
 }

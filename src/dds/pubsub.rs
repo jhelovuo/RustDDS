@@ -198,13 +198,13 @@ impl Subscriber {
             );
           }
           ADD_DATAREADER_TOKEN => {
-            let (dr, r) = self.create_datareader(self.participant_guid, self.qos.clone());
+            let (dr, r, rec) = self.create_datareader(self.participant_guid, self.qos.clone());
 
             let reader = r.unwrap();
             self
               .poll
               .register(
-                &reader,
+                &rec,
                 READER_CHANGE_TOKEN,
                 Ready::readable(),
                 PollOpt::edge(),
@@ -234,16 +234,21 @@ impl Subscriber {
     &self,
     participant_guid: GUID,
     qos: QosPolicies,
-  ) -> (Result<DataReader>, Result<Reader>) {
+  ) -> (
+    Result<DataReader>,
+    Result<Reader>,
+    mio_channel::Receiver<DataSample<DDSData>>,
+  ) {
     let (_register_datareader, _set_readiness_of_datareader) = Registration::new2();
 
     let history_cache = Arc::new(Mutex::new(HistoryCache::new()));
 
-    let new_datareader = DataReader::new(qos,);
+    let new_datareader = DataReader::new(qos);
 
-    let matching_reader = Reader::new(participant_guid, history_cache);
+    let (send, rec) = mio_channel::channel::<DataSample<DDSData>>();
+    let matching_reader = Reader::new(participant_guid, send);
 
-    (Ok(new_datareader), Ok(matching_reader))
+    (Ok(new_datareader), Ok(matching_reader), rec)
   }
 
   pub fn lookup_datareader(&self, _topic_name: String) -> Option<Vec<&DataReader>> {
@@ -260,59 +265,8 @@ mod tests {
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
   use mio_extras::channel as mio_channel;
-  //use crate::dds::ddsdata::DDSData;
-
-  #[test]
-  fn sub_datareader_reader_historycache() {
-    // NEeds fixing
-    /*
-    let dp_guid = GUID::new();
-
-    let (_sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
-    let (_sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
-
-    let (sender_add_reader, _receiver_add_reader) = mio_channel::channel::<Reader>();
-    let (sender_remove_reader, _receiver_remove_reader) = mio_channel::channel::<GUID>();
-
-    let mut sub = Subscriber::new(
-      QosPolicies::qos_none(),
-      sender_add_reader,
-      sender_remove_reader,
-      receiver_add_datareader,
-      receiver_remove_datareader,
-      dp_guid,
-    );
-
-    let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
-    sub
-      .poll
-      .register(
-        &receiver_stop,
-        STOP_POLL_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
-
-    let (dr, r) = sub.create_datareader(sub.participant_guid, sub.qos.clone());
-    let data_reader = dr.unwrap();
-    let mut reader = r.unwrap();
-
-    let data1 = Data::default();
-    let sn = data1.writer_sn;
-
-    reader.handle_data_msg(data1.clone());
-    let hist_cache = data_reader.history_cache.lock().unwrap();
-    let data2 = hist_cache
-      .get_change(sn)
-      .unwrap()
-      .data_value
-      .clone()
-      .unwrap();
-
-    assert_eq!(DDSData::from(data1), *data2);
-    */
-  }
+  use crate::dds::datasample::DataSample;
+  use crate::dds::ddsdata::DDSData;
 
   #[test]
   fn sub_subpoll_test() {
@@ -344,13 +298,13 @@ mod tests {
       )
       .unwrap();
 
-    let (dr, r) = sub.create_datareader(sub.participant_guid, sub.qos.clone());
+    let (dr, r, rec) = sub.create_datareader(sub.participant_guid, sub.qos.clone());
 
     let mut reader = r.unwrap();
     sub
       .poll
       .register(
-        &reader,
+        &rec,
         READER_CHANGE_TOKEN,
         Ready::readable(),
         PollOpt::edge(),

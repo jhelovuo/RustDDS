@@ -1,6 +1,4 @@
-
 use crate::messages::submessages::data::Data;
-
 
 use serde::Deserialize;
 
@@ -25,9 +23,7 @@ pub struct DataReader {
 }
 
 impl<'s> DataReader {
-  pub fn new(
-    qos: QosPolicies, 
-  ) -> Self {
+  pub fn new(qos: QosPolicies) -> Self {
     Self {
       qos_policy: qos,
       entity_attributes: EntityAttributes::new(GUID::new()), // todo
@@ -80,7 +76,6 @@ impl<'s> DataReader {
     todo!()
   }
 } // impl
-
 
 impl Entity for DataReader {
   fn as_entity(&self) -> &EntityAttributes {

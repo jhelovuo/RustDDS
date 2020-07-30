@@ -25,7 +25,7 @@ impl CDR_serializer {
   fn calculate_padding_need_and_write_padding(&mut self, typeOctetAlignment: u8) {
     let modulo: u32 = self.buffer.len() as u32 % typeOctetAlignment as u32;
     if modulo != 0 {
-      let paddingNeed: u32 = typeOctetAlignment as u32 - modulo; 
+      let paddingNeed: u32 = typeOctetAlignment as u32 - modulo;
       println!("need padding! {}", paddingNeed);
       self.write_pad(paddingNeed);
     } else {

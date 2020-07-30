@@ -1,7 +1,6 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use crate::dds::traits::key::*;
 
-
 /// Type used to represent the identity of a data-object whose changes in value
 /// are communicated by the RTPS protocol.
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Hash)]

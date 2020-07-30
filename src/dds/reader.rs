@@ -2,8 +2,10 @@ use crate::structure::entity::Entity;
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::structure::history_cache::HistoryCache;
 use crate::messages::submessages::data::Data;
-use crate::dds::ddsdata::DDSData;
+
 use crate::dds::traits::key::DefaultKey;
+use crate::dds::datasample::DataSample;
+use crate::dds::ddsdata::DDSData;
 use crate::messages::submessages::ack_nack::AckNack;
 use crate::messages::submessages::heartbeat::Heartbeat;
 use crate::messages::submessages::gap::Gap;
@@ -12,21 +14,22 @@ use crate::structure::guid::GUID;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use mio::event::Evented;
 use mio::{Ready, Registration, Poll, PollOpt, Token, SetReadiness};
+use mio_extras::channel as mio_channel;
+use std::fmt;
+
 use std::io;
 use std::collections::HashSet;
 
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 
-#[derive(Debug)]
 pub struct Reader {
   // Do we need to access information in messageReceiver?? Like reply locators.
   //my_message_receiver: Option<&'mr MessageReceiver>,
-  registration: Registration,
-  set_readiness: SetReadiness,
+  datasample_channel: mio_channel::Sender<DataSample<DDSData>>,
 
-  history_cache: Arc<Mutex<HistoryCache>>, // atm done with the assumption, that only one writers cache is monitored
+  history_cache: HistoryCache,
   entity_attributes: EntityAttributes,
   pub enpoint_attributes: EndpointAttributes,
 
@@ -38,13 +41,10 @@ pub struct Reader {
 } // placeholder
 
 impl Reader {
-  pub fn new(guid: GUID, history_cache: Arc<Mutex<HistoryCache>>) -> Reader {
-    let (register_reader, set_readiness_of_reader) = Registration::new2();
-
+  pub fn new(guid: GUID, datasample_channel: mio_channel::Sender<DataSample<DDSData>>) -> Reader {
     Reader {
-      set_readiness: set_readiness_of_reader,
-      registration: register_reader,
-      history_cache,
+      datasample_channel,
+      history_cache: HistoryCache::new(),
       entity_attributes: EntityAttributes { guid },
       enpoint_attributes: EndpointAttributes::default(),
 
@@ -64,37 +64,34 @@ impl Reader {
   ) -> Option<Arc<DDSData>> {
     println!(
       "history cache !!!! {:?}",
-      self
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(sequence_number)
-        .unwrap()
+      self.history_cache.get_change(sequence_number).unwrap()
     );
     self
       .history_cache
-      .lock()
-      .unwrap()
       .get_change(sequence_number)
       .unwrap()
       .data_value
       .clone()
   }
-  
-  
+
   // Used for test/debugging purposes
-  pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> CacheChange{
-    println!("history cache !!!! {:?}",self.history_cache.lock().unwrap().get_change(sequence_number).unwrap());
-    self.history_cache.lock().unwrap().get_change(sequence_number).unwrap().clone()
+  pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> CacheChange {
+    println!(
+      "history cache !!!! {:?}",
+      self.history_cache.get_change(sequence_number).unwrap()
+    );
+    self
+      .history_cache
+      .get_change(sequence_number)
+      .unwrap()
+      .clone()
   }
-  
 
   // TODO Used for test/debugging purposes
   pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
-    let history_cache = self.history_cache.lock().unwrap();
-    let start = history_cache.get_seq_num_min();
-    let end = history_cache.get_seq_num_max();
-    return vec![start.unwrap().clone(), end.unwrap().clone()];
+    let start = self.history_cache.get_seq_num_min().unwrap();
+    let end = self.history_cache.get_seq_num_max().unwrap();
+    return vec![*start, *end];
   }
 
   // handles regular data message and updates history cache
@@ -130,7 +127,7 @@ impl Reader {
     // self.notify_cache_change();
 
     let last_seq_num: SequenceNumber;
-    if let Some(num) = self.history_cache.lock().unwrap().get_seq_num_max() {
+    if let Some(num) = self.history_cache.get_seq_num_max() {
       last_seq_num = *num;
     } else {
       last_seq_num = SequenceNumber::from(0);
@@ -174,7 +171,7 @@ impl Reader {
 
     //Remove irrelevant?
     for seqnum in irrelevant_changes_set {
-      self.history_cache.lock().unwrap().remove_change(seqnum);
+      self.history_cache.remove_change(seqnum);
     }
 
     self.notify_cache_change();
@@ -185,14 +182,13 @@ impl Reader {
     let ddsdata = DDSData::new(DefaultKey::random_key(), data.serialized_payload);
     let pdata = Arc::new(ddsdata);
     let change = CacheChange::new(self.get_guid(), data.writer_sn, Some(pdata));
-    self.history_cache.lock().unwrap().add_change(change);
+    self.history_cache.add_change(change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
   // likely use of mio channel
   fn notify_cache_change(&self) {
-    println!("Trying to send a notification of cache change...");
-    self.set_readiness.set_readiness(Ready::readable()).unwrap()
+    todo!()
   }
 }
 
@@ -221,21 +217,17 @@ impl PartialEq for Reader {
   }
 }
 
-impl Evented for Reader {
-  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
-    self.registration.register(poll, token, interest, opts)
-  }
-  fn reregister(
-    &self,
-    poll: &Poll,
-    token: Token,
-    interest: Ready,
-    opts: PollOpt,
-  ) -> io::Result<()> {
-    self.registration.reregister(poll, token, interest, opts)
-  }
-  fn deregister(&self, poll: &Poll) -> io::Result<()> {
-    poll.deregister(&self.registration)
+impl fmt::Debug for Reader {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.debug_struct("Reader")
+      .field("datasample_channel", &"can't print".to_string())
+      .field("history_cache", &self.history_cache)
+      .field("entity_attributes", &self.entity_attributes)
+      .field("enpoint_attributes", &self.enpoint_attributes)
+      .field("heartbeat_response_delay", &self.heartbeat_response_delay)
+      .field("sent_ack_nack_count", &self.sent_ack_nack_count)
+      .field("received_hearbeat_count", &self.received_hearbeat_count)
+      .finish()
   }
 }
 
@@ -249,7 +241,8 @@ mod tests {
   fn rtpsreader_handle_data() {
     let new_guid = GUID::new();
 
-    let mut new_reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
+    let (send, _rec) = mio_channel::channel::<DataSample<DDSData>>();
+    let mut new_reader = Reader::new(new_guid, send);
 
     let d = Data::new();
     let d_seqnum = SequenceNumber::from(1);
@@ -262,12 +255,7 @@ mod tests {
     );
 
     assert_eq!(
-      new_reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(d_seqnum)
-        .unwrap(),
+      new_reader.history_cache.get_change(d_seqnum).unwrap(),
       &change
     );
   }
@@ -276,7 +264,8 @@ mod tests {
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
 
-    let mut new_reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
+    let (send, _rec) = mio_channel::channel::<DataSample<DDSData>>();
+    let mut new_reader = Reader::new(new_guid, send);
 
     let writer_id = EntityId::default();
     let d = Arc::new(DDSData::new(
@@ -309,11 +298,7 @@ mod tests {
       SequenceNumber::from(1),
       Some(d.clone()),
     );
-    new_reader
-      .history_cache
-      .lock()
-      .unwrap()
-      .add_change(change.clone());
+    new_reader.history_cache.add_change(change.clone());
     changes.push(change);
 
     // Duplicate
@@ -341,18 +326,10 @@ mod tests {
       SequenceNumber::from(2),
       Some(d.clone()),
     );
-    new_reader
-      .history_cache
-      .lock()
-      .unwrap()
-      .add_change(change.clone());
+    new_reader.history_cache.add_change(change.clone());
     changes.push(change);
     let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), Some(d));
-    new_reader
-      .history_cache
-      .lock()
-      .unwrap()
-      .add_change(change.clone());
+    new_reader.history_cache.add_change(change.clone());
     changes.push(change);
 
     let hb_none = Heartbeat {
@@ -370,8 +347,8 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-
-    let mut reader = Reader::new(new_guid, Arc::new(Mutex::new(HistoryCache::new())));
+    let (send, _rec) = mio_channel::channel::<DataSample<DDSData>>();
+    let mut reader = Reader::new(new_guid, send);
 
     let n: i64 = 10;
     let d = Arc::new(DDSData::new(
@@ -382,11 +359,7 @@ mod tests {
 
     for i in 0..n {
       let change = CacheChange::new(reader.get_guid(), SequenceNumber::from(i), Some(d.clone()));
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .add_change(change.clone());
+      reader.history_cache.add_change(change.clone());
       changes.push(change);
     }
 
@@ -407,83 +380,43 @@ mod tests {
     reader.handle_gap_msg(gap);
 
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(0)),
+      reader.history_cache.get_change(SequenceNumber::from(0)),
       Some(&changes[0])
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(1)),
+      reader.history_cache.get_change(SequenceNumber::from(1)),
       None
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(2)),
+      reader.history_cache.get_change(SequenceNumber::from(2)),
       None
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(3)),
+      reader.history_cache.get_change(SequenceNumber::from(3)),
       None
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(4)),
+      reader.history_cache.get_change(SequenceNumber::from(4)),
       Some(&changes[4])
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(5)),
+      reader.history_cache.get_change(SequenceNumber::from(5)),
       None
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(6)),
+      reader.history_cache.get_change(SequenceNumber::from(6)),
       Some(&changes[6])
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(7)),
+      reader.history_cache.get_change(SequenceNumber::from(7)),
       None
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(8)),
+      reader.history_cache.get_change(SequenceNumber::from(8)),
       Some(&changes[8])
     );
     assert_eq!(
-      reader
-        .history_cache
-        .lock()
-        .unwrap()
-        .get_change(SequenceNumber::from(9)),
+      reader.history_cache.get_change(SequenceNumber::from(9)),
       Some(&changes[9])
     );
   }

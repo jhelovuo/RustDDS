@@ -114,7 +114,9 @@ mod tests {
       .expect("Failed to join multicast.");
 
     // sender.send_to_all(&data, &mcaddr);
-    sender.send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002).expect("Failed to send multicast");
+    sender
+      .send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002)
+      .expect("Failed to send multicast");
 
     thread::sleep(time::Duration::from_secs(5));
 
