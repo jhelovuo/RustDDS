@@ -22,7 +22,7 @@ use crate::structure::cache_change::CacheChange;
 pub struct Reader {
   // Do we need to access information in messageReceiver?? Like reply locators.
   //my_message_receiver: Option<&'mr MessageReceiver>,
-  datasample_channel: mio_channel::Sender<DDSData>,
+  ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>,
 
   history_cache: HistoryCache,
   entity_attributes: EntityAttributes,
@@ -36,9 +36,9 @@ pub struct Reader {
 } // placeholder
 
 impl Reader {
-  pub fn new(guid: GUID, datasample_channel: mio_channel::Sender<DDSData>) -> Reader {
+  pub fn new(guid: GUID, ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>) -> Reader {
     Reader {
-      datasample_channel,
+      ddsdata_channel,
       history_cache: HistoryCache::new(),
       entity_attributes: EntityAttributes { guid },
       enpoint_attributes: EndpointAttributes::default(),
@@ -100,8 +100,8 @@ impl Reader {
     self.notify_cache_change();
   }
 
-  fn send_datasample(&self, _timestamp: Timestamp) {
-    let arc = self
+  fn send_datasample(&self, timestamp: Timestamp) {
+    let ddsdata = self
       .history_cache
       .get_latest()
       .unwrap()
@@ -110,8 +110,8 @@ impl Reader {
       .unwrap()
       .clone();
     self
-      .datasample_channel
-      .send(arc)
+      .ddsdata_channel
+      .send((ddsdata, timestamp))
       .expect("Unable to send DataSample from Reader");
   }
 
@@ -251,7 +251,7 @@ mod tests {
   fn rtpsreader_send_ddsdata() {
     let guid = GUID::new();
 
-    let (send, rec) = mio_channel::channel::<DDSData>();
+    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let mut reader = Reader::new(guid, send);
 
     let mut data = Data::default();
@@ -260,7 +260,7 @@ mod tests {
 
     reader.handle_data_msg(data.clone(), Timestamp::from(time::get_time()));
 
-    let datasample = rec.try_recv().unwrap();
+    let (datasample, _) = rec.try_recv().unwrap();
     assert_eq!(*datasample.data(), data.serialized_payload.value);
 
     print!("{:?}", *datasample.data());
@@ -272,14 +272,14 @@ mod tests {
   fn rtpsreader_handle_data() {
     let new_guid = GUID::new();
 
-    let (send, rec) = mio_channel::channel::<DDSData>();
+    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let mut new_reader = Reader::new(new_guid, send);
 
     let d = Data::new();
     let d_seqnum = SequenceNumber::from(1);
     new_reader.handle_data_msg(d.clone(), Timestamp::TIME_INVALID);
 
-    let rec_data = rec.try_recv().unwrap();
+    let (rec_data, _) = rec.try_recv().unwrap();
     let change = CacheChange::new(new_reader.get_guid(), d_seqnum, Some(rec_data));
 
     assert_eq!(
@@ -292,7 +292,7 @@ mod tests {
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
 
-    let (send, _rec) = mio_channel::channel::<DDSData>();
+    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let mut new_reader = Reader::new(new_guid, send);
 
     let writer_id = EntityId::default();
@@ -372,7 +372,7 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let (send, _rec) = mio_channel::channel::<DDSData>();
+    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let mut reader = Reader::new(new_guid, send);
 
     let n: i64 = 10;

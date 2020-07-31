@@ -4,6 +4,7 @@ use mio::{Ready, Poll, PollOpt, Events};
 use crate::network::constant::*;
 
 use crate::structure::guid::{GUID};
+use crate::structure::time::Timestamp;
 
 use mio_extras::channel as mio_channel;
 use crate::structure::entity::{Entity};
@@ -20,6 +21,8 @@ use crate::dds::datareader::DataReader;
 
 use rand::Rng;
 use crate::structure::guid::EntityId;
+
+use std::collections::HashMap;
 
 // -------------------------------------------------------------------
 
@@ -123,6 +126,8 @@ pub struct Subscriber {
   sender_remove_reader: mio_channel::Sender<GUID>,
 
   receiver_remove_datareader: mio_channel::Receiver<GUID>,
+
+  reader_channel_ends: HashMap<EntityId, mio_channel::Receiver<(DDSData, Timestamp)>>,
   participant_guid: GUID,
 }
 
@@ -166,6 +171,7 @@ impl Subscriber {
       sender_add_reader,
       sender_remove_reader,
       receiver_remove_datareader,
+      reader_channel_ends: HashMap::new(),
       participant_guid,
     }
   }
@@ -223,7 +229,7 @@ impl Subscriber {
   ) -> (Result<DataReader>, Result<Reader>) {
     let new_datareader = DataReader::new(qos);
 
-    let (send, rec) = mio_channel::channel::<DDSData>();
+    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let matching_reader = Reader::new(participant_guid, send);
 
     self
@@ -236,6 +242,9 @@ impl Subscriber {
       )
       .expect("Unable to register new Reader for Subscribers poll.");
 
+    self
+      .reader_channel_ends
+      .insert(matching_reader.get_entity_id(), rec);
     (Ok(new_datareader), Ok(matching_reader))
   }
 
@@ -303,7 +312,7 @@ mod tests {
       sender_stop.send(0).unwrap();
     });
     sub.subscriber_poll();
-    
+
     match child.join() {
       _ => {}
     }

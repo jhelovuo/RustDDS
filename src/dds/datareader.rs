@@ -3,6 +3,7 @@ use serde::Deserialize;
 use crate::structure::instance_handle::InstanceHandle;
 
 use crate::structure::entity::{Entity, EntityAttributes};
+use crate::structure::time::Timestamp;
 
 use crate::dds::values::result::*;
 use crate::dds::traits::key::*;
@@ -30,8 +31,9 @@ impl<'s> DataReader {
     }
   }
 
-  pub fn add_datasample(&self, _datasample:  DataSample<DDSData>) -> Result<()> {
-    Ok(())
+  pub fn add_datasample(&mut self, ddsdata: DDSData, time: Timestamp) -> Result<DefaultKey> {
+    let data_sample = DataSample::new(time, Some(ddsdata));
+    self.datasample_cache.add_data_sample(data_sample)
   }
 
   pub fn read<D>(
@@ -81,4 +83,3 @@ impl Entity for DataReader {
     &self.entity_attributes
   }
 }
-
