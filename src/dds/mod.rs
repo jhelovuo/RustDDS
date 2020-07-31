@@ -15,3 +15,4 @@ pub mod traits;
 pub mod typedesc;
 pub mod values;
 pub mod rtps_reader_proxy;
+pub mod rtps_writer_proxy;

@@ -4,6 +4,7 @@ use crate::structure::history_cache::HistoryCache;
 use crate::messages::submessages::data::Data;
 
 use crate::dds::ddsdata::DDSData;
+use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
 use crate::messages::submessages::ack_nack::AckNack;
 use crate::messages::submessages::heartbeat::Heartbeat;
 use crate::messages::submessages::gap::Gap;
@@ -14,7 +15,7 @@ use crate::structure::time::Timestamp;
 use mio_extras::channel as mio_channel;
 use std::fmt;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
@@ -33,6 +34,8 @@ pub struct Reader {
 
   sent_ack_nack_count: i32,
   received_hearbeat_count: i32,
+
+  matched_writers: HashMap<GUID, RtpsWriterProxy>,
 } // placeholder
 
 impl Reader {
@@ -47,6 +50,7 @@ impl Reader {
       heartbeat_supression_duration: Duration::new(0, 0),
       sent_ack_nack_count: 0,
       received_hearbeat_count: 0,
+      matched_writers: HashMap::new(),
     }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
@@ -86,18 +90,30 @@ impl Reader {
     return vec![*start, *end];
   }
 
+  fn get_writer_proxy(&mut self, remote_writer_guid: GUID) -> &mut RtpsWriterProxy{
+    match self.matched_writers.get_mut(&remote_writer_guid) {
+      Some(_) => {},
+      None => {
+        let new_writer_proxy = RtpsWriterProxy::new(remote_writer_guid);
+        self.matched_writers.insert(remote_writer_guid, new_writer_proxy);
+      },
+    };
+    self.matched_writers.get_mut(&remote_writer_guid).unwrap()
+  }
+
   // handles regular data message and updates history cache
   pub fn handle_data_msg(&mut self, data: Data, timestamp: Timestamp) {
     let user_data = true; // Different action for discovery data?
     if user_data {
-      // TODO! Sequence number check for statefull Reader?
+      //let writer_proxy = self.get_writer_proxy();
       self.make_cache_change(data);
       self.send_datasample(timestamp);
+      
+      self.notify_cache_change();
     } else {
       // is discovery data
       todo!();
     }
-    self.notify_cache_change();
   }
 
   fn send_datasample(&self, timestamp: Timestamp) {

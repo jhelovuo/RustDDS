@@ -22,8 +22,6 @@ use crate::dds::datareader::DataReader;
 use rand::Rng;
 use crate::structure::guid::EntityId;
 
-use std::collections::HashMap;
-
 // -------------------------------------------------------------------
 
 pub struct Publisher<'a> {
@@ -115,6 +113,15 @@ impl<'a> Publisher<'a> {
 }
 
 // -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
 
 pub struct Subscriber {
   //my_domainparticipant: &'a DomainParticipant,
@@ -127,7 +134,7 @@ pub struct Subscriber {
 
   receiver_remove_datareader: mio_channel::Receiver<GUID>,
 
-  reader_channel_ends: HashMap<EntityId, mio_channel::Receiver<(DDSData, Timestamp)>>,
+  reader_channel_ends: Vec<(EntityId, mio_channel::Receiver<(DDSData, Timestamp)>)>,
   participant_guid: GUID,
 }
 
@@ -171,7 +178,7 @@ impl Subscriber {
       sender_add_reader,
       sender_remove_reader,
       receiver_remove_datareader,
-      reader_channel_ends: HashMap::new(),
+      reader_channel_ends: Vec::new(),
       participant_guid,
     }
   }
@@ -192,11 +199,11 @@ impl Subscriber {
         match event.token() {
           STOP_POLL_TOKEN => return,
           READER_CHANGE_TOKEN => {
-            println!("Got notification of reader's new change!!!");
-            println!(
-              "Should get information on who the reader was???, 
-              and ask for the change?"
-            );
+            // Eti oikee datareader
+            for pos in 0..(self.reader_channel_ends.len() as usize) {
+              let _channel_message = self.reader_channel_ends[pos].1.try_recv();
+              //match channel_message
+            }
           }
           ADD_DATAREADER_TOKEN => {
             let (dr, r) = self.create_datareader(self.participant_guid, self.qos.clone());
@@ -244,7 +251,7 @@ impl Subscriber {
 
     self
       .reader_channel_ends
-      .insert(matching_reader.get_entity_id(), rec);
+      .push((matching_reader.get_entity_id(), rec));
     (Ok(new_datareader), Ok(matching_reader))
   }
 

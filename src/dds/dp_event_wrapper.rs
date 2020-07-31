@@ -231,6 +231,7 @@ mod tests {
   use mio::{Ready, PollOpt};
   use crate::structure::entity::Entity;
   use crate::dds::ddsdata::DDSData;
+  use crate::structure::time::Timestamp;
   //use std::sync::mpsc;
 
   #[test]
@@ -282,7 +283,7 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-      let (send, _rec) = mio_channel::channel::<DDSData>();
+      let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
       let new_reader = Reader::new(new_guid, send);
 
       reader_guids.push(new_reader.get_guid());
