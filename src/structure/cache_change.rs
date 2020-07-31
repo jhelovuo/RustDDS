@@ -10,6 +10,7 @@ pub enum ChangeKind {
   NOT_ALIVE_UNREGISTERED,
 }
 
+
 #[derive(Debug, Clone)]
 pub struct CacheChange {
   pub kind: ChangeKind,
@@ -18,6 +19,8 @@ pub struct CacheChange {
   pub sequence_number: SequenceNumber,
   pub data_value: Option<DDSData>,
   //pub inline_qos: ParameterList,
+
+  //stps_chage_for_reader : RTPSChangeForReader
 }
 
 impl PartialEq for CacheChange {
@@ -51,6 +54,7 @@ impl CacheChange {
       sequence_number,
       data_value,
       //inline_qos: ParameterList::new(),
+      //rtps_chage_for_reader : RTPSChangeForReader::new(),
     }
   }
 }

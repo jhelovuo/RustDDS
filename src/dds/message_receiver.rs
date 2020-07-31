@@ -440,6 +440,8 @@ mod tests {
       *sequenceNumbers.first().unwrap(),
     );
     change.sequence_number = SequenceNumber::from(91);
+
+    /*
     let _created_user_message = writerObject.write_user_msg(change);
 
     println!();
@@ -451,6 +453,7 @@ mod tests {
       "messageReceiver submessageCount: {:?}",
       message_receiver.submessage_count
     );
+    */
   }
 
   #[test]
