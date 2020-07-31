@@ -26,6 +26,7 @@ use mio::Token;
 use crate::dds::ddsdata::DDSData;
 use crate::structure::{ entity::{Entity, EntityAttributes}};
 use super::rtps_reader_proxy::RtpsReaderProxy;
+use std::time::Duration;
 
 pub struct RecievingReaderContact{
 
@@ -463,9 +464,9 @@ impl Writer {
 
 
   /// This should be called when mio channel from datawriter recieves a new message
-  pub fn handle_new_dds_data_message(&mut self, sample :DataSample<DDSData>) {
+  pub fn handle_new_dds_data_message(&mut self, sample :DDSData) {
     self.increase_last_change_sequence_number();
-    let dds_data = sample.value.unwrap();
+    let dds_data = sample;
     let change = CacheChange::new(self.get_guid(),self.last_change_sequence_number, Some(dds_data));
     self.history_cache.add_change(change);
     for reader in &mut self.readers{
@@ -492,18 +493,16 @@ impl Endpoint for Writer {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{messages::submessages::submessage_elements::serialized_payload::SerializedPayload, dds::{traits::key::DefaultKey}};
+  use crate::{messages::submessages::submessage_elements::serialized_payload::SerializedPayload};
 
   #[test]
   fn create_writer_add_readers_create_messages(){
     let new_guid = GUID::new();
-    let (sender, reciever) = mio_channel::channel::<DataSample<DDSData>>();
+    let (_sender, reciever) = mio_channel::channel::<DDSData>();
     let mut writer = Writer::new(new_guid,reciever);
-    let dds_data : Option<DDSData> = Some(DDSData::new(DefaultKey::new(123123),SerializedPayload::default()));
-    let dds_data2 : Option<DDSData> = Some(DDSData::new(DefaultKey::new(123124343),SerializedPayload::default()));
-    let message_from_data_writer : DataSample<DDSData> = DataSample::new(Timestamp::from(Timespec::new(1424545, 123)),dds_data);
-    let message_from_data_writer2 : DataSample<DDSData> = DataSample::new(Timestamp::from(Timespec::new(142454512312, 123333)),dds_data2);
-    
+    let dds_data : DDSData = DDSData::new(SerializedPayload::default());
+    let dds_data2 : DDSData = DDSData::new(SerializedPayload::default());
+        
    
     let reader_proxy1 : RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
     let reader_proxy2 : RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
@@ -517,7 +516,7 @@ mod tests {
    
     assert_eq!(writer.can_send_some(), false);
     // make change to history cahce
-    writer.handle_new_dds_data_message(message_from_data_writer);
+    writer.handle_new_dds_data_message(dds_data);
     assert_eq!(writer.can_send_some(), true);
 
     // Three messages can be ganerated
@@ -538,7 +537,7 @@ mod tests {
 
     assert_eq!(writer.can_send_some(), false);
 
-    writer.handle_new_dds_data_message(message_from_data_writer2);
+    writer.handle_new_dds_data_message(dds_data2);
     assert_eq!(writer.can_send_some(), true);
 
      // Three messages can be ganerated
