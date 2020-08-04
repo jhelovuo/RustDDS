@@ -55,7 +55,10 @@ impl<'de> CDR_deserializer {
 
   fn remove_padding_bytes_from_end(&mut self, padCount: u32) {
     println!("remove padding {}", padCount);
-    self.input = self.input[padCount as usize..].to_vec();
+    for _a in 0..padCount {
+      self.remove_first_byte_from_input();
+    }
+
   }
 }
 
