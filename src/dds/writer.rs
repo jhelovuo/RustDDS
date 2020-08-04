@@ -21,16 +21,13 @@ use speedy::{Writable, Endianness};
 use time::Timespec;
 use time::get_time;
 use mio_extras::channel as mio_channel;
-use mio::Token;
+use mio::{Events, Token, Poll};
 
 use crate::dds::ddsdata::DDSData;
-use crate::structure::{ entity::{Entity, EntityAttributes}};
+use crate::structure::{ entity::{Entity, EntityAttributes}, endpoint::{EndpointAttributes, Endpoint}};
 use super::rtps_reader_proxy::RtpsReaderProxy;
 use std::time::Duration;
 
-pub struct RecievingReaderContact{
-
-}
 
 pub struct Writer {
   pub history_cache: HistoryCache,
@@ -84,9 +81,11 @@ pub struct Writer {
   //pub unicast_locator_list: LocatorList,
   //pub multicast_locator_list: LocatorList,
 
+  endpoint_attributes : EndpointAttributes,
   entity_attributes: EntityAttributes,
   cache_change_receiver: mio_channel::Receiver<DDSData>,
-  
+  ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
+  ///RTPS Reader
   readers : Vec<RtpsReaderProxy>,
 
   message : Option<Message>,
@@ -118,9 +117,14 @@ impl Writer {
       cache_change_receiver,
       readers : vec![],
       message : None,
+      endpoint_attributes : EndpointAttributes::default(),
+    
     }
+    //entity_attributes.guid.entityId.
   }
 
+
+  /// To know when token represents a writer we should look entity attribute kind
   pub fn get_entity_token(&self) -> Token {
     let id = self.as_entity().as_usize();
     Token(id)
@@ -131,6 +135,7 @@ impl Writer {
   }
 
   pub fn insert_to_history_cache(&mut self, data: DDSData) {
+    println!("Insert to RTPS writer cache");
     let seq_num_max = self
       .history_cache
       .get_seq_num_max()
@@ -141,6 +146,7 @@ impl Writer {
 
     let new_cache_change = CacheChange::new(self.as_entity().guid, seq_num_max, datavalue);
     self.history_cache.add_change(new_cache_change);
+    self.writer_set_unsent_changes();
   }
 
   fn increase_last_change_sequence_number(&mut self){
@@ -363,8 +369,8 @@ impl Writer {
    }
     }
     if self.test_if_ack_nack_contains_not_recieved_sequence_numbers(&an) == false{
-      todo!()
-      //an.reader_sn_state.base
+      let reader_proxy  = self.matched_reader_lookup(guid_prefix, an.reader_id);
+      reader_proxy.unwrap().acked_changes_set(an.reader_sn_state.base);
     }
     else{
       // if ack nac says reader has NOT recieved data then add data to requested changes
@@ -407,9 +413,11 @@ impl Writer {
   ///corresponding CacheChange and false otherwise.
   pub fn is_acked_by_all(&self, _cache_change : &CacheChange) -> bool{
     for _proxy in &self.readers{
-      
+      if _proxy.sequence_is_acked(_cache_change.sequence_number.clone()) == false{
+        return false
+      }
     }
-    todo!();
+    return true;
   }
 
   pub fn increase_heartbeat_counter_and_remove_unsend(&mut self, message: Option<Message>, remote_reader_guid : Option<GUID> ){
@@ -463,7 +471,13 @@ impl Writer {
   }
 
 
-  /// This should be called when mio channel from datawriter recieves a new message
+  pub fn writer_set_unsent_changes(&mut self){
+    for reader in &mut self.readers{
+      reader.unsend_changes_set(self.last_change_sequence_number.clone());
+    }
+  }
+
+  // TODO Used for test/debugging purposes CAN BE DELETED WHEN tests are created again.
   pub fn handle_new_dds_data_message(&mut self, sample :DDSData) {
     self.increase_last_change_sequence_number();
     let dds_data = sample;
@@ -482,18 +496,43 @@ impl Entity for Writer {
   }
 }
 
-/*
+
 impl Endpoint for Writer {
   fn as_endpoint(&self) -> &crate::structure::endpoint::EndpointAttributes {
-    &self.enpoint_attributes
+    &self.endpoint_attributes
   }
 }
-*/
+
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{messages::submessages::submessage_elements::serialized_payload::SerializedPayload};
+  use crate::{messages::submessages::submessage_elements::serialized_payload::SerializedPayload, dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc, traits::key::{Keyed, DefaultKey}}};
+  use serde::Serialize;
+  use std::thread;
+  
+  #[derive(Serialize)]
+  struct RandomData {
+    key: DefaultKey,
+    a: i64,
+    b: String,
+  }
+
+  impl Keyed for RandomData {
+    type K = DefaultKey;
+    fn get_key(&self) -> &Self::K {
+      &self.key
+    }
+
+    fn default() -> Self {
+      RandomData {
+        key: DefaultKey::default(),
+        a: 0,
+        b: "".to_string(),
+      }
+    }
+  }
+
 
   #[test]
   fn create_writer_add_readers_create_messages(){
@@ -519,7 +558,7 @@ mod tests {
     writer.handle_new_dds_data_message(dds_data);
     assert_eq!(writer.can_send_some(), true);
 
-    // Three messages can be ganerated
+    // Three messages can be generated
     let RTPS1 = writer.get_next_reader_next_unsend_message();
     writer.increase_heartbeat_counter_and_remove_unsend(RTPS1.0,RTPS1.1);
 
@@ -554,6 +593,58 @@ mod tests {
 
      println!("need to be send to {:?}", reaminingReaders2);
      assert_eq!(writer.can_send_some(), false);
+  }
+
+  #[test]
+  fn test_writer_recieves_datawriter_cache_change_notifications(){
+
+    let domain_participant = DomainParticipant::new();
+    let qos = QosPolicies::qos_none();
+    let _default_dw_qos = QosPolicies::qos_none();
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let publisher = domain_participant
+      .create_publisher(qos.clone())
+      .expect("Failed to create publisher");
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), qos.clone())
+      .expect("Failed to create topic");
+     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let mut data_writer = publisher
+      .create_datawriter(&topic, qos.clone())
+      .expect("Failed to create datawriter");
+
+    let data = RandomData {
+      key: DefaultKey::random_key(),
+      a: 4,
+      b: "Fobar".to_string(),
+    };
+
+    let data2 = RandomData {
+      key: DefaultKey::random_key(),
+      a: 2,
+      b: "Fobar".to_string(),
+    };
+
+    let data3 = RandomData {
+      key: DefaultKey::random_key(),
+      a: 3,
+      b: "Fobar".to_string(),
+    };
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let writeResult = data_writer.write(data, None).expect("Unable to write data");
+
+    
+    println!("writerResult:  {:?}",writeResult);
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let writeResult = data_writer.write(data2, None).expect("Unable to write data");
+
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    println!("writerResult:  {:?}",writeResult);
+    let writeResult = data_writer.write(data3, None).expect("Unable to write data");
+
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    println!("writerResult:  {:?}",writeResult);
   }
 }
 

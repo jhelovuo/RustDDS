@@ -23,8 +23,8 @@ pub struct RtpsReaderProxy {
   // this list keeps sequence numbers from reader negative acknack messages
   requested_changes : HashSet<SequenceNumber>,
 
-  // this list keeps sequence numbers of reader recieved (acknack recieved) messages
-  acked_changes : HashSet<SequenceNumber>,
+  // this keeps sequence number of reader recieved (acknack recieved) messages
+  largest_acked_change : Option<SequenceNumber>,
 
   unsent_changes : HashSet<SequenceNumber>
 }
@@ -40,8 +40,8 @@ impl RtpsReaderProxy {
         expects_in_line_qos : false,
         is_active : true,
         requested_changes : HashSet::new(),
-        acked_changes : HashSet::new(),
         unsent_changes : HashSet::new(),
+        largest_acked_change : None,
       }
     }
 
@@ -129,11 +129,22 @@ impl RtpsReaderProxy {
      
       
     }
-
-    pub fn acked_changes_set(&mut self, _sequence_number : SequenceNumber){
-      todo!();
+    ///This operation changes the ChangeForReader status of a set of changes for the reader represented by
+    ///ReaderProxy ‘the_reader_proxy.’ The set of changes with sequence number smaller than or equal to the value
+    ///‘committed_seq_num’ have their status changed to ACKNOWLEDGED
+    pub fn acked_changes_set(&mut self, sequence_number : SequenceNumber){
+      self.largest_acked_change = Some(sequence_number);
     }
-  
+    
+    pub fn sequence_is_acked(&self, sequence_number : SequenceNumber) -> bool{
+      if self.largest_acked_change.is_none(){
+        return false;
+      }
+      if self.largest_acked_change.unwrap() >= sequence_number{
+        return true;
+      }
+      return false;
+    }
 
 }
 

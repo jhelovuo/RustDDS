@@ -118,13 +118,50 @@ impl EntityId {
     }
   }
 
+  
   pub fn as_usize(self) -> usize {
-    let x1 = self.entityKey[0] as usize;
-    let x2 = self.entityKey[1] as usize;
-    let x3 = self.entityKey[2] as usize;
-    let x4 = self.entityKind as usize;
+    // Usize is generated like beacause there needs to be a way to tell entity kind from usize number
+    let x1 = self.entityKey[0] as i64;
+    let x2 = self.entityKey[1] as i64;
+    let x3 = self.entityKey[2] as i64;
+    let x4 = self.entityKind as i64;
 
-    x1 * 10 ^ 9 + x2 * 10 ^ 6 + x3 * 10 ^ 3 + x4
+    /*
+    println!("{:?}", (10_i64.pow(14) + x1 * 100000000000));
+    println!("{:?}", (10_i64.pow(10) + x2 * 10000000));
+    println!("{:?}", (10_i64.pow(6) + x3 * 1000) );
+    println!("{:?}", x4 as i64);
+    */
+   
+    ((10_i64.pow(14) + x1 * 100000000000) + (10_i64.pow(10) + x2 * 10000000) + (10_i64.pow(6) + x3 * 1000) +  x4 as i64) as usize
+
+  }
+  
+  /// Use this only with usize generated with EntityID::as_usize function.!!!
+  pub fn from_usize(number: usize) -> Option<EntityId> {
+    //println!("{:?}",number);
+    let numberAsString = number.to_string();
+    let finalIndex = numberAsString.len();
+    if finalIndex != 15 {
+      return None;
+    }
+    let kind = numberAsString[finalIndex-3..finalIndex] .parse::<u8>().unwrap();
+    let thirdByte = numberAsString[finalIndex-6..finalIndex-3] .parse::<u8>().unwrap();
+    let secondBute = numberAsString[finalIndex-10..finalIndex-7] .parse::<u8>().unwrap();
+    let firstByte = numberAsString[finalIndex-14..finalIndex-11] .parse::<u8>().unwrap();
+    let e : EntityId = EntityId {
+      entityKey : [firstByte,secondBute,thirdByte],
+      entityKind : kind,
+    };
+    return Some(e);
+  }
+
+  pub fn get_kind(self) -> u8 {
+    return self.entityKind
+  }
+
+  pub fn set_kind(&mut self, entityKind : u8 ) {
+    self.entityKind = entityKind;
   }
 }
 
@@ -198,6 +235,37 @@ mod tests {
   use super::*;
 
   use speedy::Endianness;
+  use mio::Token;
+
+  #[test]
+  fn convert_entity_id_to_token_and_back(){
+    let e = EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER;
+    let t = Token(e.as_usize());
+    println!("{:?}", e.as_usize());
+    let entity = EntityId::from_usize(e.as_usize()).unwrap();
+    assert_eq!(e,entity);
+
+    let e2 = EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER;
+    let entity2 = EntityId::from_usize(e2.as_usize()).unwrap();
+    assert_eq!(e2,entity2);
+
+    let e3 = EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER;
+    let entity3 = EntityId::from_usize(e3.as_usize()).unwrap();
+    assert_eq!(e3,entity3);
+    
+    let e4 = EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER;
+    let entity4 = EntityId::from_usize(e4.as_usize()).unwrap();
+    assert_eq!(e4,entity4);
+
+    let e5 = EntityId::ENTITYID_UNKNOWN;
+    let entity5 = EntityId::from_usize(e5.as_usize()).unwrap();
+    assert_eq!(e5,entity5);
+
+
+    let e6 = EntityId::createCustomEntityID([12u8,255u8,0u8],254u8);
+    let entity6 = EntityId::from_usize(e6.as_usize()).unwrap();
+    assert_eq!(e6,entity6);
+  }
 
   #[test]
   fn minimum_bytes_needed() {

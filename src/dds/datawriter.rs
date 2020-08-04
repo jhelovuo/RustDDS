@@ -71,7 +71,7 @@ impl<'p> DataWriter<'p> {
     };
 
     let _key = self.datasample_cache.add_data_sample(data_sample)?;
-
+    //println!("datawriter send ddsData {:?} ", ddsdata);
     match self.cc_upload.send(ddsdata) {
       Ok(_) => Ok(()),
       _ => Err(Error::OutOfResources),
