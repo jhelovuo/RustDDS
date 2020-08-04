@@ -1,6 +1,9 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use crate::dds::traits::key::*;
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 /// Type used to represent the identity of a data-object whose changes in value
 /// are communicated by the RTPS protocol.
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Hash)]
@@ -16,7 +19,18 @@ impl Default for InstanceHandle {
   }
 }
 
-impl Key for InstanceHandle {}
+impl Key for InstanceHandle {
+  fn get_hash(&self) -> u64 {
+    // TODO: maybe precalc
+    let mut s = DefaultHasher::new();
+    self.entityKey.hash(&mut s);
+    s.finish()
+  }
+
+  fn box_clone(&self) -> Box<dyn Key> {
+    Box::new((*self).clone())
+  }
+}
 
 impl<'a, C: Context> Readable<'a, C> for InstanceHandle {
   #[inline]

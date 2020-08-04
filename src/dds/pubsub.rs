@@ -50,7 +50,7 @@ impl<'a> Publisher<'a> {
   pub fn create_datawriter(&'a self, topic: &'a Topic, _qos: QosPolicies) -> Result<DataWriter> {
     let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
-    // TODO: generate entity id's in a more systematic way
+    // TODO: generate unique entity id's in a more systematic way
     let mut rng = rand::thread_rng();
     let entity_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
 

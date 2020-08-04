@@ -1,38 +1,50 @@
-use std::collections::HashMap;
+use crate::dds::traits::key::{Keyed, Key};
+// use crate::dds::datasample::DataSample;
 
-use crate::dds::datasample::DataSample;
-use crate::dds::traits::key::DefaultKey;
-use crate::dds::ddsdata::DDSData;
-
-use crate::dds::values::result::Result;
+use crate::dds::values::result::{Result, Error};
+use std::any::Any;
 
 pub struct DataSampleCache {
-  datasamples: HashMap<DefaultKey, DataSample<DDSData>>,
+  datasamples: Vec<Box<dyn Keyed + Send + Sync>>,
 }
 
 impl DataSampleCache {
   pub fn new() -> DataSampleCache {
     DataSampleCache {
-      datasamples: HashMap::new(),
+      datasamples: Vec::new(),
     }
   }
 
-  pub fn add_data_sample(&mut self, data_sample: DataSample<DDSData>) -> Result<DefaultKey> {
-    let key = self.get_free_key();
-    match self.datasamples.insert(key.clone(), data_sample) {
-      Some(_) => {
-        println!("warning: for some reason key existed");
-        Ok(key)
+  pub fn add_data_sample<D: Keyed + Send + Sync + 'static>(
+    &mut self,
+    data_sample: D,
+  ) -> Result<Box<dyn Key>> {
+    // pretty slow but should avoids problems with generic type
+    for ds in self.datasamples.iter() {
+      let typeid = ds.type_id();
+      if typeid != data_sample.type_id() {
+        continue;
       }
-      None => Ok(key),
-    }
-  }
 
-  fn get_free_key(&self) -> DefaultKey {
-    let mut key = DefaultKey::random_key();
-    while self.datasamples.contains_key(&key) {
-      key = DefaultKey::random_key();
+      if ds.get_key().get_hash() == data_sample.get_key().get_hash() {
+        return Err(Error::OutOfResources);
+      }
     }
-    key
+
+    let key = data_sample.get_key().box_clone();
+    self.datasamples.push(Box::new(data_sample));
+    Ok(key)
+
+    // let key = match data_sample.value {
+    //   Ok(ad) => (*ad).get_key().clone(),
+    //   Err(e) => e,
+    // };
+    // match self.datasamples.insert(key, data_sample) {
+    //   Some(_) => {
+    //     println!("warning: for some reason key existed");
+    //     Ok(key)
+    //   }
+    //   None => Ok(key),
+    // }
   }
 }

@@ -10,8 +10,6 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
 use crate::structure::entity::Entity;
-use speedy::Endianness;
-use crate::speedy::Readable;
 
 pub struct DPEventWrapper {
   poll: Poll,
@@ -139,13 +137,13 @@ impl DPEventWrapper {
   /// Writer action can be add writer remove writer or some not predefined token.
   /// if not predefined token -> EntityIdToken can be calculated and if entityKind is 0xC2 then it is writer action.
   pub fn is_writer_action(event: &Event) -> bool {
-    if EntityId::from_usize(event.token().0).is_some(){
-     let maybeWriterKind : EntityId = EntityId::from_usize(event.token().0).unwrap();
-     if maybeWriterKind.get_kind() == 0xC2 {
-       return true;
-     }
-    }        
-    event.token() == ADD_WRITER_TOKEN || event.token() == REMOVE_WRITER_TOKEN 
+    if EntityId::from_usize(event.token().0).is_some() {
+      let maybeWriterKind: EntityId = EntityId::from_usize(event.token().0).unwrap();
+      if maybeWriterKind.get_kind() == 0xC2 {
+        return true;
+      }
+    }
+    event.token() == ADD_WRITER_TOKEN || event.token() == REMOVE_WRITER_TOKEN
   }
 
   pub fn handle_udp_traffic(&mut self, event: &Event) {
@@ -218,10 +216,8 @@ impl DPEventWrapper {
         };
       }
       t => {
-        
         let found_writer = writers.iter_mut().find(|p| p.1.get_entity_token() == t);
-       
-       
+
         match found_writer {
           Some((_guid, w)) => {
             let cache_change = w

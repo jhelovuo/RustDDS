@@ -76,11 +76,14 @@ pub struct DataSample<D: Keyed> {
   /// not provide any data value.
   /// Now Ok(D) means valid_data = true and there is a sample.
   /// Err(D::K) means there is valid_data = false, but only a Key and instance_state has changed.
-  pub value: std::result::Result<Arc<D>, D::K>,
+   
+  // TODO: think value again
+  // pub value: std::result::Result<Arc<D>, D::K>,
+  pub value: Option<Arc<D>>
 }
 
 impl<D: Keyed> DataSample<D> {
-  pub fn new(source_timestamp: Timestamp, value: Option<D>) -> DataSample<D> {
+  pub fn new(source_timestamp: Timestamp, value: D) -> DataSample<D> {
     let sample_state = SampleState::Read;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
@@ -89,10 +92,7 @@ impl<D: Keyed> DataSample<D> {
     let sample_rank = 0;
     let generation_rank = 0;
     let absolute_generation_rank = 0;
-    let value = match value {
-      Some(v) => v,
-      None => D::default(),
-    };
+    let value = Some(Arc::new(value));
 
     DataSample {
       sample_state,
@@ -104,7 +104,7 @@ impl<D: Keyed> DataSample<D> {
       generation_rank,
       absolute_generation_rank,
       source_timestamp,
-      value: Ok(Arc::new(value)),
+      value,
     }
   }
 
@@ -128,7 +128,7 @@ impl<D: Keyed> DataSample<D> {
       generation_rank,
       absolute_generation_rank,
       source_timestamp,
-      value: Ok(arc),
+      value: Some(arc),
     }
   }
 }

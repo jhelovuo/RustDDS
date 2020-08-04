@@ -432,7 +432,7 @@ mod tests {
 
     let _serializedPayload = to_little_endian_binary(&deserializedShapeType);
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
-    let mut writerObject = Writer::new(
+    let mut _writerObject = Writer::new(
       GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], 2)),
       hccc_download,
     );

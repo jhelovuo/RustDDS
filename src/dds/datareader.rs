@@ -3,14 +3,11 @@ use serde::Deserialize;
 use crate::structure::instance_handle::InstanceHandle;
 
 use crate::structure::entity::{Entity, EntityAttributes};
-use crate::structure::time::Timestamp;
 
 use crate::dds::values::result::*;
 use crate::dds::traits::key::*;
 use crate::dds::qos::*;
 use crate::dds::datasample::*;
-use crate::dds::ddsdata::DDSData;
-
 use crate::dds::datasample_cache::DataSampleCache;
 use crate::structure::guid::{GUID};
 
@@ -22,6 +19,8 @@ pub struct DataReader {
   // TODO: rest of fields
 }
 
+// TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
+
 impl<'s> DataReader {
   pub fn new(qos: QosPolicies) -> Self {
     Self {
@@ -31,9 +30,11 @@ impl<'s> DataReader {
     }
   }
 
-  pub fn add_datasample(&mut self, ddsdata: DDSData, time: Timestamp) -> Result<DefaultKey> {
-    let data_sample = DataSample::new(time, Some(ddsdata));
-    self.datasample_cache.add_data_sample(data_sample)
+  pub fn add_datasample<D>(&self, _datasample: D) -> Result<()>
+  where
+    D: Deserialize<'s> + Keyed,
+  {
+    Ok(())
   }
 
   pub fn read<D>(
@@ -42,7 +43,7 @@ impl<'s> DataReader {
     _sample_state: SampleState,
     _view_state: ViewState,
     _instance_state: InstanceState,
-  ) -> Result<Vec<DataSample<D>>>
+  ) -> Result<Vec<D>>
   where
     D: Deserialize<'s> + Keyed,
   {
@@ -56,21 +57,21 @@ impl<'s> DataReader {
     _sample_state: SampleState,
     _view_state: ViewState,
     _instance_state: InstanceState,
-  ) -> Result<Vec<DataSample<D>>>
+  ) -> Result<Vec<D>>
   where
     D: Deserialize<'s> + Keyed,
   {
     unimplemented!()
   }
 
-  pub fn read_next<D>(&self) -> Result<Vec<DataSample<D>>>
+  pub fn read_next<D>(&self) -> Result<Vec<D>>
   where
     D: Deserialize<'s> + Keyed,
   {
     todo!()
   }
 
-  pub fn read_instance<D>(&self, _instance_handle: InstanceHandle) -> Result<Vec<DataSample<D>>>
+  pub fn read_instance<D>(&self, _instance_handle: InstanceHandle) -> Result<Vec<D>>
   where
     D: Deserialize<'s> + Keyed,
   {

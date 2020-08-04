@@ -16,7 +16,6 @@ use crate::dds::values::result::{
 };
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
-use crate::dds::datasample::DataSample;
 use crate::dds::datasample_cache::DataSampleCache;
 use crate::dds::ddsdata::DDSData;
 
@@ -60,18 +59,18 @@ impl<'p> DataWriter<'p> {
   // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
-  pub fn write<D>(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
+  pub fn write<D: 'static>(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
   where
-    D: Keyed + Serialize,
+    D: Send + Sync + Keyed + Serialize,
   {
-    let ddsdata = DDSData::from(data);
-    let data_sample = match source_timestamp {
-      Some(t) => DataSample::new(t, Some(ddsdata.clone())),
-      None => DataSample::new(Timestamp::from(time::get_time()), Some(ddsdata.clone())),
-    };
+    let ddsdata = DDSData::from(&data, source_timestamp);
+    // let data_sample = match source_timestamp {
+    //   Some(t) => DataSample::new(t, Some(data)),
+    //   None => DataSample::new(Timestamp::from(time::get_time()), Some(data)),
+    // };
 
-    let _key = self.datasample_cache.add_data_sample(data_sample)?;
-    //println!("datawriter send ddsData {:?} ", ddsdata);
+    let _key = self.datasample_cache.add_data_sample::<D>(data)?;
+
     match self.cc_upload.send(ddsdata) {
       Ok(_) => Ok(()),
       _ => Err(Error::OutOfResources),
@@ -152,26 +151,18 @@ mod tests {
   use crate::dds::traits::key::DefaultKey;
   use crate::dds::participant::DomainParticipant;
   use crate::dds::typedesc::TypeDesc;
+  use crate::dds::traits::key::Key;
 
   #[derive(Serialize)]
   struct RandomData {
-    key: DefaultKey,
     a: i64,
     b: String,
   }
 
   impl Keyed for RandomData {
-    type K = DefaultKey;
-    fn get_key(&self) -> &Self::K {
-      &self.key
-    }
-
-    fn default() -> Self {
-      RandomData {
-        key: DefaultKey::default(),
-        a: 0,
-        b: "".to_string(),
-      }
+    fn get_key(&self) -> Box<dyn Key> {
+      let key = DefaultKey::new(self.a);
+      Box::new(key)
     }
   }
 
@@ -192,7 +183,6 @@ mod tests {
       .expect("Failed to create datawriter");
 
     let data = RandomData {
-      key: DefaultKey::random_key(),
       a: 4,
       b: "Fobar".to_string(),
     };

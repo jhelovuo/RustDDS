@@ -9,7 +9,7 @@ use crate::messages::submessages::ack_nack::AckNack;
 use crate::messages::submessages::heartbeat::Heartbeat;
 use crate::messages::submessages::gap::Gap;
 use crate::structure::entity::EntityAttributes;
-use crate::structure::guid::GUID;
+use crate::structure::guid::{GuidPrefix, GUID};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::time::Timestamp;
 use mio_extras::channel as mio_channel;
@@ -62,12 +62,17 @@ impl Reader {
       "history cache !!!! {:?}",
       self.history_cache.get_change(sequence_number).unwrap()
     );
-    self
+    let pl = self
       .history_cache
       .get_change(sequence_number)
       .unwrap()
       .data_value
-      .clone()
+      .clone();
+
+    match pl {
+      Some(xd) => Some(DDSData::from_arc(xd)),
+      None => None,
+    }
   }
 
   // Used for test/debugging purposes
@@ -90,13 +95,15 @@ impl Reader {
     return vec![*start, *end];
   }
 
-  fn get_writer_proxy(&mut self, remote_writer_guid: GUID) -> &mut RtpsWriterProxy{
+  fn get_writer_proxy(&mut self, remote_writer_guid: GUID) -> &mut RtpsWriterProxy {
     match self.matched_writers.get_mut(&remote_writer_guid) {
-      Some(_) => {},
+      Some(_) => {}
       None => {
         let new_writer_proxy = RtpsWriterProxy::new(remote_writer_guid);
-        self.matched_writers.insert(remote_writer_guid, new_writer_proxy);
-      },
+        self
+          .matched_writers
+          .insert(remote_writer_guid, new_writer_proxy);
+      }
     };
     self.matched_writers.get_mut(&remote_writer_guid).unwrap()
   }
@@ -108,7 +115,7 @@ impl Reader {
       //let writer_proxy = self.get_writer_proxy();
       self.make_cache_change(data);
       self.send_datasample(timestamp);
-      
+
       self.notify_cache_change();
     } else {
       // is discovery data
@@ -117,14 +124,11 @@ impl Reader {
   }
 
   fn send_datasample(&self, timestamp: Timestamp) {
-    let ddsdata = self
-      .history_cache
-      .get_latest()
-      .unwrap()
-      .data_value
-      .as_ref()
-      .unwrap()
-      .clone();
+    let cc = self.history_cache.get_latest().unwrap().clone();
+    let mut ddsdata = DDSData::from_arc(cc.data_value.unwrap());
+    ddsdata.set_reader_id(self.get_guid().entityId.clone());
+    ddsdata.set_writer_id(cc.writer_guid.entityId.clone());
+
     self
       .ddsdata_channel
       .send((ddsdata, timestamp))
@@ -204,9 +208,13 @@ impl Reader {
   // update history cache
   fn make_cache_change(&mut self, data: Data) {
     let mut ddsdata = DDSData::new(data.serialized_payload);
+    let writer_guid =
+      GUID::new_with_prefix_and_id(GuidPrefix::GUIDPREFIX_UNKNOWN, data.writer_id.clone());
+
     ddsdata.set_reader_id(data.reader_id);
-    ddsdata.set_writer_id(data.writer_id);
-    let change = CacheChange::new(self.get_guid(), data.writer_sn, Some(ddsdata));
+    ddsdata.set_writer_id(data.writer_id.clone());
+
+    let change = CacheChange::new(writer_guid, data.writer_sn, Some(ddsdata));
     self.history_cache.add_change(change);
   }
 
@@ -271,15 +279,15 @@ mod tests {
     let mut reader = Reader::new(guid, send);
 
     let mut data = Data::default();
-    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data.reader_id = reader.get_guid().entityId;
     data.writer_id = EntityId::createCustomEntityID([4, 5, 6], 222);
 
     reader.handle_data_msg(data.clone(), Timestamp::from(time::get_time()));
 
-    let (datasample, _) = rec.try_recv().unwrap();
-    assert_eq!(*datasample.data(), data.serialized_payload.value);
+    let (datasample, _time) = rec.try_recv().unwrap();
+    assert_eq!(datasample.data(), data.serialized_payload.value);
 
-    print!("{:?}", *datasample.data());
+    print!("{:?}", datasample.data());
     assert_eq!(*datasample.reader_id(), data.reader_id);
     assert_eq!(*datasample.writer_id(), data.writer_id);
   }
@@ -295,8 +303,12 @@ mod tests {
     let d_seqnum = SequenceNumber::from(1);
     new_reader.handle_data_msg(d.clone(), Timestamp::TIME_INVALID);
 
-    let (rec_data, _) = rec.try_recv().unwrap();
-    let change = CacheChange::new(new_reader.get_guid(), d_seqnum, Some(rec_data));
+    let (rec_data, _time) = rec.try_recv().unwrap();
+    let change = CacheChange::new(
+      GUID::new_with_prefix_and_id(GuidPrefix::GUIDPREFIX_UNKNOWN, d.writer_id),
+      d_seqnum,
+      Some(rec_data),
+    );
 
     assert_eq!(
       new_reader.history_cache.get_change(d_seqnum).unwrap(),

@@ -21,13 +21,19 @@ use speedy::{Writable, Endianness};
 use time::Timespec;
 use time::get_time;
 use mio_extras::channel as mio_channel;
-use mio::{Events, Token, Poll};
+use mio::Token;
 
 use crate::dds::ddsdata::DDSData;
-use crate::{network::udp_sender::UDPSender, structure::{ entity::{Entity, EntityAttributes}, endpoint::{EndpointAttributes, Endpoint}, locator::{Locator, LocatorKind}}};
+use crate::{
+  network::udp_sender::UDPSender,
+  structure::{
+    entity::{Entity, EntityAttributes},
+    endpoint::{EndpointAttributes, Endpoint},
+    locator::{Locator, LocatorKind},
+  },
+};
 use super::rtps_reader_proxy::RtpsReaderProxy;
-use std::{net::{Ipv4Addr, SocketAddr}, time::Duration};
-
+use std::{net::SocketAddr, time::Duration};
 
 pub struct Writer {
   pub history_cache: HistoryCache,
@@ -40,7 +46,7 @@ pub struct Writer {
 
   pub endianness: Endianness,
 
-  heartbeat_message_counter: i32,  
+  heartbeat_message_counter: i32,
   /// Configures the mode in which the
   ///Writer operates. If
   ///pushMode==true, then the Writer
@@ -76,21 +82,20 @@ pub struct Writer {
   ///the maximum size of any
   ///SerializedPayload that may be
   ///sent by the Writer
-  pub data_max_size_serialized : u64,
+  pub data_max_size_serialized: u64,
 
   //pub unicast_locator_list: LocatorList,
   //pub multicast_locator_list: LocatorList,
-
-  endpoint_attributes : EndpointAttributes,
+  endpoint_attributes: EndpointAttributes,
   entity_attributes: EntityAttributes,
   cache_change_receiver: mio_channel::Receiver<DDSData>,
   ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
   ///RTPS Reader
-  readers : Vec<RtpsReaderProxy>,
+  readers: Vec<RtpsReaderProxy>,
 
-  message : Option<Message>,
+  message: Option<Message>,
 
-  udp_sender : UDPSender,
+  udp_sender: UDPSender,
 }
 
 impl Writer {
@@ -98,28 +103,31 @@ impl Writer {
     let entity_attributes = EntityAttributes::new(guid);
     Writer {
       history_cache: HistoryCache::new(),
-      submessage_count : 0,
-      source_version : ProtocolVersion::PROTOCOLVERSION_2_3,
-      source_vendor_id : VendorId::VENDOR_UNKNOWN,
+      submessage_count: 0,
+      source_version: ProtocolVersion::PROTOCOLVERSION_2_3,
+      source_vendor_id: VendorId::VENDOR_UNKNOWN,
       source_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
       dest_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
-      endianness : Endianness::LittleEndian,
-      heartbeat_message_counter : 0,
-      
-      push_mode : true,
-      heartbeat_perioid : Duration::from_secs(1),
+      endianness: Endianness::LittleEndian,
+      heartbeat_message_counter: 0,
+
+      push_mode: true,
+      heartbeat_perioid: Duration::from_secs(1),
       nack_respose_delay: Duration::from_millis(200),
       nack_suppression_duration: Duration::from_nanos(0),
-      last_change_sequence_number :SequenceNumber::from(0),
-      data_max_size_serialized : 999999999,
+      last_change_sequence_number: SequenceNumber::from(0),
+      data_max_size_serialized: 999999999,
       entity_attributes,
       //enpoint_attributes: EndpointAttributes::default(),
       cache_change_receiver,
-      readers : vec![RtpsReaderProxy::new_for_unit_testing(1000),RtpsReaderProxy::new_for_unit_testing(1001),RtpsReaderProxy::new_for_unit_testing(1002) ],
-      message : None,
-      endpoint_attributes : EndpointAttributes::default(),
-      udp_sender : UDPSender::new_with_random_port(),
-    
+      readers: vec![
+        RtpsReaderProxy::new_for_unit_testing(1000),
+        RtpsReaderProxy::new_for_unit_testing(1001),
+        RtpsReaderProxy::new_for_unit_testing(1002),
+      ],
+      message: None,
+      endpoint_attributes: EndpointAttributes::default(),
+      udp_sender: UDPSender::new_with_random_port(),
     }
     //entity_attributes.guid.entityId.
   }
@@ -149,132 +157,140 @@ impl Writer {
     self.writer_set_unsent_changes();
   }
 
-  fn increase_last_change_sequence_number(&mut self){
+  fn increase_last_change_sequence_number(&mut self) {
     self.last_change_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
   }
 
-  fn increase_heartbeat_counter(&mut self){
-    self.heartbeat_message_counter = self.heartbeat_message_counter + 1; 
+  fn increase_heartbeat_counter(&mut self) {
+    self.heartbeat_message_counter = self.heartbeat_message_counter + 1;
   }
 
   pub fn can_send_some(&self) -> bool {
-    for reader_proxy in &self.readers{
-      if reader_proxy.can_send() {return true;}
+    for reader_proxy in &self.readers {
+      if reader_proxy.can_send() {
+        return true;
+      }
     }
     return false;
   }
 
-  pub fn sequence_is_sent_to_all_readers(&self, sequence_number : SequenceNumber) -> bool{
-    for reader_proxy in &self.readers{
-      if reader_proxy.unsent_changes().contains(&sequence_number){
+  pub fn sequence_is_sent_to_all_readers(&self, sequence_number: SequenceNumber) -> bool {
+    for reader_proxy in &self.readers {
+      if reader_proxy.unsent_changes().contains(&sequence_number) {
         return false;
       }
     }
-    return true; 
+    return true;
   }
 
-  pub fn sequence_needs_to_be_send_to(&self, sequence_number : SequenceNumber) -> Vec<&RtpsReaderProxy>{
-    let mut readers_remaining : Vec<&RtpsReaderProxy> = vec![];
-    for reader_proxy in &self.readers{
-      if reader_proxy.unsent_changes().contains(&sequence_number){
+  pub fn sequence_needs_to_be_send_to(
+    &self,
+    sequence_number: SequenceNumber,
+  ) -> Vec<&RtpsReaderProxy> {
+    let mut readers_remaining: Vec<&RtpsReaderProxy> = vec![];
+    for reader_proxy in &self.readers {
+      if reader_proxy.unsent_changes().contains(&sequence_number) {
         readers_remaining.push(&reader_proxy);
       }
     }
-    return readers_remaining; 
+    return readers_remaining;
   }
 
-  fn get_next_reader_next_unsend_message (&mut self) -> (Option<Message>, Option<GUID> ){
-    for reader_proxy in &mut self.readers{
-      if reader_proxy.can_send() 
-      {
+  fn get_next_reader_next_unsend_message(&mut self) -> (Option<Message>, Option<GUID>) {
+    for reader_proxy in &mut self.readers {
+      if reader_proxy.can_send() {
         let sequenceNumber = reader_proxy.next_unsent_change();
         let change = self.history_cache.get_change(*sequenceNumber.unwrap());
-        let message:Message;
+        let message: Message;
         let reader_entity_id = reader_proxy.remote_reader_guid.entityId.clone();
         let remote_reader_guid = reader_proxy.remote_reader_guid.clone();
         {
-          message = self.write_user_msg(change.unwrap().clone(),reader_entity_id);
+          message = self.write_user_msg(change.unwrap().clone(), reader_entity_id);
         }
-        return ( Some(message),Some(remote_reader_guid));
+        return (Some(message), Some(remote_reader_guid));
       }
     }
     return (None, None);
   }
 
-  fn get_next_reader_next_requested_message(&mut self) -> (Option<Message>, Option<GUID>){
-    for reader_proxy in &mut self.readers{
-      if reader_proxy.can_send() 
-      {
+  fn get_next_reader_next_requested_message(&mut self) -> (Option<Message>, Option<GUID>) {
+    for reader_proxy in &mut self.readers {
+      if reader_proxy.can_send() {
         let sequenceNumber = reader_proxy.next_requested_change();
         let change = self.history_cache.get_change(*sequenceNumber.unwrap());
-        let message:Message;
+        let message: Message;
         let reader_entity_id = reader_proxy.remote_reader_guid.entityId.clone();
         let remote_reader_guid = reader_proxy.remote_reader_guid.clone();
         {
-          message = self.write_user_msg(change.unwrap().clone(),reader_entity_id);
+          message = self.write_user_msg(change.unwrap().clone(), reader_entity_id);
         }
-        return (Some(message),Some(remote_reader_guid));
+        return (Some(message), Some(remote_reader_guid));
       }
     }
     return (None, None);
   }
 
-  fn send_next_unsend_message(&mut self){
+  fn send_next_unsend_message(&mut self) {
     println!("send next unsend message");
-    let mut uni_cast_adresses : Vec<SocketAddr> = vec![];
-    let mut multi_cast_locators : Vec<Locator> = vec![];
-    let mut buffer:Vec<u8> = vec![];
+    let mut uni_cast_adresses: Vec<SocketAddr> = vec![];
+    let mut multi_cast_locators: Vec<Locator> = vec![];
+    let mut buffer: Vec<u8> = vec![];
     let mut context = Endianness::LittleEndian;
     {
-      if self.endianness == Endianness::LittleEndian {context == Endianness::LittleEndian} else{context == Endianness::BigEndian};
+      if self.endianness == Endianness::LittleEndian {
+        context == Endianness::LittleEndian
+      } else {
+        context == Endianness::BigEndian
+      };
     }
-    let (message,Guid) = self.get_next_reader_next_unsend_message();
-    if message.is_some() && Guid.is_some(){
+    let (message, Guid) = self.get_next_reader_next_unsend_message();
+    if message.is_some() && Guid.is_some() {
       let reader = self.matched_reader_lookup(Guid.unwrap().guidPrefix, Guid.unwrap().entityId);
-      let messageSequenceNumbers = message.as_ref().unwrap().get_data_sub_message_sequence_numbers();
-      if reader.is_some(){
+      let messageSequenceNumbers = message
+        .as_ref()
+        .unwrap()
+        .get_data_sub_message_sequence_numbers();
+      if reader.is_some() {
         buffer = message.unwrap().write_to_vec_with_ctx(context).unwrap();
-        
-        let readerProx ={
-          reader.unwrap()
-        };
-        for loc in readerProx.unicast_locator_list.iter(){
-          if loc.kind == LocatorKind::LOCATOR_KIND_UDPv4{
+
+        let readerProx = { reader.unwrap() };
+        for loc in readerProx.unicast_locator_list.iter() {
+          if loc.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
             uni_cast_adresses.push(loc.clone().to_socket_address())
           }
         }
-        for loc in readerProx.multicast_locator_list.iter(){
-          if loc.kind == LocatorKind::LOCATOR_KIND_UDPv4{
+        for loc in readerProx.multicast_locator_list.iter() {
+          if loc.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
             multi_cast_locators.push(loc.clone())
           }
         }
-      }     
+      }
       self.udp_sender.send_to_all(&buffer, &uni_cast_adresses);
-      for l in multi_cast_locators{
-        if l.kind == LocatorKind::LOCATOR_KIND_UDPv4{
+      for l in multi_cast_locators {
+        if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
           let a = l.to_socket_address();
           self.udp_sender.send_ipv4_multicast(&buffer, a);
         }
       }
-      self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(messageSequenceNumbers, &Guid)
+      self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
+        messageSequenceNumbers,
+        &Guid,
+      )
     }
   }
 
-  pub fn send_all_unsend_messages(&mut self){
+  pub fn send_all_unsend_messages(&mut self) {
     println!("Writer try to send all unsend messages");
     loop {
       let (message, guid) = self.get_next_reader_next_unsend_message();
-      if message.is_some() && guid.is_some(){
+      if message.is_some() && guid.is_some() {
         self.send_next_unsend_message();
-      }
-      else{
+      } else {
         break;
       }
     }
     println!("Writer all unsent messages have been sent");
   }
-  
-  
 
   fn create_submessage_header_flags(&self, kind: &SubmessageKind) -> SubmessageFlag {
     let mut sub_flags: SubmessageFlag = SubmessageFlag {
@@ -343,7 +359,11 @@ impl Writer {
     return s;
   }
 
-  pub fn get_DATA_msg_from_cache_change(&self, change: CacheChange, reader_entity_id : EntityId) -> SubMessage {
+  pub fn get_DATA_msg_from_cache_change(
+    &self,
+    change: CacheChange,
+    reader_entity_id: EntityId,
+  ) -> SubMessage {
     let mut data_message = Data::new();
     let mut representationIdentifierBytes: [u8; 2] = [0, 0];
     if self.endianness == Endianness::LittleEndian {
@@ -355,7 +375,7 @@ impl Writer {
       LittleEndian::read_u16(&representationIdentifierBytes);
     //The current version of the protocol (2.3) does not use the representation_options: The sender shall set the representation_options to zero.
     data_message.serialized_payload.representation_options = 0u16;
-    data_message.serialized_payload.value = (*change.data_value.unwrap().data()).clone();
+    data_message.serialized_payload.value = change.data_value.unwrap().value.clone();
     data_message.reader_id = reader_entity_id;
     data_message.writer_sn = change.sequence_number;
 
@@ -374,7 +394,7 @@ impl Writer {
     return s;
   }
 
-  pub fn get_heartbeat_msg(& self) -> SubMessage {
+  pub fn get_heartbeat_msg(&self) -> SubMessage {
     let mut first = SequenceNumber::from(1);
     let mut last = SequenceNumber::from(0);
     if self.history_cache.get_seq_num_min().is_some() {
@@ -390,7 +410,7 @@ impl Writer {
       last_sn: last,
       count: self.heartbeat_message_counter,
     };
-    
+
     let mes = &mut heartbeat.write_to_vec_with_ctx(self.endianness).unwrap();
     let size = mes.len();
     let head = self.create_submessage_header(SubmessageKind::HEARTBEAT, size as u16);
@@ -406,7 +426,7 @@ impl Writer {
     return s;
   }
 
-  pub fn write_user_msg(& self, change: CacheChange, reader_entity_id : EntityId) -> Message {
+  pub fn write_user_msg(&self, change: CacheChange, reader_entity_id: EntityId) -> Message {
     let mut message: Vec<u8> = vec![];
 
     let mut RTPSMessage: Message = Message::new();
@@ -420,10 +440,9 @@ impl Writer {
     return RTPSMessage;
   }
 
-
   /// AckNack Is negative if reader_sn_state contains some sequenceNumbers in reader_sn_state set
-  fn test_if_ack_nack_contains_not_recieved_sequence_numbers(&self, ack_nack: &AckNack) -> bool{
-    if ! &ack_nack.reader_sn_state.set.is_empty(){
+  fn test_if_ack_nack_contains_not_recieved_sequence_numbers(&self, ack_nack: &AckNack) -> bool {
+    if !&ack_nack.reader_sn_state.set.is_empty() {
       return true;
     }
     return false;
@@ -432,37 +451,46 @@ impl Writer {
   ///When receiving an ACKNACK Message indicating a Reader is missing some data samples, the Writer must
   //respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
   //sending a HEARTBEAT message when the sample is no longer available
-  pub fn handle_ack_nack(& mut self, guid_prefix : GuidPrefix, an: AckNack ){
+  pub fn handle_ack_nack(&mut self, guid_prefix: GuidPrefix, an: AckNack) {
     {
-      let reader_proxy  = self.matched_reader_lookup(guid_prefix, an.reader_id);
+      let reader_proxy = self.matched_reader_lookup(guid_prefix, an.reader_id);
 
       // if ack nac says reader has recieved data then change history cache chage status ???
-      if reader_proxy.is_none(){
+      if reader_proxy.is_none() {
         print!("reader proxy is not known!");
         panic!();
-   }
+      }
     }
-    if self.test_if_ack_nack_contains_not_recieved_sequence_numbers(&an) == false{
-      let reader_proxy  = self.matched_reader_lookup(guid_prefix, an.reader_id);
-      reader_proxy.unwrap().acked_changes_set(an.reader_sn_state.base);
-    }
-    else{
+    if self.test_if_ack_nack_contains_not_recieved_sequence_numbers(&an) == false {
+      let reader_proxy = self.matched_reader_lookup(guid_prefix, an.reader_id);
+      reader_proxy
+        .unwrap()
+        .acked_changes_set(an.reader_sn_state.base);
+    } else {
       // if ack nac says reader has NOT recieved data then add data to requested changes
-      let reader_proxy  = self.matched_reader_lookup(guid_prefix, an.reader_id);
-      reader_proxy.unwrap().add_requested_changes(an.reader_sn_state.set)
+      let reader_proxy = self.matched_reader_lookup(guid_prefix, an.reader_id);
+      reader_proxy
+        .unwrap()
+        .add_requested_changes(an.reader_sn_state.set)
     }
   }
 
-  pub fn matched_reader_add(&mut self, reader_proxy : RtpsReaderProxy ){
-    if self.readers.iter().any(|x| x.remote_group_entity_id == reader_proxy.remote_group_entity_id && x.remote_reader_guid == reader_proxy.remote_reader_guid ){
+  pub fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
+    if self.readers.iter().any(|x| {
+      x.remote_group_entity_id == reader_proxy.remote_group_entity_id
+        && x.remote_reader_guid == reader_proxy.remote_reader_guid
+    }) {
       panic!("Reader proxy with same group entityid and remotereader guid added already");
     };
     &self.readers.push(reader_proxy);
   }
 
-  pub fn matched_reader_remove(&mut self, reader_proxy : RtpsReaderProxy){
-    let pos = &self.readers.iter().position(|x|x.remote_group_entity_id == reader_proxy.remote_group_entity_id && x.remote_reader_guid == reader_proxy.remote_reader_guid);
-    if pos.is_some(){
+  pub fn matched_reader_remove(&mut self, reader_proxy: RtpsReaderProxy) {
+    let pos = &self.readers.iter().position(|x| {
+      x.remote_group_entity_id == reader_proxy.remote_group_entity_id
+        && x.remote_reader_guid == reader_proxy.remote_reader_guid
+    });
+    if pos.is_some() {
       &self.readers.remove(pos.unwrap());
     }
   }
@@ -470,10 +498,20 @@ impl Writer {
   ///This operation finds the ReaderProxy with GUID_t a_reader_guid from the set
   /// get guid Prefix from RTPS message main header
   /// get reader guid from AckNack submessage readerEntityId
-  pub fn matched_reader_lookup(&mut self, guid_prefix : GuidPrefix , reader_entity_id : EntityId) -> Option<&mut RtpsReaderProxy>{
-    let search_guid : GUID = GUID { guidPrefix : guid_prefix, entityId : reader_entity_id};
-    let pos = &self.readers.iter().position(|x|x.remote_reader_guid == search_guid);
-    if pos.is_some(){
+  pub fn matched_reader_lookup(
+    &mut self,
+    guid_prefix: GuidPrefix,
+    reader_entity_id: EntityId,
+  ) -> Option<&mut RtpsReaderProxy> {
+    let search_guid: GUID = GUID {
+      guidPrefix: guid_prefix,
+      entityId: reader_entity_id,
+    };
+    let pos = &self
+      .readers
+      .iter()
+      .position(|x| x.remote_reader_guid == search_guid);
+    if pos.is_some() {
       return Some(&mut self.readers[pos.unwrap()]);
     }
     return None;
@@ -482,58 +520,79 @@ impl Writer {
   ///This operation takes a CacheChange a_change as a parameter and determines whether all the ReaderProxy
   ///have acknowledged the CacheChange. The operation will return true if all ReaderProxy have acknowledged the
   ///corresponding CacheChange and false otherwise.
-  pub fn is_acked_by_all(&self, _cache_change : &CacheChange) -> bool{
-    for _proxy in &self.readers{
-      if _proxy.sequence_is_acked(_cache_change.sequence_number.clone()) == false{
-        return false
+  pub fn is_acked_by_all(&self, _cache_change: &CacheChange) -> bool {
+    for _proxy in &self.readers {
+      if _proxy.sequence_is_acked(_cache_change.sequence_number.clone()) == false {
+        return false;
       }
     }
     return true;
   }
 
-  pub fn increase_heartbeat_counter_and_remove_unsend_sequence_numbers(&mut self, sequence_numbers : Vec<SequenceNumber>, remote_reader_guid : &Option<GUID> ){
-    let sequenceNumbersCount :usize = {
-      sequence_numbers.len()
-    };
-    if remote_reader_guid.is_some(){
-      let readerProxy = self.matched_reader_lookup(remote_reader_guid.unwrap().guidPrefix, remote_reader_guid.unwrap().entityId);
-      if readerProxy.is_some(){
+  pub fn increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
+    &mut self,
+    sequence_numbers: Vec<SequenceNumber>,
+    remote_reader_guid: &Option<GUID>,
+  ) {
+    let sequenceNumbersCount: usize = { sequence_numbers.len() };
+    if remote_reader_guid.is_some() {
+      let readerProxy = self.matched_reader_lookup(
+        remote_reader_guid.unwrap().guidPrefix,
+        remote_reader_guid.unwrap().entityId,
+      );
+      if readerProxy.is_some() {
         let reader_prox = readerProxy.unwrap();
-        for SequenceNumber in sequence_numbers{
+        for SequenceNumber in sequence_numbers {
           reader_prox.remove_unsend_change(SequenceNumber);
         }
       }
     }
-    if remote_reader_guid.is_some(){
-      for x in 0..sequenceNumbersCount{
+    if remote_reader_guid.is_some() {
+      for x in 0..sequenceNumbersCount {
         self.increase_heartbeat_counter();
       }
     }
   }
 
-  pub fn increase_heartbeat_counter_and_remove_unsend(&mut self, message: &Option<Message>, remote_reader_guid : &Option<GUID> ){
+  pub fn increase_heartbeat_counter_and_remove_unsend(
+    &mut self,
+    message: &Option<Message>,
+    remote_reader_guid: &Option<GUID>,
+  ) {
     if message.is_some() {
-      let sequence_numbers = message.as_ref().unwrap().get_data_sub_message_sequence_numbers();
+      let sequence_numbers = message
+        .as_ref()
+        .unwrap()
+        .get_data_sub_message_sequence_numbers();
       for sq in sequence_numbers {
-        let readerProxy = self.matched_reader_lookup(remote_reader_guid.unwrap().guidPrefix, remote_reader_guid.unwrap().entityId).unwrap();
+        let readerProxy = self
+          .matched_reader_lookup(
+            remote_reader_guid.unwrap().guidPrefix,
+            remote_reader_guid.unwrap().entityId,
+          )
+          .unwrap();
         readerProxy.remove_unsend_change(sq)
       }
     }
   }
 
   // TODO Used for test/debugging purposes
-  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
+  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<Vec<u8>> {
     println!(
       "history cache !!!! {:?}",
       self.history_cache.get_change(sequence_number).unwrap()
     );
-    let a = self
+    let a = (*self
       .history_cache
       .get_change(sequence_number)
       .unwrap()
       .data_value
+      .clone()
+      .unwrap()
+      .value)
+      .to_vec()
       .clone();
-    return a;
+    return Some(a);
   }
   // Used for test/debugging purposes
   pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> &CacheChange {
@@ -552,24 +611,26 @@ impl Writer {
     return vec![start.unwrap().clone(), end.unwrap().clone()];
   }
 
-
-  pub fn writer_set_unsent_changes(&mut self){
-    for reader in &mut self.readers{
+  pub fn writer_set_unsent_changes(&mut self) {
+    for reader in &mut self.readers {
       reader.unsend_changes_set(self.last_change_sequence_number.clone());
     }
   }
 
   // TODO Used for test/debugging purposes CAN BE DELETED WHEN tests are created again.
-  pub fn handle_new_dds_data_message(&mut self, sample :DDSData) {
+  pub fn handle_new_dds_data_message(&mut self, sample: DDSData) {
     self.increase_last_change_sequence_number();
     let dds_data = sample;
-    let change = CacheChange::new(self.get_guid(),self.last_change_sequence_number, Some(dds_data));
+    let change = CacheChange::new(
+      self.get_guid(),
+      self.last_change_sequence_number,
+      Some(dds_data),
+    );
     self.history_cache.add_change(change);
-    for reader in &mut self.readers{
+    for reader in &mut self.readers {
       reader.unsend_changes_set(self.last_change_sequence_number.clone());
     }
   }
-
 }
 
 impl Entity for Writer {
@@ -578,63 +639,59 @@ impl Entity for Writer {
   }
 }
 
-
 impl Endpoint for Writer {
   fn as_endpoint(&self) -> &crate::structure::endpoint::EndpointAttributes {
     &self.endpoint_attributes
   }
 }
 
-
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{messages::submessages::submessage_elements::serialized_payload::SerializedPayload, dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc, traits::key::{Keyed, DefaultKey}}, network::udp_listener::UDPListener};
+  use crate::{
+    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+    dds::{
+      qos::QosPolicies,
+      participant::DomainParticipant,
+      typedesc::TypeDesc,
+      traits::key::{Keyed, DefaultKey},
+    },
+    network::udp_listener::UDPListener,
+  };
   use serde::Serialize;
   use std::thread;
-  
+  use crate::dds::traits::key::Key;
+
   #[derive(Serialize)]
   struct RandomData {
-    key: DefaultKey,
     a: i64,
     b: String,
   }
 
   impl Keyed for RandomData {
-    type K = DefaultKey;
-    fn get_key(&self) -> &Self::K {
-      &self.key
-    }
-
-    fn default() -> Self {
-      RandomData {
-        key: DefaultKey::default(),
-        a: 0,
-        b: "".to_string(),
-      }
+    fn get_key(&self) -> Box<dyn Key> {
+      let key = DefaultKey::new(self.a);
+      Box::new(key)
     }
   }
 
-
   #[test]
-  fn create_writer_add_readers_create_messages(){
+  fn create_writer_add_readers_create_messages() {
     let new_guid = GUID::new();
     let (_sender, reciever) = mio_channel::channel::<DDSData>();
-    let mut writer = Writer::new(new_guid,reciever);
-    let dds_data : DDSData = DDSData::new(SerializedPayload::default());
-    let dds_data2 : DDSData = DDSData::new(SerializedPayload::default());
-        
-   
-    let reader_proxy1 : RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
-    let reader_proxy2 : RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
-    let reader_proxy3 : RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
-    
+    let mut writer = Writer::new(new_guid, reciever);
+    let dds_data: DDSData = DDSData::new(SerializedPayload::default());
+    let dds_data2: DDSData = DDSData::new(SerializedPayload::default());
+
+    let reader_proxy1: RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
+    let reader_proxy2: RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
+    let reader_proxy3: RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
+
     // add readers
     writer.matched_reader_add(reader_proxy1);
     writer.matched_reader_add(reader_proxy2);
     writer.matched_reader_add(reader_proxy3);
 
-   
     assert_eq!(writer.can_send_some(), false);
     // make change to history cahce
     writer.handle_new_dds_data_message(dds_data);
@@ -642,18 +699,18 @@ mod tests {
 
     // Three messages can be generated
     let RTPS1 = writer.get_next_reader_next_unsend_message();
-    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS1.0,&RTPS1.1);
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS1.0, &RTPS1.1);
 
     let RTPS2 = writer.get_next_reader_next_unsend_message();
-    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS2.0,&RTPS2.1);
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS2.0, &RTPS2.1);
 
     let RTPS3 = writer.get_next_reader_next_unsend_message();
-    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS3.0,&RTPS3.1);
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS3.0, &RTPS3.1);
 
     let isSendToAll = writer.sequence_is_sent_to_all_readers(SequenceNumber::from(1));
     let reaminingReaders = writer.sequence_needs_to_be_send_to(SequenceNumber::from(1));
 
-    println!("is Send To All  {:?}",isSendToAll);
+    println!("is Send To All  {:?}", isSendToAll);
     println!("need to be send to {:?}", reaminingReaders);
 
     assert_eq!(writer.can_send_some(), false);
@@ -661,25 +718,24 @@ mod tests {
     writer.handle_new_dds_data_message(dds_data2);
     assert_eq!(writer.can_send_some(), true);
 
-     // Three messages can be ganerated
-     let RTPS4 = writer.get_next_reader_next_unsend_message();
-     writer.increase_heartbeat_counter_and_remove_unsend(&RTPS4.0,&RTPS4.1);
- 
-     let RTPS5 = writer.get_next_reader_next_unsend_message();
-     writer.increase_heartbeat_counter_and_remove_unsend(&RTPS5.0,&RTPS5.1);
- 
-     let RTPS6 = writer.get_next_reader_next_unsend_message();
-     writer.increase_heartbeat_counter_and_remove_unsend(&RTPS6.0,&RTPS6.1);
+    // Three messages can be ganerated
+    let RTPS4 = writer.get_next_reader_next_unsend_message();
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS4.0, &RTPS4.1);
 
-     let reaminingReaders2 = writer.sequence_needs_to_be_send_to(SequenceNumber::from(2));
+    let RTPS5 = writer.get_next_reader_next_unsend_message();
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS5.0, &RTPS5.1);
 
-     println!("need to be send to {:?}", reaminingReaders2);
-     assert_eq!(writer.can_send_some(), false);
+    let RTPS6 = writer.get_next_reader_next_unsend_message();
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS6.0, &RTPS6.1);
+
+    let reaminingReaders2 = writer.sequence_needs_to_be_send_to(SequenceNumber::from(2));
+
+    println!("need to be send to {:?}", reaminingReaders2);
+    assert_eq!(writer.can_send_some(), false);
   }
 
   #[test]
-  fn test_writer_recieves_datawriter_cache_change_notifications(){
-
+  fn test_writer_recieves_datawriter_cache_change_notifications() {
     let listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
 
     let domain_participant = DomainParticipant::new();
@@ -693,7 +749,7 @@ mod tests {
     let topic = domain_participant
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), qos.clone())
       .expect("Failed to create topic");
-     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let mut data_writer = publisher
       .create_datawriter(&topic, qos.clone())
       .expect("Failed to create datawriter");
@@ -718,19 +774,19 @@ mod tests {
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let writeResult = data_writer.write(data, None).expect("Unable to write data");
 
-    
-    println!("writerResult:  {:?}",writeResult);
+    println!("writerResult:  {:?}", writeResult);
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let writeResult = data_writer.write(data2, None).expect("Unable to write data");
+    let writeResult = data_writer
+      .write(data2, None)
+      .expect("Unable to write data");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    println!("writerResult:  {:?}",writeResult);
-    let writeResult = data_writer.write(data3, None).expect("Unable to write data");
+    println!("writerResult:  {:?}", writeResult);
+    let writeResult = data_writer
+      .write(data3, None)
+      .expect("Unable to write data");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    println!("writerResult:  {:?}",writeResult);
-
+    println!("writerResult:  {:?}", writeResult);
   }
 }
-
-

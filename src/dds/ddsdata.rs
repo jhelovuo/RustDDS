@@ -1,84 +1,65 @@
-use crate::dds::traits::key::{DefaultKey, Keyed};
-use serde::{Serialize, Deserialize};
+use crate::dds::traits::key::Keyed;
+use serde::Serialize;
 use std::sync::Arc;
-use crate::dds::traits::named::Named;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::serialization::cdrSerializer::to_little_endian_binary;
 use crate::structure::guid::EntityId;
-
-pub trait DDSDataTrait<'a>: Deserialize<'a> + Keyed {}
-
-#[derive(Deserialize)]
-pub struct DummyData {
-  key: DefaultKey,
-}
-
-impl DummyData {
-  pub fn default() -> DummyData {
-    DummyData {
-      key: DefaultKey::default(),
-    }
-  }
-}
-
-impl Named for DummyData {
-  fn name() -> String {
-    "DummyData".to_string()
-  }
-  fn identifier() -> u16 {
-    0
-  }
-}
-
-impl Keyed for DummyData {
-  type K = DefaultKey;
-  fn get_key(&self) -> &Self::K {
-    &self.key
-  }
-
-  fn default() -> Self {
-    Self {
-      key: DefaultKey::default(),
-    }
-  }
-}
-
-impl<'a> DDSDataTrait<'a> for DummyData {}
+use crate::structure::time::Timestamp;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DDSData {
-  key: DefaultKey,
+  source_timestamp: Timestamp,
   reader_id: EntityId,
   writer_id: EntityId,
-  value: Arc<Vec<u8>>,
+  value: Arc<SerializedPayload>,
 }
 
 impl DDSData {
   pub fn new(payload: SerializedPayload) -> DDSData {
     DDSData {
-      key: DefaultKey::random_key(),
+      source_timestamp: Timestamp::from(time::get_time()),
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: Arc::new(payload.value),
+      value: Arc::new(payload),
     }
   }
 
-  pub fn from<D>(data: D) -> DDSData
+  pub fn from_arc(payload: Arc<SerializedPayload>) -> DDSData {
+    DDSData {
+      source_timestamp: Timestamp::from(time::get_time()),
+      reader_id: EntityId::ENTITYID_UNKNOWN,
+      writer_id: EntityId::ENTITYID_UNKNOWN,
+      value: payload.clone(),
+    }
+  }
+
+  pub fn from<D>(data: &D, source_timestamp: Option<Timestamp>) -> DDSData
   where
     D: Keyed + Serialize,
   {
-    let key = DefaultKey::random_key();
     let value = to_little_endian_binary::<D>(&data);
     let value = match value {
       Ok(val) => val,
       // TODO: handle error
       _ => Vec::new(),
     };
+
+    let ts: Timestamp = match source_timestamp {
+      Some(t) => t,
+      None => Timestamp::from(time::get_time()),
+    };
+
+    let mut serialized_payload = SerializedPayload::new();
+    // TODO: read identifier
+    serialized_payload.representation_identifier = 0;
+    serialized_payload.representation_options = 0;
+    serialized_payload.value = value;
+
     DDSData {
-      key,
+      source_timestamp: ts,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: Arc::new(value),
+      value: Arc::new(serialized_payload),
     }
   }
 
@@ -98,24 +79,11 @@ impl DDSData {
     self.writer_id = writer_id;
   }
 
-  pub fn data(&self) -> Arc<Vec<u8>> {
+  pub fn value(&self) -> Arc<SerializedPayload> {
     self.value.clone()
   }
-}
 
-impl Keyed for DDSData {
-  type K = DefaultKey;
-
-  fn get_key(&self) -> &Self::K {
-    &self.key
-  }
-
-  fn default() -> Self {
-    Self {
-      key: DefaultKey::default(),
-      reader_id: EntityId::ENTITYID_UNKNOWN,
-      writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: Arc::new(Vec::new()),
-    }
+  pub fn data(&self) -> Vec<u8> {
+    (*self.value).value.clone()
   }
 }

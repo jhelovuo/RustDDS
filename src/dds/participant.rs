@@ -236,7 +236,7 @@ impl std::fmt::Debug for DomainParticipant {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  // use super::*;
 
   use std::net::SocketAddr;
   use crate::network::udp_sender::UDPSender;
