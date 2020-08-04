@@ -19,10 +19,9 @@ use std::collections::{HashSet, HashMap};
 
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
+use crate::dds::message_receiver::MessageReceiverInfo;
 
 pub struct Reader {
-  // Do we need to access information in messageReceiver?? Like reply locators.
-  //my_message_receiver: Option<&'mr MessageReceiver>,
   ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>,
 
   history_cache: HistoryCache,
@@ -102,13 +101,13 @@ impl Reader {
   }
 
   // handles regular data message and updates history cache
-  pub fn handle_data_msg(&mut self, data: Data, timestamp: Timestamp) {
+  pub fn handle_data_msg(&mut self, data: Data, mr_info: MessageReceiverInfo) {
     let user_data = true; // Different action for discovery data?
     if user_data {
+      let writer_guid = GUID::new_with_prefix_and_id(mr_info.source_guid_prefix, data.writer_id);
       //let writer_proxy = self.get_writer_proxy();
-      self.make_cache_change(data);
-      self.send_datasample(timestamp);
-
+      self.make_cache_change(data, writer_guid);
+      self.send_datasample(mr_info.timestamp);
       self.notify_cache_change();
     } else {
       // is discovery data
@@ -199,15 +198,22 @@ impl Reader {
   }
 
   // update history cache
+<<<<<<< HEAD
   fn make_cache_change(&mut self, data: Data) {
     let instance_handle = self.history_cache.generate_free_instance_handle();
     let mut ddsdata = DDSData::new(instance_handle, data.serialized_payload);
+||||||| merged common ancestors
+  fn make_cache_change(&mut self, data: Data) {
+    let mut ddsdata = DDSData::new(data.serialized_payload);
+=======
+  fn make_cache_change(&mut self, data: Data, writer_guid: GUID) {
+    let mut ddsdata = DDSData::new(data.serialized_payload);
+>>>>>>> Added messageReceiverinfo for reader. Updated it to needed places
     let writer_guid =
       GUID::new_with_prefix_and_id(GuidPrefix::GUIDPREFIX_UNKNOWN, data.writer_id.clone());
 
     ddsdata.set_reader_id(data.reader_id);
-    ddsdata.set_writer_id(data.writer_id.clone());
-
+    ddsdata.set_writer_id(data.writer_id);
     let change = CacheChange::new(writer_guid, data.writer_sn, Some(ddsdata));
     self.history_cache.add_change(change);
   }
@@ -276,7 +282,7 @@ mod tests {
     data.reader_id = reader.get_guid().entityId;
     data.writer_id = EntityId::createCustomEntityID([4, 5, 6], 222);
 
-    reader.handle_data_msg(data.clone(), Timestamp::from(time::get_time()));
+    reader.handle_data_msg(data.clone(), MessageReceiverInfo::default());
 
     let (datasample, _time) = rec.try_recv().unwrap();
     assert_eq!(datasample.data(), data.serialized_payload.value);
@@ -295,7 +301,7 @@ mod tests {
 
     let d = Data::new();
     let d_seqnum = SequenceNumber::from(1);
-    new_reader.handle_data_msg(d.clone(), Timestamp::TIME_INVALID);
+    new_reader.handle_data_msg(d.clone(), MessageReceiverInfo::default());
 
     let (rec_data, _time) = rec.try_recv().unwrap();
     let change = CacheChange::new(

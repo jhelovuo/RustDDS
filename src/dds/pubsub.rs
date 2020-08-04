@@ -206,11 +206,9 @@ impl Subscriber {
             }
           }
           ADD_DATAREADER_TOKEN => {
-            let (dr, r) = self.create_datareader(self.participant_guid, self.qos.clone());
+            let dr = self.create_datareader(self.participant_guid, self.qos.clone());
 
-            let reader = r.unwrap();
             self.datareaders.push(dr.unwrap());
-            self.sender_add_reader.send(reader).unwrap();
           }
           REMOVE_DATAREADER_TOKEN => {
             let old_dr_guid = self.receiver_remove_datareader.try_recv().unwrap();
@@ -233,7 +231,7 @@ impl Subscriber {
     &mut self,
     participant_guid: GUID,
     qos: QosPolicies,
-  ) -> (Result<DataReader>, Result<Reader>) {
+  ) -> Result<DataReader> {
     let new_datareader = DataReader::new(qos);
 
     let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
@@ -252,7 +250,8 @@ impl Subscriber {
     self
       .reader_channel_ends
       .push((matching_reader.get_entity_id(), rec));
-    (Ok(new_datareader), Ok(matching_reader))
+    self.sender_add_reader.send(matching_reader).unwrap();
+    Ok(new_datareader)
   }
 
   pub fn lookup_datareader(&self, _topic_name: String) -> Option<Vec<&DataReader>> {
@@ -269,7 +268,7 @@ mod tests {
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
   use mio_extras::channel as mio_channel;
-  use crate::structure::time::Timestamp;
+  use crate::dds::message_receiver::MessageReceiverInfo;
 
   #[test]
   fn sub_subpoll_test() {
@@ -278,7 +277,7 @@ mod tests {
     let (_sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
     let (_sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
 
-    let (sender_add_reader, _receiver_add_reader) = mio_channel::channel::<Reader>();
+    let (sender_add_reader, receiver_add_reader) = mio_channel::channel::<Reader>();
     let (sender_remove_reader, _receiver_remove_reader) = mio_channel::channel::<GUID>();
 
     let mut sub = Subscriber::new(
@@ -301,19 +300,20 @@ mod tests {
       )
       .unwrap();
 
-    let (dr, r) = sub.create_datareader(sub.participant_guid, sub.qos.clone());
-
-    let mut reader = r.unwrap();
+    let dr = sub.create_datareader(sub.participant_guid, sub.qos.clone());
+    
+    
+    let mut reader = receiver_add_reader.try_recv().unwrap();
     sub.datareaders.push(dr.unwrap());
 
     let child = thread::spawn(move || {
       std::thread::sleep(Duration::new(0, 500));
       let d = Data::default();
-      reader.handle_data_msg(d, Timestamp::TIME_INVALID);
+      reader.handle_data_msg(d, MessageReceiverInfo::default());
 
       std::thread::sleep(Duration::new(0, 500));
       let d2 = Data::default();
-      reader.handle_data_msg(d2, Timestamp::TIME_INVALID);
+      reader.handle_data_msg(d2, MessageReceiverInfo::default());
 
       std::thread::sleep(Duration::new(0, 500_000));
       sender_stop.send(0).unwrap();

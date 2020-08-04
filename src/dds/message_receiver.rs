@@ -6,7 +6,7 @@ use crate::messages::submessages::submessages::EntitySubmessage;
 use crate::structure::guid::{GuidPrefix, GUID};
 use crate::structure::entity::Entity;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
-use crate::structure::time::Time;
+use crate::structure::time::{Time, Timestamp};
 use crate::serialization::submessage::SubMessage;
 
 use crate::messages::submessages::info_destination::InfoDestination;
@@ -30,7 +30,7 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 pub struct MessageReceiver {
   pub available_readers: Vec<Reader>,
 
-  participant_guid_prefix: GuidPrefix,
+  own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
   pub source_vendor_id: VendorId,
   pub source_guid_prefix: GuidPrefix,
@@ -51,7 +51,7 @@ impl MessageReceiver {
 
     MessageReceiver {
       available_readers: Vec::new(),
-      participant_guid_prefix,
+      own_guid_prefix: participant_guid_prefix,
 
       source_version: ProtocolVersion::PROTOCOLVERSION,
       source_vendor_id: VendorId::VENDOR_UNKNOWN,
@@ -87,6 +87,17 @@ impl MessageReceiver {
 
     self.pos = 0;
     self.submessage_count = 0;
+  }
+
+  fn give_message_receiver_info(&self) -> MessageReceiverInfo {
+    MessageReceiverInfo {
+      own_guid_prefix: self.own_guid_prefix,
+      source_guid_prefix: self.source_guid_prefix,
+      unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
+      multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
+      have_timestamp: self.have_timestamp,
+      timestamp: self.timestamp,
+    }
   }
 
   pub fn add_reader(&mut self, new_reader: Reader) {
@@ -176,7 +187,7 @@ impl MessageReceiver {
       return;
     }
     self.reset();
-    self.dest_guid_prefix = self.participant_guid_prefix;
+    self.dest_guid_prefix = self.own_guid_prefix;
 
     if !self.handle_RTPS_header(&msg) {
       println!("Header not in correct form");
@@ -237,19 +248,19 @@ impl MessageReceiver {
   }
 
   fn send_submessage(&mut self, submessage: EntitySubmessage) {
-    if self.dest_guid_prefix != self.participant_guid_prefix {
+    if self.dest_guid_prefix != self.own_guid_prefix {
       println!("Ofcourse, the example messages are not for this participant?");
       println!("dest_guid_prefix: {:?}", self.dest_guid_prefix);
-      println!("participant guid: {:?}", self.participant_guid_prefix);
+      println!("participant guid: {:?}", self.own_guid_prefix);
       return; // Wrong target received
     }
 
     // TODO! If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
     match submessage {
       EntitySubmessage::Data(data, _) => {
-        let timestamp = self.timestamp;
+        let mr_info = self.give_message_receiver_info();
         let target_reader = self.get_reader(data.reader_id).unwrap();
-        target_reader.handle_data_msg(data, timestamp);
+        target_reader.handle_data_msg(data, mr_info);
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
         let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
@@ -311,7 +322,7 @@ impl MessageReceiver {
         if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
           self.dest_guid_prefix = info_dest.guid_prefix;
         } else {
-          self.dest_guid_prefix = self.participant_guid_prefix;
+          self.dest_guid_prefix = self.own_guid_prefix;
         }
       }
       _ => return false,
@@ -345,6 +356,28 @@ impl MessageReceiver {
     true
   }
 } // impl messageReceiver
+
+pub struct MessageReceiverInfo {
+  pub own_guid_prefix: GuidPrefix,
+  pub source_guid_prefix: GuidPrefix,
+  pub unicast_reply_locator_list: LocatorList,
+  pub multicast_reply_locator_list: LocatorList,
+  pub have_timestamp: bool,
+  pub timestamp: Time,
+}
+
+impl Default for MessageReceiverInfo {
+  fn default() -> Self {
+    Self {
+      own_guid_prefix: GuidPrefix::default(),
+      source_guid_prefix: GuidPrefix::default(),
+      unicast_reply_locator_list: LocatorList::default(),
+      multicast_reply_locator_list: LocatorList::default(),
+      have_timestamp: true,
+      timestamp: Timestamp::TIME_INVALID,
+    }
+  }
+}
 
 #[cfg(test)]
 
