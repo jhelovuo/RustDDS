@@ -24,9 +24,9 @@ use mio_extras::channel as mio_channel;
 use mio::{Events, Token, Poll};
 
 use crate::dds::ddsdata::DDSData;
-use crate::structure::{ entity::{Entity, EntityAttributes}, endpoint::{EndpointAttributes, Endpoint}};
+use crate::{network::udp_sender::UDPSender, structure::{ entity::{Entity, EntityAttributes}, endpoint::{EndpointAttributes, Endpoint}, locator::{Locator, LocatorKind}}};
 use super::rtps_reader_proxy::RtpsReaderProxy;
-use std::time::Duration;
+use std::{net::{Ipv4Addr, SocketAddr}, time::Duration};
 
 
 pub struct Writer {
@@ -89,6 +89,8 @@ pub struct Writer {
   readers : Vec<RtpsReaderProxy>,
 
   message : Option<Message>,
+
+  udp_sender : UDPSender,
 }
 
 impl Writer {
@@ -101,8 +103,6 @@ impl Writer {
       source_vendor_id : VendorId::VENDOR_UNKNOWN,
       source_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
       dest_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
-      //participant_guid_prefix :participant_guid_prefix,
-      //writer_id : writer_id,
       endianness : Endianness::LittleEndian,
       heartbeat_message_counter : 0,
       
@@ -115,14 +115,14 @@ impl Writer {
       entity_attributes,
       //enpoint_attributes: EndpointAttributes::default(),
       cache_change_receiver,
-      readers : vec![],
+      readers : vec![RtpsReaderProxy::new_for_unit_testing(1000),RtpsReaderProxy::new_for_unit_testing(1001),RtpsReaderProxy::new_for_unit_testing(1002) ],
       message : None,
       endpoint_attributes : EndpointAttributes::default(),
+      udp_sender : UDPSender::new_with_random_port(),
     
     }
     //entity_attributes.guid.entityId.
   }
-
 
   /// To know when token represents a writer we should look entity attribute kind
   pub fn get_entity_token(&self) -> Token {
@@ -153,6 +153,10 @@ impl Writer {
     self.last_change_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
   }
 
+  fn increase_heartbeat_counter(&mut self){
+    self.heartbeat_message_counter = self.heartbeat_message_counter + 1; 
+  }
+
   pub fn can_send_some(&self) -> bool {
     for reader_proxy in &self.readers{
       if reader_proxy.can_send() {return true;}
@@ -179,7 +183,7 @@ impl Writer {
     return readers_remaining; 
   }
 
-  pub fn get_next_reader_next_unsend_message (&mut self) -> (Option<Message>, Option<GUID> ){
+  fn get_next_reader_next_unsend_message (&mut self) -> (Option<Message>, Option<GUID> ){
     for reader_proxy in &mut self.readers{
       if reader_proxy.can_send() 
       {
@@ -196,6 +200,80 @@ impl Writer {
     }
     return (None, None);
   }
+
+  fn get_next_reader_next_requested_message(&mut self) -> (Option<Message>, Option<GUID>){
+    for reader_proxy in &mut self.readers{
+      if reader_proxy.can_send() 
+      {
+        let sequenceNumber = reader_proxy.next_requested_change();
+        let change = self.history_cache.get_change(*sequenceNumber.unwrap());
+        let message:Message;
+        let reader_entity_id = reader_proxy.remote_reader_guid.entityId.clone();
+        let remote_reader_guid = reader_proxy.remote_reader_guid.clone();
+        {
+          message = self.write_user_msg(change.unwrap().clone(),reader_entity_id);
+        }
+        return (Some(message),Some(remote_reader_guid));
+      }
+    }
+    return (None, None);
+  }
+
+  fn send_next_unsend_message(&mut self){
+    println!("send next unsend message");
+    let mut uni_cast_adresses : Vec<SocketAddr> = vec![];
+    let mut multi_cast_locators : Vec<Locator> = vec![];
+    let mut buffer:Vec<u8> = vec![];
+    let mut context = Endianness::LittleEndian;
+    {
+      if self.endianness == Endianness::LittleEndian {context == Endianness::LittleEndian} else{context == Endianness::BigEndian};
+    }
+    let (message,Guid) = self.get_next_reader_next_unsend_message();
+    if message.is_some() && Guid.is_some(){
+      let reader = self.matched_reader_lookup(Guid.unwrap().guidPrefix, Guid.unwrap().entityId);
+      let messageSequenceNumbers = message.as_ref().unwrap().get_data_sub_message_sequence_numbers();
+      if reader.is_some(){
+        buffer = message.unwrap().write_to_vec_with_ctx(context).unwrap();
+        
+        let readerProx ={
+          reader.unwrap()
+        };
+        for loc in readerProx.unicast_locator_list.iter(){
+          if loc.kind == LocatorKind::LOCATOR_KIND_UDPv4{
+            uni_cast_adresses.push(loc.clone().to_socket_address())
+          }
+        }
+        for loc in readerProx.multicast_locator_list.iter(){
+          if loc.kind == LocatorKind::LOCATOR_KIND_UDPv4{
+            multi_cast_locators.push(loc.clone())
+          }
+        }
+      }     
+      self.udp_sender.send_to_all(&buffer, &uni_cast_adresses);
+      for l in multi_cast_locators{
+        if l.kind == LocatorKind::LOCATOR_KIND_UDPv4{
+          let a = l.to_socket_address();
+          self.udp_sender.send_ipv4_multicast(&buffer, a);
+        }
+      }
+      self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(messageSequenceNumbers, &Guid)
+    }
+  }
+
+  pub fn send_all_unsend_messages(&mut self){
+    println!("Writer try to send all unsend messages");
+    loop {
+      let (message, guid) = self.get_next_reader_next_unsend_message();
+      if message.is_some() && guid.is_some(){
+        self.send_next_unsend_message();
+      }
+      else{
+        break;
+      }
+    }
+    println!("Writer all unsent messages have been sent");
+  }
+  
   
 
   fn create_submessage_header_flags(&self, kind: &SubmessageKind) -> SubmessageFlag {
@@ -333,16 +411,12 @@ impl Writer {
 
     let mut RTPSMessage: Message = Message::new();
     RTPSMessage.set_header(self.create_message_header());
-
     RTPSMessage.add_submessage(self.get_TS_submessage());
     let data = self.get_DATA_msg_from_cache_change(change.clone(), reader_entity_id);
     RTPSMessage.add_submessage(data);
     RTPSMessage.add_submessage(self.get_heartbeat_msg());
-
-    println!("RTPS message: {:?}", RTPSMessage);
     message.append(&mut RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap());
 
-    println!("serialized RTPS message: {:?}", message);
     return RTPSMessage;
   }
 
@@ -400,10 +474,7 @@ impl Writer {
     let search_guid : GUID = GUID { guidPrefix : guid_prefix, entityId : reader_entity_id};
     let pos = &self.readers.iter().position(|x|x.remote_reader_guid == search_guid);
     if pos.is_some(){
-      println!("mathed lookup is Some");
-
       return Some(&mut self.readers[pos.unwrap()]);
-      //return self.readers[pos];
     }
     return None;
   }
@@ -420,21 +491,32 @@ impl Writer {
     return true;
   }
 
-  pub fn increase_heartbeat_counter_and_remove_unsend(&mut self, message: Option<Message>, remote_reader_guid : Option<GUID> ){
-    if message.is_some() {
-      for mes in message.unwrap().submessages(){
-        if mes.submessage.is_some() {
-          let entity_sub_message = mes.submessage.unwrap();
-          let maybeDataMessage = entity_sub_message.get_data_submessage();
-          if maybeDataMessage.is_some(){
-            let sequenceNumber = maybeDataMessage.unwrap().writer_sn;
-
-            self.heartbeat_message_counter = self.heartbeat_message_counter + 1;
-            
-            let readerProxy = self.matched_reader_lookup(remote_reader_guid.unwrap().guidPrefix, remote_reader_guid.unwrap().entityId).unwrap();
-            readerProxy.remove_unsend_change(sequenceNumber)
-          }
+  pub fn increase_heartbeat_counter_and_remove_unsend_sequence_numbers(&mut self, sequence_numbers : Vec<SequenceNumber>, remote_reader_guid : &Option<GUID> ){
+    let sequenceNumbersCount :usize = {
+      sequence_numbers.len()
+    };
+    if remote_reader_guid.is_some(){
+      let readerProxy = self.matched_reader_lookup(remote_reader_guid.unwrap().guidPrefix, remote_reader_guid.unwrap().entityId);
+      if readerProxy.is_some(){
+        let reader_prox = readerProxy.unwrap();
+        for SequenceNumber in sequence_numbers{
+          reader_prox.remove_unsend_change(SequenceNumber);
         }
+      }
+    }
+    if remote_reader_guid.is_some(){
+      for x in 0..sequenceNumbersCount{
+        self.increase_heartbeat_counter();
+      }
+    }
+  }
+
+  pub fn increase_heartbeat_counter_and_remove_unsend(&mut self, message: &Option<Message>, remote_reader_guid : &Option<GUID> ){
+    if message.is_some() {
+      let sequence_numbers = message.as_ref().unwrap().get_data_sub_message_sequence_numbers();
+      for sq in sequence_numbers {
+        let readerProxy = self.matched_reader_lookup(remote_reader_guid.unwrap().guidPrefix, remote_reader_guid.unwrap().entityId).unwrap();
+        readerProxy.remove_unsend_change(sq)
       }
     }
   }
@@ -507,7 +589,7 @@ impl Endpoint for Writer {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{messages::submessages::submessage_elements::serialized_payload::SerializedPayload, dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc, traits::key::{Keyed, DefaultKey}}};
+  use crate::{messages::submessages::submessage_elements::serialized_payload::SerializedPayload, dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc, traits::key::{Keyed, DefaultKey}}, network::udp_listener::UDPListener};
   use serde::Serialize;
   use std::thread;
   
@@ -560,13 +642,13 @@ mod tests {
 
     // Three messages can be generated
     let RTPS1 = writer.get_next_reader_next_unsend_message();
-    writer.increase_heartbeat_counter_and_remove_unsend(RTPS1.0,RTPS1.1);
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS1.0,&RTPS1.1);
 
     let RTPS2 = writer.get_next_reader_next_unsend_message();
-    writer.increase_heartbeat_counter_and_remove_unsend(RTPS2.0,RTPS2.1);
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS2.0,&RTPS2.1);
 
     let RTPS3 = writer.get_next_reader_next_unsend_message();
-    writer.increase_heartbeat_counter_and_remove_unsend(RTPS3.0,RTPS3.1);
+    writer.increase_heartbeat_counter_and_remove_unsend(&RTPS3.0,&RTPS3.1);
 
     let isSendToAll = writer.sequence_is_sent_to_all_readers(SequenceNumber::from(1));
     let reaminingReaders = writer.sequence_needs_to_be_send_to(SequenceNumber::from(1));
@@ -581,13 +663,13 @@ mod tests {
 
      // Three messages can be ganerated
      let RTPS4 = writer.get_next_reader_next_unsend_message();
-     writer.increase_heartbeat_counter_and_remove_unsend(RTPS4.0,RTPS4.1);
+     writer.increase_heartbeat_counter_and_remove_unsend(&RTPS4.0,&RTPS4.1);
  
      let RTPS5 = writer.get_next_reader_next_unsend_message();
-     writer.increase_heartbeat_counter_and_remove_unsend(RTPS5.0,RTPS5.1);
+     writer.increase_heartbeat_counter_and_remove_unsend(&RTPS5.0,&RTPS5.1);
  
      let RTPS6 = writer.get_next_reader_next_unsend_message();
-     writer.increase_heartbeat_counter_and_remove_unsend(RTPS6.0,RTPS6.1);
+     writer.increase_heartbeat_counter_and_remove_unsend(&RTPS6.0,&RTPS6.1);
 
      let reaminingReaders2 = writer.sequence_needs_to_be_send_to(SequenceNumber::from(2));
 
@@ -597,6 +679,8 @@ mod tests {
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications(){
+
+    let listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
 
     let domain_participant = DomainParticipant::new();
     let qos = QosPolicies::qos_none();
@@ -645,6 +729,7 @@ mod tests {
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     println!("writerResult:  {:?}",writeResult);
+
   }
 }
 

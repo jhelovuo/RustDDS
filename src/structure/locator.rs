@@ -14,7 +14,7 @@ impl LocatorKind {
   pub const LOCATOR_KIND_UDPv6: LocatorKind = LocatorKind { value: 2 };
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Locator {
   pub kind: LocatorKind,
   pub port: u32,
@@ -32,12 +32,18 @@ impl Locator {
 
   pub const LOCATOR_ADDRESS_INVALID: [u8; 16] = [0x00; 16];
   pub const LOCATOR_PORT_INVALID: u32 = 0;
+
+  pub fn to_socket_address(self) -> SocketAddr{
+    SocketAddr::from(self)
+  }
 }
 
 impl Default for Locator {
   fn default() -> Self {
     Locator::LOCATOR_INVALID
   }
+
+  
 }
 
 impl From<SocketAddr> for Locator {

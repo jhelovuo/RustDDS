@@ -230,6 +230,7 @@ impl DPEventWrapper {
               .expect("Failed to receive cache change");
             println!("found RTPS writer with entity token {:?} ", t);
             w.insert_to_history_cache(cache_change);
+            w.send_all_unsend_messages();
           }
           None => {}
         }

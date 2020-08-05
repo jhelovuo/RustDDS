@@ -1,6 +1,6 @@
-use crate::structure::{locator::LocatorList, guid::{EntityId, GUID}, sequence_number::{SequenceNumber}};
+use crate::structure::{locator::{Locator, LocatorList, LocatorKind}, guid::{EntityId, GUID}, sequence_number::{SequenceNumber}};
 use crate::{common::{bit_set::BitSetRef}};
-use std::{collections::HashSet};
+use std::{collections::HashSet, net::{IpAddr, SocketAddr, Ipv4Addr}};
 #[derive(Debug)]
 ///ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
 pub struct RtpsReaderProxy {
@@ -45,11 +45,29 @@ impl RtpsReaderProxy {
       }
     }
 
+    pub fn new_for_unit_testing(port_number : u16) ->RtpsReaderProxy{
+      let mut unicastLocators = LocatorList::new();
+      let locator = Locator::from(SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port_number));
+      unicastLocators.push(locator);
+      RtpsReaderProxy {
+        remote_reader_guid : GUID::new(),
+        remote_group_entity_id : EntityId::ENTITYID_UNKNOWN,
+        unicast_locator_list : unicastLocators ,
+        multicast_locator_list : LocatorList::new(),
+        //changes_for_reader : writer.history_cache.clone(),
+        expects_in_line_qos : false,
+    
+        is_active : true,
+        requested_changes : HashSet::new(),
+        unsent_changes : HashSet::new(),
+        largest_acked_change : None,
+      }
+    }
+
 
     pub fn can_send(&self) -> bool{
       if self.can_send_unsend() || self.can_send_requested()
       {
-        println!("reader proxy Can Send {:?}", self.remote_reader_guid);
         return true;
       }
       else{
