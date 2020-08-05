@@ -24,9 +24,9 @@ pub struct DataReader {
 impl<'s> DataReader {
   pub fn new(qos: QosPolicies) -> Self {
     Self {
-      qos_policy: qos,
+      qos_policy: qos.clone(),
       entity_attributes: EntityAttributes::new(GUID::new()), // todo
-      datasample_cache: DataSampleCache::new(),
+      datasample_cache: DataSampleCache::new(qos),
     }
   }
 

@@ -12,7 +12,6 @@ pub enum ChangeKind {
   NOT_ALIVE_UNREGISTERED,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct CacheChange {
   pub kind: ChangeKind,

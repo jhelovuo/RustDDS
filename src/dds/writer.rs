@@ -236,13 +236,11 @@ impl Writer {
     let mut multi_cast_locators: Vec<Locator> = vec![];
     let mut buffer: Vec<u8> = vec![];
     let mut context = Endianness::LittleEndian;
-    {
-      if self.endianness == Endianness::LittleEndian {
-        context == Endianness::LittleEndian
-      } else {
-        context == Endianness::BigEndian
-      };
+
+    if self.endianness == Endianness::BigEndian {
+        context = Endianness::BigEndian
     }
+
     let (message, Guid) = self.get_next_reader_next_unsend_message();
     if message.is_some() && Guid.is_some() {
       let reader = self.matched_reader_lookup(Guid.unwrap().guidPrefix, Guid.unwrap().entityId);
@@ -269,7 +267,8 @@ impl Writer {
       for l in multi_cast_locators {
         if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
           let a = l.to_socket_address();
-          self.udp_sender.send_ipv4_multicast(&buffer, a);
+          // TODO: handle unwrap
+          self.udp_sender.send_ipv4_multicast(&buffer, a).unwrap();
         }
       }
       self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
@@ -548,7 +547,7 @@ impl Writer {
       }
     }
     if remote_reader_guid.is_some() {
-      for x in 0..sequenceNumbersCount {
+      for _x in 0..sequenceNumbersCount {
         self.increase_heartbeat_counter();
       }
     }
@@ -651,18 +650,41 @@ mod tests {
   use crate::{
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     dds::{
-      qos::QosPolicies,
-      participant::DomainParticipant,
-      typedesc::TypeDesc,
-      traits::key::{Keyed, DefaultKey},
+      qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc, traits::key::Keyed,
     },
     network::udp_listener::UDPListener,
   };
   use serde::Serialize;
   use std::thread;
   use crate::dds::traits::key::Key;
+  use crate::dds::traits::datasample_trait::DataSampleTrait;
+  use std::collections::hash_map::DefaultHasher;
+  use std::hash::{Hash, Hasher};
 
-  #[derive(Serialize)]
+  struct RandomKey {
+    val: i64,
+  }
+
+  impl RandomKey {
+    pub fn new(val: i64) -> RandomKey {
+      RandomKey { val }
+    }
+  }
+
+  impl Key for RandomKey {
+    fn get_hash(&self) -> u64 {
+      let mut hasher = DefaultHasher::new();
+      self.val.hash(&mut hasher);
+      hasher.finish()
+    }
+
+    fn box_clone(&self) -> Box<dyn Key> {
+      let n = RandomKey::new(self.val);
+      Box::new(n)
+    }
+  }
+
+  #[derive(Serialize, Clone)]
   struct RandomData {
     a: i64,
     b: String,
@@ -670,8 +692,17 @@ mod tests {
 
   impl Keyed for RandomData {
     fn get_key(&self) -> Box<dyn Key> {
-      let key = DefaultKey::new(self.a);
+      let key = RandomKey::new(self.a);
       Box::new(key)
+    }
+  }
+
+  impl DataSampleTrait for RandomData {
+    fn box_clone(&self) -> Box<dyn DataSampleTrait> {
+      Box::new(RandomData {
+        a: self.a.clone(),
+        b: self.b.clone(),
+      })
     }
   }
 
@@ -736,7 +767,7 @@ mod tests {
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {
-    let listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
+    let _listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
 
     let domain_participant = DomainParticipant::new();
     let qos = QosPolicies::qos_none();
@@ -755,19 +786,16 @@ mod tests {
       .expect("Failed to create datawriter");
 
     let data = RandomData {
-      key: DefaultKey::random_key(),
       a: 4,
       b: "Fobar".to_string(),
     };
 
     let data2 = RandomData {
-      key: DefaultKey::random_key(),
       a: 2,
       b: "Fobar".to_string(),
     };
 
     let data3 = RandomData {
-      key: DefaultKey::random_key(),
       a: 3,
       b: "Fobar".to_string(),
     };

@@ -11,6 +11,7 @@ extern crate num_traits;
 extern crate speedy;
 extern crate tokio_util;
 extern crate uuid;
+extern crate downcast_rs;
 
 #[macro_use]
 mod serialization_test;

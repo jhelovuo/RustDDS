@@ -70,6 +70,10 @@ impl QosPolicies {
       lifespan: None,
     }
   }
+
+  pub fn history(&self) -> &Option<policy::History> {
+    &self.history
+  }
 }
 
 // put these into a submodule to avoid repeating the word "policy" or "qospolicy"

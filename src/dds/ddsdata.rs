@@ -1,10 +1,10 @@
-use crate::dds::traits::key::Keyed;
-use serde::Serialize;
+use crate::dds::traits::datasample_trait::DataSampleTrait;
 use std::sync::Arc;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::serialization::cdrSerializer::to_little_endian_binary;
+use crate::serialization::cdrSerializer::{CDR_serializer, Endianess};
 use crate::structure::guid::EntityId;
 use crate::structure::time::Timestamp;
+use erased_serde;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DDSData {
@@ -35,11 +35,14 @@ impl DDSData {
 
   pub fn from<D>(data: &D, source_timestamp: Option<Timestamp>) -> DDSData
   where
-    D: Keyed + Serialize,
+    D: DataSampleTrait,
   {
-    let value = to_little_endian_binary::<D>(&data);
+    let mut cdr = CDR_serializer::new(Endianess::LittleEndian);
+    let mut serializer = erased_serde::Serializer::erase(&mut cdr);
+    let value = data.erased_serialize(&mut serializer);
+    // let value = to_little_endian_binary::<D>(&data);
     let value = match value {
-      Ok(val) => val,
+      Ok(_) => cdr.buffer().clone(),
       // TODO: handle error
       _ => Vec::new(),
     };

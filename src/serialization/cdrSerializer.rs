@@ -11,17 +11,28 @@ use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
 #[derive(PartialEq)]
-enum endianess {
-  littleEndian,
-  bigEndian,
+pub enum Endianess {
+  LittleEndian,
+  BigEndian,
 }
 
 pub struct CDR_serializer {
   buffer: Vec<u8>,
-  serializationEndianess: endianess,
+  serializationEndianess: Endianess,
 }
 
 impl CDR_serializer {
+  pub fn new(endianess: Endianess) -> CDR_serializer {
+    CDR_serializer {
+      buffer: Vec::new(),
+      serializationEndianess: endianess,
+    }
+  }
+
+  pub fn buffer(&self) -> &Vec<u8> {
+    &self.buffer
+  }
+
   fn calculate_padding_need_and_write_padding(&mut self, typeOctetAlignment: u8) {
     let modulo: u32 = self.buffer.len() as u32 % typeOctetAlignment as u32;
     if modulo != 0 {
@@ -47,7 +58,7 @@ where
 {
   let mut CDR_serializer = CDR_serializer {
     buffer: Vec::new(),
-    serializationEndianess: endianess::littleEndian,
+    serializationEndianess: Endianess::LittleEndian,
   };
   value.serialize(&mut CDR_serializer)?;
   Ok(CDR_serializer.buffer)
@@ -59,7 +70,7 @@ where
 {
   let mut CDR_serializer = CDR_serializer {
     buffer: Vec::new(),
-    serializationEndianess: endianess::bigEndian,
+    serializationEndianess: Endianess::BigEndian,
   };
   value.serialize(&mut CDR_serializer)?;
   Ok(CDR_serializer.buffer)
@@ -111,7 +122,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_u16(self, v: u16) -> Result<()> {
     self.calculate_padding_need_and_write_padding(2);
-    if self.serializationEndianess == endianess::littleEndian {
+    if self.serializationEndianess == Endianess::LittleEndian {
       let mut wtr = vec![];
       wtr.write_u16::<LittleEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
@@ -127,7 +138,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_u32(self, v: u32) -> Result<()> {
     self.calculate_padding_need_and_write_padding(4);
-    if self.serializationEndianess == endianess::littleEndian {
+    if self.serializationEndianess == Endianess::LittleEndian {
       let mut wtr = vec![];
       wtr.write_u32::<LittleEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
@@ -148,7 +159,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_u64(self, v: u64) -> Result<()> {
     self.calculate_padding_need_and_write_padding(8);
-    if self.serializationEndianess == endianess::littleEndian {
+    if self.serializationEndianess == Endianess::LittleEndian {
       let mut wtr = vec![];
       wtr.write_u64::<LittleEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
@@ -184,7 +195,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_i16(self, v: i16) -> Result<()> {
     self.calculate_padding_need_and_write_padding(2);
-    if self.serializationEndianess == endianess::littleEndian {
+    if self.serializationEndianess == Endianess::LittleEndian {
       let mut wtr = vec![];
       wtr.write_i16::<LittleEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
@@ -201,7 +212,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_i32(self, v: i32) -> Result<()> {
     self.calculate_padding_need_and_write_padding(4);
-    if self.serializationEndianess == endianess::littleEndian {
+    if self.serializationEndianess == Endianess::LittleEndian {
       let mut wtr = vec![];
       wtr.write_i32::<LittleEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
@@ -222,7 +233,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_i64(self, v: i64) -> Result<()> {
     self.calculate_padding_need_and_write_padding(8);
-    if self.serializationEndianess == endianess::littleEndian {
+    if self.serializationEndianess == Endianess::LittleEndian {
       let mut wtr = vec![];
       wtr.write_i64::<LittleEndian>(v).unwrap();
       self.buffer.push(wtr[0]);
@@ -251,7 +262,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_f32(self, _v: f32) -> Result<()> {
     self.calculate_padding_need_and_write_padding(4);
-    if self.serializationEndianess == endianess::littleEndian {
+    if self.serializationEndianess == Endianess::LittleEndian {
       let v_bytes = _v.to_bits().to_le_bytes();
       self.buffer.push(v_bytes[0]);
       self.buffer.push(v_bytes[1]);
@@ -269,7 +280,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   }
   fn serialize_f64(self, _v: f64) -> Result<()> {
     self.calculate_padding_need_and_write_padding(8);
-    if self.serializationEndianess == endianess::littleEndian {
+    if self.serializationEndianess == Endianess::LittleEndian {
       let v_bytes = _v.to_bits().to_le_bytes();
       self.buffer.push(v_bytes[0]);
       self.buffer.push(v_bytes[1]);

@@ -15,8 +15,10 @@ use crate::dds::values::result::{
   PublicationMatchedStatus,
 };
 use crate::dds::traits::dds_entity::DDSEntity;
+use crate::dds::traits::datasample_trait::DataSampleTrait;
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
 use crate::dds::datasample_cache::DataSampleCache;
+use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
 
 pub struct DataWriter<'p> {
@@ -45,7 +47,7 @@ impl<'p> DataWriter<'p> {
       qos_policy: topic.get_qos(),
       entity_attributes,
       cc_upload,
-      datasample_cache: DataSampleCache::new(),
+      datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
     }
   }
 
@@ -61,15 +63,16 @@ impl<'p> DataWriter<'p> {
   // The _with_timestamp version is covered by the optional timestamp.
   pub fn write<D: 'static>(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
   where
-    D: Send + Sync + Keyed + Serialize,
+    D: DataSampleTrait + Clone,
   {
     let ddsdata = DDSData::from(&data, source_timestamp);
-    // let data_sample = match source_timestamp {
-    //   Some(t) => DataSample::new(t, Some(data)),
-    //   None => DataSample::new(Timestamp::from(time::get_time()), Some(data)),
-    // };
 
-    let _key = self.datasample_cache.add_data_sample::<D>(data)?;
+    let data_sample = match source_timestamp {
+      Some(t) => DataSample::new(t, data),
+      None => DataSample::new(Timestamp::from(time::get_time()), data),
+    };
+
+    let _key = self.datasample_cache.add_datasample::<D>(data_sample)?;
 
     match self.cc_upload.send(ddsdata) {
       Ok(_) => Ok(()),
@@ -79,10 +82,12 @@ impl<'p> DataWriter<'p> {
 
   // dispose
   // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose<D>(&self, _data: &D, _source_timestamp: Option<Timestamp>)
+  pub fn dispose<D>(&self, data: &D, _source_timestamp: Option<Timestamp>)
   where
-    D: Serialize + Keyed,
+    D: Send + Sync + Serialize + Keyed,
   {
+    let _key = data.get_key().get_hash();
+    // let d = self.datasample_cache.
   }
 
   pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
@@ -148,12 +153,35 @@ impl<'a> DDSEntity<'a> for DataWriter<'a> {}
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::dds::traits::key::DefaultKey;
   use crate::dds::participant::DomainParticipant;
   use crate::dds::typedesc::TypeDesc;
   use crate::dds::traits::key::Key;
+  use std::hash::{Hash, Hasher};
+  use std::collections::hash_map::DefaultHasher;
+  struct RandomKey {
+    val: i64,
+  }
 
-  #[derive(Serialize)]
+  impl RandomKey {
+    pub fn new(val: i64) -> RandomKey {
+      RandomKey { val }
+    }
+  }
+
+  impl Key for RandomKey {
+    fn get_hash(&self) -> u64 {
+      let mut hasher = DefaultHasher::new();
+      self.val.hash(&mut hasher);
+      hasher.finish()
+    }
+
+    fn box_clone(&self) -> Box<dyn Key> {
+      let n = RandomKey::new(self.val);
+      Box::new(n)
+    }
+  }
+
+  #[derive(Serialize, Clone)]
   struct RandomData {
     a: i64,
     b: String,
@@ -161,8 +189,17 @@ mod tests {
 
   impl Keyed for RandomData {
     fn get_key(&self) -> Box<dyn Key> {
-      let key = DefaultKey::new(self.a);
+      let key = RandomKey::new(self.a);
       Box::new(key)
+    }
+  }
+
+  impl DataSampleTrait for RandomData {
+    fn box_clone(&self) -> Box<dyn DataSampleTrait> {
+      Box::new(RandomData {
+        a: self.a.clone(),
+        b: self.b.clone(),
+      })
     }
   }
 
@@ -190,5 +227,6 @@ mod tests {
     data_writer.write(data, None).expect("Unable to write data");
 
     // TODO: verify that data is sent/writtent correctly
+    // TODO: write also with timestamp
   }
 }

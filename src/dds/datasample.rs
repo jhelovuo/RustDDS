@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::dds::traits::key::*;
 use crate::structure::time::Timestamp;
+use crate::dds::traits::datasample_trait::DataSampleTrait;
 
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
@@ -36,8 +37,8 @@ pub enum InstanceState {
 
 /// DDS spec 2.2.2.5.4
 /// This combines SampleInfo and Data
-#[derive(Debug, Clone)]
-pub struct DataSample<D: Keyed> {
+#[derive(Clone)]
+pub struct DataSample {
   pub sample_state: SampleState,
   pub view_state: ViewState,
   pub instance_state: InstanceState,
@@ -76,14 +77,12 @@ pub struct DataSample<D: Keyed> {
   /// not provide any data value.
   /// Now Ok(D) means valid_data = true and there is a sample.
   /// Err(D::K) means there is valid_data = false, but only a Key and instance_state has changed.
-   
   // TODO: think value again
-  // pub value: std::result::Result<Arc<D>, D::K>,
-  pub value: Option<Arc<D>>
+  pub value: std::result::Result<Arc<Box<dyn DataSampleTrait>>, Box<dyn Key>>,
 }
 
-impl<D: Keyed> DataSample<D> {
-  pub fn new(source_timestamp: Timestamp, value: D) -> DataSample<D> {
+impl DataSample {
+  pub fn new<D: DataSampleTrait + 'static>(source_timestamp: Timestamp, value: D) -> DataSample {
     let sample_state = SampleState::Read;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
@@ -92,7 +91,8 @@ impl<D: Keyed> DataSample<D> {
     let sample_rank = 0;
     let generation_rank = 0;
     let absolute_generation_rank = 0;
-    let value = Some(Arc::new(value));
+    let bx: Box<dyn DataSampleTrait> = Box::new(value);
+    let value = Ok(Arc::new(bx));
 
     DataSample {
       sample_state,
@@ -108,7 +108,10 @@ impl<D: Keyed> DataSample<D> {
     }
   }
 
-  pub fn new_with_arc(source_timestamp: Timestamp, arc: Arc<D>) -> DataSample<D> {
+  pub fn new_with_arc(
+    source_timestamp: Timestamp,
+    arc: Arc<Box<dyn DataSampleTrait>>,
+  ) -> DataSample {
     let sample_state = SampleState::Read;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
@@ -128,7 +131,23 @@ impl<D: Keyed> DataSample<D> {
       generation_rank,
       absolute_generation_rank,
       source_timestamp,
-      value: Some(arc),
+      value: Ok(arc),
     }
+  }
+
+  pub fn get_value_with_type<D: DataSampleTrait>(&self) -> Option<D> {
+    let dcval = match &self.value {
+      Ok(val) => val,
+      _ => return None,
+    };
+
+    let cpbox = dcval.box_clone();
+    let dcval = cpbox.downcast::<D>();
+    let dcval = match dcval {
+      Ok(val) => val,
+      _ => return None,
+    };
+
+    Some(*dcval)
   }
 }

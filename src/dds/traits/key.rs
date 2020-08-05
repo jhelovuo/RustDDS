@@ -1,10 +1,7 @@
 // This module defines traits to specifiy a key as defined in DDS specification.
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-
+use std::hash::Hash;
 use rand::Rng;
-use serde::{Serialize, Deserialize};
 
 pub trait Keyed: Sync + Send {
   fn get_key(&self) -> Box<dyn Key>;
@@ -16,6 +13,12 @@ pub trait Keyed: Sync + Send {
 pub trait Key: Sync + Send {
   fn get_hash(&self) -> u64;
   fn box_clone(&self) -> Box<dyn Key>;
+}
+
+impl Clone for Box<dyn Key> {
+  fn clone(&self) -> Self {
+    (*self).box_clone()
+  }
 }
 
 #[derive(Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -35,37 +38,5 @@ impl BuiltInTopicKey {
 
   pub fn default() -> BuiltInTopicKey {
     BuiltInTopicKey { value: [0, 0, 0] }
-  }
-}
-
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, Clone)]
-pub struct DefaultKey {
-  value: i64,
-}
-
-impl DefaultKey {
-  pub fn new(val: i64) -> DefaultKey {
-    DefaultKey { value: val }
-  }
-
-  pub fn get_random_key() -> DefaultKey {
-    let mut rng = rand::thread_rng();
-    DefaultKey::new(rng.gen())
-  }
-
-  pub fn default() -> DefaultKey {
-    DefaultKey::new(0)
-  }
-}
-
-impl Key for DefaultKey {
-  fn get_hash(&self) -> u64 {
-    // TODO: maybe precalc
-    let mut s = DefaultHasher::new();
-    self.value.hash(&mut s);
-    s.finish()
-  }
-  fn box_clone(&self) -> Box<dyn Key> {
-    Box::new((*self).clone())
   }
 }
