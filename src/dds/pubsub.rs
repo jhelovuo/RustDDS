@@ -268,7 +268,7 @@ mod tests {
   use std::time::Duration;
   use crate::messages::submessages::data::Data;
   use mio_extras::channel as mio_channel;
-  use crate::dds::message_receiver::MessageReceiverInfo;
+  use crate::dds::message_receiver::MessageReceiverState;
 
   #[test]
   fn sub_subpoll_test() {
@@ -309,11 +309,11 @@ mod tests {
     let child = thread::spawn(move || {
       std::thread::sleep(Duration::new(0, 500));
       let d = Data::default();
-      reader.handle_data_msg(d, MessageReceiverInfo::default());
+      reader.handle_data_msg(d, MessageReceiverState::default());
 
       std::thread::sleep(Duration::new(0, 500));
       let d2 = Data::default();
-      reader.handle_data_msg(d2, MessageReceiverInfo::default());
+      reader.handle_data_msg(d2, MessageReceiverState::default());
 
       std::thread::sleep(Duration::new(0, 500_000));
       sender_stop.send(0).unwrap();

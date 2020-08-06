@@ -105,7 +105,6 @@ impl DDSData {
       // TODO: handle error
       _ => Vec::new(),
     };
-
     value
   }
 

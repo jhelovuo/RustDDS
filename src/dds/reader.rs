@@ -1,7 +1,9 @@
 use crate::structure::entity::Entity;
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::structure::history_cache::HistoryCache;
+use crate::structure::instance_handle::InstanceHandle;
 use crate::messages::submessages::data::Data;
+use crate::messages::submessages::data_frag::DataFrag;
 
 use crate::dds::ddsdata::DDSData;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
@@ -19,7 +21,7 @@ use std::collections::{HashSet, HashMap};
 
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
-use crate::dds::message_receiver::MessageReceiverInfo;
+use crate::dds::message_receiver::MessageReceiverState;
 
 pub struct Reader {
   ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>,
@@ -57,12 +59,17 @@ impl Reader {
 
   // TODO Used for test/debugging purposes
   pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
-    let cc = self.history_cache.get_change(sequence_number).unwrap();
-    println!("history cache !!!! {:?}", cc);
-    let pl = cc.data_value.clone();
+    println!(
+      "history cache !!!! {:?}",
+      self.history_cache.get_change(sequence_number).unwrap()
+    );
+    let cc = self.history_cache.get_change(sequence_number);
 
-    match pl {
-      Some(xd) => Some(DDSData::from_arc(cc.instance_handle.clone(), xd)),
+    match cc {
+      Some(cc) => Some(DDSData::from_arc(
+        cc.instance_handle.clone(),
+        cc.data_value.as_ref().unwrap().clone(),
+      )),
       None => None,
     }
   }
@@ -87,32 +94,59 @@ impl Reader {
     return vec![*start, *end];
   }
 
-  fn get_writer_proxy(&mut self, remote_writer_guid: GUID) -> &mut RtpsWriterProxy {
+  pub fn matched_writer_add(&mut self, remote_writer_guid: GUID, mr_state: MessageReceiverState) {
     match self.matched_writers.get_mut(&remote_writer_guid) {
       Some(_) => {}
       None => {
-        let new_writer_proxy = RtpsWriterProxy::new(remote_writer_guid);
+        let new_writer_proxy = RtpsWriterProxy::new(
+          remote_writer_guid,
+          mr_state.unicast_reply_locator_list,
+          mr_state.multicast_reply_locator_list,
+        );
         self
           .matched_writers
           .insert(remote_writer_guid, new_writer_proxy);
       }
     };
+  }
+
+  pub fn matched_writer_remove(&mut self, remote_writer_guid: GUID) {
+    let writer_proxy = self.matched_writers.remove(&remote_writer_guid).unwrap();
+    drop(writer_proxy)
+  }
+
+  fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> &mut RtpsWriterProxy {
     self.matched_writers.get_mut(&remote_writer_guid).unwrap()
   }
 
   // handles regular data message and updates history cache
-  pub fn handle_data_msg(&mut self, data: Data, mr_info: MessageReceiverInfo) {
-    let user_data = true; // Different action for discovery data?
-    if user_data {
-      let writer_guid = GUID::new_with_prefix_and_id(mr_info.source_guid_prefix, data.writer_id);
-      //let writer_proxy = self.get_writer_proxy();
-      self.make_cache_change(data, writer_guid);
-      self.send_datasample(mr_info.timestamp);
-      self.notify_cache_change();
+  pub fn handle_data_msg(&mut self, data: Data, mr_state: MessageReceiverState) {
+    let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
+    let seq_num = data.writer_sn;
+
+    let ih = self.make_cache_change(data, writer_guid);
+
+    // Realy should be checked from qosPolicy?
+    let statefull: bool;
+    if self.matched_writers.get_mut(&writer_guid).is_none() {
+      statefull = false; // Added in order to test stateless actions. TODO
     } else {
-      // is discovery data
-      todo!();
+      statefull = true;
     }
+
+    if statefull {
+      let writer_proxy = self.matched_writer_lookup(writer_guid);
+      if let Some(max_sn) = writer_proxy.available_changes_max() {
+        if seq_num <= *max_sn {
+          return; // Should be ignored
+        }
+      }
+      writer_proxy.received_changes_add(seq_num, ih);
+
+      // lost changes update? All changes not received with lower seqnum should be marked as lost?
+    }
+    self.send_datasample(mr_state.timestamp);
+    self.notify_cache_change();
   }
 
   fn send_datasample(&self, timestamp: Timestamp) {
@@ -127,23 +161,31 @@ impl Reader {
       .expect("Unable to send DataSample from Reader");
   }
 
-  // send ack_nack response if necessary. spec page 104
-  // Steteless readers shouldn't react to hearbeat_messages
   pub fn handle_heartbeat_msg(
     &mut self,
     heartbeat: Heartbeat,
     final_flag_set: bool,
-  ) -> Option<AckNack> {
-    // This is done just for stetefull reader. The hearbeat count is maintained
-    // separately for all mathched writers
-    if heartbeat.count <= self.received_hearbeat_count {
-      // Already received newer or same
-      return None;
-    }
-    self.received_hearbeat_count = heartbeat.count;
+    mr_state: MessageReceiverState,
+  ) -> bool {
 
-    // remove fragmented changes untill first_sn ???
-    // self.history_cache.remove_changes_up_to(heartbeat.first_sn);
+    let writer_guid =
+      GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
+
+    if self.matched_writers.get_mut(&writer_guid).is_none() {
+      return false; // Added in order to test stateless actions. TODO
+    } 
+    let writer_proxy = self.matched_writer_lookup(writer_guid);
+
+    if heartbeat.count <= writer_proxy.received_heartbeat_count {
+      return false;
+    }
+    writer_proxy.received_heartbeat_count = heartbeat.count;
+
+    // remove fragmented changes untill first_sn
+    writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
+    self.history_cache.remove_changes_up_to(heartbeat.first_sn);
+
+    // Tell which ones are now invalid? Will not be needed in new architecture
     // self.notify_cache_change();
 
     let last_seq_num: SequenceNumber;
@@ -170,52 +212,71 @@ impl Reader {
         count: self.sent_ack_nack_count,
       };
       self.sent_ack_nack_count += 1;
-      // The messageReceiver has the information on where to send this returned acknack.
-      return Some(response_ack_nack);
+      // The acknack can be sent now or later
+      self.send_acknack(response_ack_nack);
+      return true;
     }
-    None
+    false
   }
 
-  pub fn handle_gap_msg(&mut self, gap: Gap) {
-    let mut irrelevant_changes_set = HashSet::new();
+  pub fn handle_gap_msg(&mut self, gap: Gap, mr_state: MessageReceiverState) {
+    // ATM all things related to groups is ignored.
+    let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
+    
+    if self.matched_writers.get_mut(&writer_guid).is_none() {
+      return; // Added in order to test stateless actions. TODO
+    } 
+    let writer_proxy = self.matched_writer_lookup(writer_guid);
+
     // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups
-    // 1. All sequence numbers in the range gapStart <= sequence_number <= gapList.base -1
-    for seqnum_i64 in i64::from(gap.gap_start)..i64::from(gap.gap_list.base) {
-      irrelevant_changes_set.insert(SequenceNumber::from(seqnum_i64));
-    }
-    // 2. All the sequence numbers that appear explicitly listed in the gapList.
-    for seqnum in &mut gap.gap_list.set.into_iter() {
-      irrelevant_changes_set.insert(SequenceNumber::from(seqnum as i64));
+    let mut irrelevant_changes_set = HashSet::new();
+
+    // Sequencenumber set is invalid, section 8.3.5.5
+    if i64::from(gap.gap_start) < 1i64
+      || (gap.gap_list.set.iter().max().unwrap() - gap.gap_list.set.iter().min().unwrap()) >= 256
+    {
+      return;
     }
 
-    //Remove irrelevant?
-    for seqnum in irrelevant_changes_set {
-      self.history_cache.remove_change(seqnum);
+    // 1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
+    for seq_num_i64 in i64::from(gap.gap_start)..i64::from(gap.gap_list.base) {
+      irrelevant_changes_set.insert(SequenceNumber::from(seq_num_i64));
+    }
+    // 2. All the sequence numbers that appear explicitly listed in the gapList.
+    for seq_num in &mut gap.gap_list.set.into_iter() {
+      irrelevant_changes_set.insert(SequenceNumber::from(seq_num as i64));
+    }
+
+    for seq_num in &irrelevant_changes_set {
+      let _ih = writer_proxy.irrelevant_changes_set(*seq_num);
+      //self.history_cache.remove_change(ih);
+    }
+
+    for seq_num in &irrelevant_changes_set {
+      self.history_cache.remove_change(*seq_num);
     }
 
     self.notify_cache_change();
   }
 
+  pub fn handle_datafrag_msg(&mut self, _datafrag: DataFrag, _mr_State: MessageReceiverState) {
+    todo!() // comines frags to data which is handled normally. page 51-53
+            // let data: Data = something..?
+            // self.handle_data_msg(data, mr_state);
+  }
+
   // update history cache
-<<<<<<< HEAD
-  fn make_cache_change(&mut self, data: Data) {
+  fn make_cache_change(&mut self, data: Data, writer_guid: GUID) -> InstanceHandle {
     let instance_handle = self.history_cache.generate_free_instance_handle();
     let mut ddsdata = DDSData::new(instance_handle, data.serialized_payload);
-||||||| merged common ancestors
-  fn make_cache_change(&mut self, data: Data) {
-    let mut ddsdata = DDSData::new(data.serialized_payload);
-=======
-  fn make_cache_change(&mut self, data: Data, writer_guid: GUID) {
-    let mut ddsdata = DDSData::new(data.serialized_payload);
->>>>>>> Added messageReceiverinfo for reader. Updated it to needed places
-    let writer_guid =
-      GUID::new_with_prefix_and_id(GuidPrefix::GUIDPREFIX_UNKNOWN, data.writer_id.clone());
 
     ddsdata.set_reader_id(data.reader_id);
     ddsdata.set_writer_id(data.writer_id);
     let change = CacheChange::new(writer_guid, data.writer_sn, Some(ddsdata));
+    let ih = change.instance_handle.clone();
     self.history_cache.add_change(change);
+    ih
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
@@ -223,6 +284,10 @@ impl Reader {
   fn notify_cache_change(&self) {
     println!("No notification atm...")
     // Do we need some other channel to notify about changes in history_cache?
+  }
+
+  fn send_acknack(&self, _acknack: AckNack) {
+    //todo!()
   }
 }
 
@@ -270,24 +335,37 @@ mod tests {
   use super::*;
   use crate::structure::guid::{GUID, EntityId};
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+  use crate::structure::guid::GuidPrefix;
 
   #[test]
   fn rtpsreader_send_ddsdata() {
-    let guid = GUID::new();
+    let mut guid = GUID::new();
+    guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
     let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let mut reader = Reader::new(guid, send);
 
-    let mut data = Data::default();
-    data.reader_id = reader.get_guid().entityId;
-    data.writer_id = EntityId::createCustomEntityID([4, 5, 6], 222);
+    let writer_guid = GUID {
+      guidPrefix: GuidPrefix::new(vec![1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], 1),
+    };
 
-    reader.handle_data_msg(data.clone(), MessageReceiverInfo::default());
+    let mut mr_state = MessageReceiverState::default();
+    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+
+    reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+
+    let mut data = Data::default();
+    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data.writer_id = writer_guid.entityId;
+
+    reader.handle_data_msg(data.clone(), mr_state);
 
     let (datasample, _time) = rec.try_recv().unwrap();
     assert_eq!(datasample.data(), data.serialized_payload.value);
 
-    print!("{:?}", datasample.data());
+    print!("Received: {:?}", datasample.data());
+    print!("Original: {:?}", data.serialized_payload);
     assert_eq!(*datasample.reader_id(), data.reader_id);
     assert_eq!(*datasample.writer_id(), data.writer_id);
   }
@@ -299,16 +377,23 @@ mod tests {
     let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let mut new_reader = Reader::new(new_guid, send);
 
-    let d = Data::new();
-    let d_seqnum = SequenceNumber::from(1);
-    new_reader.handle_data_msg(d.clone(), MessageReceiverInfo::default());
+    let writer_guid = GUID {
+      guidPrefix: GuidPrefix::new(vec![1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], 1),
+    };
 
-    let (rec_data, _time) = rec.try_recv().unwrap();
-    let change = CacheChange::new(
-      GUID::new_with_prefix_and_id(GuidPrefix::GUIDPREFIX_UNKNOWN, d.writer_id),
-      d_seqnum,
-      Some(rec_data),
-    );
+    let mut mr_state = MessageReceiverState::default();
+    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+
+    new_reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+
+    let mut d = Data::new();
+    d.writer_id = writer_guid.entityId;
+    let d_seqnum = d.writer_sn;
+    new_reader.handle_data_msg(d, mr_state);
+
+    let (rec_data, _) = rec.try_recv().unwrap();
+    let change = CacheChange::new(writer_guid, d_seqnum, Some(rec_data));
 
     assert_eq!(
       new_reader.history_cache.get_change(d_seqnum).unwrap(),
@@ -323,10 +408,22 @@ mod tests {
     let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let mut new_reader = Reader::new(new_guid, send);
 
-    let writer_id = EntityId::default();
-    let instance_handle = new_reader.history_cache.generate_free_instance_handle();
+    let writer_guid = GUID {
+      guidPrefix: GuidPrefix::new(vec![1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], 1),
+    };
 
-    let d = DDSData::new(instance_handle, SerializedPayload::new());
+    let writer_id = writer_guid.entityId;
+
+    let mut mr_state = MessageReceiverState::default();
+    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+
+    new_reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+
+    let d = DDSData::new(
+      new_reader.history_cache.generate_free_instance_handle(),
+      SerializedPayload::new(),
+    );
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
@@ -336,7 +433,7 @@ mod tests {
       last_sn: SequenceNumber::from(0),
       count: 1,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_new, true).is_none()); // should be false, no ack
+    assert!(!new_reader.handle_heartbeat_msg(hb_new, true, mr_state.clone())); // should be false, no ack
 
     let hb_one = Heartbeat {
       reader_id: new_reader.get_entity_id(),
@@ -345,7 +442,7 @@ mod tests {
       last_sn: SequenceNumber::from(1),
       count: 2,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_one, false).is_some()); // Should send an ack_nack
+    assert!(new_reader.handle_heartbeat_msg(hb_one, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following change
     let change = CacheChange::new(
@@ -364,7 +461,7 @@ mod tests {
       last_sn: SequenceNumber::from(1),
       count: 2,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_one2, false).is_none()); // No acknack
+    assert!(!new_reader.handle_heartbeat_msg(hb_one2, false, mr_state.clone())); // No acknack
 
     let hb_3_1 = Heartbeat {
       reader_id: new_reader.get_entity_id(),
@@ -373,7 +470,7 @@ mod tests {
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
       count: 3,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_3_1, false).is_some()); // Should send an ack_nack
+    assert!(new_reader.handle_heartbeat_msg(hb_3_1, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(
@@ -394,7 +491,7 @@ mod tests {
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
       count: 4,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_none, false).is_some()); // Should sen acknack
+    assert!(new_reader.handle_heartbeat_msg(hb_none, false, mr_state)); // Should sen acknack
 
     assert_eq!(new_reader.sent_ack_nack_count, 3);
   }
@@ -405,24 +502,27 @@ mod tests {
     let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let mut reader = Reader::new(new_guid, send);
 
+    let writer_guid = GUID {
+      guidPrefix: GuidPrefix::new(vec![1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], 1),
+    };
+    let writer_id = writer_guid.entityId;
+
+    let mut mr_state = MessageReceiverState::default();
+    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+
+    reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+
     let n: i64 = 10;
-    let instance_handle = reader.history_cache.generate_free_instance_handle();
-    let d = DDSData::new(instance_handle, SerializedPayload::new());
+    let mut d = Data::new();
+    d.writer_id = writer_id;
     let mut changes = Vec::new();
 
-    let mut dat = d.clone();
     for i in 0..n {
-      let change = CacheChange::new(
-        reader.get_guid(),
-        SequenceNumber::from(i),
-        Some(dat.clone()),
-      );
-      reader.history_cache.add_change(change.clone());
-      dat.instance_key = reader.history_cache.generate_free_instance_handle();
-      changes.push(change);
+      d.writer_sn = SequenceNumber::from(i);
+      reader.handle_data_msg(d.clone(), mr_state.clone());
+      changes.push(reader.history_cache.get_latest().unwrap().clone());
     }
-
-    let writer_id = EntityId::default();
 
     // make sequence numbers 1-3 and 5 7 irrelevant
     let mut gap_list = SequenceNumberSet::new(SequenceNumber::from(4));
@@ -436,7 +536,8 @@ mod tests {
       gap_list,
     };
 
-    reader.handle_gap_msg(gap);
+    // Cache changee muutetaan tutkiin datan kirjoittajaa.
+    reader.handle_gap_msg(gap, mr_state);
 
     assert_eq!(
       reader.history_cache.get_change(SequenceNumber::from(0)),

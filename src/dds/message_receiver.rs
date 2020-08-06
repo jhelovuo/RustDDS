@@ -89,9 +89,9 @@ impl MessageReceiver {
     self.submessage_count = 0;
   }
 
-  fn give_message_receiver_info(&self) -> MessageReceiverInfo {
-    MessageReceiverInfo {
-      own_guid_prefix: self.own_guid_prefix,
+  fn give_message_receiver_info(&self) -> MessageReceiverState {
+    MessageReceiverState {
+      //own_guid_prefix: self.own_guid_prefix,
       source_guid_prefix: self.source_guid_prefix,
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
@@ -256,28 +256,29 @@ impl MessageReceiver {
     }
 
     // TODO! If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
+    let mr_state = self.give_message_receiver_info();
     match submessage {
       EntitySubmessage::Data(data, _) => {
-        let mr_info = self.give_message_receiver_info();
         let target_reader = self.get_reader(data.reader_id).unwrap();
-        target_reader.handle_data_msg(data, mr_info);
+        target_reader.handle_data_msg(data, mr_state);
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
         let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
-        let ack_nack = target_reader.handle_heartbeat_msg(
+        target_reader.handle_heartbeat_msg(
           heartbeat,
           flags.is_flag_set(1), // final flag!?
+          mr_state, 
         );
-        if let Some(_a) = ack_nack {
-          // Send the response _a to correct place
-        }
       }
       EntitySubmessage::Gap(gap) => {
         let target_reader = self.get_reader(gap.reader_id).unwrap();
-        target_reader.handle_gap_msg(gap);
+        target_reader.handle_gap_msg(gap, mr_state);
       }
       EntitySubmessage::AckNack(_, _) => {}
-      EntitySubmessage::DataFrag(_, _) => {}
+      EntitySubmessage::DataFrag(datafrag, _) => {
+        let target_reader = self.get_reader(datafrag.reader_id).unwrap();
+        target_reader.handle_datafrag_msg(datafrag, mr_state);
+      }
       EntitySubmessage::HeartbeatFrag(_) => {}
       EntitySubmessage::NackFrag(_) => {}
     }
@@ -356,9 +357,9 @@ impl MessageReceiver {
     true
   }
 } // impl messageReceiver
-
-pub struct MessageReceiverInfo {
-  pub own_guid_prefix: GuidPrefix,
+#[derive(Debug, Clone)]
+pub struct MessageReceiverState {
+  //pub own_guid_prefix: GuidPrefix,
   pub source_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: LocatorList,
   pub multicast_reply_locator_list: LocatorList,
@@ -366,10 +367,10 @@ pub struct MessageReceiverInfo {
   pub timestamp: Time,
 }
 
-impl Default for MessageReceiverInfo {
+impl Default for MessageReceiverState {
   fn default() -> Self {
     Self {
-      own_guid_prefix: GuidPrefix::default(),
+      //own_guid_prefix: GuidPrefix::default(),
       source_guid_prefix: GuidPrefix::default(),
       unicast_reply_locator_list: LocatorList::default(),
       multicast_reply_locator_list: LocatorList::default(),
@@ -423,6 +424,8 @@ mod tests {
     let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let new_reader = Reader::new(new_guid, send);
 
+    // Skip for now+
+    //new_reader.matched_writer_add(remote_writer_guid, mr_state);
     message_receiver.add_reader(new_reader);
 
     message_receiver.handle_user_msg(udp_bits1.clone());
