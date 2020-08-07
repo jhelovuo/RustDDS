@@ -1,27 +1,20 @@
 use serde::Deserialize;
-
 use mio_extras::channel as mio_channel;
-use mio::{Ready, Poll, PollOpt, Token, Evented};
 
-use std::io; 
+use crate::structure::{
+  instance_handle::InstanceHandle,
+  entity::{Entity, EntityAttributes},
+  guid::GUID,
+  time::Timestamp,
+};
 
-use crate::structure::instance_handle::InstanceHandle;
+use crate::dds::{
+  values::result::*, traits::key::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
+  ddsdata::DDSData,
+};
 
-use crate::structure::entity::{Entity, EntityAttributes};
-
-use crate::dds::values::result::*;
-use crate::dds::traits::key::*;
-use crate::dds::qos::*;
-use crate::dds::datasample::*;
-use crate::dds::datasample_cache::DataSampleCache;
-use crate::dds::traits::datasample_trait::DataSampleTrait;
-use crate::dds::pubsub::*;
-use crate::structure::{time::Timestamp, guid::{GUID}};
-use super::ddsdata::DDSData;
-
-pub struct DataReader<'s,D> 
-{
-  my_subscriber: &'s Subscriber,
+pub struct DataReader<D> {
+  //my_subscriber: &'s Subscriber,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   datasample_cache: DataSampleCache<D>,
@@ -31,23 +24,25 @@ pub struct DataReader<'s,D>
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
 
-impl<'d,'s,D> DataReader<'s,D> 
-  where
-    D: Deserialize<'d> + Keyed + DataSampleTrait,
+impl<'s, D> DataReader<D>
+where
+  D: Deserialize<'s> + DataSampleTrait,
 {
-  pub fn new(my_subscriber: &'s Subscriber, qos: QosPolicies
-            , notification_receiver: mio_channel::Receiver<(DDSData, Timestamp)> ) -> Self {
+  pub fn new(
+    guid: GUID,
+    qos: QosPolicies,
+    new_data_receiver: mio_channel::Receiver<(DDSData, Timestamp)>,
+  ) -> Self {
     Self {
       my_subscriber,
       qos_policy: qos.clone(),
-      entity_attributes: EntityAttributes::new(GUID::new()), // todo
+      entity_attributes: EntityAttributes::new(guid), // todo
       datasample_cache: DataSampleCache::new(qos),
       notification_receiver,
     }
   }
 
-  pub fn add_datasample(&self, _datasample: D) -> Result<()>
-  {
+  pub fn add_datasample(&self, _datasample: D) -> Result<()> {
     Ok(())
   }
 
@@ -57,8 +52,7 @@ impl<'d,'s,D> DataReader<'s,D>
     _sample_state: SampleState,
     _view_state: ViewState,
     _instance_state: InstanceState,
-  ) -> Result<Vec<D>>
-  {
+  ) -> Result<Vec<D>> {
     unimplemented!();
     // Go through the historycache list and return all relevant in a vec.
   }
@@ -69,18 +63,15 @@ impl<'d,'s,D> DataReader<'s,D>
     _sample_state: SampleState,
     _view_state: ViewState,
     _instance_state: InstanceState,
-  ) -> Result<Vec<D>>
-  {
+  ) -> Result<Vec<D>> {
     unimplemented!()
   }
 
-  pub fn read_next(&self) -> Result<Vec<D>>
-  {
+  pub fn read_next(&self) -> Result<Vec<D>> {
     todo!()
   }
 
-  pub fn read_instance(&self, _instance_handle: InstanceHandle) -> Result<Vec<D>>
-  {
+  pub fn read_instance(&self, _instance_handle: InstanceHandle) -> Result<Vec<D>> {
     todo!()
   }
 } // impl
@@ -109,7 +100,7 @@ impl<'a,D> Evented for DataReader<'a,D>
 
 impl<'a,D> Entity for DataReader<'a,D> 
   where
-    D: Deserialize<'a> + Keyed + DataSampleTrait,
+    D: Deserialize<'a> + DataSampleTrait,
 {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes

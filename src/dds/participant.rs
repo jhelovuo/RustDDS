@@ -1,25 +1,20 @@
 use mio::Token;
 use mio_extras::channel as mio_channel;
 
-use std::thread;
-use std::collections::HashMap;
-use std::time::Duration;
-use std::ops::Deref;
-use std::sync::{Arc,RwLock};
+use std::{thread, collections::HashMap, time::Duration, sync::{Arc, RwLock}, rc::Rc};
 
 use crate::network::constant::*;
-use crate::dds::dp_event_wrapper::DPEventWrapper;
-use crate::dds::reader::*;
-use crate::dds::writer::Writer;
-use crate::dds::pubsub::*;
-use crate::dds::topic::*;
-use crate::dds::typedesc::*;
-use crate::dds::qos::*;
-use crate::dds::values::result::*;
-use crate::dds::datareader::DataReader;
-use crate::structure::entity::{Entity, EntityAttributes};
-use crate::structure::guid::GUID;
-use crate::structure::dds_cache::{DDSCache, DDSHistoryCache};
+
+use crate::dds::{
+  dp_event_wrapper::DPEventWrapper, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*,
+  qos::*, values::result::*, datareader::DataReader,
+};
+
+use crate::structure::{
+  entity::{Entity, EntityAttributes},
+  guid::GUID,
+  dds_cache::DDSHistoryCache,
+};
 
 #[derive(Clone)]
 // This is a smart pointer for DomainPArticipant_Inner for easier manipulation.
@@ -193,51 +188,41 @@ impl DomainParticipant_Inner {
   // There are no delete function for publisher or subscriber. Deletion is performed by
   // deleting the Publisher or Subscriber object, who upon deletion will notify
   // the DomainParticipant.
-  pub fn create_publisher<'a>(&'a self, outer: &'a DomainParticipant, qos: QosPolicies) -> Result<Publisher> {
-    let add_writer_sender = self.add_writer_sender.clone();
+  pub fn create_publisher(
+    domain_participant: Arc<DomainParticipant>,
+    qos: QosPolicies,
+  ) -> Result<Rc<Publisher>> {
+    let add_writer_sender = domain_participant.get_add_writer_sender().clone();
 
-    Ok(Publisher::new(outer.clone(), qos.clone(), qos, add_writer_sender))
-  }
-
-  pub fn create_subscriber<'a>(&'a self, outer: &'a DomainParticipant, qos: QosPolicies) -> Subscriber {
-    let (sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
-    let (sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
-
-    //self.sender_add_datareader_vec.push(sender_add_datareader);
-    //self
-    //  .sender_remove_datareader_vec
-    //  .push(sender_remove_datareader);
-
-    let subscriber = Subscriber::new(
-      outer.clone(),
+    Ok(Rc::new(Publisher::new(
+      domain_participant,
+      qos.clone(),
       qos,
-      self.sender_add_reader.clone(),
-      self.sender_remove_reader.clone(),
-      receiver_add_datareader,
-      receiver_remove_datareader,
-      self.get_guid(),
-    );
-
-    subscriber
+      add_writer_sender,
+    )))
   }
 
-  pub fn created_datareader(&self, _qos: QosPolicies) {
-    todo!();
+  pub fn create_subscriber(
+    domain_participant: Arc<DomainParticipant>,
+    qos: QosPolicies,
+  ) -> Result<Rc<Subscriber>> {
+    let subscriber = Subscriber::new(domain_participant, qos);
+
+    Ok(Rc::new(subscriber))
   }
 
   // Topic creation. Data types should be handled as something (potentially) more structured than a String.
   // NOTE: Here we are using &str for topic name. &str is Unicode string, whereas DDS specifes topic name
   // to be a sequence of octets, which would be &[u8] in Rust. This may cause problems if there are topic names
   // with non-ASCII characters. On the other hand, string handling with &str is easier in Rust.
-  pub fn create_topic<'a>(
-    &'a self,
-    outer: &'a DomainParticipant,
+  pub fn create_topic(
+    domain_participant: Arc<DomainParticipant>,
     name: &str,
     type_desc: TypeDesc,
     qos: QosPolicies,
-  ) -> Result<Topic> {
-    let topic = Topic::new(&outer, name.to_string(), type_desc, qos);
-    Ok(topic)
+  ) -> Result<Rc<Topic>> {
+    let topic = Topic::new(domain_participant, name.to_string(), type_desc, qos);
+    Ok(Rc::new(topic))
 
     // TODO: refine
   }
@@ -260,15 +245,23 @@ impl DomainParticipant_Inner {
   pub fn assert_liveliness(self) {
     unimplemented!()
   }
-} // impl
 
-/* default value for DomainParticipant does not make sense to me. Please explain or remove.
-impl Default for DomainParticipant_Inner {
-  fn default() -> DomainParticipant_Inner {
-    DomainParticipant_Inner::new()
+  pub fn get_add_reader_sender(&self) -> mio_channel::Sender<Reader> {
+    self.sender_add_reader.clone()
   }
-}
-*/
+
+  pub fn get_remove_reader_sender(&self) -> mio_channel::Sender<GUID> {
+    self.sender_remove_reader.clone()
+  }
+
+  pub fn get_add_writer_sender(&self) -> mio_channel::Sender<Writer> {
+    self.add_writer_sender.clone()
+  }
+
+  pub fn get_remove_writer_sender(&self) -> mio_channel::Sender<GUID> {
+    self.remove_writer_sender.clone()
+  }
+} // impl
 
 impl Entity for DomainParticipant_Inner {
   fn as_entity(&self) -> &EntityAttributes {

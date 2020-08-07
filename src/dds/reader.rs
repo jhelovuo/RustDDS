@@ -179,13 +179,12 @@ impl Reader {
     final_flag_set: bool,
     mr_state: MessageReceiverState,
   ) -> bool {
-
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
     if self.matched_writers.get_mut(&writer_guid).is_none() {
       return false; // Added in order to test stateless actions. TODO
-    } 
+    }
     let writer_proxy = self.matched_writer_lookup(writer_guid);
 
     if heartbeat.count <= writer_proxy.received_heartbeat_count {
@@ -218,7 +217,7 @@ impl Reader {
       }
 
       let response_ack_nack = AckNack {
-        reader_id: self.get_entity_id(),
+        reader_id: self.get_entity_id().clone(),
         writer_id: heartbeat.writer_id,
         reader_sn_state,
         count: self.sent_ack_nack_count,
@@ -234,10 +233,10 @@ impl Reader {
   pub fn handle_gap_msg(&mut self, gap: Gap, mr_state: MessageReceiverState) {
     // ATM all things related to groups is ignored.
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
-    
+
     if self.matched_writers.get_mut(&writer_guid).is_none() {
       return; // Added in order to test stateless actions. TODO
-    } 
+    }
     let writer_proxy = self.matched_writer_lookup(writer_guid);
 
     // Irrelevant sequence numbers communicated in the Gap message are
@@ -439,7 +438,7 @@ mod tests {
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id().clone(),
       writer_id,
       first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
       last_sn: SequenceNumber::from(0),
@@ -448,7 +447,7 @@ mod tests {
     assert!(!new_reader.handle_heartbeat_msg(hb_new, true, mr_state.clone())); // should be false, no ack
 
     let hb_one = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id().clone(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
       last_sn: SequenceNumber::from(1),
@@ -458,7 +457,7 @@ mod tests {
 
     // After ack_nack, will receive the following change
     let change = CacheChange::new(
-      new_reader.get_guid(),
+      new_reader.get_guid().clone(),
       SequenceNumber::from(1),
       Some(d.clone()),
     );
@@ -467,7 +466,7 @@ mod tests {
 
     // Duplicate
     let hb_one2 = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id().clone(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
       last_sn: SequenceNumber::from(1),
@@ -476,7 +475,7 @@ mod tests {
     assert!(!new_reader.handle_heartbeat_msg(hb_one2, false, mr_state.clone())); // No acknack
 
     let hb_3_1 = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id().clone(),
       writer_id,
       first_sn: SequenceNumber::from(1), // writer has last 2 in cache
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
@@ -486,18 +485,22 @@ mod tests {
 
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(
-      new_reader.get_guid(),
+      new_reader.get_guid().clone(),
       SequenceNumber::from(2),
       Some(d.clone()),
     );
     new_reader.history_cache.add_change(change.clone());
     changes.push(change);
-    let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), Some(d));
+    let change = CacheChange::new(
+      new_reader.get_guid().clone(),
+      SequenceNumber::from(3),
+      Some(d),
+    );
     new_reader.history_cache.add_change(change.clone());
     changes.push(change);
 
     let hb_none = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id().clone(),
       writer_id,
       first_sn: SequenceNumber::from(4), // writer has no samples available
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
@@ -531,9 +534,14 @@ mod tests {
     let mut changes = Vec::new();
 
     for i in 0..n {
-      d.writer_sn = SequenceNumber::from(i);
-      reader.handle_data_msg(d.clone(), mr_state.clone());
-      changes.push(reader.history_cache.get_latest().unwrap().clone());
+      let change = CacheChange::new(
+        reader.get_guid().clone(),
+        SequenceNumber::from(i),
+        Some(dat.clone()),
+      );
+      reader.history_cache.add_change(change.clone());
+      dat.instance_key = reader.history_cache.generate_free_instance_handle();
+      changes.push(change);
     }
 
     // make sequence numbers 1-3 and 5 7 irrelevant
@@ -542,7 +550,7 @@ mod tests {
     gap_list.insert(SequenceNumber::from(7 + 4));
 
     let gap = Gap {
-      reader_id: reader.get_entity_id(),
+      reader_id: reader.get_entity_id().clone(),
       writer_id,
       gap_start: SequenceNumber::from(1),
       gap_list,

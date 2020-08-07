@@ -661,7 +661,7 @@ impl Writer {
     self.increase_last_change_sequence_number();
     let dds_data = sample;
     let change = CacheChange::new(
-      self.get_guid(),
+      self.get_guid().clone(),
       self.last_change_sequence_number,
       Some(dds_data),
     );
@@ -690,12 +690,11 @@ mod tests {
   use super::*;
   use crate::{
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-    dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc},
-    network::udp_listener::UDPListener,
+    dds::{
+      qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc, pubsub::Publisher,
+    },
   };
   use std::thread;
-  use crate::dds::traits::datasample_trait::DataSampleTrait;
-  use std::collections::hash_map::DefaultHasher;
   use crate::test::random_data::*;
 
  /*
@@ -768,17 +767,11 @@ mod tests {
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let publisher = domain_participant
-      .create_publisher(qos.clone())
-      .expect("Failed to create publisher");
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let topic = domain_participant
-      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), qos.clone())
-      .expect("Failed to create topic");
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let mut data_writer = publisher
-      .create_datawriter(&topic, qos.clone())
-      .expect("Failed to create datawriter");
+
+    let publisher = DomainParticipant::create_publisher(domain_participant.clone(), qos.clone()).expect("Failed to create publisher");
+    let topic = DomainParticipant::create_topic(domain_participant.clone(), "Aasii", TypeDesc::new("Huh?".to_string()), qos.clone()).expect("Failed to create topic");
+    let mut data_writer = Publisher::create_datawriter(publisher.clone(), topic.clone(), qos.clone()).expect("Failed to create datawriter");
+
 
     let data = RandomData {
       a: 4,

@@ -8,25 +8,16 @@ use crate::network::constant::*;
 use crate::structure::guid::{GUID};
 //use crate::structure::time::Timestamp;
 
+use std::{time::Duration, sync::Arc, rc::Rc};
 use mio_extras::channel as mio_channel;
-use crate::structure::entity::{Entity};
-
-use crate::dds::traits::key::Keyed;
-use crate::dds::traits::datasample_trait::DataSampleTrait;
-
-
-use crate::dds::values::result::*;
-use crate::dds::participant::*;
-use crate::dds::topic::*;
-use crate::dds::qos::*;
-use crate::dds::ddsdata::DDSData;
-use crate::dds::reader::Reader;
-use crate::dds::writer::Writer;
-use crate::dds::datawriter::DataWriter;
-use crate::dds::datareader::DataReader;
-
 use rand::Rng;
-use crate::structure::{time::Timestamp, guid::EntityId};
+
+use crate::structure::{guid::GUID, time::Timestamp, entity::Entity, guid::EntityId};
+
+use crate::dds::{
+  values::result::*, participant::*, topic::*, qos::*, ddsdata::DDSData, reader::Reader,
+  writer::Writer, datawriter::DataWriter, datareader::DataReader,
+};
 
 // -------------------------------------------------------------------
 
@@ -53,9 +44,11 @@ impl<'a> Publisher {
     }
   }
 
-  pub fn create_datawriter<D>(&'a self, topic: &'a Topic, _qos: QosPolicies) -> Result<DataWriter<D>> 
-  where D: DataSampleTrait + Clone,
-  {
+  pub fn create_datawriter(
+    publisher: Rc<Publisher>,
+    topic: Rc<Topic>,
+    _qos: QosPolicies,
+  ) -> Result<DataWriter> {
     let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
     // TODO: generate unique entity id's in a more systematic way
@@ -63,7 +56,7 @@ impl<'a> Publisher {
     let entity_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
 
     let guid = GUID::new_with_prefix_and_id(
-      self.domainparticipant.as_entity().guid.guidPrefix,
+      publisher.get_participant().as_entity().guid.guidPrefix,
       entity_id,
     );
     let new_writer = Writer::new(guid, hccc_download,self.domainparticipant.get_dds_cache(),topic.get_name().to_string());
@@ -75,6 +68,13 @@ impl<'a> Publisher {
     let matching_data_writer = DataWriter::<D>::new(&self, topic, dwcc_upload,self.domainparticipant.get_dds_cache());
 
     Ok(matching_data_writer)
+  }
+
+  pub fn add_writer(&self, writer: Writer) -> Result<()> {
+    match self.add_writer_sender.send(writer) {
+      Ok(_) => Ok(()),
+      _ => Err(Error::OutOfResources),
+    }
   }
 
   // delete_datawriter should not be needed. The DataWriter object itself should be deleted to accomplish this.
@@ -106,9 +106,9 @@ impl<'a> Publisher {
   }
 
   // What is the use case for this? (is it useful in Rust style of programming? Should it be public?)
-  /*pub fn get_participant(&self) -> &DomainParticipant {
-    self.my_domainparticipant
-  }*/
+  pub fn get_participant(&self) -> &Arc<DomainParticipant> {
+    &self.domain_participant
+  }
 
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
 
@@ -132,134 +132,44 @@ impl<'a> Publisher {
 // -------------------------------------------------------------------
 
 pub struct Subscriber {
-  pub domainparticipant: DomainParticipant,
-  poll: Poll,
+  domain_participant: Arc<DomainParticipant>,
   qos: QosPolicies,
-
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
-
-  receiver_remove_datareader: mio_channel::Receiver<GUID>,
-
-  // what is is this? why?
-  //reader_channel_ends: Vec<(EntityId, mio_channel::Receiver<(DDSData, Timestamp)>)>,
-
-  participant_guid: GUID,
 }
 
-impl<'s> Subscriber {
-  pub fn new(
-    domainparticipant: DomainParticipant,
-    qos: QosPolicies,
-    sender_add_reader: mio_channel::Sender<Reader>,
-    sender_remove_reader: mio_channel::Sender<GUID>,
-
-    receiver_add_datareader: mio_channel::Receiver<()>,
-    receiver_remove_datareader: mio_channel::Receiver<GUID>,
-
-    participant_guid: GUID,
-  ) -> Subscriber {
-    let poll = Poll::new().expect("Unable to create new poll.");
-
-    poll
-      .register(
-        &receiver_add_datareader,
-        ADD_DATAREADER_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .expect("Failed to register datareader adder.");
-
-    poll
-      .register(
-        &receiver_remove_datareader,
-        REMOVE_DATAREADER_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .expect("Failed to register datareader remover.");
-
+impl Subscriber {
+  pub fn new(domain_participant: Arc<DomainParticipant>, qos: QosPolicies) -> Subscriber {
+    let sender_add_reader = domain_participant.get_add_reader_sender();
+    let sender_remove_reader = domain_participant.get_remove_reader_sender();
     Subscriber {
-      poll,
-      domainparticipant,
+      domain_participant,
       qos,
       sender_add_reader,
       sender_remove_reader,
-      receiver_remove_datareader,
-      //reader_channel_ends: Vec::new(),
-      participant_guid,
     }
   }
-  /* architecture change
-  pub fn subscriber_poll(&mut self) {
-    loop {
-      println!("Subscriber looping...");
-      let mut events = Events::with_capacity(1024);
 
-      self
-        .poll
-        .poll(&mut events, None)
-        .expect("Subscriber failed in polling");
+  pub fn create_datareader<D>(
+    &self,
+    participant_guid: GUID,
+    qos: QosPolicies,
+  ) -> Result<DataReader> {
+    // TODO: generate unique entity id's in a more systematic way
 
-      for event in events.into_iter() {
-        println!("Subscriber poll received: {:?}", event); // for debugging!!!!!!
+    let mut rng = rand::thread_rng();
+    let entity_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC7);
+    let guid = GUID::new_with_prefix_and_id(
+      self.domain_participant.as_entity().guid.guidPrefix,
+      entity_id,
+    );
 
-        match event.token() {
-          STOP_POLL_TOKEN => return,
-          READER_CHANGE_TOKEN => {
-            // Eti oikee datareader
-            for pos in 0..(self.reader_channel_ends.len() as usize) {
-              let _channel_message = self.reader_channel_ends[pos].1.try_recv();
-              //match channel_message
-            }
-          }
-          ADD_DATAREADER_TOKEN => {
-            let dr = self.create_datareader(self.participant_guid, self.qos.clone());
-
-            self.datareaders.push(dr.unwrap());
-          }
-          REMOVE_DATAREADER_TOKEN => {
-            let old_dr_guid = self.receiver_remove_datareader.try_recv().unwrap();
-            if let Some(pos) = self
-              .datareaders
-              .iter()
-              .position(|r| r.get_guid() == old_dr_guid)
-            {
-              self.datareaders.remove(pos);
-            }
-            self.sender_remove_reader.send(old_dr_guid).unwrap();
-          }
-          _ => {}
-        }
-      }
-    }
-  }
-  */
-  pub fn create_datareader<'d,D>(&'s self, participant_guid: GUID, qos: QosPolicies ) 
-    -> Result<DataReader<D>> 
-  where D: Deserialize<'d> + Keyed + DataSampleTrait,
-  {
-    // This channel is for notifcations only. Data is transferred through cache.
-    let (send, rec) = mio_channel::sync_channel::<(DDSData,Timestamp)>(2); // Some arbitrary smallish number
+    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let matching_reader = Reader::new(participant_guid, send);
+    self.domain_participant.add_reader(matching_reader);
 
-    let new_datareader = DataReader::<D>::new(self,qos,rec);
+    let new_datareader = DataReader::new(guid, qos, rec);
 
-    /* channel goes directly to matching DataReader, not to this Subscriber.
-    self
-      .poll
-      .register(
-        &rec,
-        READER_CHANGE_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .expect("Unable to register new Reader for Subscribers poll.");
-    */
-    /* self
-      .reader_channel_ends
-      .push((matching_reader.get_entity_id(), rec)); */
-    self.sender_add_reader.send(matching_reader).unwrap();
     Ok(new_datareader)
   }
 
@@ -268,67 +178,4 @@ impl<'s> Subscriber {
 // -------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
-  use super::*;
-  use std::thread;
-  use std::time::Duration;
-  use crate::messages::submessages::data::Data;
-  use mio_extras::channel as mio_channel;
-  use crate::dds::message_receiver::MessageReceiverState;
-
-  #[test]
-  fn sub_subpoll_test() {
-    let dp_guid = GUID::new();
-
-    let (_sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
-    let (_sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
-
-    let (sender_add_reader, receiver_add_reader) = mio_channel::channel::<Reader>();
-    let (sender_remove_reader, _receiver_remove_reader) = mio_channel::channel::<GUID>();
-
-    let mut sub = Subscriber::new(
-      DomainParticipant::new(),
-      QosPolicies::qos_none(),
-      sender_add_reader,
-      sender_remove_reader,
-      receiver_add_datareader,
-      receiver_remove_datareader,
-      dp_guid,
-    );
-
-    let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
-    sub
-      .poll
-      .register(
-        &receiver_stop,
-        STOP_POLL_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
-
-    //let dr = sub.create_datareader(sub.participant_guid, sub.qos.clone());
-    
-    
-    let mut reader = receiver_add_reader.try_recv().unwrap();
-    //sub.datareaders.push(dr.unwrap());
-
-    let child = thread::spawn(move || {
-      std::thread::sleep(Duration::new(0, 500));
-      let d = Data::default();
-      reader.handle_data_msg(d, MessageReceiverState::default());
-
-      std::thread::sleep(Duration::new(0, 500));
-      let d2 = Data::default();
-      reader.handle_data_msg(d2, MessageReceiverState::default());
-
-      std::thread::sleep(Duration::new(0, 500_000));
-      sender_stop.send(0).unwrap();
-    });
-    //sub.subscriber_poll();
-
-    match child.join() {
-      _ => {}
-    }
-  }
-}
+mod tests {}

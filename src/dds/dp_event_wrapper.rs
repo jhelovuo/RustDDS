@@ -318,14 +318,14 @@ mod tests {
       let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
       let new_reader = Reader::new(new_guid, send);
 
-      reader_guids.push(new_reader.get_guid());
-      println!("\nSent reader number {}: {:?}\n", i, new_reader);
+      reader_guids.push(new_reader.get_guid().clone());
+      println!("\nSent reader number {}: {:?}\n", i, &new_reader);
       sender_add_reader.send(new_reader).unwrap();
       std::thread::sleep(Duration::new(0, 100));
     }
 
     println!("\npoistetaan toka\n");
-    let some_guid = reader_guids[1];
+    let some_guid = reader_guids[1].clone();
     sender_remove_reader.send(some_guid).unwrap();
     std::thread::sleep(Duration::new(0, 100));
 

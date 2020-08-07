@@ -1,9 +1,9 @@
 use crate::discovery::participant_proxy::ParticipantProxyAttributes;
 use std::time::Duration;
 
-// specializes the ParticipantProxy. 
+// specializes the ParticipantProxy.
 // The SPDPdiscoveredParticipantData defines the data exchanged as part of the SPDP
-pub struct SPDSdiscoveredParticipantData{
+pub struct SPDSdiscoveredParticipantData {
   ///How long a Participant should be considered alive every
   /// time an announcement is received from the Participant.
   /// If a Participant fails to send another announcement
@@ -14,7 +14,8 @@ pub struct SPDSdiscoveredParticipantData{
 }
 
 impl ParticipantProxy for SPDSdiscoveredParticipantData {
-  fn as_participant_proxy(&self
+  fn as_participant_proxy(
+    &self,
   ) -> &crate::discovery::participant_proxy::ParticipantProxyAttributes {
     todo!()
   }

@@ -117,7 +117,7 @@ impl MessageReceiver {
     if let Some(pos) = self
       .available_readers
       .iter()
-      .position(|r| r.get_guid() == old_reader_guid)
+      .position(|r| *r.get_guid() == old_reader_guid)
     {
       self.available_readers.remove(pos);
     }
@@ -127,7 +127,7 @@ impl MessageReceiver {
     self
       .available_readers
       .iter_mut()
-      .find(|r| r.get_entity_id() == reader_id)
+      .find(|r| *r.get_entity_id() == reader_id)
   }
 
   // TODO use for test and debugging only
@@ -140,7 +140,7 @@ impl MessageReceiver {
     let reader = self
       .available_readers
       .iter()
-      .find(|r| r.get_entity_id() == reader_id)
+      .find(|&r| *r.get_entity_id() == reader_id)
       .unwrap();
     let a: Option<DDSData> = reader.get_history_cache_change_data(sequence_number);
     Some(a.unwrap().clone())
@@ -156,7 +156,7 @@ impl MessageReceiver {
     let reader = self
       .available_readers
       .iter()
-      .find(|r| r.get_entity_id() == reader_id)
+      .find(|&r| *r.get_entity_id() == reader_id)
       .unwrap();
     let a = reader.get_history_cache_change(sequence_number);
     return a.clone();
@@ -169,7 +169,7 @@ impl MessageReceiver {
     let reader = self
       .available_readers
       .iter()
-      .find(|r| r.get_entity_id() == reader_id)
+      .find(|&r| *r.get_entity_id() == reader_id)
       .unwrap();
     reader.get_history_cache_sequence_start_and_end_numbers()
   }

@@ -3,9 +3,9 @@
 use crate::dds::values::result::*;
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
-pub trait HasQoSPolicy<'a> {
-  fn get_qos(&'a self) -> &'a QosPolicies;
-  fn set_qos(self, new_qos: &'a QosPolicies) -> Result<()>;
+pub trait HasQoSPolicy {
+  fn get_qos(&self) -> &QosPolicies;
+  fn set_qos(self, new_qos: &QosPolicies) -> Result<()>;
 }
 
 // DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.
@@ -48,7 +48,7 @@ pub struct QosPolicies {
   time_based_filter: Option<policy::TimeBasedFilter>,
   pub reliability: Option<policy::Reliability>,
   destination_order: Option<policy::DestinationOrder>,
-  history: Option<policy::History>,
+  pub history: Option<policy::History>,
   resource_limits: Option<policy::ResourceLimits>,
   lifespan: Option<policy::Lifespan>,
 }
