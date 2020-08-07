@@ -14,6 +14,8 @@ use crate::dds::{
   pubsub::{Subscriber, Publisher},
 };
 
+use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
+
 use crate::structure::{entity::Entity};
 
 pub struct Discovery {
@@ -24,20 +26,20 @@ pub struct Discovery {
   discovery_publisher: Rc<Publisher>,
 
   dcps_participant_topic: Rc<Topic>,
-  dcps_participant_reader: DataReader,
-  dcps_participant_writer: DataWriter,
+  dcps_participant_reader: DataReader<SPDPDiscoveredParticipantData>,
+  dcps_participant_writer: DataWriter<SPDPDiscoveredParticipantData>,
 
   dcps_subscription_topic: Rc<Topic>,
-  dcps_subscription_reader: DataReader,
-  dcps_subscription_writer: DataWriter,
+  dcps_subscription_reader: DataReader<SPDPDiscoveredParticipantData>,
+  dcps_subscription_writer: DataWriter<SPDPDiscoveredParticipantData>,
 
   dcps_publication_topic: Rc<Topic>,
-  dcps_publication_reader: DataReader,
-  dcps_publication_writer: DataWriter,
+  dcps_publication_reader: DataReader<SPDPDiscoveredParticipantData>,
+  dcps_publication_writer: DataWriter<SPDPDiscoveredParticipantData>,
 
   dcps_topic: Rc<Topic>,
-  dcps_reader: DataReader,
-  dcps_writer: DataWriter,
+  dcps_reader: DataReader<SPDPDiscoveredParticipantData>,
+  dcps_writer: DataWriter<SPDPDiscoveredParticipantData>,
 }
 
 impl Discovery {

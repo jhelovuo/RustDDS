@@ -1,22 +1,19 @@
-use std::time::Duration;
 use mio::{Ready, Poll, PollOpt};
-
-use serde::Deserialize;
+use mio_extras::channel as mio_channel;
 
 use crate::network::constant::*;
 
-use crate::structure::guid::{GUID};
-//use crate::structure::time::Timestamp;
-
 use std::{time::Duration, sync::Arc, rc::Rc};
-use mio_extras::channel as mio_channel;
+
 use rand::Rng;
+use serde::Deserialize;
 
 use crate::structure::{guid::GUID, time::Timestamp, entity::Entity, guid::EntityId};
 
 use crate::dds::{
   values::result::*, participant::*, topic::*, qos::*, ddsdata::DDSData, reader::Reader,
   writer::Writer, datawriter::DataWriter, datareader::DataReader,
+  traits::datasample_trait::DataSampleTrait,
 };
 
 // -------------------------------------------------------------------
@@ -25,7 +22,7 @@ pub struct Publisher {
   pub domainparticipant: DomainParticipant,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
-  add_writer_sender: mio_channel::Sender<Writer>, 
+  add_writer_sender: mio_channel::Sender<Writer>,
 }
 
 // public interface for Publisher
@@ -44,11 +41,14 @@ impl<'a> Publisher {
     }
   }
 
-  pub fn create_datawriter(
+  pub fn create_datawriter<D>(
     publisher: Rc<Publisher>,
     topic: Rc<Topic>,
     _qos: QosPolicies,
-  ) -> Result<DataWriter> {
+  ) -> Result<DataWriter<D>>
+  where
+    D: DataSampleTrait,
+  {
     let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
     // TODO: generate unique entity id's in a more systematic way
@@ -59,13 +59,18 @@ impl<'a> Publisher {
       publisher.get_participant().as_entity().guid.guidPrefix,
       entity_id,
     );
-    let new_writer = Writer::new(guid, hccc_download,self.domainparticipant.get_dds_cache(),topic.get_name().to_string());
+    let new_writer = Writer::new(
+      guid,
+      hccc_download,
+      self.domainparticipant.get_dds_cache(),
+      topic.get_name().to_string(),
+    );
     self
       .add_writer_sender
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::<D>::new(&self, topic, dwcc_upload,self.domainparticipant.get_dds_cache());
+    let matching_data_writer = DataWriter::<D>::new(publisher, topic, dwcc_upload);
 
     Ok(matching_data_writer)
   }
@@ -138,7 +143,7 @@ pub struct Subscriber {
   sender_remove_reader: mio_channel::Sender<GUID>,
 }
 
-impl Subscriber {
+impl<'s> Subscriber {
   pub fn new(domain_participant: Arc<DomainParticipant>, qos: QosPolicies) -> Subscriber {
     let sender_add_reader = domain_participant.get_add_reader_sender();
     let sender_remove_reader = domain_participant.get_remove_reader_sender();
@@ -154,7 +159,10 @@ impl Subscriber {
     &self,
     participant_guid: GUID,
     qos: QosPolicies,
-  ) -> Result<DataReader> {
+  ) -> Result<DataReader<D>>
+  where
+    D: Deserialize<'s> + DataSampleTrait,
+  {
     // TODO: generate unique entity id's in a more systematic way
 
     let mut rng = rand::thread_rng();
@@ -168,11 +176,10 @@ impl Subscriber {
     let matching_reader = Reader::new(participant_guid, send);
     self.domain_participant.add_reader(matching_reader);
 
-    let new_datareader = DataReader::new(guid, qos, rec);
+    let new_datareader = DataReader::<D>::new(guid, qos, rec);
 
     Ok(new_datareader)
   }
-
 }
 
 // -------------------------------------------------------------------

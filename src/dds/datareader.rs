@@ -9,8 +9,9 @@ use crate::structure::{
 };
 
 use crate::dds::{
-  values::result::*, traits::key::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
+  values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
   ddsdata::DDSData,
+  traits::datasample_trait::DataSampleTrait,
 };
 
 pub struct DataReader<D> {

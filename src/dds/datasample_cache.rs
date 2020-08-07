@@ -13,8 +13,9 @@ pub struct DataSampleCache<D> {
   phantom: std::marker::PhantomData<D>, // this is a placeholder to prevent errors until D is actually used here.
 }
 
-impl<D> DataSampleCache<D> 
-where D: DataSampleTrait
+impl<D> DataSampleCache<D>
+where
+  D: DataSampleTrait,
 {
   pub fn new(qos: QosPolicies) -> DataSampleCache<D> {
     DataSampleCache {
@@ -24,10 +25,7 @@ where D: DataSampleTrait
     }
   }
 
-  pub fn add_datasample(
-    &mut self,
-    data_sample: DataSample,
-  ) -> Result<Box<dyn Key>> {
+  pub fn add_datasample(&mut self, data_sample: DataSample) -> Result<Box<dyn Key>> {
     let key = match &data_sample.value {
       Ok(v) => v.get_key().box_clone(),
       Err(key) => key.box_clone(),
@@ -115,7 +113,7 @@ mod tests {
   #[test]
   fn dsc_empty_qos() {
     let qos = QosPolicies::qos_none();
-    let mut datasample_cache :DataSampleCache<RandomData> = DataSampleCache::new(qos);
+    let mut datasample_cache = DataSampleCache::<RandomData>::new(qos);
 
     let timestamp = Timestamp::from(time::get_time());
     let data = RandomData {

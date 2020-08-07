@@ -7,7 +7,7 @@ use crate::network::constant::*;
 
 use crate::dds::{
   dp_event_wrapper::DPEventWrapper, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*,
-  qos::*, values::result::*, datareader::DataReader,
+  qos::*, values::result::*,
 };
 
 use crate::structure::{

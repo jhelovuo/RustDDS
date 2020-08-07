@@ -33,7 +33,10 @@ pub struct DataWriter<D> {
   datasample_cache: DataSampleCache<D>,
 }
 
-impl<D> DataWriter<D> {
+impl<D> DataWriter<D>
+where
+  D: DataSampleTrait,
+{
   pub fn new(
     publisher: Rc<Publisher>,
     topic: Rc<Topic>,

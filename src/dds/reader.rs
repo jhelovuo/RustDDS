@@ -11,7 +11,7 @@ use crate::messages::submessages::ack_nack::AckNack;
 use crate::messages::submessages::heartbeat::Heartbeat;
 use crate::messages::submessages::gap::Gap;
 use crate::structure::entity::EntityAttributes;
-use crate::structure::guid::{GuidPrefix, GUID};
+use crate::structure::guid::GUID;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::time::Timestamp;
 use mio_extras::channel as mio_channel;
@@ -534,14 +534,9 @@ mod tests {
     let mut changes = Vec::new();
 
     for i in 0..n {
-      let change = CacheChange::new(
-        reader.get_guid().clone(),
-        SequenceNumber::from(i),
-        Some(dat.clone()),
-      );
-      reader.history_cache.add_change(change.clone());
-      dat.instance_key = reader.history_cache.generate_free_instance_handle();
-      changes.push(change);
+      d.writer_sn = SequenceNumber::from(i);
+      reader.handle_data_msg(d.clone(), mr_state.clone());
+      changes.push(reader.history_cache.get_latest().unwrap().clone());
     }
 
     // make sequence numbers 1-3 and 5 7 irrelevant
@@ -600,4 +595,5 @@ mod tests {
       Some(&changes[9])
     );
   }
+
 }
