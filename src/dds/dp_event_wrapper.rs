@@ -99,11 +99,11 @@ impl DPEventWrapper {
     }
   }
 
-  pub fn event_loop(mut ev_wrapper: DPEventWrapper) {
+  pub fn event_loop(self) {
     let mut writers: HashMap<GUID, Writer> = HashMap::new();
+    let mut ev_wrapper = self;
     loop {
       let mut events = Events::with_capacity(1024);
-
       ev_wrapper
         .poll
         .poll(&mut events, None)

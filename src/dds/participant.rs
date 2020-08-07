@@ -4,6 +4,8 @@ use mio_extras::channel as mio_channel;
 use std::thread;
 use std::collections::HashMap;
 use std::time::Duration;
+use std::ops::Deref;
+use std::sync::Arc;
 
 use crate::network::constant::*;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
@@ -18,7 +20,41 @@ use crate::dds::datareader::DataReader;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
 
+#[derive(Clone)]
+// This is a smart pointer for DomainPArticipant_Inner for easier manipulation.
 pub struct DomainParticipant {
+  dpi: Arc<DomainParticipant_Inner>,
+}
+
+impl DomainParticipant {
+  pub fn new() -> DomainParticipant {
+    let dpi = DomainParticipant_Inner::new();
+    let a = Arc::new(dpi);
+    // TODO: launch dp background thread here, give it a clone of Arc
+    DomainParticipant {dpi: a}
+  }
+
+  pub fn create_publisher<'a>(&'a self, qos: QosPolicies) -> Result<Publisher> {
+    self.dpi.create_publisher(&self,qos)
+  }
+
+  pub fn create_topic<'a>(&'a self, name: &str,type_desc: TypeDesc, qos: QosPolicies) 
+      -> Result<Topic> {
+    self.dpi.create_topic(&self,name,type_desc,qos)
+  }
+
+}
+
+impl Deref for DomainParticipant {
+  type Target = DomainParticipant_Inner;
+  fn deref(&self) -> &DomainParticipant_Inner {
+    &self.dpi
+  }
+}
+
+
+// This is the actual working DomainParticipant.
+pub struct DomainParticipant_Inner {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 
@@ -39,9 +75,9 @@ pub struct DomainParticipant {
 
 pub struct SubscriptionBuiltinTopicData {} // placeholder
 
-impl DomainParticipant {
+impl DomainParticipant_Inner {
   // TODO: there might be a need to set participant id (thus calculating ports accordingly)
-  pub fn new() -> DomainParticipant {
+  pub fn new() -> DomainParticipant_Inner {
     // let discovery_multicast_listener =
     //   UDPListener::new(DISCOVERY_MUL_LISTENER_TOKEN, "0.0.0.0", 7400);
     // discovery_multicast_listener
@@ -100,10 +136,10 @@ impl DomainParticipant {
         receiver: remove_writer_receiver,
       },
     );
-    thread::spawn(move || DPEventWrapper::event_loop(ev_wrapper));
+    thread::spawn(move || ev_wrapper.event_loop() );
 
     // Addind datareaders
-    DomainParticipant {
+    DomainParticipant_Inner {
       entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
       sub_threads: Vec::new(),
@@ -145,22 +181,23 @@ impl DomainParticipant {
   // There are no delete function for publisher or subscriber. Deletion is performed by
   // deleting the Publisher or Subscriber object, who upon deletion will notify
   // the DomainParticipant.
-  pub fn create_publisher<'a>(&'a self, qos: QosPolicies) -> Result<Publisher> {
+  pub fn create_publisher<'a>(&'a self, outer: &'a DomainParticipant, qos: QosPolicies) -> Result<Publisher> {
     let add_writer_sender = self.add_writer_sender.clone();
 
-    Ok(Publisher::new(&self, qos.clone(), qos, add_writer_sender))
+    Ok(Publisher::new(&outer, qos.clone(), qos, add_writer_sender))
   }
 
-  pub fn create_subscriber(&mut self, qos: QosPolicies) {
+  pub fn create_subscriber(&self, qos: QosPolicies) -> Subscriber {
     let (sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
     let (sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
 
-    self.sender_add_datareader_vec.push(sender_add_datareader);
-    self
-      .sender_remove_datareader_vec
-      .push(sender_remove_datareader);
+    //self.sender_add_datareader_vec.push(sender_add_datareader);
+    //self
+    //  .sender_remove_datareader_vec
+    //  .push(sender_remove_datareader);
 
-    let mut subscriber = Subscriber::new(
+    let subscriber = Subscriber::new(
+      //TODO: send "outer" arc to subscriber, as in publisher
       qos,
       self.sender_add_reader.clone(),
       self.sender_remove_reader.clone(),
@@ -172,6 +209,7 @@ impl DomainParticipant {
     // removed due to threading change
     //let handle = thread::spawn(move || subscriber.subscriber_poll());
     //self.sub_threads.push(handle);
+    subscriber
   }
 
   pub fn created_datareader(&self, _qos: QosPolicies) {
@@ -184,11 +222,12 @@ impl DomainParticipant {
   // with non-ASCII characters. On the other hand, string handling with &str is easier in Rust.
   pub fn create_topic<'a>(
     &'a self,
+    outer: &'a DomainParticipant,
     name: &str,
     type_desc: TypeDesc,
     qos: QosPolicies,
   ) -> Result<Topic> {
-    let topic = Topic::new(&self, name.to_string(), type_desc, qos);
+    let topic = Topic::new(&outer, name.to_string(), type_desc, qos);
     Ok(topic)
 
     // TODO: refine
@@ -214,13 +253,13 @@ impl DomainParticipant {
   }
 } // impl
 
-impl Default for DomainParticipant {
-  fn default() -> DomainParticipant {
-    DomainParticipant::new()
+impl Default for DomainParticipant_Inner {
+  fn default() -> DomainParticipant_Inner {
+    DomainParticipant_Inner::new()
   }
 }
 
-impl Entity for DomainParticipant {
+impl Entity for DomainParticipant_Inner {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes
   }
