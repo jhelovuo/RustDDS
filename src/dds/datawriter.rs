@@ -22,21 +22,24 @@ use crate::dds::datasample_cache::DataSampleCache;
 use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
 
-pub struct DataWriter<'p> {
+pub struct DataWriter<'p,D> {
   my_publisher: &'p Publisher<'p>,
   my_topic: &'p Topic<'p>,
   qos_policy: &'p QosPolicies,
   entity_attributes: EntityAttributes,
   cc_upload: mio_channel::Sender<DDSData>,
-  datasample_cache: DataSampleCache,
+  datasample_cache: DataSampleCache<D>,
 }
 
-impl<'p> DataWriter<'p> {
+impl<'p,D> DataWriter<'p,D> 
+  where
+    D: DataSampleTrait + Clone,
+{
   pub fn new(
     publisher: &'p Publisher,
     topic: &'p Topic,
     cc_upload: mio_channel::Sender<DDSData>,
-  ) -> DataWriter<'p> {
+  ) -> DataWriter<'p,D> {
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
       publisher.get_participant().get_guid_prefix(),
       EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
@@ -62,9 +65,7 @@ impl<'p> DataWriter<'p> {
   // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
-  pub fn write<D>(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
-  where
-    D: DataSampleTrait + Clone,
+  pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
   {
     let instance_handle = self.datasample_cache.generate_free_instance_handle();
     let ddsdata = DDSData::from(instance_handle.clone(), &data, source_timestamp);
@@ -74,7 +75,7 @@ impl<'p> DataWriter<'p> {
       None => DataSample::new(Timestamp::from(time::get_time()), instance_handle, data),
     };
 
-    let _key = self.datasample_cache.add_datasample::<D>(data_sample)?;
+    let _key = self.datasample_cache.add_datasample(data_sample)?;
 
     match self.cc_upload.send(ddsdata) {
       Ok(_) => Ok(()),
@@ -84,9 +85,7 @@ impl<'p> DataWriter<'p> {
 
   // dispose
   // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose<D>(&mut self, data: &D, source_timestamp: Option<Timestamp>) -> Result<()>
-  where
-    D: DataSampleTrait,
+  pub fn dispose(&mut self, data: &D, source_timestamp: Option<Timestamp>) -> Result<()>
   {
     let instance_handle = self.datasample_cache.generate_free_instance_handle();
     let ddsdata = DDSData::from_dispose(instance_handle.clone(), &data, source_timestamp);
@@ -96,7 +95,7 @@ impl<'p> DataWriter<'p> {
       None => DataSample::new_disposed(Timestamp::from(time::get_time()), instance_handle, data),
     };
 
-    let _key = self.datasample_cache.add_datasample::<D>(data_sample)?;
+    let _key = self.datasample_cache.add_datasample(data_sample)?;
 
     match self.cc_upload.send(ddsdata) {
       Ok(_) => Ok(()),
@@ -163,13 +162,13 @@ impl<'p> DataWriter<'p> {
   // But then what if the result set changes while the application processes it?
 }
 
-impl<'a> Entity for DataWriter<'a> {
+impl<'a,D> Entity for DataWriter<'a,D> {
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     &self.entity_attributes
   }
 }
 
-impl<'p> HasQoSPolicy<'p> for DataWriter<'p> {
+impl<'p,D> HasQoSPolicy<'p> for DataWriter<'p,D> {
   fn set_qos(mut self, policy: &'p QosPolicies) -> Result<()> {
     // TODO: check liveliness of qos_policy
     self.qos_policy = policy;
@@ -181,7 +180,7 @@ impl<'p> HasQoSPolicy<'p> for DataWriter<'p> {
   }
 }
 
-impl<'a> DDSEntity<'a> for DataWriter<'a> {}
+impl<'a,D> DDSEntity<'a> for DataWriter<'a,D> {}
 
 #[cfg(test)]
 mod tests {

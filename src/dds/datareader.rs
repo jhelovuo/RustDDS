@@ -9,77 +9,77 @@ use crate::dds::traits::key::*;
 use crate::dds::qos::*;
 use crate::dds::datasample::*;
 use crate::dds::datasample_cache::DataSampleCache;
+use crate::dds::traits::datasample_trait::DataSampleTrait;
+use crate::dds::pubsub::*;
 use crate::structure::guid::{GUID};
 
-pub struct DataReader {
-  //my_subscriber: &'s Subscriber<'s>,
+pub struct DataReader<D> 
+{
+  //my_subscriber: &'s Subscriber,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
-  datasample_cache: DataSampleCache,
+  datasample_cache: DataSampleCache<D>,
   // TODO: rest of fields
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
 
-impl<'s> DataReader {
+impl<'s,D> DataReader<D> 
+  where
+    D: Deserialize<'s> + Keyed + DataSampleTrait,
+{
   pub fn new(qos: QosPolicies) -> Self {
     Self {
+      //my_subscriber,
       qos_policy: qos.clone(),
       entity_attributes: EntityAttributes::new(GUID::new()), // todo
       datasample_cache: DataSampleCache::new(qos),
     }
   }
 
-  pub fn add_datasample<D>(&self, _datasample: D) -> Result<()>
-  where
-    D: Deserialize<'s> + Keyed,
+  pub fn add_datasample(&self, _datasample: D) -> Result<()>
   {
     Ok(())
   }
 
-  pub fn read<D>(
+  pub fn read(
     &self,
     _max_samples: i32,
     _sample_state: SampleState,
     _view_state: ViewState,
     _instance_state: InstanceState,
   ) -> Result<Vec<D>>
-  where
-    D: Deserialize<'s> + Keyed,
   {
     unimplemented!();
     // Go through the historycache list and return all relevant in a vec.
   }
 
-  pub fn take<D>(
+  pub fn take(
     &self,
     _max_samples: i32,
     _sample_state: SampleState,
     _view_state: ViewState,
     _instance_state: InstanceState,
   ) -> Result<Vec<D>>
-  where
-    D: Deserialize<'s> + Keyed,
   {
     unimplemented!()
   }
 
-  pub fn read_next<D>(&self) -> Result<Vec<D>>
-  where
-    D: Deserialize<'s> + Keyed,
+  pub fn read_next(&self) -> Result<Vec<D>>
   {
     todo!()
   }
 
-  pub fn read_instance<D>(&self, _instance_handle: InstanceHandle) -> Result<Vec<D>>
-  where
-    D: Deserialize<'s> + Keyed,
+  pub fn read_instance(&self, _instance_handle: InstanceHandle) -> Result<Vec<D>>
   {
     todo!()
   }
 } // impl
 
-impl Entity for DataReader {
+impl<'a,D> Entity for DataReader<D> 
+  where
+    D: Deserialize<'a> + Keyed + DataSampleTrait,
+{
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes
   }

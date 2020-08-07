@@ -1,6 +1,8 @@
 use std::time::Duration;
 use mio::{Ready, Poll, PollOpt, Events};
 
+use serde::Deserialize;
+
 use crate::network::constant::*;
 
 use crate::structure::guid::{GUID};
@@ -8,6 +10,10 @@ use crate::structure::time::Timestamp;
 
 use mio_extras::channel as mio_channel;
 use crate::structure::entity::{Entity};
+
+use crate::dds::traits::key::Keyed;
+use crate::dds::traits::datasample_trait::DataSampleTrait;
+
 
 use crate::dds::values::result::*;
 use crate::dds::participant::*;
@@ -47,7 +53,9 @@ impl<'a> Publisher<'a> {
     }
   }
 
-  pub fn create_datawriter(&'a self, topic: &'a Topic, _qos: QosPolicies) -> Result<DataWriter> {
+  pub fn create_datawriter<D>(&'a self, topic: &'a Topic, _qos: QosPolicies) -> Result<DataWriter<D>> 
+  where D: DataSampleTrait + Clone,
+  {
     let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
     // TODO: generate unique entity id's in a more systematic way
@@ -64,7 +72,7 @@ impl<'a> Publisher<'a> {
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::new(&self, topic, dwcc_upload);
+    let matching_data_writer = DataWriter::<D>::new(&self, topic, dwcc_upload);
 
     Ok(matching_data_writer)
   }
@@ -127,7 +135,7 @@ pub struct Subscriber {
   //my_domainparticipant: &'a DomainParticipant,
   poll: Poll,
   qos: QosPolicies,
-  datareaders: Vec<DataReader>,
+  //datareaders: Vec<DataReader>,
 
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
@@ -174,7 +182,7 @@ impl Subscriber {
       poll,
       //my_domainparticipant,
       qos,
-      datareaders: Vec::new(),
+      //datareaders: Vec::new(),
       sender_add_reader,
       sender_remove_reader,
       receiver_remove_datareader,
@@ -182,7 +190,7 @@ impl Subscriber {
       participant_guid,
     }
   }
-
+  /* architecture change
   pub fn subscriber_poll(&mut self) {
     loop {
       println!("Subscriber looping...");
@@ -226,13 +234,15 @@ impl Subscriber {
       }
     }
   }
-
-  pub fn create_datareader(
+  */
+  pub fn create_datareader<'s,D>(
     &mut self,
     participant_guid: GUID,
     qos: QosPolicies,
-  ) -> Result<DataReader> {
-    let new_datareader = DataReader::new(qos);
+  ) -> Result<DataReader<D>> 
+  where D: Deserialize<'s> + Keyed + DataSampleTrait,
+  {
+    let new_datareader = DataReader::<D>::new(qos);
 
     let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let matching_reader = Reader::new(participant_guid, send);
@@ -254,9 +264,11 @@ impl Subscriber {
     Ok(new_datareader)
   }
 
+  /* architecture change: DataReader -> DataReader<D>
   pub fn lookup_datareader(&self, _topic_name: String) -> Option<Vec<&DataReader>> {
     todo!()
   }
+  */
 }
 
 // -------------------------------------------------------------------

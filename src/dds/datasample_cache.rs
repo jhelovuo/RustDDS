@@ -7,20 +7,24 @@ use crate::dds::qos::policy::History;
 use crate::structure::instance_handle::InstanceHandle;
 use std::collections::HashMap;
 
-pub struct DataSampleCache {
+pub struct DataSampleCache<D> {
   qos: QosPolicies,
   datasamples: HashMap<u64, Vec<DataSample>>,
+  phantom: std::marker::PhantomData<D>, // this is a placeholder to prevent errors until D is actually used here.
 }
 
-impl DataSampleCache {
-  pub fn new(qos: QosPolicies) -> DataSampleCache {
+impl<D> DataSampleCache<D> 
+where D: DataSampleTrait
+{
+  pub fn new(qos: QosPolicies) -> DataSampleCache<D> {
     DataSampleCache {
       qos,
       datasamples: HashMap::new(),
+      phantom: std::marker::PhantomData::<D>, // this is a placeholder to prevent errors until D is actually used here.
     }
   }
 
-  pub fn add_datasample<D: DataSampleTrait>(
+  pub fn add_datasample(
     &mut self,
     data_sample: DataSample,
   ) -> Result<Box<dyn Key>> {

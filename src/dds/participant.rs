@@ -127,6 +127,7 @@ impl DomainParticipant {
     self.sender_remove_reader.send(reader_guid).unwrap();
   }
 
+  /* removed due to architecture change.
   pub fn add_datareader(&self, _datareader: DataReader, pos: usize) {
     self.sender_add_datareader_vec[pos].send(()).unwrap();
   }
@@ -137,6 +138,7 @@ impl DomainParticipant {
       .send(datareader_guid)
       .unwrap();
   }
+  */
 
   // Publisher and subscriber creation
   //
@@ -167,8 +169,9 @@ impl DomainParticipant {
       self.get_guid(),
     );
 
-    let handle = thread::spawn(move || subscriber.subscriber_poll());
-    self.sub_threads.push(handle);
+    // removed due to threading change
+    //let handle = thread::spawn(move || subscriber.subscriber_poll());
+    //self.sub_threads.push(handle);
   }
 
   pub fn created_datareader(&self, _qos: QosPolicies) {
