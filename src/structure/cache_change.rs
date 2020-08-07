@@ -48,14 +48,21 @@ impl CacheChange {
     sequence_number: SequenceNumber,
     data_value: Option<DDSData>,
   ) -> CacheChange {
+    let instance_handle;
     let data_value = match data_value {
-      Some(val) => Some(val.value()),
-      None => None,
+      Some(ddsdata) => {
+        instance_handle = ddsdata.instance_key.clone();
+        ddsdata.value()
+      }
+      None => {
+        instance_handle = InstanceHandle::default();
+        None
+      }
     };
     CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid,
-      instance_handle: InstanceHandle::default(),
+      instance_handle,
       sequence_number,
       data_value,
       //inline_qos: ParameterList::new(),

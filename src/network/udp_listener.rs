@@ -118,7 +118,7 @@ mod tests {
       .send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002)
       .expect("Failed to send multicast");
 
-    thread::sleep(time::Duration::from_secs(5));
+    thread::sleep(time::Duration::from_secs(2));
 
     let rec_data = listener.get_message();
 

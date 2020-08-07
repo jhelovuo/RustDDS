@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::dds::traits::key::*;
 use crate::structure::time::Timestamp;
 use crate::dds::traits::datasample_trait::DataSampleTrait;
+use crate::structure::instance_handle::InstanceHandle;
 
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
@@ -39,6 +40,9 @@ pub enum InstanceState {
 /// This combines SampleInfo and Data
 #[derive(Clone)]
 pub struct DataSample {
+  // Key for this particular datasample / chachechange
+  pub instance_handle: InstanceHandle,
+
   pub sample_state: SampleState,
   pub view_state: ViewState,
   pub instance_state: InstanceState,
@@ -82,7 +86,11 @@ pub struct DataSample {
 }
 
 impl DataSample {
-  pub fn new<D: DataSampleTrait + 'static>(source_timestamp: Timestamp, value: D) -> DataSample {
+  pub fn new<D: DataSampleTrait>(
+    source_timestamp: Timestamp,
+    instance_handle: InstanceHandle,
+    value: D,
+  ) -> DataSample {
     let sample_state = SampleState::Read;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
@@ -95,6 +103,39 @@ impl DataSample {
     let value = Ok(Arc::new(bx));
 
     DataSample {
+      instance_handle,
+      sample_state,
+      view_state,
+      instance_state,
+      disposed_generation_count,
+      no_writers_generation_count,
+      sample_rank,
+      generation_rank,
+      absolute_generation_rank,
+      source_timestamp,
+      value,
+    }
+  }
+
+  pub fn new_disposed<D: DataSampleTrait>(
+    source_timestamp: Timestamp,
+    instance_handle: InstanceHandle,
+    value: &D,
+  ) -> DataSample {
+    let sample_state = SampleState::Read;
+    let view_state = ViewState::New;
+    let instance_state = InstanceState::NotAlive_Disposed;
+    let disposed_generation_count = 0;
+    let no_writers_generation_count = 0;
+    let sample_rank = 0;
+    let generation_rank = 0;
+    let absolute_generation_rank = 0;
+
+    let key = value.get_key().clone();
+    let value = Err(key);
+
+    DataSample {
+      instance_handle,
       sample_state,
       view_state,
       instance_state,
@@ -110,6 +151,7 @@ impl DataSample {
 
   pub fn new_with_arc(
     source_timestamp: Timestamp,
+    instance_handle: InstanceHandle,
     arc: Arc<Box<dyn DataSampleTrait>>,
   ) -> DataSample {
     let sample_state = SampleState::Read;
@@ -122,6 +164,7 @@ impl DataSample {
     let absolute_generation_rank = 0;
 
     DataSample {
+      instance_handle,
       sample_state,
       view_state,
       instance_state,

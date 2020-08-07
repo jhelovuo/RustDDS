@@ -1,5 +1,4 @@
 use std::time::Duration;
-use serde::Serialize;
 use mio_extras::channel as mio_channel;
 
 use crate::structure::time::Timestamp;
@@ -9,14 +8,16 @@ use crate::structure::guid::{GUID, EntityId};
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
 use crate::dds::participant::SubscriptionBuiltinTopicData;
-use crate::dds::traits::key::Keyed;
 use crate::dds::values::result::{
   Result, Error, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibelQosStatus,
   PublicationMatchedStatus,
 };
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::datasample_trait::DataSampleTrait;
-use crate::dds::qos::{HasQoSPolicy, QosPolicies};
+use crate::dds::qos::{
+  HasQoSPolicy, QosPolicies,
+  policy::{Reliability},
+};
 use crate::dds::datasample_cache::DataSampleCache;
 use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
@@ -61,15 +62,16 @@ impl<'p> DataWriter<'p> {
   // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
-  pub fn write<D: 'static>(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
+  pub fn write<D>(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
   where
     D: DataSampleTrait + Clone,
   {
-    let ddsdata = DDSData::from(&data, source_timestamp);
+    let instance_handle = self.datasample_cache.generate_free_instance_handle();
+    let ddsdata = DDSData::from(instance_handle.clone(), &data, source_timestamp);
 
     let data_sample = match source_timestamp {
-      Some(t) => DataSample::new(t, data),
-      None => DataSample::new(Timestamp::from(time::get_time()), data),
+      Some(t) => DataSample::new(t, instance_handle, data),
+      None => DataSample::new(Timestamp::from(time::get_time()), instance_handle, data),
     };
 
     let _key = self.datasample_cache.add_datasample::<D>(data_sample)?;
@@ -82,16 +84,46 @@ impl<'p> DataWriter<'p> {
 
   // dispose
   // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose<D>(&self, data: &D, _source_timestamp: Option<Timestamp>)
+  pub fn dispose<D>(&mut self, data: &D, source_timestamp: Option<Timestamp>) -> Result<()>
   where
-    D: Send + Sync + Serialize + Keyed,
+    D: DataSampleTrait,
   {
-    let _key = data.get_key().get_hash();
-    // let d = self.datasample_cache.
+    let instance_handle = self.datasample_cache.generate_free_instance_handle();
+    let ddsdata = DDSData::from_dispose(instance_handle.clone(), &data, source_timestamp);
+
+    let data_sample = match source_timestamp {
+      Some(t) => DataSample::new_disposed(t, instance_handle, data),
+      None => DataSample::new_disposed(Timestamp::from(time::get_time()), instance_handle, data),
+    };
+
+    let _key = self.datasample_cache.add_datasample::<D>(data_sample)?;
+
+    match self.cc_upload.send(ddsdata) {
+      Ok(_) => Ok(()),
+      Err(huh) => {
+        println!("Error: {:?}", huh);
+        Err(Error::OutOfResources)
+      }
+    }
   }
 
   pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
-    unimplemented!();
+    match &self.qos_policy.reliability {
+      Some(rel) => match rel {
+        Reliability::BestEffort => return Ok(()),
+        Reliability::Reliable {
+          max_blocking_time: _,
+        } =>
+        // TODO: implement actual waiting for acks
+        {
+          ()
+        }
+      },
+      None => return Ok(()),
+    };
+
+    // TODO: wait for actual acknowledgements to writers writes
+    return Err(Error::Unsupported);
   }
 
   // status queries
@@ -117,10 +149,11 @@ impl<'p> DataWriter<'p> {
   }
 
   pub fn assert_liveliness(&self) -> Result<()> {
+    // TODO: probably needs extra liveliness mio_channel to writer
     unimplemented!()
   }
 
-  // This shoudl really return InstanceHandles pointing to a BuiltInTopic reader
+  // This should really return InstanceHandles pointing to a BuiltInTopic reader
   //  but let's see if we can do without those handles.
   pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     unimplemented!()
@@ -155,59 +188,78 @@ mod tests {
   use super::*;
   use crate::dds::participant::DomainParticipant;
   use crate::dds::typedesc::TypeDesc;
-  use crate::dds::traits::key::Key;
-  use std::hash::{Hash, Hasher};
-  use std::collections::hash_map::DefaultHasher;
-  struct RandomKey {
-    val: i64,
-  }
-
-  impl RandomKey {
-    pub fn new(val: i64) -> RandomKey {
-      RandomKey { val }
-    }
-  }
-
-  impl Key for RandomKey {
-    fn get_hash(&self) -> u64 {
-      let mut hasher = DefaultHasher::new();
-      self.val.hash(&mut hasher);
-      hasher.finish()
-    }
-
-    fn box_clone(&self) -> Box<dyn Key> {
-      let n = RandomKey::new(self.val);
-      Box::new(n)
-    }
-  }
-
-  #[derive(Serialize, Clone)]
-  struct RandomData {
-    a: i64,
-    b: String,
-  }
-
-  impl Keyed for RandomData {
-    fn get_key(&self) -> Box<dyn Key> {
-      let key = RandomKey::new(self.a);
-      Box::new(key)
-    }
-  }
-
-  impl DataSampleTrait for RandomData {
-    fn box_clone(&self) -> Box<dyn DataSampleTrait> {
-      Box::new(RandomData {
-        a: self.a.clone(),
-        b: self.b.clone(),
-      })
-    }
-  }
+  use crate::test::random_data::*;
 
   #[test]
-  fn dw_basic_test() {
+  fn dw_write_test() {
     let domain_participant = DomainParticipant::new();
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
+    let publisher = domain_participant
+      .create_publisher(qos.clone())
+      .expect("Failed to create publisher");
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), qos.clone())
+      .expect("Failed to create topic");
+
+    let mut data_writer = publisher
+      .create_datawriter(&topic, qos.clone())
+      .expect("Failed to create datawriter");
+
+    let mut data = RandomData {
+      a: 4,
+      b: "Fobar".to_string(),
+    };
+
+    data_writer
+      .write(data.clone(), None)
+      .expect("Unable to write data");
+
+    data.a = 5;
+    let timestamp: Timestamp = Timestamp::from(time::get_time());
+    data_writer
+      .write(data, Some(timestamp))
+      .expect("Unable to write data with timestamp");
+
+    // TODO: verify that data is sent/writtent correctly
+    // TODO: write also with timestamp
+  }
+
+  #[test]
+  fn dw_dispose_test() {
+    let domain_participant = DomainParticipant::new();
+    let qos = QosPolicies::qos_none();
+    let publisher = domain_participant
+      .create_publisher(qos.clone())
+      .expect("Failed to create publisher");
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), qos.clone())
+      .expect("Failed to create topic");
+
+    let mut data_writer = publisher
+      .create_datawriter(&topic, qos.clone())
+      .expect("Failed to create datawriter");
+
+    let data = RandomData {
+      a: 4,
+      b: "Fobar".to_string(),
+    };
+
+    data_writer
+      .write(data.clone(), None)
+      .expect("Unable to write data");
+
+    data_writer
+      .dispose(&data, None)
+      .expect("Unable to dispose data");
+
+    // TODO: verify that dispose is sent correctly
+  }
+
+  #[test]
+  fn dw_wait_for_ack_test() {
+    let domain_participant = DomainParticipant::new();
+    let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(qos.clone())
       .expect("Failed to create publisher");
@@ -226,7 +278,9 @@ mod tests {
 
     data_writer.write(data, None).expect("Unable to write data");
 
-    // TODO: verify that data is sent/writtent correctly
-    // TODO: write also with timestamp
+    let res = data_writer
+      .wait_for_acknowledgments(Duration::from_secs(5))
+      .unwrap();
+    assert_eq!(res, ());
   }
 }

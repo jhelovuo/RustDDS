@@ -220,13 +220,16 @@ impl DPEventWrapper {
 
         match found_writer {
           Some((_guid, w)) => {
-            let cache_change = w
-              .cache_change_receiver()
-              .try_recv()
-              .expect("Failed to receive cache change");
+            let cache_change = w.cache_change_receiver().try_recv();
             println!("found RTPS writer with entity token {:?} ", t);
-            w.insert_to_history_cache(cache_change);
-            w.send_all_unsend_messages();
+
+            match cache_change {
+              Ok(cc) => {
+                w.insert_to_history_cache(cc);
+                w.send_all_unsend_messages();
+              }
+              _ => (),
+            }
           }
           None => {}
         }

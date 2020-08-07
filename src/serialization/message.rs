@@ -38,7 +38,7 @@ impl<'a> Message {
     self.submessages
   }
 
-  fn submessages_borrow(&self) -> &Vec<SubMessage>{
+  fn submessages_borrow(&self) -> &Vec<SubMessage> {
     &self.submessages
   }
 
@@ -46,13 +46,13 @@ impl<'a> Message {
     self.header = header;
   }
 
-  pub fn get_data_sub_message_sequence_numbers(&self) -> Vec<SequenceNumber>{
-    let mut sequence_numbers : Vec<SequenceNumber> = vec![];
-    for mes in self.submessages_borrow(){
+  pub fn get_data_sub_message_sequence_numbers(&self) -> Vec<SequenceNumber> {
+    let mut sequence_numbers: Vec<SequenceNumber> = vec![];
+    for mes in self.submessages_borrow() {
       if mes.submessage.is_some() {
         let entity_sub_message = mes.submessage.as_ref().unwrap();
         let maybeDataMessage = entity_sub_message.get_data_submessage();
-        if maybeDataMessage.is_some(){
+        if maybeDataMessage.is_some() {
           let sequenceNumber = maybeDataMessage.unwrap().writer_sn;
           sequence_numbers.push(sequenceNumber.clone());
         }

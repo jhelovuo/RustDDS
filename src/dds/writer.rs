@@ -238,7 +238,7 @@ impl Writer {
     let mut context = Endianness::LittleEndian;
 
     if self.endianness == Endianness::BigEndian {
-        context = Endianness::BigEndian
+      context = Endianness::BigEndian
     }
 
     let (message, Guid) = self.get_next_reader_next_unsend_message();
@@ -649,70 +649,23 @@ mod tests {
   use super::*;
   use crate::{
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-    dds::{
-      qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc, traits::key::Keyed,
-    },
+    dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc},
     network::udp_listener::UDPListener,
   };
-  use serde::Serialize;
   use std::thread;
-  use crate::dds::traits::key::Key;
   use crate::dds::traits::datasample_trait::DataSampleTrait;
   use std::collections::hash_map::DefaultHasher;
-  use std::hash::{Hash, Hasher};
-
-  struct RandomKey {
-    val: i64,
-  }
-
-  impl RandomKey {
-    pub fn new(val: i64) -> RandomKey {
-      RandomKey { val }
-    }
-  }
-
-  impl Key for RandomKey {
-    fn get_hash(&self) -> u64 {
-      let mut hasher = DefaultHasher::new();
-      self.val.hash(&mut hasher);
-      hasher.finish()
-    }
-
-    fn box_clone(&self) -> Box<dyn Key> {
-      let n = RandomKey::new(self.val);
-      Box::new(n)
-    }
-  }
-
-  #[derive(Serialize, Clone)]
-  struct RandomData {
-    a: i64,
-    b: String,
-  }
-
-  impl Keyed for RandomData {
-    fn get_key(&self) -> Box<dyn Key> {
-      let key = RandomKey::new(self.a);
-      Box::new(key)
-    }
-  }
-
-  impl DataSampleTrait for RandomData {
-    fn box_clone(&self) -> Box<dyn DataSampleTrait> {
-      Box::new(RandomData {
-        a: self.a.clone(),
-        b: self.b.clone(),
-      })
-    }
-  }
+  use crate::test::random_data::*;
 
   #[test]
   fn create_writer_add_readers_create_messages() {
     let new_guid = GUID::new();
     let (_sender, reciever) = mio_channel::channel::<DDSData>();
     let mut writer = Writer::new(new_guid, reciever);
-    let dds_data: DDSData = DDSData::new(SerializedPayload::default());
-    let dds_data2: DDSData = DDSData::new(SerializedPayload::default());
+    let instance_handle = writer.history_cache.generate_free_instance_handle();
+    let instance_handle2 = writer.history_cache.generate_free_instance_handle();
+    let dds_data: DDSData = DDSData::new(instance_handle, SerializedPayload::default());
+    let dds_data2: DDSData = DDSData::new(instance_handle2, SerializedPayload::default());
 
     let reader_proxy1: RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
     let reader_proxy2: RtpsReaderProxy = RtpsReaderProxy::new(GUID::new());
@@ -767,8 +720,6 @@ mod tests {
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {
-    let _listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
-
     let domain_participant = DomainParticipant::new();
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();

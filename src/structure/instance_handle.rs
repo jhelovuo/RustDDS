@@ -3,12 +3,26 @@ use crate::dds::traits::key::*;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use rand::Rng;
 
 /// Type used to represent the identity of a data-object whose changes in value
 /// are communicated by the RTPS protocol.
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Hash)]
 pub struct InstanceHandle {
   pub entityKey: [u8; 16],
+}
+
+impl InstanceHandle {
+  pub fn generate_random_key() -> InstanceHandle {
+    let mut rng = rand::thread_rng();
+    let mut instance_handle = InstanceHandle::default();
+    for v in instance_handle.entityKey.iter_mut() {
+      let val = rng.gen::<u8>();
+      *v = val;
+    }
+
+    instance_handle
+  }
 }
 
 impl Default for InstanceHandle {

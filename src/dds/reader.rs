@@ -58,19 +58,12 @@ impl Reader {
 
   // TODO Used for test/debugging purposes
   pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
-    println!(
-      "history cache !!!! {:?}",
-      self.history_cache.get_change(sequence_number).unwrap()
-    );
-    let pl = self
-      .history_cache
-      .get_change(sequence_number)
-      .unwrap()
-      .data_value
-      .clone();
+    let cc = self.history_cache.get_change(sequence_number).unwrap();
+    println!("history cache !!!! {:?}", cc);
+    let pl = cc.data_value.clone();
 
     match pl {
-      Some(xd) => Some(DDSData::from_arc(xd)),
+      Some(xd) => Some(DDSData::from_arc(cc.instance_handle.clone(), xd)),
       None => None,
     }
   }
@@ -125,7 +118,7 @@ impl Reader {
 
   fn send_datasample(&self, timestamp: Timestamp) {
     let cc = self.history_cache.get_latest().unwrap().clone();
-    let mut ddsdata = DDSData::from_arc(cc.data_value.unwrap());
+    let mut ddsdata = DDSData::from_arc(cc.instance_handle, cc.data_value.unwrap());
     ddsdata.set_reader_id(self.get_guid().entityId.clone());
     ddsdata.set_writer_id(cc.writer_guid.entityId.clone());
 
@@ -207,7 +200,8 @@ impl Reader {
 
   // update history cache
   fn make_cache_change(&mut self, data: Data) {
-    let mut ddsdata = DDSData::new(data.serialized_payload);
+    let instance_handle = self.history_cache.generate_free_instance_handle();
+    let mut ddsdata = DDSData::new(instance_handle, data.serialized_payload);
     let writer_guid =
       GUID::new_with_prefix_and_id(GuidPrefix::GUIDPREFIX_UNKNOWN, data.writer_id.clone());
 
@@ -324,7 +318,9 @@ mod tests {
     let mut new_reader = Reader::new(new_guid, send);
 
     let writer_id = EntityId::default();
-    let d = DDSData::new(SerializedPayload::new());
+    let instance_handle = new_reader.history_cache.generate_free_instance_handle();
+
+    let d = DDSData::new(instance_handle, SerializedPayload::new());
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
@@ -404,12 +400,19 @@ mod tests {
     let mut reader = Reader::new(new_guid, send);
 
     let n: i64 = 10;
-    let d = DDSData::new(SerializedPayload::new());
+    let instance_handle = reader.history_cache.generate_free_instance_handle();
+    let d = DDSData::new(instance_handle, SerializedPayload::new());
     let mut changes = Vec::new();
 
+    let mut dat = d.clone();
     for i in 0..n {
-      let change = CacheChange::new(reader.get_guid(), SequenceNumber::from(i), Some(d.clone()));
+      let change = CacheChange::new(
+        reader.get_guid(),
+        SequenceNumber::from(i),
+        Some(dat.clone()),
+      );
       reader.history_cache.add_change(change.clone());
+      dat.instance_key = reader.history_cache.generate_free_instance_handle();
       changes.push(change);
     }
 

@@ -58,7 +58,6 @@ impl<'de> CDR_deserializer {
     for _a in 0..padCount {
       self.remove_first_byte_from_input();
     }
-
   }
 }
 

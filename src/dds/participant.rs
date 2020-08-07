@@ -5,7 +5,6 @@ use std::thread;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
 use crate::dds::reader::*;
@@ -18,7 +17,6 @@ use crate::dds::values::result::*;
 use crate::dds::datareader::DataReader;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
-use std::net::Ipv4Addr;
 
 pub struct DomainParticipant {
   entity_attributes: EntityAttributes,
@@ -44,30 +42,30 @@ pub struct SubscriptionBuiltinTopicData {} // placeholder
 impl DomainParticipant {
   // TODO: there might be a need to set participant id (thus calculating ports accordingly)
   pub fn new() -> DomainParticipant {
-    let discovery_multicast_listener =
-      UDPListener::new(DISCOVERY_MUL_LISTENER_TOKEN, "0.0.0.0", 7400);
-    discovery_multicast_listener
-      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
-      .expect("Unable to join multicast 239.255.0.1:7400");
+    // let discovery_multicast_listener =
+    //   UDPListener::new(DISCOVERY_MUL_LISTENER_TOKEN, "0.0.0.0", 7400);
+    // discovery_multicast_listener
+    //   .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
+    //   .expect("Unable to join multicast 239.255.0.1:7400");
 
-    let discovery_listener = UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
+    // let discovery_listener = UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
 
-    let user_traffic_multicast_listener =
-      UDPListener::new(USER_TRAFFIC_MUL_LISTENER_TOKEN, "0.0.0.0", 7401);
-    user_traffic_multicast_listener
-      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
-      .expect("Unable to join multicast 239.255.0.1:7401");
+    // let user_traffic_multicast_listener =
+    //   UDPListener::new(USER_TRAFFIC_MUL_LISTENER_TOKEN, "0.0.0.0", 7401);
+    // user_traffic_multicast_listener
+    //   .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
+    //   .expect("Unable to join multicast 239.255.0.1:7401");
 
-    let user_traffic_listener = UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
+    // let user_traffic_listener = UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
 
-    let mut listeners = HashMap::new();
-    listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
-    listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
-    listeners.insert(
-      USER_TRAFFIC_MUL_LISTENER_TOKEN,
-      user_traffic_multicast_listener,
-    );
-    listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
+    let listeners = HashMap::new();
+    // listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
+    // listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
+    // listeners.insert(
+    //   USER_TRAFFIC_MUL_LISTENER_TOKEN,
+    //   user_traffic_multicast_listener,
+    // );
+    // listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     let targets = HashMap::new();
 

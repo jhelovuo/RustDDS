@@ -11,8 +11,8 @@ fn create_socket_to_available_port() -> Option<UdpSocket> {
   for port in 1025..65535 {
     let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), port);
     match UdpSocket::bind(&saddr) {
-        Ok(l) => return Some(l),
-        _ => {}
+      Ok(l) => return Some(l),
+      _ => {}
     }
   }
   None
@@ -26,11 +26,10 @@ impl UDPSender {
     UDPSender { socket: socket }
   }
 
-  pub fn new_with_random_port() -> UDPSender{
+  pub fn new_with_random_port() -> UDPSender {
     let socket: UdpSocket = create_socket_to_available_port().unwrap();
     UDPSender { socket: socket }
   }
-
 
   pub fn send_to_all(&self, buffer: &[u8], addresses: &Vec<SocketAddr>) {
     for address in addresses.iter() {
@@ -51,7 +50,7 @@ impl UDPSender {
       "Not a multicast address",
     ))
   }
-  pub fn send_ipv4_multicast(&self, buffer: &[u8], address : SocketAddr) -> io::Result<usize> {
+  pub fn send_ipv4_multicast(&self, buffer: &[u8], address: SocketAddr) -> io::Result<usize> {
     if address.ip().is_multicast() {
       return self.socket.send_to(buffer, &SocketAddr::from(address));
     }

@@ -4,48 +4,52 @@ use crate::messages::submessages::submessage_elements::serialized_payload::Seria
 use crate::serialization::cdrSerializer::{CDR_serializer, Endianess};
 use crate::structure::guid::EntityId;
 use crate::structure::time::Timestamp;
+use crate::structure::instance_handle::InstanceHandle;
+use crate::structure::cache_change::ChangeKind;
 use erased_serde;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DDSData {
   source_timestamp: Timestamp,
+  pub instance_key: InstanceHandle,
+  pub change_kind: ChangeKind,
   reader_id: EntityId,
   writer_id: EntityId,
-  value: Arc<SerializedPayload>,
+  value: Option<Arc<SerializedPayload>>,
 }
 
 impl DDSData {
-  pub fn new(payload: SerializedPayload) -> DDSData {
+  pub fn new(instance_key: InstanceHandle, payload: SerializedPayload) -> DDSData {
     DDSData {
       source_timestamp: Timestamp::from(time::get_time()),
+      instance_key,
+      change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: Arc::new(payload),
+      value: Some(Arc::new(payload)),
     }
   }
 
-  pub fn from_arc(payload: Arc<SerializedPayload>) -> DDSData {
+  pub fn from_arc(instance_key: InstanceHandle, payload: Arc<SerializedPayload>) -> DDSData {
     DDSData {
       source_timestamp: Timestamp::from(time::get_time()),
+      instance_key,
+      change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: payload.clone(),
+      value: Some(payload.clone()),
     }
   }
 
-  pub fn from<D>(data: &D, source_timestamp: Option<Timestamp>) -> DDSData
+  pub fn from<D>(
+    instance_key: InstanceHandle,
+    data: &D,
+    source_timestamp: Option<Timestamp>,
+  ) -> DDSData
   where
     D: DataSampleTrait,
   {
-    let mut cdr = CDR_serializer::new(Endianess::LittleEndian);
-    let mut serializer = erased_serde::Serializer::erase(&mut cdr);
-    let value = data.erased_serialize(&mut serializer);
-    // let value = to_little_endian_binary::<D>(&data);
-    let value = match value {
-      Ok(_) => cdr.buffer().clone(),
-      // TODO: handle error
-      _ => Vec::new(),
-    };
+    let value = DDSData::serialize_data(data);
 
     let ts: Timestamp = match source_timestamp {
       Some(t) => t,
@@ -60,10 +64,49 @@ impl DDSData {
 
     DDSData {
       source_timestamp: ts,
+      instance_key,
+      change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: Arc::new(serialized_payload),
+      value: Some(Arc::new(serialized_payload)),
     }
+  }
+
+  pub fn from_dispose<D>(
+    instance_key: InstanceHandle,
+    _data: &D,
+    source_timestamp: Option<Timestamp>,
+  ) -> DDSData {
+    let ts: Timestamp = match source_timestamp {
+      Some(t) => t,
+      None => Timestamp::from(time::get_time()),
+    };
+
+    DDSData {
+      source_timestamp: ts,
+      instance_key,
+      change_kind: ChangeKind::NOT_ALIVE_DISPOSED,
+      reader_id: EntityId::ENTITYID_UNKNOWN,
+      writer_id: EntityId::ENTITYID_UNKNOWN,
+      value: None,
+    }
+  }
+
+  fn serialize_data<D>(data: &D) -> Vec<u8>
+  where
+    D: DataSampleTrait,
+  {
+    let mut cdr = CDR_serializer::new(Endianess::LittleEndian);
+    let mut serializer = erased_serde::Serializer::erase(&mut cdr);
+    let value = data.erased_serialize(&mut serializer);
+    // let value = to_little_endian_binary::<D>(&data);
+    let value = match value {
+      Ok(_) => cdr.buffer().clone(),
+      // TODO: handle error
+      _ => Vec::new(),
+    };
+
+    value
   }
 
   pub fn reader_id(&self) -> &EntityId {
@@ -82,11 +125,14 @@ impl DDSData {
     self.writer_id = writer_id;
   }
 
-  pub fn value(&self) -> Arc<SerializedPayload> {
+  pub fn value(&self) -> Option<Arc<SerializedPayload>> {
     self.value.clone()
   }
 
   pub fn data(&self) -> Vec<u8> {
-    (*self.value).value.clone()
+    match &self.value {
+      Some(val) => (*val).value.clone(),
+      None => Vec::new(),
+    }
   }
 }

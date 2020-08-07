@@ -1,38 +1,45 @@
 use crate::structure::cache_change::CacheChange;
 use crate::structure::sequence_number::SequenceNumber;
+use crate::structure::instance_handle::InstanceHandle;
+
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
 pub struct HistoryCache {
-  changes: Vec<CacheChange>,
+  changes: HashMap<InstanceHandle, CacheChange>,
 }
 
 impl HistoryCache {
   pub fn new() -> HistoryCache {
-    HistoryCache { changes: vec![] }
+    HistoryCache {
+      changes: HashMap::new(),
+    }
   }
 
   pub fn add_change(&mut self, change: CacheChange) {
-    self.changes.push(change)
+    self.changes.insert(change.instance_handle.clone(), change);
+    // self.changes.push(change)
   }
 
   pub fn get_change(&self, sequence_number: SequenceNumber) -> Option<&CacheChange> {
     self
       .changes
       .iter()
-      .find(|x| x.sequence_number == sequence_number)
+      .find(|(_, x)| x.sequence_number == sequence_number)
+      .map(|(_, x)| x)
   }
 
   pub fn remove_change(&mut self, sequence_number: SequenceNumber) {
     self
       .changes
-      .retain(|x| x.sequence_number != sequence_number)
+      .retain(|_, x| x.sequence_number != sequence_number)
   }
 
   pub fn get_seq_num_min(&self) -> Option<&SequenceNumber> {
     self
       .changes
       .iter()
-      .map(|x| &x.sequence_number)
+      .map(|(_, x)| &x.sequence_number)
       .min_by(|x, y| x.cmp(&y))
   }
 
@@ -40,12 +47,14 @@ impl HistoryCache {
     self
       .changes
       .iter()
-      .map(|x| &x.sequence_number)
+      .map(|(_, x)| &x.sequence_number)
       .max_by(|x, y| x.cmp(&y))
   }
 
   pub fn remove_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) {
-    self.changes.retain(|x| x.sequence_number > smallest_seqnum)
+    self
+      .changes
+      .retain(|_, x| x.sequence_number > smallest_seqnum)
   }
 
   pub fn len(&self) -> usize {
@@ -53,7 +62,19 @@ impl HistoryCache {
   }
 
   pub fn get_latest(&self) -> Option<&CacheChange> {
-    self.changes.last()
+    self
+      .changes
+      .iter()
+      .map(|(_, x)| x)
+      .max_by(|x, y| x.sequence_number.cmp(&y.sequence_number))
+  }
+
+  pub fn generate_free_instance_handle(&self) -> InstanceHandle {
+    let mut instance_handle = InstanceHandle::generate_random_key();
+    while self.changes.contains_key(&instance_handle) {
+      instance_handle = InstanceHandle::generate_random_key();
+    }
+    instance_handle
   }
 }
 
@@ -95,7 +116,7 @@ mod tests {
     let cache_change = CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid: GUID::GUID_UNKNOWN,
-      instance_handle: InstanceHandle::default(),
+      instance_handle: history_cache.generate_free_instance_handle(),
       sequence_number: SequenceNumber::from(10),
       data_value: Some(Arc::new(SerializedPayload::new())),
     };
@@ -105,7 +126,7 @@ mod tests {
     let cache_change = CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid: GUID::GUID_UNKNOWN,
-      instance_handle: InstanceHandle::default(),
+      instance_handle: history_cache.generate_free_instance_handle(),
       sequence_number: SequenceNumber::from(7),
       data_value: Some(Arc::new(SerializedPayload::new())),
     };
@@ -123,7 +144,7 @@ mod tests {
     let small_cache_change = CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid: GUID::GUID_UNKNOWN,
-      instance_handle: InstanceHandle::default(),
+      instance_handle: history_cache.generate_free_instance_handle(),
       sequence_number: SequenceNumber::from(1),
       data_value: Some(Arc::new(SerializedPayload::new())),
     };
@@ -132,7 +153,7 @@ mod tests {
     let big_cache_change = CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid: GUID::GUID_UNKNOWN,
-      instance_handle: InstanceHandle::default(),
+      instance_handle: history_cache.generate_free_instance_handle(),
       sequence_number: SequenceNumber::from(7),
       data_value: Some(Arc::new(SerializedPayload::new())),
     };
