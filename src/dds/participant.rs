@@ -5,7 +5,7 @@ use std::thread;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc,RwLock};
 
 use crate::network::constant::*;
 use crate::dds::dp_event_wrapper::DPEventWrapper;
@@ -19,6 +19,7 @@ use crate::dds::values::result::*;
 use crate::dds::datareader::DataReader;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
+use crate::structure::dds_cache::DDSHistoryCache;
 
 #[derive(Clone)]
 // This is a smart pointer for DomainPArticipant_Inner for easier manipulation.
@@ -29,9 +30,7 @@ pub struct DomainParticipant {
 impl DomainParticipant {
   pub fn new() -> DomainParticipant {
     let dpi = DomainParticipant_Inner::new();
-    let a = Arc::new(dpi);
-    // TODO: launch dp background thread here, give it a clone of Arc
-    DomainParticipant {dpi: a}
+    DomainParticipant {dpi: Arc::new(dpi) }
   }
 
   pub fn create_publisher<'a>(&'a self, qos: QosPolicies) -> Result<Publisher> {
@@ -57,8 +56,7 @@ impl Deref for DomainParticipant {
 pub struct DomainParticipant_Inner {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
-
-  sub_threads: Vec<thread::JoinHandle<()>>,
+  ddscache: Arc<RwLock<DDSHistoryCache>>,
 
   // Adding Readers
   sender_add_reader: mio_channel::Sender<Reader>,
@@ -115,8 +113,11 @@ impl DomainParticipant_Inner {
 
     let new_guid = GUID::new();
 
+    let a_r_cache = Arc::new(RwLock::new(DDSHistoryCache::new()));
+
     let ev_wrapper = DPEventWrapper::new(
       listeners,
+      a_r_cache.clone(),
       targets,
       new_guid.guidPrefix,
       TokenReceiverPair {
@@ -136,13 +137,13 @@ impl DomainParticipant_Inner {
         receiver: remove_writer_receiver,
       },
     );
+    // Launch the background thread for DomainParticipant
     thread::spawn(move || ev_wrapper.event_loop() );
 
-    // Addind datareaders
     DomainParticipant_Inner {
       entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
-      sub_threads: Vec::new(),
+      ddscache: a_r_cache,
       // Adding readers
       sender_add_reader,
       sender_remove_reader,
@@ -206,9 +207,6 @@ impl DomainParticipant_Inner {
       self.get_guid(),
     );
 
-    // removed due to threading change
-    //let handle = thread::spawn(move || subscriber.subscriber_poll());
-    //self.sub_threads.push(handle);
     subscriber
   }
 
@@ -253,11 +251,13 @@ impl DomainParticipant_Inner {
   }
 } // impl
 
+/* default value for DomainParticipant does not make sense to me. Please explain or remove.
 impl Default for DomainParticipant_Inner {
   fn default() -> DomainParticipant_Inner {
     DomainParticipant_Inner::new()
   }
 }
+*/
 
 impl Entity for DomainParticipant_Inner {
   fn as_entity(&self) -> &EntityAttributes {
@@ -269,7 +269,6 @@ impl std::fmt::Debug for DomainParticipant {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("DomainParticipant")
       .field("Guid", &self.get_guid())
-      .field("Sub_threads len", &self.sub_threads.len())
       .finish()
   }
 }

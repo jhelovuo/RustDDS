@@ -2,17 +2,22 @@ use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
 
 use std::collections::HashMap;
+use std::sync::{Arc,RwLock};
 
 use crate::dds::message_receiver::MessageReceiver;
 use crate::dds::reader::Reader;
 use crate::dds::writer::Writer;
+use crate::dds::participant::DomainParticipant;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
 use crate::structure::entity::Entity;
+use crate::structure::dds_cache::DDSHistoryCache;
+
 
 pub struct DPEventWrapper {
   poll: Poll,
+  ddscache: Arc<RwLock<DDSHistoryCache>>,
   udp_listeners: HashMap<Token, UDPListener>,
   send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
   message_receiver: MessageReceiver,
@@ -29,6 +34,7 @@ pub struct DPEventWrapper {
 impl DPEventWrapper {
   pub fn new(
     udp_listeners: HashMap<Token, UDPListener>,
+    ddscache: Arc<RwLock<DDSHistoryCache>>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
     participant_guid_prefix: GuidPrefix,
     receiver_add_reader: TokenReceiverPair<Reader>,
@@ -89,6 +95,7 @@ impl DPEventWrapper {
 
     DPEventWrapper {
       poll,
+      ddscache,
       udp_listeners,
       send_targets,
       message_receiver: MessageReceiver::new(participant_guid_prefix),
@@ -100,6 +107,7 @@ impl DPEventWrapper {
   }
 
   pub fn event_loop(self) {
+    // TODO: Use the dp to access stuff we need, e.g. historycache
     let mut writers: HashMap<GUID, Writer> = HashMap::new();
     let mut ev_wrapper = self;
     loop {
