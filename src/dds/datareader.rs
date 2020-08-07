@@ -13,9 +13,9 @@ use crate::dds::traits::datasample_trait::DataSampleTrait;
 use crate::dds::pubsub::*;
 use crate::structure::guid::{GUID};
 
-pub struct DataReader<D> 
+pub struct DataReader<'s,D> 
 {
-  //my_subscriber: &'s Subscriber,
+  my_subscriber: &'s Subscriber,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   datasample_cache: DataSampleCache<D>,
@@ -24,13 +24,13 @@ pub struct DataReader<D>
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
 
-impl<'s,D> DataReader<D> 
+impl<'d,'s,D> DataReader<'s,D> 
   where
-    D: Deserialize<'s> + Keyed + DataSampleTrait,
+    D: Deserialize<'d> + Keyed + DataSampleTrait,
 {
-  pub fn new(qos: QosPolicies) -> Self {
+  pub fn new(my_subscriber: &'s Subscriber, qos: QosPolicies) -> Self {
     Self {
-      //my_subscriber,
+      my_subscriber,
       qos_policy: qos.clone(),
       entity_attributes: EntityAttributes::new(GUID::new()), // todo
       datasample_cache: DataSampleCache::new(qos),
@@ -76,7 +76,7 @@ impl<'s,D> DataReader<D>
   }
 } // impl
 
-impl<'a,D> Entity for DataReader<D> 
+impl<'a,D> Entity for DataReader<'a,D> 
   where
     D: Deserialize<'a> + Keyed + DataSampleTrait,
 {

@@ -141,11 +141,13 @@ pub struct Subscriber {
 
   receiver_remove_datareader: mio_channel::Receiver<GUID>,
 
-  reader_channel_ends: Vec<(EntityId, mio_channel::Receiver<(DDSData, Timestamp)>)>,
+  // what is is this? why?
+  //reader_channel_ends: Vec<(EntityId, mio_channel::Receiver<(DDSData, Timestamp)>)>,
+
   participant_guid: GUID,
 }
 
-impl Subscriber {
+impl<'s> Subscriber {
   pub fn new(
     domainparticipant: DomainParticipant,
     qos: QosPolicies,
@@ -184,7 +186,7 @@ impl Subscriber {
       sender_add_reader,
       sender_remove_reader,
       receiver_remove_datareader,
-      reader_channel_ends: Vec::new(),
+      //reader_channel_ends: Vec::new(),
       participant_guid,
     }
   }
@@ -233,14 +235,11 @@ impl Subscriber {
     }
   }
   */
-  pub fn create_datareader<'s,D>(
-    &mut self,
-    participant_guid: GUID,
-    qos: QosPolicies,
-  ) -> Result<DataReader<D>> 
-  where D: Deserialize<'s> + Keyed + DataSampleTrait,
+  pub fn create_datareader<'d,D>(&'s self, participant_guid: GUID, qos: QosPolicies ) 
+    -> Result<DataReader<D>> 
+  where D: Deserialize<'d> + Keyed + DataSampleTrait,
   {
-    let new_datareader = DataReader::<D>::new(qos);
+    let new_datareader = DataReader::<D>::new(self,qos);
 
     let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
     let matching_reader = Reader::new(participant_guid, send);
@@ -255,9 +254,9 @@ impl Subscriber {
       )
       .expect("Unable to register new Reader for Subscribers poll.");
 
-    self
+    /* self
       .reader_channel_ends
-      .push((matching_reader.get_entity_id(), rec));
+      .push((matching_reader.get_entity_id(), rec)); */
     self.sender_add_reader.send(matching_reader).unwrap();
     Ok(new_datareader)
   }
