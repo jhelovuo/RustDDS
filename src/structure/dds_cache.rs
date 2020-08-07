@@ -175,13 +175,13 @@ mod tests {
   use std::sync::{Arc, RwLock};
   use std::{time::{Duration, Instant}, thread};
   use super::DDSCache;
-  use crate::{dds::ddsdata::DDSData, structure::{cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber}, messages::submessages::submessage_elements::serialized_payload::SerializedPayload};
+  use crate::{dds::ddsdata::DDSData, structure::{cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber, instance_handle::InstanceHandle}, messages::submessages::submessage_elements::serialized_payload::SerializedPayload};
 
   #[test]
   fn create_dds_cache(){
     let cache  = Arc::new(RwLock::new(DDSCache::new()));
     let topic_name = &String::from("ImJustATopic");
-    let change1 = CacheChange::new(GUID::GUID_UNKNOWN,SequenceNumber::from(1), Some(DDSData::new(SerializedPayload::new())));
+    let change1 = CacheChange::new(GUID::GUID_UNKNOWN,SequenceNumber::from(1), Some(DDSData::new(InstanceHandle::generate_random_key(),SerializedPayload::new())));
     cache.write().unwrap().add_new_topic(topic_name, TopicKind::WITH_KEY, "IDontKnowIfThisIsNecessary".to_string());
     cache.write().unwrap().to_topic_add_change(topic_name,  &Instant::now(), change1);
 
@@ -189,9 +189,9 @@ mod tests {
 
     thread::spawn(move || {
       let topic_name = &String::from("ImJustATopic");
-      let cahange2 = CacheChange::new(GUID::GUID_UNKNOWN,SequenceNumber::from(1), Some(DDSData::new(SerializedPayload::new())));
+      let cahange2 = CacheChange::new(GUID::GUID_UNKNOWN,SequenceNumber::from(1), Some(DDSData::new(InstanceHandle::generate_random_key(),SerializedPayload::new())));
       pointerToCache1.write().unwrap().to_topic_add_change(topic_name, &Instant::now(), cahange2);
-      let cahange3 = CacheChange::new(GUID::GUID_UNKNOWN,SequenceNumber::from(2), Some(DDSData::new(SerializedPayload::new())));
+      let cahange3 = CacheChange::new(GUID::GUID_UNKNOWN,SequenceNumber::from(2), Some(DDSData::new(InstanceHandle::generate_random_key(),SerializedPayload::new())));
       pointerToCache1.write().unwrap().to_topic_add_change(topic_name, &Instant::now(), cahange3);
     }).join().unwrap();
 
