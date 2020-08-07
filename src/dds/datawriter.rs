@@ -23,7 +23,7 @@ use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
 
 pub struct DataWriter<'p,D> {
-  my_publisher: &'p Publisher<'p>,
+  my_publisher: &'p Publisher,
   my_topic: &'p Topic<'p>,
   qos_policy: &'p QosPolicies,
   entity_attributes: EntityAttributes,
@@ -41,7 +41,7 @@ impl<'p,D> DataWriter<'p,D>
     cc_upload: mio_channel::Sender<DDSData>,
   ) -> DataWriter<'p,D> {
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
-      publisher.get_participant().get_guid_prefix(),
+      publisher.domainparticipant.get_guid_prefix(),
       EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
     ));
 

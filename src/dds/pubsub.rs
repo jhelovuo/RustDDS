@@ -1,5 +1,5 @@
 use std::time::Duration;
-use mio::{Ready, Poll, PollOpt, Events};
+use mio::{Ready, Poll, PollOpt};
 
 use serde::Deserialize;
 
@@ -30,23 +30,23 @@ use crate::structure::guid::EntityId;
 
 // -------------------------------------------------------------------
 
-pub struct Publisher<'a> {
-  my_domainparticipant: &'a DomainParticipant,
+pub struct Publisher {
+  pub domainparticipant: DomainParticipant,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
   add_writer_sender: mio_channel::Sender<Writer>,
 }
 
 // public interface for Publisher
-impl<'a> Publisher<'a> {
+impl<'a> Publisher {
   pub fn new(
-    dp: &'a DomainParticipant,
+    dp: DomainParticipant,
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
     add_writer_sender: mio_channel::Sender<Writer>,
   ) -> Publisher {
     Publisher {
-      my_domainparticipant: dp,
+      domainparticipant: dp,
       my_qos_policies: qos,
       default_datawriter_qos: default_dw_qos,
       add_writer_sender,
@@ -63,7 +63,7 @@ impl<'a> Publisher<'a> {
     let entity_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
 
     let guid = GUID::new_with_prefix_and_id(
-      self.get_participant().as_entity().guid.guidPrefix,
+      self.domainparticipant.as_entity().guid.guidPrefix,
       entity_id,
     );
     let new_writer = Writer::new(guid, hccc_download);
@@ -106,9 +106,9 @@ impl<'a> Publisher<'a> {
   }
 
   // What is the use case for this? (is it useful in Rust style of programming? Should it be public?)
-  pub fn get_participant(&self) -> &DomainParticipant {
+  /*pub fn get_participant(&self) -> &DomainParticipant {
     self.my_domainparticipant
-  }
+  }*/
 
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
 
@@ -132,10 +132,9 @@ impl<'a> Publisher<'a> {
 // -------------------------------------------------------------------
 
 pub struct Subscriber {
-  //my_domainparticipant: &'a DomainParticipant,
+  pub domainparticipant: DomainParticipant,
   poll: Poll,
   qos: QosPolicies,
-  //datareaders: Vec<DataReader>,
 
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
@@ -148,7 +147,7 @@ pub struct Subscriber {
 
 impl Subscriber {
   pub fn new(
-    //my_domainparticipant: &'a DomainParticipant,
+    domainparticipant: DomainParticipant,
     qos: QosPolicies,
     sender_add_reader: mio_channel::Sender<Reader>,
     sender_remove_reader: mio_channel::Sender<GUID>,
@@ -180,9 +179,8 @@ impl Subscriber {
 
     Subscriber {
       poll,
-      //my_domainparticipant,
+      domainparticipant,
       qos,
-      //datareaders: Vec::new(),
       sender_add_reader,
       sender_remove_reader,
       receiver_remove_datareader,
@@ -264,11 +262,6 @@ impl Subscriber {
     Ok(new_datareader)
   }
 
-  /* architecture change: DataReader -> DataReader<D>
-  pub fn lookup_datareader(&self, _topic_name: String) -> Option<Vec<&DataReader>> {
-    todo!()
-  }
-  */
 }
 
 // -------------------------------------------------------------------

@@ -34,7 +34,11 @@ impl DomainParticipant {
   }
 
   pub fn create_publisher<'a>(&'a self, qos: QosPolicies) -> Result<Publisher> {
-    self.dpi.create_publisher(&self,qos)
+    self.dpi.create_publisher(&self,qos) // pass in Arc to DomainParticipant
+  }
+
+  pub fn create_subscriber(&self, qos: QosPolicies) -> Subscriber {
+    self.dpi.create_subscriber(&self,qos)
   }
 
   pub fn create_topic<'a>(&'a self, name: &str,type_desc: TypeDesc, qos: QosPolicies) 
@@ -185,10 +189,10 @@ impl DomainParticipant_Inner {
   pub fn create_publisher<'a>(&'a self, outer: &'a DomainParticipant, qos: QosPolicies) -> Result<Publisher> {
     let add_writer_sender = self.add_writer_sender.clone();
 
-    Ok(Publisher::new(&outer, qos.clone(), qos, add_writer_sender))
+    Ok(Publisher::new(outer.clone(), qos.clone(), qos, add_writer_sender))
   }
 
-  pub fn create_subscriber(&self, qos: QosPolicies) -> Subscriber {
+  pub fn create_subscriber<'a>(&'a self, outer: &'a DomainParticipant, qos: QosPolicies) -> Subscriber {
     let (sender_add_datareader, receiver_add_datareader) = mio_channel::channel::<()>();
     let (sender_remove_datareader, receiver_remove_datareader) = mio_channel::channel::<GUID>();
 
@@ -198,7 +202,7 @@ impl DomainParticipant_Inner {
     //  .push(sender_remove_datareader);
 
     let subscriber = Subscriber::new(
-      //TODO: send "outer" arc to subscriber, as in publisher
+      outer.clone(),
       qos,
       self.sender_add_reader.clone(),
       self.sender_remove_reader.clone(),
