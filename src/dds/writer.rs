@@ -1,4 +1,3 @@
-use crate::structure::history_cache::HistoryCache;
 use crate::messages::submessages::data::Data;
 //use crate::messages::submessages::info_destination::InfoDestination;
 use crate::messages::submessages::info_timestamp::InfoTimestamp;
@@ -29,14 +28,14 @@ use crate::{
   structure::{
     entity::{Entity, EntityAttributes},
     endpoint::{EndpointAttributes, Endpoint},
-    locator::{Locator, LocatorKind},
+    locator::{Locator, LocatorKind}, dds_cache::DDSCache, 
   },
 };
-use super::rtps_reader_proxy::RtpsReaderProxy;
-use std::{net::SocketAddr, time::Duration};
+use super::{rtps_reader_proxy::RtpsReaderProxy};
+use std::{net::SocketAddr, time::{Instant, Duration}, sync::{RwLock, Arc}, collections::{HashSet, HashMap}};
 
 pub struct Writer {
-  pub history_cache: HistoryCache,
+  //pub history_cache: HistoryCache,
   pub submessage_count: usize,
 
   source_version: ProtocolVersion,
@@ -78,31 +77,42 @@ pub struct Writer {
   ///increasing sequence number to
   ///each change made by the Writer
   pub last_change_sequence_number: SequenceNumber,
+  ///If samples are available in the Writer, identifies the first (lowest)
+  ///sequence number that is available in the Writer.
+  ///If no samples are available in the Writer, identifies the lowest
+  ///sequence number that is yet to be written by the Writer
+  pub first_change_sequence_number : SequenceNumber,
   ///Optional attribute that indicates
   ///the maximum size of any
   ///SerializedPayload that may be
   ///sent by the Writer
   pub data_max_size_serialized: u64,
-
-  //pub unicast_locator_list: LocatorList,
-  //pub multicast_locator_list: LocatorList,
   endpoint_attributes: EndpointAttributes,
   entity_attributes: EntityAttributes,
   cache_change_receiver: mio_channel::Receiver<DDSData>,
   ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
   ///RTPS Reader
   readers: Vec<RtpsReaderProxy>,
-
   message: Option<Message>,
-
   udp_sender: UDPSender,
+  dds_cache : Arc<RwLock<DDSCache>>,
+  /// Writer can only read/write to this topic DDSHistoryCache.
+  my_topic_name : String,
+  /// Maps this writers local sequence numbers to DDSHistodyCache instants.
+  /// Useful when negative acknack is recieved.
+  sequence_number_to_instant : HashMap<SequenceNumber, Instant>,
+ //// Maps this writers local sequence numbers to DDSHistodyCache instants.
+  /// Useful when datawriter dispose is recieved.
+  key_to_instant : HashMap<u64, Instant>,
+  /// Set of disposed samples.
+  /// Useful when reader requires some sample with acknack. 
+  disposed_sequence_numbers : HashSet<SequenceNumber>,
 }
 
 impl Writer {
-  pub fn new(guid: GUID, cache_change_receiver: mio_channel::Receiver<DDSData>) -> Writer {
+  pub fn new(guid: GUID, cache_change_receiver: mio_channel::Receiver<DDSData>, dds_cache : Arc<RwLock<DDSCache>>, topic_name : String) -> Writer {
     let entity_attributes = EntityAttributes::new(guid);
     Writer {
-      history_cache: HistoryCache::new(),
       submessage_count: 0,
       source_version: ProtocolVersion::PROTOCOLVERSION_2_3,
       source_vendor_id: VendorId::VENDOR_UNKNOWN,
@@ -116,18 +126,25 @@ impl Writer {
       nack_respose_delay: Duration::from_millis(200),
       nack_suppression_duration: Duration::from_nanos(0),
       last_change_sequence_number: SequenceNumber::from(0),
+      first_change_sequence_number : SequenceNumber::from(0),
       data_max_size_serialized: 999999999,
       entity_attributes,
       //enpoint_attributes: EndpointAttributes::default(),
       cache_change_receiver,
       readers: vec![
+        /*
         RtpsReaderProxy::new_for_unit_testing(1000),
         RtpsReaderProxy::new_for_unit_testing(1001),
-        RtpsReaderProxy::new_for_unit_testing(1002),
+        RtpsReaderProxy::new_for_unit_testing(1002),*/
       ],
       message: None,
       endpoint_attributes: EndpointAttributes::default(),
       udp_sender: UDPSender::new_with_random_port(),
+      dds_cache,
+      my_topic_name : topic_name,
+      sequence_number_to_instant : HashMap::new(),
+      key_to_instant : HashMap::new(),
+      disposed_sequence_numbers : HashSet::new(),
     }
     //entity_attributes.guid.entityId.
   }
@@ -143,18 +160,39 @@ impl Writer {
   }
 
   pub fn insert_to_history_cache(&mut self, data: DDSData) {
-    println!("Insert to RTPS writer cache");
-    let seq_num_max = self
-      .history_cache
-      .get_seq_num_max()
-      .unwrap_or(&SequenceNumber::from(0))
-      .clone();
-
+    self.increase_last_change_sequence_number();
+    // If first write then set first change sequence number to 1 
+    if self.first_change_sequence_number == SequenceNumber::from(0){
+      self.first_change_sequence_number = SequenceNumber::from(1);
+    }
+    let data_key = {data.value_key_hash.clone()};
     let datavalue = Some(data);
-
-    let new_cache_change = CacheChange::new(self.as_entity().guid, seq_num_max, datavalue);
-    self.history_cache.add_change(new_cache_change);
+    let new_cache_change = CacheChange::new(self.as_entity().guid, self.last_change_sequence_number, datavalue);
+    let insta = Instant::now();
+    self.dds_cache.write().unwrap().to_topic_add_change(&self.my_topic_name,&insta,new_cache_change);
+    self.sequence_number_to_instant.insert(self.last_change_sequence_number, insta.clone());
+    self.key_to_instant.insert(data_key, insta.clone());
     self.writer_set_unsent_changes();
+  }
+  
+  /// This should be called only when DataWriter sends dispose message (NOT_ALIVE_DISPOSED)
+  pub fn remove_from_history_cache(&mut self, data : DDSData){
+    let instant = self.key_to_instant.get(&data.value_key_hash);
+    if instant.is_none(){
+      println!("keys to instant {:?}", self.key_to_instant);
+      panic!("Writer did not found Instant that corresponce to DDSData key: {:?}", data.value_key_hash);
+    }
+    else{
+      let removed_change = self.dds_cache.write().unwrap().from_topic_remove_change(&self.my_topic_name, instant.unwrap());
+      println!("removed change from DDShistoryCache {:?}",removed_change);
+      if removed_change.is_some(){
+        self.disposed_sequence_numbers.insert(removed_change.unwrap().sequence_number);
+      }
+      else{
+        todo!();
+      }
+    }
+    
   }
 
   fn increase_last_change_sequence_number(&mut self) {
@@ -200,7 +238,9 @@ impl Writer {
     for reader_proxy in &mut self.readers {
       if reader_proxy.can_send() {
         let sequenceNumber = reader_proxy.next_unsent_change();
-        let change = self.history_cache.get_change(*sequenceNumber.unwrap());
+        let instant = self.sequence_number_to_instant.get(sequenceNumber.unwrap());
+        let cache = self.dds_cache.read().unwrap();
+        let change = cache.from_topic_get_change(&self.my_topic_name,&instant.unwrap());
         let message: Message;
         let reader_entity_id = reader_proxy.remote_reader_guid.entityId.clone();
         let remote_reader_guid = reader_proxy.remote_reader_guid.clone();
@@ -217,7 +257,9 @@ impl Writer {
     for reader_proxy in &mut self.readers {
       if reader_proxy.can_send() {
         let sequenceNumber = reader_proxy.next_requested_change();
-        let change = self.history_cache.get_change(*sequenceNumber.unwrap());
+        let instant = self.sequence_number_to_instant.get(sequenceNumber.unwrap());
+        let cache = self.dds_cache.read().unwrap();
+        let change = cache.from_topic_get_change(&self.my_topic_name,&instant.unwrap());
         let message: Message;
         let reader_entity_id = reader_proxy.remote_reader_guid.entityId.clone();
         let remote_reader_guid = reader_proxy.remote_reader_guid.clone();
@@ -394,14 +436,9 @@ impl Writer {
   }
 
   pub fn get_heartbeat_msg(&self) -> SubMessage {
-    let mut first = SequenceNumber::from(1);
-    let mut last = SequenceNumber::from(0);
-    if self.history_cache.get_seq_num_min().is_some() {
-      first = *self.history_cache.get_seq_num_min().unwrap();
-    }
-    if self.history_cache.get_seq_num_max().is_some() {
-      last = *self.history_cache.get_seq_num_max().unwrap();
-    }
+    let first = self.first_change_sequence_number;
+    let last = self.last_change_sequence_number;
+
     let heartbeat = Heartbeat {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: self.entity_attributes.guid.entityId,
@@ -575,6 +612,13 @@ impl Writer {
     }
   }
 
+  pub fn writer_set_unsent_changes(&mut self) {
+    for reader in &mut self.readers {
+      reader.unsend_changes_set(self.last_change_sequence_number.clone());
+    }
+  }
+
+  /*
   // TODO Used for test/debugging purposes
   pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<Vec<u8>> {
     println!(
@@ -610,11 +654,7 @@ impl Writer {
     return vec![start.unwrap().clone(), end.unwrap().clone()];
   }
 
-  pub fn writer_set_unsent_changes(&mut self) {
-    for reader in &mut self.readers {
-      reader.unsend_changes_set(self.last_change_sequence_number.clone());
-    }
-  }
+  
 
   // TODO Used for test/debugging purposes CAN BE DELETED WHEN tests are created again.
   pub fn handle_new_dds_data_message(&mut self, sample: DDSData) {
@@ -630,6 +670,7 @@ impl Writer {
       reader.unsend_changes_set(self.last_change_sequence_number.clone());
     }
   }
+  */
 }
 
 impl Entity for Writer {
@@ -657,11 +698,13 @@ mod tests {
   use std::collections::hash_map::DefaultHasher;
   use crate::test::random_data::*;
 
+ /*
   #[test]
+ 
   fn create_writer_add_readers_create_messages() {
     let new_guid = GUID::new();
     let (_sender, reciever) = mio_channel::channel::<DDSData>();
-    let mut writer = Writer::new(new_guid, reciever);
+    let mut writer = Writer::new(new_guid, reciever, Arc::new(RwLock::new(DDSCache::new())), String::from("topicName123ABC"));
     let instance_handle = writer.history_cache.generate_free_instance_handle();
     let instance_handle2 = writer.history_cache.generate_free_instance_handle();
     let dds_data: DDSData = DDSData::new(instance_handle, SerializedPayload::default());
@@ -717,6 +760,7 @@ mod tests {
     println!("need to be send to {:?}", reaminingReaders2);
     assert_eq!(writer.can_send_some(), false);
   }
+  */
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {

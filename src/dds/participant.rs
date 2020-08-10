@@ -19,7 +19,7 @@ use crate::dds::values::result::*;
 use crate::dds::datareader::DataReader;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::guid::GUID;
-use crate::structure::dds_cache::DDSHistoryCache;
+use crate::structure::dds_cache::{DDSCache, DDSHistoryCache};
 
 #[derive(Clone)]
 // This is a smart pointer for DomainPArticipant_Inner for easier manipulation.
@@ -60,7 +60,7 @@ impl Deref for DomainParticipant {
 pub struct DomainParticipant_Inner {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
-  ddscache: Arc<RwLock<DDSHistoryCache>>,
+  //ddscache: Arc<RwLock<DDSCache>>,
 
   // Adding Readers
   sender_add_reader: mio_channel::Sender<Reader>,
@@ -73,6 +73,8 @@ pub struct DomainParticipant_Inner {
   // Writers
   add_writer_sender: mio_channel::Sender<Writer>,
   remove_writer_sender: mio_channel::Sender<GUID>,
+
+  dds_cache : Arc<RwLock<DDSCache>>,
 }
 
 pub struct SubscriptionBuiltinTopicData {} // placeholder
@@ -117,7 +119,7 @@ impl DomainParticipant_Inner {
 
     let new_guid = GUID::new();
 
-    let a_r_cache = Arc::new(RwLock::new(DDSHistoryCache::new()));
+    let a_r_cache = Arc::new(RwLock::new(DDSCache::new()));
 
     let ev_wrapper = DPEventWrapper::new(
       listeners,
@@ -147,7 +149,7 @@ impl DomainParticipant_Inner {
     DomainParticipant_Inner {
       entity_attributes: EntityAttributes { guid: new_guid },
       reader_binds: HashMap::new(),
-      ddscache: a_r_cache,
+      //ddscache: a_r_cache,
       // Adding readers
       sender_add_reader,
       sender_remove_reader,
@@ -156,7 +158,12 @@ impl DomainParticipant_Inner {
       sender_remove_datareader_vec: Vec::new(),
       add_writer_sender,
       remove_writer_sender,
+      dds_cache : Arc::new(RwLock::new(DDSCache::new())),
     }
+  }
+
+  pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>>{
+    return self.dds_cache.clone();
   }
 
   pub fn add_reader(&self, reader: Reader) {

@@ -12,12 +12,12 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
 use crate::structure::entity::Entity;
-use crate::structure::dds_cache::DDSHistoryCache;
+use crate::structure::{cache_change::ChangeKind, dds_cache::{DDSCache, DDSHistoryCache}};
 
 
 pub struct DPEventWrapper {
   poll: Poll,
-  ddscache: Arc<RwLock<DDSHistoryCache>>,
+  ddscache: Arc<RwLock<DDSCache>>,
   udp_listeners: HashMap<Token, UDPListener>,
   send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
   message_receiver: MessageReceiver,
@@ -35,7 +35,7 @@ impl DPEventWrapper {
   // This pub(crate) , because it should be constructed only by DomainParticipant.
   pub (crate) fn new(
     udp_listeners: HashMap<Token, UDPListener>,
-    ddscache: Arc<RwLock<DDSHistoryCache>>,
+    ddscache: Arc<RwLock<DDSCache>>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
     participant_guid_prefix: GuidPrefix,
     receiver_add_reader: TokenReceiverPair<Reader>,
@@ -230,12 +230,19 @@ impl DPEventWrapper {
         match found_writer {
           Some((_guid, w)) => {
             let cache_change = w.cache_change_receiver().try_recv();
-            println!("found RTPS writer with entity token {:?} ", t);
+            println!("found RTPS writer with entity token {:?}", t);
 
             match cache_change {
               Ok(cc) => {
-                w.insert_to_history_cache(cc);
-                w.send_all_unsend_messages();
+                println!("Change Kind: {:?}", cc.change_kind);
+                if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED{
+                  w.remove_from_history_cache(cc);
+                }
+                else if cc.change_kind == ChangeKind::ALIVE{
+                  w.insert_to_history_cache(cc);
+                  w.send_all_unsend_messages();
+                }
+               
               }
               _ => (),
             }
@@ -255,7 +262,7 @@ mod tests {
   use mio::{Ready, PollOpt};
   use crate::structure::entity::Entity;
   use crate::dds::ddsdata::DDSData;
-  use crate::structure::time::Timestamp;
+  use crate::structure::{dds_cache::DDSCache, time::Timestamp};
   //use std::sync::mpsc;
 
   #[test]
@@ -269,6 +276,7 @@ mod tests {
 
     let dp_event_wrapper = DPEventWrapper::new(
       HashMap::new(),
+      Arc::new(RwLock::new( DDSCache::new())),
       HashMap::new(),
       GuidPrefix::default(),
       TokenReceiverPair {
@@ -307,7 +315,7 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-      let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+      let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
       let new_reader = Reader::new(new_guid, send);
 
       reader_guids.push(new_reader.get_guid());

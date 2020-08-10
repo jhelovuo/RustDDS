@@ -115,7 +115,7 @@ mod tests {
   #[test]
   fn dsc_empty_qos() {
     let qos = QosPolicies::qos_none();
-    let mut datasample_cache = DataSampleCache::new(qos);
+    let mut datasample_cache :DataSampleCache<RandomData> = DataSampleCache::new(qos);
 
     let timestamp = Timestamp::from(time::get_time());
     let data = RandomData {
@@ -129,10 +129,10 @@ mod tests {
     let key = data.get_key().clone();
     let datasample = DataSample::new(timestamp, instance_handle.clone(), data.clone());
     datasample_cache
-      .add_datasample::<RandomData>(datasample.clone())
+      .add_datasample(datasample.clone())
       .unwrap();
     datasample_cache
-      .add_datasample::<RandomData>(datasample)
+      .add_datasample(datasample)
       .unwrap();
 
     let samples = datasample_cache.get_datasample(&key);

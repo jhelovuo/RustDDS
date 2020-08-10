@@ -26,7 +26,7 @@ use crate::dds::datawriter::DataWriter;
 use crate::dds::datareader::DataReader;
 
 use rand::Rng;
-use crate::structure::guid::EntityId;
+use crate::structure::{time::Timestamp, guid::EntityId};
 
 // -------------------------------------------------------------------
 
@@ -34,7 +34,7 @@ pub struct Publisher {
   pub domainparticipant: DomainParticipant,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
-  add_writer_sender: mio_channel::Sender<Writer>,
+  add_writer_sender: mio_channel::Sender<Writer>, 
 }
 
 // public interface for Publisher
@@ -66,13 +66,13 @@ impl<'a> Publisher {
       self.domainparticipant.as_entity().guid.guidPrefix,
       entity_id,
     );
-    let new_writer = Writer::new(guid, hccc_download);
+    let new_writer = Writer::new(guid, hccc_download,self.domainparticipant.get_dds_cache(),topic.get_name().to_string());
     self
       .add_writer_sender
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::<D>::new(&self, topic, dwcc_upload);
+    let matching_data_writer = DataWriter::<D>::new(&self, topic, dwcc_upload,self.domainparticipant.get_dds_cache());
 
     Ok(matching_data_writer)
   }
@@ -240,7 +240,7 @@ impl<'s> Subscriber {
   where D: Deserialize<'d> + Keyed + DataSampleTrait,
   {
     // This channel is for notifcations only. Data is transferred through cache.
-    let (send, rec) = mio_channel::sync_channel::<()>(2); // Some arbitrary smallish number
+    let (send, rec) = mio_channel::sync_channel::<(DDSData,Timestamp)>(2); // Some arbitrary smallish number
     let matching_reader = Reader::new(participant_guid, send);
 
     let new_datareader = DataReader::<D>::new(self,qos,rec);
@@ -287,6 +287,7 @@ mod tests {
     let (sender_remove_reader, _receiver_remove_reader) = mio_channel::channel::<GUID>();
 
     let mut sub = Subscriber::new(
+      DomainParticipant::new(),
       QosPolicies::qos_none(),
       sender_add_reader,
       sender_remove_reader,
@@ -306,11 +307,11 @@ mod tests {
       )
       .unwrap();
 
-    let dr = sub.create_datareader(sub.participant_guid, sub.qos.clone());
+    //let dr = sub.create_datareader(sub.participant_guid, sub.qos.clone());
     
     
     let mut reader = receiver_add_reader.try_recv().unwrap();
-    sub.datareaders.push(dr.unwrap());
+    //sub.datareaders.push(dr.unwrap());
 
     let child = thread::spawn(move || {
       std::thread::sleep(Duration::new(0, 500));
@@ -324,7 +325,7 @@ mod tests {
       std::thread::sleep(Duration::new(0, 500_000));
       sender_stop.send(0).unwrap();
     });
-    sub.subscriber_poll();
+    //sub.subscriber_poll();
 
     match child.join() {
       _ => {}

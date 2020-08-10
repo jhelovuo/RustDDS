@@ -1,9 +1,9 @@
-use std::time::Duration;
+use std::{sync::{Arc, RwLock}, time::{Duration}};
 use mio_extras::channel as mio_channel;
 
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity, EntityAttributes};
-use crate::structure::guid::{GUID, EntityId};
+use crate::structure::{dds_cache::DDSCache, guid::{GUID, EntityId}, instance_handle::InstanceHandle, topic_kind::TopicKind};
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
@@ -18,9 +18,9 @@ use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
   policy::{Reliability},
 };
-use crate::dds::datasample_cache::DataSampleCache;
 use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
+use super::{datasample_cache::DataSampleCache, topic::TopicDescription};
 
 pub struct DataWriter<'p,D> {
   my_publisher: &'p Publisher,
@@ -28,10 +28,11 @@ pub struct DataWriter<'p,D> {
   qos_policy: &'p QosPolicies,
   entity_attributes: EntityAttributes,
   cc_upload: mio_channel::Sender<DDSData>,
+  dds_cache : Arc<RwLock<DDSCache>>,
   datasample_cache: DataSampleCache<D>,
 }
 
-impl<'p,D> DataWriter<'p,D> 
+impl<'p,D> DataWriter<'p, D> 
   where
     D: DataSampleTrait + Clone,
 {
@@ -39,63 +40,66 @@ impl<'p,D> DataWriter<'p,D>
     publisher: &'p Publisher,
     topic: &'p Topic,
     cc_upload: mio_channel::Sender<DDSData>,
-  ) -> DataWriter<'p,D> {
+    dds_cache : Arc<RwLock<DDSCache>>,
+  ) -> DataWriter<'p, D> {
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
       publisher.domainparticipant.get_guid_prefix(),
       EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
     ));
 
+    dds_cache.write().unwrap().add_new_topic(&String::from(topic.get_name()), TopicKind::NO_KEY, topic.get_type());
     DataWriter {
       my_publisher: publisher,
       my_topic: topic,
       qos_policy: topic.get_qos(),
       entity_attributes,
       cc_upload,
-      datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
+      dds_cache,
+      datasample_cache :DataSampleCache::new(topic.get_qos().clone())
     }
+    
   }
-
-  // Instance registration operations:
-  // * register_instance (_with_timestamp)
-  // * unregister_instance (_with_timestamp)
-  // * get_key_value  (InstanceHandle --> Key)
-  // * lookup_instance (Key --> InstanceHandle)
-  // Do not implement these until there is a clear use case for InstanceHandle type.
 
   // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
   pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
   {
-    let instance_handle = self.datasample_cache.generate_free_instance_handle();
-    let ddsdata = DDSData::from(instance_handle.clone(), &data, source_timestamp);
-
-    let data_sample = match source_timestamp {
+    // TODO INSTANCE HANDE IS NOT USED FOR ANYTHING
+    let instance_handle = InstanceHandle::generate_random_key();
+    let mut ddsdata = DDSData::from(instance_handle.clone(), &data, source_timestamp);
+    // TODO key value should be unique always. This is not always unique.
+    // If sample with same values is given then hash is same for both samples.
+    // TODO FIX THIS
+    ddsdata.value_key_hash = data.get_key().get_hash();
+    
+    let _data_sample = match source_timestamp {
       Some(t) => DataSample::new(t, instance_handle, data),
       None => DataSample::new(Timestamp::from(time::get_time()), instance_handle, data),
     };
-
-    let _key = self.datasample_cache.add_datasample(data_sample)?;
 
     match self.cc_upload.send(ddsdata) {
       Ok(_) => Ok(()),
       _ => Err(Error::OutOfResources),
     }
   }
-
+  
   // dispose
   // The data item is given only for identification, i.e. extracting the key
   pub fn dispose(&mut self, data: &D, source_timestamp: Option<Timestamp>) -> Result<()>
   {
-    let instance_handle = self.datasample_cache.generate_free_instance_handle();
-    let ddsdata = DDSData::from_dispose(instance_handle.clone(), &data, source_timestamp);
+    // TODO INSTANCE HANDE IS NOT USED FOR ANYTHING
+    let instance_handle = InstanceHandle::generate_random_key();
+    let mut ddsdata = DDSData::from_dispose(instance_handle.clone(), &data, source_timestamp);
+    // TODO key value should be unique always. This is not always unique.
+    // If sample with same values is given then hash is same for both samples.
+     // TODO FIX THIS
+    ddsdata.value_key_hash = data.get_key().get_hash();
 
-    let data_sample = match source_timestamp {
+    let _data_sample = match source_timestamp {
       Some(t) => DataSample::new_disposed(t, instance_handle, data),
       None => DataSample::new_disposed(Timestamp::from(time::get_time()), instance_handle, data),
     };
-
-    let _key = self.datasample_cache.add_datasample(data_sample)?;
 
     match self.cc_upload.send(ddsdata) {
       Ok(_) => Ok(()),
@@ -105,6 +109,7 @@ impl<'p,D> DataWriter<'p,D>
       }
     }
   }
+
 
   pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     match &self.qos_policy.reliability {
@@ -188,6 +193,8 @@ mod tests {
   use crate::dds::participant::DomainParticipant;
   use crate::dds::typedesc::TypeDesc;
   use crate::test::random_data::*;
+  use std::thread;
+  use crate::dds::traits::key::Keyed;
 
   #[test]
   fn dw_write_test() {
@@ -239,15 +246,25 @@ mod tests {
       .create_datawriter(&topic, qos.clone())
       .expect("Failed to create datawriter");
 
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let data = RandomData {
       a: 4,
       b: "Fobar".to_string(),
     };
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let key =  &data.get_key().get_hash();
+    println!();
+    println!("key: {:?}",key );
+    println!();println!();
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
 
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     data_writer
       .write(data.clone(), None)
       .expect("Unable to write data");
 
+    
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     data_writer
       .dispose(&data, None)
       .expect("Unable to dispose data");

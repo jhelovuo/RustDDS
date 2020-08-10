@@ -16,7 +16,8 @@ use crate::dds::datasample::*;
 use crate::dds::datasample_cache::DataSampleCache;
 use crate::dds::traits::datasample_trait::DataSampleTrait;
 use crate::dds::pubsub::*;
-use crate::structure::guid::{GUID};
+use crate::structure::{time::Timestamp, guid::{GUID}};
+use super::ddsdata::DDSData;
 
 pub struct DataReader<'s,D> 
 {
@@ -24,7 +25,7 @@ pub struct DataReader<'s,D>
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   datasample_cache: DataSampleCache<D>,
-  notification_receiver: mio_channel::Receiver<()>,
+  notification_receiver: mio_channel::Receiver<(DDSData, Timestamp)>,
   // TODO: rest of fields
 }
 
@@ -35,7 +36,7 @@ impl<'d,'s,D> DataReader<'s,D>
     D: Deserialize<'d> + Keyed + DataSampleTrait,
 {
   pub fn new(my_subscriber: &'s Subscriber, qos: QosPolicies
-            , notification_receiver: mio_channel::Receiver<()> ) -> Self {
+            , notification_receiver: mio_channel::Receiver<(DDSData, Timestamp)> ) -> Self {
     Self {
       my_subscriber,
       qos_policy: qos.clone(),

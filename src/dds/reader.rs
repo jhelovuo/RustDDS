@@ -24,7 +24,7 @@ use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiverState;
 
 pub struct Reader {
-  ddsdata_channel: mio_channel::SyncSender<()>,
+  ddsdata_channel: mio_channel::SyncSender<(DDSData,Timestamp)>,
 
   history_cache: HistoryCache,
   entity_attributes: EntityAttributes,
@@ -40,7 +40,7 @@ pub struct Reader {
 } // placeholder
 
 impl Reader {
-  pub fn new(guid: GUID, ddsdata_channel: mio_channel::SyncSender<()>) -> Reader {
+  pub fn new(guid: GUID, ddsdata_channel: mio_channel::SyncSender<(DDSData,Timestamp)>) -> Reader {
     Reader {
       ddsdata_channel,
       history_cache: HistoryCache::new(),
@@ -160,7 +160,7 @@ impl Reader {
     // *TODO
 
     // 2. send notification
-    match self.ddsdata_channel.try_send(()) {
+    match self.ddsdata_channel.try_send((ddsdata,_timestamp)) {
       Ok (()) => (), // expected result
       Err( mio_channel::TrySendError::Full( _ ) ) => (), // This is harmless. There is a notification in already.
       Err( mio_channel::TrySendError::Disconnected(_) ) => {
@@ -354,7 +354,7 @@ mod tests {
     let mut guid = GUID::new();
     guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
-    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
     let mut reader = Reader::new(guid, send);
 
     let writer_guid = GUID {
@@ -386,7 +386,7 @@ mod tests {
   fn rtpsreader_handle_data() {
     let new_guid = GUID::new();
 
-    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
     let mut new_reader = Reader::new(new_guid, send);
 
     let writer_guid = GUID {
@@ -417,7 +417,7 @@ mod tests {
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
 
-    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
     let mut new_reader = Reader::new(new_guid, send);
 
     let writer_guid = GUID {
@@ -511,7 +511,7 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
     let mut reader = Reader::new(new_guid, send);
 
     let writer_guid = GUID {

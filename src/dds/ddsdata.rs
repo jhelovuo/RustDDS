@@ -16,6 +16,7 @@ pub struct DDSData {
   reader_id: EntityId,
   writer_id: EntityId,
   value: Option<Arc<SerializedPayload>>,
+  pub value_key_hash: u64, 
 }
 
 impl DDSData {
@@ -27,6 +28,7 @@ impl DDSData {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: Some(Arc::new(payload)),
+      value_key_hash : 0
     }
   }
 
@@ -38,6 +40,7 @@ impl DDSData {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: Some(payload.clone()),
+      value_key_hash :0
     }
   }
 
@@ -69,6 +72,7 @@ impl DDSData {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: Some(Arc::new(serialized_payload)),
+      value_key_hash : 0
     }
   }
 
@@ -89,6 +93,7 @@ impl DDSData {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: None,
+      value_key_hash : 0,
     }
   }
 

@@ -1,6 +1,6 @@
 
-use std::{time::Instant, collections::{BTreeMap, HashMap, btree_map::Range}, sync::{Arc, RwLock}};
-use crate::dds::qos::QosPolicies;
+use std::{time::Instant, collections::{BTreeMap, HashMap, btree_map::Range}};
+use crate::dds::{typedesc::TypeDesc, qos::QosPolicies};
 use super::{topic_kind::TopicKind, cache_change::CacheChange};
 use std::ops::Bound::Included;
 
@@ -9,6 +9,7 @@ use std::ops::Bound::Included;
 ///One TopicCache cotains only DDSCacheChanges of one serialized IDL datatype.
 ///-> all cachechanges in same TopicCache can be serialized/deserialized same way.
 ///Topic/TopicCache is identified by its name, which must be unique in the whole Domain.
+#[derive(Debug)]
 pub struct DDSCache{
   topic_caches : HashMap<String, TopicCache>
 }
@@ -18,13 +19,13 @@ impl DDSCache{
     DDSCache {topic_caches : HashMap::new()}
   }
 
-  pub fn add_new_topic(&mut self, topic_name : &String, topic_kind : TopicKind, topic_data_type_name : String) -> bool {
+  pub fn add_new_topic(&mut self, topic_name : &String, topic_kind : TopicKind, topic_data_type : TypeDesc) -> bool {
     if self.topic_caches.contains_key(topic_name) {
       print!("Topic with same name already added to DDSCache!");
       return false;
     }
     else{
-      self.topic_caches.insert(topic_name.to_string(), TopicCache::new(topic_kind,topic_data_type_name));
+      self.topic_caches.insert(topic_name.to_string(), TopicCache::new(topic_kind,topic_data_type));
       return true;
     }
   }
@@ -57,7 +58,15 @@ impl DDSCache{
     if self.topic_caches.contains_key(topic_name) {
       return self.topic_caches.get(topic_name).unwrap().get_change(instant);
     }else{
-      return None
+      panic!("Topic: '{:?}' is not in DDSCache",topic_name);
+    }
+  }
+
+  pub fn from_topic_remove_change(&mut self, topic_name : &String, instant : &Instant) -> Option<CacheChange>{
+    if self.topic_caches.contains_key(topic_name) {
+      return self.topic_caches.get_mut(topic_name).unwrap().remove_change(instant);
+    }else{
+      panic!("Topic: '{:?}' is not in DDSCache",topic_name);
     }
   }
 
@@ -74,15 +83,15 @@ impl DDSCache{
     if self.topic_caches.contains_key(topic_name) {
       return self.topic_caches.get_mut(topic_name).unwrap().add_change(instant, cache_change);
     }else{
-      
+      panic!("Topic: '{:?}' is not added to DDSCache",topic_name);
     }
   }
 
 }
 
-
+#[derive(Debug)]
 pub struct TopicCache  {
-  topic_data_type_name : String,
+  topic_data_type : TypeDesc,
   topic_kind : TopicKind,
   topic_qos : QosPolicies,
   history_cache : DDSHistoryCache,
@@ -90,9 +99,9 @@ pub struct TopicCache  {
 }
 
 impl TopicCache  {
-  pub fn new (topic_kind : TopicKind, topic_data_type_name : String) -> TopicCache {
+  pub fn new (topic_kind : TopicKind, topic_data_type : TypeDesc) -> TopicCache {
     TopicCache {
-      topic_data_type_name : topic_data_type_name,
+      topic_data_type : topic_data_type,
       topic_kind : topic_kind,
       topic_qos : QosPolicies::qos_none(),
       history_cache : DDSHistoryCache::new(),
@@ -109,13 +118,17 @@ impl TopicCache  {
   pub fn get_changes_in_range(&self, start_instant: &Instant, end_instant : &Instant) -> Vec<(&Instant, &CacheChange)>{
     self.history_cache.get_range_of_changes_vec(start_instant, end_instant)
   }
+
+  ///Removes and returns value if it was found
+  pub fn remove_change(&mut self, instant : &Instant) -> Option<CacheChange> {
+    return self.history_cache.remove_change(instant);
+  }
 }
 
+#[derive(Debug)]
 pub struct DDSHistoryCache {
   changes : BTreeMap<Instant,CacheChange>
 }
-
-
 
 impl DDSHistoryCache {
   pub fn new() -> DDSHistoryCache {
@@ -175,14 +188,14 @@ mod tests {
   use std::sync::{Arc, RwLock};
   use std::{time::{Duration, Instant}, thread};
   use super::DDSCache;
-  use crate::{dds::ddsdata::DDSData, structure::{cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber, instance_handle::InstanceHandle}, messages::submessages::submessage_elements::serialized_payload::SerializedPayload};
+  use crate::{dds::{typedesc::TypeDesc, ddsdata::DDSData}, structure::{cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber, instance_handle::InstanceHandle}, messages::submessages::submessage_elements::serialized_payload::SerializedPayload};
 
   #[test]
   fn create_dds_cache(){
     let cache  = Arc::new(RwLock::new(DDSCache::new()));
     let topic_name = &String::from("ImJustATopic");
     let change1 = CacheChange::new(GUID::GUID_UNKNOWN,SequenceNumber::from(1), Some(DDSData::new(InstanceHandle::generate_random_key(),SerializedPayload::new())));
-    cache.write().unwrap().add_new_topic(topic_name, TopicKind::WITH_KEY, "IDontKnowIfThisIsNecessary".to_string());
+    cache.write().unwrap().add_new_topic(topic_name, TopicKind::WITH_KEY, TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()));
     cache.write().unwrap().to_topic_add_change(topic_name,  &Instant::now(), change1);
 
     let pointerToCache1 = cache.clone();
