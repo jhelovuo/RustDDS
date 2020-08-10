@@ -21,8 +21,8 @@ pub struct DPEventWrapper {
   message_receiver: MessageReceiver,
 
   // Adding readers
-  receiver_add_reader: TokenReceiverPair<Reader>,
-  receiver_remove_reader: TokenReceiverPair<GUID>,
+  add_reader_receiver: TokenReceiverPair<Reader>,
+  remove_reader_receiver: TokenReceiverPair<GUID>,
 
   // Writers
   add_writer_receiver: TokenReceiverPair<Writer>,
@@ -36,8 +36,8 @@ impl DPEventWrapper {
     ddscache: Arc<RwLock<DDSCache>>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
     participant_guid_prefix: GuidPrefix,
-    receiver_add_reader: TokenReceiverPair<Reader>,
-    receiver_remove_reader: TokenReceiverPair<GUID>,
+    add_reader_receiver: TokenReceiverPair<Reader>,
+    remove_reader_receiver: TokenReceiverPair<GUID>,
     add_writer_receiver: TokenReceiverPair<Writer>,
     remove_writer_receiver: TokenReceiverPair<GUID>,
   ) -> DPEventWrapper {
@@ -58,8 +58,8 @@ impl DPEventWrapper {
 
     poll
       .register(
-        &receiver_add_reader.receiver,
-        receiver_add_reader.token.clone(),
+        &add_reader_receiver.receiver,
+        add_reader_receiver.token.clone(),
         Ready::readable(),
         PollOpt::edge(),
       )
@@ -67,8 +67,8 @@ impl DPEventWrapper {
 
     poll
       .register(
-        &receiver_remove_reader.receiver,
-        receiver_remove_reader.token.clone(),
+        &remove_reader_receiver.receiver,
+        remove_reader_receiver.token.clone(),
         Ready::readable(),
         PollOpt::edge(),
       )
@@ -98,8 +98,8 @@ impl DPEventWrapper {
       udp_listeners,
       send_targets,
       message_receiver: MessageReceiver::new(participant_guid_prefix),
-      receiver_add_reader,
-      receiver_remove_reader,
+      add_reader_receiver,
+      remove_reader_receiver,
       add_writer_receiver,
       remove_writer_receiver,
     }
@@ -119,8 +119,6 @@ impl DPEventWrapper {
         println!("Dp_eventwrapper poll received: {:?}", event); // for debugging!!!!!!
 
         if event.token() == STOP_POLL_TOKEN {
-          // print for testing
-          //println!("{}", ev_wrapper.message_receiver.available_readers.len());
           return;
         } else if DPEventWrapper::is_udp_traffic(&event) {
           ev_wrapper.handle_udp_traffic(&event);
@@ -176,14 +174,14 @@ impl DPEventWrapper {
     match event.token() {
       ADD_READER_TOKEN => {
         let new_reader = self
-          .receiver_add_reader
+          .add_reader_receiver
           .receiver
           .try_recv()
           .expect("Can't receive new reader");
         self.message_receiver.add_reader(new_reader);
       }
       REMOVE_READER_TOKEN => {
-        let old_reader_guid = self.receiver_remove_reader.receiver.try_recv().unwrap();
+        let old_reader_guid = self.remove_reader_receiver.receiver.try_recv().unwrap();
         self.message_receiver.remove_reader(old_reader_guid);
       }
       _ => {}
@@ -215,11 +213,8 @@ impl DPEventWrapper {
             .try_recv()
             .expect("Failed to get writer reciver guid"),
         );
-        match writer {
-          Some(w) => {
-            &self.poll.deregister(w.cache_change_receiver());
-          }
-          None => {}
+        if let Some(w) = writer {
+          &self.poll.deregister(w.cache_change_receiver());
         };
       }
       t => {

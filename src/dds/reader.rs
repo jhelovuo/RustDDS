@@ -14,6 +14,11 @@ use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::GUID;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::time::Timestamp;
+
+use std::sync::{Arc, RwLock};
+use crate::structure::dds_cache::{DDSHistoryCache};
+use std::time::Instant;
+
 use mio_extras::channel as mio_channel;
 use std::fmt;
 
@@ -26,7 +31,9 @@ use crate::dds::message_receiver::MessageReceiverState;
 pub struct Reader {
   ddsdata_channel: mio_channel::SyncSender<(DDSData, Timestamp)>,
 
-  history_cache: HistoryCache,
+  history_cache: Arc<RwLock<DDSHistoryCache>>,
+  seqnum_instant_map: HashMap<SequenceNumber, Instant>,
+
   entity_attributes: EntityAttributes,
   pub enpoint_attributes: EndpointAttributes,
 
@@ -41,13 +48,15 @@ pub struct Reader {
 
 impl Reader {
   pub fn new(
-    guid: &GUID,
-    ddsdata_channel: mio_channel::SyncSender<(DDSData, Timestamp)>,
+    guid: GUID,
+    ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>,
+    history_cache: Arc<RwLock<DDSHistoryCache>>,
   ) -> Reader {
     Reader {
       ddsdata_channel,
-      history_cache: HistoryCache::new(),
-      entity_attributes: EntityAttributes { guid: guid.clone() },
+      history_cache,
+      seqnum_instant_map: HashMap::new()
+      entity_attributes: EntityAttributes { guid },
       enpoint_attributes: EndpointAttributes::default(),
 
       heartbeat_response_delay: Duration::new(0, 500_000_000), // 0,5sec
@@ -62,11 +71,10 @@ impl Reader {
 
   // TODO Used for test/debugging purposes
   pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
-    println!(
-      "history cache !!!! {:?}",
-      self.history_cache.get_change(sequence_number).unwrap()
-    );
-    let cc = self.history_cache.get_change(sequence_number);
+    let history_cache = self.history_cache.read().unwrap();
+    let cc = history_cache.get_change(self.seqnum_instant_map.get(&sequence_number).unwrap());
+
+    println!("history cache !!!! {:?}", cc);
 
     match cc {
       Some(cc) => Some(DDSData::from_arc(
@@ -78,22 +86,21 @@ impl Reader {
   }
 
   // Used for test/debugging purposes
-  pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> CacheChange {
-    println!(
-      "history cache !!!! {:?}",
-      self.history_cache.get_change(sequence_number).unwrap()
-    );
-    self
-      .history_cache
-      .get_change(sequence_number)
-      .unwrap()
-      .clone()
+  pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
+    let history_cache = self.history_cache.read().unwrap();
+    let cc = history_cache.get_change(self.seqnum_instant_map.get(&sequence_number).unwrap());
+
+    println!("history cache !!!! {:?}", cc);
+    match cc {
+      Some(cc) => Some(cc.clone()),
+      None => None,
+    }
   }
 
   // TODO Used for test/debugging purposes
   pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
-    let start = self.history_cache.get_seq_num_min().unwrap();
-    let end = self.history_cache.get_seq_num_max().unwrap();
+    let start = self.seqnum_instant_map.iter().min().unwrap().0;
+    let end = self.seqnum_instant_map.iter().max().unwrap().0;
     return vec![*start, *end];
   }
 
@@ -127,15 +134,11 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let seq_num = data.writer_sn;
 
-    let ih = self.make_cache_change(data, writer_guid);
+    let instant = Instant::now();
 
-    // Realy should be checked from qosPolicy?
-    let statefull: bool;
-    if self.matched_writers.get_mut(&writer_guid).is_none() {
-      statefull = false; // Added in order to test stateless actions. TODO
-    } else {
-      statefull = true;
-    }
+    // Really should be checked from qosPolicy?
+    // Added in order to test stateless actions. TODO
+    let statefull: bool = self.matched_writers.get_mut(&writer_guid).is_some();
 
     if statefull {
       let writer_proxy = self.matched_writer_lookup(writer_guid);
@@ -144,11 +147,14 @@ impl Reader {
           return; // Should be ignored
         }
       }
-      writer_proxy.received_changes_add(seq_num, ih);
+      // Add the change and get the instant
+      writer_proxy.received_changes_add(seq_num, instant);
 
       // lost changes update? All changes not received with lower seqnum should be marked as lost?
     }
-    self.send_datasample(mr_state.timestamp);
+
+    self.make_cache_change(data, instant, writer_guid);
+    // self.send_datasample(mr_state.timestamp);
     self.notify_cache_change();
   }
 
@@ -185,9 +191,11 @@ impl Reader {
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
+    // Added in order to test stateless actions. TODO
     if self.matched_writers.get_mut(&writer_guid).is_none() {
-      return false; // Added in order to test stateless actions. TODO
+      return false;
     }
+
     let writer_proxy = self.matched_writer_lookup(writer_guid);
 
     if heartbeat.count <= writer_proxy.received_heartbeat_count {
@@ -195,25 +203,31 @@ impl Reader {
     }
     writer_proxy.received_heartbeat_count = heartbeat.count;
 
-    // remove fragmented changes untill first_sn
-    writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
-    self.history_cache.remove_changes_up_to(heartbeat.first_sn);
+    // remove fragmented changes until first_sn. Removed a bit later due to self
+    // beign borrowd mutably already.
+    let removed_instances = writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
-    // Tell which ones are now invalid? Will not be needed in new architecture
     // self.notify_cache_change();
 
     let last_seq_num: SequenceNumber;
-    if let Some(num) = self.history_cache.get_seq_num_max() {
+    if let Some(num) = writer_proxy.available_changes_max() {
       last_seq_num = *num;
     } else {
       last_seq_num = SequenceNumber::from(0);
     }
+    // Remove instances from DDSHistoryCache
+    for instant in removed_instances.iter() {
+      self
+        .history_cache
+        .write()
+        .unwrap()
+        .remove_change(instant)
+        .expect("WriterProxy told to remove an instant which was not present");
+    }
 
     // See if ack_nack is needed.
     let changes_missing = last_seq_num < heartbeat.last_sn;
-    let need_ack_nack = changes_missing || !final_flag_set;
-
-    if need_ack_nack {
+    if changes_missing || !final_flag_set {
       let mut reader_sn_state = SequenceNumberSet::new(last_seq_num);
       for seq_num in i64::from(last_seq_num)..i64::from(heartbeat.last_sn) {
         reader_sn_state.insert(SequenceNumber::from(seq_num));
@@ -225,8 +239,10 @@ impl Reader {
         reader_sn_state,
         count: self.sent_ack_nack_count,
       };
+
       self.sent_ack_nack_count += 1;
-      // The acknack can be sent now or later
+      // The acknack can be sent now or later. The rest of the RTPS message
+      // needs to be constructed. p. 48
       self.send_acknack(response_ack_nack);
       return true;
     }
@@ -234,24 +250,24 @@ impl Reader {
   }
 
   pub fn handle_gap_msg(&mut self, gap: Gap, mr_state: MessageReceiverState) {
-    // ATM all things related to groups is ignored.
-    let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
+    // ATM all things related to groups is ignored. TODO?
 
+    let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
+    // Added in order to test stateless actions. TODO
     if self.matched_writers.get_mut(&writer_guid).is_none() {
-      return; // Added in order to test stateless actions. TODO
+      return;
     }
     let writer_proxy = self.matched_writer_lookup(writer_guid);
 
-    // Irrelevant sequence numbers communicated in the Gap message are
-    // composed of two groups
-    let mut irrelevant_changes_set = HashSet::new();
-
-    // Sequencenumber set is invalid, section 8.3.5.5
+    // Sequencenumber set in the gap is invalid: (section 8.3.5.5)
     if i64::from(gap.gap_start) < 1i64
       || (gap.gap_list.set.iter().max().unwrap() - gap.gap_list.set.iter().min().unwrap()) >= 256
     {
       return;
     }
+    // Irrelevant sequence numbers communicated in the Gap message are
+    // composed of two groups
+    let mut irrelevant_changes_set = HashSet::new();
 
     // 1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
     for seq_num_i64 in i64::from(gap.gap_start)..i64::from(gap.gap_list.base) {
@@ -262,15 +278,17 @@ impl Reader {
       irrelevant_changes_set.insert(SequenceNumber::from(seq_num as i64));
     }
 
+    // Remove from writerProxy and DDSHistoryCache
+    let mut removed_instances = Vec::new();
     for seq_num in &irrelevant_changes_set {
-      let _ih = writer_proxy.irrelevant_changes_set(*seq_num);
+      removed_instances.push(writer_proxy.irrelevant_changes_set(*seq_num));
       //self.history_cache.remove_change(ih);
     }
-
-    for seq_num in &irrelevant_changes_set {
-      self.history_cache.remove_change(*seq_num);
+    for instant in &removed_instances {
+      self.history_cache.write().unwrap().remove_change(instant);
     }
 
+    // Is this needed?
     self.notify_cache_change();
   }
 
@@ -281,21 +299,27 @@ impl Reader {
   }
 
   // update history cache
-  fn make_cache_change(&mut self, data: Data, writer_guid: GUID) -> InstanceHandle {
-    let instance_handle = self.history_cache.generate_free_instance_handle();
+  fn make_cache_change(&mut self, data: Data, instant: Instant, writer_guid: GUID) {
+    // Do we need instanceHandles in reader side?
+    // How do we determine the instanceHandle? TODO
+    let instance_handle = InstanceHandle::default();
+
     let mut ddsdata = DDSData::new(instance_handle, data.serialized_payload);
 
     ddsdata.set_reader_id(data.reader_id);
     ddsdata.set_writer_id(data.writer_id);
-    let change = CacheChange::new(writer_guid, data.writer_sn, Some(ddsdata));
-    let ih = change.instance_handle.clone();
-    self.history_cache.add_change(change);
-    ih
+    let cache_change = CacheChange::new(writer_guid, data.writer_sn, Some(ddsdata));
+    self
+      .history_cache
+      .write()
+      .unwrap()
+      .add_change(&instant, cache_change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
   // likely use of mio channel
   fn notify_cache_change(&self) {
+    // TODO!
     println!("No notification atm...")
     // Do we need some other channel to notify about changes in history_cache?
   }
@@ -357,7 +381,7 @@ mod tests {
     guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
     let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut reader = Reader::new(&guid, send);
+    let mut reader = Reader::new(guid, send, Arc::new(RwLock::new(DDSHistoryCache::new())));
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -389,7 +413,11 @@ mod tests {
     let new_guid = GUID::new();
 
     let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut new_reader = Reader::new(&new_guid, send);
+    let mut new_reader = Reader::new(
+      new_guid,
+      send,
+      Arc::new(RwLock::new(DDSHistoryCache::new())),
+    );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -410,8 +438,8 @@ mod tests {
     let change = CacheChange::new(writer_guid, d_seqnum, Some(rec_data));
 
     assert_eq!(
-      new_reader.history_cache.get_change(d_seqnum).unwrap(),
-      &change
+      new_reader.get_history_cache_change(d_seqnum).unwrap(),
+      change
     );
   }
 
@@ -420,7 +448,11 @@ mod tests {
     let new_guid = GUID::new();
 
     let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut new_reader = Reader::new(&new_guid, send);
+    let mut new_reader = Reader::new(
+      new_guid,
+      send,
+      Arc::new(RwLock::new(DDSHistoryCache::new())),
+    );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -434,10 +466,7 @@ mod tests {
 
     new_reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
 
-    let d = DDSData::new(
-      new_reader.history_cache.generate_free_instance_handle(),
-      SerializedPayload::new(),
-    );
+    let d = DDSData::new(InstanceHandle::default(), SerializedPayload::new());
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
@@ -464,7 +493,10 @@ mod tests {
       SequenceNumber::from(1),
       Some(d.clone()),
     );
-    new_reader.history_cache.add_change(change.clone());
+    new_reader.history_cache
+    .write()
+    .unwrap()
+    .add_change(&Instant::now(), change);
     changes.push(change);
 
     // Duplicate
@@ -492,14 +524,15 @@ mod tests {
       SequenceNumber::from(2),
       Some(d.clone()),
     );
-    new_reader.history_cache.add_change(change.clone());
+    new_reader.history_cache
+    .write()
+    .unwrap().add_change(&Instant::now(), change.clone());
     changes.push(change);
-    let change = CacheChange::new(
-      new_reader.get_guid().clone(),
-      SequenceNumber::from(3),
-      Some(d),
-    );
-    new_reader.history_cache.add_change(change.clone());
+
+    let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), Some(d));
+    new_reader.history_cache
+    .write()
+    .unwrap().add_change(&Instant::now(), change.clone());
     changes.push(change);
 
     let hb_none = Heartbeat {
@@ -518,7 +551,11 @@ mod tests {
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
     let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut reader = Reader::new(&new_guid, send);
+    let mut reader = Reader::new(
+      new_guid,
+      send,
+      Arc::new(RwLock::new(DDSHistoryCache::new())),
+    );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -539,7 +576,7 @@ mod tests {
     for i in 0..n {
       d.writer_sn = SequenceNumber::from(i);
       reader.handle_data_msg(d.clone(), mr_state.clone());
-      changes.push(reader.history_cache.get_latest().unwrap().clone());
+      changes.push(reader.get_history_cache_change(d.writer_sn).unwrap().clone());
     }
 
     // make sequence numbers 1-3 and 5 7 irrelevant
@@ -558,44 +595,44 @@ mod tests {
     reader.handle_gap_msg(gap, mr_state);
 
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(0)),
-      Some(&changes[0])
+      reader.get_history_cache_change(SequenceNumber::from(0)),
+      Some(changes[0])
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(1)),
+      reader.get_history_cache_change(SequenceNumber::from(1)),
       None
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(2)),
+      reader.get_history_cache_change(SequenceNumber::from(2)),
       None
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(3)),
+      reader.get_history_cache_change(SequenceNumber::from(3)),
       None
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(4)),
-      Some(&changes[4])
+      reader.get_history_cache_change(SequenceNumber::from(4)),
+      Some(changes[4])
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(5)),
+      reader.get_history_cache_change(SequenceNumber::from(5)),
       None
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(6)),
-      Some(&changes[6])
+      reader.get_history_cache_change(SequenceNumber::from(6)),
+      Some(changes[6])
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(7)),
+      reader.get_history_cache_change(SequenceNumber::from(7)),
       None
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(8)),
-      Some(&changes[8])
+      reader.get_history_cache_change(SequenceNumber::from(8)),
+      Some(changes[8])
     );
     assert_eq!(
-      reader.history_cache.get_change(SequenceNumber::from(9)),
-      Some(&changes[9])
+      reader.get_history_cache_change(SequenceNumber::from(9)),
+      Some(changes[9])
     );
   }
 }

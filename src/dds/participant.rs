@@ -28,6 +28,7 @@ pub struct DomainParticipant {
   dpi: Arc<DomainParticipant_Inner>,
 }
 
+#[allow(clippy::new_without_default)]
 impl DomainParticipant {
   pub fn new() -> DomainParticipant {
     let dpi = DomainParticipant_Inner::new();
@@ -77,6 +78,7 @@ pub struct DomainParticipant_Inner {
 
 pub struct SubscriptionBuiltinTopicData {} // placeholder
 
+#[allow(clippy::new_without_default)]
 impl DomainParticipant_Inner {
   // TODO: there might be a need to set participant id (thus calculating ports accordingly)
   pub fn new() -> DomainParticipant_Inner {
