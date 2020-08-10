@@ -7,7 +7,7 @@ use std::sync::{Arc,RwLock};
 use crate::dds::message_receiver::MessageReceiver;
 use crate::dds::reader::Reader;
 use crate::dds::writer::Writer;
-use crate::dds::participant::DomainParticipant;
+//use crate::dds::participant::DomainParticipant;
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
@@ -32,7 +32,8 @@ pub struct DPEventWrapper {
 }
 
 impl DPEventWrapper {
-  pub fn new(
+  // This pub(crate) , because it should be constructed only by DomainParticipant.
+  pub (crate) fn new(
     udp_listeners: HashMap<Token, UDPListener>,
     ddscache: Arc<RwLock<DDSHistoryCache>>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,

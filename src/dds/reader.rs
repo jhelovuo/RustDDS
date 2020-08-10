@@ -24,7 +24,7 @@ use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiverState;
 
 pub struct Reader {
-  ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>,
+  ddsdata_channel: mio_channel::SyncSender<()>,
 
   history_cache: HistoryCache,
   entity_attributes: EntityAttributes,
@@ -40,7 +40,7 @@ pub struct Reader {
 } // placeholder
 
 impl Reader {
-  pub fn new(guid: GUID, ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>) -> Reader {
+  pub fn new(guid: GUID, ddsdata_channel: mio_channel::SyncSender<()>) -> Reader {
     Reader {
       ddsdata_channel,
       history_cache: HistoryCache::new(),
@@ -149,16 +149,28 @@ impl Reader {
     self.notify_cache_change();
   }
 
-  fn send_datasample(&self, timestamp: Timestamp) {
+  fn send_datasample(&self, _timestamp: Timestamp) {
     let cc = self.history_cache.get_latest().unwrap().clone();
     let mut ddsdata = DDSData::from_arc(cc.instance_handle, cc.data_value.unwrap());
     ddsdata.set_reader_id(self.get_guid().entityId.clone());
     ddsdata.set_writer_id(cc.writer_guid.entityId.clone());
 
-    self
-      .ddsdata_channel
-      .send((ddsdata, timestamp))
-      .expect("Unable to send DataSample from Reader");
+    // Sending is accomplished by 1. put datasample in cache 2. send notification to reader
+    // 1. Put sample is cache
+    // *TODO
+
+    // 2. send notification
+    match self.ddsdata_channel.try_send(()) {
+      Ok (()) => (), // expected result
+      Err( mio_channel::TrySendError::Full( _ ) ) => (), // This is harmless. There is a notification in already.
+      Err( mio_channel::TrySendError::Disconnected(_) ) => {
+        // If we get here, our DataReader has died. The Reader should now dispose itself.
+        // TODO: Implement Reader disposal.
+      },
+      Err( mio_channel::TrySendError::Io(_)) => {
+        // TODO: What does this mean? Can we ever get here?
+      }
+    }
   }
 
   pub fn handle_heartbeat_msg(

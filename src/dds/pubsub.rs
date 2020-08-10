@@ -6,7 +6,7 @@ use serde::Deserialize;
 use crate::network::constant::*;
 
 use crate::structure::guid::{GUID};
-use crate::structure::time::Timestamp;
+//use crate::structure::time::Timestamp;
 
 use mio_extras::channel as mio_channel;
 use crate::structure::entity::{Entity};
@@ -239,11 +239,13 @@ impl<'s> Subscriber {
     -> Result<DataReader<D>> 
   where D: Deserialize<'d> + Keyed + DataSampleTrait,
   {
-    let new_datareader = DataReader::<D>::new(self,qos);
-
-    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    // This channel is for notifcations only. Data is transferred through cache.
+    let (send, rec) = mio_channel::sync_channel::<()>(2); // Some arbitrary smallish number
     let matching_reader = Reader::new(participant_guid, send);
 
+    let new_datareader = DataReader::<D>::new(self,qos,rec);
+
+    /* channel goes directly to matching DataReader, not to this Subscriber.
     self
       .poll
       .register(
@@ -253,7 +255,7 @@ impl<'s> Subscriber {
         PollOpt::edge(),
       )
       .expect("Unable to register new Reader for Subscribers poll.");
-
+    */
     /* self
       .reader_channel_ends
       .push((matching_reader.get_entity_id(), rec)); */

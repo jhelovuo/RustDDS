@@ -1,5 +1,10 @@
 use serde::Deserialize;
 
+use mio_extras::channel as mio_channel;
+use mio::{Ready, Poll, PollOpt, Token, Evented};
+
+use std::io; 
+
 use crate::structure::instance_handle::InstanceHandle;
 
 use crate::structure::entity::{Entity, EntityAttributes};
@@ -19,6 +24,7 @@ pub struct DataReader<'s,D>
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   datasample_cache: DataSampleCache<D>,
+  notification_receiver: mio_channel::Receiver<()>,
   // TODO: rest of fields
 }
 
@@ -28,12 +34,14 @@ impl<'d,'s,D> DataReader<'s,D>
   where
     D: Deserialize<'d> + Keyed + DataSampleTrait,
 {
-  pub fn new(my_subscriber: &'s Subscriber, qos: QosPolicies) -> Self {
+  pub fn new(my_subscriber: &'s Subscriber, qos: QosPolicies
+            , notification_receiver: mio_channel::Receiver<()> ) -> Self {
     Self {
       my_subscriber,
       qos_policy: qos.clone(),
       entity_attributes: EntityAttributes::new(GUID::new()), // todo
       datasample_cache: DataSampleCache::new(qos),
+      notification_receiver,
     }
   }
 
@@ -75,6 +83,28 @@ impl<'d,'s,D> DataReader<'s,D>
     todo!()
   }
 } // impl
+
+// This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
+// poll DataReader(s).
+impl<'a,D> Evented for DataReader<'a,D> 
+{
+  // We just delegate all the operations to notification_receiver, since it alrady implements Evented
+  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt)
+        -> io::Result<()>
+  {
+      self.notification_receiver.register(poll, token, interest, opts)
+  }
+
+  fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt)
+      -> io::Result<()>
+  {
+      self.notification_receiver.reregister(poll, token, interest, opts)
+  }
+
+  fn deregister(&self, poll: &Poll) -> io::Result<()> {
+      self.notification_receiver.deregister(poll)
+  }
+}
 
 impl<'a,D> Entity for DataReader<'a,D> 
   where
