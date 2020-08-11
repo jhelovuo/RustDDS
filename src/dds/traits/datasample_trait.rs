@@ -1,8 +1,8 @@
 use crate::dds::traits::key::Keyed;
 use erased_serde::{serialize_trait_object, Serialize};
 use std::fmt::Debug;
-use downcast_rs::{impl_downcast, DowncastSync};
-
+//use downcast_rs::{impl_downcast, DowncastSync};
+/*
 pub trait DataSampleTrait: Keyed + Serialize + DowncastSync {
   fn box_clone(&self) -> Box<dyn DataSampleTrait>;
 }
@@ -27,3 +27,4 @@ impl Clone for Box<dyn DataSampleTrait> {
 
 serialize_trait_object!(DataSampleTrait);
 impl_downcast!(sync DataSampleTrait);
+*/

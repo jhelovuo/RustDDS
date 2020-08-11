@@ -17,7 +17,9 @@ pub struct Topic {
 }
 
 impl Topic {
-  pub fn new(
+  // visibility pub(crate), because only DomainParticipant should be able to
+  // create new Topic objects from an application point of view.
+  pub (crate) fn new(
     my_domainparticipant: &DomainParticipant,
     my_name: String,
     my_typedesc: TypeDesc,

@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use crate::dds::traits::key::*;
 use crate::structure::time::Timestamp;
-use crate::dds::traits::datasample_trait::DataSampleTrait;
+//use crate::dds::traits::datasample_trait::DataSampleTrait;
 use crate::structure::instance_handle::InstanceHandle;
+
 
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
@@ -36,13 +37,8 @@ pub enum InstanceState {
   NotAlive_NoWriters,
 }
 
-/// DDS spec 2.2.2.5.4
-/// This combines SampleInfo and Data
-#[derive(Clone)]
-pub struct DataSample {
-  // Key for this particular datasample / chachechange
-  pub instance_handle: InstanceHandle,
-
+#[derive(Debug, Clone)]
+pub struct SampleInfo {
   pub sample_state: SampleState,
   pub view_state: ViewState,
   pub instance_state: InstanceState,
@@ -73,7 +69,18 @@ pub struct DataSample {
   //(MRS.disposed_generation_count + MRS.no_writers_generation_count)
   //- (S.disposed_generation_count + S.no_writers_generation_count)
   pub absolute_generation_rank: i32,
-  pub source_timestamp: Timestamp,
+  pub source_timestamp: Timestamp,  
+}
+
+
+/// DDS spec 2.2.2.5.4
+
+#[derive(Clone)]
+pub struct DataSample<D:Keyed>
+{
+  // Key for this particular datasample / chachechange
+  pub instance_handle: InstanceHandle, // TODO: It would be nice in Rust to operate without InstanceHandles at all
+  pub sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
   // instance handle
   // publication handle
   /// This ia a bit unorthodox use of Result.
@@ -81,16 +88,18 @@ pub struct DataSample {
   /// not provide any data value.
   /// Now Ok(D) means valid_data = true and there is a sample.
   /// Err(D::K) means there is valid_data = false, but only a Key and instance_state has changed.
-  // TODO: think value again
-  pub value: std::result::Result<Arc<Box<dyn DataSampleTrait>>, Box<dyn Key>>,
+  pub value: std::result::Result<Rc<D>, D::K>,
 }
 
-impl DataSample {
-  pub fn new<D: DataSampleTrait>(
+impl<D> DataSample<D>
+where D:Keyed
+{
+  pub fn new(
     source_timestamp: Timestamp,
     instance_handle: InstanceHandle,
-    value: D,
-  ) -> DataSample {
+    payload: D,
+  ) -> DataSample<D> {
+    // begin dummy placeholder values
     let sample_state = SampleState::Read;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
@@ -99,61 +108,27 @@ impl DataSample {
     let sample_rank = 0;
     let generation_rank = 0;
     let absolute_generation_rank = 0;
-    let bx: Box<dyn DataSampleTrait> = Box::new(value);
-    let value = Ok(Arc::new(bx));
+    // end dummy placeholder values
 
     DataSample {
       instance_handle,
-      sample_state,
-      view_state,
-      instance_state,
-      disposed_generation_count,
-      no_writers_generation_count,
-      sample_rank,
-      generation_rank,
-      absolute_generation_rank,
-      source_timestamp,
-      value,
+      sample_info: SampleInfo 
+        { sample_state, view_state, instance_state
+        , disposed_generation_count, no_writers_generation_count
+        , sample_rank, generation_rank, absolute_generation_rank
+        , source_timestamp} ,
+      value: Ok(Rc::new(payload)),
     }
   }
 
-  pub fn new_disposed<D: DataSampleTrait>(
+  pub fn new_disposed<K>(
     source_timestamp: Timestamp,
     instance_handle: InstanceHandle,
-    value: &D,
-  ) -> DataSample {
-    let sample_state = SampleState::Read;
-    let view_state = ViewState::New;
-    let instance_state = InstanceState::NotAlive_Disposed;
-    let disposed_generation_count = 0;
-    let no_writers_generation_count = 0;
-    let sample_rank = 0;
-    let generation_rank = 0;
-    let absolute_generation_rank = 0;
-
-    let key = value.get_key().clone();
-    let value = Err(key);
-
-    DataSample {
-      instance_handle,
-      sample_state,
-      view_state,
-      instance_state,
-      disposed_generation_count,
-      no_writers_generation_count,
-      sample_rank,
-      generation_rank,
-      absolute_generation_rank,
-      source_timestamp,
-      value,
-    }
-  }
-
-  pub fn new_with_arc(
-    source_timestamp: Timestamp,
-    instance_handle: InstanceHandle,
-    arc: Arc<Box<dyn DataSampleTrait>>,
-  ) -> DataSample {
+    key: D::K,
+  ) -> DataSample<D>
+  where <D as Keyed>::K : Key
+  {
+    // begin dummy placeholder values
     let sample_state = SampleState::Read;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
@@ -162,22 +137,31 @@ impl DataSample {
     let sample_rank = 0;
     let generation_rank = 0;
     let absolute_generation_rank = 0;
+    // end dummy placeholder values
 
     DataSample {
       instance_handle,
-      sample_state,
-      view_state,
-      instance_state,
-      disposed_generation_count,
-      no_writers_generation_count,
-      sample_rank,
-      generation_rank,
-      absolute_generation_rank,
-      source_timestamp,
-      value: Ok(arc),
+      sample_info: SampleInfo 
+        { sample_state, view_state, instance_state
+        , disposed_generation_count, no_writers_generation_count
+        , sample_rank, generation_rank, absolute_generation_rank
+        , source_timestamp} ,
+      value: Err(key),
     }
-  }
+  } // fn
 
+  // convenience shorthand to get the key directly, without digging out the "value"
+  pub fn get_key(&self) -> D::K 
+  where <D as Keyed>::K : Key
+  { 
+    match &self.value {
+      Ok(d) => d.get_key(),
+      Err(k) => k.clone(),
+    } 
+  } // fn
+  
+
+  /*
   pub fn get_value_with_type<D: DataSampleTrait>(&self) -> Option<D> {
     let dcval = match &self.value {
       Ok(val) => val,
@@ -192,5 +176,5 @@ impl DataSample {
     };
 
     Some(*dcval)
-  }
+  } */
 }

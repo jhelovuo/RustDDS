@@ -3,14 +3,14 @@ use mio_extras::channel as mio_channel;
 use std::time::Duration;
 
 use rand::Rng;
-use serde::Deserialize;
+use serde::{Serialize,Deserialize};
 
 use crate::structure::{guid::GUID, time::Timestamp, entity::Entity, guid::EntityId};
 
 use crate::dds::{
   values::result::*, participant::*, topic::*, qos::*, ddsdata::DDSData, reader::Reader,
   writer::Writer, datawriter::DataWriter, datareader::DataReader,
-  traits::datasample_trait::DataSampleTrait,
+  traits::key::{Keyed,Key} ,
 };
 
 // -------------------------------------------------------------------
@@ -44,7 +44,8 @@ impl<'a> Publisher {
     _qos: &QosPolicies,
   ) -> Result<DataWriter<'a, D>>
   where
-    D: DataSampleTrait,
+    D: Keyed + Serialize,
+    <D as Keyed>::K : Key,
   {
     let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
@@ -206,7 +207,8 @@ impl<'s> Subscriber {
     qos: &QosPolicies,
   ) -> Result<DataReader<D>>
   where
-    D: Deserialize<'s> + DataSampleTrait,
+    D: Deserialize<'s> + Keyed,
+    <D as Keyed>::K: Key,
   {
     // What is the bound?
     let (send, rec) = mio_channel::sync_channel::<()>(10);

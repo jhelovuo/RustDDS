@@ -1,44 +1,50 @@
-use crate::dds::traits::key::Key;
+use crate::dds::traits::key::{Key,Keyed};
 use crate::dds::datasample::DataSample;
-use crate::dds::traits::datasample_trait::DataSampleTrait;
 use crate::dds::values::result::Result;
 use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy::History;
 use crate::structure::instance_handle::InstanceHandle;
-use std::collections::HashMap;
 
-pub struct DataSampleCache<D> {
+use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+pub struct DataSampleCache<D:Keyed> {
   qos: QosPolicies,
-  datasamples: HashMap<u64, Vec<DataSample>>,
-  phantom: std::marker::PhantomData<D>, // this is a placeholder to prevent errors until D is actually used here.
+  datasamples: HashMap<u64, Vec<DataSample<D>>>,
 }
 
 impl<D> DataSampleCache<D>
 where
-  D: DataSampleTrait,
+  D: Keyed, 
+  <D as Keyed>::K : Key,
 {
   pub fn new(qos: QosPolicies) -> DataSampleCache<D> {
     DataSampleCache {
       qos,
       datasamples: HashMap::new(),
-      phantom: std::marker::PhantomData::<D>, // this is a placeholder to prevent errors until D is actually used here.
     }
   }
 
-  pub fn add_datasample(&mut self, data_sample: DataSample) -> Result<Box<dyn Key>> {
-    let key = match &data_sample.value {
-      Ok(v) => v.get_key().box_clone(),
-      Err(key) => key.box_clone(),
-    };
 
-    let block = self.datasamples.get_mut(&key.get_hash());
+  pub fn add_datasample(&mut self, data_sample: DataSample<D>) -> Result<D::K> 
+  {
+    let key : D::K = data_sample.get_key();
+    // TODO: The following three lines should be packaged into a subroutine, and all repetitions thereof
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    let h:u64 = hasher.finish();
+
+    let block = self.datasamples.get_mut(&h);
 
     match self.qos.history() {
       Some(history) => match history {
         History::KeepAll => match block {
           Some(prev_samples) => prev_samples.push(data_sample),
           None => {
-            self.datasamples.insert(key.get_hash(), vec![data_sample]);
+            self.datasamples.insert(h, vec![data_sample]);
+            // TODO: Check if DDS resource limits are exceeded by this insert, and
+            // discard older samples as needed.
           }
         },
         History::KeepLast { depth } => match block {
@@ -48,7 +54,7 @@ where
             prev_samples.drain(0..val);
           }
           None => {
-            self.datasamples.insert(key.get_hash(), vec![data_sample]);
+            self.datasamples.insert(h, vec![data_sample]);
           }
         },
       },
@@ -60,20 +66,28 @@ where
           prev_samples.drain(0..val);
         }
         None => {
-          self.datasamples.insert(key.get_hash(), vec![data_sample]);
+          self.datasamples.insert(h, vec![data_sample]);
         }
       },
     }
     Ok(key)
   }
 
-  pub fn get_datasample(&self, key: &Box<dyn Key>) -> Option<&Vec<DataSample>> {
-    let values = self.datasamples.get(&key.get_hash());
+  pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    let h:u64 = hasher.finish();
+
+    let values = self.datasamples.get(&h);
     values
   }
 
-  pub fn remove_datasamples(&mut self, key: &Box<dyn Key>) {
-    self.datasamples.remove(&key.get_hash()).unwrap();
+  pub fn remove_datasamples(&mut self, key: &D::K) {
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    let h:u64 = hasher.finish();
+
+    self.datasamples.remove(&h).unwrap();
   }
 
   pub fn set_qos_policy(&mut self, qos: QosPolicies) {
@@ -133,7 +147,7 @@ mod tests {
     match samples {
       Some(ss) => {
         assert_eq!(ss.len(), 1);
-        match &ss.get(0).unwrap().get_value_with_type::<RandomData>() {
+        match &ss.get(0).unwrap() {
           Some(huh) => {
             let ddssample = DDSData::from(instance_handle.clone(), huh, Some(timestamp));
             assert_eq!(org_ddsdata, ddssample);

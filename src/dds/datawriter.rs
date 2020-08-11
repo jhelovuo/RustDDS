@@ -4,6 +4,8 @@ use std::{
 };
 use mio_extras::channel as mio_channel;
 
+use serde::{Serialize, Deserialize};
+
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::{
@@ -21,7 +23,8 @@ use crate::dds::values::result::{
   PublicationMatchedStatus,
 };
 use crate::dds::traits::dds_entity::DDSEntity;
-use crate::dds::traits::datasample_trait::DataSampleTrait;
+use crate::dds::traits::key::*;
+
 use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
   policy::{Reliability},
@@ -30,7 +33,7 @@ use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
 use super::datasample_cache::DataSampleCache;
 
-pub struct DataWriter<'a, D> {
+pub struct DataWriter<'a, D:Keyed> {
   my_publisher: &'a Publisher,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -42,7 +45,8 @@ pub struct DataWriter<'a, D> {
 
 impl<'a, D> DataWriter<'a, D>
 where
-  D: DataSampleTrait,
+  D: Keyed + Serialize,
+  <D as Keyed>::K : Key,
 {
   pub fn new(
     publisher: &'a Publisher,
@@ -81,7 +85,7 @@ where
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
-    ddsdata.value_key_hash = data.get_key().get_hash();
+    ddsdata.value_key_hash = data.get_hash();
 
     let _data_sample = match source_timestamp {
       Some(t) => DataSample::new(t, instance_handle, data),
@@ -96,18 +100,28 @@ where
 
   // dispose
   // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose(&mut self, data: &D, source_timestamp: Option<Timestamp>) -> Result<()> {
+  pub fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
+    /*
+
+    Removing this for now, as there is need to redesign the mechanism of transmitting dispose actions
+    to RTPS Writer. Then the RTPS writer needs to execute the dispose. That is done by sending a DATA
+    submessage with the serialized key instead of data, and sending inline QoS parameter
+    StatusInfo_t (see RTPS spec 9.6.3.4) to indicate "disposed"
+    */
+
     // TODO INSTANCE HANDE IS NOT USED FOR ANYTHING
     let instance_handle = InstanceHandle::generate_random_key();
-    let mut ddsdata = DDSData::from_dispose(instance_handle.clone(), &data, source_timestamp);
+    let mut ddsdata = DDSData::from_dispose::<D>(instance_handle.clone(), key.clone(), source_timestamp);
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
-    ddsdata.value_key_hash = data.get_key().get_hash();
+    ddsdata.value_key_hash = key.get_hash();
+    
 
-    let _data_sample = match source_timestamp {
-      Some(t) => DataSample::new_disposed(t, instance_handle, data),
-      None => DataSample::new_disposed(Timestamp::from(time::get_time()), instance_handle, data),
+    // What does this block of code do? What is the purpose of _data_sample?
+    let _data_sample : DataSample<D> = match source_timestamp {
+      Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, instance_handle, key),
+      None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::from(time::get_time()), instance_handle, key),
     };
 
     match self.cc_upload.send(ddsdata) {
@@ -175,13 +189,17 @@ where
   // But then what if the result set changes while the application processes it?
 }
 
-impl<D> Entity for DataWriter<'_, D> {
+impl<D> Entity for DataWriter<'_, D> 
+where D:Keyed
+{
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     &self.entity_attributes
   }
 }
 
-impl<D> HasQoSPolicy for DataWriter<'_, D> {
+impl<D> HasQoSPolicy for DataWriter<'_, D> 
+where D:Keyed
+{
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     // TODO: check liveliness of qos_policy
     self.qos_policy = policy.clone();
@@ -193,7 +211,7 @@ impl<D> HasQoSPolicy for DataWriter<'_, D> {
   }
 }
 
-impl<D> DDSEntity for DataWriter<'_, D> {}
+impl<D> DDSEntity for DataWriter<'_, D> where D:Keyed {}
 
 #[cfg(test)]
 mod tests {

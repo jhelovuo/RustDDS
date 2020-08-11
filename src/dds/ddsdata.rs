@@ -1,13 +1,16 @@
-use crate::dds::traits::datasample_trait::DataSampleTrait;
 use std::sync::Arc;
+
+use crate::dds::traits::key::Keyed;
+
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::serialization::cdrSerializer::{CDR_serializer, Endianess};
 use crate::structure::guid::EntityId;
 use crate::structure::time::Timestamp;
 use crate::structure::instance_handle::InstanceHandle;
 use crate::structure::cache_change::ChangeKind;
-use erased_serde;
+use serde::{Serialize, Deserialize};
 
+// DDSData represets a serialized data sample with metadata
 #[derive(Debug, PartialEq, Clone)]
 pub struct DDSData {
   source_timestamp: Timestamp,
@@ -16,7 +19,7 @@ pub struct DDSData {
   reader_id: EntityId,
   writer_id: EntityId,
   value: Option<Arc<SerializedPayload>>,
-  pub value_key_hash: u64, 
+  pub value_key_hash: u64, // TODO: Is this used/needed ? If yes, please document its purpose here.
 }
 
 impl DDSData {
@@ -44,13 +47,14 @@ impl DDSData {
     }
   }
 
+  // TODO: Rename this method, as it gets confued with the std library "From" trait method.
   pub fn from<D>(
     instance_key: InstanceHandle,
     data: &D,
     source_timestamp: Option<Timestamp>,
   ) -> DDSData
   where
-    D: DataSampleTrait,
+    D: Keyed + Serialize,
   {
     let value = DDSData::serialize_data(data);
 
@@ -78,13 +82,19 @@ impl DDSData {
 
   pub fn from_dispose<D>(
     instance_key: InstanceHandle,
-    _data: &D,
+    key: <D as Keyed>::K ,
     source_timestamp: Option<Timestamp>,
-  ) -> DDSData {
+  ) -> DDSData 
+  where
+    D: Keyed,
+  {
+
     let ts: Timestamp = match source_timestamp {
       Some(t) => t,
       None => Timestamp::from(time::get_time()),
     };
+
+    // TODO: Serialize key
 
     DDSData {
       source_timestamp: ts,
@@ -92,18 +102,19 @@ impl DDSData {
       change_kind: ChangeKind::NOT_ALIVE_DISPOSED,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: None,
+      value: None,  // TODO: Here we should place the serialized _key_, so that RTPS writer can send the
+      // the DATA message indicating dispose
       value_key_hash : 0,
     }
   }
 
   fn serialize_data<D>(data: &D) -> Vec<u8>
   where
-    D: DataSampleTrait,
+    D: Keyed + Serialize,
   {
     let mut cdr = CDR_serializer::new(Endianess::LittleEndian);
-    let mut serializer = erased_serde::Serializer::erase(&mut cdr);
-    let value = data.erased_serialize(&mut serializer);
+    //let mut serializer = erased_serde::Serializer::erase(&mut cdr);
+    let value = data.serialize(&mut cdr);
     // let value = to_little_endian_binary::<D>(&data);
     let value = match value {
       Ok(_) => cdr.buffer().clone(),

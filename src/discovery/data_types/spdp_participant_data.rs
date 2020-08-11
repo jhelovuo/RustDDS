@@ -1,20 +1,25 @@
 use serde::{Serialize, Deserialize};
 
-use crate::dds::traits::{key::Keyed, datasample_trait::DataSampleTrait};
+use crate::dds::traits::key::{Key,Keyed};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SPDPDiscoveredParticipantData {}
-
+/*
 impl DataSampleTrait for SPDPDiscoveredParticipantData {
   fn box_clone(&self) -> Box<dyn DataSampleTrait> {
     todo!()
   }
 }
-
+*/
 impl Keyed for SPDPDiscoveredParticipantData {
-  fn get_key(&self) -> Box<dyn crate::dds::traits::key::Key> {
+  type K = u64; // placeholder
+  fn get_key(&self) -> Self::K {
     todo!()
   }
+}
+
+impl Key for u64 {
+
 }
 
 // #[cfg(test)]

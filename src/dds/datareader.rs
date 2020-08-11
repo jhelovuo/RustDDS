@@ -3,6 +3,8 @@ use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 use std::io;
 
+use crate::dds::traits::key::*;
+
 use crate::structure::{
   instance_handle::InstanceHandle,
   entity::{Entity, EntityAttributes},
@@ -12,10 +14,11 @@ use crate::structure::{
 
 use crate::dds::{
   values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache, ddsdata::DDSData,
-  traits::datasample_trait::DataSampleTrait, pubsub::Subscriber,
+  // traits::datasample_trait::DataSampleTrait, 
+  pubsub::Subscriber,
 };
 
-pub struct DataReader<'a, D> {
+pub struct DataReader<'a, D:Keyed> {
   subscriber: &'a Subscriber,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
@@ -28,7 +31,8 @@ pub struct DataReader<'a, D> {
 
 impl<'s, 'a, D> DataReader<'a, D>
 where
-  D: Deserialize<'s> + DataSampleTrait,
+  D: Deserialize<'s> + Keyed,
+  <D as Keyed>::K : Key,
 {
   pub fn new(
     guid: &GUID,
@@ -81,7 +85,9 @@ where
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D> Evented for DataReader<'a, D> {
+impl<'a, D> Evented for DataReader<'a, D>
+where D:Keyed 
+{
   // We just delegate all the operations to notification_receiver, since it alrady implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
@@ -108,7 +114,7 @@ impl<'a, D> Evented for DataReader<'a, D> {
 
 impl<'a, D> Entity for DataReader<'a, D>
 where
-  D: Deserialize<'a> + DataSampleTrait,
+  D: Deserialize<'a> + Keyed,
 {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes

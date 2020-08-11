@@ -4,9 +4,10 @@ use serde::Serialize;
 
 use crate::dds::traits::{
   key::{Key, Keyed},
-  datasample_trait::DataSampleTrait,
+  //datasample_trait::DataSampleTrait,
 };
 
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Hash)]
 pub struct RandomKey {
   val: i64,
 }
@@ -17,18 +18,8 @@ impl RandomKey {
   }
 }
 
-impl Key for RandomKey {
-  fn get_hash(&self) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    self.val.hash(&mut hasher);
-    hasher.finish()
-  }
-
-  fn box_clone(&self) -> Box<dyn Key> {
-    let n = RandomKey::new(self.val);
-    Box::new(n)
-  }
-}
+//impl Key for RandomKey {
+//}
 
 #[derive(Serialize, Debug, Clone)]
 pub struct RandomData {
@@ -37,17 +28,8 @@ pub struct RandomData {
 }
 
 impl Keyed for RandomData {
-  fn get_key(&self) -> Box<dyn Key> {
-    let key = RandomKey::new(self.a);
-    Box::new(key)
-  }
-}
-
-impl DataSampleTrait for RandomData {
-  fn box_clone(&self) -> Box<dyn DataSampleTrait> {
-    Box::new(RandomData {
-      a: self.a.clone(),
-      b: self.b.clone(),
-    })
+  type K = i64;
+  fn get_key(&self) -> i64 {
+    self.a
   }
 }
