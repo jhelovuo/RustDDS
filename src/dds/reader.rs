@@ -149,8 +149,9 @@ impl Reader {
 
     // Really should be checked from qosPolicy?
     // Added in order to test stateless actions. TODO
-    let statefull: bool = self.matched_writers.get_mut(&writer_guid).is_some();
 
+    let statefull = self.matched_writers.contains_key(&writer_guid);
+      
     if statefull {
       let writer_proxy = self.matched_writer_lookup(writer_guid);
       if let Some(max_sn) = writer_proxy.available_changes_max() {
@@ -180,7 +181,7 @@ impl Reader {
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
     // Added in order to test stateless actions. TODO
-    if self.matched_writers.get_mut(&writer_guid).is_none() {
+    if !self.matched_writers.contains_key(&writer_guid) {
       return false;
     }
 
@@ -242,7 +243,7 @@ impl Reader {
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
     // Added in order to test stateless actions. TODO
-    if self.matched_writers.get_mut(&writer_guid).is_none() {
+    if !self.matched_writers.contains_key(&writer_guid) {
       return;
     }
     let writer_proxy = self.matched_writer_lookup(writer_guid);
@@ -460,7 +461,7 @@ mod tests {
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
 
-    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
@@ -570,7 +571,7 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),

@@ -19,12 +19,15 @@ use crate::dds::{
 };
 
 pub struct DataReader<'a, D:Keyed> {
-  subscriber: &'a Subscriber,
+  my_subscriber: &'a Subscriber,
+  my_topic: &'a Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
-  datasample_cache: DataSampleCache<D>,
   notification_receiver: mio_channel::Receiver<()>,
-  // TODO: rest of fields
+
+  dds_cache: Arc<RwLock<DDSCache>>,
+  // Is this needed here??
+  datasample_cache: DataSampleCache<D>,
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
@@ -35,17 +38,25 @@ where
   <D as Keyed>::K : Key,
 {
   pub fn new(
-    guid: &GUID,
     subscriber: &'a Subscriber,
-    qos: &QosPolicies,
+    my_id: EntityId,
+    topic: &'a Topic,
     notification_receiver: mio_channel::Receiver<()>,
+    dds_cache: Arc<RwLock<DDSCache>>,
   ) -> Self {
+    let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
+      *subscriber.domain_participant.get_guid_prefix(),
+      my_id,
+    ));
+
     Self {
-      subscriber,
-      qos_policy: qos.clone(),
-      entity_attributes: EntityAttributes::new(guid.clone()), // todo
-      datasample_cache: DataSampleCache::new(qos.clone()),
+      my_subscriber: subscriber,
+      my_topic: topic,
+      qos_policy: topic.get_qos().clone(),
+      entity_attributes,
       notification_receiver,
+      dds_cache,
+      datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
     }
   }
 

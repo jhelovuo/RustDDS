@@ -13,6 +13,8 @@ use crate::dds::{
   traits::key::{Keyed,Key} ,
 };
 
+use crate::structure::topic_kind::TopicKind;
+
 // -------------------------------------------------------------------
 
 pub struct Publisher {
@@ -140,13 +142,13 @@ impl<'a> Publisher {
 // -------------------------------------------------------------------
 
 pub struct Subscriber {
-  domain_participant: DomainParticipant,
+  pub domain_participant: DomainParticipant,
   qos: QosPolicies,
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
 }
 
-impl<'s> Subscriber {
+impl<'a> Subscriber {
   pub fn new(
     domainparticipant: DomainParticipant,
     qos: QosPolicies,
@@ -201,11 +203,11 @@ impl<'s> Subscriber {
     }
   }
   */
-  pub fn create_datareader<'d, D>(
-    &'s self,
-    topic: &'d Topic,
-    qos: &QosPolicies,
-  ) -> Result<DataReader<D>>
+  pub fn create_datareader<D>(
+    &'a self,
+    topic: &'a Topic,
+    _qos: &QosPolicies,
+  ) -> Result<DataReader<'a, D>>
   where
     D: Deserialize<'s> + Keyed,
     <D as Keyed>::K: Key,
@@ -213,18 +215,43 @@ impl<'s> Subscriber {
     // What is the bound?
     let (send, rec) = mio_channel::sync_channel::<()>(10);
 
-    let new_datareader = DataReader::<D>::new(self.domain_participant.get_guid(), self, qos, rec);
+    // TODO: How should we create the IDs for entities?
+    let mut rng = rand::thread_rng();
+    let reader_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
+    let datareader_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
+    let reader_guid =
+      GUID::new_with_prefix_and_id(*self.domain_participant.get_guid_prefix(), reader_id);
 
-    let matching_reader = Reader::new(
-      self.domain_participant.get_guid().clone(),
+    let new_reader = Reader::new(
+      reader_guid,
       send,
       self.domain_participant.get_dds_cache(),
       topic.get_name().to_string(),
     );
 
-    self.sender_add_reader.send(matching_reader).unwrap();
+    let matching_datareader = DataReader::<D>::new(
+      self,
+      datareader_id,
+      &topic,
+      rec,
+      self.domain_participant.get_dds_cache(),
+    );
 
-    Ok(new_datareader)
+    // Create new topic to DDScache if one isn't present
+    self
+      .domain_participant
+      .get_dds_cache()
+      .write()
+      .unwrap()
+      .add_new_topic(
+        &topic.get_name().to_string(),
+        TopicKind::NO_KEY,
+        topic.get_type(),
+      );
+
+    // Return the DataReader Reader pairs to where they belong
+    self.sender_add_reader.send(new_reader).expect("Could not send new Reader");
+    Ok(matching_datareader)
   }
 }
 
