@@ -1,10 +1,17 @@
-use std::{sync::{Arc, RwLock}, time::{Duration}};
+use std::{
+  sync::{Arc, RwLock},
+  time::{Duration},
+};
 use mio_extras::channel as mio_channel;
-use std::rc::Rc;
 
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity, EntityAttributes};
-use crate::structure::{dds_cache::DDSCache, guid::{GUID, EntityId}, instance_handle::InstanceHandle, topic_kind::TopicKind};
+use crate::structure::{
+  dds_cache::DDSCache,
+  guid::{GUID, EntityId},
+  instance_handle::InstanceHandle,
+  topic_kind::TopicKind,
+};
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
@@ -23,48 +30,50 @@ use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
 use super::{datasample_cache::DataSampleCache, topic::TopicDescription};
 
-pub struct DataWriter<D> {
-  my_publisher: Rc<Publisher>,
-  my_topic: Rc<Topic>,
+pub struct DataWriter<'a, D> {
+  my_publisher: &'a Publisher,
+  my_topic: &'a Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   cc_upload: mio_channel::Sender<DDSData>,
-  dds_cache : Arc<RwLock<DDSCache>>,
+  dds_cache: Arc<RwLock<DDSCache>>,
   datasample_cache: DataSampleCache<D>,
 }
 
-impl<D> DataWriter<D>
+impl<'a, D> DataWriter<'a, D>
 where
   D: DataSampleTrait,
 {
   pub fn new(
-    publisher: Rc<Publisher>,
-    topic: Rc<Topic>,
+    publisher: &'a Publisher,
+    topic: &'a Topic,
     cc_upload: mio_channel::Sender<DDSData>,
-  ) -> DataWriter<D> {
+  ) -> DataWriter<'a, D> {
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
       publisher.get_participant().get_guid_prefix().clone(),
       EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
     ));
 
-    dds_cache.write().unwrap().add_new_topic(&String::from(topic.get_name()), TopicKind::NO_KEY, topic.get_type());
+    dds_cache.write().unwrap().add_new_topic(
+      &String::from(topic.get_name()),
+      TopicKind::NO_KEY,
+      topic.get_type(),
+    );
     DataWriter {
-      my_publisher: publisher,
+      my_publisher: publisher.clone(),
       my_topic: topic,
       qos_policy: qos_policy.clone(),
       entity_attributes,
       cc_upload,
       dds_cache,
-      datasample_cache :DataSampleCache::new(topic.get_qos().clone())
+      datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
     }
-    
   }
 
   // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
-  pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>
-  {
+  pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     // TODO INSTANCE HANDE IS NOT USED FOR ANYTHING
     let instance_handle = InstanceHandle::generate_random_key();
     let mut ddsdata = DDSData::from(instance_handle.clone(), &data, source_timestamp);
@@ -72,7 +81,7 @@ where
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
     ddsdata.value_key_hash = data.get_key().get_hash();
-    
+
     let _data_sample = match source_timestamp {
       Some(t) => DataSample::new(t, instance_handle, data),
       None => DataSample::new(Timestamp::from(time::get_time()), instance_handle, data),
@@ -83,17 +92,16 @@ where
       _ => Err(Error::OutOfResources),
     }
   }
-  
+
   // dispose
   // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose(&mut self, data: &D, source_timestamp: Option<Timestamp>) -> Result<()>
-  {
+  pub fn dispose(&mut self, data: &D, source_timestamp: Option<Timestamp>) -> Result<()> {
     // TODO INSTANCE HANDE IS NOT USED FOR ANYTHING
     let instance_handle = InstanceHandle::generate_random_key();
     let mut ddsdata = DDSData::from_dispose(instance_handle.clone(), &data, source_timestamp);
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
-     // TODO FIX THIS
+    // TODO FIX THIS
     ddsdata.value_key_hash = data.get_key().get_hash();
 
     let _data_sample = match source_timestamp {
@@ -109,7 +117,6 @@ where
       }
     }
   }
-
 
   pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     match &self.qos_policy.reliability {
@@ -145,11 +152,11 @@ where
   }
 
   // who are we connected to?
-  pub fn get_topic(&self) -> Rc<Topic> {
-    self.my_topic.clone()
+  pub fn get_topic(&self) -> &Topic {
+    &self.my_topic
   }
-  pub fn get_publisher(&self) -> Rc<Publisher> {
-    self.my_publisher.clone()
+  pub fn get_publisher(&self) -> &Publisher {
+    &self.my_publisher
   }
 
   pub fn assert_liveliness(&self) -> Result<()> {
@@ -167,14 +174,14 @@ where
   // But then what if the result set changes while the application processes it?
 }
 
-impl<D> Entity for DataWriter<D> {
+impl<D> Entity for DataWriter<'_, D> {
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     &self.entity_attributes
   }
 }
 
-impl<D> HasQoSPolicy for DataWriter<D> {
-  fn set_qos(mut self, policy: &QosPolicies) -> Result<()> {
+impl<D> HasQoSPolicy for DataWriter<'_, D> {
+  fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     // TODO: check liveliness of qos_policy
     self.qos_policy = policy.clone();
     Ok(())
@@ -185,7 +192,7 @@ impl<D> HasQoSPolicy for DataWriter<D> {
   }
 }
 
-impl<D> DDSEntity for DataWriter<D> {}
+impl<D> DDSEntity for DataWriter<'_, D> {}
 
 #[cfg(test)]
 mod tests {
@@ -201,19 +208,16 @@ mod tests {
     let domain_participant = DomainParticipant::new();
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
-    let publisher = DomainParticipant::create_publisher(domain_participant.clone(), qos.clone())
+    let publisher = domain_participant
+      .create_publisher(&qos)
       .expect("Failed to create publisher");
-    let topic = DomainParticipant::create_topic(
-      domain_participant.clone(),
-      "Aasii",
-      TypeDesc::new("Huh?".to_string()),
-      qos.clone(),
-    )
-    .expect("Failed to create topic");
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
+      .expect("Failed to create topic");
 
-    let mut data_writer =
-      Publisher::create_datawriter(publisher.clone(), topic.clone(), qos.clone())
-        .expect("Failed to create datawriter");
+    let mut data_writer = publisher
+      .create_datawriter(&topic, &qos)
+      .expect("Failed to create datawriter");
 
     let mut data = RandomData {
       a: 4,
@@ -238,19 +242,16 @@ mod tests {
   fn dw_dispose_test() {
     let domain_participant = DomainParticipant::new();
     let qos = QosPolicies::qos_none();
-    let publisher = DomainParticipant::create_publisher(domain_participant.clone(), qos.clone())
+    let publisher = domain_participant
+      .create_publisher(&qos)
       .expect("Failed to create publisher");
-    let topic = DomainParticipant::create_topic(
-      domain_participant.clone(),
-      "Aasii",
-      TypeDesc::new("Huh?".to_string()),
-      qos.clone(),
-    )
-    .expect("Failed to create topic");
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
+      .expect("Failed to create topic");
 
-    let mut data_writer =
-      Publisher::create_datawriter(publisher.clone(), topic.clone(), qos.clone())
-        .expect("Failed to create datawriter");
+    let mut data_writer = publisher
+      .create_datawriter(&topic, &qos)
+      .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let data = RandomData {
@@ -258,10 +259,11 @@ mod tests {
       b: "Fobar".to_string(),
     };
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let key =  &data.get_key().get_hash();
+    let key = &data.get_key().get_hash();
     println!();
-    println!("key: {:?}",key );
-    println!();println!();
+    println!("key: {:?}", key);
+    println!();
+    println!();
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
@@ -269,7 +271,6 @@ mod tests {
       .write(data.clone(), None)
       .expect("Unable to write data");
 
-    
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     data_writer
       .dispose(&data, None)
@@ -282,19 +283,16 @@ mod tests {
   fn dw_wait_for_ack_test() {
     let domain_participant = DomainParticipant::new();
     let qos = QosPolicies::qos_none();
-    let publisher = DomainParticipant::create_publisher(domain_participant.clone(), qos.clone())
+    let publisher = domain_participant
+      .create_publisher(&qos)
       .expect("Failed to create publisher");
-    let topic = DomainParticipant::create_topic(
-      domain_participant.clone(),
-      "Aasii",
-      TypeDesc::new("Huh?".to_string()),
-      qos.clone(),
-    )
-    .expect("Failed to create topic");
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
+      .expect("Failed to create topic");
 
-    let mut data_writer =
-      Publisher::create_datawriter(publisher.clone(), topic.clone(), qos.clone())
-        .expect("Failed to create datawriter");
+    let mut data_writer = publisher
+      .create_datawriter(&topic, &qos)
+      .expect("Failed to create datawriter");
 
     let data = RandomData {
       a: 4,

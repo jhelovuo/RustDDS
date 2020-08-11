@@ -2,18 +2,22 @@ use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
 
 use std::collections::HashMap;
-use std::sync::{Arc,RwLock};
+use std::sync::{Arc, RwLock};
 
 use crate::dds::message_receiver::MessageReceiver;
 use crate::dds::reader::Reader;
 use crate::dds::writer::Writer;
+<<<<<<< HEAD
 //use crate::dds::participant::DomainParticipant;
+||||||| merged common ancestors
+use crate::dds::participant::DomainParticipant;
+=======
+>>>>>>> Merged previous changes.
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
 use crate::structure::entity::Entity;
 use crate::structure::{cache_change::ChangeKind, dds_cache::{DDSCache, DDSHistoryCache}};
-
 
 pub struct DPEventWrapper {
   poll: Poll,
@@ -274,9 +278,16 @@ mod tests {
     let (_add_writer_sender, add_writer_receiver) = mio_channel::channel();
     let (_remove_writer_sender, remove_writer_receiver) = mio_channel::channel();
 
+    let ddshc = Arc::new(RwLock::new(DDSHistoryCache::new()));
+
     let dp_event_wrapper = DPEventWrapper::new(
       HashMap::new(),
+<<<<<<< HEAD
       Arc::new(RwLock::new( DDSCache::new())),
+||||||| merged common ancestors
+=======
+      ddshc,
+>>>>>>> Merged previous changes.
       HashMap::new(),
       GuidPrefix::default(),
       TokenReceiverPair {
@@ -315,8 +326,8 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-      let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-      let new_reader = Reader::new(new_guid, send);
+      let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+      let new_reader = Reader::new(&new_guid, send);
 
       reader_guids.push(new_reader.get_guid().clone());
       println!("\nSent reader number {}: {:?}\n", i, &new_reader);

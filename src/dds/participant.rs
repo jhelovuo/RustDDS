@@ -1,7 +1,13 @@
 use mio::Token;
 use mio_extras::channel as mio_channel;
 
-use std::{thread, collections::HashMap, time::Duration, sync::{Arc, RwLock}, rc::Rc};
+use std::{
+  thread,
+  collections::HashMap,
+  time::Duration,
+  sync::{Arc, RwLock},
+  ops::Deref,
+};
 
 use crate::network::constant::*;
 
@@ -25,22 +31,20 @@ pub struct DomainParticipant {
 impl DomainParticipant {
   pub fn new() -> DomainParticipant {
     let dpi = DomainParticipant_Inner::new();
-    DomainParticipant {dpi: Arc::new(dpi) }
+    DomainParticipant { dpi: Arc::new(dpi) }
   }
 
-  pub fn create_publisher<'a>(&'a self, qos: QosPolicies) -> Result<Publisher> {
-    self.dpi.create_publisher(&self,qos) // pass in Arc to DomainParticipant
+  pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
+    self.dpi.create_publisher(&self, qos)
   }
 
-  pub fn create_subscriber(&self, qos: QosPolicies) -> Subscriber {
-    self.dpi.create_subscriber(&self,qos)
+  pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
+    self.dpi.create_subscriber(&self, qos)
   }
 
-  pub fn create_topic<'a>(&'a self, name: &str,type_desc: TypeDesc, qos: QosPolicies) 
-      -> Result<Topic> {
-    self.dpi.create_topic(&self,name,type_desc,qos)
+  pub fn create_topic(&self, name: &str, type_desc: TypeDesc, qos: &QosPolicies) -> Result<Topic> {
+    self.dpi.create_topic(&self, name, type_desc, qos)
   }
-
 }
 
 impl Deref for DomainParticipant {
@@ -49,7 +53,6 @@ impl Deref for DomainParticipant {
     &self.dpi
   }
 }
-
 
 // This is the actual working DomainParticipant.
 pub struct DomainParticipant_Inner {
@@ -139,7 +142,7 @@ impl DomainParticipant_Inner {
       },
     );
     // Launch the background thread for DomainParticipant
-    thread::spawn(move || ev_wrapper.event_loop() );
+    thread::spawn(move || ev_wrapper.event_loop());
 
     DomainParticipant_Inner {
       entity_attributes: EntityAttributes { guid: new_guid },
@@ -189,26 +192,27 @@ impl DomainParticipant_Inner {
   // deleting the Publisher or Subscriber object, who upon deletion will notify
   // the DomainParticipant.
   pub fn create_publisher(
-    domain_participant: Arc<DomainParticipant>,
-    qos: QosPolicies,
-  ) -> Result<Rc<Publisher>> {
+    &self,
+    domain_participant: &DomainParticipant,
+    qos: &QosPolicies,
+  ) -> Result<Publisher> {
     let add_writer_sender = domain_participant.get_add_writer_sender().clone();
 
-    Ok(Rc::new(Publisher::new(
+    Ok(Publisher::new(
       domain_participant,
       qos.clone(),
-      qos,
+      qos.clone(),
       add_writer_sender,
-    )))
+    ))
   }
 
   pub fn create_subscriber(
-    domain_participant: Arc<DomainParticipant>,
-    qos: QosPolicies,
-  ) -> Result<Rc<Subscriber>> {
+    &self,
+    domain_participant: &DomainParticipant,
+    qos: &QosPolicies,
+  ) -> Result<Subscriber> {
     let subscriber = Subscriber::new(domain_participant, qos);
-
-    Ok(Rc::new(subscriber))
+    Ok(subscriber)
   }
 
   // Topic creation. Data types should be handled as something (potentially) more structured than a String.
@@ -216,13 +220,14 @@ impl DomainParticipant_Inner {
   // to be a sequence of octets, which would be &[u8] in Rust. This may cause problems if there are topic names
   // with non-ASCII characters. On the other hand, string handling with &str is easier in Rust.
   pub fn create_topic(
-    domain_participant: Arc<DomainParticipant>,
+    &self,
+    domain_participant: &DomainParticipant,
     name: &str,
     type_desc: TypeDesc,
-    qos: QosPolicies,
-  ) -> Result<Rc<Topic>> {
-    let topic = Topic::new(domain_participant, name.to_string(), type_desc, qos);
-    Ok(Rc::new(topic))
+    qos: &QosPolicies,
+  ) -> Result<Topic> {
+    let topic = Topic::new(domain_participant, name.to_string(), type_desc, &qos);
+    Ok(topic)
 
     // TODO: refine
   }

@@ -9,13 +9,12 @@ use crate::structure::{
 };
 
 use crate::dds::{
-  values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
-  ddsdata::DDSData,
-  traits::datasample_trait::DataSampleTrait,
+  values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache, ddsdata::DDSData,
+  traits::datasample_trait::DataSampleTrait, pubsub::Subscriber,
 };
 
-pub struct DataReader<D> {
-  //my_subscriber: &'s Subscriber,
+pub struct DataReader<'a, D> {
+  subscriber: &'a Subscriber,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   datasample_cache: DataSampleCache<D>,
@@ -25,21 +24,22 @@ pub struct DataReader<D> {
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
 
-impl<'s, D> DataReader<D>
+impl<'s, 'a, D> DataReader<'a, D>
 where
   D: Deserialize<'s> + DataSampleTrait,
 {
   pub fn new(
-    guid: GUID,
-    qos: QosPolicies,
+    guid: &GUID,
+    subscriber: &'a Subscriber,
+    qos: &QosPolicies,
     new_data_receiver: mio_channel::Receiver<(DDSData, Timestamp)>,
   ) -> Self {
     Self {
-      my_subscriber,
+      subscriber,
       qos_policy: qos.clone(),
-      entity_attributes: EntityAttributes::new(guid), // todo
-      datasample_cache: DataSampleCache::new(qos),
-      notification_receiver,
+      entity_attributes: EntityAttributes::new(guid.clone()), // todo
+      datasample_cache: DataSampleCache::new(qos.clone()),
+      notification_receiver: new_data_receiver,
     }
   }
 

@@ -40,11 +40,17 @@ pub struct Reader {
 } // placeholder
 
 impl Reader {
+<<<<<<< HEAD
   pub fn new(guid: GUID, ddsdata_channel: mio_channel::SyncSender<(DDSData,Timestamp)>) -> Reader {
+||||||| merged common ancestors
+  pub fn new(guid: GUID, ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>) -> Reader {
+=======
+  pub fn new(guid: &GUID, ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>) -> Reader {
+>>>>>>> Merged previous changes.
     Reader {
       ddsdata_channel,
       history_cache: HistoryCache::new(),
-      entity_attributes: EntityAttributes { guid },
+      entity_attributes: EntityAttributes { guid: guid.clone() },
       enpoint_attributes: EndpointAttributes::default(),
 
       heartbeat_response_delay: Duration::new(0, 500_000_000), // 0,5sec
@@ -353,8 +359,8 @@ mod tests {
     let mut guid = GUID::new();
     guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
-    let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut reader = Reader::new(guid, send);
+    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let mut reader = Reader::new(&guid, send);
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -385,8 +391,16 @@ mod tests {
   fn rtpsreader_handle_data() {
     let new_guid = GUID::new();
 
+<<<<<<< HEAD
     let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
     let mut new_reader = Reader::new(new_guid, send);
+||||||| merged common ancestors
+    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let mut new_reader = Reader::new(new_guid, send);
+=======
+    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let mut new_reader = Reader::new(&new_guid, send);
+>>>>>>> Merged previous changes.
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -416,8 +430,16 @@ mod tests {
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
 
+<<<<<<< HEAD
     let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
     let mut new_reader = Reader::new(new_guid, send);
+||||||| merged common ancestors
+    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let mut new_reader = Reader::new(new_guid, send);
+=======
+    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let mut new_reader = Reader::new(&new_guid, send);
+>>>>>>> Merged previous changes.
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -514,8 +536,16 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
+<<<<<<< HEAD
     let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
     let mut reader = Reader::new(new_guid, send);
+||||||| merged common ancestors
+    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let mut reader = Reader::new(new_guid, send);
+=======
+    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let mut reader = Reader::new(&new_guid, send);
+>>>>>>> Merged previous changes.
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -595,5 +625,4 @@ mod tests {
       Some(&changes[9])
     );
   }
-
 }

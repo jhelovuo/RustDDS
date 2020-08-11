@@ -267,7 +267,7 @@ impl MessageReceiver {
         target_reader.handle_heartbeat_msg(
           heartbeat,
           flags.is_flag_set(1), // final flag!?
-          mr_state, 
+          mr_state,
         );
       }
       EntitySubmessage::Gap(gap) => {
@@ -422,8 +422,8 @@ mod tests {
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
     new_guid.from_prefix(entity);
-    let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let new_reader = Reader::new(new_guid, send);
+    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let new_reader = Reader::new(&new_guid, send);
 
     // Skip for now+
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);

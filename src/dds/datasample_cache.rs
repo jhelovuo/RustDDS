@@ -126,12 +126,8 @@ mod tests {
 
     let key = data.get_key().clone();
     let datasample = DataSample::new(timestamp, instance_handle.clone(), data.clone());
-    datasample_cache
-      .add_datasample(datasample.clone())
-      .unwrap();
-    datasample_cache
-      .add_datasample(datasample)
-      .unwrap();
+    datasample_cache.add_datasample(datasample.clone()).unwrap();
+    datasample_cache.add_datasample(datasample).unwrap();
 
     let samples = datasample_cache.get_datasample(&key);
     match samples {

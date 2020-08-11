@@ -5,7 +5,7 @@ use crate::dds::values::result::*;
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
 pub trait HasQoSPolicy {
   fn get_qos(&self) -> &QosPolicies;
-  fn set_qos(self, new_qos: &QosPolicies) -> Result<()>;
+  fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<()>;
 }
 
 // DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.

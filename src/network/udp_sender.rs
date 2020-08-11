@@ -3,6 +3,7 @@ use mio::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::io;
 
+#[derive(Debug)]
 pub struct UDPSender {
   socket: UdpSocket,
 }

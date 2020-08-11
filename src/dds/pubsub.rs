@@ -19,7 +19,7 @@ use crate::dds::{
 // -------------------------------------------------------------------
 
 pub struct Publisher {
-  pub domainparticipant: DomainParticipant,
+  domain_participant: DomainParticipant,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
   add_writer_sender: mio_channel::Sender<Writer>,
@@ -34,7 +34,7 @@ impl<'a> Publisher {
     add_writer_sender: mio_channel::Sender<Writer>,
   ) -> Publisher {
     Publisher {
-      domainparticipant: dp,
+      domain_participant: dp,
       my_qos_policies: qos,
       default_datawriter_qos: default_dw_qos,
       add_writer_sender,
@@ -42,10 +42,10 @@ impl<'a> Publisher {
   }
 
   pub fn create_datawriter<D>(
-    publisher: Rc<Publisher>,
-    topic: Rc<Topic>,
-    _qos: QosPolicies,
-  ) -> Result<DataWriter<D>>
+    &'a self,
+    topic: &'a Topic,
+    _qos: &QosPolicies,
+  ) -> Result<DataWriter<'a, D>>
   where
     D: DataSampleTrait,
   {
@@ -56,13 +56,13 @@ impl<'a> Publisher {
     let entity_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
 
     let guid = GUID::new_with_prefix_and_id(
-      publisher.get_participant().as_entity().guid.guidPrefix,
+      self.get_participant().as_entity().guid.guidPrefix,
       entity_id,
     );
     let new_writer = Writer::new(
       guid,
       hccc_download,
-      self.domainparticipant.get_dds_cache(),
+      self.domain_participant.get_dds_cache(),
       topic.get_name().to_string(),
     );
     self
@@ -70,12 +70,12 @@ impl<'a> Publisher {
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::<D>::new(publisher, topic, dwcc_upload);
+    let matching_data_writer = DataWriter::<D>::new(self, &topic, dwcc_upload);
 
     Ok(matching_data_writer)
   }
 
-  pub fn add_writer(&self, writer: Writer) -> Result<()> {
+  fn add_writer(&self, writer: Writer) -> Result<()> {
     match self.add_writer_sender.send(writer) {
       Ok(_) => Ok(()),
       _ => Err(Error::OutOfResources),
@@ -111,17 +111,17 @@ impl<'a> Publisher {
   }
 
   // What is the use case for this? (is it useful in Rust style of programming? Should it be public?)
-  pub fn get_participant(&self) -> &Arc<DomainParticipant> {
+  pub fn get_participant(&self) -> &DomainParticipant {
     &self.domain_participant
   }
 
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
 
-  pub fn get_default_datawriter_qos(&self) -> QosPolicies {
-    self.default_datawriter_qos.clone()
+  pub fn get_default_datawriter_qos(&self) -> &QosPolicies {
+    &self.default_datawriter_qos
   }
-  pub fn set_default_datawriter_qos(&mut self, q: QosPolicies) {
-    self.default_datawriter_qos = q;
+  pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
+    self.default_datawriter_qos = q.clone();
   }
 }
 
@@ -137,18 +137,18 @@ impl<'a> Publisher {
 // -------------------------------------------------------------------
 
 pub struct Subscriber {
-  domain_participant: Arc<DomainParticipant>,
+  domain_participant: DomainParticipant,
   qos: QosPolicies,
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
 }
 
 impl<'s> Subscriber {
-  pub fn new(domain_participant: Arc<DomainParticipant>, qos: QosPolicies) -> Subscriber {
+  pub fn new(domain_participant: &DomainParticipant, qos: &QosPolicies) -> Subscriber {
     let sender_add_reader = domain_participant.get_add_reader_sender();
     let sender_remove_reader = domain_participant.get_remove_reader_sender();
     Subscriber {
-      domain_participant,
+      domain_participant: domain_participant.clone(),
       qos,
       sender_add_reader,
       sender_remove_reader,
@@ -157,8 +157,8 @@ impl<'s> Subscriber {
 
   pub fn create_datareader<D>(
     &self,
-    participant_guid: GUID,
-    qos: QosPolicies,
+    participant_guid: &GUID,
+    qos: &QosPolicies,
   ) -> Result<DataReader<D>>
   where
     D: Deserialize<'s> + DataSampleTrait,
@@ -173,10 +173,10 @@ impl<'s> Subscriber {
     );
 
     let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
-    let matching_reader = Reader::new(participant_guid, send);
+    let matching_reader = Reader::new(&participant_guid, send);
     self.domain_participant.add_reader(matching_reader);
 
-    let new_datareader = DataReader::<D>::new(guid, qos, rec);
+    let new_datareader = DataReader::<D>::new(&guid, &self, &qos, rec);
 
     Ok(new_datareader)
   }
