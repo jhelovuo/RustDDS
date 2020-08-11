@@ -158,8 +158,8 @@ impl MessageReceiver {
       .iter()
       .find(|&r| *r.get_entity_id() == reader_id)
       .unwrap();
-    let a = reader.get_history_cache_change(sequence_number);
-    return a.clone();
+    let a = reader.get_history_cache_change(sequence_number).unwrap();
+    a.clone()
   }
 
   fn get_reader_history_cache_start_and_end_seq_num(
@@ -394,6 +394,9 @@ mod tests {
   use crate::structure::{dds_cache::DDSCache, time::Timestamp};
   use std::sync::{RwLock, Arc};
 
+  use std::sync::{Arc, RwLock};
+  use crate::structure::dds_cache::{DDSHistoryCache};
+
   #[test]
 
   fn test_shapes_demo_message_deserialization() {
@@ -422,8 +425,12 @@ mod tests {
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
     new_guid.from_prefix(entity);
-    let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let new_reader = Reader::new(&new_guid, send);
+    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let new_reader = Reader::new(
+      new_guid,
+      send,
+      Arc::new(RwLock::new(DDSHistoryCache::new())),
+    );
 
     // Skip for now+
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);

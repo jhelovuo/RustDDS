@@ -143,6 +143,9 @@ pub struct Subscriber {
   qos: QosPolicies,
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
+
+  receiver_remove_datareader: mio_channel::Receiver<GUID>,
+  participant_guid: GUID,
 }
 
 impl<'s> Subscriber {
@@ -154,6 +157,8 @@ impl<'s> Subscriber {
       qos: qos.clone(),
       sender_add_reader,
       sender_remove_reader,
+      receiver_remove_datareader,
+      participant_guid,
     }
   }
 
@@ -165,13 +170,14 @@ impl<'s> Subscriber {
   where
     D: Deserialize<'s> + DataSampleTrait,
   {
-    // TODO: generate unique entity id's in a more systematic way
+    let new_datareader = DataReader::<D>::new(self, qos);
 
-    let mut rng = rand::thread_rng();
-    let entity_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC7);
-    let guid = GUID::new_with_prefix_and_id(
-      self.domain_participant.as_entity().guid.guidPrefix,
-      entity_id,
+    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    
+    let matching_reader = Reader::new(
+      participant_guid,
+      send,
+      self.domainparticipant.ddscache.clone(),
     );
 
     let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(2);

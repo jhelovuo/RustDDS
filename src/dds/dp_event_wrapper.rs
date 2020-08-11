@@ -308,8 +308,14 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
+
       let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-      let new_reader = Reader::new(&new_guid, send);
+      let new_reader = Reader::new(
+        new_guid,
+        send,
+        Arc::new(RwLock::new(DDSHistoryCache::new())),
+      );
+
 
       reader_guids.push(new_reader.get_guid().clone());
       println!("\nSent reader number {}: {:?}\n", i, &new_reader);

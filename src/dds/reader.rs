@@ -34,6 +34,9 @@ pub struct Reader {
   history_cache: Arc<RwLock<DDSHistoryCache>>,
   seqnum_instant_map: HashMap<SequenceNumber, Instant>,
 
+  history_cache: Arc<RwLock<DDSHistoryCache>>,
+  seqnum_instant_map: HashMap<SequenceNumber, Instant>,
+
   entity_attributes: EntityAttributes,
   pub enpoint_attributes: EndpointAttributes,
 
@@ -55,7 +58,7 @@ impl Reader {
     Reader {
       ddsdata_channel,
       history_cache,
-      seqnum_instant_map: HashMap::new()
+      seqnum_instant_map: HashMap::new(),
       entity_attributes: EntityAttributes { guid },
       enpoint_attributes: EndpointAttributes::default(),
 
