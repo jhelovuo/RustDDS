@@ -213,8 +213,12 @@ impl DomainParticipant_Inner {
     domain_participant: &DomainParticipant,
     qos: &QosPolicies,
   ) -> Result<Subscriber> {
-    let subscriber = Subscriber::new(domain_participant, qos);
-    Ok(subscriber)
+    Ok(Subscriber::new(
+      domain_participant.clone(),
+      qos.clone(),
+      self.sender_add_reader.clone(),
+      self.sender_remove_reader.clone(),
+    ))
   }
 
   // Topic creation. Data types should be handled as something (potentially) more structured than a String.

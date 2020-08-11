@@ -20,7 +20,7 @@ pub struct DataReader<'a, D> {
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   datasample_cache: DataSampleCache<D>,
-  notification_receiver: mio_channel::Receiver<(DDSData, Timestamp)>,
+  notification_receiver: mio_channel::Receiver<()>,
   // TODO: rest of fields
 }
 
@@ -34,14 +34,14 @@ where
     guid: &GUID,
     subscriber: &'a Subscriber,
     qos: &QosPolicies,
-    new_data_receiver: mio_channel::Receiver<(DDSData, Timestamp)>,
+    notification_receiver: mio_channel::Receiver<()>,
   ) -> Self {
     Self {
       subscriber,
       qos_policy: qos.clone(),
       entity_attributes: EntityAttributes::new(guid.clone()), // todo
       datasample_cache: DataSampleCache::new(qos.clone()),
-      notification_receiver: new_data_receiver,
+      notification_receiver,
     }
   }
 

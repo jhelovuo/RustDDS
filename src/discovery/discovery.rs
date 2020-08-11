@@ -67,7 +67,7 @@ impl<'a> Discovery<'a> {
 
     let _dcps_participant_reader = discovery_subscriber
       .create_datareader::<SPDPDiscoveredParticipantData>(
-        domain_participant.get_guid(),
+        &dcps_participant_topic,
         dcps_participant_topic.get_qos(),
       )
       .expect("Unable to create DataReader for DCPSParticipant");
@@ -91,7 +91,7 @@ impl<'a> Discovery<'a> {
 
     let _dcps_subscription_reader = discovery_subscriber
       .create_datareader::<SPDPDiscoveredParticipantData>(
-        domain_participant.get_guid(),
+        &dcps_subscription_topic,
         dcps_subscription_topic.get_qos(),
       )
       .expect("Unable to create DataReader for DCPSSubscription.");
@@ -115,7 +115,7 @@ impl<'a> Discovery<'a> {
 
     let _dcps_publication_reader = discovery_subscriber
       .create_datareader::<SPDPDiscoveredParticipantData>(
-        domain_participant.get_guid(),
+        &dcps_publication_topic,
         dcps_subscription_topic.get_qos(),
       )
       .expect("Unable to create DataReader for DCPSPublication");
@@ -133,7 +133,7 @@ impl<'a> Discovery<'a> {
       .expect("Unable to create DCPSTopic topic.");
     let _dcps_reader = discovery_subscriber
       .create_datareader::<SPDPDiscoveredParticipantData>(
-        domain_participant.get_guid(),
+        &dcps_topic,
         dcps_subscription_topic.get_qos(),
       )
       .expect("Unable to create DataReader for DCPSTopic");

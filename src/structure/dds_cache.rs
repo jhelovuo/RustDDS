@@ -220,12 +220,6 @@ impl DDSHistoryCache {
     }
     return changes;
   }
-<<<<<<< HEAD
-
-||||||| merged common ancestors
-  
-=======
->>>>>>> Mainly clippy cleanups
   /*
   /// returns element with LARGEST timestamp
   pub fn get_latest_change(&self) -> Option<&CacheChange>{

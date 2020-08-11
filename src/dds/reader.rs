@@ -16,7 +16,7 @@ use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::time::Timestamp;
 
 use std::sync::{Arc, RwLock};
-use crate::structure::dds_cache::{DDSHistoryCache};
+use crate::structure::dds_cache::{DDSCache};
 use std::time::Instant;
 
 use mio_extras::channel as mio_channel;
@@ -29,13 +29,12 @@ use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiverState;
 
 pub struct Reader {
-  ddsdata_channel: mio_channel::SyncSender<(DDSData, Timestamp)>,
+  // Should the instant be sent?
+  notification_sender: mio_channel::SyncSender<()>,
 
-  history_cache: Arc<RwLock<DDSHistoryCache>>,
+  dds_cache: Arc<RwLock<DDSCache>>,
   seqnum_instant_map: HashMap<SequenceNumber, Instant>,
-
-  history_cache: Arc<RwLock<DDSHistoryCache>>,
-  seqnum_instant_map: HashMap<SequenceNumber, Instant>,
+  topic_name: String,
 
   entity_attributes: EntityAttributes,
   pub enpoint_attributes: EndpointAttributes,
@@ -52,12 +51,15 @@ pub struct Reader {
 impl Reader {
   pub fn new(
     guid: GUID,
-    ddsdata_channel: mio_channel::Sender<(DDSData, Timestamp)>,
-    history_cache: Arc<RwLock<DDSHistoryCache>>,
+    notification_sender: mio_channel::SyncSender<()>,
+    dds_cache: Arc<RwLock<DDSCache>>,
+    topic_name: String,
   ) -> Reader {
     Reader {
-      ddsdata_channel,
-      history_cache,
+      notification_sender,
+      dds_cache,
+      topic_name,
+
       seqnum_instant_map: HashMap::new(),
       entity_attributes: EntityAttributes { guid },
       enpoint_attributes: EndpointAttributes::default(),
@@ -74,8 +76,11 @@ impl Reader {
 
   // TODO Used for test/debugging purposes
   pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
-    let history_cache = self.history_cache.read().unwrap();
-    let cc = history_cache.get_change(self.seqnum_instant_map.get(&sequence_number).unwrap());
+    let dds_cache = self.dds_cache.read().unwrap();
+    let cc = dds_cache.from_topic_get_change(
+      &self.topic_name,
+      &self.seqnum_instant_map.get(&sequence_number).unwrap(),
+    );
 
     println!("history cache !!!! {:?}", cc);
 
@@ -90,9 +95,12 @@ impl Reader {
 
   // Used for test/debugging purposes
   pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
-    let history_cache = self.history_cache.read().unwrap();
-    let cc = history_cache.get_change(self.seqnum_instant_map.get(&sequence_number).unwrap());
-
+    println!("{:?}", sequence_number);
+    let dds_cache = self.dds_cache.read().unwrap();
+    let cc = dds_cache.from_topic_get_change(
+      &self.topic_name,
+      &self.seqnum_instant_map.get(&sequence_number).unwrap(),
+    );
     println!("history cache !!!! {:?}", cc);
     match cc {
       Some(cc) => Some(cc.clone()),
@@ -157,32 +165,9 @@ impl Reader {
     }
 
     self.make_cache_change(data, instant, writer_guid);
+    self.seqnum_instant_map.insert(seq_num, instant);
     // self.send_datasample(mr_state.timestamp);
     self.notify_cache_change();
-  }
-
-  fn send_datasample(&self, _timestamp: Timestamp) {
-    let cc = self.history_cache.get_latest().unwrap().clone();
-    let mut ddsdata = DDSData::from_arc(cc.instance_handle, cc.data_value.unwrap());
-    ddsdata.set_reader_id(self.get_guid().entityId.clone());
-    ddsdata.set_writer_id(cc.writer_guid.entityId.clone());
-
-    // Sending is accomplished by 1. put datasample in cache 2. send notification to reader
-    // 1. Put sample is cache
-    // *TODO
-
-    // 2. send notification
-    match self.ddsdata_channel.try_send((ddsdata, _timestamp)) {
-      Ok(()) => (),                                  // expected result
-      Err(mio_channel::TrySendError::Full(_)) => (), // This is harmless. There is a notification in already.
-      Err(mio_channel::TrySendError::Disconnected(_)) => {
-        // If we get here, our DataReader has died. The Reader should now dispose itself.
-        // TODO: Implement Reader disposal.
-      }
-      Err(mio_channel::TrySendError::Io(_)) => {
-        // TODO: What does this mean? Can we ever get here?
-      }
-    }
   }
 
   pub fn handle_heartbeat_msg(
@@ -221,10 +206,10 @@ impl Reader {
     // Remove instances from DDSHistoryCache
     for instant in removed_instances.iter() {
       self
-        .history_cache
+        .dds_cache
         .write()
         .unwrap()
-        .remove_change(instant)
+        .from_topic_remove_change(&self.topic_name, instant)
         .expect("WriterProxy told to remove an instant which was not present");
     }
 
@@ -288,7 +273,11 @@ impl Reader {
       //self.history_cache.remove_change(ih);
     }
     for instant in &removed_instances {
-      self.history_cache.write().unwrap().remove_change(instant);
+      self
+        .dds_cache
+        .write()
+        .unwrap()
+        .from_topic_remove_change(&self.topic_name, instant);
     }
 
     // Is this needed?
@@ -313,18 +302,26 @@ impl Reader {
     ddsdata.set_writer_id(data.writer_id);
     let cache_change = CacheChange::new(writer_guid, data.writer_sn, Some(ddsdata));
     self
-      .history_cache
+      .dds_cache
       .write()
       .unwrap()
-      .add_change(&instant, cache_change);
+      .to_topic_add_change(&self.topic_name, &instant, cache_change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
   // likely use of mio channel
   fn notify_cache_change(&self) {
-    // TODO!
-    println!("No notification atm...")
-    // Do we need some other channel to notify about changes in history_cache?
+    match self.notification_sender.try_send(()) {
+      Ok(()) => (),                                  // expected result
+      Err(mio_channel::TrySendError::Full(_)) => (), // This is harmless. There is a notification in already.
+      Err(mio_channel::TrySendError::Disconnected(_)) => {
+        // If we get here, our DataReader has died. The Reader should now dispose itself.
+        // TODO: Implement Reader disposal.
+      }
+      Err(mio_channel::TrySendError::Io(_)) => {
+        // TODO: What does this mean? Can we ever get here?
+      }
+    }
   }
 
   fn send_acknack(&self, _acknack: AckNack) {
@@ -360,8 +357,8 @@ impl PartialEq for Reader {
 impl fmt::Debug for Reader {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("Reader")
-      .field("datasample_channel", &"can't print".to_string())
-      .field("history_cache", &self.history_cache)
+      .field("notification_sender, dds_cache", &"can't print".to_string())
+      .field("topic_name", &self.topic_name)
       .field("entity_attributes", &self.entity_attributes)
       .field("enpoint_attributes", &self.enpoint_attributes)
       .field("heartbeat_response_delay", &self.heartbeat_response_delay)
@@ -377,14 +374,22 @@ mod tests {
   use crate::structure::guid::{GUID, EntityId};
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
   use crate::structure::guid::GuidPrefix;
+  use crate::structure::topic_kind::TopicKind;
+  use crate::dds::typedesc::TypeDesc;
 
   #[test]
-  fn rtpsreader_send_ddsdata() {
+  fn rtpsreader_notification() {
     let mut guid = GUID::new();
     guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
-    let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut reader = Reader::new(guid, send, Arc::new(RwLock::new(DDSHistoryCache::new())));
+    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    dds_cache.write().unwrap().add_new_topic(
+      &"test".to_string(),
+      TopicKind::NO_KEY,
+      &TypeDesc::new("testi".to_string()),
+    );
+    let mut reader = Reader::new(guid, send, dds_cache, "test".to_string());
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -400,27 +405,23 @@ mod tests {
     data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
     data.writer_id = writer_guid.entityId;
 
-    reader.handle_data_msg(data.clone(), mr_state);
+    reader.handle_data_msg(data, mr_state);
 
-    let (datasample, _time) = rec.try_recv().unwrap();
-    assert_eq!(datasample.data(), data.serialized_payload.value);
-
-    print!("Received: {:?}", datasample.data());
-    print!("Original: {:?}", data.serialized_payload);
-    assert_eq!(*datasample.reader_id(), data.reader_id);
-    assert_eq!(*datasample.writer_id(), data.writer_id);
+    assert!(rec.try_recv().is_ok());
   }
 
   #[test]
   fn rtpsreader_handle_data() {
     let new_guid = GUID::new();
 
-    let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut new_reader = Reader::new(
-      new_guid,
-      send,
-      Arc::new(RwLock::new(DDSHistoryCache::new())),
+    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    dds_cache.write().unwrap().add_new_topic(
+      &"test".to_string(),
+      TopicKind::NO_KEY,
+      &TypeDesc::new("testi".to_string()),
     );
+    let mut new_reader = Reader::new(new_guid, send, dds_cache.clone(), "test".to_string());
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -435,27 +436,38 @@ mod tests {
     let mut d = Data::new();
     d.writer_id = writer_guid.entityId;
     let d_seqnum = d.writer_sn;
-    new_reader.handle_data_msg(d, mr_state);
+    new_reader.handle_data_msg(d.clone(), mr_state);
 
-    let (rec_data, _) = rec.try_recv().unwrap();
-    let change = CacheChange::new(writer_guid, d_seqnum, Some(rec_data));
+    assert!(rec.try_recv().is_ok());
 
-    assert_eq!(
-      new_reader.get_history_cache_change(d_seqnum).unwrap(),
-      change
+    let hc_locked = dds_cache.read().unwrap();
+    let cc_from_chache = hc_locked.from_topic_get_change(
+      &new_reader.topic_name,
+      &new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
     );
+
+    let ddsdata = DDSData::new(InstanceHandle::default(), d.serialized_payload);
+    let cc_built_here = CacheChange::new(
+      writer_guid, 
+      d_seqnum, 
+      Some(ddsdata)
+    );
+
+    assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
   }
 
   #[test]
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
 
-    let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut new_reader = Reader::new(
-      new_guid,
-      send,
-      Arc::new(RwLock::new(DDSHistoryCache::new())),
+    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    dds_cache.write().unwrap().add_new_topic(
+      &"test".to_string(),
+      TopicKind::NO_KEY,
+      &TypeDesc::new("testi".to_string()),
     );
+    let mut new_reader = Reader::new(new_guid, send, dds_cache, "test".to_string());
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -473,7 +485,7 @@ mod tests {
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
-      reader_id: new_reader.get_entity_id().clone(),
+      reader_id: *new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
       last_sn: SequenceNumber::from(0),
@@ -482,7 +494,7 @@ mod tests {
     assert!(!new_reader.handle_heartbeat_msg(hb_new, true, mr_state.clone())); // should be false, no ack
 
     let hb_one = Heartbeat {
-      reader_id: new_reader.get_entity_id().clone(),
+      reader_id: *new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
       last_sn: SequenceNumber::from(1),
@@ -492,19 +504,20 @@ mod tests {
 
     // After ack_nack, will receive the following change
     let change = CacheChange::new(
-      new_reader.get_guid().clone(),
+      *new_reader.get_guid(),
       SequenceNumber::from(1),
       Some(d.clone()),
     );
-    new_reader.history_cache
-    .write()
-    .unwrap()
-    .add_change(&Instant::now(), change);
+    new_reader.dds_cache.write().unwrap().to_topic_add_change(
+      &new_reader.topic_name,
+      &Instant::now(),
+      change.clone(),
+    );
     changes.push(change);
 
     // Duplicate
     let hb_one2 = Heartbeat {
-      reader_id: new_reader.get_entity_id().clone(),
+      reader_id: *new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
       last_sn: SequenceNumber::from(1),
@@ -513,7 +526,7 @@ mod tests {
     assert!(!new_reader.handle_heartbeat_msg(hb_one2, false, mr_state.clone())); // No acknack
 
     let hb_3_1 = Heartbeat {
-      reader_id: new_reader.get_entity_id().clone(),
+      reader_id: *new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // writer has last 2 in cache
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
@@ -523,23 +536,27 @@ mod tests {
 
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(
-      new_reader.get_guid().clone(),
+      *new_reader.get_guid(),
       SequenceNumber::from(2),
       Some(d.clone()),
     );
-    new_reader.history_cache
-    .write()
-    .unwrap().add_change(&Instant::now(), change.clone());
+    new_reader.dds_cache.write().unwrap().to_topic_add_change(
+      &new_reader.topic_name,
+      &Instant::now(),
+      change.clone(),
+    );
     changes.push(change);
 
-    let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), Some(d));
-    new_reader.history_cache
-    .write()
-    .unwrap().add_change(&Instant::now(), change.clone());
+    let change = CacheChange::new(*new_reader.get_guid(), SequenceNumber::from(3), Some(d));
+    new_reader.dds_cache.write().unwrap().to_topic_add_change(
+      &new_reader.topic_name,
+      &Instant::now(),
+      change.clone(),
+    );
     changes.push(change);
 
     let hb_none = Heartbeat {
-      reader_id: new_reader.get_entity_id().clone(),
+      reader_id: *new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(4), // writer has no samples available
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
@@ -553,12 +570,14 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
-    let mut reader = Reader::new(
-      new_guid,
-      send,
-      Arc::new(RwLock::new(DDSHistoryCache::new())),
+    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    dds_cache.write().unwrap().add_new_topic(
+      &"test".to_string(),
+      TopicKind::NO_KEY,
+      &TypeDesc::new("testi".to_string()),
     );
+    let mut reader = Reader::new(new_guid, send, dds_cache, "test".to_string());
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -579,7 +598,12 @@ mod tests {
     for i in 0..n {
       d.writer_sn = SequenceNumber::from(i);
       reader.handle_data_msg(d.clone(), mr_state.clone());
-      changes.push(reader.get_history_cache_change(d.writer_sn).unwrap().clone());
+      changes.push(
+        reader
+          .get_history_cache_change(d.writer_sn)
+          .unwrap()
+          .clone(),
+      );
     }
 
     // make sequence numbers 1-3 and 5 7 irrelevant
@@ -588,7 +612,7 @@ mod tests {
     gap_list.insert(SequenceNumber::from(7 + 4));
 
     let gap = Gap {
-      reader_id: reader.get_entity_id().clone(),
+      reader_id: *reader.get_entity_id(),
       writer_id,
       gap_start: SequenceNumber::from(1),
       gap_list,
@@ -599,7 +623,7 @@ mod tests {
 
     assert_eq!(
       reader.get_history_cache_change(SequenceNumber::from(0)),
-      Some(changes[0])
+      Some(changes[0].clone())
     );
     assert_eq!(
       reader.get_history_cache_change(SequenceNumber::from(1)),
@@ -615,7 +639,7 @@ mod tests {
     );
     assert_eq!(
       reader.get_history_cache_change(SequenceNumber::from(4)),
-      Some(changes[4])
+      Some(changes[4].clone())
     );
     assert_eq!(
       reader.get_history_cache_change(SequenceNumber::from(5)),
@@ -623,7 +647,7 @@ mod tests {
     );
     assert_eq!(
       reader.get_history_cache_change(SequenceNumber::from(6)),
-      Some(changes[6])
+      Some(changes[6].clone())
     );
     assert_eq!(
       reader.get_history_cache_change(SequenceNumber::from(7)),
@@ -631,11 +655,11 @@ mod tests {
     );
     assert_eq!(
       reader.get_history_cache_change(SequenceNumber::from(8)),
-      Some(changes[8])
+      Some(changes[8].clone())
     );
     assert_eq!(
       reader.get_history_cache_change(SequenceNumber::from(9)),
-      Some(changes[9])
+      Some(changes[9].clone())
     );
   }
 }

@@ -309,11 +309,12 @@ mod tests {
     for i in 0..n {
       let new_guid = GUID::new();
 
-      let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
+      let (send, _rec) = mio_channel::sync_channel::<()>(100);
       let new_reader = Reader::new(
         new_guid,
         send,
-        Arc::new(RwLock::new(DDSHistoryCache::new())),
+        Arc::new(RwLock::new(DDSCache::new())),
+        "test".to_string(),
       );
 
 

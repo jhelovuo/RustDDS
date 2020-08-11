@@ -143,48 +143,84 @@ pub struct Subscriber {
   qos: QosPolicies,
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
-
-  receiver_remove_datareader: mio_channel::Receiver<GUID>,
-  participant_guid: GUID,
 }
 
 impl<'s> Subscriber {
-  pub fn new(domain_participant: &DomainParticipant, qos: &QosPolicies) -> Subscriber {
-    let sender_add_reader = domain_participant.get_add_reader_sender();
-    let sender_remove_reader = domain_participant.get_remove_reader_sender();
+  pub fn new(
+    domainparticipant: DomainParticipant,
+    qos: QosPolicies,
+    sender_add_reader: mio_channel::Sender<Reader>,
+    sender_remove_reader: mio_channel::Sender<GUID>,
+  ) -> Subscriber {
     Subscriber {
-      domain_participant: domain_participant.clone(),
+      domain_participant: domainparticipant.clone(),
       qos: qos.clone(),
       sender_add_reader,
       sender_remove_reader,
-      receiver_remove_datareader,
-      participant_guid,
     }
   }
+  /* architecture change
+  pub fn subscriber_poll(&mut self) {
+    loop {
+      println!("Subscriber looping...");
+      let mut events = Events::with_capacity(1024);
 
-  pub fn create_datareader<D>(
-    &self,
-    participant_guid: &GUID,
+      self
+        .poll
+        .poll(&mut events, None)
+        .expect("Subscriber failed in polling");
+
+      for event in events.into_iter() {
+        println!("Subscriber poll received: {:?}", event); // for debugging!!!!!!
+
+        match event.token() {
+          STOP_POLL_TOKEN => return,
+          READER_CHANGE_TOKEN => {
+            // Eti oikee datareader
+          }
+          ADD_DATAREADER_TOKEN => {
+            let dr = self.create_datareader(self.participant_guid, self.qos.clone());
+
+            self.datareaders.push(dr.unwrap());
+          }
+          REMOVE_DATAREADER_TOKEN => {
+            let old_dr_guid = self.receiver_remove_datareader.try_recv().unwrap();
+            if let Some(pos) = self
+              .datareaders
+              .iter()
+              .position(|r| r.get_guid() == old_dr_guid)
+            {
+              self.datareaders.remove(pos);
+            }
+            self.sender_remove_reader.send(old_dr_guid).unwrap();
+          }
+          _ => {}
+        }
+      }
+    }
+  }
+  */
+  pub fn create_datareader<'d, D>(
+    &'s self,
+    topic: &'d Topic,
     qos: &QosPolicies,
   ) -> Result<DataReader<D>>
   where
     D: Deserialize<'s> + DataSampleTrait,
   {
-    let new_datareader = DataReader::<D>::new(self, qos);
+    // What is the bound?
+    let (send, rec) = mio_channel::sync_channel::<()>(10);
 
-    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
-    
+    let new_datareader = DataReader::<D>::new(self.domain_participant.get_guid(), self, qos, rec);
+
     let matching_reader = Reader::new(
-      participant_guid,
+      self.domain_participant.get_guid().clone(),
       send,
-      self.domainparticipant.ddscache.clone(),
+      self.domain_participant.get_dds_cache(),
+      topic.get_name().to_string(),
     );
 
-    let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(2);
-    let matching_reader = Reader::new(&participant_guid, send);
-    self.domain_participant.add_reader(matching_reader);
-
-    let new_datareader = DataReader::<D>::new(&guid, &self, &qos, rec);
+    self.sender_add_reader.send(matching_reader).unwrap();
 
     Ok(new_datareader)
   }

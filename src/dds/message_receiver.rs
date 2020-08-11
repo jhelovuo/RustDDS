@@ -393,9 +393,9 @@ mod tests {
   use mio_extras::channel as mio_channel;
   use crate::structure::{dds_cache::DDSCache, time::Timestamp};
   use std::sync::{RwLock, Arc};
-
-  use std::sync::{Arc, RwLock};
-  use crate::structure::dds_cache::{DDSHistoryCache};
+  
+  use crate::structure::topic_kind::TopicKind;
+  use crate::dds::typedesc::TypeDesc;
 
   #[test]
 
@@ -424,12 +424,20 @@ mod tests {
 
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
+    
     new_guid.from_prefix(entity);
-    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    dds_cache.write().unwrap().add_new_topic(
+      &"test".to_string(),
+      TopicKind::NO_KEY,
+      &TypeDesc::new("testi".to_string()),
+    );
     let new_reader = Reader::new(
       new_guid,
       send,
-      Arc::new(RwLock::new(DDSHistoryCache::new())),
+      dds_cache,
+      "test".to_string(),
     );
 
     // Skip for now+
