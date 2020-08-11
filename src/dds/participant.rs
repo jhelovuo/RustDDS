@@ -19,7 +19,7 @@ use crate::dds::{
 use crate::structure::{
   entity::{Entity, EntityAttributes},
   guid::GUID,
-  dds_cache::DDSHistoryCache,
+  dds_cache::DDSCache,
 };
 
 #[derive(Clone)]
@@ -72,7 +72,7 @@ pub struct DomainParticipant_Inner {
   add_writer_sender: mio_channel::Sender<Writer>,
   remove_writer_sender: mio_channel::Sender<GUID>,
 
-  dds_cache : Arc<RwLock<DDSCache>>,
+  dds_cache: Arc<RwLock<DDSCache>>,
 }
 
 pub struct SubscriptionBuiltinTopicData {} // placeholder
@@ -156,11 +156,11 @@ impl DomainParticipant_Inner {
       sender_remove_datareader_vec: Vec::new(),
       add_writer_sender,
       remove_writer_sender,
-      dds_cache : Arc::new(RwLock::new(DDSCache::new())),
+      dds_cache: Arc::new(RwLock::new(DDSCache::new())),
     }
   }
 
-  pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>>{
+  pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
     return self.dds_cache.clone();
   }
 
@@ -199,7 +199,7 @@ impl DomainParticipant_Inner {
     let add_writer_sender = domain_participant.get_add_writer_sender().clone();
 
     Ok(Publisher::new(
-      domain_participant,
+      domain_participant.clone(),
       qos.clone(),
       qos.clone(),
       add_writer_sender,

@@ -7,17 +7,11 @@ use std::sync::{Arc, RwLock};
 use crate::dds::message_receiver::MessageReceiver;
 use crate::dds::reader::Reader;
 use crate::dds::writer::Writer;
-<<<<<<< HEAD
-//use crate::dds::participant::DomainParticipant;
-||||||| merged common ancestors
-use crate::dds::participant::DomainParticipant;
-=======
->>>>>>> Merged previous changes.
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
 use crate::structure::entity::Entity;
-use crate::structure::{cache_change::ChangeKind, dds_cache::{DDSCache, DDSHistoryCache}};
+use crate::structure::{cache_change::ChangeKind, dds_cache::DDSCache};
 
 pub struct DPEventWrapper {
   poll: Poll,
@@ -37,7 +31,7 @@ pub struct DPEventWrapper {
 
 impl DPEventWrapper {
   // This pub(crate) , because it should be constructed only by DomainParticipant.
-  pub (crate) fn new(
+  pub(crate) fn new(
     udp_listeners: HashMap<Token, UDPListener>,
     ddscache: Arc<RwLock<DDSCache>>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
@@ -239,14 +233,12 @@ impl DPEventWrapper {
             match cache_change {
               Ok(cc) => {
                 println!("Change Kind: {:?}", cc.change_kind);
-                if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED{
+                if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED {
                   w.remove_from_history_cache(cc);
-                }
-                else if cc.change_kind == ChangeKind::ALIVE{
+                } else if cc.change_kind == ChangeKind::ALIVE {
                   w.insert_to_history_cache(cc);
                   w.send_all_unsend_messages();
                 }
-               
               }
               _ => (),
             }
@@ -278,16 +270,11 @@ mod tests {
     let (_add_writer_sender, add_writer_receiver) = mio_channel::channel();
     let (_remove_writer_sender, remove_writer_receiver) = mio_channel::channel();
 
-    let ddshc = Arc::new(RwLock::new(DDSHistoryCache::new()));
+    let ddshc = Arc::new(RwLock::new(DDSCache::new()));
 
     let dp_event_wrapper = DPEventWrapper::new(
       HashMap::new(),
-<<<<<<< HEAD
-      Arc::new(RwLock::new( DDSCache::new())),
-||||||| merged common ancestors
-=======
       ddshc,
->>>>>>> Merged previous changes.
       HashMap::new(),
       GuidPrefix::default(),
       TokenReceiverPair {
@@ -326,7 +313,7 @@ mod tests {
     let mut reader_guids = Vec::new();
     for i in 0..n {
       let new_guid = GUID::new();
-      let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+      let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
       let new_reader = Reader::new(&new_guid, send);
 
       reader_guids.push(new_reader.get_guid().clone());

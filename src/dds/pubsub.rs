@@ -1,9 +1,6 @@
-use mio::{Ready, Poll, PollOpt};
 use mio_extras::channel as mio_channel;
 
-use crate::network::constant::*;
-
-use std::{time::Duration, sync::Arc, rc::Rc};
+use std::time::Duration;
 
 use rand::Rng;
 use serde::Deserialize;
@@ -70,7 +67,12 @@ impl<'a> Publisher {
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::<D>::new(self, &topic, dwcc_upload);
+    let matching_data_writer = DataWriter::<D>::new(
+      self,
+      &topic,
+      dwcc_upload,
+      self.get_participant().get_dds_cache(),
+    );
 
     Ok(matching_data_writer)
   }
@@ -149,7 +151,7 @@ impl<'s> Subscriber {
     let sender_remove_reader = domain_participant.get_remove_reader_sender();
     Subscriber {
       domain_participant: domain_participant.clone(),
-      qos,
+      qos: qos.clone(),
       sender_add_reader,
       sender_remove_reader,
     }
@@ -172,7 +174,7 @@ impl<'s> Subscriber {
       entity_id,
     );
 
-    let (send, rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let (send, rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(2);
     let matching_reader = Reader::new(&participant_guid, send);
     self.domain_participant.add_reader(matching_reader);
 

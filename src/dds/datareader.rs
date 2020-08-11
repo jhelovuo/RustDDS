@@ -1,5 +1,7 @@
 use serde::Deserialize;
 use mio_extras::channel as mio_channel;
+use mio::{Poll, Token, Ready, PollOpt, Evented};
+use std::io;
 
 use crate::structure::{
   instance_handle::InstanceHandle,
@@ -79,29 +81,34 @@ where
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a,D> Evented for DataReader<'a,D> 
-{
+impl<'a, D> Evented for DataReader<'a, D> {
   // We just delegate all the operations to notification_receiver, since it alrady implements Evented
-  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt)
-        -> io::Result<()>
-  {
-      self.notification_receiver.register(poll, token, interest, opts)
+  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+    self
+      .notification_receiver
+      .register(poll, token, interest, opts)
   }
 
-  fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt)
-      -> io::Result<()>
-  {
-      self.notification_receiver.reregister(poll, token, interest, opts)
+  fn reregister(
+    &self,
+    poll: &Poll,
+    token: Token,
+    interest: Ready,
+    opts: PollOpt,
+  ) -> io::Result<()> {
+    self
+      .notification_receiver
+      .reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
-      self.notification_receiver.deregister(poll)
+    self.notification_receiver.deregister(poll)
   }
 }
 
-impl<'a,D> Entity for DataReader<'a,D> 
-  where
-    D: Deserialize<'a> + DataSampleTrait,
+impl<'a, D> Entity for DataReader<'a, D>
+where
+  D: Deserialize<'a> + DataSampleTrait,
 {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes

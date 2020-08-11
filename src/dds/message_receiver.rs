@@ -422,7 +422,7 @@ mod tests {
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
     new_guid.from_prefix(entity);
-    let (send, _rec) = mio_channel::channel::<(DDSData, Timestamp)>();
+    let (send, _rec) = mio_channel::sync_channel::<(DDSData, Timestamp)>(100);
     let new_reader = Reader::new(&new_guid, send);
 
     // Skip for now+
@@ -471,7 +471,10 @@ mod tests {
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
     let mut _writerObject = Writer::new(
       GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], 2)),
-      hccc_download, Arc::new(RwLock::new(DDSCache::new())),String::from("topicName1") );
+      hccc_download,
+      Arc::new(RwLock::new(DDSCache::new())),
+      String::from("topicName1"),
+    );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entityId,
       *sequenceNumbers.first().unwrap(),

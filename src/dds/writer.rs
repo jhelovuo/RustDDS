@@ -28,11 +28,17 @@ use crate::{
   structure::{
     entity::{Entity, EntityAttributes},
     endpoint::{EndpointAttributes, Endpoint},
-    locator::{Locator, LocatorKind}, dds_cache::DDSCache, 
+    locator::{Locator, LocatorKind},
+    dds_cache::DDSCache,
   },
 };
 use super::{rtps_reader_proxy::RtpsReaderProxy};
-use std::{net::SocketAddr, time::{Instant, Duration}, sync::{RwLock, Arc}, collections::{HashSet, HashMap}};
+use std::{
+  net::SocketAddr,
+  time::{Instant, Duration},
+  sync::{RwLock, Arc},
+  collections::{HashSet, HashMap},
+};
 
 pub struct Writer {
   //pub history_cache: HistoryCache,
@@ -81,7 +87,7 @@ pub struct Writer {
   ///sequence number that is available in the Writer.
   ///If no samples are available in the Writer, identifies the lowest
   ///sequence number that is yet to be written by the Writer
-  pub first_change_sequence_number : SequenceNumber,
+  pub first_change_sequence_number: SequenceNumber,
   ///Optional attribute that indicates
   ///the maximum size of any
   ///SerializedPayload that may be
@@ -95,22 +101,27 @@ pub struct Writer {
   readers: Vec<RtpsReaderProxy>,
   message: Option<Message>,
   udp_sender: UDPSender,
-  dds_cache : Arc<RwLock<DDSCache>>,
+  dds_cache: Arc<RwLock<DDSCache>>,
   /// Writer can only read/write to this topic DDSHistoryCache.
-  my_topic_name : String,
+  my_topic_name: String,
   /// Maps this writers local sequence numbers to DDSHistodyCache instants.
   /// Useful when negative acknack is recieved.
-  sequence_number_to_instant : HashMap<SequenceNumber, Instant>,
- //// Maps this writers local sequence numbers to DDSHistodyCache instants.
+  sequence_number_to_instant: HashMap<SequenceNumber, Instant>,
+  //// Maps this writers local sequence numbers to DDSHistodyCache instants.
   /// Useful when datawriter dispose is recieved.
-  key_to_instant : HashMap<u64, Instant>,
+  key_to_instant: HashMap<u64, Instant>,
   /// Set of disposed samples.
-  /// Useful when reader requires some sample with acknack. 
-  disposed_sequence_numbers : HashSet<SequenceNumber>,
+  /// Useful when reader requires some sample with acknack.
+  disposed_sequence_numbers: HashSet<SequenceNumber>,
 }
 
 impl Writer {
-  pub fn new(guid: GUID, cache_change_receiver: mio_channel::Receiver<DDSData>, dds_cache : Arc<RwLock<DDSCache>>, topic_name : String) -> Writer {
+  pub fn new(
+    guid: GUID,
+    cache_change_receiver: mio_channel::Receiver<DDSData>,
+    dds_cache: Arc<RwLock<DDSCache>>,
+    topic_name: String,
+  ) -> Writer {
     let entity_attributes = EntityAttributes::new(guid);
     Writer {
       submessage_count: 0,
@@ -126,7 +137,7 @@ impl Writer {
       nack_respose_delay: Duration::from_millis(200),
       nack_suppression_duration: Duration::from_nanos(0),
       last_change_sequence_number: SequenceNumber::from(0),
-      first_change_sequence_number : SequenceNumber::from(0),
+      first_change_sequence_number: SequenceNumber::from(0),
       data_max_size_serialized: 999999999,
       entity_attributes,
       //enpoint_attributes: EndpointAttributes::default(),
@@ -141,10 +152,10 @@ impl Writer {
       endpoint_attributes: EndpointAttributes::default(),
       udp_sender: UDPSender::new_with_random_port(),
       dds_cache,
-      my_topic_name : topic_name,
-      sequence_number_to_instant : HashMap::new(),
-      key_to_instant : HashMap::new(),
-      disposed_sequence_numbers : HashSet::new(),
+      my_topic_name: topic_name,
+      sequence_number_to_instant: HashMap::new(),
+      key_to_instant: HashMap::new(),
+      disposed_sequence_numbers: HashSet::new(),
     }
     //entity_attributes.guid.entityId.
   }
@@ -161,38 +172,54 @@ impl Writer {
 
   pub fn insert_to_history_cache(&mut self, data: DDSData) {
     self.increase_last_change_sequence_number();
-    // If first write then set first change sequence number to 1 
-    if self.first_change_sequence_number == SequenceNumber::from(0){
+    // If first write then set first change sequence number to 1
+    if self.first_change_sequence_number == SequenceNumber::from(0) {
       self.first_change_sequence_number = SequenceNumber::from(1);
     }
-    let data_key = {data.value_key_hash.clone()};
+    let data_key = { data.value_key_hash.clone() };
     let datavalue = Some(data);
-    let new_cache_change = CacheChange::new(self.as_entity().guid, self.last_change_sequence_number, datavalue);
+    let new_cache_change = CacheChange::new(
+      self.as_entity().guid,
+      self.last_change_sequence_number,
+      datavalue,
+    );
     let insta = Instant::now();
-    self.dds_cache.write().unwrap().to_topic_add_change(&self.my_topic_name,&insta,new_cache_change);
-    self.sequence_number_to_instant.insert(self.last_change_sequence_number, insta.clone());
+    self.dds_cache.write().unwrap().to_topic_add_change(
+      &self.my_topic_name,
+      &insta,
+      new_cache_change,
+    );
+    self
+      .sequence_number_to_instant
+      .insert(self.last_change_sequence_number, insta.clone());
     self.key_to_instant.insert(data_key, insta.clone());
     self.writer_set_unsent_changes();
   }
-  
+
   /// This should be called only when DataWriter sends dispose message (NOT_ALIVE_DISPOSED)
-  pub fn remove_from_history_cache(&mut self, data : DDSData){
+  pub fn remove_from_history_cache(&mut self, data: DDSData) {
     let instant = self.key_to_instant.get(&data.value_key_hash);
-    if instant.is_none(){
+    if instant.is_none() {
       println!("keys to instant {:?}", self.key_to_instant);
-      panic!("Writer did not found Instant that corresponce to DDSData key: {:?}", data.value_key_hash);
-    }
-    else{
-      let removed_change = self.dds_cache.write().unwrap().from_topic_remove_change(&self.my_topic_name, instant.unwrap());
-      println!("removed change from DDShistoryCache {:?}",removed_change);
-      if removed_change.is_some(){
-        self.disposed_sequence_numbers.insert(removed_change.unwrap().sequence_number);
-      }
-      else{
+      panic!(
+        "Writer did not found Instant that corresponce to DDSData key: {:?}",
+        data.value_key_hash
+      );
+    } else {
+      let removed_change = self
+        .dds_cache
+        .write()
+        .unwrap()
+        .from_topic_remove_change(&self.my_topic_name, instant.unwrap());
+      println!("removed change from DDShistoryCache {:?}", removed_change);
+      if removed_change.is_some() {
+        self
+          .disposed_sequence_numbers
+          .insert(removed_change.unwrap().sequence_number);
+      } else {
         todo!();
       }
     }
-    
   }
 
   fn increase_last_change_sequence_number(&mut self) {
@@ -240,7 +267,7 @@ impl Writer {
         let sequenceNumber = reader_proxy.next_unsent_change();
         let instant = self.sequence_number_to_instant.get(sequenceNumber.unwrap());
         let cache = self.dds_cache.read().unwrap();
-        let change = cache.from_topic_get_change(&self.my_topic_name,&instant.unwrap());
+        let change = cache.from_topic_get_change(&self.my_topic_name, &instant.unwrap());
         let message: Message;
         let reader_entity_id = reader_proxy.remote_reader_guid.entityId.clone();
         let remote_reader_guid = reader_proxy.remote_reader_guid.clone();
@@ -259,7 +286,7 @@ impl Writer {
         let sequenceNumber = reader_proxy.next_requested_change();
         let instant = self.sequence_number_to_instant.get(sequenceNumber.unwrap());
         let cache = self.dds_cache.read().unwrap();
-        let change = cache.from_topic_get_change(&self.my_topic_name,&instant.unwrap());
+        let change = cache.from_topic_get_change(&self.my_topic_name, &instant.unwrap());
         let message: Message;
         let reader_entity_id = reader_proxy.remote_reader_guid.entityId.clone();
         let remote_reader_guid = reader_proxy.remote_reader_guid.clone();
@@ -654,7 +681,7 @@ impl Writer {
     return vec![start.unwrap().clone(), end.unwrap().clone()];
   }
 
-  
+
 
   // TODO Used for test/debugging purposes CAN BE DELETED WHEN tests are created again.
   pub fn handle_new_dds_data_message(&mut self, sample: DDSData) {
@@ -689,15 +716,14 @@ impl Endpoint for Writer {
 mod tests {
   use super::*;
   use crate::{
-    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc},
   };
   use std::thread;
   use crate::test::random_data::*;
 
- /*
+  /*
   #[test]
- 
+
   fn create_writer_add_readers_create_messages() {
     let new_guid = GUID::new();
     let (_sender, reciever) = mio_channel::channel::<DDSData>();
@@ -769,12 +795,9 @@ mod tests {
     let publisher = domain_participant
       .create_publisher(&qos)
       .expect("Failed to create publisher");
-    let topic = domain_participant.create_topic(
-      "Aasii",
-      TypeDesc::new("Huh?".to_string()),
-      &qos,
-    )
-    .expect("Failed to create topic");
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
+      .expect("Failed to create topic");
     let mut data_writer = publisher
       .create_datawriter(&topic, &qos)
       .expect("Failed to create datawriter");

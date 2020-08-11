@@ -28,7 +28,7 @@ use crate::dds::qos::{
 };
 use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
-use super::{datasample_cache::DataSampleCache, topic::TopicDescription};
+use super::datasample_cache::DataSampleCache;
 
 pub struct DataWriter<'a, D> {
   my_publisher: &'a Publisher,
@@ -48,6 +48,7 @@ where
     publisher: &'a Publisher,
     topic: &'a Topic,
     cc_upload: mio_channel::Sender<DDSData>,
+    dds_cache: Arc<RwLock<DDSCache>>,
   ) -> DataWriter<'a, D> {
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
       publisher.get_participant().get_guid_prefix().clone(),
@@ -62,7 +63,7 @@ where
     DataWriter {
       my_publisher: publisher.clone(),
       my_topic: topic,
-      qos_policy: qos_policy.clone(),
+      qos_policy: topic.get_qos().clone(),
       entity_attributes,
       cc_upload,
       dds_cache,
