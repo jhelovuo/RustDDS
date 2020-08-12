@@ -97,6 +97,25 @@ pub struct SampleInfo {
   pub source_timestamp: Timestamp,
 }
 
+#[allow(clippy::new_without_default)]
+impl SampleInfo {
+  pub fn new() -> Self {
+    Self{
+      sample_state: SampleState::NotRead,
+      view_state: ViewState::New,
+      instance_state: InstanceState::Alive,
+      disposed_generation_count: 0,
+      no_writers_generation_count: 0,
+      sample_rank: 0,
+      generation_rank: 0,
+      absolute_generation_rank: 0,
+      source_timestamp: Timestamp::TIME_INVALID,
+    }
+  }
+}
+
+
+
 /// DDS spec 2.2.2.5.4
 
 #[derive(Clone)]
@@ -117,7 +136,7 @@ where
 {
   pub fn new(source_timestamp: Timestamp, payload: D) -> DataSample<D> {
     // begin dummy placeholder values
-    let sample_state = SampleState::Read;
+    let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
     let disposed_generation_count = 0;

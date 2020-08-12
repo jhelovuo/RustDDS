@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use serde::{Serialize /*, Deserialize*/};
 
 use crate::dds::traits::key::Keyed;
@@ -17,7 +15,7 @@ pub struct DDSData {
   pub change_kind: ChangeKind,
   reader_id: EntityId,
   writer_id: EntityId,
-  value: Option<Arc<SerializedPayload>>,
+  value: Option<SerializedPayload>,
   pub value_key_hash: u64, // TODO: Is this used/needed ? If yes, please document its purpose here.
 }
 
@@ -28,18 +26,7 @@ impl DDSData {
       change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: Some(Arc::new(payload)),
-      value_key_hash: 0,
-    }
-  }
-
-  pub fn from_arc(payload: Arc<SerializedPayload>) -> DDSData {
-    DDSData {
-      source_timestamp: Timestamp::from(time::get_time()),
-      change_kind: ChangeKind::ALIVE,
-      reader_id: EntityId::ENTITYID_UNKNOWN,
-      writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: Some(payload.clone()),
+      value: Some(payload),
       value_key_hash: 0,
     }
   }
@@ -67,7 +54,7 @@ impl DDSData {
       change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: Some(Arc::new(serialized_payload)),
+      value: Some(serialized_payload),
       value_key_hash: 0,
     }
   }
@@ -126,7 +113,7 @@ impl DDSData {
     self.writer_id = writer_id;
   }
 
-  pub fn value(&self) -> Option<Arc<SerializedPayload>> {
+  pub fn value(&self) -> Option<SerializedPayload> {
     self.value.clone()
   }
 
