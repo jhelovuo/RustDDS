@@ -1,8 +1,9 @@
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
-
+extern crate chrono;
+use chrono::Duration;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::{sync::{Arc,RwLock}};
 
 use crate::dds::message_receiver::MessageReceiver;
 use crate::dds::reader::Reader;
@@ -11,7 +12,8 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
 use crate::structure::entity::Entity;
-use crate::structure::{cache_change::ChangeKind, dds_cache::DDSCache};
+use crate::{common::heartbeat_handler::HeartbeatHandler, structure::{cache_change::ChangeKind, dds_cache::{DDSCache, DDSHistoryCache}}};
+
 
 pub struct DPEventWrapper {
   poll: Poll,
@@ -27,6 +29,7 @@ pub struct DPEventWrapper {
   // Writers
   add_writer_receiver: TokenReceiverPair<Writer>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
+  writer_heartbeat_recievers : HashMap<Token,mio_channel::Receiver<Token>>,
 }
 
 impl DPEventWrapper {
@@ -44,7 +47,6 @@ impl DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
 
     let mut udp_listeners = udp_listeners;
-
     for (token, listener) in &mut udp_listeners {
       poll
         .register(
@@ -92,6 +94,7 @@ impl DPEventWrapper {
       )
       .expect("Failed to register remove writer channel");
 
+   
     DPEventWrapper {
       poll,
       ddscache,
@@ -102,6 +105,7 @@ impl DPEventWrapper {
       remove_reader_receiver,
       add_writer_receiver,
       remove_writer_receiver,
+      writer_heartbeat_recievers : HashMap::new(),
     }
   }
 
@@ -126,6 +130,8 @@ impl DPEventWrapper {
           ev_wrapper.handle_reader_action(&event);
         } else if DPEventWrapper::is_writer_action(&event) {
           ev_wrapper.handle_writer_action(&event, &mut writers);
+        } else if ev_wrapper.is_writer_heartbeat_action(&event){
+          ev_wrapper.handle_writer_heartbeat(&event, &mut writers);
         }
       }
     }
@@ -149,6 +155,13 @@ impl DPEventWrapper {
       }
     }
     event.token() == ADD_WRITER_TOKEN || event.token() == REMOVE_WRITER_TOKEN
+  }
+
+  pub fn is_writer_heartbeat_action(&self, event: &Event) -> bool{
+    if self.writer_heartbeat_recievers.contains_key(&event.token()){
+      return true;
+    }
+    return false;
   }
 
   pub fn handle_udp_traffic(&mut self, event: &Event) {
@@ -192,7 +205,7 @@ impl DPEventWrapper {
     println!("dp_ew handle writer action with token {:?}", event.token());
     match event.token() {
       ADD_WRITER_TOKEN => {
-        let new_writer = self
+        let mut new_writer = self
           .add_writer_receiver
           .receiver
           .try_recv()
@@ -203,6 +216,15 @@ impl DPEventWrapper {
           Ready::readable(),
           PollOpt::edge(),
         );
+
+        let (hearbeatSender, hearbeatReciever) = mio_channel::channel::<Token>();
+        let heartBeatHandler : HeartbeatHandler = HeartbeatHandler::new(hearbeatSender.clone(),new_writer.get_heartbeat_entity_token());
+        new_writer.add_heartbeat_handler(heartBeatHandler);
+        self.poll.register(  &hearbeatReciever,
+          new_writer.get_heartbeat_entity_token(),
+Ready::readable(),
+    PollOpt::edge()).expect("Writer heartbeat timer channel registeration failed!!");
+        self.writer_heartbeat_recievers.insert(new_writer.get_heartbeat_entity_token(),hearbeatReciever);
         writers.insert(new_writer.as_entity().guid, new_writer);
       }
       REMOVE_WRITER_TOKEN => {
@@ -228,9 +250,10 @@ impl DPEventWrapper {
             match cache_change {
               Ok(cc) => {
                 println!("Change Kind: {:?}", cc.change_kind);
-                if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED {
-                  w.remove_from_history_cache(cc);
-                } else if cc.change_kind == ChangeKind::ALIVE {
+                if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED{
+                  w.handle_not_alive_disposed_cache_change(cc);
+                }
+                else if cc.change_kind == ChangeKind::ALIVE{
                   w.insert_to_history_cache(cc);
                   w.send_all_unsend_messages();
                 }
@@ -241,6 +264,17 @@ impl DPEventWrapper {
           None => {}
         }
       }
+    }
+  }
+
+  pub fn handle_writer_heartbeat(&mut self, event: &Event, writers: &mut HashMap<GUID, Writer>){
+    println!("is writer heartbeat action!");
+    let found_writer_with_heartbeat = writers.iter_mut().find(|p| p.1.get_heartbeat_entity_token() == event.token());
+    match found_writer_with_heartbeat {
+      Some((_guid, w)) => {
+        w.handle_heartbeat_tick();
+        }
+      None => {}
     }
   }
 }

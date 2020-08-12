@@ -2,6 +2,7 @@ use mio::net::UdpSocket;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::io;
+use crate::structure::locator::{LocatorKind, LocatorList};
 
 #[derive(Debug)]
 pub struct UDPSender {
@@ -38,6 +39,18 @@ impl UDPSender {
         Ok(_) => (),
         _ => println!("Unable to send to {}", address),
       };
+    }
+  }
+
+  pub fn send_to_locator_list(&self, buffer : &[u8], locators : &LocatorList){
+    for l in locators{
+      if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 || l.kind == LocatorKind::LOCATOR_KIND_UDPv6{
+        let a = SocketAddr::from(l.to_socket_address());
+        match self.socket.send_to(buffer, &a) {
+          Ok(_) => (),
+          _ => println!("Unable to send to {}", a),
+        };
+      }
     }
   }
 

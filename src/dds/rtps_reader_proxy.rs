@@ -159,11 +159,11 @@ impl RtpsReaderProxy {
     self.largest_acked_change = Some(sequence_number);
   }
 
-  pub fn sequence_is_acked(&self, sequence_number: SequenceNumber) -> bool {
+  pub fn sequence_is_acked(&self, sequence_number: &SequenceNumber) -> bool {
     if self.largest_acked_change.is_none() {
       return false;
     }
-    if self.largest_acked_change.unwrap() >= sequence_number {
+    if &self.largest_acked_change.unwrap() >= sequence_number {
       return true;
     }
     return false;

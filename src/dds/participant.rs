@@ -292,8 +292,9 @@ impl std::fmt::Debug for DomainParticipant {
 mod tests {
   // use super::*;
 
-  use std::net::SocketAddr;
-  use crate::network::udp_sender::UDPSender;
+  use std::{thread, net::SocketAddr};
+  use crate::{dds::{qos::QosPolicies, typedesc::TypeDesc}, network::udp_sender::UDPSender, test::random_data::RandomData};
+  use super::DomainParticipant;
   // TODO: improve basic test when more or the structure is known
   #[test]
   fn dp_basic_domain_participant() {
@@ -307,4 +308,27 @@ mod tests {
 
     // TODO: get result data from Reader
   }
+  #[test]
+  fn dp_writer_hearbeat_test(){
+    let domain_participant = DomainParticipant::new();
+
+
+    let qos = QosPolicies::qos_none();
+    let _default_dw_qos = QosPolicies::qos_none();
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let publisher = domain_participant
+      .create_publisher(&qos.clone())
+      .expect("Failed to create publisher");
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos.clone())
+      .expect("Failed to create topic");
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let mut data_writer = publisher
+      .create_datawriter::<RandomData>(&topic, &qos.clone())
+      .expect("Failed to create datawriter");
+
+      thread::sleep(time::Duration::seconds(1).to_std().unwrap());
+      
+  } 
 }

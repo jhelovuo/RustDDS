@@ -3,7 +3,7 @@ use std::{
   collections::{BTreeMap, HashMap, btree_map::Range},
 };
 use crate::dds::{typedesc::TypeDesc, qos::QosPolicies};
-use super::{topic_kind::TopicKind, cache_change::CacheChange};
+use super::{topic_kind::TopicKind, cache_change::{ChangeKind, CacheChange}};
 use std::ops::Bound::Included;
 
 ///DDSCache contains all cacheCahanges that are produced by participant or recieved by participant.
@@ -79,11 +79,17 @@ impl DDSCache {
     }
   }
 
-  pub fn from_topic_remove_change(
-    &mut self,
-    topic_name: &String,
-    instant: &Instant,
-  ) -> Option<CacheChange> {
+  /// Sets cacheChange to not alive disposed. So its waiting to be permanently removed.
+  pub fn from_topic_set_change_to_not_alive_disposed(&mut self, topic_name : &String, instant : &Instant){
+    if self.topic_caches.contains_key(topic_name) {
+      self.topic_caches.get_mut(topic_name).unwrap().set_change_to_not_alive_disposed(instant);
+    }else{
+      panic!("Topic: '{:?}' is not in DDSCache",topic_name);
+    }
+  }
+
+  /// Removes cacheChange permanently
+  pub fn from_topic_remove_change(&mut self, topic_name : &String, instant : &Instant) -> Option<CacheChange>{
     if self.topic_caches.contains_key(topic_name) {
       return self
         .topic_caches
@@ -169,6 +175,10 @@ impl TopicCache {
   pub fn remove_change(&mut self, instant: &Instant) -> Option<CacheChange> {
     return self.history_cache.remove_change(instant);
   }
+
+  pub fn set_change_to_not_alive_disposed(&mut self, instant : &Instant){
+    self.history_cache.change_change_kind(instant, ChangeKind::NOT_ALIVE_DISPOSED);
+  }
 }
 
 #[derive(Debug)]
@@ -187,7 +197,9 @@ impl DDSHistoryCache {
     let result = self.changes.insert(*instant, cache_change);
     if result.is_none() {
       // all is good. timestamp was not inserted before.
-    } else {
+    }
+    else{
+      // If this happens cahce changes were created at exactly same instant.
       panic!("DDSHistoryCache already contained element with key !!!");
     }
   }
@@ -220,6 +232,17 @@ impl DDSHistoryCache {
     }
     return changes;
   }
+  
+  pub fn change_change_kind(&mut self, instant : &Instant, change_kind : ChangeKind){
+    let change = self.changes.get_mut(instant);
+    if change.is_some(){
+      change.unwrap().kind = change_kind;
+    }
+    else{
+      panic!("CacheChange with instance: {:?} was not found on DDSHistoryCache!", instant);
+    }
+  }
+
   /*
   /// returns element with LARGEST timestamp
   pub fn get_latest_change(&self) -> Option<&CacheChange>{
