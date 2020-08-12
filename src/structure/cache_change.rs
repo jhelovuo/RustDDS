@@ -2,7 +2,6 @@ use crate::structure::guid::GUID;
 use crate::structure::sequence_number::SequenceNumber;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::dds::ddsdata::DDSData;
-use std::sync::Arc;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone)]
 pub enum ChangeKind {
@@ -16,7 +15,7 @@ pub struct CacheChange {
   pub kind: ChangeKind,
   pub writer_guid: GUID,
   pub sequence_number: SequenceNumber,
-  pub data_value: Option<Arc<SerializedPayload>>,
+  pub data_value: Option<SerializedPayload>,
   //pub inline_qos: ParameterList,
 
   //stps_chage_for_reader : RTPSChangeForReader
@@ -60,7 +59,7 @@ impl CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid,
       sequence_number,
-      data_value: data_value.map( |d| d.value() ).flatten(),
+      data_value: data_value.unwrap().value(),
       //inline_qos: ParameterList::new(),
       //rtps_chage_for_reader : RTPSChangeForReader::new(),
     }

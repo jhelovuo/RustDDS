@@ -2,25 +2,22 @@ use serde::Deserialize;
 use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 use std::io;
-
-use crate::dds::traits::key::*;
-
 use crate::structure::{
   entity::{Entity, EntityAttributes},
-  guid::GUID,
-  //time::Timestamp,
+  guid::{GUID, EntityId},
+  time::Timestamp,
+  dds_cache::DDSCache,
+};
+use crate::dds::{
+  traits::key::*, values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
+   pubsub::Subscriber, topic::Topic,
 };
 
-use crate::dds::{
-  values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache, /*ddsdata::DDSData,*/
-  pubsub::Subscriber,
-  readcondition::*,
-};
+use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
 
 use std::sync::{Arc, RwLock};
-use crate::structure::guid::{EntityId};
-use crate::structure::{dds_cache::DDSCache};
-use crate::dds::topic::Topic;
+use std::time::Instant;
 
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -40,25 +37,26 @@ pub struct DataReader<'a, D:Keyed> {
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
-  notification_receiver: mio_channel::Receiver<()>,
+  notification_receiver: mio_channel::Receiver<Instant>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
-  // Is this needed here??
+
   datasample_cache: DataSampleCache<D>,
+  //sampleinfo_map: BTreeMap<Instant, SampleInfo>,
+  latest_instant: Instant,
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
-
 impl<'s, 'a, D> DataReader<'a, D>
 where
   D: Deserialize<'s> + Keyed,
-  <D as Keyed>::K : Key,
+  <D as Keyed>::K: Key,
 {
   pub fn new(
     subscriber: &'a Subscriber,
     my_id: EntityId,
     topic: &'a Topic,
-    notification_receiver: mio_channel::Receiver<()>,
+    notification_receiver: mio_channel::Receiver<Instant>,
     dds_cache: Arc<RwLock<DDSCache>>,
   ) -> Self {
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
@@ -74,14 +72,40 @@ where
       notification_receiver,
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
+      //sampleinfo_map: BTreeMap::new(),
+      latest_instant: Instant::now(), // TODO FIX TO A SMALL NUMBER
     }
   }
 
-  pub fn add_datasample(&self, _datasample: D) -> Result<()> {
-    Ok(())
+  fn get_datasamples_from_cache(&mut self) {
+    let dds_cache = self.dds_cache.read().unwrap();
+    let cache_changes = dds_cache.from_topic_get_changes_in_range(
+      &self.my_topic.get_name().to_string(),
+      &self.latest_instant,
+      &Instant::now(),
+    );
+
+    self.latest_instant = *cache_changes.last().unwrap().0;
+
+    for (_instant, cc) in cache_changes {
+      let cc_data_value = cc.data_value.as_ref().unwrap().clone();
+      
+      let last_bit = (1 << 15) & cc_data_value.representation_identifier;
+      let ser_data = cc_data_value.value;
+
+      let mut data_object: D = deserialize_from_little_endian(ser_data.clone()).unwrap();
+
+      if last_bit == 1 {
+        data_object = deserialize_from_big_endian(ser_data).unwrap();
+      } 
+
+      // TODO: how do we get the time?
+      let data_sample = DataSample::new(Timestamp::TIME_INVALID, data_object);
+      self.datasample_cache.add_datasample(data_sample).unwrap();
+    }
   }
 
-  /// This operation accesses a collection of Data values from the DataReader. 
+  /// This operation accesses a collection of Data values from the DataReader.
   /// The size of the returned collection will be limited to the specified max_samples.
   /// The read_condition filters the samples accessed. 
   /// If no matching samples exist, then an empty Vec will be returned, but that is not an error.
@@ -142,7 +166,8 @@ where
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
 impl<'a, D> Evented for DataReader<'a, D>
-where D:Keyed 
+where
+  D: Keyed,
 {
   // We just delegate all the operations to notification_receiver, since it alrady implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
@@ -165,6 +190,35 @@ where D:Keyed
 
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
     self.notification_receiver.deregister(poll)
+  }
+}
+
+// Todo when others attributes have PartialEq implemented
+impl<D> PartialEq for DataReader<'_, D>
+where
+  D: Keyed,
+{
+  fn eq(&self, other: &Self) -> bool {
+    //self.my_subscriber.get_ == other.my_subscriber &&
+    self.my_topic.get_name() == other.my_topic.get_name() &&
+    // self.qos_policy == other.qos_policy &&
+    self.entity_attributes == other.entity_attributes
+    // self.dds_cache == other.dds_cache &&
+  }
+}
+
+impl<D> HasQoSPolicy for DataReader<'_, D>
+where
+  D: Keyed,
+{
+  fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
+    // TODO: check liveliness of qos_policy
+    self.qos_policy = policy.clone();
+    Ok(())
+  }
+
+  fn get_qos(&self) -> &QosPolicies {
+    &self.qos_policy
   }
 }
 

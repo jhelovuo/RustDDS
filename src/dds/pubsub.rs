@@ -1,6 +1,6 @@
 use mio_extras::channel as mio_channel;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rand::Rng;
 use serde::{Serialize, Deserialize};
@@ -164,52 +164,12 @@ impl<'s> Subscriber {
   ) -> Subscriber {
     Subscriber {
       domain_participant: domainparticipant,
-      qos: qos,
+      qos,
       sender_add_reader,
       sender_remove_reader,
     }
   }
-  /* architecture change
-  pub fn subscriber_poll(&mut self) {
-    loop {
-      println!("Subscriber looping...");
-      let mut events = Events::with_capacity(1024);
 
-      self
-        .poll
-        .poll(&mut events, None)
-        .expect("Subscriber failed in polling");
-
-      for event in events.into_iter() {
-        println!("Subscriber poll received: {:?}", event); // for debugging!!!!!!
-
-        match event.token() {
-          STOP_POLL_TOKEN => return,
-          READER_CHANGE_TOKEN => {
-            // Eti oikee datareader
-          }
-          ADD_DATAREADER_TOKEN => {
-            let dr = self.create_datareader(self.participant_guid, self.qos.clone());
-
-            self.datareaders.push(dr.unwrap());
-          }
-          REMOVE_DATAREADER_TOKEN => {
-            let old_dr_guid = self.receiver_remove_datareader.try_recv().unwrap();
-            if let Some(pos) = self
-              .datareaders
-              .iter()
-              .position(|r| r.get_guid() == old_dr_guid)
-            {
-              self.datareaders.remove(pos);
-            }
-            self.sender_remove_reader.send(old_dr_guid).unwrap();
-          }
-          _ => {}
-        }
-      }
-    }
-  }
-  */
   pub fn create_datareader<D>(
     &'s self,
     topic: &'s Topic,
@@ -220,7 +180,7 @@ impl<'s> Subscriber {
     <D as Keyed>::K: Key,
   {
     // What is the bound?
-    let (send, rec) = mio_channel::sync_channel::<()>(10);
+    let (send, rec) = mio_channel::sync_channel::<Instant>(10);
 
     // TODO: How should we create the IDs for entities?
     let mut rng = rand::thread_rng();
@@ -262,6 +222,11 @@ impl<'s> Subscriber {
       .send(new_reader)
       .expect("Could not send new Reader");
     Ok(matching_datareader)
+  }
+
+  /// Retrieves a previously created DataReader belonging to the Subscriber.
+  pub fn lookup_datareader<D: Keyed>(&self, _topic_name: &str) -> Option<DataReader<D>> {
+    todo!()
   }
 }
 

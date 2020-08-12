@@ -193,6 +193,8 @@ impl MessageReceiver {
       println!("Header not in correct form");
       return; // Header not in correct form
     }
+
+    //TODO!!!
     let endian = Endianness::LittleEndian; // Should be read from message??
     println!("Header in correct form");
 

@@ -29,7 +29,7 @@ use crate::dds::message_receiver::MessageReceiverState;
 
 pub struct Reader {
   // Should the instant be sent?
-  notification_sender: mio_channel::SyncSender<()>,
+  notification_sender: mio_channel::SyncSender<Instant>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
   seqnum_instant_map: HashMap<SequenceNumber, Instant>,
@@ -50,7 +50,7 @@ pub struct Reader {
 impl Reader {
   pub fn new(
     guid: GUID,
-    notification_sender: mio_channel::SyncSender<()>,
+    notification_sender: mio_channel::SyncSender<Instant>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
   ) -> Reader {
@@ -84,7 +84,7 @@ impl Reader {
     println!("history cache !!!! {:?}", cc);
 
     match cc {
-      Some(cc) => Some(DDSData::from_arc(cc.data_value.as_ref().unwrap().clone())),
+      Some(cc) => Some(DDSData::new(cc.data_value.as_ref().unwrap().clone())),
       None => None,
     }
   }
@@ -164,7 +164,7 @@ impl Reader {
     self.make_cache_change(data, instant, writer_guid);
     self.seqnum_instant_map.insert(seq_num, instant);
     // self.send_datasample(mr_state.timestamp);
-    self.notify_cache_change();
+    self.notify_cache_change(instant);
   }
 
   pub fn handle_heartbeat_msg(
@@ -200,6 +200,7 @@ impl Reader {
     } else {
       last_seq_num = SequenceNumber::from(0);
     }
+    // TODO: Should the really be removed?
     // Remove instances from DDSHistoryCache
     for instant in removed_instances.iter() {
       self
@@ -263,6 +264,7 @@ impl Reader {
       irrelevant_changes_set.insert(SequenceNumber::from(seq_num as i64));
     }
 
+    // TODO: Should the really be removed?
     // Remove from writerProxy and DDSHistoryCache
     let mut removed_instances = Vec::new();
     for seq_num in &irrelevant_changes_set {
@@ -278,7 +280,7 @@ impl Reader {
     }
 
     // Is this needed?
-    self.notify_cache_change();
+    // self.notify_cache_change();
   }
 
   pub fn handle_datafrag_msg(&mut self, _datafrag: DataFrag, _mr_State: MessageReceiverState) {
@@ -303,8 +305,8 @@ impl Reader {
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
   // likely use of mio channel
-  fn notify_cache_change(&self) {
-    match self.notification_sender.try_send(()) {
+  fn notify_cache_change(&self, instant: Instant) {
+    match self.notification_sender.try_send(instant) {
       Ok(()) => (),                                  // expected result
       Err(mio_channel::TrySendError::Full(_)) => (), // This is harmless. There is a notification in already.
       Err(mio_channel::TrySendError::Disconnected(_)) => {
@@ -375,7 +377,7 @@ mod tests {
     let mut guid = GUID::new();
     guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
-    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let (send, rec) = mio_channel::sync_channel::<Instant>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
@@ -407,7 +409,7 @@ mod tests {
   fn rtpsreader_handle_data() {
     let new_guid = GUID::new();
 
-    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let (send, rec) = mio_channel::sync_channel::<Instant>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
@@ -449,7 +451,7 @@ mod tests {
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
 
-    let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let (send, _rec) = mio_channel::sync_channel::<Instant>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
@@ -559,7 +561,7 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let (send, _rec) = mio_channel::sync_channel::<Instant>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),

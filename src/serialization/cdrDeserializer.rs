@@ -75,7 +75,7 @@ where
   }
 }
 
-pub fn deserialize_from_big_endian<'a, T>(s: &'a mut Vec<u8>) -> Result<T>
+pub fn deserialize_from_big_endian<'a, T>(s: Vec<u8>) -> Result<T>
 where
   T: Deserialize<'a>,
 {
