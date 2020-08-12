@@ -3,14 +3,21 @@ use mio_extras::channel as mio_channel;
 use std::time::Duration;
 
 use rand::Rng;
-use serde::{Serialize,Deserialize};
+use serde::{Serialize, Deserialize};
 
 use crate::structure::{guid::GUID, time::Timestamp, entity::Entity, guid::EntityId};
 
 use crate::dds::{
-  values::result::*, participant::*, topic::*, qos::*, ddsdata::DDSData, reader::Reader,
-  writer::Writer, datawriter::DataWriter, datareader::DataReader,
-  traits::key::{Keyed,Key} ,
+  values::result::*,
+  participant::*,
+  topic::*,
+  qos::*,
+  ddsdata::DDSData,
+  reader::Reader,
+  writer::Writer,
+  datawriter::DataWriter,
+  datareader::DataReader,
+  traits::key::{Keyed, Key},
 };
 
 use crate::structure::topic_kind::TopicKind;
@@ -47,7 +54,7 @@ impl<'a> Publisher {
   ) -> Result<DataWriter<'a, D>>
   where
     D: Keyed + Serialize,
-    <D as Keyed>::K : Key,
+    <D as Keyed>::K: Key,
   {
     let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
@@ -148,7 +155,7 @@ pub struct Subscriber {
   sender_remove_reader: mio_channel::Sender<GUID>,
 }
 
-impl<'a> Subscriber {
+impl<'s> Subscriber {
   pub fn new(
     domainparticipant: DomainParticipant,
     qos: QosPolicies,
@@ -156,8 +163,8 @@ impl<'a> Subscriber {
     sender_remove_reader: mio_channel::Sender<GUID>,
   ) -> Subscriber {
     Subscriber {
-      domain_participant: domainparticipant.clone(),
-      qos: qos.clone(),
+      domain_participant: domainparticipant,
+      qos: qos,
       sender_add_reader,
       sender_remove_reader,
     }
@@ -204,10 +211,10 @@ impl<'a> Subscriber {
   }
   */
   pub fn create_datareader<D>(
-    &'a self,
-    topic: &'a Topic,
+    &'s self,
+    topic: &'s Topic,
     _qos: &QosPolicies,
-  ) -> Result<DataReader<'a, D>>
+  ) -> Result<DataReader<'s, D>>
   where
     D: Deserialize<'s> + Keyed,
     <D as Keyed>::K: Key,
@@ -249,8 +256,11 @@ impl<'a> Subscriber {
         topic.get_type(),
       );
 
-    // Return the DataReader Reader pairs to where they belong
-    self.sender_add_reader.send(new_reader).expect("Could not send new Reader");
+    // Return the DataReader Reader pairs to where they are used
+    self
+      .sender_add_reader
+      .send(new_reader)
+      .expect("Could not send new Reader");
     Ok(matching_datareader)
   }
 }

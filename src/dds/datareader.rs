@@ -18,6 +18,11 @@ use crate::dds::{
   pubsub::Subscriber,
 };
 
+use std::sync::{Arc, RwLock};
+use crate::structure::guid::{EntityId};
+use crate::structure::{dds_cache::DDSCache};
+use crate::dds::topic::Topic;
+
 pub struct DataReader<'a, D:Keyed> {
   my_subscriber: &'a Subscriber,
   my_topic: &'a Topic,
