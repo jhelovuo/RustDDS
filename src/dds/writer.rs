@@ -41,7 +41,6 @@ use std::{
 };
 
 pub struct Writer {
-  //pub history_cache: HistoryCache,
   pub submessage_count: usize,
 
   source_version: ProtocolVersion,

@@ -8,7 +8,6 @@ use crate::messages::submessages::submessage_elements::serialized_payload::Seria
 use crate::serialization::cdrSerializer::{CDR_serializer, Endianess};
 use crate::structure::guid::EntityId;
 use crate::structure::time::Timestamp;
-use crate::structure::instance_handle::InstanceHandle;
 use crate::structure::cache_change::ChangeKind;
 
 
@@ -16,7 +15,6 @@ use crate::structure::cache_change::ChangeKind;
 #[derive(Debug, PartialEq, Clone)]
 pub struct DDSData {
   source_timestamp: Timestamp,
-  pub instance_key: InstanceHandle,
   pub change_kind: ChangeKind,
   reader_id: EntityId,
   writer_id: EntityId,
@@ -25,10 +23,9 @@ pub struct DDSData {
 }
 
 impl DDSData {
-  pub fn new(instance_key: InstanceHandle, payload: SerializedPayload) -> DDSData {
+  pub fn new(payload: SerializedPayload) -> DDSData {
     DDSData {
       source_timestamp: Timestamp::from(time::get_time()),
-      instance_key,
       change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
@@ -37,10 +34,9 @@ impl DDSData {
     }
   }
 
-  pub fn from_arc(instance_key: InstanceHandle, payload: Arc<SerializedPayload>) -> DDSData {
+  pub fn from_arc(payload: Arc<SerializedPayload>) -> DDSData {
     DDSData {
       source_timestamp: Timestamp::from(time::get_time()),
-      instance_key,
       change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
@@ -51,7 +47,6 @@ impl DDSData {
 
   // TODO: Rename this method, as it gets confued with the std library "From" trait method.
   pub fn from<D>(
-    instance_key: InstanceHandle,
     data: &D,
     source_timestamp: Option<Timestamp>,
   ) -> DDSData
@@ -73,7 +68,6 @@ impl DDSData {
 
     DDSData {
       source_timestamp: ts,
-      instance_key,
       change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
@@ -83,7 +77,6 @@ impl DDSData {
   }
 
   pub fn from_dispose<D>(
-    instance_key: InstanceHandle,
     _key: <D as Keyed>::K ,
     source_timestamp: Option<Timestamp>,
   ) -> DDSData 
@@ -100,7 +93,6 @@ impl DDSData {
 
     DDSData {
       source_timestamp: ts,
-      instance_key,
       change_kind: ChangeKind::NOT_ALIVE_DISPOSED,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,

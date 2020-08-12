@@ -2,8 +2,6 @@ use std::rc::Rc;
 
 use crate::dds::traits::key::*;
 use crate::structure::time::Timestamp;
-//use crate::dds::traits::datasample_trait::DataSampleTrait;
-use crate::structure::instance_handle::InstanceHandle;
 
 
 /// DDS spec 2.2.2.5.4
@@ -78,11 +76,8 @@ pub struct SampleInfo {
 #[derive(Clone)]
 pub struct DataSample<D:Keyed>
 {
-  // Key for this particular datasample / chachechange
-  pub instance_handle: InstanceHandle, // TODO: It would be nice in Rust to operate without InstanceHandles at all
   pub sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
-  // instance handle
-  // publication handle
+
   /// This ia a bit unorthodox use of Result.
   /// It replaces the use of valid_data flag, because when valid_data = false, we should
   /// not provide any data value.
@@ -96,7 +91,6 @@ where D:Keyed
 {
   pub fn new(
     source_timestamp: Timestamp,
-    instance_handle: InstanceHandle,
     payload: D,
   ) -> DataSample<D> {
     // begin dummy placeholder values
@@ -111,7 +105,6 @@ where D:Keyed
     // end dummy placeholder values
 
     DataSample {
-      instance_handle,
       sample_info: SampleInfo 
         { sample_state, view_state, instance_state
         , disposed_generation_count, no_writers_generation_count
@@ -123,7 +116,6 @@ where D:Keyed
 
   pub fn new_disposed<K>(
     source_timestamp: Timestamp,
-    instance_handle: InstanceHandle,
     key: D::K,
   ) -> DataSample<D>
   where <D as Keyed>::K : Key
@@ -140,7 +132,6 @@ where D:Keyed
     // end dummy placeholder values
 
     DataSample {
-      instance_handle,
       sample_info: SampleInfo 
         { sample_state, view_state, instance_state
         , disposed_generation_count, no_writers_generation_count
@@ -161,20 +152,4 @@ where D:Keyed
   } // fn
   
 
-  /*
-  pub fn get_value_with_type<D: DataSampleTrait>(&self) -> Option<D> {
-    let dcval = match &self.value {
-      Ok(val) => val,
-      _ => return None,
-    };
-
-    let cpbox = dcval.box_clone();
-    let dcval = cpbox.downcast::<D>();
-    let dcval = match dcval {
-      Ok(val) => val,
-      _ => return None,
-    };
-
-    Some(*dcval)
-  } */
 }

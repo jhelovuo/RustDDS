@@ -2,8 +2,6 @@ pub mod cache_change;
 pub mod endpoint;
 pub mod entity;
 pub mod guid;
-pub mod history_cache;
-pub mod instance_handle;
 pub mod locator;
 pub mod parameter_id;
 pub mod participant;

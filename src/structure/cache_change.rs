@@ -1,5 +1,4 @@
 use crate::structure::guid::GUID;
-use crate::structure::instance_handle::InstanceHandle;
 use crate::structure::sequence_number::SequenceNumber;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::dds::ddsdata::DDSData;
@@ -16,7 +15,6 @@ pub enum ChangeKind {
 pub struct CacheChange {
   pub kind: ChangeKind,
   pub writer_guid: GUID,
-  pub instance_handle: InstanceHandle,
   pub sequence_number: SequenceNumber,
   pub data_value: Option<Arc<SerializedPayload>>,
   //pub inline_qos: ParameterList,
@@ -36,7 +34,6 @@ impl PartialEq for CacheChange {
 
     self.kind == other.kind
       && self.writer_guid == other.writer_guid
-      && self.instance_handle == other.instance_handle
       && self.sequence_number == other.sequence_number
       && dataeq
   }
@@ -48,7 +45,7 @@ impl CacheChange {
     sequence_number: SequenceNumber,
     data_value: Option<DDSData>,
   ) -> CacheChange {
-    let instance_handle;
+    /*let instance_handle;
     let data_value = match data_value {
       Some(ddsdata) => {
         instance_handle = ddsdata.instance_key.clone();
@@ -58,13 +55,12 @@ impl CacheChange {
         instance_handle = InstanceHandle::default();
         None
       }
-    };
+    };*/
     CacheChange {
       kind: ChangeKind::ALIVE,
       writer_guid,
-      instance_handle,
       sequence_number,
-      data_value,
+      data_value: data_value.map( |d| d.value() ).flatten(),
       //inline_qos: ParameterList::new(),
       //rtps_chage_for_reader : RTPSChangeForReader::new(),
     }

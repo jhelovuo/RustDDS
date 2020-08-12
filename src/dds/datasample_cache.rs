@@ -3,7 +3,6 @@ use crate::dds::datasample::DataSample;
 use crate::dds::values::result::Result;
 use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy::History;
-use crate::structure::instance_handle::InstanceHandle;
 
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
@@ -94,26 +93,6 @@ where
     self.qos = qos
   }
 
-  pub fn generate_free_instance_handle(&self) -> InstanceHandle {
-    let mut instance_handle = InstanceHandle::generate_random_key();
-
-    loop {
-      let mut has_key = false;
-      for (_, cc) in &self.datasamples {
-        for ds in cc {
-          if ds.instance_handle == instance_handle {
-            has_key = true;
-          }
-        }
-      }
-
-      if !has_key {
-        return instance_handle;
-      }
-
-      instance_handle = InstanceHandle::generate_random_key();
-    }
-  }
 }
 
 #[cfg(test)]

@@ -6,7 +6,6 @@ use std::io;
 use crate::dds::traits::key::*;
 
 use crate::structure::{
-  instance_handle::InstanceHandle,
   entity::{Entity, EntityAttributes},
   guid::GUID,
   //time::Timestamp,
@@ -68,6 +67,7 @@ where
     Ok(())
   }
 
+  //TODO: The input parameter list may be horribly wrong. Do not implement before checking.
   pub fn read(
     &self,
     _max_samples: i32,
@@ -79,6 +79,7 @@ where
     // Go through the historycache list and return all relevant in a vec.
   }
 
+  //TODO: The input parameter list may be horribly wrong. Do not implement before checking.
   pub fn take(
     &self,
     _max_samples: i32,
@@ -89,11 +90,14 @@ where
     unimplemented!()
   }
 
+  //TODO: The input parameter list may be horribly wrong. Do not implement before checking.
   pub fn read_next(&self) -> Result<Vec<D>> {
     todo!()
   }
 
-  pub fn read_instance(&self, _instance_handle: InstanceHandle) -> Result<Vec<D>> {
+
+  //TODO: The input parameter list may be horribly wrong. Do not implement before checking.
+  pub fn read_instance(&self, _instance_key: <D as Keyed>::K) -> Result<Vec<D>> {
     todo!()
   }
 } // impl

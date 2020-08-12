@@ -11,7 +11,6 @@ use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::{
   dds_cache::DDSCache,
   guid::{GUID, EntityId},
-  instance_handle::InstanceHandle,
   topic_kind::TopicKind,
 };
 
@@ -79,17 +78,15 @@ where
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
   pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
-    // TODO INSTANCE HANDE IS NOT USED FOR ANYTHING
-    let instance_handle = InstanceHandle::generate_random_key();
-    let mut ddsdata = DDSData::from(instance_handle.clone(), &data, source_timestamp);
+    let mut ddsdata = DDSData::from(&data, source_timestamp);
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
     ddsdata.value_key_hash = data.get_hash();
 
     let _data_sample = match source_timestamp {
-      Some(t) => DataSample::new(t, instance_handle, data),
-      None => DataSample::new(Timestamp::from(time::get_time()), instance_handle, data),
+      Some(t) => DataSample::new(t, data),
+      None => DataSample::new(Timestamp::from(time::get_time()), data),
     };
 
     match self.cc_upload.send(ddsdata) {
@@ -109,9 +106,7 @@ where
     StatusInfo_t (see RTPS spec 9.6.3.4) to indicate "disposed"
     */
 
-    // TODO INSTANCE HANDE IS NOT USED FOR ANYTHING
-    let instance_handle = InstanceHandle::generate_random_key();
-    let mut ddsdata = DDSData::from_dispose::<D>(instance_handle.clone(), key.clone(), source_timestamp);
+    let mut ddsdata = DDSData::from_dispose::<D>(key.clone(), source_timestamp);
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
@@ -120,8 +115,8 @@ where
 
     // What does this block of code do? What is the purpose of _data_sample?
     let _data_sample : DataSample<D> = match source_timestamp {
-      Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, instance_handle, key),
-      None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::from(time::get_time()), instance_handle, key),
+      Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, key),
+      None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::from(time::get_time()), key),
     };
 
     match self.cc_upload.send(ddsdata) {
@@ -179,8 +174,8 @@ where
     unimplemented!()
   }
 
-  // This should really return InstanceHandles pointing to a BuiltInTopic reader
-  //  but let's see if we can do without those handles.
+  // DDS spec returns an InstanceHandles pointing to a BuiltInTopic reader
+  //  but we do not use those, so return the actual data instead.
   pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     unimplemented!()
   }

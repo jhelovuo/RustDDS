@@ -8,8 +8,8 @@ use std::convert::From;
 /// expressed in seconds and fraction of seconds using the formula:
 /// time = seconds + (fraction / 2^(32))
 
-/// This time representation is used in RTPS serialization.
-/// Application-facing interfaces should use Instant nad Duration from Rust std library.
+/// This time representation is used in RTPS messages.
+/// Application-facing interfaces should use Instant and Duration from Rust std library.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Clone, Copy)]
 pub struct Time {
   seconds: i32,

@@ -1,8 +1,5 @@
 use crate::structure::entity::Entity;
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
-#[allow(unused_imports)]  // TODO: Remove this directive when reader works
-use crate::structure::history_cache::HistoryCache;
-use crate::structure::instance_handle::InstanceHandle;
 use crate::messages::submessages::data::Data;
 use crate::messages::submessages::data_frag::DataFrag;
 
@@ -88,7 +85,6 @@ impl Reader {
 
     match cc {
       Some(cc) => Some(DDSData::from_arc(
-        cc.instance_handle.clone(),
         cc.data_value.as_ref().unwrap().clone(),
       )),
       None => None,
@@ -295,11 +291,8 @@ impl Reader {
 
   // update history cache
   fn make_cache_change(&mut self, data: Data, instant: Instant, writer_guid: GUID) {
-    // Do we need instanceHandles in reader side?
-    // How do we determine the instanceHandle? TODO
-    let instance_handle = InstanceHandle::default();
 
-    let mut ddsdata = DDSData::new(instance_handle, data.serialized_payload);
+    let mut ddsdata = DDSData::new(data.serialized_payload);
 
     ddsdata.set_reader_id(data.reader_id);
     ddsdata.set_writer_id(data.writer_id);
