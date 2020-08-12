@@ -1,37 +1,65 @@
 use std::rc::Rc;
+use enumflags2::BitFlags;
 
 use crate::dds::traits::key::*;
 use crate::structure::time::Timestamp;
 
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
-#[derive(Debug, Clone)]
+#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
+#[repr(u32)]  // DDS Spec 1.4 section 2.3.3 DCPS PSM : IDL defines these as "unsigned long", so u32
 pub enum SampleState {
-  Read,
-  NotRead,
+  Read    = 0b0001,
+  NotRead = 0b0010,
+}
+
+impl SampleState {
+  /// Set that contains all possible states
+  pub fn any() -> BitFlags<Self> {
+    BitFlags::<Self>::all()
+  }
 }
 
 /// DDS spec 2.2.2.5.1.8
 ///
-#[derive(Debug, Clone)]
+#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
+#[repr(u32)]
 pub enum ViewState {
   ///  indicates that either this is the first time that the DataReader has ever
   /// accessed samples of that instance, or else that the DataReader has accessed previous
   /// samples of the instance, but the instance has since been reborn (i.e., become
   /// not-alive and then alive again).
-  New,
+  New    = 0b0001,
   /// indicates that the DataReader has already accessed samples of the same
   ///instance and that the instance has not been reborn since
-  NotNew,
+  NotNew = 0b0010,
+}
+impl ViewState {
+  /// Set that contains all possible states
+  pub fn any() -> BitFlags<Self> {
+    BitFlags::<Self>::all()
+  }
 }
 
-#[derive(Debug, Clone)]
+#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
+#[repr(u32)]
 pub enum InstanceState {
-  Alive,
+  Alive               = 0b0001,
   /// A DataWriter has actively disposed this instance
-  NotAlive_Disposed,
+  NotAlive_Disposed   = 0b0010,
   /// There are no writers alive.
-  NotAlive_NoWriters,
+  NotAlive_NoWriters  = 0b0100,
+}
+
+impl InstanceState {
+  /// Set that contains all possible states
+  pub fn any() -> BitFlags<Self> {
+    BitFlags::<Self>::all()
+  }
+  /// Set that contains both not_alive states.
+  pub fn not_alive() -> BitFlags<Self> {
+    InstanceState::NotAlive_Disposed | InstanceState::NotAlive_NoWriters
+  }
 }
 
 #[derive(Debug, Clone)]
