@@ -67,31 +67,46 @@ where
     Ok(())
   }
 
-  //TODO: The input parameter list may be horribly wrong. Do not implement before checking.
+  /// This operation accesses a collection of Data values from the DataReader. 
+  /// The size of the returned collection will be limited to the specified max_samples.
+  /// The different _mask parameters filter the samples accessed. If a mask is None, then there is
+  /// no filtering. If it is e.g. Some(SampleState::NotRead), then only samples having the specified
+  ///  sample state are returned. 
+  /// If no matching samples exist, then an empty Vec will be returned, but that is not an error.
+  /// In case a disposed sample is returned, it is indicated by InstanceState in SampleInfo and
+  /// DataSample.value will be Err containig the key of the disposed sample.
+  ///
+  /// View state and sample state are maintained for each DataReader separately. Instance state is
+  /// determined by global CacheChange objects concerning that instance.
   pub fn read(
     &self,
-    _max_samples: i32,
-    _sample_state: SampleState,
-    _view_state: ViewState,
-    _instance_state: InstanceState,
-  ) -> Result<Vec<D>> {
+    _max_samples: usize,
+    _sample_state_mask: Option<SampleState>,
+    _view_state_mask: Option<ViewState>,
+    _instance_state_mask: Option<InstanceState>,
+  ) -> Result<Vec<DataSample<D>>> {
     unimplemented!();
     // Go through the historycache list and return all relevant in a vec.
   }
 
-  //TODO: The input parameter list may be horribly wrong. Do not implement before checking.
+  /// Similar to read() above.
+  ///
+  /// The act of taking a sample removes it from the DataReader so it cannot be ‘read’ or ‘taken’ again
+  /// by the same DataReader. In addition, the sample will change its view_state to NOT_NEW.
+  /// Note that this applies only to samples that are returned as a result of the call.
   pub fn take(
     &self,
-    _max_samples: i32,
-    _sample_state: SampleState,
-    _view_state: ViewState,
-    _instance_state: InstanceState,
-  ) -> Result<Vec<D>> {
+    _max_samples: usize,
+    _sample_state_mask: Option<SampleState>,
+    _view_state_mask: Option<ViewState>,
+    _instance_state_mask: Option<InstanceState>,
+  ) -> Result<Vec<DataSample<D>>> {
     unimplemented!()
   }
 
-  //TODO: The input parameter list may be horribly wrong. Do not implement before checking.
-  pub fn read_next(&self) -> Result<Vec<D>> {
+  /// This is a simplified API for .read( 1 , Some(SampleState::NotRead) , None, None) 
+  /// If no new data is available, the return value is Ok(None).
+  pub fn read_next(&self) -> Result<Option<DataSample<D>>> {
     todo!()
   }
 
