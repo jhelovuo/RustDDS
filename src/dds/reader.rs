@@ -1,5 +1,6 @@
 use crate::structure::entity::Entity;
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
+#[allow(unused_imports)]  // TODO: Remove this directive when reader works
 use crate::structure::history_cache::HistoryCache;
 use crate::structure::instance_handle::InstanceHandle;
 use crate::messages::submessages::data::Data;
@@ -13,6 +14,7 @@ use crate::messages::submessages::gap::Gap;
 use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::GUID;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
+#[allow(unused_imports)]  // TODO: Remove this directive when reader works
 use crate::structure::time::Timestamp;
 
 use std::sync::{Arc, RwLock};

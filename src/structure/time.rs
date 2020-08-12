@@ -7,6 +7,9 @@ use std::convert::From;
 /// Protocol (NTP) Standard (IETF RFC 1305). In this representation, time is
 /// expressed in seconds and fraction of seconds using the formula:
 /// time = seconds + (fraction / 2^(32))
+
+/// This time representation is used in RTPS serialization.
+/// Application-facing interfaces should use Instant nad Duration from Rust std library.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Clone, Copy)]
 pub struct Time {
   seconds: i32,

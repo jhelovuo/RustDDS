@@ -4,7 +4,7 @@ use std::{
 };
 use mio_extras::channel as mio_channel;
 
-use serde::{Serialize, Deserialize};
+use serde::Serialize;
 
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity, EntityAttributes};

@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use serde::{Serialize /*, Deserialize*/};
+
 use crate::dds::traits::key::Keyed;
 
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
@@ -8,7 +10,7 @@ use crate::structure::guid::EntityId;
 use crate::structure::time::Timestamp;
 use crate::structure::instance_handle::InstanceHandle;
 use crate::structure::cache_change::ChangeKind;
-use serde::{Serialize, Deserialize};
+
 
 // DDSData represets a serialized data sample with metadata
 #[derive(Debug, PartialEq, Clone)]
@@ -82,7 +84,7 @@ impl DDSData {
 
   pub fn from_dispose<D>(
     instance_key: InstanceHandle,
-    key: <D as Keyed>::K ,
+    _key: <D as Keyed>::K ,
     source_timestamp: Option<Timestamp>,
   ) -> DDSData 
   where

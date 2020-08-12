@@ -1,7 +1,7 @@
-use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash};
 use serde::Serialize;
 
+#[allow(unused_imports)] // since this is testing code only
 use crate::dds::traits::{
   key::{Key, Keyed},
   //datasample_trait::DataSampleTrait,

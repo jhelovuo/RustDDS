@@ -15,7 +15,7 @@ use crate::dds::{
 
 use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
 
-use crate::structure::entity::Entity;
+//use crate::structure::entity::Entity;
 
 pub struct Discovery<'a> {
   poll: Poll,
