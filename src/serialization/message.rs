@@ -92,7 +92,9 @@ impl<'a, C: Context> Readable<'a, C> for Message {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let mut message = Message::default();
     let endianess = reader.endianness();
+    // message.header = SubMessage::deserialize_header(C, reader.)
     message.header = reader.read_value()?;
+
     // TODO FLAGS???
     let flag: SubmessageFlag = SubmessageFlag { flags: 1 };
     loop {
@@ -103,7 +105,21 @@ impl<'a, C: Context> Readable<'a, C> for Message {
           break;
         }
       };
-      let buffer: Vec<u8> = reader.read_vec(subHeader.submessage_length as usize)?;
+
+      let mut buffer: Vec<u8> = Vec::new();
+      if subHeader.submessage_length == 0 {
+        let mut ended = false;
+        while !ended {
+          let byte = reader.read_u8();
+          match byte {
+            Ok(val) => buffer.push(val),
+            _ => ended = true,
+          };
+        }
+      } else {
+        buffer = reader.read_vec(subHeader.submessage_length as usize)?;
+      }
+
       match subHeader.submessage_id {
         SubmessageKind::DATA => {
           let x = Data::read_from_buffer_with_ctx(endianess, &buffer).unwrap();

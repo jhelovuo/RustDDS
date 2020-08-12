@@ -1,8 +1,9 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::convert::From;
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use serde::{Serialize, Deserialize};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Readable, Writable)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Readable, Writable, Serialize, Deserialize)]
 pub struct LocatorKind {
   value: i32,
 }
@@ -14,7 +15,7 @@ impl LocatorKind {
   pub const LOCATOR_KIND_UDPv6: LocatorKind = LocatorKind { value: 2 };
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub struct Locator {
   pub kind: LocatorKind,
   pub port: u32,

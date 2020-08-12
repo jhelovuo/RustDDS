@@ -1,4 +1,4 @@
-use crate::dds::traits::key::{Key,Keyed};
+use crate::dds::traits::key::{Key, Keyed};
 use crate::dds::datasample::DataSample;
 use crate::dds::values::result::Result;
 use crate::dds::qos::QosPolicies;
@@ -8,15 +8,15 @@ use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-pub struct DataSampleCache<D:Keyed> {
+pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
   datasamples: HashMap<u64, Vec<DataSample<D>>>,
 }
 
 impl<D> DataSampleCache<D>
 where
-  D: Keyed, 
-  <D as Keyed>::K : Key,
+  D: Keyed,
+  <D as Keyed>::K: Key,
 {
   pub fn new(qos: QosPolicies) -> DataSampleCache<D> {
     DataSampleCache {
@@ -25,14 +25,12 @@ where
     }
   }
 
-
-  pub fn add_datasample(&mut self, data_sample: DataSample<D>) -> Result<D::K> 
-  {
-    let key : D::K = data_sample.get_key();
+  pub fn add_datasample(&mut self, data_sample: DataSample<D>) -> Result<D::K> {
+    let key: D::K = data_sample.get_key();
     // TODO: The following three lines should be packaged into a subroutine, and all repetitions thereof
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
-    let h:u64 = hasher.finish();
+    let h: u64 = hasher.finish();
 
     let block = self.datasamples.get_mut(&h);
 
@@ -75,7 +73,7 @@ where
   pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
-    let h:u64 = hasher.finish();
+    let h: u64 = hasher.finish();
 
     let values = self.datasamples.get(&h);
     values
@@ -84,7 +82,7 @@ where
   pub fn remove_datasamples(&mut self, key: &D::K) {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
-    let h:u64 = hasher.finish();
+    let h: u64 = hasher.finish();
 
     self.datasamples.remove(&h).unwrap();
   }
@@ -92,7 +90,6 @@ where
   pub fn set_qos_policy(&mut self, qos: QosPolicies) {
     self.qos = qos
   }
-
 }
 
 #[cfg(test)]
@@ -114,11 +111,10 @@ mod tests {
       b: "Fobar".to_string(),
     };
 
-    let instance_handle = datasample_cache.generate_free_instance_handle();
-    let org_ddsdata = DDSData::from(instance_handle.clone(), &data, Some(timestamp));
+    let org_ddsdata = DDSData::from(&data, Some(timestamp));
 
     let key = data.get_key().clone();
-    let datasample = DataSample::new(timestamp, instance_handle.clone(), data.clone());
+    let datasample = DataSample::new(timestamp, data.clone());
     datasample_cache.add_datasample(datasample.clone()).unwrap();
     datasample_cache.add_datasample(datasample).unwrap();
 
@@ -126,9 +122,9 @@ mod tests {
     match samples {
       Some(ss) => {
         assert_eq!(ss.len(), 1);
-        match &ss.get(0).unwrap() {
-          Some(huh) => {
-            let ddssample = DDSData::from(instance_handle.clone(), huh, Some(timestamp));
+        match &ss.get(0).unwrap().value {
+          Ok(huh) => {
+            let ddssample = DDSData::from(&**huh, Some(timestamp));
             assert_eq!(org_ddsdata, ddssample);
           }
           _ => (),

@@ -1,16 +1,36 @@
 use serde::{Serialize, Deserialize};
 
-use crate::dds::traits::key::{Key,Keyed};
+use crate::dds::{
+  traits::{
+    key::{Key, Keyed},
+  },
+};
+
+use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
+use crate::structure::{
+  locator::LocatorList,
+  guid::GUID,
+  duration::Duration,
+  builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
+};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SPDPDiscoveredParticipantData {}
-/*
-impl DataSampleTrait for SPDPDiscoveredParticipantData {
-  fn box_clone(&self) -> Box<dyn DataSampleTrait> {
-    todo!()
-  }
+pub struct SPDPDiscoveredParticipantData {
+  pub protocol_version: Option<ProtocolVersion>,
+  pub vendor_id: Option<VendorId>,
+  pub expects_inline_qos: Option<bool>,
+  pub participant_guid: Option<GUID>,
+  pub metatraffic_unicast_locators: LocatorList,
+  pub metatraffic_multicast_locators: LocatorList,
+  pub default_unicast_locators: LocatorList,
+  pub default_multicast_locators: LocatorList,
+  pub available_builtin_endpoints: Option<BuiltinEndpointSet>,
+  pub lease_duration: Option<Duration>,
+  pub manual_liveliness_count: Option<u32>,
+  pub builtin_enpoint_qos: Option<BuiltinEndpointQos>,
+  pub entity_name: Option<String>,
 }
-*/
+
 impl Keyed for SPDPDiscoveredParticipantData {
   type K = u64; // placeholder
   fn get_key(&self) -> Self::K {
@@ -18,18 +38,59 @@ impl Keyed for SPDPDiscoveredParticipantData {
   }
 }
 
-impl Key for u64 {
+impl Key for u64 {}
 
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use crate::submessages::EntitySubmessage;
+  use speedy::{Endianness, Readable};
+  use crate::serialization::message::Message;
+  use crate::serialization::builtin_data_deserializer::BuiltinDataDeserializer;
+
+  #[test]
+  fn pdata_deserialize_serialize() {
+    const data: [u8; 204] = [
+      // Offset 0x00000000 to 0x00000203
+      0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
+      0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x01, 0x08, 0x00, 0x0e, 0x15, 0xf3, 0x5e, 0x00, 0x28,
+      0x74, 0xd2, 0x15, 0x05, 0xa8, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x01, 0x00, 0xc7, 0x00,
+      0x01, 0x00, 0xc2, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
+      0x15, 0x00, 0x04, 0x00, 0x02, 0x03, 0x00, 0x00, 0x16, 0x00, 0x04, 0x00, 0x01, 0x0f, 0x00,
+      0x00, 0x50, 0x00, 0x10, 0x00, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00, 0x01, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x01, 0xc1, 0x32, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf4,
+      0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x0a, 0x50, 0x8e, 0x68, 0x31, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf5, 0x1c, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x50,
+      0x8e, 0x68, 0x02, 0x00, 0x08, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x58,
+      0x00, 0x04, 0x00, 0x3f, 0x0c, 0x3f, 0x0c, 0x62, 0x00, 0x18, 0x00, 0x14, 0x00, 0x00, 0x00,
+      0x66, 0x61, 0x73, 0x74, 0x72, 0x74, 0x70, 0x73, 0x50, 0x61, 0x72, 0x74, 0x69, 0x63, 0x69,
+      0x70, 0x61, 0x6e, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00,
+    ];
+
+    let rtpsmsg = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &data).unwrap();
+    let submsgs = rtpsmsg.submessages();
+
+    for submsg in submsgs.iter() {
+      match submsg.submessage.as_ref() {
+        Some(v) => match v {
+          EntitySubmessage::Data(d, _) => {
+            let _particiapant_data: SPDPDiscoveredParticipantData =
+              BuiltinDataDeserializer::new(d.serialized_payload.value.clone())
+                .parse_data()
+                .generate_spdp_participant_data();
+            
+
+          }
+          _ => continue,
+        },
+        None => (),
+      }
+    }
+
+    // let serializer = cdrDeserializer::CDR_deserializer::deserialize_from_little_endian(data);
+    // let res = data.serialize(serializer);
+    // println!("AAAA: {:?}", res);
+  }
 }
-
-// #[cfg(test)]
-// mod tests {
-//   use super::*;
-//   use std::fs;
-
-//   #[test]
-//   fn pdata_deserialize() {
-//     let data = fs::read("RTPS_Discovery_data(p).bin")?;
-
-//   }
-// }

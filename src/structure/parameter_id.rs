@@ -1,6 +1,7 @@
 use speedy::{Readable, Writable};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialEq, Readable, Writable, Clone)]
+#[derive(Debug, PartialEq, Eq, Readable, Writable, Clone, Serialize, Deserialize)]
 pub struct ParameterId {
   value: u16,
 }
@@ -53,6 +54,7 @@ impl ParameterId {
   pub const PID_GROUP_GUID: ParameterId = ParameterId { value: 0x0052 };
   pub const PID_GROUP_ENTITYID: ParameterId = ParameterId { value: 0x0053 };
   pub const PID_BUILTIN_ENDPOINT_SET: ParameterId = ParameterId { value: 0x0058 };
+  pub const PID_BUILTIN_ENDPOINT_QOS: ParameterId = ParameterId { value: 0x0077 };
   pub const PID_PROPERTY_LIST: ParameterId = ParameterId { value: 0x0059 };
   pub const PID_TYPE_MAX_SIZE_SERIALIZED: ParameterId = ParameterId { value: 0x0060 };
   pub const PID_ENTITY_NAME: ParameterId = ParameterId { value: 0x0062 };

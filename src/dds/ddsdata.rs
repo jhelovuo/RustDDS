@@ -10,7 +10,6 @@ use crate::structure::guid::EntityId;
 use crate::structure::time::Timestamp;
 use crate::structure::cache_change::ChangeKind;
 
-
 // DDSData represets a serialized data sample with metadata
 #[derive(Debug, PartialEq, Clone)]
 pub struct DDSData {
@@ -30,7 +29,7 @@ impl DDSData {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: Some(Arc::new(payload)),
-      value_key_hash : 0
+      value_key_hash: 0,
     }
   }
 
@@ -41,15 +40,12 @@ impl DDSData {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: Some(payload.clone()),
-      value_key_hash :0
+      value_key_hash: 0,
     }
   }
 
   // TODO: Rename this method, as it gets confued with the std library "From" trait method.
-  pub fn from<D>(
-    data: &D,
-    source_timestamp: Option<Timestamp>,
-  ) -> DDSData
+  pub fn from<D>(data: &D, source_timestamp: Option<Timestamp>) -> DDSData
   where
     D: Keyed + Serialize,
   {
@@ -72,18 +68,14 @@ impl DDSData {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: Some(Arc::new(serialized_payload)),
-      value_key_hash : 0
+      value_key_hash: 0,
     }
   }
 
-  pub fn from_dispose<D>(
-    _key: <D as Keyed>::K ,
-    source_timestamp: Option<Timestamp>,
-  ) -> DDSData 
+  pub fn from_dispose<D>(_key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> DDSData
   where
     D: Keyed,
   {
-
     let ts: Timestamp = match source_timestamp {
       Some(t) => t,
       None => Timestamp::from(time::get_time()),
@@ -96,9 +88,9 @@ impl DDSData {
       change_kind: ChangeKind::NOT_ALIVE_DISPOSED,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
-      value: None,  // TODO: Here we should place the serialized _key_, so that RTPS writer can send the
+      value: None, // TODO: Here we should place the serialized _key_, so that RTPS writer can send the
       // the DATA message indicating dispose
-      value_key_hash : 0,
+      value_key_hash: 0,
     }
   }
 

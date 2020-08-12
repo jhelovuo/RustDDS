@@ -3,7 +3,6 @@ use std::rc::Rc;
 use crate::dds::traits::key::*;
 use crate::structure::time::Timestamp;
 
-
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
 #[derive(Debug, Clone)]
@@ -67,15 +66,13 @@ pub struct SampleInfo {
   //(MRS.disposed_generation_count + MRS.no_writers_generation_count)
   //- (S.disposed_generation_count + S.no_writers_generation_count)
   pub absolute_generation_rank: i32,
-  pub source_timestamp: Timestamp,  
+  pub source_timestamp: Timestamp,
 }
-
 
 /// DDS spec 2.2.2.5.4
 
 #[derive(Clone)]
-pub struct DataSample<D:Keyed>
-{
+pub struct DataSample<D: Keyed> {
   pub sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
 
   /// This ia a bit unorthodox use of Result.
@@ -87,12 +84,10 @@ pub struct DataSample<D:Keyed>
 }
 
 impl<D> DataSample<D>
-where D:Keyed
+where
+  D: Keyed,
 {
-  pub fn new(
-    source_timestamp: Timestamp,
-    payload: D,
-  ) -> DataSample<D> {
+  pub fn new(source_timestamp: Timestamp, payload: D) -> DataSample<D> {
     // begin dummy placeholder values
     let sample_state = SampleState::Read;
     let view_state = ViewState::New;
@@ -105,20 +100,24 @@ where D:Keyed
     // end dummy placeholder values
 
     DataSample {
-      sample_info: SampleInfo 
-        { sample_state, view_state, instance_state
-        , disposed_generation_count, no_writers_generation_count
-        , sample_rank, generation_rank, absolute_generation_rank
-        , source_timestamp} ,
+      sample_info: SampleInfo {
+        sample_state,
+        view_state,
+        instance_state,
+        disposed_generation_count,
+        no_writers_generation_count,
+        sample_rank,
+        generation_rank,
+        absolute_generation_rank,
+        source_timestamp,
+      },
       value: Ok(Rc::new(payload)),
     }
   }
 
-  pub fn new_disposed<K>(
-    source_timestamp: Timestamp,
-    key: D::K,
-  ) -> DataSample<D>
-  where <D as Keyed>::K : Key
+  pub fn new_disposed<K>(source_timestamp: Timestamp, key: D::K) -> DataSample<D>
+  where
+    <D as Keyed>::K: Key,
   {
     // begin dummy placeholder values
     let sample_state = SampleState::Read;
@@ -132,24 +131,29 @@ where D:Keyed
     // end dummy placeholder values
 
     DataSample {
-      sample_info: SampleInfo 
-        { sample_state, view_state, instance_state
-        , disposed_generation_count, no_writers_generation_count
-        , sample_rank, generation_rank, absolute_generation_rank
-        , source_timestamp} ,
+      sample_info: SampleInfo {
+        sample_state,
+        view_state,
+        instance_state,
+        disposed_generation_count,
+        no_writers_generation_count,
+        sample_rank,
+        generation_rank,
+        absolute_generation_rank,
+        source_timestamp,
+      },
       value: Err(key),
     }
   } // fn
 
   // convenience shorthand to get the key directly, without digging out the "value"
-  pub fn get_key(&self) -> D::K 
-  where <D as Keyed>::K : Key
-  { 
+  pub fn get_key(&self) -> D::K
+  where
+    <D as Keyed>::K: Key,
+  {
     match &self.value {
       Ok(d) => d.get_key(),
       Err(k) => k.clone(),
-    } 
+    }
   } // fn
-  
-
 }

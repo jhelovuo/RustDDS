@@ -391,9 +391,9 @@ mod tests {
   use serde::{Serialize, Deserialize};
   use crate::dds::writer::Writer;
   use mio_extras::channel as mio_channel;
-  use crate::structure::{dds_cache::DDSCache, time::Timestamp};
+  use crate::structure::dds_cache::DDSCache;
   use std::sync::{RwLock, Arc};
-  
+
   use crate::structure::topic_kind::TopicKind;
   use crate::dds::typedesc::TypeDesc;
 
@@ -424,7 +424,7 @@ mod tests {
 
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
-    
+
     new_guid.from_prefix(entity);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
@@ -433,12 +433,7 @@ mod tests {
       TopicKind::NO_KEY,
       &TypeDesc::new("testi".to_string()),
     );
-    let new_reader = Reader::new(
-      new_guid,
-      send,
-      dds_cache,
-      "test".to_string(),
-    );
+    let new_reader = Reader::new(new_guid, send, dds_cache, "test".to_string());
 
     // Skip for now+
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);

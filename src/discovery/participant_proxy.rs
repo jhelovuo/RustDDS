@@ -1,9 +1,11 @@
-use crate::structure::guid::*;
-use crate::messages::protocol_version::ProtocolVersion;
-use crate::messages::vendor_id::VendorId;
-use crate::structure::locator::LocatorList;
+use serde::{Serialize, Deserialize};
+
+use crate::structure::{guid::*, locator::LocatorList};
+
+use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
 
 /// Defines ParticipantProxyAttributes
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ParticipantProxyAttributes {
   /// Identifies the DDS domainId of the associated DDS DomainParticipant
   pub domain_id: EntityId,

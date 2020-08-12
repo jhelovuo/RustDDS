@@ -1,6 +1,7 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VendorId {
   pub vendorId: [u8; 2],
 }

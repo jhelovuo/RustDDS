@@ -398,10 +398,13 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     );
 
     // last byte is always 0 and it can be ignored.
-    for _byte in 0..stringByteCount - 1 {
-      let c = self.next_byte().unwrap() as char;
-      chars.push(c);
+    if stringByteCount > 0 {
+      for _byte in 0..stringByteCount - 1 {
+        let c = self.next_byte().unwrap() as char;
+        chars.push(c);
+      }
     }
+
     // here need to call next byte to remove trailing 0 from buffer.
     self.remove_first_byte_from_input();
     buildString = chars.into_iter().collect();
@@ -527,6 +530,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    self.calculate_padding_count_from_written_bytes_and_remove(4);
     println!(
       "deserialize struct! it has num of fields: {} ",
       _fields.len()

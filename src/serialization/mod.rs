@@ -1,8 +1,9 @@
+pub mod builtin_data_deserializer;
 pub mod cdrDeserializer;
 pub mod cdrSerializer;
 mod error;
 
-mod message;
+pub mod message;
 pub mod submessage;
 
 pub use message::*;

@@ -11,7 +11,7 @@ use crate::messages::submessages::gap::Gap;
 use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::GUID;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
-#[allow(unused_imports)]  // TODO: Remove this directive when reader works
+#[allow(unused_imports)] // TODO: Remove this directive when reader works
 use crate::structure::time::Timestamp;
 
 use std::sync::{Arc, RwLock};
@@ -84,9 +84,7 @@ impl Reader {
     println!("history cache !!!! {:?}", cc);
 
     match cc {
-      Some(cc) => Some(DDSData::from_arc(
-        cc.data_value.as_ref().unwrap().clone(),
-      )),
+      Some(cc) => Some(DDSData::from_arc(cc.data_value.as_ref().unwrap().clone())),
       None => None,
     }
   }
@@ -149,7 +147,7 @@ impl Reader {
     // Added in order to test stateless actions. TODO
 
     let statefull = self.matched_writers.contains_key(&writer_guid);
-      
+
     if statefull {
       let writer_proxy = self.matched_writer_lookup(writer_guid);
       if let Some(max_sn) = writer_proxy.available_changes_max() {
@@ -291,7 +289,6 @@ impl Reader {
 
   // update history cache
   fn make_cache_change(&mut self, data: Data, instant: Instant, writer_guid: GUID) {
-
     let mut ddsdata = DDSData::new(data.serialized_payload);
 
     ddsdata.set_reader_id(data.reader_id);
@@ -442,12 +439,8 @@ mod tests {
       &new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
     );
 
-    let ddsdata = DDSData::new(InstanceHandle::default(), d.serialized_payload);
-    let cc_built_here = CacheChange::new(
-      writer_guid, 
-      d_seqnum, 
-      Some(ddsdata)
-    );
+    let ddsdata = DDSData::new(d.serialized_payload);
+    let cc_built_here = CacheChange::new(writer_guid, d_seqnum, Some(ddsdata));
 
     assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
   }
@@ -477,7 +470,7 @@ mod tests {
 
     new_reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
 
-    let d = DDSData::new(InstanceHandle::default(), SerializedPayload::new());
+    let d = DDSData::new(SerializedPayload::new());
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {

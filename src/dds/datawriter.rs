@@ -32,7 +32,7 @@ use crate::dds::datasample::DataSample;
 use crate::dds::ddsdata::DDSData;
 use super::datasample_cache::DataSampleCache;
 
-pub struct DataWriter<'a, D:Keyed> {
+pub struct DataWriter<'a, D: Keyed> {
   my_publisher: &'a Publisher,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -45,7 +45,7 @@ pub struct DataWriter<'a, D:Keyed> {
 impl<'a, D> DataWriter<'a, D>
 where
   D: Keyed + Serialize,
-  <D as Keyed>::K : Key,
+  <D as Keyed>::K: Key,
 {
   pub fn new(
     publisher: &'a Publisher,
@@ -97,7 +97,11 @@ where
 
   // dispose
   // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
+  pub fn dispose(
+    &mut self,
+    key: <D as Keyed>::K,
+    source_timestamp: Option<Timestamp>,
+  ) -> Result<()> {
     /*
 
     Removing this for now, as there is need to redesign the mechanism of transmitting dispose actions
@@ -111,10 +115,9 @@ where
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
     ddsdata.value_key_hash = key.get_hash();
-    
 
     // What does this block of code do? What is the purpose of _data_sample?
-    let _data_sample : DataSample<D> = match source_timestamp {
+    let _data_sample: DataSample<D> = match source_timestamp {
       Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, key),
       None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::from(time::get_time()), key),
     };
@@ -184,16 +187,18 @@ where
   // But then what if the result set changes while the application processes it?
 }
 
-impl<D> Entity for DataWriter<'_, D> 
-where D:Keyed
+impl<D> Entity for DataWriter<'_, D>
+where
+  D: Keyed,
 {
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     &self.entity_attributes
   }
 }
 
-impl<D> HasQoSPolicy for DataWriter<'_, D> 
-where D:Keyed
+impl<D> HasQoSPolicy for DataWriter<'_, D>
+where
+  D: Keyed,
 {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     // TODO: check liveliness of qos_policy
@@ -206,7 +211,7 @@ where D:Keyed
   }
 }
 
-impl<D> DDSEntity for DataWriter<'_, D> where D:Keyed {}
+impl<D> DDSEntity for DataWriter<'_, D> where D: Keyed {}
 
 #[cfg(test)]
 mod tests {
@@ -287,7 +292,7 @@ mod tests {
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     data_writer
-      .dispose(&data, None)
+      .dispose(data.get_key(), None)
       .expect("Unable to dispose data");
 
     // TODO: verify that dispose is sent correctly

@@ -252,8 +252,7 @@ mod tests {
   use std::time::Duration;
   use mio::{Ready, PollOpt};
   use crate::structure::entity::Entity;
-  use crate::dds::ddsdata::DDSData;
-  use crate::structure::{dds_cache::DDSCache, time::Timestamp};
+  use crate::structure::dds_cache::DDSCache;
   //use std::sync::mpsc;
 
   #[test]
@@ -316,7 +315,6 @@ mod tests {
         Arc::new(RwLock::new(DDSCache::new())),
         "test".to_string(),
       );
-
 
       reader_guids.push(new_reader.get_guid().clone());
       println!("\nSent reader number {}: {:?}\n", i, &new_reader);

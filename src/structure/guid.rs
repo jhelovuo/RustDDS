@@ -1,7 +1,8 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
+use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct GuidPrefix {
   pub entityKey: [u8; 12],
 }
@@ -55,7 +56,7 @@ impl<C: Context> Writable<C> for GuidPrefix {
   }
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct EntityId {
   entityKey: [u8; 3],
   entityKind: u8,
@@ -202,7 +203,21 @@ impl<C: Context> Writable<C> for EntityId {
   }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Hash)]
+#[derive(
+  Copy,
+  Clone,
+  Debug,
+  Default,
+  PartialOrd,
+  PartialEq,
+  Ord,
+  Eq,
+  Readable,
+  Writable,
+  Hash,
+  Serialize,
+  Deserialize,
+)]
 pub struct GUID {
   pub guidPrefix: GuidPrefix,
   pub entityId: EntityId,

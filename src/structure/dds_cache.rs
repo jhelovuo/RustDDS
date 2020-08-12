@@ -250,8 +250,7 @@ mod tests {
   use crate::{
     dds::{typedesc::TypeDesc, ddsdata::DDSData},
     structure::{
-      cache_change::CacheChange, topic_kind::TopicKind, guid::GUID,
-      sequence_number::SequenceNumber, instance_handle::InstanceHandle,
+      cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber,
     },
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
   };
@@ -263,10 +262,7 @@ mod tests {
     let change1 = CacheChange::new(
       GUID::GUID_UNKNOWN,
       SequenceNumber::from(1),
-      Some(DDSData::new(
-        InstanceHandle::generate_random_key(),
-        SerializedPayload::new(),
-      )),
+      Some(DDSData::new(SerializedPayload::new())),
     );
     cache.write().unwrap().add_new_topic(
       topic_name,
@@ -285,10 +281,7 @@ mod tests {
       let cahange2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(1),
-        Some(DDSData::new(
-          InstanceHandle::generate_random_key(),
-          SerializedPayload::new(),
-        )),
+        Some(DDSData::new(SerializedPayload::new())),
       );
       pointerToCache1
         .write()
@@ -297,10 +290,7 @@ mod tests {
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(2),
-        Some(DDSData::new(
-          InstanceHandle::generate_random_key(),
-          SerializedPayload::new(),
-        )),
+        Some(DDSData::new(SerializedPayload::new())),
       );
       pointerToCache1
         .write()
