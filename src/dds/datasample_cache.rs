@@ -4,9 +4,6 @@ use crate::dds::values::result::Result;
 use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy::History;
 
-use std::collections::HashMap;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
 
 pub struct DataSampleCache<D: Keyed> {

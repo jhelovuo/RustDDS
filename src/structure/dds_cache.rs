@@ -181,6 +181,8 @@ impl TopicCache {
   }
 }
 
+
+// This is contained in a TopicCache
 #[derive(Debug)]
 pub struct DDSHistoryCache {
   changes: BTreeMap<Instant, CacheChange>,

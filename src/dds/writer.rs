@@ -271,7 +271,7 @@ impl Writer {
     acked_by_all_reades
   };
   {
-    for (i,sq) in acked_by_all_reades{
+    for (i,_sq) in acked_by_all_reades{
       self.dds_cache.write().unwrap().from_topic_remove_change(&self.my_topic_name, i);
       // TODO MAYBE USEFUL TO REMOVE SEQUENCE NUMBERST THAT ARE REMOVED
       //self.sequence_number_to_instant.remove(sq);
@@ -432,14 +432,12 @@ impl Writer {
   }
 
   fn send_unicast_message_to_reader(&self, message : &Message, reader : &RtpsReaderProxy){
-    let mut buffer: Vec<u8> = vec![];
-    buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
+    let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
     self.udp_sender.send_to_locator_list(&buffer, &reader.unicast_locator_list)
   }
 
   fn send_multicast_message_to_reader(&self, message : &Message, reader : &RtpsReaderProxy){
-    let mut buffer: Vec<u8> = vec![];
-    buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
+    let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
     for multiaddress in &reader.multicast_locator_list{
       if multiaddress.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
         self.udp_sender.send_ipv4_multicast(&buffer, multiaddress.to_socket_address());

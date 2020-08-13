@@ -1,11 +1,10 @@
-use std::{thread, marker::PhantomData};
 extern crate timer;
 extern crate chrono;
 
 use timer::Timer;
 use timer::Guard;
-use chrono::Duration;
-use mio::{Poll, Token, Ready, PollOpt};
+//use chrono::Duration;
+use mio::{Token /*, Ready, PollOpt*/ };
 use mio_extras::channel as mio_channel;
 
 
@@ -48,6 +47,7 @@ mod tests {
   extern crate chrono;
   use chrono::Duration;
   use mio::Token;
+  use std::thread;
 
   #[test]
   fn test_heartbeat_timer() {

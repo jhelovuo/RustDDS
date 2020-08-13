@@ -244,7 +244,6 @@ impl DomainParticipant_Inner {
     unimplemented!()
   }
 
-  // TopicDescription? shoudl that be implemented? is is necessary?
 
   // get_builtin_subscriber (why would we need this?)
 
@@ -257,19 +256,22 @@ impl DomainParticipant_Inner {
     unimplemented!()
   }
 
-  pub fn get_add_reader_sender(&self) -> mio_channel::Sender<Reader> {
+
+  // The following methods are not for application use.
+
+  pub (crate) fn get_add_reader_sender(&self) -> mio_channel::Sender<Reader> {
     self.sender_add_reader.clone()
   }
 
-  pub fn get_remove_reader_sender(&self) -> mio_channel::Sender<GUID> {
+  pub (crate) fn get_remove_reader_sender(&self) -> mio_channel::Sender<GUID> {
     self.sender_remove_reader.clone()
   }
 
-  pub fn get_add_writer_sender(&self) -> mio_channel::Sender<Writer> {
+  pub (crate) fn get_add_writer_sender(&self) -> mio_channel::Sender<Writer> {
     self.add_writer_sender.clone()
   }
 
-  pub fn get_remove_writer_sender(&self) -> mio_channel::Sender<GUID> {
+  pub (crate) fn get_remove_writer_sender(&self) -> mio_channel::Sender<GUID> {
     self.remove_writer_sender.clone()
   }
 } // impl
