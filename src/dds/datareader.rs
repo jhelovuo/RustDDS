@@ -10,7 +10,7 @@ use crate::structure::{
 };
 use crate::dds::{
   traits::key::*, values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
-   pubsub::Subscriber, topic::Topic,
+  pubsub::Subscriber, topic::Topic, readcondition::*,
 };
 
 use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
@@ -20,19 +20,19 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Take {
   No,
   Yes,
 }
 
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectByKey {
   This,
   Next,
 }
 
-pub struct DataReader<'a, D:Keyed> {
+pub struct DataReader<'a, D: Keyed> {
   my_subscriber: &'a Subscriber,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -89,7 +89,6 @@ where
 
     for (_instant, cc) in cache_changes {
       let cc_data_value = cc.data_value.as_ref().unwrap().clone();
-      
       let last_bit = (1 << 15) & cc_data_value.representation_identifier;
       let ser_data = cc_data_value.value;
 
@@ -97,7 +96,7 @@ where
 
       if last_bit == 1 {
         data_object = deserialize_from_big_endian(ser_data).unwrap();
-      } 
+      }
 
       // TODO: how do we get the time?
       let data_sample = DataSample::new(Timestamp::TIME_INVALID, data_object);
@@ -107,7 +106,7 @@ where
 
   /// This operation accesses a collection of Data values from the DataReader.
   /// The size of the returned collection will be limited to the specified max_samples.
-  /// The read_condition filters the samples accessed. 
+  /// The read_condition filters the samples accessed.
   /// If no matching samples exist, then an empty Vec will be returned, but that is not an error.
   /// In case a disposed sample is returned, it is indicated by InstanceState in SampleInfo and
   /// DataSample.value will be Err containig the key of the disposed sample.
@@ -124,9 +123,9 @@ where
   /// rad_next_sample, take_next_sample.
   pub fn read(
     &self,
-    _take: Take, // Take::Yes ( = take) or Take::No ( = read)
-    _max_samples: usize, // maximum number of DataSamples to return.
-    _read_condition: ReadCondition,  // use e.g. ReadCondition::any() or ReadCondition::not_read()
+    _take: Take,                    // Take::Yes ( = take) or Take::No ( = read)
+    _max_samples: usize,            // maximum number of DataSamples to return.
+    _read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
   ) -> Result<Vec<DataSample<D>>> {
     unimplemented!();
     // Go through the historycache list and return all relevant in a vec.
@@ -135,12 +134,12 @@ where
   /// Works similarly to read(), but will return only samples from a specific instance.
   /// The instance is specified by an optional key. In case the key is not specified, the smallest
   /// (in key order) instance is selected.
-  /// If a key is specified, then the parameter this_or_next specifies whether to access the instance 
+  /// If a key is specified, then the parameter this_or_next specifies whether to access the instance
   /// with specified key or the following one, in key order.
   ///
   /// This should cover DDS DataReader methods read_instance, take_instance, read_next_instance,
   /// take_next_instance, read_next_instance_w_condition, take_next_instance_w_condition.
-  pub fn read_instance(    
+  pub fn read_instance(
     &self,
     _take: Take,
     _max_samples: usize,
@@ -148,7 +147,7 @@ where
     // Select only samples from instance specified by key. In case of None, select the
     // "smallest" instance as specified by the key type Ord trait.
     _instance_key: Option<<D as Keyed>::K>,
-    // This = Select instance specified by key. 
+    // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     _this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
@@ -158,7 +157,7 @@ where
   /// This is a simplified API for reading the next not_read sample
   /// If no new data is available, the return value is Ok(None).
   pub fn read_next_sample(&self, take: Take) -> Result<Option<DataSample<D>>> {
-    let mut ds = self.read(take,1,ReadCondition::not_read())?;
+    let mut ds = self.read(take, 1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 } // impl

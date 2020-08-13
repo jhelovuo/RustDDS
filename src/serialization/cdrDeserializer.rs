@@ -906,7 +906,7 @@ mod tests {
     let mut serialized_be: Vec<u8> = vec![0x00, 0x00, 0x00, 0x01, 0x61, 0x62, 0x63, 0x64];
 
     let deserialized_le: example = deserialize_from_little_endian(serialized_le).unwrap();
-    let deserialized_be: example = deserialize_from_big_endian(&mut serialized_be).unwrap();
+    let deserialized_be: example = deserialize_from_big_endian(serialized_be).unwrap();
     let serializedO_le = to_little_endian_binary(&o).unwrap();
     let serializedO_be = to_big_endian_binary(&o).unwrap();
 

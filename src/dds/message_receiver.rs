@@ -398,6 +398,7 @@ mod tests {
 
   use crate::structure::topic_kind::TopicKind;
   use crate::dds::typedesc::TypeDesc;
+  use std::time::Instant;
 
   #[test]
 
@@ -428,7 +429,7 @@ mod tests {
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
 
     new_guid.from_prefix(entity);
-    let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let (send, _rec) = mio_channel::sync_channel::<Instant>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),

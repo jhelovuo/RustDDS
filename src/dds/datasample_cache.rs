@@ -7,10 +7,11 @@ use crate::dds::qos::policy::History;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::collections::BTreeMap;
 
 pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
-  datasamples: HashMap<u64, Vec<DataSample<D>>>,
+  datasamples: BTreeMap<D::K, Vec<DataSample<D>>>,
 }
 
 impl<D> DataSampleCache<D>
@@ -21,25 +22,20 @@ where
   pub fn new(qos: QosPolicies) -> DataSampleCache<D> {
     DataSampleCache {
       qos,
-      datasamples: HashMap::new(),
+      datasamples: BTreeMap::new(),
     }
   }
 
   pub fn add_datasample(&mut self, data_sample: DataSample<D>) -> Result<D::K> {
     let key: D::K = data_sample.get_key();
-    // TODO: The following three lines should be packaged into a subroutine, and all repetitions thereof
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    let h: u64 = hasher.finish();
-
-    let block = self.datasamples.get_mut(&h);
+    let block = self.datasamples.get_mut(&key);
 
     match self.qos.history() {
       Some(history) => match history {
         History::KeepAll => match block {
           Some(prev_samples) => prev_samples.push(data_sample),
           None => {
-            self.datasamples.insert(h, vec![data_sample]);
+            self.datasamples.insert(key.clone(), vec![data_sample]);
             // TODO: Check if DDS resource limits are exceeded by this insert, and
             // discard older samples as needed.
           }
@@ -51,7 +47,7 @@ where
             prev_samples.drain(0..val);
           }
           None => {
-            self.datasamples.insert(h, vec![data_sample]);
+            self.datasamples.insert(key.clone(), vec![data_sample]);
           }
         },
       },
@@ -63,7 +59,7 @@ where
           prev_samples.drain(0..val);
         }
         None => {
-          self.datasamples.insert(h, vec![data_sample]);
+          self.datasamples.insert(key.clone(), vec![data_sample]);
         }
       },
     }
@@ -71,20 +67,12 @@ where
   }
 
   pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    let h: u64 = hasher.finish();
-
-    let values = self.datasamples.get(&h);
+    let values = self.datasamples.get(&key);
     values
   }
 
   pub fn remove_datasamples(&mut self, key: &D::K) {
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    let h: u64 = hasher.finish();
-
-    self.datasamples.remove(&h).unwrap();
+    self.datasamples.remove(&key).unwrap();
   }
 
   pub fn set_qos_policy(&mut self, qos: QosPolicies) {
