@@ -14,5 +14,3 @@ impl TypeDesc {
   }
 }
 
-#[derive(Clone)]
-pub struct SampleInfo {} // placeholder
