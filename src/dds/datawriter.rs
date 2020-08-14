@@ -18,7 +18,7 @@ use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
 use crate::dds::participant::SubscriptionBuiltinTopicData;
 use crate::dds::values::result::{
-  Result, Error, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibelQosStatus,
+  Result, Error, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibleQosStatus,
   PublicationMatchedStatus,
 };
 use crate::dds::traits::dds_entity::DDSEntity;
@@ -157,7 +157,7 @@ where
   pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
     unimplemented!()
   }
-  pub fn get_offered_incompatibel_qos_status(&self) -> Result<OfferedIncompatibelQosStatus> {
+  pub fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
     unimplemented!()
   }
   pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {

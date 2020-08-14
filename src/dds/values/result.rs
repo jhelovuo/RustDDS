@@ -1,6 +1,6 @@
 use std::result;
 
-// This is a spcialized Result, similar to std::io::Result
+// This is a specialized Result, similar to std::io::Result
 pub type Result<T> = result::Result<T, Error>;
 
 // This roughly corresponds to "Return codes" in DDS spec 2.2.1.1 Format and Conventions
@@ -21,17 +21,18 @@ pub enum Error {
   //NoData,  // this should be encoded as Option<SomeData>, not an error code
 }
 
-//TODO: Since most of the struct below have (sub)structure (count , count_change), that should be made into
-// a separate structure, which is then a component of these structs.
+
+pub struct CountWithChange {
+  pub count: i32,
+  pub count_change: i32,
+}
 
 pub struct InconsistentTopicStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
+  pub total: CountWithChange,
 }
 
 pub struct SampleLostStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
+  pub total: CountWithChange,
 }
 
 // This replaces SampleRejectedStatusKind
@@ -42,49 +43,40 @@ pub enum SampleRejectedReason {
 }
 
 pub struct SampleRejectedStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
+  pub total: CountWithChange,
   pub last_reason: Option<SampleRejectedReason>, // None == NOT_REJECTED
-                                                 // missing: last_instance_handle: InstanceHandle pointing to last rejected (what?)
+  // missing: last_instance_handle: instance key indicating last rejected instance
 }
 
 pub struct LivelinessLostStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
+  pub total: CountWithChange,
 }
 
 pub struct OfferedDeadlineMissedStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
-  // last_instance_hadle field should be here
+  pub total: CountWithChange,
+  // missing: last instance key 
 }
 
-pub struct OfferedIncompatibelQosStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
+pub struct OfferedIncompatibleQosStatus {
+  pub total: CountWithChange,
   //TODO: last_policy_id: QosPolicyId_t
   //TODO: policies: QosPolicyCountSeq
 }
 
-pub struct RequestedIncompatibelQosStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
+pub struct RequestedIncompatibleQosStatus {
+  pub total: CountWithChange,
   //TODO: last_policy_id: QosPolicyId_t
   //TODO: policies: QosPolicyCountSeq
 }
 
 pub struct PublicationMatchedStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
-  pub current_count: i32,
-  pub current_count_change: i32,
-  // last_instance_hadle field should be here
+  pub total: CountWithChange,
+  pub current: CountWithChange,
+  // Missing: reference to last instance key
 }
 
 pub struct SubscriptionMatchedStatus {
-  pub total_count: i32,
-  pub total_count_change: i32,
-  pub current_count: i32,
-  pub current_count_change: i32,
-  // last_instance_hadle field should be here
+  pub total: CountWithChange,
+  pub current: CountWithChange,
+  // Missing: reference to last instance key
 }

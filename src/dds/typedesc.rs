@@ -1,4 +1,3 @@
-// TODO: rename this module to e.g. samples
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypeDesc {
