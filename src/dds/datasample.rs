@@ -7,9 +7,9 @@ use crate::structure::time::Timestamp;
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
 #[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
-#[repr(u32)]  // DDS Spec 1.4 section 2.3.3 DCPS PSM : IDL defines these as "unsigned long", so u32
+#[repr(u32)] // DDS Spec 1.4 section 2.3.3 DCPS PSM : IDL defines these as "unsigned long", so u32
 pub enum SampleState {
-  Read    = 0b0001,
+  Read = 0b0001,
   NotRead = 0b0010,
 }
 
@@ -29,7 +29,7 @@ pub enum ViewState {
   /// accessed samples of that instance, or else that the DataReader has accessed previous
   /// samples of the instance, but the instance has since been reborn (i.e., become
   /// not-alive and then alive again).
-  New    = 0b0001,
+  New = 0b0001,
   /// indicates that the DataReader has already accessed samples of the same
   ///instance and that the instance has not been reborn since
   NotNew = 0b0010,
@@ -44,11 +44,11 @@ impl ViewState {
 #[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
 #[repr(u32)]
 pub enum InstanceState {
-  Alive               = 0b0001,
+  Alive = 0b0001,
   /// A DataWriter has actively disposed this instance
-  NotAlive_Disposed   = 0b0010,
+  NotAlive_Disposed = 0b0010,
   /// There are no writers alive.
-  NotAlive_NoWriters  = 0b0100,
+  NotAlive_NoWriters = 0b0100,
 }
 
 impl InstanceState {
@@ -62,7 +62,7 @@ impl InstanceState {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SampleInfo {
   pub sample_state: SampleState,
   pub view_state: ViewState,
@@ -100,7 +100,7 @@ pub struct SampleInfo {
 #[allow(clippy::new_without_default)]
 impl SampleInfo {
   pub fn new() -> Self {
-    Self{
+    Self {
       sample_state: SampleState::NotRead,
       view_state: ViewState::New,
       instance_state: InstanceState::Alive,
@@ -114,11 +114,8 @@ impl SampleInfo {
   }
 }
 
-
-
 /// DDS spec 2.2.2.5.4
-
-#[derive(Clone)]
+#[derive(PartialEq, Debug)]
 pub struct DataSample<D: Keyed> {
   pub sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
 
@@ -128,6 +125,7 @@ pub struct DataSample<D: Keyed> {
   /// Now Ok(D) means valid_data = true and there is a sample.
   /// Err(D::K) means there is valid_data = false, but only a Key and instance_state has changed.
   pub value: std::result::Result<Rc<D>, D::K>,
+  pub taken: bool,
 }
 
 impl<D> DataSample<D>
@@ -159,6 +157,7 @@ where
         source_timestamp,
       },
       value: Ok(Rc::new(payload)),
+      taken: false,
     }
   }
 
@@ -169,7 +168,7 @@ where
     // begin dummy placeholder values
     let sample_state = SampleState::Read;
     let view_state = ViewState::New;
-    let instance_state = InstanceState::Alive;
+    let instance_state = InstanceState::NotAlive_Disposed;
     let disposed_generation_count = 0;
     let no_writers_generation_count = 0;
     let sample_rank = 0;
@@ -190,6 +189,7 @@ where
         source_timestamp,
       },
       value: Err(key),
+      taken: false,
     }
   } // fn
 
@@ -203,4 +203,22 @@ where
       Err(k) => k.clone(),
     }
   } // fn
+} // imlp
+
+impl<D> Clone for DataSample<D>
+where
+  D: Keyed,
+  <D as Keyed>::K: Key,
+{
+  fn clone(&self) -> Self {
+    let value: std::result::Result<Rc<D>, D::K> = match &self.value {
+      Ok(rc) => Ok(rc.clone()),
+      Err(_) => Err(self.get_key()),
+    };
+    Self {
+      sample_info: self.sample_info.clone(),
+      value,
+      taken: self.taken
+    }
+  }
 }

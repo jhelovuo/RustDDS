@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
-  datasamples: BTreeMap<D::K, Vec<DataSample<D>>>,
+  pub datasamples: BTreeMap<D::K, Vec<DataSample<D>>>,
 }
 
 impl<D> DataSampleCache<D>
@@ -64,8 +64,18 @@ where
   }
 
   pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
-    let values = self.datasamples.get(&key);
-    values
+    self.datasamples.get(&key)
+  }
+
+  pub fn get_next_key(&self, key: &D::K) -> D::K {
+    let pos = self.datasamples.iter().position(|(k, _)| k == key);
+    self
+      .datasamples
+      .iter()
+      .nth(pos.unwrap() + 1)
+      .unwrap()
+      .0
+      .clone()
   }
 
   pub fn remove_datasamples(&mut self, key: &D::K) {

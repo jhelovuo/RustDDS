@@ -30,7 +30,7 @@ impl DDSCache {
     topic_data_type: &TypeDesc,
   ) -> bool {
     if self.topic_caches.contains_key(topic_name) {
-      print!("Topic with same name already added to DDSCache!");
+      println!("Topic with same name already added to DDSCache!");
       return false;
     } else {
       self.topic_caches.insert(

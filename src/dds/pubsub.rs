@@ -200,7 +200,7 @@ impl<'s> Subscriber {
       }
     };
 
-    let reader_id = entity_id.clone();
+    let reader_id = entity_id;
     let datareader_id = entity_id;
 
     let reader_guid =

@@ -7,6 +7,7 @@ use crate::structure::{
   guid::{GUID, EntityId},
   time::Timestamp,
   dds_cache::DDSCache,
+  cache_change::ChangeKind,
 };
 use crate::dds::{
   traits::key::*, values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
@@ -42,11 +43,9 @@ pub struct DataReader<'a, D: Keyed> {
   dds_cache: Arc<RwLock<DDSCache>>,
 
   datasample_cache: DataSampleCache<D>,
-  //sampleinfo_map: BTreeMap<Instant, SampleInfo>,
   latest_instant: Instant,
 }
 
-// TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
 impl<'s, 'a, D> DataReader<'a, D>
 where
   D: Deserialize<'s> + Keyed,
@@ -72,11 +71,13 @@ where
       notification_receiver,
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
-      //sampleinfo_map: BTreeMap::new(),
       latest_instant: Instant::now(), // TODO FIX TO A SMALL NUMBER
     }
   }
 
+  // Gets all cache_changes from the TopicCache. Deserializes
+  // the serialized payload and stores the DataSamples (the actual data and the
+  // samplestate) to local container, datasample_cache.
   fn get_datasamples_from_cache(&mut self) {
     let dds_cache = self.dds_cache.read().unwrap();
     let cache_changes = dds_cache.from_topic_get_changes_in_range(
@@ -94,13 +95,15 @@ where
 
       let mut data_object: D = deserialize_from_little_endian(ser_data.clone()).unwrap();
 
+      // TODO! last_bit as 1 means which endianness?
       if last_bit == 1 {
         data_object = deserialize_from_big_endian(ser_data).unwrap();
       }
 
-      // TODO: how do we get the time?
-      let data_sample = DataSample::new(Timestamp::TIME_INVALID, data_object);
-      self.datasample_cache.add_datasample(data_sample).unwrap();
+      // TODO: how do we get the time here? Is it needed?
+      let mut datasample = DataSample::new(Timestamp::TIME_INVALID, data_object);
+      datasample.sample_info.instance_state = Self::change_kind_to_instance_state(&cc.kind);
+      self.datasample_cache.add_datasample(datasample).unwrap();
     }
   }
 
@@ -120,15 +123,38 @@ where
   /// it will also set the view_state of the instance to NotNew.
   ///
   /// This should cover DDS DataReader methods read, take, read_w_condition, take_w_condition,
-  /// rad_next_sample, take_next_sample.
+  /// read_next_sample, take_next_sample.
   pub fn read(
-    &self,
-    _take: Take,                    // Take::Yes ( = take) or Take::No ( = read)
-    _max_samples: usize,            // maximum number of DataSamples to return.
-    _read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
+    &mut self,
+    take: Take,                    // Take::Yes ( = take) or Take::No ( = read)
+    max_samples: usize,            // maximum number of DataSamples to return.
+    read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
   ) -> Result<Vec<DataSample<D>>> {
-    unimplemented!();
-    // Go through the historycache list and return all relevant in a vec.
+    let mut result = Vec::new();
+
+    // TODO! Are we iterating in a correct direction?
+    'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
+      for datasample in datasample_vec.iter_mut() {
+        if Self::matches_conditions(&read_condition, datasample) {
+          datasample.sample_info.sample_state = SampleState::Read;
+          result.push(datasample.clone()); // TODO! How do we remove it?
+
+          if take == Take::Yes {
+            datasample.taken = true;
+          }
+        }
+        if result.len() >= max_samples {
+          break 'outer;
+        }
+      }
+    }
+    // Remove all that are marked .taken
+    if take == Take::Yes {
+      for (_, datsample_vec) in self.datasample_cache.datasamples.iter_mut() {
+        datsample_vec.retain(|elem| !elem.taken)
+      }
+    }
+    Ok(result)
   }
 
   /// Works similarly to read(), but will return only samples from a specific instance.
@@ -140,25 +166,91 @@ where
   /// This should cover DDS DataReader methods read_instance, take_instance, read_next_instance,
   /// take_next_instance, read_next_instance_w_condition, take_next_instance_w_condition.
   pub fn read_instance(
-    &self,
-    _take: Take,
-    _max_samples: usize,
-    _read_condition: ReadCondition,
+    &mut self,
+    take: Take,
+    max_samples: usize,
+    read_condition: ReadCondition,
     // Select only samples from instance specified by key. In case of None, select the
     // "smallest" instance as specified by the key type Ord trait.
-    _instance_key: Option<<D as Keyed>::K>,
+    instance_key: Option<<D as Keyed>::K>,
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
-    _this_or_next: SelectByKey,
+    this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
-    todo!()
+    let mut result = Vec::new();
+
+    let key = match instance_key {
+      Some(k) => match this_or_next {
+        SelectByKey::This => k,
+        SelectByKey::Next => self.datasample_cache.get_next_key(&k),
+      },
+      None => self
+        .datasample_cache
+        .datasamples
+        .keys()
+        .min()
+        .unwrap()
+        .clone(),
+    };
+
+    let datasample_vec = self.datasample_cache.datasamples.get_mut(&key).unwrap();
+    // Rest is almost identical to read.. combine them?
+    for datasample in datasample_vec.iter_mut() {
+      if Self::matches_conditions(&read_condition, datasample) {
+        datasample.sample_info.sample_state = SampleState::Read;
+        result.push(datasample.clone());
+
+        if take == Take::Yes {
+          datasample.taken = true;
+        }
+      }
+      if result.len() >= max_samples {
+        break;
+      }
+    }
+    if take == Take::Yes {
+      datasample_vec.retain(|elem| !elem.taken);
+    }
+    Ok(result)
   }
 
   /// This is a simplified API for reading the next not_read sample
   /// If no new data is available, the return value is Ok(None).
-  pub fn read_next_sample(&self, take: Take) -> Result<Option<DataSample<D>>> {
+  pub fn read_next_sample(&mut self, take: Take) -> Result<Option<DataSample<D>>> {
     let mut ds = self.read(take, 1, ReadCondition::not_read())?;
     Ok(ds.pop())
+  }
+
+  // Helper functions
+  fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
+    if !rcondition
+      .sample_state_mask
+      .contains(dsample.sample_info.sample_state)
+    {
+      return false;
+    }
+    if !rcondition
+      .view_state_mask
+      .contains(dsample.sample_info.view_state)
+    {
+      return false;
+    }
+    if !rcondition
+      .instance_state_mask
+      .contains(dsample.sample_info.instance_state)
+    {
+      return false;
+    }
+    true
+  }
+
+  fn change_kind_to_instance_state(c_k: &ChangeKind) -> InstanceState {
+    match c_k {
+      ChangeKind::ALIVE => InstanceState::Alive,
+      ChangeKind::NOT_ALIVE_DISPOSED => InstanceState::NotAlive_Disposed,
+      // TODO check this..?
+      ChangeKind::NOT_ALIVE_UNREGISTERED => InstanceState::NotAlive_NoWriters,
+    }
   }
 } // impl
 
@@ -193,18 +285,6 @@ where
 }
 
 // Todo when others attributes have PartialEq implemented
-impl<D> PartialEq for DataReader<'_, D>
-where
-  D: Keyed,
-{
-  fn eq(&self, other: &Self) -> bool {
-    //self.my_subscriber.get_ == other.my_subscriber &&
-    self.my_topic.get_name() == other.my_topic.get_name() &&
-    // self.qos_policy == other.qos_policy &&
-    self.entity_attributes == other.entity_attributes
-    // self.dds_cache == other.dds_cache &&
-  }
-}
 
 impl<D> HasQoSPolicy for DataReader<'_, D>
 where
@@ -227,5 +307,130 @@ where
 {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::dds::participant::DomainParticipant;
+  use crate::dds::typedesc::TypeDesc;
+  use crate::test::random_data::*;
+  use crate::dds::traits::key::Keyed;
+  use mio_extras::channel as mio_channel;
+  use crate::dds::reader::Reader;
+  use crate::messages::submessages::data::Data;
+  use crate::dds::message_receiver::*;
+  use crate::structure::guid::GuidPrefix;
+
+  use crate::serialization::cdrSerializer::to_little_endian_binary;
+  use std::thread;
+
+  use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+  #[test]
+  fn dr_get_samples_from_ddschache() {
+    let dp = DomainParticipant::new(0, 0);
+    let mut qos = QosPolicies::qos_none();
+    qos.history = Some(policy::History::KeepAll);
+
+    let sub = dp.create_subscriber(&qos).unwrap();
+    let topic = dp
+      .create_topic("dr", TypeDesc::new("drtest?".to_string()), &qos)
+      .unwrap();
+
+    let (send, _rec) = mio_channel::sync_channel::<Instant>(10);
+
+    let reader_id = EntityId::default();
+    let datareader_id = EntityId::default();
+    let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), reader_id);
+
+    let mut new_reader = Reader::new(
+      reader_guid,
+      send,
+      dp.get_dds_cache(),
+      topic.get_name().to_string(),
+    );
+
+    let mut matching_datareader = sub
+      .create_datareader::<RandomData>(Some(datareader_id), &topic, &qos)
+      .unwrap();
+
+    let mut random_data = RandomData {
+      a: 1,
+      b: "somedata".to_string(),
+    };
+    let data_key = random_data.get_key();
+
+    let writer_guid = GUID {
+      guidPrefix: GuidPrefix::new(vec![1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], 1),
+    };
+    let mut mr_state = MessageReceiverState::default();
+    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+
+    new_reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+
+    let mut data = Data::default();
+    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data.writer_id = writer_guid.entityId;
+
+    data.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&random_data).unwrap(),
+    };
+    new_reader.handle_data_msg(data, mr_state.clone());
+
+    matching_datareader.get_datasamples_from_cache();
+    let deserialized_random_data = matching_datareader
+      .datasample_cache
+      .get_datasample(&data_key)
+      .unwrap()[0]
+      .clone()
+      .value
+      .unwrap();
+
+    assert_eq!(*deserialized_random_data, random_data);
+    println!("All good until here?");
+
+    // Test getting of next samples.
+    let mut random_data2 = RandomData {
+      a: 2,
+      b: "somedata number 2".to_string(),
+    };
+    let mut data2 = Data::default();
+    data2.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data2.writer_id = writer_guid.entityId;
+
+    data2.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&random_data2).unwrap(),
+    };
+
+    let mut random_data3 = RandomData {
+      a: 3,
+      b: "third somedata".to_string(),
+    };
+    let mut data3 = Data::default();
+    data3.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data3.writer_id = writer_guid.entityId;
+
+    data3.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&random_data3).unwrap(),
+    };
+
+    new_reader.handle_data_msg(data2, mr_state.clone());
+    new_reader.handle_data_msg(data3, mr_state);
+    thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
+
+    matching_datareader.get_datasamples_from_cache();
+    let random_data_vec = matching_datareader
+      .datasample_cache
+      .get_datasample(&data_key)
+      .unwrap();
+    assert_eq!(random_data_vec.len(), 2);
   }
 }

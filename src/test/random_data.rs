@@ -1,5 +1,6 @@
 use std::hash::{Hash};
 use serde::Serialize;
+use serde::Deserialize;
 
 #[allow(unused_imports)] // since this is testing code only
 use crate::dds::traits::{
@@ -21,7 +22,7 @@ impl RandomKey {
 //impl Key for RandomKey {
 //}
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, PartialEq, Deserialize)]
 pub struct RandomData {
   pub a: i64,
   pub b: String,

@@ -77,7 +77,7 @@ impl Discovery {
       )
       .expect("Unable to create DCPSParticipant topic.");
 
-    let dcps_participant_reader = discovery_subscriber
+    let mut dcps_participant_reader = discovery_subscriber
       .create_datareader::<SPDPDiscoveredParticipantData>(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         &dcps_participant_topic,
@@ -203,7 +203,7 @@ impl Discovery {
         if event.token() == STOP_POLL_TOKEN {
           return;
         } else if event.token() == DISCOVERY_PARTICIPANT_DATA_TOKEN {
-          discovery.handle_participant_reader(&dcps_participant_reader);
+          discovery.handle_participant_reader(&mut dcps_participant_reader);
         } else if event.token() == DISCOVERY_PARTICIPANT_CLEANUP_TOKEN {
           discovery.participant_cleanup();
           // setting next cleanup timeout
@@ -216,7 +216,7 @@ impl Discovery {
     }
   }
 
-  pub fn handle_participant_reader(&self, reader: &DataReader<SPDPDiscoveredParticipantData>) {
+  pub fn handle_participant_reader(&self, reader: &mut DataReader<SPDPDiscoveredParticipantData>) {
     let participant_data = match reader.read_next_sample(Take::Yes) {
       Ok(d) => match d {
         Some(d) => match d.value {
