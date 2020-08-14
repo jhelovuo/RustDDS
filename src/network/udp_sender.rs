@@ -47,7 +47,7 @@ impl UDPSender {
       if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 || l.kind == LocatorKind::LOCATOR_KIND_UDPv6{
         let a = SocketAddr::from(l.to_socket_address());
         match self.socket.send_to(buffer, &a) {
-          Ok(_) => (),
+          Ok(_) => (println!("send udp message to socket {:?}",a)),
           _ => println!("Unable to send to {}", a),
         };
       }

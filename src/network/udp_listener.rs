@@ -45,8 +45,14 @@ impl UDPListener {
   pub fn get_message(&self) -> Vec<u8> {
     let mut message: Vec<u8> = vec![];
     let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    if let Ok(nbytes) = self.socket.recv(&mut buf) {
+    //self.mio_socket().recv_from(buf)
+    let result = self.socket.recv(&mut buf);
+    if result.is_ok() {
+       let nbytes = result.unwrap();
       message = buf[..nbytes].to_vec();
+    }
+    else{
+      println!("{:?}", result);
     }
     message
   }

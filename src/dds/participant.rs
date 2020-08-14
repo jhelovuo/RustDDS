@@ -176,6 +176,7 @@ impl DomainParticipant_Inner {
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
     let ev_wrapper = DPEventWrapper::new(
+      new_guid,
       listeners,
       a_r_cache.clone(),
       discovery_db.clone(),
@@ -249,7 +250,7 @@ impl DomainParticipant_Inner {
       + DomainParticipant_Inner::D2
   }
 
-  fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
+  pub fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
     DomainParticipant_Inner::PB
       + DomainParticipant_Inner::DG * domain_id
       + DomainParticipant_Inner::D3
@@ -385,14 +386,16 @@ impl std::fmt::Debug for DomainParticipant {
 #[cfg(test)]
 mod tests {
   // use super::*;
-
+  use mio_extras::channel as mio_channel;
   use std::{thread, net::SocketAddr};
+  use crate::speedy::Writable;
   use crate::{
-    dds::{qos::QosPolicies, typedesc::TypeDesc},
+    dds::{qos::QosPolicies, typedesc::TypeDesc, writer::Writer},
     network::udp_sender::UDPSender,
-    test::random_data::RandomData,
+    test::random_data::RandomData, structure::{locator::{LocatorKind, Locator}, guid::{EntityId, GUID}, sequence_number::{SequenceNumber, SequenceNumberSet}}, submessages::{EntitySubmessage, AckNack, SubmessageFlag, SubmessageHeader, SubmessageKind}, common::bit_set::BitSetRef, serialization::{SubMessage, Message}, messages::{protocol_version::ProtocolVersion, header::Header, vendor_id::VendorId, protocol_id::ProtocolId},
   };
-  use super::DomainParticipant;
+  use super::{DomainParticipant_Inner, DomainParticipant};
+  use speedy::Endianness;
   // TODO: improve basic test when more or the structure is known
   #[test]
   fn dp_basic_domain_participant() {
@@ -409,7 +412,6 @@ mod tests {
   #[test]
   fn dp_writer_hearbeat_test() {
     let domain_participant = DomainParticipant::new(5, 0);
-
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
@@ -425,6 +427,87 @@ mod tests {
       .create_datawriter::<RandomData>(None, &topic, &qos.clone())
       .expect("Failed to create datawriter");
 
-    thread::sleep(time::Duration::seconds(1).to_std().unwrap());
-  }
+    thread::sleep(time::Duration::seconds(5).to_std().unwrap());
+  } 
+
+
+  #[test]
+  fn dp_recieve_acknack_message_test() {
+
+    // TODO SEND ACKNACK 
+    let domain_participant = DomainParticipant::new(5, 0);
+   
+    let qos = QosPolicies::qos_none();
+    let _default_dw_qos = QosPolicies::qos_none();
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let publisher = domain_participant
+      .create_publisher(&qos.clone())
+      .expect("Failed to create publisher");
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let topic = domain_participant
+      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos.clone())
+      .expect("Failed to create topic");
+    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    let mut _data_writer = publisher
+      .create_datawriter::<RandomData>(None, &topic, &qos.clone())
+      .expect("Failed to create datawriter");
+    
+    let portNumber :u16 = DomainParticipant_Inner::get_user_traffic_unicast_port(5, 0);
+    let _sender = UDPSender::new(1234);
+    let mut m : Message  = Message::new();
+    
+    let a : AckNack = AckNack{
+      reader_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+      writer_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+      reader_sn_state: SequenceNumberSet{
+        base :SequenceNumber::default(),
+        set : BitSetRef::new(),        
+      },
+      count: 1,
+    };
+    let subHeader: SubmessageHeader = SubmessageHeader {
+      submessage_id: SubmessageKind::ACKNACK,
+      flags: SubmessageFlag {
+         flags: 0b0000000_u8,
+      },
+      submessage_length: 24,
+    };
+
+    let s: SubMessage = SubMessage {
+      header:  subHeader,
+      intepreterSubmessage: None,
+      submessage: Some(EntitySubmessage::AckNack(
+        a,
+        SubmessageFlag {
+          flags: 0b0000000_u8,
+        },
+      )),
+    };
+    let h =Header {
+      protocol_id: ProtocolId::default(),
+      protocol_version: ProtocolVersion {
+        major: 2,
+        minor: 3,
+      },
+      vendor_id:  VendorId::VENDOR_UNKNOWN,
+      guid_prefix: GUID::new().guidPrefix,
+    };
+    m.set_header(h);
+    m.add_submessage(SubMessage::from(s));
+    let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
+    println!("data to send via udp: {:?}", _data);
+    let loca = Locator{
+      kind: LocatorKind::LOCATOR_KIND_UDPv4,
+      port: portNumber as u32,
+      address: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+      //address: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F, 0x00, 0x00, 0x01],
+    };
+    let locas = vec![loca];
+    _sender.send_to_locator_list(&_data, &locas);
+
+
+    thread::sleep(time::Duration::seconds(5).to_std().unwrap());
+  } 
+
+
 }

@@ -429,7 +429,7 @@ impl Writer {
 
     let (message, Guid) = self.get_next_reader_next_unsend_message();
     if message.is_some() && Guid.is_some() {
-      let reader = self.matched_reader_lookup(Guid.unwrap().guidPrefix, Guid.unwrap().entityId);
+      let reader = self.matched_reader_lookup(&Guid.unwrap().guidPrefix, Guid.unwrap().entityId);
       let messageSequenceNumbers = message
         .as_ref()
         .unwrap()
@@ -662,16 +662,15 @@ impl Writer {
   }
 
   ///When receiving an ACKNACK Message indicating a Reader is missing some data samples, the Writer must
-  //respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
-  //sending a HEARTBEAT message when the sample is no longer available
-  pub fn handle_ack_nack(&mut self, guid_prefix: GuidPrefix, an: AckNack) {
+  ///respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
+  ///sending a HEARTBEAT message when the sample is no longer available
+  pub fn handle_ack_nack(&mut self, guid_prefix: &GuidPrefix, an: AckNack) {
     {
       let reader_proxy = self.matched_reader_lookup(guid_prefix, an.reader_id);
 
       // if ack nac says reader has recieved data then change history cache chage status ???
       if reader_proxy.is_none() {
-        print!("reader proxy is not known!");
-        panic!();
+        panic!("For writer {:?} reader proxy: {:?} is not known!",self.entity_attributes.guid, an.reader_id );
       }
     }
     if self.test_if_ack_nack_contains_not_recieved_sequence_numbers(&an) == false {
@@ -713,11 +712,11 @@ impl Writer {
   /// get reader guid from AckNack submessage readerEntityId
   pub fn matched_reader_lookup(
     &mut self,
-    guid_prefix: GuidPrefix,
+    guid_prefix: &GuidPrefix,
     reader_entity_id: EntityId,
   ) -> Option<&mut RtpsReaderProxy> {
     let search_guid: GUID = GUID {
-      guidPrefix: guid_prefix,
+      guidPrefix: *guid_prefix,
       entityId: reader_entity_id,
     };
     let pos = &self
@@ -762,7 +761,7 @@ impl Writer {
     let sequenceNumbersCount: usize = { sequence_numbers.len() };
     if remote_reader_guid.is_some() {
       let readerProxy = self.matched_reader_lookup(
-        remote_reader_guid.unwrap().guidPrefix,
+        &remote_reader_guid.unwrap().guidPrefix,
         remote_reader_guid.unwrap().entityId,
       );
       if readerProxy.is_some() {
@@ -792,7 +791,7 @@ impl Writer {
       for sq in sequence_numbers {
         let readerProxy = self
           .matched_reader_lookup(
-            remote_reader_guid.unwrap().guidPrefix,
+            &remote_reader_guid.unwrap().guidPrefix,
             remote_reader_guid.unwrap().entityId,
           )
           .unwrap();
@@ -876,7 +875,6 @@ impl Endpoint for Writer {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
   use crate::{
     dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc},
   };

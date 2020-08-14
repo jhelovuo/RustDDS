@@ -16,9 +16,13 @@ use crate::{
   common::heartbeat_handler::HeartbeatHandler,
   discovery::discovery_db::DiscoveryDB,
   structure::{cache_change::ChangeKind, dds_cache::DDSCache},
+  submessages::AckNack
 };
+//use crate::{common::heartbeat_handler::HeartbeatHandler, structure::{cache_change::ChangeKind, dds_cache::{DDSCache, DDSHistoryCache}}, submessages::AckNack};
+
 
 pub struct DPEventWrapper {
+  domain_participants_guid : GUID,
   poll: Poll,
   ddscache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -36,11 +40,16 @@ pub struct DPEventWrapper {
   writer_heartbeat_recievers : HashMap<Token,mio_channel::Receiver<Token>>,
 
   stop_poll_receiver: mio_channel::Receiver<()>,
+  // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
+  ack_nack_reciever: mio_channel::Receiver<(GuidPrefix,AckNack)>,
+
+  writers: HashMap<GUID, Writer>,
 }
 
 impl DPEventWrapper {
   // This pub(crate) , because it should be constructed only by DomainParticipant.
   pub(crate) fn new(
+    domain_participants_guid: GUID,
     udp_listeners: HashMap<Token, UDPListener>,
     ddscache: Arc<RwLock<DDSCache>>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -53,7 +62,7 @@ impl DPEventWrapper {
     stop_poll_receiver: mio_channel::Receiver<()>,
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
-
+    let (acknack_sender, acknack_reciever) = mio_channel::channel::<(GuidPrefix,AckNack)>();
     let mut udp_listeners = udp_listeners;
     for (token, listener) in &mut udp_listeners {
       poll
@@ -64,6 +73,7 @@ impl DPEventWrapper {
           PollOpt::edge(),
         )
         .expect("Failed to register listener.");
+      println!("registered listener with token:  {:?} on socket: {:?}", token, listener.mio_socket())
     }
 
     poll
@@ -83,7 +93,6 @@ impl DPEventWrapper {
         PollOpt::edge(),
       )
       .expect("Failed to register reader remover.");
-
     poll
       .register(
         &add_writer_receiver.receiver,
@@ -111,25 +120,30 @@ impl DPEventWrapper {
       )
       .expect("Failed to register stop poll channel");
 
+    poll.register(&acknack_reciever, ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN, Ready::readable(), PollOpt::edge())
+    .expect("Failed to register AckNack submessage sending from MessageReciever to DPEventLoop");
+
     DPEventWrapper {
+      domain_participants_guid,
       poll,
       ddscache,
       discovery_db,
       udp_listeners,
       send_targets,
-      message_receiver: MessageReceiver::new(participant_guid_prefix),
+      message_receiver: MessageReceiver::new(participant_guid_prefix,acknack_sender),
       add_reader_receiver,
       remove_reader_receiver,
       add_writer_receiver,
       remove_writer_receiver,
       writer_heartbeat_recievers : HashMap::new(),
       stop_poll_receiver,
+      writers: HashMap::new(),
+      ack_nack_reciever : acknack_reciever,
     }
   }
 
   pub fn event_loop(self) {
     // TODO: Use the dp to access stuff we need, e.g. historycache
-    let mut writers: HashMap<GUID, Writer> = HashMap::new();
     let mut ev_wrapper = self;
     loop {
       let mut events = Events::with_capacity(1024);
@@ -147,16 +161,19 @@ impl DPEventWrapper {
         } else if DPEventWrapper::is_reader_action(&event) {
           ev_wrapper.handle_reader_action(&event);
         } else if DPEventWrapper::is_writer_action(&event) {
-          ev_wrapper.handle_writer_action(&event, &mut writers);
+          ev_wrapper.handle_writer_action(&event);
         } else if ev_wrapper.is_writer_heartbeat_action(&event){
-          ev_wrapper.handle_writer_heartbeat(&event, &mut writers);
+          ev_wrapper.handle_writer_heartbeat(&event);
+        } else if DPEventWrapper::is_writer_acknack_action(&event){
+          ev_wrapper.handle_writer_acknack_action(&event);
         }
       }
     }
   }
 
   pub fn is_udp_traffic(event: &Event) -> bool {
-    event.token() == DISCOVERY_SENDER_TOKEN || event.token() == USER_TRAFFIC_SENDER_TOKEN
+    event.token() == DISCOVERY_SENDER_TOKEN || event.token() == USER_TRAFFIC_SENDER_TOKEN || event.token() == USER_TRAFFIC_LISTENER_TOKEN ||  event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
+
   }
 
   pub fn is_reader_action(event: &Event) -> bool {
@@ -182,22 +199,30 @@ impl DPEventWrapper {
     return false;
   }
 
+  pub fn is_writer_acknack_action(event: &Event) -> bool{
+    event.token() == ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN 
+  }
+
   pub fn handle_udp_traffic(&mut self, event: &Event) {
+    println!("handle udp traffic");
     let listener = self.udp_listeners.get(&event.token());
     match listener {
       Some(l) => loop {
         let data = l.get_message();
         if data.is_empty() {
+          //println!("UDP data is empty!");
           return;
         }
 
-        if event.token() == DISCOVERY_SENDER_TOKEN {
+        if event.token() == DISCOVERY_LISTENER_TOKEN {
           self.message_receiver.handle_discovery_msg(data);
-        } else if event.token() == USER_TRAFFIC_SENDER_TOKEN {
+        } else if event.token() == USER_TRAFFIC_LISTENER_TOKEN {
           self.message_receiver.handle_user_msg(data);
         }
       },
-      None => return,
+      None => {print!("Cannot handle upd traffic! No listener with token {:?}", &event.token());
+      return;
+      }
     };
   }
 
@@ -219,7 +244,7 @@ impl DPEventWrapper {
     }
   }
 
-  pub fn handle_writer_action(&mut self, event: &Event, writers: &mut HashMap<GUID, Writer>) {
+  pub fn handle_writer_action(&mut self, event: &Event) {
     println!("dp_ew handle writer action with token {:?}", event.token());
     match event.token() {
       ADD_WRITER_TOKEN => {
@@ -243,10 +268,10 @@ impl DPEventWrapper {
 Ready::readable(),
     PollOpt::edge()).expect("Writer heartbeat timer channel registeration failed!!");
         self.writer_heartbeat_recievers.insert(new_writer.get_heartbeat_entity_token(),hearbeatReciever);
-        writers.insert(new_writer.as_entity().guid, new_writer);
+        self.writers.insert(new_writer.as_entity().guid, new_writer);
       }
       REMOVE_WRITER_TOKEN => {
-        let writer = writers.remove(
+        let writer = self.writers.remove(
           &self
             .remove_writer_receiver
             .receiver
@@ -258,7 +283,7 @@ Ready::readable(),
         };
       }
       t => {
-        let found_writer = writers.iter_mut().find(|p| p.1.get_entity_token() == t);
+        let found_writer = self.writers.iter_mut().find(|p| p.1.get_entity_token() == t);
 
         match found_writer {
           Some((_guid, w)) => {
@@ -285,9 +310,16 @@ Ready::readable(),
     }
   }
 
-  pub fn handle_writer_heartbeat(&mut self, event: &Event, writers: &mut HashMap<GUID, Writer>){
+  pub fn handle_writer_heartbeat(&mut self, event: &Event/*, writers: &mut HashMap<GUID, Writer>*/){
     println!("is writer heartbeat action!");
-    let found_writer_with_heartbeat = writers.iter_mut().find(|p| p.1.get_heartbeat_entity_token() == event.token());
+    let found_writer_with_heartbeat = self.writers.iter_mut().find(|p| p.1.get_heartbeat_entity_token() == event.token());
+    match found_writer_with_heartbeat {
+      Some((_guid, w)) => {
+        w.handle_heartbeat_tick();
+        }
+      None => {}
+    }
+    let found_writer_with_heartbeat = self.writers.iter_mut().find(|p| p.1.get_heartbeat_entity_token() == event.token());
     match found_writer_with_heartbeat {
       Some((_guid, w)) => {
         w.handle_heartbeat_tick();
@@ -295,6 +327,28 @@ Ready::readable(),
       None => {}
     }
   }
+
+
+  pub fn handle_writer_acknack_action(&mut self, _event: &Event){
+    println!("is writer acknack action!");
+    let recieved = self.ack_nack_reciever.try_recv();
+   
+    if recieved.is_ok(){
+      let (acknack_sender_prefix, acknack_message) = recieved.unwrap();
+      let target_writer_entity_id = {
+        acknack_message.writer_id
+      };
+      let writer_guid = GUID::new_with_prefix_and_id(self.domain_participants_guid.guidPrefix, target_writer_entity_id);
+      let found_writer = self.writers.get_mut(&writer_guid);
+      if found_writer.is_some(){
+        found_writer.unwrap().handle_ack_nack(&acknack_sender_prefix, acknack_message)
+      }
+      else{
+        panic!("Couldn't handle acknack! did not find local rtps writer with GUID: {:?}", writer_guid);
+      }
+    }
+  }
+
 }
 
 #[cfg(test)]
@@ -322,7 +376,9 @@ mod tests {
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
 
+    let domain_participant_guid = GUID::new();
     let dp_event_wrapper = DPEventWrapper::new(
+      domain_participant_guid,
       HashMap::new(),
       ddshc,
       discovery_db,
