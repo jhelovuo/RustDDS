@@ -81,15 +81,16 @@ where
   }
 
   pub fn read(
-    &self,
+    &mut self,
     take: Take,                    // Take::Yes ( = take) or Take::No ( = read)
     max_samples: usize,            // maximum number of DataSamples to return.
     read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
   ) -> Result<Vec<DataSample<NoKeyWrapper<D>>>> {
     let kv : Result<Vec<datasample_with_key::DataSample<NoKeyWrapper<D>>>>
       = self.keyed_datareader.read(take,max_samples,read_condition);
+    #[allow(unused_variables)]
     kv.map( move |v| v.iter()
-      .map( move |datasample_with_key::DataSample{sample_info, value}| DataSample
+      .map( move |datasample_with_key::DataSample{sample_info, value, taken}| DataSample
         { sample_info: sample_info.clone()
         , value: value.as_ref().expect("Received instance state change for no_key data. What to do?").clone()
         } )
@@ -112,7 +113,7 @@ where
 
   /// This is a simplified API for reading the next not_read sample
   /// If no new data is available, the return value is Ok(None).
-  pub fn read_next_sample(&self, take: Take) -> Result<Option<DataSample<NoKeyWrapper<D>>>> {
+  pub fn read_next_sample(&mut self, take: Take) -> Result<Option<DataSample<NoKeyWrapper<D>>>> {
     let mut ds = self.read(take, 1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
