@@ -5,6 +5,7 @@ pub mod datawriter;
 pub mod ddsdata;
 mod dp_event_wrapper;
 mod message_receiver;
+pub mod no_key;
 pub mod participant;
 pub mod pubsub;
 pub mod qos;

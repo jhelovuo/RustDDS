@@ -38,7 +38,7 @@ pub struct DataReader<'a, D: Keyed> {
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
-  notification_receiver: mio_channel::Receiver<Instant>,
+  pub (crate) notification_receiver: mio_channel::Receiver<Instant>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
 
