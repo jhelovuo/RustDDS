@@ -224,7 +224,7 @@ mod tests {
 
   #[test]
   fn dw_write_test() {
-    let domain_participant = DomainParticipant::new();
+    let domain_participant = DomainParticipant::new(1, 0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     let publisher = domain_participant
@@ -235,7 +235,7 @@ mod tests {
       .expect("Failed to create topic");
 
     let mut data_writer = publisher
-      .create_datawriter(&topic, &qos)
+      .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 
     let mut data = RandomData {
@@ -259,7 +259,7 @@ mod tests {
 
   #[test]
   fn dw_dispose_test() {
-    let domain_participant = DomainParticipant::new();
+    let domain_participant = DomainParticipant::new(2, 0);
     let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(&qos)
@@ -269,7 +269,7 @@ mod tests {
       .expect("Failed to create topic");
 
     let mut data_writer = publisher
-      .create_datawriter(&topic, &qos)
+      .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
@@ -300,7 +300,7 @@ mod tests {
 
   #[test]
   fn dw_wait_for_ack_test() {
-    let domain_participant = DomainParticipant::new();
+    let domain_participant = DomainParticipant::new(3, 0);
     let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(&qos)
@@ -310,7 +310,7 @@ mod tests {
       .expect("Failed to create topic");
 
     let mut data_writer = publisher
-      .create_datawriter(&topic, &qos)
+      .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 
     let data = RandomData {

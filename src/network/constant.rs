@@ -28,6 +28,9 @@ pub const REMOVE_WRITER_TOKEN: Token = Token(17);
 pub const ADD_DATAWRITER_TOKEN: Token = Token(18);
 pub const REMOVE_DATAWRITER_TOKEN: Token = Token(19);
 
+pub const DISCOVERY_PARTICIPANT_DATA_TOKEN: Token = Token(30);
+pub const DISCOVERY_PARTICIPANT_CLEANUP_TOKEN: Token = Token(31);
+
 pub struct TokenReceiverPair<T> {
   pub token: Token,
   pub receiver: mio_channel::Receiver<T>,

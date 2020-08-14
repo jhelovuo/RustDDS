@@ -12,14 +12,16 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
 use crate::structure::entity::Entity;
-use crate:: { common::heartbeat_handler::HeartbeatHandler
-            , structure:: {cache_change::ChangeKind
-                          , dds_cache::{DDSCache, /*DDSHistoryCache*/}}};
-
+use crate::{
+  common::heartbeat_handler::HeartbeatHandler,
+  discovery::discovery_db::DiscoveryDB,
+  structure::{cache_change::ChangeKind, dds_cache::DDSCache},
+};
 
 pub struct DPEventWrapper {
   poll: Poll,
   ddscache: Arc<RwLock<DDSCache>>,
+  discovery_db: Arc<RwLock<DiscoveryDB>>,
   udp_listeners: HashMap<Token, UDPListener>,
   send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
   message_receiver: MessageReceiver,
@@ -32,6 +34,8 @@ pub struct DPEventWrapper {
   add_writer_receiver: TokenReceiverPair<Writer>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
   writer_heartbeat_recievers : HashMap<Token,mio_channel::Receiver<Token>>,
+
+  stop_poll_receiver: mio_channel::Receiver<()>,
 }
 
 impl DPEventWrapper {
@@ -39,12 +43,14 @@ impl DPEventWrapper {
   pub(crate) fn new(
     udp_listeners: HashMap<Token, UDPListener>,
     ddscache: Arc<RwLock<DDSCache>>,
+    discovery_db: Arc<RwLock<DiscoveryDB>>,
     send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
     participant_guid_prefix: GuidPrefix,
     add_reader_receiver: TokenReceiverPair<Reader>,
     remove_reader_receiver: TokenReceiverPair<GUID>,
     add_writer_receiver: TokenReceiverPair<Writer>,
     remove_writer_receiver: TokenReceiverPair<GUID>,
+    stop_poll_receiver: mio_channel::Receiver<()>,
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
 
@@ -96,10 +102,19 @@ impl DPEventWrapper {
       )
       .expect("Failed to register remove writer channel");
 
-   
+    poll
+      .register(
+        &stop_poll_receiver,
+        STOP_POLL_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register stop poll channel");
+
     DPEventWrapper {
       poll,
       ddscache,
+      discovery_db,
       udp_listeners,
       send_targets,
       message_receiver: MessageReceiver::new(participant_guid_prefix),
@@ -108,6 +123,7 @@ impl DPEventWrapper {
       add_writer_receiver,
       remove_writer_receiver,
       writer_heartbeat_recievers : HashMap::new(),
+      stop_poll_receiver,
     }
   }
 
@@ -301,11 +317,15 @@ mod tests {
     let (_add_writer_sender, add_writer_receiver) = mio_channel::channel();
     let (_remove_writer_sender, remove_writer_receiver) = mio_channel::channel();
 
+    let (_stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
+
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
+    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
 
     let dp_event_wrapper = DPEventWrapper::new(
       HashMap::new(),
       ddshc,
+      discovery_db,
       HashMap::new(),
       GuidPrefix::default(),
       TokenReceiverPair {
@@ -324,6 +344,7 @@ mod tests {
         token: REMOVE_WRITER_TOKEN,
         receiver: remove_writer_receiver,
       },
+      stop_poll_receiver,
     );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();

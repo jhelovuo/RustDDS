@@ -3,7 +3,9 @@ use std::convert::From;
 use std::time::Duration as TDuration;
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Serialize, Deserialize)]
+#[derive(
+  Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Serialize, Deserialize, Clone,
+)]
 pub struct Duration {
   seconds: i32,
   fraction: u32,

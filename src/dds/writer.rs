@@ -913,7 +913,7 @@ mod tests {
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {
-    let domain_participant = DomainParticipant::new();
+    let domain_participant = DomainParticipant::new(4, 0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
@@ -925,7 +925,7 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
     let mut data_writer = publisher
-      .create_datawriter(&topic, &qos)
+      .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 
     let data = RandomData {

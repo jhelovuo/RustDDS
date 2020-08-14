@@ -10,7 +10,7 @@ use std::{
   collections::HashSet,
   net::{SocketAddr, Ipv4Addr},
 };
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 ///ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
 pub struct RtpsReaderProxy {
   ///Identifies the remote matched RTPS Reader that is represented by the ReaderProxy

@@ -7,15 +7,18 @@ use crate::dds::{
 };
 
 use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
-use crate::structure::{
-  locator::LocatorList,
-  guid::GUID,
-  duration::Duration,
-  builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
+use crate::{
+  structure::{
+    locator::LocatorList,
+    guid::GUID,
+    duration::Duration,
+    builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
+  },
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SPDPDiscoveredParticipantData {
+  pub updated_time: u64,
   pub protocol_version: Option<ProtocolVersion>,
   pub vendor_id: Option<VendorId>,
   pub expects_inline_qos: Option<bool>,
@@ -26,7 +29,7 @@ pub struct SPDPDiscoveredParticipantData {
   pub default_multicast_locators: LocatorList,
   pub available_builtin_endpoints: Option<BuiltinEndpointSet>,
   pub lease_duration: Option<Duration>,
-  pub manual_liveliness_count: Option<u32>,
+  pub manual_liveliness_count: Option<i32>,
   pub builtin_enpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<String>,
 }
@@ -80,8 +83,6 @@ mod tests {
               BuiltinDataDeserializer::new(d.serialized_payload.value.clone())
                 .parse_data()
                 .generate_spdp_participant_data();
-            
-
           }
           _ => continue,
         },

@@ -1,6 +1,7 @@
 extern crate time;
 
 use speedy::{Readable, Writable};
+use serde::{Serialize, Deserialize};
 use std::convert::From;
 
 /// The representation of the time is the one defined by the IETF Network Time
@@ -10,7 +11,9 @@ use std::convert::From;
 
 /// This time representation is used in RTPS messages.
 /// Application-facing interfaces should use Instant and Duration from Rust std library.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Clone, Copy)]
+#[derive(
+  Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Clone, Copy, Serialize, Deserialize,
+)]
 pub struct Time {
   seconds: i32,
   fraction: u32,

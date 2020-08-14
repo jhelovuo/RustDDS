@@ -2,7 +2,6 @@ use mio_extras::channel as mio_channel;
 
 use std::time::{Duration, Instant};
 
-use rand::Rng;
 use serde::{Serialize, Deserialize};
 
 use crate::structure::{guid::GUID, /*time::Timestamp,*/ entity::Entity, guid::EntityId};
@@ -21,6 +20,8 @@ use crate::dds::{
 };
 
 use crate::structure::topic_kind::TopicKind;
+
+use rand::Rng;
 
 // -------------------------------------------------------------------
 
@@ -49,6 +50,7 @@ impl<'a> Publisher {
 
   pub fn create_datawriter<D>(
     &'a self,
+    entity_id: Option<EntityId>,
     topic: &'a Topic,
     _qos: &QosPolicies,
   ) -> Result<DataWriter<'a, D>>
@@ -58,9 +60,15 @@ impl<'a> Publisher {
   {
     let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
-    // TODO: generate unique entity id's in a more systematic way
-    let mut rng = rand::thread_rng();
-    let entity_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
+    let entity_id = match entity_id {
+      Some(eid) => eid,
+      None => {
+        let mut rng = rand::thread_rng();
+        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
+
+        eid
+      }
+    };
 
     let guid = GUID::new_with_prefix_and_id(
       self.get_participant().as_entity().guid.guidPrefix,
@@ -172,6 +180,7 @@ impl<'s> Subscriber {
 
   pub fn create_datareader<D>(
     &'s self,
+    entity_id: Option<EntityId>,
     topic: &'s Topic,
     _qos: &QosPolicies,
   ) -> Result<DataReader<'s, D>>
@@ -182,10 +191,18 @@ impl<'s> Subscriber {
     // What is the bound?
     let (send, rec) = mio_channel::sync_channel::<Instant>(10);
 
-    // TODO: How should we create the IDs for entities?
-    let mut rng = rand::thread_rng();
-    let reader_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
-    let datareader_id = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
+    let entity_id = match entity_id {
+      Some(eid) => eid,
+      None => {
+        let mut rng = rand::thread_rng();
+        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC7);
+        eid
+      }
+    };
+
+    let reader_id = entity_id.clone();
+    let datareader_id = entity_id;
+
     let reader_guid =
       GUID::new_with_prefix_and_id(*self.domain_participant.get_guid_prefix(), reader_id);
 

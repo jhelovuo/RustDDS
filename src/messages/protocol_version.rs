@@ -1,7 +1,7 @@
 use speedy::{Readable, Writable};
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Serialize, Deserialize)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Serialize, Deserialize, Clone)]
 pub struct ProtocolVersion {
   pub major: u8,
   pub minor: u8,

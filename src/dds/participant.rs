@@ -3,23 +3,28 @@ use mio_extras::channel as mio_channel;
 
 use std::{
   thread,
+  thread::JoinHandle,
   collections::HashMap,
   time::Duration,
   sync::{Arc, RwLock},
   ops::Deref,
+  net::Ipv4Addr,
 };
 
-use crate::network::constant::*;
+use crate::network::{udp_listener::UDPListener, constant::*};
 
 use crate::dds::{
   dp_event_wrapper::DPEventWrapper, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*,
   qos::*, values::result::*,
 };
 
-use crate::structure::{
-  entity::{Entity, EntityAttributes},
-  guid::GUID,
-  dds_cache::DDSCache,
+use crate::{
+  discovery::{discovery::Discovery, discovery_db::DiscoveryDB},
+  structure::{
+    entity::{Entity, EntityAttributes},
+    guid::GUID,
+    dds_cache::DDSCache,
+  },
 };
 
 #[derive(Clone)]
@@ -28,11 +33,22 @@ pub struct DomainParticipant {
   dpi: Arc<DomainParticipant_Inner>,
 }
 
+// Send and Sync for actual ability to send between threads
+unsafe impl Send for DomainParticipant {}
+unsafe impl Sync for DomainParticipant {}
+
 #[allow(clippy::new_without_default)]
 impl DomainParticipant {
-  pub fn new() -> DomainParticipant {
-    let dpi = DomainParticipant_Inner::new();
-    DomainParticipant { dpi: Arc::new(dpi) }
+  pub fn new(domain_id: u16, participant_id: u16) -> DomainParticipant {
+    let dpi = DomainParticipant_Inner::new(domain_id, participant_id);
+    let dp = DomainParticipant { dpi: Arc::new(dpi) };
+
+    let discovery = Discovery::new(dp.clone(), dp.dpi.discovery_db.clone());
+    // TODO:
+    // FIXME: when do we stop discovery?
+    let _discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
+
+    dp
   }
 
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
@@ -59,7 +75,6 @@ impl Deref for DomainParticipant {
 pub struct DomainParticipant_Inner {
   entity_attributes: EntityAttributes,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
-  //ddscache: Arc<RwLock<DDSCache>>,
 
   // Adding Readers
   sender_add_reader: mio_channel::Sender<Reader>,
@@ -69,43 +84,79 @@ pub struct DomainParticipant_Inner {
   sender_add_datareader_vec: Vec<mio_channel::Sender<()>>,
   sender_remove_datareader_vec: Vec<mio_channel::Sender<GUID>>,
 
+  // dp_event_wrapper control
+  stop_poll_sender: mio_channel::Sender<()>,
+  ev_loop_handle: Option<JoinHandle<()>>,
+
   // Writers
   add_writer_sender: mio_channel::Sender<Writer>,
   remove_writer_sender: mio_channel::Sender<GUID>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
+  discovery_db: Arc<RwLock<DiscoveryDB>>,
+}
+
+impl Drop for DomainParticipant_Inner {
+  fn drop(&mut self) {
+    // if send has an error simply leave as we have lost control of the ev_loop_thread anyways
+    match self.stop_poll_sender.send(()) {
+      Ok(_) => (),
+      _ => return (),
+    };
+
+    // handle should always exist
+    // ignoring errors on join
+    match self.ev_loop_handle.take().unwrap().join() {
+      Ok(s) => s,
+      _ => (),
+    };
+  }
 }
 
 pub struct SubscriptionBuiltinTopicData {} // placeholder
 
 #[allow(clippy::new_without_default)]
 impl DomainParticipant_Inner {
-  // TODO: there might be a need to set participant id (thus calculating ports accordingly)
-  pub fn new() -> DomainParticipant_Inner {
-    // let discovery_multicast_listener =
-    //   UDPListener::new(DISCOVERY_MUL_LISTENER_TOKEN, "0.0.0.0", 7400);
-    // discovery_multicast_listener
-    //   .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
-    //   .expect("Unable to join multicast 239.255.0.1:7400");
+  fn new(domain_id: u16, participant_id: u16) -> DomainParticipant_Inner {
+    // Creating UPD listeners for participantId 0 (change this if necessary)
+    let discovery_multicast_listener = UDPListener::new(
+      DISCOVERY_MUL_LISTENER_TOKEN,
+      "0.0.0.0",
+      DomainParticipant_Inner::get_spdp_well_known_multicast_port(domain_id),
+    );
+    discovery_multicast_listener
+      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
+      .expect("Unable to join multicast 239.255.0.1:7400");
 
-    // let discovery_listener = UDPListener::new(DISCOVERY_LISTENER_TOKEN, "0.0.0.0", 7412);
+    let discovery_listener = UDPListener::new(
+      DISCOVERY_LISTENER_TOKEN,
+      "0.0.0.0",
+      DomainParticipant_Inner::get_spdp_well_known_unicast_port(domain_id, participant_id),
+    );
 
-    // let user_traffic_multicast_listener =
-    //   UDPListener::new(USER_TRAFFIC_MUL_LISTENER_TOKEN, "0.0.0.0", 7401);
-    // user_traffic_multicast_listener
-    //   .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
-    //   .expect("Unable to join multicast 239.255.0.1:7401");
+    let user_traffic_multicast_listener = UDPListener::new(
+      USER_TRAFFIC_MUL_LISTENER_TOKEN,
+      "0.0.0.0",
+      DomainParticipant_Inner::get_user_traffic_multicast_port(domain_id),
+    );
+    user_traffic_multicast_listener
+      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
+      .expect("Unable to join multicast 239.255.0.1:7401");
 
-    // let user_traffic_listener = UDPListener::new(USER_TRAFFIC_LISTENER_TOKEN, "0.0.0.0", 7413);
+    let user_traffic_listener = UDPListener::new(
+      USER_TRAFFIC_LISTENER_TOKEN,
+      "0.0.0.0",
+      DomainParticipant_Inner::get_user_traffic_unicast_port(domain_id, participant_id),
+    );
 
-    let listeners = HashMap::new();
-    // listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
-    // listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
-    // listeners.insert(
-    //   USER_TRAFFIC_MUL_LISTENER_TOKEN,
-    //   user_traffic_multicast_listener,
-    // );
-    // listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
+    let mut listeners = HashMap::new();
+    listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
+    listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
+    listeners.insert(
+      USER_TRAFFIC_MUL_LISTENER_TOKEN,
+      user_traffic_multicast_listener,
+    );
+    listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     let targets = HashMap::new();
 
@@ -120,10 +171,14 @@ impl DomainParticipant_Inner {
     let new_guid = GUID::new();
 
     let a_r_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
+
+    let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
     let ev_wrapper = DPEventWrapper::new(
       listeners,
       a_r_cache.clone(),
+      discovery_db.clone(),
       targets,
       new_guid.guidPrefix,
       TokenReceiverPair {
@@ -142,9 +197,10 @@ impl DomainParticipant_Inner {
         token: REMOVE_WRITER_TOKEN,
         receiver: remove_writer_receiver,
       },
+      stop_poll_receiver,
     );
     // Launch the background thread for DomainParticipant
-    thread::spawn(move || ev_wrapper.event_loop());
+    let ev_loop_handle = thread::spawn(move || ev_wrapper.event_loop());
 
     DomainParticipant_Inner {
       entity_attributes: EntityAttributes { guid: new_guid },
@@ -156,10 +212,48 @@ impl DomainParticipant_Inner {
       // Adding datareaders
       sender_add_datareader_vec: Vec::new(),
       sender_remove_datareader_vec: Vec::new(),
+      stop_poll_sender,
+      ev_loop_handle: Some(ev_loop_handle),
       add_writer_sender,
       remove_writer_sender,
       dds_cache: Arc::new(RwLock::new(DDSCache::new())),
+      discovery_db: discovery_db,
     }
+  }
+
+  const PB: u16 = 7400;
+  const DG: u16 = 250;
+  const PG: u16 = 2;
+
+  const D0: u16 = 0;
+  const D1: u16 = 10;
+  const D2: u16 = 1;
+  const D3: u16 = 11;
+
+  fn get_spdp_well_known_multicast_port(domain_id: u16) -> u16 {
+    DomainParticipant_Inner::PB
+      + DomainParticipant_Inner::DG * domain_id
+      + DomainParticipant_Inner::D0
+  }
+
+  fn get_spdp_well_known_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
+    DomainParticipant_Inner::PB
+      + DomainParticipant_Inner::DG * domain_id
+      + DomainParticipant_Inner::D1
+      + DomainParticipant_Inner::PG * participant_id
+  }
+
+  fn get_user_traffic_multicast_port(domain_id: u16) -> u16 {
+    DomainParticipant_Inner::PB
+      + DomainParticipant_Inner::DG * domain_id
+      + DomainParticipant_Inner::D2
+  }
+
+  fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
+    DomainParticipant_Inner::PB
+      + DomainParticipant_Inner::DG * domain_id
+      + DomainParticipant_Inner::D3
+      + DomainParticipant_Inner::PG * participant_id
   }
 
   pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {

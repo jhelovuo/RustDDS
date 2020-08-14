@@ -27,7 +27,7 @@ pub struct BuiltinDataDeserializer {
   default_multicast_locators: LocatorList,
   available_builtin_endpoints: Option<BuiltinEndpointSet>,
   lease_duration: Option<Duration>,
-  manual_liveliness_count: Option<u32>,
+  manual_liveliness_count: Option<i32>,
   builtin_enpoint_qos: Option<BuiltinEndpointQos>,
   entity_name: Option<String>,
   sentinel: Option<u16>,
@@ -56,6 +56,7 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_spdp_participant_data(self) -> SPDPDiscoveredParticipantData {
     SPDPDiscoveredParticipantData {
+      updated_time: time::precise_time_ns(),
       protocol_version: self.protocol_version,
       vendor_id: self.vendor_id,
       expects_inline_qos: self.expects_inline_qos,
@@ -206,7 +207,7 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT => {
-        let count: Result<u32, Error> =
+        let count: Result<i32, Error> =
           deserialize_from_little_endian(self.buffer[4..4 + parameter_length].to_vec());
         match count {
           Ok(c) => {
