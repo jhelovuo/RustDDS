@@ -338,7 +338,6 @@ impl DomainParticipant_Inner {
     unimplemented!()
   }
 
-
   // get_builtin_subscriber (why would we need this?)
 
   // ignore_* operations. TODO: Do we needa any of those?
@@ -350,22 +349,21 @@ impl DomainParticipant_Inner {
     unimplemented!()
   }
 
-
   // The following methods are not for application use.
 
-  pub (crate) fn get_add_reader_sender(&self) -> mio_channel::Sender<Reader> {
+  pub(crate) fn get_add_reader_sender(&self) -> mio_channel::Sender<Reader> {
     self.sender_add_reader.clone()
   }
 
-  pub (crate) fn get_remove_reader_sender(&self) -> mio_channel::Sender<GUID> {
+  pub(crate) fn get_remove_reader_sender(&self) -> mio_channel::Sender<GUID> {
     self.sender_remove_reader.clone()
   }
 
-  pub (crate) fn get_add_writer_sender(&self) -> mio_channel::Sender<Writer> {
+  pub(crate) fn get_add_writer_sender(&self) -> mio_channel::Sender<Writer> {
     self.add_writer_sender.clone()
   }
 
-  pub (crate) fn get_remove_writer_sender(&self) -> mio_channel::Sender<GUID> {
+  pub(crate) fn get_remove_writer_sender(&self) -> mio_channel::Sender<GUID> {
     self.remove_writer_sender.clone()
   }
 } // impl
@@ -389,7 +387,11 @@ mod tests {
   // use super::*;
 
   use std::{thread, net::SocketAddr};
-  use crate::{dds::{qos::QosPolicies, typedesc::TypeDesc}, network::udp_sender::UDPSender, test::random_data::RandomData};
+  use crate::{
+    dds::{qos::QosPolicies, typedesc::TypeDesc},
+    network::udp_sender::UDPSender,
+    test::random_data::RandomData,
+  };
   use super::DomainParticipant;
   // TODO: improve basic test when more or the structure is known
   #[test]
@@ -405,9 +407,8 @@ mod tests {
     // TODO: get result data from Reader
   }
   #[test]
-  fn dp_writer_hearbeat_test(){
-    let domain_participant = DomainParticipant::new();
-
+  fn dp_writer_hearbeat_test() {
+    let domain_participant = DomainParticipant::new(5, 0);
 
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
@@ -420,11 +421,10 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos.clone())
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let mut data_writer = publisher
-      .create_datawriter::<RandomData>(&topic, &qos.clone())
+    let mut _data_writer = publisher
+      .create_datawriter::<RandomData>(None, &topic, &qos.clone())
       .expect("Failed to create datawriter");
 
-      thread::sleep(time::Duration::seconds(1).to_std().unwrap());
-      
-  } 
+    thread::sleep(time::Duration::seconds(1).to_std().unwrap());
+  }
 }

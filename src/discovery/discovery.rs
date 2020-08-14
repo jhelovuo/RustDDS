@@ -13,7 +13,7 @@ use crate::dds::{
     QosPolicies, HasQoSPolicy,
     policy::{Reliability, History},
   },
-  datareader::DataReader,
+  datareader::{Take, DataReader},
 };
 
 use crate::discovery::{
@@ -217,22 +217,26 @@ impl Discovery {
   }
 
   pub fn handle_participant_reader(&self, reader: &DataReader<SPDPDiscoveredParticipantData>) {
-    let participant_datas = match reader.read_next() {
-      Ok(d) => d,
+    let participant_data = match reader.read_next_sample(Take::Yes) {
+      Ok(d) => match d {
+        Some(d) => match d.value {
+          Ok(aaaaa) => (*aaaaa).clone(),
+          _ => return (),
+        },
+        None => return (),
+      },
       _ => return (),
     };
 
-    for pd in participant_datas.iter() {
-      let dbres = self.discovery_db.write();
-      match dbres {
-        Ok(mut db) => {
-          (*db).update_participant(pd);
-        }
-        _ => continue,
+    let dbres = self.discovery_db.write();
+    match dbres {
+      Ok(mut db) => {
+        (*db).update_participant(&participant_data);
       }
-      // debug for when all parts are available
-      println!("Participant: {:?}", pd);
+      _ => return (),
     }
+    // debug for when all parts are available
+    println!("Participant: {:?}", participant_data);
   }
 
   pub fn participant_cleanup(&self) {

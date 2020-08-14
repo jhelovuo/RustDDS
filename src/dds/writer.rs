@@ -30,11 +30,18 @@ use crate::{
   structure::{
     entity::{Entity, EntityAttributes},
     endpoint::{EndpointAttributes, Endpoint},
-    locator::{Locator, LocatorKind}, dds_cache::DDSCache, 
-  }, common::heartbeat_handler::HeartbeatHandler,
+    locator::{Locator, LocatorKind},
+    dds_cache::DDSCache,
+  },
+  common::heartbeat_handler::HeartbeatHandler,
 };
 use super::{rtps_reader_proxy::RtpsReaderProxy};
-use std::{net::SocketAddr, time::{Instant, Duration}, sync::{RwLock, Arc}, collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher}};
+use std::{
+  net::SocketAddr,
+  time::{Instant, Duration},
+  sync::{RwLock, Arc},
+  collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
+};
 
 pub struct Writer {
   pub submessage_count: usize,
@@ -94,27 +101,27 @@ pub struct Writer {
   message: Option<Message>,
   udp_sender: UDPSender,
   // This writer can read/write to only one of this DDSCache topic caches identified with my_topic_name
-  dds_cache : Arc<RwLock<DDSCache>>,
+  dds_cache: Arc<RwLock<DDSCache>>,
   /// Writer can only read/write to this topic DDSHistoryCache.
   my_topic_name: String,
   /// Maps this writers local sequence numbers to DDSHistodyCache instants.
   /// Useful when negative acknack is recieved.
-  sequence_number_to_instant : BTreeMap<SequenceNumber, Instant>,
- //// Maps this writers local sequence numbers to DDSHistodyCache instants.
+  sequence_number_to_instant: BTreeMap<SequenceNumber, Instant>,
+  //// Maps this writers local sequence numbers to DDSHistodyCache instants.
   /// Useful when datawriter dispose is recieved.
   key_to_instant: HashMap<u64, Instant>,
   /// Set of disposed samples.
-  /// Useful when reader requires some sample with acknack. 
-  disposed_sequence_numbers : HashSet<SequenceNumber>,
+  /// Useful when reader requires some sample with acknack.
+  disposed_sequence_numbers: HashSet<SequenceNumber>,
   //When dataWriter sends cacheChange message with cacheKind is NotAlive_Disposed
-  //this is set true. If Datawriter after disposing sends new cahceChanges this falg is then 
+  //this is set true. If Datawriter after disposing sends new cahceChanges this falg is then
   //turned true.
-  //When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with DisposedFlag 
+  //When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with DisposedFlag
   //TODO are messages send every heartbeat or just once ????
-  pub writer_is_disposed : bool,
+  pub writer_is_disposed: bool,
   ///Contains timer that needs to be set to timeout with duration of self.heartbeat_perioid
   ///Heartbeat handler sends notification when timer is up via miochannel to poll in Dp_eventWrapper
-  heartbeat_handler : Option<HeartbeatHandler>,
+  heartbeat_handler: Option<HeartbeatHandler>,
 }
 
 impl Writer {
@@ -153,12 +160,12 @@ impl Writer {
       endpoint_attributes: EndpointAttributes::default(),
       udp_sender: UDPSender::new_with_random_port(),
       dds_cache,
-      my_topic_name : topic_name,
-      sequence_number_to_instant : BTreeMap::new(),
-      key_to_instant : HashMap::new(),
-      disposed_sequence_numbers : HashSet::new(),
-      writer_is_disposed : false,
-      heartbeat_handler : None,
+      my_topic_name: topic_name,
+      sequence_number_to_instant: BTreeMap::new(),
+      key_to_instant: HashMap::new(),
+      disposed_sequence_numbers: HashSet::new(),
+      writer_is_disposed: false,
+      heartbeat_handler: None,
     }
     //entity_attributes.guid.entityId.
   }
@@ -169,12 +176,12 @@ impl Writer {
     Token(id)
   }
 
-  pub fn get_heartbeat_entity_token(&self) -> Token{
+  pub fn get_heartbeat_entity_token(&self) -> Token {
     let mut hasher = DefaultHasher::new();
     let id = self.as_entity().as_usize() as u64;
     hasher.write(&id.to_le_bytes());
-    let hashedID : u64 = hasher.finish();
-    Token(hashedID as usize)    
+    let hashedID: u64 = hasher.finish();
+    Token(hashedID as usize)
   }
 
   pub fn cache_change_receiver(&self) -> &mio_channel::Receiver<DDSData> {
@@ -183,41 +190,48 @@ impl Writer {
 
   pub fn add_heartbeat_handler(&mut self, heartbeat_handler: HeartbeatHandler) {
     self.heartbeat_handler = Some(heartbeat_handler);
-    self.heartbeat_handler.as_mut().unwrap().set_timeout(&chronoDuration::from_std(self.heartbeat_perioid).unwrap());
+    self
+      .heartbeat_handler
+      .as_mut()
+      .unwrap()
+      .set_timeout(&chronoDuration::from_std(self.heartbeat_perioid).unwrap());
   }
 
   /// this should be called everytime heartbeat message with token is recieved.
-  pub fn handle_heartbeat_tick(&mut self){
+  pub fn handle_heartbeat_tick(&mut self) {
     println!("HANDLE HERTBEAT writer entityID: {:?}", self.as_entity());
 
     let mut RTPSMessage: Message = Message::new();
 
     RTPSMessage.set_header(self.create_message_header());
-    
+
     // TODO Set some guidprefix if needed at all.
     // Not sure if DST submessage and TS submessage are needed when sending heartbeat.
-    
+
     //RTPSMessage.add_submessage(self.get_DST_submessage(GuidPrefix::GUIDPREFIX_UNKNOWN));
     //RTPSMessage.add_submessage(self.get_TS_submessage());
     RTPSMessage.add_submessage(self.get_heartbeat_msg());
 
     //let buffer :[u8] = RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap();
-    for reader in &self.readers{
+    for reader in &self.readers {
       if reader.unicast_locator_list.len() > 0 {
-        self.send_unicast_message_to_reader(&RTPSMessage,reader);
+        self.send_unicast_message_to_reader(&RTPSMessage, reader);
       }
       if reader.multicast_locator_list.len() > 0 {
-        self.send_multicast_message_to_reader(&RTPSMessage,reader);
+        self.send_multicast_message_to_reader(&RTPSMessage, reader);
       }
-      
     }
 
     self.set_heartbeat_timer();
   }
 
   /// after heartbeat is handled timer should be set running again.
-  fn set_heartbeat_timer(&mut self){
-    self.heartbeat_handler.as_mut().unwrap().set_timeout(&chronoDuration::from_std(self.heartbeat_perioid).unwrap())
+  fn set_heartbeat_timer(&mut self) {
+    self
+      .heartbeat_handler
+      .as_mut()
+      .unwrap()
+      .set_timeout(&chronoDuration::from_std(self.heartbeat_perioid).unwrap())
   }
 
   pub fn insert_to_history_cache(&mut self, data: DDSData) {
@@ -246,65 +260,84 @@ impl Writer {
     self.key_to_instant.insert(data_key, insta.clone());
     self.writer_set_unsent_changes();
   }
-  
+
   /// This needs to be called when dataWriter does dispose.
   /// This does not remove anything from datacahce but changes the status of writer to disposed.
-  pub fn handle_not_alive_disposed_cache_change(&mut self, data : DDSData){
+  pub fn handle_not_alive_disposed_cache_change(&mut self, data: DDSData) {
     let instant = self.key_to_instant.get(&data.value_key_hash);
     self.writer_is_disposed = true;
-    if instant.is_some(){
-      self.dds_cache.write().unwrap().from_topic_set_change_to_not_alive_disposed(&self.my_topic_name, &instant.unwrap());
+    if instant.is_some() {
+      self
+        .dds_cache
+        .write()
+        .unwrap()
+        .from_topic_set_change_to_not_alive_disposed(&self.my_topic_name, &instant.unwrap());
     }
-    
   }
 
   /// Removes permanently cacheChanges from DDSCache.
   /// CacheChanges can be safely removed only if they are acked by all readers.
-  pub fn remove_all_acked_changes(&mut self){
-  let acked_by_all_reades = {
-    let mut acked_by_all_reades : Vec<(&Instant,&SequenceNumber)>  = vec![];
-    for (sq,i)  in self.sequence_number_to_instant.iter(){
-      if self.change_with_sequence_number_is_acked_by_all(&sq){
-        acked_by_all_reades.push((i,sq));
+  pub fn remove_all_acked_changes(&mut self) {
+    let acked_by_all_reades = {
+      let mut acked_by_all_reades: Vec<(&Instant, &SequenceNumber)> = vec![];
+      for (sq, i) in self.sequence_number_to_instant.iter() {
+        if self.change_with_sequence_number_is_acked_by_all(&sq) {
+          acked_by_all_reades.push((i, sq));
+        }
+      }
+      acked_by_all_reades
+    };
+    {
+      for (i, _sq) in acked_by_all_reades {
+        self
+          .dds_cache
+          .write()
+          .unwrap()
+          .from_topic_remove_change(&self.my_topic_name, i);
+        // TODO MAYBE USEFUL TO REMOVE SEQUENCE NUMBERST THAT ARE REMOVED
+        //self.sequence_number_to_instant.remove(sq);
       }
     }
-    acked_by_all_reades
-  };
-  {
-    for (i,_sq) in acked_by_all_reades{
-      self.dds_cache.write().unwrap().from_topic_remove_change(&self.my_topic_name, i);
-      // TODO MAYBE USEFUL TO REMOVE SEQUENCE NUMBERST THAT ARE REMOVED
-      //self.sequence_number_to_instant.remove(sq);
-    }
-  }
-     
   }
 
-  fn remove_from_history_cache(&mut self, instant : &Instant){
-    let removed_change = self.dds_cache.write().unwrap().from_topic_remove_change(&self.my_topic_name, instant);
-    println!("removed change from DDShistoryCache {:?}",removed_change);
-    if removed_change.is_some(){
-      self.disposed_sequence_numbers.insert(removed_change.unwrap().sequence_number);
-    }
-    else{
+  fn remove_from_history_cache(&mut self, instant: &Instant) {
+    let removed_change = self
+      .dds_cache
+      .write()
+      .unwrap()
+      .from_topic_remove_change(&self.my_topic_name, instant);
+    println!("removed change from DDShistoryCache {:?}", removed_change);
+    if removed_change.is_some() {
+      self
+        .disposed_sequence_numbers
+        .insert(removed_change.unwrap().sequence_number);
+    } else {
       todo!();
     }
   }
 
-  fn remove_from_history_cache_with_sequence_number(&mut self, sequence_number : &SequenceNumber){
+  fn remove_from_history_cache_with_sequence_number(&mut self, sequence_number: &SequenceNumber) {
     let instant = self.sequence_number_to_instant.get(sequence_number);
-    if instant.is_some(){
-      let removed_change = self.dds_cache.write().unwrap().from_topic_remove_change(&self.my_topic_name, instant.unwrap());
-      if removed_change.is_none(){
-        todo!("Cache change with seqnum {:?} and instant {:?} cold not be revod from DDSCache", sequence_number, instant)
+    if instant.is_some() {
+      let removed_change = self
+        .dds_cache
+        .write()
+        .unwrap()
+        .from_topic_remove_change(&self.my_topic_name, instant.unwrap());
+      if removed_change.is_none() {
+        todo!(
+          "Cache change with seqnum {:?} and instant {:?} cold not be revod from DDSCache",
+          sequence_number,
+          instant
+        )
       }
+    } else {
+      todo!(
+        "sequence number: {:?} cannot be tranformed to instant ",
+        sequence_number
+      );
     }
-    else{
-      todo!("sequence number: {:?} cannot be tranformed to instant ", sequence_number);
-    }
-    
   }
-
 
   fn increase_last_change_sequence_number(&mut self) {
     self.last_change_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
@@ -431,18 +464,21 @@ impl Writer {
     }
   }
 
-  fn send_unicast_message_to_reader(&self, message : &Message, reader : &RtpsReaderProxy){
+  fn send_unicast_message_to_reader(&self, message: &Message, reader: &RtpsReaderProxy) {
     let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
-    self.udp_sender.send_to_locator_list(&buffer, &reader.unicast_locator_list)
+    self
+      .udp_sender
+      .send_to_locator_list(&buffer, &reader.unicast_locator_list)
   }
 
-  fn send_multicast_message_to_reader(&self, message : &Message, reader : &RtpsReaderProxy){
+  fn send_multicast_message_to_reader(&self, message: &Message, reader: &RtpsReaderProxy) {
     let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
-    for multiaddress in &reader.multicast_locator_list{
+    for multiaddress in &reader.multicast_locator_list {
       if multiaddress.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
-        self.udp_sender.send_ipv4_multicast(&buffer, multiaddress.to_socket_address());
-      }
-      else if multiaddress.kind == LocatorKind::LOCATOR_KIND_UDPv6 {
+        self
+          .udp_sender
+          .send_ipv4_multicast(&buffer, multiaddress.to_socket_address()).expect("Unable to send multicast message.");
+      } else if multiaddress.kind == LocatorKind::LOCATOR_KIND_UDPv6 {
         todo!();
       }
     }
@@ -528,18 +564,15 @@ impl Writer {
     return s;
   }
 
-  pub fn get_DST_submessage(&self, guid_prefix : GuidPrefix) -> SubMessage{
+  pub fn get_DST_submessage(&self, guid_prefix: GuidPrefix) -> SubMessage {
     //InfoDST length is always 12 because message contains only GuidPrefix
     let submessageHeader = self.create_submessage_header(SubmessageKind::INFO_DST, 12u16);
     let s: SubMessage = SubMessage {
       header: submessageHeader,
       submessage: None,
-      intepreterSubmessage: Some(InterpreterSubmessage::InfoDestination(
-        InfoDestination{
-          guid_prefix : guid_prefix 
-        }
-        
-      )),
+      intepreterSubmessage: Some(InterpreterSubmessage::InfoDestination(InfoDestination {
+        guid_prefix: guid_prefix,
+      })),
     };
     return s;
   }
@@ -709,7 +742,10 @@ impl Writer {
     return true;
   }
 
-  pub fn change_with_sequence_number_is_acked_by_all(&self, sequence_number : &SequenceNumber) -> bool {
+  pub fn change_with_sequence_number_is_acked_by_all(
+    &self,
+    sequence_number: &SequenceNumber,
+  ) -> bool {
     for _proxy in &self.readers {
       if _proxy.sequence_is_acked(sequence_number) == false {
         return false;
