@@ -15,6 +15,34 @@ pub struct Message {
   header: Header,
   submessages: Vec<SubMessage>,
 }
+#[derive(Debug)]
+pub struct SubmessageFlagHelper {
+  pub KeyFlag : bool,         //DATA
+  pub DataFlag: bool,         //DATA
+  pub InlineQosFlag : bool,   //DATA
+  pub NonStandardPayloadFlag: bool, //DATA
+  pub EndiannessFlag : bool,
+  pub FinalFlag : bool,        //ACKNACK
+  pub LivelinessFlag : bool,   //HEARTBEAT
+  pub MulticastFlag : bool,    //InfoReply
+  pub InvalidateFlag : bool,   //InfoTS
+}
+impl SubmessageFlagHelper {
+  pub fn new() -> SubmessageFlagHelper{
+    SubmessageFlagHelper {
+      KeyFlag : false,        
+      DataFlag: false,         
+      InlineQosFlag : false,   
+      NonStandardPayloadFlag : false,
+      EndiannessFlag : false,
+      FinalFlag : false,        
+      LivelinessFlag : false,   
+      MulticastFlag : false,    
+      InvalidateFlag : false,   
+    }
+  }
+}
+
 
 impl<'a> Message {
   pub fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Header {
@@ -44,6 +72,24 @@ impl<'a> Message {
 
   pub fn set_header(&mut self, header: Header) {
     self.header = header;
+  }
+
+  ///Meaning of each bit is different depending on the message submessage type.
+  ///Flags are u8 long -> possibility of 8 diffenrent flags.
+  pub fn get_submessage_flags_helper(submessage_kind : &SubmessageKind, flags : &SubmessageFlag) -> SubmessageFlagHelper{
+    let mut helper = SubmessageFlagHelper::new();
+
+    // |X|X|X|N|K|D|Q|E|
+    //  NonStandardPayloadFlag, Key, DataFlag, InlineQosFlag, EndiannessFlag
+    if submessage_kind == &SubmessageKind::DATA { 
+      helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+      helper.InlineQosFlag = flags.is_flag_set(2u8.pow(1));
+      helper.DataFlag = flags.is_flag_set(2u8.pow(2));
+      helper.KeyFlag = flags.is_flag_set(2u8.pow(3));
+      helper.NonStandardPayloadFlag = flags.is_flag_set(2u8.pow(4));
+    }
+    return helper;
+
   }
 
   pub fn get_data_sub_message_sequence_numbers(&self) -> Vec<SequenceNumber> {
@@ -88,6 +134,8 @@ impl<C: Context> Writable<C> for Message {
   }
 }
 
+
+
 impl<'a, C: Context> Readable<'a, C> for Message {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let mut message = Message::default();
@@ -120,9 +168,12 @@ impl<'a, C: Context> Readable<'a, C> for Message {
         buffer = reader.read_vec(subHeader.submessage_length as usize)?;
       }
 
+      let submessageFlagHelper = Message::get_submessage_flags_helper(&subHeader.submessage_id, &subHeader.flags);
+
       match subHeader.submessage_id {
         SubmessageKind::DATA => {
-          let x = Data::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
+
+          let x = Data::deserialize_data(&buffer, endianess,submessageFlagHelper.InlineQosFlag,submessageFlagHelper.DataFlag);
           let y: SubMessage = SubMessage {
             header: subHeader,
             submessage: Some(EntitySubmessage::Data(x, flag.clone())),
@@ -430,5 +481,56 @@ mod tests {
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .unwrap();
     assert_eq!(bits1, serialized);
+  }
+
+
+  #[test]
+  fn test_RTPS_submessage_flags_helper(){
+    let fla : SubmessageFlag = SubmessageFlag{
+      flags: 0b00000001_u8,
+    };
+    let mut helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA, &fla);
+    println!("{:?}",&helper);
+    assert_eq!(helper.EndiannessFlag,true);
+    assert_eq!(helper.InlineQosFlag,false);
+    assert_eq!(helper.DataFlag,false);
+    assert_eq!(helper.NonStandardPayloadFlag,false);
+    assert_eq!(helper.FinalFlag,false);
+    assert_eq!(helper.InvalidateFlag,false);
+    assert_eq!(helper.KeyFlag,false);
+    assert_eq!(helper.LivelinessFlag,false);
+    assert_eq!(helper.MulticastFlag,false);
+
+    let fla2 : SubmessageFlag = SubmessageFlag{
+      flags: 0b00011111_u8,
+    };
+    helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA, &fla2);
+    println!("{:?}",&helper);
+    assert_eq!(helper.EndiannessFlag,true);
+    assert_eq!(helper.InlineQosFlag,true);
+    assert_eq!(helper.DataFlag,true);
+    assert_eq!(helper.NonStandardPayloadFlag,true);
+    assert_eq!(helper.FinalFlag,false);
+    assert_eq!(helper.InvalidateFlag,false);
+    assert_eq!(helper.KeyFlag,true);
+    assert_eq!(helper.LivelinessFlag,false);
+    assert_eq!(helper.MulticastFlag,false);
+
+
+
+    let fla3 : SubmessageFlag = SubmessageFlag{
+      flags: 0b00001010_u8,
+    };
+    helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA, &fla3);
+    println!("{:?}",&helper);
+    assert_eq!(helper.EndiannessFlag,false);
+    assert_eq!(helper.InlineQosFlag,true);
+    assert_eq!(helper.DataFlag,false);
+    assert_eq!(helper.NonStandardPayloadFlag,false);
+    assert_eq!(helper.FinalFlag,false);
+    assert_eq!(helper.InvalidateFlag,false);
+    assert_eq!(helper.KeyFlag,true);
+    assert_eq!(helper.LivelinessFlag,false);
+    assert_eq!(helper.MulticastFlag,false);
   }
 }

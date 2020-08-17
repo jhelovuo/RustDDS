@@ -560,8 +560,6 @@ impl<'a> ser::SerializeStructVariant for &'a mut CDR_serializer {
 mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use crate::serialization::cdrSerializer::to_big_endian_binary;
-  use std::fs::File;
-  use std::io::prelude::*;
   use serde::{Serialize, Deserialize};
 
   #[test]
@@ -610,43 +608,13 @@ mod tests {
     };
 
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let mut file = File::create("serialization_result_from_cdr_test").unwrap();
-    file.write_all(&sarjallistettu).unwrap();
+    let expected: Vec<u8> = vec![
+	    0x01, 0xff, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x67, 0x67, 0x34, 0x00,
+	    0x00, 0x00, 0x00, 0x00, 0x01
+    ];
+    assert_eq!(expected,sarjallistettu)
+  
   }
-
-  #[test]
-  fn CDR_serialization_f32() {
-    #[derive(Serialize)]
-    struct OmaTyyppi {
-      firstValue: f32,
-    }
-
-    let mikkiHiiri = OmaTyyppi {
-      firstValue: 255.255_f32,
-    };
-
-    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let mut file = File::create("serialization_result_f32").unwrap();
-    file.write_all(&sarjallistettu).unwrap();
-  }
-
-  #[test]
-  fn CDR_serialization_f64() {
-    #[derive(Serialize)]
-    struct OmaTyyppi {
-      firstValue: f64,
-    }
-
-    let mikkiHiiri = OmaTyyppi {
-      firstValue: 255.255_f64,
-    };
-
-    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let mut file = File::create("serialization_result_f64").unwrap();
-    file.write_all(&sarjallistettu).unwrap();
-  }
-
-  #[test]
 
   fn CDR_serialization_char() {
     #[derive(Serialize)]
@@ -662,8 +630,9 @@ mod tests {
     };
 
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let mut file = File::create("serialization_result_char").unwrap();
-    file.write_all(&sarjallistettu).unwrap();
+    let expected: Vec<u8> = vec![ 0x61, 0x62, 0xe4];
+    assert_eq!(expected,sarjallistettu)
+    
   }
   #[test]
   fn CDR_serialization_string() {
@@ -673,8 +642,8 @@ mod tests {
     }
     let mikkiHiiri = OmaTyyppi { firstValue: "BLUE" };
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let mut file = File::create("serialization_result_string").unwrap();
-    file.write_all(&sarjallistettu).unwrap();
+    let expected: Vec<u8> =  vec![0x05, 0x00, 0x00, 0x00, 0x42, 0x4c, 0x55, 0x45, 0x00 ];
+    assert_eq!(expected,sarjallistettu)
   }
 
   fn CDR_serialization_little() {
@@ -695,7 +664,13 @@ mod tests {
       firstValue: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 123123],
     };
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let mut file = File::create("serialization_result_seq").unwrap();
-    file.write_all(&sarjallistettu).unwrap();
+    let expected: Vec<u8> =  vec![
+    	0x0b, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+    	0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00,
+    	0x06, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
+    	0x09, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xf3, 0xe0, 0x01, 0x00
+    ];
+    assert_eq!(expected,sarjallistettu)
+
   }
 }

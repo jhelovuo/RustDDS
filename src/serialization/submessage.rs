@@ -16,8 +16,9 @@ use crate::messages::submessages::nack_frag::*;
 use crate::messages::submessages::data::*;
 use crate::messages::submessages::data_frag::*;
 use crate::messages::submessages::submessage::InterpreterSubmessage;
-use crate::messages::fragment_number::FragmentNumber;
+use crate::{messages::fragment_number::FragmentNumber};
 use speedy::{Context, Writer, Readable, Writable, Endianness};
+use super::Message;
 
 #[derive(Debug, PartialEq)]
 pub struct SubMessage {
@@ -42,6 +43,8 @@ where
     context: Endianness,
     buffer: &'a [u8],
   ) -> Option<EntitySubmessage> {
+
+    let data_message_flag_helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA,&msgheader.flags);
     match msgheader.submessage_id {
       SubmessageKind::ACKNACK => Some(EntitySubmessage::AckNack(
         AckNack::read_from_buffer_with_ctx(context, buffer).unwrap(),
@@ -60,10 +63,11 @@ where
       SubmessageKind::HEARTBEAT_FRAG => Some(EntitySubmessage::HeartbeatFrag(
         HeartbeatFrag::read_from_buffer_with_ctx(context, buffer).unwrap(),
       )),
-      SubmessageKind::DATA => Some(EntitySubmessage::Data(
-        Data::read_from_buffer_owned_with_ctx(context, buffer).unwrap(),
+      SubmessageKind::DATA =>  Some(EntitySubmessage::Data(
+        Data::deserialize_data(&buffer.to_vec(), context, data_message_flag_helper.InlineQosFlag, data_message_flag_helper.DataFlag),
         msgheader.flags.clone(),
       )),
+      
       SubmessageKind::DATA_FRAG => {
         match SubMessage::deserialize_data_frag(&msgheader, context, &buffer) {
           Some(T) => Some(EntitySubmessage::DataFrag(T, msgheader.flags.clone())),
@@ -74,75 +78,7 @@ where
     }
   }
 
-  fn deserialize_data(
-    msgheader: &SubmessageHeader,
-    _context: Endianness,
-    buffer: &'a [u8],
-  ) -> Option<Data> {
-    let mut pos: usize = 0;
-    // TODO Check flag locations..?
-    //let endianness_flag = msgheader.flags.is_flag_set(3);
-    let inline_qoS_flag = msgheader.flags.is_flag_set(2);
-    let data_flag = msgheader.flags.is_flag_set(1);
-    let key_flag = msgheader.flags.is_flag_set(0);
-    if key_flag && data_flag {
-      return None;
-    }
-    pos += 2; // Ignore extra flags for now
-
-    let octets_to_inline_qos = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
-    pos += 2;
-
-    let reader_id = EntityId::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
-    pos += 4;
-    let writer_id = EntityId::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
-    pos += 4;
-    let writer_sn = SequenceNumber::read_from_buffer(&buffer[pos..pos + 8]).unwrap();
-    pos += 8;
-
-    if pos != octets_to_inline_qos as usize + 4 {
-      pos = octets_to_inline_qos as usize + 4; // Ignore
-    }
-    let mut inline_qos = None;
-    if inline_qoS_flag {
-      let inline_qos_size: usize = 4; // Is it this for sure??
-      inline_qos =
-        Some(ParameterList::read_from_buffer(&buffer[pos..pos + inline_qos_size]).unwrap());
-      pos += inline_qos_size;
-    }
-    let mut serialized_payload = SerializedPayload::new();
-    if data_flag || key_flag {
-      // Table 10.2 - RepresentationIdentifier values for built-in endpoints other than discovery
-      let rep_identifier =
-        u16::read_from_buffer_with_ctx(Endianness::BigEndian, &buffer[pos..pos + 2]).unwrap();
-      println!("rep_identifier: {:?}", rep_identifier);
-      pos += 2;
-      let rep_options =
-        u16::read_from_buffer_with_ctx(Endianness::BigEndian, &buffer[pos..pos + 2]).unwrap();
-      pos += 2;
-
-      let payload_size: usize = msgheader.submessage_length as usize - pos;
-
-      let vec_value: Vec<u8> = buffer[pos..(pos + payload_size)].to_vec().clone();
-
-      if vec_value.len() != payload_size {
-        println!("SUBMESSAGE SERIALIZED PAYLOAD AND VEC SLICE ARE NOT SAME SIZE !!!")
-      }
-
-      serialized_payload = SerializedPayload {
-        representation_identifier: rep_identifier,
-        representation_options: rep_options,
-        value: vec_value,
-      }
-    }
-    Some(Data {
-      reader_id,
-      writer_id,
-      writer_sn,
-      inline_qos,
-      serialized_payload,
-    })
-  }
+  
 
   fn deserialize_data_frag(
     msgheader: &SubmessageHeader,
@@ -299,7 +235,7 @@ impl<C: Context> Writable<C> for SubMessage {
 mod tests {
   use super::SubMessage;
   use speedy::{Readable, Writable, Endianness};
-  use crate::submessages::{Heartbeat, InfoDestination, InfoTimestamp, Data};
+  use crate::{serialization::Message, submessages::{Heartbeat, InfoDestination, InfoTimestamp, Data, SubmessageKind}};
   #[test]
   fn submessage_data_submessage_deserialization() {
     // this is wireshark captured shapesdemo dataSubmessage
@@ -320,10 +256,11 @@ mod tests {
         return;
       } // rule 1. Could not create submessage header
     };
+    let helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA, &submessage_header.flags);
     println!("{:?}", submessage_header);
     let suba =
-      Data::read_from_buffer_with_ctx(Endianness::LittleEndian, &serializedDataSubMessage[4..])
-        .unwrap();
+      Data::deserialize_data(&serializedDataSubMessage[4..].to_vec(),Endianness::LittleEndian, helper.InlineQosFlag, helper.DataFlag );
+        
     println!("{:?}", suba);
 
     let mut messageBuffer = vec![];
@@ -339,21 +276,7 @@ mod tests {
     );
     assert_eq!(serializedDataSubMessage, messageBuffer);
 
-    let mut submessage_header2 =
-      match SubMessage::deserialize_header(Endianness::LittleEndian, &messageBuffer[0..8]) {
-        Some(T) => T,
-        None => {
-          print!("could not create submessage header");
-          return;
-        } // rule 1. Could not create submessage header
-      };
-    let sub2 = SubMessage::deserialize_data(
-      &mut submessage_header2,
-      Endianness::LittleEndian,
-      &messageBuffer[4..],
-    )
-    .unwrap();
-    assert_eq!(suba, sub2);
+   
   }
 
   #[test]
@@ -475,9 +398,8 @@ mod tests {
       } // rule 1. Could not create submessage header
     };
     println!("{:?}", submessage_header);
-
-    let ha = Data::read_from_buffer_with_ctx(Endianness::LittleEndian, &serializedDatamessage[4..])
-      .unwrap();
+    let helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA, &submessage_header.flags);
+    let ha = Data::deserialize_data(&serializedDatamessage[4..].to_vec(),Endianness::LittleEndian, helper.InlineQosFlag, helper.DataFlag);
 
     let mut messageBuffer = vec![];
     println!("datamessage  : {:?}", ha);

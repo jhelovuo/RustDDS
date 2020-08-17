@@ -2,7 +2,7 @@ use crate::messages::submessages::submessage_elements::parameter_list::Parameter
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
-use speedy::{Readable, Writable, Context, Writer, Reader};
+use speedy::{Readable, Writable, Context, Writer, Endianness};
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -48,30 +48,41 @@ impl Data {
       serialized_payload: SerializedPayload::default(),
     }
   }
+
+  /// DATA submessage cannot be speedy Readable because deserializing this requires info from submessage header. 
+  /// Required iformation is  expect_qos and expect_payload whish are told on submessage headerflags.
+  pub fn deserialize_data(buffer : &Vec<u8>, _context : Endianness, expect_qos : bool, expect_payload : bool) -> Data{
+    let mut  d = Data::new();
+    let _extra_flags = &buffer[0..2];
+    let octets_to_inline_qos = u16::read_from_buffer(&buffer[2..4]).unwrap();
+    let octets_to_inline_qos_usize = octets_to_inline_qos as usize;
+    let reader_id = &buffer[4..8];
+    let writer_id = &buffer[8..12];
+    let sequence_number = &buffer[12..20];
+    
+    if expect_qos{ 
+      let QoS_list_length = u32::read_from_buffer(&buffer[octets_to_inline_qos_usize ..(octets_to_inline_qos_usize  + 4)]).unwrap() as usize;
+      d.inline_qos = Some(ParameterList::read_from_buffer(&buffer[octets_to_inline_qos_usize  .. octets_to_inline_qos_usize + QoS_list_length]).unwrap());
+      
+    }
+    if expect_payload && !expect_qos{
+      d.serialized_payload = SerializedPayload::read_from_buffer(&buffer[octets_to_inline_qos_usize + 4 .. buffer.len()]).unwrap();
+    }
+    if expect_payload && expect_qos{
+      let QoS_list_length = u32::read_from_buffer(&buffer[octets_to_inline_qos_usize ..(octets_to_inline_qos_usize  + 4)]).unwrap() as usize;
+      d.serialized_payload = SerializedPayload::read_from_buffer(&buffer[octets_to_inline_qos_usize + 4 + QoS_list_length .. buffer.len()]).unwrap(); 
+    }
+    
+    d.reader_id = EntityId::read_from_buffer(reader_id).unwrap();
+    d.writer_id = EntityId::read_from_buffer(writer_id).unwrap();
+    d.writer_sn = SequenceNumber::read_from_buffer(sequence_number).unwrap();
+    return d;
+  }
 }
 
 impl Default for Data {
   fn default() -> Self {
     Data::new()
-  }
-}
-
-impl<'a, C: Context> Readable<'a, C> for Data {
-  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut dataMessage = Data::default();
-    //ExtraFlags This version of the protocol (2.3) should set all the bits in the extraFlags to zero
-    //just ignore these
-    reader.read_u16()?;
-    //octets to InlineQos
-    reader.read_u16()?;
-    dataMessage.reader_id = reader.read_value()?;
-    dataMessage.writer_id = reader.read_value()?;
-    dataMessage.writer_sn = reader.read_value()?;
-
-    // TODO INLINE QOS ??
-
-    dataMessage.serialized_payload = reader.read_value()?;
-    Ok(dataMessage)
   }
 }
 
@@ -84,11 +95,8 @@ impl<C: Context> Writable<C> for Data {
     //present (i.e., the InlineQosFlag is not set), then octetsToInlineQos contains the offset to the next field after
     //the inlineQos.
 
-    // TODO INLINE QOS ??
-
     if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0 {
-      println!("self.inline_qos {:?}", self.inline_qos);
-      todo!()
+      writer.write_value(&self.inline_qos)?;
     } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() == 0 {
       writer.write_u16(16)?;
     } else if self.inline_qos.is_none() {
@@ -104,3 +112,4 @@ impl<C: Context> Writable<C> for Data {
     Ok(())
   }
 }
+
