@@ -4,19 +4,31 @@ use crate::dds::{
   traits::{
     key::{Key, Keyed},
   },
+  rtps_reader_proxy::RtpsReaderProxy,
+  participant::DomainParticipant,
 };
 
 use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
 use crate::{
   structure::{
-    locator::LocatorList,
-    guid::GUID,
+    locator::{Locator, LocatorList},
+    guid::{EntityId, GUID},
     duration::Duration,
     builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
+    entity::Entity,
   },
 };
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+use crate::{
+  serialization::{
+    builtin_data_serializer::BuiltinDataSerializer,
+    builtin_data_deserializer::BuiltinDataDeserializer,
+  },
+  network::constant::*,
+};
+
+use std::{net::SocketAddr, time::Duration as StdDuration};
+#[derive(Debug, Clone)]
 pub struct SPDPDiscoveredParticipantData {
   pub updated_time: u64,
   pub protocol_version: Option<ProtocolVersion>,
@@ -34,14 +46,101 @@ pub struct SPDPDiscoveredParticipantData {
   pub entity_name: Option<String>,
 }
 
+impl SPDPDiscoveredParticipantData {
+  // pub fn new() -> SPDPDiscoveredParticipantData {}
+
+  pub fn as_reader_proxy(&self) -> Option<RtpsReaderProxy> {
+    let remote_reader_guid = GUID::new_with_prefix_and_id(
+      self.participant_guid.unwrap().guidPrefix,
+      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+    );
+    let mut proxy = RtpsReaderProxy::new(remote_reader_guid);
+    proxy.expects_in_line_qos = match self.expects_inline_qos {
+      Some(v) => v,
+      None => return None,
+    };
+    proxy.multicast_locator_list = self.default_multicast_locators.clone();
+    proxy.unicast_locator_list = self.default_unicast_locators.clone();
+    Some(proxy)
+  }
+
+  pub fn from_participant(participant: &DomainParticipant) -> SPDPDiscoveredParticipantData {
+    let mut metatraffic_unicast_locators = LocatorList::new();
+    let saddr = SocketAddr::new(
+      "239.255.0.1".parse().unwrap(),
+      get_spdp_well_known_multicast_port(participant.domain_id()),
+    );
+    metatraffic_unicast_locators.push(Locator::from(saddr));
+
+    let mut metatraffic_multicast_locators = LocatorList::new();
+    let saddr = SocketAddr::new(
+      "0.0.0.0".parse().unwrap(),
+      get_spdp_well_known_unicast_port(participant.domain_id(), participant.participant_id()),
+    );
+    metatraffic_multicast_locators.push(Locator::from(saddr));
+
+    let mut default_unicast_locators = LocatorList::new();
+    let saddr = SocketAddr::new(
+      "239.255.0.1".parse().unwrap(),
+      get_user_traffic_multicast_port(participant.domain_id()),
+    );
+    default_unicast_locators.push(Locator::from(saddr));
+
+    let mut default_multicast_locators = LocatorList::new();
+    let saddr = SocketAddr::new(
+      "0.0.0.0".parse().unwrap(),
+      get_user_traffic_unicast_port(participant.domain_id(), participant.participant_id()),
+    );
+    default_multicast_locators.push(Locator::from(saddr));
+
+    SPDPDiscoveredParticipantData {
+      updated_time: time::precise_time_ns(),
+      protocol_version: Some(ProtocolVersion::PROTOCOLVERSION),
+      vendor_id: Some(VendorId::VENDOR_UNKNOWN),
+      expects_inline_qos: Some(false),
+      participant_guid: Some(participant.get_guid().clone()),
+      metatraffic_unicast_locators,
+      metatraffic_multicast_locators,
+      default_unicast_locators,
+      default_multicast_locators,
+      available_builtin_endpoints: None,
+      lease_duration: Some(Duration::from(StdDuration::from_secs(60))),
+      manual_liveliness_count: None,
+      builtin_enpoint_qos: None,
+      entity_name: None,
+    }
+  }
+}
+
 impl Keyed for SPDPDiscoveredParticipantData {
   type K = u64; // placeholder
   fn get_key(&self) -> Self::K {
-    todo!()
+    self.updated_time
   }
 }
 
 impl Key for u64 {}
+
+impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let custom_ds = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    Ok(res.generate_spdp_participant_data())
+  }
+}
+
+impl Serialize for SPDPDiscoveredParticipantData {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::new(&self);
+    builtin_data_serializer.serialize::<S>(serializer)
+  }
+}
 
 #[cfg(test)]
 mod tests {
@@ -50,27 +149,13 @@ mod tests {
   use crate::submessages::EntitySubmessage;
   use speedy::{Endianness, Readable};
   use crate::serialization::message::Message;
-  use crate::serialization::builtin_data_deserializer::BuiltinDataDeserializer;
+  use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+  use crate::serialization::cdrSerializer::to_little_endian_binary;
+  use crate::test::test_data::*;
 
   #[test]
   fn pdata_deserialize_serialize() {
-    const data: [u8; 204] = [
-      // Offset 0x00000000 to 0x00000203
-      0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
-      0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x01, 0x08, 0x00, 0x0e, 0x15, 0xf3, 0x5e, 0x00, 0x28,
-      0x74, 0xd2, 0x15, 0x05, 0xa8, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x01, 0x00, 0xc7, 0x00,
-      0x01, 0x00, 0xc2, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
-      0x15, 0x00, 0x04, 0x00, 0x02, 0x03, 0x00, 0x00, 0x16, 0x00, 0x04, 0x00, 0x01, 0x0f, 0x00,
-      0x00, 0x50, 0x00, 0x10, 0x00, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00, 0x01, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x01, 0xc1, 0x32, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf4,
-      0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x0a, 0x50, 0x8e, 0x68, 0x31, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf5, 0x1c, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x50,
-      0x8e, 0x68, 0x02, 0x00, 0x08, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x58,
-      0x00, 0x04, 0x00, 0x3f, 0x0c, 0x3f, 0x0c, 0x62, 0x00, 0x18, 0x00, 0x14, 0x00, 0x00, 0x00,
-      0x66, 0x61, 0x73, 0x74, 0x72, 0x74, 0x70, 0x73, 0x50, 0x61, 0x72, 0x74, 0x69, 0x63, 0x69,
-      0x70, 0x61, 0x6e, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00,
-    ];
+    let data = spdp_participant_data_raw();
 
     let rtpsmsg = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &data).unwrap();
     let submsgs = rtpsmsg.submessages();
@@ -79,11 +164,25 @@ mod tests {
       match submsg.submessage.as_ref() {
         Some(v) => match v {
           EntitySubmessage::Data(d, _) => {
-            let _particiapant_data: SPDPDiscoveredParticipantData =
-              BuiltinDataDeserializer::new(d.serialized_payload.value.clone())
-                .parse_data()
-                .generate_spdp_participant_data();
+            let participant_data: SPDPDiscoveredParticipantData =
+              deserialize_from_little_endian(d.serialized_payload.value.clone()).unwrap();
+
+            let sdata =
+              to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data).unwrap();
+
+            // order cannot be known at this point
+            assert_eq!(sdata.len(), d.serialized_payload.value.len());
+
+            let participant_data_2: SPDPDiscoveredParticipantData =
+              deserialize_from_little_endian(sdata.clone()).unwrap();
+            let sdata_2 =
+              to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data_2)
+                .unwrap();
+
+            // now the order of bytes should be the same
+            assert_eq!(sdata, sdata_2);
           }
+
           _ => continue,
         },
         None => (),

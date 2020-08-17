@@ -21,13 +21,14 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) {
+  pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) -> bool {
     match data.participant_guid {
       Some(guid) => {
         self.participant_proxies.insert(guid, data.clone());
+        true
       }
-      _ => (),
-    };
+      _ => false,
+    }
   }
 
   pub fn participant_cleanup(&mut self) {
@@ -39,7 +40,7 @@ impl DiscoveryDB {
     });
   }
 
-  pub fn add_writers_reader_proxy(&mut self, writer: GUID, reader: RtpsReaderProxy) {
+  pub fn update_writers_reader_proxy(&mut self, writer: &GUID, reader: RtpsReaderProxy) -> bool {
     let mut proxies = match self.writers_reader_proxies.get(&writer) {
       Some(prox) => prox.clone(),
       None => Vec::new(),
@@ -53,7 +54,8 @@ impl DiscoveryDB {
       None => proxies.push(reader),
     };
 
-    self.writers_reader_proxies.insert(writer, proxies);
+    self.writers_reader_proxies.insert(writer.clone(), proxies);
+    true
   }
 }
 
@@ -87,7 +89,7 @@ mod tests {
   fn discdb_writer_proxies() {
     let mut discoverydb = DiscoveryDB::new();
     let reader = RtpsReaderProxy::new(GUID::new());
-    discoverydb.add_writers_reader_proxy(GUID::new(), reader);
+    discoverydb.update_writers_reader_proxy(&GUID::new(), reader);
     assert_eq!(discoverydb.writers_reader_proxies.len(), 1);
 
     // TODO: more tests :)

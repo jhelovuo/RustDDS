@@ -2,6 +2,7 @@ use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::convert::From;
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use serde::{Serialize, Deserialize};
+use super::parameter_id::ParameterId;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Readable, Writable, Serialize, Deserialize)]
 pub struct LocatorKind {
@@ -107,6 +108,23 @@ impl<C: Context> Writable<C> for Locator {
       writer.write_u8(*elem)?;
     }
     Ok(())
+  }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LocatorData {
+  parameter_id: ParameterId,
+  parameter_length: u16,
+  locator: Locator,
+}
+
+impl LocatorData {
+  pub fn from(locator: &Locator, parameter_id: ParameterId) -> LocatorData {
+    LocatorData {
+      parameter_id,
+      parameter_length: 24,
+      locator: locator.clone(),
+    }
   }
 }
 

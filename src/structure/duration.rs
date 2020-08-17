@@ -2,6 +2,7 @@ use speedy::{Readable, Writable};
 use std::convert::From;
 use std::time::Duration as TDuration;
 use serde::{Serialize, Deserialize};
+use super::parameter_id::ParameterId;
 
 #[derive(
   Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Serialize, Deserialize, Clone,
@@ -38,6 +39,23 @@ impl From<TDuration> for Duration {
 impl From<Duration> for TDuration {
   fn from(duration: Duration) -> Self {
     TDuration::new(duration.seconds as u64, duration.fraction)
+  }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DurationData {
+  parameter_id: ParameterId,
+  parameter_length: u16,
+  duration: Duration,
+}
+
+impl DurationData {
+  pub fn from(duration: &Duration) -> DurationData {
+    DurationData {
+      parameter_id: ParameterId::PID_PARTICIPANT_LEASE_DURATION,
+      parameter_length: 8,
+      duration: duration.clone(),
+    }
   }
 }
 

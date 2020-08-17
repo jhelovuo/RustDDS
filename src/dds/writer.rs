@@ -477,7 +477,8 @@ impl Writer {
       if multiaddress.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
         self
           .udp_sender
-          .send_ipv4_multicast(&buffer, multiaddress.to_socket_address()).expect("Unable to send multicast message.");
+          .send_ipv4_multicast(&buffer, multiaddress.to_socket_address())
+          .expect("Unable to send multicast message.");
       } else if multiaddress.kind == LocatorKind::LOCATOR_KIND_UDPv6 {
         todo!();
       }

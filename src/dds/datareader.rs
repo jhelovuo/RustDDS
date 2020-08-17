@@ -21,9 +21,6 @@ use crate::dds::{
 use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
 use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
 
-
-
-
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Take {
@@ -336,7 +333,7 @@ mod tests {
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
   #[test]
   fn dr_get_samples_from_ddschache() {
-    let dp = DomainParticipant::new(0, 0);
+    let dp = DomainParticipant::new(10, 0);
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll);
 

@@ -1,5 +1,6 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Serialize, Deserialize};
+use crate::structure::parameter_id::ParameterId;
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct VendorId {
@@ -15,6 +16,23 @@ impl VendorId {
 impl Default for VendorId {
   fn default() -> Self {
     VendorId::VENDOR_UNKNOWN
+  }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct VendorIdData {
+  parameter_id: ParameterId,
+  parameter_length: u16,
+  vendor_id: VendorId,
+}
+
+impl VendorIdData {
+  pub fn from(vendor_id: &VendorId) -> VendorIdData {
+    VendorIdData {
+      parameter_id: ParameterId::PID_VENDOR_ID,
+      parameter_length: 4,
+      vendor_id: vendor_id.clone(),
+    }
   }
 }
 

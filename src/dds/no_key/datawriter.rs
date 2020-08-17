@@ -5,13 +5,11 @@ use std::{
 use std::ops::Deref;
 
 use mio_extras::channel as mio_channel;
-use serde:: {Serialize,Serializer};
+use serde::{Serialize, Serializer};
 
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity};
-use crate::structure::{
-  dds_cache::DDSCache,
-};
+use crate::structure::{dds_cache::DDSCache};
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
@@ -23,13 +21,10 @@ use crate::dds::values::result::{
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::key::*;
 
-use crate::dds::qos::{
-  HasQoSPolicy, QosPolicies,
-};
+use crate::dds::qos::{HasQoSPolicy, QosPolicies};
 use crate::dds::ddsdata::DDSData;
 
 use crate::dds::datawriter as datawriter_with_key;
-
 
 // This structure shoud be private to no_key DataWriter
 struct NoKeyWrapper_Write<D> {
@@ -39,33 +34,34 @@ struct NoKeyWrapper_Write<D> {
 // implement Deref so that &NoKeyWrapper_Write<D> is coercible to &D
 impl<D> Deref for NoKeyWrapper_Write<D> {
   type Target = D;
-  fn deref(&self) -> &Self::Target { &self.d }
+  fn deref(&self) -> &Self::Target {
+    &self.d
+  }
 }
 
 impl<D> Keyed for NoKeyWrapper_Write<D> {
   type K = ();
-  fn get_key(&self) -> () { () }
+  fn get_key(&self) -> () {
+    ()
+  }
 }
 
-
 impl<D> Serialize for NoKeyWrapper_Write<D>
-where D: Serialize,
+where
+  D: Serialize,
 {
-  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok,S::Error>
-    where S: Serializer
+  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+  where
+    S: Serializer,
   {
     self.d.serialize(serializer)
   }
 }
 
-impl<D> NoKeyWrapper_Write<D> {
-
-}
-
-
+impl<D> NoKeyWrapper_Write<D> {}
 
 pub struct DataWriter<'a, D> {
-  keyed_datawriter: datawriter_with_key::DataWriter<'a,NoKeyWrapper_Write<D>>
+  keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>>,
 }
 
 impl<'a, D> DataWriter<'a, D>
@@ -79,14 +75,17 @@ where
     dds_cache: Arc<RwLock<DDSCache>>,
   ) -> DataWriter<'a, D> {
     DataWriter {
-      keyed_datawriter: datawriter_with_key::DataWriter::<'a,NoKeyWrapper_Write<D>>
-        ::new(publisher, topic, cc_upload, dds_cache),
+      keyed_datawriter: datawriter_with_key::DataWriter::<'a, NoKeyWrapper_Write<D>>::new(
+        publisher, topic, cc_upload, dds_cache,
+      ),
     }
   }
 
   // write (with optional timestamp)
   pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
-    self.keyed_datawriter.write( NoKeyWrapper_Write::<D>{d: data} , source_timestamp )
+    self
+      .keyed_datawriter
+      .write(NoKeyWrapper_Write::<D> { d: data }, source_timestamp)
   }
 
   // dispose
@@ -135,15 +134,13 @@ where
   }
 }
 
-impl<D> Entity for DataWriter<'_, D>
-{
+impl<D> Entity for DataWriter<'_, D> {
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     self.keyed_datawriter.as_entity()
   }
 }
 
-impl<D> HasQoSPolicy for DataWriter<'_, D>
-{
+impl<D> HasQoSPolicy for DataWriter<'_, D> {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     self.keyed_datawriter.set_qos(policy)
   }
@@ -166,7 +163,7 @@ mod tests {
 
   #[test]
   fn dw_write_test() {
-    let domain_participant = DomainParticipant::new(1, 0);
+    let domain_participant = DomainParticipant::new(9, 0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     let publisher = domain_participant
@@ -201,7 +198,7 @@ mod tests {
 
   #[test]
   fn dw_dispose_test() {
-    let domain_participant = DomainParticipant::new(2, 0);
+    let domain_participant = DomainParticipant::new(7, 0);
     let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(&qos)
@@ -242,7 +239,7 @@ mod tests {
 
   #[test]
   fn dw_wait_for_ack_test() {
-    let domain_participant = DomainParticipant::new(3, 0);
+    let domain_participant = DomainParticipant::new(8, 0);
     let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(&qos)

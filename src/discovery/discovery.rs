@@ -1,5 +1,6 @@
 use mio::{Ready, Poll, PollOpt, Events};
 use mio_extras::timer::Timer;
+use mio_extras::channel as mio_channel;
 
 use std::{
   time::Duration,
@@ -14,13 +15,14 @@ use crate::dds::{
     policy::{Reliability, History},
   },
   datareader::{Take, DataReader},
+  datawriter::{DataWriter},
 };
 
 use crate::discovery::{
   data_types::spdp_participant_data::SPDPDiscoveredParticipantData, discovery_db::DiscoveryDB,
 };
 
-use crate::structure::guid::EntityId;
+use crate::structure::{guid::EntityId, entity::Entity};
 
 use crate::network::constant::*;
 
@@ -28,14 +30,22 @@ pub struct Discovery {
   poll: Poll,
   domain_participant: DomainParticipant,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
+  writers_proxy_updated_sender: mio_channel::Sender<()>,
+  readers_proxy_updated_sender: mio_channel::Sender<()>,
 }
+
+unsafe impl Sync for Discovery {}
+unsafe impl Send for Discovery {}
 
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: u64 = 60;
+  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 1;
 
   pub fn new(
     domain_participant: DomainParticipant,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
+    writers_proxy_updated_sender: mio_channel::Sender<()>,
+    readers_proxy_updated_sender: mio_channel::Sender<()>,
   ) -> Discovery {
     let poll = mio::Poll::new().expect("Unable to create discovery poll");
 
@@ -43,6 +53,8 @@ impl Discovery {
       poll,
       domain_participant,
       discovery_db,
+      writers_proxy_updated_sender,
+      readers_proxy_updated_sender,
     }
   }
 
@@ -111,13 +123,29 @@ impl Discovery {
       )
       .expect("Unable to create participant cleanup timer");
 
-    let _dcps_participant_writer = discovery_publisher
+    let mut dcps_participant_writer = discovery_publisher
       .create_datawriter::<SPDPDiscoveredParticipantData>(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
         &dcps_participant_topic,
         dcps_participant_topic.get_qos(),
       )
       .expect("Unable to create DataWriter for DCPSParticipant.");
+
+    // creating timer for sending out own participant data
+    let mut participant_send_info_timer: Timer<()> = Timer::default();
+    participant_send_info_timer.set_timeout(
+      Duration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+      (),
+    );
+    discovery
+      .poll
+      .register(
+        &participant_send_info_timer,
+        DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Unable to register participant info sneder");
 
     // Subcription
     let dcps_subscription_qos = QosPolicies::qos_none();
@@ -203,7 +231,13 @@ impl Discovery {
         if event.token() == STOP_POLL_TOKEN {
           return;
         } else if event.token() == DISCOVERY_PARTICIPANT_DATA_TOKEN {
-          discovery.handle_participant_reader(&mut dcps_participant_reader);
+          let data = discovery.handle_participant_reader(&mut dcps_participant_reader);
+          match data {
+            Some(dat) => {
+              discovery.update_spdp_participant_writer(dat, &dcps_participant_writer);
+            }
+            None => (),
+          }
         } else if event.token() == DISCOVERY_PARTICIPANT_CLEANUP_TOKEN {
           discovery.participant_cleanup();
           // setting next cleanup timeout
@@ -211,32 +245,48 @@ impl Discovery {
             Duration::from_secs(Discovery::PARTICIPANT_CLEANUP_PERIOD),
             (),
           );
+        } else if event.token() == DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN {
+          let data = SPDPDiscoveredParticipantData::from_participant(&discovery.domain_participant);
+          dcps_participant_writer.write(data, None).unwrap_or(());
+          // reschedule timer
+          participant_send_info_timer.set_timeout(
+            Duration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+            (),
+          );
         }
       }
     }
   }
 
-  pub fn handle_participant_reader(&self, reader: &mut DataReader<SPDPDiscoveredParticipantData>) {
+  pub fn handle_participant_reader(
+    &self,
+    reader: &mut DataReader<SPDPDiscoveredParticipantData>,
+  ) -> Option<SPDPDiscoveredParticipantData> {
     let participant_data = match reader.read_next_sample(Take::Yes) {
       Ok(d) => match d {
         Some(d) => match d.value {
           Ok(aaaaa) => (*aaaaa).clone(),
-          _ => return (),
+          _ => return None,
         },
-        None => return (),
+        None => return None,
       },
-      _ => return (),
+      _ => return None,
     };
 
     let dbres = self.discovery_db.write();
     match dbres {
       Ok(mut db) => {
-        (*db).update_participant(&participant_data);
+        let updated = (*db).update_participant(&participant_data);
+        if updated {
+          println!("Update participant data.");
+          return Some(participant_data);
+        }
       }
-      _ => return (),
+      _ => return None,
     }
     // debug for when all parts are available
     println!("Participant: {:?}", participant_data);
+    None
   }
 
   pub fn participant_cleanup(&self) {
@@ -246,6 +296,20 @@ impl Discovery {
         (*db).participant_cleanup();
       }
       _ => return (),
+    }
+  }
+
+  pub fn update_spdp_participant_writer(
+    &self,
+    data: SPDPDiscoveredParticipantData,
+    writer: &DataWriter<SPDPDiscoveredParticipantData>,
+  ) -> bool {
+    // TODO: remove unwrap and handle error
+    let new_proxy = data.as_reader_proxy().unwrap();
+    let dbres = self.discovery_db.write();
+    match dbres {
+      Ok(mut db) => (*db).update_writers_reader_proxy(writer.get_guid(), new_proxy),
+      _ => return false,
     }
   }
 }

@@ -19,8 +19,13 @@ pub fn spdp_participant_data_raw() -> Vec<u8> {
   data.to_vec()
 }
 
-use crate::{serialization::{builtin_data_deserializer::BuiltinDataDeserializer, Message}, discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData, submessages::EntitySubmessage};
+use crate::{
+  serialization::{Message, cdrDeserializer},
+  discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData,
+  submessages::EntitySubmessage,
+};
 use speedy::{Readable, Endianness};
+
 pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
   let data = spdp_participant_data_raw();
 
@@ -32,10 +37,10 @@ pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
       Some(v) => match v {
         EntitySubmessage::Data(d, _) => {
           let particiapant_data: SPDPDiscoveredParticipantData =
-            BuiltinDataDeserializer::new(d.serialized_payload.value.clone())
-              .parse_data()
-              .generate_spdp_participant_data();
-            return Some(particiapant_data);
+            cdrDeserializer::deserialize_from_little_endian(d.serialized_payload.value.clone())
+              .unwrap();
+
+          return Some(particiapant_data);
         }
         _ => continue,
       },

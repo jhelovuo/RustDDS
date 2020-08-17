@@ -430,11 +430,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     unimplemented!()
   }
 
-  fn deserialize_byte_buf<V>(self, _visitor: V) -> Result<V::Value>
+  fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    unimplemented!()
+    visitor.visit_byte_buf(self.input.clone())
   }
 
   fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value>

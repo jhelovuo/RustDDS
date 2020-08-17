@@ -31,6 +31,8 @@ use crate::{
 // This is a smart pointer for DomainPArticipant_Inner for easier manipulation.
 pub struct DomainParticipant {
   dpi: Arc<DomainParticipant_Inner>,
+  domain_id: u16,
+  participant_id: u16,
 }
 
 // Send and Sync for actual ability to send between threads
@@ -40,10 +42,29 @@ unsafe impl Sync for DomainParticipant {}
 #[allow(clippy::new_without_default)]
 impl DomainParticipant {
   pub fn new(domain_id: u16, participant_id: u16) -> DomainParticipant {
-    let dpi = DomainParticipant_Inner::new(domain_id, participant_id);
-    let dp = DomainParticipant { dpi: Arc::new(dpi) };
+    let (reader_update_notification_sender, reader_update_notification_receiver) =
+      mio_channel::channel::<()>();
+    let (writer_update_notification_sender, writer_update_notification_receiver) =
+      mio_channel::channel::<()>();
 
-    let discovery = Discovery::new(dp.clone(), dp.dpi.discovery_db.clone());
+    let dpi = DomainParticipant_Inner::new(
+      domain_id,
+      participant_id,
+      reader_update_notification_receiver,
+      writer_update_notification_receiver,
+    );
+    let dp = DomainParticipant {
+      dpi: Arc::new(dpi),
+      domain_id,
+      participant_id,
+    };
+
+    let discovery = Discovery::new(
+      dp.clone(),
+      dp.dpi.discovery_db.clone(),
+      writer_update_notification_sender,
+      reader_update_notification_sender,
+    );
     // TODO:
     // FIXME: when do we stop discovery?
     let _discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
@@ -61,6 +82,14 @@ impl DomainParticipant {
 
   pub fn create_topic(&self, name: &str, type_desc: TypeDesc, qos: &QosPolicies) -> Result<Topic> {
     self.dpi.create_topic(&self, name, type_desc, qos)
+  }
+
+  pub fn domain_id(&self) -> u16 {
+    self.domain_id
+  }
+
+  pub fn participant_id(&self) -> u16 {
+    self.participant_id
   }
 }
 
@@ -117,36 +146,41 @@ pub struct SubscriptionBuiltinTopicData {} // placeholder
 
 #[allow(clippy::new_without_default)]
 impl DomainParticipant_Inner {
-  fn new(domain_id: u16, participant_id: u16) -> DomainParticipant_Inner {
+  fn new(
+    domain_id: u16,
+    participant_id: u16,
+    reader_update_notification_receiver: mio_channel::Receiver<()>,
+    writer_update_notification_receiver: mio_channel::Receiver<()>,
+  ) -> DomainParticipant_Inner {
     // Creating UPD listeners for participantId 0 (change this if necessary)
     let discovery_multicast_listener = UDPListener::new(
-      DISCOVERY_MUL_LISTENER_TOKEN,
+      DISCOVERY_SENDER_TOKEN,
       "0.0.0.0",
-      DomainParticipant_Inner::get_spdp_well_known_multicast_port(domain_id),
+      get_spdp_well_known_multicast_port(domain_id),
     );
     discovery_multicast_listener
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Unable to join multicast 239.255.0.1:7400");
 
     let discovery_listener = UDPListener::new(
-      DISCOVERY_LISTENER_TOKEN,
+      DISCOVERY_SENDER_TOKEN,
       "0.0.0.0",
-      DomainParticipant_Inner::get_spdp_well_known_unicast_port(domain_id, participant_id),
+      get_spdp_well_known_unicast_port(domain_id, participant_id),
     );
 
     let user_traffic_multicast_listener = UDPListener::new(
-      USER_TRAFFIC_MUL_LISTENER_TOKEN,
+      USER_TRAFFIC_SENDER_TOKEN,
       "0.0.0.0",
-      DomainParticipant_Inner::get_user_traffic_multicast_port(domain_id),
+      get_user_traffic_multicast_port(domain_id),
     );
     user_traffic_multicast_listener
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Unable to join multicast 239.255.0.1:7401");
 
     let user_traffic_listener = UDPListener::new(
-      USER_TRAFFIC_LISTENER_TOKEN,
+      USER_TRAFFIC_SENDER_TOKEN,
       "0.0.0.0",
-      DomainParticipant_Inner::get_user_traffic_unicast_port(domain_id, participant_id),
+      get_user_traffic_unicast_port(domain_id, participant_id),
     );
 
     let mut listeners = HashMap::new();
@@ -171,6 +205,7 @@ impl DomainParticipant_Inner {
     let new_guid = GUID::new();
 
     let a_r_cache = Arc::new(RwLock::new(DDSCache::new()));
+
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
@@ -199,6 +234,8 @@ impl DomainParticipant_Inner {
         receiver: remove_writer_receiver,
       },
       stop_poll_receiver,
+      reader_update_notification_receiver,
+      writer_update_notification_receiver,
     );
     // Launch the background thread for DomainParticipant
     let ev_loop_handle = thread::spawn(move || ev_wrapper.event_loop());
@@ -220,41 +257,6 @@ impl DomainParticipant_Inner {
       dds_cache: Arc::new(RwLock::new(DDSCache::new())),
       discovery_db: discovery_db,
     }
-  }
-
-  const PB: u16 = 7400;
-  const DG: u16 = 250;
-  const PG: u16 = 2;
-
-  const D0: u16 = 0;
-  const D1: u16 = 10;
-  const D2: u16 = 1;
-  const D3: u16 = 11;
-
-  fn get_spdp_well_known_multicast_port(domain_id: u16) -> u16 {
-    DomainParticipant_Inner::PB
-      + DomainParticipant_Inner::DG * domain_id
-      + DomainParticipant_Inner::D0
-  }
-
-  fn get_spdp_well_known_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
-    DomainParticipant_Inner::PB
-      + DomainParticipant_Inner::DG * domain_id
-      + DomainParticipant_Inner::D1
-      + DomainParticipant_Inner::PG * participant_id
-  }
-
-  fn get_user_traffic_multicast_port(domain_id: u16) -> u16 {
-    DomainParticipant_Inner::PB
-      + DomainParticipant_Inner::DG * domain_id
-      + DomainParticipant_Inner::D2
-  }
-
-  pub fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
-    DomainParticipant_Inner::PB
-      + DomainParticipant_Inner::DG * domain_id
-      + DomainParticipant_Inner::D3
-      + DomainParticipant_Inner::PG * participant_id
   }
 
   pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
@@ -391,8 +393,20 @@ mod tests {
   use crate::speedy::Writable;
   use crate::{
     dds::{qos::QosPolicies, typedesc::TypeDesc, writer::Writer},
-    network::udp_sender::UDPSender,
-    test::random_data::RandomData, structure::{locator::{LocatorKind, Locator}, guid::{EntityId, GUID}, sequence_number::{SequenceNumber, SequenceNumberSet}}, submessages::{EntitySubmessage, AckNack, SubmessageFlag, SubmessageHeader, SubmessageKind}, common::bit_set::BitSetRef, serialization::{SubMessage, Message}, messages::{protocol_version::ProtocolVersion, header::Header, vendor_id::VendorId, protocol_id::ProtocolId},
+    network::{udp_sender::UDPSender, constant::get_user_traffic_unicast_port},
+    test::random_data::RandomData,
+    structure::{
+      locator::{LocatorKind, Locator},
+      guid::{EntityId, GUID},
+      sequence_number::{SequenceNumber, SequenceNumberSet},
+    },
+    submessages::{EntitySubmessage, AckNack, SubmessageFlag, SubmessageHeader, SubmessageKind},
+    common::bit_set::BitSetRef,
+    serialization::{SubMessage, Message},
+    messages::{
+      protocol_version::ProtocolVersion, header::Header, vendor_id::VendorId,
+      protocol_id::ProtocolId,
+    },
   };
   use super::{DomainParticipant_Inner, DomainParticipant};
   use speedy::Endianness;
@@ -428,15 +442,13 @@ mod tests {
       .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::seconds(5).to_std().unwrap());
-  } 
-
+  }
 
   #[test]
   fn dp_recieve_acknack_message_test() {
+    // TODO SEND ACKNACK
+    let domain_participant = DomainParticipant::new(6, 0);
 
-    // TODO SEND ACKNACK 
-    let domain_participant = DomainParticipant::new(5, 0);
-   
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
@@ -451,30 +463,30 @@ mod tests {
     let mut _data_writer = publisher
       .create_datawriter::<RandomData>(None, &topic, &qos.clone())
       .expect("Failed to create datawriter");
-    
-    let portNumber :u16 = DomainParticipant_Inner::get_user_traffic_unicast_port(5, 0);
+
+    let portNumber: u16 = get_user_traffic_unicast_port(5, 0);
     let _sender = UDPSender::new(1234);
-    let mut m : Message  = Message::new();
-    
-    let a : AckNack = AckNack{
+    let mut m: Message = Message::new();
+
+    let a: AckNack = AckNack {
       reader_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
       writer_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
-      reader_sn_state: SequenceNumberSet{
-        base :SequenceNumber::default(),
-        set : BitSetRef::new(),        
+      reader_sn_state: SequenceNumberSet {
+        base: SequenceNumber::default(),
+        set: BitSetRef::new(),
       },
       count: 1,
     };
     let subHeader: SubmessageHeader = SubmessageHeader {
       submessage_id: SubmessageKind::ACKNACK,
       flags: SubmessageFlag {
-         flags: 0b0000000_u8,
+        flags: 0b0000000_u8,
       },
       submessage_length: 24,
     };
 
     let s: SubMessage = SubMessage {
-      header:  subHeader,
+      header: subHeader,
       intepreterSubmessage: None,
       submessage: Some(EntitySubmessage::AckNack(
         a,
@@ -483,31 +495,28 @@ mod tests {
         },
       )),
     };
-    let h =Header {
+    let h = Header {
       protocol_id: ProtocolId::default(),
-      protocol_version: ProtocolVersion {
-        major: 2,
-        minor: 3,
-      },
-      vendor_id:  VendorId::VENDOR_UNKNOWN,
+      protocol_version: ProtocolVersion { major: 2, minor: 3 },
+      vendor_id: VendorId::VENDOR_UNKNOWN,
       guid_prefix: GUID::new().guidPrefix,
     };
     m.set_header(h);
     m.add_submessage(SubMessage::from(s));
     let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
     println!("data to send via udp: {:?}", _data);
-    let loca = Locator{
+    let loca = Locator {
       kind: LocatorKind::LOCATOR_KIND_UDPv4,
       port: portNumber as u32,
-      address: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+      address: [
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00,
+      ],
       //address: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F, 0x00, 0x00, 0x01],
     };
     let locas = vec![loca];
     _sender.send_to_locator_list(&_data, &locas);
 
-
     thread::sleep(time::Duration::seconds(5).to_std().unwrap());
-  } 
-
-
+  }
 }

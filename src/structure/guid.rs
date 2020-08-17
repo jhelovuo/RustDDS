@@ -1,6 +1,7 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
+use super::parameter_id::ParameterId;
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct GuidPrefix {
@@ -250,6 +251,23 @@ impl GUID {
     GUID {
       guidPrefix: prefix,
       entityId: entity_id,
+    }
+  }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GUIDData {
+  parameter_id: ParameterId,
+  parameter_length: u16,
+  guid: GUID,
+}
+
+impl GUIDData {
+  pub fn from(guid: &GUID) -> GUIDData {
+    GUIDData {
+      parameter_id: ParameterId::PID_PARTICIPANT_GUID,
+      parameter_length: 16,
+      guid: guid.clone(),
     }
   }
 }

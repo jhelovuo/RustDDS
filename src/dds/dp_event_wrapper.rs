@@ -3,7 +3,9 @@ use mio_extras::channel as mio_channel;
 extern crate chrono;
 //use chrono::Duration;
 use std::collections::HashMap;
-use std::{sync::{Arc,RwLock}};
+use std::{
+  sync::{Arc, RwLock},
+};
 
 use crate::dds::message_receiver::MessageReceiver;
 use crate::dds::reader::Reader;
@@ -37,13 +39,16 @@ pub struct DPEventWrapper {
   // Writers
   add_writer_receiver: TokenReceiverPair<Writer>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
-  writer_heartbeat_recievers : HashMap<Token,mio_channel::Receiver<Token>>,
+  writer_heartbeat_recievers: HashMap<Token, mio_channel::Receiver<Token>>,
 
   stop_poll_receiver: mio_channel::Receiver<()>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
   ack_nack_reciever: mio_channel::Receiver<(GuidPrefix,AckNack)>,
 
   writers: HashMap<GUID, Writer>,
+
+  reader_update_notification_receiver: mio_channel::Receiver<()>,
+  writer_update_notification_receiver: mio_channel::Receiver<()>,
 }
 
 impl DPEventWrapper {
@@ -60,6 +65,8 @@ impl DPEventWrapper {
     add_writer_receiver: TokenReceiverPair<Writer>,
     remove_writer_receiver: TokenReceiverPair<GUID>,
     stop_poll_receiver: mio_channel::Receiver<()>,
+    reader_update_notification_receiver: mio_channel::Receiver<()>,
+    writer_update_notification_receiver: mio_channel::Receiver<()>,
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_reciever) = mio_channel::channel::<(GuidPrefix,AckNack)>();
@@ -123,6 +130,24 @@ impl DPEventWrapper {
     poll.register(&acknack_reciever, ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN, Ready::readable(), PollOpt::edge())
     .expect("Failed to register AckNack submessage sending from MessageReciever to DPEventLoop");
 
+    poll
+      .register(
+        &reader_update_notification_receiver,
+        READER_UPDATE_NOTIFICATION_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register reader update notification.");
+
+    poll
+      .register(
+        &writer_update_notification_receiver,
+        WRITER_UPDATE_NOTIFICATION_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register writer update notification token.");
+
     DPEventWrapper {
       domain_participants_guid,
       poll,
@@ -135,10 +160,12 @@ impl DPEventWrapper {
       remove_reader_receiver,
       add_writer_receiver,
       remove_writer_receiver,
-      writer_heartbeat_recievers : HashMap::new(),
+      writer_heartbeat_recievers: HashMap::new(),
       stop_poll_receiver,
       writers: HashMap::new(),
       ack_nack_reciever : acknack_reciever,
+      reader_update_notification_receiver,
+      writer_update_notification_receiver,
     }
   }
 
@@ -166,6 +193,10 @@ impl DPEventWrapper {
           ev_wrapper.handle_writer_heartbeat(&event);
         } else if DPEventWrapper::is_writer_acknack_action(&event){
           ev_wrapper.handle_writer_acknack_action(&event);
+        } else if DPEventWrapper::is_reader_update_notification(&event) {
+          // TODO:
+        } else if DPEventWrapper::is_writer_update_notification(&event) {
+          // TODO:
         }
       }
     }
@@ -192,8 +223,8 @@ impl DPEventWrapper {
     event.token() == ADD_WRITER_TOKEN || event.token() == REMOVE_WRITER_TOKEN
   }
 
-  pub fn is_writer_heartbeat_action(&self, event: &Event) -> bool{
-    if self.writer_heartbeat_recievers.contains_key(&event.token()){
+  pub fn is_writer_heartbeat_action(&self, event: &Event) -> bool {
+    if self.writer_heartbeat_recievers.contains_key(&event.token()) {
       return true;
     }
     return false;
@@ -201,6 +232,14 @@ impl DPEventWrapper {
 
   pub fn is_writer_acknack_action(event: &Event) -> bool{
     event.token() == ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN 
+  }
+
+  pub fn is_reader_update_notification(event: &Event) -> bool {
+    event.token() == READER_UPDATE_NOTIFICATION_TOKEN
+  }
+
+  pub fn is_writer_update_notification(event: &Event) -> bool {
+    event.token() == WRITER_UPDATE_NOTIFICATION_TOKEN
   }
 
   pub fn handle_udp_traffic(&mut self, event: &Event) {
@@ -261,13 +300,23 @@ impl DPEventWrapper {
         );
 
         let (hearbeatSender, hearbeatReciever) = mio_channel::channel::<Token>();
-        let heartBeatHandler : HeartbeatHandler = HeartbeatHandler::new(hearbeatSender.clone(),new_writer.get_heartbeat_entity_token());
-        new_writer.add_heartbeat_handler(heartBeatHandler);
-        self.poll.register(  &hearbeatReciever,
+        let heartBeatHandler: HeartbeatHandler = HeartbeatHandler::new(
+          hearbeatSender.clone(),
           new_writer.get_heartbeat_entity_token(),
-Ready::readable(),
-    PollOpt::edge()).expect("Writer heartbeat timer channel registeration failed!!");
-        self.writer_heartbeat_recievers.insert(new_writer.get_heartbeat_entity_token(),hearbeatReciever);
+        );
+        new_writer.add_heartbeat_handler(heartBeatHandler);
+        self
+          .poll
+          .register(
+            &hearbeatReciever,
+            new_writer.get_heartbeat_entity_token(),
+            Ready::readable(),
+            PollOpt::edge(),
+          )
+          .expect("Writer heartbeat timer channel registeration failed!!");
+        self
+          .writer_heartbeat_recievers
+          .insert(new_writer.get_heartbeat_entity_token(), hearbeatReciever);
         self.writers.insert(new_writer.as_entity().guid, new_writer);
       }
       REMOVE_WRITER_TOKEN => {
@@ -293,10 +342,9 @@ Ready::readable(),
             match cache_change {
               Ok(cc) => {
                 println!("Change Kind: {:?}", cc.change_kind);
-                if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED{
+                if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED {
                   w.handle_not_alive_disposed_cache_change(cc);
-                }
-                else if cc.change_kind == ChangeKind::ALIVE{
+                } else if cc.change_kind == ChangeKind::ALIVE {
                   w.insert_to_history_cache(cc);
                   w.send_all_unsend_messages();
                 }
@@ -323,7 +371,7 @@ Ready::readable(),
     match found_writer_with_heartbeat {
       Some((_guid, w)) => {
         w.handle_heartbeat_tick();
-        }
+      }
       None => {}
     }
   }
@@ -373,6 +421,11 @@ mod tests {
 
     let (_stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
 
+    let (_reader_update_notification_sender, reader_update_notification_receiver) =
+      mio_channel::channel();
+    let (_writer_update_notification_sender, writer_update_notification_receiver) =
+      mio_channel::channel();
+
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
 
@@ -401,6 +454,8 @@ mod tests {
         receiver: remove_writer_receiver,
       },
       stop_poll_receiver,
+      reader_update_notification_receiver,
+      writer_update_notification_receiver,
     );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
