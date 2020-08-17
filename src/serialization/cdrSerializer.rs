@@ -321,6 +321,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   //octets. The string contents include a single terminating null character. The string
   //length includes the null character, so an empty string has a length of 1.
   fn serialize_str(self, _v: &str) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(4);
     let count: u32 = _v.chars().count() as u32;
     self.serialize_u32(count + 1).unwrap();
     for c in _v.chars() {
@@ -389,6 +390,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
+    self.calculate_padding_need_and_write_padding(4);
     println!("serialize seq");
     let elementCount = _len.unwrap() as u32;
     if elementCount % 4 != 0 {
@@ -424,6 +426,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
     Ok(self)
   }
   fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+    self.calculate_padding_need_and_write_padding(4);
     println!("serialize struct");
     self.serialize_map(Some(len))
   }
@@ -560,7 +563,37 @@ impl<'a> ser::SerializeStructVariant for &'a mut CDR_serializer {
 mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use crate::serialization::cdrSerializer::to_big_endian_binary;
+  use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use serde::{Serialize, Deserialize};
+
+
+  #[test]
+
+  fn CDR_serialize_and_deserializesequence_of_structs(){
+
+    // this length is not dividable by 4 so paddings are necessary???
+    #[derive(Debug, Eq, PartialEq, Serialize,Deserialize)]
+    pub struct OmaTyyppi {
+      firstValue: i16,
+      second: u8,
+      
+    }
+    impl OmaTyyppi {
+      pub fn new(firstValue : i16, second : u8 ) -> OmaTyyppi {
+        OmaTyyppi{
+          firstValue,
+          second
+        }
+      }
+    }
+
+    let sequence_of_structs : Vec<OmaTyyppi> = vec![OmaTyyppi::new(1,23),OmaTyyppi::new(2,34),OmaTyyppi::new(-3,45)];
+    let serialized = to_little_endian_binary(&sequence_of_structs).unwrap();
+    let deSerialized :  Vec<OmaTyyppi> = deserialize_from_little_endian(serialized.clone()).unwrap();
+    println!("deSerialized    {:?}", deSerialized);
+    println!("serialized    {:?}", serialized);
+    assert_eq!(deSerialized,sequence_of_structs);
+  }
 
   #[test]
   fn CDR_serialization_example() {
