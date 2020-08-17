@@ -1,7 +1,11 @@
+use std::io;
+use std::sync::{Arc, RwLock};
+use std::time::Instant;
+
 use serde::Deserialize;
 use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
-use std::io;
+
 use crate::structure::{
   entity::{Entity, EntityAttributes},
   guid::{GUID, EntityId},
@@ -17,8 +21,8 @@ use crate::dds::{
 use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
 use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
 
-use std::sync::{Arc, RwLock};
-use std::time::Instant;
+
+
 
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

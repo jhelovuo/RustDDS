@@ -27,7 +27,7 @@ pub trait Keyed
 }
 
 pub trait Key: Eq + PartialEq + PartialOrd + Ord + Hash + Clone {
-  // no mothods required
+  // no methods required
 
   // provides one method for convenience
   fn get_hash(&self) -> u64 {
@@ -37,18 +37,11 @@ pub trait Key: Eq + PartialEq + PartialOrd + Ord + Hash + Clone {
   }
 }
 
-
-/*pub trait Key: Sync + Send {
-  fn get_hash(&self) -> u64;
-  fn box_clone(&self) -> Box<dyn Key>;
+impl Key for () {
+  // nothing
 }
 
-impl Clone for Box<dyn Key> {
-  fn clone(&self) -> Self {
-    (*self).box_clone()
-  }
-}
-*/
+
 #[derive(Eq, PartialEq, PartialOrd, Ord, Hash)]
 // Key type to identicy data instances in builtin topics
 pub struct BuiltInTopicKey {

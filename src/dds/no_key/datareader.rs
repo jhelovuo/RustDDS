@@ -1,8 +1,9 @@
+use std::io;
+use std::ops::Deref;
+
 use serde::{Deserialize,Deserializer};
 use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
-use std::io;
-use std::ops::Deref;
 
 use crate::structure::{
   entity::{Entity, EntityAttributes},
@@ -10,7 +11,8 @@ use crate::structure::{
   dds_cache::DDSCache,
 };
 use crate::dds::{
-  traits::key::*, values::result::*, qos::*,
+  traits::key::*,
+  values::result::*, qos::*,
   pubsub::Subscriber, topic::Topic, readcondition::*,
   datareader::Take
 };
@@ -22,8 +24,10 @@ use crate::dds::no_key::datasample::*;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-// We should not expose this.
+// We should not expose the NoKeyWrapper type.
 // TODO: Find a way how to remove the from read()'s return type and then hide this data type.
+// NoKeyWrapper is defined separately for reading and writing so that
+// they can require only either Serialize or Deserialize.
 pub struct NoKeyWrapper<D> {
   pub d: D,
 }
@@ -37,10 +41,6 @@ impl<D> Deref for NoKeyWrapper<D> {
 impl<D> Keyed for NoKeyWrapper<D> {
   type K = ();
   fn get_key(&self) -> () { () }
-}
-
-impl Key for () {
-  // nothing
 }
 
 impl<'de,D> Deserialize<'de> for NoKeyWrapper<D>
@@ -57,6 +57,10 @@ impl<D> NoKeyWrapper<D> {
 
 }
 
+
+
+
+// DataReader for NO_KEY data. Does not require "D: Keyed"
 pub struct DataReader<'a,D> {
   keyed_datareader: datareader_with_key::DataReader<'a,NoKeyWrapper<D>>
 }
