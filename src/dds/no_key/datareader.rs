@@ -90,7 +90,7 @@ where
       = self.keyed_datareader.read(take,max_samples,read_condition);
     #[allow(unused_variables)]
     kv.map( move |v| v.iter()
-      .map( move |datasample_with_key::DataSample{sample_info, value, taken}| DataSample
+      .map( move |datasample_with_key::DataSample{sample_info, value,}| DataSample
         { sample_info: sample_info.clone()
         , value: value.as_ref().expect("Received instance state change for no_key data. What to do?").clone()
         } )

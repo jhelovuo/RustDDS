@@ -38,11 +38,12 @@ pub struct DataReader<'a, D: Keyed> {
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
-  pub (crate) notification_receiver: mio_channel::Receiver<Instant>,
+  pub(crate) notification_receiver: mio_channel::Receiver<Instant>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
 
   datasample_cache: DataSampleCache<D>,
+  data_available: bool,
   latest_instant: Instant,
 }
 
@@ -71,6 +72,7 @@ where
       notification_receiver,
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
+      data_available: true,
       latest_instant: Instant::now(), // TODO FIX TO A SMALL NUMBER
     }
   }
@@ -80,31 +82,31 @@ where
   // samplestate) to local container, datasample_cache.
   fn get_datasamples_from_cache(&mut self) {
     let dds_cache = self.dds_cache.read().unwrap();
-    let cache_changes = dds_cache.from_topic_get_changes_in_range(
-      &self.my_topic.get_name().to_string(),
-      &self.latest_instant,
-      &Instant::now(),
-    );
+    let cache_changes = dds_cache.from_topic_get_all_changes(&self.my_topic.get_name().to_string());
 
-    self.latest_instant = *cache_changes.last().unwrap().0;
+    let last_instant = *cache_changes.last().unwrap().0;
 
+    // TODO: How to make sure that samples that are read and taken are not reread
+    // but at the same time samples that are kept are updated
     for (_instant, cc) in cache_changes {
+      // A completely new sample. Add it to datasample_cache
       let cc_data_value = cc.data_value.as_ref().unwrap().clone();
-      let last_bit = (1 << 15) & cc_data_value.representation_identifier;
       let ser_data = cc_data_value.value;
-
+      // data_object needs to be initialized
       let mut data_object: D = deserialize_from_little_endian(ser_data.clone()).unwrap();
 
-      // TODO! last_bit as 1 means which endianness?
+      // TODO: last_bit as 1 means which endianness?
+      let last_bit = (1 << 15) & cc_data_value.representation_identifier;
       if last_bit == 1 {
         data_object = deserialize_from_big_endian(ser_data).unwrap();
       }
-
       // TODO: how do we get the time here? Is it needed?
       let mut datasample = DataSample::new(Timestamp::TIME_INVALID, data_object);
       datasample.sample_info.instance_state = Self::change_kind_to_instance_state(&cc.kind);
       self.datasample_cache.add_datasample(datasample).unwrap();
     }
+    self.latest_instant = last_instant;
+    self.data_available = false;
   }
 
   /// This operation accesses a collection of Data values from the DataReader.
@@ -130,28 +132,26 @@ where
     max_samples: usize,            // maximum number of DataSamples to return.
     read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
   ) -> Result<Vec<DataSample<D>>> {
+    if self.data_available {
+      self.get_datasamples_from_cache();
+    }
     let mut result = Vec::new();
-
     // TODO! Are we iterating in a correct direction?
     'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, datasample) {
           datasample.sample_info.sample_state = SampleState::Read;
-          result.push(datasample.clone()); // TODO! How do we remove it?
-
-          if take == Take::Yes {
-            datasample.taken = true;
-          }
+          result.push(datasample.clone());
         }
         if result.len() >= max_samples {
           break 'outer;
         }
       }
     }
-    // Remove all that are marked .taken
+    // Remove all that are read.
     if take == Take::Yes {
       for (_, datsample_vec) in self.datasample_cache.datasamples.iter_mut() {
-        datsample_vec.retain(|elem| !elem.taken)
+        datsample_vec.retain(|elem| !elem.sample_info.sample_state == SampleState::Read)
       }
     }
     Ok(result)
@@ -177,6 +177,9 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
+    if self.data_available {
+      self.get_datasamples_from_cache();
+    }
     let mut result = Vec::new();
 
     let key = match instance_key {
@@ -199,17 +202,13 @@ where
       if Self::matches_conditions(&read_condition, datasample) {
         datasample.sample_info.sample_state = SampleState::Read;
         result.push(datasample.clone());
-
-        if take == Take::Yes {
-          datasample.taken = true;
-        }
       }
       if result.len() >= max_samples {
         break;
       }
     }
     if take == Take::Yes {
-      datasample_vec.retain(|elem| !elem.taken);
+      datasample_vec.retain(|elem| !!elem.sample_info.sample_state == SampleState::Read);
     }
     Ok(result)
   }
@@ -219,6 +218,10 @@ where
   pub fn read_next_sample(&mut self, take: Take) -> Result<Option<DataSample<D>>> {
     let mut ds = self.read(take, 1, ReadCondition::not_read())?;
     Ok(ds.pop())
+  }
+
+  pub fn receive_notification(&mut self) {
+    self.data_available = true;
   }
 
   // Helper functions
@@ -260,7 +263,7 @@ impl<'a, D> Evented for DataReader<'a, D>
 where
   D: Keyed,
 {
-  // We just delegate all the operations to notification_receiver, since it alrady implements Evented
+  // We just delegate all the operations to notification_receiver, since it already implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
       .notification_receiver
@@ -355,7 +358,7 @@ mod tests {
       .create_datareader::<RandomData>(Some(datareader_id), &topic, &qos)
       .unwrap();
 
-    let mut random_data = RandomData {
+    let random_data = RandomData {
       a: 1,
       b: "somedata".to_string(),
     };
@@ -394,7 +397,7 @@ mod tests {
     println!("All good until here?");
 
     // Test getting of next samples.
-    let mut random_data2 = RandomData {
+    let random_data2 = RandomData {
       a: 2,
       b: "somedata number 2".to_string(),
     };
@@ -408,7 +411,7 @@ mod tests {
       value: to_little_endian_binary(&random_data2).unwrap(),
     };
 
-    let mut random_data3 = RandomData {
+    let random_data3 = RandomData {
       a: 3,
       b: "third somedata".to_string(),
     };

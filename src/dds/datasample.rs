@@ -125,7 +125,6 @@ pub struct DataSample<D: Keyed> {
   /// Now Ok(D) means valid_data = true and there is a sample.
   /// Err(D::K) means there is valid_data = false, but only a Key and instance_state has changed.
   pub value: std::result::Result<Rc<D>, D::K>,
-  pub taken: bool,
 }
 
 impl<D> DataSample<D>
@@ -157,7 +156,6 @@ where
         source_timestamp,
       },
       value: Ok(Rc::new(payload)),
-      taken: false,
     }
   }
 
@@ -189,7 +187,6 @@ where
         source_timestamp,
       },
       value: Err(key),
-      taken: false,
     }
   } // fn
 
@@ -218,7 +215,6 @@ where
     Self {
       sample_info: self.sample_info.clone(),
       value,
-      taken: self.taken
     }
   }
 }

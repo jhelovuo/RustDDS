@@ -17,10 +17,13 @@ use crate::messages::submessages::info_timestamp::InfoTimestamp;
 use crate::dds::reader::Reader;
 use crate::dds::ddsdata::DDSData;
 use crate::structure::guid::EntityId;
-use crate::{submessages::AckNack, structure::{
-  cache_change::CacheChange,
-  sequence_number::{SequenceNumber},
-}};
+use crate::{
+  submessages::AckNack,
+  structure::{
+    cache_change::CacheChange,
+    sequence_number::{SequenceNumber},
+  },
+};
 
 use speedy::{Readable, Endianness};
 use mio_extras::channel as mio_channel;
@@ -30,7 +33,7 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 pub struct MessageReceiver {
   pub available_readers: Vec<Reader>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
-  acknack_sender: mio_channel::Sender<(GuidPrefix,AckNack)>,
+  acknack_sender: mio_channel::Sender<(GuidPrefix, AckNack)>,
 
   own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
@@ -47,7 +50,10 @@ pub struct MessageReceiver {
 }
 
 impl MessageReceiver {
-  pub fn new(participant_guid_prefix: GuidPrefix, acknack_sender : mio_channel::Sender<(GuidPrefix,AckNack)>) -> MessageReceiver {
+  pub fn new(
+    participant_guid_prefix: GuidPrefix,
+    acknack_sender: mio_channel::Sender<(GuidPrefix, AckNack)>,
+  ) -> MessageReceiver {
     // could be passed in as a parameter
     let locator_kind = LocatorKind::LOCATOR_KIND_UDPv4;
 
@@ -146,7 +152,7 @@ impl MessageReceiver {
       .find(|&r| *r.get_entity_id() == reader_id)
       .unwrap();
     let a: Option<DDSData> = reader.get_history_cache_change_data(sequence_number);
-    Some(a.unwrap().clone())
+    Some(a.unwrap())
   }
 
   // TODO use for test and debugging only
@@ -162,7 +168,7 @@ impl MessageReceiver {
       .find(|&r| *r.get_entity_id() == reader_id)
       .unwrap();
     let a = reader.get_history_cache_change(sequence_number).unwrap();
-    a.clone()
+    a
   }
 
   fn get_reader_history_cache_start_and_end_seq_num(
@@ -280,7 +286,10 @@ impl MessageReceiver {
         target_reader.handle_gap_msg(gap, mr_state);
       }
       EntitySubmessage::AckNack(ackNack, _) => {
-        self.acknack_sender.send((self.source_guid_prefix.clone(),ackNack)).unwrap();
+        self
+          .acknack_sender
+          .send((self.source_guid_prefix.clone(), ackNack))
+          .unwrap();
       }
       EntitySubmessage::DataFrag(datafrag, _) => {
         let target_reader = self.get_reader(datafrag.reader_id).unwrap();
@@ -429,7 +438,7 @@ mod tests {
     ]);
 
     let (acknack_sender, _acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
-    let mut message_receiver = MessageReceiver::new(guiPrefix,acknack_sender);
+    let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
 
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
@@ -540,7 +549,7 @@ mod tests {
 
     let guid_new = GUID::new();
     let (acknack_sender, _acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
-    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix,acknack_sender);
+    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
 
     message_receiver.handle_user_msg(udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);
@@ -567,7 +576,7 @@ mod tests {
     ];
     let guid_new = GUID::new();
     let (acknack_sender, _acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
-    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix,acknack_sender);
+    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
     assert!(message_receiver.handle_RTPS_header(&test_header));
   }
 }

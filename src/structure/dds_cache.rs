@@ -101,6 +101,16 @@ impl DDSCache {
     }
   }
 
+  pub fn from_topic_get_all_changes (
+    &self, 
+    topic_name: &str
+  ) -> Vec<(&Instant, &CacheChange)> {
+    match self.topic_caches.get(topic_name) {
+      Some(r) => r.get_all_changes(), 
+      None => vec![]
+    }
+  }
+
   pub fn from_topic_get_changes_in_range(
     &self,
     topic_name: &String,
@@ -161,6 +171,10 @@ impl TopicCache {
     self.history_cache.add_change(instant, cache_change)
   }
 
+  pub fn get_all_changes(&self) -> Vec<(&Instant, &CacheChange)> {
+    self.history_cache.get_all_changes()
+  }
+
   pub fn get_changes_in_range(
     &self,
     start_instant: &Instant,
@@ -204,6 +218,10 @@ impl DDSHistoryCache {
       // If this happens cahce changes were created at exactly same instant.
       panic!("DDSHistoryCache already contained element with key !!!");
     }
+  }
+
+  pub fn get_all_changes(&self) -> Vec<(&Instant, &CacheChange)> {
+    self.changes.iter().collect()
   }
 
   pub fn get_change(&self, instant: &Instant) -> Option<&CacheChange> {
