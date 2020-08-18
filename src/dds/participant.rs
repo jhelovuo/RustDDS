@@ -428,15 +428,15 @@ mod tests {
     let domain_participant = DomainParticipant::new(5, 0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let publisher = domain_participant
       .create_publisher(&qos.clone())
       .expect("Failed to create publisher");
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let topic = domain_participant
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos.clone())
       .expect("Failed to create topic");
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let mut _data_writer = publisher
       .create_datawriter::<RandomData>(None, &topic, &qos.clone())
       .expect("Failed to create datawriter");

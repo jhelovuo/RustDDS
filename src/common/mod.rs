@@ -1,4 +1,4 @@
 pub mod bit_set;
 pub mod ranged_bit_set;
 pub mod validity_trait;
-pub mod heartbeat_handler;
+pub mod timed_event_handler;

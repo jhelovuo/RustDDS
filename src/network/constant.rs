@@ -66,3 +66,9 @@ pub fn get_user_traffic_multicast_port(domain_id: u16) -> u16 {
 pub fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
   PB + DG * domain_id + D3 + PG * participant_id
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TimerMessageType {
+  writer_heartbeat,
+  writer_cache_cleaning,
+}
