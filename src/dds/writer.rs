@@ -35,13 +35,14 @@ use crate::{
   },
   common::timed_event_handler::{TimedEventHandler},
 };
-use super::{rtps_reader_proxy::RtpsReaderProxy};
+use super::{rtps_reader_proxy::RtpsReaderProxy, qos::{policy, QosPolicies}};
 use std::{
   net::SocketAddr,
   time::{Instant, Duration},
   sync::{RwLock, Arc},
   collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
 };
+use policy::{History, Reliability};
 
 pub struct Writer {
   source_version: ProtocolVersion,
@@ -122,6 +123,8 @@ pub struct Writer {
   ///timed_event_handler sends notification when timer is up via miochannel to poll in Dp_eventWrapper
   ///this also handles writers cache cleaning timeouts.
   timed_event_handler: Option<TimedEventHandler>,  
+
+  qos_policies: QosPolicies,
 }
 
 impl Writer {
@@ -130,6 +133,7 @@ impl Writer {
     cache_change_receiver: mio_channel::Receiver<DDSData>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
+    qos_policies : QosPolicies
   ) -> Writer {
     let entity_attributes = EntityAttributes::new(guid);
     Writer {
@@ -138,8 +142,8 @@ impl Writer {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 0,
       push_mode: true,
-      heartbeat_perioid: Duration::from_millis(100),
-      cahce_cleaning_perioid: Duration::from_millis(1000),
+      heartbeat_perioid: Duration::from_secs(1),
+      cahce_cleaning_perioid: Duration::from_secs(3),
       nack_respose_delay: Duration::from_millis(200),
       nack_suppression_duration: Duration::from_nanos(0),
       last_change_sequence_number: SequenceNumber::from(0),
@@ -164,6 +168,7 @@ impl Writer {
       disposed_sequence_numbers: HashSet::new(),
       writer_is_disposed: false,
       timed_event_handler: None,
+      qos_policies
     }
   }
 
@@ -194,11 +199,35 @@ impl Writer {
  
   }
 
+  fn is_reliable(&self) -> bool{
+    match self.qos_policies.reliability{
+      Some(Reliability::Reliable{max_blocking_time: _}) => {return true;}
+      _ => {return false;}
+    }
+  }
  
   /// this should be called everytime cacheCleaning message is received.
   pub fn handle_cache_cleaning(&mut self){
     println!("HANDLE CAHCE CLEANING writer entityID: {:?}", self.as_entity());
-    self.remove_all_acked_changes();
+    let mut removedChanges = vec![];
+    match  self.qos_policies.history {
+      None =>{
+        removedChanges = self.remove_all_acked_changes_but_keep_depth(0);
+      }
+      Some(History::KeepAll)=>{
+        // TODO need to find a way to check if resource limit.
+        // writer can only know the amount its own samples.
+        //todo!("TODO keep all resource limit ???");
+
+      }
+      Some(History::KeepLast{depth: d}) =>{
+        removedChanges = self.remove_all_acked_changes_but_keep_depth(d);
+      }
+    }
+    // This is needdd to be removed also if cahceChange is removed from DDSCache.
+    for sq in removedChanges{
+      self.sequence_number_to_instant.remove(&sq);
+    }
     self.set_cache_cleaning_timer();
   }
 
@@ -291,27 +320,56 @@ impl Writer {
   }
 
   /// Removes permanently cacheChanges from DDSCache.
-  /// CacheChanges can be safely removed only if they are acked by all readers.
-  fn remove_all_acked_changes(&mut self) {
-    let acked_by_all_reades = {
-      let mut acked_by_all_reades: Vec<(&Instant, &SequenceNumber)> = vec![];
+  /// CacheChanges can be safely removed only if they are acked by all readers. (Reliable)
+  /// Depth is QoS policy History depth.
+  /// Returns SequenceNumbers of removed CacheChanges
+  /// This is called repeadedly by handle_cache_cleaning action.
+  fn remove_all_acked_changes_but_keep_depth(&mut self, depth : i32) -> Vec<SequenceNumber> {
+    let mut amount_need_to_remove = 0;
+    let mut removed_change_sequence_numbers = vec![];
+    let acked_by_all_readers = {
+      //let mut acked_by_all: Vec<(&Instant, &SequenceNumber)> = vec![];
+      let mut acked_by_all: BTreeMap<&Instant,&SequenceNumber> = BTreeMap::new();
       for (sq, i) in self.sequence_number_to_instant.iter() {
         if self.change_with_sequence_number_is_acked_by_all(&sq) {
-          acked_by_all_reades.push((i, sq));
+          acked_by_all.insert(i, sq);
         }
       }
-      acked_by_all_reades
+      acked_by_all
     };
+    if acked_by_all_readers.len() as i32 <= depth {
+      println!("Count of acked changes: {:?} is smaller than required history depth: {:?} -> Do not remove anything", acked_by_all_readers.len(), depth);
+      return removed_change_sequence_numbers;
+    }
+    else{
+      amount_need_to_remove = acked_by_all_readers.len() as i32 - depth;
+      println!("need to remove amount {:?}", amount_need_to_remove);
+      println!("acked changes map {:?}", acked_by_all_readers);
+    }
     {
-      for (i, _sq) in acked_by_all_reades.clone() {
-        self
+      let mut index : i32 = 0; 
+      for (i, sq) in acked_by_all_readers {
+        if index >= amount_need_to_remove{
+          break;
+        }
+        let removed = self
           .dds_cache
           .write()
           .unwrap()
           .from_topic_remove_change(&self.my_topic_name, i);
-        // TODO MAYBE USEFUL TO REMOVE SEQUENCE NUMBERST THAT ARE REMOVED
+        if removed.is_some(){
+          println!("Removed cahceChange with sequenceNumber {:?} from topic {:?}", sq, self.my_topic_name);
+          removed_change_sequence_numbers.push(removed.unwrap().sequence_number);
+        }
+        else{
+          println!("ERROR remove from {:?} failed. No results with {:?}", &self.my_topic_name,i);
+          println!("{:?}", self.dds_cache);
+          //panic!("CahceChange remove failed");
+        }
+        index = index+1;
       }
     }
+    return removed_change_sequence_numbers;
   }
 
   fn remove_from_history_cache(&mut self, instant: &Instant) {
@@ -362,10 +420,27 @@ impl Writer {
   }
 
   pub fn can_send_some(&self) -> bool {
-    for reader_proxy in &self.readers {
-      if reader_proxy.can_send() {
-        return true;
+    // When writer is reliable all changes has to be acnowledged by remote reader before sending new messages.
+    if self.is_reliable(){
+      let last_change_is_acked : bool = self.change_with_sequence_number_is_acked_by_all(&self.last_change_sequence_number);
+      if last_change_is_acked {
+        for reader_proxy in &self.readers {
+          if reader_proxy.can_send() {
+            return true;
+          }
+        }
+        return false;
       }
+    }
+    //Note that for a Best-Effort Writer, W::pushMode == true, as there are no acknowledgements. Therefore, the
+    //Writer always pushes out data as it becomes available.
+    else{
+      for reader_proxy in &self.readers {
+        if reader_proxy.can_send() {
+          return true;
+        }
+      }
+      return false;
     }
     return false;
   }
@@ -501,15 +576,20 @@ impl Writer {
 
   pub fn send_all_unsend_messages(&mut self) {
     println!("Writer try to send all unsend messages");
-    loop {
-      let (message, guid) = self.get_next_reader_next_unsend_message();
-      if message.is_some() && guid.is_some() {
-        self.send_next_unsend_message();
-      } else {
-        break;
+    if self.can_send_some(){
+      loop {
+        let (message, guid) = self.get_next_reader_next_unsend_message();
+        if message.is_some() && guid.is_some() {
+          self.send_next_unsend_message();
+        } else {
+          println!("Writer all unsent messages have been sent");
+          break;
+        }
       }
     }
-    println!("Writer all unsent messages have been sent");
+    else{
+      println!("Writer cannot send any messages!");
+    }
   }
 
   fn create_submessage_header_flags(&self, kind: &SubmessageKind) -> SubmessageFlag {
@@ -681,6 +761,9 @@ impl Writer {
   ///sending a HEARTBEAT message when the sample is no longer available
   pub fn handle_ack_nack(&mut self, guid_prefix: &GuidPrefix, an: AckNack) {
     {
+      if ! self.is_reliable(){
+        panic!("Writer is best effort! It should not handle acknack messages!");
+      }
       let reader_proxy = self.matched_reader_lookup(guid_prefix, an.reader_id);
 
       // if ack nac says reader has recieved data then change history cache chage status ???

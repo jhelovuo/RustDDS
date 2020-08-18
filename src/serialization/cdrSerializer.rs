@@ -37,7 +37,7 @@ impl CDR_serializer {
     let modulo: u32 = self.buffer.len() as u32 % typeOctetAlignment as u32;
     if modulo != 0 {
       let paddingNeed: u32 = typeOctetAlignment as u32 - modulo;
-      println!("need padding! {}", paddingNeed);
+      //println!("need padding! {}", paddingNeed);
       self.write_pad(paddingNeed);
     } else {
       return;
@@ -45,7 +45,7 @@ impl CDR_serializer {
   }
 
   fn write_pad(&mut self, byteCount: u32) {
-    println!("PAD byte count: {}", byteCount);
+    //println!("PAD byte count: {}", byteCount);
     for _x in 0..byteCount {
       self.buffer.push(0u8);
     }
@@ -391,10 +391,10 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   //The elements of the sequence are encoded as specified for their type.
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
     self.calculate_padding_need_and_write_padding(4);
-    println!("serialize seq");
+    //println!("serialize seq");
     let elementCount = _len.unwrap() as u32;
     if elementCount % 4 != 0 {
-      println!("sequence element count: {}", elementCount);
+      //println!("sequence element count: {}", elementCount);
     }
 
     self.serialize_u32(elementCount).unwrap();
@@ -402,7 +402,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   }
   // if CDR contains fixed length array then number of elements is not written.
   fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
-    println!("serialize tuple");
+    //println!("serialize tuple");
     Ok(self)
   }
   fn serialize_tuple_struct(
@@ -422,12 +422,12 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
     Ok(self)
   }
   fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
-    println!("serialize map");
+    //println!("serialize map");
     Ok(self)
   }
   fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
     self.calculate_padding_need_and_write_padding(4);
-    println!("serialize struct");
+    //println!("serialize struct");
     self.serialize_map(Some(len))
   }
   fn serialize_struct_variant(

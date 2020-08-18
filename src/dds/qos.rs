@@ -164,7 +164,7 @@ pub mod policy {
     pub name: Vec<Vec<u8>>,
   }
   */
-  #[derive(Clone, Debug)]
+  #[derive(Clone, Debug, PartialEq)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
@@ -176,7 +176,7 @@ pub mod policy {
     BySourceTimeStamp,
   }
 
-  #[derive(Clone, Debug)]
+  #[derive(Clone, Debug, PartialEq)]
   pub enum History {
     KeepLast { depth: i32 },
     KeepAll,

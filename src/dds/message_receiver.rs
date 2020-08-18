@@ -411,7 +411,7 @@ mod tests {
   use std::sync::{RwLock, Arc};
 
   use crate::structure::topic_kind::TopicKind;
-  use crate::dds::typedesc::TypeDesc;
+  use crate::dds::{qos::QosPolicies, typedesc::TypeDesc};
   use std::time::Instant;
 
   #[test]
@@ -502,6 +502,7 @@ mod tests {
       hccc_download,
       Arc::new(RwLock::new(DDSCache::new())),
       String::from("topicName1"),
+      QosPolicies::qos_none(),
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entityId,

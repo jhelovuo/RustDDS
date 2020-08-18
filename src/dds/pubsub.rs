@@ -79,6 +79,7 @@ impl<'a> Publisher {
       hccc_download,
       self.domain_participant.get_dds_cache(),
       topic.get_name().to_string(),
+      topic.get_qos().clone(),
     );
     self
       .add_writer_sender

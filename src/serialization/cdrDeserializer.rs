@@ -498,7 +498,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
-    println!("deserialize tuple!");
+    //println!("deserialize tuple!");
     visitor.visit_seq(SequenceHelper::new(&mut self, _len as u32, false))
   }
 
@@ -531,12 +531,13 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     V: Visitor<'de>,
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4);
+    /*
     println!(
       "deserialize struct! it has num of fields: {} ",
       _fields.len()
-    );
+    );*/
     for f in _fields {
-      println!("field: {} ", f);
+      //println!("field: {} ", f);
     }
     visitor.visit_seq(SequenceHelper::new(&mut self, _fields.len() as u32, false))
   }
