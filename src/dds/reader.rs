@@ -145,7 +145,6 @@ impl Reader {
 
     // Really should be checked from qosPolicy?
     // Added in order to test stateless actions. TODO
-
     let statefull = self.matched_writers.contains_key(&writer_guid);
 
     if statefull {
@@ -162,8 +161,8 @@ impl Reader {
     }
 
     self.make_cache_change(data, instant, writer_guid);
+    // Add to own track-keeping datastructure
     self.seqnum_instant_map.insert(seq_num, instant);
-    // self.send_datasample(mr_state.timestamp);
     self.notify_cache_change(instant);
   }
 
@@ -202,14 +201,13 @@ impl Reader {
     }
     // TODO: Should the really be removed?
     // Remove instances from DDSHistoryCache
+    let mut cache = self.dds_cache.write().unwrap();
     for instant in removed_instances.iter() {
-      self
-        .dds_cache
-        .write()
-        .unwrap()
+      cache
         .from_topic_remove_change(&self.topic_name, instant)
         .expect("WriterProxy told to remove an instant which was not present");
     }
+    drop(cache);
 
     // See if ack_nack is needed.
     let changes_missing = last_seq_num < heartbeat.last_sn;
@@ -220,7 +218,7 @@ impl Reader {
       }
 
       let response_ack_nack = AckNack {
-        reader_id: self.get_entity_id().clone(),
+        reader_id: *self.get_entity_id(),
         writer_id: heartbeat.writer_id,
         reader_sn_state,
         count: self.sent_ack_nack_count,
@@ -264,20 +262,16 @@ impl Reader {
       irrelevant_changes_set.insert(SequenceNumber::from(seq_num as i64));
     }
 
-    // TODO: Should the really be removed?
     // Remove from writerProxy and DDSHistoryCache
     let mut removed_instances = Vec::new();
     for seq_num in &irrelevant_changes_set {
       removed_instances.push(writer_proxy.irrelevant_changes_set(*seq_num));
-      //self.history_cache.remove_change(ih);
     }
+    let mut cache = self.dds_cache.write().unwrap();
     for instant in &removed_instances {
-      self
-        .dds_cache
-        .write()
-        .unwrap()
-        .from_topic_remove_change(&self.topic_name, instant);
+      cache.from_topic_remove_change(&self.topic_name, instant);
     }
+    drop(cache);
 
     // Is this needed?
     // self.notify_cache_change();
@@ -336,7 +330,8 @@ impl Endpoint for Reader {
   }
 }
 
-impl PartialEq for Reader {
+// Not needed anymore
+/*impl PartialEq for Reader {
   // Ignores registration and history cache?
   fn eq(&self, other: &Self) -> bool {
     //self.history_cache == other.history_cache &&
@@ -347,7 +342,7 @@ impl PartialEq for Reader {
       && self.sent_ack_nack_count == other.sent_ack_nack_count
       && self.received_hearbeat_count == other.received_hearbeat_count
   }
-}
+}*/
 
 impl fmt::Debug for Reader {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

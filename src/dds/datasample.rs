@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use enumflags2::BitFlags;
 
 use crate::dds::traits::key::*;
@@ -124,7 +123,7 @@ pub struct DataSample<D: Keyed> {
   /// not provide any data value.
   /// Now Ok(D) means valid_data = true and there is a sample.
   /// Err(D::K) means there is valid_data = false, but only a Key and instance_state has changed.
-  pub value: std::result::Result<Rc<D>, D::K>,
+  pub value: std::result::Result<D, D::K>,
 }
 
 impl<D> DataSample<D>
@@ -155,7 +154,7 @@ where
         absolute_generation_rank,
         source_timestamp,
       },
-      value: Ok(Rc::new(payload)),
+      value: Ok(payload),
     }
   }
 
@@ -202,14 +201,14 @@ where
   } // fn
 } // imlp
 
-impl<D> Clone for DataSample<D>
+/*impl<D> Clone for DataSample<D>
 where
   D: Keyed,
   <D as Keyed>::K: Key,
 {
   fn clone(&self) -> Self {
-    let value: std::result::Result<Rc<D>, D::K> = match &self.value {
-      Ok(rc) => Ok(rc.clone()),
+    let value: std::result::Result<D, D::K> = match &self.value {
+      Ok(d) => Ok(d.clone()),
       Err(_) => Err(self.get_key()),
     };
     Self {
@@ -218,3 +217,4 @@ where
     }
   }
 }
+*/

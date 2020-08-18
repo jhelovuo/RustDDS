@@ -264,8 +264,8 @@ impl Discovery {
   ) -> Option<SPDPDiscoveredParticipantData> {
     let participant_data = match reader.read_next_sample(Take::Yes) {
       Ok(d) => match d {
-        Some(d) => match d.value {
-          Ok(aaaaa) => (*aaaaa).clone(),
+        Some(d) => match &d.value {
+          Ok(aaaaa) => (aaaaa).clone(),
           _ => return None,
         },
         None => return None,

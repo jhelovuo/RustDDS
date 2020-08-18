@@ -89,14 +89,13 @@ where
 
     // TODO: How to make sure that samples that are read and taken are not reread
     // but at the same time samples that are kept are updated
+    // ?!
     for (_instant, cc) in cache_changes {
-      // A completely new sample. Add it to datasample_cache
       let cc_data_value = cc.data_value.as_ref().unwrap().clone();
       let ser_data = cc_data_value.value;
       // data_object needs to be initialized
       let mut data_object: D = deserialize_from_little_endian(ser_data.clone()).unwrap();
 
-      // TODO: last_bit as 1 means which endianness?
       let last_bit = (1 << 15) & cc_data_value.representation_identifier;
       if last_bit == 1 {
         data_object = deserialize_from_big_endian(ser_data).unwrap();
@@ -111,6 +110,7 @@ where
   }
 
   /// This operation accesses a collection of Data values from the DataReader.
+  /// The function return references to the data.
   /// The size of the returned collection will be limited to the specified max_samples.
   /// The read_condition filters the samples accessed.
   /// If no matching samples exist, then an empty Vec will be returned, but that is not an error.
@@ -120,39 +120,64 @@ where
   /// View state and sample state are maintained for each DataReader separately. Instance state is
   /// determined by global CacheChange objects concerning that instance.
   ///
-  /// The parameter "take" specifies if the returned samples are removed from the DataReader.
-  /// The returned samples change their state in DataReader from NotRead to Read after this operation.
   /// If the sample belongs to the most recent generation of the instance,
   /// it will also set the view_state of the instance to NotNew.
   ///
-  /// This should cover DDS DataReader methods read, take, read_w_condition, take_w_condition,
-  /// read_next_sample, take_next_sample.
+  /// This should cover DDS DataReader methods read, read_w_condition and
+  /// read_next_sample.
   pub fn read(
     &mut self,
-    take: Take,                    // Take::Yes ( = take) or Take::No ( = read)
     max_samples: usize,            // maximum number of DataSamples to return.
     read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
-  ) -> Result<Vec<DataSample<D>>> {
+  ) -> Result<Vec<&DataSample<D>>> {
     if self.data_available {
       self.get_datasamples_from_cache();
     }
     let mut result = Vec::new();
-    // TODO! Are we iterating in a correct direction?
     'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, datasample) {
           datasample.sample_info.sample_state = SampleState::Read;
-          result.push(datasample.clone());
+          result.push(&*datasample);
         }
         if result.len() >= max_samples {
           break 'outer;
         }
       }
     }
-    // Remove all that are read.
-    if take == Take::Yes {
-      for (_, datsample_vec) in self.datasample_cache.datasamples.iter_mut() {
-        datsample_vec.retain(|elem| !elem.sample_info.sample_state == SampleState::Read)
+    Ok(result)
+  }
+
+  /// Similar to read, but insted of references being returned, the datasamples
+  /// are removed from the DataReader and ownership is transferred to the caller.
+  /// Should cover take, take_w_condition and take_next_sample
+  pub fn take(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<DataSample<D>>> {
+    if self.data_available {
+      self.get_datasamples_from_cache();
+    }
+
+    let mut result = Vec::new();
+    'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
+      let mut ind = 0;
+      while ind < datasample_vec.len() {
+        // If a datasample is removed from the vec, all elements from the index
+        // onwards will be shifted left. Therefore, the next sample is accessible
+        // in the same index
+        if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
+          let mut datasample = datasample_vec.remove(ind);
+          datasample.sample_info.sample_state = SampleState::Read;
+          result.push(datasample);
+        // Nothing removed, next element can be found in the next index.
+        } else {
+          ind += 1;
+        }
+        if result.len() >= max_samples {
+          break 'outer;
+        }
       }
     }
     Ok(result)
@@ -164,11 +189,10 @@ where
   /// If a key is specified, then the parameter this_or_next specifies whether to access the instance
   /// with specified key or the following one, in key order.
   ///
-  /// This should cover DDS DataReader methods read_instance, take_instance, read_next_instance,
-  /// take_next_instance, read_next_instance_w_condition, take_next_instance_w_condition.
+  /// This should cover DDS DataReader methods read_instance, read_next_instance,
+  /// read_next_instance_w_condition.
   pub fn read_instance(
     &mut self,
-    take: Take,
     max_samples: usize,
     read_condition: ReadCondition,
     // Select only samples from instance specified by key. In case of None, select the
@@ -177,12 +201,10 @@ where
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
-  ) -> Result<Vec<DataSample<D>>> {
+  ) -> Result<Vec<&DataSample<D>>> {
     if self.data_available {
       self.get_datasamples_from_cache();
     }
-    let mut result = Vec::new();
-
     let key = match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => k,
@@ -196,28 +218,83 @@ where
         .unwrap()
         .clone(),
     };
+    let mut result = Vec::new();
 
     let datasample_vec = self.datasample_cache.datasamples.get_mut(&key).unwrap();
-    // Rest is almost identical to read.. combine them?
     for datasample in datasample_vec.iter_mut() {
       if Self::matches_conditions(&read_condition, datasample) {
         datasample.sample_info.sample_state = SampleState::Read;
-        result.push(datasample.clone());
+        result.push(&*datasample);
       }
       if result.len() >= max_samples {
         break;
       }
     }
-    if take == Take::Yes {
-      datasample_vec.retain(|elem| !!elem.sample_info.sample_state == SampleState::Read);
+    Ok(result)
+  }
+
+  /// Similar to read_instance, but will return owned datasamples
+  /// This should cover DDS DataReader methods take_instance, take_next_instance,
+  /// take_next_instance_w_condition.
+  pub fn take_instance(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+    // Select only samples from instance specified by key. In case of None, select the
+    // "smallest" instance as specified by the key type Ord trait.
+    instance_key: Option<<D as Keyed>::K>,
+    // This = Select instance specified by key.
+    // Next = select next instance in the order specified by Ord on keys.
+    this_or_next: SelectByKey,
+  ) -> Result<Vec<DataSample<D>>> {
+    if self.data_available {
+      self.get_datasamples_from_cache();
+    }
+    let key = match instance_key {
+      Some(k) => match this_or_next {
+        SelectByKey::This => k,
+        SelectByKey::Next => self.datasample_cache.get_next_key(&k),
+      },
+      None => self
+        .datasample_cache
+        .datasamples
+        .keys()
+        .min()
+        .unwrap()
+        .clone(),
+    };
+    let mut result = Vec::new();
+
+    let datasample_vec = self.datasample_cache.datasamples.get_mut(&key).unwrap();
+    let mut ind = 0;
+    while ind < datasample_vec.len() {
+      // If a datasample is removed from the vec, all elements from the index
+      // onwards will be shifted left. Therefore, the next sample is accessible
+      // in the same index
+      if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
+        let mut datasample = datasample_vec.remove(ind);
+        datasample.sample_info.sample_state = SampleState::Read;
+        result.push(datasample);
+      // Nothing removed, next element can be found in the next index.
+      } else {
+        ind += 1;
+      }
+      if result.len() >= max_samples {
+        break;
+      }
     }
     Ok(result)
   }
 
   /// This is a simplified API for reading the next not_read sample
   /// If no new data is available, the return value is Ok(None).
-  pub fn read_next_sample(&mut self, take: Take) -> Result<Option<DataSample<D>>> {
-    let mut ds = self.read(take, 1, ReadCondition::not_read())?;
+  pub fn read_next_sample(&mut self, _take: Take) -> Result<Option<&DataSample<D>>> {
+    let mut ds = self.read(1, ReadCondition::not_read())?;
+    Ok(ds.pop())
+  }
+
+  pub fn take_next_sample(&mut self, _take: Take) -> Result<Option<DataSample<D>>> {
+    let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 
@@ -226,6 +303,7 @@ where
   }
 
   // Helper functions
+
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
     if !rcondition
       .sample_state_mask
@@ -326,6 +404,7 @@ mod tests {
   use crate::messages::submessages::data::Data;
   use crate::dds::message_receiver::*;
   use crate::structure::guid::GuidPrefix;
+  use crate::structure::sequence_number::SequenceNumber;
 
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use std::thread;
@@ -390,11 +469,11 @@ mod tests {
       .datasample_cache
       .get_datasample(&data_key)
       .unwrap()[0]
-      .clone()
       .value
+      .as_ref()
       .unwrap();
 
-    assert_eq!(*deserialized_random_data, random_data);
+    assert_eq!(deserialized_random_data, &random_data);
     println!("All good until here?");
 
     // Test getting of next samples.
@@ -436,5 +515,107 @@ mod tests {
       .get_datasample(&data_key)
       .unwrap();
     assert_eq!(random_data_vec.len(), 2);
+  }
+
+  #[test]
+  fn dr_read_and_take() {
+    let dp = DomainParticipant::new(0, 0);
+
+    let mut qos = QosPolicies::qos_none();
+    qos.history = Some(policy::History::KeepAll); // Just for testing
+
+    let sub = dp.create_subscriber(&qos).unwrap();
+    let topic = dp
+      .create_topic("dr read", TypeDesc::new("read fn test?".to_string()), &qos)
+      .unwrap();
+
+    let (send, _rec) = mio_channel::sync_channel::<Instant>(10);
+
+    let default_id = EntityId::default();
+    let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), default_id);
+
+    let mut reader = Reader::new(
+      reader_guid,
+      send,
+      dp.get_dds_cache(),
+      topic.get_name().to_string(),
+    );
+
+    let mut datareader = sub
+      .create_datareader::<RandomData>(Some(default_id), &topic, &qos)
+      .unwrap();
+
+    let writer_guid = GUID {
+      guidPrefix: GuidPrefix::new(vec![1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], 1),
+    };
+    let mut mr_state = MessageReceiverState::default();
+    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+
+    // Reader and datareader ready, test with data
+    let test_data = RandomData {
+      a: 100,
+      b: ":DD".to_string(),
+    };
+
+    let test_data2 = RandomData {
+      a: 200,
+      b: ":)".to_string(),
+    };
+
+    let mut data_msg = Data::default();
+    data_msg.reader_id = *reader.get_entity_id();
+    data_msg.writer_id = writer_guid.entityId;
+    data_msg.writer_sn = SequenceNumber::from(0);
+
+    data_msg.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&test_data).unwrap(),
+    };
+
+    let mut data_msg2 = Data::default();
+    data_msg2.reader_id = *reader.get_entity_id();
+    data_msg2.writer_id = writer_guid.entityId;
+    data_msg2.writer_sn = SequenceNumber::from(1);
+
+    data_msg2.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&test_data2).unwrap(),
+    };
+    reader.handle_data_msg(data_msg, mr_state.clone());
+    reader.handle_data_msg(data_msg2, mr_state);
+    //thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+
+    // Read the same sample two times.
+    {
+      let result_vec = datareader.read(100, ReadCondition::any()).unwrap();
+      let d = result_vec[0].value.as_ref().unwrap();
+      assert_eq!(&test_data, d);
+    }
+    {
+      let result_vec2 = datareader.read(100, ReadCondition::any()).unwrap();
+      let d2 = result_vec2[1].value.as_ref().unwrap();
+      assert_eq!(&test_data2, d2);
+    }
+    {
+      let result_vec3 = datareader.read(100, ReadCondition::any()).unwrap();
+      let d3 = result_vec3[0].value.as_ref().unwrap();
+      assert_eq!(&test_data, d3);
+    }
+
+    // Take
+    let mut result_vec = datareader.take(100, ReadCondition::any()).unwrap();
+    let mut result_vec2 = datareader.take(100, ReadCondition::any());
+    drop(datareader);
+
+    let d2 = result_vec.pop().unwrap().value.unwrap();
+    let d1 = result_vec.pop().unwrap().value.unwrap();
+    assert_eq!(test_data2, d2);
+    assert_eq!(test_data, d1);
+    assert!(result_vec2.is_ok());
+    assert_eq!(result_vec2.unwrap().len(), 0);
   }
 }

@@ -1,7 +1,7 @@
 use std::io;
 use std::ops::Deref;
 
-use serde::{Deserialize,Deserializer};
+use serde::{Deserialize, Deserializer};
 use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
@@ -11,10 +11,8 @@ use crate::structure::{
   dds_cache::DDSCache,
 };
 use crate::dds::{
-  traits::key::*,
-  values::result::*, qos::*,
-  pubsub::Subscriber, topic::Topic, readcondition::*,
-  datareader::Take
+  traits::key::*, values::result::*, qos::*, pubsub::Subscriber, topic::Topic, readcondition::*,
+  datareader::Take,
 };
 
 use crate::dds::datareader as datareader_with_key;
@@ -35,34 +33,35 @@ pub struct NoKeyWrapper<D> {
 // implement Deref so that &NoKeyWrapper<D> is coercible to &D
 impl<D> Deref for NoKeyWrapper<D> {
   type Target = D;
-  fn deref(&self) -> &Self::Target { &self.d }
+  fn deref(&self) -> &Self::Target {
+    &self.d
+  }
 }
 
 impl<D> Keyed for NoKeyWrapper<D> {
   type K = ();
-  fn get_key(&self) -> () { () }
-}
-
-impl<'de,D> Deserialize<'de> for NoKeyWrapper<D>
-where D: Deserialize<'de>,
-{
-  fn deserialize<R>(deserializer: R) -> std::result::Result<NoKeyWrapper<D>,R::Error>
-    where R: Deserializer<'de>
-  {
-     D::deserialize(deserializer).map( |d| NoKeyWrapper::<D>{d} )
+  fn get_key(&self) -> () {
+    ()
   }
 }
 
-impl<D> NoKeyWrapper<D> {
-
+impl<'de, D> Deserialize<'de> for NoKeyWrapper<D>
+where
+  D: Deserialize<'de>,
+{
+  fn deserialize<R>(deserializer: R) -> std::result::Result<NoKeyWrapper<D>, R::Error>
+  where
+    R: Deserializer<'de>,
+  {
+    D::deserialize(deserializer).map(|d| NoKeyWrapper::<D> { d })
+  }
 }
 
-
-
+impl<D> NoKeyWrapper<D> {}
 
 // DataReader for NO_KEY data. Does not require "D: Keyed"
-pub struct DataReader<'a,D> {
-  keyed_datareader: datareader_with_key::DataReader<'a,NoKeyWrapper<D>>
+pub struct DataReader<'a, D> {
+  keyed_datareader: datareader_with_key::DataReader<'a, NoKeyWrapper<D>>,
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
@@ -78,9 +77,13 @@ where
     dds_cache: Arc<RwLock<DDSCache>>,
   ) -> Self {
     DataReader {
-      keyed_datareader:
-        datareader_with_key::DataReader::<'a,NoKeyWrapper<D>>
-          ::new(subscriber,my_id, topic, notification_receiver, dds_cache),
+      keyed_datareader: datareader_with_key::DataReader::<'a, NoKeyWrapper<D>>::new(
+        subscriber,
+        my_id,
+        topic,
+        notification_receiver,
+        dds_cache,
+      ),
     }
   }
 
@@ -90,15 +93,23 @@ where
     max_samples: usize,            // maximum number of DataSamples to return.
     read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
   ) -> Result<Vec<DataSample<NoKeyWrapper<D>>>> {
-    let kv : Result<Vec<datasample_with_key::DataSample<NoKeyWrapper<D>>>>
-      = self.keyed_datareader.read(take,max_samples,read_condition);
+    let kv: Result<Vec<datasample_with_key::DataSample<NoKeyWrapper<D>>>> = self
+      .keyed_datareader
+      .read(take, max_samples, read_condition);
     #[allow(unused_variables)]
-    kv.map( move |v| v.iter()
-      .map( move |datasample_with_key::DataSample{sample_info, value,}| DataSample
-        { sample_info: sample_info.clone()
-        , value: value.as_ref().expect("Received instance state change for no_key data. What to do?").clone()
-        } )
-      .collect() )
+    kv.map(move |v| {
+      v.iter()
+        .map(
+          move |datasample_with_key::DataSample { sample_info, value }| DataSample {
+            sample_info: sample_info.clone(),
+            value: value
+              .as_ref()
+              .expect("Received instance state change for no_key data. What to do?")
+              .clone(),
+          },
+        )
+        .collect()
+    })
   }
 
   // It does not make any sense to implement read_instance(), by definition of "no_key".
@@ -125,11 +136,11 @@ where
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D> Evented for DataReader<'a, D>
-{
+impl<'a, D> Evented for DataReader<'a, D> {
   // We just delegate all the operations to notification_receiver, since it alrady implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
-    self.keyed_datareader
+    self
+      .keyed_datareader
       .notification_receiver
       .register(poll, token, interest, opts)
   }
@@ -141,7 +152,8 @@ impl<'a, D> Evented for DataReader<'a, D>
     interest: Ready,
     opts: PollOpt,
   ) -> io::Result<()> {
-    self.keyed_datareader
+    self
+      .keyed_datareader
       .notification_receiver
       .reregister(poll, token, interest, opts)
   }
@@ -151,8 +163,7 @@ impl<'a, D> Evented for DataReader<'a, D>
   }
 }
 
-impl<D> HasQoSPolicy for DataReader<'_, D>
-{
+impl<D> HasQoSPolicy for DataReader<'_, D> {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     self.keyed_datareader.set_qos(policy)
   }
