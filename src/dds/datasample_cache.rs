@@ -67,6 +67,10 @@ where
     self.datasamples.get(&key)
   }
 
+  pub fn get_datasamples_mut(&mut self, key: &D::K) -> Option<&mut Vec<DataSample<D>>> {
+    self.datasamples.get_mut(&key)
+  }
+
   pub fn get_next_key(&self, key: &D::K) -> D::K {
     let pos = self.datasamples.iter().position(|(k, _)| k == key);
     self

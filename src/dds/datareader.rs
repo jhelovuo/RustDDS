@@ -74,22 +74,26 @@ where
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
       data_available: true,
-      latest_instant: Instant::now(), // TODO FIX TO A SMALL NUMBER
+      // The reader is created before the datareader, hence initializing the
+      // latest_instant to now should be fine. There should be no smaller instants
+      // added by the reader.
+      latest_instant: Instant::now(),
     }
   }
 
-  // Gets all cache_changes from the TopicCache. Deserializes
+  // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
   fn get_datasamples_from_cache(&mut self) {
     let dds_cache = self.dds_cache.read().unwrap();
-    let cache_changes = dds_cache.from_topic_get_all_changes(&self.my_topic.get_name().to_string());
+    let cache_changes = dds_cache.from_topic_get_changes_in_range(
+      &self.my_topic.get_name().to_string(),
+      &self.latest_instant,
+      &Instant::now(),
+    );
 
-    let last_instant = *cache_changes.last().unwrap().0;
+    self.latest_instant = *cache_changes.last().unwrap().0;
 
-    // TODO: How to make sure that samples that are read and taken are not reread
-    // but at the same time samples that are kept are updated
-    // ?!
     for (_instant, cc) in cache_changes {
       let cc_data_value = cc.data_value.as_ref().unwrap().clone();
       let ser_data = cc_data_value.value;
@@ -100,12 +104,12 @@ where
       if last_bit == 1 {
         data_object = deserialize_from_big_endian(ser_data).unwrap();
       }
-      // TODO: how do we get the time here? Is it needed?
+      // TODO: how do we get the source_timestamp here? Is it needed?
+      // TODO: Keeping track of and assigning  generation rank, sample rank etc.
       let mut datasample = DataSample::new(Timestamp::TIME_INVALID, data_object);
       datasample.sample_info.instance_state = Self::change_kind_to_instance_state(&cc.kind);
       self.datasample_cache.add_datasample(datasample).unwrap();
     }
-    self.latest_instant = last_instant;
     self.data_available = false;
   }
 
@@ -219,8 +223,7 @@ where
         .clone(),
     };
     let mut result = Vec::new();
-
-    let datasample_vec = self.datasample_cache.datasamples.get_mut(&key).unwrap();
+    let datasample_vec = self.datasample_cache.get_datasamples_mut(&key).unwrap();
     for datasample in datasample_vec.iter_mut() {
       if Self::matches_conditions(&read_condition, datasample) {
         datasample.sample_info.sample_state = SampleState::Read;
@@ -298,12 +301,12 @@ where
     Ok(ds.pop())
   }
 
+  // Could be called when readers send notification.
   pub fn receive_notification(&mut self) {
     self.data_available = true;
   }
 
   // Helper functions
-
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
     if !rcondition
       .sample_state_mask
@@ -366,8 +369,6 @@ where
   }
 }
 
-// Todo when others attributes have PartialEq implemented
-
 impl<D> HasQoSPolicy for DataReader<'_, D>
 where
   D: Keyed,
@@ -407,7 +408,6 @@ mod tests {
   use crate::structure::sequence_number::SequenceNumber;
 
   use crate::serialization::cdrSerializer::to_little_endian_binary;
-  use std::thread;
 
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
   #[test]
@@ -456,6 +456,7 @@ mod tests {
     let mut data = Data::default();
     data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
     data.writer_id = writer_guid.entityId;
+    data.writer_sn = SequenceNumber::from(0);
 
     data.serialized_payload = SerializedPayload {
       representation_identifier: 0,
@@ -474,16 +475,16 @@ mod tests {
       .unwrap();
 
     assert_eq!(deserialized_random_data, &random_data);
-    println!("All good until here?");
 
     // Test getting of next samples.
     let random_data2 = RandomData {
-      a: 2,
+      a: 1,
       b: "somedata number 2".to_string(),
     };
     let mut data2 = Data::default();
     data2.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
     data2.writer_id = writer_guid.entityId;
+    data2.writer_sn = SequenceNumber::from(1);
 
     data2.serialized_payload = SerializedPayload {
       representation_identifier: 0,
@@ -492,12 +493,13 @@ mod tests {
     };
 
     let random_data3 = RandomData {
-      a: 3,
+      a: 1,
       b: "third somedata".to_string(),
     };
     let mut data3 = Data::default();
     data3.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
     data3.writer_id = writer_guid.entityId;
+    data3.writer_sn = SequenceNumber::from(2);
 
     data3.serialized_payload = SerializedPayload {
       representation_identifier: 0,
@@ -507,14 +509,13 @@ mod tests {
 
     new_reader.handle_data_msg(data2, mr_state.clone());
     new_reader.handle_data_msg(data3, mr_state);
-    thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
 
     matching_datareader.get_datasamples_from_cache();
     let random_data_vec = matching_datareader
       .datasample_cache
       .get_datasample(&data_key)
       .unwrap();
-    assert_eq!(random_data_vec.len(), 2);
+    assert_eq!(random_data_vec.len(), 3);
   }
 
   #[test]
@@ -555,13 +556,13 @@ mod tests {
 
     // Reader and datareader ready, test with data
     let test_data = RandomData {
-      a: 100,
-      b: ":DD".to_string(),
+      a: 10,
+      b: ":DDD".to_string(),
     };
 
     let test_data2 = RandomData {
-      a: 200,
-      b: ":)".to_string(),
+      a: 11,
+      b: ":)))".to_string(),
     };
 
     let mut data_msg = Data::default();
@@ -586,8 +587,7 @@ mod tests {
       value: to_little_endian_binary(&test_data2).unwrap(),
     };
     reader.handle_data_msg(data_msg, mr_state.clone());
-    reader.handle_data_msg(data_msg2, mr_state);
-    //thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    reader.handle_data_msg(data_msg2, mr_state.clone());
 
     // Read the same sample two times.
     {
@@ -608,8 +608,7 @@ mod tests {
 
     // Take
     let mut result_vec = datareader.take(100, ReadCondition::any()).unwrap();
-    let mut result_vec2 = datareader.take(100, ReadCondition::any());
-    drop(datareader);
+    let result_vec2 = datareader.take(100, ReadCondition::any());
 
     let d2 = result_vec.pop().unwrap().value.unwrap();
     let d1 = result_vec.pop().unwrap().value.unwrap();
@@ -617,5 +616,112 @@ mod tests {
     assert_eq!(test_data, d1);
     assert!(result_vec2.is_ok());
     assert_eq!(result_vec2.unwrap().len(), 0);
+
+    //datareader.
+
+    // Read and take tests with instant
+
+    let data_key1 = RandomData {
+      a: 1,
+      b: ":D".to_string(),
+    };
+    let data_key2_1 = RandomData {
+      a: 2,
+      b: ":(".to_string(),
+    };
+    let data_key2_2 = RandomData {
+      a: 2,
+      b: ":)".to_string(),
+    };
+    let data_key2_3 = RandomData {
+      a: 2,
+      b: "xD".to_string(),
+    };
+
+    let key1 = data_key1.get_key();
+    let key2 = data_key2_1.get_key();
+
+    assert!(data_key2_1.get_key() == data_key2_2.get_key());
+    assert!(data_key2_3.get_key() == key2);
+
+    let mut data_msg = Data::default();
+    data_msg.reader_id = *reader.get_entity_id();
+    data_msg.writer_id = writer_guid.entityId;
+    data_msg.writer_sn = SequenceNumber::from(2);
+
+    data_msg.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&data_key1).unwrap(),
+    };
+    let mut data_msg2 = Data::default();
+    data_msg2.reader_id = *reader.get_entity_id();
+    data_msg2.writer_id = writer_guid.entityId;
+    data_msg2.writer_sn = SequenceNumber::from(3);
+
+    data_msg2.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&data_key2_1).unwrap(),
+    };
+    let mut data_msg3 = Data::default();
+    data_msg3.reader_id = *reader.get_entity_id();
+    data_msg3.writer_id = writer_guid.entityId;
+    data_msg3.writer_sn = SequenceNumber::from(4);
+
+    data_msg3.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&data_key2_2).unwrap(),
+    };
+    let mut data_msg4 = Data::default();
+    data_msg4.reader_id = *reader.get_entity_id();
+    data_msg4.writer_id = writer_guid.entityId;
+    data_msg4.writer_sn = SequenceNumber::from(5);
+
+    data_msg4.serialized_payload = SerializedPayload {
+      representation_identifier: 0,
+      representation_options: 0,
+      value: to_little_endian_binary(&data_key2_3).unwrap(),
+    };
+    reader.handle_data_msg(data_msg, mr_state.clone());
+    reader.handle_data_msg(data_msg2, mr_state.clone());
+    reader.handle_data_msg(data_msg3, mr_state.clone());
+    reader.handle_data_msg(data_msg4, mr_state.clone());
+    datareader.receive_notification();
+
+    println!("calling read with key 1 and this");
+    let results =
+      datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::This);
+    assert_eq!(&data_key1, results.unwrap()[0].value.as_ref().unwrap());
+
+    println!("calling read with None and this");
+    // Takes the samllest key, 1 in this case.
+    let results = datareader.read_instance(100, ReadCondition::any(), None, SelectByKey::This);
+    assert_eq!(&data_key1, results.unwrap()[0].value.as_ref().unwrap());
+
+    println!("calling read with key 1 and next");
+    let results =
+      datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::Next);
+    assert_eq!(results.as_ref().unwrap().len(), 3);
+    assert_eq!(&data_key2_2, results.unwrap()[1].value.as_ref().unwrap());
+
+    println!("calling take with key 2 and this");
+    let results =
+      datareader.take_instance(100, ReadCondition::any(), Some(key2), SelectByKey::This);
+    assert_eq!(results.as_ref().unwrap().len(), 3);
+    let mut vec = results.unwrap();
+    let d3 = vec.pop().unwrap().value.unwrap();
+    let d2 = vec.pop().unwrap().value.unwrap();
+    let d1 = vec.pop().unwrap().value.unwrap();
+    assert_eq!(data_key2_3, d3);
+    assert_eq!(data_key2_2, d2);
+    assert_eq!(data_key2_1, d1);
+
+    println!("calling take with key 2 and this");
+    let results =
+      datareader.take_instance(100, ReadCondition::any(), Some(key2), SelectByKey::This);
+    assert!(results.is_ok());
+    assert!(results.unwrap().is_empty());
   }
 }

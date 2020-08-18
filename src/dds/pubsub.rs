@@ -204,6 +204,14 @@ impl<'s> Subscriber {
     let reader_id = entity_id;
     let datareader_id = entity_id;
 
+    let matching_datareader = DataReader::<D>::new(
+      self,
+      datareader_id,
+      &topic,
+      rec,
+      self.domain_participant.get_dds_cache(),
+    );
+
     let reader_guid =
       GUID::new_with_prefix_and_id(*self.domain_participant.get_guid_prefix(), reader_id);
 
@@ -212,14 +220,6 @@ impl<'s> Subscriber {
       send,
       self.domain_participant.get_dds_cache(),
       topic.get_name().to_string(),
-    );
-
-    let matching_datareader = DataReader::<D>::new(
-      self,
-      datareader_id,
-      &topic,
-      rec,
-      self.domain_participant.get_dds_cache(),
     );
 
     // Create new topic to DDScache if one isn't present

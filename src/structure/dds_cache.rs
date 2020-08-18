@@ -4,7 +4,7 @@ use std::{
 };
 use crate::dds::{typedesc::TypeDesc, qos::QosPolicies};
 use super::{topic_kind::TopicKind, cache_change::{ChangeKind, CacheChange}};
-use std::ops::Bound::Included;
+use std::ops::Bound::{Included, Excluded};
 
 ///DDSCache contains all cacheCahanges that are produced by participant or recieved by participant.
 ///Each topic that is been published or been subscribed are contained in separate TopicCaches.
@@ -246,7 +246,7 @@ impl DDSHistoryCache {
     let mut changes: Vec<(&Instant, &CacheChange)> = vec![];
     for (i, c) in self
       .changes
-      .range((Included(start_instant), Included(end_instant)))
+      .range((Excluded(start_instant), Included(end_instant)))
     {
       changes.push((i, c));
     }

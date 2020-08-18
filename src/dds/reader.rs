@@ -151,6 +151,7 @@ impl Reader {
       let writer_proxy = self.matched_writer_lookup(writer_guid);
       if let Some(max_sn) = writer_proxy.available_changes_max() {
         if seq_num <= *max_sn {
+          println!("A smaller sequence number received. Ignoring...");
           return; // Should be ignored
         }
       }
