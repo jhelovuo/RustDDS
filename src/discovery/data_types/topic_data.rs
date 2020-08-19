@@ -9,7 +9,7 @@ use crate::{
   dds::{
     qos::policy::{
       Deadline, Durability, LatencyBudget, Reliability, Ownership, DestinationOrder, Liveliness,
-      TimeBasedFilter, Presentation, Lifespan,
+      TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
   },
   discovery::content_filter_property::ContentFilterProperty,
@@ -113,15 +113,157 @@ impl Serialize for DiscoveredReaderData {
     S: serde::Serializer,
   {
     let builtin_data_serializer = BuiltinDataSerializer::from_discovered_reader_data(&self);
+    builtin_data_serializer.serialize::<S>(serializer, true)
+  }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct WriterProxy {
+  pub remote_writer_guid: Option<GUID>,
+  pub unicast_locator_list: LocatorList,
+  pub multicast_locator_list: LocatorList,
+  pub data_max_size_serialized: Option<u32>,
+}
+
+impl<'de> Deserialize<'de> for WriterProxy {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let custom_ds = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    Ok(res.generate_writer_proxy())
+  }
+}
+
+impl Serialize for WriterProxy {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_writer_proxy(&self);
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
 
-pub struct WriterProxy {
-  remote_writer_guid: Option<GUID>,
-  unicast_locator_list: LocatorList,
-  multicast_locator_list: LocatorList,
-  data_max_size_serialized: Option<u64>,
+#[derive(Debug, PartialEq)]
+pub struct PublicationBuiltinTopicData {
+  pub key: Option<GUID>,
+  pub participant_key: Option<GUID>,
+  pub topic_name: Option<String>,
+  pub type_name: Option<String>,
+  pub durability: Option<Durability>,
+  pub deadline: Option<Deadline>,
+  pub latency_budget: Option<LatencyBudget>,
+  pub liveliness: Option<Liveliness>,
+  pub reliability: Option<Reliability>,
+  pub lifespan: Option<Lifespan>,
+  pub time_based_filter: Option<TimeBasedFilter>,
+  pub ownership: Option<Ownership>,
+  pub destination_order: Option<DestinationOrder>,
+  pub presentation: Option<Presentation>,
+}
+
+impl<'de> Deserialize<'de> for PublicationBuiltinTopicData {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let custom_ds = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    Ok(res.generate_publication_topic_data())
+  }
+}
+
+impl Serialize for PublicationBuiltinTopicData {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_publication_topic_data(&self);
+    builtin_data_serializer.serialize::<S>(serializer, false)
+  }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DiscoveredWriterData {
+  pub writer_proxy: WriterProxy,
+  pub publication_topic_data: PublicationBuiltinTopicData,
+}
+
+impl<'de> Deserialize<'de> for DiscoveredWriterData {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let custom_ds = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    Ok(res.generate_discovered_writer_data())
+  }
+}
+
+impl Serialize for DiscoveredWriterData {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_writer_data(&self);
+    builtin_data_serializer.serialize::<S>(serializer, true)
+  }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TopicBuiltinTopicData {
+  pub key: Option<GUID>,
+  pub name: Option<String>,
+  pub type_name: Option<String>,
+  pub durability: Option<Durability>,
+  pub deadline: Option<Deadline>,
+  pub latency_budget: Option<LatencyBudget>,
+  pub liveliness: Option<Liveliness>,
+  pub reliability: Option<Reliability>,
+  pub lifespan: Option<Lifespan>,
+  pub destination_order: Option<DestinationOrder>,
+  pub presentation: Option<Presentation>,
+  pub history: Option<History>,
+  pub resource_limits: Option<ResourceLimits>,
+  pub ownership: Option<Ownership>,
+}
+
+impl<'de> Deserialize<'de> for TopicBuiltinTopicData {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let custom_ds = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    Ok(res.generate_topic_data())
+  }
+}
+
+impl Serialize for TopicBuiltinTopicData {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_topic_data(&self);
+    builtin_data_serializer.serialize::<S>(serializer, false)
+  }
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct DiscoveredTopicData {
+  topic_data: TopicBuiltinTopicData,
+}
+
+impl Serialize for DiscoveredTopicData {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_topic_data(&self.topic_data);
+    builtin_data_serializer.serialize::<S>(serializer, true)
+  }
 }
 
 #[cfg(test)]
@@ -132,7 +274,10 @@ mod tests {
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
 
   use crate::{
-    test::test_data::{subscription_builtin_topic_data, reader_proxy_data, content_filter_data},
+    test::test_data::{
+      subscription_builtin_topic_data, reader_proxy_data, content_filter_data, writer_proxy_data,
+      publication_builtin_topic_data, topic_data,
+    },
   };
 
   #[test]
@@ -147,40 +292,18 @@ mod tests {
   }
 
   #[test]
-  fn td_subscription_builtin_topic_data_ser_deser() {
-    // TODO: uncomment when enum serialization is complete or QosPolicies have been reworked
+  fn td_writer_proxy_ser_deser() {
+    let writer_proxy = writer_proxy_data().unwrap();
 
-    // let sub_topic_data = SubscriptionBuiltinTopicData {
-    //   key: Some(GUID::new()),
-    //   participant_key: Some(GUID::new()),
-    //   topic_name: Some("some topic name".to_string()),
-    //   type_name: Some("RandomData".to_string()),
-    //   durability: Some(Durability::Transient),
-    //   deadline: Some(Deadline {
-    //     period: Duration::from(std::time::Duration::from_secs(7)),
-    //   }),
-    //   latency_budget: Some(LatencyBudget {
-    //     duration: Duration::from(std::time::Duration::from_secs(5)),
-    //   }),
-    //   liveliness: Some(Liveliness {
-    //     kind: LivelinessKind::ManulByTopic,
-    //     lease_duration: Duration::from(std::time::Duration::from_secs(60)),
-    //   }),
-    //   reliability: Some(Reliability::BestEffort),
-    //   ownership: Some(Ownership::Exclusive { strength: 4 }),
-    //   destination_order: Some(DestinationOrder::BySourceTimeStamp),
-    //   time_based_filter: Some(TimeBasedFilter {
-    //     minimum_separation: Duration::from(std::time::Duration::from_secs(120)),
-    //   }),
-    //   presentation: Some(Presentation {
-    //     access_scope: PresentationAccessScope::Instance,
-    //     coherent_access: false,
-    //     ordered_access: true,
-    //   }),
-    //   lifespan: Some(Lifespan {
-    //     duration: Duration::from(std::time::Duration::from_secs(3214)),
-    //   }),
-    // };
+    let sdata = to_little_endian_binary(&writer_proxy).unwrap();
+    let writer_proxy2: WriterProxy = deserialize_from_little_endian(&sdata).unwrap();
+    assert_eq!(writer_proxy, writer_proxy2);
+    let sdata2 = to_little_endian_binary(&writer_proxy2).unwrap();
+    assert_eq!(sdata, sdata2);
+  }
+
+  #[test]
+  fn td_subscription_builtin_topic_data_ser_deser() {
     let sub_topic_data = subscription_builtin_topic_data().unwrap();
 
     let sdata = to_little_endian_binary(&sub_topic_data).unwrap();
@@ -188,6 +311,18 @@ mod tests {
       deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(sub_topic_data, sub_topic_data2);
     let sdata2 = to_little_endian_binary(&sub_topic_data2).unwrap();
+    assert_eq!(sdata, sdata2);
+  }
+
+  #[test]
+  fn td_publication_builtin_topic_data_ser_deser() {
+    let pub_topic_data = publication_builtin_topic_data().unwrap();
+
+    let sdata = to_little_endian_binary(&pub_topic_data).unwrap();
+    let pub_topic_data2: PublicationBuiltinTopicData =
+      deserialize_from_little_endian(&sdata).unwrap();
+    assert_eq!(pub_topic_data, pub_topic_data2);
+    let sdata2 = to_little_endian_binary(&pub_topic_data2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
@@ -208,6 +343,48 @@ mod tests {
     let drd2: DiscoveredReaderData = deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(drd, drd2);
     let sdata2 = to_little_endian_binary(&drd2).unwrap();
+    assert_eq!(sdata, sdata2);
+  }
+
+  #[test]
+  fn td_discovered_writer_data_ser_deser() {
+    let mut writer_proxy = writer_proxy_data().unwrap();
+    let pub_topic_data = publication_builtin_topic_data().unwrap();
+    writer_proxy.remote_writer_guid = pub_topic_data.key.clone();
+
+    let dwd = DiscoveredWriterData {
+      writer_proxy,
+      publication_topic_data: pub_topic_data,
+    };
+
+    let sdata = to_little_endian_binary(&dwd).unwrap();
+    let dwd2: DiscoveredWriterData = deserialize_from_little_endian(&sdata).unwrap();
+    assert_eq!(dwd, dwd2);
+    let sdata2 = to_little_endian_binary(&dwd2).unwrap();
+    assert_eq!(sdata, sdata2);
+  }
+
+  #[test]
+  fn td_topic_data_ser_deser() {
+    let topic_data = topic_data().unwrap();
+
+    let sdata = to_little_endian_binary(&topic_data).unwrap();
+    let topic_data2: TopicBuiltinTopicData = deserialize_from_little_endian(&sdata).unwrap();
+    assert_eq!(topic_data, topic_data2);
+    let sdata2 = to_little_endian_binary(&topic_data2).unwrap();
+    assert_eq!(sdata, sdata2);
+  }
+
+  #[test]
+  fn td_discovered_topic_data_ser_deser() {
+    let topic_data = topic_data().unwrap();
+
+    let dtd = DiscoveredTopicData { topic_data };
+
+    let sdata = to_little_endian_binary(&dtd).unwrap();
+    let dtd2: DiscoveredTopicData = deserialize_from_little_endian(&sdata).unwrap();
+    assert_eq!(dtd, dtd2);
+    let sdata2 = to_little_endian_binary(&dtd2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 }

@@ -24,7 +24,10 @@ use crate::{
   discovery::{
     content_filter_property::ContentFilterProperty,
     data_types::{
-      topic_data::{SubscriptionBuiltinTopicData, ReaderProxy},
+      topic_data::{
+        SubscriptionBuiltinTopicData, ReaderProxy, WriterProxy, PublicationBuiltinTopicData,
+        TopicBuiltinTopicData,
+      },
       spdp_participant_data::SPDPDiscoveredParticipantData,
     },
   },
@@ -74,6 +77,23 @@ pub fn reader_proxy_data() -> Option<ReaderProxy> {
   Some(reader_proxy)
 }
 
+pub fn writer_proxy_data() -> Option<WriterProxy> {
+  let writer_proxy = WriterProxy {
+    remote_writer_guid: Some(GUID::new()),
+    unicast_locator_list: vec![Locator::from(SocketAddr::new(
+      "0.0.0.0".parse().unwrap(),
+      12345,
+    ))],
+    multicast_locator_list: vec![Locator::from(SocketAddr::new(
+      "0.0.0.0".parse().unwrap(),
+      13579,
+    ))],
+    data_max_size_serialized: Some(24000),
+  };
+
+  Some(writer_proxy)
+}
+
 pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData> {
   let sub_topic_data = SubscriptionBuiltinTopicData {
     key: Some(GUID::new()),
@@ -93,6 +113,48 @@ pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData>
   };
 
   Some(sub_topic_data)
+}
+
+pub fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
+  let pub_topic_data = PublicationBuiltinTopicData {
+    key: Some(GUID::new()),
+    participant_key: Some(GUID::new()),
+    topic_name: Some("rand topic namm".to_string()),
+    type_name: Some("RandomData".to_string()),
+    durability: None,
+    deadline: None,
+    latency_budget: None,
+    liveliness: None,
+    reliability: None,
+    lifespan: None,
+    time_based_filter: None,
+    ownership: None,
+    destination_order: None,
+    presentation: None,
+  };
+
+  Some(pub_topic_data)
+}
+
+pub fn topic_data() -> Option<TopicBuiltinTopicData> {
+  let topic_data = TopicBuiltinTopicData {
+    key: Some(GUID::new()),
+    name: Some("SomeTopicName".to_string()),
+    type_name: Some("RandomData".to_string()),
+    durability: None,
+    deadline: None,
+    latency_budget: None,
+    liveliness: None,
+    reliability: None,
+    lifespan: None,
+    destination_order: None,
+    presentation: None,
+    history: None,
+    resource_limits: None,
+    ownership: None,
+  };
+
+  Some(topic_data)
 }
 
 pub fn content_filter_data() -> Option<ContentFilterProperty> {

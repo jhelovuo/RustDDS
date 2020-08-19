@@ -16,13 +16,16 @@ use crate::{
   dds::{
     qos::policy::{
       Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
-      TimeBasedFilter, Presentation, Lifespan,
+      TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
     data_types::{
-      topic_data::{SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData},
+      topic_data::{
+        SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData, WriterProxy,
+        PublicationBuiltinTopicData, DiscoveredWriterData, TopicBuiltinTopicData,
+      },
       spdp_participant_data::SPDPDiscoveredParticipantData,
     },
   },
@@ -52,6 +55,9 @@ pub struct BuiltinDataDeserializer {
   pub unicast_locator_list: LocatorList,
   pub multicast_locator_list: LocatorList,
 
+  // Writer Proxy
+  pub data_max_size_serialized: Option<u32>,
+
   // topic data
   pub topic_name: Option<String>,
   pub type_name: Option<String>,
@@ -65,6 +71,8 @@ pub struct BuiltinDataDeserializer {
   pub time_based_filter: Option<TimeBasedFilter>,
   pub presentation: Option<Presentation>,
   pub lifespan: Option<Lifespan>,
+  pub history: Option<History>,
+  pub resource_limits: Option<ResourceLimits>,
 
   pub content_filter_property: Option<ContentFilterProperty>,
 }
@@ -91,6 +99,8 @@ impl BuiltinDataDeserializer {
       unicast_locator_list: LocatorList::new(),
       multicast_locator_list: LocatorList::new(),
 
+      data_max_size_serialized: None,
+
       topic_name: None,
       type_name: None,
       durability: None,
@@ -103,6 +113,8 @@ impl BuiltinDataDeserializer {
       time_based_filter: None,
       presentation: None,
       lifespan: None,
+      history: None,
+      resource_limits: None,
 
       content_filter_property: None,
     }
@@ -136,6 +148,15 @@ impl BuiltinDataDeserializer {
     }
   }
 
+  pub fn generate_writer_proxy(self) -> WriterProxy {
+    WriterProxy {
+      remote_writer_guid: self.endpoint_guid,
+      unicast_locator_list: self.unicast_locator_list,
+      multicast_locator_list: self.multicast_locator_list,
+      data_max_size_serialized: self.data_max_size_serialized,
+    }
+  }
+
   pub fn generate_subscription_topic_data(self) -> SubscriptionBuiltinTopicData {
     SubscriptionBuiltinTopicData {
       key: self.endpoint_guid,
@@ -155,6 +176,44 @@ impl BuiltinDataDeserializer {
     }
   }
 
+  pub fn generate_publication_topic_data(self) -> PublicationBuiltinTopicData {
+    PublicationBuiltinTopicData {
+      key: self.endpoint_guid,
+      participant_key: self.participant_guid,
+      topic_name: self.topic_name,
+      type_name: self.type_name,
+      durability: self.durability,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      liveliness: self.liveliness,
+      reliability: self.reliability,
+      lifespan: self.lifespan,
+      time_based_filter: self.time_based_filter,
+      ownership: self.ownership,
+      destination_order: self.destination_order,
+      presentation: self.presentation,
+    }
+  }
+
+  pub fn generate_topic_data(self) -> TopicBuiltinTopicData {
+    TopicBuiltinTopicData {
+      key: self.endpoint_guid,
+      name: self.topic_name,
+      type_name: self.type_name,
+      durability: self.durability,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      liveliness: self.liveliness,
+      reliability: self.reliability,
+      lifespan: self.lifespan,
+      destination_order: self.destination_order,
+      presentation: self.presentation,
+      history: self.history,
+      resource_limits: self.resource_limits,
+      ownership: self.ownership,
+    }
+  }
+
   pub fn generate_discovered_reader_data(self) -> DiscoveredReaderData {
     // TODO: refactor so that clones are not necessary
     let reader_proxy = self.clone().generate_reader_proxy();
@@ -163,6 +222,16 @@ impl BuiltinDataDeserializer {
       reader_proxy,
       subscription_topic_data,
       content_filter: self.content_filter_property,
+    }
+  }
+
+  pub fn generate_discovered_writer_data(self) -> DiscoveredWriterData {
+    // TODO: refactor so that clones are not necessary
+    let writer_proxy = self.clone().generate_writer_proxy();
+    let publication_topic_data = self.clone().generate_publication_topic_data();
+    DiscoveredWriterData {
+      writer_proxy,
+      publication_topic_data,
     }
   }
 
@@ -522,16 +591,47 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
-        println!("Parameter length: {}", parameter_length);
-        println!(
-          "CONTENT FILTER {:?}",
-          buffer[4..4 + parameter_length].to_vec()
-        );
         let content_filter: Result<ContentFilterProperty, Error> =
           deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match content_filter {
           Ok(cfp) => {
             self.content_filter_property = Some(cfp);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED => {
+        let max_size: Result<u32, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match max_size {
+          Ok(ms) => {
+            self.data_max_size_serialized = Some(ms);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_HISTORY => {
+        let history: Result<History, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match history {
+          Ok(his) => {
+            self.history = Some(his);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_RESOURCE_LIMITS => {
+        let resource_limits: Result<ResourceLimits, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match resource_limits {
+          Ok(lim) => {
+            self.resource_limits = Some(lim);
             buffer.drain(..4 + parameter_length);
             return self;
           }

@@ -176,13 +176,13 @@ pub mod policy {
     BySourceTimeStamp,
   }
 
-  #[derive(Clone, Debug, PartialEq)]
+  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum History {
     KeepLast { depth: i32 },
     KeepAll,
   }
 
-  #[derive(Clone, Debug)]
+  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct ResourceLimits {
     max_samples: i32,
     max_instances: i32,
