@@ -8,9 +8,11 @@ use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
 use crate::messages::submessages::ack_nack::AckNack;
 use crate::messages::submessages::heartbeat::Heartbeat;
 use crate::messages::submessages::gap::Gap;
+use crate::messages::submessages::heartbeat_frag::HeartbeatFrag;
 use crate::structure::entity::EntityAttributes;
-use crate::structure::guid::GUID;
+use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
+use crate::structure::locator::LocatorList;
 #[allow(unused_imports)] // TODO: Remove this directive when reader works
 use crate::structure::time::Timestamp;
 
@@ -26,6 +28,14 @@ use std::collections::{HashSet, HashMap};
 use std::time::Duration;
 use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiverState;
+use crate::dds::qos::{QosPolicies, HasQoSPolicy};
+use crate::dds::values::result::Result as DDSResult;
+use crate::network::udp_sender::UDPSender;
+use crate::serialization::submessage::*;
+use crate::messages::submessages::submessage_header::SubmessageHeader;
+use crate::messages::submessages::submessage_kind::SubmessageKind;
+use crate::messages::submessages::submessage_flag::SubmessageFlag;
+use crate::messages::submessages::submessage::EntitySubmessage;
 
 pub struct Reader {
   // Should the instant be sent?
@@ -34,6 +44,7 @@ pub struct Reader {
   dds_cache: Arc<RwLock<DDSCache>>,
   seqnum_instant_map: HashMap<SequenceNumber, Instant>,
   topic_name: String,
+  qos_policy: QosPolicies,
 
   entity_attributes: EntityAttributes,
   pub enpoint_attributes: EndpointAttributes,
@@ -53,11 +64,13 @@ impl Reader {
     notification_sender: mio_channel::SyncSender<Instant>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
+    //qos_policy: QosPolicies, add later to constructor
   ) -> Reader {
     Reader {
       notification_sender,
       dds_cache,
       topic_name,
+      qos_policy: QosPolicies::qos_none(),
 
       seqnum_instant_map: HashMap::new(),
       entity_attributes: EntityAttributes { guid },
@@ -110,15 +123,26 @@ impl Reader {
     let end = self.seqnum_instant_map.iter().max().unwrap().0;
     return vec![*start, *end];
   }
-
-  pub fn matched_writer_add(&mut self, remote_writer_guid: GUID, mr_state: MessageReceiverState) {
+  
+  pub fn matched_writer_add(
+    &mut self,
+    remote_writer_guid: GUID,
+    remote_group_entity_id: EntityId,
+    unicast_locator_list: LocatorList,
+    multicast_locator_list: LocatorList,
+  ) {
     match self.matched_writers.get_mut(&remote_writer_guid) {
-      Some(_) => {}
+      Some(rp) => {
+        rp.remote_group_entity_id = remote_group_entity_id;
+        rp.unicast_locator_list = unicast_locator_list;
+        rp.multicast_locator_list = multicast_locator_list;
+      }
       None => {
         let new_writer_proxy = RtpsWriterProxy::new(
           remote_writer_guid,
-          mr_state.unicast_reply_locator_list,
-          mr_state.multicast_reply_locator_list,
+          unicast_locator_list,
+          multicast_locator_list,
+          remote_group_entity_id,
         );
         self
           .matched_writers
@@ -144,13 +168,14 @@ impl Reader {
     let instant = Instant::now();
 
     // Really should be checked from qosPolicy?
-    // Added in order to test stateless actions. TODO
+    // Added in order to test stateless actions.
+    // TODO
     let statefull = self.matched_writers.contains_key(&writer_guid);
 
     if statefull {
       let writer_proxy = self.matched_writer_lookup(writer_guid);
       if let Some(max_sn) = writer_proxy.available_changes_max() {
-        if seq_num <= *max_sn {
+        if seq_num <= max_sn {
           println!("A smaller sequence number received. Ignoring...");
           return; // Should be ignored
         }
@@ -188,19 +213,9 @@ impl Reader {
     }
     writer_proxy.received_heartbeat_count = heartbeat.count;
 
-    // remove fragmented changes until first_sn. Removed a bit later due to self
-    // beign borrowd mutably already.
+    // remove fragmented changes until first_sn.
     let removed_instances = writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
-    // self.notify_cache_change();
-
-    let last_seq_num: SequenceNumber;
-    if let Some(num) = writer_proxy.available_changes_max() {
-      last_seq_num = *num;
-    } else {
-      last_seq_num = SequenceNumber::from(0);
-    }
-    // TODO: Should the really be removed?
     // Remove instances from DDSHistoryCache
     let mut cache = self.dds_cache.write().unwrap();
     for instant in removed_instances.iter() {
@@ -210,25 +225,29 @@ impl Reader {
     }
     drop(cache);
 
+    let writer_proxy = self.matched_writer_lookup(writer_guid);
     // See if ack_nack is needed.
-    let changes_missing = last_seq_num < heartbeat.last_sn;
-    if changes_missing || !final_flag_set {
-      let mut reader_sn_state = SequenceNumberSet::new(last_seq_num);
-      for seq_num in i64::from(last_seq_num)..i64::from(heartbeat.last_sn) {
-        reader_sn_state.insert(SequenceNumber::from(seq_num));
+    if writer_proxy.changes_are_missing(heartbeat.last_sn) || !final_flag_set {
+      let max_sn_plus_1 = match writer_proxy.available_changes_max(){
+        Some(sn) => sn + SequenceNumber::from(1),
+        None => SequenceNumber::from(1)
+      };
+      let mut missing_seq_num_set = SequenceNumberSet::new(max_sn_plus_1);
+      for seq_num in writer_proxy.missing_changes(heartbeat.last_sn) {
+        missing_seq_num_set.insert(seq_num);
       }
 
       let response_ack_nack = AckNack {
         reader_id: *self.get_entity_id(),
         writer_id: heartbeat.writer_id,
-        reader_sn_state,
+        reader_sn_state: missing_seq_num_set,
         count: self.sent_ack_nack_count,
       };
 
       self.sent_ack_nack_count += 1;
       // The acknack can be sent now or later. The rest of the RTPS message
       // needs to be constructed. p. 48
-      self.send_acknack(response_ack_nack);
+      self.send_acknack(response_ack_nack, mr_state);
       return true;
     }
     false
@@ -266,7 +285,7 @@ impl Reader {
     // Remove from writerProxy and DDSHistoryCache
     let mut removed_instances = Vec::new();
     for seq_num in &irrelevant_changes_set {
-      removed_instances.push(writer_proxy.irrelevant_changes_set(*seq_num));
+      removed_instances.push(writer_proxy.set_irrelevant_change(*seq_num));
     }
     let mut cache = self.dds_cache.write().unwrap();
     for instant in &removed_instances {
@@ -282,6 +301,14 @@ impl Reader {
     todo!() // comines frags to data which is handled normally. page 51-53
             // let data: Data = something..?
             // self.handle_data_msg(data, mr_state);
+  }
+
+  pub fn handle_heartbeatfrag_msg(
+    &mut self,
+    _heartbeatfrag: HeartbeatFrag,
+    _mr_state: MessageReceiverState,
+  ) {
+    todo!()
   }
 
   // update history cache
@@ -314,8 +341,35 @@ impl Reader {
     }
   }
 
-  fn send_acknack(&self, _acknack: AckNack) {
-    //todo!()
+  fn send_acknack(&self, acknack: AckNack, mr_state: MessageReceiverState) {
+    // Should it be saved as an attribute?
+    let sender = UDPSender::new_with_random_port();
+    let flags = SubmessageFlag { flags: 0 };
+
+    let submessage = SubMessage {
+      header: SubmessageHeader {
+        submessage_id: SubmessageKind::ACKNACK,
+        flags: flags.clone(),
+        submessage_length: 0, // TODO
+      },
+      submessage: Some(EntitySubmessage::AckNack(acknack, flags)),
+      intepreterSubmessage: None,
+    };
+
+    let bytes = submessage.serialize_msg();
+    sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
+  }
+} // impl
+
+impl HasQoSPolicy for Reader {
+  fn set_qos(&mut self, policy: &QosPolicies) -> DDSResult<()> {
+    // TODO: check liveliness of qos_policy
+    self.qos_policy = policy.clone();
+    Ok(())
+  }
+
+  fn get_qos(&self) -> &QosPolicies {
+    &self.qos_policy
   }
 }
 
@@ -390,7 +444,12 @@ mod tests {
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
 
-    reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+    reader.matched_writer_add(
+      writer_guid.clone(),
+      EntityId::ENTITYID_UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+    );
 
     let mut data = Data::default();
     data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
@@ -422,7 +481,12 @@ mod tests {
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
 
-    new_reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+    new_reader.matched_writer_add(
+      writer_guid.clone(),
+      EntityId::ENTITYID_UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+    );
 
     let mut d = Data::new();
     d.writer_id = writer_guid.entityId;
@@ -466,7 +530,12 @@ mod tests {
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
 
-    new_reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+    new_reader.matched_writer_add(
+      writer_guid.clone(),
+      EntityId::ENTITYID_UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+    );
 
     let d = DDSData::new(SerializedPayload::new());
     let mut changes = Vec::new();
@@ -575,7 +644,12 @@ mod tests {
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
 
-    reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+    reader.matched_writer_add(
+      writer_guid.clone(),
+      EntityId::ENTITYID_UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+    );
 
     let n: i64 = 10;
     let mut d = Data::new();

@@ -167,8 +167,7 @@ impl MessageReceiver {
       .iter()
       .find(|&r| *r.get_entity_id() == reader_id)
       .unwrap();
-    let a = reader.get_history_cache_change(sequence_number).unwrap();
-    a
+    reader.get_history_cache_change(sequence_number).unwrap()
   }
 
   fn get_reader_history_cache_start_and_end_seq_num(
@@ -203,9 +202,7 @@ impl MessageReceiver {
       return; // Header not in correct form
     }
 
-    //TODO!!!
-    let endian = Endianness::LittleEndian; // Should be read from message??
-    println!("Header in correct form");
+    let mut endian = Endianness::LittleEndian; // Should be read from message??
 
     // Go through each submessage
     while self.pos < msg.len() {
@@ -214,11 +211,12 @@ impl MessageReceiver {
           Some(T) => T,
           None => {
             print!("could not create submessage header");
-            return;
-          } // rule 1. Could not create submessage header
+            return; // rule 1. Could not create submessage header
+          }
         };
       self.pos += 4; // Submessage header lenght is 4 bytes
-
+                     // How do we know how to deserialize the header?
+      endian = submessage_header.flags.endianness_flag();
       let mut submessage_length = submessage_header.submessage_length as usize;
       println!("submessage length: {:?}", submessage_length);
       println!("submessage header: {:?}", submessage_header);
@@ -253,7 +251,7 @@ impl MessageReceiver {
 
         self.send_submessage(new_submessage.submessage.unwrap());
         self.submessage_count += 1;
-      }
+      } // end if
       self.pos += submessage_length;
     } // end while
   }
@@ -266,20 +264,37 @@ impl MessageReceiver {
       return; // Wrong target received
     }
 
-    // TODO! If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
     let mr_state = self.give_message_receiver_info();
     match submessage {
       EntitySubmessage::Data(data, _) => {
-        let target_reader = self.get_reader(data.reader_id).unwrap();
-        target_reader.handle_data_msg(data, mr_state);
+        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
+        if data.reader_id == EntityId::ENTITYID_UNKNOWN {
+          for reader in self.available_readers.iter_mut() {
+            reader.handle_data_msg(data.clone(), mr_state.clone());
+          }
+        } else {
+          let target_reader = self.get_reader(data.reader_id).unwrap();
+          target_reader.handle_data_msg(data, mr_state);
+        }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
-        let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
-        target_reader.handle_heartbeat_msg(
-          heartbeat,
-          flags.is_flag_set(1), // final flag!?
-          mr_state,
-        );
+        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
+        if heartbeat.reader_id == EntityId::ENTITYID_UNKNOWN {
+          for reader in self.available_readers.iter_mut() {
+            reader.handle_heartbeat_msg(
+              heartbeat.clone(),
+              flags.is_flag_set(1), // final flag!?
+              mr_state.clone(),
+            );
+          }
+        } else {
+          let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
+          target_reader.handle_heartbeat_msg(
+            heartbeat,
+            flags.is_flag_set(1), // final flag!?
+            mr_state,
+          );
+        }
       }
       EntitySubmessage::Gap(gap) => {
         let target_reader = self.get_reader(gap.reader_id).unwrap();
@@ -288,14 +303,24 @@ impl MessageReceiver {
       EntitySubmessage::AckNack(ackNack, _) => {
         self
           .acknack_sender
-          .send((self.source_guid_prefix.clone(), ackNack))
+          .send((self.source_guid_prefix, ackNack))
           .unwrap();
       }
       EntitySubmessage::DataFrag(datafrag, _) => {
         let target_reader = self.get_reader(datafrag.reader_id).unwrap();
         target_reader.handle_datafrag_msg(datafrag, mr_state);
       }
-      EntitySubmessage::HeartbeatFrag(_) => {}
+      EntitySubmessage::HeartbeatFrag(heartbeatfrag) => {
+        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
+        if heartbeatfrag.reader_id == EntityId::ENTITYID_UNKNOWN {
+          for reader in self.available_readers.iter_mut() {
+            reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
+          }
+        } else {
+          let target_reader = self.get_reader(heartbeatfrag.reader_id).unwrap();
+          target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+        }
+      }
       EntitySubmessage::NackFrag(_) => {}
     }
   }
@@ -373,6 +398,7 @@ impl MessageReceiver {
     true
   }
 } // impl messageReceiver
+
 #[derive(Debug, Clone)]
 pub struct MessageReceiverState {
   //pub own_guid_prefix: GuidPrefix,

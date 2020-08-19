@@ -451,7 +451,12 @@ mod tests {
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
 
-    new_reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+    new_reader.matched_writer_add(
+      writer_guid.clone(),
+      EntityId::ENTITYID_UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+    );
 
     let mut data = Data::default();
     data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
@@ -552,7 +557,12 @@ mod tests {
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
-    reader.matched_writer_add(writer_guid.clone(), mr_state.clone());
+    reader.matched_writer_add(
+      writer_guid.clone(),
+      EntityId::ENTITYID_UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+    );
 
     // Reader and datareader ready, test with data
     let test_data = RandomData {
