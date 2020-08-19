@@ -98,11 +98,11 @@ where
       let cc_data_value = cc.data_value.as_ref().unwrap().clone();
       let ser_data = cc_data_value.value;
       // data_object needs to be initialized
-      let mut data_object: D = deserialize_from_little_endian(ser_data.clone()).unwrap();
+      let mut data_object: D = deserialize_from_little_endian(&ser_data).unwrap();
 
       let last_bit = (1 << 15) & cc_data_value.representation_identifier;
       if last_bit == 1 {
-        data_object = deserialize_from_big_endian(ser_data).unwrap();
+        data_object = deserialize_from_big_endian(&ser_data).unwrap();
       }
       // TODO: how do we get the source_timestamp here? Is it needed?
       // TODO: Keeping track of and assigning  generation rank, sample rank etc.
@@ -520,7 +520,7 @@ mod tests {
 
   #[test]
   fn dr_read_and_take() {
-    let dp = DomainParticipant::new(0, 0);
+    let dp = DomainParticipant::new(11, 0);
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing

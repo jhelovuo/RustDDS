@@ -482,8 +482,7 @@ mod tests {
       size: i32,
     }
 
-    let copy_vec = (*a.data().clone()).to_vec();
-    let deserializedShapeType: ShapeType = deserialize_from_little_endian(copy_vec).unwrap();
+    let deserializedShapeType: ShapeType = deserialize_from_little_endian(&a.data()).unwrap();
     println!("deserialized shapeType: {:?}", deserializedShapeType);
     assert_eq!(deserializedShapeType.color, "RED");
 

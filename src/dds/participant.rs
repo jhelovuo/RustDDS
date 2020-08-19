@@ -142,8 +142,6 @@ impl Drop for DomainParticipant_Inner {
   }
 }
 
-pub struct SubscriptionBuiltinTopicData {} // placeholder
-
 #[allow(clippy::new_without_default)]
 impl DomainParticipant_Inner {
   fn new(
@@ -387,12 +385,10 @@ impl std::fmt::Debug for DomainParticipant {
 
 #[cfg(test)]
 mod tests {
-  // use super::*;
-  use mio_extras::channel as mio_channel;
   use std::{thread, net::SocketAddr};
   use crate::speedy::Writable;
   use crate::{
-    dds::{qos::QosPolicies, typedesc::TypeDesc, writer::Writer},
+    dds::{qos::QosPolicies, typedesc::TypeDesc},
     network::{udp_sender::UDPSender, constant::get_user_traffic_unicast_port},
     test::random_data::RandomData,
     structure::{
@@ -408,7 +404,7 @@ mod tests {
       protocol_id::ProtocolId,
     },
   };
-  use super::{DomainParticipant_Inner, DomainParticipant};
+  use super::DomainParticipant;
   use speedy::Endianness;
   // TODO: improve basic test when more or the structure is known
   #[test]

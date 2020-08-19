@@ -47,8 +47,6 @@ pub struct SPDPDiscoveredParticipantData {
 }
 
 impl SPDPDiscoveredParticipantData {
-  // pub fn new() -> SPDPDiscoveredParticipantData {}
-
   pub fn as_reader_proxy(&self) -> Option<RtpsReaderProxy> {
     let remote_reader_guid = GUID::new_with_prefix_and_id(
       self.participant_guid.unwrap().guidPrefix,
@@ -64,7 +62,10 @@ impl SPDPDiscoveredParticipantData {
     Some(proxy)
   }
 
-  pub fn from_participant(participant: &DomainParticipant) -> SPDPDiscoveredParticipantData {
+  pub fn from_participant(
+    participant: &DomainParticipant,
+    lease_duration: StdDuration,
+  ) -> SPDPDiscoveredParticipantData {
     let mut metatraffic_unicast_locators = LocatorList::new();
     let saddr = SocketAddr::new(
       "239.255.0.1".parse().unwrap(),
@@ -93,6 +94,15 @@ impl SPDPDiscoveredParticipantData {
     );
     default_multicast_locators.push(Locator::from(saddr));
 
+    let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
+      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR
+      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER
+      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR
+      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER
+      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR
+      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER
+      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR;
+
     SPDPDiscoveredParticipantData {
       updated_time: time::precise_time_ns(),
       protocol_version: Some(ProtocolVersion::PROTOCOLVERSION),
@@ -103,8 +113,8 @@ impl SPDPDiscoveredParticipantData {
       metatraffic_multicast_locators,
       default_unicast_locators,
       default_multicast_locators,
-      available_builtin_endpoints: None,
-      lease_duration: Some(Duration::from(StdDuration::from_secs(60))),
+      available_builtin_endpoints: Some(BuiltinEndpointSet::from(builtin_endpoints)),
+      lease_duration: Some(Duration::from(lease_duration)),
       manual_liveliness_count: None,
       builtin_enpoint_qos: None,
       entity_name: None,
@@ -137,8 +147,8 @@ impl Serialize for SPDPDiscoveredParticipantData {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::new(&self);
-    builtin_data_serializer.serialize::<S>(serializer)
+    let builtin_data_serializer = BuiltinDataSerializer::from_participant_data(&self);
+    builtin_data_serializer.serialize::<S>(serializer, true)
   }
 }
 
@@ -165,7 +175,7 @@ mod tests {
         Some(v) => match v {
           EntitySubmessage::Data(d, _) => {
             let participant_data: SPDPDiscoveredParticipantData =
-              deserialize_from_little_endian(d.serialized_payload.value.clone()).unwrap();
+              deserialize_from_little_endian(&d.serialized_payload.value).unwrap();
 
             let sdata =
               to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data).unwrap();
@@ -174,7 +184,7 @@ mod tests {
             assert_eq!(sdata.len(), d.serialized_payload.value.len());
 
             let participant_data_2: SPDPDiscoveredParticipantData =
-              deserialize_from_little_endian(sdata.clone()).unwrap();
+              deserialize_from_little_endian(&sdata).unwrap();
             let sdata_2 =
               to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data_2)
                 .unwrap();

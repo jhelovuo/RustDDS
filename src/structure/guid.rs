@@ -263,9 +263,9 @@ pub struct GUIDData {
 }
 
 impl GUIDData {
-  pub fn from(guid: &GUID) -> GUIDData {
+  pub fn from(guid: &GUID, parameter_id: &ParameterId) -> GUIDData {
     GUIDData {
-      parameter_id: ParameterId::PID_PARTICIPANT_GUID,
+      parameter_id: parameter_id.clone(),
       parameter_length: 16,
       guid: guid.clone(),
     }

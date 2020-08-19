@@ -21,10 +21,18 @@ pub fn spdp_participant_data_raw() -> Vec<u8> {
 
 use crate::{
   serialization::{Message, cdrDeserializer},
-  discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData,
+  discovery::{
+    content_filter_property::ContentFilterProperty,
+    data_types::{
+      topic_data::{SubscriptionBuiltinTopicData, ReaderProxy},
+      spdp_participant_data::SPDPDiscoveredParticipantData,
+    },
+  },
   submessages::EntitySubmessage,
+  structure::{locator::Locator, guid::GUID},
 };
 use speedy::{Readable, Endianness};
+use std::net::SocketAddr;
 
 pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
   let data = spdp_participant_data_raw();
@@ -37,8 +45,7 @@ pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
       Some(v) => match v {
         EntitySubmessage::Data(d, _) => {
           let particiapant_data: SPDPDiscoveredParticipantData =
-            cdrDeserializer::deserialize_from_little_endian(d.serialized_payload.value.clone())
-              .unwrap();
+            cdrDeserializer::deserialize_from_little_endian(&d.serialized_payload.value).unwrap();
 
           return Some(particiapant_data);
         }
@@ -48,4 +55,54 @@ pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
     }
   }
   None
+}
+
+pub fn reader_proxy_data() -> Option<ReaderProxy> {
+  let reader_proxy = ReaderProxy {
+    remote_reader_guid: Some(GUID::new()),
+    expects_inline_qos: Some(false),
+    unicast_locator_list: vec![Locator::from(SocketAddr::new(
+      "0.0.0.0".parse().unwrap(),
+      12345,
+    ))],
+    multicast_locator_list: vec![Locator::from(SocketAddr::new(
+      "0.0.0.0".parse().unwrap(),
+      13579,
+    ))],
+  };
+
+  Some(reader_proxy)
+}
+
+pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData> {
+  let sub_topic_data = SubscriptionBuiltinTopicData {
+    key: Some(GUID::new()),
+    participant_key: Some(GUID::new()),
+    topic_name: Some("some topic name".to_string()),
+    type_name: Some("RandomData".to_string()),
+    durability: None,
+    deadline: None,
+    latency_budget: None,
+    liveliness: None,
+    reliability: None,
+    ownership: None,
+    destination_order: None,
+    time_based_filter: None,
+    presentation: None,
+    lifespan: None,
+  };
+
+  Some(sub_topic_data)
+}
+
+pub fn content_filter_data() -> Option<ContentFilterProperty> {
+  let content_filter = ContentFilterProperty {
+    contentFilteredTopicName: "tn".to_string(),
+    relatedTopicName: "rtn".to_string(),
+    filterClassName: "fcn".to_string(),
+    filterExpression: "fexp".to_string(),
+    expressionParameters: vec!["asdf".to_string(), "fdsas".to_string()],
+  };
+
+  Some(content_filter)
 }

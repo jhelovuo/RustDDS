@@ -18,12 +18,11 @@ use crate::{
   common::timed_event_handler::{TimedEventHandler},
   discovery::discovery_db::DiscoveryDB,
   structure::{cache_change::ChangeKind, dds_cache::DDSCache},
-  submessages::AckNack
+  submessages::AckNack,
 };
 
-
 pub struct DPEventWrapper {
-  domain_participants_guid : GUID,
+  domain_participants_guid: GUID,
   poll: Poll,
   ddscache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -42,7 +41,7 @@ pub struct DPEventWrapper {
 
   stop_poll_receiver: mio_channel::Receiver<()>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
-  ack_nack_reciever: mio_channel::Receiver<(GuidPrefix,AckNack)>,
+  ack_nack_reciever: mio_channel::Receiver<(GuidPrefix, AckNack)>,
 
   writers: HashMap<GUID, Writer>,
 
@@ -68,7 +67,7 @@ impl DPEventWrapper {
     writer_update_notification_receiver: mio_channel::Receiver<()>,
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
-    let (acknack_sender, acknack_reciever) = mio_channel::channel::<(GuidPrefix,AckNack)>();
+    let (acknack_sender, acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
     let mut udp_listeners = udp_listeners;
     for (token, listener) in &mut udp_listeners {
       poll
@@ -79,7 +78,11 @@ impl DPEventWrapper {
           PollOpt::edge(),
         )
         .expect("Failed to register listener.");
-      println!("registered listener with token:  {:?} on socket: {:?}", token, listener.mio_socket())
+      println!(
+        "registered listener with token:  {:?} on socket: {:?}",
+        token,
+        listener.mio_socket()
+      )
     }
 
     poll
@@ -126,8 +129,14 @@ impl DPEventWrapper {
       )
       .expect("Failed to register stop poll channel");
 
-    poll.register(&acknack_reciever, ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN, Ready::readable(), PollOpt::edge())
-    .expect("Failed to register AckNack submessage sending from MessageReciever to DPEventLoop");
+    poll
+      .register(
+        &acknack_reciever,
+        ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register AckNack submessage sending from MessageReciever to DPEventLoop");
 
     poll
       .register(
@@ -154,7 +163,7 @@ impl DPEventWrapper {
       discovery_db,
       udp_listeners,
       send_targets,
-      message_receiver: MessageReceiver::new(participant_guid_prefix,acknack_sender),
+      message_receiver: MessageReceiver::new(participant_guid_prefix, acknack_sender),
       add_reader_receiver,
       remove_reader_receiver,
       add_writer_receiver,
@@ -162,7 +171,7 @@ impl DPEventWrapper {
       writer_timed_event_reciever : HashMap::new(),
       stop_poll_receiver,
       writers: HashMap::new(),
-      ack_nack_reciever : acknack_reciever,
+      ack_nack_reciever: acknack_reciever,
       reader_update_notification_receiver,
       writer_update_notification_receiver,
     }
@@ -202,8 +211,10 @@ impl DPEventWrapper {
   }
 
   pub fn is_udp_traffic(event: &Event) -> bool {
-    event.token() == DISCOVERY_SENDER_TOKEN || event.token() == USER_TRAFFIC_SENDER_TOKEN || event.token() == USER_TRAFFIC_LISTENER_TOKEN ||  event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
-
+    event.token() == DISCOVERY_SENDER_TOKEN
+      || event.token() == USER_TRAFFIC_SENDER_TOKEN
+      || event.token() == USER_TRAFFIC_LISTENER_TOKEN
+      || event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
   }
 
   pub fn is_reader_action(event: &Event) -> bool {
@@ -230,8 +241,8 @@ impl DPEventWrapper {
     return false;
   }
 
-  pub fn is_writer_acknack_action(event: &Event) -> bool{
-    event.token() == ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN 
+  pub fn is_writer_acknack_action(event: &Event) -> bool {
+    event.token() == ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN
   }
 
   pub fn is_reader_update_notification(event: &Event) -> bool {
@@ -259,8 +270,12 @@ impl DPEventWrapper {
           self.message_receiver.handle_user_msg(data);
         }
       },
-      None => {print!("Cannot handle upd traffic! No listener with token {:?}", &event.token());
-      return;
+      None => {
+        print!(
+          "Cannot handle upd traffic! No listener with token {:?}",
+          &event.token()
+        );
+        return;
       }
     };
   }
@@ -323,7 +338,10 @@ Ready::readable(),
         };
       }
       t => {
-        let found_writer = self.writers.iter_mut().find(|p| p.1.get_entity_token() == t);
+        let found_writer = self
+          .writers
+          .iter_mut()
+          .find(|p| p.1.get_entity_token() == t);
 
         match found_writer {
           Some((_guid, w)) => {
@@ -389,27 +407,30 @@ Ready::readable(),
     
   }
 
-
-  pub fn handle_writer_acknack_action(&mut self, _event: &Event){
+  pub fn handle_writer_acknack_action(&mut self, _event: &Event) {
     println!("is writer acknack action!");
     let recieved = self.ack_nack_reciever.try_recv();
-   
-    if recieved.is_ok(){
+
+    if recieved.is_ok() {
       let (acknack_sender_prefix, acknack_message) = recieved.unwrap();
-      let target_writer_entity_id = {
-        acknack_message.writer_id
-      };
-      let writer_guid = GUID::new_with_prefix_and_id(self.domain_participants_guid.guidPrefix, target_writer_entity_id);
+      let target_writer_entity_id = { acknack_message.writer_id };
+      let writer_guid = GUID::new_with_prefix_and_id(
+        self.domain_participants_guid.guidPrefix,
+        target_writer_entity_id,
+      );
       let found_writer = self.writers.get_mut(&writer_guid);
-      if found_writer.is_some(){
-        found_writer.unwrap().handle_ack_nack(&acknack_sender_prefix, acknack_message)
-      }
-      else{
-        panic!("Couldn't handle acknack! did not find local rtps writer with GUID: {:?}", writer_guid);
+      if found_writer.is_some() {
+        found_writer
+          .unwrap()
+          .handle_ack_nack(&acknack_sender_prefix, acknack_message)
+      } else {
+        panic!(
+          "Couldn't handle acknack! did not find local rtps writer with GUID: {:?}",
+          writer_guid
+        );
       }
     }
   }
-
 }
 
 #[cfg(test)]

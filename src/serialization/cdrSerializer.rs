@@ -566,33 +566,31 @@ mod tests {
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use serde::{Serialize, Deserialize};
 
-
   #[test]
 
-  fn CDR_serialize_and_deserializesequence_of_structs(){
-
+  fn CDR_serialize_and_deserializesequence_of_structs() {
     // this length is not dividable by 4 so paddings are necessary???
-    #[derive(Debug, Eq, PartialEq, Serialize,Deserialize)]
+    #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
     pub struct OmaTyyppi {
       firstValue: i16,
       second: u8,
-      
     }
     impl OmaTyyppi {
-      pub fn new(firstValue : i16, second : u8 ) -> OmaTyyppi {
-        OmaTyyppi{
-          firstValue,
-          second
-        }
+      pub fn new(firstValue: i16, second: u8) -> OmaTyyppi {
+        OmaTyyppi { firstValue, second }
       }
     }
 
-    let sequence_of_structs : Vec<OmaTyyppi> = vec![OmaTyyppi::new(1,23),OmaTyyppi::new(2,34),OmaTyyppi::new(-3,45)];
+    let sequence_of_structs: Vec<OmaTyyppi> = vec![
+      OmaTyyppi::new(1, 23),
+      OmaTyyppi::new(2, 34),
+      OmaTyyppi::new(-3, 45),
+    ];
     let serialized = to_little_endian_binary(&sequence_of_structs).unwrap();
-    let deSerialized :  Vec<OmaTyyppi> = deserialize_from_little_endian(serialized.clone()).unwrap();
+    let deSerialized: Vec<OmaTyyppi> = deserialize_from_little_endian(&serialized).unwrap();
     println!("deSerialized    {:?}", deSerialized);
     println!("serialized    {:?}", serialized);
-    assert_eq!(deSerialized,sequence_of_structs);
+    assert_eq!(deSerialized, sequence_of_structs);
   }
 
   #[test]
@@ -642,11 +640,10 @@ mod tests {
 
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
     let expected: Vec<u8> = vec![
-	    0x01, 0xff, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x67, 0x67, 0x34, 0x00,
-	    0x00, 0x00, 0x00, 0x00, 0x01
+      0x01, 0xff, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x67, 0x67, 0x34, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x01,
     ];
-    assert_eq!(expected,sarjallistettu)
-  
+    assert_eq!(expected, sarjallistettu)
   }
 
   fn CDR_serialization_char() {
@@ -663,9 +660,8 @@ mod tests {
     };
 
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let expected: Vec<u8> = vec![ 0x61, 0x62, 0xe4];
-    assert_eq!(expected,sarjallistettu)
-    
+    let expected: Vec<u8> = vec![0x61, 0x62, 0xe4];
+    assert_eq!(expected, sarjallistettu)
   }
   #[test]
   fn CDR_serialization_string() {
@@ -675,8 +671,8 @@ mod tests {
     }
     let mikkiHiiri = OmaTyyppi { firstValue: "BLUE" };
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let expected: Vec<u8> =  vec![0x05, 0x00, 0x00, 0x00, 0x42, 0x4c, 0x55, 0x45, 0x00 ];
-    assert_eq!(expected,sarjallistettu)
+    let expected: Vec<u8> = vec![0x05, 0x00, 0x00, 0x00, 0x42, 0x4c, 0x55, 0x45, 0x00];
+    assert_eq!(expected, sarjallistettu)
   }
 
   fn CDR_serialization_little() {
@@ -697,13 +693,12 @@ mod tests {
       firstValue: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 123123],
     };
     let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
-    let expected: Vec<u8> =  vec![
-    	0x0b, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-    	0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00,
-    	0x06, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
-    	0x09, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xf3, 0xe0, 0x01, 0x00
+    let expected: Vec<u8> = vec![
+      0x0b, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
+      0x00, 0x04, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x07, 0x00,
+      0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xf3,
+      0xe0, 0x01, 0x00,
     ];
-    assert_eq!(expected,sarjallistettu)
-
+    assert_eq!(expected, sarjallistettu)
   }
 }

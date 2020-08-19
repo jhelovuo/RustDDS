@@ -16,7 +16,6 @@ use crate::structure::{
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
-use crate::dds::participant::SubscriptionBuiltinTopicData;
 use crate::dds::values::result::{
   Result, Error, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibleQosStatus,
   PublicationMatchedStatus,
@@ -29,7 +28,7 @@ use crate::dds::qos::{
   policy::{Reliability},
 };
 use crate::dds::datasample::DataSample;
-use crate::dds::ddsdata::DDSData;
+use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
 use super::datasample_cache::DataSampleCache;
 
 pub struct DataWriter<'a, D: Keyed> {

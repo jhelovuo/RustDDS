@@ -246,7 +246,12 @@ impl Discovery {
             (),
           );
         } else if event.token() == DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN {
-          let data = SPDPDiscoveredParticipantData::from_participant(&discovery.domain_participant);
+          // setting 3 times the duration so lease doesn't break if we fail once for some reason
+          let lease_duration = Duration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD * 3);
+          let data = SPDPDiscoveredParticipantData::from_participant(
+            &discovery.domain_participant,
+            lease_duration,
+          );
           dcps_participant_writer.write(data, None).unwrap_or(());
           // reschedule timer
           participant_send_info_timer.set_timeout(

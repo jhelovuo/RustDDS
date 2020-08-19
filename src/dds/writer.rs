@@ -35,7 +35,10 @@ use crate::{
   },
   common::timed_event_handler::{TimedEventHandler},
 };
-use super::{rtps_reader_proxy::RtpsReaderProxy, qos::{policy, QosPolicies}};
+use super::{
+  rtps_reader_proxy::RtpsReaderProxy,
+  qos::{policy, QosPolicies},
+};
 use std::{
   net::SocketAddr,
   time::{Instant, Duration},
@@ -65,7 +68,7 @@ pub struct Writer {
   ///Heartbeat Message.
   pub heartbeat_perioid: Duration,
   /// duration to launch cahche change remove from DDSCache
-  pub cahce_cleaning_perioid : Duration,
+  pub cahce_cleaning_perioid: Duration,
   ///Protocol tuning parameter that
   ///allows the RTPS Writer to delay
   ///the response to a request for data
@@ -122,7 +125,7 @@ pub struct Writer {
   ///Contains timer that needs to be set to timeout with duration of self.heartbeat_perioid
   ///timed_event_handler sends notification when timer is up via miochannel to poll in Dp_eventWrapper
   ///this also handles writers cache cleaning timeouts.
-  timed_event_handler: Option<TimedEventHandler>,  
+  timed_event_handler: Option<TimedEventHandler>,
 
   qos_policies: QosPolicies,
 }
@@ -133,7 +136,7 @@ impl Writer {
     cache_change_receiver: mio_channel::Receiver<DDSData>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
-    qos_policies : QosPolicies
+    qos_policies: QosPolicies,
   ) -> Writer {
     let entity_attributes = EntityAttributes::new(guid);
     Writer {
@@ -168,7 +171,7 @@ impl Writer {
       disposed_sequence_numbers: HashSet::new(),
       writer_is_disposed: false,
       timed_event_handler: None,
-      qos_policies
+      qos_policies,
     }
   }
 
@@ -196,50 +199,54 @@ impl Writer {
     self.timed_event_handler = Some(time_handler);
     self.set_cache_cleaning_timer();
     self.set_heartbeat_timer();
- 
   }
 
-  fn is_reliable(&self) -> bool{
-    match self.qos_policies.reliability{
-      Some(Reliability::Reliable{max_blocking_time: _}) => {return true;}
-      _ => {return false;}
+  fn is_reliable(&self) -> bool {
+    match self.qos_policies.reliability {
+      Some(Reliability::Reliable {
+        max_blocking_time: _,
+      }) => {
+        return true;
+      }
+      _ => {
+        return false;
+      }
     }
   }
- 
+
   /// this should be called everytime cacheCleaning message is received.
-  pub fn handle_cache_cleaning(&mut self){
-    println!("HANDLE CAHCE CLEANING writer entityID: {:?}", self.as_entity());
+  pub fn handle_cache_cleaning(&mut self) {
+    println!(
+      "HANDLE CAHCE CLEANING writer entityID: {:?}",
+      self.as_entity()
+    );
     let mut removedChanges = vec![];
-    match  self.qos_policies.history {
-      None =>{
+    match self.qos_policies.history {
+      None => {
         removedChanges = self.remove_all_acked_changes_but_keep_depth(0);
       }
-      Some(History::KeepAll)=>{
+      Some(History::KeepAll) => {
         // TODO need to find a way to check if resource limit.
         // writer can only know the amount its own samples.
         //todo!("TODO keep all resource limit ???");
-
       }
-      Some(History::KeepLast{depth: d}) =>{
+      Some(History::KeepLast { depth: d }) => {
         removedChanges = self.remove_all_acked_changes_but_keep_depth(d);
       }
     }
     // This is needdd to be removed also if cahceChange is removed from DDSCache.
-    for sq in removedChanges{
+    for sq in removedChanges {
       self.sequence_number_to_instant.remove(&sq);
     }
     self.set_cache_cleaning_timer();
   }
 
-  
-  fn set_cache_cleaning_timer(&mut self){
-    self
-      .timed_event_handler
-      .as_mut()
-      .unwrap()
-      .set_timeout(&chronoDuration::from_std(self.cahce_cleaning_perioid).unwrap(),TimerMessageType::writer_cache_cleaning)
+  fn set_cache_cleaning_timer(&mut self) {
+    self.timed_event_handler.as_mut().unwrap().set_timeout(
+      &chronoDuration::from_std(self.cahce_cleaning_perioid).unwrap(),
+      TimerMessageType::writer_cache_cleaning,
+    )
   }
-  
 
   /// this should be called everytime heartbeat message with token is recieved.
   pub fn handle_heartbeat_tick(&mut self) {
@@ -271,11 +278,10 @@ impl Writer {
 
   /// after heartbeat is handled timer should be set running again.
   fn set_heartbeat_timer(&mut self) {
-    self
-      .timed_event_handler
-      .as_mut()
-      .unwrap()
-      .set_timeout(&chronoDuration::from_std(self.heartbeat_perioid).unwrap(),TimerMessageType::writer_heartbeat)
+    self.timed_event_handler.as_mut().unwrap().set_timeout(
+      &chronoDuration::from_std(self.heartbeat_perioid).unwrap(),
+      TimerMessageType::writer_heartbeat,
+    )
   }
 
   pub fn insert_to_history_cache(&mut self, data: DDSData) {
@@ -324,12 +330,12 @@ impl Writer {
   /// Depth is QoS policy History depth.
   /// Returns SequenceNumbers of removed CacheChanges
   /// This is called repeadedly by handle_cache_cleaning action.
-  fn remove_all_acked_changes_but_keep_depth(&mut self, depth : i32) -> Vec<SequenceNumber> {
-    let mut amount_need_to_remove = 0;
+  fn remove_all_acked_changes_but_keep_depth(&mut self, depth: i32) -> Vec<SequenceNumber> {
+    let amount_need_to_remove;
     let mut removed_change_sequence_numbers = vec![];
     let acked_by_all_readers = {
       //let mut acked_by_all: Vec<(&Instant, &SequenceNumber)> = vec![];
-      let mut acked_by_all: BTreeMap<&Instant,&SequenceNumber> = BTreeMap::new();
+      let mut acked_by_all: BTreeMap<&Instant, &SequenceNumber> = BTreeMap::new();
       for (sq, i) in self.sequence_number_to_instant.iter() {
         if self.change_with_sequence_number_is_acked_by_all(&sq) {
           acked_by_all.insert(i, sq);
@@ -340,16 +346,15 @@ impl Writer {
     if acked_by_all_readers.len() as i32 <= depth {
       println!("Count of acked changes: {:?} is smaller than required history depth: {:?} -> Do not remove anything", acked_by_all_readers.len(), depth);
       return removed_change_sequence_numbers;
-    }
-    else{
+    } else {
       amount_need_to_remove = acked_by_all_readers.len() as i32 - depth;
       println!("need to remove amount {:?}", amount_need_to_remove);
       println!("acked changes map {:?}", acked_by_all_readers);
     }
     {
-      let mut index : i32 = 0; 
+      let mut index: i32 = 0;
       for (i, sq) in acked_by_all_readers {
-        if index >= amount_need_to_remove{
+        if index >= amount_need_to_remove {
           break;
         }
         let removed = self
@@ -357,16 +362,21 @@ impl Writer {
           .write()
           .unwrap()
           .from_topic_remove_change(&self.my_topic_name, i);
-        if removed.is_some(){
-          println!("Removed cahceChange with sequenceNumber {:?} from topic {:?}", sq, self.my_topic_name);
+        if removed.is_some() {
+          println!(
+            "Removed cahceChange with sequenceNumber {:?} from topic {:?}",
+            sq, self.my_topic_name
+          );
           removed_change_sequence_numbers.push(removed.unwrap().sequence_number);
-        }
-        else{
-          println!("ERROR remove from {:?} failed. No results with {:?}", &self.my_topic_name,i);
+        } else {
+          println!(
+            "ERROR remove from {:?} failed. No results with {:?}",
+            &self.my_topic_name, i
+          );
           println!("{:?}", self.dds_cache);
           //panic!("CahceChange remove failed");
         }
-        index = index+1;
+        index = index + 1;
       }
     }
     return removed_change_sequence_numbers;
@@ -421,8 +431,9 @@ impl Writer {
 
   pub fn can_send_some(&self) -> bool {
     // When writer is reliable all changes has to be acnowledged by remote reader before sending new messages.
-    if self.is_reliable(){
-      let last_change_is_acked : bool = self.change_with_sequence_number_is_acked_by_all(&self.last_change_sequence_number);
+    if self.is_reliable() {
+      let last_change_is_acked: bool =
+        self.change_with_sequence_number_is_acked_by_all(&self.last_change_sequence_number);
       if last_change_is_acked {
         for reader_proxy in &self.readers {
           if reader_proxy.can_send() {
@@ -434,7 +445,7 @@ impl Writer {
     }
     //Note that for a Best-Effort Writer, W::pushMode == true, as there are no acknowledgements. Therefore, the
     //Writer always pushes out data as it becomes available.
-    else{
+    else {
       for reader_proxy in &self.readers {
         if reader_proxy.can_send() {
           return true;
@@ -576,7 +587,7 @@ impl Writer {
 
   pub fn send_all_unsend_messages(&mut self) {
     println!("Writer try to send all unsend messages");
-    if self.can_send_some(){
+    if self.can_send_some() {
       loop {
         let (message, guid) = self.get_next_reader_next_unsend_message();
         if message.is_some() && guid.is_some() {
@@ -586,8 +597,7 @@ impl Writer {
           break;
         }
       }
-    }
-    else{
+    } else {
       println!("Writer cannot send any messages!");
     }
   }
@@ -761,14 +771,17 @@ impl Writer {
   ///sending a HEARTBEAT message when the sample is no longer available
   pub fn handle_ack_nack(&mut self, guid_prefix: &GuidPrefix, an: AckNack) {
     {
-      if ! self.is_reliable(){
+      if !self.is_reliable() {
         panic!("Writer is best effort! It should not handle acknack messages!");
       }
       let reader_proxy = self.matched_reader_lookup(guid_prefix, an.reader_id);
 
       // if ack nac says reader has recieved data then change history cache chage status ???
       if reader_proxy.is_none() {
-        panic!("For writer {:?} reader proxy: {:?} is not known!",self.entity_attributes.guid, an.reader_id );
+        panic!(
+          "For writer {:?} reader proxy: {:?} is not known!",
+          self.entity_attributes.guid, an.reader_id
+        );
       }
     }
     if self.test_if_ack_nack_contains_not_recieved_sequence_numbers(&an) == false {
@@ -903,8 +916,6 @@ impl Writer {
       reader.unsend_changes_set(self.last_change_sequence_number.clone());
     }
   }
-
- 
 }
 
 impl Entity for Writer {
@@ -926,8 +937,6 @@ mod tests {
   };
   use std::thread;
   use crate::test::random_data::*;
-
- 
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {

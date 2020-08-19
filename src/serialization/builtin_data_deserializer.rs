@@ -12,10 +12,25 @@ use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
 
 use crate::serialization::{cdrDeserializer::deserialize_from_little_endian, error::Error};
 
-use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
+use crate::{
+  dds::{
+    qos::policy::{
+      Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
+      TimeBasedFilter, Presentation, Lifespan,
+    },
+  },
+  discovery::{
+    content_filter_property::ContentFilterProperty,
+    data_types::{
+      topic_data::{SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData},
+      spdp_participant_data::SPDPDiscoveredParticipantData,
+    },
+  },
+};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BuiltinDataDeserializer {
+  // Participant Data
   pub protocol_version: Option<ProtocolVersion>,
   pub vendor_id: Option<VendorId>,
   pub expects_inline_qos: Option<bool>,
@@ -30,6 +45,28 @@ pub struct BuiltinDataDeserializer {
   pub builtin_enpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<String>,
   pub sentinel: Option<u32>,
+
+  pub endpoint_guid: Option<GUID>,
+
+  // Reader Proxy
+  pub unicast_locator_list: LocatorList,
+  pub multicast_locator_list: LocatorList,
+
+  // topic data
+  pub topic_name: Option<String>,
+  pub type_name: Option<String>,
+  pub durability: Option<Durability>,
+  pub deadline: Option<Deadline>,
+  pub latency_budget: Option<LatencyBudget>,
+  pub liveliness: Option<Liveliness>,
+  pub reliability: Option<Reliability>,
+  pub ownership: Option<Ownership>,
+  pub destination_order: Option<DestinationOrder>,
+  pub time_based_filter: Option<TimeBasedFilter>,
+  pub presentation: Option<Presentation>,
+  pub lifespan: Option<Lifespan>,
+
+  pub content_filter_property: Option<ContentFilterProperty>,
 }
 
 impl BuiltinDataDeserializer {
@@ -49,6 +86,25 @@ impl BuiltinDataDeserializer {
       builtin_enpoint_qos: None,
       entity_name: None,
       sentinel: None,
+
+      endpoint_guid: None,
+      unicast_locator_list: LocatorList::new(),
+      multicast_locator_list: LocatorList::new(),
+
+      topic_name: None,
+      type_name: None,
+      durability: None,
+      deadline: None,
+      latency_budget: None,
+      liveliness: None,
+      reliability: None,
+      ownership: None,
+      destination_order: None,
+      time_based_filter: None,
+      presentation: None,
+      lifespan: None,
+
+      content_filter_property: None,
     }
   }
 
@@ -71,6 +127,45 @@ impl BuiltinDataDeserializer {
     }
   }
 
+  pub fn generate_reader_proxy(self) -> ReaderProxy {
+    ReaderProxy {
+      remote_reader_guid: self.endpoint_guid,
+      expects_inline_qos: self.expects_inline_qos,
+      unicast_locator_list: self.unicast_locator_list,
+      multicast_locator_list: self.multicast_locator_list,
+    }
+  }
+
+  pub fn generate_subscription_topic_data(self) -> SubscriptionBuiltinTopicData {
+    SubscriptionBuiltinTopicData {
+      key: self.endpoint_guid,
+      participant_key: self.participant_guid,
+      topic_name: self.topic_name,
+      type_name: self.type_name,
+      durability: self.durability,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      liveliness: self.liveliness,
+      reliability: self.reliability,
+      ownership: self.ownership,
+      destination_order: self.destination_order,
+      time_based_filter: self.time_based_filter,
+      presentation: self.presentation,
+      lifespan: self.lifespan,
+    }
+  }
+
+  pub fn generate_discovered_reader_data(self) -> DiscoveredReaderData {
+    // TODO: refactor so that clones are not necessary
+    let reader_proxy = self.clone().generate_reader_proxy();
+    let subscription_topic_data = self.clone().generate_subscription_topic_data();
+    DiscoveredReaderData {
+      reader_proxy,
+      subscription_topic_data,
+      content_filter: self.content_filter_property,
+    }
+  }
+
   pub fn parse_data(mut self, mut buffer: Vec<u8>) -> BuiltinDataDeserializer {
     while self.sentinel.is_none() && buffer.len() > 0 {
       self = self.read_next(&mut buffer);
@@ -81,13 +176,18 @@ impl BuiltinDataDeserializer {
 
   pub fn read_next(mut self, buffer: &mut Vec<u8>) -> BuiltinDataDeserializer {
     let parameter_id = BuiltinDataDeserializer::read_parameter_id(&buffer).unwrap();
-    let parameter_length: usize =
+    let mut parameter_length: usize =
       BuiltinDataDeserializer::read_parameter_length(&buffer).unwrap() as usize;
+
+    if (parameter_length + 4) > buffer.len() {
+      parameter_length = buffer.len() - 4;
+    }
+    // TODO: decrease/remove copying of the buffer
 
     match parameter_id {
       ParameterId::PID_PARTICIPANT_GUID => {
         let guid: Result<GUID, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match guid {
           Ok(gg) => {
             self.participant_guid = Some(gg);
@@ -99,7 +199,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PROTOCOL_VERSION => {
         let version: Result<ProtocolVersion, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match version {
           Ok(vv) => {
             self.protocol_version = Some(vv);
@@ -111,7 +211,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_VENDOR_ID => {
         let vendor: Result<VendorId, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match vendor {
           Ok(vv) => {
             self.vendor_id = Some(vv);
@@ -123,7 +223,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_EXPECTS_INLINE_QOS => {
         let inline_qos: Result<bool, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match inline_qos {
           Ok(qos) => {
             self.expects_inline_qos = Some(qos);
@@ -135,7 +235,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match locator {
           Ok(loc) => {
             self.metatraffic_unicast_locators.push(loc);
@@ -147,7 +247,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match locator {
           Ok(loc) => {
             self.metatraffic_multicast_locators.push(loc);
@@ -159,7 +259,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match locator {
           Ok(loc) => {
             self.default_unicast_locators.push(loc);
@@ -171,7 +271,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match locator {
           Ok(loc) => {
             self.default_multicast_locators.push(loc);
@@ -183,7 +283,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_BUILTIN_ENDPOINT_SET => {
         let endpoints: Result<BuiltinEndpointSet, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match endpoints {
           Ok(ep) => {
             self.available_builtin_endpoints = Some(ep);
@@ -195,7 +295,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PARTICIPANT_LEASE_DURATION => {
         let duration: Result<Duration, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match duration {
           Ok(dur) => {
             self.lease_duration = Some(dur);
@@ -207,7 +307,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT => {
         let count: Result<i32, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match count {
           Ok(c) => {
             self.manual_liveliness_count = Some(c);
@@ -219,7 +319,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_BUILTIN_ENDPOINT_QOS => {
         let qos: Result<BuiltinEndpointQos, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match qos {
           Ok(q) => {
             self.builtin_enpoint_qos = Some(q);
@@ -231,10 +331,207 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_ENTITY_NAME => {
         let name: Result<String, Error> =
-          deserialize_from_little_endian(buffer[4..4 + parameter_length].to_vec());
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match name {
           Ok(n) => {
             self.entity_name = Some(n);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_ENDPOINT_GUID => {
+        let guid: Result<GUID, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match guid {
+          Ok(gg) => {
+            self.endpoint_guid = Some(gg);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_UNICAST_LOCATOR => {
+        let locator: Result<Locator, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match locator {
+          Ok(loc) => {
+            self.unicast_locator_list.push(loc);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_MULTICAST_LOCATOR => {
+        let locator: Result<Locator, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match locator {
+          Ok(loc) => {
+            self.multicast_locator_list.push(loc);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_TOPIC_NAME => {
+        let topic_name: Result<String, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match topic_name {
+          Ok(name) => {
+            self.topic_name = Some(name);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_TYPE_NAME => {
+        let type_name: Result<String, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match type_name {
+          Ok(name) => {
+            self.type_name = Some(name);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_DURABILITY => {
+        let durability: Result<Durability, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match durability {
+          Ok(dur) => {
+            self.durability = Some(dur);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_DEADLINE => {
+        let deadline: Result<Deadline, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match deadline {
+          Ok(dl) => {
+            self.deadline = Some(dl);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_LATENCY_BUDGET => {
+        let latency_budget: Result<LatencyBudget, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match latency_budget {
+          Ok(lb) => {
+            self.latency_budget = Some(lb);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_LIVELINESS => {
+        let liveliness: Result<Liveliness, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match liveliness {
+          Ok(liv) => {
+            self.liveliness = Some(liv);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_RELIABILITY => {
+        let reliability: Result<Reliability, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match reliability {
+          Ok(rel) => {
+            self.reliability = Some(rel);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_OWNERSHIP => {
+        let ownership: Result<Ownership, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match ownership {
+          Ok(own) => {
+            self.ownership = Some(own);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_DESTINATION_ORDER => {
+        let destination_order: Result<DestinationOrder, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match destination_order {
+          Ok(deor) => {
+            self.destination_order = Some(deor);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_TIME_BASED_FILTER => {
+        let time_based_filter: Result<TimeBasedFilter, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match time_based_filter {
+          Ok(tbf) => {
+            self.time_based_filter = Some(tbf);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_PRESENTATION => {
+        let presentation: Result<Presentation, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match presentation {
+          Ok(p) => {
+            self.presentation = Some(p);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_LIFESPAN => {
+        let lifespan: Result<Lifespan, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match lifespan {
+          Ok(ls) => {
+            self.lifespan = Some(ls);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          _ => (),
+        }
+      }
+      ParameterId::PID_CONTENT_FILTER_PROPERTY => {
+        println!("Parameter length: {}", parameter_length);
+        println!(
+          "CONTENT FILTER {:?}",
+          buffer[4..4 + parameter_length].to_vec()
+        );
+        let content_filter: Result<ContentFilterProperty, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match content_filter {
+          Ok(cfp) => {
+            self.content_filter_property = Some(cfp);
             buffer.drain(..4 + parameter_length);
             return self;
           }
@@ -254,7 +551,7 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn read_parameter_id(buffer: &Vec<u8>) -> Option<ParameterId> {
-    let par: Result<ParameterId, Error> = deserialize_from_little_endian(buffer[..2].to_vec());
+    let par: Result<ParameterId, Error> = deserialize_from_little_endian(&buffer[..2].to_vec());
     match par {
       Ok(val) => Some(val),
       _ => None,

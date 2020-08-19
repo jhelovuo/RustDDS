@@ -13,7 +13,6 @@ use crate::structure::{dds_cache::DDSCache};
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
-use crate::dds::participant::SubscriptionBuiltinTopicData;
 use crate::dds::values::result::{
   Result, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibleQosStatus,
   PublicationMatchedStatus,
@@ -24,7 +23,7 @@ use crate::dds::traits::key::*;
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
 use crate::dds::ddsdata::DDSData;
 
-use crate::dds::datawriter as datawriter_with_key;
+use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::datawriter as datawriter_with_key};
 
 // This structure shoud be private to no_key DataWriter
 struct NoKeyWrapper_Write<D> {

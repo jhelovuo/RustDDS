@@ -15,6 +15,10 @@ impl BuiltinEndpointSet {
 
   pub const DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER: u32 = 0x08000000;
   pub const DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR: u32 = 0x10000000;
+
+  pub fn from(val: u32) -> BuiltinEndpointSet {
+    BuiltinEndpointSet { value: val }
+  }
 }
 
 #[derive(Serialize, Deserialize)]
