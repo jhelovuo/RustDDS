@@ -194,6 +194,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   }
 
   fn serialize_i16(self, v: i16) -> Result<()> {
+    println!("serialize_i16");
     self.calculate_padding_need_and_write_padding(2);
     if self.serializationEndianess == Endianess::LittleEndian {
       let mut wtr = vec![];
@@ -212,6 +213,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_i32(self, v: i32) -> Result<()> {
     self.calculate_padding_need_and_write_padding(4);
+    println!("serialize_i32");
     if self.serializationEndianess == Endianess::LittleEndian {
       let mut wtr = vec![];
       wtr.write_i32::<LittleEndian>(v).unwrap();
@@ -321,6 +323,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   //octets. The string contents include a single terminating null character. The string
   //length includes the null character, so an empty string has a length of 1.
   fn serialize_str(self, _v: &str) -> Result<()> {
+    println!("serialize_str");
     self.calculate_padding_need_and_write_padding(4);
     let count: u32 = _v.chars().count() as u32;
     self.serialize_u32(count + 1).unwrap();
@@ -348,27 +351,33 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   where
     T: ?Sized + Serialize,
   {
+    println!("serialize_some");
     Ok(())
   }
 
   fn serialize_unit(self) -> Result<()> {
+    println!("serialize_unit");
     Ok(())
   }
   fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
+    println!("serialize_unit_struct");
     self.serialize_unit()
   }
   fn serialize_unit_variant(
     self,
     _name: &'static str,
     _variant_index: u32,
-    variant: &'static str,
+    _variant: &'static str,
   ) -> Result<()> {
-    self.serialize_str(variant)
+    println!("serialize_unit_variant");
+    println!("unit variant index {:?}", _variant_index);
+    self.serialize_u32(_variant_index)
   }
   fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>
   where
     T: ?Sized + Serialize,
   {
+    println!("serialize_newtype_struct");
     value.serialize(self)?;
     Ok(())
   }
@@ -378,12 +387,13 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
     _name: &'static str,
     _variant_index: u32,
     _variant: &'static str,
-    _value: &T,
+    value: &T,
   ) -> Result<()>
   where
     T: ?Sized + Serialize,
   {
-    Ok(())
+    println!("serialize_newtype_variant");
+    value.serialize(self)
   }
 
   //Sequences are encoded as an unsigned long value, followed by the elements of the
@@ -391,7 +401,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   //The elements of the sequence are encoded as specified for their type.
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
     self.calculate_padding_need_and_write_padding(4);
-    //println!("serialize seq");
+    println!("serialize_seq");
     let elementCount = _len.unwrap() as u32;
     if elementCount % 4 != 0 {
       //println!("sequence element count: {}", elementCount);
@@ -403,6 +413,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   // if CDR contains fixed length array then number of elements is not written.
   fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
     //println!("serialize tuple");
+    println!("serialize_tuple");
     Ok(self)
   }
   fn serialize_tuple_struct(
@@ -419,15 +430,18 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
     _variant: &'static str,
     _len: usize,
   ) -> Result<Self::SerializeTupleVariant> {
+    println!("serialize_tuple_variant");
     Ok(self)
   }
   fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
     //println!("serialize map");
+    println!("serialize_map");
     Ok(self)
   }
   fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
     self.calculate_padding_need_and_write_padding(4);
     //println!("serialize struct");
+    println!("serialize_struct");
     self.serialize_map(Some(len))
   }
   fn serialize_struct_variant(
@@ -437,6 +451,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
     _variant: &'static str,
     _len: usize,
   ) -> Result<Self::SerializeStructVariant> {
+    println!("serialize_struct_variant");
     Ok(self)
   }
 }
@@ -592,6 +607,75 @@ mod tests {
     println!("serialized    {:?}", serialized);
     assert_eq!(deSerialized, sequence_of_structs);
   }
+
+
+
+
+  #[test]
+  fn CDR_serialize_enum(){
+    #[derive(Debug, Eq, PartialEq, Serialize,Deserialize)]
+    pub enum OmaEnumeration {
+      first,
+      second,
+      third,
+      fourth(u8,u8,u8,u8),
+      fifth(u8,u8,u16),
+      sixth(i16,i16),
+      seventh(i32),
+      eigth(u32),
+      this_should_not_be_valid(u64,u8,u8,u16,String),
+      similar_to_fourth(u8,u8,u8,u8),
+    }
+
+    let enum_object_1 = OmaEnumeration::first;
+    let enum_object_2 = OmaEnumeration::second;
+    let enum_object_3 = OmaEnumeration::third;
+    let enum_object_4 = OmaEnumeration::fourth(1,2,3,4);
+    let enum_object_5 = OmaEnumeration::fifth(5,6,7);
+    let enum_object_6 = OmaEnumeration::sixth(-8,9);
+    let enum_object_7 = OmaEnumeration::seventh(-100);
+    let enum_object_8 = OmaEnumeration::eigth(1000);
+    let enum_object_9 = OmaEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hejssan allihoppa!"));
+    let enum_object_10 = OmaEnumeration::similar_to_fourth(5,6,7,8);
+
+    let serialized_1 = to_little_endian_binary(&enum_object_1).unwrap();
+    println!("{:?}", serialized_1);
+
+    let deserialized_1 : OmaEnumeration = deserialize_from_little_endian(serialized_1).unwrap();
+    println!("{:?}", deserialized_1);
+
+    let serialized_2 = to_little_endian_binary(&enum_object_2).unwrap();
+    println!("{:?}", serialized_2);
+
+    let serialized_3 = to_little_endian_binary(&enum_object_3).unwrap();
+    println!("{:?}", serialized_3);
+
+    let serialized_4 = to_little_endian_binary(&enum_object_4).unwrap();
+    println!("{:?}", serialized_4);
+
+    let serialized_5 = to_little_endian_binary(&enum_object_5).unwrap();
+    println!("{:?}", serialized_5);
+
+    let serialized_6 = to_little_endian_binary(&enum_object_6).unwrap();
+    println!("{:?}", serialized_6);
+
+    let serialized_7 = to_little_endian_binary(&enum_object_7).unwrap();
+    println!("{:?}", serialized_7);
+
+    let serialized_8 = to_little_endian_binary(&enum_object_8).unwrap();
+    println!("{:?}", serialized_8);
+
+    let serialized_9 = to_little_endian_binary(&enum_object_9).unwrap();
+    println!("{:?}", serialized_9);
+
+    let serialized_10 = to_little_endian_binary(&enum_object_10).unwrap();
+    println!("{:?}", serialized_10);
+
+    
+
+  }
+
+
 
   #[test]
   fn CDR_serialization_example() {

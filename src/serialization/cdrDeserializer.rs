@@ -1,9 +1,9 @@
 use byteorder::{ByteOrder, LittleEndian, BigEndian};
 use serde::Deserialize;
-use serde::de::{
-  self, DeserializeSeed, EnumAccess, /* IntoDeserializer, */ MapAccess, SeqAccess,
+use serde::{Deserializer, de::{
+  self, DeserializeSeed, EnumAccess,  IntoDeserializer,  MapAccess, SeqAccess,
   VariantAccess, Visitor,
-};
+}};
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
@@ -376,6 +376,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_str");
     self.calculate_padding_count_from_written_bytes_and_remove(4);
     // first is information about how long string is in bytes.
     let by0 = self.next_byte().unwrap();
@@ -420,6 +421,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_string");
     self.deserialize_str(visitor)
   }
 
@@ -441,6 +443,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_option");
     unimplemented!()
   }
 
@@ -448,6 +451,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_unit");
     unimplemented!()
   }
 
@@ -455,6 +459,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_unit_struct");
     self.deserialize_unit(visitor)
   }
 
@@ -462,6 +467,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_newtype_struct");
     visitor.visit_newtype_struct(self)
   }
 
@@ -472,6 +478,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_seq");
     self.calculate_padding_count_from_written_bytes_and_remove(4);
     if self.serializedDataCount % 2 != 0 {
       println!("seq does not start a multiple of 2 !");
@@ -498,7 +505,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
-    //println!("deserialize tuple!");
+    println!("deserialize_tuple");
     visitor.visit_seq(SequenceHelper::new(&mut self, _len as u32, false))
   }
 
@@ -511,6 +518,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_tuple_struct");
     unimplemented!()
   }
 
@@ -530,6 +538,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_struct");
     self.calculate_padding_count_from_written_bytes_and_remove(4);
     /*
     println!(
@@ -542,8 +551,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     visitor.visit_seq(SequenceHelper::new(&mut self, _fields.len() as u32, false))
   }
 
+  ///Enum values are encoded as unsigned longs. (u32)
+  /// The numeric values associated with enum identifiers are determined by the order in which the identifiers appear in the enum declaration.
+  /// The first enum identifier has the numeric value zero (0). Successive enum identifiers take ascending numeric values, in order of declaration from left to right.
   fn deserialize_enum<V>(
-    self,
+    mut self,
     _name: &'static str,
     _variants: &'static [&'static str],
     _visitor: V,
@@ -551,13 +563,28 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
-    unimplemented!()
+    self.calculate_padding_count_from_written_bytes_and_remove(4);
+    let by0 = self.next_byte().unwrap();
+    let by1 = self.next_byte().unwrap();
+    let by2 = self.next_byte().unwrap();
+    let by3 = self.next_byte().unwrap();
+    let bytes: [u8; 4] = [by0, by1, by2, by3];
+    let enum_number_value: u32;
+    if self.DeserializationEndianess == endianess::littleEndian {
+      enum_number_value = LittleEndian::read_u32(&bytes);
+    } else {
+      enum_number_value = BigEndian::read_u32(&bytes);
+    }
+    _visitor.visit_enum(EnumerationHelper::new(&mut self))
+    //_visitor.visit_enum(enum_number_value);
   }
 
   fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_identifier");
+    //return Ok((self));
     self.deserialize_str(visitor)
   }
 
@@ -565,10 +592,24 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
+    println!("deserialize_ignored_any");
     self.deserialize_any(visitor)
   }
 }
 
+
+struct EnumerationHelper<'a>{
+  de: &'a mut CDR_deserializer,
+}
+impl<'a, 'de> EnumerationHelper<'a> {
+  fn new(de: &'a mut  CDR_deserializer) -> Self {
+    EnumerationHelper{
+      de
+    }
+  }
+}
+
+/*
 struct Enum<'a> {
   de: &'a mut CDR_deserializer,
 }
@@ -578,46 +619,83 @@ impl<'a, 'de> Enum<'a> {
     Enum { de }
   }
 }
+*/
 
-impl<'de, 'a> EnumAccess<'de> for Enum<'a> {
+impl<'de, 'a> EnumAccess<'de> for EnumerationHelper<'a> {
   type Error = Error;
   type Variant = Self;
 
-  fn variant_seed<V>(self, _seed: V) -> Result<(V::Value, Self::Variant)>
+  fn variant_seed<V>(mut self, _seed: V) -> Result<(V::Value, Self::Variant)>
   where
     V: DeserializeSeed<'de>,
   {
-    unimplemented!()
+    println!("EnumAccess variant_seed");
+    let val = _seed.deserialize( &mut *self.de)?;
+
+    println!("seed deserialized");
+    ///println!("{:?}",val);
+    Ok((val,self))
+    //unimplemented!()
+    //Ok((_seed))
+    
+    //unimplemented!()
   }
+  fn variant<V>(self) -> Result<(V, Self::Variant)>
+    where
+        V: Deserialize<'de>,
+    {
+        self.variant_seed(std::marker::PhantomData)
+    }
 }
 
-impl<'de, 'a> VariantAccess<'de> for Enum<'a> {
+impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
   type Error = Error;
 
   fn unit_variant(self) -> Result<()> {
-    unimplemented!()
+    println!("VariantAccess unit_variant");
+    Ok(())
+    //unimplemented!()
   }
 
   fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
   where
     T: DeserializeSeed<'de>,
   {
-    seed.deserialize(self.de)
+    println!("VariantAccess newtype_variant_seed");
+    unimplemented!();
+    //seed.deserialize()
   }
 
   fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    de::Deserializer::deserialize_seq(self.de, visitor)
+    println!("VariantAccess tuple_variant");
+    unimplemented!();
+    //self.de.deserialize_seq(/*self.de,*/ visitor)
   }
 
   fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    de::Deserializer::deserialize_map(self.de, visitor)
+    println!("VariantAccess struct_variant");
+    unimplemented!();
+    //self.de.deserialize_map(/*self.de,*/ visitor)
   }
+  fn newtype_variant<T>(self) -> Result<T>
+    where
+        T: Deserialize<'de>,
+    {
+      println!("VariantAccess newtype_variant");
+      unimplemented!();
+      //self.newtype_variant_seed(self);
+      //self.de.newtype_variant_seed(std::marker::PhantomData)
+    }
+
+
+ 
+  
 }
 
 struct SequenceHelper<'a> {
@@ -643,6 +721,8 @@ impl<'a, 'de> SequenceHelper<'a> {
     }
   }
 }
+
+
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.
