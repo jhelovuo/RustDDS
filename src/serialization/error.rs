@@ -8,7 +8,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 // information in its error type, for example the line and column at which the
 // error occurred, the byte offset into the input, or the current key being
 // processed.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Error {
   // One or more variants that can be created by data structures through the
   // `ser::Error` and `de::Error` traits. For example the Serialize impl for
@@ -16,7 +16,7 @@ pub enum Error {
   // Deserialize impl for a struct may return an error because a required
   // field is missing.
   Message(String),
-
+  IOError(std::io::Error),
   // Zero or more variants that can be created directly by the Serializer and
   // Deserializer without going through `ser::Error` and `de::Error`.
   Eof,
@@ -56,9 +56,14 @@ impl Display for Error {
     match self {
       Error::Message(msg) => formatter.write_str(msg),
       Error::Eof => formatter.write_str("unexpected end of input"),
+      Error::IOError(e) => formatter.write_fmt(format_args!("io::Error: {:?}",e)),
       /* and so forth */
     }
   }
+}
+
+impl From<std::io::Error> for Error {
+  fn from(ioerr: std::io::Error) -> Error { Error::IOError(ioerr) } 
 }
 
 impl std::error::Error for Error {}

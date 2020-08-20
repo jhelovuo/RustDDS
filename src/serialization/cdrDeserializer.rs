@@ -954,12 +954,12 @@ mod tests {
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct example {
       a: u32,
-      b: [char; 4],
+      b: [u8; 4],
     }
 
     let o = example {
       a: 1,
-      b: ['a', 'b', 'c', 'd'],
+      b: [b'a', b'b', b'c', b'd'],
     };
 
     let serialized_le: Vec<u8> = vec![0x01, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x64];

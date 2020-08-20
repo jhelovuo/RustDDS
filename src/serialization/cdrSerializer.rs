@@ -1,5 +1,8 @@
 use serde::{ser, Serialize};
 use std::marker::PhantomData;
+use std::io;
+use std::io::Write;
+
 //use serde::{de};
 //use std::fmt::{self, Display};
 //use error::{Error, Result};
@@ -10,51 +13,94 @@ use byteorder::{LittleEndian,BigEndian,ByteOrder};
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
+// This is a wrapper object for a Write object. The wrapper keeps count of bytes written.
+struct CountingWrite<W : io::Write> 
+{
+  writer: W,
+  bytes_written: u64,
+}
 
-pub struct CDR_serializer<BO> {
-  buffer: Vec<u8>,
+impl<W> CountingWrite<W> 
+  where W: io::Write
+{
+  pub fn new(w : W) -> CountingWrite<W>
+  {
+    CountingWrite{ writer: w , bytes_written: 0 , }
+  }
+  pub fn count(&self) -> u64 {
+    self.bytes_written
+  }
+}
+
+impl<W> io::Write for CountingWrite<W> 
+  where W: io::Write
+{
+  fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+    match self.writer.write(buf) {
+      Ok(c) => { self.bytes_written += c as u64; Ok(c) },
+      e => e,
+    }
+  }
+  fn flush(&mut self) -> io::Result<()> {
+    self.writer.flush()
+  }
+}
+
+
+pub struct CDR_serializer<W,BO> 
+where W: io::Write
+{
+  writer: CountingWrite<W>,   // serialization destination
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
 }
 
-impl<BO> CDR_serializer<BO> 
-  where BO: ByteOrder
+impl<W,BO> CDR_serializer<W,BO> 
+  where BO: ByteOrder,
+        W: io::Write,
 {
-  pub fn new() -> CDR_serializer<BO> {
-      CDR_serializer::<BO> { buffer: Vec::new(), phantom: PhantomData, }
+  pub fn new(w : W) -> CDR_serializer<W,BO>
+  {
+      CDR_serializer::<W,BO> { writer: CountingWrite::<W>::new(w), phantom: PhantomData, }
   }
 
-  pub fn buffer(&self) -> &Vec<u8> {
-    &self.buffer
-  }
 
-  fn calculate_padding_need_and_write_padding(&mut self, typeOctetAlignment: u8) {
-    let modulo: u32 = self.buffer.len() as u32 % typeOctetAlignment as u32;
+  fn calculate_padding_need_and_write_padding(&mut self, typeOctetAlignment: u8) -> Result<()> {
+    let modulo: u32 = self.writer.count() as u32 % typeOctetAlignment as u32;
     if modulo != 0 {
       let paddingNeed: u32 = typeOctetAlignment as u32 - modulo;
       //println!("need padding! {}", paddingNeed);
-      self.write_pad(paddingNeed);
+      self.write_pad(paddingNeed)
     } else {
-      return;
+      Ok(())
     }
   }
 
-  fn write_pad(&mut self, byteCount: u32) {
+  fn write_pad(&mut self, byteCount: u32) -> Result<()> {
     //println!("PAD byte count: {}", byteCount);
     for _x in 0..byteCount {
-      self.buffer.push(0u8);
+      self.writer.write_u8(0)? 
     }
+    Ok(())
   }
 }
 
+pub fn to_writer<T,BO,W>(writer: W, value: &T) -> Result<()>
+where
+  T: Serialize,
+  BO: ByteOrder,
+  W: io::Write,
+{
+  value.serialize(&mut CDR_serializer::<W,BO>::new(writer))
+}
 
 pub fn to_bytes<T,BO>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
   BO: ByteOrder,
 {
-  let mut serializer = CDR_serializer::<BO>::new();
-  value.serialize(&mut serializer)?;
-  Ok(serializer.buffer)
+  let mut buffer : Vec<u8> = Vec::with_capacity(32); // just some value out of hat.
+  to_writer::<T,BO,&mut Vec<u8>>(&mut buffer,value)?;
+  Ok(buffer)
 }
 
 // TODO: Remove this function, use directly to_bytes
@@ -73,8 +119,9 @@ where
   to_bytes::<T,BigEndian>(value)
 }
 
-impl<'a,BO> ser::Serializer for &'a mut CDR_serializer<BO> 
-  where BO: ByteOrder
+impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO> 
+  where BO: ByteOrder,
+        W: io::Write,
 {
   type Ok = ();
   // The error type when some error occurs during serialization.
@@ -98,9 +145,9 @@ impl<'a,BO> ser::Serializer for &'a mut CDR_serializer<BO>
   //  Boolean values are encoded as single octets, where TRUE is the value 1, and FALSE as 0.
   fn serialize_bool(self, v: bool) -> Result<()> {
     if v {
-      self.buffer.push(1u8);
+      self.writer.write_u8(1u8)?;
     } else {
-      self.buffer.push(0u8);
+      self.writer.write_u8(0u8)?;
     }
     Ok(())
   }
@@ -115,122 +162,72 @@ impl<'a,BO> ser::Serializer for &'a mut CDR_serializer<BO>
   //unsigned long long
 
   fn serialize_u8(self, v: u8) -> Result<()> {
-    self.buffer.push(v);
+    self.writer.write_u8(v)?;
     Ok(())
   }
 
   fn serialize_u16(self, v: u16) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(2);
-    let mut wtr = vec![];
-    wtr.write_u16::<BO>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
+    self.calculate_padding_need_and_write_padding(2)?;
+    self.writer.write_u16::<BO>(v)?;
     Ok(())
   }
 
   fn serialize_u32(self, v: u32) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(4);
-    let mut wtr = vec![];
-    wtr.write_u32::<BO>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
+    self.calculate_padding_need_and_write_padding(4)?;
+    self.writer.write_u32::<BO>(v)?;
     Ok(())
   }
 
   fn serialize_u64(self, v: u64) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(8);
-    let mut wtr = vec![];
-    wtr.write_u64::<BO>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
-    self.buffer.push(wtr[4]);
-    self.buffer.push(wtr[5]);
-    self.buffer.push(wtr[6]);
-    self.buffer.push(wtr[7]);
+    self.calculate_padding_need_and_write_padding(8)?;
+    self.writer.write_u64::<BO>(v)?;
     Ok(())
   }
 
   fn serialize_i8(self, v: i8) -> Result<()> {
-    let mut wtr = vec![];
-    wtr.write_i8(v).unwrap();
-    self.buffer.push(wtr[0]);
+    self.writer.write_i8(v)?;
     Ok(())
   }
 
   fn serialize_i16(self, v: i16) -> Result<()> {
     println!("serialize_i16");
-    self.calculate_padding_need_and_write_padding(2);
-    let mut wtr = vec![];
-    wtr.write_i16::<BO>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
+    self.calculate_padding_need_and_write_padding(2)?;
+    self.writer.write_i16::<BO>(v)?;
     Ok(())
   }
 
   fn serialize_i32(self, v: i32) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(4);
-    println!("serialize_i32");
-    let mut wtr = vec![];
-    wtr.write_i32::<BO>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
+    self.calculate_padding_need_and_write_padding(4)?;
+    self.writer.write_i32::<BO>(v)?;
     Ok(())
   }
 
   fn serialize_i64(self, v: i64) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(8);
-    let mut wtr = vec![];
-    wtr.write_i64::<BO>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
-    self.buffer.push(wtr[4]);
-    self.buffer.push(wtr[5]);
-    self.buffer.push(wtr[6]);
-    self.buffer.push(wtr[7]);
+    self.calculate_padding_need_and_write_padding(8)?;
+    self.writer.write_i64::<BO>(v)?;
     Ok(())
   }
 
   fn serialize_f32(self, v: f32) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(4);
-    let mut wtr = vec![];
-    wtr.write_f32::<BO>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
+    self.calculate_padding_need_and_write_padding(4)?;
+    self.writer.write_f32::<BO>(v)?;
     Ok(())
   }
   fn serialize_f64(self, v: f64) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(8);
-    let mut wtr = vec![];
-    wtr.write_f64::<BO>(v).unwrap();
-    self.buffer.push(wtr[0]);
-    self.buffer.push(wtr[1]);
-    self.buffer.push(wtr[2]);
-    self.buffer.push(wtr[3]);
-    self.buffer.push(wtr[4]);
-    self.buffer.push(wtr[5]);
-    self.buffer.push(wtr[6]);
-    self.buffer.push(wtr[7]);
+    self.calculate_padding_need_and_write_padding(8)?;
+    self.writer.write_f64::<BO>(v)?;
     Ok(())
   }
 
   //An IDL character is represented as a single octet; the code set used for transmission of
   //character data (e.g., TCS-C) between a particular client and server ORBs is determined
   //via the process described in Section 13.10, “Code Set Conversion,”
-  fn serialize_char(self, _v: char) -> Result<()> {
-    // TODO how to convert RUST 32 bit char to 8 bit safely???
-    let charAsinteger = _v as u32;
-    let bytes = charAsinteger.to_le_bytes();
-    self.buffer.push(bytes[0]);
+  fn serialize_char(self, v: char) -> Result<()> {
+    // Rust "char" means a 32-bit Unicode code point.
+    // IDL & CDR "char" means an octet.
+    // We are here actually serializing the 32-bit quantity.
+    // If we want to serialize CDR "char", then the corresponding Rust type is "u8".
+    self.serialize_u32( v as u32)?;
     Ok(())
   }
 
@@ -238,24 +235,18 @@ impl<'a,BO> ser::Serializer for &'a mut CDR_serializer<BO>
   //followed by the string value in single- or multi-byte form represented as a sequence of
   //octets. The string contents include a single terminating null character. The string
   //length includes the null character, so an empty string has a length of 1.
-  fn serialize_str(self, _v: &str) -> Result<()> {
-    println!("serialize_str");
-    self.calculate_padding_need_and_write_padding(4);
-    let count: u32 = _v.chars().count() as u32;
-    self.serialize_u32(count + 1).unwrap();
-    for c in _v.chars() {
-      let charAsinteger = c as u32;
-      let bytes = charAsinteger.to_le_bytes();
-      self.buffer.push(bytes[0]);
-    }
-    self.buffer.push(0u8);
+  fn serialize_str(self, v: &str) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(4)?;
+    let byte_count :u32 = v.as_bytes().len() as u32 + 1;
+    self.serialize_u32(byte_count)?; // +1 for terminator
+    self.writer.write(v.as_bytes())?;
+    self.writer.write_u8(0)?; // CDR spec requires a null terminator
     Ok(())
+    // The end result is not UTF-8-encoded string, but how could we do better in CDR?
   }
 
-  fn serialize_bytes(self, _v: &[u8]) -> Result<()> {
-    for by in _v {
-      self.buffer.push(*by);
-    }
+  fn serialize_bytes(self, v: &[u8]) -> Result<()> {
+    self.writer.write(v)?;
     Ok(())
   }
 
@@ -317,7 +308,7 @@ impl<'a,BO> ser::Serializer for &'a mut CDR_serializer<BO>
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
   fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-    self.calculate_padding_need_and_write_padding(4);
+    self.calculate_padding_need_and_write_padding(4)?;
     println!("serialize_seq");
     let elementCount = _len.unwrap() as u32;
     if elementCount % 4 != 0 {
@@ -356,7 +347,7 @@ impl<'a,BO> ser::Serializer for &'a mut CDR_serializer<BO>
     Ok(self)
   }
   fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
-    self.calculate_padding_need_and_write_padding(4);
+    self.calculate_padding_need_and_write_padding(4)?;
     //println!("serialize struct");
     println!("serialize_struct");
     self.serialize_map(Some(len))
@@ -373,7 +364,7 @@ impl<'a,BO> ser::Serializer for &'a mut CDR_serializer<BO>
   }
 }
 
-impl<'a,BO:ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<BO> {
+impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<W,BO> {
   type Ok = ();
   type Error = Error;
 
@@ -389,7 +380,7 @@ impl<'a,BO:ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<BO> {
   }
 }
 
-impl<'a,BO:ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<BO> {
+impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<W,BO> {
   type Ok = ();
   type Error = Error;
 
@@ -405,7 +396,7 @@ impl<'a,BO:ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<BO> {
   }
 }
 
-impl<'a,BO:ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<BO> {
+impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<W,BO> {
   type Ok = ();
   type Error = Error;
 
@@ -420,7 +411,7 @@ impl<'a,BO:ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<BO> {
   }
 }
 
-impl<'a,BO:ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<BO> {
+impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<W,BO> {
   type Ok = ();
   type Error = Error;
 
@@ -435,7 +426,7 @@ impl<'a,BO:ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<BO> 
   }
 }
 
-impl<'a,BO:ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<BO> {
+impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<W,BO> {
   type Ok = ();
   type Error = Error;
   fn serialize_key<T>(&mut self, key: &T) -> Result<()>
@@ -457,7 +448,7 @@ impl<'a,BO:ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<BO> {
   }
 }
 
-impl<'a,BO:ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<BO> {
+impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<W,BO> {
   type Ok = ();
   type Error = Error;
 
@@ -474,7 +465,7 @@ impl<'a,BO:ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<BO> {
   }
 }
 
-impl<'a,BO:ByteOrder> ser::SerializeStructVariant for &'a mut CDR_serializer<BO> {
+impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStructVariant for &'a mut CDR_serializer<W,BO> {
   type Ok = ();
   type Error = Error;
 
@@ -641,12 +632,12 @@ mod tests {
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct example {
       a: u32,
-      b: [char; 4],
+      b: [u8; 4],
     }
 
     let o = example {
       a: 1,
-      b: ['a', 'b', 'c', 'd'],
+      b: [b'a', b'b', b'c', b'd'],
     };
 
     let expected_serialization_le: Vec<u8> = vec![0x01, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x64];
