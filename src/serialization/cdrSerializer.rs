@@ -14,6 +14,8 @@ use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
 // This is a wrapper object for a Write object. The wrapper keeps count of bytes written.
+// Such a wrapper seemed easier implementation strategy than capturing the return values of all
+// write and write_* calls in serializer implementation.
 struct CountingWrite<W : io::Write> 
 {
   writer: W,
@@ -47,12 +49,19 @@ impl<W> io::Write for CountingWrite<W>
 }
 
 
+// ---------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------
+
+/// Parameter W is an io::Write that would receive the serialization
+/// Parameter BO is byte order: LittleEndian or BigEndian
 pub struct CDR_serializer<W,BO> 
-where W: io::Write
+  where W: io::Write
 {
   writer: CountingWrite<W>,   // serialization destination
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
 }
+
+
 
 impl<W,BO> CDR_serializer<W,BO> 
   where BO: ByteOrder,
@@ -250,46 +259,54 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
     Ok(())
   }
 
-  // TODO FUNCTIONS AFTER THIS ARE NOT IMPLEMENTED
   fn serialize_none(self) -> Result<()> {
-    Ok(())
+    self.serialize_u32(0) // None is the first variant
   }
-  fn serialize_some<T>(self, _: &T) -> Result<()>
+
+  fn serialize_some<T>(self, t: &T) -> Result<()>
   where
     T: ?Sized + Serialize,
   {
-    println!("serialize_some");
+    self.serialize_u32(1)?; // Some is the second variant
+    t.serialize(self)?;
     Ok(())
   }
 
+  // Unit contains no data, but the CDR spec has no concept of types that carry no data.
+  // We decide to serialize this as nothing.
   fn serialize_unit(self) -> Result<()> {
-    println!("serialize_unit");
+    // nothing
     Ok(())
   }
+
   fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
-    println!("serialize_unit_struct");
     self.serialize_unit()
   }
+
+
+  // CDR 15.3.2.6:
+  // Enum values are encoded as unsigned longs. The numeric values associated with enum
+  // identifiers are determined by the order in which the identifiers appear in the enum
+  // declaration. The first enum identifier has the numeric value zero (0). Successive enum
+  // identifiers take ascending numeric values, in order of declaration from left to right.
   fn serialize_unit_variant(
     self,
     _name: &'static str,
-    _variant_index: u32,
+    variant_index: u32,
     _variant: &'static str,
   ) -> Result<()> {
-    println!("serialize_unit_variant");
-    println!("unit variant index {:?}", _variant_index);
-    println!("variant {:?}", _variant);
-    self.serialize_u32(_variant_index)
+    self.serialize_u32(variant_index)
   }
+
+  // In CDR, this would be a special case of struct.
   fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>
   where
     T: ?Sized + Serialize,
   {
-    println!("serialize_newtype_struct");
-    value.serialize(self)?;
-    Ok(())
+    value.serialize(self)
   }
 
+  // As this is technically an enum, we treat this as union with one variat. 
   fn serialize_newtype_variant<T>(
     self,
     _name: &'static str,
@@ -300,66 +317,85 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
   where
     T: ?Sized + Serialize,
   {
-    println!("serialize_newtype_variant");
+
+    self.serialize_u32(0)?;
     value.serialize(self)
   }
 
   //Sequences are encoded as an unsigned long value, followed by the elements of the
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
-  fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-    self.calculate_padding_need_and_write_padding(4)?;
-    println!("serialize_seq");
-    let elementCount = _len.unwrap() as u32;
-    if elementCount % 4 != 0 {
-      //println!("sequence element count: {}", elementCount);
-    }
+  //
+  // Serde calls this to start sequence. Then it calls serialize_element() for each element, and
+  // finally calls end().
+  fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
+    match len {
+      None => Err(Error::SequenceLengthUnknown),
+      Some( elem_count ) => {
+        self.serialize_u32(elem_count as u32 )?;
+        Ok(self)
+      }
+    } // match
+  } // fn
 
-    self.serialize_u32(elementCount).unwrap();
-    Ok(self)
-  }
   // if CDR contains fixed length array then number of elements is not written.
   fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
-    //println!("serialize tuple");
-    println!("serialize_tuple");
+    // nothing to be done here
     Ok(self)
   }
+
   fn serialize_tuple_struct(
     self,
     _name: &'static str,
-    len: usize,
+    _len: usize,
   ) -> Result<Self::SerializeTupleStruct> {
-    self.serialize_seq(Some(len))
+    // (tuple) struct length is not written. Nothing to be done.
+    Ok(self)
   }
+
+  // This is technically enum/union, so write the variant index.
   fn serialize_tuple_variant(
     self,
     _name: &'static str,
-    _variant_index: u32,
+    variant_index: u32,
     _variant: &'static str,
     _len: usize,
   ) -> Result<Self::SerializeTupleVariant> {
-    println!("serialize_tuple_variant");
+    self.serialize_u32(variant_index)?;
     Ok(self)
   }
-  fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
-    //println!("serialize map");
-    println!("serialize_map");
-    Ok(self)
+
+  // CDR spec from year 2002 does not yet know about maps.
+  // We make an educated guess that the design is similar to sequences:
+  // First the number of key-value pairs, then each entry as a (key,value)-pair.
+  fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
+    //println!("serialize_map");
+    match len {
+      None => Err(Error::SequenceLengthUnknown),
+      Some( elem_count ) => {
+        self.serialize_u32(elem_count as u32 )?;
+        Ok(self)
+      }
+    } // match
   }
-  fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+
+  // Similar to tuple. No need to mark the beginning.
+  fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
     self.calculate_padding_need_and_write_padding(4)?;
     //println!("serialize struct");
-    println!("serialize_struct");
-    self.serialize_map(Some(len))
+    // nothing to be done.
+    Ok(self)
   }
+
+  // Same as tuple variant: Serialize variant index. Serde will then serialize fields.
   fn serialize_struct_variant(
     self,
     _name: &'static str,
-    _variant_index: u32,
+    variant_index: u32,
     _variant: &'static str,
     _len: usize,
   ) -> Result<Self::SerializeStructVariant> {
-    println!("serialize_struct_variant");
+    self.serialize_u32(variant_index)?;
     Ok(self)
   }
 }
@@ -375,9 +411,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<
     value.serialize(&mut **self)
   }
 
-  fn end(self) -> Result<()> {
-    Ok(())
-  }
+  fn end(self) -> Result<()> { Ok(()) }
 }
 
 impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<W,BO> {
@@ -391,9 +425,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTuple for &'a mut CDR_serialize
     value.serialize(&mut **self)
   }
 
-  fn end(self) -> Result<()> {
-    Ok(())
-  }
+  fn end(self) -> Result<()> { Ok(()) }
 }
 
 impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<W,BO> {
@@ -406,9 +438,8 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_ser
   {
     value.serialize(&mut **self)
   }
-  fn end(self) -> Result<()> {
-    Ok(())
-  }
+
+  fn end(self) -> Result<()> { Ok(()) }
 }
 
 impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<W,BO> {
@@ -421,9 +452,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_se
   {
     value.serialize(&mut **self)
   }
-  fn end(self) -> Result<()> {
-    Ok(())
-  }
+  fn end(self) -> Result<()> { Ok(()) }
 }
 
 impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<W,BO> {
@@ -443,9 +472,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<
     value.serialize(&mut **self)
   }
 
-  fn end(self) -> Result<()> {
-    Ok(())
-  }
+  fn end(self) -> Result<()> { Ok(()) }
 }
 
 impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<W,BO> {
@@ -460,9 +487,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStruct for &'a mut CDR_serializ
     Ok(())
   }
 
-  fn end(self) -> Result<()> {
-    Ok(())
-  }
+  fn end(self) -> Result<()> { Ok(()) }
 }
 
 impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStructVariant for &'a mut CDR_serializer<W,BO> {
@@ -477,9 +502,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStructVariant for &'a mut CDR_s
     Ok(())
   }
 
-  fn end(self) -> Result<()> {
-    Ok(())
-  }
+  fn end(self) -> Result<()> { Ok(()) }
 }
 
 #[cfg(test)]
@@ -489,6 +512,7 @@ mod tests {
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use serde::{Serialize, Deserialize};
   use serde_repr::{Serialize_repr, Deserialize_repr};
+  use super::*;
 
   #[test]
 

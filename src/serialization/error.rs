@@ -17,6 +17,7 @@ pub enum Error {
   // field is missing.
   Message(String),
   IOError(std::io::Error),
+  SequenceLengthUnknown,
   // Zero or more variants that can be created directly by the Serializer and
   // Deserializer without going through `ser::Error` and `de::Error`.
   Eof,
@@ -57,6 +58,8 @@ impl Display for Error {
       Error::Message(msg) => formatter.write_str(msg),
       Error::Eof => formatter.write_str("unexpected end of input"),
       Error::IOError(e) => formatter.write_fmt(format_args!("io::Error: {:?}",e)),
+      Error::SequenceLengthUnknown => 
+        formatter.write_str("CDR serialzation requires sequence length to be specified at the start."),
       /* and so forth */
     }
   }
