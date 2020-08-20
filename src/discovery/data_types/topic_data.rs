@@ -11,12 +11,13 @@ use crate::{
       Deadline, Durability, LatencyBudget, Reliability, Ownership, DestinationOrder, Liveliness,
       TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
+    traits::key::Keyed,
   },
   discovery::content_filter_property::ContentFilterProperty,
 };
 
 // Topic data contains all topic related (including reader and writer data structures for serialization and deserialization)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReaderProxy {
   pub remote_reader_guid: Option<GUID>,
   pub expects_inline_qos: Option<bool>,
@@ -45,7 +46,7 @@ impl Serialize for ReaderProxy {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SubscriptionBuiltinTopicData {
   pub key: Option<GUID>,
   pub participant_key: Option<GUID>,
@@ -94,6 +95,16 @@ pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
   pub content_filter: Option<ContentFilterProperty>,
+}
+
+impl Keyed for DiscoveredReaderData {
+  type K = GUID;
+  fn get_key(&self) -> Self::K {
+    match self.subscription_topic_data.key {
+      Some(k) => k,
+      None => GUID::default(),
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for DiscoveredReaderData {

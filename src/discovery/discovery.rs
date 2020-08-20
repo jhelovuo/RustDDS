@@ -16,6 +16,7 @@ use crate::dds::{
   },
   datareader::{Take, DataReader},
   datawriter::{DataWriter},
+  readcondition::ReadCondition,
 };
 
 use crate::discovery::{
@@ -25,6 +26,7 @@ use crate::discovery::{
 use crate::structure::{guid::EntityId, entity::Entity};
 
 use crate::network::constant::*;
+use super::data_types::topic_data::DiscoveredReaderData;
 
 pub struct Discovery {
   poll: Poll,
@@ -158,16 +160,25 @@ impl Discovery {
       )
       .expect("Unable to create DCPSSubscription topic.");
 
-    let _dcps_subscription_reader = discovery_subscriber
-      .create_datareader::<SPDPDiscoveredParticipantData>(
+    let mut dcps_subscription_reader = discovery_subscriber
+      .create_datareader::<DiscoveredReaderData>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         &dcps_subscription_topic,
         dcps_subscription_topic.get_qos(),
       )
       .expect("Unable to create DataReader for DCPSSubscription.");
+    discovery
+      .poll
+      .register(
+        &dcps_subscription_reader,
+        DISCOVERY_SUBSCRIPTION_DATA_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Unable to register subscription reader.");
 
     let _dcps_subscription_writer = discovery_publisher
-      .create_datawriter::<SPDPDiscoveredParticipantData>(
+      .create_datawriter::<DiscoveredReaderData>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
         &dcps_subscription_topic,
         dcps_subscription_topic.get_qos(),
@@ -258,6 +269,8 @@ impl Discovery {
             Duration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
             (),
           );
+        } else if event.token() == DISCOVERY_SUBSCRIPTION_DATA_TOKEN {
+          discovery.handle_subscription_reader(&mut dcps_subscription_reader);
         }
       }
     }
@@ -292,6 +305,34 @@ impl Discovery {
     // debug for when all parts are available
     println!("Participant: {:?}", participant_data);
     None
+  }
+
+  pub fn handle_subscription_reader(&self, reader: &mut DataReader<DiscoveredReaderData>) {
+    let reader_data_vec = match reader.take(100, ReadCondition::not_read()) {
+      Ok(d) => Some(
+        d.into_iter()
+          .map(|p| p.value)
+          .filter(|p| p.is_ok())
+          .map(|p| p.unwrap())
+          .collect(),
+      ),
+      _ => None,
+    };
+
+    let reader_data_vec: Vec<DiscoveredReaderData> = match reader_data_vec {
+      Some(d) => d,
+      None => return,
+    };
+
+    let _res = self.discovery_db.write().map(|mut p| {
+      for data in reader_data_vec.iter() {
+        let updated = (*p).update_subscription(data);
+        if updated {
+          let _send_result = self.writers_proxy_updated_sender.send(());
+          println!("Updated subscription {}", updated);
+        }
+      }
+    });
   }
 
   pub fn participant_cleanup(&self) {

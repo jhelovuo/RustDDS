@@ -5,6 +5,7 @@ use crate::structure::{
 };
 use crate::{
   common::{bit_set::BitSetRef},
+  discovery::data_types::topic_data::DiscoveredReaderData,
 };
 use std::{
   collections::HashSet,
@@ -51,6 +52,44 @@ impl RtpsReaderProxy {
       requested_changes: HashSet::new(),
       unsent_changes: HashSet::new(),
       largest_acked_change: None,
+    }
+  }
+
+  pub fn from(discovered_reader_data: &DiscoveredReaderData) -> Option<RtpsReaderProxy> {
+    let remote_reader_guid = match &discovered_reader_data.reader_proxy.remote_reader_guid {
+      Some(v) => v,
+      None => return None,
+    };
+
+    let expects_inline_qos = match &discovered_reader_data.reader_proxy.expects_inline_qos {
+      Some(v) => v.clone(),
+      None => false,
+    };
+
+    Some(RtpsReaderProxy {
+      remote_reader_guid: remote_reader_guid.clone(),
+      remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
+      unicast_locator_list: discovered_reader_data
+        .reader_proxy
+        .unicast_locator_list
+        .clone(),
+      multicast_locator_list: discovered_reader_data
+        .reader_proxy
+        .multicast_locator_list
+        .clone(),
+      expects_in_line_qos: expects_inline_qos,
+      is_active: true,
+      requested_changes: HashSet::new(),
+      unsent_changes: HashSet::new(),
+      largest_acked_change: None,
+    })
+  }
+
+  pub fn update(&mut self, updated: &RtpsReaderProxy) {
+    if self.remote_reader_guid == updated.remote_reader_guid {
+      self.unicast_locator_list = updated.unicast_locator_list.clone();
+      self.multicast_locator_list = updated.multicast_locator_list.clone();
+      self.expects_in_line_qos = updated.expects_in_line_qos.clone();
     }
   }
 

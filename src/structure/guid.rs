@@ -1,7 +1,9 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
+use std::hash::{Hash, Hasher};
 use super::parameter_id::ParameterId;
+use crate::dds::traits::key::Key;
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct GuidPrefix {
@@ -252,6 +254,17 @@ impl GUID {
       guidPrefix: prefix,
       entityId: entity_id,
     }
+  }
+}
+
+impl Key for GUID {
+  fn get_hash(&self) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    self.entityId.entityKind.hash(&mut hasher);
+    self.entityId.entityKey.hash(&mut hasher);
+    self.guidPrefix.entityKey.hash(&mut hasher);
+
+    hasher.finish()
   }
 }
 
