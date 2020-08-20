@@ -135,6 +135,8 @@ mod tests {
     subscription_builtin_topic_data, spdp_participant_data, reader_proxy_data,
   };
 
+  use crate::structure::guid::*;
+
   #[test]
   fn discdb_participant_operations() {
     let mut discoverydb = DiscoveryDB::new();
@@ -171,12 +173,12 @@ mod tests {
     let topic_name = "Foobar".to_string();
     let topic_name2 = "Barfoo".to_string();
 
-    let writer = RtpsWriterProxy::new(GUID::new(), Vec::new(), Vec::new());
+    let writer = RtpsWriterProxy::new(GUID::new(), Vec::new(), Vec::new(), EntityId::createCustomEntityID([1, 2, 3], 111) );
     let writer_key = writer.remote_writer_guid.clone();
     discovery_db.add_local_topic_writer(topic_name.clone(), writer);
     assert_eq!(discovery_db.local_topic_writers.len(), 1);
 
-    let writer2 = RtpsWriterProxy::new(GUID::new(), Vec::new(), Vec::new());
+    let writer2 = RtpsWriterProxy::new(GUID::new(), Vec::new(), Vec::new(), EntityId::createCustomEntityID([1, 2, 4], 111));
     let _writer2_key = writer2.remote_writer_guid.clone();
     discovery_db.add_local_topic_writer(topic_name2.clone(), writer2);
     assert_eq!(discovery_db.local_topic_writers.len(), 2);
