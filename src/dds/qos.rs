@@ -76,7 +76,7 @@ impl QosPolicies {
 
 // put these into a submodule to avoid repeating the word "policy" or "qospolicy"
 pub mod policy {
-  use crate::structure::duration::Duration;
+  use crate::structure::{parameter_id::ParameterId, duration::Duration};
   use serde::{Serialize, Deserialize};
 
   /*
@@ -164,6 +164,7 @@ pub mod policy {
     pub name: Vec<Vec<u8>>,
   }
   */
+
   #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum Reliability {
     BestEffort,
@@ -184,10 +185,58 @@ pub mod policy {
 
   #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct ResourceLimits {
-    max_samples: i32,
-    max_instances: i32,
-    max_samples_per_instance: i32,
+    pub max_samples: i32,
+    pub max_instances: i32,
+    pub max_samples_per_instance: i32,
   }
+
+  #[derive(Serialize, Deserialize)]
+  pub struct QosData<D>
+  where
+    D: Serialize,
+  {
+    parameter_id: ParameterId,
+    parameter_length: u16,
+    qos_param: D,
+  }
+
+  impl<D> QosData<D>
+  where
+    D: Serialize + Clone,
+  {
+    pub fn new(parameter_id: ParameterId, qosparam: &D) -> QosData<D> {
+      match parameter_id {
+        ParameterId::PID_DURABILITY => QosData {
+          parameter_id,
+          parameter_length: 4,
+          qos_param: qosparam.clone(),
+        },
+        ParameterId::PID_DEADLINE
+        | ParameterId::PID_LATENCY_BUDGET
+        | ParameterId::PID_TIME_BASED_FILTER
+        | ParameterId::PID_PRESENTATION
+        | ParameterId::PID_LIFESPAN
+        | ParameterId::PID_HISTORY => QosData {
+          parameter_id,
+          parameter_length: 8,
+          qos_param: qosparam.clone(),
+        },
+        ParameterId::PID_LIVELINESS
+        | ParameterId::PID_RELIABILITY
+        | ParameterId::PID_RESOURCE_LIMITS => QosData {
+          parameter_id,
+          parameter_length: 12,
+          qos_param: qosparam.clone(),
+        },
+        _ => QosData {
+          parameter_id,
+          parameter_length: 4,
+          qos_param: qosparam.clone(),
+        },
+      }
+    }
+  }
+
   /*
   pub struct EntityFactory {
     autoenable_created_entities: bool,

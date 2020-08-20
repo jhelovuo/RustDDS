@@ -1,4 +1,5 @@
 use speedy::Readable;
+use serde::Deserialize;
 
 use crate::structure::{
   guid::GUID,
@@ -6,6 +7,7 @@ use crate::structure::{
   locator::{LocatorList, Locator},
   builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
   duration::Duration,
+  endpoint::ReliabilityKind,
 };
 
 use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
@@ -519,11 +521,27 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_RELIABILITY => {
-        let reliability: Result<Reliability, Error> =
+        #[derive(Deserialize, Clone)]
+        struct ReliabilityBestEffortData {
+          pub reliability_kind: ReliabilityKind,
+          pub max_blocking_time: Duration,
+        }
+
+        let reliability: Result<ReliabilityBestEffortData, Error> =
           deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match reliability {
           Ok(rel) => {
-            self.reliability = Some(rel);
+            self.reliability = match rel.reliability_kind {
+              ReliabilityKind::BEST_EFFORT => Some(Reliability::BestEffort),
+              ReliabilityKind::RELIABLE => Some(Reliability::Reliable {
+                max_blocking_time: rel.max_blocking_time,
+              }),
+              _ => {
+                buffer.drain(..4 + parameter_length);
+                return self;
+              }
+            };
+
             buffer.drain(..4 + parameter_length);
             return self;
           }
@@ -531,16 +549,54 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_OWNERSHIP => {
-        let ownership: Result<Ownership, Error> =
+        #[derive(Deserialize)]
+        enum OwnershipKind {
+          SHARED,
+          EXCLUSIVE,
+        }
+        let ownership: Result<OwnershipKind, Error> =
           deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match ownership {
           Ok(own) => {
+            let strength = match self.ownership {
+              Some(v) => match v {
+                Ownership::Exclusive { strength } => strength,
+                _ => 0,
+              },
+              None => 0,
+            };
+
+            let own = match own {
+              OwnershipKind::SHARED => Ownership::Shared,
+              OwnershipKind::EXCLUSIVE => Ownership::Exclusive { strength: strength },
+            };
+
             self.ownership = Some(own);
             buffer.drain(..4 + parameter_length);
             return self;
           }
           _ => (),
         }
+      }
+      ParameterId::PID_OWNERSHIP_STRENGTH => {
+        let ownership_strength: Result<i32, Error> =
+          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        match ownership_strength {
+          Ok(stri) => {
+            self.ownership = match self.ownership {
+              Some(v) => match v {
+                Ownership::Exclusive { strength: _ } => {
+                  Some(Ownership::Exclusive { strength: stri })
+                }
+                _ => Some(v),
+              },
+              None => Some(Ownership::Exclusive { strength: stri }),
+            }
+          }
+          _ => (),
+        };
+        buffer.drain(..4 + parameter_length);
+        return self;
       }
       ParameterId::PID_DESTINATION_ORDER => {
         let destination_order: Result<DestinationOrder, Error> =
@@ -615,11 +671,27 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_HISTORY => {
-        let history: Result<History, Error> =
+        #[derive(Deserialize)]
+        enum HistoryKind {
+          KEEP_LAST,
+          KEEP_ALL,
+        }
+
+        #[derive(Deserialize)]
+        struct HistoryData {
+          pub kind: HistoryKind,
+          pub depth: i32,
+        }
+
+        let history: Result<HistoryData, Error> =
           deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
         match history {
           Ok(his) => {
-            self.history = Some(his);
+            let h = match his.kind {
+              HistoryKind::KEEP_LAST => History::KeepLast { depth: his.depth },
+              HistoryKind::KEEP_ALL => History::KeepAll,
+            };
+            self.history = Some(h);
             buffer.drain(..4 + parameter_length);
             return self;
           }

@@ -1,9 +1,11 @@
 use byteorder::{ByteOrder, LittleEndian, BigEndian};
 use serde::Deserialize;
-use serde::{Deserializer, de::{
-  self, DeserializeSeed, EnumAccess,  IntoDeserializer,  MapAccess, SeqAccess,
-  VariantAccess, Visitor,
-}};
+use serde::{
+  de::{
+    self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess,
+    Visitor,
+  },
+};
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
@@ -564,11 +566,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     V: Visitor<'de>,
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4);
-    println!("_name {:?}",  _name);
-    println!("variants {:?}",  _variants);
-    return  _visitor.visit_enum(EnumerationHelper::new(&mut self));
+    println!("_name {:?}", _name);
+    println!("variants {:?}", _variants);
+    return _visitor.visit_enum(EnumerationHelper::new(&mut self));
   }
-
 
   /// An identifier in Serde is the type that identifies a field of a struct or
   /// the variant of an enum. In JSON, struct fields and enum variants are
@@ -580,7 +581,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   {
     println!("deserialize_identifier");
     self.deserialize_u32(visitor)
-   
   }
 
   fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
@@ -592,24 +592,20 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   }
 }
 
-
-struct EnumerationHelper<'a>{
+struct EnumerationHelper<'a> {
   de: &'a mut CDR_deserializer,
 }
 impl<'a, 'de> EnumerationHelper<'a> {
-  fn new(de: &'a mut  CDR_deserializer) -> Self {
-    EnumerationHelper{
-      de
-    }
+  fn new(de: &'a mut CDR_deserializer) -> Self {
+    EnumerationHelper { de }
   }
 }
-
 
 impl<'de, 'a> EnumAccess<'de> for EnumerationHelper<'a> {
   type Error = Error;
   type Variant = Self;
 
-  fn variant_seed<V>(mut self, _seed: V) -> Result<(V::Value, Self::Variant)>
+  fn variant_seed<V>(self, _seed: V) -> Result<(V::Value, Self::Variant)>
   where
     V: DeserializeSeed<'de>,
   {
@@ -640,7 +636,7 @@ impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
     //unimplemented!()
   }
 
-  fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
+  fn newtype_variant_seed<T>(self, _seed: T) -> Result<T::Value>
   where
     T: DeserializeSeed<'de>,
   {
@@ -649,7 +645,7 @@ impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
     //seed.deserialize()
   }
 
-  fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
+  fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -658,7 +654,7 @@ impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
     //self.de.deserialize_seq(/*self.de,*/ visitor)
   }
 
-  fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
+  fn struct_variant<V>(self, _fields: &'static [&'static str], _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -667,14 +663,14 @@ impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
     //self.de.deserialize_map(/*self.de,*/ visitor)
   }
   fn newtype_variant<T>(self) -> Result<T>
-    where
-        T: Deserialize<'de>,
-    {
-      println!("VariantAccess newtype_variant");
-      unimplemented!();
-      //self.newtype_variant_seed(self);
-      //self.de.newtype_variant_seed(std::marker::PhantomData)
-    }
+  where
+    T: Deserialize<'de>,
+  {
+    println!("VariantAccess newtype_variant");
+    unimplemented!();
+    //self.newtype_variant_seed(self);
+    //self.de.newtype_variant_seed(std::marker::PhantomData)
+  }
 }
 
 struct SequenceHelper<'a> {
@@ -700,8 +696,6 @@ impl<'a, 'de> SequenceHelper<'a> {
     }
   }
 }
-
-
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.

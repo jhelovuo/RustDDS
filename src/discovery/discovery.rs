@@ -3,7 +3,7 @@ use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
 
 use std::{
-  time::Duration,
+  time::Duration as StdDuration,
   sync::{Arc, RwLock},
 };
 
@@ -112,7 +112,7 @@ impl Discovery {
     // create lease duration check timer
     let mut participant_cleanup_timer: Timer<()> = Timer::default();
     participant_cleanup_timer.set_timeout(
-      Duration::from_secs(Discovery::PARTICIPANT_CLEANUP_PERIOD),
+      StdDuration::from_secs(Discovery::PARTICIPANT_CLEANUP_PERIOD),
       (),
     );
     discovery
@@ -136,7 +136,7 @@ impl Discovery {
     // creating timer for sending out own participant data
     let mut participant_send_info_timer: Timer<()> = Timer::default();
     participant_send_info_timer.set_timeout(
-      Duration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+      StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
       (),
     );
     discovery
@@ -253,12 +253,12 @@ impl Discovery {
           discovery.participant_cleanup();
           // setting next cleanup timeout
           participant_cleanup_timer.set_timeout(
-            Duration::from_secs(Discovery::PARTICIPANT_CLEANUP_PERIOD),
+            StdDuration::from_secs(Discovery::PARTICIPANT_CLEANUP_PERIOD),
             (),
           );
         } else if event.token() == DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN {
           // setting 3 times the duration so lease doesn't break if we fail once for some reason
-          let lease_duration = Duration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD * 3);
+          let lease_duration = StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD * 3);
           let data = SPDPDiscoveredParticipantData::from_participant(
             &discovery.domain_participant,
             lease_duration,
@@ -266,7 +266,7 @@ impl Discovery {
           dcps_participant_writer.write(data, None).unwrap_or(());
           // reschedule timer
           participant_send_info_timer.set_timeout(
-            Duration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+            StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
             (),
           );
         } else if event.token() == DISCOVERY_SUBSCRIPTION_DATA_TOKEN {

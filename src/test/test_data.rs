@@ -32,10 +32,15 @@ use crate::{
     },
   },
   submessages::EntitySubmessage,
-  structure::{locator::Locator, guid::GUID},
+  structure::{locator::Locator, guid::GUID, duration::Duration},
+  dds::qos::policy::{
+    Deadline, Durability, LatencyBudget, Liveliness, LivelinessKind, Reliability, Ownership,
+    DestinationOrder, TimeBasedFilter, Presentation, PresentationAccessScope, Lifespan, History,
+    ResourceLimits,
+  },
 };
 use speedy::{Readable, Endianness};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration as StdDuration};
 
 pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
   let data = spdp_participant_data_raw();
@@ -100,16 +105,33 @@ pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData>
     participant_key: Some(GUID::new()),
     topic_name: Some("some topic name".to_string()),
     type_name: Some("RandomData".to_string()),
-    durability: None,
-    deadline: None,
-    latency_budget: None,
-    liveliness: None,
-    reliability: None,
-    ownership: None,
-    destination_order: None,
-    time_based_filter: None,
-    presentation: None,
-    lifespan: None,
+    durability: Some(Durability::TransientLocal),
+    deadline: Some(Deadline {
+      period: Duration::from(StdDuration::from_secs(60)),
+    }),
+    latency_budget: Some(LatencyBudget {
+      duration: Duration::from(StdDuration::from_secs(2 * 60)),
+    }),
+    liveliness: Some(Liveliness {
+      kind: LivelinessKind::ManulByTopic,
+      lease_duration: Duration::from(StdDuration::from_secs(3 * 60)),
+    }),
+    reliability: Some(Reliability::Reliable {
+      max_blocking_time: Duration::from(StdDuration::from_secs(4 * 60)),
+    }),
+    ownership: Some(Ownership::Exclusive { strength: 234 }),
+    destination_order: Some(DestinationOrder::BySourceTimeStamp),
+    time_based_filter: Some(TimeBasedFilter {
+      minimum_separation: Duration::from(StdDuration::from_secs(5 * 60)),
+    }),
+    presentation: Some(Presentation {
+      access_scope: PresentationAccessScope::Topic,
+      coherent_access: false,
+      ordered_access: true,
+    }),
+    lifespan: Some(Lifespan {
+      duration: Duration::from(StdDuration::from_secs(6 * 60)),
+    }),
   };
 
   Some(sub_topic_data)
@@ -121,16 +143,31 @@ pub fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
     participant_key: Some(GUID::new()),
     topic_name: Some("rand topic namm".to_string()),
     type_name: Some("RandomData".to_string()),
-    durability: None,
-    deadline: None,
-    latency_budget: None,
-    liveliness: None,
-    reliability: None,
-    lifespan: None,
-    time_based_filter: None,
-    ownership: None,
-    destination_order: None,
-    presentation: None,
+    durability: Some(Durability::Volatile),
+    deadline: Some(Deadline {
+      period: Duration::from(StdDuration::from_secs(30)),
+    }),
+    latency_budget: Some(LatencyBudget {
+      duration: Duration::from(StdDuration::from_secs(2 * 30)),
+    }),
+    liveliness: Some(Liveliness {
+      kind: LivelinessKind::ManulByTopic,
+      lease_duration: Duration::from(StdDuration::from_secs(3 * 30)),
+    }),
+    reliability: Some(Reliability::BestEffort),
+    lifespan: Some(Lifespan {
+      duration: Duration::from(StdDuration::from_secs(6 * 30)),
+    }),
+    time_based_filter: Some(TimeBasedFilter {
+      minimum_separation: Duration::from(StdDuration::from_secs(5 * 30)),
+    }),
+    ownership: Some(Ownership::Shared),
+    destination_order: Some(DestinationOrder::ByReceptionTimestamp),
+    presentation: Some(Presentation {
+      access_scope: PresentationAccessScope::Instance,
+      coherent_access: true,
+      ordered_access: false,
+    }),
   };
 
   Some(pub_topic_data)
@@ -141,17 +178,34 @@ pub fn topic_data() -> Option<TopicBuiltinTopicData> {
     key: Some(GUID::new()),
     name: Some("SomeTopicName".to_string()),
     type_name: Some("RandomData".to_string()),
-    durability: None,
-    deadline: None,
-    latency_budget: None,
-    liveliness: None,
-    reliability: None,
-    lifespan: None,
-    destination_order: None,
-    presentation: None,
-    history: None,
-    resource_limits: None,
-    ownership: None,
+    durability: Some(Durability::Persistent),
+    deadline: Some(Deadline {
+      period: Duration::from(StdDuration::from_secs(45)),
+    }),
+    latency_budget: Some(LatencyBudget {
+      duration: Duration::from(StdDuration::from_secs(2 * 45)),
+    }),
+    liveliness: Some(Liveliness {
+      kind: LivelinessKind::ManulByTopic,
+      lease_duration: Duration::from(StdDuration::from_secs(3 * 45)),
+    }),
+    reliability: Some(Reliability::BestEffort),
+    lifespan: Some(Lifespan {
+      duration: Duration::from(StdDuration::from_secs(6 * 45)),
+    }),
+    destination_order: Some(DestinationOrder::ByReceptionTimestamp),
+    presentation: Some(Presentation {
+      access_scope: PresentationAccessScope::Group,
+      coherent_access: true,
+      ordered_access: true,
+    }),
+    history: Some(History::KeepLast { depth: 25 }),
+    resource_limits: Some(ResourceLimits {
+      max_samples: 5,
+      max_instances: 10,
+      max_samples_per_instance: 15,
+    }),
+    ownership: Some(Ownership::Exclusive { strength: 432 }),
   };
 
   Some(topic_data)

@@ -7,6 +7,7 @@ use crate::{
       BuiltinEndpointQosData, BuiltinEndpointSetData, BuiltinEndpointSet, BuiltinEndpointQos,
     },
     duration::{Duration, DurationData},
+    endpoint::ReliabilityKind,
   },
   discovery::{
     content_filter_property::{ContentFilterPropertyData, ContentFilterProperty},
@@ -24,10 +25,11 @@ use crate::{
   },
   dds::qos::policy::{
     Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
-    TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
+    TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits, QosData,
   },
 };
 use serde::{Serialize, Serializer, ser::SerializeStruct, Deserialize};
+use std::time::Duration as StdDuration;
 
 #[derive(Serialize, Deserialize)]
 struct StringData {
@@ -66,24 +68,18 @@ impl U32Data {
 }
 
 #[derive(Serialize, Deserialize)]
-struct QosData<D>
-where
-  D: Serialize,
-{
+struct I32Data {
   parameter_id: ParameterId,
   parameter_length: u16,
-  qos_param: D,
+  data: i32,
 }
 
-impl<D> QosData<D>
-where
-  D: Serialize + Clone,
-{
-  pub fn new(parameter_id: ParameterId, qosparam: &D) -> QosData<D> {
-    QosData {
+impl I32Data {
+  pub fn new(parameter_id: ParameterId, data: i32) -> I32Data {
+    I32Data {
       parameter_id,
       parameter_length: 4,
-      qos_param: qosparam.clone(),
+      data,
     }
   }
 }
@@ -930,24 +926,84 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_reliability<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    #[derive(Serialize, Clone)]
+    struct ReliabilityBestEffortData {
+      pub reliability_kind: ReliabilityKind,
+      pub max_blocking_time: Duration,
+    }
+
     match self.reliability.as_ref() {
-      Some(rel) => {
-        s.serialize_field(
-          "reliability",
-          &QosData::new(ParameterId::PID_RELIABILITY, rel),
-        )
-        .unwrap();
-      }
+      Some(rel) => match rel {
+        Reliability::BestEffort => {
+          let data = ReliabilityBestEffortData {
+            reliability_kind: ReliabilityKind::BEST_EFFORT,
+            max_blocking_time: Duration::from(StdDuration::from_secs(0)),
+          };
+          s.serialize_field(
+            "reliability",
+            &QosData::new(ParameterId::PID_RELIABILITY, &data),
+          )
+          .unwrap();
+        }
+        Reliability::Reliable { max_blocking_time } => {
+          let data = ReliabilityBestEffortData {
+            reliability_kind: ReliabilityKind::RELIABLE,
+            max_blocking_time: max_blocking_time.clone(),
+          };
+          s.serialize_field(
+            "reliability",
+            &QosData::new(ParameterId::PID_RELIABILITY, &data),
+          )
+          .unwrap();
+        }
+      },
       None => (),
     }
   }
 
   fn add_ownership<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    #[derive(Serialize)]
+    enum OwnershipKind {
+      SHARED,
+      EXCLUSIVE,
+    }
+
+    #[derive(Serialize)]
+    struct OwnershipData {
+      pub parameter_id: ParameterId,
+      pub parameter_length: u16,
+      pub kind: OwnershipKind,
+    }
     match self.ownership.as_ref() {
-      Some(own) => {
-        s.serialize_field("ownership", &QosData::new(ParameterId::PID_OWNERSHIP, own))
+      Some(own) => match own {
+        Ownership::Shared => {
+          s.serialize_field(
+            "ownership",
+            &OwnershipData {
+              parameter_id: ParameterId::PID_OWNERSHIP,
+              parameter_length: 4,
+              kind: OwnershipKind::SHARED,
+            },
+          )
           .unwrap();
-      }
+        }
+        Ownership::Exclusive { strength } => {
+          s.serialize_field(
+            "ownership",
+            &OwnershipData {
+              parameter_id: ParameterId::PID_OWNERSHIP,
+              parameter_length: 4,
+              kind: OwnershipKind::EXCLUSIVE,
+            },
+          )
+          .unwrap();
+          s.serialize_field(
+            "ownership_strength",
+            &I32Data::new(ParameterId::PID_OWNERSHIP_STRENGTH, strength.clone()),
+          )
+          .unwrap();
+        }
+      },
       None => (),
     }
   }
@@ -1002,10 +1058,36 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_history<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    #[derive(Serialize, Clone)]
+    enum HistoryKind {
+      KEEP_LAST,
+      KEEP_ALL,
+    }
+
+    #[derive(Serialize, Clone)]
+    struct HistoryData {
+      pub kind: HistoryKind,
+      pub depth: i32,
+    }
+
     match self.history.as_ref() {
       Some(hs) => {
-        s.serialize_field("history", &QosData::new(ParameterId::PID_HISTORY, hs))
-          .unwrap();
+        let history_data = match hs {
+          History::KeepLast { depth } => HistoryData {
+            kind: HistoryKind::KEEP_LAST,
+            depth: depth.clone(),
+          },
+          // TODO: should depth be ignored for serialization?
+          History::KeepAll => HistoryData {
+            kind: HistoryKind::KEEP_ALL,
+            depth: 0,
+          },
+        };
+        s.serialize_field(
+          "history",
+          &QosData::new(ParameterId::PID_HISTORY, &history_data),
+        )
+        .unwrap();
       }
       None => (),
     }
