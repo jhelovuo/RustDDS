@@ -97,7 +97,7 @@ where
     for (_instant, cc) in cache_changes {
       let cc_data_value = cc.data_value.as_ref().unwrap().clone();
       let ser_payload = cc_data_value.value;
-      // data_object needs to be initialized
+
       let payload: D = match cc_data_value.representation_identifier {
         RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(ser_payload).unwrap(),
         RepresentationIdentifier::CDR_LE => deserialize_from_little_endian(ser_payload).unwrap(),

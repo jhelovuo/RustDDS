@@ -24,6 +24,8 @@ pub struct RtpsWriterProxy {
   pub changes: HashMap<SequenceNumber, Instant>,
 
   pub received_heartbeat_count: i32,
+
+  pub sent_ack_nack_count: i32,
 }
 
 impl RtpsWriterProxy {
@@ -40,6 +42,7 @@ impl RtpsWriterProxy {
       remote_group_entity_id,
       changes: HashMap::new(),
       received_heartbeat_count: 0,
+      sent_ack_nack_count: 0,
     }
   }
 

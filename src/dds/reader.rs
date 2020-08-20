@@ -13,8 +13,7 @@ use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::locator::LocatorList;
-#[allow(unused_imports)] // TODO: Remove this directive when reader works
-use crate::structure::time::Timestamp;
+//#[allow(unused_imports)] // TODO: Remove this directive when reader works
 
 use std::sync::{Arc, RwLock};
 use crate::structure::dds_cache::{DDSCache};
@@ -36,6 +35,16 @@ use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessage_flag::SubmessageFlag;
 use crate::messages::submessages::submessage::EntitySubmessage;
+
+use crate::serialization::message::Message;
+use crate::messages::header::Header;
+use crate::messages::protocol_id::ProtocolId;
+use crate::messages::protocol_version::ProtocolVersion;
+use crate::messages::vendor_id::VendorId;
+use speedy::{Writable};
+
+const PROTOCOLVERSION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_3;
+const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
 
 pub struct Reader {
   // Should the instant be sent?
@@ -123,7 +132,6 @@ impl Reader {
     let end = self.seqnum_instant_map.iter().max().unwrap().0;
     return vec![*start, *end];
   }
-  
   pub fn matched_writer_add(
     &mut self,
     remote_writer_guid: GUID,
@@ -228,9 +236,9 @@ impl Reader {
     let writer_proxy = self.matched_writer_lookup(writer_guid);
     // See if ack_nack is needed.
     if writer_proxy.changes_are_missing(heartbeat.last_sn) || !final_flag_set {
-      let max_sn_plus_1 = match writer_proxy.available_changes_max(){
+      let max_sn_plus_1 = match writer_proxy.available_changes_max() {
         Some(sn) => sn + SequenceNumber::from(1),
-        None => SequenceNumber::from(1)
+        None => SequenceNumber::from(1),
       };
       let mut missing_seq_num_set = SequenceNumberSet::new(max_sn_plus_1);
       for seq_num in writer_proxy.missing_changes(heartbeat.last_sn) {
@@ -344,19 +352,28 @@ impl Reader {
   fn send_acknack(&self, acknack: AckNack, mr_state: MessageReceiverState) {
     // Should it be saved as an attribute?
     let sender = UDPSender::new_with_random_port();
-    let flags = SubmessageFlag { flags: 0 };
+    // TODO: How to determine which flags should be one? Both on atm
+    let flags = SubmessageFlag { flags: 3 };
+
+    let mut message = Message::new();
+    message.set_header(Header {
+      protocol_id: ProtocolId::default(),
+      protocol_version: PROTOCOLVERSION,
+      vendor_id: VENDORID,
+      guid_prefix: self.entity_attributes.guid.guidPrefix,
+    });
 
     let submessage = SubMessage {
       header: SubmessageHeader {
         submessage_id: SubmessageKind::ACKNACK,
         flags: flags.clone(),
-        submessage_length: 0, // TODO
+        submessage_length: acknack.write_to_vec().unwrap().len() as u16,
       },
       submessage: Some(EntitySubmessage::AckNack(acknack, flags)),
       intepreterSubmessage: None,
     };
-
-    let bytes = submessage.serialize_msg();
+    let mut bytes = message.serialize_header();
+    bytes.extend_from_slice(&submessage.serialize_msg());
     sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
   }
 } // impl
