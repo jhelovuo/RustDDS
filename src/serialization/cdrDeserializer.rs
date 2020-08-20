@@ -564,28 +564,23 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     V: Visitor<'de>,
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4);
-    let by0 = self.next_byte().unwrap();
-    let by1 = self.next_byte().unwrap();
-    let by2 = self.next_byte().unwrap();
-    let by3 = self.next_byte().unwrap();
-    let bytes: [u8; 4] = [by0, by1, by2, by3];
-    let enum_number_value: u32;
-    if self.DeserializationEndianess == endianess::littleEndian {
-      enum_number_value = LittleEndian::read_u32(&bytes);
-    } else {
-      enum_number_value = BigEndian::read_u32(&bytes);
-    }
-    _visitor.visit_enum(EnumerationHelper::new(&mut self))
-    //_visitor.visit_enum(enum_number_value);
+    println!("_name {:?}",  _name);
+    println!("variants {:?}",  _variants);
+    return  _visitor.visit_enum(EnumerationHelper::new(&mut self));
   }
 
+
+  /// An identifier in Serde is the type that identifies a field of a struct or
+  /// the variant of an enum. In JSON, struct fields and enum variants are
+  /// represented as strings. In other formats they may be represented as
+  /// numeric indices.
   fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
     println!("deserialize_identifier");
-    //return Ok((self));
-    self.deserialize_str(visitor)
+    self.deserialize_u32(visitor)
+   
   }
 
   fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
@@ -609,17 +604,6 @@ impl<'a, 'de> EnumerationHelper<'a> {
   }
 }
 
-/*
-struct Enum<'a> {
-  de: &'a mut CDR_deserializer,
-}
-
-impl<'a, 'de> Enum<'a> {
-  fn new(de: &'a mut CDR_deserializer) -> Self {
-    Enum { de }
-  }
-}
-*/
 
 impl<'de, 'a> EnumAccess<'de> for EnumerationHelper<'a> {
   type Error = Error;
@@ -630,22 +614,21 @@ impl<'de, 'a> EnumAccess<'de> for EnumerationHelper<'a> {
     V: DeserializeSeed<'de>,
   {
     println!("EnumAccess variant_seed");
-    let val = _seed.deserialize( &mut *self.de)?;
 
-    println!("seed deserialized");
-    ///println!("{:?}",val);
-    Ok((val,self))
-    //unimplemented!()
-    //Ok((_seed))
-    
-    //unimplemented!()
-  }
-  fn variant<V>(self) -> Result<(V, Self::Variant)>
-    where
-        V: Deserialize<'de>,
-    {
-        self.variant_seed(std::marker::PhantomData)
+    let by0 = self.de.next_byte().unwrap();
+    let by1 = self.de.next_byte().unwrap();
+    let by2 = self.de.next_byte().unwrap();
+    let by3 = self.de.next_byte().unwrap();
+    let bytes: [u8; 4] = [by0, by1, by2, by3];
+    let enum_number_value: u32;
+    if self.de.DeserializationEndianess == endianess::littleEndian {
+      enum_number_value = LittleEndian::read_u32(&bytes);
+    } else {
+      enum_number_value = BigEndian::read_u32(&bytes);
     }
+    let val: Result<_> = _seed.deserialize(enum_number_value.into_deserializer());
+    return Ok((val?, self));
+  }
 }
 
 impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
@@ -692,10 +675,6 @@ impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
       //self.newtype_variant_seed(self);
       //self.de.newtype_variant_seed(std::marker::PhantomData)
     }
-
-
- 
-  
 }
 
 struct SequenceHelper<'a> {

@@ -1,4 +1,5 @@
 use serde::{ser, Serialize};
+use serde_repr::{Serialize_repr, Deserialize_repr};
 //use serde::{de};
 //use std::fmt::{self, Display};
 //use error::{Error, Result};
@@ -371,6 +372,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   ) -> Result<()> {
     println!("serialize_unit_variant");
     println!("unit variant index {:?}", _variant_index);
+    println!("variant {:?}", _variant);
     self.serialize_u32(_variant_index)
   }
   fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>
@@ -580,6 +582,7 @@ mod tests {
   use crate::serialization::cdrSerializer::to_big_endian_binary;
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use serde::{Serialize, Deserialize};
+  use serde_repr::{Serialize_repr, Deserialize_repr};
 
   #[test]
 
@@ -613,54 +616,92 @@ mod tests {
 
   #[test]
   fn CDR_serialize_enum(){
-    #[derive(Debug, Eq, PartialEq, Serialize,Deserialize)]
+
+    //Enum values are encoded as unsigned longs. The numeric values associated with enum
+    //identifiers are determined by the order in which the identifiers appear in the enum
+    //declaration. The first enum identifier has the numeric value zero (0). Successive enum
+    //identifiers are take ascending numeric values, in order of declaration from left to right. 
+    // -> Only C type "classic enumerations" are possible to be serialized.
+    // use Serialize_repr and Deserialize_repr when enum member has value taht is not same as unit variant index
+    // (when specified explicitly in code with assing)
+    #[derive(Debug, Eq, PartialEq, /*Serialize,Deserialize,*/Serialize_repr, Deserialize_repr)]
+    #[repr(u32)]
     pub enum OmaEnumeration {
       first,
       second,
       third,
-      fourth(u8,u8,u8,u8),
-      fifth(u8,u8,u16),
-      sixth(i16,i16),
-      seventh(i32),
-      eigth(u32),
-      this_should_not_be_valid(u64,u8,u8,u16,String),
-      similar_to_fourth(u8,u8,u8,u8),
+      //fourth(u8,u8,u8,u8),
+      //fifth(u8,u8,u16),
+      //sixth(i16,i16),
+      seventhHundred = 700,
+      //eigth(u32),
+      //this_should_not_be_valid(u64,u8,u8,u16,String),
+      //similar_to_fourth(u8,u8,u8,u8),
     }
 
     let enum_object_1 = OmaEnumeration::first;
     let enum_object_2 = OmaEnumeration::second;
     let enum_object_3 = OmaEnumeration::third;
-    let enum_object_4 = OmaEnumeration::fourth(1,2,3,4);
-    let enum_object_5 = OmaEnumeration::fifth(5,6,7);
-    let enum_object_6 = OmaEnumeration::sixth(-8,9);
-    let enum_object_7 = OmaEnumeration::seventh(-100);
-    let enum_object_8 = OmaEnumeration::eigth(1000);
-    let enum_object_9 = OmaEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hejssan allihoppa!"));
-    let enum_object_10 = OmaEnumeration::similar_to_fourth(5,6,7,8);
+    //let enum_object_4 = OmaEnumeration::fourth(1,2,3,4);
+    //let enum_object_5 = OmaEnumeration::fifth(5,6,7);
+    //let enum_object_6 = OmaEnumeration::sixth(-8,9);
+    let enum_object_7 = OmaEnumeration::seventhHundred;
+    //let enum_object_8 = OmaEnumeration::eigth(1000);
+    //let enum_object_9 = OmaEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hejssan allihoppa!"));
+    //let enum_object_10 = OmaEnumeration::similar_to_fourth(5,6,7,8);
 
     let serialized_1 = to_little_endian_binary(&enum_object_1).unwrap();
     println!("{:?}", serialized_1);
-
+    let u32Value_1 :u32 = deserialize_from_little_endian(serialized_1.clone()).unwrap();
     let deserialized_1 : OmaEnumeration = deserialize_from_little_endian(serialized_1).unwrap();
-    println!("{:?}", deserialized_1);
+    println!("Deserialized 1: {:?}", deserialized_1);
+    assert_eq!(deserialized_1,enum_object_1);
+    assert_eq!(u32Value_1, 0);
+
 
     let serialized_2 = to_little_endian_binary(&enum_object_2).unwrap();
     println!("{:?}", serialized_2);
+    let u32Value_2 :u32 = deserialize_from_little_endian(serialized_2.clone()).unwrap();
+    let deserialized_2 : OmaEnumeration = deserialize_from_little_endian(serialized_2).unwrap();
+    println!("Deserialized 2: {:?}", deserialized_2);
+    assert_eq!(deserialized_2,enum_object_2);
+    assert_eq!(u32Value_2, 1);
+
 
     let serialized_3 = to_little_endian_binary(&enum_object_3).unwrap();
     println!("{:?}", serialized_3);
+    let deserialized_3 : OmaEnumeration = deserialize_from_little_endian(serialized_3.clone()).unwrap();
+    let u32Value_3 :u32 = deserialize_from_little_endian(serialized_3).unwrap();
+    println!("Deserialized 3: {:?}", deserialized_3);
+    assert_eq!(deserialized_3,enum_object_3);
+    assert_eq!(u32Value_3, 2);
 
+
+    /*
     let serialized_4 = to_little_endian_binary(&enum_object_4).unwrap();
     println!("{:?}", serialized_4);
+    let deserialized_4 : OmaEnumeration = deserialize_from_little_endian(serialized_4).unwrap();
+    println!("Deserialized 4: {:?}", deserialized_4);
+    */
 
+
+    let serialized_7 = to_little_endian_binary(&enum_object_7).unwrap();
+    println!("{:?}", serialized_7);
+    let deserialized_7 : OmaEnumeration = deserialize_from_little_endian(serialized_7.clone()).unwrap();
+    let u32Value_7 :u32 = deserialize_from_little_endian(serialized_7).unwrap();
+    println!("Deserialized 7: {:?}", deserialized_7);
+    assert_eq!(deserialized_7,enum_object_7);
+    assert_eq!(u32Value_7, 700);
+
+
+    /*
     let serialized_5 = to_little_endian_binary(&enum_object_5).unwrap();
     println!("{:?}", serialized_5);
 
     let serialized_6 = to_little_endian_binary(&enum_object_6).unwrap();
     println!("{:?}", serialized_6);
 
-    let serialized_7 = to_little_endian_binary(&enum_object_7).unwrap();
-    println!("{:?}", serialized_7);
+   
 
     let serialized_8 = to_little_endian_binary(&enum_object_8).unwrap();
     println!("{:?}", serialized_8);
@@ -671,7 +712,7 @@ mod tests {
     let serialized_10 = to_little_endian_binary(&enum_object_10).unwrap();
     println!("{:?}", serialized_10);
 
-    
+    */
 
   }
 
