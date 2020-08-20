@@ -3,7 +3,9 @@ use serde::{Serialize /*, Deserialize*/};
 use crate::dds::traits::key::Keyed;
 
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::serialization::cdrSerializer::{CDR_serializer, Endianess};
+use crate::serialization::cdrSerializer::{CDR_serializer};
+use byteorder::{LittleEndian /*,BigEndian*/ };
+
 use crate::structure::guid::EntityId;
 use crate::structure::time::Timestamp;
 use crate::structure::cache_change::ChangeKind;
@@ -85,7 +87,7 @@ impl DDSData {
   where
     D: Keyed + Serialize,
   {
-    let mut cdr = CDR_serializer::new(Endianess::LittleEndian);
+    let mut cdr = CDR_serializer::<LittleEndian>::new();
     //let mut serializer = erased_serde::Serializer::erase(&mut cdr);
     let value = data.serialize(&mut cdr);
     // let value = to_little_endian_binary::<D>(&data);

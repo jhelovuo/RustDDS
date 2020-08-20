@@ -1,33 +1,26 @@
 use serde::{ser, Serialize};
-use serde_repr::{Serialize_repr, Deserialize_repr};
+use std::marker::PhantomData;
 //use serde::{de};
 //use std::fmt::{self, Display};
 //use error::{Error, Result};
 extern crate byteorder;
 use crate::serialization::cdrSerializer::byteorder::WriteBytesExt;
-use byteorder::LittleEndian;
-use byteorder::BigEndian;
+use byteorder::{LittleEndian,BigEndian,ByteOrder};
 
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
-#[derive(PartialEq)]
-pub enum Endianess {
-  LittleEndian,
-  BigEndian,
-}
 
-pub struct CDR_serializer {
+pub struct CDR_serializer<BO> {
   buffer: Vec<u8>,
-  serializationEndianess: Endianess,
+  phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
 }
 
-impl CDR_serializer {
-  pub fn new(endianess: Endianess) -> CDR_serializer {
-    CDR_serializer {
-      buffer: Vec::new(),
-      serializationEndianess: endianess,
-    }
+impl<BO> CDR_serializer<BO> 
+  where BO: ByteOrder
+{
+  pub fn new() -> CDR_serializer<BO> {
+      CDR_serializer::<BO> { buffer: Vec::new(), phantom: PhantomData, }
   }
 
   pub fn buffer(&self) -> &Vec<u8> {
@@ -53,31 +46,36 @@ impl CDR_serializer {
   }
 }
 
+
+pub fn to_bytes<T,BO>(value: &T) -> Result<Vec<u8>>
+where
+  T: Serialize,
+  BO: ByteOrder,
+{
+  let mut serializer = CDR_serializer::<BO>::new();
+  value.serialize(&mut serializer)?;
+  Ok(serializer.buffer)
+}
+
+// TODO: Remove this function, use directly to_bytes
 pub fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
-  let mut CDR_serializer = CDR_serializer {
-    buffer: Vec::new(),
-    serializationEndianess: Endianess::LittleEndian,
-  };
-  value.serialize(&mut CDR_serializer)?;
-  Ok(CDR_serializer.buffer)
+  to_bytes::<T,LittleEndian>(value)
 }
 
+// TODO: Remove this function, use directly to_bytes
 pub fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
-  let mut CDR_serializer = CDR_serializer {
-    buffer: Vec::new(),
-    serializationEndianess: Endianess::BigEndian,
-  };
-  value.serialize(&mut CDR_serializer)?;
-  Ok(CDR_serializer.buffer)
+  to_bytes::<T,BigEndian>(value)
 }
 
-impl<'a> ser::Serializer for &'a mut CDR_serializer {
+impl<'a,BO> ser::Serializer for &'a mut CDR_serializer<BO> 
+  where BO: ByteOrder
+{
   type Ok = ();
   // The error type when some error occurs during serialization.
   type Error = Error;
@@ -99,7 +97,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   //15.3.1.5 Boolean
   //  Boolean values are encoded as single octets, where TRUE is the value 1, and FALSE as 0.
   fn serialize_bool(self, v: bool) -> Result<()> {
-    if v == true {
+    if v {
       self.buffer.push(1u8);
     } else {
       self.buffer.push(0u8);
@@ -123,68 +121,37 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
 
   fn serialize_u16(self, v: u16) -> Result<()> {
     self.calculate_padding_need_and_write_padding(2);
-    if self.serializationEndianess == Endianess::LittleEndian {
-      let mut wtr = vec![];
-      wtr.write_u16::<LittleEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-    } else {
-      let mut wtr = vec![];
-      wtr.write_u16::<BigEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-    }
+    let mut wtr = vec![];
+    wtr.write_u16::<BO>(v).unwrap();
+    self.buffer.push(wtr[0]);
+    self.buffer.push(wtr[1]);
     Ok(())
   }
 
   fn serialize_u32(self, v: u32) -> Result<()> {
     self.calculate_padding_need_and_write_padding(4);
-    if self.serializationEndianess == Endianess::LittleEndian {
-      let mut wtr = vec![];
-      wtr.write_u32::<LittleEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      self.buffer.push(wtr[2]);
-      self.buffer.push(wtr[3]);
-      Ok(())
-    } else {
-      let mut wtr = vec![];
-      wtr.write_u32::<BigEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      self.buffer.push(wtr[2]);
-      self.buffer.push(wtr[3]);
-      Ok(())
-    }
+    let mut wtr = vec![];
+    wtr.write_u32::<BO>(v).unwrap();
+    self.buffer.push(wtr[0]);
+    self.buffer.push(wtr[1]);
+    self.buffer.push(wtr[2]);
+    self.buffer.push(wtr[3]);
+    Ok(())
   }
 
   fn serialize_u64(self, v: u64) -> Result<()> {
     self.calculate_padding_need_and_write_padding(8);
-    if self.serializationEndianess == Endianess::LittleEndian {
-      let mut wtr = vec![];
-      wtr.write_u64::<LittleEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      self.buffer.push(wtr[2]);
-      self.buffer.push(wtr[3]);
-      self.buffer.push(wtr[4]);
-      self.buffer.push(wtr[5]);
-      self.buffer.push(wtr[6]);
-      self.buffer.push(wtr[7]);
-      Ok(())
-    } else {
-      let mut wtr = vec![];
-      wtr.write_u64::<BigEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      self.buffer.push(wtr[2]);
-      self.buffer.push(wtr[3]);
-      self.buffer.push(wtr[4]);
-      self.buffer.push(wtr[5]);
-      self.buffer.push(wtr[6]);
-      self.buffer.push(wtr[7]);
-      Ok(())
-    }
+    let mut wtr = vec![];
+    wtr.write_u64::<BO>(v).unwrap();
+    self.buffer.push(wtr[0]);
+    self.buffer.push(wtr[1]);
+    self.buffer.push(wtr[2]);
+    self.buffer.push(wtr[3]);
+    self.buffer.push(wtr[4]);
+    self.buffer.push(wtr[5]);
+    self.buffer.push(wtr[6]);
+    self.buffer.push(wtr[7]);
+    Ok(())
   }
 
   fn serialize_i8(self, v: i8) -> Result<()> {
@@ -197,115 +164,63 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   fn serialize_i16(self, v: i16) -> Result<()> {
     println!("serialize_i16");
     self.calculate_padding_need_and_write_padding(2);
-    if self.serializationEndianess == Endianess::LittleEndian {
-      let mut wtr = vec![];
-      wtr.write_i16::<LittleEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      Ok(())
-    } else {
-      let mut wtr = vec![];
-      wtr.write_i16::<BigEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      Ok(())
-    }
+    let mut wtr = vec![];
+    wtr.write_i16::<BO>(v).unwrap();
+    self.buffer.push(wtr[0]);
+    self.buffer.push(wtr[1]);
+    Ok(())
   }
 
   fn serialize_i32(self, v: i32) -> Result<()> {
     self.calculate_padding_need_and_write_padding(4);
     println!("serialize_i32");
-    if self.serializationEndianess == Endianess::LittleEndian {
-      let mut wtr = vec![];
-      wtr.write_i32::<LittleEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      self.buffer.push(wtr[2]);
-      self.buffer.push(wtr[3]);
-      Ok(())
-    } else {
-      let mut wtr = vec![];
-      wtr.write_i32::<BigEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      self.buffer.push(wtr[2]);
-      self.buffer.push(wtr[3]);
-      Ok(())
-    }
+    let mut wtr = vec![];
+    wtr.write_i32::<BO>(v).unwrap();
+    self.buffer.push(wtr[0]);
+    self.buffer.push(wtr[1]);
+    self.buffer.push(wtr[2]);
+    self.buffer.push(wtr[3]);
+    Ok(())
   }
 
   fn serialize_i64(self, v: i64) -> Result<()> {
     self.calculate_padding_need_and_write_padding(8);
-    if self.serializationEndianess == Endianess::LittleEndian {
-      let mut wtr = vec![];
-      wtr.write_i64::<LittleEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      self.buffer.push(wtr[2]);
-      self.buffer.push(wtr[3]);
-      self.buffer.push(wtr[4]);
-      self.buffer.push(wtr[5]);
-      self.buffer.push(wtr[6]);
-      self.buffer.push(wtr[7]);
-      Ok(())
-    } else {
-      let mut wtr = vec![];
-      wtr.write_i64::<BigEndian>(v).unwrap();
-      self.buffer.push(wtr[0]);
-      self.buffer.push(wtr[1]);
-      self.buffer.push(wtr[2]);
-      self.buffer.push(wtr[3]);
-      self.buffer.push(wtr[4]);
-      self.buffer.push(wtr[5]);
-      self.buffer.push(wtr[6]);
-      self.buffer.push(wtr[7]);
-      Ok(())
-    }
+    let mut wtr = vec![];
+    wtr.write_i64::<BO>(v).unwrap();
+    self.buffer.push(wtr[0]);
+    self.buffer.push(wtr[1]);
+    self.buffer.push(wtr[2]);
+    self.buffer.push(wtr[3]);
+    self.buffer.push(wtr[4]);
+    self.buffer.push(wtr[5]);
+    self.buffer.push(wtr[6]);
+    self.buffer.push(wtr[7]);
+    Ok(())
   }
 
-  fn serialize_f32(self, _v: f32) -> Result<()> {
+  fn serialize_f32(self, v: f32) -> Result<()> {
     self.calculate_padding_need_and_write_padding(4);
-    if self.serializationEndianess == Endianess::LittleEndian {
-      let v_bytes = _v.to_bits().to_le_bytes();
-      self.buffer.push(v_bytes[0]);
-      self.buffer.push(v_bytes[1]);
-      self.buffer.push(v_bytes[2]);
-      self.buffer.push(v_bytes[3]);
-      Ok(())
-    } else {
-      let v_bytes = _v.to_bits().to_be_bytes();
-      self.buffer.push(v_bytes[0]);
-      self.buffer.push(v_bytes[1]);
-      self.buffer.push(v_bytes[2]);
-      self.buffer.push(v_bytes[3]);
-      Ok(())
-    }
+    let mut wtr = vec![];
+    wtr.write_f32::<BO>(v).unwrap();
+    self.buffer.push(wtr[0]);
+    self.buffer.push(wtr[1]);
+    self.buffer.push(wtr[2]);
+    self.buffer.push(wtr[3]);
+    Ok(())
   }
-  fn serialize_f64(self, _v: f64) -> Result<()> {
+  fn serialize_f64(self, v: f64) -> Result<()> {
     self.calculate_padding_need_and_write_padding(8);
-    if self.serializationEndianess == Endianess::LittleEndian {
-      let v_bytes = _v.to_bits().to_le_bytes();
-      self.buffer.push(v_bytes[0]);
-      self.buffer.push(v_bytes[1]);
-      self.buffer.push(v_bytes[2]);
-      self.buffer.push(v_bytes[3]);
-      self.buffer.push(v_bytes[4]);
-      self.buffer.push(v_bytes[5]);
-      self.buffer.push(v_bytes[6]);
-      self.buffer.push(v_bytes[7]);
-      Ok(())
-    } else {
-      let v_bytes = _v.to_bits().to_be_bytes();
-      self.buffer.push(v_bytes[0]);
-      self.buffer.push(v_bytes[1]);
-      self.buffer.push(v_bytes[2]);
-      self.buffer.push(v_bytes[3]);
-      self.buffer.push(v_bytes[4]);
-      self.buffer.push(v_bytes[5]);
-      self.buffer.push(v_bytes[6]);
-      self.buffer.push(v_bytes[7]);
-      Ok(())
-    }
+    let mut wtr = vec![];
+    wtr.write_f64::<BO>(v).unwrap();
+    self.buffer.push(wtr[0]);
+    self.buffer.push(wtr[1]);
+    self.buffer.push(wtr[2]);
+    self.buffer.push(wtr[3]);
+    self.buffer.push(wtr[4]);
+    self.buffer.push(wtr[5]);
+    self.buffer.push(wtr[6]);
+    self.buffer.push(wtr[7]);
+    Ok(())
   }
 
   //An IDL character is represented as a single octet; the code set used for transmission of
@@ -458,7 +373,7 @@ impl<'a> ser::Serializer for &'a mut CDR_serializer {
   }
 }
 
-impl<'a> ser::SerializeSeq for &'a mut CDR_serializer {
+impl<'a,BO:ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<BO> {
   type Ok = ();
   type Error = Error;
 
@@ -474,7 +389,7 @@ impl<'a> ser::SerializeSeq for &'a mut CDR_serializer {
   }
 }
 
-impl<'a> ser::SerializeTuple for &'a mut CDR_serializer {
+impl<'a,BO:ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<BO> {
   type Ok = ();
   type Error = Error;
 
@@ -490,7 +405,7 @@ impl<'a> ser::SerializeTuple for &'a mut CDR_serializer {
   }
 }
 
-impl<'a> ser::SerializeTupleStruct for &'a mut CDR_serializer {
+impl<'a,BO:ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<BO> {
   type Ok = ();
   type Error = Error;
 
@@ -505,7 +420,7 @@ impl<'a> ser::SerializeTupleStruct for &'a mut CDR_serializer {
   }
 }
 
-impl<'a> ser::SerializeTupleVariant for &'a mut CDR_serializer {
+impl<'a,BO:ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<BO> {
   type Ok = ();
   type Error = Error;
 
@@ -520,7 +435,7 @@ impl<'a> ser::SerializeTupleVariant for &'a mut CDR_serializer {
   }
 }
 
-impl<'a> ser::SerializeMap for &'a mut CDR_serializer {
+impl<'a,BO:ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<BO> {
   type Ok = ();
   type Error = Error;
   fn serialize_key<T>(&mut self, key: &T) -> Result<()>
@@ -542,7 +457,7 @@ impl<'a> ser::SerializeMap for &'a mut CDR_serializer {
   }
 }
 
-impl<'a> ser::SerializeStruct for &'a mut CDR_serializer {
+impl<'a,BO:ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<BO> {
   type Ok = ();
   type Error = Error;
 
@@ -559,7 +474,7 @@ impl<'a> ser::SerializeStruct for &'a mut CDR_serializer {
   }
 }
 
-impl<'a> ser::SerializeStructVariant for &'a mut CDR_serializer {
+impl<'a,BO:ByteOrder> ser::SerializeStructVariant for &'a mut CDR_serializer<BO> {
   type Ok = ();
   type Error = Error;
 
