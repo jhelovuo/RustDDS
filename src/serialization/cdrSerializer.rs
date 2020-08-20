@@ -652,8 +652,8 @@ mod tests {
 
     let serialized_1 = to_little_endian_binary(&enum_object_1).unwrap();
     println!("{:?}", serialized_1);
-    let u32Value_1 :u32 = deserialize_from_little_endian(serialized_1.clone()).unwrap();
-    let deserialized_1 : OmaEnumeration = deserialize_from_little_endian(serialized_1).unwrap();
+    let u32Value_1 :u32 = deserialize_from_little_endian(&serialized_1).unwrap();
+    let deserialized_1 : OmaEnumeration = deserialize_from_little_endian(&serialized_1).unwrap();
     println!("Deserialized 1: {:?}", deserialized_1);
     assert_eq!(deserialized_1,enum_object_1);
     assert_eq!(u32Value_1, 0);
@@ -661,8 +661,8 @@ mod tests {
 
     let serialized_2 = to_little_endian_binary(&enum_object_2).unwrap();
     println!("{:?}", serialized_2);
-    let u32Value_2 :u32 = deserialize_from_little_endian(serialized_2.clone()).unwrap();
-    let deserialized_2 : OmaEnumeration = deserialize_from_little_endian(serialized_2).unwrap();
+    let u32Value_2 :u32 = deserialize_from_little_endian(&serialized_2).unwrap();
+    let deserialized_2 : OmaEnumeration = deserialize_from_little_endian(&serialized_2).unwrap();
     println!("Deserialized 2: {:?}", deserialized_2);
     assert_eq!(deserialized_2,enum_object_2);
     assert_eq!(u32Value_2, 1);
@@ -670,8 +670,8 @@ mod tests {
 
     let serialized_3 = to_little_endian_binary(&enum_object_3).unwrap();
     println!("{:?}", serialized_3);
-    let deserialized_3 : OmaEnumeration = deserialize_from_little_endian(serialized_3.clone()).unwrap();
-    let u32Value_3 :u32 = deserialize_from_little_endian(serialized_3).unwrap();
+    let deserialized_3 : OmaEnumeration = deserialize_from_little_endian(&serialized_3).unwrap();
+    let u32Value_3 :u32 = deserialize_from_little_endian(&serialized_3).unwrap();
     println!("Deserialized 3: {:?}", deserialized_3);
     assert_eq!(deserialized_3,enum_object_3);
     assert_eq!(u32Value_3, 2);
@@ -687,8 +687,8 @@ mod tests {
 
     let serialized_7 = to_little_endian_binary(&enum_object_7).unwrap();
     println!("{:?}", serialized_7);
-    let deserialized_7 : OmaEnumeration = deserialize_from_little_endian(serialized_7.clone()).unwrap();
-    let u32Value_7 :u32 = deserialize_from_little_endian(serialized_7).unwrap();
+    let deserialized_7 : OmaEnumeration = deserialize_from_little_endian(&serialized_7).unwrap();
+    let u32Value_7 :u32 = deserialize_from_little_endian(&serialized_7).unwrap();
     println!("Deserialized 7: {:?}", deserialized_7);
     assert_eq!(deserialized_7,enum_object_7);
     assert_eq!(u32Value_7, 700);
