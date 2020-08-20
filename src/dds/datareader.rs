@@ -17,7 +17,7 @@ use crate::dds::{
   traits::key::*, values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
   pubsub::Subscriber, topic::Topic, readcondition::*,
 };
-
+use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
 use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
 
@@ -96,17 +96,19 @@ where
 
     for (_instant, cc) in cache_changes {
       let cc_data_value = cc.data_value.as_ref().unwrap().clone();
-      let ser_data = cc_data_value.value;
+      let ser_payload = cc_data_value.value;
       // data_object needs to be initialized
-      let mut data_object: D = deserialize_from_little_endian(&ser_data).unwrap();
+      let payload: D = match cc_data_value.representation_identifier {
+        RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(ser_payload).unwrap(),
+        RepresentationIdentifier::CDR_LE => deserialize_from_little_endian(ser_payload).unwrap(),
+        _ => {
+          panic!("DataReader doesn't know how to deserialize with this representation_identifier");
+        }
+      };
 
-      let last_bit = (1 << 15) & cc_data_value.representation_identifier;
-      if last_bit == 1 {
-        data_object = deserialize_from_big_endian(&ser_data).unwrap();
-      }
       // TODO: how do we get the source_timestamp here? Is it needed?
       // TODO: Keeping track of and assigning  generation rank, sample rank etc.
-      let mut datasample = DataSample::new(Timestamp::TIME_INVALID, data_object);
+      let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload);
       datasample.sample_info.instance_state = Self::change_kind_to_instance_state(&cc.kind);
       self.datasample_cache.add_datasample(datasample).unwrap();
     }
@@ -464,7 +466,7 @@ mod tests {
     data.writer_sn = SequenceNumber::from(0);
 
     data.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&random_data).unwrap(),
     };
@@ -492,7 +494,7 @@ mod tests {
     data2.writer_sn = SequenceNumber::from(1);
 
     data2.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&random_data2).unwrap(),
     };
@@ -507,7 +509,7 @@ mod tests {
     data3.writer_sn = SequenceNumber::from(2);
 
     data3.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&random_data3).unwrap(),
     };
@@ -581,7 +583,7 @@ mod tests {
     data_msg.writer_sn = SequenceNumber::from(0);
 
     data_msg.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&test_data).unwrap(),
     };
@@ -592,7 +594,7 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(1);
 
     data_msg2.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&test_data2).unwrap(),
     };
@@ -660,7 +662,7 @@ mod tests {
     data_msg.writer_sn = SequenceNumber::from(2);
 
     data_msg.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&data_key1).unwrap(),
     };
@@ -670,7 +672,7 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(3);
 
     data_msg2.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&data_key2_1).unwrap(),
     };
@@ -680,7 +682,7 @@ mod tests {
     data_msg3.writer_sn = SequenceNumber::from(4);
 
     data_msg3.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&data_key2_2).unwrap(),
     };
@@ -690,7 +692,7 @@ mod tests {
     data_msg4.writer_sn = SequenceNumber::from(5);
 
     data_msg4.serialized_payload = SerializedPayload {
-      representation_identifier: 0,
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
       value: to_little_endian_binary(&data_key2_3).unwrap(),
     };

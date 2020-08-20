@@ -1,7 +1,7 @@
 use serde::{Serialize /*, Deserialize*/};
 
 use crate::dds::traits::key::Keyed;
-
+use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::serialization::cdrSerializer::{to_bytes};
 use byteorder::{LittleEndian /*,BigEndian*/ };
@@ -47,7 +47,7 @@ impl DDSData {
 
     let mut serialized_payload = SerializedPayload::new();
     // TODO: read identifier
-    serialized_payload.representation_identifier = 0;
+    serialized_payload.representation_identifier = RepresentationIdentifier::CDR_LE;
     serialized_payload.representation_options = 0;
     serialized_payload.value = value;
 

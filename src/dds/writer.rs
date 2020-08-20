@@ -46,7 +46,7 @@ use std::{
   collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
 };
 use policy::{History, Reliability};
-
+use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 pub struct Writer {
   source_version: ProtocolVersion,
   source_vendor_id: VendorId,
@@ -694,8 +694,9 @@ impl Writer {
     } else if self.endianness == Endianness::BigEndian {
       representationIdentifierBytes = [0x00, 0x00];
     }
+    let u_16 = LittleEndian::read_u16(&representationIdentifierBytes);
     data_message.serialized_payload.representation_identifier =
-      LittleEndian::read_u16(&representationIdentifierBytes);
+      SerializedPayload::representation_identifier_from(u_16);
     //The current version of the protocol (2.3) does not use the representation_options: The sender shall set the representation_options to zero.
     data_message.serialized_payload.representation_options = 0u16;
     data_message.serialized_payload.value = change.data_value.unwrap().value.clone();
