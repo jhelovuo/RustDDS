@@ -99,8 +99,8 @@ where
       let ser_payload = cc_data_value.value;
 
       let payload: D = match cc_data_value.representation_identifier {
-        RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(ser_payload).unwrap(),
-        RepresentationIdentifier::CDR_LE => deserialize_from_little_endian(ser_payload).unwrap(),
+        RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(&ser_payload).unwrap(),
+        RepresentationIdentifier::CDR_LE => deserialize_from_little_endian(&ser_payload).unwrap(),
         _ => {
           panic!("DataReader doesn't know how to deserialize with this representation_identifier");
         }

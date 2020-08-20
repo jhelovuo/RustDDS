@@ -512,7 +512,6 @@ mod tests {
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use serde::{Serialize, Deserialize};
   use serde_repr::{Serialize_repr, Deserialize_repr};
-  use super::*;
 
   #[test]
 
