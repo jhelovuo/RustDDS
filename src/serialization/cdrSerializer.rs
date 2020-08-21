@@ -8,7 +8,7 @@ use std::io::Write;
 //use error::{Error, Result};
 extern crate byteorder;
 use crate::serialization::cdrSerializer::byteorder::WriteBytesExt;
-use byteorder::{LittleEndian,BigEndian,ByteOrder};
+use byteorder::{BigEndian,LittleEndian,ByteOrder};
 
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
@@ -78,16 +78,9 @@ impl<W,BO> CDR_serializer<W,BO>
     if modulo != 0 {
       let paddingNeed: u32 = typeOctetAlignment as u32 - modulo;
       //println!("need padding! {}", paddingNeed);
-      self.write_pad(paddingNeed)
-    } else {
-      Ok(())
-    }
-  }
-
-  fn write_pad(&mut self, byteCount: u32) -> Result<()> {
-    //println!("PAD byte count: {}", byteCount);
-    for _x in 0..byteCount {
-      self.writer.write_u8(0)? 
+      for _x in 0..paddingNeed {
+        self.writer.write_u8(0)? 
+      }
     }
     Ok(())
   }
@@ -112,21 +105,27 @@ where
   Ok(buffer)
 }
 
-// TODO: Remove this function, use directly to_bytes
-pub fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
+
+
+// This is private, for unit test cases only
+// Public interface should use to_bytes() instead, as it is recommended by serde documentation
+fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
   to_bytes::<T,LittleEndian>(value)
 }
 
-// TODO: Remove this function, use directly to_bytes
-pub fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
+// This is private, for unit test cases only
+// Public interface should use to_bytes() instead, as it is recommended by serde documentation
+fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
   to_bytes::<T,BigEndian>(value)
 }
+
+
 
 impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO> 
   where BO: ByteOrder,

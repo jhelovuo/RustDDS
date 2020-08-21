@@ -281,8 +281,11 @@ impl Serialize for DiscoveredTopicData {
 mod tests {
   use super::*;
 
-  use crate::serialization::cdrSerializer::to_little_endian_binary;
+  //use crate::serialization::cdrSerializer::to_little_endian_binary;
+  use crate::serialization::cdrSerializer::{to_bytes};
+  use byteorder::LittleEndian;
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+
 
   use crate::{
     test::test_data::{
@@ -295,10 +298,10 @@ mod tests {
   fn td_reader_proxy_ser_deser() {
     let reader_proxy = reader_proxy_data().unwrap();
 
-    let sdata = to_little_endian_binary(&reader_proxy).unwrap();
+    let sdata = to_bytes::<ReaderProxy,LittleEndian>(&reader_proxy).unwrap();
     let reader_proxy2: ReaderProxy = deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(reader_proxy, reader_proxy2);
-    let sdata2 = to_little_endian_binary(&reader_proxy2).unwrap();
+    let sdata2 = to_bytes::<ReaderProxy,LittleEndian>(&reader_proxy2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
@@ -306,10 +309,10 @@ mod tests {
   fn td_writer_proxy_ser_deser() {
     let writer_proxy = writer_proxy_data().unwrap();
 
-    let sdata = to_little_endian_binary(&writer_proxy).unwrap();
+    let sdata = to_bytes::<WriterProxy,LittleEndian>(&writer_proxy).unwrap();
     let writer_proxy2: WriterProxy = deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(writer_proxy, writer_proxy2);
-    let sdata2 = to_little_endian_binary(&writer_proxy2).unwrap();
+    let sdata2 = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
@@ -317,11 +320,11 @@ mod tests {
   fn td_subscription_builtin_topic_data_ser_deser() {
     let sub_topic_data = subscription_builtin_topic_data().unwrap();
 
-    let sdata = to_little_endian_binary(&sub_topic_data).unwrap();
+    let sdata = to_bytes::<SubscriptionBuiltinTopicData,LittleEndian>(&sub_topic_data).unwrap();
     let sub_topic_data2: SubscriptionBuiltinTopicData =
       deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(sub_topic_data, sub_topic_data2);
-    let sdata2 = to_little_endian_binary(&sub_topic_data2).unwrap();
+    let sdata2 = to_bytes::<SubscriptionBuiltinTopicData,LittleEndian>(&sub_topic_data2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
@@ -329,11 +332,11 @@ mod tests {
   fn td_publication_builtin_topic_data_ser_deser() {
     let pub_topic_data = publication_builtin_topic_data().unwrap();
 
-    let sdata = to_little_endian_binary(&pub_topic_data).unwrap();
+    let sdata = to_bytes::<PublicationBuiltinTopicData,LittleEndian>(&pub_topic_data).unwrap();
     let pub_topic_data2: PublicationBuiltinTopicData =
       deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(pub_topic_data, pub_topic_data2);
-    let sdata2 = to_little_endian_binary(&pub_topic_data2).unwrap();
+    let sdata2 = to_bytes::<PublicationBuiltinTopicData,LittleEndian>(&pub_topic_data2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
@@ -350,10 +353,10 @@ mod tests {
       content_filter: Some(content_filter),
     };
 
-    let sdata = to_little_endian_binary(&drd).unwrap();
+    let sdata = to_bytes::<DiscoveredReaderData,LittleEndian>(&drd).unwrap();
     let drd2: DiscoveredReaderData = deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(drd, drd2);
-    let sdata2 = to_little_endian_binary(&drd2).unwrap();
+    let sdata2 = to_bytes::<DiscoveredReaderData,LittleEndian>(&drd2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
@@ -368,10 +371,10 @@ mod tests {
       publication_topic_data: pub_topic_data,
     };
 
-    let sdata = to_little_endian_binary(&dwd).unwrap();
+    let sdata = to_bytes::<DiscoveredWriterData,LittleEndian>(&dwd).unwrap();
     let dwd2: DiscoveredWriterData = deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(dwd, dwd2);
-    let sdata2 = to_little_endian_binary(&dwd2).unwrap();
+    let sdata2 = to_bytes::<DiscoveredWriterData,LittleEndian>(&dwd2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
@@ -379,10 +382,10 @@ mod tests {
   fn td_topic_data_ser_deser() {
     let topic_data = topic_data().unwrap();
 
-    let sdata = to_little_endian_binary(&topic_data).unwrap();
+    let sdata = to_bytes::<TopicBuiltinTopicData,LittleEndian>(&topic_data).unwrap();
     let topic_data2: TopicBuiltinTopicData = deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(topic_data, topic_data2);
-    let sdata2 = to_little_endian_binary(&topic_data2).unwrap();
+    let sdata2 = to_bytes::<TopicBuiltinTopicData,LittleEndian>(&topic_data2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
@@ -392,10 +395,10 @@ mod tests {
 
     let dtd = DiscoveredTopicData { topic_data };
 
-    let sdata = to_little_endian_binary(&dtd).unwrap();
+    let sdata = to_bytes::<DiscoveredTopicData,LittleEndian>(&dtd).unwrap();
     let dtd2: DiscoveredTopicData = deserialize_from_little_endian(&sdata).unwrap();
     assert_eq!(dtd, dtd2);
-    let sdata2 = to_little_endian_binary(&dtd2).unwrap();
+    let sdata2 = to_bytes::<DiscoveredTopicData,LittleEndian>(&dtd2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 }

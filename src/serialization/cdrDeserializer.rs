@@ -778,8 +778,8 @@ impl<'de, 'a> MapAccess<'de> for SequenceHelper<'a> {
 
 #[cfg(test)]
 mod tests {
-  use crate::serialization::cdrSerializer::to_little_endian_binary;
-  use crate::serialization::cdrSerializer::to_big_endian_binary;
+  use crate::serialization::cdrSerializer::to_bytes;
+  use byteorder::{BigEndian,LittleEndian};
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
   use serde::{Serialize, Deserialize};
@@ -866,7 +866,7 @@ mod tests {
       0x00, 0x04, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x00,
     ];
 
-    let sarjallistettu = to_little_endian_binary(&mikkiHiiri).unwrap();
+    let sarjallistettu = to_bytes::<OmaTyyppi,LittleEndian>(&mikkiHiiri).unwrap();
     //println!("{:?}",sarjallistettu);
 
     for x in 0..expected_serialized_result.len() {
@@ -908,7 +908,7 @@ mod tests {
       0x00, 0x64, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00,
     ];
 
-    let serialized = to_little_endian_binary(&message).unwrap();
+    let serialized = to_bytes::<ShapeType,LittleEndian>(&message).unwrap();
     assert_eq!(serialized, expected_serialized_result);
     let deserializedMessage: ShapeType = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(deserializedMessage, message)
@@ -962,8 +962,8 @@ mod tests {
 
     let deserialized_le: example = deserialize_from_little_endian(&serialized_le).unwrap();
     let deserialized_be: example = deserialize_from_big_endian(&serialized_be).unwrap();
-    let serializedO_le = to_little_endian_binary(&o).unwrap();
-    let serializedO_be = to_big_endian_binary(&o).unwrap();
+    let serializedO_le = to_bytes::<example,LittleEndian>(&o).unwrap();
+    let serializedO_be = to_bytes::<example,BigEndian>(&o).unwrap();
 
     assert_eq!(
       serializedO_le,
@@ -1006,7 +1006,7 @@ mod tests {
     let deserializedMessage: ShapeType = deserialize_from_little_endian(&recieved_message).unwrap();
     println!("{:?}", deserializedMessage);
 
-    let serializedMessage = to_little_endian_binary(&deserializedMessage).unwrap();
+    let serializedMessage = to_bytes::<ShapeType,LittleEndian>(&deserializedMessage).unwrap();
 
     assert_eq!(serializedMessage, recieved_message2);
     //assert_eq!(deserializedMessage,recieved_message)
@@ -1120,7 +1120,7 @@ mod tests {
       0x00, 0x01, 0x00, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x17, 0x00, 0x02,
     ];
 
-    let serializationResult_le = to_little_endian_binary(&value).unwrap();
+    let serializationResult_le = to_bytes::<InterestingMessage,LittleEndian>(&value).unwrap();
 
     assert_eq!(serializationResult_le, DATA);
     println!("serialization success!");
@@ -1132,7 +1132,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_u8() {
     let numberU8: u8 = 35;
-    let serializedNumberU8 = to_little_endian_binary(&numberU8).unwrap();
+    let serializedNumberU8 = to_bytes::<u8,LittleEndian>(&numberU8).unwrap();
     let deSerializedNmberU8 = deserialize_from_little_endian(&serializedNumberU8).unwrap();
     assert_eq!(numberU8, deSerializedNmberU8);
     assert_eq!(deSerializedNmberU8, 35u8)
@@ -1141,7 +1141,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_u16() {
     let numberU16: u16 = 35;
-    let serializedNumberu16 = to_little_endian_binary(&numberU16).unwrap();
+    let serializedNumberu16 = to_bytes::<u16,LittleEndian>(&numberU16).unwrap();
     let deSerializedNmberU16 = deserialize_from_little_endian(&serializedNumberu16).unwrap();
     assert_eq!(numberU16, deSerializedNmberU16);
     assert_eq!(deSerializedNmberU16, 35u16);
@@ -1150,7 +1150,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_u32() {
     let numberU32: u32 = 352323;
-    let serializedNumberu32 = to_little_endian_binary(&numberU32).unwrap();
+    let serializedNumberu32 = to_bytes::<u32,LittleEndian>(&numberU32).unwrap();
     let deSerializedNmberU32 = deserialize_from_little_endian(&serializedNumberu32).unwrap();
     assert_eq!(numberU32, deSerializedNmberU32);
     assert_eq!(deSerializedNmberU32, 352323);
@@ -1159,7 +1159,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_u64() {
     let numberU64: u64 = 352323232;
-    let serializedNumberu64 = to_little_endian_binary(&numberU64).unwrap();
+    let serializedNumberu64 = to_bytes::<u64,LittleEndian>(&numberU64).unwrap();
     let deSerializedNmberU64 = deserialize_from_little_endian(&serializedNumberu64).unwrap();
     assert_eq!(numberU64, deSerializedNmberU64);
     assert_eq!(deSerializedNmberU64, 352323232);
@@ -1168,7 +1168,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_i8() {
     let numberi8: i8 = -3;
-    let serializedNumberi8 = to_little_endian_binary(&numberi8).unwrap();
+    let serializedNumberi8 = to_bytes::<i8,LittleEndian>(&numberi8).unwrap();
     let deSerializedNmberi8 = deserialize_from_little_endian(&serializedNumberi8).unwrap();
     assert_eq!(numberi8, deSerializedNmberi8);
     assert_eq!(deSerializedNmberi8, -3i8);
@@ -1178,7 +1178,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_i16() {
     let numberi16: i16 = -3;
-    let serializedNumberi16 = to_little_endian_binary(&numberi16).unwrap();
+    let serializedNumberi16 = to_bytes::<i16,LittleEndian>(&numberi16).unwrap();
     let deSerializedNmberi16 = deserialize_from_little_endian(&serializedNumberi16).unwrap();
     assert_eq!(numberi16, deSerializedNmberi16);
     assert_eq!(deSerializedNmberi16, -3i16);
@@ -1187,7 +1187,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_i32() {
     let numberi32: i32 = -323232;
-    let serializedNumberi32 = to_little_endian_binary(&numberi32).unwrap();
+    let serializedNumberi32 = to_bytes::<i32,LittleEndian>(&numberi32).unwrap();
     let deSerializedNmberi32 = deserialize_from_little_endian(&serializedNumberi32).unwrap();
     assert_eq!(numberi32, deSerializedNmberi32);
     assert_eq!(deSerializedNmberi32, -323232);
@@ -1196,7 +1196,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_i64() {
     let numberi64: i64 = -3232323434;
-    let serializedNumberi64 = to_little_endian_binary(&numberi64).unwrap();
+    let serializedNumberi64 = to_bytes::<i64,LittleEndian>(&numberi64).unwrap();
     let deSerializedNmberi64 = deserialize_from_little_endian(&serializedNumberi64).unwrap();
     assert_eq!(numberi64, deSerializedNmberi64);
     assert_eq!(deSerializedNmberi64, -3232323434);
@@ -1206,14 +1206,14 @@ mod tests {
   #[test]
   fn CDR_Deserialization_Boolean() {
     let boolean: bool = true;
-    let serialized = to_little_endian_binary(&boolean).unwrap();
+    let serialized = to_bytes::<bool,LittleEndian>(&boolean).unwrap();
     let deserialized: bool = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(deserialized, boolean);
     assert_eq!(boolean, true);
     assert_eq!(deserialized, true);
 
     let booleanF: bool = false;
-    let serializedF = to_little_endian_binary(&booleanF).unwrap();
+    let serializedF = to_bytes::<bool,LittleEndian>(&booleanF).unwrap();
     let deserializedF: bool = deserialize_from_little_endian(&serializedF).unwrap();
     assert_eq!(deserializedF, booleanF);
     assert_eq!(booleanF, false);
@@ -1223,7 +1223,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_f32() {
     let number: f32 = 2.35f32;
-    let serialized = to_little_endian_binary(&number).unwrap();
+    let serialized = to_bytes::<f32,LittleEndian>(&number).unwrap();
     let deserialized: f32 = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(number, deserialized);
     assert_eq!(number, 2.35f32);
@@ -1233,7 +1233,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_f64() {
     let number: f64 = 278.35f64;
-    let serialized = to_little_endian_binary(&number).unwrap();
+    let serialized = to_bytes::<f64,LittleEndian>(&number).unwrap();
     let deserialized: f64 = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(number, deserialized);
     assert_eq!(number, 278.35f64);
@@ -1242,7 +1242,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_char() {
     let c: char = 'a';
-    let serialized = to_little_endian_binary(&c).unwrap();
+    let serialized = to_bytes::<char,LittleEndian>(&c).unwrap();
     let deserialized: char = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(c, deserialized);
     assert_eq!(c, 'a');
@@ -1252,7 +1252,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_str() {
     let c: &str = "BLUE";
-    let serialized = to_little_endian_binary(&c).unwrap();
+    let serialized = to_bytes::<&str,LittleEndian>(&c).unwrap();
     let deserialized: &str = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(c, deserialized);
     assert_eq!(c, "BLUE");
@@ -1263,7 +1263,7 @@ mod tests {
 
   fn CDR_Deserialization_string() {
     let c: String = String::from("BLUE");
-    let serialized = to_little_endian_binary(&c).unwrap();
+    let serialized = to_bytes::<String,LittleEndian>(&c).unwrap();
     let deserialized: String = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(c, deserialized);
     assert_eq!(c, String::from("BLUE"));
@@ -1287,7 +1287,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_seq() {
     let sequence: Vec<i32> = [1i32, -2i32, 3i32].to_vec();
-    let serialized = to_little_endian_binary(&sequence).unwrap();
+    let serialized = to_bytes::<Vec<i32>,LittleEndian>(&sequence).unwrap();
     let deserialized: Vec<i32> = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(sequence, deserialized);
     assert_eq!(sequence, [1i32, -2i32, 3i32].to_vec());
@@ -1297,7 +1297,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_unknown_type() {
     let sequence: Vec<i32> = [1i32, -2i32, 3i32, -4i32].to_vec();
-    let _serialized = to_little_endian_binary(&sequence).unwrap();
+    let _serialized = to_bytes::<Vec<i32>,LittleEndian>(&sequence).unwrap();
     //let TargetType: Vec<i32>;
     //TargetType = 2;
 

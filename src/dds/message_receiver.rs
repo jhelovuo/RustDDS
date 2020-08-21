@@ -429,7 +429,8 @@ mod tests {
   use crate::messages::header::Header;
   use crate::speedy::{Writable, Readable};
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
-  use crate::serialization::cdrSerializer::to_little_endian_binary;
+  use crate::serialization::cdrSerializer::to_bytes;
+  use byteorder::LittleEndian;
   use serde::{Serialize, Deserialize};
   use crate::dds::writer::Writer;
   use mio_extras::channel as mio_channel;
@@ -520,7 +521,7 @@ mod tests {
 
     // now try to serialize same message
 
-    let _serializedPayload = to_little_endian_binary(&deserializedShapeType);
+    let _serializedPayload = to_bytes::<ShapeType,LittleEndian>(&deserializedShapeType);
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
     let mut _writerObject = Writer::new(
       GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], 2)),
