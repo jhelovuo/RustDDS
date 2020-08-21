@@ -1,4 +1,3 @@
 pub trait Named {
-  fn name() -> String;
-  fn identifier() -> u16;
+  fn type_name() -> String;
 }

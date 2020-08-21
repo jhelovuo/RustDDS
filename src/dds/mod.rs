@@ -10,7 +10,7 @@ pub mod participant;
 pub mod pubsub;
 pub mod qos;
 pub mod readcondition;
-mod reader;
+pub mod reader;
 pub mod rtps_reader_proxy;
 pub mod rtps_writer_proxy;
 pub mod topic;

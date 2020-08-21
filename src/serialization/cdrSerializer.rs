@@ -22,24 +22,31 @@ struct CountingWrite<W : io::Write>
   bytes_written: u64,
 }
 
-impl<W> CountingWrite<W> 
-  where W: io::Write
+impl<W> CountingWrite<W>
+where
+  W: io::Write,
 {
-  pub fn new(w : W) -> CountingWrite<W>
-  {
-    CountingWrite{ writer: w , bytes_written: 0 , }
+  pub fn new(w: W) -> CountingWrite<W> {
+    CountingWrite {
+      writer: w,
+      bytes_written: 0,
+    }
   }
   pub fn count(&self) -> u64 {
     self.bytes_written
   }
 }
 
-impl<W> io::Write for CountingWrite<W> 
-  where W: io::Write
+impl<W> io::Write for CountingWrite<W>
+where
+  W: io::Write,
 {
   fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
     match self.writer.write(buf) {
-      Ok(c) => { self.bytes_written += c as u64; Ok(c) },
+      Ok(c) => {
+        self.bytes_written += c as u64;
+        Ok(c)
+      }
       e => e,
     }
   }
@@ -57,7 +64,7 @@ impl<W> io::Write for CountingWrite<W>
 pub struct CDR_serializer<W,BO> 
   where W: io::Write
 {
-  writer: CountingWrite<W>,   // serialization destination
+  writer: CountingWrite<W>, // serialization destination
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
 }
 
@@ -67,11 +74,12 @@ impl<W,BO> CDR_serializer<W,BO>
   where BO: ByteOrder,
         W: io::Write,
 {
-  pub fn new(w : W) -> CDR_serializer<W,BO>
-  {
-      CDR_serializer::<W,BO> { writer: CountingWrite::<W>::new(w), phantom: PhantomData, }
+  pub fn new(w: W) -> CDR_serializer<W, BO> {
+    CDR_serializer::<W, BO> {
+      writer: CountingWrite::<W>::new(w),
+      phantom: PhantomData,
+    }
   }
-
 
   fn calculate_padding_need_and_write_padding(&mut self, typeOctetAlignment: u8) -> Result<()> {
     let modulo: u32 = self.writer.count() as u32 % typeOctetAlignment as u32;
@@ -86,22 +94,22 @@ impl<W,BO> CDR_serializer<W,BO>
   }
 }
 
-pub fn to_writer<T,BO,W>(writer: W, value: &T) -> Result<()>
+pub fn to_writer<T, BO, W>(writer: W, value: &T) -> Result<()>
 where
   T: Serialize,
   BO: ByteOrder,
   W: io::Write,
 {
-  value.serialize(&mut CDR_serializer::<W,BO>::new(writer))
+  value.serialize(&mut CDR_serializer::<W, BO>::new(writer))
 }
 
-pub fn to_bytes<T,BO>(value: &T) -> Result<Vec<u8>>
+pub fn to_bytes<T, BO>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
   BO: ByteOrder,
 {
-  let mut buffer : Vec<u8> = Vec::with_capacity(32); // just some value out of hat.
-  to_writer::<T,BO,&mut Vec<u8>>(&mut buffer,value)?;
+  let mut buffer: Vec<u8> = Vec::with_capacity(32); // just some value out of hat.
+  to_writer::<T, BO, &mut Vec<u8>>(&mut buffer, &value)?;
   Ok(buffer)
 }
 
@@ -113,7 +121,7 @@ fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
-  to_bytes::<T,LittleEndian>(value)
+  to_bytes::<T, LittleEndian>(value)
 }
 
 // This is private, for unit test cases only
@@ -122,7 +130,7 @@ fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
-  to_bytes::<T,BigEndian>(value)
+  to_bytes::<T, BigEndian>(value)
 }
 
 
@@ -235,7 +243,7 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
     // IDL & CDR "char" means an octet.
     // We are here actually serializing the 32-bit quantity.
     // If we want to serialize CDR "char", then the corresponding Rust type is "u8".
-    self.serialize_u32( v as u32)?;
+    self.serialize_u32(v as u32)?;
     Ok(())
   }
 
@@ -245,7 +253,7 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
   //length includes the null character, so an empty string has a length of 1.
   fn serialize_str(self, v: &str) -> Result<()> {
     self.calculate_padding_need_and_write_padding(4)?;
-    let byte_count :u32 = v.as_bytes().len() as u32 + 1;
+    let byte_count: u32 = v.as_bytes().len() as u32 + 1;
     self.serialize_u32(byte_count)?; // +1 for terminator
     self.writer.write(v.as_bytes())?;
     self.writer.write_u8(0)?; // CDR spec requires a null terminator
@@ -399,7 +407,7 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
   }
 }
 
-impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<W,BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -413,7 +421,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<
   fn end(self) -> Result<()> { Ok(()) }
 }
 
-impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<W,BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -427,7 +435,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTuple for &'a mut CDR_serialize
   fn end(self) -> Result<()> { Ok(()) }
 }
 
-impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<W,BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -441,7 +449,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_ser
   fn end(self) -> Result<()> { Ok(()) }
 }
 
-impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<W,BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -454,7 +462,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_se
   fn end(self) -> Result<()> { Ok(()) }
 }
 
-impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<W,BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<W, BO> {
   type Ok = ();
   type Error = Error;
   fn serialize_key<T>(&mut self, key: &T) -> Result<()>
@@ -474,7 +482,7 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<
   fn end(self) -> Result<()> { Ok(()) }
 }
 
-impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<W,BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -489,7 +497,9 @@ impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStruct for &'a mut CDR_serializ
   fn end(self) -> Result<()> { Ok(()) }
 }
 
-impl<'a,W: io::Write,BO:ByteOrder> ser::SerializeStructVariant for &'a mut CDR_serializer<W,BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStructVariant
+  for &'a mut CDR_serializer<W, BO>
+{
   type Ok = ();
   type Error = Error;
 

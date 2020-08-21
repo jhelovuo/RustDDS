@@ -37,7 +37,7 @@ pub struct DPEventWrapper {
   // Writers
   add_writer_receiver: TokenReceiverPair<Writer>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
-  writer_timed_event_reciever : HashMap<Token,mio_channel::Receiver<TimerMessageType>>,
+  writer_timed_event_reciever: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
 
   stop_poll_receiver: mio_channel::Receiver<()>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
@@ -168,7 +168,7 @@ impl DPEventWrapper {
       remove_reader_receiver,
       add_writer_receiver,
       remove_writer_receiver,
-      writer_timed_event_reciever : HashMap::new(),
+      writer_timed_event_reciever: HashMap::new(),
       stop_poll_receiver,
       writers: HashMap::new(),
       ack_nack_reciever: acknack_reciever,
@@ -197,9 +197,9 @@ impl DPEventWrapper {
           ev_wrapper.handle_reader_action(&event);
         } else if DPEventWrapper::is_writer_action(&event) {
           ev_wrapper.handle_writer_action(&event);
-        } else if ev_wrapper.is_writer_timed_event_action(&event){
+        } else if ev_wrapper.is_writer_timed_event_action(&event) {
           ev_wrapper.handle_writer_timed_event(&event);
-        } else if DPEventWrapper::is_writer_acknack_action(&event){
+        } else if DPEventWrapper::is_writer_acknack_action(&event) {
           ev_wrapper.handle_writer_acknack_action(&event);
         } else if DPEventWrapper::is_reader_update_notification(&event) {
           // TODO:
@@ -234,8 +234,11 @@ impl DPEventWrapper {
   }
 
   /// Writer timed events can be Heartbeats or cache cleaning actions.
-  pub fn is_writer_timed_event_action(&self, event: &Event) -> bool{
-    if self.writer_timed_event_reciever.contains_key(&event.token()){
+  pub fn is_writer_timed_event_action(&self, event: &Event) -> bool {
+    if self
+      .writer_timed_event_reciever
+      .contains_key(&event.token())
+    {
       return true;
     }
     return false;
@@ -314,15 +317,24 @@ impl DPEventWrapper {
           Ready::readable(),
           PollOpt::edge(),
         );
-        let (timed_action_sender, timed_action_receiver) = mio_channel::channel::<TimerMessageType>();
-        let time_handler : TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
+        let (timed_action_sender, timed_action_receiver) =
+          mio_channel::channel::<TimerMessageType>();
+        let time_handler: TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
         new_writer.add_timed_event_handler(time_handler);
 
-        self.poll.register(  &timed_action_receiver,
+        self
+          .poll
+          .register(
+            &timed_action_receiver,
+            new_writer.get_timed_event_entity_token(),
+            Ready::readable(),
+            PollOpt::edge(),
+          )
+          .expect("Writer heartbeat timer channel registeration failed!!");
+        self.writer_timed_event_reciever.insert(
           new_writer.get_timed_event_entity_token(),
-Ready::readable(),
-    PollOpt::edge()).expect("Writer heartbeat timer channel registeration failed!!");
-        self.writer_timed_event_reciever.insert(new_writer.get_timed_event_entity_token(),timed_action_receiver);
+          timed_action_receiver,
+        );
         self.writers.insert(new_writer.as_entity().guid, new_writer);
       }
       REMOVE_WRITER_TOKEN => {
@@ -368,43 +380,49 @@ Ready::readable(),
   }
 
   /// Writer timed events can be heatrbeats or cache cleaning events.
-  /// events are distinguished by TimerMessageType which is send via mio channel. Channel token in 
-  pub fn handle_writer_timed_event(&mut self, event: &Event){
-
-    let reciever = self.writer_timed_event_reciever.get(&event.token()).expect("Did not found heartbeat reciever ");
-    let mut message_queue : Vec<TimerMessageType> = vec![];
+  /// events are distinguished by TimerMessageType which is send via mio channel. Channel token in
+  pub fn handle_writer_timed_event(&mut self, event: &Event) {
+    let reciever = self
+      .writer_timed_event_reciever
+      .get(&event.token())
+      .expect("Did not found heartbeat reciever ");
+    let mut message_queue: Vec<TimerMessageType> = vec![];
     loop {
       let res = reciever.try_recv();
-      if res.is_ok(){
+      if res.is_ok() {
         message_queue.push(res.unwrap());
         break;
       }
-      if res.is_err(){
+      if res.is_err() {
         panic!("Writer timed event message error! {:?}", res)
       }
     }
-    
-    for timer_message in message_queue{
-      if timer_message == TimerMessageType::writer_heartbeat{
-        let found_writer_with_heartbeat = self.writers.iter_mut().find(|p| p.1.get_timed_event_entity_token() == event.token());
+
+    for timer_message in message_queue {
+      if timer_message == TimerMessageType::writer_heartbeat {
+        let found_writer_with_heartbeat = self
+          .writers
+          .iter_mut()
+          .find(|p| p.1.get_timed_event_entity_token() == event.token());
         match found_writer_with_heartbeat {
           Some((_guid, w)) => {
-           w.handle_heartbeat_tick();
-            }
+            w.handle_heartbeat_tick();
+          }
           None => {}
         }
-      }
-      else if timer_message == TimerMessageType::writer_cache_cleaning{
-        let found_writer_to_clean_some_cache = self.writers.iter_mut().find(|p| p.1.get_timed_event_entity_token() == event.token());
+      } else if timer_message == TimerMessageType::writer_cache_cleaning {
+        let found_writer_to_clean_some_cache = self
+          .writers
+          .iter_mut()
+          .find(|p| p.1.get_timed_event_entity_token() == event.token());
         match found_writer_to_clean_some_cache {
           Some((_guid, w)) => {
             w.handle_cache_cleaning();
-            }
+          }
           None => {}
         }
       }
     }
-    
   }
 
   pub fn handle_writer_acknack_action(&mut self, _event: &Event) {
@@ -441,8 +459,6 @@ mod tests {
   use mio::{Ready, PollOpt};
   use crate::structure::entity::Entity;
   use crate::structure::dds_cache::DDSCache;
-  use std::time::Instant;
-  //use std::sync::mpsc;
 
   #[test]
   fn dpew_add_and_remove_readers() {

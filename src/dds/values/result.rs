@@ -21,7 +21,6 @@ pub enum Error {
   //NoData,  // this should be encoded as Option<SomeData>, not an error code
 }
 
-
 pub struct CountWithChange {
   pub count: i32,
   pub count_change: i32,
@@ -45,7 +44,7 @@ pub enum SampleRejectedReason {
 pub struct SampleRejectedStatus {
   pub total: CountWithChange,
   pub last_reason: Option<SampleRejectedReason>, // None == NOT_REJECTED
-  // missing: last_instance_handle: instance key indicating last rejected instance
+                                                 // missing: last_instance_handle: instance key indicating last rejected instance
 }
 
 pub struct LivelinessLostStatus {
@@ -54,7 +53,7 @@ pub struct LivelinessLostStatus {
 
 pub struct OfferedDeadlineMissedStatus {
   pub total: CountWithChange,
-  // missing: last instance key 
+  // missing: last instance key
 }
 
 pub struct OfferedIncompatibleQosStatus {

@@ -41,7 +41,8 @@ unsafe impl Send for Discovery {}
 
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: u64 = 60;
-  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 1;
+  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 60;
+  const SEND_READERS_INFO_PERIOD: u64 = 1;
 
   pub fn new(
     domain_participant: DomainParticipant,
@@ -177,13 +178,28 @@ impl Discovery {
       )
       .expect("Unable to register subscription reader.");
 
-    let _dcps_subscription_writer = discovery_publisher
+    let mut dcps_subscription_writer = discovery_publisher
       .create_datawriter::<DiscoveredReaderData>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
         &dcps_subscription_topic,
         dcps_subscription_topic.get_qos(),
       )
       .expect("Unable to create DataWriter for DCPSSubscription.");
+
+    let mut readers_send_info_timer: Timer<()> = Timer::default();
+    readers_send_info_timer.set_timeout(
+      StdDuration::from_secs(Discovery::SEND_READERS_INFO_PERIOD),
+      (),
+    );
+    discovery
+      .poll
+      .register(
+        &readers_send_info_timer,
+        DISCOVERY_SEND_READERS_INFO_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Unable to register readers info sender");
 
     // Publication
     let dcps_publication_qos = QosPolicies::qos_none();
@@ -267,6 +283,24 @@ impl Discovery {
           // reschedule timer
           participant_send_info_timer.set_timeout(
             StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+            (),
+          );
+        } else if event.token() == DISCOVERY_SEND_READERS_INFO_TOKEN {
+          // TODO: handle unwrap
+          match discovery.discovery_db.read() {
+            Ok(db) => {
+              let datas = db.get_all_local_topic_readers();
+              for data in datas {
+                // TODO: handle unwrap
+                dcps_subscription_writer.write(data.clone(), None).unwrap();
+                println!("Writing data {:?}", data);
+              }
+            }
+            _ => (),
+          }
+
+          readers_send_info_timer.set_timeout(
+            StdDuration::from_secs(Discovery::SEND_READERS_INFO_PERIOD),
             (),
           );
         } else if event.token() == DISCOVERY_SUBSCRIPTION_DATA_TOKEN {

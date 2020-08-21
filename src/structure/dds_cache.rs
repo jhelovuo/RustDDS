@@ -3,7 +3,10 @@ use std::{
   collections::{BTreeMap, HashMap, btree_map::Range},
 };
 use crate::dds::{typedesc::TypeDesc, qos::QosPolicies};
-use super::{topic_kind::TopicKind, cache_change::{ChangeKind, CacheChange}};
+use super::{
+  topic_kind::TopicKind,
+  cache_change::{ChangeKind, CacheChange},
+};
 use std::ops::Bound::{Included, Excluded};
 
 ///DDSCache contains all cacheCahanges that are produced by participant or recieved by participant.
@@ -30,7 +33,10 @@ impl DDSCache {
     topic_data_type: &TypeDesc,
   ) -> bool {
     if self.topic_caches.contains_key(topic_name) {
-      println!("Topic with same name: {:?} already added to DDSCache!", topic_name);
+      println!(
+        "Topic with same name: {:?} already added to DDSCache!",
+        topic_name
+      );
       return false;
     } else {
       self.topic_caches.insert(
@@ -80,16 +86,28 @@ impl DDSCache {
   }
 
   /// Sets cacheChange to not alive disposed. So its waiting to be permanently removed.
-  pub fn from_topic_set_change_to_not_alive_disposed(&mut self, topic_name : &String, instant : &Instant){
+  pub fn from_topic_set_change_to_not_alive_disposed(
+    &mut self,
+    topic_name: &String,
+    instant: &Instant,
+  ) {
     if self.topic_caches.contains_key(topic_name) {
-      self.topic_caches.get_mut(topic_name).unwrap().set_change_to_not_alive_disposed(instant);
-    }else{
-      panic!("Topic: '{:?}' is not in DDSCache",topic_name);
+      self
+        .topic_caches
+        .get_mut(topic_name)
+        .unwrap()
+        .set_change_to_not_alive_disposed(instant);
+    } else {
+      panic!("Topic: '{:?}' is not in DDSCache", topic_name);
     }
   }
 
   /// Removes cacheChange permanently
-  pub fn from_topic_remove_change(&mut self, topic_name : &String, instant : &Instant) -> Option<CacheChange>{
+  pub fn from_topic_remove_change(
+    &mut self,
+    topic_name: &String,
+    instant: &Instant,
+  ) -> Option<CacheChange> {
     if self.topic_caches.contains_key(topic_name) {
       return self
         .topic_caches
@@ -101,13 +119,10 @@ impl DDSCache {
     }
   }
 
-  pub fn from_topic_get_all_changes (
-    &self, 
-    topic_name: &str
-  ) -> Vec<(&Instant, &CacheChange)> {
+  pub fn from_topic_get_all_changes(&self, topic_name: &str) -> Vec<(&Instant, &CacheChange)> {
     match self.topic_caches.get(topic_name) {
-      Some(r) => r.get_all_changes(), 
-      None => vec![]
+      Some(r) => r.get_all_changes(),
+      None => vec![],
     }
   }
 
@@ -190,11 +205,12 @@ impl TopicCache {
     return self.history_cache.remove_change(instant);
   }
 
-  pub fn set_change_to_not_alive_disposed(&mut self, instant : &Instant){
-    self.history_cache.change_change_kind(instant, ChangeKind::NOT_ALIVE_DISPOSED);
+  pub fn set_change_to_not_alive_disposed(&mut self, instant: &Instant) {
+    self
+      .history_cache
+      .change_change_kind(instant, ChangeKind::NOT_ALIVE_DISPOSED);
   }
 }
-
 
 // This is contained in a TopicCache
 #[derive(Debug)]
@@ -213,8 +229,7 @@ impl DDSHistoryCache {
     let result = self.changes.insert(*instant, cache_change);
     if result.is_none() {
       // all is good. timestamp was not inserted before.
-    }
-    else{
+    } else {
       // If this happens cahce changes were created at exactly same instant.
       panic!("DDSHistoryCache already contained element with key !!!");
     }
@@ -252,14 +267,16 @@ impl DDSHistoryCache {
     }
     return changes;
   }
-  
-  pub fn change_change_kind(&mut self, instant : &Instant, change_kind : ChangeKind){
+
+  pub fn change_change_kind(&mut self, instant: &Instant, change_kind: ChangeKind) {
     let change = self.changes.get_mut(instant);
-    if change.is_some(){
+    if change.is_some() {
       change.unwrap().kind = change_kind;
-    }
-    else{
-      panic!("CacheChange with instance: {:?} was not found on DDSHistoryCache!", instant);
+    } else {
+      panic!(
+        "CacheChange with instance: {:?} was not found on DDSHistoryCache!",
+        instant
+      );
     }
   }
 

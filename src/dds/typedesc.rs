@@ -1,4 +1,3 @@
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypeDesc {
   my_name: String, // this is a rather minimal implementation
@@ -12,4 +11,3 @@ impl TypeDesc {
     &self.my_name
   }
 }
-

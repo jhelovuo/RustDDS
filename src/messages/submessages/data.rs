@@ -49,30 +49,50 @@ impl Data {
     }
   }
 
-  /// DATA submessage cannot be speedy Readable because deserializing this requires info from submessage header. 
+  /// DATA submessage cannot be speedy Readable because deserializing this requires info from submessage header.
   /// Required iformation is  expect_qos and expect_payload whish are told on submessage headerflags.
-  pub fn deserialize_data(buffer : &Vec<u8>, _context : Endianness, expect_qos : bool, expect_payload : bool) -> Data{
-    let mut  d = Data::new();
+  pub fn deserialize_data(
+    buffer: &Vec<u8>,
+    _context: Endianness,
+    expect_qos: bool,
+    expect_payload: bool,
+  ) -> Data {
+    let mut d = Data::new();
     let _extra_flags = &buffer[0..2];
     let octets_to_inline_qos = u16::read_from_buffer(&buffer[2..4]).unwrap();
     let octets_to_inline_qos_usize = octets_to_inline_qos as usize;
     let reader_id = &buffer[4..8];
     let writer_id = &buffer[8..12];
     let sequence_number = &buffer[12..20];
-    
-    if expect_qos{ 
-      let QoS_list_length = u32::read_from_buffer(&buffer[octets_to_inline_qos_usize ..(octets_to_inline_qos_usize  + 4)]).unwrap() as usize;
-      d.inline_qos = Some(ParameterList::read_from_buffer(&buffer[octets_to_inline_qos_usize  .. octets_to_inline_qos_usize + QoS_list_length]).unwrap());
-      
+
+    if expect_qos {
+      let QoS_list_length = u32::read_from_buffer(
+        &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
+      )
+      .unwrap() as usize;
+      d.inline_qos = Some(
+        ParameterList::read_from_buffer(
+          &buffer[octets_to_inline_qos_usize..octets_to_inline_qos_usize + QoS_list_length],
+        )
+        .unwrap(),
+      );
     }
-    if expect_payload && !expect_qos{
-      d.serialized_payload = SerializedPayload::read_from_buffer(&buffer[octets_to_inline_qos_usize + 4 .. buffer.len()]).unwrap();
+    if expect_payload && !expect_qos {
+      d.serialized_payload =
+        SerializedPayload::read_from_buffer(&buffer[octets_to_inline_qos_usize + 4..buffer.len()])
+          .unwrap();
     }
-    if expect_payload && expect_qos{
-      let QoS_list_length = u32::read_from_buffer(&buffer[octets_to_inline_qos_usize ..(octets_to_inline_qos_usize  + 4)]).unwrap() as usize;
-      d.serialized_payload = SerializedPayload::read_from_buffer(&buffer[octets_to_inline_qos_usize + 4 + QoS_list_length .. buffer.len()]).unwrap(); 
+    if expect_payload && expect_qos {
+      let QoS_list_length = u32::read_from_buffer(
+        &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
+      )
+      .unwrap() as usize;
+      d.serialized_payload = SerializedPayload::read_from_buffer(
+        &buffer[octets_to_inline_qos_usize + 4 + QoS_list_length..buffer.len()],
+      )
+      .unwrap();
     }
-    
+
     d.reader_id = EntityId::read_from_buffer(reader_id).unwrap();
     d.writer_id = EntityId::read_from_buffer(writer_id).unwrap();
     d.writer_sn = SequenceNumber::read_from_buffer(sequence_number).unwrap();
@@ -112,4 +132,3 @@ impl<C: Context> Writable<C> for Data {
     Ok(())
   }
 }
-

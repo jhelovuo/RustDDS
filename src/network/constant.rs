@@ -37,6 +37,7 @@ pub const DISCOVERY_PARTICIPANT_DATA_TOKEN: Token = Token(30);
 pub const DISCOVERY_PARTICIPANT_CLEANUP_TOKEN: Token = Token(31);
 pub const DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN: Token = Token(32);
 pub const DISCOVERY_SUBSCRIPTION_DATA_TOKEN: Token = Token(33);
+pub const DISCOVERY_SEND_READERS_INFO_TOKEN: Token = Token(34);
 
 pub struct TokenReceiverPair<T> {
   pub token: Token,

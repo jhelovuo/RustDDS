@@ -37,18 +37,18 @@ pub enum QosPolicyId {
 
 #[derive(Clone, Debug)]
 pub struct QosPolicies {
-  durability: Option<policy::Durability>,
-  presentation: Option<policy::Presentation>,
-  deadline: Option<policy::Deadline>,
-  latency_budget: Option<policy::LatencyBudget>,
-  ownership: Option<policy::Ownership>,
-  liveliness: Option<policy::Liveliness>,
-  time_based_filter: Option<policy::TimeBasedFilter>,
+  pub durability: Option<policy::Durability>,
+  pub presentation: Option<policy::Presentation>,
+  pub deadline: Option<policy::Deadline>,
+  pub latency_budget: Option<policy::LatencyBudget>,
+  pub ownership: Option<policy::Ownership>,
+  pub liveliness: Option<policy::Liveliness>,
+  pub time_based_filter: Option<policy::TimeBasedFilter>,
   pub reliability: Option<policy::Reliability>,
-  destination_order: Option<policy::DestinationOrder>,
+  pub destination_order: Option<policy::DestinationOrder>,
   pub history: Option<policy::History>,
-  resource_limits: Option<policy::ResourceLimits>,
-  lifespan: Option<policy::Lifespan>,
+  pub resource_limits: Option<policy::ResourceLimits>,
+  pub lifespan: Option<policy::Lifespan>,
 }
 
 impl QosPolicies {

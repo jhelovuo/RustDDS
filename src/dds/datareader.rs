@@ -116,14 +116,14 @@ where
       let bytes = &ser_payload.value;
 
       let payload: D = match ser_payload.representation_identifier {
-        RepresentationIdentifier::CDR_BE => match deserialize_from_big_endian(bytes) {
+        RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => match deserialize_from_big_endian(bytes) {
           Ok(payload) => payload,
           Err(e) => {
             println!("DataReader couldn't deserialize from BE. \n{}", e);
             continue;
           }
         },
-        RepresentationIdentifier::CDR_LE => match deserialize_from_little_endian(bytes) {
+        RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => match deserialize_from_little_endian(bytes) {
           Ok(payload) => payload,
           Err(e) => {
             println!("DataReader couldn't deserialize from LE. \n{}", e);

@@ -66,7 +66,9 @@ impl Display for Error {
 }
 
 impl From<std::io::Error> for Error {
-  fn from(ioerr: std::io::Error) -> Error { Error::IOError(ioerr) } 
+  fn from(ioerr: std::io::Error) -> Error {
+    Error::IOError(ioerr)
+  }
 }
 
 impl std::error::Error for Error {}

@@ -42,12 +42,12 @@ impl UDPSender {
     }
   }
 
-  pub fn send_to_locator_list(&self, buffer : &[u8], locators : &LocatorList){
-    for l in locators{
-      if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 || l.kind == LocatorKind::LOCATOR_KIND_UDPv6{
+  pub fn send_to_locator_list(&self, buffer: &[u8], locators: &LocatorList) {
+    for l in locators {
+      if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 || l.kind == LocatorKind::LOCATOR_KIND_UDPv6 {
         let a = SocketAddr::from(l.to_socket_address());
         match self.socket.send_to(buffer, &a) {
-          Ok(_) => (println!("send udp message to socket {:?}",a)),
+          Ok(_) => (println!("send udp message to socket {:?}", a)),
           _ => println!("Unable to send to {}", a),
         };
       }

@@ -224,7 +224,6 @@ impl SubmessageFlagHelper {
   }
 }
 
-
 impl<'a> Message {
   pub fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Header {
     Header::read_from_buffer_with_ctx(context, buffer).unwrap()
@@ -299,8 +298,6 @@ impl<C: Context> Writable<C> for Message {
   }
 }
 
-
-
 impl<'a, C: Context> Readable<'a, C> for Message {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let mut message = Message::default();
@@ -337,8 +334,12 @@ impl<'a, C: Context> Readable<'a, C> for Message {
 
       match subHeader.submessage_id {
         SubmessageKind::DATA => {
-
-          let x = Data::deserialize_data(&buffer, endianess,submessageFlagHelper.InlineQosFlag,submessageFlagHelper.DataFlag);
+          let x = Data::deserialize_data(
+            &buffer,
+            endianess,
+            submessageFlagHelper.InlineQosFlag,
+            submessageFlagHelper.DataFlag,
+          );
           let y: SubMessage = SubMessage {
             header: subHeader,
             submessage: Some(EntitySubmessage::Data(x, flag.clone())),
@@ -648,10 +649,9 @@ mod tests {
     assert_eq!(bits1, serialized);
   }
 
-
   #[test]
-  fn test_RTPS_submessage_flags_helper(){
-    let fla : SubmessageFlag = SubmessageFlag{
+  fn test_RTPS_submessage_flags_helper() {
+    let fla: SubmessageFlag = SubmessageFlag {
       flags: 0b00000001_u8,
     };
     let mut helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &fla);

@@ -2,7 +2,6 @@ use enumflags2::BitFlags;
 
 use crate::dds::datasample::*;
 
-
 // This is used to specify which samples are to be read or taken.
 // To be selected, the current state of the sample must be included in the corresponding bitflags.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -25,10 +24,9 @@ impl ReadCondition {
 
   pub fn not_read() -> ReadCondition {
     ReadCondition {
-      sample_state_mask: SampleState::NotRead.into() ,
+      sample_state_mask: SampleState::NotRead.into(),
       view_state_mask: ViewState::any(),
       instance_state_mask: InstanceState::any(),
     }
   }
-
 }

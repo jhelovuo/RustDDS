@@ -12,6 +12,7 @@ use crate::{
       TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
     traits::key::Keyed,
+    rtps_reader_proxy::RtpsReaderProxy,
   },
   discovery::content_filter_property::ContentFilterProperty,
 };
@@ -23,6 +24,17 @@ pub struct ReaderProxy {
   pub expects_inline_qos: Option<bool>,
   pub unicast_locator_list: LocatorList,
   pub multicast_locator_list: LocatorList,
+}
+
+impl From<RtpsReaderProxy> for ReaderProxy {
+  fn from(rtps_reader_proxy: RtpsReaderProxy) -> Self {
+    ReaderProxy {
+      remote_reader_guid: Some(rtps_reader_proxy.remote_reader_guid),
+      expects_inline_qos: Some(rtps_reader_proxy.expects_in_line_qos),
+      unicast_locator_list: rtps_reader_proxy.unicast_locator_list,
+      multicast_locator_list: rtps_reader_proxy.multicast_locator_list,
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for ReaderProxy {
@@ -90,7 +102,7 @@ impl Serialize for SubscriptionBuiltinTopicData {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,

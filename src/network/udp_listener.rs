@@ -48,10 +48,9 @@ impl UDPListener {
     //self.mio_socket().recv_from(buf)
     let result = self.socket.recv(&mut buf);
     if result.is_ok() {
-       let nbytes = result.unwrap();
+      let nbytes = result.unwrap();
       message = buf[..nbytes].to_vec();
-    }
-    else{
+    } else {
       println!("{:?}", result);
     }
     message
