@@ -1,6 +1,6 @@
 use mio_extras::channel as mio_channel;
 
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 
 use serde::{Serialize, Deserialize};
 
@@ -190,7 +190,7 @@ impl<'s> Subscriber {
     <D as Keyed>::K: Key,
   {
     // What is the bound?
-    let (send, rec) = mio_channel::sync_channel::<Instant>(10);
+    let (send, rec) = mio_channel::sync_channel::<()>(10);
 
     let entity_id = match entity_id {
       Some(eid) => eid,

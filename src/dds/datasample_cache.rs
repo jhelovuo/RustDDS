@@ -23,7 +23,7 @@ where
     }
   }
 
-  pub fn add_datasample(&mut self, data_sample: DataSample<D>) -> Result<D::K> {
+  pub fn add_datasample(&mut self, data_sample: DataSample<D>) {
     let key: D::K = data_sample.get_key();
     let block = self.datasamples.get_mut(&key);
 
@@ -60,7 +60,6 @@ where
         }
       },
     }
-    Ok(key)
   }
 
   pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
@@ -114,7 +113,7 @@ mod tests {
 
     let key = data.get_key().clone();
     let datasample = DataSample::new(timestamp, data.clone());
-    datasample_cache.add_datasample(datasample).unwrap();
+    datasample_cache.add_datasample(datasample);
     //datasample_cache.add_datasample(datasample).unwrap();
 
     let samples = datasample_cache.get_datasample(&key);

@@ -39,12 +39,11 @@ pub struct DataReader<'a, D: Keyed> {
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
-  pub(crate) notification_receiver: mio_channel::Receiver<Instant>,
+  pub(crate) notification_receiver: mio_channel::Receiver<()>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
 
   datasample_cache: DataSampleCache<D>,
-  data_available: bool,
   latest_instant: Instant,
 }
 
@@ -57,7 +56,8 @@ where
     subscriber: &'a Subscriber,
     my_id: EntityId,
     topic: &'a Topic,
-    notification_receiver: mio_channel::Receiver<Instant>,
+    // Each notification sent to this channel must be try_recv'd
+    notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
   ) -> Self {
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
@@ -73,7 +73,6 @@ where
       notification_receiver,
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
-      data_available: true,
       // The reader is created before the datareader, hence initializing the
       // latest_instant to now should be fine. There should be no smaller instants
       // added by the reader.
@@ -85,24 +84,57 @@ where
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
   fn get_datasamples_from_cache(&mut self) {
-    let dds_cache = self.dds_cache.read().unwrap();
+    let dds_cache = match self.dds_cache.read() {
+      Ok(rwlock) => rwlock,
+      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
+      Err(e) => panic!(
+        "The DDSCache of domain participant {:?} is poisoned. Error: {}",
+        self.my_subscriber.domain_participant.get_guid(),
+        e
+      ),
+    };
     let cache_changes = dds_cache.from_topic_get_changes_in_range(
       &self.my_topic.get_name().to_string(),
       &self.latest_instant,
       &Instant::now(),
     );
 
-    self.latest_instant = *cache_changes.last().unwrap().0;
+    match cache_changes.last() {
+      Some((last_instant, _)) => self.latest_instant = **last_instant,
+      // No new changes available
+      None => return,
+    };
 
     for (_instant, cc) in cache_changes {
-      let cc_data_value = cc.data_value.as_ref().unwrap().clone();
-      let ser_payload = cc_data_value.value;
+      let ser_payload = match &cc.data_value {
+        Some(s) => s,
+        None => {
+          println!("DataReader cant access serialized payload");
+          continue;
+        }
+      };
+      let bytes = &ser_payload.value;
 
-      let payload: D = match cc_data_value.representation_identifier {
-        RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(&ser_payload).unwrap(),
-        RepresentationIdentifier::CDR_LE => deserialize_from_little_endian(&ser_payload).unwrap(),
+      let payload: D = match ser_payload.representation_identifier {
+        RepresentationIdentifier::CDR_BE => match deserialize_from_big_endian(bytes) {
+          Ok(payload) => payload,
+          Err(e) => {
+            println!("DataReader couldn't deserialize from BE. \n{}", e);
+            continue;
+          }
+        },
+        RepresentationIdentifier::CDR_LE => match deserialize_from_little_endian(bytes) {
+          Ok(payload) => payload,
+          Err(e) => {
+            println!("DataReader couldn't deserialize from LE. \n{}", e);
+            continue;
+          }
+        },
         _ => {
-          panic!("DataReader doesn't know how to deserialize with this representation_identifier");
+          println!(
+            "DataReader doesn't know how to deserialize with this representation_identifier"
+          );
+          continue;
         }
       };
 
@@ -110,9 +142,8 @@ where
       // TODO: Keeping track of and assigning  generation rank, sample rank etc.
       let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload);
       datasample.sample_info.instance_state = Self::change_kind_to_instance_state(&cc.kind);
-      self.datasample_cache.add_datasample(datasample).unwrap();
+      self.datasample_cache.add_datasample(datasample);
     }
-    self.data_available = false;
   }
 
   /// This operation accesses a collection of Data values from the DataReader.
@@ -136,9 +167,7 @@ where
     max_samples: usize,            // maximum number of DataSamples to return.
     read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
   ) -> Result<Vec<&DataSample<D>>> {
-    if self.data_available {
-      self.get_datasamples_from_cache();
-    }
+    self.get_datasamples_from_cache();
     let mut result = Vec::new();
     'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
       for datasample in datasample_vec.iter_mut() {
@@ -162,9 +191,7 @@ where
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
-    if self.data_available {
-      self.get_datasamples_from_cache();
-    }
+    self.get_datasamples_from_cache();
 
     let mut result = Vec::new();
     'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
@@ -208,33 +235,31 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<&DataSample<D>>> {
-    if self.data_available {
-      self.get_datasamples_from_cache();
-    }
+    let mut result = Vec::new();
+    self.get_datasamples_from_cache();
     let key = match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => k,
         SelectByKey::Next => self.datasample_cache.get_next_key(&k),
       },
-      None => self
-        .datasample_cache
-        .datasamples
-        .keys()
-        .min()
-        .unwrap()
-        .clone(),
+      None => match self.datasample_cache.datasamples.keys().min() {
+        Some(key) => key.clone(),
+        None => {
+          return Ok(result); // no keys in datasample. No samples to return
+        }
+      },
     };
-    let mut result = Vec::new();
-    let datasample_vec = self.datasample_cache.get_datasamples_mut(&key).unwrap();
-    for datasample in datasample_vec.iter_mut() {
-      if Self::matches_conditions(&read_condition, datasample) {
-        datasample.sample_info.sample_state = SampleState::Read;
-        result.push(&*datasample);
+    if let Some(datasample_vec) = self.datasample_cache.get_datasamples_mut(&key) {
+      for datasample in datasample_vec.iter_mut() {
+        if Self::matches_conditions(&read_condition, datasample) {
+          datasample.sample_info.sample_state = SampleState::Read;
+          result.push(&*datasample);
+        }
+        if result.len() >= max_samples {
+          break;
+        }
       }
-      if result.len() >= max_samples {
-        break;
-      }
-    }
+    } // Else, cat't get mut datasample_vec, return no samples
     Ok(result)
   }
 
@@ -252,42 +277,39 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
-    if self.data_available {
-      self.get_datasamples_from_cache();
-    }
+    let mut result = Vec::new();
+    self.get_datasamples_from_cache();
     let key = match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => k,
         SelectByKey::Next => self.datasample_cache.get_next_key(&k),
       },
-      None => self
-        .datasample_cache
-        .datasamples
-        .keys()
-        .min()
-        .unwrap()
-        .clone(),
+      None => match self.datasample_cache.datasamples.keys().min() {
+        Some(key) => key.clone(),
+        None => {
+          return Ok(result); // no keys in datasample. No samples to return
+        }
+      },
     };
-    let mut result = Vec::new();
-
-    let datasample_vec = self.datasample_cache.datasamples.get_mut(&key).unwrap();
-    let mut ind = 0;
-    while ind < datasample_vec.len() {
-      // If a datasample is removed from the vec, all elements from the index
-      // onwards will be shifted left. Therefore, the next sample is accessible
-      // in the same index
-      if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
-        let mut datasample = datasample_vec.remove(ind);
-        datasample.sample_info.sample_state = SampleState::Read;
-        result.push(datasample);
-      // Nothing removed, next element can be found in the next index.
-      } else {
-        ind += 1;
+    if let Some(datasample_vec) = self.datasample_cache.datasamples.get_mut(&key) {
+      let mut ind = 0;
+      while ind < datasample_vec.len() {
+        // If a datasample is removed from the vec, all elements from the index
+        // onwards will be shifted left. Therefore, the next sample is accessible
+        // in the same index
+        if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
+          let mut datasample = datasample_vec.remove(ind);
+          datasample.sample_info.sample_state = SampleState::Read;
+          result.push(datasample);
+        // Nothing removed, next element can be found in the next index.
+        } else {
+          ind += 1;
+        }
+        if result.len() >= max_samples {
+          break;
+        }
       }
-      if result.len() >= max_samples {
-        break;
-      }
-    }
+    } // Else, cat't get mut datasample_vec, return no samples
     Ok(result)
   }
 
@@ -301,11 +323,6 @@ where
   pub fn take_next_sample(&mut self, _take: Take) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
-  }
-
-  // Could be called when readers send notification.
-  pub fn receive_notification(&mut self) {
-    self.data_available = true;
   }
 
   // Helper functions
@@ -411,7 +428,8 @@ mod tests {
   use crate::serialization::cdrSerializer::to_bytes;
   use byteorder::LittleEndian;
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-
+  use std::{thread, time};
+  use mio::{Events};
   #[test]
   fn dr_get_samples_from_ddschache() {
     let dp = DomainParticipant::new(10, 0);
@@ -423,7 +441,7 @@ mod tests {
       .create_topic("dr", TypeDesc::new("drtest?".to_string()), &qos)
       .unwrap();
 
-    let (send, _rec) = mio_channel::sync_channel::<Instant>(10);
+    let (send, _rec) = mio_channel::sync_channel::<()>(10);
 
     let reader_id = EntityId::default();
     let datareader_id = EntityId::default();
@@ -537,7 +555,7 @@ mod tests {
       .create_topic("dr read", TypeDesc::new("read fn test?".to_string()), &qos)
       .unwrap();
 
-    let (send, _rec) = mio_channel::sync_channel::<Instant>(10);
+    let (send, _rec) = mio_channel::sync_channel::<()>(10);
 
     let default_id = EntityId::default();
     let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), default_id);
@@ -700,7 +718,6 @@ mod tests {
     reader.handle_data_msg(data_msg2, mr_state.clone());
     reader.handle_data_msg(data_msg3, mr_state.clone());
     reader.handle_data_msg(data_msg4, mr_state.clone());
-    datareader.receive_notification();
 
     println!("calling read with key 1 and this");
     let results =
@@ -735,5 +752,144 @@ mod tests {
       datareader.take_instance(100, ReadCondition::any(), Some(key2), SelectByKey::This);
     assert!(results.is_ok());
     assert!(results.unwrap().is_empty());
+  }
+
+  #[test]
+  fn dr_wake_up() {
+    let dp = DomainParticipant::new(1, 1);
+
+    let mut qos = QosPolicies::qos_none();
+    qos.history = Some(policy::History::KeepAll); // Just for testing
+
+    let sub = dp.create_subscriber(&qos).unwrap();
+    let topic = dp
+      .create_topic("wakeup", TypeDesc::new("Wake up!".to_string()), &qos)
+      .unwrap();
+
+    let (send, rec) = mio_channel::sync_channel::<()>(10);
+
+    let default_id = EntityId::default();
+    let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), default_id);
+
+    let mut reader = Reader::new(
+      reader_guid,
+      send,
+      dp.get_dds_cache(),
+      topic.get_name().to_string(),
+    );
+
+    let mut datareader = sub
+      .create_datareader::<RandomData>(Some(default_id), &topic, &qos)
+      .unwrap();
+    datareader.notification_receiver = rec;
+
+    let writer_guid = GUID {
+      guidPrefix: GuidPrefix::new(vec![1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], 1),
+    };
+    let mut mr_state = MessageReceiverState::default();
+    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    reader.matched_writer_add(
+      writer_guid.clone(),
+      EntityId::ENTITYID_UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+    );
+
+    let test_data1 = RandomData {
+      a: 1,
+      b: "Testing 1".to_string(),
+    };
+
+    let test_data2 = RandomData {
+      a: 2,
+      b: "Testing 2".to_string(),
+    };
+
+    let test_data3 = RandomData {
+      a: 2,
+      b: "Testing 3".to_string(),
+    };
+
+    let mut data_msg = Data::default();
+    data_msg.reader_id = *reader.get_entity_id();
+    data_msg.writer_id = writer_guid.entityId;
+    data_msg.writer_sn = SequenceNumber::from(0);
+
+    data_msg.serialized_payload = SerializedPayload {
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_options: 0,
+      value: to_little_endian_binary(&test_data1).unwrap(),
+    };
+
+    let mut data_msg2 = Data::default();
+    data_msg2.reader_id = *reader.get_entity_id();
+    data_msg2.writer_id = writer_guid.entityId;
+    data_msg2.writer_sn = SequenceNumber::from(1);
+
+    data_msg2.serialized_payload = SerializedPayload {
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_options: 0,
+      value: to_little_endian_binary(&test_data2).unwrap(),
+    };
+
+    let mut data_msg3 = Data::default();
+    data_msg3.reader_id = *reader.get_entity_id();
+    data_msg3.writer_id = writer_guid.entityId;
+    data_msg3.writer_sn = SequenceNumber::from(2);
+
+    data_msg3.serialized_payload = SerializedPayload {
+      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_options: 0,
+      value: to_little_endian_binary(&test_data3).unwrap(),
+    };
+
+    let handle = std::thread::spawn(move || {
+      reader.handle_data_msg(data_msg, mr_state.clone());
+      thread::sleep(time::Duration::from_millis(2500));
+      println!("I'll send the second now..");
+      reader.handle_data_msg(data_msg2, mr_state.clone());
+      thread::sleep(time::Duration::from_millis(2500));
+      println!("I'll send the third now..");
+      reader.handle_data_msg(data_msg3, mr_state.clone());
+    });
+
+    let poll = Poll::new().unwrap();
+    poll
+      .register(&datareader, Token(100), Ready::readable(), PollOpt::edge())
+      .unwrap();
+
+    let mut count_to_stop = 0;
+    'l: loop {
+      let mut events = Events::with_capacity(1024);
+      println!("Going to poll");
+      poll.poll(&mut events, None).unwrap();
+
+      for event in events.into_iter() {
+        println!();
+        println!("Handling events");
+        if event.token() == Token(100) {
+          let data = datareader.take(100, ReadCondition::any());
+          let len = data.as_ref().unwrap().len();
+          println!();
+          println!("There were {} samples available.", len);
+          println!("Their strings:");
+          for d in data.unwrap().into_iter() {
+            // Remove one notification for each data
+            datareader.notification_receiver.try_recv().unwrap();
+            println!("{}", d.value.as_ref().unwrap().b);
+          }
+          println!();
+          count_to_stop += len;
+        }
+        if count_to_stop >= 3 {
+          println!("I'll stop now with count {}", count_to_stop);
+          break 'l;
+        }
+      } // for
+    } // loop
+
+    handle.join().unwrap();
+    assert_eq!(count_to_stop, 3);
   }
 }

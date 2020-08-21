@@ -48,7 +48,7 @@ const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
 
 pub struct Reader {
   // Should the instant be sent?
-  notification_sender: mio_channel::SyncSender<Instant>,
+  notification_sender: mio_channel::SyncSender<()>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
   seqnum_instant_map: HashMap<SequenceNumber, Instant>,
@@ -70,7 +70,7 @@ pub struct Reader {
 impl Reader {
   pub fn new(
     guid: GUID,
-    notification_sender: mio_channel::SyncSender<Instant>,
+    notification_sender: mio_channel::SyncSender<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
     //qos_policy: QosPolicies, add later to constructor
@@ -197,7 +197,7 @@ impl Reader {
     self.make_cache_change(data, instant, writer_guid);
     // Add to own track-keeping datastructure
     self.seqnum_instant_map.insert(seq_num, instant);
-    self.notify_cache_change(instant);
+    self.notify_cache_change();
   }
 
   pub fn handle_heartbeat_msg(
@@ -278,14 +278,14 @@ impl Reader {
       return;
     }
     // Irrelevant sequence numbers communicated in the Gap message are
-    // composed of two groups
+    // composed of two groups:
     let mut irrelevant_changes_set = HashSet::new();
 
-    // 1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
+    //   1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
     for seq_num_i64 in i64::from(gap.gap_start)..i64::from(gap.gap_list.base) {
       irrelevant_changes_set.insert(SequenceNumber::from(seq_num_i64));
     }
-    // 2. All the sequence numbers that appear explicitly listed in the gapList.
+    //   2. All the sequence numbers that appear explicitly listed in the gapList.
     for seq_num in &mut gap.gap_list.set.into_iter() {
       irrelevant_changes_set.insert(SequenceNumber::from(seq_num as i64));
     }
@@ -335,9 +335,9 @@ impl Reader {
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
   // likely use of mio channel
-  fn notify_cache_change(&self, instant: Instant) {
-    match self.notification_sender.try_send(instant) {
-      Ok(()) => (),                                  // expected result
+  fn notify_cache_change(&self) {
+    match self.notification_sender.try_send(()) {
+      Ok(()) => println!("Reader sending notification to channel"), // expected result
       Err(mio_channel::TrySendError::Full(_)) => (), // This is harmless. There is a notification in already.
       Err(mio_channel::TrySendError::Disconnected(_)) => {
         // If we get here, our DataReader has died. The Reader should now dispose itself.
@@ -444,7 +444,7 @@ mod tests {
     let mut guid = GUID::new();
     guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
-    let (send, rec) = mio_channel::sync_channel::<Instant>(100);
+    let (send, rec) = mio_channel::sync_channel::<()>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
@@ -481,7 +481,7 @@ mod tests {
   fn rtpsreader_handle_data() {
     let new_guid = GUID::new();
 
-    let (send, rec) = mio_channel::sync_channel::<Instant>(100);
+    let (send, rec) = mio_channel::sync_channel::<()>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
@@ -528,7 +528,7 @@ mod tests {
   fn rtpsreader_handle_heartbeat() {
     let new_guid = GUID::new();
 
-    let (send, _rec) = mio_channel::sync_channel::<Instant>(100);
+    let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
@@ -643,7 +643,7 @@ mod tests {
   #[test]
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
-    let (send, _rec) = mio_channel::sync_channel::<Instant>(100);
+    let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
