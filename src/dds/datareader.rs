@@ -495,7 +495,7 @@ mod tests {
     data.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&random_data).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&random_data).unwrap(),
     };
     new_reader.handle_data_msg(data, mr_state.clone());
 
@@ -523,7 +523,7 @@ mod tests {
     data2.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&random_data2).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap(),
     };
 
     let random_data3 = RandomData {
@@ -538,7 +538,7 @@ mod tests {
     data3.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&random_data3).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap(),
     };
 
     new_reader.handle_data_msg(data2, mr_state.clone());
@@ -612,7 +612,7 @@ mod tests {
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&test_data).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&test_data).unwrap(),
     };
 
     let mut data_msg2 = Data::default();
@@ -623,7 +623,7 @@ mod tests {
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&test_data2).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap(),
     };
     reader.handle_data_msg(data_msg, mr_state.clone());
     reader.handle_data_msg(data_msg2, mr_state.clone());
@@ -691,7 +691,7 @@ mod tests {
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&data_key1).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap(),
     };
     let mut data_msg2 = Data::default();
     data_msg2.reader_id = *reader.get_entity_id();
@@ -701,7 +701,7 @@ mod tests {
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&data_key2_1).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap(),
     };
     let mut data_msg3 = Data::default();
     data_msg3.reader_id = *reader.get_entity_id();
@@ -711,7 +711,7 @@ mod tests {
     data_msg3.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&data_key2_2).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap(),
     };
     let mut data_msg4 = Data::default();
     data_msg4.reader_id = *reader.get_entity_id();
@@ -721,7 +721,7 @@ mod tests {
     data_msg4.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_bytes::<RandomData,LittleEndian>(&data_key2_3).unwrap(),
+      value: to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap(),
     };
     reader.handle_data_msg(data_msg, mr_state.clone());
     reader.handle_data_msg(data_msg2, mr_state.clone());
@@ -828,7 +828,7 @@ mod tests {
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_little_endian_binary(&test_data1).unwrap(),
+      value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data1).unwrap(),
     };
 
     let mut data_msg2 = Data::default();
@@ -839,7 +839,7 @@ mod tests {
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_little_endian_binary(&test_data2).unwrap(),
+      value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data2).unwrap(),
     };
 
     let mut data_msg3 = Data::default();
@@ -850,7 +850,7 @@ mod tests {
     data_msg3.serialized_payload = SerializedPayload {
       representation_identifier: SerializedPayload::representation_identifier_from(1),
       representation_options: 0,
-      value: to_little_endian_binary(&test_data3).unwrap(),
+      value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data3).unwrap(),
     };
 
     let handle = std::thread::spawn(move || {
