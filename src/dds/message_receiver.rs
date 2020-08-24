@@ -234,7 +234,7 @@ impl MessageReceiver {
       ) {
         let entity_submessage = match SubMessage::deserialize_msg(
           &submessage_header,
-          endian,
+          //endian,
           &msg[self.pos..(self.pos + submessage_length)],
         ) {
           Some(entity_sm) => entity_sm,

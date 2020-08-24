@@ -15,21 +15,23 @@ pub struct Message {
   header: Header,
   submessages: Vec<SubMessage>,
 }
-#[derive(Debug)]
+
+///Purpose of this object is to help RTPS Message SubmessageHeader SubmessageFlag value setting and value reading.
+#[derive(Debug, Clone)]
 pub struct SubmessageFlagHelper {
-  pub KeyFlag : bool,         //DATA
-  pub DataFlag: bool,         //DATA
-  pub InlineQosFlag : bool,   //DATA
-  pub NonStandardPayloadFlag: bool, //DATA
+  pub KeyFlag : bool,         
+  pub DataFlag: bool,         
+  pub InlineQosFlag : bool,   
+  pub NonStandardPayloadFlag: bool, 
   pub EndiannessFlag : bool,
-  pub FinalFlag : bool,        //ACKNACK
-  pub LivelinessFlag : bool,   //HEARTBEAT
-  pub MulticastFlag : bool,    //InfoReply
-  pub InvalidateFlag : bool,   //InfoTS
+  pub FinalFlag : bool,        
+  pub LivelinessFlag : bool,   
+  pub MulticastFlag : bool,    
+  pub InvalidateFlag : bool,   
 }
 impl SubmessageFlagHelper {
-  pub fn new() -> SubmessageFlagHelper{
-    SubmessageFlagHelper {
+  pub fn new(endianness : Endianness) -> SubmessageFlagHelper{
+    let mut f = SubmessageFlagHelper {
       KeyFlag : false,        
       DataFlag: false,         
       InlineQosFlag : false,   
@@ -39,7 +41,186 @@ impl SubmessageFlagHelper {
       LivelinessFlag : false,   
       MulticastFlag : false,    
       InvalidateFlag : false,   
+    };
+    if endianness == Endianness::LittleEndian{
+      f.EndiannessFlag = true;
     }
+    return f;
+  }
+
+  pub fn get_endianness(&self) -> Endianness {
+    if self.EndiannessFlag == true{
+      return Endianness::LittleEndian;
+    }else{
+      return Endianness::BigEndian;
+    }
+  }
+
+  ///Meaning of each bit is different depending on the message submessage type.
+  ///Flags are u8 long -> possibility of 8 diffenrent flags, but not all are used.
+  pub fn get_submessage_flags_helper_from_submessage_flag(submessage_kind : &SubmessageKind, flags : &SubmessageFlag) -> SubmessageFlagHelper{
+    let mut helper = SubmessageFlagHelper::new(Endianness::BigEndian);
+
+    match submessage_kind {
+      //|X|X|X|N|K|D|Q|E|
+      //NonStandardPayloadFlag, Key, DataFlag, InlineQosFlag, EndiannessFlag
+      &SubmessageKind::DATA =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+        helper.InlineQosFlag = flags.is_flag_set(2u8.pow(1));
+        helper.DataFlag = flags.is_flag_set(2u8.pow(2));
+        helper.KeyFlag = flags.is_flag_set(2u8.pow(3));
+        helper.NonStandardPayloadFlag = flags.is_flag_set(2u8.pow(4));
+      }
+      //|X|X|X|X|N|K|Q|E|
+      //NonStandardPayloadFlag, Key, InlineQosFlag, EndiannessFlag
+      &SubmessageKind::DATA_FRAG =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+        helper.InlineQosFlag = flags.is_flag_set(2u8.pow(1));
+        helper.KeyFlag = flags.is_flag_set(2u8.pow(2));
+        helper.NonStandardPayloadFlag = flags.is_flag_set(2u8.pow(3));
+      }
+      //|X|X|X|X|X|X|F|E|
+      //FinalFlag,EndiannessFlag
+      &SubmessageKind::ACKNACK =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+        helper.FinalFlag = flags.is_flag_set(2u8.pow(1));
+      }
+      //|X|X|X|X|X|L|F|E|
+      //LivelinessFlag,FinalFlag,EndiannessFlag
+      &SubmessageKind::HEARTBEAT =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+        helper.FinalFlag = flags.is_flag_set(2u8.pow(1));
+        helper.LivelinessFlag = flags.is_flag_set(2u8.pow(2));
+      }
+      //|X|X|X|X|X|X|X|E| 
+      //EndiannessFlag
+      &SubmessageKind::HEARTBEAT_FRAG =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+      }
+      //|X|X|X|X|X|X|X|E|
+      //EndiannessFlag
+      &SubmessageKind::INFO_DST => {
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+      }
+      //|X|X|X|X|X|X|M|E|
+      //MulticastFlag,EndiannessFlag
+      &SubmessageKind::INFO_REPLY => {
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+        helper.MulticastFlag = flags.is_flag_set(2u8.pow(1));
+      }
+      //|X|X|X|X|X|X|X|E| 
+      //EndiannessFlag
+      &SubmessageKind::INFO_SRC => {
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+      }
+      //|X|X|X|X|X|X|I|E| 
+      //InvalidateFlag, EndiannessFlag
+      &SubmessageKind::INFO_TS => {
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+        helper.InvalidateFlag = flags.is_flag_set(2u8.pow(1));
+      }
+      //|X|X|X|X|X|X|X|E|
+      //EndiannessFlag
+      &SubmessageKind::PAD =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+      }
+      //|X|X|X|X|X|X|X|E|
+      //EndiannessFlag
+      &SubmessageKind::NACK_FRAG =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+      }
+      //|X|X|X|X|X|X|M|E| 
+      //MulticastFlag,EndiannessFlag
+      &SubmessageKind::INFO_REPLY_IP4 =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+        helper.MulticastFlag = flags.is_flag_set(2u8.pow(1));
+      } 
+      //|X|X|X|X|X|X|X|E| 
+      //EndiannessFlag
+      &SubmessageKind::GAP =>{
+        helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
+      }
+      _ =>{
+        todo!();
+      }
+    }
+    return helper;
+  }
+
+  pub fn create_submessage_flags_from_flag_helper(submessage_kind : &SubmessageKind, helper : &SubmessageFlagHelper,) -> SubmessageFlag{
+    let mut flags = SubmessageFlag{flags: 0b00000000_u8};
+   
+    match submessage_kind {
+      //|X|X|X|N|K|D|Q|E|
+      //NonStandardPayloadFlag, Key, DataFlag, InlineQosFlag, EndiannessFlag
+      &SubmessageKind::DATA  => { 
+        if helper.EndiannessFlag{
+          flags.set_flag(2u8.pow(0));
+        }
+        if helper.InlineQosFlag{
+          flags.set_flag(2u8.pow(1));
+        }
+        if helper.DataFlag {
+          flags.set_flag(2u8.pow(2));
+        }
+        if helper.KeyFlag {
+          flags.set_flag(2u8.pow(3));
+        }
+        if helper.NonStandardPayloadFlag{
+          flags.set_flag(2u8.pow(4));
+        }
+      }
+       //|X|X|X|X|N|K|Q|E|
+      //NonStandardPayloadFlag, Key, InlineQosFlag, EndiannessFlag
+      &SubmessageKind::DATA_FRAG =>{
+        if helper.EndiannessFlag{
+          flags.set_flag(2u8.pow(0));
+        }
+        if helper.InlineQosFlag{
+          flags.set_flag(2u8.pow(1));
+        }
+        if helper.KeyFlag {
+          flags.set_flag(2u8.pow(2));
+        }
+        if helper.NonStandardPayloadFlag{
+          flags.set_flag(2u8.pow(3));
+        }
+      }
+      //|X|X|X|X|X|X|I|E| 
+      //InvalidateFlag, EndiannessFlag
+      &SubmessageKind::INFO_TS =>{
+        if helper.EndiannessFlag{
+          flags.set_flag(2u8.pow(0));
+        }
+        if helper.InvalidateFlag{
+          flags.set_flag(2u8.pow(1));
+        }
+      }
+      //|X|X|X|X|X|L|F|E|
+      //LivelinessFlag,FinalFlag,EndiannessFlag
+      &SubmessageKind::HEARTBEAT =>{
+        if helper.EndiannessFlag{
+          flags.set_flag(2u8.pow(0));
+        }
+        if helper.FinalFlag{
+          flags.set_flag(2u8.pow(1));
+        }
+        if helper.LivelinessFlag {
+          flags.set_flag(2u8.pow(2));
+        }
+      }
+       //|X|X|X|X|X|X|X|E|
+      //EndiannessFlag
+      &SubmessageKind::INFO_DST => {
+        if helper.EndiannessFlag{
+          flags.set_flag(2u8.pow(0));
+        }
+      }
+      _ => {
+        todo!();
+      }
+    }
+    return flags;
   }
 }
 
@@ -74,23 +255,7 @@ impl<'a> Message {
     self.header = header;
   }
 
-  ///Meaning of each bit is different depending on the message submessage type.
-  ///Flags are u8 long -> possibility of 8 diffenrent flags.
-  pub fn get_submessage_flags_helper(submessage_kind : &SubmessageKind, flags : &SubmessageFlag) -> SubmessageFlagHelper{
-    let mut helper = SubmessageFlagHelper::new();
-
-    // |X|X|X|N|K|D|Q|E|
-    //  NonStandardPayloadFlag, Key, DataFlag, InlineQosFlag, EndiannessFlag
-    if submessage_kind == &SubmessageKind::DATA { 
-      helper.EndiannessFlag = flags.is_flag_set(2u8.pow(0));
-      helper.InlineQosFlag = flags.is_flag_set(2u8.pow(1));
-      helper.DataFlag = flags.is_flag_set(2u8.pow(2));
-      helper.KeyFlag = flags.is_flag_set(2u8.pow(3));
-      helper.NonStandardPayloadFlag = flags.is_flag_set(2u8.pow(4));
-    }
-    return helper;
-
-  }
+  
 
   pub fn get_data_sub_message_sequence_numbers(&self) -> Vec<SequenceNumber> {
     let mut sequence_numbers: Vec<SequenceNumber> = vec![];
@@ -168,7 +333,7 @@ impl<'a, C: Context> Readable<'a, C> for Message {
         buffer = reader.read_vec(subHeader.submessage_length as usize)?;
       }
 
-      let submessageFlagHelper = Message::get_submessage_flags_helper(&subHeader.submessage_id, &subHeader.flags);
+      let submessageFlagHelper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&subHeader.submessage_id, &subHeader.flags);
 
       match subHeader.submessage_id {
         SubmessageKind::DATA => {
@@ -489,7 +654,7 @@ mod tests {
     let fla : SubmessageFlag = SubmessageFlag{
       flags: 0b00000001_u8,
     };
-    let mut helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA, &fla);
+    let mut helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &fla);
     println!("{:?}",&helper);
     assert_eq!(helper.EndiannessFlag,true);
     assert_eq!(helper.InlineQosFlag,false);
@@ -501,10 +666,13 @@ mod tests {
     assert_eq!(helper.LivelinessFlag,false);
     assert_eq!(helper.MulticastFlag,false);
 
+    let fla_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA, &helper);
+    assert_eq!(fla, fla_dese);
+
     let fla2 : SubmessageFlag = SubmessageFlag{
       flags: 0b00011111_u8,
     };
-    helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA, &fla2);
+    helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &fla2);
     println!("{:?}",&helper);
     assert_eq!(helper.EndiannessFlag,true);
     assert_eq!(helper.InlineQosFlag,true);
@@ -516,12 +684,13 @@ mod tests {
     assert_eq!(helper.LivelinessFlag,false);
     assert_eq!(helper.MulticastFlag,false);
 
-
+    let fla2_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA, &helper);
+    assert_eq!(fla2, fla2_dese);
 
     let fla3 : SubmessageFlag = SubmessageFlag{
       flags: 0b00001010_u8,
     };
-    helper = Message::get_submessage_flags_helper(&SubmessageKind::DATA, &fla3);
+    helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &fla3);
     println!("{:?}",&helper);
     assert_eq!(helper.EndiannessFlag,false);
     assert_eq!(helper.InlineQosFlag,true);
@@ -532,5 +701,10 @@ mod tests {
     assert_eq!(helper.KeyFlag,true);
     assert_eq!(helper.LivelinessFlag,false);
     assert_eq!(helper.MulticastFlag,false);
+
+
+
+    let fla3_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA, &helper);
+    assert_eq!(fla3, fla3_dese);
   }
 }

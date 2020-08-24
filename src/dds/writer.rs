@@ -1,7 +1,7 @@
 use crate::messages::submessages::data::Data;
 use chrono::Duration as chronoDuration;
 //use crate::messages::submessages::info_destination::InfoDestination;
-use crate::messages::submessages::info_timestamp::InfoTimestamp;
+use crate::messages::submessages::{submessage_elements::{parameter::Parameter, parameter_list::ParameterList}, info_timestamp::InfoTimestamp};
 use crate::structure::time::Timestamp;
 use byteorder::{ByteOrder, LittleEndian};
 use crate::messages::protocol_version::ProtocolVersion;
@@ -11,10 +11,10 @@ use crate::structure::sequence_number::{SequenceNumber};
 use std::hash::Hasher;
 use crate::{
   submessages::{
-    Heartbeat, SubmessageHeader, SubmessageKind, SubmessageFlag, InterpreterSubmessage,
-    EntitySubmessage, AckNack, InfoDestination,
+    Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage,
+    EntitySubmessage, AckNack, InfoDestination, SubmessageFlagHelper,
   },
-  structure::cache_change::{CacheChange},
+  structure::cache_change::{CacheChange, ChangeKind},
   serialization::{SubMessage, Message},
 };
 
@@ -31,8 +31,7 @@ use crate::{
     entity::{Entity, EntityAttributes},
     endpoint::{EndpointAttributes, Endpoint},
     locator::{Locator, LocatorKind},
-    dds_cache::DDSCache,
-  },
+    dds_cache::DDSCache},
   common::timed_event_handler::{TimedEventHandler},
 };
 use super::{
@@ -252,23 +251,30 @@ impl Writer {
   pub fn handle_heartbeat_tick(&mut self) {
     println!("HANDLE HERTBEAT writer entityID: {:?}", self.as_entity());
 
-    let mut RTPSMessage: Message = Message::new();
-
-    RTPSMessage.set_header(self.create_message_header());
+   
 
     // TODO Set some guidprefix if needed at all.
     // Not sure if DST submessage and TS submessage are needed when sending heartbeat.
 
     //RTPSMessage.add_submessage(self.get_DST_submessage(GuidPrefix::GUIDPREFIX_UNKNOWN));
     //RTPSMessage.add_submessage(self.get_TS_submessage());
-    RTPSMessage.add_submessage(self.get_heartbeat_msg());
+
+    //TODO WHEN FINAL FLAG NEEDS TO BE SET?
+    //TODO WHEN LIVELINESS FLAG NEEDS TO BE SET?
+   
 
     //let buffer :[u8] = RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap();
     for reader in &self.readers {
       if reader.unicast_locator_list.len() > 0 {
+        let mut RTPSMessage: Message = Message::new();
+        RTPSMessage.set_header(self.create_message_header());
+        RTPSMessage.add_submessage(self.get_heartbeat_msg(reader.remote_reader_guid.entityId, false,false));
         self.send_unicast_message_to_reader(&RTPSMessage, reader);
       }
       if reader.multicast_locator_list.len() > 0 {
+        let mut RTPSMessage: Message = Message::new();
+        RTPSMessage.set_header(self.create_message_header());
+        RTPSMessage.add_submessage(self.get_heartbeat_msg(reader.remote_group_entity_id, false,false));
         self.send_multicast_message_to_reader(&RTPSMessage, reader);
       }
     }
@@ -602,6 +608,7 @@ impl Writer {
     }
   }
 
+  /*
   fn create_submessage_header_flags(&self, kind: &SubmessageKind) -> SubmessageFlag {
     let mut sub_flags: SubmessageFlag = SubmessageFlag {
       flags: 0b0000000_u8,
@@ -619,6 +626,7 @@ impl Writer {
     }
     return sub_flags;
   }
+  */
 
   fn create_message_header(&self) -> Header {
     let head: Header = Header {
@@ -639,8 +647,9 @@ impl Writer {
     &self,
     kind: SubmessageKind,
     submessageLength: u16,
+    submessage_flag_helper: SubmessageFlagHelper
   ) -> SubmessageHeader {
-    let sub_flags: SubmessageFlag = self.create_submessage_header_flags(&kind);
+    let sub_flags = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&kind,&submessage_flag_helper);
     let header: SubmessageHeader = SubmessageHeader {
       submessage_id: kind,
       flags: sub_flags,
@@ -649,7 +658,7 @@ impl Writer {
     header
   }
 
-  pub fn get_TS_submessage(&self) -> SubMessage {
+  pub fn get_TS_submessage(&self, invalidiateFlagSet : bool) -> SubMessage {
     let currentTime: Timespec = get_time();
     let timestamp = InfoTimestamp {
       timestamp: Timestamp::from(currentTime),
@@ -657,21 +666,25 @@ impl Writer {
     let mes = &mut timestamp.write_to_vec_with_ctx(self.endianness).unwrap();
     let size = mes.len();
 
-    let submessageHeader = self.create_submessage_header(SubmessageKind::INFO_TS, size as u16);
+    let mut flagHelper : SubmessageFlagHelper = SubmessageFlagHelper::new(self.endianness);
+    flagHelper.InvalidateFlag = invalidiateFlagSet;
+
+    let submessageHeader = self.create_submessage_header(SubmessageKind::INFO_TS, size as u16,flagHelper.clone());
     let s: SubMessage = SubMessage {
       header: submessageHeader,
       submessage: None,
       intepreterSubmessage: Some(InterpreterSubmessage::InfoTimestamp(
         timestamp,
-        self.create_submessage_header_flags(&SubmessageKind::INFO_TS),
+        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::INFO_TS,&flagHelper),
       )),
     };
     return s;
   }
 
   pub fn get_DST_submessage(&self, guid_prefix: GuidPrefix) -> SubMessage {
+    let flagHelper : SubmessageFlagHelper = SubmessageFlagHelper::new(self.endianness);
     //InfoDST length is always 12 because message contains only GuidPrefix
-    let submessageHeader = self.create_submessage_header(SubmessageKind::INFO_DST, 12u16);
+    let submessageHeader = self.create_submessage_header(SubmessageKind::INFO_DST, 12u16,flagHelper);
     let s: SubMessage = SubMessage {
       header: submessageHeader,
       submessage: None,
@@ -681,6 +694,7 @@ impl Writer {
     };
     return s;
   }
+
 
   pub fn get_DATA_msg_from_cache_change(
     &self,
@@ -703,43 +717,59 @@ impl Writer {
     data_message.reader_id = reader_entity_id;
     data_message.writer_sn = change.sequence_number;
 
+    let mut flagHelper = SubmessageFlagHelper::new(self.endianness);
+    flagHelper.DataFlag = true;
+    // if change kind is dispose then datawriter is telling to dispose the data instance
+    if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
+      let mut inline_qos_settings = ParameterList::new();
+      inline_qos_settings.parameters.push(Parameter::create_pid_status_info_parameter(true,false,false));
+      data_message.inline_qos = Some(inline_qos_settings);
+      flagHelper.InlineQosFlag = true;
+      flagHelper.KeyFlag = true;
+      flagHelper.DataFlag = false;
+    }
+  
     let size = data_message
       .write_to_vec_with_ctx(self.endianness)
       .unwrap()
       .len() as u16;
     let s: SubMessage = SubMessage {
-      header: self.create_submessage_header(SubmessageKind::DATA, size),
+      header: self.create_submessage_header(SubmessageKind::DATA, size,flagHelper.clone()),
       submessage: Some(crate::submessages::EntitySubmessage::Data(
         data_message,
-        self.create_submessage_header_flags(&SubmessageKind::DATA),
+        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA,&flagHelper),
       )),
       intepreterSubmessage: None,
     };
     return s;
   }
 
-  pub fn get_heartbeat_msg(&self) -> SubMessage {
+  pub fn get_heartbeat_msg(&self, reader_id : EntityId, set_final_flag : bool, set_liveliness_flag : bool) -> SubMessage {
     let first = self.first_change_sequence_number;
     let last = self.last_change_sequence_number;
 
     let heartbeat = Heartbeat {
-      reader_id: EntityId::ENTITYID_UNKNOWN,
+      reader_id: reader_id,
       writer_id: self.entity_attributes.guid.entityId,
       first_sn: first,
       last_sn: last,
       count: self.heartbeat_message_counter,
     };
 
+    let mut flagHelper = SubmessageFlagHelper::new(self.endianness);
+    flagHelper.FinalFlag = set_final_flag;
+    flagHelper.LivelinessFlag = set_liveliness_flag;
+
     let mes = &mut heartbeat.write_to_vec_with_ctx(self.endianness).unwrap();
     let size = mes.len();
-    let head = self.create_submessage_header(SubmessageKind::HEARTBEAT, size as u16);
+    let head = self.create_submessage_header(SubmessageKind::HEARTBEAT, size as u16,flagHelper.clone());
 
     let s: SubMessage = SubMessage {
       header: head,
       intepreterSubmessage: None,
       submessage: Some(EntitySubmessage::Heartbeat(
         heartbeat,
-        self.create_submessage_header_flags(&SubmessageKind::HEARTBEAT),
+        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::HEARTBEAT, &flagHelper),
       )),
     };
     return s;
@@ -750,10 +780,10 @@ impl Writer {
 
     let mut RTPSMessage: Message = Message::new();
     RTPSMessage.set_header(self.create_message_header());
-    RTPSMessage.add_submessage(self.get_TS_submessage());
+    RTPSMessage.add_submessage(self.get_TS_submessage(false));
     let data = self.get_DATA_msg_from_cache_change(change.clone(), reader_entity_id);
     RTPSMessage.add_submessage(data);
-    RTPSMessage.add_submessage(self.get_heartbeat_msg());
+    //RTPSMessage.add_submessage(self.get_heartbeat_msg());
     message.append(&mut RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap());
 
     return RTPSMessage;
@@ -988,4 +1018,5 @@ mod tests {
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     println!("writerResult:  {:?}", writeResult);
   }
+  
 }

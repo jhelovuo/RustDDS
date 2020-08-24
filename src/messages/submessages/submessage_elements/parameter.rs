@@ -1,13 +1,46 @@
 use crate::structure::parameter_id::ParameterId;
 use speedy::{Context, Readable, Reader, Writable, Writer};
+use bit_vec::BitVec;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Parameter {
   /// Uniquely identifies the type of parameter
-  parameter_id: ParameterId,
+  pub parameter_id: ParameterId,
   /// Contains the CDR encapsulation of the Parameter type
   /// that corresponds to the specified parameterId
-  value: Vec<u8>,
+  pub value: Vec<u8>,
+}
+
+impl Parameter{
+
+  /// Creates new paramer of type PID_STATUS_INFO.
+  /// Sets flag bits to parameter : is_disposed=1 indicates that the DDS DataWriter has disposed the instance of the data-object whose Key appears in the submessage
+  ///                               is_unregistered=1 indicates that the DDS DataWriter has unregistered the instance of the data-object whose Key appears in the submessage
+  ///                               is_filtered=1 indicates that the DDS DataWriter has written as sample for the instance of the data-object whose Key appears in the submessage but the sample did not pass the content filter specified by the DDS DataReader.
+  /// The status info parameter may appear in the Data or in the DataFrag submessages
+  /// for additional info look https://www.omg.org/spec/DDSI-RTPS/2.3/PDF -> 9.6.3.9 StatusInfo_t (PID_STATUS_INFO)
+  pub fn create_pid_status_info_parameter(is_disposed : bool, is_unregistered : bool, is_filtered : bool ) -> Parameter{
+    //0...2..........8...............16..............24..............32
+    //+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|F|U|D|
+    //+--------------+---------------+---------------+----------------+
+    //The current version of the protocol (2.3) defines the DisposedFlag, the UnregisteredFlag, the FilteredFlag. 
+    // DisposeedFlag is represented with the literal ‘D.’
+    // UnregisteredFlag is represented with the literal ‘U.’
+    // FilteredFlag is represented with the literal ‘F.’
+   
+    let mut bit_vec = BitVec::from_bytes(&[0b0000_0000]);
+    bit_vec.set(7, is_disposed);
+    bit_vec.set(6, is_unregistered);
+    bit_vec.set(5, is_filtered);
+    let bytes = bit_vec.to_bytes();
+    let last_byte = bytes[0];
+    let pid_status_info_parameter = Parameter {
+      parameter_id : ParameterId::PID_STATUS_INFO,
+      value : vec![0,0,0,last_byte],
+    };
+    return pid_status_info_parameter;
+  }
 }
 
 impl<'a, C: Context> Readable<'a, C> for Parameter {
