@@ -248,17 +248,20 @@ impl MessageReceiver {
           submessage: Some(entity_submessage),
           intepreterSubmessage: None,
         };
-
-        self.send_submessage(new_submessage.submessage.unwrap());
+        if let Some(submessage) = new_submessage.submessage {
+          self.send_submessage(submessage);
+        };
         self.submessage_count += 1;
       } // end if
+        // The SubmessageId didn't match any of the known ones. Parsing continues
+        // from next submessage.
       self.pos += submessage_length;
     } // end while
   }
 
   fn send_submessage(&mut self, submessage: EntitySubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix {
-      println!("Ofcourse, the example messages are not for this participant?");
+      println!("Messages are not for this participant?");
       println!("dest_guid_prefix: {:?}", self.dest_guid_prefix);
       println!("participant guid: {:?}", self.own_guid_prefix);
       return; // Wrong target received
@@ -273,8 +276,11 @@ impl MessageReceiver {
             reader.handle_data_msg(data.clone(), mr_state.clone());
           }
         } else {
-          let target_reader = self.get_reader(data.reader_id).unwrap();
-          target_reader.handle_data_msg(data, mr_state);
+          if let Some(target_reader) = self.get_reader(data.reader_id) {
+            target_reader.handle_data_msg(data, mr_state);
+          } else {
+            println!("MessageReceiver could not find corresponding Reader");
+          }
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -288,17 +294,23 @@ impl MessageReceiver {
             );
           }
         } else {
-          let target_reader = self.get_reader(heartbeat.reader_id).unwrap();
-          target_reader.handle_heartbeat_msg(
-            heartbeat,
-            flags.is_flag_set(1), // final flag!?
-            mr_state,
-          );
+          if let Some(target_reader) = self.get_reader(heartbeat.reader_id) {
+            target_reader.handle_heartbeat_msg(
+              heartbeat,
+              flags.is_flag_set(1), // final flag!?
+              mr_state,
+            );
+          } else {
+            println!("MessageReceiver could not find corresponding Reader");
+          }
         }
       }
       EntitySubmessage::Gap(gap) => {
-        let target_reader = self.get_reader(gap.reader_id).unwrap();
-        target_reader.handle_gap_msg(gap, mr_state);
+        if let Some(target_reader) = self.get_reader(gap.reader_id) {
+          target_reader.handle_gap_msg(gap, mr_state);
+        } else {
+          println!("MessageReceiver could not find corresponding Reader");
+        }
       }
       EntitySubmessage::AckNack(ackNack, _) => {
         self
@@ -307,8 +319,11 @@ impl MessageReceiver {
           .unwrap();
       }
       EntitySubmessage::DataFrag(datafrag, _) => {
-        let target_reader = self.get_reader(datafrag.reader_id).unwrap();
-        target_reader.handle_datafrag_msg(datafrag, mr_state);
+        if let Some(target_reader) = self.get_reader(datafrag.reader_id) {
+          target_reader.handle_datafrag_msg(datafrag, mr_state);
+        } else {
+          println!("MessageReceiver could not find corresponding Reader");
+        }
       }
       EntitySubmessage::HeartbeatFrag(heartbeatfrag) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
@@ -317,8 +332,11 @@ impl MessageReceiver {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
         } else {
-          let target_reader = self.get_reader(heartbeatfrag.reader_id).unwrap();
-          target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+          if let Some(target_reader) = self.get_reader(heartbeatfrag.reader_id) {
+            target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+          } else {
+            println!("MessageReceiver could not find corresponding Reader");
+          }
         }
       }
       EntitySubmessage::NackFrag(_) => {}
@@ -332,40 +350,55 @@ impl MessageReceiver {
     buffer: &[u8],
   ) -> bool {
     match msgheader.submessage_id {
-      SubmessageKind::INFO_TS => {
-        let info_ts: InfoTimestamp =
-          InfoTimestamp::read_from_buffer_with_ctx(context, buffer).unwrap();
-        if !msgheader.flags.is_flag_set(1) {
-          self.have_timestamp = true;
-          self.timestamp = info_ts.timestamp;
+      SubmessageKind::INFO_TS => match InfoTimestamp::read_from_buffer_with_ctx(context, buffer) {
+        Ok(info_ts) => {
+          if msgheader.flags.is_flag_set(0) {
+            self.have_timestamp = true;
+            self.timestamp = info_ts.timestamp;
+          }
+        }
+        Err(e) => println!("MessageReceiver couldn't deserialize INFO_TS. Error {}", e),
+      },
+      SubmessageKind::INFO_SRC => {
+        match InfoSource::read_from_buffer_with_ctx(context, buffer) {
+          Ok(info_src) => {
+            self.source_guid_prefix = info_src.guid_prefix;
+            self.source_version = info_src.protocol_version;
+            self.source_vendor_id = info_src.vendor_id;
+            self.unicast_reply_locator_list.clear(); // Or invalid?
+            self.multicast_reply_locator_list.clear(); // Or invalid?
+            self.have_timestamp = false;
+          }
+          Err(e) => println!("MessageReceiver couldn't deserialize INFO_SRC. Error {}", e),
         }
       }
-      SubmessageKind::INFO_SRC => {
-        let info_src: InfoSource = InfoSource::read_from_buffer_with_ctx(context, buffer).unwrap();
-        self.source_guid_prefix = info_src.guid_prefix;
-        self.source_version = info_src.protocol_version;
-        self.source_vendor_id = info_src.vendor_id;
-        self.unicast_reply_locator_list.clear(); // Or invalid?
-        self.multicast_reply_locator_list.clear(); // Or invalid?
-        self.have_timestamp = false;
-      }
       SubmessageKind::INFO_REPLY | SubmessageKind::INFO_REPLY_IP4 => {
-        let info_reply: InfoReply = InfoReply::read_from_buffer_with_ctx(context, buffer).unwrap();
-        self.unicast_reply_locator_list = info_reply.unicast_locator_list;
-        if msgheader.flags.is_flag_set(1) {
-          self.multicast_reply_locator_list = info_reply.multicast_locator_list.unwrap();
-        } else {
-          self.multicast_reply_locator_list.clear();
+        match InfoReply::read_from_buffer_with_ctx(context, buffer) {
+          Ok(info_reply) => {
+            self.unicast_reply_locator_list = info_reply.unicast_locator_list;
+            if msgheader.flags.is_flag_set(1) {
+              self.multicast_reply_locator_list = info_reply.multicast_locator_list.unwrap();
+            } else {
+              self.multicast_reply_locator_list.clear();
+            }
+          }
+          Err(e) => println!(
+            "MessageReceiver couldn't deserialize INFO_REPLY. Error {}",
+            e
+          ),
         }
       }
       SubmessageKind::INFO_DST => {
-        let info_dest: InfoDestination =
-          InfoDestination::read_from_buffer_with_ctx(context, buffer).unwrap();
-        if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
-          self.dest_guid_prefix = info_dest.guid_prefix;
-        } else {
-          self.dest_guid_prefix = self.own_guid_prefix;
-        }
+        match InfoDestination::read_from_buffer_with_ctx(context, buffer) {
+          Ok(info_dest) => {
+            if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
+              self.dest_guid_prefix = info_dest.guid_prefix;
+            } else {
+              self.dest_guid_prefix = self.own_guid_prefix;
+            }
+          }
+          Err(e) => println!("MessageReceiver couldn't deserialize INFO_DST. Error {}", e),
+        };
       }
       _ => return false,
     }
@@ -379,8 +412,16 @@ impl MessageReceiver {
       return false;
     }
     self.pos += 4;
-
-    self.source_version = ProtocolVersion::read_from_buffer(&msg[self.pos..self.pos + 2]).unwrap();
+    match ProtocolVersion::read_from_buffer(&msg[self.pos..self.pos + 2]) {
+      Ok(source_version) => self.source_version = source_version,
+      Err(e) => {
+        println!(
+          "MessageReceiver couldn't deserialize protocol version. Error {}",
+          e
+        );
+        return false;
+      }
+    }
     self.pos += 2;
 
     // Check and set protocl version
@@ -389,11 +430,30 @@ impl MessageReceiver {
       return false;
     }
     // Set vendor id
-    self.source_vendor_id = VendorId::read_from_buffer(&msg[self.pos..self.pos + 2]).unwrap();
+    match VendorId::read_from_buffer(&msg[self.pos..self.pos + 2]) {
+      Ok(source_vendor_id) => self.source_vendor_id = source_vendor_id,
+      Err(e) => {
+        println!(
+          "MessageReceiver couldn't deserialize vendor id. Error {}",
+          e
+        );
+        return false;
+      }
+    }
     self.pos += 2;
 
     // Set source guid prefix
-    self.source_guid_prefix = GuidPrefix::read_from_buffer(&msg[self.pos..self.pos + 12]).unwrap();
+    match GuidPrefix::read_from_buffer(&msg[self.pos..self.pos + 12]) {
+      Ok(source_guid_prefix) => self.source_guid_prefix = source_guid_prefix,
+      Err(e) => {
+        println!(
+          "MessageReceiver couldn't deserialize source guid prefix. Error {}",
+          e
+        );
+        return false;
+      }
+    }
+
     self.pos += 12;
     true
   }

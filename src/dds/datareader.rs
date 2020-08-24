@@ -237,18 +237,22 @@ where
   ) -> Result<Vec<&DataSample<D>>> {
     let mut result = Vec::new();
     self.get_datasamples_from_cache();
+
+    // Infer the key
     let key = match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => k,
-        SelectByKey::Next => self.datasample_cache.get_next_key(&k),
+        SelectByKey::Next => match self.datasample_cache.get_next_key(&k) {
+          Some(key) => key,
+          None => return Ok(result), // no next key in datasamplecache. No samples to return
+        },
       },
       None => match self.datasample_cache.datasamples.keys().min() {
         Some(key) => key.clone(),
-        None => {
-          return Ok(result); // no keys in datasample. No samples to return
-        }
+        None => return Ok(result), // no keys in datasamplecache. No samples to return
       },
     };
+
     if let Some(datasample_vec) = self.datasample_cache.get_datasamples_mut(&key) {
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, datasample) {
@@ -279,18 +283,22 @@ where
   ) -> Result<Vec<DataSample<D>>> {
     let mut result = Vec::new();
     self.get_datasamples_from_cache();
+
+    // Infer the key
     let key = match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => k,
-        SelectByKey::Next => self.datasample_cache.get_next_key(&k),
+        SelectByKey::Next => match self.datasample_cache.get_next_key(&k) {
+          Some(key) => key,
+          None => return Ok(result), // no next key in datasamplecache. No samples to return
+        },
       },
       None => match self.datasample_cache.datasamples.keys().min() {
         Some(key) => key.clone(),
-        None => {
-          return Ok(result); // no keys in datasample. No samples to return
-        }
+        None => return Ok(result), // no keys in datasamplecache. No samples to return
       },
     };
+
     if let Some(datasample_vec) = self.datasample_cache.datasamples.get_mut(&key) {
       let mut ind = 0;
       while ind < datasample_vec.len() {
@@ -326,6 +334,7 @@ where
   }
 
   // Helper functions
+
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
     if !rcondition
       .sample_state_mask

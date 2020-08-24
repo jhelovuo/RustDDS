@@ -132,6 +132,7 @@ impl Reader {
     let end = self.seqnum_instant_map.iter().max().unwrap().0;
     return vec![*start, *end];
   }
+
   pub fn matched_writer_add(
     &mut self,
     remote_writer_guid: GUID,
@@ -159,13 +160,16 @@ impl Reader {
     };
   }
 
-  pub fn matched_writer_remove(&mut self, remote_writer_guid: GUID) {
-    let writer_proxy = self.matched_writers.remove(&remote_writer_guid).unwrap();
-    drop(writer_proxy)
+  pub fn matched_writer_remove(&mut self, remote_writer_guid: GUID) -> Result<(), ()> {
+    if let Some(writer_proxy) = self.matched_writers.remove(&remote_writer_guid) {
+      drop(writer_proxy);
+      return Ok(());
+    };
+    Err(())
   }
 
-  fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> &mut RtpsWriterProxy {
-    self.matched_writers.get_mut(&remote_writer_guid).unwrap()
+  fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
+    self.matched_writers.get_mut(&remote_writer_guid)
   }
 
   // handles regular data message and updates history cache
@@ -181,17 +185,17 @@ impl Reader {
     let statefull = self.matched_writers.contains_key(&writer_guid);
 
     if statefull {
-      let writer_proxy = self.matched_writer_lookup(writer_guid);
-      if let Some(max_sn) = writer_proxy.available_changes_max() {
-        if seq_num <= max_sn {
-          println!("A smaller sequence number received. Ignoring...");
-          return; // Should be ignored
+      if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
+        if let Some(max_sn) = writer_proxy.available_changes_max() {
+          if seq_num <= max_sn {
+            println!("A smaller sequence number received. Ignoring...");
+            return; // Should be ignored
+          }
         }
-      }
-      // Add the change and get the instant
-      writer_proxy.received_changes_add(seq_num, instant);
-
-      // lost changes update? All changes not received with lower seqnum should be marked as lost?
+        // Add the change and get the instant
+        writer_proxy.received_changes_add(seq_num, instant);
+      } // We checked that the writer can be found
+        // lost changes update? All changes not received with lower seqnum should be marked as lost?
     }
 
     self.make_cache_change(data, instant, writer_guid);
@@ -214,7 +218,10 @@ impl Reader {
       return false;
     }
 
-    let writer_proxy = self.matched_writer_lookup(writer_guid);
+    let writer_proxy = match self.matched_writer_lookup(writer_guid) {
+      Some(wp) => wp,
+      None => return false, // Matching writer not found
+    };
 
     if heartbeat.count <= writer_proxy.received_heartbeat_count {
       return false;
@@ -225,7 +232,11 @@ impl Reader {
     let removed_instances = writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
     // Remove instances from DDSHistoryCache
-    let mut cache = self.dds_cache.write().unwrap();
+    let mut cache = match self.dds_cache.write() {
+      Ok(rwlock) => rwlock,
+      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
+      Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
+    };
     for instant in removed_instances.iter() {
       cache
         .from_topic_remove_change(&self.topic_name, instant)
@@ -233,7 +244,10 @@ impl Reader {
     }
     drop(cache);
 
-    let writer_proxy = self.matched_writer_lookup(writer_guid);
+    let writer_proxy = match self.matched_writer_lookup(writer_guid) {
+      Some(wp) => wp,
+      None => return false, // Matching writer not found
+    };
     // See if ack_nack is needed.
     if writer_proxy.changes_are_missing(heartbeat.last_sn) || !final_flag_set {
       let max_sn_plus_1 = match writer_proxy.available_changes_max() {
@@ -266,17 +280,23 @@ impl Reader {
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
     // Added in order to test stateless actions. TODO
-    if !self.matched_writers.contains_key(&writer_guid) {
-      return;
-    }
-    let writer_proxy = self.matched_writer_lookup(writer_guid);
+
+    let writer_proxy = match self.matched_writer_lookup(writer_guid) {
+      Some(wp) => wp,
+      None => return, // Matching writer not found
+    };
 
     // Sequencenumber set in the gap is invalid: (section 8.3.5.5)
-    if i64::from(gap.gap_start) < 1i64
-      || (gap.gap_list.set.iter().max().unwrap() - gap.gap_list.set.iter().min().unwrap()) >= 256
-    {
+    // Set checked to be not empty. Unwraps won't panic
+    if gap.gap_list.set.len() != 0 {
+      if i64::from(gap.gap_start) < 1i64
+        || (gap.gap_list.set.iter().max().unwrap() - gap.gap_list.set.iter().min().unwrap()) >= 256
+      {
+        return;
+      }
+    } else {
       return;
-    }
+    };
     // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups:
     let mut irrelevant_changes_set = HashSet::new();
@@ -295,7 +315,11 @@ impl Reader {
     for seq_num in &irrelevant_changes_set {
       removed_instances.push(writer_proxy.set_irrelevant_change(*seq_num));
     }
-    let mut cache = self.dds_cache.write().unwrap();
+    let mut cache = match self.dds_cache.write() {
+      Ok(rwlock) => rwlock,
+      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
+      Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
+    };
     for instant in &removed_instances {
       cache.from_topic_remove_change(&self.topic_name, instant);
     }
@@ -326,11 +350,12 @@ impl Reader {
     ddsdata.set_reader_id(data.reader_id);
     ddsdata.set_writer_id(data.writer_id);
     let cache_change = CacheChange::new(writer_guid, data.writer_sn, Some(ddsdata));
-    self
-      .dds_cache
-      .write()
-      .unwrap()
-      .to_topic_add_change(&self.topic_name, &instant, cache_change);
+    let mut cache = match self.dds_cache.write() {
+      Ok(rwlock) => rwlock,
+      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
+      Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
+    };
+    cache.to_topic_add_change(&self.topic_name, &instant, cache_change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
@@ -363,11 +388,19 @@ impl Reader {
       guid_prefix: self.entity_attributes.guid.guidPrefix,
     });
 
+    let submessage_len = match acknack.write_to_vec() {
+      Ok(bytes) => bytes.len() as u16,
+      Err(e) => {
+        println!("Reader couldn't write acknack to bytes. Error: {}", e);
+        return;
+      }
+    };
+
     let submessage = SubMessage {
       header: SubmessageHeader {
         submessage_id: SubmessageKind::ACKNACK,
         flags: flags.clone(),
-        submessage_length: acknack.write_to_vec().unwrap().len() as u16,
+        submessage_length: submessage_len,
       },
       submessage: Some(EntitySubmessage::AckNack(acknack, flags)),
       intepreterSubmessage: None,

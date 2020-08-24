@@ -1,6 +1,6 @@
 use crate::dds::traits::key::{Key, Keyed};
 use crate::dds::datasample::DataSample;
-use crate::dds::values::result::Result;
+//use crate::dds::values::result::Result;
 use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy::History;
 
@@ -70,19 +70,18 @@ where
     self.datasamples.get_mut(&key)
   }
 
-  pub fn get_next_key(&self, key: &D::K) -> D::K {
-    let pos = self.datasamples.iter().position(|(k, _)| k == key);
-    self
-      .datasamples
-      .iter()
-      .nth(pos.unwrap() + 1)
-      .unwrap()
-      .0
-      .clone()
+  pub fn get_next_key(&self, key: &D::K) -> Option<D::K> {
+    if let Some(pos) = self.datasamples.iter().position(|(k, _)| k == key) {
+      if let Some(next) = self.datasamples.iter().nth(pos + 1){
+        return Some(next.0.clone())
+      };
+    };
+    None
   }
 
-  pub fn remove_datasamples(&mut self, key: &D::K) {
-    self.datasamples.remove(&key).unwrap();
+  pub fn remove_datasamples(&mut self, key: &D::K) -> Option<Vec<DataSample<D>>>{
+    self.datasamples.remove(&key)
+    
   }
 
   pub fn set_qos_policy(&mut self, qos: QosPolicies) {

@@ -223,16 +223,18 @@ impl<'s> Subscriber {
     );
 
     // Create new topic to DDScache if one isn't present
-    self
-      .domain_participant
-      .get_dds_cache()
-      .write()
-      .unwrap()
-      .add_new_topic(
+    match self.domain_participant.get_dds_cache().write() {
+      Ok(mut rwlock) => rwlock.add_new_topic(
         &topic.get_name().to_string(),
-        TopicKind::NO_KEY,
+        TopicKind::WITH_KEY,
         topic.get_type(),
-      );
+      ),
+      Err(e) => panic!(
+        "The DDSCache of domain participant {:?} is poisoned. Error: {}",
+        self.domain_participant.get_guid(),
+        e
+      ),
+    };
 
     // Return the DataReader Reader pairs to where they are used
     self
