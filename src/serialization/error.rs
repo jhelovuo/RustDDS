@@ -21,6 +21,9 @@ pub enum Error {
   // Zero or more variants that can be created directly by the Serializer and
   // Deserializer without going through `ser::Error` and `de::Error`.
   Eof,
+  BadBoolean(u8),
+  BadString(std::str::Utf8Error), // was not valid UTF-8
+  BadChar(u32), // invalid Unicode codepoint
   //TODO
   /*
   Syntax,
@@ -36,8 +39,9 @@ pub enum Error {
   ExpectedMapComma,
   ExpectedMapEnd,
   ExpectedEnum,
-  TrailingCharacters,
   */
+  TrailingCharacters(Vec<u8>),
+  
 }
 
 impl ser::Error for Error {
@@ -59,7 +63,13 @@ impl Display for Error {
       Error::Eof => formatter.write_str("unexpected end of input"),
       Error::IOError(e) => formatter.write_fmt(format_args!("io::Error: {:?}",e)),
       Error::SequenceLengthUnknown => 
-        formatter.write_str("CDR serialzation requires sequence length to be specified at the start."),
+        formatter.write_str("CDR serialization requires sequence length to be specified at the start."),
+      Error::BadChar(e) => formatter.write_fmt(format_args!("Bad Unicode character code: {:?}",e)),
+      Error::BadBoolean(e) => formatter.write_fmt(format_args!("Expected 0 or 1 as Boolean, got: {:?}",e)),
+      Error::TrailingCharacters(vec) => 
+        formatter.write_fmt(format_args!("Trailing garbage, {:?} bytes",vec.len())),
+      Error::BadString( utf_err) => 
+        formatter.write_fmt(format_args!("UTF-8 error: {:?}", utf_err)),
       /* and so forth */
     }
   }

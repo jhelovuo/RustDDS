@@ -3,7 +3,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use rand::Rng;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 // A payload data object may be "Keyed": It allows a Key to be extracted from it.
 // The key is used to distinguish between different Instances of the data.
@@ -26,7 +26,7 @@ pub trait Keyed {
   }
 }
 
-pub trait Key: Eq + PartialEq + PartialOrd + Ord + Hash + Clone {
+pub trait Key: Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned {
   // no methods required
 
   // provides one method for convenience

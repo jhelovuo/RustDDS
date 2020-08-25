@@ -5,7 +5,7 @@ use std::{
   time::Duration,
 };
 
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, /*Deserialize,*/ de::DeserializeOwned};
 
 use crate::structure::{guid::GUID, /*time::Timestamp,*/ entity::Entity, guid::EntityId};
 
@@ -212,7 +212,7 @@ impl<'s> Subscriber {
     _qos: &QosPolicies,
   ) -> Result<DataReader<'s, D>>
   where
-    D: Deserialize<'s> + Keyed,
+    D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
   {
     // What is the bound?

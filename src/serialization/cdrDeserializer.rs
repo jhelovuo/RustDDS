@@ -1,126 +1,113 @@
-use byteorder::{ByteOrder, LittleEndian, BigEndian};
-use serde::Deserialize;
+use byteorder::{ByteOrder, LittleEndian, BigEndian, ReadBytesExt};
+use std::marker::PhantomData;
+use serde::{Deserialize};
+//use serde::Deserializer;
 use serde::{
   de::{
     self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess,
-    Visitor,
+    Visitor, DeserializeOwned,
   },
 };
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
-#[derive(PartialEq)]
-enum endianess {
-  littleEndian,
-  bigEndian,
+pub struct CDR_deserializer<'de,BO> {
+  phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
+  input: &'de [u8],
+  serializedDataCount: usize,
 }
 
-pub struct CDR_deserializer {
-  input: Vec<u8>,
-  DeserializationEndianess: endianess,
-  serializedDataCount: u32,
-}
+impl<'de,BO> CDR_deserializer<'de,BO>
+  where BO:ByteOrder
+{
+  pub fn new_little_endian(input: &[u8]) -> CDR_deserializer<LittleEndian>
+    {  CDR_deserializer::<LittleEndian>::new(input) }
 
-impl<'de> CDR_deserializer {
-  pub fn deserialize_from_little_endian(input: Vec<u8>) -> Self {
-    CDR_deserializer {
+  pub fn new_big_endian(input: &[u8]) -> CDR_deserializer<BigEndian> 
+    { CDR_deserializer::<BigEndian>::new(input) }
+
+  pub fn new(input: &'de [u8]) -> CDR_deserializer<'de,BO> {
+    CDR_deserializer::<BO> {
+      phantom: PhantomData,
       input,
-      DeserializationEndianess: endianess::littleEndian,
       serializedDataCount: 0,
     }
   }
 
-  pub fn deserialize_from_big_endian(input: Vec<u8>) -> Self {
-    CDR_deserializer {
-      input,
-      DeserializationEndianess: endianess::bigEndian,
-      serializedDataCount: 0,
-    }
+  fn remove_bytes_from_input(&mut self, count: usize) -> Result<()> {
+    let _pad = self.next_bytes(count)?;
+    Ok(())
   }
 
-  fn remove_first_byte_from_input(&mut self) {
-    self.serializedDataCount = self.serializedDataCount + 1;
-    self.input.remove(0);
-  }
-
-  fn calculate_padding_count_from_written_bytes_and_remove(&mut self, typeOctetAligment: u8) {
-    let modulo = self.serializedDataCount % typeOctetAligment as u32;
-
-    if modulo != 0 {
-      let padding: u32 = typeOctetAligment as u32 - modulo;
-      println!("need to remove padding! {}", padding);
-      self.remove_padding_bytes_from_end(padding);
+  // Consume the first byte in the input.
+  fn next_bytes(&mut self, count: usize) -> Result<&[u8]> {
+    if count <= self.input.len() {
+      let ( head , tail ) = self.input.split_at(count);
+      self.input = tail;
+      self.serializedDataCount = self.serializedDataCount + count;
+      Ok(head)
     } else {
-      return;
+      Err(Error::Eof)
     }
   }
-
-  fn remove_padding_bytes_from_end(&mut self, padCount: u32) {
-    println!("remove padding {}", padCount);
-    for _a in 0..padCount {
-      self.remove_first_byte_from_input();
-    }
-  }
-}
-
-pub fn deserialize_from_little_endian<'a, T>(s: &Vec<u8>) -> Result<T>
-where
-  T: Deserialize<'a>,
-{
-  let mut deserializer = CDR_deserializer::deserialize_from_little_endian(s.to_vec());
-  let t = T::deserialize(&mut deserializer)?;
-  if deserializer.input.is_empty() {
-    Ok(t)
-  } else {
-    Ok(t)
-    //panic!()
-  }
-}
-
-pub fn deserialize_from_big_endian<'a, T>(s: &Vec<u8>) -> Result<T>
-where
-  T: Deserialize<'a>,
-{
-  let mut deserializer = CDR_deserializer::deserialize_from_big_endian(s.to_vec());
-  let t = T::deserialize(&mut deserializer)?;
-  if deserializer.input.is_empty() {
-    Ok(t)
-  } else {
-    Ok(t)
-    //panic!()
-  }
-}
-
-impl<'de> CDR_deserializer {
   // Look at the first byte in the input without consuming it.
-  fn peek_byte(&mut self) -> Result<&u8> {
-    self.input.first().ok_or(Error::Eof)
+  fn peek_byte(&mut self) -> Result<u8> {
+    self.input.first().ok_or(Error::Eof).map( |b| *b)
   }
 
   fn check_if_bytes_left(&mut self) -> bool {
-    let someValueFound = self.input.first().ok_or(Error::Eof);
-    if someValueFound.is_ok() {
-      true
-    } else {
-      false
-    }
+    self.input.len() > 0
   }
 
   fn get_input_size(&mut self) -> u64 {
     self.input.len() as u64
   }
 
-  // Consume the first byte in the input.
-  fn next_byte(&mut self) -> Result<u8> {
-    let by = self.input[0];
-    self.remove_first_byte_from_input();
-    Ok(by)
+  fn calculate_padding_count_from_written_bytes_and_remove(&mut self, typeOctetAligment: usize) -> Result<()> {
+    let modulo = self.serializedDataCount % typeOctetAligment;
+    if modulo != 0 {
+      let padding = typeOctetAligment - modulo;
+      println!("need to remove padding! {}", padding);
+      self.remove_bytes_from_input(padding)
+    } else {
+      Ok(())
+    }
+  }
+
+}
+
+pub fn deserialize_from_little_endian<'a, T>(s: &'a [u8]) -> Result<T>
+where
+  T: DeserializeOwned,
+{
+  let mut deserializer = CDR_deserializer::<LittleEndian>::new(s);
+  let t = T::deserialize(&mut deserializer)?;
+  if deserializer.input.is_empty() {
+    Ok(t)
+  } else {
+    Err(Error::TrailingCharacters(deserializer.input.to_vec()))
   }
 }
 
-impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
+pub fn deserialize_from_big_endian<'a, T>(s: &'a [u8]) -> Result<T>
+where
+  T: DeserializeOwned,
+{
+  let mut deserializer = CDR_deserializer::<BigEndian>::new(s);
+  let t = T::deserialize(&mut deserializer)?;
+  if deserializer.input.is_empty() {
+    Ok(t)
+  } else {
+    Err(Error::TrailingCharacters(deserializer.input.to_vec()))
+  }
+}
+
+impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
+  where BO:ByteOrder 
+{
   type Error = Error;
 
+  /// CDR serialization is not a self-describing data format, so we cannot implement this.
   fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
@@ -128,297 +115,140 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     unimplemented!()
   }
 
+  //15.3.1.5 Boolean
+  //  Boolean values are encoded as single octets, where TRUE is the value 1, and FALSE as 0.
   fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let result: bool;
-    if self.next_byte()? == 1u8 {
-      result = true;
-    } else {
-      result = false;
+    match self.next_bytes(1)?.first().unwrap() {
+      0 => visitor.visit_bool(false),
+      1 => visitor.visit_bool(true),
+      x => Err(Error::BadBoolean(*x))
     }
-    visitor.visit_bool(result)
   }
 
   fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let firstByte = self.next_byte()?;
-    let i8Byte = firstByte as i8;
-    visitor.visit_i8(i8Byte)
+    visitor.visit_i8(*self.next_bytes(1)?.first().unwrap() as i8)
   }
 
   fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(2);
-    if self.DeserializationEndianess == endianess::littleEndian {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let bytes: [u8; 2] = [by0, by1];
-      let result: i16 = LittleEndian::read_i16(&bytes);
-      visitor.visit_i16(result)
-    } else {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let bytes: [u8; 2] = [by0, by1];
-      let result: i16 = BigEndian::read_i16(&bytes);
-      visitor.visit_i16(result)
-    }
+    self.calculate_padding_count_from_written_bytes_and_remove(2)?;
+    visitor.visit_i16( self.next_bytes(2)?.read_i16::<BO>().unwrap() )
   }
 
   fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(4);
-    if self.DeserializationEndianess == endianess::littleEndian {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let bytes: [u8; 4] = [by0, by1, by2, by3];
-      let result: i32 = LittleEndian::read_i32(&bytes);
-      visitor.visit_i32(result)
-    } else {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let bytes: [u8; 4] = [by0, by1, by2, by3];
-      let result: i32 = BigEndian::read_i32(&bytes);
-      visitor.visit_i32(result)
-    }
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
+    visitor.visit_i32( self.next_bytes(4)?.read_i32::<BO>().unwrap() )
   }
 
   fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(8);
-    if self.DeserializationEndianess == endianess::littleEndian {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let by4 = self.next_byte()?;
-      let by5 = self.next_byte()?;
-      let by6 = self.next_byte()?;
-      let by7 = self.next_byte()?;
-      let bytes: [u8; 8] = [by0, by1, by2, by3, by4, by5, by6, by7];
-      let result: i64 = LittleEndian::read_i64(&bytes);
-      visitor.visit_i64(result)
-    } else {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let by4 = self.next_byte()?;
-      let by5 = self.next_byte()?;
-      let by6 = self.next_byte()?;
-      let by7 = self.next_byte()?;
-      let bytes: [u8; 8] = [by0, by1, by2, by3, by4, by5, by6, by7];
-      let result: i64 = BigEndian::read_i64(&bytes);
-      visitor.visit_i64(result)
-    }
+    self.calculate_padding_count_from_written_bytes_and_remove(8)?;
+    visitor.visit_i64( self.next_bytes(8)?.read_i64::<BO>().unwrap() )
   }
 
   fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let by = self.next_byte()?;
-    visitor.visit_u8(by)
+    visitor.visit_u8(*self.next_bytes(1)?.first().unwrap() )
   }
 
   fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(2);
-    if self.DeserializationEndianess == endianess::littleEndian {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let bytes: [u8; 2] = [by0, by1];
-      let result = LittleEndian::read_u16(&bytes);
-      visitor.visit_u16(result)
-    } else {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let bytes: [u8; 2] = [by0, by1];
-      let result = BigEndian::read_u16(&bytes);
-      visitor.visit_u16(result)
-    }
+    self.calculate_padding_count_from_written_bytes_and_remove(2)?;
+    visitor.visit_u16( self.next_bytes(2)?.read_u16::<BO>().unwrap() )
   }
 
   fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(4);
-    if self.DeserializationEndianess == endianess::littleEndian {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let bytes: [u8; 4] = [by0, by1, by2, by3];
-      let result = LittleEndian::read_u32(&bytes);
-      visitor.visit_u32(result)
-    } else {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let bytes: [u8; 4] = [by0, by1, by2, by3];
-      let result = BigEndian::read_u32(&bytes);
-      visitor.visit_u32(result)
-    }
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
+    visitor.visit_u32( self.next_bytes(4)?.read_u32::<BO>().unwrap() )
   }
 
   fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(8);
-    if self.DeserializationEndianess == endianess::littleEndian {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let by4 = self.next_byte()?;
-      let by5 = self.next_byte()?;
-      let by6 = self.next_byte()?;
-      let by7 = self.next_byte()?;
-      let bytes: [u8; 8] = [by0, by1, by2, by3, by4, by5, by6, by7];
-      let result = LittleEndian::read_u64(&bytes);
-      visitor.visit_u64(result)
-    } else {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let by4 = self.next_byte()?;
-      let by5 = self.next_byte()?;
-      let by6 = self.next_byte()?;
-      let by7 = self.next_byte()?;
-      let bytes: [u8; 8] = [by0, by1, by2, by3, by4, by5, by6, by7];
-      let result = BigEndian::read_u64(&bytes);
-      visitor.visit_u64(result)
-    }
+    self.calculate_padding_count_from_written_bytes_and_remove(8)?;
+    visitor.visit_u64( self.next_bytes(8)?.read_u64::<BO>().unwrap() )
   }
 
-  fn deserialize_f32<V>(self, _visitor: V) -> Result<V::Value>
+  fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(4);
-    if self.DeserializationEndianess == endianess::littleEndian {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let bytes: [u8; 4] = [by0, by1, by2, by3];
-      let result = LittleEndian::read_f32(&bytes);
-      _visitor.visit_f32(result)
-    } else {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let bytes: [u8; 4] = [by0, by1, by2, by3];
-      let result = BigEndian::read_f32(&bytes);
-      _visitor.visit_f32(result)
-    }
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
+    visitor.visit_f32( self.next_bytes(4)?.read_f32::<BO>().unwrap() )
   }
 
-  fn deserialize_f64<V>(self, _visitor: V) -> Result<V::Value>
+  fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(8);
-    if self.DeserializationEndianess == endianess::littleEndian {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let by4 = self.next_byte()?;
-      let by5 = self.next_byte()?;
-      let by6 = self.next_byte()?;
-      let by7 = self.next_byte()?;
-      let bytes: [u8; 8] = [by0, by1, by2, by3, by4, by5, by6, by7];
-      let result: f64 = LittleEndian::read_f64(&bytes);
-      _visitor.visit_f64(result)
-    } else {
-      let by0 = self.next_byte()?;
-      let by1 = self.next_byte()?;
-      let by2 = self.next_byte()?;
-      let by3 = self.next_byte()?;
-      let by4 = self.next_byte()?;
-      let by5 = self.next_byte()?;
-      let by6 = self.next_byte()?;
-      let by7 = self.next_byte()?;
-      let bytes: [u8; 8] = [by0, by1, by2, by3, by4, by5, by6, by7];
-      let result: f64 = BigEndian::read_f64(&bytes);
-      _visitor.visit_f64(result)
-    }
+    self.calculate_padding_count_from_written_bytes_and_remove(8)?;
+    visitor.visit_f64( self.next_bytes(8)?.read_f64::<BO>().unwrap() )
   }
-
-  fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value>
+  
+  /// Since this is Rust, a char is 32-bit Unicode codepoint.
+  fn deserialize_char<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let by0 = self.next_byte()?;
-    _visitor.visit_char(by0 as char)
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
+    let codepoint = self.next_bytes(4)?.read_u32::<BO>().unwrap();
+    // TODO: Temporary workaround until std::char::from_u32() makes it into stable
+    // matched value should be char::from_u32( codepoint )
+    match Some(codepoint as u8 as char) {
+      Some(c) => visitor.visit_char( c ),
+      None => Err( Error::BadChar(codepoint)),
+    }
   }
 
   fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(4);
-    // first is information about how long string is in bytes.
-    let by0 = self.next_byte()?;
-    let by1 = self.next_byte()?;
-    let by2 = self.next_byte()?;
-    let by3 = self.next_byte()?;
-    let bytes: [u8; 4] = [by0, by1, by2, by3];
-    let stringByteCount: u32;
-    if self.DeserializationEndianess == endianess::littleEndian {
-      stringByteCount = LittleEndian::read_u32(&bytes);
-    } else {
-      stringByteCount = BigEndian::read_u32(&bytes);
-    }
-    let buildString: String;
-    let mut chars: Vec<char> = [].to_vec();
+    //println!("deserialize_str");
+    // read string length
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
+    let bytes_len = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
+    
+    let bytes = self.next_bytes( bytes_len ) ?; // length includes null terminator 
 
-    // last byte is always 0 and it can be ignored.
-    if stringByteCount > 0 {
-      for _byte in 0..stringByteCount - 1 {
-        let c = self.next_byte()? as char;
-        chars.push(c);
-      }
-    }
+    let bytes_without_null = &bytes[0..bytes.len()-1];
 
-    // here need to call next byte to remove trailing 0 from buffer.
-    self.remove_first_byte_from_input();
-    buildString = chars.into_iter().collect();
-
-    // TODO check is this correct way to create string literals. This is propably not correct!!!
-    fn string_to_static_str(s: String) -> &'static str {
-      Box::leak(s.into_boxed_str())
+    match std::str::from_utf8( bytes_without_null ) {
+      Ok(s) => visitor.visit_str(s),
+      Err(utf8_err) => Err(Error::BadString(utf8_err)),
     }
-    visitor.visit_borrowed_str(string_to_static_str(buildString))
   }
 
   fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
+    //println!("deserialize_string");
     self.deserialize_str(visitor)
   }
+  
+  // Byte strings
 
   fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value>
   where
@@ -427,11 +257,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     unimplemented!()
   }
 
-  fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
+  fn deserialize_byte_buf<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_byte_buf(self.input.clone())
+    unimplemented!()
+    //visitor.visit_byte_buf(self.input.clone())
   }
 
   fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value>
@@ -464,42 +295,31 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   {
     visitor.visit_newtype_struct(self)
   }
-
+  
   ///Sequences are encoded as an unsigned long value, followed by the elements of the
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
-  fn deserialize_seq<V>(mut self, _visitor: V) -> Result<V::Value>
+  fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
     println!("deserialize_seq");
-    self.calculate_padding_count_from_written_bytes_and_remove(4);
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     if self.serializedDataCount % 2 != 0 {
       println!("seq does not start a multiple of 2 !");
     }
+    let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
 
-    let by0 = self.next_byte()?;
-    let by1 = self.next_byte()?;
-    let by2 = self.next_byte()?;
-    let by3 = self.next_byte()?;
-    let bytes: [u8; 4] = [by0, by1, by2, by3];
-    let elementCount: u32;
-    if self.DeserializationEndianess == endianess::littleEndian {
-      elementCount = LittleEndian::read_u32(&bytes);
-    } else {
-      elementCount = BigEndian::read_u32(&bytes);
-    }
-    println!("seq length: {}", elementCount);
-    let res = _visitor.visit_seq(SequenceHelper::new(&mut self, elementCount, true));
-    res
+    println!("seq length: {}", element_count);
+    visitor.visit_seq(SequenceHelper::new(&mut self, element_count))
   }
 
   // if sequence is fixed length array then number of elements is not included
-  fn deserialize_tuple<V>(mut self, _len: usize, visitor: V) -> Result<V::Value>
+  fn deserialize_tuple<V>(mut self, len: usize, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_seq(SequenceHelper::new(&mut self, _len as u32, false))
+    visitor.visit_seq(SequenceHelper::new(&mut self, len))
   }
 
   fn deserialize_tuple_struct<V>(
@@ -525,22 +345,22 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   fn deserialize_struct<V>(
     mut self,
     _name: &'static str,
-    _fields: &'static [&'static str],
+    fields: &'static [&'static str],
     visitor: V,
   ) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(4);
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     /*
     println!(
       "deserialize struct! it has num of fields: {} ",
       _fields.len()
     );*/
-    for _f in _fields {
+    //for _f in _fields {
       //println!("field: {} ", f);
-    }
-    visitor.visit_seq(SequenceHelper::new(&mut self, _fields.len() as u32, false))
+    //}
+    visitor.visit_seq(SequenceHelper::new(&mut self, fields.len()))
   }
 
   ///Enum values are encoded as unsigned longs. (u32)
@@ -550,15 +370,15 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     mut self,
     _name: &'static str,
     _variants: &'static [&'static str],
-    _visitor: V,
+    visitor: V,
   ) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(4);
-    println!("_name {:?}", _name);
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
+    println!("enum: name {:?}", _name);
     println!("variants {:?}", _variants);
-    return _visitor.visit_enum(EnumerationHelper::new(&mut self));
+    visitor.visit_enum(EnumerationHelper::<BO>::new(&mut self))
   }
 
   /// An identifier in Serde is the type that identifies a field of a struct or
@@ -580,18 +400,27 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     println!("deserialize_ignored_any");
     self.deserialize_any(visitor)
   }
+  
 }
 
-struct EnumerationHelper<'a> {
-  de: &'a mut CDR_deserializer,
+// ----------------------------------------------------------
+
+struct EnumerationHelper<'a,'de:'a, BO> 
+{
+  de: &'a mut CDR_deserializer<'de, BO>,
 }
-impl<'a, 'de> EnumerationHelper<'a> {
-  fn new(de: &'a mut CDR_deserializer) -> Self {
-    EnumerationHelper { de }
+
+impl<'a,'de, BO> EnumerationHelper<'a,'de,BO> 
+  where BO:ByteOrder,
+{
+  fn new(de: &'a mut CDR_deserializer<'de,BO>) -> Self {
+    EnumerationHelper::<BO> { de }
   }
 }
 
-impl<'de, 'a> EnumAccess<'de> for EnumerationHelper<'a> {
+impl<'de, 'a, BO> EnumAccess<'de> for EnumerationHelper<'a,'de,BO> 
+where BO: ByteOrder
+{
   type Error = Error;
   type Variant = Self;
 
@@ -599,25 +428,20 @@ impl<'de, 'a> EnumAccess<'de> for EnumerationHelper<'a> {
   where
     V: DeserializeSeed<'de>,
   {
+    // preceeding deserialize_enum aligned to 4
     println!("EnumAccess variant_seed");
+    let enum_tag = self.de.next_bytes(4)?.read_u32::<BO>().unwrap();
 
-    let by0 = self.de.next_byte()?;
-    let by1 = self.de.next_byte()?;
-    let by2 = self.de.next_byte()?;
-    let by3 = self.de.next_byte()?;
-    let bytes: [u8; 4] = [by0, by1, by2, by3];
-    let enum_number_value: u32;
-    if self.de.DeserializationEndianess == endianess::littleEndian {
-      enum_number_value = LittleEndian::read_u32(&bytes);
-    } else {
-      enum_number_value = BigEndian::read_u32(&bytes);
-    }
-    let val: Result<_> = seed.deserialize(enum_number_value.into_deserializer());
-    return Ok((val?, self));
+    let val: Result<_> = seed.deserialize(enum_tag.into_deserializer());
+    Ok( (val?, self) )
   }
 }
 
-impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
+// ----------------------------------------------------------
+
+impl<'de, 'a,BO> VariantAccess<'de> for EnumerationHelper<'a,'de,BO> 
+where BO: ByteOrder
+{
   type Error = Error;
 
   fn unit_variant(self) -> Result<()> {
@@ -658,102 +482,66 @@ impl<'de, 'a> VariantAccess<'de> for EnumerationHelper<'a> {
   {
     println!("VariantAccess newtype_variant");
     unimplemented!();
-    //self.newtype_variant_seed(self);
-    //self.de.newtype_variant_seed(std::marker::PhantomData)
   }
 }
 
-struct SequenceHelper<'a> {
-  de: &'a mut CDR_deserializer,
-  first: bool,
-  elementCounter: u64,
-  inputSizeFirstElement: u64,
-  inputSizeBeforeLastElement: u64,
-  expectedCount: u32,
-  isVariableSizeSequence: bool,
+// ----------------------------------------------------------
+
+struct SequenceHelper<'a, 'de:'a, BO> {
+  de: &'a mut CDR_deserializer<'de,BO>,
+  elementCounter: usize,
+  expectedCount: usize,
 }
 
-impl<'a, 'de> SequenceHelper<'a> {
-  fn new(de: &'a mut CDR_deserializer, expectedCount: u32, isVariableSizeSequence: bool) -> Self {
+impl<'a,'de,BO> SequenceHelper<'a,'de,BO> {
+  fn new(de: &'a mut CDR_deserializer<'de,BO>, expectedCount: usize ) -> Self {
     SequenceHelper {
       de,
-      first: true,
       elementCounter: 0,
-      inputSizeFirstElement: 0,
-      inputSizeBeforeLastElement: 0,
       expectedCount: expectedCount,
-      isVariableSizeSequence: isVariableSizeSequence,
     }
   }
 }
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.
-impl<'de, 'a> SeqAccess<'de> for SequenceHelper<'a> {
+impl<'a, 'de, BO> SeqAccess<'de> for SequenceHelper<'a,'de, BO> 
+where BO: ByteOrder, 
+{
   type Error = Error;
 
   fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
   where
-    T: DeserializeSeed<'de>,
+    T: DeserializeSeed<'de>, 
   {
-    if self.first == true && self.isVariableSizeSequence {
-      self.inputSizeFirstElement = self.de.get_input_size() as u64;
-      println!(
-        "firstElement size: {} expected element count: {}",
-        self.inputSizeFirstElement, self.expectedCount
-      );
-    }
-    if self.elementCounter == self.expectedCount as u64 {
-      return Ok(None);
-    }
-
-    if self.isVariableSizeSequence {
-      println!("seq element number: {}", self.elementCounter);
-    }
-    self.elementCounter = self.elementCounter + 1;
-
-    //if self.isVariableSizeSequence && self.first == false && self.elementCounter == 2 {
-    //  println!("elementSize: {}", (self.inputSizeFirstElement - self.de.get_input_size() as u64) as i64);
-    //}
-
-    /*
-     if self.elementCounter == self.expectedCount as u64 && self.isVariableSizeSequence{
-
-       self.inputSizeBeforeLastElement = self.de.get_input_size() as u64;
-       println!("lastElement now! {}", self.inputSizeBeforeLastElement);
-     }
-     if self.isVariableSizeSequence {
-       println!("next element. Counter now {}",  self.elementCounter);
-     }
-    */
-
-    // Check if there are no more elements.
-    if self.de.check_if_bytes_left() == false {
-      return Ok(None);
-    }
-
-    self.first = false;
-    // Deserialize an array element.
-    seed.deserialize(&mut *self.de).map(Some)
+    if self.elementCounter == self.expectedCount {
+      println!("STOP SEQ");
+      Ok(None)
+    } else {
+      self.elementCounter = self.elementCounter + 1;
+      seed.deserialize(&mut *self.de).map(Some)    
+    }   
   }
 }
 
 // `MapAccess` is provided to the `Visitor` to give it the ability to iterate
 // through entries of the map.
-impl<'de, 'a> MapAccess<'de> for SequenceHelper<'a> {
+impl<'de, 'a, BO> MapAccess<'de> for SequenceHelper<'a,'de,BO> 
+where BO: ByteOrder,
+{
   type Error = Error;
 
   fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
   where
     K: DeserializeSeed<'de>,
   {
-    // Check if there are no more elements.
-    if self.de.check_if_bytes_left() == false {
-      return Ok(None);
-    }
-    self.first = false;
-    // Deserialize a map key.
-    seed.deserialize(&mut *self.de).map(Some)
+    if self.elementCounter == self.expectedCount {
+      println!("STOP MAP");
+      Ok(None)
+    } else {
+      self.elementCounter = self.elementCounter + 1;
+      seed.deserialize(&mut *self.de).map(Some)    
+    }   
   }
 
   fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>

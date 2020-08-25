@@ -2,7 +2,7 @@ use std::io;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-use serde::Deserialize;
+use serde::{Deserialize,de::DeserializeOwned};
 use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
@@ -49,7 +49,7 @@ pub struct DataReader<'a, D: Keyed> {
 
 impl<'a, D> DataReader<'a, D>
 where
-  D: Deserialize<'a> + Keyed,
+  D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
 {
   pub fn new(
