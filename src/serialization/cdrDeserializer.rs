@@ -8,13 +8,18 @@ use serde::{
     Visitor, DeserializeOwned,
   },
 };
+
+use paste::paste;
+
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
 
+/// CDR deserializer.
+/// Input is from &[u8], since we expect to have the data in contiguous memory buffers.
 pub struct CDR_deserializer<'de,BO> {
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
-  input: &'de [u8],
-  serializedDataCount: usize,
+  input: &'de [u8],         // We borrow the input data, therefore we carry lifetime 'de all around.
+  serializedDataCount: usize, // This is to keep track of CDR data alignment requirements.
 }
 
 impl<'de,BO> CDR_deserializer<'de,BO>
@@ -34,12 +39,8 @@ impl<'de,BO> CDR_deserializer<'de,BO>
     }
   }
 
-  fn remove_bytes_from_input(&mut self, count: usize) -> Result<()> {
-    let _pad = self.next_bytes(count)?;
-    Ok(())
-  }
 
-  // Consume the first byte in the input.
+  /// Read the first bytes in the input.
   fn next_bytes(&mut self, count: usize) -> Result<&[u8]> {
     if count <= self.input.len() {
       let ( head , tail ) = self.input.split_at(count);
@@ -50,6 +51,13 @@ impl<'de,BO> CDR_deserializer<'de,BO>
       Err(Error::Eof)
     }
   }
+
+  /// consume and discard bytes
+  fn remove_bytes_from_input(&mut self, count: usize) -> Result<()> {
+    let _pad = self.next_bytes(count)?;
+    Ok(())
+  }
+
   // Look at the first byte in the input without consuming it.
   fn peek_byte(&mut self) -> Result<u8> {
     self.input.first().ok_or(Error::Eof).map( |b| *b)
@@ -57,10 +65,6 @@ impl<'de,BO> CDR_deserializer<'de,BO>
 
   fn check_if_bytes_left(&mut self) -> bool {
     self.input.len() > 0
-  }
-
-  fn get_input_size(&mut self) -> u64 {
-    self.input.len() as u64
   }
 
   fn calculate_padding_count_from_written_bytes_and_remove(&mut self, typeOctetAligment: usize) -> Result<()> {
@@ -102,6 +106,26 @@ where
   }
 }
 
+/// macro for writing priitive number deserializers. Rust does not allow declaring a macro
+/// inside impl block, so it is here.
+macro_rules! deserialize_multibyte_number {
+  ($num_type:ident) => {
+    paste!{
+      fn [<deserialize_ $num_type>]<V>(self, visitor: V) -> Result<V::Value>
+      where
+        V: Visitor<'de>,
+      {
+        const size :usize = std::mem::size_of::<$num_type>();
+        assert!(size > 1, "multibyte means size must be > 1");
+        self.calculate_padding_count_from_written_bytes_and_remove(size)?;
+        visitor.[<visit_ $num_type>]( 
+          self.next_bytes(size)?.[<read_ $num_type>]::<BO>().unwrap() )
+      }
+    }
+  };
+}
+
+
 impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
   where BO:ByteOrder 
 {
@@ -128,84 +152,32 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
     }
   }
 
+  deserialize_multibyte_number!(i16);
+  deserialize_multibyte_number!(i32);
+  deserialize_multibyte_number!(i64);
+
+  deserialize_multibyte_number!(u16);
+  deserialize_multibyte_number!(u32);
+  deserialize_multibyte_number!(u64);
+
+  deserialize_multibyte_number!(f32);
+  deserialize_multibyte_number!(f64);
+  
+  // Single-byte numbers have a bit simpler logic: No alignment, no endianness.
   fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_i8(*self.next_bytes(1)?.first().unwrap() as i8)
-  }
-
-  fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
-  where
-    V: Visitor<'de>,
-  {
-    self.calculate_padding_count_from_written_bytes_and_remove(2)?;
-    visitor.visit_i16( self.next_bytes(2)?.read_i16::<BO>().unwrap() )
-  }
-
-  fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
-  where
-    V: Visitor<'de>,
-  {
-    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    visitor.visit_i32( self.next_bytes(4)?.read_i32::<BO>().unwrap() )
-  }
-
-  fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
-  where
-    V: Visitor<'de>,
-  {
-    self.calculate_padding_count_from_written_bytes_and_remove(8)?;
-    visitor.visit_i64( self.next_bytes(8)?.read_i64::<BO>().unwrap() )
+    visitor.visit_i8(self.next_bytes(1)?.read_i8().unwrap() )
   }
 
   fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_u8(*self.next_bytes(1)?.first().unwrap() )
+    visitor.visit_u8(self.next_bytes(1)?.read_u8().unwrap() )
   }
 
-  fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
-  where
-    V: Visitor<'de>,
-  {
-    self.calculate_padding_count_from_written_bytes_and_remove(2)?;
-    visitor.visit_u16( self.next_bytes(2)?.read_u16::<BO>().unwrap() )
-  }
-
-  fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
-  where
-    V: Visitor<'de>,
-  {
-    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    visitor.visit_u32( self.next_bytes(4)?.read_u32::<BO>().unwrap() )
-  }
-
-  fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
-  where
-    V: Visitor<'de>,
-  {
-    self.calculate_padding_count_from_written_bytes_and_remove(8)?;
-    visitor.visit_u64( self.next_bytes(8)?.read_u64::<BO>().unwrap() )
-  }
-
-  fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
-  where
-    V: Visitor<'de>,
-  {
-    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    visitor.visit_f32( self.next_bytes(4)?.read_f32::<BO>().unwrap() )
-  }
-
-  fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value>
-  where
-    V: Visitor<'de>,
-  {
-    self.calculate_padding_count_from_written_bytes_and_remove(8)?;
-    visitor.visit_f64( self.next_bytes(8)?.read_f64::<BO>().unwrap() )
-  }
-  
   /// Since this is Rust, a char is 32-bit Unicode codepoint.
   fn deserialize_char<V>(self, visitor: V) -> Result<V::Value>
   where
