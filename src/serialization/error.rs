@@ -24,6 +24,7 @@ pub enum Error {
   BadBoolean(u8),
   BadString(std::str::Utf8Error), // was not valid UTF-8
   BadChar(u32), // invalid Unicode codepoint
+  BadOption(u32),
   //TODO
   /*
   Syntax,
@@ -70,6 +71,8 @@ impl Display for Error {
         formatter.write_fmt(format_args!("Trailing garbage, {:?} bytes",vec.len())),
       Error::BadString( utf_err) => 
         formatter.write_fmt(format_args!("UTF-8 error: {:?}", utf_err)),
+      Error::BadOption(tag) => 
+        formatter.write_fmt(format_args!("Option value must have discriminant 0 or 1, read: {:?}", tag)),
       /* and so forth */
     }
   }

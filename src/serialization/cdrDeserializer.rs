@@ -106,7 +106,7 @@ where
   }
 }
 
-/// macro for writing priitive number deserializers. Rust does not allow declaring a macro
+/// macro for writing primitive number deserializers. Rust does not allow declaring a macro
 /// inside impl block, so it is here.
 macro_rules! deserialize_multibyte_number {
   ($num_type:ident) => {
@@ -222,43 +222,47 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
   
   // Byte strings
 
-  fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value>
+  fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    unimplemented!()
+    self.deserialize_seq(visitor)
   }
 
-  fn deserialize_byte_buf<V>(self, _visitor: V) -> Result<V::Value>
+  fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    unimplemented!()
-    //visitor.visit_byte_buf(self.input.clone())
+    self.deserialize_seq(visitor)
   }
 
-  fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value>
+  fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_option");
-    unimplemented!()
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
+    let enum_tag = self.next_bytes(4)?.read_u32::<BO>().unwrap();
+    match enum_tag {
+      0 => visitor.visit_none() ,
+      1 => visitor.visit_some(self) ,
+      wtf => Err(Error::BadOption(wtf)) ,
+    }
+
   }
 
-  fn deserialize_unit<V>(self, _visitor: V) -> Result<V::Value>
+  fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_unit");
-    unimplemented!()
+    // Unit data is not put on wire, to match behavior with cdrSerializer
+    visitor.visit_unit() 
   }
 
   fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_unit_struct");
-    self.deserialize_unit(visitor)
+    self.deserialize_unit(visitor) // This means a named type, which has no data.
   }
 
   fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
@@ -275,14 +279,13 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_seq");
+    //println!("deserialize_seq");
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    if self.serializedDataCount % 2 != 0 {
-      println!("seq does not start a multiple of 2 !");
-    }
+    //if self.serializedDataCount % 2 != 0 {
+    //  println!("seq does not start a multiple of 2 !");
+    //}
     let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
-
-    println!("seq length: {}", element_count);
+    //println!("seq length: {}", element_count);
     visitor.visit_seq(SequenceHelper::new(&mut self, element_count))
   }
 
@@ -295,23 +298,24 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
   }
 
   fn deserialize_tuple_struct<V>(
-    self,
+    mut self,
     _name: &'static str,
-    _len: usize,
-    _visitor: V,
+    len: usize,
+    visitor: V,
   ) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_tuple_struct");
-    unimplemented!()
+    visitor.visit_seq(SequenceHelper::new(&mut self, len))
   }
 
-  fn deserialize_map<V>(/*mut*/ self, _visitor: V) -> Result<V::Value>
+  fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    unimplemented!()
+    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
+    let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
+    visitor.visit_map(SequenceHelper::new(&mut self,element_count))
   }
 
   fn deserialize_struct<V>(
@@ -323,15 +327,6 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
   where
     V: Visitor<'de>,
   {
-    self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    /*
-    println!(
-      "deserialize struct! it has num of fields: {} ",
-      _fields.len()
-    );*/
-    //for _f in _fields {
-      //println!("field: {} ", f);
-    //}
     visitor.visit_seq(SequenceHelper::new(&mut self, fields.len()))
   }
 
@@ -348,8 +343,8 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
     V: Visitor<'de>,
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    println!("enum: name {:?}", _name);
-    println!("variants {:?}", _variants);
+    //println!("enum: name {:?}", _name);
+    //println!("variants {:?}", _variants);
     visitor.visit_enum(EnumerationHelper::<BO>::new(&mut self))
   }
 
@@ -419,7 +414,6 @@ where BO: ByteOrder
   fn unit_variant(self) -> Result<()> {
     println!("VariantAccess unit_variant");
     Ok(())
-    //unimplemented!()
   }
 
   fn newtype_variant_seed<T>(self, _seed: T) -> Result<T::Value>
