@@ -560,8 +560,8 @@ mod tests {
     println!("reader history chache DATA: {:?}", a.data());
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct ShapeType<'a> {
-      color: &'a str,
+    struct ShapeType {
+      color: String,
       x: i32,
       y: i32,
       size: i32,

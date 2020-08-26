@@ -602,7 +602,7 @@ mod tests {
 
       */
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct OmaTyyppi<'a> {
+    struct OmaTyyppi {
       firstValue: u8,
       secondvalue: i8,
       thirdValue: i32,
@@ -615,7 +615,7 @@ mod tests {
       tenth: Vec<i16>,
       eleventh: Vec<i64>,
       twelwe: [u16; 3],
-      thirteen: &'a str,
+      thirteen: String,
     }
 
     let mikkiHiiri = OmaTyyppi {
@@ -631,7 +631,7 @@ mod tests {
       tenth: vec![5, -4, 3, -2, 1],
       eleventh: vec![],
       twelwe: [3, 2, 1],
-      thirteen: "abc",
+      thirteen: "abc".to_string(),
     };
 
     let expected_serialized_result: Vec<u8> = vec![
@@ -666,15 +666,15 @@ mod tests {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
     //10.7 Example for User-defined Topic Data
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct ShapeType<'a> {
-      color: &'a str,
+    struct ShapeType {
+      color: String,
       x: i32,
       y: i32,
       size: i32,
     }
 
     let message = ShapeType {
-      color: "BLUE",
+      color: "BLUE".to_string(),
       x: 34,
       y: 100,
       size: 24,
@@ -703,7 +703,7 @@ mod tests {
       0x07, 0x00, 0x00, 0x00, 0x053, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, /* 0x00, */
     ];
 
-    let deserializedMessage: &str = deserialize_from_little_endian(&recievedCDRString).unwrap();
+    let deserializedMessage: String = deserialize_from_little_endian(&recievedCDRString).unwrap();
     println!("{:?}", deserializedMessage);
     assert_eq!("Square", deserializedMessage);
 
@@ -712,7 +712,7 @@ mod tests {
       0x00, /* 0x00, 0x00, */
     ];
 
-    let deserializedMessage2: &str = deserialize_from_little_endian(&recievedCDRString2).unwrap();
+    let deserializedMessage2: String = deserialize_from_little_endian(&recievedCDRString2).unwrap();
     println!("{:?}", deserializedMessage2);
     assert_eq!("ShapeType", deserializedMessage2);
   }
@@ -764,8 +764,8 @@ mod tests {
   fn CDR_Deserialization_serialization_payload_shapes() {
     // This test uses wireshark captured shapes demo part of serialized message as recieved_message.
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct ShapeType<'a> {
-      color: &'a str,
+    struct ShapeType {
+      color: String,
       x: i32,
       y: i32,
       size: i32,
@@ -802,14 +802,14 @@ mod tests {
     //string test
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct messageType<'a> {
+    struct messageType {
       x: f64,
       y: f64,
       heading: f64,
       v_x: f64,
       v_y: f64,
       kappa: f64,
-      test: &'a str,
+      test: String,
     }
 
     let recieved_message_le: Vec<u8> = vec![
@@ -817,7 +817,7 @@ mod tests {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x85, 0xeb, 0x51, 0xb8,
       0x1e, 0xd5, 0x3f, 0x0a, 0x00, 0x00, 0x00, 0x54, 0x6f, 0x69, 0x6d, 0x69, 0x69, 0x6b, 0x6f,
-      0x3f, 0x00, 0x00, 0x00,
+      0x3f, 0x00, //0x00, 0x00,
     ];
 
     let value: messageType = deserialize_from_little_endian(&recieved_message_le).unwrap();
@@ -862,8 +862,8 @@ mod tests {
     */
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct InterestingMessage<'a> {
-      unboundedString: &'a str,
+    struct InterestingMessage {
+      unboundedString: String,
       x: i32,
       y: i32,
       shapesize: i32,
@@ -876,7 +876,7 @@ mod tests {
     };
 
     let value = InterestingMessage {
-      unboundedString: "Tassa on aika pitka teksti",
+      unboundedString: "Tassa on aika pitka teksti".to_string(),
       x: 2,
       y: -3,
       shapesize: -4,
@@ -1028,9 +1028,9 @@ mod tests {
 
   #[test]
   fn CDR_Deserialization_str() {
-    let c: &str = "BLUE";
-    let serialized = to_bytes::<&str,LittleEndian>(&c).unwrap();
-    let deserialized: &str = deserialize_from_little_endian(&serialized).unwrap();
+    let c: String = "BLUE".to_string();
+    let serialized = to_bytes::<String,LittleEndian>(&c).unwrap();
+    let deserialized: String = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(c, deserialized);
     assert_eq!(c, "BLUE");
     assert_eq!(deserialized, "BLUE");
