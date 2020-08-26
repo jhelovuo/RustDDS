@@ -47,9 +47,9 @@ pub struct DataReader<'a, D: Keyed> {
   latest_instant: Instant,
 }
 
-impl<'s, 'a, D> DataReader<'a, D>
+impl<'a, D> DataReader<'a, D>
 where
-  D: Deserialize<'s> + Keyed,
+  D: Deserialize<'a> + Keyed,
   <D as Keyed>::K: Key,
 {
   pub fn new(
@@ -116,20 +116,24 @@ where
       let bytes = &ser_payload.value;
 
       let payload: D = match ser_payload.representation_identifier {
-        RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => match deserialize_from_big_endian(bytes) {
-          Ok(payload) => payload,
-          Err(e) => {
-            println!("DataReader couldn't deserialize from BE. \n{}", e);
-            continue;
+        RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => {
+          match deserialize_from_big_endian(bytes) {
+            Ok(payload) => payload,
+            Err(e) => {
+              println!("DataReader couldn't deserialize from BE. \n{}", e);
+              continue;
+            }
           }
-        },
-        RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => match deserialize_from_little_endian(bytes) {
-          Ok(payload) => payload,
-          Err(e) => {
-            println!("DataReader couldn't deserialize from LE. \n{}", e);
-            continue;
+        }
+        RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
+          match deserialize_from_little_endian(bytes) {
+            Ok(payload) => payload,
+            Err(e) => {
+              println!("DataReader couldn't deserialize from LE. \n{}", e);
+              continue;
+            }
           }
-        },
+        }
         _ => {
           println!(
             "DataReader doesn't know how to deserialize with this representation_identifier"
@@ -765,7 +769,7 @@ mod tests {
 
   #[test]
   fn dr_wake_up() {
-    let dp = DomainParticipant::new(1, 1);
+    let dp = DomainParticipant::new(13, 1);
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing

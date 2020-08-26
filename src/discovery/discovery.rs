@@ -15,7 +15,6 @@ use crate::dds::{
     policy::{Reliability, History},
   },
   datareader::{Take, DataReader},
-  datawriter::{DataWriter},
   readcondition::ReadCondition,
 };
 
@@ -23,7 +22,7 @@ use crate::discovery::{
   data_types::spdp_participant_data::SPDPDiscoveredParticipantData, discovery_db::DiscoveryDB,
 };
 
-use crate::structure::{guid::EntityId, entity::Entity};
+use crate::structure::guid::EntityId;
 
 use crate::network::constant::*;
 use super::data_types::topic_data::DiscoveredReaderData;
@@ -41,7 +40,7 @@ unsafe impl Send for Discovery {}
 
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: u64 = 60;
-  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 60;
+  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 2;
   const SEND_READERS_INFO_PERIOD: u64 = 1;
 
   pub fn new(
@@ -172,7 +171,7 @@ impl Discovery {
       .poll
       .register(
         &dcps_subscription_reader,
-        DISCOVERY_SUBSCRIPTION_DATA_TOKEN,
+        DISCOVERY_READER_DATA_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
       )
@@ -261,7 +260,7 @@ impl Discovery {
           let data = discovery.handle_participant_reader(&mut dcps_participant_reader);
           match data {
             Some(dat) => {
-              discovery.update_spdp_participant_writer(dat, &dcps_participant_writer);
+              discovery.update_spdp_participant_writer(dat);
             }
             None => (),
           }
@@ -279,21 +278,33 @@ impl Discovery {
             &discovery.domain_participant,
             lease_duration,
           );
+
           dcps_participant_writer.write(data, None).unwrap_or(());
           // reschedule timer
           participant_send_info_timer.set_timeout(
             StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
             (),
           );
+        } else if event.token() == DISCOVERY_READER_DATA_TOKEN {
+          discovery.handle_subscription_reader(&mut dcps_subscription_reader);
         } else if event.token() == DISCOVERY_SEND_READERS_INFO_TOKEN {
-          // TODO: handle unwrap
           match discovery.discovery_db.read() {
             Ok(db) => {
               let datas = db.get_all_local_topic_readers();
-              for data in datas {
+              for &data in datas
+                .iter()
+                // filtering out discoveries own readers
+                .filter(|p| {
+                  // TODO: handle unwrap
+                  let eid = &p.reader_proxy.remote_reader_guid.unwrap().entityId;
+                  *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
+                    && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
+                    && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
+                    && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
+                })
+              {
                 // TODO: handle unwrap
                 dcps_subscription_writer.write(data.clone(), None).unwrap();
-                println!("Writing data {:?}", data);
               }
             }
             _ => (),
@@ -303,8 +314,6 @@ impl Discovery {
             StdDuration::from_secs(Discovery::SEND_READERS_INFO_PERIOD),
             (),
           );
-        } else if event.token() == DISCOVERY_SUBSCRIPTION_DATA_TOKEN {
-          discovery.handle_subscription_reader(&mut dcps_subscription_reader);
         }
       }
     }
@@ -330,28 +339,27 @@ impl Discovery {
       Ok(mut db) => {
         let updated = (*db).update_participant(&participant_data);
         if updated {
-          println!("Update participant data.");
           return Some(participant_data);
         }
       }
       _ => return None,
     }
-    // debug for when all parts are available
-    println!("Participant: {:?}", participant_data);
+
     None
   }
 
   pub fn handle_subscription_reader(&self, reader: &mut DataReader<DiscoveredReaderData>) {
-    let reader_data_vec = match reader.take(100, ReadCondition::not_read()) {
-      Ok(d) => Some(
-        d.into_iter()
-          .map(|p| p.value)
-          .filter(|p| p.is_ok())
-          .map(|p| p.unwrap())
-          .collect(),
-      ),
-      _ => None,
-    };
+    let reader_data_vec: Option<Vec<DiscoveredReaderData>> =
+      match reader.take(100, ReadCondition::not_read()) {
+        Ok(d) => Some(
+          d.into_iter()
+            .map(|p| p.value)
+            .filter(|p| p.is_ok())
+            .map(|p| p.unwrap())
+            .collect(),
+        ),
+        _ => None,
+      };
 
     let reader_data_vec: Vec<DiscoveredReaderData> = match reader_data_vec {
       Some(d) => d,
@@ -363,7 +371,6 @@ impl Discovery {
         let updated = (*p).update_subscription(data);
         if updated {
           let _send_result = self.writers_proxy_updated_sender.send(());
-          println!("Updated subscription {}", updated);
         }
       }
     });
@@ -379,56 +386,192 @@ impl Discovery {
     }
   }
 
-  pub fn update_spdp_participant_writer(
-    &self,
-    data: SPDPDiscoveredParticipantData,
-    writer: &DataWriter<SPDPDiscoveredParticipantData>,
-  ) -> bool {
-    // TODO: remove unwrap and handle error
-    let new_proxy = data.as_reader_proxy().unwrap();
+  pub fn update_spdp_participant_writer(&self, data: SPDPDiscoveredParticipantData) -> bool {
     let dbres = self.discovery_db.write();
-    match dbres {
-      Ok(mut db) => (*db).update_writers_reader_proxy(writer.get_guid(), new_proxy),
+    let res = match dbres {
+      Ok(mut db) => (*db).update_participant(&data),
       _ => return false,
+    };
+
+    if res {
+      // TODO: handle unwrap
+      self.writers_proxy_updated_sender.send(()).unwrap();
     }
+
+    res
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::network::udp_sender::UDPSender;
+  use crate::{
+    test::{
+      shape_type::ShapeType,
+      test_data::{spdp_participant_msg, spdp_subscription_msg},
+    },
+    network::{udp_listener::UDPListener, udp_sender::UDPSender},
+    structure::locator::Locator,
+    serialization::{
+      Message, cdrSerializer::to_bytes, cdrDeserializer::deserialize_from_little_endian,
+    },
+    submessages::EntitySubmessage,
+  };
   use std::{time::Duration, net::SocketAddr};
+  use mio::Token;
+  use speedy::{Writable, Endianness};
 
   #[test]
-  fn discovery_participant_test() {
+  fn discovery_participant_data_test() {
     let _participant = DomainParticipant::new(0, 0);
+
+    let poll = Poll::new().unwrap();
+    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11000);
+    poll
+      .register(
+        udp_listener.mio_socket(),
+        Token(0),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+
+    // waiting for init
+    std::thread::sleep(Duration::from_secs(5));
 
     // sending participant data to discovery
     let udp_sender = UDPSender::new_with_random_port();
-    let addresses = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 7412)];
+    let addresses = vec![SocketAddr::new(
+      "127.0.0.1".parse().unwrap(),
+      get_spdp_well_known_unicast_port(0, 0),
+    )];
 
-    const data: [u8; 204] = [
-      // Offset 0x00000000 to 0x00000203
-      0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
-      0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x01, 0x08, 0x00, 0x0e, 0x15, 0xf3, 0x5e, 0x00, 0x28,
-      0x74, 0xd2, 0x15, 0x05, 0xa8, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x01, 0x00, 0xc7, 0x00,
-      0x01, 0x00, 0xc2, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
-      0x15, 0x00, 0x04, 0x00, 0x02, 0x03, 0x00, 0x00, 0x16, 0x00, 0x04, 0x00, 0x01, 0x0f, 0x00,
-      0x00, 0x50, 0x00, 0x10, 0x00, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00, 0x01, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x01, 0xc1, 0x32, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf4,
-      0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x0a, 0x50, 0x8e, 0x68, 0x31, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf5, 0x1c, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x50,
-      0x8e, 0x68, 0x02, 0x00, 0x08, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x58,
-      0x00, 0x04, 0x00, 0x3f, 0x0c, 0x3f, 0x0c, 0x62, 0x00, 0x18, 0x00, 0x14, 0x00, 0x00, 0x00,
-      0x66, 0x61, 0x73, 0x74, 0x72, 0x74, 0x70, 0x73, 0x50, 0x61, 0x72, 0x74, 0x69, 0x63, 0x69,
-      0x70, 0x61, 0x6e, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00,
-    ];
+    let mut tdata: Message = spdp_participant_msg();
+    let mut data;
+    for submsg in tdata.submessages.iter_mut() {
+      let mut submsglen = submsg.header.submessage_length;
+      match submsg.submessage.as_mut() {
+        Some(v) => match v {
+          EntitySubmessage::Data(d, _) => {
+            let mut participant_data: SPDPDiscoveredParticipantData =
+              deserialize_from_little_endian(&d.serialized_payload.value).unwrap();
+            participant_data.metatraffic_unicast_locators[0] =
+              Locator::from(SocketAddr::new("127.0.0.1".parse().unwrap(), 11000));
+            participant_data.metatraffic_multicast_locators.clear();
+            participant_data.default_unicast_locators.clear();
+            participant_data.default_multicast_locators.clear();
 
-    udp_sender.send_to_all(&data, &addresses);
+            let datalen = d.serialized_payload.value.len() as u16;
+            data =
+              to_bytes::<SPDPDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
+                .unwrap();
+            d.serialized_payload.value = data.clone();
+            submsglen = submsglen + d.serialized_payload.value.len() as u16 - datalen;
+          }
+          _ => continue,
+        },
+        None => (),
+      }
+      submsg.header.submessage_length = submsglen;
+    }
 
-    // during the 5 secs data should be visible
+    let msg_data = tdata
+      .write_to_vec_with_ctx(Endianness::LittleEndian)
+      .expect("Failed to write msg data");
+
+    udp_sender.send_to_all(&msg_data, &addresses);
+
+    let mut events = Events::with_capacity(10);
+    poll
+      .poll(&mut events, Some(StdDuration::from_secs(10)))
+      .unwrap();
+
+    let _data2 = udp_listener.get_message();
+    // TODO: we should have received our own participants info decoding the actual message might be good idea
+  }
+
+  #[test]
+  fn discovery_reader_data_test() {
+    let participant = DomainParticipant::new(14, 0);
+
+    let topic = participant
+      .create_topic(
+        "Square",
+        TypeDesc::new(String::from("ShapeType")),
+        &QosPolicies::qos_none(),
+      )
+      .unwrap();
+
+    let publisher = participant
+      .create_publisher(&QosPolicies::qos_none())
+      .unwrap();
+    let _writer = publisher
+      .create_datawriter::<ShapeType>(None, &topic, &QosPolicies::qos_none())
+      .unwrap();
+
+    let subscriber = participant
+      .create_subscriber(&QosPolicies::qos_none())
+      .unwrap();
+    let _reader = subscriber.create_datareader::<ShapeType>(None, &topic, &QosPolicies::qos_none());
+
+    let poll = Poll::new().unwrap();
+    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11001);
+    poll
+      .register(
+        udp_listener.mio_socket(),
+        Token(0),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+
+    // waiting for init
     std::thread::sleep(Duration::from_secs(5));
+
+    let udp_sender = UDPSender::new_with_random_port();
+    let addresses = vec![SocketAddr::new(
+      "127.0.0.1".parse().unwrap(),
+      get_spdp_well_known_unicast_port(14, 0),
+    )];
+
+    let mut tdata = spdp_subscription_msg();
+    let mut data;
+    for submsg in tdata.submessages.iter_mut() {
+      match submsg.submessage.as_mut() {
+        Some(v) => match v {
+          EntitySubmessage::Data(d, _) => {
+            let mut drd: DiscoveredReaderData =
+              deserialize_from_little_endian(&d.serialized_payload.value).unwrap();
+            drd.reader_proxy.unicast_locator_list.clear();
+            drd
+              .reader_proxy
+              .unicast_locator_list
+              .push(Locator::from(SocketAddr::new(
+                "127.0.0.1".parse().unwrap(),
+                11001,
+              )));
+            drd.reader_proxy.multicast_locator_list.clear();
+
+            data = to_bytes::<DiscoveredReaderData, byteorder::LittleEndian>(&drd).unwrap();
+            d.serialized_payload.value = data.clone();
+          }
+          _ => continue,
+        },
+        None => (),
+      }
+    }
+
+    let msg_data = tdata
+      .write_to_vec_with_ctx(Endianness::LittleEndian)
+      .expect("Failed to write msg dtaa");
+
+    udp_sender.send_to_all(&msg_data, &addresses);
+
+    let mut events = Events::with_capacity(10);
+    poll
+      .poll(&mut events, Some(StdDuration::from_secs(10)))
+      .unwrap();
+
+    let _data2 = udp_listener.get_message();
   }
 }

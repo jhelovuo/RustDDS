@@ -91,7 +91,7 @@ mod tests {
   #[test]
   fn udpl_single_address() {
     let listener = UDPListener::new(Token(0), "127.0.0.1", 10001);
-    let sender = UDPSender::new(11001);
+    let sender = UDPSender::new_with_random_port();
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
@@ -108,7 +108,7 @@ mod tests {
   #[test]
   fn udpl_multicast_address() {
     let listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
-    let sender = UDPSender::new(11002);
+    let sender = UDPSender::new_with_random_port();
 
     let data: Vec<u8> = vec![2, 4, 6];
 

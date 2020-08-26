@@ -1,6 +1,9 @@
 use mio_extras::channel as mio_channel;
 
-use std::time::{Duration};
+use std::{
+  sync::{RwLock, Arc},
+  time::Duration,
+};
 
 use serde::{Serialize, Deserialize};
 
@@ -19,7 +22,13 @@ use crate::dds::{
   traits::key::{Keyed, Key},
 };
 
-use crate::structure::topic_kind::TopicKind;
+use crate::{
+  discovery::{
+    discovery_db::DiscoveryDB,
+    data_types::topic_data::{DiscoveredWriterData},
+  },
+  structure::topic_kind::TopicKind,
+};
 
 use rand::Rng;
 
@@ -27,6 +36,7 @@ use rand::Rng;
 
 pub struct Publisher {
   domain_participant: DomainParticipant,
+  discovery_db: Arc<RwLock<DiscoveryDB>>,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
   add_writer_sender: mio_channel::Sender<Writer>,
@@ -36,12 +46,14 @@ pub struct Publisher {
 impl<'a> Publisher {
   pub fn new(
     dp: DomainParticipant,
+    discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
     add_writer_sender: mio_channel::Sender<Writer>,
   ) -> Publisher {
     Publisher {
       domain_participant: dp,
+      discovery_db,
       my_qos_policies: qos,
       default_datawriter_qos: default_dw_qos,
       add_writer_sender,
@@ -75,12 +87,13 @@ impl<'a> Publisher {
       entity_id,
     );
     let new_writer = Writer::new(
-      guid,
+      guid.clone(),
       hccc_download,
       self.domain_participant.get_dds_cache(),
       topic.get_name().to_string(),
       topic.get_qos().clone(),
     );
+
     self
       .add_writer_sender
       .send(new_writer)
@@ -89,9 +102,19 @@ impl<'a> Publisher {
     let matching_data_writer = DataWriter::<D>::new(
       self,
       &topic,
+      Some(guid),
       dwcc_upload,
       self.get_participant().get_dds_cache(),
     );
+
+    match self.discovery_db.write() {
+      Ok(mut db) => {
+        let dwd =
+          DiscoveredWriterData::new(&matching_data_writer, &topic, &self.domain_participant);
+        db.update_local_topic_writer(dwd);
+      }
+      _ => return Err(Error::OutOfResources),
+    };
 
     Ok(matching_data_writer)
   }
@@ -159,6 +182,7 @@ impl<'a> Publisher {
 
 pub struct Subscriber {
   pub domain_participant: DomainParticipant,
+  discovery_db: Arc<RwLock<DiscoveryDB>>,
   qos: QosPolicies,
   sender_add_reader: mio_channel::Sender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
@@ -166,13 +190,15 @@ pub struct Subscriber {
 
 impl<'s> Subscriber {
   pub fn new(
-    domainparticipant: DomainParticipant,
+    domain_participant: DomainParticipant,
+    discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
     sender_add_reader: mio_channel::Sender<Reader>,
     sender_remove_reader: mio_channel::Sender<GUID>,
   ) -> Subscriber {
     Subscriber {
-      domain_participant: domainparticipant,
+      domain_participant,
+      discovery_db,
       qos,
       sender_add_reader,
       sender_remove_reader,
@@ -221,6 +247,13 @@ impl<'s> Subscriber {
       self.domain_participant.get_dds_cache(),
       topic.get_name().to_string(),
     );
+
+    match self.discovery_db.write() {
+      Ok(mut db) => {
+        db.update_local_topic_reader(&self.domain_participant, &topic, &new_reader);
+      }
+      _ => return Err(Error::OutOfResources),
+    };
 
     // Create new topic to DDScache if one isn't present
     match self.domain_participant.get_dds_cache().write() {

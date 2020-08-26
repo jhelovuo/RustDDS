@@ -378,7 +378,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_str");
     self.calculate_padding_count_from_written_bytes_and_remove(4);
     // first is information about how long string is in bytes.
     let by0 = self.next_byte()?;
@@ -394,11 +393,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
     }
     let buildString: String;
     let mut chars: Vec<char> = [].to_vec();
-
-    println!(
-      "trying to deserialize string of byte length: {}",
-      stringByteCount
-    );
 
     // last byte is always 0 and it can be ignored.
     if stringByteCount > 0 {
@@ -423,7 +417,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_string");
     self.deserialize_str(visitor)
   }
 
@@ -469,7 +462,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_newtype_struct");
     visitor.visit_newtype_struct(self)
   }
 
@@ -507,7 +499,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_tuple");
     visitor.visit_seq(SequenceHelper::new(&mut self, _len as u32, false))
   }
 
@@ -540,7 +531,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut CDR_deserializer {
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_struct");
     self.calculate_padding_count_from_written_bytes_and_remove(4);
     /*
     println!(
@@ -714,7 +704,6 @@ impl<'de, 'a> SeqAccess<'de> for SequenceHelper<'a> {
       );
     }
     if self.elementCounter == self.expectedCount as u64 {
-      println!("STOP SEQ");
       return Ok(None);
     }
 

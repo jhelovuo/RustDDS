@@ -64,6 +64,7 @@ impl UDPSender {
       "Not a multicast address",
     ))
   }
+
   pub fn send_ipv4_multicast(&self, buffer: &[u8], address: SocketAddr) -> io::Result<usize> {
     if address.ip().is_multicast() {
       return self.socket.send_to(buffer, &SocketAddr::from(address));

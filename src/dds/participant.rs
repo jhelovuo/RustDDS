@@ -297,6 +297,7 @@ impl DomainParticipant_Inner {
 
     Ok(Publisher::new(
       domain_participant.clone(),
+      self.discovery_db.clone(),
       qos.clone(),
       qos.clone(),
       add_writer_sender,
@@ -310,6 +311,7 @@ impl DomainParticipant_Inner {
   ) -> Result<Subscriber> {
     Ok(Subscriber::new(
       domain_participant.clone(),
+      self.discovery_db.clone(),
       qos.clone(),
       self.sender_add_reader.clone(),
       self.sender_remove_reader.clone(),

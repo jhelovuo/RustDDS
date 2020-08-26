@@ -17,55 +17,38 @@ use crate::structure::{
 use crate::{
   network::constant::{get_user_traffic_unicast_port, get_user_traffic_multicast_port},
   dds::{
-    rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy, reader::Reader,
-    participant::DomainParticipant, topic::Topic,
+    rtps_reader_proxy::RtpsReaderProxy, reader::Reader, participant::DomainParticipant,
+    topic::Topic,
   },
 };
 
 use super::data_types::{
-  topic_data::{SubscriptionBuiltinTopicData, DiscoveredReaderData, ReaderProxy},
+  topic_data::{
+    SubscriptionBuiltinTopicData, DiscoveredReaderData, ReaderProxy, DiscoveredWriterData,
+  },
   spdp_participant_data::SPDPDiscoveredParticipantData,
 };
 
 pub struct DiscoveryDB {
   participant_proxies: HashMap<GUID, SPDPDiscoveredParticipantData>,
   // local writer proxies for topics (topic name acts as key)
-  local_topic_writers: HashMap<String, Vec<RtpsWriterProxy>>,
+  local_topic_writers: Vec<DiscoveredWriterData>,
   // local reader proxies for topics (topic name acts as key)
-  local_topic_readers: HashMap<String, Vec<DiscoveredReaderData>>,
+  local_topic_readers: Vec<DiscoveredReaderData>,
 
-  writers_reader_proxies: HashMap<GUID, Vec<RtpsReaderProxy>>,
-  readers_writer_proxies: HashMap<GUID, Vec<RtpsWriterProxy>>,
+  writers_reader_proxies: HashMap<GUID, Vec<DiscoveredReaderData>>,
+  readers_writer_proxies: HashMap<GUID, Vec<DiscoveredWriterData>>,
 }
 
 impl DiscoveryDB {
   pub fn new() -> DiscoveryDB {
     DiscoveryDB {
       participant_proxies: HashMap::new(),
-      local_topic_writers: HashMap::new(),
-      local_topic_readers: HashMap::new(),
+      local_topic_writers: Vec::new(),
+      local_topic_readers: Vec::new(),
       writers_reader_proxies: HashMap::new(),
       readers_writer_proxies: HashMap::new(),
     }
-  }
-
-  pub fn add_local_topic_writer(&mut self, topic_name: String, writer: RtpsWriterProxy) -> bool {
-    let dbwriter = self.local_topic_writers.get_mut(&topic_name);
-    match dbwriter {
-      Some(v) => {
-        let res = v
-          .iter()
-          .filter(|p| p.remote_writer_guid == writer.remote_writer_guid)
-          .count();
-        if res == 0 {
-          v.push(writer);
-          return true;
-        }
-        return false;
-      }
-      None => self.local_topic_writers.insert(topic_name, vec![writer]),
-    };
-    true
   }
 
   pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) -> bool {
@@ -78,45 +61,6 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> bool {
-    let topic_name = match data.subscription_topic_data.topic_name.as_ref() {
-      Some(v) => v,
-      None => return false,
-    };
-
-    let local_writers = self.local_topic_writers.get(topic_name);
-    let writers = match local_writers {
-      Some(writers) => writers,
-      None => return false,
-    };
-
-    let rtps_reader_proxy = match RtpsReaderProxy::from(&data) {
-      Some(v) => v,
-      None => return false,
-    };
-
-    for writer in writers.iter() {
-      let wrp = self
-        .writers_reader_proxies
-        .get_mut(&writer.remote_writer_guid);
-
-      match wrp {
-        Some(v) => v
-          .iter_mut()
-          .filter(|p| p.remote_reader_guid == rtps_reader_proxy.remote_reader_guid)
-          .for_each(|p| p.update(&rtps_reader_proxy)),
-        None => {
-          self
-            .writers_reader_proxies
-            .insert(writer.remote_writer_guid, vec![rtps_reader_proxy.clone()]);
-          continue;
-        }
-      };
-    }
-
-    true
-  }
-
   pub fn participant_cleanup(&mut self) {
     let instant = time::precise_time_ns();
     self.participant_proxies.retain(|_, d| {
@@ -126,7 +70,93 @@ impl DiscoveryDB {
     });
   }
 
-  pub fn update_writers_reader_proxy(&mut self, writer: &GUID, reader: RtpsReaderProxy) -> bool {
+  // TODO: collecting participants might be slowish, might want to consider returning just iterator
+  pub fn get_participants(&self) -> Vec<&SPDPDiscoveredParticipantData> {
+    self.participant_proxies.iter().map(|(_, p)| p).collect()
+  }
+
+  pub fn update_local_topic_writer(&mut self, writer: DiscoveredWriterData) {
+    let dbwriter = self
+      .local_topic_writers
+      .iter_mut()
+      .find(|p| p.writer_proxy.remote_writer_guid == writer.writer_proxy.remote_writer_guid);
+
+    match dbwriter {
+      Some(v) => {
+        *v = writer;
+        return;
+      }
+      None => self.local_topic_writers.push(writer),
+    };
+  }
+
+  pub fn get_writers_reader_proxies(&self, guid: &GUID) -> Option<Vec<&DiscoveredReaderData>> {
+    self
+      .writers_reader_proxies
+      .get(guid)
+      .map(|p| p.iter().map(|c| c).collect())
+  }
+
+  pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> bool {
+    let topic_name = match data.subscription_topic_data.topic_name.as_ref() {
+      Some(v) => v,
+      None => return false,
+    };
+
+    let writers: Vec<DiscoveredWriterData> = self
+      .local_topic_writers
+      .iter()
+      .filter(|p| *p.publication_topic_data.topic_name.as_ref().unwrap() == *topic_name)
+      .map(|p| p.clone())
+      .collect();
+
+    // TODO: clean reader proxy out
+    let rtps_reader_proxy = match RtpsReaderProxy::from(&data) {
+      Some(v) => v,
+      None => return false,
+    };
+
+    for writer in writers.iter().map(|p| p.clone()) {
+      // update writers reader proxy
+      // TODO: handle unwrap
+      self.update_writers_reader_proxy(
+        &writer.writer_proxy.remote_writer_guid.unwrap(),
+        data.clone(),
+      );
+
+      // update writers local data
+      let wrp = self
+        .writers_reader_proxies
+        // TODO: handle unwrap
+        .get_mut(&writer.writer_proxy.remote_writer_guid.unwrap());
+
+      match wrp {
+        Some(v) => v
+          .iter_mut()
+          // TODO: handle unwrap
+          .filter(|p| {
+            p.reader_proxy.remote_reader_guid.unwrap() == rtps_reader_proxy.remote_reader_guid
+          })
+          .for_each(|p| p.update(&rtps_reader_proxy)),
+        None => {
+          self.writers_reader_proxies.insert(
+            // TODO: handle unwrap
+            writer.writer_proxy.remote_writer_guid.unwrap(),
+            vec![data.clone()],
+          );
+          continue;
+        }
+      };
+    }
+
+    true
+  }
+
+  pub fn update_writers_reader_proxy(
+    &mut self,
+    writer: &GUID,
+    reader: DiscoveredReaderData,
+  ) -> bool {
     let mut proxies = match self.writers_reader_proxies.get(&writer) {
       Some(prox) => prox.clone(),
       None => Vec::new(),
@@ -134,7 +164,11 @@ impl DiscoveryDB {
 
     let value: Option<usize> = proxies
       .iter()
-      .position(|x| x.remote_reader_guid == reader.remote_reader_guid);
+      // TODO: handle unwrap
+      .position(|x| {
+        x.reader_proxy.remote_reader_guid.unwrap()
+          == reader.reader_proxy.remote_reader_guid.unwrap()
+      });
     match value {
       Some(val) => proxies[val] = reader,
       None => proxies.push(reader),
@@ -214,36 +248,43 @@ impl DiscoveryDB {
     };
 
     // updating local topic readers
-    let treaders = self.local_topic_readers.get_mut(topic.get_name());
-    match treaders {
-      Some(readers) => {
-        *readers = readers
-          .into_iter()
-          .filter(|drd| {
-            drd.reader_proxy.remote_reader_guid
-              != discovered_reader_data.reader_proxy.remote_reader_guid
-          })
-          .map(|drd| drd.clone())
-          .collect::<Vec<DiscoveredReaderData>>();
+    let mut treaders: Vec<&mut DiscoveredReaderData> = self
+      .local_topic_readers
+      .iter_mut()
+      .filter(|p| {
+        *p.subscription_topic_data.topic_name.as_ref().unwrap() == String::from(topic.get_name())
+          && *p.reader_proxy.remote_reader_guid.as_ref().unwrap() == *reader.get_guid()
+      })
+      .collect();
 
-        readers.push(discovered_reader_data);
-      }
-      None => {
-        self
-          .local_topic_readers
-          .insert(topic.get_name().to_string(), vec![discovered_reader_data]);
-      }
-    };
+    if !treaders.is_empty() {
+      treaders
+        .iter_mut()
+        .filter(|p| {
+          p.reader_proxy.remote_reader_guid.unwrap()
+            == discovered_reader_data
+              .reader_proxy
+              .remote_reader_guid
+              .unwrap()
+        })
+        .for_each(|p| **p = discovered_reader_data.clone());
+    } else {
+      self.local_topic_readers.push(discovered_reader_data);
+    }
   }
 
   pub fn get_all_local_topic_readers(&self) -> Vec<&DiscoveredReaderData> {
-    let all_readers: Vec<&DiscoveredReaderData> = self.local_topic_readers.iter().map(|(_, drd)| drd.iter()).flatten().collect();
-    all_readers
+    self.local_topic_readers.iter().collect()
   }
 
   // TODO: maybe query parameter should only be topics' name
-  pub fn get_local_topic_readers(&self, topic: &Topic) -> Option<&Vec<DiscoveredReaderData>> {
-    self.local_topic_readers.get(&topic.get_name().to_string())
+  pub fn get_local_topic_readers(&self, topic: &Topic) -> Vec<&DiscoveredReaderData> {
+    let topic_name = topic.get_name().to_string();
+    self
+      .local_topic_readers
+      .iter()
+      .filter(|p| *p.subscription_topic_data.topic_name.as_ref().unwrap() == topic_name)
+      .collect()
   }
 }
 
@@ -253,8 +294,11 @@ mod tests {
   use super::*;
 
   use crate::{
-    structure::{dds_cache::DDSCache, guid::EntityId},
-    test::test_data::{subscription_builtin_topic_data, spdp_participant_data, reader_proxy_data},
+    structure::dds_cache::DDSCache,
+    test::{
+      random_data::RandomData,
+      test_data::{subscription_builtin_topic_data, spdp_participant_data, reader_proxy_data},
+    },
     dds::{qos::QosPolicies, typedesc::TypeDesc},
   };
   use std::sync::{RwLock, Arc};
@@ -283,8 +327,10 @@ mod tests {
   #[test]
   fn discdb_writer_proxies() {
     let mut discoverydb = DiscoveryDB::new();
-    let reader = RtpsReaderProxy::new(GUID::new());
-    discoverydb.update_writers_reader_proxy(&GUID::new(), reader);
+    let topic_name = String::from("some_topic");
+    let type_name = String::from("RandomData");
+    let dreader = DiscoveredReaderData::default(&topic_name, &type_name);
+    discoverydb.update_writers_reader_proxy(&GUID::new(), dreader);
     assert_eq!(discoverydb.writers_reader_proxies.len(), 1);
 
     // TODO: more tests :)
@@ -294,34 +340,55 @@ mod tests {
   fn discdb_subscription_operations() {
     let mut discovery_db = DiscoveryDB::new();
 
-    let topic_name = "Foobar".to_string();
-    let topic_name2 = "Barfoo".to_string();
+    let domain_participant = DomainParticipant::new(15, 0);
+    let topic = domain_participant
+      .create_topic(
+        "Foobar",
+        TypeDesc::new(String::from("RandomData")),
+        &QosPolicies::qos_none(),
+      )
+      .unwrap();
+    let topic2 = domain_participant
+      .create_topic(
+        "Barfoo",
+        TypeDesc::new(String::from("RandomData")),
+        &QosPolicies::qos_none(),
+      )
+      .unwrap();
 
-    let writer = RtpsWriterProxy::new(
-      GUID::new(),
-      Vec::new(),
-      Vec::new(),
-      EntityId::ENTITYID_UNKNOWN,
-    );
-    let writer_key = writer.remote_writer_guid.clone();
-    discovery_db.add_local_topic_writer(topic_name.clone(), writer);
+    let publisher1 = domain_participant
+      .create_publisher(&QosPolicies::qos_none())
+      .unwrap();
+    let dw = publisher1
+      .create_datawriter::<RandomData>(None, &topic, &QosPolicies::qos_none())
+      .unwrap();
+
+    let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
+
+    let writer_key = writer_data.writer_proxy.remote_writer_guid.unwrap().clone();
+    discovery_db.update_local_topic_writer(writer_data);
     assert_eq!(discovery_db.local_topic_writers.len(), 1);
 
-    let writer2 = RtpsWriterProxy::new(
-      GUID::new(),
-      Vec::new(),
-      Vec::new(),
-      EntityId::ENTITYID_UNKNOWN,
-    );
-    let _writer2_key = writer2.remote_writer_guid.clone();
-    discovery_db.add_local_topic_writer(topic_name2.clone(), writer2);
+    let publisher2 = domain_participant
+      .create_publisher(&QosPolicies::qos_none())
+      .unwrap();
+    let dw2 = publisher2
+      .create_datawriter::<RandomData>(None, &topic, &QosPolicies::qos_none())
+      .unwrap();
+    let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
+    let _writer2_key = writer_data2
+      .writer_proxy
+      .remote_writer_guid
+      .unwrap()
+      .clone();
+    discovery_db.update_local_topic_writer(writer_data2);
     assert_eq!(discovery_db.local_topic_writers.len(), 2);
 
     // creating data
     let reader1 = reader_proxy_data().unwrap();
     let mut reader1sub = subscription_builtin_topic_data().unwrap();
     reader1sub.key = reader1.remote_reader_guid.clone();
-    reader1sub.topic_name = Some(topic_name.clone());
+    reader1sub.topic_name = Some(topic.get_name().to_string().clone());
     let dreader1 = DiscoveredReaderData {
       reader_proxy: reader1.clone(),
       subscription_topic_data: reader1sub.clone(),
@@ -340,7 +407,7 @@ mod tests {
     let reader2 = reader_proxy_data().unwrap();
     let mut reader2sub = subscription_builtin_topic_data().unwrap();
     reader2sub.key = reader2.remote_reader_guid.clone();
-    reader2sub.topic_name = Some(topic_name2.clone());
+    reader2sub.topic_name = Some(topic2.get_name().to_string().clone());
     let dreader2 = DiscoveredReaderData {
       reader_proxy: reader2,
       subscription_topic_data: reader2sub,
@@ -404,17 +471,11 @@ mod tests {
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
-    assert_eq!(
-      discoverydb.get_local_topic_readers(&topic).unwrap().len(),
-      1
-    );
+    assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
-    assert_eq!(
-      discoverydb.get_local_topic_readers(&topic).unwrap().len(),
-      1
-    );
+    assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
     let reader = Reader::new(
       GUID::new(),
@@ -424,12 +485,7 @@ mod tests {
     );
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);
-    assert_eq!(discoverydb.local_topic_readers.len(), 1);
-    assert_eq!(
-      discoverydb.get_local_topic_readers(&topic).unwrap().len(),
-      2
-    );
-
+    assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 2);
     assert_eq!(discoverydb.get_all_local_topic_readers().len(), 2);
   }
 }

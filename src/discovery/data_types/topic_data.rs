@@ -5,7 +5,7 @@ use crate::{
     builtin_data_serializer::BuiltinDataSerializer,
     builtin_data_deserializer::BuiltinDataDeserializer,
   },
-  structure::{locator::LocatorList, guid::GUID},
+  structure::{locator::LocatorList, guid::GUID, entity::Entity},
   dds::{
     qos::policy::{
       Deadline, Durability, LatencyBudget, Reliability, Ownership, DestinationOrder, Liveliness,
@@ -13,6 +13,10 @@ use crate::{
     },
     traits::key::Keyed,
     rtps_reader_proxy::RtpsReaderProxy,
+    reader::Reader,
+    participant::DomainParticipant,
+    topic::Topic,
+    datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
 };
@@ -24,6 +28,17 @@ pub struct ReaderProxy {
   pub expects_inline_qos: Option<bool>,
   pub unicast_locator_list: LocatorList,
   pub multicast_locator_list: LocatorList,
+}
+
+impl ReaderProxy {
+  pub fn new(guid: &GUID) -> ReaderProxy {
+    ReaderProxy {
+      remote_reader_guid: Some(guid.clone()),
+      expects_inline_qos: Some(false),
+      unicast_locator_list: Vec::new(),
+      multicast_locator_list: Vec::new(),
+    }
+  }
 }
 
 impl From<RtpsReaderProxy> for ReaderProxy {
@@ -81,6 +96,32 @@ pub struct SubscriptionBuiltinTopicData {
   pub lifespan: Option<Lifespan>,
 }
 
+impl SubscriptionBuiltinTopicData {
+  pub fn new(
+    key: &GUID,
+    participant_key: &GUID,
+    topic_name: &String,
+    type_name: &String,
+  ) -> SubscriptionBuiltinTopicData {
+    SubscriptionBuiltinTopicData {
+      key: Some(key.clone()),
+      participant_key: Some(participant_key.clone()),
+      topic_name: Some(topic_name.clone()),
+      type_name: Some(type_name.clone()),
+      durability: None,
+      deadline: None,
+      latency_budget: None,
+      liveliness: None,
+      reliability: None,
+      ownership: None,
+      destination_order: None,
+      time_based_filter: None,
+      presentation: None,
+      lifespan: None,
+    }
+  }
+}
+
 impl<'de> Deserialize<'de> for SubscriptionBuiltinTopicData {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
@@ -107,6 +148,44 @@ pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
   pub content_filter: Option<ContentFilterProperty>,
+}
+
+impl DiscoveredReaderData {
+  pub fn new(reader: &Reader, dp: &DomainParticipant, topic: &Topic) -> DiscoveredReaderData {
+    let reader_proxy = ReaderProxy::new(reader.get_guid());
+    let subscription_topic_data = SubscriptionBuiltinTopicData::new(
+      reader.get_guid(),
+      dp.get_guid(),
+      &topic.get_name().to_string(),
+      &topic.get_type().name().to_string(),
+    );
+    DiscoveredReaderData {
+      reader_proxy,
+      subscription_topic_data,
+      content_filter: None,
+    }
+  }
+
+  pub fn default(topic_name: &String, type_name: &String) -> DiscoveredReaderData {
+    let rguid = GUID::new();
+    let reader_proxy = ReaderProxy::new(&rguid);
+    let mut pguid = GUID::new();
+    pguid.guidPrefix = rguid.guidPrefix.clone();
+    let subscription_topic_data =
+      SubscriptionBuiltinTopicData::new(&rguid, &pguid, topic_name, type_name);
+    DiscoveredReaderData {
+      reader_proxy,
+      subscription_topic_data,
+      content_filter: None,
+    }
+  }
+
+  pub fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
+    self.reader_proxy.remote_reader_guid = Some(rtps_reader_proxy.remote_reader_guid.clone());
+    self.reader_proxy.expects_inline_qos = Some(rtps_reader_proxy.expects_in_line_qos.clone());
+    self.reader_proxy.unicast_locator_list = rtps_reader_proxy.unicast_locator_list.clone();
+    self.reader_proxy.multicast_locator_list = rtps_reader_proxy.multicast_locator_list.clone();
+  }
 }
 
 impl Keyed for DiscoveredReaderData {
@@ -140,12 +219,23 @@ impl Serialize for DiscoveredReaderData {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WriterProxy {
   pub remote_writer_guid: Option<GUID>,
   pub unicast_locator_list: LocatorList,
   pub multicast_locator_list: LocatorList,
   pub data_max_size_serialized: Option<u32>,
+}
+
+impl WriterProxy {
+  pub fn new(guid: &GUID) -> WriterProxy {
+    WriterProxy {
+      remote_writer_guid: Some(guid.clone()),
+      unicast_locator_list: Vec::new(),
+      multicast_locator_list: Vec::new(),
+      data_max_size_serialized: None,
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for WriterProxy {
@@ -169,7 +259,7 @@ impl Serialize for WriterProxy {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PublicationBuiltinTopicData {
   pub key: Option<GUID>,
   pub participant_key: Option<GUID>,
@@ -185,6 +275,32 @@ pub struct PublicationBuiltinTopicData {
   pub ownership: Option<Ownership>,
   pub destination_order: Option<DestinationOrder>,
   pub presentation: Option<Presentation>,
+}
+
+impl PublicationBuiltinTopicData {
+  pub fn new(
+    guid: &GUID,
+    participant_guid: &GUID,
+    topic_name: &String,
+    type_name: &String,
+  ) -> PublicationBuiltinTopicData {
+    PublicationBuiltinTopicData {
+      key: Some(guid.clone()),
+      participant_key: Some(participant_guid.clone()),
+      topic_name: Some(topic_name.clone()),
+      type_name: Some(type_name.clone()),
+      durability: None,
+      deadline: None,
+      latency_budget: None,
+      liveliness: None,
+      reliability: None,
+      lifespan: None,
+      time_based_filter: None,
+      ownership: None,
+      destination_order: None,
+      presentation: None,
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for PublicationBuiltinTopicData {
@@ -208,10 +324,30 @@ impl Serialize for PublicationBuiltinTopicData {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DiscoveredWriterData {
   pub writer_proxy: WriterProxy,
   pub publication_topic_data: PublicationBuiltinTopicData,
+}
+
+impl DiscoveredWriterData {
+  pub fn new<D: Keyed>(
+    writer: &DataWriter<D>,
+    topic: &Topic,
+    dp: &DomainParticipant,
+  ) -> DiscoveredWriterData {
+    let writer_proxy = WriterProxy::new(writer.get_guid());
+    let publication_topic_data = PublicationBuiltinTopicData::new(
+      writer.get_guid(),
+      dp.get_guid(),
+      &topic.get_name().to_string(),
+      &topic.get_type().name().to_string(),
+    );
+    DiscoveredWriterData {
+      writer_proxy,
+      publication_topic_data,
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for DiscoveredWriterData {

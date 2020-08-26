@@ -20,6 +20,7 @@ use crate::{
   structure::{cache_change::ChangeKind, dds_cache::DDSCache},
   submessages::AckNack,
 };
+use super::rtps_reader_proxy::RtpsReaderProxy;
 
 pub struct DPEventWrapper {
   domain_participants_guid: GUID,
@@ -78,11 +79,6 @@ impl DPEventWrapper {
           PollOpt::edge(),
         )
         .expect("Failed to register listener.");
-      println!(
-        "registered listener with token:  {:?} on socket: {:?}",
-        token,
-        listener.mio_socket()
-      )
     }
 
     poll
@@ -187,8 +183,6 @@ impl DPEventWrapper {
         .poll(&mut events, None)
         .expect("Failed in waiting of poll.");
       for event in events.into_iter() {
-        println!("Dp_eventwrapper poll received: {:?}", event); // for debugging!!!!!!
-
         if event.token() == STOP_POLL_TOKEN {
           return;
         } else if DPEventWrapper::is_udp_traffic(&event) {
@@ -202,17 +196,18 @@ impl DPEventWrapper {
         } else if DPEventWrapper::is_writer_acknack_action(&event) {
           ev_wrapper.handle_writer_acknack_action(&event);
         } else if DPEventWrapper::is_reader_update_notification(&event) {
+
           // TODO:
         } else if DPEventWrapper::is_writer_update_notification(&event) {
-          // TODO:
+          ev_wrapper.update_writers();
         }
       }
     }
   }
 
   pub fn is_udp_traffic(event: &Event) -> bool {
-    event.token() == DISCOVERY_SENDER_TOKEN
-      || event.token() == USER_TRAFFIC_SENDER_TOKEN
+    event.token() == DISCOVERY_LISTENER_TOKEN
+      || event.token() == DISCOVERY_MUL_LISTENER_TOKEN
       || event.token() == USER_TRAFFIC_LISTENER_TOKEN
       || event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
   }
@@ -257,7 +252,6 @@ impl DPEventWrapper {
   }
 
   pub fn handle_udp_traffic(&mut self, event: &Event) {
-    println!("handle udp traffic");
     let listener = self.udp_listeners.get(&event.token());
     match listener {
       Some(l) => loop {
@@ -302,10 +296,8 @@ impl DPEventWrapper {
   }
 
   pub fn handle_writer_action(&mut self, event: &Event) {
-    println!("dp_ew handle writer action with token {:?}", event.token());
     match event.token() {
       ADD_WRITER_TOKEN => {
-        println!("ADD WRITER");
         let mut new_writer = self
           .add_writer_receiver
           .receiver
@@ -358,11 +350,9 @@ impl DPEventWrapper {
         match found_writer {
           Some((_guid, w)) => {
             let cache_change = w.cache_change_receiver().try_recv();
-            println!("found RTPS writer with entity token {:?}", t);
 
             match cache_change {
               Ok(cc) => {
-                println!("Change Kind: {:?}", cc.change_kind);
                 if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED {
                   w.handle_not_alive_disposed_cache_change(cc);
                 } else if cc.change_kind == ChangeKind::ALIVE {
@@ -447,6 +437,41 @@ impl DPEventWrapper {
           writer_guid
         );
       }
+    }
+  }
+
+  pub fn update_writers(&mut self) {
+    match self.discovery_db.read() {
+      Ok(db) => {
+        for (_, writer) in self.writers.iter_mut() {
+          if *writer.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
+            // if writer is participant writer
+            let proxies = db.get_participants();
+            writer.readers = proxies
+              .iter()
+              .map(|&p| p.as_reader_proxy(true).clone())
+              .collect();
+          } else if *writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
+            let proxies = db.get_participants();
+            writer.readers = proxies.iter().map(|p| p.as_reader_proxy(true)).map(|mut p| { 
+              p.remote_reader_guid.entityId = EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER; 
+              p
+            }).collect();
+          } else {
+            let proxies = db.get_writers_reader_proxies(writer.get_guid());
+            match proxies {
+              Some(v) => {
+                writer.readers = v
+                  .iter()
+                  .map(|&p| RtpsReaderProxy::from(p).unwrap())
+                  .collect();
+              }
+              None => (),
+            };
+          }
+        }
+      }
+      _ => return,
     }
   }
 }

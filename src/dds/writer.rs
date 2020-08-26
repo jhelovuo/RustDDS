@@ -1,9 +1,11 @@
 use crate::messages::submessages::data::Data;
 use chrono::Duration as chronoDuration;
 //use crate::messages::submessages::info_destination::InfoDestination;
-use crate::messages::submessages::{submessage_elements::{parameter::Parameter, parameter_list::ParameterList}, info_timestamp::InfoTimestamp};
+use crate::messages::submessages::{
+  submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
+  info_timestamp::InfoTimestamp,
+};
 use crate::structure::time::Timestamp;
-use byteorder::{ByteOrder, LittleEndian};
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::{header::Header, vendor_id::VendorId, protocol_id::ProtocolId};
 use crate::structure::guid::{GuidPrefix, EntityId, GUID};
@@ -11,8 +13,8 @@ use crate::structure::sequence_number::{SequenceNumber};
 use std::hash::Hasher;
 use crate::{
   submessages::{
-    Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage,
-    EntitySubmessage, AckNack, InfoDestination, SubmessageFlagHelper,
+    Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage, EntitySubmessage, AckNack,
+    InfoDestination, SubmessageFlagHelper,
   },
   structure::cache_change::{CacheChange, ChangeKind},
   serialization::{SubMessage, Message},
@@ -31,7 +33,8 @@ use crate::{
     entity::{Entity, EntityAttributes},
     endpoint::{EndpointAttributes, Endpoint},
     locator::{Locator, LocatorKind},
-    dds_cache::DDSCache},
+    dds_cache::DDSCache,
+  },
   common::timed_event_handler::{TimedEventHandler},
 };
 use super::{
@@ -99,7 +102,7 @@ pub struct Writer {
   cache_change_receiver: mio_channel::Receiver<DDSData>,
   ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
   ///RTPS Reader
-  readers: Vec<RtpsReaderProxy>,
+  pub readers: Vec<RtpsReaderProxy>,
   message: Option<Message>,
   udp_sender: UDPSender,
   // This writer can read/write to only one of this DDSCache topic caches identified with my_topic_name
@@ -215,10 +218,6 @@ impl Writer {
 
   /// this should be called everytime cacheCleaning message is received.
   pub fn handle_cache_cleaning(&mut self) {
-    println!(
-      "HANDLE CAHCE CLEANING writer entityID: {:?}",
-      self.as_entity()
-    );
     let mut removedChanges = vec![];
     match self.qos_policies.history {
       None => {
@@ -249,9 +248,9 @@ impl Writer {
 
   /// this should be called everytime heartbeat message with token is recieved.
   pub fn handle_heartbeat_tick(&mut self) {
-    println!("HANDLE HERTBEAT writer entityID: {:?}", self.as_entity());
+    let mut RTPSMessage: Message = Message::new();
 
-   
+    RTPSMessage.set_header(self.create_message_header());
 
     // TODO Set some guidprefix if needed at all.
     // Not sure if DST submessage and TS submessage are needed when sending heartbeat.
@@ -261,20 +260,27 @@ impl Writer {
 
     //TODO WHEN FINAL FLAG NEEDS TO BE SET?
     //TODO WHEN LIVELINESS FLAG NEEDS TO BE SET?
-   
 
     //let buffer :[u8] = RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap();
     for reader in &self.readers {
       if reader.unicast_locator_list.len() > 0 {
         let mut RTPSMessage: Message = Message::new();
         RTPSMessage.set_header(self.create_message_header());
-        RTPSMessage.add_submessage(self.get_heartbeat_msg(reader.remote_reader_guid.entityId, false,false));
+        RTPSMessage.add_submessage(self.get_heartbeat_msg(
+          reader.remote_reader_guid.entityId,
+          false,
+          false,
+        ));
         self.send_unicast_message_to_reader(&RTPSMessage, reader);
       }
       if reader.multicast_locator_list.len() > 0 {
         let mut RTPSMessage: Message = Message::new();
         RTPSMessage.set_header(self.create_message_header());
-        RTPSMessage.add_submessage(self.get_heartbeat_msg(reader.remote_group_entity_id, false,false));
+        RTPSMessage.add_submessage(self.get_heartbeat_msg(
+          reader.remote_group_entity_id,
+          false,
+          false,
+        ));
         self.send_multicast_message_to_reader(&RTPSMessage, reader);
       }
     }
@@ -350,16 +356,13 @@ impl Writer {
       acked_by_all
     };
     if acked_by_all_readers.len() as i32 <= depth {
-      println!("Count of acked changes: {:?} is smaller than required history depth: {:?} -> Do not remove anything", acked_by_all_readers.len(), depth);
       return removed_change_sequence_numbers;
     } else {
       amount_need_to_remove = acked_by_all_readers.len() as i32 - depth;
-      println!("need to remove amount {:?}", amount_need_to_remove);
-      println!("acked changes map {:?}", acked_by_all_readers);
     }
     {
       let mut index: i32 = 0;
-      for (i, sq) in acked_by_all_readers {
+      for (i, _sq) in acked_by_all_readers {
         if index >= amount_need_to_remove {
           break;
         }
@@ -369,10 +372,6 @@ impl Writer {
           .unwrap()
           .from_topic_remove_change(&self.my_topic_name, i);
         if removed.is_some() {
-          println!(
-            "Removed cahceChange with sequenceNumber {:?} from topic {:?}",
-            sq, self.my_topic_name
-          );
           removed_change_sequence_numbers.push(removed.unwrap().sequence_number);
         } else {
           println!(
@@ -464,6 +463,7 @@ impl Writer {
 
   pub fn sequence_is_sent_to_all_readers(&self, sequence_number: SequenceNumber) -> bool {
     for reader_proxy in &self.readers {
+      println!("Proxy: {:?}", reader_proxy);
       if reader_proxy.unsent_changes().contains(&sequence_number) {
         return false;
       }
@@ -592,19 +592,20 @@ impl Writer {
   }
 
   pub fn send_all_unsend_messages(&mut self) {
-    println!("Writer try to send all unsend messages");
     if self.can_send_some() {
       loop {
         let (message, guid) = self.get_next_reader_next_unsend_message();
         if message.is_some() && guid.is_some() {
           self.send_next_unsend_message();
         } else {
-          println!("Writer all unsent messages have been sent");
           break;
         }
       }
     } else {
-      println!("Writer cannot send any messages!");
+      println!(
+        "Writer {:?} cannot send any messages!",
+        self.get_entity_id()
+      );
     }
   }
 
@@ -647,9 +648,12 @@ impl Writer {
     &self,
     kind: SubmessageKind,
     submessageLength: u16,
-    submessage_flag_helper: SubmessageFlagHelper
+    submessage_flag_helper: SubmessageFlagHelper,
   ) -> SubmessageHeader {
-    let sub_flags = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&kind,&submessage_flag_helper);
+    let sub_flags = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
+      &kind,
+      &submessage_flag_helper,
+    );
     let header: SubmessageHeader = SubmessageHeader {
       submessage_id: kind,
       flags: sub_flags,
@@ -658,7 +662,7 @@ impl Writer {
     header
   }
 
-  pub fn get_TS_submessage(&self, invalidiateFlagSet : bool) -> SubMessage {
+  pub fn get_TS_submessage(&self, invalidiateFlagSet: bool) -> SubMessage {
     let currentTime: Timespec = get_time();
     let timestamp = InfoTimestamp {
       timestamp: Timestamp::from(currentTime),
@@ -666,25 +670,30 @@ impl Writer {
     let mes = &mut timestamp.write_to_vec_with_ctx(self.endianness).unwrap();
     let size = mes.len();
 
-    let mut flagHelper : SubmessageFlagHelper = SubmessageFlagHelper::new(self.endianness);
+    let mut flagHelper: SubmessageFlagHelper = SubmessageFlagHelper::new(self.endianness);
     flagHelper.InvalidateFlag = invalidiateFlagSet;
 
-    let submessageHeader = self.create_submessage_header(SubmessageKind::INFO_TS, size as u16,flagHelper.clone());
+    let submessageHeader =
+      self.create_submessage_header(SubmessageKind::INFO_TS, size as u16, flagHelper.clone());
     let s: SubMessage = SubMessage {
       header: submessageHeader,
       submessage: None,
       intepreterSubmessage: Some(InterpreterSubmessage::InfoTimestamp(
         timestamp,
-        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::INFO_TS,&flagHelper),
+        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
+          &SubmessageKind::INFO_TS,
+          &flagHelper,
+        ),
       )),
     };
     return s;
   }
 
   pub fn get_DST_submessage(&self, guid_prefix: GuidPrefix) -> SubMessage {
-    let flagHelper : SubmessageFlagHelper = SubmessageFlagHelper::new(self.endianness);
+    let flagHelper: SubmessageFlagHelper = SubmessageFlagHelper::new(self.endianness);
     //InfoDST length is always 12 because message contains only GuidPrefix
-    let submessageHeader = self.create_submessage_header(SubmessageKind::INFO_DST, 12u16,flagHelper);
+    let submessageHeader =
+      self.create_submessage_header(SubmessageKind::INFO_DST, 12u16, flagHelper);
     let s: SubMessage = SubMessage {
       header: submessageHeader,
       submessage: None,
@@ -694,7 +703,6 @@ impl Writer {
     };
     return s;
   }
-
 
   pub fn get_DATA_msg_from_cache_change(
     &self,
@@ -708,9 +716,11 @@ impl Writer {
     } else if self.endianness == Endianness::BigEndian {
       representationIdentifierBytes = [0x00, 0x00];
     }
-    let u_16 = LittleEndian::read_u16(&representationIdentifierBytes);
+
+    // TODO: might want check representation identifier again
     data_message.serialized_payload.representation_identifier =
-      SerializedPayload::representation_identifier_from(u_16);
+      SerializedPayload::representation_identifier_from(representationIdentifierBytes[1] as u16);
+
     //The current version of the protocol (2.3) does not use the representation_options: The sender shall set the representation_options to zero.
     data_message.serialized_payload.representation_options = 0u16;
     data_message.serialized_payload.value = change.data_value.unwrap().value.clone();
@@ -722,29 +732,41 @@ impl Writer {
     // if change kind is dispose then datawriter is telling to dispose the data instance
     if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
       let mut inline_qos_settings = ParameterList::new();
-      inline_qos_settings.parameters.push(Parameter::create_pid_status_info_parameter(true,false,false));
+      inline_qos_settings
+        .parameters
+        .push(Parameter::create_pid_status_info_parameter(
+          true, false, false,
+        ));
       data_message.inline_qos = Some(inline_qos_settings);
       flagHelper.InlineQosFlag = true;
       flagHelper.KeyFlag = true;
       flagHelper.DataFlag = false;
     }
-  
+
     let size = data_message
       .write_to_vec_with_ctx(self.endianness)
       .unwrap()
       .len() as u16;
     let s: SubMessage = SubMessage {
-      header: self.create_submessage_header(SubmessageKind::DATA, size,flagHelper.clone()),
+      header: self.create_submessage_header(SubmessageKind::DATA, size, flagHelper.clone()),
       submessage: Some(crate::submessages::EntitySubmessage::Data(
         data_message,
-        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA,&flagHelper),
+        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
+          &SubmessageKind::DATA,
+          &flagHelper,
+        ),
       )),
       intepreterSubmessage: None,
     };
     return s;
   }
 
-  pub fn get_heartbeat_msg(&self, reader_id : EntityId, set_final_flag : bool, set_liveliness_flag : bool) -> SubMessage {
+  pub fn get_heartbeat_msg(
+    &self,
+    reader_id: EntityId,
+    set_final_flag: bool,
+    set_liveliness_flag: bool,
+  ) -> SubMessage {
     let first = self.first_change_sequence_number;
     let last = self.last_change_sequence_number;
 
@@ -762,14 +784,18 @@ impl Writer {
 
     let mes = &mut heartbeat.write_to_vec_with_ctx(self.endianness).unwrap();
     let size = mes.len();
-    let head = self.create_submessage_header(SubmessageKind::HEARTBEAT, size as u16,flagHelper.clone());
+    let head =
+      self.create_submessage_header(SubmessageKind::HEARTBEAT, size as u16, flagHelper.clone());
 
     let s: SubMessage = SubMessage {
       header: head,
       intepreterSubmessage: None,
       submessage: Some(EntitySubmessage::Heartbeat(
         heartbeat,
-        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::HEARTBEAT, &flagHelper),
+        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
+          &SubmessageKind::HEARTBEAT,
+          &flagHelper,
+        ),
       )),
     };
     return s;
@@ -887,8 +913,8 @@ impl Writer {
     &self,
     sequence_number: &SequenceNumber,
   ) -> bool {
-    for _proxy in &self.readers {
-      if _proxy.sequence_is_acked(sequence_number) == false {
+    for proxy in &self.readers {
+      if proxy.sequence_is_acked(sequence_number) == false {
         return false;
       }
     }
@@ -1018,5 +1044,4 @@ mod tests {
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     println!("writerResult:  {:?}", writeResult);
   }
-  
 }

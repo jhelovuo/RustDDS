@@ -27,7 +27,11 @@ use crate::{
   network::constant::*,
 };
 
-use std::{net::SocketAddr, time::Duration as StdDuration};
+use std::{
+  net::{IpAddr, SocketAddr},
+  time::Duration as StdDuration,
+  io::Error,
+};
 #[derive(Debug, Clone)]
 pub struct SPDPDiscoveredParticipantData {
   pub updated_time: u64,
@@ -47,7 +51,7 @@ pub struct SPDPDiscoveredParticipantData {
 }
 
 impl SPDPDiscoveredParticipantData {
-  pub fn as_reader_proxy(&self) -> Option<RtpsReaderProxy> {
+  pub fn as_reader_proxy(&self, is_metatraffic: bool) -> RtpsReaderProxy {
     let remote_reader_guid = GUID::new_with_prefix_and_id(
       self.participant_guid.unwrap().guidPrefix,
       EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
@@ -55,44 +59,77 @@ impl SPDPDiscoveredParticipantData {
     let mut proxy = RtpsReaderProxy::new(remote_reader_guid);
     proxy.expects_in_line_qos = match self.expects_inline_qos {
       Some(v) => v,
-      None => return None,
+      None => false,
     };
-    proxy.multicast_locator_list = self.default_multicast_locators.clone();
-    proxy.unicast_locator_list = self.default_unicast_locators.clone();
-    Some(proxy)
+
+    if !is_metatraffic {
+      proxy.multicast_locator_list = self.default_multicast_locators.clone();
+      proxy.unicast_locator_list = self.default_unicast_locators.clone();
+    } else {
+      proxy.multicast_locator_list = self.metatraffic_multicast_locators.clone();
+      proxy.unicast_locator_list = self.metatraffic_unicast_locators.clone();
+    }
+
+    proxy
   }
 
   pub fn from_participant(
     participant: &DomainParticipant,
     lease_duration: StdDuration,
   ) -> SPDPDiscoveredParticipantData {
-    let mut metatraffic_unicast_locators = LocatorList::new();
+    let mut metatraffic_multicast_locators = LocatorList::new();
     let saddr = SocketAddr::new(
       "239.255.0.1".parse().unwrap(),
       get_spdp_well_known_multicast_port(participant.domain_id()),
     );
-    metatraffic_unicast_locators.push(Locator::from(saddr));
-
-    let mut metatraffic_multicast_locators = LocatorList::new();
-    let saddr = SocketAddr::new(
-      "0.0.0.0".parse().unwrap(),
-      get_spdp_well_known_unicast_port(participant.domain_id(), participant.participant_id()),
-    );
     metatraffic_multicast_locators.push(Locator::from(saddr));
 
-    let mut default_unicast_locators = LocatorList::new();
+    let local_ips: Result<Vec<IpAddr>, Error> = get_if_addrs::get_if_addrs().map(|p| {
+      p.iter()
+        .filter(|ip| !ip.is_loopback())
+        .map(|ip| ip.ip())
+        .collect()
+    });
+
+    let metatraffic_unicast_locators: LocatorList = match local_ips {
+      Ok(ips) => ips
+        .iter()
+        .map(|p| {
+          Locator::from(SocketAddr::new(
+            p.clone(),
+            get_spdp_well_known_unicast_port(participant.domain_id(), participant.participant_id()),
+          ))
+        })
+        .collect(),
+      _ => Vec::new(),
+    };
+
+    let mut default_multicast_locators = LocatorList::new();
     let saddr = SocketAddr::new(
       "239.255.0.1".parse().unwrap(),
       get_user_traffic_multicast_port(participant.domain_id()),
     );
-    default_unicast_locators.push(Locator::from(saddr));
-
-    let mut default_multicast_locators = LocatorList::new();
-    let saddr = SocketAddr::new(
-      "0.0.0.0".parse().unwrap(),
-      get_user_traffic_unicast_port(participant.domain_id(), participant.participant_id()),
-    );
     default_multicast_locators.push(Locator::from(saddr));
+
+    let local_ips: Result<Vec<IpAddr>, Error> = get_if_addrs::get_if_addrs().map(|p| {
+      p.iter()
+        .filter(|ip| !ip.is_loopback())
+        .map(|ip| ip.ip())
+        .collect()
+    });
+
+    let default_unicast_locators: LocatorList = match local_ips {
+      Ok(ips) => ips
+        .iter()
+        .map(|p| {
+          Locator::from(SocketAddr::new(
+            p.clone(),
+            get_user_traffic_unicast_port(participant.domain_id(), participant.participant_id()),
+          ))
+        })
+        .collect(),
+      _ => Vec::new(),
+    };
 
     let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR

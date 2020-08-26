@@ -33,12 +33,13 @@ pub struct SerializedPayload {
 impl SerializedPayload {
   pub fn new() -> SerializedPayload {
     SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_BE,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: 0,
       value: vec![],
     }
   }
   pub fn representation_identifier_from(u_16: u16) -> RepresentationIdentifier {
+    // TODO: handle unwrap
     RepresentationIdentifier::try_from(u_16).unwrap()
   }
 }

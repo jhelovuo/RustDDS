@@ -182,16 +182,16 @@ impl MessageReceiver {
     reader.get_history_cache_sequence_start_and_end_numbers()
   }
 
-  pub fn handle_discovery_msg(&mut self, _msg: Vec<u8>) {
+  pub fn handle_discovery_msg(&mut self, msg: Vec<u8>) {
     // 9.6.2.2
     // The discovery message is just a data message. No need for the
     // messageReceiver to handle it any differently here?
-    unimplemented!();
+    self.handle_user_msg(msg);
   }
 
   pub fn handle_user_msg(&mut self, msg: Vec<u8>) {
-    println!("handle user Message");
     if msg.len() < RTPS_MESSAGE_HEADER_SIZE {
+      println!("Message is smaller that RTPS_MESSAGE_HEADER_SIZE");
       return;
     }
     self.reset();
@@ -218,10 +218,8 @@ impl MessageReceiver {
                      // How do we know how to deserialize the header?
       endian = submessage_header.flags.endianness_flag();
       let mut submessage_length = submessage_header.submessage_length as usize;
-      println!("submessage length: {:?}", submessage_length);
-      println!("submessage header: {:?}", submessage_header);
       if submessage_length == 0 {
-        submessage_length = msg.len() - self.pos; // RTPS 8.3.3.2.3
+        submessage_length = msg.len() - self.pos; // RTPS 8.3.3.2.3s
       } else if submessage_length > msg.len() - self.pos {
         println!("submessage is longer than msg len ?????");
         return; // rule 2
@@ -239,6 +237,7 @@ impl MessageReceiver {
         ) {
           Some(entity_sm) => entity_sm,
           None => {
+            println!("Failed to deserialize RTPS submessage");
             continue; // rule 3
           }
         };
@@ -499,7 +498,6 @@ mod tests {
 
   use crate::structure::topic_kind::TopicKind;
   use crate::dds::{qos::QosPolicies, typedesc::TypeDesc};
-  use std::time::Instant;
 
   #[test]
 
@@ -581,7 +579,7 @@ mod tests {
 
     // now try to serialize same message
 
-    let _serializedPayload = to_bytes::<ShapeType,LittleEndian>(&deserializedShapeType);
+    let _serializedPayload = to_bytes::<ShapeType, LittleEndian>(&deserializedShapeType);
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
     let mut _writerObject = Writer::new(
       GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], 2)),

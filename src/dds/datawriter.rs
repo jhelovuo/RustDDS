@@ -49,12 +49,17 @@ where
   pub fn new(
     publisher: &'a Publisher,
     topic: &'a Topic,
+    guid: Option<GUID>,
     cc_upload: mio_channel::Sender<DDSData>,
     dds_cache: Arc<RwLock<DDSCache>>,
   ) -> DataWriter<'a, D> {
+    let entity_id = match guid {
+      Some(g) => g.entityId.clone(),
+      None => EntityId::ENTITYID_UNKNOWN,
+    };
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
       publisher.get_participant().get_guid_prefix().clone(),
-      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+      entity_id,
     ));
 
     dds_cache.write().unwrap().add_new_topic(

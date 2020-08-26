@@ -12,8 +12,8 @@ use speedy::{Readable, Writable, Endianness, Reader, Context, Writer};
 
 #[derive(Debug)]
 pub struct Message {
-  header: Header,
-  submessages: Vec<SubMessage>,
+  pub header: Header,
+  pub submessages: Vec<SubMessage>,
 }
 
 ///Purpose of this object is to help RTPS Message SubmessageHeader SubmessageFlag value setting and value reading.
