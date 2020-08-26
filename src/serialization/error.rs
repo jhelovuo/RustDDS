@@ -24,23 +24,7 @@ pub enum Error {
   BadBoolean(u8),
   BadString(std::str::Utf8Error), // was not valid UTF-8
   BadChar(u32), // invalid Unicode codepoint
-  BadOption(u32),
-  //TODO
-  /*
-  Syntax,
-  ExpectedBoolean,
-  ExpectedInteger,
-  ExpectedString,
-  ExpectedNull,
-  ExpectedArray,
-  ExpectedArrayComma,
-  ExpectedArrayEnd,
-  ExpectedMap,
-  ExpectedMapColon,
-  ExpectedMapComma,
-  ExpectedMapEnd,
-  ExpectedEnum,
-  */
+  BadOption(u32),  // Option variant tag (discriminant) is not 0 or 1
   TrailingCharacters(Vec<u8>),
   
 }

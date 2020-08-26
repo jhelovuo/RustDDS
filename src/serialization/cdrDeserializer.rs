@@ -1,6 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian, BigEndian, ReadBytesExt};
 use std::marker::PhantomData;
-use serde::{Deserialize};
+//use serde::Deserialize;
 //use serde::Deserializer;
 use serde::{
   de::{
@@ -71,7 +71,7 @@ impl<'de,BO> CDR_deserializer<'de,BO>
     let modulo = self.serializedDataCount % typeOctetAligment;
     if modulo != 0 {
       let padding = typeOctetAligment - modulo;
-      println!("need to remove padding! {}", padding);
+      //println!("need to remove padding! {}", padding);
       self.remove_bytes_from_input(padding)
     } else {
       Ok(())
@@ -364,7 +364,7 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_ignored_any");
+    //println!("deserialize_ignored_any");
     self.deserialize_any(visitor)
   }
   
@@ -396,9 +396,8 @@ where BO: ByteOrder
     V: DeserializeSeed<'de>,
   {
     // preceeding deserialize_enum aligned to 4
-    println!("EnumAccess variant_seed");
+    //println!("EnumAccess variant_seed");
     let enum_tag = self.de.next_bytes(4)?.read_u32::<BO>().unwrap();
-
     let val: Result<_> = seed.deserialize(enum_tag.into_deserializer());
     Ok( (val?, self) )
   }
@@ -412,42 +411,32 @@ where BO: ByteOrder
   type Error = Error;
 
   fn unit_variant(self) -> Result<()> {
-    println!("VariantAccess unit_variant");
+    //println!("VariantAccess unit_variant");
     Ok(())
   }
 
-  fn newtype_variant_seed<T>(self, _seed: T) -> Result<T::Value>
+  fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
   where
     T: DeserializeSeed<'de>,
   {
-    println!("VariantAccess newtype_variant_seed");
-    unimplemented!();
-    //seed.deserialize()
+    //println!("VariantAccess newtype_variant_seed");
+    seed.deserialize(self.de)
   }
 
-  fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value>
+  fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    println!("VariantAccess tuple_variant");
-    unimplemented!();
-    //self.de.deserialize_seq(/*self.de,*/ visitor)
+    //println!("VariantAccess tuple_variant");
+    de::Deserializer::deserialize_seq(self.de, visitor)
   }
 
-  fn struct_variant<V>(self, _fields: &'static [&'static str], _visitor: V) -> Result<V::Value>
+  fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    println!("VariantAccess struct_variant");
-    unimplemented!();
-    //self.de.deserialize_map(/*self.de,*/ visitor)
-  }
-  fn newtype_variant<T>(self) -> Result<T>
-  where
-    T: Deserialize<'de>,
-  {
-    println!("VariantAccess newtype_variant");
-    unimplemented!();
+    //println!("VariantAccess struct_variant");
+    de::Deserializer::deserialize_map(self.de, visitor)
   }
 }
 
@@ -481,7 +470,7 @@ where BO: ByteOrder,
     T: DeserializeSeed<'de>, 
   {
     if self.elementCounter == self.expectedCount {
-      println!("STOP SEQ");
+      //println!("STOP SEQ");
       Ok(None)
     } else {
       self.elementCounter = self.elementCounter + 1;
@@ -502,7 +491,7 @@ where BO: ByteOrder,
     K: DeserializeSeed<'de>,
   {
     if self.elementCounter == self.expectedCount {
-      println!("STOP MAP");
+      //println!("STOP MAP");
       Ok(None)
     } else {
       self.elementCounter = self.elementCounter + 1;
