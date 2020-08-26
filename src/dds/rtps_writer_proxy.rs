@@ -1,6 +1,9 @@
 use crate::structure::locator::LocatorList;
 use crate::structure::guid::{EntityId, GUID};
-use crate::structure::sequence_number::{SequenceNumber};
+use crate::{
+  discovery::data_types::topic_data::DiscoveredWriterData,
+  structure::sequence_number::{SequenceNumber},
+};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -105,5 +108,31 @@ impl RtpsWriterProxy {
       }
     }
     result
+  }
+
+  pub fn from(discovered_writer_data: &DiscoveredWriterData) -> Option<RtpsWriterProxy> {
+    let remote_writer_guid = match &discovered_writer_data.writer_proxy.remote_writer_guid {
+      Some(v) => v,
+      None => {
+        println!("Failed to convert DiscoveredWriterData to RtpsWriterProxy. No GUID.");
+        return None;
+      }
+    };
+
+    Some(RtpsWriterProxy {
+      remote_writer_guid: remote_writer_guid.clone(),
+      remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
+      unicast_locator_list: discovered_writer_data
+        .writer_proxy
+        .unicast_locator_list
+        .clone(),
+      multicast_locator_list: discovered_writer_data
+        .writer_proxy
+        .multicast_locator_list
+        .clone(),
+      changes: HashMap::new(),
+      received_heartbeat_count: 0,
+      sent_ack_nack_count: 0,
+    })
   }
 }

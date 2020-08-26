@@ -16,6 +16,7 @@ use crate::dds::{
   },
   datareader::{Take, DataReader},
   readcondition::ReadCondition,
+  datawriter::DataWriter,
 };
 
 use crate::discovery::{
@@ -32,6 +33,7 @@ use crate::serialization::cdrSerializer::*;
 use byteorder::{LittleEndian};
 
 use crate::network::constant::*;
+use super::data_types::topic_data::{DiscoveredWriterData, DiscoveredReaderData};
 
 pub struct Discovery {
   poll: Poll,
@@ -48,6 +50,7 @@ impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: u64 = 60;
   const SEND_PARTICIPANT_INFO_PERIOD: u64 = 2;
   const SEND_READERS_INFO_PERIOD: u64 = 1;
+  const SEND_WRITERS_INFO_PERIOD: u64 = 1;
 
   pub fn new(
     domain_participant: DomainParticipant,
@@ -92,7 +95,7 @@ impl Discovery {
       .domain_participant
       .create_topic(
         "DCPSParticipant",
-        TypeDesc::new("".to_string()),
+        TypeDesc::new(String::from("SPDPDiscoveredParticipantData")),
         &dcps_participant_qos,
       )
       .expect("Unable to create DCPSParticipant topic.");
@@ -161,7 +164,7 @@ impl Discovery {
       .domain_participant
       .create_topic(
         "DCPSSubscription",
-        TypeDesc::new("".to_string()),
+        TypeDesc::new(String::from("DiscoveredReaderData")),
         &dcps_subscription_qos,
       )
       .expect("Unable to create DCPSSubscription topic.");
@@ -212,7 +215,7 @@ impl Discovery {
       .domain_participant
       .create_topic(
         "DCPSPublication",
-        TypeDesc::new("".to_string()),
+        TypeDesc::new(String::from("DiscoveredWriterData")),
         &dcps_publication_qos,
       )
       .expect("Unable to create DCPSPublication topic.");
@@ -224,13 +227,38 @@ impl Discovery {
         dcps_subscription_topic.get_qos(),
       )
       .expect("Unable to create DataReader for DCPSPublication");
-    let _dcps_publication_writer = discovery_publisher
-      .create_datawriter::<SPDPDiscoveredParticipantData,CDR_serializer_adapter<SPDPDiscoveredParticipantData,LittleEndian>>(
+    discovery
+      .poll
+      .register(
+        &dcps_publication_reader,
+        DISCOVERY_WRITER_DATA_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Unable to regiser writers info sender.");
+
+    let mut dcps_publication_writer = discovery_publisher
+      .create_datawriter::<DiscoveredWriterData>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
         &dcps_publication_topic,
         dcps_publication_topic.get_qos(),
       )
       .expect("Unable to create DataWriter for DCPSPublication.");
+
+    let mut writers_send_info_timer: Timer<()> = Timer::default();
+    writers_send_info_timer.set_timeout(
+      StdDuration::from_secs(Discovery::SEND_WRITERS_INFO_PERIOD),
+      (),
+    );
+    discovery
+      .poll
+      .register(
+        &writers_send_info_timer,
+        DISCOVERY_SEND_WRITERS_INFO_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Unable to register readers info sender");
 
     // Topic
     let dcps_topic_qos = QosPolicies::qos_none();
@@ -294,30 +322,19 @@ impl Discovery {
         } else if event.token() == DISCOVERY_READER_DATA_TOKEN {
           discovery.handle_subscription_reader(&mut dcps_subscription_reader);
         } else if event.token() == DISCOVERY_SEND_READERS_INFO_TOKEN {
-          match discovery.discovery_db.read() {
-            Ok(db) => {
-              let datas = db.get_all_local_topic_readers();
-              for &data in datas
-                .iter()
-                // filtering out discoveries own readers
-                .filter(|p| {
-                  // TODO: handle unwrap
-                  let eid = &p.reader_proxy.remote_reader_guid.unwrap().entityId;
-                  *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
-                    && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
-                    && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
-                    && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
-                })
-              {
-                // TODO: handle unwrap
-                dcps_subscription_writer.write(data.clone(), None).unwrap();
-              }
-            }
-            _ => (),
-          }
+          discovery.write_readers_info(&mut dcps_subscription_writer);
 
           readers_send_info_timer.set_timeout(
             StdDuration::from_secs(Discovery::SEND_READERS_INFO_PERIOD),
+            (),
+          );
+        } else if event.token() == DISCOVERY_WRITER_DATA_TOKEN {
+          discovery.handle_publication_reader(&mut dcps_publication_reader);
+        } else if event.token() == DISCOVERY_SEND_WRITERS_INFO_TOKEN {
+          discovery.write_writers_info(&mut dcps_publication_writer);
+
+          writers_send_info_timer.set_timeout(
+            StdDuration::from_secs(Discovery::SEND_WRITERS_INFO_PERIOD),
             (),
           );
         }
@@ -379,10 +396,47 @@ impl Discovery {
       for data in reader_data_vec.iter() {
         let updated = (*p).update_subscription(data);
         if updated {
-          let _send_result = self.writers_proxy_updated_sender.send(());
+          match self.writers_proxy_updated_sender.send(()) {
+            Ok(_) => (),
+            Err(_) => println!("Unable to update writers proxy."),
+          };
         }
       }
     });
+  }
+
+  pub fn handle_publication_reader(&self, reader: &mut DataReader<DiscoveredWriterData>) {
+    let writer_data_vec: Option<Vec<DiscoveredWriterData>> =
+      match reader.take(100, ReadCondition::not_read()) {
+        Ok(d) => Some(
+          d.into_iter()
+            .map(|p| p.value)
+            .filter(|p| p.is_ok())
+            .map(|p| p.unwrap())
+            .collect(),
+        ),
+        _ => None,
+      };
+
+    let writer_data_vec = match writer_data_vec {
+      Some(d) => d,
+      None => return,
+    };
+
+    match self.discovery_db.write().map(|mut p| {
+      writer_data_vec.iter().for_each(|data| {
+        let updated = (*p).update_publication(data);
+        if updated {
+          match self.readers_proxy_updated_sender.send(()) {
+            Ok(_) => (),
+            Err(_) => println!("Unable to update readers proxy."),
+          };
+        }
+      })
+    }) {
+      Ok(_) => (),
+      _ => panic!("DiscoveryDB is poisoned."),
+    };
   }
 
   pub fn participant_cleanup(&self) {
@@ -403,11 +457,69 @@ impl Discovery {
     };
 
     if res {
-      // TODO: handle unwrap
-      self.writers_proxy_updated_sender.send(()).unwrap();
+      match self.writers_proxy_updated_sender.send(()) {
+        Ok(_) => (),
+        _ => println!("Failed to send participant writer notification"),
+      };
     }
 
     res
+  }
+
+  pub fn write_readers_info(&self, writer: &mut DataWriter<DiscoveredReaderData>) {
+    match self.discovery_db.read() {
+      Ok(db) => {
+        let datas = db.get_all_local_topic_readers();
+        for &data in datas
+          .iter()
+          // filtering out discoveries own readers
+          .filter(|p| {
+            let guid = match &p.reader_proxy.remote_reader_guid {
+              Some(g) => g,
+              None => return false,
+            };
+            let eid = &guid.entityId;
+
+            *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
+              && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
+              && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
+              && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
+          })
+        {
+          match writer.write(data.clone(), None) {
+            Ok(_) => (),
+            _ => println!("Unable to write new readers info."),
+          }
+        }
+      }
+      _ => panic!("DiscoveryDB is poisoned."),
+    }
+  }
+
+  pub fn write_writers_info(&self, writer: &mut DataWriter<DiscoveredWriterData>) {
+    match self.discovery_db.read() {
+      Ok(db) => {
+        let datas = db.get_all_local_topic_writers();
+        for &data in datas.iter().filter(|p| {
+          let guid = match &p.writer_proxy.remote_writer_guid {
+            Some(g) => g,
+            None => return false,
+          };
+          let eid = &guid.entityId;
+
+          *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
+            && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
+            && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER
+            && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER
+        }) {
+          match writer.write(data.clone(), None) {
+            Ok(_) => (),
+            _ => println!("Unable to write new readers info."),
+          }
+        }
+      }
+      _ => panic!("DiscoveryDB is poisoned."),
+    }
   }
 }
 
@@ -417,14 +529,16 @@ mod tests {
   use crate::{
     test::{
       shape_type::ShapeType,
-      test_data::{spdp_participant_msg, spdp_subscription_msg},
+      test_data::{
+        spdp_subscription_msg, spdp_publication_msg, spdp_participant_msg_mod,
+      },
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
-    structure::locator::Locator,
+    structure::{locator::Locator, entity::Entity},
     serialization::{
-      Message, cdrSerializer::to_bytes, cdrDeserializer::deserialize_from_little_endian,
+      cdrSerializer::to_bytes, cdrDeserializer::deserialize_from_little_endian,
     },
-    submessages::EntitySubmessage,
+    submessages::{InterpreterSubmessage, EntitySubmessage},
   };
   use std::{time::Duration, net::SocketAddr};
   use mio::Token;
@@ -455,35 +569,7 @@ mod tests {
       get_spdp_well_known_unicast_port(0, 0),
     )];
 
-    let mut tdata: Message = spdp_participant_msg();
-    let mut data;
-    for submsg in tdata.submessages.iter_mut() {
-      let mut submsglen = submsg.header.submessage_length;
-      match submsg.submessage.as_mut() {
-        Some(v) => match v {
-          EntitySubmessage::Data(d, _) => {
-            let mut participant_data: SPDPDiscoveredParticipantData =
-              deserialize_from_little_endian(&d.serialized_payload.value).unwrap();
-            participant_data.metatraffic_unicast_locators[0] =
-              Locator::from(SocketAddr::new("127.0.0.1".parse().unwrap(), 11000));
-            participant_data.metatraffic_multicast_locators.clear();
-            participant_data.default_unicast_locators.clear();
-            participant_data.default_multicast_locators.clear();
-
-            let datalen = d.serialized_payload.value.len() as u16;
-            data =
-              to_bytes::<SPDPDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
-                .unwrap();
-            d.serialized_payload.value = data.clone();
-            submsglen = submsglen + d.serialized_payload.value.len() as u16 - datalen;
-          }
-          _ => continue,
-        },
-        None => (),
-      }
-      submsg.header.submessage_length = submsglen;
-    }
-
+    let tdata = spdp_participant_msg_mod(11000);
     let msg_data = tdata
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .expect("Failed to write msg data");
@@ -582,5 +668,85 @@ mod tests {
       .unwrap();
 
     let _data2 = udp_listener.get_message();
+  }
+
+  #[test]
+  fn discovery_writer_data_test() {
+    let participant = DomainParticipant::new(15, 0);
+
+    let topic = participant
+      .create_topic(
+        "Square",
+        TypeDesc::new(String::from("ShapeType")),
+        &QosPolicies::qos_none(),
+      )
+      .unwrap();
+
+    let publisher = participant
+      .create_publisher(&QosPolicies::qos_none())
+      .unwrap();
+    let _writer = publisher
+      .create_datawriter::<ShapeType>(None, &topic, &QosPolicies::qos_none())
+      .unwrap();
+
+    let subscriber = participant
+      .create_subscriber(&QosPolicies::qos_none())
+      .unwrap();
+    let _reader = subscriber.create_datareader::<ShapeType>(None, &topic, &QosPolicies::qos_none());
+
+    let poll = Poll::new().unwrap();
+    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11002);
+    poll
+      .register(
+        udp_listener.mio_socket(),
+        Token(0),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+
+    let udp_sender = UDPSender::new_with_random_port();
+    let addresses = vec![SocketAddr::new(
+      "127.0.0.1".parse().unwrap(),
+      get_spdp_well_known_unicast_port(15, 0),
+    )];
+
+    let mut tdata = spdp_publication_msg();
+    for submsg in tdata.submessages.iter_mut() {
+      match submsg.intepreterSubmessage.as_mut() {
+        Some(v) => match v {
+          InterpreterSubmessage::InfoDestination(dst) => {
+            dst.guid_prefix = participant.get_guid_prefix().clone();
+          }
+          _ => continue,
+        },
+        None => (),
+      }
+    }
+    // TODO: modify message accordingly
+
+    let par_msg_data = spdp_participant_msg_mod(11002).write_to_vec_with_ctx(Endianness::LittleEndian).expect("Failed to write participant data.");
+
+    let msg_data = tdata
+      .write_to_vec_with_ctx(Endianness::LittleEndian)
+      .expect("Failed to write msg data");
+
+    // wait for init
+    std::thread::sleep(Duration::from_secs(5));
+
+    udp_sender.send_to_all(&par_msg_data, &addresses);
+    udp_sender.send_to_all(&msg_data, &addresses);
+
+    let mut events = Events::with_capacity(10);
+    poll
+      .poll(&mut events, Some(StdDuration::from_secs(10)))
+      .unwrap();
+
+    while !udp_listener.get_message().is_empty() {
+      println!("Message received");
+    }
+
+    // small wait for stuff to happen
+    std::thread::sleep(Duration::from_secs(2));
   }
 }

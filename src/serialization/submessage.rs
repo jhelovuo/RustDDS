@@ -45,42 +45,87 @@ where
     match msgheader.submessage_id {
       SubmessageKind::ACKNACK => Some(EntitySubmessage::AckNack(
         AckNack::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::ACKNACK,&msgheader.flags).get_endianness(),
-          buffer).unwrap(),
+          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+            &SubmessageKind::ACKNACK,
+            &msgheader.flags,
+          )
+          .get_endianness(),
+          buffer,
+        )
+        .unwrap(),
         msgheader.flags.clone(),
       )),
       SubmessageKind::HEARTBEAT => Some(EntitySubmessage::Heartbeat(
         Heartbeat::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::ACKNACK,&msgheader.flags).get_endianness(),
-          buffer).unwrap(),
+          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+            &SubmessageKind::ACKNACK,
+            &msgheader.flags,
+          )
+          .get_endianness(),
+          buffer,
+        )
+        .unwrap(),
         msgheader.flags.clone(),
       )),
       SubmessageKind::GAP => Some(EntitySubmessage::Gap(
         Gap::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::GAP,&msgheader.flags).get_endianness(),
-          buffer).unwrap(),
+          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+            &SubmessageKind::GAP,
+            &msgheader.flags,
+          )
+          .get_endianness(),
+          buffer,
+        )
+        .unwrap(),
       )),
       SubmessageKind::NACK_FRAG => Some(EntitySubmessage::NackFrag(
         NackFrag::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::NACK_FRAG,&msgheader.flags).get_endianness(),
-          buffer).unwrap(),
+          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+            &SubmessageKind::NACK_FRAG,
+            &msgheader.flags,
+          )
+          .get_endianness(),
+          buffer,
+        )
+        .unwrap(),
       )),
       SubmessageKind::HEARTBEAT_FRAG => Some(EntitySubmessage::HeartbeatFrag(
         HeartbeatFrag::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::HEARTBEAT_FRAG,&msgheader.flags).get_endianness(),
-          buffer).unwrap(),
+          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+            &SubmessageKind::HEARTBEAT_FRAG,
+            &msgheader.flags,
+          )
+          .get_endianness(),
+          buffer,
+        )
+        .unwrap(),
       )),
       SubmessageKind::DATA => {
-        let data_helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA,&msgheader.flags);
+        let data_helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+          &SubmessageKind::DATA,
+          &msgheader.flags,
+        );
         Some(EntitySubmessage::Data(
-        Data::deserialize_data(&buffer.to_vec(), data_helper.get_endianness(), data_helper.InlineQosFlag, data_helper.DataFlag),
-        msgheader.flags.clone(),
-      ))},
-      
+          Data::deserialize_data(
+            &buffer.to_vec(),
+            data_helper.get_endianness(),
+            data_helper.InlineQosFlag,
+            data_helper.DataFlag,
+          ),
+          msgheader.flags.clone(),
+        ))
+      }
+
       SubmessageKind::DATA_FRAG => {
-        match SubMessage::deserialize_data_frag(&msgheader, 
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA_FRAG,&msgheader.flags).get_endianness(),
-          &buffer) {
+        match SubMessage::deserialize_data_frag(
+          &msgheader,
+          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+            &SubmessageKind::DATA_FRAG,
+            &msgheader.flags,
+          )
+          .get_endianness(),
+          &buffer,
+        ) {
           Some(T) => Some(EntitySubmessage::DataFrag(T, msgheader.flags.clone())),
           None => None,
         }
@@ -246,7 +291,10 @@ impl<C: Context> Writable<C> for SubMessage {
 mod tests {
   use super::SubMessage;
   use speedy::{Readable, Writable, Endianness};
-  use crate::{serialization::{SubmessageFlagHelper}, submessages::{Heartbeat, InfoDestination, InfoTimestamp, Data, SubmessageKind}};
+  use crate::{
+    serialization::{SubmessageFlagHelper},
+    submessages::{Heartbeat, InfoDestination, InfoTimestamp, Data, SubmessageKind},
+  };
   #[test]
   fn submessage_data_submessage_deserialization() {
     // this is wireshark captured shapesdemo dataSubmessage
@@ -267,7 +315,10 @@ mod tests {
         return;
       } // rule 1. Could not create submessage header
     };
-    let helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &submessage_header.flags);
+    let helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+      &SubmessageKind::DATA,
+      &submessage_header.flags,
+    );
     println!("{:?}", submessage_header);
     let suba = Data::deserialize_data(
       &serializedDataSubMessage[4..].to_vec(),
@@ -410,8 +461,16 @@ mod tests {
       } // rule 1. Could not create submessage header
     };
     println!("{:?}", submessage_header);
-    let helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &submessage_header.flags);
-    let ha = Data::deserialize_data(&serializedDatamessage[4..].to_vec(),helper.get_endianness(), helper.InlineQosFlag, helper.DataFlag);
+    let helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
+      &SubmessageKind::DATA,
+      &submessage_header.flags,
+    );
+    let ha = Data::deserialize_data(
+      &serializedDatamessage[4..].to_vec(),
+      helper.get_endianness(),
+      helper.InlineQosFlag,
+      helper.DataFlag,
+    );
 
     let mut messageBuffer = vec![];
     println!("datamessage  : {:?}", ha);

@@ -196,8 +196,7 @@ impl DPEventWrapper {
         } else if DPEventWrapper::is_writer_acknack_action(&event) {
           ev_wrapper.handle_writer_acknack_action(&event);
         } else if DPEventWrapper::is_reader_update_notification(&event) {
-
-          // TODO:
+          ev_wrapper.update_readers();
         } else if DPEventWrapper::is_writer_update_notification(&event) {
           ev_wrapper.update_writers();
         }
@@ -451,12 +450,28 @@ impl DPEventWrapper {
               .iter()
               .map(|&p| p.as_reader_proxy(true).clone())
               .collect();
-          } else if *writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
+          } else if *writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
+          {
             let proxies = db.get_participants();
-            writer.readers = proxies.iter().map(|p| p.as_reader_proxy(true)).map(|mut p| { 
-              p.remote_reader_guid.entityId = EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER; 
-              p
-            }).collect();
+            writer.readers = proxies
+              .iter()
+              .map(|p| p.as_reader_proxy(true))
+              .map(|mut p| {
+                p.remote_reader_guid.entityId =
+                  EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER;
+                p
+              })
+              .collect();
+          } else if *writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER {
+            let proxies = db.get_participants();
+            writer.readers = proxies
+              .iter()
+              .map(|p| p.as_reader_proxy(true))
+              .map(|mut p| {
+                p.remote_reader_guid.entityId = EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER;
+                p
+              })
+              .collect();
           } else {
             let proxies = db.get_writers_reader_proxies(writer.get_guid());
             match proxies {
@@ -471,7 +486,37 @@ impl DPEventWrapper {
           }
         }
       }
-      _ => return,
+      _ => panic!("DiscoveryDB is poisoned."),
+    }
+  }
+
+  pub fn update_readers(&mut self) {
+    match self.discovery_db.read() {
+      Ok(db) => {
+        for reader in self.message_receiver.available_readers.iter_mut() {
+          let proxies = db.get_readers_writer_proxies(reader.get_guid());
+          match proxies {
+            Some(v) => {
+              reader.clear_matched_writers();
+              v.iter().for_each(|p| {
+                let guid = match p.writer_proxy.remote_writer_guid {
+                  Some(g) => g.clone(),
+                  None => return,
+                };
+                // TODO: get actual group entityId
+                reader.matched_writer_add(
+                  guid,
+                  EntityId::ENTITYID_UNKNOWN,
+                  p.writer_proxy.unicast_locator_list.clone(),
+                  p.writer_proxy.multicast_locator_list.clone(),
+                );
+              })
+            }
+            None => (),
+          }
+        }
+      }
+      _ => panic!("DiscoveryDB is poisoned"),
     }
   }
 }

@@ -168,6 +168,10 @@ impl Reader {
     Err(())
   }
 
+  pub fn clear_matched_writers(&mut self) {
+    self.matched_writers.clear();
+  }
+
   fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
     self.matched_writers.get_mut(&remote_writer_guid)
   }
@@ -362,7 +366,10 @@ impl Reader {
   // likely use of mio channel
   fn notify_cache_change(&self) {
     match self.notification_sender.try_send(()) {
-      Ok(()) => println!("Reader sending notification to channel"), // expected result
+      Ok(()) => println!(
+        "Reader sending notification to channel {:?}",
+        self.get_entity_id()
+      ), // expected result
       Err(mio_channel::TrySendError::Full(_)) => (), // This is harmless. There is a notification in already.
       Err(mio_channel::TrySendError::Disconnected(_)) => {
         // If we get here, our DataReader has died. The Reader should now dispose itself.

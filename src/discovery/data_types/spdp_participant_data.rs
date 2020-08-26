@@ -216,8 +216,8 @@ mod tests {
               deserialize_from_little_endian(&d.serialized_payload.value).unwrap();
 
             let sdata =
-              to_bytes::<SPDPDiscoveredParticipantData,LittleEndian>(&participant_data).unwrap();
-              //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data).unwrap();
+              to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
+            //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data).unwrap();
 
             // order cannot be known at this point
             assert_eq!(sdata.len(), d.serialized_payload.value.len());
@@ -225,8 +225,8 @@ mod tests {
             let participant_data_2: SPDPDiscoveredParticipantData =
               deserialize_from_little_endian(&sdata).unwrap();
             let sdata_2 =
-              to_bytes::<SPDPDiscoveredParticipantData,LittleEndian>(&participant_data_2)
-              //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data_2)
+              to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data_2)
+                //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data_2)
                 .unwrap();
 
             // now the order of bytes should be the same

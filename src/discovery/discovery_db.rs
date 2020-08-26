@@ -18,7 +18,7 @@ use crate::{
   network::constant::{get_user_traffic_unicast_port, get_user_traffic_multicast_port},
   dds::{
     rtps_reader_proxy::RtpsReaderProxy, reader::Reader, participant::DomainParticipant,
-    topic::Topic,
+    topic::Topic, rtps_writer_proxy::RtpsWriterProxy,
   },
 };
 
@@ -97,38 +97,57 @@ impl DiscoveryDB {
       .map(|p| p.iter().map(|c| c).collect())
   }
 
+  pub fn get_readers_writer_proxies(&self, guid: &GUID) -> Option<Vec<&DiscoveredWriterData>> {
+    self
+      .readers_writer_proxies
+      .get(guid)
+      .map(|p| p.iter().map(|c| c).collect())
+  }
+
   pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> bool {
     let topic_name = match data.subscription_topic_data.topic_name.as_ref() {
       Some(v) => v,
-      None => return false,
+      None => {
+        println!("Failed to update subscription. No topic name.");
+        return false;
+      }
     };
 
     let writers: Vec<DiscoveredWriterData> = self
       .local_topic_writers
       .iter()
-      .filter(|p| *p.publication_topic_data.topic_name.as_ref().unwrap() == *topic_name)
+      .filter(|p| {
+        let ptopic_name = p.publication_topic_data.topic_name.as_ref();
+        match ptopic_name {
+          Some(tn) => *tn == *topic_name,
+          None => false,
+        }
+      })
       .map(|p| p.clone())
       .collect();
 
-    // TODO: clean reader proxy out
     let rtps_reader_proxy = match RtpsReaderProxy::from(&data) {
       Some(v) => v,
-      None => return false,
+      None => {
+        println!("Failed to update subscription. Cannot parse RtpsReaderProxy.");
+        return false;
+      }
     };
 
-    for writer in writers.iter().map(|p| p.clone()) {
+    for writer in writers.into_iter() {
+      let guid = match &writer.writer_proxy.remote_writer_guid {
+        Some(guid) => guid,
+        None => {
+          println!("warning: Writer doesn't have GUID.");
+          continue;
+        }
+      };
+
       // update writers reader proxy
-      // TODO: handle unwrap
-      self.update_writers_reader_proxy(
-        &writer.writer_proxy.remote_writer_guid.unwrap(),
-        data.clone(),
-      );
+      self.update_writers_reader_proxy(guid, data.clone());
 
       // update writers local data
-      let wrp = self
-        .writers_reader_proxies
-        // TODO: handle unwrap
-        .get_mut(&writer.writer_proxy.remote_writer_guid.unwrap());
+      let wrp = self.writers_reader_proxies.get_mut(guid);
 
       match wrp {
         Some(v) => v
@@ -141,9 +160,73 @@ impl DiscoveryDB {
         None => {
           self.writers_reader_proxies.insert(
             // TODO: handle unwrap
-            writer.writer_proxy.remote_writer_guid.unwrap(),
+            guid.clone(),
             vec![data.clone()],
           );
+          continue;
+        }
+      };
+    }
+
+    true
+  }
+
+  pub fn update_publication(&mut self, data: &DiscoveredWriterData) -> bool {
+    let topic_name = match data.publication_topic_data.topic_name.as_ref() {
+      Some(v) => v,
+      None => {
+        println!("Failed to update publication. No topic name.");
+        return false;
+      }
+    };
+
+    let readers: Vec<DiscoveredReaderData> = self
+      .local_topic_readers
+      .iter()
+      .filter(|p| {
+        let ptopic_name = p.subscription_topic_data.topic_name.as_ref();
+        match ptopic_name {
+          Some(tn) => *tn == *topic_name,
+          None => false,
+        }
+      })
+      .map(|p| p.clone())
+      .collect();
+
+    let rtps_writer_proxy = match RtpsWriterProxy::from(&data) {
+      Some(v) => v,
+      None => {
+        println!("Failed to update publication. Cannot parse RtpsWriterProxy.");
+        return false;
+      }
+    };
+
+    for reader in readers.into_iter() {
+      let guid = match &reader.reader_proxy.remote_reader_guid {
+        Some(guid) => guid,
+        None => {
+          println!("warning: Reader doesn't have GUID");
+          continue;
+        }
+      };
+
+      // update reader writer proxy
+      self.update_readers_writer_proxy(guid, data.clone());
+
+      let rwp = self.readers_writer_proxies.get_mut(guid);
+
+      match rwp {
+        Some(v) => v
+          .iter_mut()
+          .filter(|p| match p.writer_proxy.remote_writer_guid {
+            Some(g) => g == rtps_writer_proxy.remote_writer_guid,
+            None => false,
+          })
+          .for_each(|p| p.update(&rtps_writer_proxy)),
+        None => {
+          self
+            .readers_writer_proxies
+            .insert(guid.clone(), vec![data.clone()]);
           continue;
         }
       };
@@ -162,19 +245,62 @@ impl DiscoveryDB {
       None => Vec::new(),
     };
 
-    let value: Option<usize> = proxies
-      .iter()
-      // TODO: handle unwrap
-      .position(|x| {
-        x.reader_proxy.remote_reader_guid.unwrap()
-          == reader.reader_proxy.remote_reader_guid.unwrap()
-      });
+    let guid = match &reader.reader_proxy.remote_reader_guid {
+      Some(g) => g,
+      None => {
+        println!("Failed to update writers reader proxy. No reader guid.");
+        return false;
+      }
+    };
+
+    let value: Option<usize> =
+      proxies
+        .iter()
+        .position(|x| match x.reader_proxy.remote_reader_guid {
+          Some(xguid) => xguid == *guid,
+          None => false,
+        });
     match value {
       Some(val) => proxies[val] = reader,
       None => proxies.push(reader),
     };
 
     self.writers_reader_proxies.insert(writer.clone(), proxies);
+    true
+  }
+
+  pub fn update_readers_writer_proxy(
+    &mut self,
+    reader: &GUID,
+    writer: DiscoveredWriterData,
+  ) -> bool {
+    let mut proxies = match self.readers_writer_proxies.get(&reader) {
+      Some(prox) => prox.clone(),
+      None => Vec::new(),
+    };
+
+    let guid = match &writer.writer_proxy.remote_writer_guid {
+      Some(g) => g,
+      None => {
+        println!("Failed to update readers writer proxy. No writer guid.");
+        return false;
+      }
+    };
+
+    let value: Option<usize> =
+      proxies
+        .iter()
+        .position(|x| match x.writer_proxy.remote_writer_guid {
+          Some(xguid) => xguid == *guid,
+          None => false,
+        });
+
+    match value {
+      Some(val) => proxies[val] = writer,
+      None => proxies.push(writer),
+    };
+
+    self.readers_writer_proxies.insert(reader.clone(), proxies);
     true
   }
 
@@ -275,6 +401,10 @@ impl DiscoveryDB {
 
   pub fn get_all_local_topic_readers(&self) -> Vec<&DiscoveredReaderData> {
     self.local_topic_readers.iter().collect()
+  }
+
+  pub fn get_all_local_topic_writers(&self) -> Vec<&DiscoveredWriterData> {
+    self.local_topic_writers.iter().collect()
   }
 
   // TODO: maybe query parameter should only be topics' name

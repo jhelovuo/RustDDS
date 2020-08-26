@@ -12,7 +12,7 @@ use crate::structure::{
   guid::{GUID, EntityId},
   time::Timestamp,
   dds_cache::DDSCache,
-  cache_change::ChangeKind,
+  cache_change::{CacheChange, ChangeKind},
 };
 use crate::dds::{
   traits::key::*, traits::serde_adapters::*,
@@ -103,6 +103,10 @@ where
       &self.latest_instant,
       &Instant::now(),
     );
+    let cache_changes: Vec<(&Instant, &CacheChange)> = cache_changes
+      .into_iter()
+      .filter(|(_, cc)| cc.writer_guid.guidPrefix != *self.get_guid_prefix())
+      .collect();
 
     match cache_changes.last() {
       Some((last_instant, _)) => self.latest_instant = **last_instant,

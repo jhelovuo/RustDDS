@@ -59,7 +59,10 @@ impl RtpsReaderProxy {
   pub fn from(discovered_reader_data: &DiscoveredReaderData) -> Option<RtpsReaderProxy> {
     let remote_reader_guid = match &discovered_reader_data.reader_proxy.remote_reader_guid {
       Some(v) => v,
-      None => return None,
+      None => {
+        println!("Failed to convert DiscoveredReaderData to RtpsReaderProxy. No GUID");
+        return None;
+      }
     };
 
     let expects_inline_qos = match &discovered_reader_data.reader_proxy.expects_inline_qos {
