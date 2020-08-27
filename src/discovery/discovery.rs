@@ -529,20 +529,17 @@ mod tests {
   use crate::{
     test::{
       shape_type::ShapeType,
-      test_data::{
-        spdp_subscription_msg, spdp_publication_msg, spdp_participant_msg_mod,
-      },
+      test_data::{spdp_subscription_msg, spdp_publication_msg, spdp_participant_msg_mod},
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
     structure::{locator::Locator, entity::Entity},
-    serialization::{
-      cdrSerializer::to_bytes, cdrDeserializer::deserialize_from_little_endian,
-    },
+    serialization::{cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializer},
     submessages::{InterpreterSubmessage, EntitySubmessage},
   };
   use std::{time::Duration, net::SocketAddr};
   use mio::Token;
   use speedy::{Writable, Endianness};
+  use byteorder::LittleEndian;
 
   #[test]
   fn discovery_participant_data_test() {
@@ -635,8 +632,11 @@ mod tests {
       match submsg.submessage.as_mut() {
         Some(v) => match v {
           EntitySubmessage::Data(d, _) => {
-            let mut drd: DiscoveredReaderData =
-              deserialize_from_little_endian(&d.serialized_payload.value).unwrap();
+            let mut drd: DiscoveredReaderData = PlCdrDeserializer::<LittleEndian>::from_bytes::<
+              DiscoveredReaderData,
+              LittleEndian,
+            >(&d.serialized_payload.value)
+            .unwrap();
             drd.reader_proxy.unicast_locator_list.clear();
             drd
               .reader_proxy
@@ -725,7 +725,9 @@ mod tests {
     }
     // TODO: modify message accordingly
 
-    let par_msg_data = spdp_participant_msg_mod(11002).write_to_vec_with_ctx(Endianness::LittleEndian).expect("Failed to write participant data.");
+    let par_msg_data = spdp_participant_msg_mod(11002)
+      .write_to_vec_with_ctx(Endianness::LittleEndian)
+      .expect("Failed to write participant data.");
 
     let msg_data = tdata
       .write_to_vec_with_ctx(Endianness::LittleEndian)

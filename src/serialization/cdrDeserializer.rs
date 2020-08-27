@@ -132,12 +132,12 @@ where
   T: DeserializeOwned,
 {
   let mut deserializer = CDR_deserializer::<LittleEndian>::new(s);
-  let t = T::deserialize(&mut deserializer)?;
-  if deserializer.input.is_empty() {
-    Ok(t)
-  } else {
-    Err(Error::TrailingCharacters(deserializer.input.to_vec()))
-  }
+  T::deserialize(&mut deserializer)
+  // if deserializer.input.is_empty() {
+  //   Ok(t)
+  // } else {
+  //   Err(Error::TrailingCharacters(deserializer.input.to_vec()))
+  // }
 }
 
 pub fn deserialize_from_big_endian<'a, T>(s: &'a [u8]) -> Result<T>
@@ -145,12 +145,12 @@ where
   T: DeserializeOwned,
 {
   let mut deserializer = CDR_deserializer::<BigEndian>::new(s);
-  let t = T::deserialize(&mut deserializer)?;
-  if deserializer.input.is_empty() {
-    Ok(t)
-  } else {
-    Err(Error::TrailingCharacters(deserializer.input.to_vec()))
-  }
+  T::deserialize(&mut deserializer)
+  // if deserializer.input.is_empty() {
+  //   Ok(t)
+  // } else {
+  //   Err(Error::TrailingCharacters(deserializer.input.to_vec()))
+  // }
 }
 
 /// macro for writing primitive number deserializers. Rust does not allow declaring a macro
@@ -290,11 +290,10 @@ where
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let enum_tag = self.next_bytes(4)?.read_u32::<BO>().unwrap();
     match enum_tag {
-      0 => visitor.visit_none() ,
-      1 => visitor.visit_some(self) ,
-      wtf => Err(Error::BadOption(wtf)) ,
+      0 => visitor.visit_none(),
+      1 => visitor.visit_some(self),
+      wtf => Err(Error::BadOption(wtf)),
     }
-
   }
 
   fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
@@ -302,7 +301,7 @@ where
     V: Visitor<'de>,
   {
     // Unit data is not put on wire, to match behavior with cdrSerializer
-    visitor.visit_unit() 
+    visitor.visit_unit()
   }
 
   fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
@@ -362,7 +361,7 @@ where
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
-    visitor.visit_map(SequenceHelper::new(&mut self,element_count))
+    visitor.visit_map(SequenceHelper::new(&mut self, element_count))
   }
 
   fn deserialize_struct<V>(

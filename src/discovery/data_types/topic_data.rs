@@ -60,7 +60,7 @@ impl<'de> Deserialize<'de> for ReaderProxy {
     D: serde::Deserializer<'de>,
   {
     let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
     Ok(res.generate_reader_proxy())
   }
 }
@@ -130,7 +130,7 @@ impl<'de> Deserialize<'de> for SubscriptionBuiltinTopicData {
     D: serde::Deserializer<'de>,
   {
     let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
     Ok(res.generate_subscription_topic_data())
   }
 }
@@ -206,7 +206,7 @@ impl<'de> Deserialize<'de> for DiscoveredReaderData {
     D: serde::Deserializer<'de>,
   {
     let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
     Ok(res.generate_discovered_reader_data())
   }
 }
@@ -248,7 +248,7 @@ impl<'de> Deserialize<'de> for WriterProxy {
     D: serde::Deserializer<'de>,
   {
     let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
     Ok(res.generate_writer_proxy())
   }
 }
@@ -313,7 +313,7 @@ impl<'de> Deserialize<'de> for PublicationBuiltinTopicData {
     D: serde::Deserializer<'de>,
   {
     let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
     Ok(res.generate_publication_topic_data())
   }
 }
@@ -374,7 +374,7 @@ impl<'de> Deserialize<'de> for DiscoveredWriterData {
     D: serde::Deserializer<'de>,
   {
     let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
     Ok(res.generate_discovered_writer_data())
   }
 }
@@ -413,7 +413,7 @@ impl<'de> Deserialize<'de> for TopicBuiltinTopicData {
     D: serde::Deserializer<'de>,
   {
     let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
     Ok(res.generate_topic_data())
   }
 }
@@ -428,9 +428,22 @@ impl Serialize for TopicBuiltinTopicData {
   }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq)]
 pub struct DiscoveredTopicData {
-  topic_data: TopicBuiltinTopicData,
+  pub topic_data: TopicBuiltinTopicData,
+}
+
+impl<'de> Deserialize<'de> for DiscoveredTopicData {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let custom_ds = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
+    let topic_data = res.generate_topic_data();
+
+    Ok(DiscoveredTopicData { topic_data })
+  }
 }
 
 impl Serialize for DiscoveredTopicData {
@@ -450,7 +463,7 @@ mod tests {
   //use crate::serialization::cdrSerializer::to_little_endian_binary;
   use crate::serialization::cdrSerializer::{to_bytes};
   use byteorder::LittleEndian;
-  use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+  use crate::serialization::pl_cdr_deserializer::PlCdrDeserializer;
 
   use crate::{
     test::test_data::{
@@ -464,7 +477,8 @@ mod tests {
     let reader_proxy = reader_proxy_data().unwrap();
 
     let sdata = to_bytes::<ReaderProxy, LittleEndian>(&reader_proxy).unwrap();
-    let reader_proxy2: ReaderProxy = deserialize_from_little_endian(&sdata).unwrap();
+    let reader_proxy2: ReaderProxy =
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<ReaderProxy, LittleEndian>(&sdata).unwrap();
     assert_eq!(reader_proxy, reader_proxy2);
     let sdata2 = to_bytes::<ReaderProxy, LittleEndian>(&reader_proxy2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -475,7 +489,8 @@ mod tests {
     let writer_proxy = writer_proxy_data().unwrap();
 
     let sdata = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy).unwrap();
-    let writer_proxy2: WriterProxy = deserialize_from_little_endian(&sdata).unwrap();
+    let writer_proxy2: WriterProxy =
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<WriterProxy, LittleEndian>(&sdata).unwrap();
     assert_eq!(writer_proxy, writer_proxy2);
     let sdata2 = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -487,7 +502,10 @@ mod tests {
 
     let sdata = to_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(&sub_topic_data).unwrap();
     let sub_topic_data2: SubscriptionBuiltinTopicData =
-      deserialize_from_little_endian(&sdata).unwrap();
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(
+        &sdata,
+      )
+      .unwrap();
     assert_eq!(sub_topic_data, sub_topic_data2);
     let sdata2 = to_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(&sub_topic_data2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -499,7 +517,10 @@ mod tests {
 
     let sdata = to_bytes::<PublicationBuiltinTopicData, LittleEndian>(&pub_topic_data).unwrap();
     let pub_topic_data2: PublicationBuiltinTopicData =
-      deserialize_from_little_endian(&sdata).unwrap();
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<PublicationBuiltinTopicData, LittleEndian>(
+        &sdata,
+      )
+      .unwrap();
     assert_eq!(pub_topic_data, pub_topic_data2);
     let sdata2 = to_bytes::<PublicationBuiltinTopicData, LittleEndian>(&pub_topic_data2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -519,7 +540,9 @@ mod tests {
     };
 
     let sdata = to_bytes::<DiscoveredReaderData, LittleEndian>(&drd).unwrap();
-    let drd2: DiscoveredReaderData = deserialize_from_little_endian(&sdata).unwrap();
+    let drd2: DiscoveredReaderData =
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredReaderData, LittleEndian>(&sdata)
+        .unwrap();
     assert_eq!(drd, drd2);
     let sdata2 = to_bytes::<DiscoveredReaderData, LittleEndian>(&drd2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -537,7 +560,9 @@ mod tests {
     };
 
     let sdata = to_bytes::<DiscoveredWriterData, LittleEndian>(&dwd).unwrap();
-    let dwd2: DiscoveredWriterData = deserialize_from_little_endian(&sdata).unwrap();
+    let dwd2: DiscoveredWriterData =
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredWriterData, LittleEndian>(&sdata)
+        .unwrap();
     assert_eq!(dwd, dwd2);
     let sdata2 = to_bytes::<DiscoveredWriterData, LittleEndian>(&dwd2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -548,7 +573,9 @@ mod tests {
     let topic_data = topic_data().unwrap();
 
     let sdata = to_bytes::<TopicBuiltinTopicData, LittleEndian>(&topic_data).unwrap();
-    let topic_data2: TopicBuiltinTopicData = deserialize_from_little_endian(&sdata).unwrap();
+    let topic_data2: TopicBuiltinTopicData =
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<TopicBuiltinTopicData, LittleEndian>(&sdata)
+        .unwrap();
     assert_eq!(topic_data, topic_data2);
     let sdata2 = to_bytes::<TopicBuiltinTopicData, LittleEndian>(&topic_data2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -561,7 +588,9 @@ mod tests {
     let dtd = DiscoveredTopicData { topic_data };
 
     let sdata = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd).unwrap();
-    let dtd2: DiscoveredTopicData = deserialize_from_little_endian(&sdata).unwrap();
+    let dtd2: DiscoveredTopicData =
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredTopicData, LittleEndian>(&sdata)
+        .unwrap();
     assert_eq!(dtd, dtd2);
     let sdata2 = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd2).unwrap();
     assert_eq!(sdata, sdata2);

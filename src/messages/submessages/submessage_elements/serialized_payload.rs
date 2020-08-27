@@ -31,9 +31,9 @@ pub struct SerializedPayload {
 }
 
 impl SerializedPayload {
-  pub fn new() -> SerializedPayload {
+  pub fn new(representation_identifier: RepresentationIdentifier) -> SerializedPayload {
     SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE,
+      representation_identifier,
       representation_options: 0,
       value: vec![],
     }
@@ -45,7 +45,7 @@ impl SerializedPayload {
 }
 impl Default for SerializedPayload {
   fn default() -> SerializedPayload {
-    SerializedPayload::new()
+    SerializedPayload::new(RepresentationIdentifier::CDR_LE)
   }
 }
 

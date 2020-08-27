@@ -177,7 +177,7 @@ where
         Some(ParameterList::read_from_buffer(&buffer[pos..pos + inline_qos_size]).unwrap());
       pos += inline_qos_size;
     }
-    let mut serialized_payload = SerializedPayload::new();
+    let mut serialized_payload = SerializedPayload::default();
     if !key_flag {
       let rep_identifier = SerializedPayload::representation_identifier_from(
         u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap(),

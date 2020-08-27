@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use std::marker::PhantomData;
 
-use serde::{Deserialize,de::DeserializeOwned};
+use serde::{Deserialize, de::DeserializeOwned};
 use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
@@ -21,7 +21,7 @@ use crate::dds::{
 };
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
-use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
+use crate::serialization::{pl_cdr_deserializer::*, cdrDeserializer::deserialize_from_big_endian};
 
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,24 +125,42 @@ where
       let bytes = &ser_payload.value;
 
       let payload: D = match ser_payload.representation_identifier {
-        RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => {
-          match deserialize_from_big_endian(bytes) {
+        RepresentationIdentifier::PL_CDR_BE => {
+          match PlCdrDeserializer::<byteorder::BigEndian>::from_bytes::<D, byteorder::BigEndian>(
+            bytes,
+          ) {
             Ok(payload) => payload,
             Err(e) => {
-              println!("DataReader couldn't deserialize from BE. \n{}", e);
+              println!("DataReader couldn't deserialize PL_LE. \n{}", e);
               continue;
             }
           }
         }
-        RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
-          match deserialize_from_little_endian(bytes) {
+        RepresentationIdentifier::PL_CDR_LE => {
+          match PlCdrDeserializer::<byteorder::BigEndian>::from_bytes::<D, byteorder::LittleEndian>(
+            bytes,
+          ) {
             Ok(payload) => payload,
             Err(e) => {
-              println!("DataReader couldn't deserialize from LE. \n{}", e);
+              println!("DataReader couldn't deserialize PL_LE. \n{}", e);
               continue;
             }
           }
         }
+        RepresentationIdentifier::CDR_BE => match deserialize_from_big_endian(bytes) {
+          Ok(payload) => payload,
+          Err(e) => {
+            println!("DataReader couldn't deserialize from BE. \n{}", e);
+            continue;
+          }
+        },
+        RepresentationIdentifier::CDR_LE => match deserialize_from_little_endian(bytes) {
+          Ok(payload) => payload,
+          Err(e) => {
+            println!("DataReader couldn't deserialize from LE. \n{}", e);
+            continue;
+          }
+        },
         _ => {
           println!(
             "DataReader doesn't know how to deserialize with this representation_identifier"

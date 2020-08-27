@@ -237,7 +237,8 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn parse_data(mut self, mut buffer: Vec<u8>) -> BuiltinDataDeserializer {
+  pub fn parse_data(mut self, buffer: &[u8]) -> BuiltinDataDeserializer {
+    let mut buffer = buffer.to_vec();
     while self.sentinel.is_none() && buffer.len() > 0 {
       self = self.read_next(&mut buffer);
     }

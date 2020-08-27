@@ -45,7 +45,7 @@ impl DDSData {
       None => Timestamp::from(time::get_time()),
     };
 
-    let mut serialized_payload = SerializedPayload::new();
+    let mut serialized_payload = SerializedPayload::default();
     // TODO: read identifier
     serialized_payload.representation_identifier = RepresentationIdentifier::CDR_LE;
     serialized_payload.representation_options = 0;

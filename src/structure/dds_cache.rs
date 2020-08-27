@@ -312,7 +312,7 @@ mod tests {
     structure::{
       cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber,
     },
-    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+    messages::submessages::submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload},
   };
 
   #[test]
@@ -322,7 +322,7 @@ mod tests {
     let change1 = CacheChange::new(
       GUID::GUID_UNKNOWN,
       SequenceNumber::from(1),
-      Some(DDSData::new(SerializedPayload::new())),
+      Some(DDSData::new(SerializedPayload::new(RepresentationIdentifier::CDR_LE))),
     );
     cache.write().unwrap().add_new_topic(
       topic_name,
@@ -341,7 +341,7 @@ mod tests {
       let cahange2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(1),
-        Some(DDSData::new(SerializedPayload::new())),
+        Some(DDSData::new(SerializedPayload::new(RepresentationIdentifier::CDR_LE))),
       );
       pointerToCache1
         .write()
@@ -350,7 +350,7 @@ mod tests {
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(2),
-        Some(DDSData::new(SerializedPayload::new())),
+        Some(DDSData::new(SerializedPayload::new(RepresentationIdentifier::CDR_LE))),
       );
       pointerToCache1
         .write()

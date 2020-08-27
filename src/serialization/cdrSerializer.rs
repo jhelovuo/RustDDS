@@ -5,7 +5,7 @@ use std::io::Write;
 
 extern crate byteorder;
 use crate::serialization::cdrSerializer::byteorder::WriteBytesExt;
-use byteorder::{BigEndian,LittleEndian,ByteOrder};
+use byteorder::{BigEndian, LittleEndian, ByteOrder};
 
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
@@ -16,8 +16,7 @@ use crate::dds::traits::serde_adapters::SerializerAdapter;
 // This is a wrapper object for a Write object. The wrapper keeps count of bytes written.
 // Such a wrapper seemed easier implementation strategy than capturing the return values of all
 // write and write_* calls in serializer implementation.
-struct CountingWrite<W : io::Write> 
-{
+struct CountingWrite<W: io::Write> {
   writer: W,
   bytes_written: u64,
 }
@@ -93,18 +92,18 @@ impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D,BigEndian>
 
 /// Parameter W is an io::Write that would receive the serialization
 /// Parameter BO is byte order: LittleEndian or BigEndian
-pub struct CDR_serializer<W,BO> 
-  where W: io::Write
+pub struct CDR_serializer<W, BO>
+where
+  W: io::Write,
 {
   writer: CountingWrite<W>, // serialization destination
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
 }
 
-
-
-impl<W,BO> CDR_serializer<W,BO> 
-  where BO: ByteOrder,
-        W: io::Write,
+impl<W, BO> CDR_serializer<W, BO>
+where
+  BO: ByteOrder,
+  W: io::Write,
 {
   pub fn new(w: W) -> CDR_serializer<W, BO> {
     CDR_serializer::<W, BO> {
@@ -119,7 +118,7 @@ impl<W,BO> CDR_serializer<W,BO>
       let paddingNeed: u32 = typeOctetAlignment as u32 - modulo;
       //println!("need padding! {}", paddingNeed);
       for _x in 0..paddingNeed {
-        self.writer.write_u8(0)? 
+        self.writer.write_u8(0)?
       }
     }
     Ok(())
@@ -145,8 +144,6 @@ where
   Ok(buffer)
 }
 
-
-
 // This is private, for unit test cases only
 // Public interface should use to_bytes() instead, as it is recommended by serde documentation
 fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
@@ -165,11 +162,10 @@ where
   to_bytes::<T, BigEndian>(value)
 }
 
-
-
-impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO> 
-  where BO: ByteOrder,
-        W: io::Write,
+impl<'a, W, BO> ser::Serializer for &'a mut CDR_serializer<W, BO>
+where
+  BO: ByteOrder,
+  W: io::Write,
 {
   type Ok = ();
   // The error type when some error occurs during serialization.
@@ -322,7 +318,6 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
     self.serialize_unit()
   }
 
-
   // CDR 15.3.2.6:
   // Enum values are encoded as unsigned longs. The numeric values associated with enum
   // identifiers are determined by the order in which the identifiers appear in the enum
@@ -345,7 +340,7 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
     value.serialize(self)
   }
 
-  // As this is technically an enum, we treat this as union with one variat. 
+  // As this is technically an enum, we treat this as union with one variat.
   fn serialize_newtype_variant<T>(
     self,
     _name: &'static str,
@@ -356,7 +351,6 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
   where
     T: ?Sized + Serialize,
   {
-
     self.serialize_u32(0)?;
     value.serialize(self)
   }
@@ -370,8 +364,8 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
   fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
     match len {
       None => Err(Error::SequenceLengthUnknown),
-      Some( elem_count ) => {
-        self.serialize_u32(elem_count as u32 )?;
+      Some(elem_count) => {
+        self.serialize_u32(elem_count as u32)?;
         Ok(self)
       }
     } // match
@@ -411,8 +405,8 @@ impl<'a,W,BO> ser::Serializer for &'a mut CDR_serializer<W,BO>
     //println!("serialize_map");
     match len {
       None => Err(Error::SequenceLengthUnknown),
-      Some( elem_count ) => {
-        self.serialize_u32(elem_count as u32 )?;
+      Some(elem_count) => {
+        self.serialize_u32(elem_count as u32)?;
         Ok(self)
       }
     } // match
@@ -450,7 +444,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeSeq for &'a mut CDR_serializ
     value.serialize(&mut **self)
   }
 
-  fn end(self) -> Result<()> { Ok(()) }
+  fn end(self) -> Result<()> {
+    Ok(())
+  }
 }
 
 impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<W, BO> {
@@ -464,7 +460,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTuple for &'a mut CDR_serial
     value.serialize(&mut **self)
   }
 
-  fn end(self) -> Result<()> { Ok(()) }
+  fn end(self) -> Result<()> {
+    Ok(())
+  }
 }
 
 impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<W, BO> {
@@ -478,7 +476,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_
     value.serialize(&mut **self)
   }
 
-  fn end(self) -> Result<()> { Ok(()) }
+  fn end(self) -> Result<()> {
+    Ok(())
+  }
 }
 
 impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<W, BO> {
@@ -491,7 +491,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleVariant for &'a mut CDR
   {
     value.serialize(&mut **self)
   }
-  fn end(self) -> Result<()> { Ok(()) }
+  fn end(self) -> Result<()> {
+    Ok(())
+  }
 }
 
 impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<W, BO> {
@@ -511,7 +513,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeMap for &'a mut CDR_serializ
     value.serialize(&mut **self)
   }
 
-  fn end(self) -> Result<()> { Ok(()) }
+  fn end(self) -> Result<()> {
+    Ok(())
+  }
 }
 
 impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<W, BO> {
@@ -526,7 +530,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStruct for &'a mut CDR_seria
     Ok(())
   }
 
-  fn end(self) -> Result<()> { Ok(()) }
+  fn end(self) -> Result<()> {
+    Ok(())
+  }
 }
 
 impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStructVariant
@@ -543,7 +549,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStructVariant
     Ok(())
   }
 
-  fn end(self) -> Result<()> { Ok(()) }
+  fn end(self) -> Result<()> {
+    Ok(())
+  }
 }
 
 #[cfg(test)]

@@ -474,7 +474,7 @@ impl fmt::Debug for Reader {
 mod tests {
   use super::*;
   use crate::structure::guid::{GUID, EntityId};
-  use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+  use crate::messages::submessages::submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload};
   use crate::structure::guid::GuidPrefix;
   use crate::structure::topic_kind::TopicKind;
   use crate::dds::typedesc::TypeDesc;
@@ -594,7 +594,7 @@ mod tests {
       mr_state.multicast_reply_locator_list.clone(),
     );
 
-    let d = DDSData::new(SerializedPayload::new());
+    let d = DDSData::new(SerializedPayload::new(RepresentationIdentifier::CDR_LE));
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {

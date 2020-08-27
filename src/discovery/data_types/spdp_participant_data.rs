@@ -174,7 +174,7 @@ impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
     D: serde::Deserializer<'de>,
   {
     let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_byte_buf(custom_ds).unwrap();
+    let res = deserializer.deserialize_bytes(custom_ds)?;
     Ok(res.generate_spdp_participant_data())
   }
 }
@@ -196,7 +196,7 @@ mod tests {
   use crate::submessages::EntitySubmessage;
   use speedy::{Endianness, Readable};
   use crate::serialization::message::Message;
-  use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+  use crate::serialization::pl_cdr_deserializer::PlCdrDeserializer;
   use crate::serialization::cdrSerializer::{to_bytes};
   use byteorder::LittleEndian;
   use crate::test::test_data::*;
@@ -213,7 +213,11 @@ mod tests {
         Some(v) => match v {
           EntitySubmessage::Data(d, _) => {
             let participant_data: SPDPDiscoveredParticipantData =
-              deserialize_from_little_endian(&d.serialized_payload.value).unwrap();
+              PlCdrDeserializer::<LittleEndian>::from_bytes::<
+                SPDPDiscoveredParticipantData,
+                LittleEndian,
+              >(&d.serialized_payload.value)
+              .unwrap();
 
             let sdata =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
@@ -223,7 +227,11 @@ mod tests {
             assert_eq!(sdata.len(), d.serialized_payload.value.len());
 
             let participant_data_2: SPDPDiscoveredParticipantData =
-              deserialize_from_little_endian(&sdata).unwrap();
+              PlCdrDeserializer::<LittleEndian>::from_bytes::<
+                SPDPDiscoveredParticipantData,
+                LittleEndian,
+              >(&sdata)
+              .unwrap();
             let sdata_2 =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data_2)
                 //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data_2)
