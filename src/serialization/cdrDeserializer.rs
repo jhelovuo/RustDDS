@@ -59,24 +59,25 @@ where
 
 /// CDR deserializer.
 /// Input is from &[u8], since we expect to have the data in contiguous memory buffers.
-pub struct CDR_deserializer<'de,BO> {
+pub struct CDR_deserializer<'de, BO> {
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
   input: &'de [u8],         // We borrow the input data, therefore we carry lifetime 'de all around.
   serializedDataCount: usize, // This is to keep track of CDR data alignment requirements.
 }
 
-
-
-impl<'de,BO> CDR_deserializer<'de,BO>
-  where BO:ByteOrder
+impl<'de, BO> CDR_deserializer<'de, BO>
+where
+  BO: ByteOrder,
 {
-  pub fn new_little_endian(input: &[u8]) -> CDR_deserializer<LittleEndian>
-    {  CDR_deserializer::<LittleEndian>::new(input) }
+  pub fn new_little_endian(input: &[u8]) -> CDR_deserializer<LittleEndian> {
+    CDR_deserializer::<LittleEndian>::new(input)
+  }
 
-  pub fn new_big_endian(input: &[u8]) -> CDR_deserializer<BigEndian> 
-    { CDR_deserializer::<BigEndian>::new(input) }
+  pub fn new_big_endian(input: &[u8]) -> CDR_deserializer<BigEndian> {
+    CDR_deserializer::<BigEndian>::new(input)
+  }
 
-  pub fn new(input: &'de [u8]) -> CDR_deserializer<'de,BO> {
+  pub fn new(input: &'de [u8]) -> CDR_deserializer<'de, BO> {
     CDR_deserializer::<BO> {
       phantom: PhantomData,
       input,
@@ -84,11 +85,10 @@ impl<'de,BO> CDR_deserializer<'de,BO>
     }
   }
 
-
   /// Read the first bytes in the input.
   fn next_bytes(&mut self, count: usize) -> Result<&[u8]> {
     if count <= self.input.len() {
-      let ( head , tail ) = self.input.split_at(count);
+      let (head, tail) = self.input.split_at(count);
       self.input = tail;
       self.serializedDataCount = self.serializedDataCount + count;
       Ok(head)
@@ -105,14 +105,17 @@ impl<'de,BO> CDR_deserializer<'de,BO>
 
   // Look at the first byte in the input without consuming it.
   fn peek_byte(&mut self) -> Result<u8> {
-    self.input.first().ok_or(Error::Eof).map( |b| *b)
+    self.input.first().ok_or(Error::Eof).map(|b| *b)
   }
 
   fn check_if_bytes_left(&mut self) -> bool {
     self.input.len() > 0
   }
 
-  fn calculate_padding_count_from_written_bytes_and_remove(&mut self, typeOctetAligment: usize) -> Result<()> {
+  fn calculate_padding_count_from_written_bytes_and_remove(
+    &mut self,
+    typeOctetAligment: usize,
+  ) -> Result<()> {
     let modulo = self.serializedDataCount % typeOctetAligment;
     if modulo != 0 {
       let padding = typeOctetAligment - modulo;
@@ -122,7 +125,6 @@ impl<'de,BO> CDR_deserializer<'de,BO>
       Ok(())
     }
   }
-
 }
 
 pub fn deserialize_from_little_endian<'a, T>(s: &'a [u8]) -> Result<T>
@@ -155,7 +157,7 @@ where
 /// inside impl block, so it is here.
 macro_rules! deserialize_multibyte_number {
   ($num_type:ident) => {
-    paste!{
+    paste! {
       fn [<deserialize_ $num_type>]<V>(self, visitor: V) -> Result<V::Value>
       where
         V: Visitor<'de>,
@@ -163,16 +165,16 @@ macro_rules! deserialize_multibyte_number {
         const size :usize = std::mem::size_of::<$num_type>();
         assert!(size > 1, "multibyte means size must be > 1");
         self.calculate_padding_count_from_written_bytes_and_remove(size)?;
-        visitor.[<visit_ $num_type>]( 
+        visitor.[<visit_ $num_type>](
           self.next_bytes(size)?.[<read_ $num_type>]::<BO>().unwrap() )
       }
     }
   };
 }
 
-
-impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
-  where BO:ByteOrder 
+impl<'de, 'a, BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de, BO>
+where
+  BO: ByteOrder,
 {
   type Error = Error;
 
@@ -193,7 +195,7 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
     match self.next_bytes(1)?.first().unwrap() {
       0 => visitor.visit_bool(false),
       1 => visitor.visit_bool(true),
-      x => Err(Error::BadBoolean(*x))
+      x => Err(Error::BadBoolean(*x)),
     }
   }
 
@@ -207,20 +209,20 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
 
   deserialize_multibyte_number!(f32);
   deserialize_multibyte_number!(f64);
-  
+
   // Single-byte numbers have a bit simpler logic: No alignment, no endianness.
   fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_i8(self.next_bytes(1)?.read_i8().unwrap() )
+    visitor.visit_i8(self.next_bytes(1)?.read_i8().unwrap())
   }
 
   fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_u8(self.next_bytes(1)?.read_u8().unwrap() )
+    visitor.visit_u8(self.next_bytes(1)?.read_u8().unwrap())
   }
 
   /// Since this is Rust, a char is 32-bit Unicode codepoint.
@@ -233,8 +235,8 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
     // TODO: Temporary workaround until std::char::from_u32() makes it into stable
     // matched value should be char::from_u32( codepoint )
     match Some(codepoint as u8 as char) {
-      Some(c) => visitor.visit_char( c ),
-      None => Err( Error::BadChar(codepoint)),
+      Some(c) => visitor.visit_char(c),
+      None => Err(Error::BadChar(codepoint)),
     }
   }
 
@@ -246,12 +248,12 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
     // read string length
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let bytes_len = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
-    
-    let bytes = self.next_bytes( bytes_len ) ?; // length includes null terminator 
 
-    let bytes_without_null = &bytes[0..bytes.len()-1];
+    let bytes = self.next_bytes(bytes_len)?; // length includes null terminator
 
-    match std::str::from_utf8( bytes_without_null ) {
+    let bytes_without_null = &bytes[0..bytes.len() - 1];
+
+    match std::str::from_utf8(bytes_without_null) {
       Ok(s) => visitor.visit_str(s),
       Err(utf8_err) => Err(Error::BadString(utf8_err)),
     }
@@ -264,7 +266,7 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
     //println!("deserialize_string");
     self.deserialize_str(visitor)
   }
-  
+
   // Byte strings
 
   fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
@@ -316,7 +318,7 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
   {
     visitor.visit_newtype_struct(self)
   }
-  
+
   ///Sequences are encoded as an unsigned long value, followed by the elements of the
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
@@ -410,26 +412,26 @@ impl<'de, 'a,BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de,BO>
     //println!("deserialize_ignored_any");
     self.deserialize_any(visitor)
   }
-  
 }
 
 // ----------------------------------------------------------
 
-struct EnumerationHelper<'a,'de:'a, BO> 
-{
+struct EnumerationHelper<'a, 'de: 'a, BO> {
   de: &'a mut CDR_deserializer<'de, BO>,
 }
 
-impl<'a,'de, BO> EnumerationHelper<'a,'de,BO> 
-  where BO:ByteOrder,
+impl<'a, 'de, BO> EnumerationHelper<'a, 'de, BO>
+where
+  BO: ByteOrder,
 {
-  fn new(de: &'a mut CDR_deserializer<'de,BO>) -> Self {
+  fn new(de: &'a mut CDR_deserializer<'de, BO>) -> Self {
     EnumerationHelper::<BO> { de }
   }
 }
 
-impl<'de, 'a, BO> EnumAccess<'de> for EnumerationHelper<'a,'de,BO> 
-where BO: ByteOrder
+impl<'de, 'a, BO> EnumAccess<'de> for EnumerationHelper<'a, 'de, BO>
+where
+  BO: ByteOrder,
 {
   type Error = Error;
   type Variant = Self;
@@ -441,14 +443,15 @@ where BO: ByteOrder
     // preceeding deserialize_enum aligned to 4
     let enum_tag = self.de.next_bytes(4)?.read_u32::<BO>().unwrap();
     let val: Result<_> = seed.deserialize(enum_tag.into_deserializer());
-    Ok( (val?, self) )
+    Ok((val?, self))
   }
 }
 
 // ----------------------------------------------------------
 
-impl<'de, 'a,BO> VariantAccess<'de> for EnumerationHelper<'a,'de,BO> 
-where BO: ByteOrder
+impl<'de, 'a, BO> VariantAccess<'de> for EnumerationHelper<'a, 'de, BO>
+where
+  BO: ByteOrder,
 {
   type Error = Error;
 
@@ -483,14 +486,14 @@ where BO: ByteOrder
 
 // ----------------------------------------------------------
 
-struct SequenceHelper<'a, 'de:'a, BO> {
-  de: &'a mut CDR_deserializer<'de,BO>,
+struct SequenceHelper<'a, 'de: 'a, BO> {
+  de: &'a mut CDR_deserializer<'de, BO>,
   elementCounter: usize,
   expectedCount: usize,
 }
 
-impl<'a,'de,BO> SequenceHelper<'a,'de,BO> {
-  fn new(de: &'a mut CDR_deserializer<'de,BO>, expectedCount: usize ) -> Self {
+impl<'a, 'de, BO> SequenceHelper<'a, 'de, BO> {
+  fn new(de: &'a mut CDR_deserializer<'de, BO>, expectedCount: usize) -> Self {
     SequenceHelper {
       de,
       elementCounter: 0,
@@ -501,29 +504,31 @@ impl<'a,'de,BO> SequenceHelper<'a,'de,BO> {
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.
-impl<'a, 'de, BO> SeqAccess<'de> for SequenceHelper<'a,'de, BO> 
-where BO: ByteOrder, 
+impl<'a, 'de, BO> SeqAccess<'de> for SequenceHelper<'a, 'de, BO>
+where
+  BO: ByteOrder,
 {
   type Error = Error;
 
   fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
   where
-    T: DeserializeSeed<'de>, 
+    T: DeserializeSeed<'de>,
   {
     if self.elementCounter == self.expectedCount {
       //println!("STOP SEQ");
       Ok(None)
     } else {
       self.elementCounter = self.elementCounter + 1;
-      seed.deserialize(&mut *self.de).map(Some)    
-    }   
+      seed.deserialize(&mut *self.de).map(Some)
+    }
   }
 }
 
 // `MapAccess` is provided to the `Visitor` to give it the ability to iterate
 // through entries of the map.
-impl<'de, 'a, BO> MapAccess<'de> for SequenceHelper<'a,'de,BO> 
-where BO: ByteOrder,
+impl<'de, 'a, BO> MapAccess<'de> for SequenceHelper<'a, 'de, BO>
+where
+  BO: ByteOrder,
 {
   type Error = Error;
 
@@ -536,8 +541,8 @@ where BO: ByteOrder,
       Ok(None)
     } else {
       self.elementCounter = self.elementCounter + 1;
-      seed.deserialize(&mut *self.de).map(Some)    
-    }   
+      seed.deserialize(&mut *self.de).map(Some)
+    }
   }
 
   fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
@@ -1025,7 +1030,7 @@ mod tests {
   #[test]
   fn CDR_Deserialization_str() {
     let c: String = "BLUE".to_string();
-    let serialized = to_bytes::<String,LittleEndian>(&c).unwrap();
+    let serialized = to_bytes::<String, LittleEndian>(&c).unwrap();
     let deserialized: String = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(c, deserialized);
     assert_eq!(c, "BLUE");

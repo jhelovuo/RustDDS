@@ -472,7 +472,7 @@ mod tests {
   fn discdb_subscription_operations() {
     let mut discovery_db = DiscoveryDB::new();
 
-    let domain_participant = DomainParticipant::new(15, 0);
+    let domain_participant = DomainParticipant::new(16, 0);
     let topic = domain_participant
       .create_topic(
         "Foobar",
