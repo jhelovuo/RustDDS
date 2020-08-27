@@ -444,6 +444,7 @@ mod tests {
   use crate::structure::guid::GuidPrefix;
   use crate::structure::sequence_number::SequenceNumber;
   use crate::serialization::cdrSerializer::to_bytes;
+  use crate::serialization::cdrDeserializer::CDR_deserializer_adapter;
   use byteorder::LittleEndian;
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
   use std::{thread, time};
@@ -473,7 +474,7 @@ mod tests {
     );
 
     let mut matching_datareader = sub
-      .create_datareader::<RandomData>(Some(datareader_id), &topic, &qos)
+      .create_datareader::<RandomData,CDR_deserializer_adapter<RandomData>>(Some(datareader_id), &topic, &qos)
       .unwrap();
 
     let random_data = RandomData {
@@ -586,7 +587,7 @@ mod tests {
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData>(Some(default_id), &topic, &qos)
+      .create_datareader::<RandomData,CDR_deserializer_adapter<RandomData>>(Some(default_id), &topic, &qos)
       .unwrap();
 
     let writer_guid = GUID {
@@ -797,7 +798,7 @@ mod tests {
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData>(Some(default_id), &topic, &qos)
+      .create_datareader::<RandomData,CDR_deserializer_adapter<RandomData>>(Some(default_id), &topic, &qos)
       .unwrap();
     datareader.notification_receiver = rec;
 

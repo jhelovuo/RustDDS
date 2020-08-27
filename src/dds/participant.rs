@@ -408,6 +408,10 @@ mod tests {
   };
   use super::DomainParticipant;
   use speedy::Endianness;
+
+  use crate::serialization::cdrSerializer::CDR_serializer_adapter;
+  use byteorder::LittleEndian;
+
   // TODO: improve basic test when more or the structure is known
   #[test]
   fn dp_basic_domain_participant() {
@@ -436,7 +440,7 @@ mod tests {
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let mut _data_writer = publisher
-      .create_datawriter::<RandomData>(None, &topic, &qos.clone())
+      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>(None, &topic, &qos.clone())
       .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::seconds(5).to_std().unwrap());
@@ -459,7 +463,7 @@ mod tests {
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let mut _data_writer = publisher
-      .create_datawriter::<RandomData>(None, &topic, &qos.clone())
+      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>(None, &topic, &qos.clone())
       .expect("Failed to create datawriter");
 
     let portNumber: u16 = get_user_traffic_unicast_port(5, 0);

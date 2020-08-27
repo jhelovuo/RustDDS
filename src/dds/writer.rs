@@ -994,6 +994,9 @@ mod tests {
   };
   use std::thread;
   use crate::test::random_data::*;
+  use crate::dds::datawriter::DataWriter;
+  use crate::serialization::cdrSerializer::CDR_serializer_adapter;
+  use byteorder::LittleEndian;
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {
@@ -1008,7 +1011,8 @@ mod tests {
     let topic = domain_participant
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
-    let mut data_writer = publisher
+    let mut data_writer : DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>
+      = publisher
       .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 

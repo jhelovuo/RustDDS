@@ -61,15 +61,16 @@ impl<'a> Publisher {
     }
   }
 
-  pub fn create_datawriter<D>(
+  pub fn create_datawriter<D,SA>(
     &'a self,
     entity_id: Option<EntityId>,
     topic: &'a Topic,
     _qos: &QosPolicies,
-  ) -> Result<DataWriter<'a, D>>
+  ) -> Result<DataWriter<'a, D,SA>>
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
+    SA: SerializerAdapter<D>,
   {
     let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
 
@@ -100,7 +101,7 @@ impl<'a> Publisher {
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::<D>::new(
+    let matching_data_writer = DataWriter::<D,SA>::new(
       self,
       &topic,
       Some(guid),

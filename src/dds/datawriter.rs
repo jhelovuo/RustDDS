@@ -1,6 +1,7 @@
 use std::{
   sync::{Arc, RwLock},
   time::{Duration},
+  marker::PhantomData,
 };
 use mio_extras::channel as mio_channel;
 
@@ -27,11 +28,12 @@ use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
   policy::{Reliability},
 };
+use crate::dds::traits::serde_adapters::SerializerAdapter;
 use crate::dds::datasample::DataSample;
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
 use super::datasample_cache::DataSampleCache;
 
-pub struct DataWriter<'a, D: Keyed> {
+pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D>> {
   my_publisher: &'a Publisher,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -39,12 +41,14 @@ pub struct DataWriter<'a, D: Keyed> {
   cc_upload: mio_channel::Sender<DDSData>,
   dds_cache: Arc<RwLock<DDSCache>>,
   datasample_cache: DataSampleCache<D>,
+  phantom: PhantomData<SA>,
 }
 
-impl<'a, D> DataWriter<'a, D>
+impl<'a, D, SA> DataWriter<'a, D, SA>
 where
   D: Keyed + Serialize,
   <D as Keyed>::K: Key,
+  SA: SerializerAdapter<D>,
 {
   pub fn new(
     publisher: &'a Publisher,
@@ -52,7 +56,7 @@ where
     guid: Option<GUID>,
     cc_upload: mio_channel::Sender<DDSData>,
     dds_cache: Arc<RwLock<DDSCache>>,
-  ) -> DataWriter<'a, D> {
+  ) -> DataWriter<'a, D, SA> {
     let entity_id = match guid {
       Some(g) => g.entityId.clone(),
       None => EntityId::ENTITYID_UNKNOWN,
@@ -75,6 +79,7 @@ where
       cc_upload,
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
+      phantom: PhantomData,
     }
   }
 
@@ -191,18 +196,20 @@ where
   // But then what if the result set changes while the application processes it?
 }
 
-impl<D> Entity for DataWriter<'_, D>
+impl<D,SA> Entity for DataWriter<'_, D,SA>
 where
-  D: Keyed,
+  D: Keyed + Serialize,
+  SA: SerializerAdapter<D>,
 {
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     &self.entity_attributes
   }
 }
 
-impl<D> HasQoSPolicy for DataWriter<'_, D>
+impl<D,SA> HasQoSPolicy for DataWriter<'_, D, SA>
 where
-  D: Keyed,
+  D: Keyed + Serialize,
+  SA: SerializerAdapter<D>,
 {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     // TODO: check liveliness of qos_policy
@@ -215,7 +222,11 @@ where
   }
 }
 
-impl<D> DDSEntity for DataWriter<'_, D> where D: Keyed {}
+impl<D,SA> DDSEntity for DataWriter<'_, D, SA> 
+where
+  D: Keyed + Serialize,
+  SA: SerializerAdapter<D>,
+{}
 
 #[cfg(test)]
 mod tests {
@@ -225,6 +236,8 @@ mod tests {
   use crate::test::random_data::*;
   use std::thread;
   use crate::dds::traits::key::Keyed;
+  use crate::serialization::cdrSerializer::CDR_serializer_adapter;
+  use byteorder::LittleEndian;
 
   #[test]
   fn dw_write_test() {
@@ -238,7 +251,8 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer = publisher
+    let mut data_writer : DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData,LittleEndian>> 
+      = publisher
       .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 
@@ -272,7 +286,8 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer = publisher
+    let mut data_writer : DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData,LittleEndian>> 
+      = publisher
       .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 
@@ -313,7 +328,8 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer = publisher
+    let mut data_writer : DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>
+      = publisher
       .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 

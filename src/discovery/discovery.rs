@@ -28,6 +28,8 @@ use crate::structure::guid::EntityId;
 
 
 use crate::serialization::cdrDeserializer::*;
+use crate::serialization::cdrSerializer::*;
+use byteorder::{LittleEndian};
 
 use crate::network::constant::*;
 
@@ -130,7 +132,7 @@ impl Discovery {
       .expect("Unable to create participant cleanup timer");
 
     let mut dcps_participant_writer = discovery_publisher
-      .create_datawriter::<SPDPDiscoveredParticipantData>(
+      .create_datawriter::<SPDPDiscoveredParticipantData, CDR_serializer_adapter<SPDPDiscoveredParticipantData,LittleEndian> >(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
         &dcps_participant_topic,
         dcps_participant_topic.get_qos(),
@@ -182,7 +184,7 @@ impl Discovery {
       .expect("Unable to register subscription reader.");
 
     let mut dcps_subscription_writer = discovery_publisher
-      .create_datawriter::<DiscoveredReaderData>(
+      .create_datawriter::<DiscoveredReaderData,CDR_serializer_adapter<DiscoveredReaderData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
         &dcps_subscription_topic,
         dcps_subscription_topic.get_qos(),
@@ -223,7 +225,7 @@ impl Discovery {
       )
       .expect("Unable to create DataReader for DCPSPublication");
     let _dcps_publication_writer = discovery_publisher
-      .create_datawriter::<SPDPDiscoveredParticipantData>(
+      .create_datawriter::<SPDPDiscoveredParticipantData,CDR_serializer_adapter<SPDPDiscoveredParticipantData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
         &dcps_publication_topic,
         dcps_publication_topic.get_qos(),
@@ -244,7 +246,7 @@ impl Discovery {
       )
       .expect("Unable to create DataReader for DCPSTopic");
     let _dcps_writer = discovery_publisher
-      .create_datawriter::<SPDPDiscoveredParticipantData>(
+      .create_datawriter::<SPDPDiscoveredParticipantData,CDR_serializer_adapter<SPDPDiscoveredParticipantData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
         &dcps_topic,
         dcps_topic.get_qos(),
@@ -513,13 +515,13 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType>(None, &topic, &QosPolicies::qos_none())
+      .create_datawriter::<ShapeType,CDR_serializer_adapter<ShapeType,LittleEndian>>(None, &topic, &QosPolicies::qos_none())
       .unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
-    let _reader = subscriber.create_datareader::<ShapeType>(None, &topic, &QosPolicies::qos_none());
+    let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(None, &topic, &QosPolicies::qos_none());
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11001);

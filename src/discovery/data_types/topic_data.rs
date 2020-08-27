@@ -12,6 +12,7 @@ use crate::{
       TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
     traits::key::Keyed,
+    traits::serde_adapters::SerializerAdapter,
     rtps_reader_proxy::RtpsReaderProxy,
     reader::Reader,
     participant::DomainParticipant,
@@ -333,8 +334,8 @@ pub struct DiscoveredWriterData {
 }
 
 impl DiscoveredWriterData {
-  pub fn new<D: Keyed>(
-    writer: &DataWriter<D>,
+  pub fn new<D: Keyed + Serialize, SA: SerializerAdapter<D>>(
+    writer: &DataWriter<D,SA>,
     topic: &Topic,
     dp: &DomainParticipant,
   ) -> DiscoveredWriterData {

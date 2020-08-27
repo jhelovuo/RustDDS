@@ -3,15 +3,15 @@ use std::marker::PhantomData;
 use std::io;
 use std::io::Write;
 
-//use serde::{de};
-//use std::fmt::{self, Display};
-//use error::{Error, Result};
 extern crate byteorder;
 use crate::serialization::cdrSerializer::byteorder::WriteBytesExt;
 use byteorder::{BigEndian,LittleEndian,ByteOrder};
 
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
+
+use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
+use crate::dds::traits::serde_adapters::SerializerAdapter;
 
 // This is a wrapper object for a Write object. The wrapper keeps count of bytes written.
 // Such a wrapper seemed easier implementation strategy than capturing the return values of all
@@ -52,6 +52,38 @@ where
   }
   fn flush(&mut self) -> io::Result<()> {
     self.writer.flush()
+  }
+}
+
+// ---------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------
+
+
+// A struct separate from CDR_serializer is needed, because the neme to_writer is already taken
+pub struct CDR_serializer_adapter<D,BO>
+where BO:ByteOrder 
+{
+  phantom: PhantomData<D>,
+  ghost: PhantomData<BO>,
+}
+
+impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D,LittleEndian> 
+  where D: Serialize
+{
+  fn output_encoding() -> RepresentationIdentifier { RepresentationIdentifier::CDR_LE }
+
+  fn to_writer<W: io::Write>(writer: W, value: &D) -> Result<()> {
+    to_writer::<D,LittleEndian,W>(writer,value)
+  }
+}
+
+impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D,BigEndian> 
+  where D: Serialize
+{
+  fn output_encoding() -> RepresentationIdentifier { RepresentationIdentifier::CDR_BE }
+
+  fn to_writer<W: io::Write>(writer: W, value: &D) -> Result<()> {
+    to_writer::<D,BigEndian,W>(writer,value)
   }
 }
 
