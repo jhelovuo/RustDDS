@@ -1,6 +1,7 @@
 use std::io;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
+use std::marker::PhantomData;
 
 use serde::{Deserialize,de::DeserializeOwned};
 use mio_extras::channel as mio_channel;
@@ -14,7 +15,8 @@ use crate::structure::{
   cache_change::ChangeKind,
 };
 use crate::dds::{
-  traits::key::*, values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
+  traits::key::*, traits::serde_adapters::*,
+  values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
   pubsub::Subscriber, topic::Topic, readcondition::*,
 };
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
@@ -34,7 +36,7 @@ pub enum SelectByKey {
   Next,
 }
 
-pub struct DataReader<'a, D: Keyed> {
+pub struct DataReader<'a, D: Keyed,SA> {
   my_subscriber: &'a Subscriber,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -45,12 +47,14 @@ pub struct DataReader<'a, D: Keyed> {
 
   datasample_cache: DataSampleCache<D>,
   latest_instant: Instant,
+  deserializer_type: PhantomData<SA>, // This is to provide use for SA
 }
 
-impl<'a, D> DataReader<'a, D>
+impl<'a, D, SA> DataReader<'a, D,SA>
 where
   D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
+  SA: DeserializerAdapter<D>
 {
   pub fn new(
     subscriber: &'a Subscriber,
@@ -77,6 +81,7 @@ where
       // latest_instant to now should be fine. There should be no smaller instants
       // added by the reader.
       latest_instant: Instant::now(),
+      deserializer_type: PhantomData,
     }
   }
 
@@ -373,7 +378,7 @@ where
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D> Evented for DataReader<'a, D>
+impl<'a, D,SA> Evented for DataReader<'a, D,SA>
 where
   D: Keyed,
 {
@@ -401,7 +406,7 @@ where
   }
 }
 
-impl<D> HasQoSPolicy for DataReader<'_, D>
+impl<D, SA> HasQoSPolicy for DataReader<'_, D,SA>
 where
   D: Keyed,
 {
@@ -416,7 +421,7 @@ where
   }
 }
 
-impl<'a, D> Entity for DataReader<'a, D>
+impl<'a, D, SA> Entity for DataReader<'a, D, SA>
 where
   D: Deserialize<'a> + Keyed,
 {

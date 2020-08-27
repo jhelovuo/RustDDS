@@ -19,13 +19,17 @@ use crate::dds::{
 };
 
 use crate::discovery::{
-  data_types::spdp_participant_data::SPDPDiscoveredParticipantData, discovery_db::DiscoveryDB,
+  data_types::spdp_participant_data::SPDPDiscoveredParticipantData,
+  data_types::topic_data::DiscoveredReaderData,
+  discovery_db::DiscoveryDB,
 };
 
 use crate::structure::guid::EntityId;
 
+
+use crate::serialization::cdrDeserializer::*;
+
 use crate::network::constant::*;
-use super::data_types::topic_data::DiscoveredReaderData;
 
 pub struct Discovery {
   poll: Poll,
@@ -92,7 +96,7 @@ impl Discovery {
       .expect("Unable to create DCPSParticipant topic.");
 
     let mut dcps_participant_reader = discovery_subscriber
-      .create_datareader::<SPDPDiscoveredParticipantData>(
+      .create_datareader::<SPDPDiscoveredParticipantData,CDR_deserializer_adapter<SPDPDiscoveredParticipantData>>(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         &dcps_participant_topic,
         dcps_participant_topic.get_qos(),
@@ -161,7 +165,7 @@ impl Discovery {
       .expect("Unable to create DCPSSubscription topic.");
 
     let mut dcps_subscription_reader = discovery_subscriber
-      .create_datareader::<DiscoveredReaderData>(
+      .create_datareader::<DiscoveredReaderData,CDR_deserializer_adapter<DiscoveredReaderData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         &dcps_subscription_topic,
         dcps_subscription_topic.get_qos(),
@@ -212,7 +216,7 @@ impl Discovery {
       .expect("Unable to create DCPSPublication topic.");
 
     let _dcps_publication_reader = discovery_subscriber
-      .create_datareader::<SPDPDiscoveredParticipantData>(
+      .create_datareader::<SPDPDiscoveredParticipantData,CDR_deserializer_adapter<SPDPDiscoveredParticipantData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         &dcps_publication_topic,
         dcps_subscription_topic.get_qos(),
@@ -233,7 +237,7 @@ impl Discovery {
       .create_topic("DCPSTopic", TypeDesc::new("".to_string()), &dcps_topic_qos)
       .expect("Unable to create DCPSTopic topic.");
     let _dcps_reader = discovery_subscriber
-      .create_datareader::<SPDPDiscoveredParticipantData>(
+      .create_datareader::<SPDPDiscoveredParticipantData,CDR_deserializer_adapter<SPDPDiscoveredParticipantData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         &dcps_topic,
         dcps_subscription_topic.get_qos(),
@@ -321,7 +325,8 @@ impl Discovery {
 
   pub fn handle_participant_reader(
     &self,
-    reader: &mut DataReader<SPDPDiscoveredParticipantData>,
+    reader: &mut DataReader<SPDPDiscoveredParticipantData,CDR_deserializer_adapter<SPDPDiscoveredParticipantData>>,
+    //TODO: CDR is probably not what we want here. Change adapter to something else.
   ) -> Option<SPDPDiscoveredParticipantData> {
     let participant_data = match reader.read_next_sample(Take::Yes) {
       Ok(d) => match d {
@@ -348,7 +353,9 @@ impl Discovery {
     None
   }
 
-  pub fn handle_subscription_reader(&self, reader: &mut DataReader<DiscoveredReaderData>) {
+  pub fn handle_subscription_reader(&self, 
+    reader: &mut DataReader<DiscoveredReaderData,CDR_deserializer_adapter<DiscoveredReaderData>>
+  ) {
     let reader_data_vec: Option<Vec<DiscoveredReaderData>> =
       match reader.take(100, ReadCondition::not_read()) {
         Ok(d) => Some(

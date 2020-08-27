@@ -209,6 +209,8 @@ impl<'de> Deserialize<'de> for DiscoveredReaderData {
   }
 }
 
+//impl DeserializeOwned for DiscoveredReaderData { /*marker trait only */ } 
+
 impl Serialize for DiscoveredReaderData {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where

@@ -20,6 +20,7 @@ use crate::dds::{
   datawriter::DataWriter,
   datareader::DataReader,
   traits::key::{Keyed, Key},
+  traits::serde_adapters::*,
 };
 
 use crate::{
@@ -205,15 +206,16 @@ impl<'s> Subscriber {
     }
   }
 
-  pub fn create_datareader<D>(
+  pub fn create_datareader<D,SA>(
     &'s self,
     entity_id: Option<EntityId>,
     topic: &'s Topic,
     _qos: &QosPolicies,
-  ) -> Result<DataReader<'s, D>>
+  ) -> Result<DataReader<'s, D, SA>>
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
+    SA: DeserializerAdapter<D>
   {
     // What is the bound?
     let (send, rec) = mio_channel::sync_channel::<()>(10);
@@ -230,7 +232,7 @@ impl<'s> Subscriber {
     let reader_id = entity_id;
     let datareader_id = entity_id;
 
-    let matching_datareader = DataReader::<D>::new(
+    let matching_datareader = DataReader::<D,SA>::new(
       self,
       datareader_id,
       &topic,
@@ -278,8 +280,13 @@ impl<'s> Subscriber {
   }
 
   /// Retrieves a previously created DataReader belonging to the Subscriber.
-  pub fn lookup_datareader<D: Keyed>(&self, _topic_name: &str) -> Option<DataReader<D>> {
+  pub fn lookup_datareader<D,SA>(&self, _topic_name: &str) -> Option<DataReader<D,SA>>
+    where D: Keyed + DeserializeOwned,
+          SA:DeserializerAdapter<D>,
+  {
     todo!()
+    // TO think: Is this really necessary? Because the caller would have to know
+    // types D and SA. Sould we just trust whoever creates DataReaders to also remember them?
   }
 }
 
