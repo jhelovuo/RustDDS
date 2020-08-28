@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessage::EntitySubmessage;
@@ -179,7 +181,7 @@ where
     }
     let rep_identifier_raw = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
     pos += 2;
-    let rep_options = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
+    let rep_options = &buffer[pos..pos + 2];
     pos += 2;
 
     let payload_size: usize = msgheader.submessage_length as usize - pos;
@@ -188,7 +190,7 @@ where
 
     let serialized_payload = SerializedPayload {
       representation_identifier: rep_identifier_raw,
-      representation_options: rep_options,
+      representation_options: rep_options.try_into().expect("Unexpected array length in representation_options"),
       value: vec_value,
     };
     Some(DataFrag {

@@ -3,7 +3,7 @@ use crate::messages::submessages::submessage_elements::parameter_list::Parameter
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
-use speedy::{Readable, Writable, Context, Writer, Reader};
+use speedy::{ Writable, Context, Writer };
 
 /// The DataFrag Submessage extends the Data Submessage by enabling the
 /// serializedData to be fragmented and sent as multiple DataFrag Submessages.
@@ -71,27 +71,6 @@ impl DataFrag {
 impl Default for DataFrag {
   fn default() -> Self {
     DataFrag::new()
-  }
-}
-
-impl<'a, C: Context> Readable<'a, C> for DataFrag {
-  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut dataFragMessage = DataFrag::default();
-    //ExtraFlags This version of the protocol (2.3) should set all the bits in the extraFlags to zero
-    //just ignore these
-    reader.read_u16()?;
-    //octets to InlineQos
-    reader.read_u16()?;
-    dataFragMessage.reader_id = reader.read_value()?;
-    dataFragMessage.writer_id = reader.read_value()?;
-    dataFragMessage.writer_sn = reader.read_value()?;
-    dataFragMessage.fragment_starting_num = reader.read_value()?;
-    dataFragMessage.fragments_in_submessage = reader.read_value()?;
-    dataFragMessage.fragment_size = reader.read_value()?;
-    dataFragMessage.data_size = reader.read_value()?;
-    // TODO handle inlineQos ?????
-    dataFragMessage.serialized_payload = reader.read_value()?;
-    Ok(dataFragMessage)
   }
 }
 

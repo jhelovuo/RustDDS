@@ -39,19 +39,10 @@ pub struct Data {
 }
 
 impl Data {
-  /* This is not a "new" function. It looks like implementation of Default trait.
-  pub fn new() -> Data {
-    Data {
-      reader_id: EntityId::default(),
-      writer_id: EntityId::default(),
-      writer_sn: SequenceNumber::default(),
-      inline_qos: None,
-      serialized_payload: SerializedPayload::default(),
-    }
-  }
-  */
   /// DATA submessage cannot be speedy Readable because deserializing this requires info from submessage header.
   /// Required iformation is  expect_qos and expect_payload whish are told on submessage headerflags.
+
+  // TODO: Handle errors, return a Result type.
   pub fn deserialize_data(
     buffer: &Vec<u8>,
     _context: Endianness,
@@ -81,8 +72,8 @@ impl Data {
     let payload = 
       if expect_payload {
         if  !expect_qos {
-        
-          SerializedPayload::read_from_buffer(&buffer[octets_to_inline_qos_usize + 4..buffer.len()])
+          // Bypass Speedy here, use custom desrialization
+          SerializedPayload::from_bytes(&buffer[octets_to_inline_qos_usize + 4..buffer.len()])
             .unwrap()
         } else {
           let QoS_list_length = u32::read_from_buffer(
@@ -90,7 +81,7 @@ impl Data {
           )
           .unwrap() as usize;
 
-          SerializedPayload::read_from_buffer(
+          SerializedPayload::from_bytes(
             &buffer[octets_to_inline_qos_usize + 4 + QoS_list_length..buffer.len()],
           )
           .unwrap()

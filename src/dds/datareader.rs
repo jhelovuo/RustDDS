@@ -500,7 +500,7 @@ mod tests {
 
     data.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data).unwrap(),
     };
     new_reader.handle_data_msg(data, mr_state.clone());
@@ -528,7 +528,7 @@ mod tests {
 
     data2.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap(),
     };
 
@@ -543,7 +543,7 @@ mod tests {
 
     data3.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap(),
     };
 
@@ -621,7 +621,7 @@ mod tests {
 
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&test_data).unwrap(),
     };
 
@@ -632,7 +632,7 @@ mod tests {
 
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap(),
     };
     reader.handle_data_msg(data_msg, mr_state.clone());
@@ -700,7 +700,7 @@ mod tests {
 
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap(),
     };
     let mut data_msg2 = Data::default();
@@ -710,7 +710,7 @@ mod tests {
 
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap(),
     };
     let mut data_msg3 = Data::default();
@@ -720,7 +720,7 @@ mod tests {
 
     data_msg3.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap(),
     };
     let mut data_msg4 = Data::default();
@@ -730,7 +730,7 @@ mod tests {
 
     data_msg4.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap(),
     };
     reader.handle_data_msg(data_msg, mr_state.clone());
@@ -841,7 +841,7 @@ mod tests {
 
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data1).unwrap(),
     };
 
@@ -852,7 +852,7 @@ mod tests {
 
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data2).unwrap(),
     };
 
@@ -863,7 +863,7 @@ mod tests {
 
     data_msg3.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data3).unwrap(),
     };
 

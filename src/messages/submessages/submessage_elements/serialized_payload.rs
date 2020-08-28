@@ -1,5 +1,7 @@
-use speedy::{Readable, Writable, Writer, Reader, Context};
-//use byteorder::{ByteOrder, BigEndian };
+use speedy::{Writable, Writer, Context};
+use std::io;
+use std::io::Read;
+use byteorder::{ ReadBytesExt, BigEndian };
 
 use num_enum::{TryFromPrimitive, IntoPrimitive};
 //use std::convert::TryFrom;
@@ -40,7 +42,7 @@ impl RepresentationIdentifier {
 #[derive(Debug, PartialEq, Clone)]
 pub struct SerializedPayload {
   pub representation_identifier: u16, // This is u16, not RepresentationIdentifier, because we need to be able to deserialize whatever is on the wire
-  pub representation_options: u16, // Not used. Send as zero, ignore on receive.
+  pub representation_options: [u8;2], // Not used. Send as zero, ignore on receive.
   pub value: Vec<u8>,
 }
 
@@ -49,9 +51,24 @@ impl SerializedPayload {
   pub fn new(rep_id:RepresentationIdentifier, payload:Vec<u8>) -> SerializedPayload {
     SerializedPayload {
       representation_identifier: rep_id as u16,
-      representation_options: 0,
+      representation_options: [0,0],
       value: payload,
     }
+  }
+
+  // Implement deserialization here, because Speedy just makes it difficult.
+  pub fn from_bytes(bytes: &[u8]) -> io::Result<SerializedPayload> {
+    let mut reader = io::Cursor::new(bytes);
+    let representation_identifier = reader.read_u16::<BigEndian>()?;
+    let representation_options = [reader.read_u8()? , reader.read_u8()? ];
+    let mut value = Vec::with_capacity(bytes.len() - 4 ); // still length == 0
+    reader.read_to_end(&mut value)?;
+
+    Ok(SerializedPayload {
+      representation_identifier,
+      representation_options,
+      value, 
+    })
   }
 }
 
@@ -60,48 +77,18 @@ impl Default for SerializedPayload {
   fn default() -> SerializedPayload {
     SerializedPayload::new(RepresentationIdentifier::CDR_LE, b"fake data".to_vec() )
   }
+
 }
 
-impl<'a, C: Context> Readable<'a, C> for SerializedPayload {
-  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    //let mut payload = SerializedPayload::default();
-    //let mut representationIentifierBytes: Vec<u8> = vec![];
-
-    // Speedy is now stupid here. We get a speedy reader, but it has an unknown endianness.
-    // 
-    let rep_id_high = reader.read_u8()?;
-    let rep_id_low = reader.read_u8()?;
-    let rep_id = ((rep_id_high as u16) << 8) | (rep_id_low as u16); // construct as big-endian
-
-    /*representationIentifierBytes.push();
-    representationIentifierBytes.push(reader.read_u8()?);
-    let u_16 = BigEndian::read_u16(&representationIentifierBytes);
-    payload.representation_identifier = SerializedPayload::representation_identifier_from(u_16); */
-    let ro : u16 = reader.read_value()?;
-
-    let mut value = Vec::with_capacity(128); // just a guess to avoid too much reallocation 
-    loop {
-      let res = reader.read_u8();
-      match res {
-        Ok(by) => value.push(by),
-        Err(_error) => break,
-      };
-    }
-    Ok(SerializedPayload {
-      representation_identifier: rep_id,
-      representation_options: ro,
-      value, 
-    })
-  }
-}
 
 impl<C: Context> Writable<C> for SerializedPayload {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
     let primitive: u16 = self.representation_identifier.into();
-    let bigEndianRepresentation = primitive.clone().to_be_bytes();
+    let bigEndianRepresentation = primitive.to_be_bytes();
     writer.write_u8(bigEndianRepresentation[0])?;
     writer.write_u8(bigEndianRepresentation[1])?;
-    writer.write_u16(self.representation_options)?;
+    writer.write_u8(self.representation_options[0])?;
+    writer.write_u8(self.representation_options[1])?;
     for element in &*self.value {
       writer.write_u8(*element)?;
     }
