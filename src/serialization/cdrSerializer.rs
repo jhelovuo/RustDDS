@@ -57,35 +57,40 @@ where
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
-
 // A struct separate from CDR_serializer is needed, because the neme to_writer is already taken
-pub struct CDR_serializer_adapter<D,BO>
-where BO:ByteOrder 
+pub struct CDR_serializer_adapter<D, BO>
+where
+  BO: ByteOrder,
 {
   phantom: PhantomData<D>,
   ghost: PhantomData<BO>,
 }
 
-impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D,LittleEndian> 
-  where D: Serialize
+impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D, LittleEndian>
+where
+  D: Serialize,
 {
-  fn output_encoding() -> RepresentationIdentifier { RepresentationIdentifier::CDR_LE }
+  fn output_encoding() -> RepresentationIdentifier {
+    RepresentationIdentifier::CDR_LE
+  }
 
   fn to_writer<W: io::Write>(writer: W, value: &D) -> Result<()> {
-    to_writer::<D,LittleEndian,W>(writer,value)
+    to_writer::<D, LittleEndian, W>(writer, value)
   }
 }
 
-impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D,BigEndian> 
-  where D: Serialize
+impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D, BigEndian>
+where
+  D: Serialize,
 {
-  fn output_encoding() -> RepresentationIdentifier { RepresentationIdentifier::CDR_BE }
+  fn output_encoding() -> RepresentationIdentifier {
+    RepresentationIdentifier::CDR_BE
+  }
 
   fn to_writer<W: io::Write>(writer: W, value: &D) -> Result<()> {
-    to_writer::<D,BigEndian,W>(writer,value)
+    to_writer::<D, BigEndian, W>(writer, value)
   }
 }
-
 
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------

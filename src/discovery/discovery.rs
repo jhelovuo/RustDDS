@@ -27,10 +27,11 @@ use crate::discovery::{
 
 use crate::structure::guid::EntityId;
 
-use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
+use crate::serialization::{cdrSerializer::CDR_serializer_adapter, pl_cdr_deserializer::PlCdrDeserializerAdapter};
 
 use crate::network::constant::*;
 use super::data_types::topic_data::DiscoveredTopicData;
+use byteorder::LittleEndian;
 
 pub struct Discovery {
   poll: Poll,
@@ -235,7 +236,7 @@ impl Discovery {
       .expect("Unable to regiser writers info sender.");
 
     let mut dcps_publication_writer = discovery_publisher
-      .create_datawriter::<DiscoveredWriterData>(
+      .create_datawriter::<DiscoveredWriterData, CDR_serializer_adapter<DiscoveredWriterData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
         &dcps_publication_topic,
         dcps_publication_topic.get_qos(),
@@ -271,7 +272,7 @@ impl Discovery {
       )
       .expect("Unable to create DataReader for DCPSTopic");
     let _dcps_writer = discovery_publisher
-      .create_datawriter::<DiscoveredTopicData>(
+      .create_datawriter::<DiscoveredTopicData, CDR_serializer_adapter<DiscoveredTopicData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
         &dcps_topic,
         dcps_topic.get_qos(),
@@ -470,7 +471,7 @@ impl Discovery {
     res
   }
 
-  pub fn write_readers_info(&self, writer: &mut DataWriter<DiscoveredReaderData>) {
+  pub fn write_readers_info(&self, writer: &mut DataWriter<DiscoveredReaderData, CDR_serializer_adapter<DiscoveredReaderData,LittleEndian>>) {
     match self.discovery_db.read() {
       Ok(db) => {
         let datas = db.get_all_local_topic_readers();
@@ -500,7 +501,7 @@ impl Discovery {
     }
   }
 
-  pub fn write_writers_info(&self, writer: &mut DataWriter<DiscoveredWriterData>) {
+  pub fn write_writers_info(&self, writer: &mut DataWriter<DiscoveredWriterData,  CDR_serializer_adapter<DiscoveredWriterData,LittleEndian>>) {
     match self.discovery_db.read() {
       Ok(db) => {
         let datas = db.get_all_local_topic_writers();
@@ -687,7 +688,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType>(None, &topic, &QosPolicies::qos_none())
+      .create_datawriter::<ShapeType, CDR_serializer_adapter<ShapeType, LittleEndian>>(None, &topic, &QosPolicies::qos_none())
       .unwrap();
 
     let subscriber = participant
