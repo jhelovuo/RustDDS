@@ -48,7 +48,7 @@ use std::{
   collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
 };
 use policy::{History, Reliability};
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+//use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 pub struct Writer {
   source_version: ProtocolVersion,
   source_vendor_id: VendorId,
@@ -709,23 +709,31 @@ impl Writer {
     change: CacheChange,
     reader_entity_id: EntityId,
   ) -> SubMessage {
-    let mut data_message = Data::new();
-    let mut representationIdentifierBytes: [u8; 2] = [0, 0];
-    if self.endianness == Endianness::LittleEndian {
-      representationIdentifierBytes = [0x00, 0x01];
-    } else if self.endianness == Endianness::BigEndian {
-      representationIdentifierBytes = [0x00, 0x00];
-    }
+    
+    // let mut representationIdentifierBytes: [u8; 2] = [0, 0];
+    // if self.endianness == Endianness::LittleEndian {
+    //   representationIdentifierBytes = [0x00, 0x01];
+    // } else if self.endianness == Endianness::BigEndian {
+    //   representationIdentifierBytes = [0x00, 0x00];
+    // }
 
     // TODO: might want check representation identifier again
-    data_message.serialized_payload.representation_identifier =
-      SerializedPayload::representation_identifier_from(representationIdentifierBytes[1] as u16);
+    //data_message.serialized_payload.representation_identifier =
+    //  SerializedPayload::representation_identifier_from(representationIdentifierBytes[1] as u16);
 
     //The current version of the protocol (2.3) does not use the representation_options: The sender shall set the representation_options to zero.
-    data_message.serialized_payload.representation_options = 0u16;
-    data_message.serialized_payload.value = change.data_value.unwrap().value.clone();
-    data_message.reader_id = reader_entity_id;
-    data_message.writer_sn = change.sequence_number;
+    //data_message.serialized_payload.representation_options = 0u16;
+    //data_message.serialized_payload.value = change.data_value.unwrap().value.clone();
+    //data_message.reader_id = reader_entity_id;
+    //data_message.writer_sn = change.sequence_number;
+
+    let mut data_message = Data {
+      reader_id: reader_entity_id,
+      writer_id: *self.get_entity_id(), // TODO! Is this the correct EntityId here?
+      writer_sn: change.sequence_number,
+      inline_qos: None,  // Change later, if needed.
+      serialized_payload: change.data_value.unwrap(), // TODO: Is the representation identifier already correct?
+    };
 
     let mut flagHelper = SubmessageFlagHelper::new(self.endianness);
     flagHelper.DataFlag = true;

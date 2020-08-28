@@ -2,7 +2,8 @@ use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessage::EntitySubmessage;
 
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+use crate::messages::submessages::submessage_elements
+  ::serialized_payload::{SerializedPayload};
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 
 use crate::structure::guid::EntityId;
@@ -144,7 +145,6 @@ where
     //let endianness_flag = msgheader.flags.is_flag_set(3);
     let inline_qoS_flag = msgheader.flags.is_flag_set(2);
     //let non_standar_payload_flag = msgheader.flags.is_flag_set(1);
-    let key_flag = msgheader.flags.is_flag_set(0);
 
     pos += 2; // Ignore extra flags for now
 
@@ -177,25 +177,20 @@ where
         Some(ParameterList::read_from_buffer(&buffer[pos..pos + inline_qos_size]).unwrap());
       pos += inline_qos_size;
     }
-    let mut serialized_payload = SerializedPayload::default();
-    if !key_flag {
-      let rep_identifier = SerializedPayload::representation_identifier_from(
-        u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap(),
-      );
-      pos += 2;
-      let rep_options = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
-      pos += 2;
+    let rep_identifier_raw = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
+    pos += 2;
+    let rep_options = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
+    pos += 2;
 
-      let payload_size: usize = msgheader.submessage_length as usize - pos;
+    let payload_size: usize = msgheader.submessage_length as usize - pos;
 
-      let vec_value = Vec::read_from_buffer(&buffer[pos..pos + payload_size]).unwrap();
+    let vec_value = Vec::read_from_buffer(&buffer[pos..pos + payload_size]).unwrap();
 
-      serialized_payload = SerializedPayload {
-        representation_identifier: rep_identifier,
-        representation_options: rep_options,
-        value: vec_value,
-      }
-    }
+    let serialized_payload = SerializedPayload {
+      representation_identifier: rep_identifier_raw,
+      representation_options: rep_options,
+      value: vec_value,
+    };
     Some(DataFrag {
       reader_id,
       writer_id,

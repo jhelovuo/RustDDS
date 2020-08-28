@@ -39,6 +39,7 @@ pub struct Data {
 }
 
 impl Data {
+  /* This is not a "new" function. It looks like implementation of Default trait.
   pub fn new() -> Data {
     Data {
       reader_id: EntityId::default(),
@@ -48,7 +49,7 @@ impl Data {
       serialized_payload: SerializedPayload::default(),
     }
   }
-
+  */
   /// DATA submessage cannot be speedy Readable because deserializing this requires info from submessage header.
   /// Required iformation is  expect_qos and expect_payload whish are told on submessage headerflags.
   pub fn deserialize_data(
@@ -57,7 +58,6 @@ impl Data {
     expect_qos: bool,
     expect_payload: bool,
   ) -> Data {
-    let mut d = Data::new();
     let _extra_flags = &buffer[0..2];
     let octets_to_inline_qos = u16::read_from_buffer(&buffer[2..4]).unwrap();
     let octets_to_inline_qos_usize = octets_to_inline_qos as usize;
@@ -65,44 +65,65 @@ impl Data {
     let writer_id = &buffer[8..12];
     let sequence_number = &buffer[12..20];
 
-    if expect_qos {
-      let QoS_list_length = u32::read_from_buffer(
-        &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
-      )
-      .unwrap() as usize;
-      d.inline_qos = Some(
-        ParameterList::read_from_buffer(
-          &buffer[octets_to_inline_qos_usize..octets_to_inline_qos_usize + QoS_list_length],
+    let inline_qos_ =
+      if expect_qos {
+        let QoS_list_length = u32::read_from_buffer(
+          &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
         )
-        .unwrap(),
-      );
-    }
-    if expect_payload && !expect_qos {
-      d.serialized_payload =
-        SerializedPayload::read_from_buffer(&buffer[octets_to_inline_qos_usize + 4..buffer.len()])
-          .unwrap();
-    }
-    if expect_payload && expect_qos {
-      let QoS_list_length = u32::read_from_buffer(
-        &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
-      )
-      .unwrap() as usize;
-      d.serialized_payload = SerializedPayload::read_from_buffer(
-        &buffer[octets_to_inline_qos_usize + 4 + QoS_list_length..buffer.len()],
-      )
-      .unwrap();
-    }
+        .unwrap() as usize;
+        Some(
+          ParameterList::read_from_buffer(
+            &buffer[octets_to_inline_qos_usize..octets_to_inline_qos_usize + QoS_list_length],
+          )
+          .unwrap())
+      } else { None };
 
-    d.reader_id = EntityId::read_from_buffer(reader_id).unwrap();
-    d.writer_id = EntityId::read_from_buffer(writer_id).unwrap();
-    d.writer_sn = SequenceNumber::read_from_buffer(sequence_number).unwrap();
-    return d;
+    let payload = 
+      if expect_payload {
+        if  !expect_qos {
+        
+          SerializedPayload::read_from_buffer(&buffer[octets_to_inline_qos_usize + 4..buffer.len()])
+            .unwrap()
+        } else {
+          let QoS_list_length = u32::read_from_buffer(
+            &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
+          )
+          .unwrap() as usize;
+
+          SerializedPayload::read_from_buffer(
+            &buffer[octets_to_inline_qos_usize + 4 + QoS_list_length..buffer.len()],
+          )
+          .unwrap()
+        }
+      } else {
+          // ! expect payload
+          unimplemented!();
+      };
+
+    let reader_id_ = EntityId::read_from_buffer(reader_id).unwrap();
+    let writer_id_ = EntityId::read_from_buffer(writer_id).unwrap();
+    let writer_sn_ = SequenceNumber::read_from_buffer(sequence_number).unwrap();
+
+    Data {
+      reader_id: reader_id_ ,
+      writer_id: writer_id_ ,
+      writer_sn: writer_sn_ ,
+      inline_qos: inline_qos_ ,
+      serialized_payload: payload,
+    }
   }
 }
 
+// TODO: This should not be necessary. 
 impl Default for Data {
   fn default() -> Self {
-    Data::new()
+    Data {
+      reader_id: EntityId::default(),
+      writer_id: EntityId::default(),
+      writer_sn: SequenceNumber::default(),
+      inline_qos: None,
+      serialized_payload: SerializedPayload::default(),
+    }
   }
 }
 

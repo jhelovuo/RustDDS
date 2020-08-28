@@ -19,6 +19,8 @@ use crate::dds::{
   datasample_cache::DataSampleCache, pubsub::Subscriber, topic::Topic, readcondition::*,
 };
 
+use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
+
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Take {
@@ -115,12 +117,22 @@ where
         Some(s) => s,
         None => {
           println!("DataReader cant access serialized payload");
-          continue;
+          continue
         }
       };
+
+      let rep_id = match RepresentationIdentifier::try_from_u16( ser_payload.representation_identifier ) {
+        Ok(r) => r,
+        Err(unknown_rep_id) => {
+          // TODO: Maybe we should ask SA first? It may be able to handle this even though it is non-std.
+          println!("Datareader: Unknown representation id {:?}.", unknown_rep_id);
+          continue
+        },
+      };
+
       let bytes = &ser_payload.value;
 
-      let payload = match SA::from_bytes(bytes, ser_payload.representation_identifier) {
+      let payload = match SA::from_bytes(bytes, rep_id) {
         Ok(pl) => pl,
         Err(e) => { 
           println!("Failed to deserialize bytes \n{}", e);
@@ -487,7 +499,7 @@ mod tests {
     data.writer_sn = SequenceNumber::from(0);
 
     data.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&random_data).unwrap(),
     };
@@ -515,7 +527,7 @@ mod tests {
     data2.writer_sn = SequenceNumber::from(1);
 
     data2.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap(),
     };
@@ -530,7 +542,7 @@ mod tests {
     data3.writer_sn = SequenceNumber::from(2);
 
     data3.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap(),
     };
@@ -608,7 +620,7 @@ mod tests {
     data_msg.writer_sn = SequenceNumber::from(0);
 
     data_msg.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&test_data).unwrap(),
     };
@@ -619,7 +631,7 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(1);
 
     data_msg2.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap(),
     };
@@ -687,7 +699,7 @@ mod tests {
     data_msg.writer_sn = SequenceNumber::from(2);
 
     data_msg.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap(),
     };
@@ -697,7 +709,7 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(3);
 
     data_msg2.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap(),
     };
@@ -707,7 +719,7 @@ mod tests {
     data_msg3.writer_sn = SequenceNumber::from(4);
 
     data_msg3.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap(),
     };
@@ -717,7 +729,7 @@ mod tests {
     data_msg4.writer_sn = SequenceNumber::from(5);
 
     data_msg4.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap(),
     };
@@ -828,7 +840,7 @@ mod tests {
     data_msg.writer_sn = SequenceNumber::from(0);
 
     data_msg.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data1).unwrap(),
     };
@@ -839,7 +851,7 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(1);
 
     data_msg2.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data2).unwrap(),
     };
@@ -850,7 +862,7 @@ mod tests {
     data_msg3.writer_sn = SequenceNumber::from(2);
 
     data_msg3.serialized_payload = SerializedPayload {
-      representation_identifier: SerializedPayload::representation_identifier_from(1),
+      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: 0,
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data3).unwrap(),
     };

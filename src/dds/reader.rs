@@ -545,7 +545,7 @@ mod tests {
       mr_state.multicast_reply_locator_list.clone(),
     );
 
-    let mut d = Data::new();
+    let mut d = Data::default();
     d.writer_id = writer_guid.entityId;
     let d_seqnum = d.writer_sn;
     new_reader.handle_data_msg(d.clone(), mr_state);
@@ -594,7 +594,7 @@ mod tests {
       mr_state.multicast_reply_locator_list.clone(),
     );
 
-    let d = DDSData::new(SerializedPayload::new(RepresentationIdentifier::CDR_LE));
+    let d = DDSData::new(SerializedPayload::default());
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
@@ -709,7 +709,7 @@ mod tests {
     );
 
     let n: i64 = 10;
-    let mut d = Data::new();
+    let mut d = Data::default();
     d.writer_id = writer_id;
     let mut changes = Vec::new();
 
