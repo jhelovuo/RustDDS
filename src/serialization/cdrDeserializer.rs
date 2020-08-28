@@ -17,23 +17,22 @@ use crate::dds::traits::serde_adapters::DeserializerAdapter;
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
-
 /// This type adapts CDR_deserializer (which implements serde::Deserializer) to work as a
 /// DeserializerAdapter. CDR_deserializer cannot directly implement the trait itself, because
 /// CDR_deserializer has the type parameter BO open, and the adapter needs to be bi-endian.
-pub struct CDR_deserializer_adapter<D> 
-{
+pub struct CDR_deserializer_adapter<D> {
   phantom: PhantomData<D>,
   // no-one home
 }
 
-const repr_ids : [RepresentationIdentifier;2] = 
-    [RepresentationIdentifier::CDR_BE, RepresentationIdentifier::CDR_LE];
+const repr_ids: [RepresentationIdentifier; 2] = [
+  RepresentationIdentifier::CDR_BE,
+  RepresentationIdentifier::CDR_LE,
+];
 
-
-impl <D> DeserializerAdapter<D> for CDR_deserializer_adapter<D> 
-where 
-      D: DeserializeOwned,
+impl<D> DeserializerAdapter<D> for CDR_deserializer_adapter<D>
+where
+  D: DeserializeOwned,
 {
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &repr_ids
@@ -41,21 +40,15 @@ where
 
   fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D> {
     match encoding {
-      RepresentationIdentifier::CDR_LE => {
-        deserialize_from_little_endian(input_bytes)
-      },
-      RepresentationIdentifier::CDR_BE => {
-        deserialize_from_big_endian(input_bytes)
-      }
-      repr_id => {
-        Err(Error::Message(format!("Unknown representaiton identifier {}.", u16::from(repr_id) )))
-      }
+      RepresentationIdentifier::CDR_LE => deserialize_from_little_endian(input_bytes),
+      RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
+      repr_id => Err(Error::Message(format!(
+        "Unknown representaiton identifier {}.",
+        u16::from(repr_id)
+      ))),
     }
   }
 }
-
-
-
 
 /// CDR deserializer.
 /// Input is from &[u8], since we expect to have the data in contiguous memory buffers.

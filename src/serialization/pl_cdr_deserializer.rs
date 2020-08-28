@@ -1,9 +1,47 @@
 use serde::{Deserializer, de::DeserializeOwned};
 use std::marker::PhantomData;
-use byteorder::ByteOrder;
+use byteorder::{LittleEndian, ByteOrder, BigEndian};
 
 use crate::serialization::error::Error;
-use crate::serialization::error::Result;
+use crate::{
+  messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+  serialization::error::Result,
+};
+
+use crate::dds::traits::serde_adapters::DeserializerAdapter;
+
+pub struct PlCdrDeserializerAdapter<D> {
+  phantom: PhantomData<D>,
+}
+
+const repr_ids: [RepresentationIdentifier; 2] = [
+  RepresentationIdentifier::PL_CDR_BE,
+  RepresentationIdentifier::PL_CDR_LE,
+];
+
+impl<D> DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>
+where
+  D: DeserializeOwned,
+{
+  fn supported_encodings() -> &'static [RepresentationIdentifier] {
+    &repr_ids
+  }
+
+  fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D> {
+    match encoding {
+      RepresentationIdentifier::PL_CDR_LE => {
+        PlCdrDeserializer::<LittleEndian>::from_bytes::<D>(input_bytes)
+      }
+      RepresentationIdentifier::PL_CDR_BE => {
+        PlCdrDeserializer::<BigEndian>::from_bytes::<D>(input_bytes)
+      }
+      repr_id => Err(Error::Message(format!(
+        "Unknown representation identifier {}",
+        u16::from(repr_id)
+      ))),
+    }
+  }
+}
 
 pub struct PlCdrDeserializer<'de, BO> {
   phantom: PhantomData<BO>,
@@ -14,15 +52,15 @@ impl<'de, BO> PlCdrDeserializer<'de, BO>
 where
   BO: ByteOrder,
 {
-  pub fn new<B: ByteOrder>(s: &'de [u8]) -> PlCdrDeserializer<'de, B> {
-    PlCdrDeserializer {
+  pub fn new(s: &'de [u8]) -> PlCdrDeserializer<'de, BO> {
+    PlCdrDeserializer::<BO> {
       phantom: PhantomData,
       input: s,
     }
   }
 
-  pub fn from_bytes<'a, T: DeserializeOwned, B: ByteOrder>(s: &'a [u8]) -> Result<T> {
-    let deserializer: PlCdrDeserializer<B> = PlCdrDeserializer::<B>::new(s);
+  pub fn from_bytes<'a, T: DeserializeOwned>(s: &'a [u8]) -> Result<T> {
+    let deserializer: PlCdrDeserializer<BO> = PlCdrDeserializer::new(s);
     let t: T = T::deserialize(deserializer)?;
     Ok(t)
   }

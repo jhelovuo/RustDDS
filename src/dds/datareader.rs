@@ -15,13 +15,9 @@ use crate::structure::{
   cache_change::{CacheChange, ChangeKind},
 };
 use crate::dds::{
-  traits::key::*, traits::serde_adapters::*,
-  values::result::*, qos::*, datasample::*, datasample_cache::DataSampleCache,
-  pubsub::Subscriber, topic::Topic, readcondition::*,
+  traits::key::*, traits::serde_adapters::*, values::result::*, qos::*, datasample::*,
+  datasample_cache::DataSampleCache, pubsub::Subscriber, topic::Topic, readcondition::*,
 };
-use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
-use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
-use crate::serialization::{pl_cdr_deserializer::*, cdrDeserializer::deserialize_from_big_endian};
 
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,7 +32,7 @@ pub enum SelectByKey {
   Next,
 }
 
-pub struct DataReader<'a, D: Keyed,SA> {
+pub struct DataReader<'a, D: Keyed, SA> {
   my_subscriber: &'a Subscriber,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -50,11 +46,11 @@ pub struct DataReader<'a, D: Keyed,SA> {
   deserializer_type: PhantomData<SA>, // This is to provide use for SA
 }
 
-impl<'a, D, SA> DataReader<'a, D,SA>
+impl<'a, D, SA> DataReader<'a, D, SA>
 where
   D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
-  SA: DeserializerAdapter<D>
+  SA: DeserializerAdapter<D>,
 {
   pub fn new(
     subscriber: &'a Subscriber,
@@ -124,49 +120,12 @@ where
       };
       let bytes = &ser_payload.value;
 
-      let payload: D = match ser_payload.representation_identifier {
-        RepresentationIdentifier::PL_CDR_BE => {
-          match PlCdrDeserializer::<byteorder::BigEndian>::from_bytes::<D, byteorder::BigEndian>(
-            bytes,
-          ) {
-            Ok(payload) => payload,
-            Err(e) => {
-              println!("DataReader couldn't deserialize PL_LE. \n{}", e);
-              continue;
-            }
-          }
-        }
-        RepresentationIdentifier::PL_CDR_LE => {
-          match PlCdrDeserializer::<byteorder::BigEndian>::from_bytes::<D, byteorder::LittleEndian>(
-            bytes,
-          ) {
-            Ok(payload) => payload,
-            Err(e) => {
-              println!("DataReader couldn't deserialize PL_LE. \n{}", e);
-              continue;
-            }
-          }
-        }
-        RepresentationIdentifier::CDR_BE => match deserialize_from_big_endian(bytes) {
-          Ok(payload) => payload,
-          Err(e) => {
-            println!("DataReader couldn't deserialize from BE. \n{}", e);
-            continue;
-          }
-        },
-        RepresentationIdentifier::CDR_LE => match deserialize_from_little_endian(bytes) {
-          Ok(payload) => payload,
-          Err(e) => {
-            println!("DataReader couldn't deserialize from LE. \n{}", e);
-            continue;
-          }
-        },
-        _ => {
-          println!(
-            "DataReader doesn't know how to deserialize with this representation_identifier"
-          );
+      let payload = match SA::from_bytes(bytes, ser_payload.representation_identifier) {
+        Ok(pl) => pl,
+        Err(e) => { 
+          println!("Failed to deserialize bytes \n{}", e);
           continue;
-        }
+        },
       };
 
       // TODO: how do we get the source_timestamp here? Is it needed?
@@ -400,7 +359,7 @@ where
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D,SA> Evented for DataReader<'a, D,SA>
+impl<'a, D, SA> Evented for DataReader<'a, D, SA>
 where
   D: Keyed,
 {
@@ -428,7 +387,7 @@ where
   }
 }
 
-impl<D, SA> HasQoSPolicy for DataReader<'_, D,SA>
+impl<D, SA> HasQoSPolicy for DataReader<'_, D, SA>
 where
   D: Keyed,
 {
@@ -465,8 +424,7 @@ mod tests {
   use crate::dds::message_receiver::*;
   use crate::structure::guid::GuidPrefix;
   use crate::structure::sequence_number::SequenceNumber;
-  use crate::serialization::cdrSerializer::to_bytes;
-  use crate::serialization::cdrDeserializer::CDR_deserializer_adapter;
+  use crate::serialization::{cdrDeserializer::CDR_deserializer_adapter, cdrSerializer::to_bytes};
   use byteorder::LittleEndian;
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
   use std::{thread, time};
@@ -496,7 +454,11 @@ mod tests {
     );
 
     let mut matching_datareader = sub
-      .create_datareader::<RandomData,CDR_deserializer_adapter<RandomData>>(Some(datareader_id), &topic, &qos)
+      .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
+        Some(datareader_id),
+        &topic,
+        &qos,
+      )
       .unwrap();
 
     let random_data = RandomData {
@@ -609,7 +571,11 @@ mod tests {
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData,CDR_deserializer_adapter<RandomData>>(Some(default_id), &topic, &qos)
+      .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
+        Some(default_id),
+        &topic,
+        &qos,
+      )
       .unwrap();
 
     let writer_guid = GUID {
@@ -820,7 +786,11 @@ mod tests {
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData,CDR_deserializer_adapter<RandomData>>(Some(default_id), &topic, &qos)
+      .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
+        Some(default_id),
+        &topic,
+        &qos,
+      )
       .unwrap();
     datareader.notification_receiver = rec;
 

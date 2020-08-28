@@ -26,7 +26,9 @@ pub trait Keyed {
   }
 }
 
-pub trait Key: Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned {
+pub trait Key:
+  Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned
+{
   // no methods required
 
   // provides one method for convenience

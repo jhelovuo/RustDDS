@@ -211,7 +211,7 @@ impl<'de> Deserialize<'de> for DiscoveredReaderData {
   }
 }
 
-//impl DeserializeOwned for DiscoveredReaderData { /*marker trait only */ } 
+//impl DeserializeOwned for DiscoveredReaderData { /*marker trait only */ }
 
 impl Serialize for DiscoveredReaderData {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -456,6 +456,14 @@ impl Serialize for DiscoveredTopicData {
   }
 }
 
+impl Keyed for DiscoveredTopicData {
+  type K = GUID;
+
+  fn get_key(&self) -> Self::K {
+    self.topic_data.key.unwrap()
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -478,7 +486,7 @@ mod tests {
 
     let sdata = to_bytes::<ReaderProxy, LittleEndian>(&reader_proxy).unwrap();
     let reader_proxy2: ReaderProxy =
-      PlCdrDeserializer::<LittleEndian>::from_bytes::<ReaderProxy, LittleEndian>(&sdata).unwrap();
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<ReaderProxy>(&sdata).unwrap();
     assert_eq!(reader_proxy, reader_proxy2);
     let sdata2 = to_bytes::<ReaderProxy, LittleEndian>(&reader_proxy2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -490,7 +498,7 @@ mod tests {
 
     let sdata = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy).unwrap();
     let writer_proxy2: WriterProxy =
-      PlCdrDeserializer::<LittleEndian>::from_bytes::<WriterProxy, LittleEndian>(&sdata).unwrap();
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<WriterProxy>(&sdata).unwrap();
     assert_eq!(writer_proxy, writer_proxy2);
     let sdata2 = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -502,7 +510,7 @@ mod tests {
 
     let sdata = to_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(&sub_topic_data).unwrap();
     let sub_topic_data2: SubscriptionBuiltinTopicData =
-      PlCdrDeserializer::<LittleEndian>::from_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<SubscriptionBuiltinTopicData>(
         &sdata,
       )
       .unwrap();
@@ -517,7 +525,7 @@ mod tests {
 
     let sdata = to_bytes::<PublicationBuiltinTopicData, LittleEndian>(&pub_topic_data).unwrap();
     let pub_topic_data2: PublicationBuiltinTopicData =
-      PlCdrDeserializer::<LittleEndian>::from_bytes::<PublicationBuiltinTopicData, LittleEndian>(
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<PublicationBuiltinTopicData>(
         &sdata,
       )
       .unwrap();
@@ -541,7 +549,7 @@ mod tests {
 
     let sdata = to_bytes::<DiscoveredReaderData, LittleEndian>(&drd).unwrap();
     let drd2: DiscoveredReaderData =
-      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredReaderData, LittleEndian>(&sdata)
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredReaderData>(&sdata)
         .unwrap();
     assert_eq!(drd, drd2);
     let sdata2 = to_bytes::<DiscoveredReaderData, LittleEndian>(&drd2).unwrap();
@@ -561,7 +569,7 @@ mod tests {
 
     let sdata = to_bytes::<DiscoveredWriterData, LittleEndian>(&dwd).unwrap();
     let dwd2: DiscoveredWriterData =
-      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredWriterData, LittleEndian>(&sdata)
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredWriterData>(&sdata)
         .unwrap();
     assert_eq!(dwd, dwd2);
     let sdata2 = to_bytes::<DiscoveredWriterData, LittleEndian>(&dwd2).unwrap();
@@ -574,7 +582,7 @@ mod tests {
 
     let sdata = to_bytes::<TopicBuiltinTopicData, LittleEndian>(&topic_data).unwrap();
     let topic_data2: TopicBuiltinTopicData =
-      PlCdrDeserializer::<LittleEndian>::from_bytes::<TopicBuiltinTopicData, LittleEndian>(&sdata)
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<TopicBuiltinTopicData>(&sdata)
         .unwrap();
     assert_eq!(topic_data, topic_data2);
     let sdata2 = to_bytes::<TopicBuiltinTopicData, LittleEndian>(&topic_data2).unwrap();
@@ -589,7 +597,7 @@ mod tests {
 
     let sdata = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd).unwrap();
     let dtd2: DiscoveredTopicData =
-      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredTopicData, LittleEndian>(&sdata)
+      PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredTopicData>(&sdata)
         .unwrap();
     assert_eq!(dtd, dtd2);
     let sdata2 = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd2).unwrap();

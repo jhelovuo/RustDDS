@@ -21,19 +21,16 @@ use crate::dds::{
 
 use crate::discovery::{
   data_types::spdp_participant_data::SPDPDiscoveredParticipantData,
-  data_types::topic_data::DiscoveredReaderData,
+  data_types::topic_data::{DiscoveredWriterData, DiscoveredReaderData},
   discovery_db::DiscoveryDB,
 };
 
 use crate::structure::guid::EntityId;
 
-
-use crate::serialization::cdrDeserializer::*;
-use crate::serialization::cdrSerializer::*;
-use byteorder::{LittleEndian};
+use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
 
 use crate::network::constant::*;
-use super::data_types::topic_data::{DiscoveredWriterData, DiscoveredReaderData};
+use super::data_types::topic_data::DiscoveredTopicData;
 
 pub struct Discovery {
   poll: Poll,
@@ -101,7 +98,7 @@ impl Discovery {
       .expect("Unable to create DCPSParticipant topic.");
 
     let mut dcps_participant_reader = discovery_subscriber
-      .create_datareader::<SPDPDiscoveredParticipantData,CDR_deserializer_adapter<SPDPDiscoveredParticipantData>>(
+      .create_datareader::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         &dcps_participant_topic,
         dcps_participant_topic.get_qos(),
@@ -170,7 +167,7 @@ impl Discovery {
       .expect("Unable to create DCPSSubscription topic.");
 
     let mut dcps_subscription_reader = discovery_subscriber
-      .create_datareader::<DiscoveredReaderData,CDR_deserializer_adapter<DiscoveredReaderData>>(
+      .create_datareader::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         &dcps_subscription_topic,
         dcps_subscription_topic.get_qos(),
@@ -220,8 +217,8 @@ impl Discovery {
       )
       .expect("Unable to create DCPSPublication topic.");
 
-    let _dcps_publication_reader = discovery_subscriber
-      .create_datareader::<SPDPDiscoveredParticipantData,CDR_deserializer_adapter<SPDPDiscoveredParticipantData>>(
+    let mut dcps_publication_reader = discovery_subscriber
+      .create_datareader::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         &dcps_publication_topic,
         dcps_subscription_topic.get_qos(),
@@ -267,14 +264,14 @@ impl Discovery {
       .create_topic("DCPSTopic", TypeDesc::new("".to_string()), &dcps_topic_qos)
       .expect("Unable to create DCPSTopic topic.");
     let _dcps_reader = discovery_subscriber
-      .create_datareader::<SPDPDiscoveredParticipantData,CDR_deserializer_adapter<SPDPDiscoveredParticipantData>>(
+      .create_datareader::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         &dcps_topic,
         dcps_subscription_topic.get_qos(),
       )
       .expect("Unable to create DataReader for DCPSTopic");
     let _dcps_writer = discovery_publisher
-      .create_datawriter::<SPDPDiscoveredParticipantData,CDR_serializer_adapter<SPDPDiscoveredParticipantData,LittleEndian>>(
+      .create_datawriter::<DiscoveredTopicData>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
         &dcps_topic,
         dcps_topic.get_qos(),
@@ -344,7 +341,10 @@ impl Discovery {
 
   pub fn handle_participant_reader(
     &self,
-    reader: &mut DataReader<SPDPDiscoveredParticipantData,CDR_deserializer_adapter<SPDPDiscoveredParticipantData>>,
+    reader: &mut DataReader<
+      SPDPDiscoveredParticipantData,
+      PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>,
+    >,
     //TODO: CDR is probably not what we want here. Change adapter to something else.
   ) -> Option<SPDPDiscoveredParticipantData> {
     let participant_data = match reader.read_next_sample(Take::Yes) {
@@ -372,8 +372,9 @@ impl Discovery {
     None
   }
 
-  pub fn handle_subscription_reader(&self, 
-    reader: &mut DataReader<DiscoveredReaderData,CDR_deserializer_adapter<DiscoveredReaderData>>
+  pub fn handle_subscription_reader(
+    &self,
+    reader: &mut DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
   ) {
     let reader_data_vec: Option<Vec<DiscoveredReaderData>> =
       match reader.take(100, ReadCondition::not_read()) {
@@ -405,7 +406,10 @@ impl Discovery {
     });
   }
 
-  pub fn handle_publication_reader(&self, reader: &mut DataReader<DiscoveredWriterData>) {
+  pub fn handle_publication_reader(
+    &self,
+    reader: &mut DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
+  ) {
     let writer_data_vec: Option<Vec<DiscoveredWriterData>> =
       match reader.take(100, ReadCondition::not_read()) {
         Ok(d) => Some(
@@ -533,7 +537,7 @@ mod tests {
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
     structure::{locator::Locator, entity::Entity},
-    serialization::{cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializer},
+    serialization::{cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializer, cdrDeserializer::CDR_deserializer_adapter},
     submessages::{InterpreterSubmessage, EntitySubmessage},
   };
   use std::{time::Duration, net::SocketAddr};
@@ -632,10 +636,7 @@ mod tests {
       match submsg.submessage.as_mut() {
         Some(v) => match v {
           EntitySubmessage::Data(d, _) => {
-            let mut drd: DiscoveredReaderData = PlCdrDeserializer::<LittleEndian>::from_bytes::<
-              DiscoveredReaderData,
-              LittleEndian,
-            >(&d.serialized_payload.value)
+            let mut drd: DiscoveredReaderData = PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredReaderData>(&d.serialized_payload.value)
             .unwrap();
             drd.reader_proxy.unicast_locator_list.clear();
             drd
@@ -692,7 +693,7 @@ mod tests {
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
-    let _reader = subscriber.create_datareader::<ShapeType>(None, &topic, &QosPolicies::qos_none());
+    let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(None, &topic, &QosPolicies::qos_none());
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11002);

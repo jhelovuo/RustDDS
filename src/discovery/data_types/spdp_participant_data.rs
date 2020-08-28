@@ -213,10 +213,9 @@ mod tests {
         Some(v) => match v {
           EntitySubmessage::Data(d, _) => {
             let participant_data: SPDPDiscoveredParticipantData =
-              PlCdrDeserializer::<LittleEndian>::from_bytes::<
-                SPDPDiscoveredParticipantData,
-                LittleEndian,
-              >(&d.serialized_payload.value)
+              PlCdrDeserializer::<LittleEndian>::from_bytes::<SPDPDiscoveredParticipantData>(
+                &d.serialized_payload.value,
+              )
               .unwrap();
 
             let sdata =
@@ -227,10 +226,9 @@ mod tests {
             assert_eq!(sdata.len(), d.serialized_payload.value.len());
 
             let participant_data_2: SPDPDiscoveredParticipantData =
-              PlCdrDeserializer::<LittleEndian>::from_bytes::<
-                SPDPDiscoveredParticipantData,
-                LittleEndian,
-              >(&sdata)
+              PlCdrDeserializer::<LittleEndian>::from_bytes::<SPDPDiscoveredParticipantData>(
+                &sdata,
+              )
               .unwrap();
             let sdata_2 =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data_2)

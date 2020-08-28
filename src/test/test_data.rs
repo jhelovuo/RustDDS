@@ -73,9 +73,7 @@ pub fn spdp_publication_data_raw() -> Vec<u8> {
 }
 
 use crate::{
-  serialization::{
-    Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializer,
-  },
+  serialization::{Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializer},
   discovery::{
     content_filter_property::ContentFilterProperty,
     data_types::{
@@ -128,10 +126,7 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
       Some(v) => match v {
         EntitySubmessage::Data(d, _) => {
           let mut participant_data: SPDPDiscoveredParticipantData =
-            PlCdrDeserializer::<LittleEndian>::from_bytes::<
-              SPDPDiscoveredParticipantData,
-              LittleEndian,
-            >(&d.serialized_payload.value)
+            PlCdrDeserializer::<LittleEndian>::from_bytes::<SPDPDiscoveredParticipantData>(&d.serialized_payload.value)
             .unwrap();
           participant_data.metatraffic_unicast_locators[0] =
             Locator::from(SocketAddr::new("127.0.0.1".parse().unwrap(), port));
@@ -167,10 +162,7 @@ pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
       Some(v) => match v {
         EntitySubmessage::Data(d, _) => {
           let particiapant_data: SPDPDiscoveredParticipantData =
-            PlCdrDeserializer::<LittleEndian>::from_bytes::<
-              SPDPDiscoveredParticipantData,
-              LittleEndian,
-            >(&d.serialized_payload.value)
+          PlCdrDeserializer::<LittleEndian>::from_bytes::<SPDPDiscoveredParticipantData>(&d.serialized_payload.value)
             .unwrap();
 
           return Some(particiapant_data);
