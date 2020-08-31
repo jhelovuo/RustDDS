@@ -72,7 +72,7 @@ impl SerializedPayload {
   }
 }
 
-// TODO: Remove this. It does not make sense to have a default value for this.
+// TODO: Remove this. It does not make sense to have a default value for this. Except for testing.
 impl Default for SerializedPayload {
   fn default() -> SerializedPayload {
     SerializedPayload::new(RepresentationIdentifier::CDR_LE, b"fake data".to_vec() )
