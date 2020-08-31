@@ -289,7 +289,7 @@ mod tests {
   use super::SubMessage;
   use speedy::{Readable, Writable, Endianness};
   use crate::{
-    serialization::{SubmessageFlagHelper},
+    submessages::{SubmessageFlagHelper},
     submessages::{Heartbeat, InfoDestination, InfoTimestamp, Data, SubmessageKind},
   };
   #[test]
