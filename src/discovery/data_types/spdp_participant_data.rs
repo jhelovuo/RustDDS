@@ -173,8 +173,8 @@ impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
   where
     D: serde::Deserializer<'de>,
   {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_bytes(custom_ds)?;
+    let visitor = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_any(visitor)?;
     Ok(res.generate_spdp_participant_data())
   }
 }
@@ -196,10 +196,14 @@ mod tests {
   use crate::submessages::EntitySubmessage;
   use speedy::{Endianness, Readable};
   use crate::serialization::message::Message;
-  use crate::serialization::pl_cdr_deserializer::PlCdrDeserializer;
+  use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
   use crate::serialization::cdrSerializer::{to_bytes};
   use byteorder::LittleEndian;
-  use crate::test::test_data::*;
+  use crate::{
+    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+    test::test_data::*,
+  };
+  use crate::dds::traits::serde_adapters::DeserializerAdapter;
 
   #[test]
   fn pdata_deserialize_serialize() {
@@ -213,23 +217,21 @@ mod tests {
         Some(v) => match v {
           EntitySubmessage::Data(d, _) => {
             let participant_data: SPDPDiscoveredParticipantData =
-              PlCdrDeserializer::<LittleEndian>::from_bytes::<SPDPDiscoveredParticipantData>(
+              PlCdrDeserializerAdapter::from_bytes(
                 &d.serialized_payload.value,
+                RepresentationIdentifier::PL_CDR_LE,
               )
               .unwrap();
 
             let sdata =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
-            //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data).unwrap();
 
             // order cannot be known at this point
             assert_eq!(sdata.len(), d.serialized_payload.value.len());
 
             let participant_data_2: SPDPDiscoveredParticipantData =
-              PlCdrDeserializer::<LittleEndian>::from_bytes::<SPDPDiscoveredParticipantData>(
-                &sdata,
-              )
-              .unwrap();
+              PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)
+                .unwrap();
             let sdata_2 =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data_2)
                 //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data_2)

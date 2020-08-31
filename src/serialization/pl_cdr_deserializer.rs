@@ -1,6 +1,5 @@
 use serde::{Deserializer, de::DeserializeOwned};
 use std::marker::PhantomData;
-use byteorder::{LittleEndian, ByteOrder, BigEndian};
 
 use crate::serialization::error::Error;
 use crate::{
@@ -9,6 +8,8 @@ use crate::{
 };
 
 use crate::dds::traits::serde_adapters::DeserializerAdapter;
+use super::{cdrSerializer::to_bytes};
+use byteorder::LittleEndian;
 
 pub struct PlCdrDeserializerAdapter<D> {
   phantom: PhantomData<D>,
@@ -30,10 +31,10 @@ where
   fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D> {
     match encoding {
       RepresentationIdentifier::PL_CDR_LE => {
-        PlCdrDeserializer::<LittleEndian>::from_bytes::<D>(input_bytes)
+        PlCdrDeserializer::from_little_endian_bytes::<D>(input_bytes)
       }
       RepresentationIdentifier::PL_CDR_BE => {
-        PlCdrDeserializer::<BigEndian>::from_bytes::<D>(input_bytes)
+        PlCdrDeserializer::from_big_endian_bytes::<D>(input_bytes)
       }
       repr_id => Err(Error::Message(format!(
         "Unknown representation identifier {}",
@@ -43,37 +44,53 @@ where
   }
 }
 
-pub struct PlCdrDeserializer<'de, BO> {
-  phantom: PhantomData<BO>,
+pub struct PlCdrDeserializer<'de> {
+  endianness: RepresentationIdentifier,
   input: &'de [u8],
 }
 
-impl<'de, BO> PlCdrDeserializer<'de, BO>
-where
-  BO: ByteOrder,
-{
-  pub fn new(s: &'de [u8]) -> PlCdrDeserializer<'de, BO> {
-    PlCdrDeserializer::<BO> {
-      phantom: PhantomData,
+impl<'de> PlCdrDeserializer<'de> {
+  pub fn new(s: &'de [u8], endianness: RepresentationIdentifier) -> PlCdrDeserializer {
+    PlCdrDeserializer {
+      endianness,
       input: s,
     }
   }
 
-  pub fn from_bytes<'a, T: DeserializeOwned>(s: &'a [u8]) -> Result<T> {
-    let deserializer: PlCdrDeserializer<BO> = PlCdrDeserializer::new(s);
-    let t: T = T::deserialize(deserializer)?;
-    Ok(t)
+  pub fn from_little_endian_bytes<'a, T: DeserializeOwned>(s: &'a [u8]) -> Result<T> {
+    let deserializer = PlCdrDeserializer::new(s, RepresentationIdentifier::PL_CDR_LE);
+    T::deserialize(deserializer)
+  }
+
+  pub fn from_big_endian_bytes<'a, T: DeserializeOwned>(s: &'a [u8]) -> Result<T> {
+    let deserializer = PlCdrDeserializer::new(s, RepresentationIdentifier::PL_CDR_BE);
+    T::deserialize(deserializer)
+  }
+
+  fn custom_deserialize_any<V>(self, visitor: V) -> Result<V::Value>
+  where
+    V: serde::de::Visitor<'de>,
+    //BuiltinDataDeserializer<LittleEndian, V::Value>: DataGeneration<V::Value>,
+    //BuiltinDataDeserializer<BigEndian, V::Value>: DataGeneration<V::Value>,
+  {
+    match self.endianness {
+      RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
+        let rep: Result<Vec<u8>> = to_bytes::<u16, LittleEndian>(&u16::from(self.endianness));
+        visitor.visit_bytes(&[&rep.unwrap(), self.input].concat())
+      }
+      e => Err(Error::Message(format!("Unsupported endianness {:?}", e))),
+    }
   }
 }
 
-impl<'de, BO> Deserializer<'de> for PlCdrDeserializer<'de, BO> {
+impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   type Error = Error;
 
-  fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
+  fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
   where
     V: serde::de::Visitor<'de>,
   {
-    unimplemented!()
+    self.custom_deserialize_any(visitor)
   }
 
   fn deserialize_bool<V>(self, _visitor: V) -> Result<V::Value>
@@ -253,12 +270,12 @@ impl<'de, BO> Deserializer<'de> for PlCdrDeserializer<'de, BO> {
     self,
     _name: &'static str,
     _fields: &'static [&'static str],
-    _visitor: V,
+    visitor: V,
   ) -> Result<V::Value>
   where
     V: serde::de::Visitor<'de>,
   {
-    unimplemented!()
+    self.deserialize_any(visitor)
   }
 
   fn deserialize_enum<V>(

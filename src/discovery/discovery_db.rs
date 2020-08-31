@@ -492,7 +492,11 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let dw = publisher1
-      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>(None, &topic, &QosPolicies::qos_none())
+      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
+        None,
+        &topic,
+        &QosPolicies::qos_none(),
+      )
       .unwrap();
 
     let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
@@ -505,7 +509,11 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let dw2 = publisher2
-      .create_datawriter::<RandomData,CDR_serializer_adapter<RandomData,LittleEndian>>(None, &topic, &QosPolicies::qos_none())
+      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
+        None,
+        &topic,
+        &QosPolicies::qos_none(),
+      )
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
     let _writer2_key = writer_data2

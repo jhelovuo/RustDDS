@@ -1,4 +1,3 @@
-use speedy::Readable;
 use serde::Deserialize;
 
 use crate::structure::{
@@ -10,9 +9,12 @@ use crate::structure::{
   endpoint::ReliabilityKind,
 };
 
-use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
+use crate::messages::{
+  protocol_version::ProtocolVersion, vendor_id::VendorId,
+  submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+};
 
-use crate::serialization::{cdrDeserializer::deserialize_from_little_endian, error::Error};
+use crate::serialization::error::Error;
 
 use crate::{
   dds::{
@@ -20,6 +22,7 @@ use crate::{
       Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
       TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
+    traits::serde_adapters::DeserializerAdapter,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
@@ -33,7 +36,9 @@ use crate::{
   },
 };
 
-#[derive(Debug, Clone)]
+use super::cdrDeserializer::CDR_deserializer_adapter;
+
+#[derive(Debug)]
 pub struct BuiltinDataDeserializer {
   // Participant Data
   pub protocol_version: Option<ProtocolVersion>,
@@ -122,78 +127,78 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn generate_spdp_participant_data(self) -> SPDPDiscoveredParticipantData {
+  pub fn generate_spdp_participant_data(&self) -> SPDPDiscoveredParticipantData {
     SPDPDiscoveredParticipantData {
       updated_time: time::precise_time_ns(),
-      protocol_version: self.protocol_version,
-      vendor_id: self.vendor_id,
-      expects_inline_qos: self.expects_inline_qos,
-      participant_guid: self.participant_guid,
-      metatraffic_unicast_locators: self.metatraffic_unicast_locators,
-      metatraffic_multicast_locators: self.metatraffic_multicast_locators,
-      default_unicast_locators: self.default_unicast_locators,
-      default_multicast_locators: self.default_multicast_locators,
-      available_builtin_endpoints: self.available_builtin_endpoints,
-      lease_duration: self.lease_duration,
-      manual_liveliness_count: self.manual_liveliness_count,
-      builtin_enpoint_qos: self.builtin_enpoint_qos,
-      entity_name: self.entity_name,
+      protocol_version: self.protocol_version.clone(),
+      vendor_id: self.vendor_id.clone(),
+      expects_inline_qos: self.expects_inline_qos.clone(),
+      participant_guid: self.participant_guid.clone(),
+      metatraffic_unicast_locators: self.metatraffic_unicast_locators.clone(),
+      metatraffic_multicast_locators: self.metatraffic_multicast_locators.clone(),
+      default_unicast_locators: self.default_unicast_locators.clone(),
+      default_multicast_locators: self.default_multicast_locators.clone(),
+      available_builtin_endpoints: self.available_builtin_endpoints.clone(),
+      lease_duration: self.lease_duration.clone(),
+      manual_liveliness_count: self.manual_liveliness_count.clone(),
+      builtin_enpoint_qos: self.builtin_enpoint_qos.clone(),
+      entity_name: self.entity_name.clone(),
     }
   }
 
-  pub fn generate_reader_proxy(self) -> ReaderProxy {
+  pub fn generate_reader_proxy(&self) -> ReaderProxy {
     ReaderProxy {
-      remote_reader_guid: self.endpoint_guid,
-      expects_inline_qos: self.expects_inline_qos,
-      unicast_locator_list: self.unicast_locator_list,
-      multicast_locator_list: self.multicast_locator_list,
+      remote_reader_guid: self.endpoint_guid.clone(),
+      expects_inline_qos: self.expects_inline_qos.clone(),
+      unicast_locator_list: self.unicast_locator_list.clone(),
+      multicast_locator_list: self.multicast_locator_list.clone(),
     }
   }
 
-  pub fn generate_writer_proxy(self) -> WriterProxy {
+  pub fn generate_writer_proxy(&self) -> WriterProxy {
     WriterProxy {
-      remote_writer_guid: self.endpoint_guid,
-      unicast_locator_list: self.unicast_locator_list,
-      multicast_locator_list: self.multicast_locator_list,
-      data_max_size_serialized: self.data_max_size_serialized,
+      remote_writer_guid: self.endpoint_guid.clone(),
+      unicast_locator_list: self.unicast_locator_list.clone(),
+      multicast_locator_list: self.multicast_locator_list.clone(),
+      data_max_size_serialized: self.data_max_size_serialized.clone(),
     }
   }
 
-  pub fn generate_subscription_topic_data(self) -> SubscriptionBuiltinTopicData {
+  pub fn generate_subscription_topic_data(&self) -> SubscriptionBuiltinTopicData {
     SubscriptionBuiltinTopicData {
-      key: self.endpoint_guid,
-      participant_key: self.participant_guid,
-      topic_name: self.topic_name,
-      type_name: self.type_name,
-      durability: self.durability,
-      deadline: self.deadline,
-      latency_budget: self.latency_budget,
-      liveliness: self.liveliness,
-      reliability: self.reliability,
-      ownership: self.ownership,
-      destination_order: self.destination_order,
-      time_based_filter: self.time_based_filter,
-      presentation: self.presentation,
-      lifespan: self.lifespan,
+      key: self.endpoint_guid.clone(),
+      participant_key: self.participant_guid.clone(),
+      topic_name: self.topic_name.clone(),
+      type_name: self.type_name.clone(),
+      durability: self.durability.clone(),
+      deadline: self.deadline.clone(),
+      latency_budget: self.latency_budget.clone(),
+      liveliness: self.liveliness.clone(),
+      reliability: self.reliability.clone(),
+      ownership: self.ownership.clone(),
+      destination_order: self.destination_order.clone(),
+      time_based_filter: self.time_based_filter.clone(),
+      presentation: self.presentation.clone(),
+      lifespan: self.lifespan.clone(),
     }
   }
 
-  pub fn generate_publication_topic_data(self) -> PublicationBuiltinTopicData {
+  pub fn generate_publication_topic_data(&self) -> PublicationBuiltinTopicData {
     PublicationBuiltinTopicData {
-      key: self.endpoint_guid,
-      participant_key: self.participant_guid,
-      topic_name: self.topic_name,
-      type_name: self.type_name,
-      durability: self.durability,
-      deadline: self.deadline,
-      latency_budget: self.latency_budget,
-      liveliness: self.liveliness,
-      reliability: self.reliability,
-      lifespan: self.lifespan,
-      time_based_filter: self.time_based_filter,
-      ownership: self.ownership,
-      destination_order: self.destination_order,
-      presentation: self.presentation,
+      key: self.endpoint_guid.clone(),
+      participant_key: self.participant_guid.clone(),
+      topic_name: self.topic_name.clone(),
+      type_name: self.type_name.clone(),
+      durability: self.durability.clone(),
+      deadline: self.deadline.clone(),
+      latency_budget: self.latency_budget.clone(),
+      liveliness: self.liveliness.clone(),
+      reliability: self.reliability.clone(),
+      lifespan: self.lifespan.clone(),
+      time_based_filter: self.time_based_filter.clone(),
+      ownership: self.ownership.clone(),
+      destination_order: self.destination_order.clone(),
+      presentation: self.presentation.clone(),
     }
   }
 
@@ -218,8 +223,8 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_discovered_reader_data(self) -> DiscoveredReaderData {
     // TODO: refactor so that clones are not necessary
-    let reader_proxy = self.clone().generate_reader_proxy();
-    let subscription_topic_data = self.clone().generate_subscription_topic_data();
+    let reader_proxy = self.generate_reader_proxy();
+    let subscription_topic_data = self.generate_subscription_topic_data();
     DiscoveredReaderData {
       reader_proxy,
       subscription_topic_data,
@@ -229,27 +234,39 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_discovered_writer_data(self) -> DiscoveredWriterData {
     // TODO: refactor so that clones are not necessary
-    let writer_proxy = self.clone().generate_writer_proxy();
-    let publication_topic_data = self.clone().generate_publication_topic_data();
+    let writer_proxy = self.generate_writer_proxy();
+    let publication_topic_data = self.generate_publication_topic_data();
     DiscoveredWriterData {
       writer_proxy,
       publication_topic_data,
     }
   }
 
-  pub fn parse_data(mut self, buffer: &[u8]) -> BuiltinDataDeserializer {
+  pub fn parse_data_little_endian(self, buffer: &[u8]) -> BuiltinDataDeserializer {
+    self.parse_data(buffer, RepresentationIdentifier::CDR_LE)
+  }
+
+  pub fn parse_data_big_endian(self, buffer: &[u8]) -> BuiltinDataDeserializer {
+    self.parse_data(buffer, RepresentationIdentifier::CDR_BE)
+  }
+
+  fn parse_data(mut self, buffer: &[u8], rep: RepresentationIdentifier) -> BuiltinDataDeserializer {
     let mut buffer = buffer.to_vec();
     while self.sentinel.is_none() && buffer.len() > 0 {
-      self = self.read_next(&mut buffer);
+      self = self.read_next(&mut buffer, rep.clone());
     }
 
     self
   }
 
-  pub fn read_next(mut self, buffer: &mut Vec<u8>) -> BuiltinDataDeserializer {
-    let parameter_id = BuiltinDataDeserializer::read_parameter_id(&buffer).unwrap();
+  pub fn read_next(
+    mut self,
+    buffer: &mut Vec<u8>,
+    rep: RepresentationIdentifier,
+  ) -> BuiltinDataDeserializer {
+    let parameter_id = BuiltinDataDeserializer::read_parameter_id(&buffer, rep.clone()).unwrap();
     let mut parameter_length: usize =
-      BuiltinDataDeserializer::read_parameter_length(&buffer).unwrap() as usize;
+      BuiltinDataDeserializer::read_parameter_length(&buffer, rep.clone()).unwrap() as usize;
 
     if (parameter_length + 4) > buffer.len() {
       parameter_length = buffer.len() - 4;
@@ -258,8 +275,10 @@ impl BuiltinDataDeserializer {
 
     match parameter_id {
       ParameterId::PID_PARTICIPANT_GUID => {
-        let guid: Result<GUID, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let guid: Result<GUID, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match guid {
           Ok(gg) => {
             self.participant_guid = Some(gg);
@@ -270,8 +289,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_PROTOCOL_VERSION => {
-        let version: Result<ProtocolVersion, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let version: Result<ProtocolVersion, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match version {
           Ok(vv) => {
             self.protocol_version = Some(vv);
@@ -282,8 +303,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_VENDOR_ID => {
-        let vendor: Result<VendorId, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let vendor: Result<VendorId, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match vendor {
           Ok(vv) => {
             self.vendor_id = Some(vv);
@@ -294,8 +317,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_EXPECTS_INLINE_QOS => {
-        let inline_qos: Result<bool, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let inline_qos: Result<bool, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match inline_qos {
           Ok(qos) => {
             self.expects_inline_qos = Some(qos);
@@ -306,8 +331,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR => {
-        let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match locator {
           Ok(loc) => {
             self.metatraffic_unicast_locators.push(loc);
@@ -318,8 +345,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR => {
-        let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match locator {
           Ok(loc) => {
             self.metatraffic_multicast_locators.push(loc);
@@ -330,8 +359,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR => {
-        let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match locator {
           Ok(loc) => {
             self.default_unicast_locators.push(loc);
@@ -342,8 +373,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR => {
-        let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match locator {
           Ok(loc) => {
             self.default_multicast_locators.push(loc);
@@ -354,8 +387,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_BUILTIN_ENDPOINT_SET => {
-        let endpoints: Result<BuiltinEndpointSet, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let endpoints: Result<BuiltinEndpointSet, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match endpoints {
           Ok(ep) => {
             self.available_builtin_endpoints = Some(ep);
@@ -366,8 +401,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_PARTICIPANT_LEASE_DURATION => {
-        let duration: Result<Duration, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let duration: Result<Duration, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match duration {
           Ok(dur) => {
             self.lease_duration = Some(dur);
@@ -378,8 +415,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT => {
-        let count: Result<i32, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let count: Result<i32, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match count {
           Ok(c) => {
             self.manual_liveliness_count = Some(c);
@@ -390,8 +429,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_BUILTIN_ENDPOINT_QOS => {
-        let qos: Result<BuiltinEndpointQos, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let qos: Result<BuiltinEndpointQos, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match qos {
           Ok(q) => {
             self.builtin_enpoint_qos = Some(q);
@@ -402,8 +443,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_ENTITY_NAME => {
-        let name: Result<String, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let name: Result<String, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match name {
           Ok(n) => {
             self.entity_name = Some(n);
@@ -414,8 +457,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_ENDPOINT_GUID => {
-        let guid: Result<GUID, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let guid: Result<GUID, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match guid {
           Ok(gg) => {
             self.endpoint_guid = Some(gg);
@@ -426,8 +471,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_UNICAST_LOCATOR => {
-        let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match locator {
           Ok(loc) => {
             self.unicast_locator_list.push(loc);
@@ -438,8 +485,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_MULTICAST_LOCATOR => {
-        let locator: Result<Locator, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match locator {
           Ok(loc) => {
             self.multicast_locator_list.push(loc);
@@ -450,8 +499,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_TOPIC_NAME => {
-        let topic_name: Result<String, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let topic_name: Result<String, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match topic_name {
           Ok(name) => {
             self.topic_name = Some(name);
@@ -462,8 +513,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_TYPE_NAME => {
-        let type_name: Result<String, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let type_name: Result<String, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match type_name {
           Ok(name) => {
             self.type_name = Some(name);
@@ -474,8 +527,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_DURABILITY => {
-        let durability: Result<Durability, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let durability: Result<Durability, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match durability {
           Ok(dur) => {
             self.durability = Some(dur);
@@ -486,8 +541,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_DEADLINE => {
-        let deadline: Result<Deadline, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let deadline: Result<Deadline, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match deadline {
           Ok(dl) => {
             self.deadline = Some(dl);
@@ -498,8 +555,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_LATENCY_BUDGET => {
-        let latency_budget: Result<LatencyBudget, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let latency_budget: Result<LatencyBudget, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match latency_budget {
           Ok(lb) => {
             self.latency_budget = Some(lb);
@@ -510,8 +569,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_LIVELINESS => {
-        let liveliness: Result<Liveliness, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let liveliness: Result<Liveliness, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match liveliness {
           Ok(liv) => {
             self.liveliness = Some(liv);
@@ -529,7 +590,10 @@ impl BuiltinDataDeserializer {
         }
 
         let reliability: Result<ReliabilityBestEffortData, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+          CDR_deserializer_adapter::from_bytes(
+            &buffer[4..4 + parameter_length].to_vec(),
+            rep.clone(),
+          );
         match reliability {
           Ok(rel) => {
             self.reliability = match rel.reliability_kind {
@@ -555,8 +619,10 @@ impl BuiltinDataDeserializer {
           SHARED,
           EXCLUSIVE,
         }
-        let ownership: Result<OwnershipKind, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let ownership: Result<OwnershipKind, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match ownership {
           Ok(own) => {
             let strength = match self.ownership {
@@ -580,8 +646,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_OWNERSHIP_STRENGTH => {
-        let ownership_strength: Result<i32, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let ownership_strength: Result<i32, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match ownership_strength {
           Ok(stri) => {
             self.ownership = match self.ownership {
@@ -601,7 +669,10 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DESTINATION_ORDER => {
         let destination_order: Result<DestinationOrder, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+          CDR_deserializer_adapter::from_bytes(
+            &buffer[4..4 + parameter_length].to_vec(),
+            rep.clone(),
+          );
         match destination_order {
           Ok(deor) => {
             self.destination_order = Some(deor);
@@ -613,7 +684,10 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_TIME_BASED_FILTER => {
         let time_based_filter: Result<TimeBasedFilter, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+          CDR_deserializer_adapter::from_bytes(
+            &buffer[4..4 + parameter_length].to_vec(),
+            rep.clone(),
+          );
         match time_based_filter {
           Ok(tbf) => {
             self.time_based_filter = Some(tbf);
@@ -624,8 +698,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_PRESENTATION => {
-        let presentation: Result<Presentation, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let presentation: Result<Presentation, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match presentation {
           Ok(p) => {
             self.presentation = Some(p);
@@ -636,8 +712,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_LIFESPAN => {
-        let lifespan: Result<Lifespan, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let lifespan: Result<Lifespan, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match lifespan {
           Ok(ls) => {
             self.lifespan = Some(ls);
@@ -649,7 +727,10 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
         let content_filter: Result<ContentFilterProperty, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+          CDR_deserializer_adapter::from_bytes(
+            &buffer[4..4 + parameter_length].to_vec(),
+            rep.clone(),
+          );
         match content_filter {
           Ok(cfp) => {
             self.content_filter_property = Some(cfp);
@@ -660,8 +741,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED => {
-        let max_size: Result<u32, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let max_size: Result<u32, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match max_size {
           Ok(ms) => {
             self.data_max_size_serialized = Some(ms);
@@ -684,8 +767,10 @@ impl BuiltinDataDeserializer {
           pub depth: i32,
         }
 
-        let history: Result<HistoryData, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let history: Result<HistoryData, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match history {
           Ok(his) => {
             let h = match his.kind {
@@ -700,8 +785,10 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_RESOURCE_LIMITS => {
-        let resource_limits: Result<ResourceLimits, Error> =
-          deserialize_from_little_endian(&buffer[4..4 + parameter_length].to_vec());
+        let resource_limits: Result<ResourceLimits, Error> = CDR_deserializer_adapter::from_bytes(
+          &buffer[4..4 + parameter_length].to_vec(),
+          rep.clone(),
+        );
         match resource_limits {
           Ok(lim) => {
             self.resource_limits = Some(lim);
@@ -723,20 +810,21 @@ impl BuiltinDataDeserializer {
     self
   }
 
-  pub fn read_parameter_id(buffer: &Vec<u8>) -> Option<ParameterId> {
-    let par: Result<ParameterId, Error> = deserialize_from_little_endian(&buffer[..2].to_vec());
+  pub fn read_parameter_id(buffer: &Vec<u8>, rep: RepresentationIdentifier) -> Option<ParameterId> {
+    let par: Result<ParameterId, Error> =
+      CDR_deserializer_adapter::from_bytes(&buffer[..2].to_vec(), rep.clone());
     match par {
       Ok(val) => Some(val),
       _ => None,
     }
   }
 
-  pub fn read_parameter_length(buffer: &Vec<u8>) -> Option<u16> {
+  pub fn read_parameter_length(buffer: &Vec<u8>, rep: RepresentationIdentifier) -> Option<u16> {
     if buffer.len() < 4 {
       return Some(0);
     }
 
-    let parameter_length_value = u16::read_from_buffer(&buffer[2..4]);
+    let parameter_length_value = CDR_deserializer_adapter::from_bytes(&buffer[2..4], rep.clone());
     match parameter_length_value {
       Ok(val) => Some(val),
       _ => None,

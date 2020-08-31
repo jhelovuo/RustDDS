@@ -27,7 +27,9 @@ use crate::discovery::{
 
 use crate::structure::guid::EntityId;
 
-use crate::serialization::{cdrSerializer::CDR_serializer_adapter, pl_cdr_deserializer::PlCdrDeserializerAdapter};
+use crate::serialization::{
+  cdrSerializer::CDR_serializer_adapter, pl_cdr_deserializer::PlCdrDeserializerAdapter,
+};
 
 use crate::network::constant::*;
 use super::data_types::topic_data::DiscoveredTopicData;
@@ -471,7 +473,13 @@ impl Discovery {
     res
   }
 
-  pub fn write_readers_info(&self, writer: &mut DataWriter<DiscoveredReaderData, CDR_serializer_adapter<DiscoveredReaderData,LittleEndian>>) {
+  pub fn write_readers_info(
+    &self,
+    writer: &mut DataWriter<
+      DiscoveredReaderData,
+      CDR_serializer_adapter<DiscoveredReaderData, LittleEndian>,
+    >,
+  ) {
     match self.discovery_db.read() {
       Ok(db) => {
         let datas = db.get_all_local_topic_readers();
@@ -501,7 +509,13 @@ impl Discovery {
     }
   }
 
-  pub fn write_writers_info(&self, writer: &mut DataWriter<DiscoveredWriterData,  CDR_serializer_adapter<DiscoveredWriterData,LittleEndian>>) {
+  pub fn write_writers_info(
+    &self,
+    writer: &mut DataWriter<
+      DiscoveredWriterData,
+      CDR_serializer_adapter<DiscoveredWriterData, LittleEndian>,
+    >,
+  ) {
     match self.discovery_db.read() {
       Ok(db) => {
         let datas = db.get_all_local_topic_writers();
@@ -538,9 +552,11 @@ mod tests {
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
     structure::{locator::Locator, entity::Entity},
-    serialization::{cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializer, cdrDeserializer::CDR_deserializer_adapter},
+    serialization::{cdrSerializer::to_bytes, cdrDeserializer::CDR_deserializer_adapter},
     submessages::{InterpreterSubmessage, EntitySubmessage},
+    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   };
+  use crate::dds::traits::serde_adapters::DeserializerAdapter;
   use std::{time::Duration, net::SocketAddr};
   use mio::Token;
   use speedy::{Writable, Endianness};
@@ -603,13 +619,21 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType,CDR_serializer_adapter<ShapeType,LittleEndian>>(None, &topic, &QosPolicies::qos_none())
+      .create_datawriter::<ShapeType, CDR_serializer_adapter<ShapeType, LittleEndian>>(
+        None,
+        &topic,
+        &QosPolicies::qos_none(),
+      )
       .unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
-    let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(None, &topic, &QosPolicies::qos_none());
+    let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(
+      None,
+      &topic,
+      &QosPolicies::qos_none(),
+    );
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11001);
@@ -637,7 +661,10 @@ mod tests {
       match submsg.submessage.as_mut() {
         Some(v) => match v {
           EntitySubmessage::Data(d, _) => {
-            let mut drd: DiscoveredReaderData = PlCdrDeserializer::<LittleEndian>::from_bytes::<DiscoveredReaderData>(&d.serialized_payload.value)
+            let mut drd: DiscoveredReaderData = PlCdrDeserializerAdapter::from_bytes(
+              &d.serialized_payload.value,
+              RepresentationIdentifier::PL_CDR_LE,
+            )
             .unwrap();
             drd.reader_proxy.unicast_locator_list.clear();
             drd
@@ -688,13 +715,21 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType, CDR_serializer_adapter<ShapeType, LittleEndian>>(None, &topic, &QosPolicies::qos_none())
+      .create_datawriter::<ShapeType, CDR_serializer_adapter<ShapeType, LittleEndian>>(
+        None,
+        &topic,
+        &QosPolicies::qos_none(),
+      )
       .unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
-    let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(None, &topic, &QosPolicies::qos_none());
+    let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(
+      None,
+      &topic,
+      &QosPolicies::qos_none(),
+    );
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11002);
