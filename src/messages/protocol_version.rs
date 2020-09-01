@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use crate::structure::parameter_id::ParameterId;
 
 #[derive(
-  Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Serialize, Deserialize, Clone,
+  Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Serialize, Deserialize, Clone, Copy
 )]
 pub struct ProtocolVersion {
   pub major: u8,

@@ -1,15 +1,13 @@
+use std::io;
+
 use crate::{
   structure::{sequence_number::SequenceNumber, guid::GuidPrefix},
   serialization::submessage::SubMessage,
-  submessages::{
-    SubmessageKind, SubmessageHeader, Data, InfoDestination, InterpreterSubmessage, InfoTimestamp,
-    Heartbeat, EntitySubmessage, SubmessageFlag, AckNack, Gap, HeartbeatFrag, InfoReply,
-    InfoSource, NackFrag,
-    SubmessageFlagHelper,
-  },
+  submessages::*,
   messages::header::Header,
 };
 use speedy::{Readable, Writable, Endianness, Reader, Context, Writer};
+use enumflags2::BitFlags;
 
 #[derive(Debug)]
 pub struct Message {
@@ -40,9 +38,9 @@ impl<'a> Message {
     self.submessages
   }
 
-  fn submessages_borrow(&self) -> &Vec<SubMessage> {
-    &self.submessages
-  }
+  //fn submessages_borrow(&self) -> &Vec<SubMessage> {
+  //  &self.submessages
+  //}
 
   pub fn set_header(&mut self, header: Header) {
     self.header = header;
@@ -50,33 +48,158 @@ impl<'a> Message {
 
   pub fn get_data_sub_message_sequence_numbers(&self) -> Vec<SequenceNumber> {
     let mut sequence_numbers: Vec<SequenceNumber> = vec![];
-    for mes in self.submessages_borrow() {
-      if mes.submessage.is_some() {
-        let entity_sub_message = mes.submessage.as_ref().unwrap();
-        let maybeDataMessage = entity_sub_message.get_data_submessage();
-        if maybeDataMessage.is_some() {
-          let sequenceNumber = maybeDataMessage.unwrap().writer_sn;
-          sequence_numbers.push(sequenceNumber.clone());
-        }
+    for mes in self.submessages.iter() {
+      if let Some(EntitySubmessage::Data(data_subm , _ )) = &mes.submessage {
+        sequence_numbers.push(data_subm.writer_sn);
       }
     }
-    return sequence_numbers;
+    sequence_numbers
   }
+
+  // We implement this instead of Speedy trait Readable, because
+  // we need to run-time decide which endianness we input. Speedy requires the
+  // top level to fix that. And there seems to be no reasonable way to change endianness.
+  // TODO: The error type should be something better
+  pub fn read_from_buffer(buffer: &'a [u8]) -> io::Result<Message> {
+    
+    //let endianess = reader.endianness();
+    // message.header = SubMessage::deserialize_header(C, reader.)
+
+    // The Header deserializes the same
+    let rtps_header = Header::read_from_buffer(buffer)
+      .map_err( |e| io::Error::new(io::ErrorKind::Other,e))?;
+
+    let mut message = Message::new(rtps_header);
+
+    let mut submessages_left = &buffer[ 40 .. ]; // header is 40 bytes
+
+    // submessage loop
+    while submessages_left.len() > 0 {
+      let sub_header = SubmessageHeader::read_from_buffer(submessages_left)
+        .map_err( |e| io::Error::new(io::ErrorKind::Other,e))?;
+
+      // Try to figure out how large this submessage is.
+      let sub_header_length = 4; // 4 bytes
+      let sub_content_length = 
+        if sub_header.content_length == 0 {
+          // RTPS spec 2.3, section 9.4.5.1.3:
+          //           In case octetsToNextHeader==0 and the kind of Submessage is
+          // NOT PAD or INFO_TS, the Submessage is the last Submessage in the Message
+          // and extends up to the end of the Message. This makes it possible to send
+          // Submessages larger than 64k (the size that can be stored in the
+          // octetsToNextHeader field), provided they are the last Submessage in the
+          // Message. In case the octetsToNextHeader==0 and the kind of Submessage is
+          // PAD or INFO_TS, the next Submessage header starts immediately after the
+          // current Submessage header OR the PAD or INFO_TS is the last Submessage
+          // in the Message.
+          match sub_header.kind {
+            SubmessageKind::PAD | 
+            SubmessageKind::INFO_TS => 0,
+            _not_pad_or_info_ts => submessages_left.len() - sub_header_length ,
+          }
+        }
+        else { sub_header.content_length as usize };
+
+      let (sub_buffer,submessages_left) = 
+        submessages_left.split_at( sub_header_length + sub_content_length );
+
+      let e = endianness_flag( sub_header.flags );
+
+      let mk_e_subm = move |s| 
+        {Ok ( SubMessage { 
+                header:sub_header ,
+                submessage: Some (s),
+                intepreterSubmessage: None,
+              }
+            ) 
+        };
+      let mk_i_subm = move |s| 
+        {Ok ( SubMessage { 
+                header:sub_header ,
+                submessage: None,
+                intepreterSubmessage: Some(s),
+              }
+            ) 
+        };
+
+      let new_submessage_result : io::Result<SubMessage> = 
+        match sub_header.kind {
+
+          SubmessageKind::DATA => {
+            let f = BitFlags::<Submessage_DATA_Flags>::from_bits_truncate(sub_header.flags);
+            mk_e_subm( EntitySubmessage::Data(Data::deserialize_data(sub_buffer,e,f)? , f ) ) 
+          },
+
+          SubmessageKind::HEARTBEAT => {
+            let f = BitFlags::<Submessage_HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
+            mk_e_subm( EntitySubmessage::Heartbeat(Heartbeat::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
+          },
+          
+          SubmessageKind::GAP => {
+            let f = BitFlags::<Submessage_GAP_Flags>::from_bits_truncate(sub_header.flags);
+            mk_e_subm( EntitySubmessage::Gap(Gap::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
+          },
+
+          SubmessageKind::ACKNACK => {
+            let f = BitFlags::<Submessage_ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
+            mk_e_subm( EntitySubmessage::AckNack(AckNack::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
+          },
+
+          SubmessageKind::NACK_FRAG => {
+            let f = BitFlags::<Submessage_NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
+            mk_e_subm( EntitySubmessage::NackFrag(NackFrag::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
+          },
+
+          // interpreter submessages
+
+          SubmessageKind::INFO_DST => {
+            let f = BitFlags::<Submessage_INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
+            mk_i_subm( InterpreterSubmessage::InfoDestination(InfoDestination::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
+          },
+          SubmessageKind::INFO_SRC => {
+            let f = BitFlags::<Submessage_INFOSOURCE_Flags>::from_bits_truncate(sub_header.flags);
+            mk_i_subm( InterpreterSubmessage::InfoSource(InfoSource::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
+          },
+          SubmessageKind::INFO_TS => {
+            let f = BitFlags::<Submessage_INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
+            mk_i_subm( InterpreterSubmessage::InfoTimestamp(InfoTimestamp::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
+          },
+          SubmessageKind::INFO_REPLY => {
+            let f = BitFlags::<Submessage_INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
+            mk_i_subm( InterpreterSubmessage::InfoReply(InfoReply::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
+          },
+          SubmessageKind::PAD => {
+            continue // nothing to do here
+          }
+          unknown_kind => {
+            println!("Received unknown submessage kind {:?}", unknown_kind);
+            continue
+          }
+        }; // match
+
+      message.submessages.push(new_submessage_result?)
+    } // loop
+
+    Ok(message)    
+  }
+
 }
 
 impl Message {
-  pub fn new() -> Message {
+  pub fn new(header: Header) -> Message {
     Message {
-      header: Header::new(GuidPrefix::GUIDPREFIX_UNKNOWN),
+      header,
       submessages: vec![],
-      //interpteterSubmessages : vec![],
     }
   }
 }
 
 impl Default for Message {
   fn default() -> Self {
-    Message::new()
+    Message {
+      header: Header::new(GuidPrefix::GUIDPREFIX_UNKNOWN),
+      submessages: vec![],
+    }
   }
 }
 
@@ -90,159 +213,6 @@ impl<C: Context> Writable<C> for Message {
   }
 }
 
-impl<'a, C: Context> Readable<'a, C> for Message {
-  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut message = Message::default();
-    let endianess = reader.endianness();
-    // message.header = SubMessage::deserialize_header(C, reader.)
-    message.header = reader.read_value()?;
-
-    // TODO FLAGS???
-    let flag: SubmessageFlag = SubmessageFlag { flags: 1 };
-    loop {
-      let res: Result<SubmessageHeader, C::Error> = reader.read_value();
-      let subHeader = match res {
-        Ok(res) => res,
-        Err(_e) => {
-          break;
-        }
-      };
-
-      let mut buffer: Vec<u8> = Vec::new();
-      if subHeader.submessage_length == 0 {
-        let mut ended = false;
-        while !ended {
-          let byte = reader.read_u8();
-          match byte {
-            Ok(val) => buffer.push(val),
-            _ => ended = true,
-          };
-        }
-      } else {
-        buffer = reader.read_vec(subHeader.submessage_length as usize)?;
-      }
-
-      let submessageFlagHelper =
-        SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-          &subHeader.submessage_id,
-          &subHeader.flags,
-        );
-
-      match subHeader.submessage_id {
-        SubmessageKind::DATA => {
-          let x = Data::deserialize_data(
-            &buffer,
-            endianess,
-            submessageFlagHelper.InlineQosFlag,
-            submessageFlagHelper.DataFlag,
-          );
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: Some(EntitySubmessage::Data(x, flag.clone())),
-            intepreterSubmessage: None,
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::HEARTBEAT => {
-          let x = Heartbeat::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: Some(EntitySubmessage::Heartbeat(x, flag.clone())),
-            intepreterSubmessage: None,
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::GAP => {
-          let x = Gap::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: Some(EntitySubmessage::Gap(x)),
-            intepreterSubmessage: None,
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::HEARTBEAT_FRAG => {
-          let x = HeartbeatFrag::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: Some(EntitySubmessage::HeartbeatFrag(x)),
-            intepreterSubmessage: None,
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::ACKNACK => {
-          let x = AckNack::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: Some(EntitySubmessage::AckNack(x, flag.clone())),
-            intepreterSubmessage: None,
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::INFO_DST => {
-          let x: InfoDestination =
-            InfoDestination::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: None,
-            intepreterSubmessage: Some(InterpreterSubmessage::InfoDestination(x)),
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::INFO_TS => {
-          let x: InfoTimestamp =
-            InfoTimestamp::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: None,
-            intepreterSubmessage: Some(InterpreterSubmessage::InfoTimestamp(x, flag.clone())),
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::INFO_REPLY => {
-          let x: InfoReply = InfoReply::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: None,
-            intepreterSubmessage: Some(InterpreterSubmessage::InfoReply(x, flag.clone())),
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::INFO_REPLY_IP4 => {
-          todo!();
-        }
-        SubmessageKind::INFO_SRC => {
-          let x: InfoSource = InfoSource::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: None,
-            intepreterSubmessage: Some(InterpreterSubmessage::InfoSource(x)),
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::NACK_FRAG => {
-          let x: NackFrag = NackFrag::read_from_buffer_with_ctx(endianess, &buffer).unwrap();
-          let y: SubMessage = SubMessage {
-            header: subHeader,
-            submessage: Some(EntitySubmessage::NackFrag(x)),
-            intepreterSubmessage: None,
-          };
-          message.add_submessage(y);
-        }
-        SubmessageKind::PAD => {
-          todo!();
-        }
-
-        _ => {
-          panic!();
-        }
-      }
-    }
-
-    Ok(message)
-  }
-}
 
 #[cfg(test)]
 

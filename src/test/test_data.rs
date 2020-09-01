@@ -104,21 +104,21 @@ use std::{net::SocketAddr, time::Duration as StdDuration};
 pub fn spdp_participant_msg() -> Message {
   let data = spdp_participant_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &data).unwrap();
+  let rtpsmsg = Message::read_from_buffer(&data).unwrap();
   rtpsmsg
 }
 
 pub fn spdp_subscription_msg() -> Message {
   let data = spdp_subscription_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &data).unwrap();
+  let rtpsmsg = Message::read_from_buffer(&data).unwrap();
   rtpsmsg
 }
 
 pub fn spdp_publication_msg() -> Message {
   let data = spdp_publication_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &data).unwrap();
+  let rtpsmsg = Message::read_from_buffer(&data).unwrap();
   rtpsmsg
 }
 
@@ -126,7 +126,7 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
   let mut tdata: Message = spdp_participant_msg();
   let mut data;
   for submsg in tdata.submessages.iter_mut() {
-    let mut submsglen = submsg.header.submessage_length;
+    let mut submsglen = submsg.header.content_length;
     match submsg.submessage.as_mut() {
       Some(v) => match v {
         EntitySubmessage::Data(d, _) => {
@@ -153,7 +153,7 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
       },
       None => (),
     }
-    submsg.header.submessage_length = submsglen;
+    submsg.header.content_length = submsglen;
   }
 
   tdata
@@ -162,7 +162,7 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
 pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
   let data = spdp_participant_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &data).unwrap();
+  let rtpsmsg = Message::read_from_buffer(&data).unwrap();
   let submsgs = rtpsmsg.submessages();
 
   for submsg in submsgs.iter() {

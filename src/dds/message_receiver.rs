@@ -1,18 +1,20 @@
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::vendor_id::VendorId;
-use crate::messages::submessages::submessage_header::SubmessageHeader;
-use crate::messages::submessages::submessage_kind::SubmessageKind;
+//use crate::messages::submessages::submessage_header::SubmessageHeader;
+//use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessages::EntitySubmessage;
+use crate::messages::submessages::submessages::*;
 use crate::structure::guid::{GuidPrefix, GUID};
 use crate::structure::entity::Entity;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::structure::time::{Time, Timestamp};
-use crate::serialization::submessage::SubMessage;
+//use crate::serialization::submessage::{SubMessage};
+use crate::serialization::Message;
 
 use crate::messages::submessages::info_destination::InfoDestination;
-use crate::messages::submessages::info_source::InfoSource;
-use crate::messages::submessages::info_reply::InfoReply;
-use crate::messages::submessages::info_timestamp::InfoTimestamp;
+//use crate::messages::submessages::info_source::InfoSource;
+//use crate::messages::submessages::info_reply::InfoReply;
+//use crate::messages::submessages::info_timestamp::InfoTimestamp;
 
 use crate::dds::reader::Reader;
 use crate::dds::ddsdata::DDSData;
@@ -25,7 +27,7 @@ use crate::{
   },
 };
 
-use speedy::{Readable, Endianness};
+use speedy::{Readable};
 use mio_extras::channel as mio_channel;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
@@ -189,73 +191,28 @@ impl MessageReceiver {
     self.handle_user_msg(msg);
   }
 
-  pub fn handle_user_msg(&mut self, msg: Vec<u8>) {
-    if msg.len() < RTPS_MESSAGE_HEADER_SIZE {
-      println!("Message is smaller that RTPS_MESSAGE_HEADER_SIZE");
-      return;
-    }
+  pub fn handle_user_msg(&mut self, msg_bytes: Vec<u8>) {
     self.reset();
     self.dest_guid_prefix = self.own_guid_prefix;
 
-    if !self.handle_RTPS_header(&msg) {
-      println!("Header not in correct form");
-      return; // Header not in correct form
-    }
-
-    let mut endian = Endianness::LittleEndian; // Should be read from message??
-
-    // Go through each submessage
-    while self.pos < msg.len() {
-      let submessage_header =
-        match SubMessage::deserialize_header(endian, &msg[self.pos..self.pos + 4]) {
-          Some(T) => T,
-          None => {
-            print!("could not create submessage header");
-            return; // rule 1. Could not create submessage header
-          }
-        };
-      self.pos += 4; // Submessage header lenght is 4 bytes
-                     // How do we know how to deserialize the header?
-      endian = submessage_header.flags.endianness_flag();
-      let mut submessage_length = submessage_header.submessage_length as usize;
-      if submessage_length == 0 {
-        submessage_length = msg.len() - self.pos; // RTPS 8.3.3.2.3s
-      } else if submessage_length > msg.len() - self.pos {
-        println!("submessage is longer than msg len ?????");
-        return; // rule 2
+    // call Speedy reader
+    let rtps_message = match Message::read_from_buffer(&msg_bytes) {
+      Ok(m) => m,
+      Err(speedy_err) => {
+        println!("RTPS deserialize error {:?}", speedy_err);
+        return
       }
+    };
 
-      if !self.handle_interpreter_submessage(
-        &submessage_header,
-        endian,
-        &msg[self.pos..(self.pos + submessage_length)],
-      ) {
-        let entity_submessage = match SubMessage::deserialize_msg(
-          &submessage_header,
-          //endian,
-          &msg[self.pos..(self.pos + submessage_length)],
-        ) {
-          Some(entity_sm) => entity_sm,
-          None => {
-            println!("Failed to deserialize RTPS submessage");
-            continue; // rule 3
-          }
-        };
-
-        let new_submessage = SubMessage {
-          header: submessage_header,
-          submessage: Some(entity_submessage),
-          intepreterSubmessage: None,
-        };
-        if let Some(submessage) = new_submessage.submessage {
-          self.send_submessage(submessage);
-        };
-        self.submessage_count += 1;
-      } // end if
-        // The SubmessageId didn't match any of the known ones. Parsing continues
-        // from next submessage.
-      self.pos += submessage_length;
-    } // end while
+    for submessage in rtps_message.submessages {
+      if let Some(interp_subm) = submessage.intepreterSubmessage {
+        self.handle_parsed_interpreter_submessage(interp_subm);
+      }
+      if let Some(entity_subm) = submessage.submessage {
+        self.send_submessage(entity_subm);
+      }
+      self.submessage_count += 1;
+    } // submessage loop
   }
 
   fn send_submessage(&mut self, submessage: EntitySubmessage) {
@@ -288,7 +245,7 @@ impl MessageReceiver {
           for reader in self.available_readers.iter_mut() {
             reader.handle_heartbeat_msg(
               heartbeat.clone(),
-              flags.is_flag_set(1), // final flag!?
+              flags.contains(Submessage_HEARTBEAT_Flags::Final),  
               mr_state.clone(),
             );
           }
@@ -296,7 +253,7 @@ impl MessageReceiver {
           if let Some(target_reader) = self.get_reader(heartbeat.reader_id) {
             target_reader.handle_heartbeat_msg(
               heartbeat,
-              flags.is_flag_set(1), // final flag!?
+              flags.contains(Submessage_HEARTBEAT_Flags::Final), 
               mr_state,
             );
           } else {
@@ -304,7 +261,7 @@ impl MessageReceiver {
           }
         }
       }
-      EntitySubmessage::Gap(gap) => {
+      EntitySubmessage::Gap(gap, _flags) => {
         if let Some(target_reader) = self.get_reader(gap.reader_id) {
           target_reader.handle_gap_msg(gap, mr_state);
         } else {
@@ -324,7 +281,7 @@ impl MessageReceiver {
           println!("MessageReceiver could not find corresponding Reader");
         }
       }
-      EntitySubmessage::HeartbeatFrag(heartbeatfrag) => {
+      EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
         if heartbeatfrag.reader_id == EntityId::ENTITYID_UNKNOWN {
           for reader in self.available_readers.iter_mut() {
@@ -338,123 +295,47 @@ impl MessageReceiver {
           }
         }
       }
-      EntitySubmessage::NackFrag(_) => {}
+      EntitySubmessage::NackFrag(_, _) => {}
     }
   }
 
-  fn handle_interpreter_submessage(
-    &mut self,
-    msgheader: &SubmessageHeader,
-    context: Endianness,
-    buffer: &[u8],
-  ) -> bool {
-    match msgheader.submessage_id {
-      SubmessageKind::INFO_TS => match InfoTimestamp::read_from_buffer_with_ctx(context, buffer) {
-        Ok(info_ts) => {
-          if msgheader.flags.is_flag_set(0) {
-            self.have_timestamp = true;
-            self.timestamp = info_ts.timestamp;
-          }
+  fn handle_parsed_interpreter_submessage(&mut self, interp_subm: InterpreterSubmessage)
+  // no return value, just change state of self.
+  { 
+    match interp_subm {
+      InterpreterSubmessage::InfoTimestamp( ts_struct , flags) => {
+        if flags.contains(Submessage_INFOTIMESTAMP_Flags::Invalidate) {
+          self.have_timestamp = true;
+          self.timestamp = ts_struct.timestamp;
         }
-        Err(e) => println!("MessageReceiver couldn't deserialize INFO_TS. Error {}", e),
       },
-      SubmessageKind::INFO_SRC => {
-        match InfoSource::read_from_buffer_with_ctx(context, buffer) {
-          Ok(info_src) => {
-            self.source_guid_prefix = info_src.guid_prefix;
-            self.source_version = info_src.protocol_version;
-            self.source_vendor_id = info_src.vendor_id;
-            self.unicast_reply_locator_list.clear(); // Or invalid?
-            self.multicast_reply_locator_list.clear(); // Or invalid?
-            self.have_timestamp = false;
-          }
-          Err(e) => println!("MessageReceiver couldn't deserialize INFO_SRC. Error {}", e),
+      InterpreterSubmessage::InfoSource( info_src , flags) => {
+          self.source_guid_prefix = info_src.guid_prefix;
+          self.source_version = info_src.protocol_version;
+          self.source_vendor_id = info_src.vendor_id;
+          self.unicast_reply_locator_list.clear(); // Or invalid?
+          self.multicast_reply_locator_list.clear(); // Or invalid?
+          self.have_timestamp = false;        
+      },
+      InterpreterSubmessage::InfoReply( info_reply , flags) => {
+        self.unicast_reply_locator_list = info_reply.unicast_locator_list;
+        if flags.contains( Submessage_INFOREPLY_Flags::Multicast)  {
+          self.multicast_reply_locator_list = 
+            info_reply.multicast_locator_list
+              .expect("InfoReply flag indicates multicast locator is present but none found.");
+              // TODO: Convert the above error to warning only.
+        } else {
+          self.multicast_reply_locator_list.clear();
+        }        
+      },
+      InterpreterSubmessage::InfoDestination( info_dest , flags) => {
+        if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
+          self.dest_guid_prefix = info_dest.guid_prefix;
+        } else {
+          self.dest_guid_prefix = self.own_guid_prefix;
         }
-      }
-      SubmessageKind::INFO_REPLY | SubmessageKind::INFO_REPLY_IP4 => {
-        match InfoReply::read_from_buffer_with_ctx(context, buffer) {
-          Ok(info_reply) => {
-            self.unicast_reply_locator_list = info_reply.unicast_locator_list;
-            if msgheader.flags.is_flag_set(1) {
-              self.multicast_reply_locator_list = info_reply.multicast_locator_list.unwrap();
-            } else {
-              self.multicast_reply_locator_list.clear();
-            }
-          }
-          Err(e) => println!(
-            "MessageReceiver couldn't deserialize INFO_REPLY. Error {}",
-            e
-          ),
-        }
-      }
-      SubmessageKind::INFO_DST => {
-        match InfoDestination::read_from_buffer_with_ctx(context, buffer) {
-          Ok(info_dest) => {
-            if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
-              self.dest_guid_prefix = info_dest.guid_prefix;
-            } else {
-              self.dest_guid_prefix = self.own_guid_prefix;
-            }
-          }
-          Err(e) => println!("MessageReceiver couldn't deserialize INFO_DST. Error {}", e),
-        };
-      }
-      _ => return false,
+      },
     }
-    self.submessage_count += 1;
-    true
-  }
-
-  fn handle_RTPS_header(&mut self, msg: &[u8]) -> bool {
-    // First 4 bytes 'R' 'T' 'P' 'S'
-    if msg[0] != 0x52 || msg[1] != 0x54 || msg[2] != 0x50 || msg[3] != 0x53 {
-      return false;
-    }
-    self.pos += 4;
-    match ProtocolVersion::read_from_buffer(&msg[self.pos..self.pos + 2]) {
-      Ok(source_version) => self.source_version = source_version,
-      Err(e) => {
-        println!(
-          "MessageReceiver couldn't deserialize protocol version. Error {}",
-          e
-        );
-        return false;
-      }
-    }
-    self.pos += 2;
-
-    // Check and set protocl version
-    if self.source_version.major > ProtocolVersion::PROTOCOLVERSION.major {
-      // Error: Too new version
-      return false;
-    }
-    // Set vendor id
-    match VendorId::read_from_buffer(&msg[self.pos..self.pos + 2]) {
-      Ok(source_vendor_id) => self.source_vendor_id = source_vendor_id,
-      Err(e) => {
-        println!(
-          "MessageReceiver couldn't deserialize vendor id. Error {}",
-          e
-        );
-        return false;
-      }
-    }
-    self.pos += 2;
-
-    // Set source guid prefix
-    match GuidPrefix::read_from_buffer(&msg[self.pos..self.pos + 12]) {
-      Ok(source_guid_prefix) => self.source_guid_prefix = source_guid_prefix,
-      Err(e) => {
-        println!(
-          "MessageReceiver couldn't deserialize source guid prefix. Error {}",
-          e
-        );
-        return false;
-      }
-    }
-
-    self.pos += 12;
-    true
   }
 } // impl messageReceiver
 

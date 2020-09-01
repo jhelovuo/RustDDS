@@ -201,20 +201,3 @@ where
   } // fn
 } // imlp
 
-/*impl<D> Clone for DataSample<D>
-where
-  D: Keyed,
-  <D as Keyed>::K: Key,
-{
-  fn clone(&self) -> Self {
-    let value: std::result::Result<D, D::K> = match &self.value {
-      Ok(d) => Ok(d.clone()),
-      Err(_) => Err(self.get_key()),
-    };
-    Self {
-      sample_info: self.sample_info.clone(),
-      value,
-    }
-  }
-}
-*/

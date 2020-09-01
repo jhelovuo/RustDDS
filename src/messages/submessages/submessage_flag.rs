@@ -1,5 +1,31 @@
-use speedy::{Endianness, Readable, Writable};
+use speedy::{Endianness, Readable};
+use enumflags2::BitFlags;
+
 use super::submessage_kind::SubmessageKind;
+
+pub trait FromEndianness {
+  fn from_endianness(end: speedy::Endianness) -> Self;
+}
+
+
+macro_rules! submessageflag_impls {
+  ($t:ident) => {
+    impl FromEndianness for BitFlags<$t> {
+        fn from_endianness(end: speedy::Endianness) -> Self {
+          if end == Endianness::LittleEndian { $t::Endianness.into() } 
+          else { Self::empty() }
+        }
+    }
+
+    /* This does not work, because BitFlags is not a local type. 
+    impl<C> Writable<C: Context> for BitFlags<$t> {
+      fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+        writer.write_u8( self.bits() )
+      }
+    }
+    */    
+  }
+}
 
 /// Identifies the endianness used to encapsulate the Submessage, the
 /// presence of optional elements with in the Submessage, and possibly
@@ -8,6 +34,122 @@ use super::submessage_kind::SubmessageKind;
 /// endianness used to encapsulate the Submessage. The remaining
 /// flags are interpreted differently depending on the kind
 /// of Submessage and are described separately for each Submessage.
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_ACKNACK_Flags {
+  Endianness = 0b01,
+  Final = 0b10,
+}
+submessageflag_impls!(Submessage_ACKNACK_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_DATA_Flags {
+  Endianness         = 0b00001,
+  InlineQos          = 0b00010,
+  Data               = 0b00100,
+  Key                = 0b01000,
+  NonStandardPayload = 0b10000,  
+}
+submessageflag_impls!(Submessage_DATA_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_DATAFRAG_Flags {
+  Endianness         = 0b00001,
+  InlineQos          = 0b00010,
+  Key                = 0b00100,
+  NonStandardPayload = 0b01000,  
+}
+submessageflag_impls!(Submessage_DATAFRAG_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_GAP_Flags {
+  Endianness         = 0b00001,
+}
+submessageflag_impls!(Submessage_GAP_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_HEARTBEAT_Flags {
+  Endianness         = 0b00001,
+  Final              = 0b00010,
+  Liveliness         = 0b00100,
+}
+submessageflag_impls!(Submessage_HEARTBEAT_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_HEARTBEATFRAG_Flags {
+  Endianness         = 0b00001,
+}
+submessageflag_impls!(Submessage_HEARTBEATFRAG_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_INFODESTINATION_Flags {
+  Endianness         = 0b00001,
+}
+submessageflag_impls!(Submessage_INFODESTINATION_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_INFOREPLY_Flags {
+  Endianness = 0b01,
+  Multicast  = 0b10,
+}
+submessageflag_impls!(Submessage_INFOREPLY_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_INFOSOURCE_Flags {
+  Endianness         = 0b00001,
+}
+submessageflag_impls!(Submessage_INFOSOURCE_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_INFOTIMESTAMP_Flags {
+  Endianness = 0b01,
+  Invalidate = 0b10,
+}
+submessageflag_impls!(Submessage_INFOTIMESTAMP_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_PAD_Flags {
+  Endianness         = 0b00001,
+}
+submessageflag_impls!(Submessage_PAD_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_NACKFRAG_Flags {
+  Endianness         = 0b00001,
+}
+submessageflag_impls!(Submessage_NACKFRAG_Flags);
+
+#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
+#[repr(u8)]
+pub enum Submessage_INFOREPLYIP4_Flags {
+  Endianness = 0b01,
+  Multicast  = 0b10,
+}
+submessageflag_impls!(Submessage_INFOREPLYIP4_Flags);
+
+pub fn endianness_flag(flags: u8) -> speedy::Endianness {
+    if (flags & 0x01) != 0 {
+      Endianness::LittleEndian
+    } else {
+      Endianness::BigEndian
+    }  
+}
+
+
+
+/*
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Clone)]
 pub struct SubmessageFlag {
   pub flags: u8,
@@ -33,9 +175,9 @@ impl SubmessageFlag {
     self.flags & bit != 0
   }
 }
+*/
 
-
-
+/*
 ///Purpose of this object is to help RTPS Message SubmessageHeader SubmessageFlag value setting and value reading.
 #[derive(Debug, Clone)]
 pub struct SubmessageFlagHelper {
@@ -244,7 +386,7 @@ impl SubmessageFlagHelper {
   }
 }
 
-
+*/
 #[cfg(test)]
 mod tests {
   use super::*;

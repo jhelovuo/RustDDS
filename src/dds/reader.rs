@@ -1,19 +1,13 @@
 use crate::structure::entity::Entity;
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
-use crate::messages::submessages::data::Data;
-use crate::messages::submessages::data_frag::DataFrag;
+use crate::messages::submessages::submessages::*;
 
 use crate::dds::ddsdata::DDSData;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
-use crate::messages::submessages::ack_nack::AckNack;
-use crate::messages::submessages::heartbeat::Heartbeat;
-use crate::messages::submessages::gap::Gap;
-use crate::messages::submessages::heartbeat_frag::HeartbeatFrag;
 use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::locator::LocatorList;
-//#[allow(unused_imports)] // TODO: Remove this directive when reader works
 
 use std::sync::{Arc, RwLock};
 use crate::structure::dds_cache::{DDSCache};
@@ -23,8 +17,9 @@ use mio_extras::channel as mio_channel;
 use std::fmt;
 
 use std::collections::{HashSet, HashMap};
-
 use std::time::Duration;
+use enumflags2::BitFlags;
+
 use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiverState;
 use crate::dds::qos::{QosPolicies, HasQoSPolicy};
@@ -33,7 +28,7 @@ use crate::network::udp_sender::UDPSender;
 use crate::serialization::submessage::*;
 use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage_kind::SubmessageKind;
-use crate::messages::submessages::submessage_flag::SubmessageFlag;
+//use crate::messages::submessages::submessage_flag::SubmessageFlag;
 use crate::messages::submessages::submessage::EntitySubmessage;
 
 use crate::serialization::message::Message;
@@ -41,7 +36,7 @@ use crate::messages::header::Header;
 use crate::messages::protocol_id::ProtocolId;
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::vendor_id::VendorId;
-use speedy::{Writable};
+use speedy::{Writable,Endianness};
 
 const PROTOCOLVERSION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_3;
 const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
@@ -385,15 +380,16 @@ impl Reader {
     // Should it be saved as an attribute?
     let sender = UDPSender::new_with_random_port();
     // TODO: How to determine which flags should be one? Both on atm
-    let flags = SubmessageFlag { flags: 3 };
+    let flags = BitFlags::<Submessage_ACKNACK_Flags>::from_flag(Submessage_ACKNACK_Flags::Endianness)
+              | BitFlags::<Submessage_ACKNACK_Flags>::from_flag(Submessage_ACKNACK_Flags::Final);
 
-    let mut message = Message::new();
-    message.set_header(Header {
-      protocol_id: ProtocolId::default(),
-      protocol_version: PROTOCOLVERSION,
-      vendor_id: VENDORID,
-      guid_prefix: self.entity_attributes.guid.guidPrefix,
-    });
+    let mut message = Message::new(
+      Header {
+        protocol_id: ProtocolId::default(),
+        protocol_version: PROTOCOLVERSION,
+        vendor_id: VENDORID,
+        guid_prefix: self.entity_attributes.guid.guidPrefix,
+      });
 
     let submessage_len = match acknack.write_to_vec() {
       Ok(bytes) => bytes.len() as u16,
@@ -403,17 +399,19 @@ impl Reader {
       }
     };
 
-    let submessage = SubMessage {
+    message.submessages.push( SubMessage {
       header: SubmessageHeader {
-        submessage_id: SubmessageKind::ACKNACK,
-        flags: flags.clone(),
-        submessage_length: submessage_len,
+        kind: SubmessageKind::ACKNACK,
+        flags: flags.bits(),
+        content_length: submessage_len,
       },
       submessage: Some(EntitySubmessage::AckNack(acknack, flags)),
       intepreterSubmessage: None,
-    };
-    let mut bytes = message.serialize_header();
-    bytes.extend_from_slice(&submessage.serialize_msg());
+    });
+
+    /*let mut bytes = message.serialize_header();
+    bytes.extend_from_slice(&submessage.serialize_msg()); */
+    let bytes = message.write_to_vec_with_ctx( Endianness::LittleEndian ).unwrap();
     sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
   }
 } // impl

@@ -1,8 +1,10 @@
 use std::convert::TryInto;
+use enumflags2::BitFlags;
 
 use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessage::EntitySubmessage;
+use crate::messages::submessages::submessages::*; 
 
 use crate::messages::submessages::submessage_elements
   ::serialized_payload::{SerializedPayload};
@@ -18,9 +20,10 @@ use crate::messages::submessages::heartbeat_frag::*;
 use crate::messages::submessages::nack_frag::*;
 use crate::messages::submessages::data::*;
 use crate::messages::submessages::data_frag::*;
-use crate::messages::submessages::submessage::InterpreterSubmessage;
-use crate::{messages::fragment_number::FragmentNumber, submessages::SubmessageFlagHelper};
+use crate::messages::submessages::submessage::*;
+use crate::{messages::fragment_number::FragmentNumber, };
 use speedy::{Context, Writer, Readable, Writable, Endianness};
+
 
 #[derive(Debug, PartialEq)]
 pub struct SubMessage {
@@ -33,119 +36,22 @@ impl<'a> SubMessage
 where
 // T: Readable<'a, Endianness> + Writable<Endianness>,
 {
-  pub fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Option<SubmessageHeader> {
+  fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Option<SubmessageHeader> {
     match SubmessageHeader::read_from_buffer_with_ctx(context, buffer) {
       Ok(T) => Some(T),
       Err(_) => None,
     }
   }
 
-  pub fn deserialize_msg(
-    msgheader: &SubmessageHeader,
-    //_context: Endianness,
-    buffer: &'a [u8],
-  ) -> Option<EntitySubmessage> {
-    match msgheader.submessage_id {
-      SubmessageKind::ACKNACK => Some(EntitySubmessage::AckNack(
-        AckNack::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-            &SubmessageKind::ACKNACK,
-            &msgheader.flags,
-          )
-          .get_endianness(),
-          buffer,
-        )
-        .unwrap(),
-        msgheader.flags.clone(),
-      )),
-      SubmessageKind::HEARTBEAT => Some(EntitySubmessage::Heartbeat(
-        Heartbeat::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-            &SubmessageKind::ACKNACK,
-            &msgheader.flags,
-          )
-          .get_endianness(),
-          buffer,
-        )
-        .unwrap(),
-        msgheader.flags.clone(),
-      )),
-      SubmessageKind::GAP => Some(EntitySubmessage::Gap(
-        Gap::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-            &SubmessageKind::GAP,
-            &msgheader.flags,
-          )
-          .get_endianness(),
-          buffer,
-        )
-        .unwrap(),
-      )),
-      SubmessageKind::NACK_FRAG => Some(EntitySubmessage::NackFrag(
-        NackFrag::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-            &SubmessageKind::NACK_FRAG,
-            &msgheader.flags,
-          )
-          .get_endianness(),
-          buffer,
-        )
-        .unwrap(),
-      )),
-      SubmessageKind::HEARTBEAT_FRAG => Some(EntitySubmessage::HeartbeatFrag(
-        HeartbeatFrag::read_from_buffer_with_ctx(
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-            &SubmessageKind::HEARTBEAT_FRAG,
-            &msgheader.flags,
-          )
-          .get_endianness(),
-          buffer,
-        )
-        .unwrap(),
-      )),
-      SubmessageKind::DATA => {
-        let data_helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-          &SubmessageKind::DATA,
-          &msgheader.flags,
-        );
-        Some(EntitySubmessage::Data(
-          Data::deserialize_data(
-            &buffer.to_vec(),
-            data_helper.get_endianness(),
-            data_helper.InlineQosFlag,
-            data_helper.DataFlag,
-          ),
-          msgheader.flags.clone(),
-        ))
-      }
-
-      SubmessageKind::DATA_FRAG => {
-        match SubMessage::deserialize_data_frag(
-          &msgheader,
-          SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-            &SubmessageKind::DATA_FRAG,
-            &msgheader.flags,
-          )
-          .get_endianness(),
-          &buffer,
-        ) {
-          Some(T) => Some(EntitySubmessage::DataFrag(T, msgheader.flags.clone())),
-          None => None,
-        }
-      }
-      _ => None, // Unknown id, must be ignored
-    }
-  }
 
   fn deserialize_data_frag(
-    msgheader: &SubmessageHeader,
-    _context: Endianness,
     buffer: &'a [u8],
+    flags: BitFlags<Submessage_DATAFRAG_Flags>
   ) -> Option<DataFrag> {
     let mut pos: usize = 0;
     // TODO Check flag locations..?
     //let endianness_flag = msgheader.flags.is_flag_set(3);
-    let inline_qoS_flag = msgheader.flags.is_flag_set(2);
+    let inline_qoS_flag = flags.contains(Submessage_DATAFRAG_Flags::InlineQos);
     //let non_standar_payload_flag = msgheader.flags.is_flag_set(1);
 
     pos += 2; // Ignore extra flags for now
@@ -184,7 +90,7 @@ where
     let rep_options = &buffer[pos..pos + 2];
     pos += 2;
 
-    let payload_size: usize = msgheader.submessage_length as usize - pos;
+    let payload_size: usize = buffer.len() - pos;
 
     let vec_value = Vec::read_from_buffer(&buffer[pos..pos + payload_size]).unwrap();
 
@@ -223,16 +129,16 @@ where
       Some(EntitySubmessage::DataFrag(msg, _)) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }
-      Some(EntitySubmessage::Gap(msg)) => {
+      Some(EntitySubmessage::Gap(msg,_)) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }
       Some(EntitySubmessage::Heartbeat(msg, _)) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }
-      Some(EntitySubmessage::HeartbeatFrag(msg)) => {
+      Some(EntitySubmessage::HeartbeatFrag(msg,_)) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }
-      Some(EntitySubmessage::NackFrag(msg)) => {
+      Some(EntitySubmessage::NackFrag(msg,_)) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }
       _ => {
@@ -245,13 +151,13 @@ where
   pub fn serialize_interpreter_msg(&self) -> Vec<u8> {
     let message: Vec<u8>;
     message = match &self.intepreterSubmessage {
-      Some(InterpreterSubmessage::InfoDestination(msg)) => {
+      Some(InterpreterSubmessage::InfoDestination(msg,_)) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }
       Some(InterpreterSubmessage::InfoReply(msg, _)) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }
-      Some(InterpreterSubmessage::InfoSource(msg)) => {
+      Some(InterpreterSubmessage::InfoSource(msg,_)) => {
         msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
       }
       Some(InterpreterSubmessage::InfoTimestamp(msg, _)) => {

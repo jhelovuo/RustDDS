@@ -2,7 +2,7 @@ use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Serialize, Deserialize};
 use crate::structure::parameter_id::ParameterId;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
 pub struct VendorId {
   pub vendorId: [u8; 2],
 }

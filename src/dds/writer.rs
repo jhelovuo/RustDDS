@@ -1,30 +1,37 @@
-use crate::messages::submessages::data::Data;
 use chrono::Duration as chronoDuration;
-//use crate::messages::submessages::info_destination::InfoDestination;
-use crate::messages::submessages::{
-  submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
-  info_timestamp::InfoTimestamp,
-};
-use crate::structure::time::Timestamp;
-use crate::messages::protocol_version::ProtocolVersion;
-use crate::messages::{header::Header, vendor_id::VendorId, protocol_id::ProtocolId};
-use crate::structure::guid::{GuidPrefix, EntityId, GUID};
-use crate::structure::sequence_number::{SequenceNumber};
-use std::hash::Hasher;
-use crate::{
-  submessages::{
-    Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage, EntitySubmessage, AckNack,
-    InfoDestination, SubmessageFlagHelper,
-  },
-  structure::cache_change::{CacheChange, ChangeKind},
-  serialization::{SubMessage, Message},
-};
-
+use enumflags2::BitFlags;
 use speedy::{Writable, Endianness};
 use time::Timespec;
 use time::get_time;
 use mio_extras::channel as mio_channel;
 use mio::Token;
+use std::{
+  net::SocketAddr,
+  time::{Instant, Duration},
+  sync::{RwLock, Arc},
+  collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
+};
+use std::hash::Hasher;
+
+//use crate::messages::submessages::info_destination::InfoDestination;
+use crate::messages::submessages::{
+  submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
+  info_timestamp::InfoTimestamp, submessage_flag::*
+};
+use crate::messages::submessages::data::Data;
+use crate::structure::time::Timestamp;
+use crate::messages::protocol_version::ProtocolVersion;
+use crate::messages::{header::Header, vendor_id::VendorId, protocol_id::ProtocolId};
+use crate::structure::guid::{GuidPrefix, EntityId, GUID};
+use crate::structure::sequence_number::{SequenceNumber};
+use crate::{
+  submessages::{
+    Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage, EntitySubmessage, AckNack,
+    InfoDestination, 
+  },
+  structure::cache_change::{CacheChange, ChangeKind},
+  serialization::{SubMessage, Message},
+};
 
 use crate::dds::ddsdata::DDSData;
 use crate::{
@@ -41,14 +48,10 @@ use super::{
   rtps_reader_proxy::RtpsReaderProxy,
   qos::{policy, QosPolicies},
 };
-use std::{
-  net::SocketAddr,
-  time::{Instant, Duration},
-  sync::{RwLock, Arc},
-  collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
-};
 use policy::{History, Reliability};
 //use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+
+
 pub struct Writer {
   source_version: ProtocolVersion,
   source_vendor_id: VendorId,
@@ -248,9 +251,7 @@ impl Writer {
 
   /// this should be called everytime heartbeat message with token is recieved.
   pub fn handle_heartbeat_tick(&mut self) {
-    let mut RTPSMessage: Message = Message::new();
-
-    RTPSMessage.set_header(self.create_message_header());
+    let mut RTPSMessage: Message = Message::new(self.create_message_header());
 
     // TODO Set some guidprefix if needed at all.
     // Not sure if DST submessage and TS submessage are needed when sending heartbeat.
@@ -264,8 +265,7 @@ impl Writer {
     //let buffer :[u8] = RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap();
     for reader in &self.readers {
       if reader.unicast_locator_list.len() > 0 {
-        let mut RTPSMessage: Message = Message::new();
-        RTPSMessage.set_header(self.create_message_header());
+        let mut RTPSMessage: Message = Message::new(self.create_message_header());
         RTPSMessage.add_submessage(self.get_heartbeat_msg(
           reader.remote_reader_guid.entityId,
           false,
@@ -274,8 +274,7 @@ impl Writer {
         self.send_unicast_message_to_reader(&RTPSMessage, reader);
       }
       if reader.multicast_locator_list.len() > 0 {
-        let mut RTPSMessage: Message = Message::new();
-        RTPSMessage.set_header(self.create_message_header());
+        let mut RTPSMessage: Message = Message::new(self.create_message_header());
         RTPSMessage.add_submessage(self.get_heartbeat_msg(
           reader.remote_group_entity_id,
           false,
@@ -609,25 +608,6 @@ impl Writer {
     }
   }
 
-  /*
-  fn create_submessage_header_flags(&self, kind: &SubmessageKind) -> SubmessageFlag {
-    let mut sub_flags: SubmessageFlag = SubmessageFlag {
-      flags: 0b0000000_u8,
-    };
-    // The first flag, the EndiannessFlag is in this position for all submessage types (2^0)
-    if self.endianness == Endianness::LittleEndian {
-      sub_flags.set_flag(1);
-    }
-    if self.endianness == Endianness::BigEndian {
-      sub_flags.clear_flag(1);
-    } //in data submessage third flag is DataFlag (2^2 = 4)
-      //if message contains serialized payload this should be set
-    if kind == &SubmessageKind::DATA {
-      sub_flags.set_flag(4)
-    }
-    return sub_flags;
-  }
-  */
 
   fn create_message_header(&self) -> Header {
     let head: Header = Header {
@@ -644,64 +624,46 @@ impl Writer {
     return head;
   }
 
-  fn create_submessage_header(
-    &self,
-    kind: SubmessageKind,
-    submessageLength: u16,
-    submessage_flag_helper: SubmessageFlagHelper,
-  ) -> SubmessageHeader {
-    let sub_flags = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
-      &kind,
-      &submessage_flag_helper,
-    );
-    let header: SubmessageHeader = SubmessageHeader {
-      submessage_id: kind,
-      flags: sub_flags,
-      submessage_length: submessageLength,
-    };
-    header
-  }
-
   pub fn get_TS_submessage(&self, invalidiateFlagSet: bool) -> SubMessage {
     let currentTime: Timespec = get_time();
     let timestamp = InfoTimestamp {
       timestamp: Timestamp::from(currentTime),
     };
     let mes = &mut timestamp.write_to_vec_with_ctx(self.endianness).unwrap();
-    let size = mes.len();
 
-    let mut flagHelper: SubmessageFlagHelper = SubmessageFlagHelper::new(self.endianness);
-    flagHelper.InvalidateFlag = invalidiateFlagSet;
+    let flags 
+      = BitFlags::<Submessage_INFOTIMESTAMP_Flags>::from_endianness(self.endianness) 
+      | ( if invalidiateFlagSet { Submessage_INFOTIMESTAMP_Flags::Invalidate.into() }
+          else { BitFlags::<Submessage_INFOTIMESTAMP_Flags>::empty() } );
 
-    let submessageHeader =
-      self.create_submessage_header(SubmessageKind::INFO_TS, size as u16, flagHelper.clone());
-    let s: SubMessage = SubMessage {
+    let submessageHeader = SubmessageHeader {
+        kind: SubmessageKind::INFO_TS , 
+        flags: flags.bits(),
+        content_length: mes.len() as u16, // This conversion should be safe, as timestamp length cannot exceed u16
+      };
+    SubMessage {
       header: submessageHeader,
       submessage: None,
-      intepreterSubmessage: Some(InterpreterSubmessage::InfoTimestamp(
-        timestamp,
-        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
-          &SubmessageKind::INFO_TS,
-          &flagHelper,
-        ),
-      )),
-    };
-    return s;
+      intepreterSubmessage: 
+        Some(InterpreterSubmessage::InfoTimestamp( timestamp , flags)) ,
+    }
   }
 
   pub fn get_DST_submessage(&self, guid_prefix: GuidPrefix) -> SubMessage {
-    let flagHelper: SubmessageFlagHelper = SubmessageFlagHelper::new(self.endianness);
-    //InfoDST length is always 12 because message contains only GuidPrefix
-    let submessageHeader =
-      self.create_submessage_header(SubmessageKind::INFO_DST, 12u16, flagHelper);
-    let s: SubMessage = SubMessage {
+    let flags 
+      = BitFlags::<Submessage_INFODESTINATION_Flags>::from_endianness(self.endianness);
+    let submessageHeader = SubmessageHeader {
+        kind: SubmessageKind::INFO_DST , 
+        flags: flags.bits(),
+        content_length: 12u16,
+        //InfoDST length is always 12 because message contains only GuidPrefix
+      };     
+    SubMessage {
       header: submessageHeader,
       submessage: None,
-      intepreterSubmessage: Some(InterpreterSubmessage::InfoDestination(InfoDestination {
-        guid_prefix: guid_prefix,
-      })),
-    };
-    return s;
+      intepreterSubmessage: 
+        Some(InterpreterSubmessage::InfoDestination(InfoDestination { guid_prefix } , flags))
+    }
   }
 
   pub fn get_DATA_msg_from_cache_change(
@@ -734,9 +696,16 @@ impl Writer {
       inline_qos: None,  // Change later, if needed.
       serialized_payload: change.data_value.unwrap(), // TODO: Is the representation identifier already correct?
     };
+    let flags : BitFlags<Submessage_DATA_Flags> =
+      BitFlags::<Submessage_DATA_Flags>::from_endianness(self.endianness)
+      | ( if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
+            // No data, we send key instead
+            BitFlags::<Submessage_DATA_Flags>::from_flag( Submessage_DATA_Flags::InlineQos)
+            | BitFlags::<Submessage_DATA_Flags>::from_flag(Submessage_DATA_Flags::Key)
+          }
+          else { BitFlags::<Submessage_DATA_Flags>::from_flag(Submessage_DATA_Flags::Data) } // normal case
+        );
 
-    let mut flagHelper = SubmessageFlagHelper::new(self.endianness);
-    flagHelper.DataFlag = true;
     // if change kind is dispose then datawriter is telling to dispose the data instance
     if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
       let mut inline_qos_settings = ParameterList::new();
@@ -746,9 +715,6 @@ impl Writer {
           true, false, false,
         ));
       data_message.inline_qos = Some(inline_qos_settings);
-      flagHelper.InlineQosFlag = true;
-      flagHelper.KeyFlag = true;
-      flagHelper.DataFlag = false;
     }
 
     let size = data_message
@@ -756,14 +722,12 @@ impl Writer {
       .unwrap()
       .len() as u16;
     let s: SubMessage = SubMessage {
-      header: self.create_submessage_header(SubmessageKind::DATA, size, flagHelper.clone()),
-      submessage: Some(crate::submessages::EntitySubmessage::Data(
-        data_message,
-        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
-          &SubmessageKind::DATA,
-          &flagHelper,
-        ),
-      )),
+      header: SubmessageHeader {
+        kind: SubmessageKind::DATA , 
+        flags: flags.bits(),
+        content_length: size,
+      },
+      submessage: Some(crate::submessages::EntitySubmessage::Data(data_message, flags)),
       intepreterSubmessage: None,
     };
     return s;
@@ -786,34 +750,30 @@ impl Writer {
       count: self.heartbeat_message_counter,
     };
 
-    let mut flagHelper = SubmessageFlagHelper::new(self.endianness);
-    flagHelper.FinalFlag = set_final_flag;
-    flagHelper.LivelinessFlag = set_liveliness_flag;
+    let mut flags = 
+      BitFlags::<Submessage_HEARTBEAT_Flags>::from_endianness(self.endianness);
+
+    if set_final_flag      { flags.insert(Submessage_HEARTBEAT_Flags::Final) }
+    if set_liveliness_flag { flags.insert(Submessage_HEARTBEAT_Flags::Liveliness) }
 
     let mes = &mut heartbeat.write_to_vec_with_ctx(self.endianness).unwrap();
     let size = mes.len();
-    let head =
-      self.create_submessage_header(SubmessageKind::HEARTBEAT, size as u16, flagHelper.clone());
 
-    let s: SubMessage = SubMessage {
-      header: head,
+    SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::HEARTBEAT , 
+        flags: flags.bits(),
+        content_length: size as u16, // cannot overflow, heartbeat has fixed size
+      },
       intepreterSubmessage: None,
-      submessage: Some(EntitySubmessage::Heartbeat(
-        heartbeat,
-        SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
-          &SubmessageKind::HEARTBEAT,
-          &flagHelper,
-        ),
-      )),
-    };
-    return s;
+      submessage: Some(EntitySubmessage::Heartbeat(heartbeat, flags)),
+    }
   }
 
   pub fn write_user_msg(&self, change: CacheChange, reader_entity_id: EntityId) -> Message {
     let mut message: Vec<u8> = vec![];
 
-    let mut RTPSMessage: Message = Message::new();
-    RTPSMessage.set_header(self.create_message_header());
+    let mut RTPSMessage: Message = Message::new(self.create_message_header());
     RTPSMessage.add_submessage(self.get_TS_submessage(false));
     let data = self.get_DATA_msg_from_cache_change(change.clone(), reader_entity_id);
     RTPSMessage.add_submessage(data);
