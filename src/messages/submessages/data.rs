@@ -56,56 +56,57 @@ impl Data {
     let writer_id = &buffer[8..12];
     let sequence_number = &buffer[12..20];
 
-    let inline_qos_ =
-      if expect_qos {
+    let inline_qos_ = if expect_qos {
+      let QoS_list_length = u32::read_from_buffer(
+        &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
+      )
+      .unwrap() as usize;
+      Some(
+        ParameterList::read_from_buffer(
+          &buffer[octets_to_inline_qos_usize..octets_to_inline_qos_usize + QoS_list_length],
+        )
+        .unwrap(),
+      )
+    } else {
+      None
+    };
+
+    let payload = if expect_payload {
+      if !expect_qos {
+        // Bypass Speedy here, use custom desrialization
+        SerializedPayload::from_bytes(&buffer[octets_to_inline_qos_usize + 4..buffer.len()])
+          .unwrap()
+      } else {
         let QoS_list_length = u32::read_from_buffer(
           &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
         )
         .unwrap() as usize;
-        Some(
-          ParameterList::read_from_buffer(
-            &buffer[octets_to_inline_qos_usize..octets_to_inline_qos_usize + QoS_list_length],
-          )
-          .unwrap())
-      } else { None };
 
-    let payload = 
-      if expect_payload {
-        if  !expect_qos {
-          // Bypass Speedy here, use custom desrialization
-          SerializedPayload::from_bytes(&buffer[octets_to_inline_qos_usize + 4..buffer.len()])
-            .unwrap()
-        } else {
-          let QoS_list_length = u32::read_from_buffer(
-            &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
-          )
-          .unwrap() as usize;
-
-          SerializedPayload::from_bytes(
-            &buffer[octets_to_inline_qos_usize + 4 + QoS_list_length..buffer.len()],
-          )
-          .unwrap()
-        }
-      } else {
-          // ! expect payload
-          unimplemented!();
-      };
+        SerializedPayload::from_bytes(
+          &buffer[octets_to_inline_qos_usize + 4 + QoS_list_length..buffer.len()],
+        )
+        .unwrap()
+      }
+    } else {
+      // ! expect payload
+      unimplemented!();
+    };
 
     let reader_id_ = EntityId::read_from_buffer(reader_id).unwrap();
     let writer_id_ = EntityId::read_from_buffer(writer_id).unwrap();
     let writer_sn_ = SequenceNumber::read_from_buffer(sequence_number).unwrap();
 
     Data {
-      reader_id: reader_id_ ,
-      writer_id: writer_id_ ,
-      writer_sn: writer_sn_ ,
-      inline_qos: inline_qos_ ,
+      reader_id: reader_id_,
+      writer_id: writer_id_,
+      writer_sn: writer_sn_,
+      inline_qos: inline_qos_,
       serialized_payload: payload,
     }
   }
 }
 
-// TODO: This should not be necessary. 
+// TODO: This should not be necessary.
 impl Default for Data {
   fn default() -> Self {
     Data {

@@ -709,7 +709,6 @@ impl Writer {
     change: CacheChange,
     reader_entity_id: EntityId,
   ) -> SubMessage {
-    
     // let mut representationIdentifierBytes: [u8; 2] = [0, 0];
     // if self.endianness == Endianness::LittleEndian {
     //   representationIdentifierBytes = [0x00, 0x01];
@@ -731,7 +730,7 @@ impl Writer {
       reader_id: reader_entity_id,
       writer_id: *self.get_entity_id(), // TODO! Is this the correct EntityId here?
       writer_sn: change.sequence_number,
-      inline_qos: None,  // Change later, if needed.
+      inline_qos: None,                               // Change later, if needed.
       serialized_payload: change.data_value.unwrap(), // TODO: Is the representation identifier already correct?
     };
 
@@ -1019,8 +1018,11 @@ mod tests {
     let topic = domain_participant
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
-    let mut data_writer : DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>
-      = publisher
+    let mut data_writer: DataWriter<
+      '_,
+      RandomData,
+      CDR_serializer_adapter<RandomData, LittleEndian>,
+    > = publisher
       .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 

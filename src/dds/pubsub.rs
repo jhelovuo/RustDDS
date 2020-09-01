@@ -61,12 +61,12 @@ impl<'a> Publisher {
     }
   }
 
-  pub fn create_datawriter<D,SA>(
+  pub fn create_datawriter<D, SA>(
     &'a self,
     entity_id: Option<EntityId>,
     topic: &'a Topic,
     _qos: &QosPolicies,
-  ) -> Result<DataWriter<'a, D,SA>>
+  ) -> Result<DataWriter<'a, D, SA>>
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
@@ -78,7 +78,7 @@ impl<'a> Publisher {
       Some(eid) => eid,
       None => {
         let mut rng = rand::thread_rng();
-        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC2);
+        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x02);
 
         eid
       }
@@ -101,7 +101,7 @@ impl<'a> Publisher {
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::<D,SA>::new(
+    let matching_data_writer = DataWriter::<D, SA>::new(
       self,
       &topic,
       Some(guid),
@@ -114,6 +114,7 @@ impl<'a> Publisher {
         let dwd =
           DiscoveredWriterData::new(&matching_data_writer, &topic, &self.domain_participant);
         db.update_local_topic_writer(dwd);
+        db.update_topic_data_p(&topic);
       }
       _ => return Err(Error::OutOfResources),
     };
@@ -207,7 +208,7 @@ impl<'s> Subscriber {
     }
   }
 
-  pub fn create_datareader<D,SA>(
+  pub fn create_datareader<D, SA>(
     &'s self,
     entity_id: Option<EntityId>,
     topic: &'s Topic,
@@ -216,7 +217,7 @@ impl<'s> Subscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: DeserializerAdapter<D>
+    SA: DeserializerAdapter<D>,
   {
     // What is the bound?
     let (send, rec) = mio_channel::sync_channel::<()>(10);
@@ -225,7 +226,7 @@ impl<'s> Subscriber {
       Some(eid) => eid,
       None => {
         let mut rng = rand::thread_rng();
-        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0xC7);
+        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x07);
         eid
       }
     };
@@ -233,7 +234,7 @@ impl<'s> Subscriber {
     let reader_id = entity_id;
     let datareader_id = entity_id;
 
-    let matching_datareader = DataReader::<D,SA>::new(
+    let matching_datareader = DataReader::<D, SA>::new(
       self,
       datareader_id,
       &topic,
@@ -254,6 +255,7 @@ impl<'s> Subscriber {
     match self.discovery_db.write() {
       Ok(mut db) => {
         db.update_local_topic_reader(&self.domain_participant, &topic, &new_reader);
+        db.update_topic_data_p(&topic);
       }
       _ => return Err(Error::OutOfResources),
     };
@@ -281,9 +283,10 @@ impl<'s> Subscriber {
   }
 
   /// Retrieves a previously created DataReader belonging to the Subscriber.
-  pub fn lookup_datareader<D,SA>(&self, _topic_name: &str) -> Option<DataReader<D,SA>>
-    where D: Keyed + DeserializeOwned,
-          SA:DeserializerAdapter<D>,
+  pub fn lookup_datareader<D, SA>(&self, _topic_name: &str) -> Option<DataReader<D, SA>>
+  where
+    D: Keyed + DeserializeOwned,
+    SA: DeserializerAdapter<D>,
   {
     todo!()
     // TO think: Is this really necessary? Because the caller would have to know

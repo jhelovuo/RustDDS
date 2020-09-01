@@ -4,8 +4,7 @@ use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessage::EntitySubmessage;
 
-use crate::messages::submessages::submessage_elements
-  ::serialized_payload::{SerializedPayload};
+use crate::messages::submessages::submessage_elements::serialized_payload::{SerializedPayload};
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 
 use crate::structure::guid::EntityId;
@@ -190,7 +189,9 @@ where
 
     let serialized_payload = SerializedPayload {
       representation_identifier: rep_identifier_raw,
-      representation_options: rep_options.try_into().expect("Unexpected array length in representation_options"),
+      representation_options: rep_options
+        .try_into()
+        .expect("Unexpected array length in representation_options"),
       value: vec_value,
     };
     Some(DataFrag {

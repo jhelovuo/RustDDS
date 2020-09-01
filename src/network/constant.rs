@@ -30,8 +30,7 @@ pub const REMOVE_DATAWRITER_TOKEN: Token = Token(19);
 
 pub const ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN: Token = Token(20);
 
-pub const READER_UPDATE_NOTIFICATION_TOKEN: Token = Token(21);
-pub const WRITER_UPDATE_NOTIFICATION_TOKEN: Token = Token(22);
+pub const DISCOVERY_UPDATE_NOTIFICATION_TOKEN: Token = Token(21);
 
 pub const DISCOVERY_PARTICIPANT_DATA_TOKEN: Token = Token(30);
 pub const DISCOVERY_PARTICIPANT_CLEANUP_TOKEN: Token = Token(31);
@@ -40,6 +39,9 @@ pub const DISCOVERY_READER_DATA_TOKEN: Token = Token(33);
 pub const DISCOVERY_SEND_READERS_INFO_TOKEN: Token = Token(34);
 pub const DISCOVERY_WRITER_DATA_TOKEN: Token = Token(35);
 pub const DISCOVERY_SEND_WRITERS_INFO_TOKEN: Token = Token(36);
+pub const DISCOVERY_TOPIC_DATA_TOKEN: Token = Token(37);
+pub const DISCOVERY_TOPIC_CLEANUP_TOKEN: Token = Token(38);
+pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(39);
 
 pub struct TokenReceiverPair<T> {
   pub token: Token,
@@ -75,4 +77,10 @@ pub fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16
 pub enum TimerMessageType {
   writer_heartbeat,
   writer_cache_cleaning,
+}
+
+pub enum DiscoveryNotificationType {
+  ReadersInfoUpdated,
+  WritersInfoUpdated,
+  TopicsInfoUpdated,
 }
