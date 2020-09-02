@@ -1,20 +1,13 @@
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::vendor_id::VendorId;
-//use crate::messages::submessages::submessage_header::SubmessageHeader;
-//use crate::messages::submessages::submessage_kind::SubmessageKind;
 use crate::messages::submessages::submessages::EntitySubmessage;
 use crate::messages::submessages::submessages::*;
 use crate::structure::guid::{GuidPrefix, GUID};
 use crate::structure::entity::Entity;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::structure::time::{Time, Timestamp};
-//use crate::serialization::submessage::{SubMessage};
 use crate::serialization::Message;
 
-use crate::messages::submessages::info_destination::InfoDestination;
-//use crate::messages::submessages::info_source::InfoSource;
-//use crate::messages::submessages::info_reply::InfoReply;
-//use crate::messages::submessages::info_timestamp::InfoTimestamp;
 
 use crate::dds::reader::Reader;
 use crate::dds::ddsdata::DDSData;
@@ -27,7 +20,6 @@ use crate::{
   },
 };
 
-use speedy::{Readable};
 use mio_extras::channel as mio_channel;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
@@ -309,7 +301,7 @@ impl MessageReceiver {
           self.timestamp = ts_struct.timestamp;
         }
       },
-      InterpreterSubmessage::InfoSource( info_src , flags) => {
+      InterpreterSubmessage::InfoSource( info_src , _flags) => {
           self.source_guid_prefix = info_src.guid_prefix;
           self.source_version = info_src.protocol_version;
           self.source_vendor_id = info_src.vendor_id;
@@ -328,7 +320,7 @@ impl MessageReceiver {
           self.multicast_reply_locator_list.clear();
         }        
       },
-      InterpreterSubmessage::InfoDestination( info_dest , flags) => {
+      InterpreterSubmessage::InfoDestination( info_dest , _flags) => {
         if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
           self.dest_guid_prefix = info_dest.guid_prefix;
         } else {

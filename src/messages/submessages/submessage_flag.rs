@@ -1,7 +1,6 @@
 use speedy::{Endianness, Readable};
 use enumflags2::BitFlags;
 
-use super::submessage_kind::SubmessageKind;
 
 pub trait FromEndianness {
   fn from_endianness(end: speedy::Endianness) -> Self;

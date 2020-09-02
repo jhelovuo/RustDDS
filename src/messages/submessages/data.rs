@@ -4,7 +4,7 @@ use crate ::messages::submessages::submessages::*;
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
 
-use speedy::{Readable, Writable, Context, Writer, Endianness};
+use speedy::{Readable, Writable, Context, Writer,};
 use enumflags2::BitFlags;
 use std::io;
 
@@ -49,7 +49,6 @@ impl Data {
   // TODO: Handle errors, return a Result type.
   pub fn deserialize_data(
     buffer: &[u8],
-    context: Endianness,
     flags: BitFlags<Submessage_DATA_Flags>,
   ) -> io::Result<Data> {
     let _extra_flags = &buffer[0..2];

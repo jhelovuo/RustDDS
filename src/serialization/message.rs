@@ -6,7 +6,7 @@ use crate::{
   submessages::*,
   messages::header::Header,
 };
-use speedy::{Readable, Writable, Endianness, Reader, Context, Writer};
+use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
 
 #[derive(Debug)]
@@ -100,8 +100,11 @@ impl<'a> Message {
         }
         else { sub_header.content_length as usize };
 
-      let (sub_buffer,submessages_left) = 
+      // we have to use temporary variable new_submessages_left to avoid creating another
+      // submessages_left
+      let (sub_buffer,new_submessages_left) = 
         submessages_left.split_at( sub_header_length + sub_content_length );
+      submessages_left = new_submessages_left;
 
       let e = endianness_flag( sub_header.flags );
 
@@ -126,8 +129,9 @@ impl<'a> Message {
         match sub_header.kind {
 
           SubmessageKind::DATA => {
+            // Manually implemented deserialization for DATA. Speedy does not quite cut it.
             let f = BitFlags::<Submessage_DATA_Flags>::from_bits_truncate(sub_header.flags);
-            mk_e_subm( EntitySubmessage::Data(Data::deserialize_data(sub_buffer,e,f)? , f ) ) 
+            mk_e_subm( EntitySubmessage::Data(Data::deserialize_data(sub_buffer,f)? , f ) ) 
           },
 
           SubmessageKind::HEARTBEAT => {

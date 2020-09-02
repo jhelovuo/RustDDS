@@ -251,18 +251,11 @@ impl Writer {
 
   /// this should be called everytime heartbeat message with token is recieved.
   pub fn handle_heartbeat_tick(&mut self) {
-    let mut RTPSMessage: Message = Message::new(self.create_message_header());
-
     // TODO Set some guidprefix if needed at all.
     // Not sure if DST submessage and TS submessage are needed when sending heartbeat.
 
-    //RTPSMessage.add_submessage(self.get_DST_submessage(GuidPrefix::GUIDPREFIX_UNKNOWN));
-    //RTPSMessage.add_submessage(self.get_TS_submessage());
-
     //TODO WHEN FINAL FLAG NEEDS TO BE SET?
     //TODO WHEN LIVELINESS FLAG NEEDS TO BE SET?
-
-    //let buffer :[u8] = RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap();
     for reader in &self.readers {
       if reader.unicast_locator_list.len() > 0 {
         let mut RTPSMessage: Message = Message::new(self.create_message_header());

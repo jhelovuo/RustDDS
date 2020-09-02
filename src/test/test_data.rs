@@ -98,7 +98,6 @@ use crate::{
   },
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
 };
-use speedy::{Readable, Endianness};
 use std::{net::SocketAddr, time::Duration as StdDuration};
 
 pub fn spdp_participant_msg() -> Message {
