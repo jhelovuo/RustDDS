@@ -3,7 +3,7 @@ use enumflags2::BitFlags;
 
 use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage::EntitySubmessage;
-use crate::messages::submessages::submessages::*; 
+use crate::messages::submessages::submessages::*;
 
 use crate::messages::submessages::submessage_elements::serialized_payload::{SerializedPayload};
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
@@ -11,9 +11,8 @@ use crate::messages::submessages::submessage_elements::parameter_list::Parameter
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
 
-use crate::{messages::fragment_number::FragmentNumber, };
+use crate::{messages::fragment_number::FragmentNumber};
 use speedy::{Context, Writer, Readable, Writable};
-
 
 #[derive(Debug, PartialEq)]
 pub struct SubMessage {
@@ -23,19 +22,12 @@ pub struct SubMessage {
 
 #[derive(Debug, PartialEq)]
 pub enum SubmessageBody {
-  Entity(EntitySubmessage) , 
-  Interpreter(InterpreterSubmessage) ,
+  Entity(EntitySubmessage),
+  Interpreter(InterpreterSubmessage),
 }
 
-
-impl<'a> SubMessage
-where
-{
-  
-  fn deserialize_data_frag(
-    buffer: &'a [u8],
-    flags: BitFlags<DATAFRAG_Flags>
-  ) -> Option<DataFrag> {
+impl<'a> SubMessage {
+  fn deserialize_data_frag(buffer: &'a [u8], flags: BitFlags<DATAFRAG_Flags>) -> Option<DataFrag> {
     let mut pos: usize = 0;
     // TODO Check flag locations..?
     //let endianness_flag = msgheader.flags.is_flag_set(3);
@@ -101,15 +93,14 @@ where
       serialized_payload,
     })
   }
-
 }
 
 impl<C: Context> Writable<C> for SubMessage {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_value(&self.header)?;
     match &self.body {
-      SubmessageBody::Entity(e) => writer.write_value(&e) ,
-      SubmessageBody::Interpreter(i) => writer.write_value(&i) ,
+      SubmessageBody::Entity(e) => writer.write_value(&e),
+      SubmessageBody::Interpreter(i) => writer.write_value(&i),
     }
   }
 }
@@ -119,11 +110,9 @@ mod tests {
   use enumflags2::BitFlags;
   use super::SubMessage;
   use speedy::{Readable, Writable};
-  use crate::{
-    messages::submessages::submessages::*,
-  };
+  use crate::{messages::submessages::submessages::*};
   use crate::serialization::submessage::*;
-  
+
   #[test]
   fn submessage_data_submessage_deserialization() {
     // this is wireshark captured shapesdemo dataSubmessage
@@ -134,20 +123,24 @@ mod tests {
       0x00, 0x00, 0x00,
     ];
 
-    let header = 
-      SubmessageHeader::read_from_buffer(&serializedDataSubMessage[0..4])
-        .expect("could not create submessage header");
+    let header = SubmessageHeader::read_from_buffer(&serializedDataSubMessage[0..4])
+      .expect("could not create submessage header");
     println!("{:?}", header);
 
     let flags = BitFlags::<DATA_Flags>::from_bits_truncate(header.flags);
-    let suba = Data::deserialize_data( &serializedDataSubMessage[4..] , flags )
+    let suba = Data::deserialize_data(&serializedDataSubMessage[4..], flags)
       .expect("DATA deserialization failed.");
-    let sub = SubMessage { header, body: SubmessageBody::Entity(EntitySubmessage::Data(suba,flags)) };
+    let sub = SubMessage {
+      header,
+      body: SubmessageBody::Entity(EntitySubmessage::Data(suba, flags)),
+    };
 
     println!("{:?}", sub);
 
     let mut messageBuffer = vec![];
-    sub.write_to_buffer( &mut messageBuffer).expect("DATA serialization failed");
+    sub
+      .write_to_buffer(&mut messageBuffer)
+      .expect("DATA serialization failed");
 
     assert_eq!(serializedDataSubMessage, messageBuffer);
   }

@@ -61,13 +61,21 @@ where
     // Each notification sent to this channel must be try_recv'd
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
-  ) -> Self {
+  ) -> Result<Self> {
+    let dp = match subscriber.get_participant() {
+      Some(dp) => dp,
+      None => {
+        println!("Cannot create new DataReader, DomainParticipant doesn't exist.");
+        return Err(Error::PreconditionNotMet);
+      }
+    };
+
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
-      *subscriber.domain_participant.get_guid_prefix(),
+      dp.get_guid_prefix().clone(),
       my_id,
     ));
 
-    Self {
+    Ok(Self {
       my_subscriber: subscriber,
       my_topic: topic,
       qos_policy: topic.get_qos().clone(),
@@ -80,7 +88,7 @@ where
       // added by the reader.
       latest_instant: Instant::now(),
       deserializer_type: PhantomData,
-    }
+    })
   }
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
@@ -91,11 +99,11 @@ where
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
       Err(e) => panic!(
-        "The DDSCache of domain participant {:?} is poisoned. Error: {}",
-        self.my_subscriber.domain_participant.get_guid(),
+        "The DDSCache of domain participant is poisoned. Error: {}",
         e
       ),
     };
+
     let cache_changes = dds_cache.from_topic_get_changes_in_range(
       &self.my_topic.get_name().to_string(),
       &self.latest_instant,

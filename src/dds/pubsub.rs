@@ -36,7 +36,7 @@ use rand::Rng;
 // -------------------------------------------------------------------
 
 pub struct Publisher {
-  domain_participant: DomainParticipant,
+  domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
@@ -46,7 +46,7 @@ pub struct Publisher {
 // public interface for Publisher
 impl<'a> Publisher {
   pub fn new(
-    dp: DomainParticipant,
+    dp: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
@@ -84,14 +84,19 @@ impl<'a> Publisher {
       }
     };
 
-    let guid = GUID::new_with_prefix_and_id(
-      self.get_participant().as_entity().guid.guidPrefix,
-      entity_id,
-    );
+    let dp = match self.get_participant() {
+      Some(dp) => dp,
+      None => {
+        println!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
+        return Err(Error::PreconditionNotMet);
+      }
+    };
+
+    let guid = GUID::new_with_prefix_and_id(dp.as_entity().guid.guidPrefix, entity_id);
     let new_writer = Writer::new(
       guid.clone(),
       hccc_download,
-      self.domain_participant.get_dds_cache(),
+      dp.get_dds_cache(),
       topic.get_name().to_string(),
       topic.get_qos().clone(),
     );
@@ -101,18 +106,18 @@ impl<'a> Publisher {
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::<D, SA>::new(
-      self,
-      &topic,
-      Some(guid),
-      dwcc_upload,
-      self.get_participant().get_dds_cache(),
-    );
+    let matching_data_writer =
+      DataWriter::<D, SA>::new(self, &topic, Some(guid), dwcc_upload, dp.get_dds_cache());
+
+    let matching_data_writer = match matching_data_writer {
+      Ok(dw) => dw,
+      e => return e,
+    };
 
     match self.discovery_db.write() {
       Ok(mut db) => {
-        let dwd =
-          DiscoveredWriterData::new(&matching_data_writer, &topic, &self.domain_participant);
+        let dwd = DiscoveredWriterData::new(&matching_data_writer, &topic, &dp);
+
         db.update_local_topic_writer(dwd);
         db.update_topic_data_p(&topic);
       }
@@ -158,8 +163,8 @@ impl<'a> Publisher {
   }
 
   // What is the use case for this? (is it useful in Rust style of programming? Should it be public?)
-  pub fn get_participant(&self) -> &DomainParticipant {
-    &self.domain_participant
+  pub fn get_participant(&self) -> Option<DomainParticipant> {
+    self.domain_participant.clone().upgrade()
   }
 
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
@@ -184,7 +189,7 @@ impl<'a> Publisher {
 // -------------------------------------------------------------------
 
 pub struct Subscriber {
-  pub domain_participant: DomainParticipant,
+  domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   qos: QosPolicies,
   sender_add_reader: mio_channel::Sender<Reader>,
@@ -193,7 +198,7 @@ pub struct Subscriber {
 
 impl<'s> Subscriber {
   pub fn new(
-    domain_participant: DomainParticipant,
+    domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
     sender_add_reader: mio_channel::Sender<Reader>,
@@ -234,34 +239,41 @@ impl<'s> Subscriber {
     let reader_id = entity_id;
     let datareader_id = entity_id;
 
-    let matching_datareader = DataReader::<D, SA>::new(
-      self,
-      datareader_id,
-      &topic,
-      rec,
-      self.domain_participant.get_dds_cache(),
-    );
+    let dp = match self.get_participant() {
+      Some(dp) => dp,
+      None => {
+        println!("DomainParticipant doesn't exist anymore.");
+        return Err(Error::PreconditionNotMet);
+      }
+    };
 
-    let reader_guid =
-      GUID::new_with_prefix_and_id(*self.domain_participant.get_guid_prefix(), reader_id);
+    let matching_datareader =
+      DataReader::<D, SA>::new(self, datareader_id, &topic, rec, dp.get_dds_cache());
+
+    let matching_datareader = match matching_datareader {
+      Ok(dr) => dr,
+      e => return e,
+    };
+
+    let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), reader_id);
 
     let new_reader = Reader::new(
       reader_guid,
       send,
-      self.domain_participant.get_dds_cache(),
+      dp.get_dds_cache(),
       topic.get_name().to_string(),
     );
 
     match self.discovery_db.write() {
       Ok(mut db) => {
-        db.update_local_topic_reader(&self.domain_participant, &topic, &new_reader);
+        db.update_local_topic_reader(&dp, &topic, &new_reader);
         db.update_topic_data_p(&topic);
       }
       _ => return Err(Error::OutOfResources),
     };
 
     // Create new topic to DDScache if one isn't present
-    match self.domain_participant.get_dds_cache().write() {
+    match dp.get_dds_cache().write() {
       Ok(mut rwlock) => rwlock.add_new_topic(
         &topic.get_name().to_string(),
         TopicKind::WITH_KEY,
@@ -269,7 +281,7 @@ impl<'s> Subscriber {
       ),
       Err(e) => panic!(
         "The DDSCache of domain participant {:?} is poisoned. Error: {}",
-        self.domain_participant.get_guid(),
+        dp.get_guid(),
         e
       ),
     };
@@ -291,6 +303,10 @@ impl<'s> Subscriber {
     todo!()
     // TO think: Is this really necessary? Because the caller would have to know
     // types D and SA. Sould we just trust whoever creates DataReaders to also remember them?
+  }
+
+  pub fn get_participant(&self) -> Option<DomainParticipant> {
+    self.domain_participant.clone().upgrade()
   }
 }
 
