@@ -49,7 +49,7 @@ impl Data {
   // TODO: Handle errors, return a Result type.
   pub fn deserialize_data(
     buffer: &[u8],
-    flags: BitFlags<Submessage_DATA_Flags>,
+    flags: BitFlags<DATA_Flags>,
   ) -> io::Result<Data> {
     let _extra_flags = &buffer[0..2];
     let octets_to_inline_qos = u16::read_from_buffer(&buffer[2..4]).unwrap();
@@ -57,8 +57,8 @@ impl Data {
     let reader_id = &buffer[4..8];
     let writer_id = &buffer[8..12];
     let sequence_number = &buffer[12..20];
-    let expect_qos = flags.contains(Submessage_DATA_Flags::InlineQos);
-    let expect_data = flags.contains(Submessage_DATA_Flags::Data);
+    let expect_qos = flags.contains(DATA_Flags::InlineQos);
+    let expect_data = flags.contains(DATA_Flags::Data);
 
     let inline_qos_ =
       if expect_qos {

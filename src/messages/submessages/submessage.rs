@@ -18,13 +18,13 @@ use enumflags2::BitFlags;
 
 #[derive(Debug, PartialEq)]
 pub enum EntitySubmessage {
-  AckNack(AckNack, BitFlags<Submessage_ACKNACK_Flags>),
-  Data(Data, BitFlags<Submessage_DATA_Flags>),
-  DataFrag(DataFrag, BitFlags<Submessage_DATAFRAG_Flags>),
-  Gap(Gap, BitFlags<Submessage_GAP_Flags>),
-  Heartbeat(Heartbeat, BitFlags<Submessage_HEARTBEAT_Flags>),
-  HeartbeatFrag(HeartbeatFrag, BitFlags<Submessage_HEARTBEATFRAG_Flags>),
-  NackFrag(NackFrag, BitFlags<Submessage_NACKFRAG_Flags>),
+  AckNack(AckNack, BitFlags<ACKNACK_Flags>),
+  Data(Data, BitFlags<DATA_Flags>),
+  DataFrag(DataFrag, BitFlags<DATAFRAG_Flags>),
+  Gap(Gap, BitFlags<GAP_Flags>),
+  Heartbeat(Heartbeat, BitFlags<HEARTBEAT_Flags>),
+  HeartbeatFrag(HeartbeatFrag, BitFlags<HEARTBEATFRAG_Flags>),
+  NackFrag(NackFrag, BitFlags<NACKFRAG_Flags>),
 }
 
 // we must write this manually, because
@@ -65,10 +65,10 @@ impl EntitySubmessage {
 
 #[derive(Debug, PartialEq)]
 pub enum InterpreterSubmessage {
-  InfoSource(InfoSource, BitFlags<Submessage_INFOSOURCE_Flags>),
-  InfoDestination(InfoDestination, BitFlags<Submessage_INFODESTINATION_Flags>),
-  InfoReply(InfoReply, BitFlags<Submessage_INFOREPLY_Flags>),
-  InfoTimestamp(InfoTimestamp, BitFlags<Submessage_INFOTIMESTAMP_Flags>),
+  InfoSource(InfoSource, BitFlags<INFOSOURCE_Flags>),
+  InfoDestination(InfoDestination, BitFlags<INFODESTINATION_Flags>),
+  InfoReply(InfoReply, BitFlags<INFOREPLY_Flags>),
+  InfoTimestamp(InfoTimestamp, BitFlags<INFOTIMESTAMP_Flags>),
   //Pad(Pad), // Pad message does not need to be processed above serialization layer
 }
 

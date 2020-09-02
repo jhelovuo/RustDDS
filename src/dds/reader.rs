@@ -380,8 +380,8 @@ impl Reader {
     // Should it be saved as an attribute?
     let sender = UDPSender::new_with_random_port();
     // TODO: How to determine which flags should be one? Both on atm
-    let flags = BitFlags::<Submessage_ACKNACK_Flags>::from_flag(Submessage_ACKNACK_Flags::Endianness)
-              | BitFlags::<Submessage_ACKNACK_Flags>::from_flag(Submessage_ACKNACK_Flags::Final);
+    let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
+              | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
 
     let mut message = Message::new(
       Header {

@@ -37,12 +37,12 @@ where
 
   fn deserialize_data_frag(
     buffer: &'a [u8],
-    flags: BitFlags<Submessage_DATAFRAG_Flags>
+    flags: BitFlags<DATAFRAG_Flags>
   ) -> Option<DataFrag> {
     let mut pos: usize = 0;
     // TODO Check flag locations..?
     //let endianness_flag = msgheader.flags.is_flag_set(3);
-    let inline_qoS_flag = flags.contains(Submessage_DATAFRAG_Flags::InlineQos);
+    let inline_qoS_flag = flags.contains(DATAFRAG_Flags::InlineQos);
     //let non_standar_payload_flag = msgheader.flags.is_flag_set(1);
 
     pos += 2; // Ignore extra flags for now

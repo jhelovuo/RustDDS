@@ -237,7 +237,7 @@ impl MessageReceiver {
           for reader in self.available_readers.iter_mut() {
             reader.handle_heartbeat_msg(
               heartbeat.clone(),
-              flags.contains(Submessage_HEARTBEAT_Flags::Final),  
+              flags.contains(HEARTBEAT_Flags::Final),  
               mr_state.clone(),
             );
           }
@@ -245,7 +245,7 @@ impl MessageReceiver {
           if let Some(target_reader) = self.get_reader(heartbeat.reader_id) {
             target_reader.handle_heartbeat_msg(
               heartbeat,
-              flags.contains(Submessage_HEARTBEAT_Flags::Final), 
+              flags.contains(HEARTBEAT_Flags::Final), 
               mr_state,
             );
           } else {
@@ -296,7 +296,7 @@ impl MessageReceiver {
   { 
     match interp_subm {
       InterpreterSubmessage::InfoTimestamp( ts_struct , flags) => {
-        if flags.contains(Submessage_INFOTIMESTAMP_Flags::Invalidate) {
+        if flags.contains(INFOTIMESTAMP_Flags::Invalidate) {
           self.have_timestamp = true;
           self.timestamp = ts_struct.timestamp;
         }
@@ -311,7 +311,7 @@ impl MessageReceiver {
       },
       InterpreterSubmessage::InfoReply( info_reply , flags) => {
         self.unicast_reply_locator_list = info_reply.unicast_locator_list;
-        if flags.contains( Submessage_INFOREPLY_Flags::Multicast)  {
+        if flags.contains( INFOREPLY_Flags::Multicast)  {
           self.multicast_reply_locator_list = 
             info_reply.multicast_locator_list
               .expect("InfoReply flag indicates multicast locator is present but none found.");

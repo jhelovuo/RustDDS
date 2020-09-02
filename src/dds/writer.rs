@@ -625,9 +625,9 @@ impl Writer {
     let mes = &mut timestamp.write_to_vec_with_ctx(self.endianness).unwrap();
 
     let flags 
-      = BitFlags::<Submessage_INFOTIMESTAMP_Flags>::from_endianness(self.endianness) 
-      | ( if invalidiateFlagSet { Submessage_INFOTIMESTAMP_Flags::Invalidate.into() }
-          else { BitFlags::<Submessage_INFOTIMESTAMP_Flags>::empty() } );
+      = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(self.endianness) 
+      | ( if invalidiateFlagSet { INFOTIMESTAMP_Flags::Invalidate.into() }
+          else { BitFlags::<INFOTIMESTAMP_Flags>::empty() } );
 
     let submessageHeader = SubmessageHeader {
         kind: SubmessageKind::INFO_TS , 
@@ -644,7 +644,7 @@ impl Writer {
 
   pub fn get_DST_submessage(&self, guid_prefix: GuidPrefix) -> SubMessage {
     let flags 
-      = BitFlags::<Submessage_INFODESTINATION_Flags>::from_endianness(self.endianness);
+      = BitFlags::<INFODESTINATION_Flags>::from_endianness(self.endianness);
     let submessageHeader = SubmessageHeader {
         kind: SubmessageKind::INFO_DST , 
         flags: flags.bits(),
@@ -689,14 +689,14 @@ impl Writer {
       inline_qos: None,  // Change later, if needed.
       serialized_payload: change.data_value.unwrap(), // TODO: Is the representation identifier already correct?
     };
-    let flags : BitFlags<Submessage_DATA_Flags> =
-      BitFlags::<Submessage_DATA_Flags>::from_endianness(self.endianness)
+    let flags : BitFlags<DATA_Flags> =
+      BitFlags::<DATA_Flags>::from_endianness(self.endianness)
       | ( if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
             // No data, we send key instead
-            BitFlags::<Submessage_DATA_Flags>::from_flag( Submessage_DATA_Flags::InlineQos)
-            | BitFlags::<Submessage_DATA_Flags>::from_flag(Submessage_DATA_Flags::Key)
+            BitFlags::<DATA_Flags>::from_flag( DATA_Flags::InlineQos)
+            | BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key)
           }
-          else { BitFlags::<Submessage_DATA_Flags>::from_flag(Submessage_DATA_Flags::Data) } // normal case
+          else { BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data) } // normal case
         );
 
     // if change kind is dispose then datawriter is telling to dispose the data instance
@@ -744,10 +744,10 @@ impl Writer {
     };
 
     let mut flags = 
-      BitFlags::<Submessage_HEARTBEAT_Flags>::from_endianness(self.endianness);
+      BitFlags::<HEARTBEAT_Flags>::from_endianness(self.endianness);
 
-    if set_final_flag      { flags.insert(Submessage_HEARTBEAT_Flags::Final) }
-    if set_liveliness_flag { flags.insert(Submessage_HEARTBEAT_Flags::Liveliness) }
+    if set_final_flag      { flags.insert(HEARTBEAT_Flags::Final) }
+    if set_liveliness_flag { flags.insert(HEARTBEAT_Flags::Liveliness) }
 
     let mes = &mut heartbeat.write_to_vec_with_ctx(self.endianness).unwrap();
     let size = mes.len();

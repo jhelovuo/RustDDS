@@ -130,46 +130,46 @@ impl<'a> Message {
 
           SubmessageKind::DATA => {
             // Manually implemented deserialization for DATA. Speedy does not quite cut it.
-            let f = BitFlags::<Submessage_DATA_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<DATA_Flags>::from_bits_truncate(sub_header.flags);
             mk_e_subm( EntitySubmessage::Data(Data::deserialize_data(sub_buffer,f)? , f ) ) 
           },
 
           SubmessageKind::HEARTBEAT => {
-            let f = BitFlags::<Submessage_HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
             mk_e_subm( EntitySubmessage::Heartbeat(Heartbeat::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
           },
           
           SubmessageKind::GAP => {
-            let f = BitFlags::<Submessage_GAP_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<GAP_Flags>::from_bits_truncate(sub_header.flags);
             mk_e_subm( EntitySubmessage::Gap(Gap::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
           },
 
           SubmessageKind::ACKNACK => {
-            let f = BitFlags::<Submessage_ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
             mk_e_subm( EntitySubmessage::AckNack(AckNack::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
           },
 
           SubmessageKind::NACK_FRAG => {
-            let f = BitFlags::<Submessage_NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
             mk_e_subm( EntitySubmessage::NackFrag(NackFrag::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
           },
 
           // interpreter submessages
 
           SubmessageKind::INFO_DST => {
-            let f = BitFlags::<Submessage_INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
             mk_i_subm( InterpreterSubmessage::InfoDestination(InfoDestination::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
           },
           SubmessageKind::INFO_SRC => {
-            let f = BitFlags::<Submessage_INFOSOURCE_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<INFOSOURCE_Flags>::from_bits_truncate(sub_header.flags);
             mk_i_subm( InterpreterSubmessage::InfoSource(InfoSource::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
           },
           SubmessageKind::INFO_TS => {
-            let f = BitFlags::<Submessage_INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
             mk_i_subm( InterpreterSubmessage::InfoTimestamp(InfoTimestamp::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
           },
           SubmessageKind::INFO_REPLY => {
-            let f = BitFlags::<Submessage_INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
+            let f = BitFlags::<INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
             mk_i_subm( InterpreterSubmessage::InfoReply(InfoReply::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
           },
           SubmessageKind::PAD => {

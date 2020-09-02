@@ -36,107 +36,107 @@ macro_rules! submessageflag_impls {
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_ACKNACK_Flags {
+pub enum ACKNACK_Flags {
   Endianness = 0b01,
   Final = 0b10,
 }
-submessageflag_impls!(Submessage_ACKNACK_Flags);
+submessageflag_impls!(ACKNACK_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_DATA_Flags {
+pub enum DATA_Flags {
   Endianness         = 0b00001,
   InlineQos          = 0b00010,
   Data               = 0b00100,
   Key                = 0b01000,
   NonStandardPayload = 0b10000,  
 }
-submessageflag_impls!(Submessage_DATA_Flags);
+submessageflag_impls!(DATA_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_DATAFRAG_Flags {
+pub enum DATAFRAG_Flags {
   Endianness         = 0b00001,
   InlineQos          = 0b00010,
   Key                = 0b00100,
   NonStandardPayload = 0b01000,  
 }
-submessageflag_impls!(Submessage_DATAFRAG_Flags);
+submessageflag_impls!(DATAFRAG_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_GAP_Flags {
+pub enum GAP_Flags {
   Endianness         = 0b00001,
 }
-submessageflag_impls!(Submessage_GAP_Flags);
+submessageflag_impls!(GAP_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_HEARTBEAT_Flags {
+pub enum HEARTBEAT_Flags {
   Endianness         = 0b00001,
   Final              = 0b00010,
   Liveliness         = 0b00100,
 }
-submessageflag_impls!(Submessage_HEARTBEAT_Flags);
+submessageflag_impls!(HEARTBEAT_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_HEARTBEATFRAG_Flags {
+pub enum HEARTBEATFRAG_Flags {
   Endianness         = 0b00001,
 }
-submessageflag_impls!(Submessage_HEARTBEATFRAG_Flags);
+submessageflag_impls!(HEARTBEATFRAG_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_INFODESTINATION_Flags {
+pub enum INFODESTINATION_Flags {
   Endianness         = 0b00001,
 }
-submessageflag_impls!(Submessage_INFODESTINATION_Flags);
+submessageflag_impls!(INFODESTINATION_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_INFOREPLY_Flags {
+pub enum INFOREPLY_Flags {
   Endianness = 0b01,
   Multicast  = 0b10,
 }
-submessageflag_impls!(Submessage_INFOREPLY_Flags);
+submessageflag_impls!(INFOREPLY_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_INFOSOURCE_Flags {
+pub enum INFOSOURCE_Flags {
   Endianness         = 0b00001,
 }
-submessageflag_impls!(Submessage_INFOSOURCE_Flags);
+submessageflag_impls!(INFOSOURCE_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_INFOTIMESTAMP_Flags {
+pub enum INFOTIMESTAMP_Flags {
   Endianness = 0b01,
   Invalidate = 0b10,
 }
-submessageflag_impls!(Submessage_INFOTIMESTAMP_Flags);
+submessageflag_impls!(INFOTIMESTAMP_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_PAD_Flags {
+pub enum PAD_Flags {
   Endianness         = 0b00001,
 }
-submessageflag_impls!(Submessage_PAD_Flags);
+submessageflag_impls!(PAD_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_NACKFRAG_Flags {
+pub enum NACKFRAG_Flags {
   Endianness         = 0b00001,
 }
-submessageflag_impls!(Submessage_NACKFRAG_Flags);
+submessageflag_impls!(NACKFRAG_Flags);
 
 #[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable,  Clone, Copy)]
 #[repr(u8)]
-pub enum Submessage_INFOREPLYIP4_Flags {
+pub enum INFOREPLYIP4_Flags {
   Endianness = 0b01,
   Multicast  = 0b10,
 }
-submessageflag_impls!(Submessage_INFOREPLYIP4_Flags);
+submessageflag_impls!(INFOREPLYIP4_Flags);
 
 pub fn endianness_flag(flags: u8) -> speedy::Endianness {
     if (flags & 0x01) != 0 {
