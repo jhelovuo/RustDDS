@@ -98,17 +98,17 @@ where
     topic: &'a Topic,
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
-  ) -> Self {
-    DataReader {
+  ) -> Result<Self> {
+    Ok(DataReader {
       keyed_datareader: datareader_with_key::DataReader::<'a, NoKeyWrapper<D>,SA_Wrapper<SA> >::new(
         subscriber,
         my_id,
         topic,
         notification_receiver,
         dds_cache,
-      ),
+      )?,
       result_cache: vec![], 
-    }
+    })
   }
 
   pub fn read(

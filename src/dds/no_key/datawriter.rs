@@ -93,12 +93,11 @@ where
     guid: Option<GUID>,
     cc_upload: mio_channel::Sender<DDSData>,
     dds_cache: Arc<RwLock<DDSCache>>,
-  ) -> DataWriter<'a, D, SA> {
-    DataWriter {
+  ) -> Result<DataWriter<'a, D, SA>> {
+    Ok( DataWriter {
       keyed_datawriter: datawriter_with_key::DataWriter::<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>::new(
-        publisher, topic, guid, cc_upload, dds_cache,
-      ),
-    }
+        publisher, topic, guid, cc_upload, dds_cache)?,
+    })
   }
 
   // write (with optional timestamp)
