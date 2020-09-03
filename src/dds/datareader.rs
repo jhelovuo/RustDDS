@@ -22,11 +22,11 @@ use crate::dds::{
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/*#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Take {
   No,
   Yes,
-}
+}*/
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectByKey {
@@ -330,12 +330,12 @@ where
 
   /// This is a simplified API for reading the next not_read sample
   /// If no new data is available, the return value is Ok(None).
-  pub fn read_next_sample(&mut self, _take: Take) -> Result<Option<&DataSample<D>>> {
+  pub fn read_next_sample(&mut self) -> Result<Option<&DataSample<D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 
-  pub fn take_next_sample(&mut self, _take: Take) -> Result<Option<DataSample<D>>> {
+  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }

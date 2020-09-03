@@ -14,7 +14,7 @@ use crate::dds::{
     QosPolicies, HasQoSPolicy,
     policy::{Reliability, History},
   },
-  datareader::{Take, DataReader},
+  datareader::{DataReader},
   readcondition::ReadCondition,
   datawriter::DataWriter,
 };
@@ -389,7 +389,7 @@ impl Discovery {
     >,
     //TODO: CDR is probably not what we want here. Change adapter to something else.
   ) -> Option<SPDPDiscoveredParticipantData> {
-    let participant_data = match reader.read_next_sample(Take::Yes) {
+    let participant_data = match reader.take_next_sample() {
       Ok(d) => match d {
         Some(d) => match &d.value {
           Ok(aaaaa) => (aaaaa).clone(),

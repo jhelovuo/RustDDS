@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::structure::time::Timestamp;
 use crate::dds::datasample::{SampleState, ViewState, InstanceState, SampleInfo};
 
@@ -10,7 +8,7 @@ use crate::dds::datasample::{SampleState, ViewState, InstanceState, SampleInfo};
 #[derive(Clone)]
 pub struct DataSample<D> {
   pub sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
-  pub value: Rc<D>,
+  pub value: D,
 }
 
 impl<D> DataSample<D>
@@ -40,7 +38,7 @@ impl<D> DataSample<D>
         absolute_generation_rank,
         source_timestamp,
       },
-      value: Rc::new(payload),
+      value: payload,
     }
   }
 

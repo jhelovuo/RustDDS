@@ -3,13 +3,14 @@ use std::{
   time::{Duration},
 };
 use std::ops::Deref;
+use std::io;
 
 use mio_extras::channel as mio_channel;
 use serde::{Serialize, Serializer};
 
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity};
-use crate::structure::{dds_cache::DDSCache};
+use crate::structure::{dds_cache::DDSCache, guid::{GUID} };
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
@@ -19,13 +20,18 @@ use crate::dds::values::result::{
 };
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::key::*;
+use crate::dds::traits::serde_adapters::SerializerAdapter;
+use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
+
 
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
 use crate::dds::ddsdata::DDSData;
 
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::datawriter as datawriter_with_key};
 
-// This structure shoud be private to no_key DataWriter
+use crate::serialization;
+
+// This structure should be private to no_key DataWriter
 struct NoKeyWrapper_Write<D> {
   pub d: D,
 }
@@ -59,23 +65,38 @@ where
 
 impl<D> NoKeyWrapper_Write<D> {}
 
-pub struct DataWriter<'a, D> {
-  keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>>,
+struct SA_Wrapper<SA> {
+  inner: SA,
 }
 
-impl<'a, D> DataWriter<'a, D>
+impl<D:Serialize, SA:SerializerAdapter<D> > SerializerAdapter<NoKeyWrapper_Write<D>> for SA_Wrapper<SA> {
+  fn output_encoding() -> RepresentationIdentifier {
+    SA::output_encoding()
+  }
+  fn to_writer<W: io::Write>(writer: W, value: &NoKeyWrapper_Write<D>) -> serialization::error::Result<()> {
+    SA::to_writer(writer, &value.d)
+  }
+}
+
+pub struct DataWriter<'a, D:Serialize, SA: SerializerAdapter<D> > {
+  keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>,SA_Wrapper<SA>>,
+}
+
+impl<'a, D, SA> DataWriter<'a, D, SA>
 where
   D: Serialize,
+  SA: SerializerAdapter<D>  
 {
   pub fn new(
     publisher: &'a Publisher,
     topic: &'a Topic,
+    guid: Option<GUID>,
     cc_upload: mio_channel::Sender<DDSData>,
     dds_cache: Arc<RwLock<DDSCache>>,
-  ) -> DataWriter<'a, D> {
+  ) -> DataWriter<'a, D, SA> {
     DataWriter {
-      keyed_datawriter: datawriter_with_key::DataWriter::<'a, NoKeyWrapper_Write<D>>::new(
-        publisher, topic, cc_upload, dds_cache,
+      keyed_datawriter: datawriter_with_key::DataWriter::<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>::new(
+        publisher, topic, guid, cc_upload, dds_cache,
       ),
     }
   }
@@ -133,13 +154,13 @@ where
   }
 }
 
-impl<D> Entity for DataWriter<'_, D> {
+impl<D:Serialize, SA :SerializerAdapter<D> > Entity for DataWriter<'_, D,SA> {
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     self.keyed_datawriter.as_entity()
   }
 }
 
-impl<D> HasQoSPolicy for DataWriter<'_, D> {
+impl<D:Serialize, SA :SerializerAdapter<D> > HasQoSPolicy for DataWriter<'_, D,SA> {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     self.keyed_datawriter.set_qos(policy)
   }
@@ -149,7 +170,7 @@ impl<D> HasQoSPolicy for DataWriter<'_, D> {
   }
 }
 
-impl<D> DDSEntity for DataWriter<'_, D> {}
+impl<D:Serialize, SA :SerializerAdapter<D> > DDSEntity for DataWriter<'_, D,SA> {}
 
 #[cfg(test)]
 mod tests {
