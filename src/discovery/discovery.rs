@@ -752,7 +752,7 @@ mod tests {
     for submsg in tdata.submessages.iter_mut() {
       match submsg.intepreterSubmessage.as_mut() {
         Some(v) => match v {
-          InterpreterSubmessage::InfoDestination(dst) => {
+          InterpreterSubmessage::InfoDestination(dst , _flags) => {
             dst.guid_prefix = participant.get_guid_prefix().clone();
           }
           _ => continue,

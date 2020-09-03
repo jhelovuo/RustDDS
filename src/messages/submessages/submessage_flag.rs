@@ -153,18 +153,18 @@ mod tests {
   use super::*;
 
   #[test]
-  fn endianness_flag() {
+  fn endianness_flag_test() {
     assert_eq!(
       Endianness::BigEndian,
-      SubmessageFlag { flags: 0x00 }.endianness_flag()
+      endianness_flag(0x00)
     );
     assert_eq!(
       Endianness::LittleEndian,
-      SubmessageFlag { flags: 0x01 }.endianness_flag()
+      endianness_flag(0x01)
     );
   }
 
-  #[test]
+  /*#[test]  This is a weird test. Bytes have no endianness (unless streaming bits on serial link).
   fn correct_bits_order() {
     let submessage_flag = SubmessageFlag {
       flags: 0b10110100_u8,
@@ -178,9 +178,9 @@ mod tests {
     assert!(submessage_flag.is_flag_set(0b0010_0000));
     assert!(!submessage_flag.is_flag_set(0b0100_0000));
     assert!(submessage_flag.is_flag_set(0b1000_0000));
-  }
+  } */
 
-  #[test]
+  /*#[test] This should be unit tested inside enumflags2 crate.
   fn helper_functions_test() {
     for x in 0..7 {
       let mut flags = SubmessageFlag { flags: 0x00 };
@@ -192,8 +192,9 @@ mod tests {
       flags.clear_flag(bit);
       assert!(!flags.is_flag_set(bit));
     }
-  }
-
+  }*/
+  
+  /*
   serialization_test!(type = SubmessageFlag,
   {
       submessage_flag,
@@ -201,8 +202,9 @@ mod tests {
       le = [0b10110100_u8],
       be = [0b10110100_u8]
   });
+  */
 
-  
+  /* testing removed functionality here
   #[test]
   fn test_RTPS_submessage_flags_helper(){
     let fla : SubmessageFlag = SubmessageFlag{
@@ -261,5 +263,5 @@ mod tests {
     let fla3_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA, &helper);
     assert_eq!(fla3, fla3_dese);
   }
-
+  */
 }

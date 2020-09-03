@@ -54,6 +54,7 @@ impl<C: Context> Writable<C> for SubmessageHeader {
 
 #[cfg(test)]
 mod tests {
+  use enumflags2::BitFlags;
   use super::*;
 
   serialization_test!( type = SubmessageHeader,
@@ -61,7 +62,7 @@ mod tests {
       submessage_header_big_endian_flag,
       SubmessageHeader {
           kind: SubmessageKind::ACKNACK,
-          flags: SubmessageFlag { flags: 0x00 },
+          flags: BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::BigEndian).bits(),
           content_length: 42,
       },
       le = [0x06, 0x00, 0x00, 0x2A],
@@ -71,7 +72,7 @@ mod tests {
       submessage_header_little_endian_flag,
       SubmessageHeader {
           kind: SubmessageKind::ACKNACK,
-          flags: SubmessageFlag { flags: 0x01 },
+          flags: BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::LittleEndian).bits(),
           content_length: 42,
       },
       le = [0x06, 0x01, 0x2A, 0x00],
@@ -81,7 +82,7 @@ mod tests {
       submessage_header_big_endian_2_bytes_length,
       SubmessageHeader {
           kind: SubmessageKind::ACKNACK,
-          flags: SubmessageFlag { flags: 0x00 },
+          flags: BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::BigEndian).bits(),
           content_length: 258,
       },
       le = [0x06, 0x00, 0x01, 0x02],
@@ -91,7 +92,7 @@ mod tests {
       submessage_header_little_endian_2_bytes_length,
       SubmessageHeader {
           kind: SubmessageKind::ACKNACK,
-          flags: SubmessageFlag { flags: 0x01 },
+          flags: BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::LittleEndian).bits(),
           content_length: 258,
       },
       le = [0x06, 0x01, 0x02, 0x01],
@@ -101,7 +102,7 @@ mod tests {
       submessage_header_wireshark,
       SubmessageHeader {
           kind: SubmessageKind::INFO_TS,
-          flags: SubmessageFlag { flags: 0x01 },
+          flags: BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(Endianness::LittleEndian).bits(),
           content_length: 8,
       },
       le = [0x09, 0x01, 0x08, 0x00],
@@ -111,10 +112,11 @@ mod tests {
       submessage_header_gap,
       SubmessageHeader {
           kind: SubmessageKind::GAP,
-          flags: SubmessageFlag { flags: 0x03 },
+          flags: BitFlags::<GAP_Flags>::from_endianness(Endianness::LittleEndian).bits(),
           content_length: 7,
       },
       le = [0x08, 0x03, 0x07, 0x00],
       be = [0x08, 0x03, 0x07, 0x00]
+      //TODO: Where is the flags value 0x03 from? RTPS 2.3 spec 9.4.5.5 shows only Endianness bit is legal.
   });
 }

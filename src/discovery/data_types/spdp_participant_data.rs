@@ -194,7 +194,6 @@ mod tests {
   use super::*;
 
   use crate::submessages::EntitySubmessage;
-  use speedy::{Endianness, Readable};
   use crate::serialization::message::Message;
   use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
   use crate::serialization::cdrSerializer::{to_bytes};
@@ -209,7 +208,7 @@ mod tests {
   fn pdata_deserialize_serialize() {
     let data = spdp_participant_data_raw();
 
-    let rtpsmsg = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &data).unwrap();
+    let rtpsmsg = Message::read_from_buffer(&data).unwrap();
     let submsgs = rtpsmsg.submessages();
 
     for submsg in submsgs.iter() {

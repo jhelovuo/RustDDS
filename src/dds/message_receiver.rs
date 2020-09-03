@@ -526,6 +526,8 @@ mod tests {
     assert_eq!(header, new_header);
   }
 
+  /*
+  TODO: This test should be in header module.
   #[test]
   fn mr_test_is_RTPS_header() {
     let test_header: Vec<u8> = vec![
@@ -537,4 +539,5 @@ mod tests {
     let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
     assert!(message_receiver.handle_RTPS_header(&test_header));
   }
+  */
 }

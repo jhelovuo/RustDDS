@@ -222,7 +222,7 @@ impl<C: Context> Writable<C> for Message {
 
 mod tests {
   use super::*;
-  use crate::speedy::{Writable, Readable};
+  use crate::speedy::{Writable};
 
   #[test]
 
@@ -241,7 +241,7 @@ mod tests {
       0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00,
     ];
-    let rtps = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &bits1).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     println!("{:?}", rtps);
 
     let serialized = rtps
@@ -278,7 +278,7 @@ mod tests {
       0x00,
     ];
 
-    let rtps_data = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &bits2).unwrap();
+    let rtps_data = Message::read_from_buffer(&bits2).unwrap();
 
     let serialized_data = rtps_data
       .write_to_vec_with_ctx(Endianness::LittleEndian)
@@ -307,7 +307,7 @@ mod tests {
       0x70, 0x61, 0x6e, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00,
     ];
 
-    let rtps = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &bits1).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     println!("{:?}", rtps);
 
     let serialized = rtps
@@ -331,7 +331,7 @@ mod tests {
       0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
     ];
 
-    let rtps = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &bits1).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     println!("{:?}", rtps);
 
     let serialized = rtps
@@ -361,7 +361,7 @@ mod tests {
       0x70, 0x61, 0x6e, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00,
     ];
 
-    let rtps = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &bits1).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     println!("{:?}", rtps);
 
     let serialized = rtps
@@ -403,7 +403,7 @@ mod tests {
       0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
     ];
 
-    let rtps = Message::read_from_buffer_with_ctx(Endianness::LittleEndian, &bits1).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     println!("{:?}", rtps);
 
     let entitySubmessage = rtps.submessages[2].submessage.as_ref().unwrap();
@@ -419,78 +419,7 @@ mod tests {
     assert_eq!(bits1, serialized);
   }
 
-  #[test]
-  fn test_RTPS_submessage_flags_helper() {
-    let fla: SubmessageFlag = SubmessageFlag {
-      flags: 0b00000001_u8,
-    };
-    let mut helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-      &SubmessageKind::DATA,
-      &fla,
-    );
-    println!("{:?}", &helper);
-    assert_eq!(helper.EndiannessFlag, true);
-    assert_eq!(helper.InlineQosFlag, false);
-    assert_eq!(helper.DataFlag, false);
-    assert_eq!(helper.NonStandardPayloadFlag, false);
-    assert_eq!(helper.FinalFlag, false);
-    assert_eq!(helper.InvalidateFlag, false);
-    assert_eq!(helper.KeyFlag, false);
-    assert_eq!(helper.LivelinessFlag, false);
-    assert_eq!(helper.MulticastFlag, false);
-
-    let fla_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
-      &SubmessageKind::DATA,
-      &helper,
-    );
-    assert_eq!(fla, fla_dese);
-
-    let fla2: SubmessageFlag = SubmessageFlag {
-      flags: 0b00011111_u8,
-    };
-    helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-      &SubmessageKind::DATA,
-      &fla2,
-    );
-    println!("{:?}", &helper);
-    assert_eq!(helper.EndiannessFlag, true);
-    assert_eq!(helper.InlineQosFlag, true);
-    assert_eq!(helper.DataFlag, true);
-    assert_eq!(helper.NonStandardPayloadFlag, true);
-    assert_eq!(helper.FinalFlag, false);
-    assert_eq!(helper.InvalidateFlag, false);
-    assert_eq!(helper.KeyFlag, true);
-    assert_eq!(helper.LivelinessFlag, false);
-    assert_eq!(helper.MulticastFlag, false);
-
-    let fla2_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
-      &SubmessageKind::DATA,
-      &helper,
-    );
-    assert_eq!(fla2, fla2_dese);
-
-    let fla3: SubmessageFlag = SubmessageFlag {
-      flags: 0b00001010_u8,
-    };
-    helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-      &SubmessageKind::DATA,
-      &fla3,
-    );
-    println!("{:?}", &helper);
-    assert_eq!(helper.EndiannessFlag, false);
-    assert_eq!(helper.InlineQosFlag, true);
-    assert_eq!(helper.DataFlag, false);
-    assert_eq!(helper.NonStandardPayloadFlag, false);
-    assert_eq!(helper.FinalFlag, false);
-    assert_eq!(helper.InvalidateFlag, false);
-    assert_eq!(helper.KeyFlag, true);
-    assert_eq!(helper.LivelinessFlag, false);
-    assert_eq!(helper.MulticastFlag, false);
-
-    let fla3_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(
-      &SubmessageKind::DATA,
-      &helper,
-    );
-    assert_eq!(fla3, fla3_dese);
-  }
+  // removed case test_RTPS_submessage_flags_helper , as it was cut-and-paste from
+  // submessage_flag module - and obsoleted there.
+  
 }

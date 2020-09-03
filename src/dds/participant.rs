@@ -388,6 +388,7 @@ impl std::fmt::Debug for DomainParticipant {
 #[cfg(test)]
 mod tests {
   use std::{thread, net::SocketAddr};
+  use enumflags2::BitFlags;
   use crate::speedy::Writable;
   use crate::{
     dds::{qos::QosPolicies, typedesc::TypeDesc},
@@ -398,12 +399,12 @@ mod tests {
       guid::{EntityId, GUID},
       sequence_number::{SequenceNumber, SequenceNumberSet},
     },
-    submessages::{EntitySubmessage, AckNack, SubmessageFlag, SubmessageHeader, SubmessageKind},
+    submessages::{EntitySubmessage, AckNack, SubmessageHeader, SubmessageKind},
     common::bit_set::BitSetRef,
     serialization::{SubMessage, Message},
     messages::{
       protocol_version::ProtocolVersion, header::Header, vendor_id::VendorId,
-      protocol_id::ProtocolId,
+      protocol_id::ProtocolId, submessages::submessages::*
     },
   };
   use super::DomainParticipant;
@@ -468,7 +469,7 @@ mod tests {
 
     let portNumber: u16 = get_user_traffic_unicast_port(5, 0);
     let _sender = UDPSender::new(1234);
-    let mut m: Message = Message::new();
+    let mut m: Message = Message::default();
 
     let a: AckNack = AckNack {
       reader_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
@@ -479,23 +480,17 @@ mod tests {
       },
       count: 1,
     };
+    let flags = BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::BigEndian);
     let subHeader: SubmessageHeader = SubmessageHeader {
-      submessage_id: SubmessageKind::ACKNACK,
-      flags: SubmessageFlag {
-        flags: 0b0000000_u8,
-      },
-      submessage_length: 24,
+      kind: SubmessageKind::ACKNACK,
+      flags: flags.bits(),
+      content_length: 24,
     };
 
     let s: SubMessage = SubMessage {
       header: subHeader,
       intepreterSubmessage: None,
-      submessage: Some(EntitySubmessage::AckNack(
-        a,
-        SubmessageFlag {
-          flags: 0b0000000_u8,
-        },
-      )),
+      submessage: Some(EntitySubmessage::AckNack( a, flags )),
     };
     let h = Header {
       protocol_id: ProtocolId::default(),

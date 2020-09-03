@@ -472,7 +472,7 @@ impl fmt::Debug for Reader {
 mod tests {
   use super::*;
   use crate::structure::guid::{GUID, EntityId};
-  use crate::messages::submessages::submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload};
+  use crate::messages::submessages::submessage_elements::serialized_payload::{SerializedPayload};
   use crate::structure::guid::GuidPrefix;
   use crate::structure::topic_kind::TopicKind;
   use crate::dds::typedesc::TypeDesc;

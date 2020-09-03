@@ -312,7 +312,7 @@ mod tests {
     structure::{
       cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber,
     },
-    messages::submessages::submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload},
+    messages::submessages::submessage_elements::serialized_payload::{SerializedPayload},
   };
 
   #[test]
