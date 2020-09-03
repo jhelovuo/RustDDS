@@ -14,7 +14,7 @@ use crate::messages::submessages::submessage_flag::*;
 use speedy::{Writable, Writer, Context};
 use enumflags2::BitFlags;
 
-//TODO: These messagesa restructured a bit oddly. Why is flags separate from the submessage proper?
+//TODO: These messages are structured a bit oddly. Why is flags separate from the submessage proper?
 
 #[derive(Debug, PartialEq)]
 pub enum EntitySubmessage {
@@ -44,24 +44,6 @@ impl<C:Context> Writable<C> for EntitySubmessage {
   }
 }
 
-impl EntitySubmessage {
-  pub fn get_data_submessage(&self) -> Option<&Data> {
-    match self {
-      EntitySubmessage::Data(data, _) => Some(data),
-      _ => None,
-    }
-  }
-  /*
-  pub fn get_submessage_flag(&self) -> Option<&SubmessageFlag> {
-    match self {
-      EntitySubmessage::AckNack(_, flag) => Some(flag),
-      EntitySubmessage::Data(_, flag) => Some(flag),
-      EntitySubmessage::DataFrag(_, flag) => Some(flag),
-      EntitySubmessage::Heartbeat(_, flag) => Some(flag),
-      _ => None,
-    }
-  } */
-}
 
 #[derive(Debug, PartialEq)]
 pub enum InterpreterSubmessage {

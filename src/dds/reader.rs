@@ -405,8 +405,7 @@ impl Reader {
         flags: flags.bits(),
         content_length: submessage_len,
       },
-      submessage: Some(EntitySubmessage::AckNack(acknack, flags)),
-      intepreterSubmessage: None,
+      body: SubmessageBody::Entity(EntitySubmessage::AckNack(acknack, flags)),
     });
 
     /*let mut bytes = message.serialize_header();

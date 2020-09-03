@@ -6,7 +6,6 @@ pub trait FromEndianness {
   fn from_endianness(end: speedy::Endianness) -> Self;
 }
 
-
 macro_rules! submessageflag_impls {
   ($t:ident) => {
     impl FromEndianness for BitFlags<$t> {
@@ -15,15 +14,15 @@ macro_rules! submessageflag_impls {
           else { Self::empty() }
         }
     }
-
-    /* This does not work, because BitFlags is not a local type. 
-    impl<C> Writable<C: Context> for BitFlags<$t> {
-      fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-        writer.write_u8( self.bits() )
-      }
-    }
-    */    
   }
+}
+
+pub fn endianness_flag(flags: u8) -> speedy::Endianness {
+    if (flags & 0x01) != 0 {
+      Endianness::LittleEndian
+    } else {
+      Endianness::BigEndian
+    }  
 }
 
 /// Identifies the endianness used to encapsulate the Submessage, the
@@ -138,13 +137,6 @@ pub enum INFOREPLYIP4_Flags {
 }
 submessageflag_impls!(INFOREPLYIP4_Flags);
 
-pub fn endianness_flag(flags: u8) -> speedy::Endianness {
-    if (flags & 0x01) != 0 {
-      Endianness::LittleEndian
-    } else {
-      Endianness::BigEndian
-    }  
-}
 
 
 
@@ -164,104 +156,5 @@ mod tests {
     );
   }
 
-  /*#[test]  This is a weird test. Bytes have no endianness (unless streaming bits on serial link).
-  fn correct_bits_order() {
-    let submessage_flag = SubmessageFlag {
-      flags: 0b10110100_u8,
-    };
 
-    assert!(!submessage_flag.is_flag_set(0b0000_0001));
-    assert!(!submessage_flag.is_flag_set(0b0000_0010));
-    assert!(submessage_flag.is_flag_set(0b0000_0100));
-    assert!(!submessage_flag.is_flag_set(0b0000_1000));
-    assert!(submessage_flag.is_flag_set(0b0001_0000));
-    assert!(submessage_flag.is_flag_set(0b0010_0000));
-    assert!(!submessage_flag.is_flag_set(0b0100_0000));
-    assert!(submessage_flag.is_flag_set(0b1000_0000));
-  } */
-
-  /*#[test] This should be unit tested inside enumflags2 crate.
-  fn helper_functions_test() {
-    for x in 0..7 {
-      let mut flags = SubmessageFlag { flags: 0x00 };
-      let bit = u8::from(2).pow(x);
-
-      assert!(!flags.is_flag_set(bit));
-      flags.set_flag(bit);
-      assert!(flags.is_flag_set(bit));
-      flags.clear_flag(bit);
-      assert!(!flags.is_flag_set(bit));
-    }
-  }*/
-  
-  /*
-  serialization_test!(type = SubmessageFlag,
-  {
-      submessage_flag,
-      SubmessageFlag { flags: 0b10110100_u8 },
-      le = [0b10110100_u8],
-      be = [0b10110100_u8]
-  });
-  */
-
-  /* testing removed functionality here
-  #[test]
-  fn test_RTPS_submessage_flags_helper(){
-    let fla : SubmessageFlag = SubmessageFlag{
-      flags: 0b00000001_u8,
-    };
-    let mut helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &fla);
-    println!("{:?}",&helper);
-    assert_eq!(helper.EndiannessFlag,true);
-    assert_eq!(helper.InlineQosFlag,false);
-    assert_eq!(helper.DataFlag,false);
-    assert_eq!(helper.NonStandardPayloadFlag,false);
-    assert_eq!(helper.FinalFlag,false);
-    assert_eq!(helper.InvalidateFlag,false);
-    assert_eq!(helper.KeyFlag,false);
-    assert_eq!(helper.LivelinessFlag,false);
-    assert_eq!(helper.MulticastFlag,false);
-
-    let fla_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA, &helper);
-    assert_eq!(fla, fla_dese);
-
-    let fla2 : SubmessageFlag = SubmessageFlag{
-      flags: 0b00011111_u8,
-    };
-    helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &fla2);
-    println!("{:?}",&helper);
-    assert_eq!(helper.EndiannessFlag,true);
-    assert_eq!(helper.InlineQosFlag,true);
-    assert_eq!(helper.DataFlag,true);
-    assert_eq!(helper.NonStandardPayloadFlag,true);
-    assert_eq!(helper.FinalFlag,false);
-    assert_eq!(helper.InvalidateFlag,false);
-    assert_eq!(helper.KeyFlag,true);
-    assert_eq!(helper.LivelinessFlag,false);
-    assert_eq!(helper.MulticastFlag,false);
-
-    let fla2_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA, &helper);
-    assert_eq!(fla2, fla2_dese);
-
-    let fla3 : SubmessageFlag = SubmessageFlag{
-      flags: 0b00001010_u8,
-    };
-    helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(&SubmessageKind::DATA, &fla3);
-    println!("{:?}",&helper);
-    assert_eq!(helper.EndiannessFlag,false);
-    assert_eq!(helper.InlineQosFlag,true);
-    assert_eq!(helper.DataFlag,false);
-    assert_eq!(helper.NonStandardPayloadFlag,false);
-    assert_eq!(helper.FinalFlag,false);
-    assert_eq!(helper.InvalidateFlag,false);
-    assert_eq!(helper.KeyFlag,true);
-    assert_eq!(helper.LivelinessFlag,false);
-    assert_eq!(helper.MulticastFlag,false);
-
-
-
-    let fla3_dese = SubmessageFlagHelper::create_submessage_flags_from_flag_helper(&SubmessageKind::DATA, &helper);
-    assert_eq!(fla3, fla3_dese);
-  }
-  */
 }

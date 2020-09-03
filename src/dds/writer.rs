@@ -30,7 +30,7 @@ use crate::{
     InfoDestination, 
   },
   structure::cache_change::{CacheChange, ChangeKind},
-  serialization::{SubMessage, Message},
+  serialization::{SubMessage, Message, SubmessageBody},
 };
 
 use crate::dds::ddsdata::DDSData;
@@ -636,9 +636,8 @@ impl Writer {
       };
     SubMessage {
       header: submessageHeader,
-      submessage: None,
-      intepreterSubmessage: 
-        Some(InterpreterSubmessage::InfoTimestamp( timestamp , flags)) ,
+      body: 
+        SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp( timestamp , flags)) ,
     }
   }
 
@@ -653,9 +652,9 @@ impl Writer {
       };     
     SubMessage {
       header: submessageHeader,
-      submessage: None,
-      intepreterSubmessage: 
-        Some(InterpreterSubmessage::InfoDestination(InfoDestination { guid_prefix } , flags))
+      body: 
+        SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(
+          InfoDestination { guid_prefix } , flags))
     }
   }
 
@@ -719,8 +718,7 @@ impl Writer {
         flags: flags.bits(),
         content_length: size,
       },
-      submessage: Some(crate::submessages::EntitySubmessage::Data(data_message, flags)),
-      intepreterSubmessage: None,
+      body: SubmessageBody::Entity(crate::submessages::EntitySubmessage::Data(data_message, flags)),
     };
     return s;
   }
@@ -757,8 +755,7 @@ impl Writer {
         flags: flags.bits(),
         content_length: size as u16, // cannot overflow, heartbeat has fixed size
       },
-      intepreterSubmessage: None,
-      submessage: Some(EntitySubmessage::Heartbeat(heartbeat, flags)),
+      body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(heartbeat, flags)),
     }
   }
 

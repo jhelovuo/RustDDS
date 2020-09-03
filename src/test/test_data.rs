@@ -74,7 +74,8 @@ pub fn spdp_publication_data_raw() -> Vec<u8> {
 
 use crate::{
   serialization::{
-    Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, SubMessage,
+    Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, 
+    SubMessage, SubmessageBody,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
@@ -86,7 +87,7 @@ use crate::{
       spdp_participant_data::SPDPDiscoveredParticipantData,
     },
   },
-  submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader},
+  submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader },
   structure::{
     locator::Locator,
     guid::{EntityId, GUID},
@@ -141,8 +142,8 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
   let mut data;
   for submsg in tdata.submessages.iter_mut() {
     let mut submsglen = submsg.header.content_length;
-    match submsg.submessage.as_mut() {
-      Some(v) => match v {
+    match &mut submsg.body {
+      SubmessageBody::Entity(v) => match v {
         EntitySubmessage::Data(d, _) => {
           let mut participant_data: SPDPDiscoveredParticipantData =
             PlCdrDeserializerAdapter::<SPDPDiscoveredParticipantData>::from_bytes(
@@ -165,7 +166,7 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
         }
         _ => continue,
       },
-      None => (),
+      SubmessageBody::Interpreter( _ ) => (),
     }
     submsg.header.content_length = submsglen;
   }
@@ -180,8 +181,8 @@ pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
   let submsgs = rtpsmsg.submessages();
 
   for submsg in submsgs.iter() {
-    match submsg.submessage.as_ref() {
-      Some(v) => match v {
+    match &submsg.body {
+      SubmessageBody::Entity(v) => match v {
         EntitySubmessage::Data(d, _) => {
           let particiapant_data: SPDPDiscoveredParticipantData =
             PlCdrDeserializerAdapter::from_bytes(
@@ -194,7 +195,7 @@ pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
         }
         _ => continue,
       },
-      None => (),
+      SubmessageBody::Interpreter(_) => (),
     }
   }
   None
@@ -399,8 +400,7 @@ pub fn create_rtps_data_message<D: Serialize>(
 
   let submessage: SubMessage = SubMessage {
     header: submessage_header,
-    submessage: Some(crate::submessages::EntitySubmessage::Data(data_message, sub_flags)),
-    intepreterSubmessage: None,
+    body: SubmessageBody::Entity(crate::submessages::EntitySubmessage::Data(data_message, sub_flags)),
   };
   rtps_message.add_submessage(submessage);
 

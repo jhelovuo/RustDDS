@@ -395,7 +395,7 @@ mod tests {
     },
     submessages::{EntitySubmessage, AckNack, SubmessageHeader, SubmessageKind},
     common::bit_set::BitSetRef,
-    serialization::{SubMessage, Message},
+    serialization::{SubMessage, Message, submessage::*},
     messages::{
       protocol_version::ProtocolVersion, header::Header, vendor_id::VendorId,
       protocol_id::ProtocolId, submessages::submessages::*
@@ -491,8 +491,7 @@ mod tests {
 
     let s: SubMessage = SubMessage {
       header: subHeader,
-      intepreterSubmessage: None,
-      submessage: Some(EntitySubmessage::AckNack( a, flags )),
+      body: SubmessageBody::Entity(EntitySubmessage::AckNack( a, flags )),
     };
     let h = Header {
       protocol_id: ProtocolId::default(),

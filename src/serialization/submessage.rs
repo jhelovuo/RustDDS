@@ -12,15 +12,21 @@ use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
 
 use crate::{messages::fragment_number::FragmentNumber, };
-use speedy::{Context, Writer, Readable, Writable, Endianness};
+use speedy::{Context, Writer, Readable, Writable};
 
 
 #[derive(Debug, PartialEq)]
 pub struct SubMessage {
   pub header: SubmessageHeader,
-  pub submessage: Option<EntitySubmessage>,
-  pub intepreterSubmessage: Option<InterpreterSubmessage>,
+  pub body: SubmessageBody,
 }
+
+#[derive(Debug, PartialEq)]
+pub enum SubmessageBody {
+  Entity(EntitySubmessage) , 
+  Interpreter(InterpreterSubmessage) ,
+}
+
 
 impl<'a> SubMessage
 where
@@ -96,81 +102,15 @@ where
     })
   }
 
-  pub fn serialize_header(&self) -> Vec<u8> {
-    let buffer = self.header.write_to_vec_with_ctx(Endianness::LittleEndian);
-    buffer.unwrap()
-  }
-
-  pub fn serialize_msg(&self) -> Vec<u8> {
-    let message: Vec<u8>;
-    message = match &self.submessage {
-      Some(EntitySubmessage::AckNack(msg, _)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(EntitySubmessage::Data(msg, _)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(EntitySubmessage::DataFrag(msg, _)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(EntitySubmessage::Gap(msg,_)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(EntitySubmessage::Heartbeat(msg, _)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(EntitySubmessage::HeartbeatFrag(msg,_)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(EntitySubmessage::NackFrag(msg,_)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      _ => {
-        panic!();
-      }
-    };
-    return message;
-  }
-
-  pub fn serialize_interpreter_msg(&self) -> Vec<u8> {
-    let message: Vec<u8>;
-    message = match &self.intepreterSubmessage {
-      Some(InterpreterSubmessage::InfoDestination(msg,_)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(InterpreterSubmessage::InfoReply(msg, _)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(InterpreterSubmessage::InfoSource(msg,_)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      Some(InterpreterSubmessage::InfoTimestamp(msg, _)) => {
-        msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap()
-      }
-      _ => {
-        panic!();
-      }
-    };
-    return message;
-  }
 }
 
 impl<C: Context> Writable<C> for SubMessage {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
-    let by = &self.serialize_header();
-    let mesBy: Vec<u8>;
-    if self.submessage.is_some() {
-      mesBy = self.serialize_msg();
-    } else {
-      mesBy = self.serialize_interpreter_msg();
+    writer.write_value(&self.header)?;
+    match &self.body {
+      SubmessageBody::Entity(e) => writer.write_value(&e) ,
+      SubmessageBody::Interpreter(i) => writer.write_value(&i) ,
     }
-    for b in by {
-      writer.write_u8(*b)?;
-    }
-    for b in mesBy {
-      writer.write_u8(b)?;
-    }
-    Ok(())
   }
 }
 
@@ -182,6 +122,8 @@ mod tests {
   use crate::{
     messages::submessages::submessages::*,
   };
+  use crate::serialization::submessage::*;
+  
   #[test]
   fn submessage_data_submessage_deserialization() {
     // this is wireshark captured shapesdemo dataSubmessage
@@ -200,8 +142,7 @@ mod tests {
     let flags = BitFlags::<DATA_Flags>::from_bits_truncate(header.flags);
     let suba = Data::deserialize_data( &serializedDataSubMessage[4..] , flags )
       .expect("DATA deserialization failed.");
-    let sub = SubMessage { header, submessage: Some(EntitySubmessage::Data(suba,flags))
-        , intepreterSubmessage:None};
+    let sub = SubMessage { header, body: SubmessageBody::Entity(EntitySubmessage::Data(suba,flags)) };
 
     println!("{:?}", sub);
 

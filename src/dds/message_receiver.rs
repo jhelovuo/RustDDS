@@ -7,6 +7,7 @@ use crate::structure::entity::Entity;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::structure::time::{Time, Timestamp};
 use crate::serialization::Message;
+use crate::serialization::submessage::SubmessageBody;
 
 
 use crate::dds::reader::Reader;
@@ -197,11 +198,9 @@ impl MessageReceiver {
     };
 
     for submessage in rtps_message.submessages {
-      if let Some(interp_subm) = submessage.intepreterSubmessage {
-        self.handle_parsed_interpreter_submessage(interp_subm);
-      }
-      if let Some(entity_subm) = submessage.submessage {
-        self.send_submessage(entity_subm);
+      match submessage.body {
+        SubmessageBody::Interpreter(i) => self.handle_parsed_interpreter_submessage(i),
+        SubmessageBody::Entity(e) => self.send_submessage(e),
       }
       self.submessage_count += 1;
     } // submessage loop
@@ -526,18 +525,4 @@ mod tests {
     assert_eq!(header, new_header);
   }
 
-  /*
-  TODO: This test should be in header module.
-  #[test]
-  fn mr_test_is_RTPS_header() {
-    let test_header: Vec<u8> = vec![
-      0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
-      0x00, 0x01, 0x00, 0x00, 0x00,
-    ];
-    let guid_new = GUID::new();
-    let (acknack_sender, _acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
-    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
-    assert!(message_receiver.handle_RTPS_header(&test_header));
-  }
-  */
 }

@@ -679,6 +679,8 @@ mod tests {
     discovery::data_types::topic_data::TopicBuiltinTopicData,
     dds::traits::serde_adapters::DeserializerAdapter,
   };
+  use crate::serialization::submessage::*;
+
   use std::{time::Duration, net::SocketAddr};
   use mio::Token;
   use speedy::{Writable, Endianness};
@@ -780,8 +782,8 @@ mod tests {
     let mut tdata = spdp_subscription_msg();
     let mut data;
     for submsg in tdata.submessages.iter_mut() {
-      match submsg.submessage.as_mut() {
-        Some(v) => match v {
+      match &mut submsg.body {
+        SubmessageBody::Entity(v) => match v {
           EntitySubmessage::Data(d, _) => {
             let mut drd: DiscoveredReaderData = PlCdrDeserializerAdapter::from_bytes(
               &d.serialized_payload.value,
@@ -803,7 +805,7 @@ mod tests {
           }
           _ => continue,
         },
-        None => (),
+        SubmessageBody::Interpreter( _ ) => (),
       }
     }
 
@@ -872,14 +874,14 @@ mod tests {
 
     let mut tdata = spdp_publication_msg();
     for submsg in tdata.submessages.iter_mut() {
-      match submsg.intepreterSubmessage.as_mut() {
-        Some(v) => match v {
+      match &mut submsg.body {
+        SubmessageBody::Interpreter(v) => match v {
           InterpreterSubmessage::InfoDestination(dst , _flags) => {
             dst.guid_prefix = participant.get_guid_prefix().clone();
           }
           _ => continue,
         },
-        None => (),
+        SubmessageBody::Entity( _ ) => (),
       }
     }
 
@@ -912,7 +914,7 @@ mod tests {
 
   #[test]
   fn discovery_topic_data_test() {
-    let participant = DomainParticipant::new(16, 0);
+    //let participant = DomainParticipant::new(16, 0);
 
     let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
       key: None,

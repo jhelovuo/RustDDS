@@ -195,6 +195,7 @@ mod tests {
 
   use crate::submessages::EntitySubmessage;
   use crate::serialization::message::Message;
+  use crate::serialization::submessage::*;
   use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
   use crate::serialization::cdrSerializer::{to_bytes};
   use byteorder::LittleEndian;
@@ -212,8 +213,8 @@ mod tests {
     let submsgs = rtpsmsg.submessages();
 
     for submsg in submsgs.iter() {
-      match submsg.submessage.as_ref() {
-        Some(v) => match v {
+      match &submsg.body {
+        SubmessageBody::Entity(v) => match v {
           EntitySubmessage::Data(d, _) => {
             let participant_data: SPDPDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(
@@ -242,7 +243,7 @@ mod tests {
 
           _ => continue,
         },
-        None => (),
+        SubmessageBody::Interpreter( _ ) => (),
       }
     }
 

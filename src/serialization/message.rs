@@ -2,7 +2,7 @@ use std::io;
 
 use crate::{
   structure::{sequence_number::SequenceNumber, guid::GuidPrefix},
-  serialization::submessage::SubMessage,
+  serialization::submessage::{SubMessage, SubmessageBody},
   submessages::*,
   messages::header::Header,
 };
@@ -49,7 +49,7 @@ impl<'a> Message {
   pub fn get_data_sub_message_sequence_numbers(&self) -> Vec<SequenceNumber> {
     let mut sequence_numbers: Vec<SequenceNumber> = vec![];
     for mes in self.submessages.iter() {
-      if let Some(EntitySubmessage::Data(data_subm , _ )) = &mes.submessage {
+      if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm , _ )) = &mes.body {
         sequence_numbers.push(data_subm.writer_sn);
       }
     }
@@ -111,16 +111,14 @@ impl<'a> Message {
       let mk_e_subm = move |s| 
         {Ok ( SubMessage { 
                 header:sub_header ,
-                submessage: Some (s),
-                intepreterSubmessage: None,
+                body: SubmessageBody::Entity(s),
               }
             ) 
         };
       let mk_i_subm = move |s| 
         {Ok ( SubMessage { 
                 header:sub_header ,
-                submessage: None,
-                intepreterSubmessage: Some(s),
+                body: SubmessageBody::Interpreter(s),
               }
             ) 
         };
@@ -406,8 +404,10 @@ mod tests {
     let rtps = Message::read_from_buffer(&bits1).unwrap();
     println!("{:?}", rtps);
 
-    let entitySubmessage = rtps.submessages[2].submessage.as_ref().unwrap();
-    let dataSubmessage = entitySubmessage.get_data_submessage().unwrap();
+    let dataSubmessage = match &rtps.submessages[2] {
+      SubMessage{ header: _ , body: SubmessageBody::Entity(EntitySubmessage::Data(d , _flags))} => d,
+      wtf => panic!("Unexpected message structure {:?}",wtf)
+    };
     let serializedPayload = dataSubmessage.serialized_payload.value.clone();
     println!();
     println!();
