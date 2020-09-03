@@ -56,7 +56,7 @@ impl RtpsReaderProxy {
     }
   }
 
-  pub fn from(discovered_reader_data: &DiscoveredReaderData) -> Option<RtpsReaderProxy> {
+  pub fn from_discovered_reader_data(discovered_reader_data: &DiscoveredReaderData) -> Option<RtpsReaderProxy> {
     let remote_reader_guid = match &discovered_reader_data.reader_proxy.remote_reader_guid {
       Some(v) => v,
       None => {

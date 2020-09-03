@@ -150,7 +150,7 @@ impl SPDPDiscoveredParticipantData {
       metatraffic_multicast_locators,
       default_unicast_locators,
       default_multicast_locators,
-      available_builtin_endpoints: Some(BuiltinEndpointSet::from(builtin_endpoints)),
+      available_builtin_endpoints: Some(BuiltinEndpointSet::from_u32(builtin_endpoints)),
       lease_duration: Some(Duration::from(lease_duration)),
       manual_liveliness_count: None,
       builtin_enpoint_qos: None,

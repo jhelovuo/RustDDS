@@ -12,7 +12,10 @@ use crate::dds::{
   typedesc::TypeDesc,
   qos::{
     QosPolicies, HasQoSPolicy,
-    policy::{Reliability, History},
+    policy::{
+      Reliability, History, Durability, Presentation, PresentationAccessScope, Deadline, Ownership,
+      Liveliness, LivelinessKind, TimeBasedFilter, DestinationOrder, ResourceLimits,
+    },
   },
   datareader::{Take, DataReader},
   readcondition::ReadCondition,
@@ -25,7 +28,7 @@ use crate::discovery::{
   discovery_db::DiscoveryDB,
 };
 
-use crate::structure::guid::EntityId;
+use crate::structure::{duration::Duration, guid::EntityId};
 
 use crate::serialization::{
   cdrSerializer::CDR_serializer_adapter, pl_cdr_deserializer::PlCdrDeserializerAdapter,
@@ -89,7 +92,7 @@ impl Discovery {
       )
       .expect("Failed to register Discovery STOP");
 
-    let discovery_subscriber_qos = QosPolicies::qos_none();
+    let discovery_subscriber_qos = Discovery::subscriber_qos();
     let discovery_subscriber = discovery
       .domain_participant
       .create_subscriber(&discovery_subscriber_qos)
@@ -116,7 +119,7 @@ impl Discovery {
       .create_datareader::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         &dcps_participant_topic,
-        dcps_participant_topic.get_qos(),
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DataReader for DCPSParticipant");
     // register participant reader
@@ -185,7 +188,7 @@ impl Discovery {
       .create_datareader::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         &dcps_subscription_topic,
-        dcps_subscription_topic.get_qos(),
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DataReader for DCPSSubscription.");
     discovery
@@ -236,7 +239,7 @@ impl Discovery {
       .create_datareader::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         &dcps_publication_topic,
-        dcps_subscription_topic.get_qos(),
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DataReader for DCPSPublication");
     discovery
@@ -299,7 +302,7 @@ impl Discovery {
       .create_datareader::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         &dcps_topic,
-        dcps_subscription_topic.get_qos(),
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DataReader for DCPSTopic");
     discovery
@@ -419,7 +422,6 @@ impl Discovery {
       SPDPDiscoveredParticipantData,
       PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>,
     >,
-    //TODO: CDR is probably not what we want here. Change adapter to something else.
   ) -> Option<SPDPDiscoveredParticipantData> {
     let participant_data = match reader.read_next_sample(Take::Yes) {
       Ok(d) => match d {
@@ -691,6 +693,38 @@ impl Discovery {
       }
       _ => panic!("DiscoveryDB is poisoned."),
     }
+  }
+
+  pub fn subscriber_qos() -> QosPolicies {
+    let mut qos = QosPolicies::qos_none();
+    qos.durability = Some(Durability::TransientLocal);
+    qos.presentation = Some(Presentation {
+      access_scope: PresentationAccessScope::Topic,
+      coherent_access: false,
+      ordered_access: false,
+    });
+    qos.deadline = Some(Deadline {
+      period: Duration::DURATION_INFINITE,
+    });
+    qos.ownership = Some(Ownership::Shared);
+    qos.liveliness = Some(Liveliness {
+      kind: LivelinessKind::Automatic,
+      lease_duration: Duration::DURATION_INVALID,
+    });
+    qos.time_based_filter = Some(TimeBasedFilter {
+      minimum_separation: Duration::DURATION_ZERO,
+    });
+    qos.reliability = Some(Reliability::Reliable {
+      max_blocking_time: Duration::from(StdDuration::from_millis(100)),
+    });
+    qos.destination_order = Some(DestinationOrder::ByReceptionTimestamp);
+    qos.history = Some(History::KeepLast { depth: 1 });
+    qos.resource_limits = Some(ResourceLimits {
+      max_instances: std::i32::MAX,
+      max_samples: std::i32::MAX,
+      max_samples_per_instance: std::i32::MAX,
+    });
+    qos
   }
 }
 
