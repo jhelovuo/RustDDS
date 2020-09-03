@@ -1,10 +1,10 @@
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate ::messages::submessages::submessages::*;
+use crate::messages::submessages::submessages::*;
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
 
-use speedy::{Readable, Writable, Context, Writer,};
+use speedy::{Readable, Writable, Context, Writer, Error};
 use enumflags2::BitFlags;
 use std::io;
 
@@ -47,71 +47,56 @@ impl Data {
   /// Required iformation is  expect_qos and expect_payload whish are told on submessage headerflags.
 
   // TODO: Handle errors, return a Result type.
-  pub fn deserialize_data(
-    buffer: &[u8],
-    flags: BitFlags<DATA_Flags>,
-  ) -> io::Result<Data> {
-    let _extra_flags = &buffer[0..2];
-    let octets_to_inline_qos = u16::read_from_buffer(&buffer[2..4]).unwrap();
-    let octets_to_inline_qos_usize = octets_to_inline_qos as usize;
-    let reader_id = &buffer[4..8];
-    let writer_id = &buffer[8..12];
-    let sequence_number = &buffer[12..20];
+  pub fn deserialize_data(buffer: &[u8], flags: BitFlags<DATA_Flags>) -> io::Result<Data> {
+    let mut cursor = io::Cursor::new(buffer);
+    let endianness = endianness_flag(flags.bits());
+    let map_speedy_err = |p: Error| io::Error::new(io::ErrorKind::Other, p);
+
+    let _extra_flags =
+      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let octets_to_inline_qos =
+      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let reader_id =
+      EntityId::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let writer_id =
+      EntityId::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let sequence_number =
+      SequenceNumber::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+
     let expect_qos = flags.contains(DATA_Flags::InlineQos);
     let expect_data = flags.contains(DATA_Flags::Data);
 
-    let inline_qos_ =
-      if expect_qos {
-        let QoS_list_length = u32::read_from_buffer(
-          &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
-        )
-        .unwrap() as usize;
-        Some(
-          ParameterList::read_from_buffer(
-            &buffer[octets_to_inline_qos_usize..octets_to_inline_qos_usize + QoS_list_length],
-          )
-          .unwrap())
-      } else { None };
+    let extra_octets = octets_to_inline_qos - 16;
+    for _ in 0..extra_octets / 4 {
+      u8::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    }
 
-    let payload = 
-      if expect_data {
-        if  !expect_qos {
-          // Bypass Speedy here, use custom desrialization
-          SerializedPayload::from_bytes(&buffer[octets_to_inline_qos_usize + 4..buffer.len()])
-            .unwrap()
-        } else {
-          let QoS_list_length = u32::read_from_buffer(
-            &buffer[octets_to_inline_qos_usize..(octets_to_inline_qos_usize + 4)],
-          )
-          .unwrap() as usize;
+    let parameter_list = if expect_qos {
+      Some(
+        ParameterList::read_from_stream_with_ctx(endianness, &mut cursor)
+          .map_err(map_speedy_err)?,
+      )
+    } else {
+      None
+    };
 
-          SerializedPayload::from_bytes(
-            &buffer[octets_to_inline_qos_usize + 4 + QoS_list_length..buffer.len()],
-          )
-          .unwrap()
-        }
-      } else {
-          // ! expect payload
-          // TODO: Check if the KEY flag is set. If yes, then deserialize key.
-          // If not, then this submessage apparently contains no data.
-          unimplemented!();
-      };
-
-    let reader_id_ = EntityId::read_from_buffer(reader_id).unwrap();
-    let writer_id_ = EntityId::read_from_buffer(writer_id).unwrap();
-    let writer_sn_ = SequenceNumber::read_from_buffer(sequence_number).unwrap();
+    let payload = if expect_data {
+      SerializedPayload::from_bytes(&buffer[cursor.position() as usize..])?
+    } else {
+      unimplemented!();
+    };
 
     Ok(Data {
-      reader_id: reader_id_ ,
-      writer_id: writer_id_ ,
-      writer_sn: writer_sn_ ,
-      inline_qos: inline_qos_ ,
+      reader_id,
+      writer_id,
+      writer_sn: sequence_number,
+      inline_qos: parameter_list,
       serialized_payload: payload,
     })
   }
 }
 
-// TODO: This should not be necessary. 
+// TODO: This should not be necessary.
 impl Default for Data {
   fn default() -> Self {
     Data {

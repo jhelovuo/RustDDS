@@ -2,7 +2,7 @@ use crate::messages::submessages::submessage_flag::*;
 use crate::messages::submessages::submessage_kind::SubmessageKind;
 use speedy::{Context, Endianness, Readable, Reader, Writable, Writer};
 
-#[derive(Debug, PartialEq,Clone,Copy)] // This is only 32 bits, so better Copy
+#[derive(Debug, PartialEq, Clone, Copy)] // This is only 32 bits, so better Copy
 pub struct SubmessageHeader {
   pub kind: SubmessageKind,
   pub flags: u8, // This must be able to contain anything combination of any flags.
@@ -21,7 +21,11 @@ impl<'a, C: Context> Readable<'a, C> for SubmessageHeader {
       Endianness::BigEndian => u16::from_be_bytes([reader.read_u8()?, reader.read_u8()?]),
     };
 
-    Ok(SubmessageHeader { kind, flags, content_length, })
+    Ok(SubmessageHeader {
+      kind,
+      flags,
+      content_length,
+    })
   }
 
   #[inline]
@@ -115,8 +119,8 @@ mod tests {
           flags: BitFlags::<GAP_Flags>::from_endianness(Endianness::LittleEndian).bits(),
           content_length: 7,
       },
-      le = [0x08, 0x03, 0x07, 0x00],
-      be = [0x08, 0x03, 0x07, 0x00]
+      le = [0x08, 0x01, 0x07, 0x00],
+      be = [0x08, 0x01, 0x07, 0x00]
       //TODO: Where is the flags value 0x03 from? RTPS 2.3 spec 9.4.5.5 shows only Endianness bit is legal.
   });
 }

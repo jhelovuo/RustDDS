@@ -877,7 +877,7 @@ mod tests {
           }
           _ => continue,
         },
-        SubmessageBody::Interpreter( _ ) => (),
+        SubmessageBody::Interpreter(_) => (),
       }
     }
 
@@ -948,12 +948,12 @@ mod tests {
     for submsg in tdata.submessages.iter_mut() {
       match &mut submsg.body {
         SubmessageBody::Interpreter(v) => match v {
-          InterpreterSubmessage::InfoDestination(dst , _flags) => {
+          InterpreterSubmessage::InfoDestination(dst, _flags) => {
             dst.guid_prefix = participant.get_guid_prefix().clone();
           }
           _ => continue,
         },
-        SubmessageBody::Entity( _ ) => (),
+        SubmessageBody::Entity(_) => (),
       }
     }
 
