@@ -4,7 +4,6 @@ use serde::{
 use super::{
   builtin_data_deserializer::BuiltinDataDeserializer, cdrDeserializer::CDR_deserializer_adapter,
 };
-use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
 
 use crate::{messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier};
 
@@ -38,13 +37,5 @@ impl<'de> Visitor<'de> for BuiltinDataDeserializer {
       RepresentationIdentifier::PL_CDR_BE => Ok(self.parse_data_big_endian(&v[2..])),
       _ => Err(E::missing_field("representation identifier")),
     }
-  }
-}
-
-impl<'de> Visitor<'de> for SPDPDiscoveredParticipantData {
-  type Value = SPDPDiscoveredParticipantData;
-
-  fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(formatter, "ParameterId")
   }
 }

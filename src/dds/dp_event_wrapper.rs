@@ -17,10 +17,10 @@ use crate::structure::entity::Entity;
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
   discovery::discovery_db::DiscoveryDB,
-  structure::{cache_change::ChangeKind, dds_cache::DDSCache},
+  structure::{cache_change::ChangeKind, dds_cache::DDSCache, topic_kind::TopicKind},
   submessages::AckNack,
 };
-use super::rtps_reader_proxy::RtpsReaderProxy;
+use super::{typedesc::TypeDesc, rtps_reader_proxy::RtpsReaderProxy};
 
 pub struct DPEventWrapper {
   domain_participants_guid: GUID,
@@ -46,8 +46,7 @@ pub struct DPEventWrapper {
 
   writers: HashMap<GUID, Writer>,
 
-  reader_update_notification_receiver: mio_channel::Receiver<()>,
-  writer_update_notification_receiver: mio_channel::Receiver<()>,
+  discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
 }
 
 impl DPEventWrapper {
@@ -64,8 +63,7 @@ impl DPEventWrapper {
     add_writer_receiver: TokenReceiverPair<Writer>,
     remove_writer_receiver: TokenReceiverPair<GUID>,
     stop_poll_receiver: mio_channel::Receiver<()>,
-    reader_update_notification_receiver: mio_channel::Receiver<()>,
-    writer_update_notification_receiver: mio_channel::Receiver<()>,
+    discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
@@ -136,21 +134,12 @@ impl DPEventWrapper {
 
     poll
       .register(
-        &reader_update_notification_receiver,
-        READER_UPDATE_NOTIFICATION_TOKEN,
+        &discovery_update_notification_receiver,
+        DISCOVERY_UPDATE_NOTIFICATION_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
       )
       .expect("Failed to register reader update notification.");
-
-    poll
-      .register(
-        &writer_update_notification_receiver,
-        WRITER_UPDATE_NOTIFICATION_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .expect("Failed to register writer update notification token.");
 
     DPEventWrapper {
       domain_participants_guid,
@@ -168,8 +157,7 @@ impl DPEventWrapper {
       stop_poll_receiver,
       writers: HashMap::new(),
       ack_nack_reciever: acknack_reciever,
-      reader_update_notification_receiver,
-      writer_update_notification_receiver,
+      discovery_update_notification_receiver,
     }
   }
 
@@ -195,10 +183,18 @@ impl DPEventWrapper {
           ev_wrapper.handle_writer_timed_event(&event);
         } else if DPEventWrapper::is_writer_acknack_action(&event) {
           ev_wrapper.handle_writer_acknack_action(&event);
-        } else if DPEventWrapper::is_reader_update_notification(&event) {
-          ev_wrapper.update_readers();
-        } else if DPEventWrapper::is_writer_update_notification(&event) {
-          ev_wrapper.update_writers();
+        } else if DPEventWrapper::is_discovery_update_notification(&event) {
+          let notification_type = match ev_wrapper.discovery_update_notification_receiver.try_recv()
+          {
+            Ok(nt) => nt,
+            _ => continue,
+          };
+
+          match notification_type {
+            DiscoveryNotificationType::ReadersInfoUpdated => ev_wrapper.update_readers(),
+            DiscoveryNotificationType::WritersInfoUpdated => ev_wrapper.update_writers(),
+            DiscoveryNotificationType::TopicsInfoUpdated => ev_wrapper.update_topics(),
+          }
         }
       }
     }
@@ -242,12 +238,8 @@ impl DPEventWrapper {
     event.token() == ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN
   }
 
-  pub fn is_reader_update_notification(event: &Event) -> bool {
-    event.token() == READER_UPDATE_NOTIFICATION_TOKEN
-  }
-
-  pub fn is_writer_update_notification(event: &Event) -> bool {
-    event.token() == WRITER_UPDATE_NOTIFICATION_TOKEN
+  pub fn is_discovery_update_notification(event: &Event) -> bool {
+    event.token() == DISCOVERY_UPDATE_NOTIFICATION_TOKEN
   }
 
   pub fn handle_udp_traffic(&mut self, event: &Event) {
@@ -519,6 +511,33 @@ impl DPEventWrapper {
       _ => panic!("DiscoveryDB is poisoned"),
     }
   }
+
+  pub fn update_topics(&mut self) {
+    match self.discovery_db.read() {
+      Ok(db) => match self.ddscache.write() {
+        Ok(mut ddsc) => {
+          for topic in db.get_all_topics() {
+            let topic_name = match &topic.topic_data.name {
+              Some(td) => td,
+              None => continue,
+            };
+            // TODO: how do you know when topic is keyed and is not
+            let topic_kind = match &topic.topic_data.key {
+              Some(_) => TopicKind::WITH_KEY,
+              None => TopicKind::NO_KEY,
+            };
+            let topic_data_type = match &topic.topic_data.type_name {
+              Some(tn) => tn.clone(),
+              None => continue,
+            };
+            ddsc.add_new_topic(topic_name, topic_kind, &TypeDesc::new(topic_data_type));
+          }
+        }
+        _ => panic!("DDSCache is poisoned"),
+      },
+      _ => panic!("DiscoveryDB is poisoned"),
+    }
+  }
 }
 
 #[cfg(test)]
@@ -541,9 +560,7 @@ mod tests {
 
     let (_stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
 
-    let (_reader_update_notification_sender, reader_update_notification_receiver) =
-      mio_channel::channel();
-    let (_writer_update_notification_sender, writer_update_notification_receiver) =
+    let (_discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::channel();
 
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
@@ -574,8 +591,7 @@ mod tests {
         receiver: remove_writer_receiver,
       },
       stop_poll_receiver,
-      reader_update_notification_receiver,
-      writer_update_notification_receiver,
+      discovery_update_notification_receiver,
     );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();

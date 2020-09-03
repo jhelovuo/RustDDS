@@ -25,6 +25,7 @@ use crate::{
 use super::data_types::{
   topic_data::{
     SubscriptionBuiltinTopicData, DiscoveredReaderData, ReaderProxy, DiscoveredWriterData,
+    DiscoveredTopicData, TopicBuiltinTopicData,
   },
   spdp_participant_data::SPDPDiscoveredParticipantData,
 };
@@ -38,6 +39,8 @@ pub struct DiscoveryDB {
 
   writers_reader_proxies: HashMap<GUID, Vec<DiscoveredReaderData>>,
   readers_writer_proxies: HashMap<GUID, Vec<DiscoveredWriterData>>,
+
+  topics: HashMap<String, DiscoveredTopicData>,
 }
 
 impl DiscoveryDB {
@@ -48,6 +51,7 @@ impl DiscoveryDB {
       local_topic_readers: Vec::new(),
       writers_reader_proxies: HashMap::new(),
       readers_writer_proxies: HashMap::new(),
+      topics: HashMap::new(),
     }
   }
 
@@ -68,6 +72,41 @@ impl DiscoveryDB {
       SDuration::from(Duration::from_nanos(instant - d.updated_time))
         < *d.lease_duration.as_ref().unwrap()
     });
+  }
+
+  pub fn topic_cleanup(&mut self) {
+    let instant = time::precise_time_ns();
+    self.topics = self
+      .topics
+      .iter()
+      .filter(|(name, p)| {
+        let dur = match &p.topic_data.lifespan {
+          Some(ls) => ls.duration.clone(),
+          // TODO: what is default lifespan
+          None => SDuration::from(Duration::from_secs(60 * 5)),
+        };
+        SDuration::from(Duration::from_nanos(instant - p.updated_time)) < dur
+          || self
+            .local_topic_readers
+            .iter()
+            .filter(|drd| {
+              // TODO: handle unwrap
+              *drd.subscription_topic_data.topic_name.as_ref().unwrap() == **name
+            })
+            .count()
+            > 0
+          || self
+            .local_topic_writers
+            .iter()
+            .filter(|dwd| {
+              // TODO: handle unwrap
+              *dwd.publication_topic_data.topic_name.as_ref().unwrap() == **name
+            })
+            .count()
+            > 0
+      })
+      .map(|(n, p)| (n.clone(), p.clone()))
+      .collect();
   }
 
   // TODO: collecting participants might be slowish, might want to consider returning just iterator
@@ -231,6 +270,88 @@ impl DiscoveryDB {
         }
       };
     }
+
+    true
+  }
+
+  pub fn update_topic_data_drd(&mut self, drd: &DiscoveredReaderData) {
+    let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
+      key: None,
+      name: drd.subscription_topic_data.topic_name.clone(),
+      type_name: drd.subscription_topic_data.type_name.clone(),
+      durability: drd.subscription_topic_data.durability.clone(),
+      deadline: drd.subscription_topic_data.deadline.clone(),
+      latency_budget: drd.subscription_topic_data.latency_budget.clone(),
+      liveliness: drd.subscription_topic_data.liveliness.clone(),
+      reliability: drd.subscription_topic_data.reliability.clone(),
+      lifespan: drd.subscription_topic_data.lifespan.clone(),
+      destination_order: drd.subscription_topic_data.destination_order.clone(),
+      presentation: drd.subscription_topic_data.presentation.clone(),
+      history: None,
+      resource_limits: None,
+      ownership: drd.subscription_topic_data.ownership.clone(),
+    });
+
+    self.update_topic_data(&topic_data);
+  }
+
+  pub fn update_topic_data_dwd(&mut self, dwd: &DiscoveredWriterData) {
+    let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
+      key: None,
+      name: dwd.publication_topic_data.topic_name.clone(),
+      type_name: dwd.publication_topic_data.type_name.clone(),
+      durability: dwd.publication_topic_data.durability.clone(),
+      deadline: dwd.publication_topic_data.deadline.clone(),
+      latency_budget: dwd.publication_topic_data.latency_budget.clone(),
+      liveliness: dwd.publication_topic_data.liveliness.clone(),
+      reliability: dwd.publication_topic_data.reliability.clone(),
+      lifespan: dwd.publication_topic_data.lifespan.clone(),
+      destination_order: dwd.publication_topic_data.destination_order.clone(),
+      presentation: dwd.publication_topic_data.presentation.clone(),
+      history: None,
+      resource_limits: None,
+      ownership: dwd.publication_topic_data.ownership.clone(),
+    });
+
+    self.update_topic_data(&topic_data);
+  }
+
+  pub fn update_topic_data_p(&mut self, topic: &Topic) {
+    let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
+      key: None,
+      name: Some(String::from(topic.get_name())),
+      type_name: Some(String::from(topic.get_type().name())),
+      durability: topic.get_qos().durability.clone(),
+      deadline: topic.get_qos().deadline.clone(),
+      latency_budget: topic.get_qos().latency_budget.clone(),
+      liveliness: topic.get_qos().liveliness.clone(),
+      reliability: topic.get_qos().reliability.clone(),
+      lifespan: topic.get_qos().lifespan.clone(),
+      destination_order: topic.get_qos().destination_order.clone(),
+      presentation: topic.get_qos().presentation.clone(),
+      history: topic.get_qos().history.clone(),
+      resource_limits: topic.get_qos().resource_limits.clone(),
+      ownership: topic.get_qos().ownership.clone(),
+    });
+
+    self.update_topic_data(&topic_data);
+  }
+
+  pub fn update_topic_data(&mut self, data: &DiscoveredTopicData) -> bool {
+    let topic_name = match &data.topic_data.name {
+      Some(n) => n,
+      None => {
+        println!("Received DiscoveredTopicData doesn't have a name.");
+        return false;
+      }
+    };
+
+    match self.topics.get_mut(topic_name) {
+      Some(t) => *t = data.clone(),
+      None => {
+        self.topics.insert(topic_name.clone(), data.clone());
+      }
+    };
 
     true
   }
@@ -407,6 +528,10 @@ impl DiscoveryDB {
     self.local_topic_writers.iter().collect()
   }
 
+  pub fn get_all_topics(&self) -> Vec<&DiscoveredTopicData> {
+    self.topics.iter().map(|(_, v)| v).collect()
+  }
+
   // TODO: maybe query parameter should only be topics' name
   pub fn get_local_topic_readers(&self, topic: &Topic) -> Vec<&DiscoveredReaderData> {
     let topic_name = topic.get_name().to_string();
@@ -472,7 +597,7 @@ mod tests {
   fn discdb_subscription_operations() {
     let mut discovery_db = DiscoveryDB::new();
 
-    let domain_participant = DomainParticipant::new(16, 0);
+    let domain_participant = DomainParticipant::new(7, 0);
     let topic = domain_participant
       .create_topic(
         "Foobar",

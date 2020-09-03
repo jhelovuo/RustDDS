@@ -101,6 +101,7 @@ where
       &self.latest_instant,
       &Instant::now(),
     );
+
     let cache_changes: Vec<(&Instant, &CacheChange)> = cache_changes
       .into_iter()
       .filter(|(_, cc)| cc.writer_guid.guidPrefix != *self.get_guid_prefix())
@@ -117,27 +118,31 @@ where
         Some(s) => s,
         None => {
           println!("DataReader cant access serialized payload");
-          continue
+          continue;
         }
       };
 
-      let rep_id = match RepresentationIdentifier::try_from_u16( ser_payload.representation_identifier ) {
-        Ok(r) => r,
-        Err(unknown_rep_id) => {
-          // TODO: Maybe we should ask SA first? It may be able to handle this even though it is non-std.
-          println!("Datareader: Unknown representation id {:?}.", unknown_rep_id);
-          continue
-        },
-      };
+      let rep_id =
+        match RepresentationIdentifier::try_from_u16(ser_payload.representation_identifier) {
+          Ok(r) => r,
+          Err(unknown_rep_id) => {
+            // TODO: Maybe we should ask SA first? It may be able to handle this even though it is non-std.
+            println!(
+              "Datareader: Unknown representation id {:?}.",
+              unknown_rep_id
+            );
+            continue;
+          }
+        };
 
       let bytes = &ser_payload.value;
 
       let payload = match SA::from_bytes(bytes, rep_id) {
         Ok(pl) => pl,
-        Err(e) => { 
+        Err(e) => {
           println!("Failed to deserialize bytes \n{}", e);
           continue;
-        },
+        }
       };
 
       // TODO: how do we get the source_timestamp here? Is it needed?
@@ -500,7 +505,7 @@ mod tests {
 
     data.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data).unwrap(),
     };
     new_reader.handle_data_msg(data, mr_state.clone());
@@ -528,7 +533,7 @@ mod tests {
 
     data2.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap(),
     };
 
@@ -543,7 +548,7 @@ mod tests {
 
     data3.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap(),
     };
 
@@ -621,7 +626,7 @@ mod tests {
 
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&test_data).unwrap(),
     };
 
@@ -632,7 +637,7 @@ mod tests {
 
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap(),
     };
     reader.handle_data_msg(data_msg, mr_state.clone());
@@ -700,7 +705,7 @@ mod tests {
 
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap(),
     };
     let mut data_msg2 = Data::default();
@@ -710,7 +715,7 @@ mod tests {
 
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap(),
     };
     let mut data_msg3 = Data::default();
@@ -720,7 +725,7 @@ mod tests {
 
     data_msg3.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap(),
     };
     let mut data_msg4 = Data::default();
@@ -730,7 +735,7 @@ mod tests {
 
     data_msg4.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap(),
     };
     reader.handle_data_msg(data_msg, mr_state.clone());
@@ -841,7 +846,7 @@ mod tests {
 
     data_msg.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data1).unwrap(),
     };
 
@@ -852,7 +857,7 @@ mod tests {
 
     data_msg2.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data2).unwrap(),
     };
 
@@ -863,7 +868,7 @@ mod tests {
 
     data_msg3.serialized_payload = SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data3).unwrap(),
     };
 

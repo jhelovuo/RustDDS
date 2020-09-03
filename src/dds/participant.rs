@@ -42,16 +42,13 @@ unsafe impl Sync for DomainParticipant {}
 #[allow(clippy::new_without_default)]
 impl DomainParticipant {
   pub fn new(domain_id: u16, participant_id: u16) -> DomainParticipant {
-    let (reader_update_notification_sender, reader_update_notification_receiver) =
-      mio_channel::channel::<()>();
-    let (writer_update_notification_sender, writer_update_notification_receiver) =
-      mio_channel::channel::<()>();
+    let (discovery_update_notification_sender, discovery_update_notification_receiver) =
+      mio_channel::channel::<DiscoveryNotificationType>();
 
     let dpi = DomainParticipant_Inner::new(
       domain_id,
       participant_id,
-      reader_update_notification_receiver,
-      writer_update_notification_receiver,
+      discovery_update_notification_receiver,
     );
     let dp = DomainParticipant {
       dpi: Arc::new(dpi),
@@ -62,8 +59,7 @@ impl DomainParticipant {
     let discovery = Discovery::new(
       dp.clone(),
       dp.dpi.discovery_db.clone(),
-      writer_update_notification_sender,
-      reader_update_notification_sender,
+      discovery_update_notification_sender,
     );
     // TODO:
     // FIXME: when do we stop discovery?
@@ -147,8 +143,7 @@ impl DomainParticipant_Inner {
   fn new(
     domain_id: u16,
     participant_id: u16,
-    reader_update_notification_receiver: mio_channel::Receiver<()>,
-    writer_update_notification_receiver: mio_channel::Receiver<()>,
+    discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
   ) -> DomainParticipant_Inner {
     // Creating UPD listeners for participantId 0 (change this if necessary)
     let discovery_multicast_listener = UDPListener::new(
@@ -232,8 +227,7 @@ impl DomainParticipant_Inner {
         receiver: remove_writer_receiver,
       },
       stop_poll_receiver,
-      reader_update_notification_receiver,
-      writer_update_notification_receiver,
+      discovery_update_notification_receiver,
     );
     // Launch the background thread for DomainParticipant
     let ev_loop_handle = thread::spawn(move || ev_wrapper.event_loop());
@@ -441,7 +435,11 @@ mod tests {
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let mut _data_writer = publisher
-      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>(None, &topic, &qos.clone())
+      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
+        None,
+        &topic,
+        &qos.clone(),
+      )
       .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::seconds(5).to_std().unwrap());
@@ -464,7 +462,11 @@ mod tests {
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let mut _data_writer = publisher
-      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>(None, &topic, &qos.clone())
+      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
+        None,
+        &topic,
+        &qos.clone(),
+      )
       .expect("Failed to create datawriter");
 
     let portNumber: u16 = get_user_traffic_unicast_port(5, 0);

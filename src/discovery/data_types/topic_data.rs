@@ -11,7 +11,7 @@ use crate::{
       Deadline, Durability, LatencyBudget, Reliability, Ownership, DestinationOrder, Liveliness,
       TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
-    traits::key::Keyed,
+    traits::key::{Key, Keyed},
     traits::serde_adapters::SerializerAdapter,
     rtps_reader_proxy::RtpsReaderProxy,
     reader::Reader,
@@ -389,7 +389,7 @@ impl Serialize for DiscoveredWriterData {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TopicBuiltinTopicData {
   pub key: Option<GUID>,
   pub name: Option<String>,
@@ -428,9 +428,19 @@ impl Serialize for TopicBuiltinTopicData {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DiscoveredTopicData {
+  pub updated_time: u64,
   pub topic_data: TopicBuiltinTopicData,
+}
+
+impl DiscoveredTopicData {
+  pub fn new(topic_data: TopicBuiltinTopicData) -> DiscoveredTopicData {
+    DiscoveredTopicData {
+      updated_time: time::precise_time_ns(),
+      topic_data,
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for DiscoveredTopicData {
@@ -442,7 +452,7 @@ impl<'de> Deserialize<'de> for DiscoveredTopicData {
     let res = deserializer.deserialize_any(custom_ds)?;
     let topic_data = res.generate_topic_data();
 
-    Ok(DiscoveredTopicData { topic_data })
+    Ok(DiscoveredTopicData::new(topic_data))
   }
 }
 
@@ -457,12 +467,15 @@ impl Serialize for DiscoveredTopicData {
 }
 
 impl Keyed for DiscoveredTopicData {
-  type K = GUID;
+  type K = String;
 
   fn get_key(&self) -> Self::K {
-    self.topic_data.key.unwrap()
+    // topic should always have a name, if this crashes the problem is in the overall logic (or message parsing)
+    self.topic_data.name.as_ref().unwrap().clone()
   }
 }
+
+impl Key for String {}
 
 #[cfg(test)]
 mod tests {
@@ -588,12 +601,12 @@ mod tests {
   fn td_discovered_topic_data_ser_deser() {
     let topic_data = topic_data().unwrap();
 
-    let dtd = DiscoveredTopicData { topic_data };
+    let dtd = DiscoveredTopicData::new(topic_data);
 
     let sdata = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd).unwrap();
     let dtd2: DiscoveredTopicData =
       PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
-    assert_eq!(dtd, dtd2);
+    assert_eq!(dtd.topic_data, dtd2.topic_data);
     let sdata2 = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd2).unwrap();
     assert_eq!(sdata, sdata2);
   }

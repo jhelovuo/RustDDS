@@ -74,7 +74,7 @@ pub fn spdp_publication_data_raw() -> Vec<u8> {
 
 use crate::{
   serialization::{
-    Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter,
+    Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, SubMessage,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
@@ -86,8 +86,13 @@ use crate::{
       spdp_participant_data::SPDPDiscoveredParticipantData,
     },
   },
-  submessages::EntitySubmessage,
-  structure::{locator::Locator, guid::GUID, duration::Duration},
+  submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader},
+  structure::{
+    locator::Locator,
+    guid::{EntityId, GUID},
+    duration::Duration,
+    sequence_number::SequenceNumber,
+  },
   dds::{
     qos::policy::{
       Deadline, Durability, LatencyBudget, Liveliness, LivelinessKind, Reliability, Ownership,
@@ -96,9 +101,19 @@ use crate::{
     },
     traits::serde_adapters::DeserializerAdapter,
   },
-  messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+  messages::{
+    header::Header,
+    submessages::submessage_elements::serialized_payload::{
+      SerializedPayload, RepresentationIdentifier,
+    },
+  },
 };
+use speedy::{Endianness, Writable};
 use std::{net::SocketAddr, time::Duration as StdDuration};
+use serde::Serialize;
+use byteorder::LittleEndian;
+use enumflags2::BitFlags;
+use crate::messages::submessages::submessages::*;
 
 pub fn spdp_participant_msg() -> Message {
   let data = spdp_participant_data_raw();
@@ -341,4 +356,53 @@ pub fn content_filter_data() -> Option<ContentFilterProperty> {
   };
 
   Some(content_filter)
+}
+
+pub fn create_rtps_data_message<D: Serialize>(
+  data: D,
+  reader_id: EntityId,
+  writer_id: EntityId,
+) -> Message {
+  let tdata = to_bytes::<D, LittleEndian>(&data).unwrap();
+
+  let mut rtps_message = Message::default();
+  let prefix = GUID::new();
+  let rtps_message_header = Header::new(prefix.guidPrefix);
+  rtps_message.set_header(rtps_message_header);
+
+  let serialized_payload = SerializedPayload {
+    representation_identifier: u16::from(RepresentationIdentifier::PL_CDR_LE),
+    representation_options: [0; 2],
+    value: tdata.clone(),
+  };
+  let data_message = Data {
+    reader_id,
+    writer_id,
+    writer_sn: SequenceNumber::default(),
+    inline_qos: None,
+    serialized_payload,
+  };
+
+  let data_size = data_message
+    .write_to_vec_with_ctx(Endianness::LittleEndian)
+    .unwrap()
+    .len();
+
+  let sub_flags = BitFlags::<DATA_Flags>::from_endianness( Endianness::LittleEndian )
+                | BitFlags::<DATA_Flags>::from_flag( DATA_Flags::Data );
+
+  let submessage_header: SubmessageHeader = SubmessageHeader {
+    kind: SubmessageKind::DATA,
+    flags: sub_flags.bits(),
+    content_length: data_size as u16,
+  };
+
+  let submessage: SubMessage = SubMessage {
+    header: submessage_header,
+    submessage: Some(crate::submessages::EntitySubmessage::Data(data_message, sub_flags)),
+    intepreterSubmessage: None,
+  };
+  rtps_message.add_submessage(submessage);
+
+  rtps_message
 }
