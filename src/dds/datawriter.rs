@@ -56,13 +56,22 @@ where
     guid: Option<GUID>,
     cc_upload: mio_channel::Sender<DDSData>,
     dds_cache: Arc<RwLock<DDSCache>>,
-  ) -> DataWriter<'a, D, SA> {
+  ) -> Result<DataWriter<'a, D, SA>> {
     let entity_id = match guid {
       Some(g) => g.entityId.clone(),
       None => EntityId::ENTITYID_UNKNOWN,
     };
+
+    let dp = match publisher.get_participant() {
+      Some(dp) => dp,
+      None => {
+        println!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
+        return Err(Error::PreconditionNotMet);
+      }
+    };
+
     let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
-      publisher.get_participant().get_guid_prefix().clone(),
+      dp.get_guid_prefix().clone(),
       entity_id,
     ));
 
@@ -71,7 +80,8 @@ where
       TopicKind::NO_KEY,
       topic.get_type(),
     );
-    DataWriter {
+
+    Ok(DataWriter {
       my_publisher: publisher.clone(),
       my_topic: topic,
       qos_policy: topic.get_qos().clone(),
@@ -80,7 +90,7 @@ where
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
       phantom: PhantomData,
-    }
+    })
   }
 
   // write (with optional timestamp)
@@ -196,7 +206,7 @@ where
   // But then what if the result set changes while the application processes it?
 }
 
-impl<D,SA> Entity for DataWriter<'_, D,SA>
+impl<D, SA> Entity for DataWriter<'_, D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
@@ -206,7 +216,7 @@ where
   }
 }
 
-impl<D,SA> HasQoSPolicy for DataWriter<'_, D, SA>
+impl<D, SA> HasQoSPolicy for DataWriter<'_, D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
@@ -222,11 +232,12 @@ where
   }
 }
 
-impl<D,SA> DDSEntity for DataWriter<'_, D, SA> 
+impl<D, SA> DDSEntity for DataWriter<'_, D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
-{}
+{
+}
 
 #[cfg(test)]
 mod tests {
@@ -251,8 +262,11 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer : DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData,LittleEndian>> 
-      = publisher
+    let mut data_writer: DataWriter<
+      '_,
+      RandomData,
+      CDR_serializer_adapter<RandomData, LittleEndian>,
+    > = publisher
       .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 
@@ -286,8 +300,11 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer : DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData,LittleEndian>> 
-      = publisher
+    let mut data_writer: DataWriter<
+      '_,
+      RandomData,
+      CDR_serializer_adapter<RandomData, LittleEndian>,
+    > = publisher
       .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 
@@ -328,8 +345,11 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer : DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData,LittleEndian>>
-      = publisher
+    let mut data_writer: DataWriter<
+      '_,
+      RandomData,
+      CDR_serializer_adapter<RandomData, LittleEndian>,
+    > = publisher
       .create_datawriter(None, &topic, &qos)
       .expect("Failed to create datawriter");
 

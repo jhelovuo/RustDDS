@@ -1,7 +1,7 @@
 use speedy::{Writable, Writer, Context};
 use std::io;
 use std::io::Read;
-use byteorder::{ ReadBytesExt, BigEndian };
+use byteorder::{ReadBytesExt, BigEndian};
 
 use num_enum::{TryFromPrimitive, IntoPrimitive};
 //use std::convert::TryFrom;
@@ -24,8 +24,8 @@ pub enum RepresentationIdentifier {
 }
 
 impl RepresentationIdentifier {
-  pub fn try_from_u16(ri_raw : u16) -> Result<RepresentationIdentifier,u16> {
-    RepresentationIdentifier::try_from_primitive(ri_raw).map_err( |e| e.number )
+  pub fn try_from_u16(ri_raw: u16) -> Result<RepresentationIdentifier, u16> {
+    RepresentationIdentifier::try_from_primitive(ri_raw).map_err(|e| e.number)
   }
 }
 
@@ -34,24 +34,23 @@ impl RepresentationIdentifier {
 /// the value of the key that uniquely identifies the data-object
 /// See RTPS spec v2.3 section 10.
 /// Standard representation identifer values are defined in sections 10.2 - 10.5
-/// representation_options "shall be interpreted in the context of the 
-/// RepresentationIdentifier, such that each RepresentationIdentifier may define the 
-/// representation_options that it requires." and "The [2.3] version of the protocol 
-/// does not use the representation_options: The sender shall set the representation_options 
+/// representation_options "shall be interpreted in the context of the
+/// RepresentationIdentifier, such that each RepresentationIdentifier may define the
+/// representation_options that it requires." and "The [2.3] version of the protocol
+/// does not use the representation_options: The sender shall set the representation_options
 /// to zero. The receiver shall ignore the value of the representation_options."
 #[derive(Debug, PartialEq, Clone)]
 pub struct SerializedPayload {
   pub representation_identifier: u16, // This is u16, not RepresentationIdentifier, because we need to be able to deserialize whatever is on the wire
-  pub representation_options: [u8;2], // Not used. Send as zero, ignore on receive.
+  pub representation_options: [u8; 2], // Not used. Send as zero, ignore on receive.
   pub value: Vec<u8>,
 }
 
 impl SerializedPayload {
-  
-  pub fn new(rep_id:RepresentationIdentifier, payload:Vec<u8>) -> SerializedPayload {
+  pub fn new(rep_id: RepresentationIdentifier, payload: Vec<u8>) -> SerializedPayload {
     SerializedPayload {
       representation_identifier: rep_id as u16,
-      representation_options: [0,0],
+      representation_options: [0, 0],
       value: payload,
     }
   }
@@ -60,14 +59,14 @@ impl SerializedPayload {
   pub fn from_bytes(bytes: &[u8]) -> io::Result<SerializedPayload> {
     let mut reader = io::Cursor::new(bytes);
     let representation_identifier = reader.read_u16::<BigEndian>()?;
-    let representation_options = [reader.read_u8()? , reader.read_u8()? ];
-    let mut value = Vec::with_capacity(bytes.len() - 4 ); // still length == 0
+    let representation_options = [reader.read_u8()?, reader.read_u8()?];
+    let mut value = Vec::with_capacity(bytes.len() - 4); // still length == 0
     reader.read_to_end(&mut value)?;
 
     Ok(SerializedPayload {
       representation_identifier,
       representation_options,
-      value, 
+      value,
     })
   }
 }
@@ -75,11 +74,9 @@ impl SerializedPayload {
 // TODO: Remove this. It does not make sense to have a default value for this. Except for testing.
 impl Default for SerializedPayload {
   fn default() -> SerializedPayload {
-    SerializedPayload::new(RepresentationIdentifier::CDR_LE, b"fake data".to_vec() )
+    SerializedPayload::new(RepresentationIdentifier::CDR_LE, b"fake data".to_vec())
   }
-
 }
-
 
 impl<C: Context> Writable<C> for SerializedPayload {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {

@@ -15,7 +15,6 @@ pub struct Message {
   pub submessages: Vec<SubMessage>,
 }
 
-
 impl<'a> Message {
   pub fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Header {
     Header::read_from_buffer_with_ctx(context, buffer).unwrap()
@@ -49,7 +48,7 @@ impl<'a> Message {
   pub fn get_data_sub_message_sequence_numbers(&self) -> Vec<SequenceNumber> {
     let mut sequence_numbers: Vec<SequenceNumber> = vec![];
     for mes in self.submessages.iter() {
-      if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm , _ )) = &mes.body {
+      if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm, _)) = &mes.body {
         sequence_numbers.push(data_subm.writer_sn);
       }
     }
@@ -61,130 +60,136 @@ impl<'a> Message {
   // top level to fix that. And there seems to be no reasonable way to change endianness.
   // TODO: The error type should be something better
   pub fn read_from_buffer(buffer: &'a [u8]) -> io::Result<Message> {
-    
     //let endianess = reader.endianness();
     // message.header = SubMessage::deserialize_header(C, reader.)
 
     // The Header deserializes the same
-    let rtps_header = Header::read_from_buffer(buffer)
-      .map_err( |e| io::Error::new(io::ErrorKind::Other,e))?;
-
+    let rtps_header =
+      Header::read_from_buffer(buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     let mut message = Message::new(rtps_header);
-
-    let mut submessages_left = &buffer[ 40 .. ]; // header is 40 bytes
-
-    // submessage loop
+    let mut submessages_left = &buffer[20..]; // header is 20 bytes
+                                              // submessage loop
     while submessages_left.len() > 0 {
       let sub_header = SubmessageHeader::read_from_buffer(submessages_left)
-        .map_err( |e| io::Error::new(io::ErrorKind::Other,e))?;
-
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
       // Try to figure out how large this submessage is.
       let sub_header_length = 4; // 4 bytes
-      let sub_content_length = 
-        if sub_header.content_length == 0 {
-          // RTPS spec 2.3, section 9.4.5.1.3:
-          //           In case octetsToNextHeader==0 and the kind of Submessage is
-          // NOT PAD or INFO_TS, the Submessage is the last Submessage in the Message
-          // and extends up to the end of the Message. This makes it possible to send
-          // Submessages larger than 64k (the size that can be stored in the
-          // octetsToNextHeader field), provided they are the last Submessage in the
-          // Message. In case the octetsToNextHeader==0 and the kind of Submessage is
-          // PAD or INFO_TS, the next Submessage header starts immediately after the
-          // current Submessage header OR the PAD or INFO_TS is the last Submessage
-          // in the Message.
-          match sub_header.kind {
-            SubmessageKind::PAD | 
-            SubmessageKind::INFO_TS => 0,
-            _not_pad_or_info_ts => submessages_left.len() - sub_header_length ,
-          }
+      let sub_content_length = if sub_header.content_length == 0 {
+        // RTPS spec 2.3, section 9.4.5.1.3:
+        //           In case octetsToNextHeader==0 and the kind of Submessage is
+        // NOT PAD or INFO_TS, the Submessage is the last Submessage in the Message
+        // and extends up to the end of the Message. This makes it possible to send
+        // Submessages larger than 64k (the size that can be stored in the
+        // octetsToNextHeader field), provided they are the last Submessage in the
+        // Message. In case the octetsToNextHeader==0 and the kind of Submessage is
+        // PAD or INFO_TS, the next Submessage header starts immediately after the
+        // current Submessage header OR the PAD or INFO_TS is the last Submessage
+        // in the Message.
+        match sub_header.kind {
+          SubmessageKind::PAD | SubmessageKind::INFO_TS => 0,
+          _not_pad_or_info_ts => submessages_left.len() - sub_header_length,
         }
-        else { sub_header.content_length as usize };
+      } else {
+        sub_header.content_length as usize
+      };
 
       // we have to use temporary variable new_submessages_left to avoid creating another
       // submessages_left
-      let (sub_buffer,new_submessages_left) = 
-        submessages_left.split_at( sub_header_length + sub_content_length );
+      let (sub_buffer, new_submessages_left) =
+        submessages_left.split_at(sub_header_length + sub_content_length);
       submessages_left = new_submessages_left;
+      let (_sub_header, sub_content_buffer) = sub_buffer.split_at(sub_header_length);
 
-      let e = endianness_flag( sub_header.flags );
+      let e = endianness_flag(sub_header.flags);
+      let mk_e_subm = move |s: EntitySubmessage| {
+        Ok(SubMessage {
+          header: sub_header,
+          body: SubmessageBody::Entity(s),
+        })
+      };
+      let mk_i_subm = move |s: InterpreterSubmessage| {
+        Ok(SubMessage {
+          header: sub_header,
+          body: SubmessageBody::Interpreter(s),
+        })
+      };
 
-      let mk_e_subm = move |s| 
-        {Ok ( SubMessage { 
-                header:sub_header ,
-                body: SubmessageBody::Entity(s),
-              }
-            ) 
-        };
-      let mk_i_subm = move |s| 
-        {Ok ( SubMessage { 
-                header:sub_header ,
-                body: SubmessageBody::Interpreter(s),
-              }
-            ) 
-        };
+      let new_submessage_result: io::Result<SubMessage> = match sub_header.kind {
+        SubmessageKind::DATA => {
+          // Manually implemented deserialization for DATA. Speedy does not quite cut it.
+          let f = BitFlags::<DATA_Flags>::from_bits_truncate(sub_header.flags);
+          mk_e_subm(EntitySubmessage::Data(
+            Data::deserialize_data(sub_content_buffer, f)?,
+            f,
+          ))
+        }
+        SubmessageKind::GAP => {
+          let f = BitFlags::<GAP_Flags>::from_bits_truncate(sub_header.flags);
+          mk_e_subm(EntitySubmessage::Gap(
+            Gap::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            f,
+          ))
+        }
 
-      let new_submessage_result : io::Result<SubMessage> = 
-        match sub_header.kind {
+        SubmessageKind::ACKNACK => {
+          let f = BitFlags::<ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
+          mk_e_subm(EntitySubmessage::AckNack(
+            AckNack::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            f,
+          ))
+        }
 
-          SubmessageKind::DATA => {
-            // Manually implemented deserialization for DATA. Speedy does not quite cut it.
-            let f = BitFlags::<DATA_Flags>::from_bits_truncate(sub_header.flags);
-            mk_e_subm( EntitySubmessage::Data(Data::deserialize_data(sub_buffer,f)? , f ) ) 
-          },
+        SubmessageKind::NACK_FRAG => {
+          let f = BitFlags::<NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
+          mk_e_subm(EntitySubmessage::NackFrag(
+            NackFrag::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            f,
+          ))
+        }
 
-          SubmessageKind::HEARTBEAT => {
-            let f = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
-            mk_e_subm( EntitySubmessage::Heartbeat(Heartbeat::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
-          },
-          
-          SubmessageKind::GAP => {
-            let f = BitFlags::<GAP_Flags>::from_bits_truncate(sub_header.flags);
-            mk_e_subm( EntitySubmessage::Gap(Gap::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
-          },
-
-          SubmessageKind::ACKNACK => {
-            let f = BitFlags::<ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
-            mk_e_subm( EntitySubmessage::AckNack(AckNack::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
-          },
-
-          SubmessageKind::NACK_FRAG => {
-            let f = BitFlags::<NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
-            mk_e_subm( EntitySubmessage::NackFrag(NackFrag::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
-          },
-
-          // interpreter submessages
-
-          SubmessageKind::INFO_DST => {
-            let f = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
-            mk_i_subm( InterpreterSubmessage::InfoDestination(InfoDestination::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
-          },
-          SubmessageKind::INFO_SRC => {
-            let f = BitFlags::<INFOSOURCE_Flags>::from_bits_truncate(sub_header.flags);
-            mk_i_subm( InterpreterSubmessage::InfoSource(InfoSource::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
-          },
-          SubmessageKind::INFO_TS => {
-            let f = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
-            mk_i_subm( InterpreterSubmessage::InfoTimestamp(InfoTimestamp::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
-          },
-          SubmessageKind::INFO_REPLY => {
-            let f = BitFlags::<INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
-            mk_i_subm( InterpreterSubmessage::InfoReply(InfoReply::read_from_buffer_with_ctx(e, sub_buffer)? , f ) ) 
-          },
-          SubmessageKind::PAD => {
-            continue // nothing to do here
-          }
-          unknown_kind => {
-            println!("Received unknown submessage kind {:?}", unknown_kind);
-            continue
-          }
-        }; // match
+        // interpreter submessages
+        SubmessageKind::INFO_DST => {
+          let f = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
+          mk_i_subm(InterpreterSubmessage::InfoDestination(
+            InfoDestination::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            f,
+          ))
+        }
+        SubmessageKind::INFO_SRC => {
+          let f = BitFlags::<INFOSOURCE_Flags>::from_bits_truncate(sub_header.flags);
+          mk_i_subm(InterpreterSubmessage::InfoSource(
+            InfoSource::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            f,
+          ))
+        }
+        SubmessageKind::INFO_TS => {
+          let f = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
+          mk_i_subm(InterpreterSubmessage::InfoTimestamp(
+            InfoTimestamp::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            f,
+          ))
+        }
+        SubmessageKind::INFO_REPLY => {
+          let f = BitFlags::<INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
+          mk_i_subm(InterpreterSubmessage::InfoReply(
+            InfoReply::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            f,
+          ))
+        }
+        SubmessageKind::PAD => {
+          continue; // nothing to do here
+        }
+        unknown_kind => {
+          println!("Received unknown submessage kind {:?}", unknown_kind);
+          continue;
+        }
+      }; // match
 
       message.submessages.push(new_submessage_result?)
     } // loop
 
-    Ok(message)    
+    Ok(message)
   }
-
 }
 
 impl Message {
@@ -214,7 +219,6 @@ impl<C: Context> Writable<C> for Message {
     Ok(())
   }
 }
-
 
 #[cfg(test)]
 
@@ -405,8 +409,11 @@ mod tests {
     println!("{:?}", rtps);
 
     let dataSubmessage = match &rtps.submessages[2] {
-      SubMessage{ header: _ , body: SubmessageBody::Entity(EntitySubmessage::Data(d , _flags))} => d,
-      wtf => panic!("Unexpected message structure {:?}",wtf)
+      SubMessage {
+        header: _,
+        body: SubmessageBody::Entity(EntitySubmessage::Data(d, _flags)),
+      } => d,
+      wtf => panic!("Unexpected message structure {:?}", wtf),
     };
     let serializedPayload = dataSubmessage.serialized_payload.value.clone();
     println!();
@@ -421,5 +428,4 @@ mod tests {
 
   // removed case test_RTPS_submessage_flags_helper , as it was cut-and-paste from
   // submessage_flag module - and obsoleted there.
-  
 }

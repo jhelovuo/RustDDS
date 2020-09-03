@@ -1,8 +1,9 @@
 use std::{
   time::Duration,
-  collections::HashMap,
+  collections::{hash_map::Iter, HashMap},
   net::{IpAddr, SocketAddr},
   io::Error,
+  iter::Map,
 };
 
 use crate::dds::qos::HasQoSPolicy;
@@ -68,9 +69,13 @@ impl DiscoveryDB {
   pub fn participant_cleanup(&mut self) {
     let instant = time::precise_time_ns();
     self.participant_proxies.retain(|_, d| {
-      // TODO: do we always assume that lease duration exists?
-      SDuration::from(Duration::from_nanos(instant - d.updated_time))
-        < *d.lease_duration.as_ref().unwrap()
+      let ld = match &d.lease_duration {
+        Some(ld) => ld.clone(),
+        // default is 100 secs
+        None => SDuration::from(Duration::from_secs(100)),
+      };
+
+      SDuration::from(Duration::from_nanos(instant - d.updated_time)) < ld
     });
   }
 
@@ -83,15 +88,18 @@ impl DiscoveryDB {
         let dur = match &p.topic_data.lifespan {
           Some(ls) => ls.duration.clone(),
           // TODO: what is default lifespan
-          None => SDuration::from(Duration::from_secs(60 * 5)),
+          None => SDuration::from(Duration::from_secs(100)),
         };
         SDuration::from(Duration::from_nanos(instant - p.updated_time)) < dur
           || self
             .local_topic_readers
             .iter()
             .filter(|drd| {
-              // TODO: handle unwrap
-              *drd.subscription_topic_data.topic_name.as_ref().unwrap() == **name
+              let tname = match drd.subscription_topic_data.topic_name.as_ref() {
+                Some(tname) => tname,
+                None => return false,
+              };
+              *tname == **name
             })
             .count()
             > 0
@@ -99,8 +107,11 @@ impl DiscoveryDB {
             .local_topic_writers
             .iter()
             .filter(|dwd| {
-              // TODO: handle unwrap
-              *dwd.publication_topic_data.topic_name.as_ref().unwrap() == **name
+              let tname = match dwd.publication_topic_data.topic_name.as_ref() {
+                Some(tname) => tname,
+                None => return false,
+              };
+              *tname == **name
             })
             .count()
             > 0
@@ -109,9 +120,22 @@ impl DiscoveryDB {
       .collect();
   }
 
-  // TODO: collecting participants might be slowish, might want to consider returning just iterator
-  pub fn get_participants(&self) -> Vec<&SPDPDiscoveredParticipantData> {
-    self.participant_proxies.iter().map(|(_, p)| p).collect()
+  pub fn get_participants<'a>(
+    &'a self,
+  ) -> Map<
+    Iter<'a, GUID, SPDPDiscoveredParticipantData>,
+    fn((&GUID, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData,
+  > {
+    type cvfun<'a> =
+      fn((&GUID, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData;
+    fn conver<'a>(
+      (_, data): (&GUID, &'a SPDPDiscoveredParticipantData),
+    ) -> &'a SPDPDiscoveredParticipantData {
+      data
+    }
+    let cv: cvfun = conver;
+    let a = self.participant_proxies.iter().map(cv);
+    a
   }
 
   pub fn update_local_topic_writer(&mut self, writer: DiscoveredWriterData) {
@@ -129,6 +153,7 @@ impl DiscoveryDB {
     };
   }
 
+  // TODO: return iterator
   pub fn get_writers_reader_proxies(&self, guid: &GUID) -> Option<Vec<&DiscoveredReaderData>> {
     self
       .writers_reader_proxies
@@ -136,6 +161,7 @@ impl DiscoveryDB {
       .map(|p| p.iter().map(|c| c).collect())
   }
 
+  // TODO: return iterator
   pub fn get_readers_writer_proxies(&self, guid: &GUID) -> Option<Vec<&DiscoveredWriterData>> {
     self
       .readers_writer_proxies
@@ -165,7 +191,7 @@ impl DiscoveryDB {
       .map(|p| p.clone())
       .collect();
 
-    let rtps_reader_proxy = match RtpsReaderProxy::from(&data) {
+    let rtps_reader_proxy = match RtpsReaderProxy::from_discovered_reader_data(&data) {
       Some(v) => v,
       None => {
         println!("Failed to update subscription. Cannot parse RtpsReaderProxy.");
@@ -191,17 +217,18 @@ impl DiscoveryDB {
       match wrp {
         Some(v) => v
           .iter_mut()
-          // TODO: handle unwrap
           .filter(|p| {
-            p.reader_proxy.remote_reader_guid.unwrap() == rtps_reader_proxy.remote_reader_guid
+            let guid = match &p.reader_proxy.remote_reader_guid {
+              Some(guid) => guid,
+              None => return false,
+            };
+            *guid == rtps_reader_proxy.remote_reader_guid
           })
           .for_each(|p| p.update(&rtps_reader_proxy)),
         None => {
-          self.writers_reader_proxies.insert(
-            // TODO: handle unwrap
-            guid.clone(),
-            vec![data.clone()],
-          );
+          self
+            .writers_reader_proxies
+            .insert(guid.clone(), vec![data.clone()]);
           continue;
         }
       };
@@ -461,7 +488,6 @@ impl DiscoveryDB {
       get_user_traffic_multicast_port(domain_participant.domain_id()),
     ))];
 
-    // let unicast_socketaddr = SocketAddr::new("ip", port)
     reader_proxy.unicast_locator_list = unicast_locators;
     reader_proxy.multicast_locator_list = multicast_locators;
     // TODO: remove these constant evaluations
@@ -520,19 +546,23 @@ impl DiscoveryDB {
     }
   }
 
+  // TODO: return iterator
   pub fn get_all_local_topic_readers(&self) -> Vec<&DiscoveredReaderData> {
     self.local_topic_readers.iter().collect()
   }
 
+  // TODO: return iterator
   pub fn get_all_local_topic_writers(&self) -> Vec<&DiscoveredWriterData> {
     self.local_topic_writers.iter().collect()
   }
 
+  // TODO: return iterator
   pub fn get_all_topics(&self) -> Vec<&DiscoveredTopicData> {
     self.topics.iter().map(|(_, v)| v).collect()
   }
 
   // TODO: maybe query parameter should only be topics' name
+  // TODO: return iterator
   pub fn get_local_topic_readers(&self, topic: &Topic) -> Vec<&DiscoveredReaderData> {
     let topic_name = topic.get_name().to_string();
     self

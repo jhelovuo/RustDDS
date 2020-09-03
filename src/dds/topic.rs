@@ -3,14 +3,14 @@ use crate::{
 };
 
 pub trait TopicDescription {
-  fn get_participant(&self) -> &DomainParticipant;
+  fn get_participant(&self) -> DomainParticipant;
   fn get_type(&self) -> &TypeDesc; // This replaces get_type_name() from spec
   fn get_name(&self) -> &str;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Topic {
-  my_domainparticipant: DomainParticipant,
+  my_domainparticipant: DomainParticipantWeak,
   my_name: String,
   my_typedesc: TypeDesc,
   my_qos_policies: QosPolicies,
@@ -20,7 +20,7 @@ impl Topic {
   // visibility pub(crate), because only DomainParticipant should be able to
   // create new Topic objects from an application point of view.
   pub(crate) fn new(
-    my_domainparticipant: &DomainParticipant,
+    my_domainparticipant: &DomainParticipantWeak,
     my_name: String,
     my_typedesc: TypeDesc,
     my_qos_policies: &QosPolicies,
@@ -33,8 +33,11 @@ impl Topic {
     }
   }
 
-  pub fn get_participant(&self) -> &DomainParticipant {
-    &self.my_domainparticipant
+  pub fn get_participant(&self) -> DomainParticipant {
+    match self.my_domainparticipant.clone().upgrade() {
+      Some(dp) => dp,
+      None => panic!("Cannot restore original DomainParticipant"),
+    }
   }
 
   pub fn get_type(&self) -> &TypeDesc {
@@ -53,7 +56,7 @@ impl Topic {
 }
 
 impl TopicDescription for Topic {
-  fn get_participant(&self) -> &DomainParticipant {
+  fn get_participant(&self) -> DomainParticipant {
     self.get_participant()
   }
 

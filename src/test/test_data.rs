@@ -389,8 +389,8 @@ pub fn create_rtps_data_message<D: Serialize>(
     .unwrap()
     .len();
 
-  let sub_flags = BitFlags::<DATA_Flags>::from_endianness( Endianness::LittleEndian )
-                | BitFlags::<DATA_Flags>::from_flag( DATA_Flags::Data );
+  let sub_flags = BitFlags::<DATA_Flags>::from_endianness(Endianness::LittleEndian)
+    | BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
 
   let submessage_header: SubmessageHeader = SubmessageHeader {
     kind: SubmessageKind::DATA,

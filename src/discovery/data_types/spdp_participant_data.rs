@@ -150,7 +150,7 @@ impl SPDPDiscoveredParticipantData {
       metatraffic_multicast_locators,
       default_unicast_locators,
       default_multicast_locators,
-      available_builtin_endpoints: Some(BuiltinEndpointSet::from(builtin_endpoints)),
+      available_builtin_endpoints: Some(BuiltinEndpointSet::from_u32(builtin_endpoints)),
       lease_duration: Some(Duration::from(lease_duration)),
       manual_liveliness_count: None,
       builtin_enpoint_qos: None,
@@ -222,10 +222,8 @@ mod tests {
                 RepresentationIdentifier::PL_CDR_LE,
               )
               .unwrap();
-
             let sdata =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
-
             // order cannot be known at this point
             assert_eq!(sdata.len(), d.serialized_payload.value.len());
 
@@ -236,7 +234,6 @@ mod tests {
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data_2)
                 //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data_2)
                 .unwrap();
-
             // now the order of bytes should be the same
             assert_eq!(sdata, sdata_2);
           }

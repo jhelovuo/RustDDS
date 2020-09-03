@@ -8,11 +8,14 @@ use std::{
 };
 
 use crate::dds::{
-  participant::DomainParticipant,
+  participant::{DomainParticipantWeak},
   typedesc::TypeDesc,
   qos::{
     QosPolicies, HasQoSPolicy,
-    policy::{Reliability, History},
+    policy::{
+      Reliability, History, Durability, Presentation, PresentationAccessScope, Deadline, Ownership,
+      Liveliness, LivelinessKind, TimeBasedFilter, DestinationOrder, ResourceLimits,
+    },
   },
   datareader::{DataReader},
   readcondition::ReadCondition,
@@ -25,7 +28,7 @@ use crate::discovery::{
   discovery_db::DiscoveryDB,
 };
 
-use crate::structure::guid::EntityId;
+use crate::structure::{duration::Duration, guid::EntityId};
 
 use crate::serialization::{
   cdrSerializer::CDR_serializer_adapter, pl_cdr_deserializer::PlCdrDeserializerAdapter,
@@ -37,9 +40,10 @@ use byteorder::LittleEndian;
 
 pub struct Discovery {
   poll: Poll,
-  domain_participant: DomainParticipant,
+  domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   discovery_updated_sender: mio_channel::Sender<DiscoveryNotificationType>,
+  discovery_stop_receiver: mio_channel::Receiver<()>,
 }
 
 unsafe impl Sync for Discovery {}
@@ -54,9 +58,10 @@ impl Discovery {
   const SEND_TOPIC_INFO_PERIOD: u64 = 5;
 
   pub fn new(
-    domain_participant: DomainParticipant,
+    domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     discovery_updated_sender: mio_channel::Sender<DiscoveryNotificationType>,
+    discovery_stop_receiver: mio_channel::Receiver<()>,
   ) -> Discovery {
     let poll = mio::Poll::new().expect("Unable to create discovery poll");
 
@@ -65,6 +70,7 @@ impl Discovery {
       domain_participant,
       discovery_db,
       discovery_updated_sender,
+      discovery_stop_receiver,
     }
   }
 
@@ -76,7 +82,17 @@ impl Discovery {
   }
 
   pub fn discovery_event_loop(discovery: Discovery) {
-    let discovery_subscriber_qos = QosPolicies::qos_none();
+    discovery
+      .poll
+      .register(
+        &discovery.discovery_stop_receiver,
+        STOP_POLL_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register Discovery STOP");
+
+    let discovery_subscriber_qos = Discovery::subscriber_qos();
     let discovery_subscriber = discovery
       .domain_participant
       .create_subscriber(&discovery_subscriber_qos)
@@ -103,7 +119,7 @@ impl Discovery {
       .create_datareader::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         &dcps_participant_topic,
-        dcps_participant_topic.get_qos(),
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DataReader for DCPSParticipant");
     // register participant reader
@@ -172,7 +188,7 @@ impl Discovery {
       .create_datareader::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         &dcps_subscription_topic,
-        dcps_subscription_topic.get_qos(),
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DataReader for DCPSSubscription.");
     discovery
@@ -223,7 +239,7 @@ impl Discovery {
       .create_datareader::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         &dcps_publication_topic,
-        dcps_subscription_topic.get_qos(),
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DataReader for DCPSPublication");
     discovery
@@ -286,7 +302,7 @@ impl Discovery {
       .create_datareader::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         &dcps_topic,
-        dcps_subscription_topic.get_qos(),
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DataReader for DCPSTopic");
     discovery
@@ -307,8 +323,19 @@ impl Discovery {
       )
       .expect("Unable to create DataWriter for DCPSTopic.");
     let mut topic_info_send_timer: Timer<()> = Timer::default();
-    topic_info_send_timer.set_timeout(StdDuration::from_secs(Discovery::SEND_TOPIC_INFO_PERIOD), ());
-    discovery.poll.register(&topic_info_send_timer, DISCOVERY_SEND_TOPIC_INFO_TOKEN, Ready::readable(), PollOpt::edge()).expect("Unable to register topic info sender.");
+    topic_info_send_timer.set_timeout(
+      StdDuration::from_secs(Discovery::SEND_TOPIC_INFO_PERIOD),
+      (),
+    );
+    discovery
+      .poll
+      .register(
+        &topic_info_send_timer,
+        DISCOVERY_SEND_TOPIC_INFO_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Unable to register topic info sender.");
 
     loop {
       let mut events = Events::with_capacity(1024);
@@ -318,6 +345,7 @@ impl Discovery {
         .expect("Failed in waiting of poll.");
       for event in events.into_iter() {
         if event.token() == STOP_POLL_TOKEN {
+          println!("Stopping Discovery");
           return;
         } else if event.token() == DISCOVERY_PARTICIPANT_DATA_TOKEN {
           let data = discovery.handle_participant_reader(&mut dcps_participant_reader);
@@ -337,10 +365,14 @@ impl Discovery {
         } else if event.token() == DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN {
           // setting 3 times the duration so lease doesn't break if we fail once for some reason
           let lease_duration = StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD * 3);
-          let data = SPDPDiscoveredParticipantData::from_participant(
-            &discovery.domain_participant,
-            lease_duration,
-          );
+          let strong_dp = match discovery.domain_participant.clone().upgrade() {
+            Some(dp) => dp,
+            None => {
+              println!("DomainParticipant doesn't exist anymore, exiting Discovery.");
+              return;
+            }
+          };
+          let data = SPDPDiscoveredParticipantData::from_participant(&strong_dp, lease_duration);
 
           dcps_participant_writer.write(data, None).unwrap_or(());
           // reschedule timer
@@ -375,7 +407,10 @@ impl Discovery {
             .set_timeout(StdDuration::from_secs(Discovery::TOPIC_CLEANUP_PERIOD), ());
         } else if event.token() == DISCOVERY_SEND_TOPIC_INFO_TOKEN {
           discovery.write_topic_info(&mut dcps_writer);
-          topic_info_send_timer.set_timeout(StdDuration::from_secs(Discovery::SEND_TOPIC_INFO_PERIOD), ());
+          topic_info_send_timer.set_timeout(
+            StdDuration::from_secs(Discovery::SEND_TOPIC_INFO_PERIOD),
+            (),
+          );
         }
       }
     }
@@ -387,7 +422,6 @@ impl Discovery {
       SPDPDiscoveredParticipantData,
       PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>,
     >,
-    //TODO: CDR is probably not what we want here. Change adapter to something else.
   ) -> Option<SPDPDiscoveredParticipantData> {
     let participant_data = match reader.take_next_sample() {
       Ok(d) => match d {
@@ -640,7 +674,13 @@ impl Discovery {
     }
   }
 
-  pub fn write_topic_info(&self, writer: &mut DataWriter<DiscoveredTopicData, CDR_serializer_adapter<DiscoveredTopicData, LittleEndian>>) {
+  pub fn write_topic_info(
+    &self,
+    writer: &mut DataWriter<
+      DiscoveredTopicData,
+      CDR_serializer_adapter<DiscoveredTopicData, LittleEndian>,
+    >,
+  ) {
     match self.discovery_db.read() {
       Ok(db) => {
         let datas = db.get_all_topics();
@@ -650,9 +690,41 @@ impl Discovery {
             _ => println!("Unable to write new topic info."),
           }
         }
-      },
+      }
       _ => panic!("DiscoveryDB is poisoned."),
     }
+  }
+
+  pub fn subscriber_qos() -> QosPolicies {
+    let mut qos = QosPolicies::qos_none();
+    qos.durability = Some(Durability::TransientLocal);
+    qos.presentation = Some(Presentation {
+      access_scope: PresentationAccessScope::Topic,
+      coherent_access: false,
+      ordered_access: false,
+    });
+    qos.deadline = Some(Deadline {
+      period: Duration::DURATION_INFINITE,
+    });
+    qos.ownership = Some(Ownership::Shared);
+    qos.liveliness = Some(Liveliness {
+      kind: LivelinessKind::Automatic,
+      lease_duration: Duration::DURATION_INVALID,
+    });
+    qos.time_based_filter = Some(TimeBasedFilter {
+      minimum_separation: Duration::DURATION_ZERO,
+    });
+    qos.reliability = Some(Reliability::Reliable {
+      max_blocking_time: Duration::from(StdDuration::from_millis(100)),
+    });
+    qos.destination_order = Some(DestinationOrder::ByReceptionTimestamp);
+    qos.history = Some(History::KeepLast { depth: 1 });
+    qos.resource_limits = Some(ResourceLimits {
+      max_instances: std::i32::MAX,
+      max_samples: std::i32::MAX,
+      max_samples_per_instance: std::i32::MAX,
+    });
+    qos
   }
 }
 
@@ -668,7 +740,7 @@ mod tests {
       },
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
-    structure::{locator::Locator, entity::Entity},
+    structure::{entity::Entity, locator::Locator},
     serialization::{cdrSerializer::to_bytes, cdrDeserializer::CDR_deserializer_adapter},
     submessages::{InterpreterSubmessage, EntitySubmessage},
     messages::{
@@ -677,7 +749,7 @@ mod tests {
   };
   use crate::{
     discovery::data_types::topic_data::TopicBuiltinTopicData,
-    dds::traits::serde_adapters::DeserializerAdapter,
+    dds::{participant::DomainParticipant, traits::serde_adapters::DeserializerAdapter},
   };
   use crate::serialization::submessage::*;
 
@@ -805,7 +877,7 @@ mod tests {
           }
           _ => continue,
         },
-        SubmessageBody::Interpreter( _ ) => (),
+        SubmessageBody::Interpreter(_) => (),
       }
     }
 
@@ -876,12 +948,12 @@ mod tests {
     for submsg in tdata.submessages.iter_mut() {
       match &mut submsg.body {
         SubmessageBody::Interpreter(v) => match v {
-          InterpreterSubmessage::InfoDestination(dst , _flags) => {
+          InterpreterSubmessage::InfoDestination(dst, _flags) => {
             dst.guid_prefix = participant.get_guid_prefix().clone();
           }
           _ => continue,
         },
-        SubmessageBody::Entity( _ ) => (),
+        SubmessageBody::Entity(_) => (),
       }
     }
 
@@ -914,7 +986,7 @@ mod tests {
 
   #[test]
   fn discovery_topic_data_test() {
-    //let participant = DomainParticipant::new(16, 0);
+    let _participant = DomainParticipant::new(16, 0);
 
     let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
       key: None,

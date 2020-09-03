@@ -30,20 +30,40 @@ pub enum EntitySubmessage {
 // we must write this manually, because
 // 1) we cannot implement Writable for *Flags defined using enumflags2, as they are foreign types (coherence rules)
 // 2) Writer should not use any enum variant tag in this type, as we have SubmessageHeader already.
-impl<C:Context> Writable<C> for EntitySubmessage {
+impl<C: Context> Writable<C> for EntitySubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      EntitySubmessage::AckNack(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      EntitySubmessage::Data(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      EntitySubmessage::DataFrag(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      EntitySubmessage::Gap(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      EntitySubmessage::Heartbeat(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      EntitySubmessage::HeartbeatFrag(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      EntitySubmessage::NackFrag(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }        
+      EntitySubmessage::AckNack(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      EntitySubmessage::Data(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      EntitySubmessage::DataFrag(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      EntitySubmessage::Gap(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      EntitySubmessage::Heartbeat(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      EntitySubmessage::HeartbeatFrag(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      EntitySubmessage::NackFrag(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
     }
   }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum InterpreterSubmessage {
@@ -55,13 +75,25 @@ pub enum InterpreterSubmessage {
 }
 
 // See notes on impl Writer for EntitySubmessage
-impl<C:Context> Writable<C> for InterpreterSubmessage {
+impl<C: Context> Writable<C> for InterpreterSubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      InterpreterSubmessage::InfoSource(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      InterpreterSubmessage::InfoDestination(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      InterpreterSubmessage::InfoReply(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
-      InterpreterSubmessage::InfoTimestamp(s,f) => { writer.write_value(s)?; writer.write_u8( f.bits() ) }
+      InterpreterSubmessage::InfoSource(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      InterpreterSubmessage::InfoDestination(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      InterpreterSubmessage::InfoReply(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
+      InterpreterSubmessage::InfoTimestamp(s, f) => {
+        writer.write_value(s)?;
+        writer.write_u8(f.bits())
+      }
     }
   }
 }

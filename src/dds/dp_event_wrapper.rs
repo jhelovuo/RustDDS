@@ -437,16 +437,14 @@ impl DPEventWrapper {
         for (_, writer) in self.writers.iter_mut() {
           if *writer.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
             // if writer is participant writer
-            let proxies = db.get_participants();
-            writer.readers = proxies
-              .iter()
-              .map(|&p| p.as_reader_proxy(true).clone())
+            writer.readers = db
+              .get_participants()
+              .map(|p| p.as_reader_proxy(true).clone())
               .collect();
           } else if *writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
           {
-            let proxies = db.get_participants();
-            writer.readers = proxies
-              .iter()
+            writer.readers = db
+              .get_participants()
               .map(|p| p.as_reader_proxy(true))
               .map(|mut p| {
                 p.remote_reader_guid.entityId =
@@ -455,9 +453,8 @@ impl DPEventWrapper {
               })
               .collect();
           } else if *writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER {
-            let proxies = db.get_participants();
-            writer.readers = proxies
-              .iter()
+            writer.readers = db
+              .get_participants()
               .map(|p| p.as_reader_proxy(true))
               .map(|mut p| {
                 p.remote_reader_guid.entityId = EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER;
@@ -470,7 +467,7 @@ impl DPEventWrapper {
               Some(v) => {
                 writer.readers = v
                   .iter()
-                  .map(|&p| RtpsReaderProxy::from(p).unwrap())
+                  .map(|&p| RtpsReaderProxy::from_discovered_reader_data(p).unwrap())
                   .collect();
               }
               None => (),
