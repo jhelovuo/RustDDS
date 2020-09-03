@@ -6,14 +6,14 @@ use crate::dds::datasample::{SampleState, ViewState, InstanceState, SampleInfo};
 /// DDS spec 2.2.2.5.4
 /// this is the no_key version
 #[derive(Clone)]
-pub struct DataSample<D> {
+pub struct DataSample<'a,D> {
   pub sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
-  pub value: D,
+  pub value: &'a D,
 }
 
-impl<D> DataSample<D>
+impl<'a, D> DataSample<'a, D>
 {
-  pub fn new(source_timestamp: Timestamp, payload: D) -> DataSample<D> {
+  pub fn new(source_timestamp: Timestamp, payload: &'a D) -> DataSample<D> {
 
     // begin dummy placeholder values
     let sample_state = SampleState::NotRead;

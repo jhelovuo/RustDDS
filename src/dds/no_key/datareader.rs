@@ -77,13 +77,17 @@ impl<D:DeserializeOwned, SA:DeserializerAdapter<D> > DeserializerAdapter<NoKeyWr
 
 impl<D> NoKeyWrapper<D> {}
 
+// ----------------------------------------------------
+
+
 // DataReader for NO_KEY data. Does not require "D: Keyed"
-pub struct DataReader<'a, D,SA> {
+pub struct DataReader<'a,'b, D,SA> {
   keyed_datareader: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SA_Wrapper<SA>>,
+  result_cache: Vec<DataSample<'b,D>>
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
-impl<'s, 'a, D, SA> DataReader<'a, D,SA>
+impl<'s, 'a,'b, D, SA> DataReader<'a,'b, D,SA>
 where
   D: DeserializeOwned, // + Deserialize<'s>,
   SA: DeserializerAdapter<D>,
@@ -103,6 +107,7 @@ where
         notification_receiver,
         dds_cache,
       ),
+      result_cache: vec![], 
     }
   }
 
@@ -110,12 +115,27 @@ where
     &mut self,
     max_samples: usize,            // maximum number of DataSamples to return.
     read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
-  ) -> Result<Vec<&DataSample<NoKeyWrapper<D>>>> 
+  ) -> Result<Vec<&'b DataSample<D>>> 
   {
     let kv: Result<Vec<&datasample_with_key::DataSample<NoKeyWrapper<D>>>> = self
       .keyed_datareader
       .read(max_samples, read_condition);
     #[allow(unused_variables)]
+    match kv {
+      Err(e) => Err(e),
+      Ok(v) => {
+        self.result_cache = v.iter()
+          .map(
+            move | &datasample_with_key::DataSample { sample_info, value }| DataSample {
+              sample_info: sample_info.clone(),
+              value: &value.as_ref().expect("Received instance state change for no_key data. What to do?").d 
+              },
+            )
+          .collect();
+        Ok( self.result_cache.iter().collect() )
+      }
+    }
+    /*
     kv.map(move |v| {
       v.iter()
         .map(
@@ -128,7 +148,7 @@ where
           },
         )
         .collect()
-    })
+    })*/
   }
 
   // It does not make any sense to implement read_instance(), by definition of "no_key".
@@ -145,19 +165,17 @@ where
   }
   */
 
-  /* TODO
   /// This is a simplified API for reading the next not_read sample
-  /// If no new data is available, the return value is Ok(None).
-   
-  pub fn read_next_sample(&mut self) -> Result<Option<&DataSample<NoKeyWrapper<D>>>> {
+  /// If no new data is available, the return value is Ok(None).  
+  pub fn read_next_sample(&mut self) -> Result<Option<&'b DataSample<D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
-  } */
+  } 
 } // impl
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D, SA> Evented for DataReader<'a, D, SA> {
+impl<'a,'b, D, SA> Evented for DataReader<'a,'b , D, SA> {
   // We just delegate all the operations to notification_receiver, since it alrady implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
@@ -184,7 +202,7 @@ impl<'a, D, SA> Evented for DataReader<'a, D, SA> {
   }
 }
 
-impl<D,SA> HasQoSPolicy for DataReader<'_, D, SA> {
+impl<D,SA> HasQoSPolicy for DataReader<'_,'_, D, SA> {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     self.keyed_datareader.set_qos(policy)
   }
@@ -194,7 +212,7 @@ impl<D,SA> HasQoSPolicy for DataReader<'_, D, SA> {
   }
 }
 
-impl<'a, D, SA> Entity for DataReader<'a, D, SA>
+impl<'a, D, SA> Entity for DataReader<'a,'_, D, SA>
 where
   D: DeserializeOwned,
   SA: DeserializerAdapter<D>,
