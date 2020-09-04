@@ -1,18 +1,8 @@
-use std::convert::TryInto;
-use enumflags2::BitFlags;
-
 use crate::messages::submessages::submessage_header::SubmessageHeader;
 use crate::messages::submessages::submessage::EntitySubmessage;
 use crate::messages::submessages::submessages::*;
 
-use crate::messages::submessages::submessage_elements::serialized_payload::{SerializedPayload};
-use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
-
-use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::SequenceNumber;
-
-use crate::{messages::fragment_number::FragmentNumber};
-use speedy::{Context, Writer, Readable, Writable};
+use speedy::{Context, Writer, Writable};
 
 #[derive(Debug, PartialEq)]
 pub struct SubMessage {
@@ -26,74 +16,6 @@ pub enum SubmessageBody {
   Interpreter(InterpreterSubmessage),
 }
 
-impl<'a> SubMessage {
-  fn deserialize_data_frag(buffer: &'a [u8], flags: BitFlags<DATAFRAG_Flags>) -> Option<DataFrag> {
-    let mut pos: usize = 0;
-    // TODO Check flag locations..?
-    //let endianness_flag = msgheader.flags.is_flag_set(3);
-    let inline_qoS_flag = flags.contains(DATAFRAG_Flags::InlineQos);
-    //let non_standar_payload_flag = msgheader.flags.is_flag_set(1);
-
-    pos += 2; // Ignore extra flags for now
-
-    let octets_to_inline_qos = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
-    pos += 2;
-
-    let reader_id = EntityId::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
-    pos += 4;
-    let writer_id = EntityId::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
-    pos += 4;
-    let writer_sn = SequenceNumber::read_from_buffer(&buffer[pos..pos + 8]).unwrap();
-    pos += 8;
-    let fragment_starting_num = FragmentNumber::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
-    pos += 4;
-    let fragments_in_submessage = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
-    pos += 2;
-    let fragment_size = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
-    pos += 2;
-    let data_size = u32::read_from_buffer(&buffer[pos..pos + 4]).unwrap();
-    pos += 4;
-
-    if pos != octets_to_inline_qos as usize + 4 {
-      pos = octets_to_inline_qos as usize + 4; // Ignore
-    }
-
-    let mut inline_qos: Option<ParameterList> = None;
-    if inline_qoS_flag {
-      let inline_qos_size: usize = 4; // Is it this for sure??
-      inline_qos =
-        Some(ParameterList::read_from_buffer(&buffer[pos..pos + inline_qos_size]).unwrap());
-      pos += inline_qos_size;
-    }
-    let rep_identifier_raw = u16::read_from_buffer(&buffer[pos..pos + 2]).unwrap();
-    pos += 2;
-    let rep_options = &buffer[pos..pos + 2];
-    pos += 2;
-
-    let payload_size: usize = buffer.len() - pos;
-
-    let vec_value = Vec::read_from_buffer(&buffer[pos..pos + payload_size]).unwrap();
-
-    let serialized_payload = SerializedPayload {
-      representation_identifier: rep_identifier_raw,
-      representation_options: rep_options
-        .try_into()
-        .expect("Unexpected array length in representation_options"),
-      value: vec_value,
-    };
-    Some(DataFrag {
-      reader_id,
-      writer_id,
-      writer_sn,
-      fragment_starting_num,
-      fragments_in_submessage,
-      data_size,
-      fragment_size,
-      inline_qos,
-      serialized_payload,
-    })
-  }
-}
 
 impl<C: Context> Writable<C> for SubMessage {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {

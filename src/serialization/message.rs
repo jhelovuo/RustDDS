@@ -123,6 +123,16 @@ impl<'a> Message {
             f,
           ))
         }
+
+        SubmessageKind::DATA_FRAG => {
+          // Manually implemented deserialization for DATA. Speedy does not quite cut it.
+          let f = BitFlags::<DATAFRAG_Flags>::from_bits_truncate(sub_header.flags);
+          mk_e_subm(EntitySubmessage::DataFrag(
+            DataFrag::deserialize(sub_content_buffer, f)?,
+            f,
+          ))
+        }
+
         SubmessageKind::GAP => {
           let f = BitFlags::<GAP_Flags>::from_bits_truncate(sub_header.flags);
           mk_e_subm(EntitySubmessage::Gap(

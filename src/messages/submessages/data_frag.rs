@@ -3,7 +3,15 @@ use crate::messages::submessages::submessage_elements::parameter_list::Parameter
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::SequenceNumber;
-use speedy::{ Writable, Context, Writer };
+
+use crate::messages::submessages::submessages::*;
+
+
+use speedy::{Context, Writer, Readable, Writable, Error};
+use enumflags2::BitFlags;
+
+use std::io;
+
 
 /// The DataFrag Submessage extends the Data Submessage by enabling the
 /// serializedData to be fragmented and sent as multiple DataFrag Submessages.
@@ -52,8 +60,61 @@ pub struct DataFrag {
   pub serialized_payload: SerializedPayload,
 }
 
-impl DataFrag {
-  pub fn new() -> DataFrag {
+impl<'a> DataFrag {
+
+  pub fn deserialize(buffer: &'a [u8], flags: BitFlags<DATAFRAG_Flags>) -> io::Result<DataFrag> {
+    let mut cursor = io::Cursor::new(buffer);
+    let endianness = endianness_flag(flags.bits());
+    let map_speedy_err = |p: Error| io::Error::new(io::ErrorKind::Other, p);
+
+    let _extra_flags =
+      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let octets_to_inline_qos =
+      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let reader_id =
+      EntityId::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let writer_id =
+      EntityId::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let writer_sn =
+      SequenceNumber::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let fragment_starting_num =
+      FragmentNumber::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let fragments_in_submessage = 
+      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let fragment_size =
+      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let data_size =
+      u32::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+
+    let expect_qos = flags.contains(DATAFRAG_Flags::InlineQos);
+    //let expect_key = flags.contains(DATAFRAG_Flags::Key);
+
+    // Skip any possible fields we do not know about.
+    let rtps_v23_header_size: u16 = 7*4; 
+    let extra_octets = octets_to_inline_qos - rtps_v23_header_size;
+    if octets_to_inline_qos < rtps_v23_header_size { 
+      return Err(io::Error::new(io::ErrorKind::Other, "DataFrag has too low octetsToInlineQos")) 
+    }
+    cursor.set_position(cursor.position() + extra_octets as u64);
+
+    let inline_qos = if expect_qos {  
+        Some(ParameterList::read_from_stream_with_ctx(endianness, &mut cursor)
+              .map_err(map_speedy_err)? )
+      } 
+      else { None };
+
+    // Payload should be always present, be it data or key fragments.
+    let serialized_payload = SerializedPayload::from_bytes(&buffer[cursor.position() as usize..])?;
+
+    Ok( DataFrag { reader_id, writer_id, writer_sn, fragment_starting_num, fragments_in_submessage,
+                  data_size, fragment_size, inline_qos, serialized_payload,
+        })
+  }
+
+}
+
+impl Default for DataFrag {
+  fn default() -> Self {
     DataFrag {
       reader_id: EntityId::default(),
       writer_id: EntityId::default(),
@@ -65,12 +126,6 @@ impl DataFrag {
       inline_qos: None,
       serialized_payload: SerializedPayload::default(),
     }
-  }
-}
-
-impl Default for DataFrag {
-  fn default() -> Self {
-    DataFrag::new()
   }
 }
 
