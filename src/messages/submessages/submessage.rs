@@ -33,33 +33,26 @@ pub enum EntitySubmessage {
 impl<C: Context> Writable<C> for EntitySubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      EntitySubmessage::AckNack(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      EntitySubmessage::AckNack(s, _f) => {
+        writer.write_value(s)
       }
-      EntitySubmessage::Data(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      EntitySubmessage::Data(s, _f) => {
+        writer.write_value(s)
       }
-      EntitySubmessage::DataFrag(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      EntitySubmessage::DataFrag(s, _f) => {
+        writer.write_value(s)
       }
-      EntitySubmessage::Gap(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      EntitySubmessage::Gap(s, _f) => {
+        writer.write_value(s)
       }
-      EntitySubmessage::Heartbeat(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      EntitySubmessage::Heartbeat(s, _f) => {
+        writer.write_value(s)
       }
-      EntitySubmessage::HeartbeatFrag(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      EntitySubmessage::HeartbeatFrag(s, _f) => {
+        writer.write_value(s)
       }
-      EntitySubmessage::NackFrag(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      EntitySubmessage::NackFrag(s, _f) => {
+        writer.write_value(s)
       }
     }
   }
@@ -78,21 +71,17 @@ pub enum InterpreterSubmessage {
 impl<C: Context> Writable<C> for InterpreterSubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      InterpreterSubmessage::InfoSource(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      InterpreterSubmessage::InfoSource(s, _f) => {
+        writer.write_value(s)
       }
-      InterpreterSubmessage::InfoDestination(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      InterpreterSubmessage::InfoDestination(s, _f) => {
+        writer.write_value(s)
       }
-      InterpreterSubmessage::InfoReply(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      InterpreterSubmessage::InfoReply(s, _f) => {
+        writer.write_value(s)
       }
-      InterpreterSubmessage::InfoTimestamp(s, f) => {
-        writer.write_value(s)?;
-        writer.write_u8(f.bits())
+      InterpreterSubmessage::InfoTimestamp(s, _f) => {
+        writer.write_value(s)
       }
     }
   }
