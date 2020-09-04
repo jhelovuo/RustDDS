@@ -5,6 +5,10 @@ use mio::Token;
 use mio::net::UdpSocket;
 use std::net::UdpSocket as StdUdpSocket;
 
+//use std::os::unix::io::AsRawFd;
+//use nix::sys::socket::setsockopt;
+//use nix::sys::socket::sockopt::ReuseAddr;
+
 // 64 kB buffer size
 const BUFFER_SIZE: usize = 64 * 1024;
 
@@ -24,7 +28,9 @@ impl UDPListener {
     std_socket
       .set_nonblocking(true)
       .expect("Failed to set std socket to non blocking.");
+
     let socket = UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
+    //setsockopt(socket.as_raw_fd(), ReuseAddr, &true).expect("Unable set ReuseAddr option on socket");
 
     UDPListener {
       socket: socket,
@@ -51,7 +57,7 @@ impl UDPListener {
       let nbytes = result.unwrap();
       message = buf[..nbytes].to_vec();
     } else {
-      println!("{:?}", result);
+      println!("UDPListener::get_message failed: {:?}", result);
     }
     message
   }
@@ -86,6 +92,10 @@ mod tests {
   use super::*;
   use crate::network::udp_sender::*;
 
+  //use std::os::unix::io::AsRawFd;
+  //use nix::sys::socket::setsockopt;
+  //use nix::sys::socket::sockopt::IpMulticastLoop;
+
   use std::{thread, time};
 
   #[test]
@@ -107,23 +117,24 @@ mod tests {
   // TODO: there is something wrong with this test (possibly inability actually send or receive multicast)
   #[test]
   fn udpl_multicast_address() {
-    let listener = UDPListener::new(Token(0), "127.0.0.1", 10002);
+    let listener = UDPListener::new(Token(0), "0.0.0.0", 10002);
     let sender = UDPSender::new_with_random_port();
+
+    //setsockopt(sender.socket.as_raw_fd(), IpMulticastLoop, &true)
+    //  .expect("Unable set IpMulticastLoop option on socket");
+
 
     let data: Vec<u8> = vec![2, 4, 6];
 
-    // still need to use the same port
-    let _mcaddr = vec![SocketAddr::new("239.255.0.1".parse().unwrap(), 10002)];
     listener
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Failed to join multicast.");
-
-    // sender.send_to_all(&data, &mcaddr);
+    
     sender
       .send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002)
       .expect("Failed to send multicast");
-
-    thread::sleep(time::Duration::from_secs(2));
+    
+    thread::sleep(time::Duration::from_secs(1));
 
     let rec_data = listener.get_message();
 
