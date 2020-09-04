@@ -1,16 +1,16 @@
 use std::{
-  sync::{Arc, RwLock},
+  //sync::{Arc, RwLock},
   time::{Duration},
 };
 use std::ops::Deref;
 use std::io;
 
-use mio_extras::channel as mio_channel;
+//use mio_extras::channel as mio_channel;
 use serde::{Serialize, Serializer};
 
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity};
-use crate::structure::{dds_cache::DDSCache, guid::{GUID} };
+//use crate::structure::{dds_cache::DDSCache, guid::{GUID} };
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
@@ -25,7 +25,7 @@ use crate::messages::submessages::submessage_elements::serialized_payload::Repre
 
 
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
-use crate::dds::ddsdata::DDSData;
+//use crate::dds::ddsdata::DDSData;
 
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::datawriter as datawriter_with_key};
 
@@ -33,7 +33,7 @@ use crate::serialization;
 
 // This structure should be private to no_key DataWriter
 // But it needs to be exposed to pubsub module to create DataWriter .
-pub  struct NoKeyWrapper_Write<D> {
+pub (crate) struct NoKeyWrapper_Write<D> {
   pub d: D,
 }
 
@@ -66,7 +66,7 @@ where
 
 impl<D> NoKeyWrapper_Write<D> {}
 
-pub struct SA_Wrapper<SA> {
+pub (crate) struct SA_Wrapper<SA> {
   inner: SA,
 }
 
@@ -88,6 +88,7 @@ where
   D: Serialize,
   SA: SerializerAdapter<D>  
 {
+  /*
   pub fn new(
     publisher: &'a Publisher,
     topic: &'a Topic,
@@ -100,8 +101,8 @@ where
         publisher, topic, guid, cc_upload, dds_cache)?,
     })
   }
-
-  pub fn from_keyed( keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>)
+  */
+  pub (crate) fn from_keyed( keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>)
    -> DataWriter<'a, D, SA> {
     DataWriter { keyed_datawriter: keyed }
   }
