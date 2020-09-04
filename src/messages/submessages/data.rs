@@ -7,6 +7,7 @@ use crate::structure::sequence_number::SequenceNumber;
 use speedy::{Readable, Writable, Context, Writer, Error};
 use enumflags2::BitFlags;
 use std::io;
+use super::submessage_elements::serialized_payload::RepresentationIdentifier;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -64,12 +65,11 @@ impl Data {
       SequenceNumber::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
 
     let expect_qos = flags.contains(DATA_Flags::InlineQos);
-    let expect_data = flags.contains(DATA_Flags::Data);
+    let expect_data = flags.contains(DATA_Flags::Data) || flags.contains(DATA_Flags::Key);
 
-    let extra_octets = octets_to_inline_qos - 16;
-    for _ in 0..extra_octets / 4 {
-      u8::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
-    }
+    let rtps_v23_data_header_size: u16 = 16;
+    let extra_octets = octets_to_inline_qos - rtps_v23_data_header_size;
+    cursor.set_position(cursor.position() + extra_octets as u64);
 
     let parameter_list = if expect_qos {
       Some(
@@ -83,7 +83,7 @@ impl Data {
     let payload = if expect_data {
       SerializedPayload::from_bytes(&buffer[cursor.position() as usize..])?
     } else {
-      unimplemented!();
+      SerializedPayload::new(RepresentationIdentifier::INVALID, vec![])
     };
 
     Ok(Data {

@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-#[derive(Debug, PartialEq, Eq, Readable, Writable,Clone,Copy)]
+#[derive(Debug, PartialEq, Eq, Readable, Writable, Clone, Copy)]
 pub struct SubmessageKind {
   value: u8,
 }

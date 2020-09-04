@@ -21,6 +21,8 @@ pub enum RepresentationIdentifier {
   D_CDR_BE = 0x0014,
   D_CDR_LE = 0x0015,
   XML = 0x0004,
+
+  INVALID = 0xffff,
 }
 
 impl RepresentationIdentifier {
