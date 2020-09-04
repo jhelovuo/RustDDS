@@ -45,7 +45,7 @@ impl DDSData {
       None => Timestamp::from(time::get_time()),
     };
 
-    let serialized_payload = SerializedPayload::new(RepresentationIdentifier::CDR_LE,value);
+    let serialized_payload = SerializedPayload::new(RepresentationIdentifier::CDR_LE, value);
 
     DDSData {
       source_timestamp: ts,

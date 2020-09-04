@@ -559,7 +559,7 @@ mod tests {
     serialization::{SubMessage, Message, submessage::*},
     messages::{
       protocol_version::ProtocolVersion, header::Header, vendor_id::VendorId,
-      protocol_id::ProtocolId, submessages::submessages::*
+      protocol_id::ProtocolId, submessages::submessages::*,
     },
   };
   use super::DomainParticipant;
@@ -656,7 +656,7 @@ mod tests {
 
     let s: SubMessage = SubMessage {
       header: subHeader,
-      body: SubmessageBody::Entity(EntitySubmessage::AckNack( a, flags )),
+      body: SubmessageBody::Entity(EntitySubmessage::AckNack(a, flags)),
     };
     let h = Header {
       protocol_id: ProtocolId::default(),

@@ -16,7 +16,8 @@ use std::hash::Hasher;
 //use crate::messages::submessages::info_destination::InfoDestination;
 use crate::messages::submessages::{
   submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
-  info_timestamp::InfoTimestamp, submessage_flag::*
+  info_timestamp::InfoTimestamp,
+  submessage_flag::*,
 };
 use crate::messages::submessages::data::Data;
 use crate::structure::time::Timestamp;
@@ -27,7 +28,7 @@ use crate::structure::sequence_number::{SequenceNumber};
 use crate::{
   submessages::{
     Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage, EntitySubmessage, AckNack,
-    InfoDestination, 
+    InfoDestination,
   },
   structure::cache_change::{CacheChange, ChangeKind},
   serialization::{SubMessage, Message, SubmessageBody},
@@ -50,7 +51,6 @@ use super::{
 };
 use policy::{History, Reliability};
 //use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-
 
 pub struct Writer {
   source_version: ProtocolVersion,
@@ -601,7 +601,6 @@ impl Writer {
     }
   }
 
-
   fn create_message_header(&self) -> Header {
     let head: Header = Header {
       protocol_id: ProtocolId::default(),
@@ -624,37 +623,38 @@ impl Writer {
     };
     let mes = &mut timestamp.write_to_vec_with_ctx(self.endianness).unwrap();
 
-    let flags 
-      = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(self.endianness) 
-      | ( if invalidiateFlagSet { INFOTIMESTAMP_Flags::Invalidate.into() }
-          else { BitFlags::<INFOTIMESTAMP_Flags>::empty() } );
+    let flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(self.endianness)
+      | (if invalidiateFlagSet {
+        INFOTIMESTAMP_Flags::Invalidate.into()
+      } else {
+        BitFlags::<INFOTIMESTAMP_Flags>::empty()
+      });
 
     let submessageHeader = SubmessageHeader {
-        kind: SubmessageKind::INFO_TS , 
-        flags: flags.bits(),
-        content_length: mes.len() as u16, // This conversion should be safe, as timestamp length cannot exceed u16
-      };
+      kind: SubmessageKind::INFO_TS,
+      flags: flags.bits(),
+      content_length: mes.len() as u16, // This conversion should be safe, as timestamp length cannot exceed u16
+    };
     SubMessage {
       header: submessageHeader,
-      body: 
-        SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp( timestamp , flags)) ,
+      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(timestamp, flags)),
     }
   }
 
   pub fn get_DST_submessage(&self, guid_prefix: GuidPrefix) -> SubMessage {
-    let flags 
-      = BitFlags::<INFODESTINATION_Flags>::from_endianness(self.endianness);
+    let flags = BitFlags::<INFODESTINATION_Flags>::from_endianness(self.endianness);
     let submessageHeader = SubmessageHeader {
-        kind: SubmessageKind::INFO_DST , 
-        flags: flags.bits(),
-        content_length: 12u16,
-        //InfoDST length is always 12 because message contains only GuidPrefix
-      };     
+      kind: SubmessageKind::INFO_DST,
+      flags: flags.bits(),
+      content_length: 12u16,
+      //InfoDST length is always 12 because message contains only GuidPrefix
+    };
     SubMessage {
       header: submessageHeader,
-      body: 
-        SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(
-          InfoDestination { guid_prefix } , flags))
+      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(
+        InfoDestination { guid_prefix },
+        flags,
+      )),
     }
   }
 
@@ -687,15 +687,17 @@ impl Writer {
       inline_qos: None,                               // Change later, if needed.
       serialized_payload: change.data_value.unwrap(), // TODO: Is the representation identifier already correct?
     };
-    let flags : BitFlags<DATA_Flags> =
-      BitFlags::<DATA_Flags>::from_endianness(self.endianness)
-      | ( if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
-            // No data, we send key instead
-            BitFlags::<DATA_Flags>::from_flag( DATA_Flags::InlineQos)
+    let flags: BitFlags<DATA_Flags> = BitFlags::<DATA_Flags>::from_endianness(self.endianness)
+      | (
+        if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
+          // No data, we send key instead
+          BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
             | BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key)
-          }
-          else { BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data) } // normal case
-        );
+        } else {
+          BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data)
+        }
+        // normal case
+      );
 
     // if change kind is dispose then datawriter is telling to dispose the data instance
     if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
@@ -714,11 +716,14 @@ impl Writer {
       .len() as u16;
     let s: SubMessage = SubMessage {
       header: SubmessageHeader {
-        kind: SubmessageKind::DATA , 
+        kind: SubmessageKind::DATA,
         flags: flags.bits(),
         content_length: size,
       },
-      body: SubmessageBody::Entity(crate::submessages::EntitySubmessage::Data(data_message, flags)),
+      body: SubmessageBody::Entity(crate::submessages::EntitySubmessage::Data(
+        data_message,
+        flags,
+      )),
     };
     return s;
   }
@@ -740,18 +745,21 @@ impl Writer {
       count: self.heartbeat_message_counter,
     };
 
-    let mut flags = 
-      BitFlags::<HEARTBEAT_Flags>::from_endianness(self.endianness);
+    let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(self.endianness);
 
-    if set_final_flag      { flags.insert(HEARTBEAT_Flags::Final) }
-    if set_liveliness_flag { flags.insert(HEARTBEAT_Flags::Liveliness) }
+    if set_final_flag {
+      flags.insert(HEARTBEAT_Flags::Final)
+    }
+    if set_liveliness_flag {
+      flags.insert(HEARTBEAT_Flags::Liveliness)
+    }
 
     let mes = &mut heartbeat.write_to_vec_with_ctx(self.endianness).unwrap();
     let size = mes.len();
 
     SubMessage {
       header: SubmessageHeader {
-        kind: SubmessageKind::HEARTBEAT , 
+        kind: SubmessageKind::HEARTBEAT,
         flags: flags.bits(),
         content_length: size as u16, // cannot overflow, heartbeat has fixed size
       },

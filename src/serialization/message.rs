@@ -147,6 +147,14 @@ impl<'a> Message {
           ))
         }
 
+        SubmessageKind::HEARTBEAT => {
+          let f = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
+          mk_e_subm(EntitySubmessage::Heartbeat(
+            Heartbeat::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            f,
+          ))
+        }
+
         // interpreter submessages
         SubmessageKind::INFO_DST => {
           let f = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);

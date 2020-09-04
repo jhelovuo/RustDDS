@@ -9,7 +9,6 @@ use crate::structure::time::{Time, Timestamp};
 use crate::serialization::Message;
 use crate::serialization::submessage::SubmessageBody;
 
-
 use crate::dds::reader::Reader;
 use crate::dds::ddsdata::DDSData;
 use crate::structure::guid::EntityId;
@@ -193,7 +192,7 @@ impl MessageReceiver {
       Ok(m) => m,
       Err(speedy_err) => {
         println!("RTPS deserialize error {:?}", speedy_err);
-        return
+        return;
       }
     };
 
@@ -236,7 +235,7 @@ impl MessageReceiver {
           for reader in self.available_readers.iter_mut() {
             reader.handle_heartbeat_msg(
               heartbeat.clone(),
-              flags.contains(HEARTBEAT_Flags::Final),  
+              flags.contains(HEARTBEAT_Flags::Final),
               mr_state.clone(),
             );
           }
@@ -244,7 +243,7 @@ impl MessageReceiver {
           if let Some(target_reader) = self.get_reader(heartbeat.reader_id) {
             target_reader.handle_heartbeat_msg(
               heartbeat,
-              flags.contains(HEARTBEAT_Flags::Final), 
+              flags.contains(HEARTBEAT_Flags::Final),
               mr_state,
             );
           } else {
@@ -292,40 +291,40 @@ impl MessageReceiver {
 
   fn handle_parsed_interpreter_submessage(&mut self, interp_subm: InterpreterSubmessage)
   // no return value, just change state of self.
-  { 
+  {
     match interp_subm {
-      InterpreterSubmessage::InfoTimestamp( ts_struct , flags) => {
+      InterpreterSubmessage::InfoTimestamp(ts_struct, flags) => {
         if flags.contains(INFOTIMESTAMP_Flags::Invalidate) {
           self.have_timestamp = true;
           self.timestamp = ts_struct.timestamp;
         }
-      },
-      InterpreterSubmessage::InfoSource( info_src , _flags) => {
-          self.source_guid_prefix = info_src.guid_prefix;
-          self.source_version = info_src.protocol_version;
-          self.source_vendor_id = info_src.vendor_id;
-          self.unicast_reply_locator_list.clear(); // Or invalid?
-          self.multicast_reply_locator_list.clear(); // Or invalid?
-          self.have_timestamp = false;        
-      },
-      InterpreterSubmessage::InfoReply( info_reply , flags) => {
+      }
+      InterpreterSubmessage::InfoSource(info_src, _flags) => {
+        self.source_guid_prefix = info_src.guid_prefix;
+        self.source_version = info_src.protocol_version;
+        self.source_vendor_id = info_src.vendor_id;
+        self.unicast_reply_locator_list.clear(); // Or invalid?
+        self.multicast_reply_locator_list.clear(); // Or invalid?
+        self.have_timestamp = false;
+      }
+      InterpreterSubmessage::InfoReply(info_reply, flags) => {
         self.unicast_reply_locator_list = info_reply.unicast_locator_list;
-        if flags.contains( INFOREPLY_Flags::Multicast)  {
-          self.multicast_reply_locator_list = 
-            info_reply.multicast_locator_list
-              .expect("InfoReply flag indicates multicast locator is present but none found.");
-              // TODO: Convert the above error to warning only.
+        if flags.contains(INFOREPLY_Flags::Multicast) {
+          self.multicast_reply_locator_list = info_reply
+            .multicast_locator_list
+            .expect("InfoReply flag indicates multicast locator is present but none found.");
+        // TODO: Convert the above error to warning only.
         } else {
           self.multicast_reply_locator_list.clear();
-        }        
-      },
-      InterpreterSubmessage::InfoDestination( info_dest , _flags) => {
+        }
+      }
+      InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
         if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
           self.dest_guid_prefix = info_dest.guid_prefix;
         } else {
           self.dest_guid_prefix = self.own_guid_prefix;
         }
-      },
+      }
     }
   }
 } // impl messageReceiver
@@ -524,5 +523,4 @@ mod tests {
     let new_header = Header::read_from_buffer(&bytes).unwrap();
     assert_eq!(header, new_header);
   }
-
 }
