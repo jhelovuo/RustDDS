@@ -32,7 +32,8 @@ use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds
 use crate::serialization;
 
 // This structure should be private to no_key DataWriter
-struct NoKeyWrapper_Write<D> {
+// But it needs to be exposed to pubsub module to create DataWriter .
+pub  struct NoKeyWrapper_Write<D> {
   pub d: D,
 }
 
@@ -65,7 +66,7 @@ where
 
 impl<D> NoKeyWrapper_Write<D> {}
 
-struct SA_Wrapper<SA> {
+pub struct SA_Wrapper<SA> {
   inner: SA,
 }
 
@@ -99,6 +100,12 @@ where
         publisher, topic, guid, cc_upload, dds_cache)?,
     })
   }
+
+  pub fn from_keyed( keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>)
+   -> DataWriter<'a, D, SA> {
+    DataWriter { keyed_datawriter: keyed }
+  }
+
 
   // write (with optional timestamp)
   pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
@@ -179,6 +186,8 @@ mod tests {
   use crate::test::random_data::*;
   use std::thread;
   use crate::dds::traits::key::Keyed;
+  use crate::serialization::cdrSerializer::*;
+  use byteorder::LittleEndian;
 
   #[test]
   fn dw_write_test() {
@@ -192,9 +201,11 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer = publisher
-      .create_datawriter(None, &topic, &qos)
-      .expect("Failed to create datawriter");
+    let mut data_writer : DataWriter<'_,RandomData,CDR_serializer_adapter<RandomData,LittleEndian>> = 
+      publisher
+          .create_datawriter_no_key(None, &topic, &qos)
+          .expect("Failed to create datawriter")
+        ;
 
     let mut data = RandomData {
       a: 4,
@@ -226,9 +237,10 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer = publisher
-      .create_datawriter(None, &topic, &qos)
-      .expect("Failed to create datawriter");
+    let mut data_writer : DataWriter<'_,RandomData,CDR_serializer_adapter<RandomData,LittleEndian>>  = 
+      publisher
+        .create_datawriter_no_key(None, &topic, &qos)
+        .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let data = RandomData {
@@ -248,12 +260,14 @@ mod tests {
       .write(data.clone(), None)
       .expect("Unable to write data");
 
+    /* Keyless topics cannot dispose.
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     data_writer
       .dispose(data.get_key(), None)
       .expect("Unable to dispose data");
 
     // TODO: verify that dispose is sent correctly
+    */
   }
 
   #[test]
@@ -267,9 +281,10 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer = publisher
-      .create_datawriter(None, &topic, &qos)
-      .expect("Failed to create datawriter");
+    let mut data_writer : DataWriter<'_,RandomData,CDR_serializer_adapter<RandomData,LittleEndian>> 
+      = publisher
+        .create_datawriter_no_key(None, &topic, &qos)
+        .expect("Failed to create datawriter");
 
     let data = RandomData {
       a: 4,
