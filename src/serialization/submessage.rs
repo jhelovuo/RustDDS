@@ -125,8 +125,6 @@ mod tests {
 
     let header = SubmessageHeader::read_from_buffer(&serializedDataSubMessage[0..4])
       .expect("could not create submessage header");
-    println!("{:?}", header);
-
     let flags = BitFlags::<DATA_Flags>::from_bits_truncate(header.flags);
     let suba = Data::deserialize_data(&serializedDataSubMessage[4..], flags)
       .expect("DATA deserialization failed.");
@@ -134,19 +132,15 @@ mod tests {
       header,
       body: SubmessageBody::Entity(EntitySubmessage::Data(suba, flags)),
     };
-
     println!("{:?}", sub);
 
-    let mut messageBuffer = vec![];
-    sub
-      .write_to_buffer(&mut messageBuffer)
+    let messageBuffer = sub
+      .write_to_vec()
       .expect("DATA serialization failed");
 
     assert_eq!(serializedDataSubMessage, messageBuffer);
   }
-  /* TODO: rewrite rest of tests according to first one. Or better: use a common test function/macro
-      to avoid copy/paste test code, since all of these start from reference byte vector, then deserialize,
-      serialize again, and compare to reference.
+
   #[test]
   fn submessage_hearbeat_deserialization() {
     let serializedHeartbeatMessage: Vec<u8> = vec![
@@ -154,137 +148,75 @@ mod tests {
       0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00,
       0x00, 0x00,
     ];
-    let submessage_header = match SubMessage::deserialize_header(
-      Endianness::LittleEndian,
-      &serializedHeartbeatMessage[0..4],
-    ) {
-      Some(T) => T,
-      None => {
-        print!("could not create submessage header");
-        return;
-      } // rule 1. Could not create submessage header
-    };
-    println!("{:?}", submessage_header);
 
-    let ha = Heartbeat::read_from_buffer_with_ctx(
-      Endianness::LittleEndian,
-      &serializedHeartbeatMessage[4..],
-    )
-    .unwrap();
-    let mut messageBuffer = vec![];
-    println!("heartbeatSubmessage : {:?}", ha);
-    messageBuffer.append(
-      &mut submessage_header
-        .write_to_vec_with_ctx(Endianness::LittleEndian)
-        .unwrap(),
-    );
-    messageBuffer.append(&mut ha.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap());
+    let header = SubmessageHeader::read_from_buffer(&serializedHeartbeatMessage[0..4])
+      .expect("could not create submessage header");
+    let flags = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(header.flags);
+    let e = endianness_flag(header.flags);
+    let suba = Heartbeat::read_from_buffer_with_ctx(e,&serializedHeartbeatMessage[4..])
+      .expect("deserialization failed.");
+    let sub = SubMessage {
+      header,
+      body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(suba, flags)),
+    };
+    println!("{:?}", sub);
+
+    let messageBuffer = sub
+      .write_to_vec()
+      .expect("serialization failed");
+
     assert_eq!(serializedHeartbeatMessage, messageBuffer);
   }
+  
   #[test]
   fn submessage_info_dst_deserialization() {
     let serializedInfoDSTMessage: Vec<u8> = vec![
       0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02,
       0x08,
     ];
-    let submessage_header = match SubMessage::deserialize_header(
-      Endianness::LittleEndian,
-      &serializedInfoDSTMessage[0..4],
-    ) {
-      Some(T) => T,
-      None => {
-        print!("could not create submessage header");
-        return;
-      } // rule 1. Could not create submessage header
-    };
-    println!("{:?}", submessage_header);
 
-    let ha = InfoDestination::read_from_buffer_with_ctx(
-      Endianness::LittleEndian,
-      &serializedInfoDSTMessage[4..],
-    )
-    .unwrap();
-    let mut messageBuffer = vec![];
-    println!("info dst : {:?}", ha);
-    messageBuffer.append(
-      &mut submessage_header
-        .write_to_vec_with_ctx(Endianness::LittleEndian)
-        .unwrap(),
-    );
-    messageBuffer.append(&mut ha.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap());
+    let header = SubmessageHeader::read_from_buffer(&serializedInfoDSTMessage[0..4])
+      .expect("could not create submessage header");
+    let flags = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(header.flags);
+    let e = endianness_flag(header.flags);
+    let suba = InfoDestination::read_from_buffer_with_ctx(e,&serializedInfoDSTMessage[4..])
+      .expect("deserialization failed.");
+    let sub = SubMessage {
+      header,
+      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(suba, flags)),
+    };
+    println!("{:?}", sub);
+
+    let messageBuffer = sub
+      .write_to_vec()
+      .expect("serialization failed");
+
     assert_eq!(serializedInfoDSTMessage, messageBuffer);
   }
-
+  
   #[test]
   fn submessage_info_ts_deserialization() {
     let serializedInfoTSMessage: Vec<u8> = vec![
       0x09, 0x01, 0x08, 0x00, 0x1a, 0x15, 0xf3, 0x5e, 0x00, 0xcc, 0xfb, 0x13,
     ];
-    let submessage_header = match SubMessage::deserialize_header(
-      Endianness::LittleEndian,
-      &serializedInfoTSMessage[0..4],
-    ) {
-      Some(T) => T,
-      None => {
-        print!("could not create submessage header");
-        return;
-      } // rule 1. Could not create submessage header
+    let header = SubmessageHeader::read_from_buffer(&serializedInfoTSMessage[0..4])
+      .expect("could not create submessage header");
+    let flags = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(header.flags);
+    let e = endianness_flag(header.flags);
+    let suba = InfoTimestamp::read_from_buffer_with_ctx(e,&serializedInfoTSMessage[4..])
+      .expect("deserialization failed.");
+    let sub = SubMessage {
+      header,
+      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(suba, flags)),
     };
-    println!("{:?}", submessage_header);
+    println!("{:?}", sub);
 
-    let ha = InfoTimestamp::read_from_buffer_with_ctx(
-      Endianness::LittleEndian,
-      &serializedInfoTSMessage[4..],
-    )
-    .unwrap();
-    let mut messageBuffer = vec![];
-    println!("timestamp : {:?}", ha);
-    messageBuffer.append(
-      &mut submessage_header
-        .write_to_vec_with_ctx(Endianness::LittleEndian)
-        .unwrap(),
-    );
-    messageBuffer.append(&mut ha.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap());
+    let messageBuffer = sub
+      .write_to_vec()
+      .expect("serialization failed");
+
     assert_eq!(serializedInfoTSMessage, messageBuffer);
-  }
-  #[test]
-  fn submessage_data_deserialization() {
-    let serializedDatamessage: Vec<u8> = vec![
-      0x15, 0x05, 0x2c, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x01,
-      0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x04, 0x00,
-      0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x69, 0x00, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x1e,
-      0x00, 0x00, 0x00,
-    ];
-    let submessage_header = match SubMessage::deserialize_header(
-      Endianness::LittleEndian,
-      &serializedDatamessage[0..4],
-    ) {
-      Some(T) => T,
-      None => {
-        print!("could not create submessage header");
-        return;
-      } // rule 1. Could not create submessage header
-    };
-    println!("{:?}", submessage_header);
-    let helper = SubmessageFlagHelper::get_submessage_flags_helper_from_submessage_flag(
-      &SubmessageKind::DATA,
-      &submessage_header.flags,
-    );
-    let ha = Data::deserialize_data(
-      &serializedDatamessage[4..].to_vec(),
-      helper.get_endianness(),
-      helper.InlineQosFlag,
-      helper.DataFlag,
-    );
 
-    let mut messageBuffer = vec![];
-    println!("datamessage  : {:?}", ha);
-    messageBuffer.append(
-      &mut submessage_header
-        .write_to_vec_with_ctx(Endianness::LittleEndian)
-        .unwrap(),
-    );
-    messageBuffer.append(&mut ha.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap());
-    assert_eq!(serializedDatamessage, messageBuffer);
-  } */
+  }
+  
 }
