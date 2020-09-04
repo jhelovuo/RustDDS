@@ -1,6 +1,9 @@
+use std::fmt::Debug;
+use std::fmt;
+
 use speedy::{Readable, Writable};
 
-#[derive(Debug, PartialEq, Eq, Readable, Writable, Clone, Copy)]
+#[derive(PartialEq, Eq, Readable, Writable,Clone,Copy)]
 pub struct SubmessageKind {
   value: u8,
 }
@@ -19,6 +22,27 @@ impl SubmessageKind {
   pub const HEARTBEAT_FRAG: SubmessageKind = SubmessageKind { value: 0x13 };
   pub const DATA: SubmessageKind = SubmessageKind { value: 0x15 };
   pub const DATA_FRAG: SubmessageKind = SubmessageKind { value: 0x16 };
+}
+
+impl Debug for SubmessageKind {
+  fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match *self {
+      SubmessageKind::PAD => fmt.write_str("PAD"),
+      SubmessageKind::ACKNACK => fmt.write_str("ACKNACK"),
+      SubmessageKind::HEARTBEAT => fmt.write_str("HEARTBEAT"),
+      SubmessageKind::GAP => fmt.write_str("GAP"),
+      SubmessageKind::INFO_TS => fmt.write_str("INFO_TS"),
+      SubmessageKind::INFO_SRC => fmt.write_str("INFO_SRC"),
+      SubmessageKind::INFO_REPLY_IP4 => fmt.write_str("INFO_REPLY_IP4"),
+      SubmessageKind::INFO_DST => fmt.write_str("INFO_DST"),
+      SubmessageKind::INFO_REPLY => fmt.write_str("INFO_REPLY"),
+      SubmessageKind::NACK_FRAG => fmt.write_str("NACK_FRAG"),
+      SubmessageKind::HEARTBEAT_FRAG => fmt.write_str("HEARTBEAT_FRAG"),
+      SubmessageKind::DATA => fmt.write_str("DATA"),
+      SubmessageKind::DATA_FRAG => fmt.write_str("DATA_FRAG"),
+      SubmessageKind{ value: other } => fmt.write_fmt(format_args!("SubmessageKind {} (UNKNOWN!)",other)),
+    }
+  }
 }
 
 #[cfg(test)]
