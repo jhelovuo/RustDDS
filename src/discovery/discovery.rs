@@ -31,7 +31,7 @@ use crate::discovery::{
 use crate::structure::{duration::Duration, guid::EntityId};
 
 use crate::serialization::{
-  cdrSerializer::CDR_serializer_adapter, pl_cdr_deserializer::PlCdrDeserializerAdapter,
+  cdrSerializer::{to_bytes, CDR_serializer_adapter}, pl_cdr_deserializer::PlCdrDeserializerAdapter,
 };
 
 use crate::network::constant::*;
@@ -52,10 +52,10 @@ unsafe impl Send for Discovery {}
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: u64 = 60;
   const TOPIC_CLEANUP_PERIOD: u64 = 5 * 60; // timer for cleaning up inactive topics
-  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 2;
-  const SEND_READERS_INFO_PERIOD: u64 = 1;
-  const SEND_WRITERS_INFO_PERIOD: u64 = 1;
-  const SEND_TOPIC_INFO_PERIOD: u64 = 5;
+  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 5;
+  const SEND_READERS_INFO_PERIOD: u64 = 20;
+  const SEND_WRITERS_INFO_PERIOD: u64 = 20;
+  const SEND_TOPIC_INFO_PERIOD: u64 = 20;
 
   pub fn new(
     domain_participant: DomainParticipantWeak,
@@ -105,13 +105,12 @@ impl Discovery {
       .expect("Unable to create Discovery Publisher.");
 
     // Participant
-    let dcps_participant_qos = Discovery::create_spdp_patricipant_qos();
     let dcps_participant_topic = discovery
       .domain_participant
       .create_topic(
         "DCPSParticipant",
         TypeDesc::new(String::from("SPDPDiscoveredParticipantData")),
-        &dcps_participant_qos,
+        &Discovery::subscriber_qos(),
       )
       .expect("Unable to create DCPSParticipant topic.");
 
@@ -348,6 +347,7 @@ impl Discovery {
           println!("Stopping Discovery");
           return;
         } else if event.token() == DISCOVERY_PARTICIPANT_DATA_TOKEN {
+          println!("DISCOVERY_PARTICIPANT_DATA_TOKEN");
           let data = discovery.handle_participant_reader(&mut dcps_participant_reader);
           match data {
             Some(dat) => {
@@ -363,6 +363,7 @@ impl Discovery {
             (),
           );
         } else if event.token() == DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN {
+          println!("DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN");
           // setting 3 times the duration so lease doesn't break if we fail once for some reason
           let lease_duration = StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD * 3);
           let strong_dp = match discovery.domain_participant.clone().upgrade() {
@@ -373,6 +374,7 @@ impl Discovery {
             }
           };
           let data = SPDPDiscoveredParticipantData::from_participant(&strong_dp, lease_duration);
+          println!("Sending SPDPParData \n{:x?}", to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&data).unwrap());
 
           dcps_participant_writer.write(data, None).unwrap_or(());
           // reschedule timer
@@ -381,6 +383,7 @@ impl Discovery {
             (),
           );
         } else if event.token() == DISCOVERY_READER_DATA_TOKEN {
+          println!("DISCOVERY_READER_DATA_TOKEN");
           discovery.handle_subscription_reader(&mut dcps_subscription_reader);
         } else if event.token() == DISCOVERY_SEND_READERS_INFO_TOKEN {
           discovery.write_readers_info(&mut dcps_subscription_writer);
@@ -390,6 +393,7 @@ impl Discovery {
             (),
           );
         } else if event.token() == DISCOVERY_WRITER_DATA_TOKEN {
+          println!("DISCOVERY_WRITER_DATA_TOKEN");
           discovery.handle_publication_reader(&mut dcps_publication_reader);
         } else if event.token() == DISCOVERY_SEND_WRITERS_INFO_TOKEN {
           discovery.write_writers_info(&mut dcps_publication_writer);
@@ -439,6 +443,7 @@ impl Discovery {
       Ok(mut db) => {
         let updated = (*db).update_participant(&participant_data);
         if updated {
+          println!("Updated participant \n{:?}", participant_data);
           return Some(participant_data);
         }
       }

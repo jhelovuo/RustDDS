@@ -129,7 +129,7 @@ impl<'a> Publisher {
     Ok(matching_data_writer)
   }
 
-pub fn create_datawriter_no_key<D, SA>(
+  pub fn create_datawriter_no_key<D, SA>(
     &'a self,
     entity_id: Option<EntityId>,
     topic: &'a Topic,
@@ -142,9 +142,8 @@ pub fn create_datawriter_no_key<D, SA>(
     let d = self.create_datawriter::
       <no_key_datawriter::NoKeyWrapper_Write<D>,no_key_datawriter::SA_Wrapper<SA>>
         (entity_id, topic, qos)?;
-    Ok( no_key_datawriter::DataWriter::<'a, D, SA>::from_keyed(d) )
+    Ok(no_key_datawriter::DataWriter::<'a, D, SA>::from_keyed(d))
   }
-
 
   fn add_writer(&self, writer: Writer) -> Result<()> {
     match self.add_writer_sender.send(writer) {

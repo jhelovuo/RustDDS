@@ -36,7 +36,7 @@ use crate::messages::header::Header;
 use crate::messages::protocol_id::ProtocolId;
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::vendor_id::VendorId;
-use speedy::{Writable,Endianness};
+use speedy::{Writable, Endianness};
 
 const PROTOCOLVERSION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_3;
 const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
@@ -381,15 +381,14 @@ impl Reader {
     let sender = UDPSender::new_with_random_port();
     // TODO: How to determine which flags should be one? Both on atm
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
-              | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
+      | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
 
-    let mut message = Message::new(
-      Header {
-        protocol_id: ProtocolId::default(),
-        protocol_version: PROTOCOLVERSION,
-        vendor_id: VENDORID,
-        guid_prefix: self.entity_attributes.guid.guidPrefix,
-      });
+    let mut message = Message::new(Header {
+      protocol_id: ProtocolId::default(),
+      protocol_version: PROTOCOLVERSION,
+      vendor_id: VENDORID,
+      guid_prefix: self.entity_attributes.guid.guidPrefix,
+    });
 
     let submessage_len = match acknack.write_to_vec() {
       Ok(bytes) => bytes.len() as u16,
@@ -399,7 +398,7 @@ impl Reader {
       }
     };
 
-    message.submessages.push( SubMessage {
+    message.submessages.push(SubMessage {
       header: SubmessageHeader {
         kind: SubmessageKind::ACKNACK,
         flags: flags.bits(),
@@ -410,7 +409,9 @@ impl Reader {
 
     /*let mut bytes = message.serialize_header();
     bytes.extend_from_slice(&submessage.serialize_msg()); */
-    let bytes = message.write_to_vec_with_ctx( Endianness::LittleEndian ).unwrap();
+    let bytes = message
+      .write_to_vec_with_ctx(Endianness::LittleEndian)
+      .unwrap();
     sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
   }
 } // impl

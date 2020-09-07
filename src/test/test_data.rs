@@ -74,8 +74,8 @@ pub fn spdp_publication_data_raw() -> Vec<u8> {
 
 use crate::{
   serialization::{
-    Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, 
-    SubMessage, SubmessageBody,
+    Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, SubMessage,
+    SubmessageBody,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
@@ -87,7 +87,7 @@ use crate::{
       spdp_participant_data::SPDPDiscoveredParticipantData,
     },
   },
-  submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader },
+  submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader},
   structure::{
     locator::Locator,
     guid::{EntityId, GUID},
@@ -166,7 +166,7 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
         }
         _ => continue,
       },
-      SubmessageBody::Interpreter( _ ) => (),
+      SubmessageBody::Interpreter(_) => (),
     }
     submsg.header.content_length = submsglen;
   }
@@ -400,7 +400,10 @@ pub fn create_rtps_data_message<D: Serialize>(
 
   let submessage: SubMessage = SubMessage {
     header: submessage_header,
-    body: SubmessageBody::Entity(crate::submessages::EntitySubmessage::Data(data_message, sub_flags)),
+    body: SubmessageBody::Entity(crate::submessages::EntitySubmessage::Data(
+      data_message,
+      sub_flags,
+    )),
   };
   rtps_message.add_submessage(submessage);
 

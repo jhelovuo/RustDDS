@@ -72,16 +72,15 @@ where
 
   pub fn get_next_key(&self, key: &D::K) -> Option<D::K> {
     if let Some(pos) = self.datasamples.iter().position(|(k, _)| k == key) {
-      if let Some(next) = self.datasamples.iter().nth(pos + 1){
-        return Some(next.0.clone())
+      if let Some(next) = self.datasamples.iter().nth(pos + 1) {
+        return Some(next.0.clone());
       };
     };
     None
   }
 
-  pub fn remove_datasamples(&mut self, key: &D::K) -> Option<Vec<DataSample<D>>>{
+  pub fn remove_datasamples(&mut self, key: &D::K) -> Option<Vec<DataSample<D>>> {
     self.datasamples.remove(&key)
-    
   }
 
   pub fn set_qos_policy(&mut self, qos: QosPolicies) {

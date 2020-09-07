@@ -191,8 +191,6 @@ impl RtpsReaderProxy {
 
   /// this should be called everytime next_unsent_change is called and change is sent
   pub fn remove_unsend_change(&mut self, sequence_number: SequenceNumber) {
-    println!("{:?}", self.unsent_changes);
-    println!("{:?}", sequence_number);
     if self.unsent_changes.remove(&sequence_number) {
       println!("removeUnsend Change");
     }

@@ -23,17 +23,19 @@ use crate::dds::traits::key::*;
 use crate::dds::traits::serde_adapters::SerializerAdapter;
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
-
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
 //use crate::dds::ddsdata::DDSData;
 
-use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::datawriter as datawriter_with_key};
+use crate::{
+  discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
+  dds::datawriter as datawriter_with_key,
+};
 
 use crate::serialization;
 
 // This structure should be private to no_key DataWriter
 // But it needs to be exposed to pubsub module to create DataWriter .
-pub (crate) struct NoKeyWrapper_Write<D> {
+pub(crate) struct NoKeyWrapper_Write<D> {
   pub d: D,
 }
 
@@ -66,27 +68,32 @@ where
 
 impl<D> NoKeyWrapper_Write<D> {}
 
-pub (crate) struct SA_Wrapper<SA> {
+pub(crate) struct SA_Wrapper<SA> {
   inner: SA,
 }
 
-impl<D:Serialize, SA:SerializerAdapter<D> > SerializerAdapter<NoKeyWrapper_Write<D>> for SA_Wrapper<SA> {
+impl<D: Serialize, SA: SerializerAdapter<D>> SerializerAdapter<NoKeyWrapper_Write<D>>
+  for SA_Wrapper<SA>
+{
   fn output_encoding() -> RepresentationIdentifier {
     SA::output_encoding()
   }
-  fn to_writer<W: io::Write>(writer: W, value: &NoKeyWrapper_Write<D>) -> serialization::error::Result<()> {
+  fn to_writer<W: io::Write>(
+    writer: W,
+    value: &NoKeyWrapper_Write<D>,
+  ) -> serialization::error::Result<()> {
     SA::to_writer(writer, &value.d)
   }
 }
 
-pub struct DataWriter<'a, D:Serialize, SA: SerializerAdapter<D> > {
-  keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>,SA_Wrapper<SA>>,
+pub struct DataWriter<'a, D: Serialize, SA: SerializerAdapter<D>> {
+  keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>,
 }
 
 impl<'a, D, SA> DataWriter<'a, D, SA>
 where
   D: Serialize,
-  SA: SerializerAdapter<D>  
+  SA: SerializerAdapter<D>,
 {
   /*
   pub fn new(
@@ -102,11 +109,13 @@ where
     })
   }
   */
-  pub (crate) fn from_keyed( keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>)
-   -> DataWriter<'a, D, SA> {
-    DataWriter { keyed_datawriter: keyed }
+  pub(crate) fn from_keyed(
+    keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>,
+  ) -> DataWriter<'a, D, SA> {
+    DataWriter {
+      keyed_datawriter: keyed,
+    }
   }
-
 
   // write (with optional timestamp)
   pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
@@ -161,13 +170,13 @@ where
   }
 }
 
-impl<D:Serialize, SA :SerializerAdapter<D> > Entity for DataWriter<'_, D,SA> {
+impl<D: Serialize, SA: SerializerAdapter<D>> Entity for DataWriter<'_, D, SA> {
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     self.keyed_datawriter.as_entity()
   }
 }
 
-impl<D:Serialize, SA :SerializerAdapter<D> > HasQoSPolicy for DataWriter<'_, D,SA> {
+impl<D: Serialize, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<'_, D, SA> {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     self.keyed_datawriter.set_qos(policy)
   }
@@ -177,7 +186,7 @@ impl<D:Serialize, SA :SerializerAdapter<D> > HasQoSPolicy for DataWriter<'_, D,S
   }
 }
 
-impl<D:Serialize, SA :SerializerAdapter<D> > DDSEntity for DataWriter<'_, D,SA> {}
+impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<'_, D, SA> {}
 
 #[cfg(test)]
 mod tests {
@@ -202,11 +211,13 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer : DataWriter<'_,RandomData,CDR_serializer_adapter<RandomData,LittleEndian>> = 
-      publisher
-          .create_datawriter_no_key(None, &topic, &qos)
-          .expect("Failed to create datawriter")
-        ;
+    let mut data_writer: DataWriter<
+      '_,
+      RandomData,
+      CDR_serializer_adapter<RandomData, LittleEndian>,
+    > = publisher
+      .create_datawriter_no_key(None, &topic, &qos)
+      .expect("Failed to create datawriter");
 
     let mut data = RandomData {
       a: 4,
@@ -238,10 +249,13 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer : DataWriter<'_,RandomData,CDR_serializer_adapter<RandomData,LittleEndian>>  = 
-      publisher
-        .create_datawriter_no_key(None, &topic, &qos)
-        .expect("Failed to create datawriter");
+    let mut data_writer: DataWriter<
+      '_,
+      RandomData,
+      CDR_serializer_adapter<RandomData, LittleEndian>,
+    > = publisher
+      .create_datawriter_no_key(None, &topic, &qos)
+      .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let data = RandomData {
@@ -282,10 +296,13 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer : DataWriter<'_,RandomData,CDR_serializer_adapter<RandomData,LittleEndian>> 
-      = publisher
-        .create_datawriter_no_key(None, &topic, &qos)
-        .expect("Failed to create datawriter");
+    let mut data_writer: DataWriter<
+      '_,
+      RandomData,
+      CDR_serializer_adapter<RandomData, LittleEndian>,
+    > = publisher
+      .create_datawriter_no_key(None, &topic, &qos)
+      .expect("Failed to create datawriter");
 
     let data = RandomData {
       a: 4,

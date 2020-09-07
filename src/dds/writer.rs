@@ -594,10 +594,7 @@ impl Writer {
         }
       }
     } else {
-      println!(
-        "Writer {:?} cannot send any messages!",
-        self.get_entity_id()
-      );
+      // TODO: maybe add debug print when necessary
     }
   }
 

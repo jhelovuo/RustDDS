@@ -240,7 +240,7 @@ mod tests {
 
           _ => continue,
         },
-        SubmessageBody::Interpreter( _ ) => (),
+        SubmessageBody::Interpreter(_) => (),
       }
     }
 

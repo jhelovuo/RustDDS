@@ -252,9 +252,13 @@ impl DPEventWrapper {
           return;
         }
 
-        if event.token() == DISCOVERY_LISTENER_TOKEN {
+        if event.token() == DISCOVERY_LISTENER_TOKEN
+          || event.token() == DISCOVERY_MUL_LISTENER_TOKEN
+        {
           self.message_receiver.handle_discovery_msg(data);
-        } else if event.token() == USER_TRAFFIC_LISTENER_TOKEN {
+        } else if event.token() == USER_TRAFFIC_LISTENER_TOKEN
+          || event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
+        {
           self.message_receiver.handle_user_msg(data);
         }
       },
