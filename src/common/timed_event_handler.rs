@@ -13,12 +13,12 @@ use std::{collections::HashMap /*time::Instant*/};
 /// One TimedEventHandler can handle one timer of each TimerMessageType. Multiple timeuts of same TimerMessageType are not possible.
 pub struct TimedEventHandler {
   timers: HashMap<TimerMessageType, Timer>,
-  channel_send: mio_channel::Sender<TimerMessageType>,
+  channel_send: mio_channel::SyncSender<TimerMessageType>,
   guards: HashMap<TimerMessageType, Option<Guard>>,
 }
 
 impl<'a> TimedEventHandler {
-  pub fn new(channel_send: mio_channel::Sender<TimerMessageType>) -> TimedEventHandler {
+  pub fn new(channel_send: mio_channel::SyncSender<TimerMessageType>) -> TimedEventHandler {
     let hbh = TimedEventHandler {
       timers: HashMap::new(),
       channel_send,
@@ -44,7 +44,7 @@ impl<'a> TimedEventHandler {
           .schedule_with_delay(duration.clone(), move || {
             //println!("END TIME with message Type {:?} ",  timer_type);
             new_chanenel
-              .send(timer_type)
+              .try_send(timer_type)
               .expect("Unable to send timeout message of type ");
           }),
       ),
@@ -65,8 +65,8 @@ mod tests {
   fn test_heartbeat_timer() {
     let poll = Poll::new().expect("Unable to create new poll.");
 
-    let (hearbeatSender, hearbeatReciever) = mio_channel::channel::<TimerMessageType>();
-    let (hearbeatSender2, hearbeatReciever2) = mio_channel::channel::<TimerMessageType>();
+    let (hearbeatSender, hearbeatReciever) = mio_channel::sync_channel::<TimerMessageType>(10);
+    let (hearbeatSender2, hearbeatReciever2) = mio_channel::sync_channel::<TimerMessageType>(10);
     let mut hbh = TimedEventHandler::new(hearbeatSender);
     let mut hbh2 = TimedEventHandler::new(hearbeatSender2);
     poll

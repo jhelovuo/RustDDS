@@ -187,7 +187,6 @@ impl Reader {
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
         if let Some(max_sn) = writer_proxy.available_changes_max() {
           if seq_num <= max_sn {
-            println!("A smaller sequence number received. Ignoring...");
             return; // Should be ignored
           }
         }
@@ -200,6 +199,7 @@ impl Reader {
     self.make_cache_change(data, instant, writer_guid);
     // Add to own track-keeping datastructure
     self.seqnum_instant_map.insert(seq_num, instant);
+
     self.notify_cache_change();
   }
 
@@ -221,6 +221,9 @@ impl Reader {
       Some(wp) => wp,
       None => return false, // Matching writer not found
     };
+
+    let mut mr_state = mr_state;
+    mr_state.unicast_reply_locator_list = writer_proxy.unicast_locator_list.clone();
 
     if heartbeat.count <= writer_proxy.received_heartbeat_count {
       return false;
@@ -259,7 +262,7 @@ impl Reader {
       }
 
       let response_ack_nack = AckNack {
-        reader_id: *self.get_entity_id(),
+        reader_id: self.get_entity_id(),
         writer_id: heartbeat.writer_id,
         reader_sn_state: missing_seq_num_set,
         count: self.sent_ack_nack_count,
@@ -268,6 +271,7 @@ impl Reader {
       self.sent_ack_nack_count += 1;
       // The acknack can be sent now or later. The rest of the RTPS message
       // needs to be constructed. p. 48
+
       self.send_acknack(response_ack_nack, mr_state);
       return true;
     }
@@ -361,10 +365,7 @@ impl Reader {
   // likely use of mio channel
   fn notify_cache_change(&self) {
     match self.notification_sender.try_send(()) {
-      Ok(()) => println!(
-        "Reader sending notification to channel {:?}",
-        self.get_entity_id()
-      ), // expected result
+      Ok(()) => (),
       Err(mio_channel::TrySendError::Full(_)) => (), // This is harmless. There is a notification in already.
       Err(mio_channel::TrySendError::Disconnected(_)) => {
         // If we get here, our DataReader has died. The Reader should now dispose itself.
@@ -596,7 +597,7 @@ mod tests {
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
-      reader_id: *new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
       last_sn: SequenceNumber::from(0),
@@ -605,7 +606,7 @@ mod tests {
     assert!(!new_reader.handle_heartbeat_msg(hb_new, true, mr_state.clone())); // should be false, no ack
 
     let hb_one = Heartbeat {
-      reader_id: *new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
       last_sn: SequenceNumber::from(1),
@@ -615,7 +616,7 @@ mod tests {
 
     // After ack_nack, will receive the following change
     let change = CacheChange::new(
-      *new_reader.get_guid(),
+      new_reader.get_guid(),
       SequenceNumber::from(1),
       Some(d.clone()),
     );
@@ -628,7 +629,7 @@ mod tests {
 
     // Duplicate
     let hb_one2 = Heartbeat {
-      reader_id: *new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
       last_sn: SequenceNumber::from(1),
@@ -637,7 +638,7 @@ mod tests {
     assert!(!new_reader.handle_heartbeat_msg(hb_one2, false, mr_state.clone())); // No acknack
 
     let hb_3_1 = Heartbeat {
-      reader_id: *new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // writer has last 2 in cache
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
@@ -647,7 +648,7 @@ mod tests {
 
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(
-      *new_reader.get_guid(),
+      new_reader.get_guid(),
       SequenceNumber::from(2),
       Some(d.clone()),
     );
@@ -658,7 +659,7 @@ mod tests {
     );
     changes.push(change);
 
-    let change = CacheChange::new(*new_reader.get_guid(), SequenceNumber::from(3), Some(d));
+    let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), Some(d));
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
       &Instant::now(),
@@ -667,7 +668,7 @@ mod tests {
     changes.push(change);
 
     let hb_none = Heartbeat {
-      reader_id: *new_reader.get_entity_id(),
+      reader_id: new_reader.get_entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(4), // writer has no samples available
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
@@ -728,7 +729,7 @@ mod tests {
     gap_list.insert(SequenceNumber::from(7 + 4));
 
     let gap = Gap {
-      reader_id: *reader.get_entity_id(),
+      reader_id: reader.get_entity_id(),
       writer_id,
       gap_start: SequenceNumber::from(1),
       gap_list,

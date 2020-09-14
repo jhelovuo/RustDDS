@@ -5,6 +5,8 @@ use crate::{
   serialization::submessage::{SubMessage, SubmessageBody},
   submessages::*,
   messages::header::Header,
+  dds::writer::Writer as RtpsWriter,
+  dds::rtps_reader_proxy::RtpsReaderProxy,
 };
 use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
@@ -216,6 +218,29 @@ impl Message {
       header,
       submessages: vec![],
     }
+  }
+
+  pub fn add_data_msg(
+    &mut self,
+    seqnum: SequenceNumber,
+    writer: &RtpsWriter,
+    reader: &RtpsReaderProxy,
+  ) {
+    let instant = match writer.sequence_number_to_instant(seqnum) {
+      Some(i) => i,
+      None => return,
+    };
+
+    let cache_change = match writer.find_cache_change(instant) {
+      Some(cc) => cc,
+      None => return,
+    };
+
+    let data_msg =
+      writer.get_DATA_msg_from_cache_change(cache_change, reader.remote_reader_guid.entityId);
+
+    self.add_submessage(writer.get_TS_submessage(false));
+    self.add_submessage(data_msg);
   }
 }
 

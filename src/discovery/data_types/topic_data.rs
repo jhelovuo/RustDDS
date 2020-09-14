@@ -21,6 +21,10 @@ use crate::{
     rtps_writer_proxy::RtpsWriterProxy,
   },
   discovery::content_filter_property::ContentFilterProperty,
+  network::constant::get_user_traffic_unicast_port,
+  network::util::get_local_unicast_socket_address,
+  dds::qos::QosPolicies,
+  dds::qos::HasQoSPolicy,
 };
 
 // Topic data contains all topic related (including reader and writer data structures for serialization and deserialization)
@@ -33,9 +37,9 @@ pub struct ReaderProxy {
 }
 
 impl ReaderProxy {
-  pub fn new(guid: &GUID) -> ReaderProxy {
+  pub fn new(guid: GUID) -> ReaderProxy {
     ReaderProxy {
-      remote_reader_guid: Some(guid.clone()),
+      remote_reader_guid: Some(guid),
       expects_inline_qos: Some(false),
       unicast_locator_list: Vec::new(),
       multicast_locator_list: Vec::new(),
@@ -100,14 +104,14 @@ pub struct SubscriptionBuiltinTopicData {
 
 impl SubscriptionBuiltinTopicData {
   pub fn new(
-    key: &GUID,
-    participant_key: &GUID,
+    key: GUID,
+    participant_key: GUID,
     topic_name: &String,
     type_name: &String,
   ) -> SubscriptionBuiltinTopicData {
     SubscriptionBuiltinTopicData {
-      key: Some(key.clone()),
-      participant_key: Some(participant_key.clone()),
+      key: Some(key),
+      participant_key: Some(participant_key),
       topic_name: Some(topic_name.clone()),
       type_name: Some(type_name.clone()),
       durability: None,
@@ -170,11 +174,11 @@ impl DiscoveredReaderData {
 
   pub fn default(topic_name: &String, type_name: &String) -> DiscoveredReaderData {
     let rguid = GUID::new();
-    let reader_proxy = ReaderProxy::new(&rguid);
+    let reader_proxy = ReaderProxy::new(rguid);
     let mut pguid = GUID::new();
     pguid.guidPrefix = rguid.guidPrefix.clone();
     let subscription_topic_data =
-      SubscriptionBuiltinTopicData::new(&rguid, &pguid, topic_name, type_name);
+      SubscriptionBuiltinTopicData::new(rguid, pguid, topic_name, type_name);
     DiscoveredReaderData {
       reader_proxy,
       subscription_topic_data,
@@ -232,11 +236,15 @@ pub struct WriterProxy {
 }
 
 impl WriterProxy {
-  pub fn new(guid: &GUID) -> WriterProxy {
+  pub fn new(
+    guid: GUID,
+    multicast_locator_list: LocatorList,
+    unicast_locator_list: LocatorList,
+  ) -> WriterProxy {
     WriterProxy {
-      remote_writer_guid: Some(guid.clone()),
-      unicast_locator_list: Vec::new(),
-      multicast_locator_list: Vec::new(),
+      remote_writer_guid: Some(guid),
+      unicast_locator_list,
+      multicast_locator_list,
       data_max_size_serialized: None,
     }
   }
@@ -283,14 +291,14 @@ pub struct PublicationBuiltinTopicData {
 
 impl PublicationBuiltinTopicData {
   pub fn new(
-    guid: &GUID,
-    participant_guid: &GUID,
+    guid: GUID,
+    participant_guid: GUID,
     topic_name: &String,
     type_name: &String,
   ) -> PublicationBuiltinTopicData {
     PublicationBuiltinTopicData {
-      key: Some(guid.clone()),
-      participant_key: Some(participant_guid.clone()),
+      key: Some(guid),
+      participant_key: Some(participant_guid),
       topic_name: Some(topic_name.clone()),
       type_name: Some(type_name.clone()),
       durability: None,
@@ -304,6 +312,19 @@ impl PublicationBuiltinTopicData {
       destination_order: None,
       presentation: None,
     }
+  }
+
+  pub fn read_qos(&mut self, qos: &QosPolicies) {
+    self.durability = qos.durability;
+    self.deadline = qos.deadline;
+    self.latency_budget = qos.latency_budget;
+    self.liveliness = qos.liveliness;
+    self.reliability = qos.reliability;
+    self.lifespan = qos.lifespan;
+    self.time_based_filter = qos.time_based_filter;
+    self.ownership = qos.ownership;
+    self.destination_order = qos.destination_order;
+    self.presentation = qos.presentation;
   }
 }
 
@@ -338,7 +359,10 @@ impl Keyed for DiscoveredWriterData {
   type K = GUID;
 
   fn get_key(&self) -> Self::K {
-    self.publication_topic_data.key.unwrap()
+    match self.publication_topic_data.key {
+      Some(k) => k,
+      None => GUID::GUID_UNKNOWN,
+    }
   }
 }
 
@@ -348,13 +372,19 @@ impl DiscoveredWriterData {
     topic: &Topic,
     dp: &DomainParticipant,
   ) -> DiscoveredWriterData {
-    let writer_proxy = WriterProxy::new(writer.get_guid());
-    let publication_topic_data = PublicationBuiltinTopicData::new(
+    let unicast_port = get_user_traffic_unicast_port(dp.domain_id(), dp.participant_id());
+    let unicast_addresses = get_local_unicast_socket_address(unicast_port);
+
+    let writer_proxy = WriterProxy::new(writer.get_guid(), vec![], unicast_addresses);
+    let mut publication_topic_data = PublicationBuiltinTopicData::new(
       writer.get_guid(),
       dp.get_guid(),
       &topic.get_name().to_string(),
       &topic.get_type().name().to_string(),
     );
+
+    publication_topic_data.read_qos(topic.get_qos());
+
     DiscoveredWriterData {
       writer_proxy,
       publication_topic_data,
@@ -467,11 +497,14 @@ impl Serialize for DiscoveredTopicData {
 }
 
 impl Keyed for DiscoveredTopicData {
-  type K = String;
+  type K = GUID;
 
   fn get_key(&self) -> Self::K {
     // topic should always have a name, if this crashes the problem is in the overall logic (or message parsing)
-    self.topic_data.name.as_ref().unwrap().clone()
+    match self.topic_data.key {
+      Some(k) => k,
+      None => GUID::GUID_UNKNOWN,
+    }
   }
 }
 
@@ -482,7 +515,10 @@ mod tests {
   use super::*;
 
   //use crate::serialization::cdrSerializer::to_little_endian_binary;
-  use crate::serialization::cdrSerializer::{to_bytes};
+  use crate::serialization::{
+    cdrSerializer::{to_bytes},
+    Message,
+  };
   use byteorder::LittleEndian;
   use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
 
@@ -564,6 +600,30 @@ mod tests {
     assert_eq!(drd, drd2);
     let sdata2 = to_bytes::<DiscoveredReaderData, LittleEndian>(&drd2).unwrap();
     assert_eq!(sdata, sdata2);
+
+    let raw_data = [
+      0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x00, 0x00, 0x39, 0xbc, 0xd6, 0xb1, 0x4f, 0xa2, 0x49,
+      0x72, 0x81, 0x7d, 0xd4, 0x54, 0x09, 0x01, 0x08, 0x00, 0xa8, 0x3b, 0x56, 0x5f, 0xfa, 0xa6,
+      0xa9, 0x75, 0x15, 0x05, 0xdc, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x04, 0xc7, 0x00,
+      0x00, 0x04, 0xc2, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+      0x43, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x50, 0x00, 0x10, 0x00, 0x39, 0xbc, 0xd6,
+      0xb1, 0x4f, 0xa2, 0x49, 0x72, 0x81, 0x7d, 0xd4, 0x54, 0x00, 0x00, 0x01, 0xc1, 0x5a, 0x00,
+      0x10, 0x00, 0x39, 0xbc, 0xd6, 0xb1, 0x4f, 0xa2, 0x49, 0x72, 0x81, 0x7d, 0xd4, 0x54, 0x4f,
+      0xe7, 0xe7, 0x07, 0x2f, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xfd, 0x1c, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x50, 0x8e,
+      0xc9, 0x2f, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xfd, 0x1c, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0xa8, 0x45, 0x14, 0x2f,
+      0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0xfd, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xac, 0x11, 0x00, 0x01, 0x30, 0x00, 0x18,
+      0x00, 0x01, 0x00, 0x00, 0x00, 0xe9, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xef, 0xff, 0x00, 0x01, 0x05, 0x00, 0x0c, 0x00, 0x07,
+      0x00, 0x00, 0x00, 0x53, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, 0x00, 0x07, 0x00, 0x0c, 0x00,
+      0x07, 0x00, 0x00, 0x00, 0x53, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, 0x00, 0x01, 0x00, 0x00,
+      0x00,
+    ];
+
+    let msg = Message::read_from_buffer(&raw_data).unwrap();
+    println!("{:?}", msg);
   }
 
   #[test]

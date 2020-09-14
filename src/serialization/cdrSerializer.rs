@@ -151,7 +151,7 @@ where
 
 // This is private, for unit test cases only
 // Public interface should use to_bytes() instead, as it is recommended by serde documentation
-fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
+pub fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {

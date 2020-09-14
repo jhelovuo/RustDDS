@@ -74,7 +74,7 @@ impl<'a> Publisher {
     <D as Keyed>::K: Key,
     SA: SerializerAdapter<D>,
   {
-    let (dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
+    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<DDSData>(100);
 
     let entity_id = match entity_id {
       Some(eid) => eid,
@@ -210,7 +210,7 @@ pub struct Subscriber {
   domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   qos: QosPolicies,
-  sender_add_reader: mio_channel::Sender<Reader>,
+  sender_add_reader: mio_channel::SyncSender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
 }
 
@@ -219,7 +219,7 @@ impl<'s> Subscriber {
     domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
-    sender_add_reader: mio_channel::Sender<Reader>,
+    sender_add_reader: mio_channel::SyncSender<Reader>,
     sender_remove_reader: mio_channel::Sender<GUID>,
   ) -> Subscriber {
     Subscriber {
@@ -273,7 +273,7 @@ impl<'s> Subscriber {
       e => return e,
     };
 
-    let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), reader_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
 
     let new_reader = Reader::new(
       reader_guid,
@@ -307,7 +307,7 @@ impl<'s> Subscriber {
     // Return the DataReader Reader pairs to where they are used
     self
       .sender_add_reader
-      .send(new_reader)
+      .try_send(new_reader)
       .expect("Could not send new Reader");
     Ok(matching_datareader)
   }

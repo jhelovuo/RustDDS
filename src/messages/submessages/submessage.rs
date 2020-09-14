@@ -33,27 +33,13 @@ pub enum EntitySubmessage {
 impl<C: Context> Writable<C> for EntitySubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      EntitySubmessage::AckNack(s, _f) => {
-        writer.write_value(s)
-      }
-      EntitySubmessage::Data(s, _f) => {
-        writer.write_value(s)
-      }
-      EntitySubmessage::DataFrag(s, _f) => {
-        writer.write_value(s)
-      }
-      EntitySubmessage::Gap(s, _f) => {
-        writer.write_value(s)
-      }
-      EntitySubmessage::Heartbeat(s, _f) => {
-        writer.write_value(s)
-      }
-      EntitySubmessage::HeartbeatFrag(s, _f) => {
-        writer.write_value(s)
-      }
-      EntitySubmessage::NackFrag(s, _f) => {
-        writer.write_value(s)
-      }
+      EntitySubmessage::AckNack(s, _f) => writer.write_value(s),
+      EntitySubmessage::Data(s, _f) => writer.write_value(s),
+      EntitySubmessage::DataFrag(s, _f) => writer.write_value(s),
+      EntitySubmessage::Gap(s, _f) => writer.write_value(s),
+      EntitySubmessage::Heartbeat(s, _f) => writer.write_value(s),
+      EntitySubmessage::HeartbeatFrag(s, _f) => writer.write_value(s),
+      EntitySubmessage::NackFrag(s, _f) => writer.write_value(s),
     }
   }
 }
@@ -71,18 +57,10 @@ pub enum InterpreterSubmessage {
 impl<C: Context> Writable<C> for InterpreterSubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      InterpreterSubmessage::InfoSource(s, _f) => {
-        writer.write_value(s)
-      }
-      InterpreterSubmessage::InfoDestination(s, _f) => {
-        writer.write_value(s)
-      }
-      InterpreterSubmessage::InfoReply(s, _f) => {
-        writer.write_value(s)
-      }
-      InterpreterSubmessage::InfoTimestamp(s, _f) => {
-        writer.write_value(s)
-      }
+      InterpreterSubmessage::InfoSource(s, _f) => writer.write_value(s),
+      InterpreterSubmessage::InfoDestination(s, _f) => writer.write_value(s),
+      InterpreterSubmessage::InfoReply(s, _f) => writer.write_value(s),
+      InterpreterSubmessage::InfoTimestamp(s, _f) => writer.write_value(s),
     }
   }
 }

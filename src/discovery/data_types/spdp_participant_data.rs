@@ -1,17 +1,22 @@
 use serde::{Serialize, Deserialize};
 
-use crate::dds::{
-  traits::{
-    key::{Key, Keyed},
+use crate::{
+  dds::{
+    traits::{
+      key::{Key, Keyed},
+    },
+    rtps_reader_proxy::RtpsReaderProxy,
+    participant::DomainParticipant,
+    rtps_writer_proxy::RtpsWriterProxy,
   },
-  rtps_reader_proxy::RtpsReaderProxy,
-  participant::DomainParticipant,
+  network::util::get_local_multicast_locators,
+  network::util::get_local_unicast_socket_address,
 };
 
 use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
 use crate::{
   structure::{
-    locator::{Locator, LocatorList},
+    locator::LocatorList,
     guid::{EntityId, GUID},
     duration::Duration,
     builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
@@ -27,11 +32,7 @@ use crate::{
   network::constant::*,
 };
 
-use std::{
-  net::{IpAddr, SocketAddr},
-  time::Duration as StdDuration,
-  io::Error,
-};
+use std::{time::Duration as StdDuration};
 #[derive(Debug, Clone)]
 pub struct SPDPDiscoveredParticipantData {
   pub updated_time: u64,
@@ -63,10 +64,35 @@ impl SPDPDiscoveredParticipantData {
     };
 
     if !is_metatraffic {
-      proxy.multicast_locator_list = self.default_multicast_locators.clone();
+      // TODO: possible multicast addresses
+      // proxy.multicast_locator_list = self.default_multicast_locators.clone();
       proxy.unicast_locator_list = self.default_unicast_locators.clone();
     } else {
-      proxy.multicast_locator_list = self.metatraffic_multicast_locators.clone();
+      // TODO: possible multicast addresses
+      // proxy.multicast_locator_list = self.metatraffic_multicast_locators.clone();
+      proxy.unicast_locator_list = self.metatraffic_unicast_locators.clone();
+    }
+
+    proxy
+  }
+
+  pub fn as_writer_proxy(&self, is_metatraffic: bool) -> RtpsWriterProxy {
+    let remote_writer_guid = GUID::new_with_prefix_and_id(
+      self.participant_guid.unwrap().guidPrefix,
+      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+    );
+    let mut proxy = RtpsWriterProxy::new(
+      remote_writer_guid,
+      Vec::new(),
+      Vec::new(),
+      EntityId::ENTITYID_UNKNOWN,
+    );
+
+    if !is_metatraffic {
+      // TODO: possible multicast addresses
+      proxy.unicast_locator_list = self.default_unicast_locators.clone();
+    } else {
+      // TODO: possible multicast addresses
       proxy.unicast_locator_list = self.metatraffic_unicast_locators.clone();
     }
 
@@ -77,59 +103,19 @@ impl SPDPDiscoveredParticipantData {
     participant: &DomainParticipant,
     lease_duration: StdDuration,
   ) -> SPDPDiscoveredParticipantData {
-    let mut metatraffic_multicast_locators = LocatorList::new();
-    let saddr = SocketAddr::new(
-      "239.255.0.1".parse().unwrap(),
-      get_spdp_well_known_multicast_port(participant.domain_id()),
-    );
-    metatraffic_multicast_locators.push(Locator::from(saddr));
+    let spdp_multicast_port = get_spdp_well_known_multicast_port(participant.domain_id());
+    let metatraffic_multicast_locators = get_local_multicast_locators(spdp_multicast_port);
 
-    let local_ips: Result<Vec<IpAddr>, Error> = get_if_addrs::get_if_addrs().map(|p| {
-      p.iter()
-        .filter(|ip| !ip.is_loopback())
-        .map(|ip| ip.ip())
-        .collect()
-    });
+    let spdp_unicast_port =
+      get_spdp_well_known_unicast_port(participant.domain_id(), participant.participant_id());
+    let metatraffic_unicast_locators = get_local_unicast_socket_address(spdp_unicast_port);
 
-    let metatraffic_unicast_locators: LocatorList = match local_ips {
-      Ok(ips) => ips
-        .iter()
-        .map(|p| {
-          Locator::from(SocketAddr::new(
-            p.clone(),
-            get_spdp_well_known_unicast_port(participant.domain_id(), participant.participant_id()),
-          ))
-        })
-        .collect(),
-      _ => Vec::new(),
-    };
+    let multicast_port = get_user_traffic_multicast_port(participant.domain_id());
+    let default_multicast_locators = get_local_multicast_locators(multicast_port);
 
-    let mut default_multicast_locators = LocatorList::new();
-    let saddr = SocketAddr::new(
-      "239.255.0.1".parse().unwrap(),
-      get_user_traffic_multicast_port(participant.domain_id()),
-    );
-    default_multicast_locators.push(Locator::from(saddr));
-
-    let local_ips: Result<Vec<IpAddr>, Error> = get_if_addrs::get_if_addrs().map(|p| {
-      p.iter()
-        .filter(|ip| !ip.is_loopback())
-        .map(|ip| ip.ip())
-        .collect()
-    });
-
-    let default_unicast_locators: LocatorList = match local_ips {
-      Ok(ips) => ips
-        .iter()
-        .map(|p| {
-          Locator::from(SocketAddr::new(
-            p.clone(),
-            get_user_traffic_unicast_port(participant.domain_id(), participant.participant_id()),
-          ))
-        })
-        .collect(),
-      _ => Vec::new(),
-    };
+    let unicast_port =
+      get_user_traffic_unicast_port(participant.domain_id(), participant.participant_id());
+    let default_unicast_locators = get_local_unicast_socket_address(unicast_port);
 
     let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR
@@ -145,7 +131,7 @@ impl SPDPDiscoveredParticipantData {
       protocol_version: Some(ProtocolVersion::PROTOCOLVERSION),
       vendor_id: Some(VendorId::VENDOR_UNKNOWN),
       expects_inline_qos: Some(false),
-      participant_guid: Some(participant.get_guid().clone()),
+      participant_guid: Some(participant.get_guid()),
       metatraffic_unicast_locators,
       metatraffic_multicast_locators,
       default_unicast_locators,

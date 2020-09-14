@@ -47,7 +47,7 @@ impl UDPSender {
       if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 || l.kind == LocatorKind::LOCATOR_KIND_UDPv6 {
         let a = SocketAddr::from(l.to_socket_address());
         match self.socket.send_to(buffer, &a) {
-          Ok(_) => (println!("send udp message to socket {:?}", a)),
+          Ok(_) => (),
           _ => println!("Unable to send to {}", a),
         };
       }
@@ -67,7 +67,7 @@ impl UDPSender {
 
   pub fn send_ipv4_multicast(&self, buffer: &[u8], address: SocketAddr) -> io::Result<usize> {
     if address.ip().is_multicast() {
-      return self.socket.send_to(buffer, &SocketAddr::from(address));
+      return self.socket.send_to(buffer, &address);
     }
     io::Result::Err(io::Error::new(
       io::ErrorKind::Other,

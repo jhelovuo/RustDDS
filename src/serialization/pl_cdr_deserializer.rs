@@ -15,7 +15,11 @@ pub struct PlCdrDeserializerAdapter<D> {
   phantom: PhantomData<D>,
 }
 
-const repr_ids: [RepresentationIdentifier; 2] = [
+const repr_ids: [RepresentationIdentifier; 4] = [
+  // CDR_* are only added for random interoperability
+  RepresentationIdentifier::CDR_BE,
+  RepresentationIdentifier::CDR_LE,
+  // PL_CDR_* are expected
   RepresentationIdentifier::PL_CDR_BE,
   RepresentationIdentifier::PL_CDR_LE,
 ];
@@ -30,10 +34,10 @@ where
 
   fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D> {
     match encoding {
-      RepresentationIdentifier::PL_CDR_LE => {
+      RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::CDR_LE => {
         PlCdrDeserializer::from_little_endian_bytes::<D>(input_bytes)
       }
-      RepresentationIdentifier::PL_CDR_BE => {
+      RepresentationIdentifier::PL_CDR_BE | RepresentationIdentifier::CDR_BE => {
         PlCdrDeserializer::from_big_endian_bytes::<D>(input_bytes)
       }
       repr_id => Err(Error::Message(format!(

@@ -120,7 +120,7 @@ impl MessageReceiver {
     if let Some(pos) = self
       .available_readers
       .iter()
-      .position(|r| *r.get_guid() == old_reader_guid)
+      .position(|r| r.get_guid() == old_reader_guid)
     {
       self.available_readers.remove(pos);
     }
@@ -130,7 +130,7 @@ impl MessageReceiver {
     self
       .available_readers
       .iter_mut()
-      .find(|r| *r.get_entity_id() == reader_id)
+      .find(|r| r.get_entity_id() == reader_id)
   }
 
   // TODO use for test and debugging only
@@ -143,7 +143,7 @@ impl MessageReceiver {
     let reader = self
       .available_readers
       .iter()
-      .find(|&r| *r.get_entity_id() == reader_id)
+      .find(|&r| r.get_entity_id() == reader_id)
       .unwrap();
     let a: Option<DDSData> = reader.get_history_cache_change_data(sequence_number);
     Some(a.unwrap())
@@ -159,7 +159,7 @@ impl MessageReceiver {
     let reader = self
       .available_readers
       .iter()
-      .find(|&r| *r.get_entity_id() == reader_id)
+      .find(|&r| r.get_entity_id() == reader_id)
       .unwrap();
     reader.get_history_cache_change(sequence_number).unwrap()
   }
@@ -171,7 +171,7 @@ impl MessageReceiver {
     let reader = self
       .available_readers
       .iter()
-      .find(|&r| *r.get_entity_id() == reader_id)
+      .find(|&r| r.get_entity_id() == reader_id)
       .unwrap();
     reader.get_history_cache_sequence_start_and_end_numbers()
   }
@@ -195,6 +195,8 @@ impl MessageReceiver {
         return;
       }
     };
+
+    self.source_guid_prefix = rtps_message.header.guid_prefix;
 
     for submessage in rtps_message.submessages {
       match submessage.body {
@@ -225,7 +227,10 @@ impl MessageReceiver {
           if let Some(target_reader) = self.get_reader(data.reader_id) {
             target_reader.handle_data_msg(data, mr_state);
           } else {
-            println!("MessageReceiver could not find corresponding Reader");
+            println!(
+              "MessageReceiver could not find corresponding Reader {:?}",
+              data.reader_id
+            );
           }
         }
       }

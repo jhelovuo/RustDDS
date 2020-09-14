@@ -11,7 +11,9 @@ use std::{
   net::Ipv4Addr,
 };
 
-use crate::network::{udp_listener::UDPListener, constant::*};
+use crate::{
+  network::{udp_listener::UDPListener, constant::*},
+};
 
 use crate::dds::{
   dp_event_wrapper::DPEventWrapper, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*,
@@ -250,7 +252,7 @@ pub struct DomainParticipant_Inner {
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 
   // Adding Readers
-  sender_add_reader: mio_channel::Sender<Reader>,
+  sender_add_reader: mio_channel::SyncSender<Reader>,
   sender_remove_reader: mio_channel::Sender<GUID>,
 
   // Adding DataReaders
@@ -336,7 +338,7 @@ impl DomainParticipant_Inner {
     let targets = HashMap::new();
 
     // Adding readers
-    let (sender_add_reader, receiver_add_reader) = mio_channel::channel::<Reader>();
+    let (sender_add_reader, receiver_add_reader) = mio_channel::sync_channel::<Reader>(100);
     let (sender_remove_reader, receiver_remove_reader) = mio_channel::channel::<GUID>();
 
     // Writers
@@ -501,7 +503,7 @@ impl DomainParticipant_Inner {
 
   // The following methods are not for application use.
 
-  pub(crate) fn get_add_reader_sender(&self) -> mio_channel::Sender<Reader> {
+  pub(crate) fn get_add_reader_sender(&self) -> mio_channel::SyncSender<Reader> {
     self.sender_add_reader.clone()
   }
 

@@ -1,7 +1,7 @@
 use crate::common::validity_trait::Validity;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub struct ProtocolId {
   protocol_id: [char; 4],
 }

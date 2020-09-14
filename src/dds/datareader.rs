@@ -112,7 +112,7 @@ where
 
     let cache_changes: Vec<(&Instant, &CacheChange)> = cache_changes
       .into_iter()
-      .filter(|(_, cc)| cc.writer_guid.guidPrefix != *self.get_guid_prefix())
+      .filter(|(_, cc)| cc.writer_guid.guidPrefix != self.get_guid_prefix())
       .collect();
 
     match cache_changes.last() {
@@ -195,6 +195,10 @@ where
         }
       }
     }
+
+    // clearing receiver buffer
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
     Ok(result)
   }
 
@@ -228,6 +232,10 @@ where
         }
       }
     }
+
+    // clearing receiver buffer
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
     Ok(result)
   }
 
@@ -469,7 +477,7 @@ mod tests {
 
     let reader_id = EntityId::default();
     let datareader_id = EntityId::default();
-    let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), reader_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
 
     let mut new_reader = Reader::new(
       reader_guid,
@@ -586,7 +594,7 @@ mod tests {
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
 
     let default_id = EntityId::default();
-    let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), default_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), default_id);
 
     let mut reader = Reader::new(
       reader_guid,
@@ -628,7 +636,7 @@ mod tests {
     };
 
     let mut data_msg = Data::default();
-    data_msg.reader_id = *reader.get_entity_id();
+    data_msg.reader_id = reader.get_entity_id();
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(0);
 
@@ -639,7 +647,7 @@ mod tests {
     };
 
     let mut data_msg2 = Data::default();
-    data_msg2.reader_id = *reader.get_entity_id();
+    data_msg2.reader_id = reader.get_entity_id();
     data_msg2.writer_id = writer_guid.entityId;
     data_msg2.writer_sn = SequenceNumber::from(1);
 
@@ -707,7 +715,7 @@ mod tests {
     assert!(data_key2_3.get_key() == key2);
 
     let mut data_msg = Data::default();
-    data_msg.reader_id = *reader.get_entity_id();
+    data_msg.reader_id = reader.get_entity_id();
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(2);
 
@@ -717,7 +725,7 @@ mod tests {
       value: to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap(),
     };
     let mut data_msg2 = Data::default();
-    data_msg2.reader_id = *reader.get_entity_id();
+    data_msg2.reader_id = reader.get_entity_id();
     data_msg2.writer_id = writer_guid.entityId;
     data_msg2.writer_sn = SequenceNumber::from(3);
 
@@ -727,7 +735,7 @@ mod tests {
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap(),
     };
     let mut data_msg3 = Data::default();
-    data_msg3.reader_id = *reader.get_entity_id();
+    data_msg3.reader_id = reader.get_entity_id();
     data_msg3.writer_id = writer_guid.entityId;
     data_msg3.writer_sn = SequenceNumber::from(4);
 
@@ -737,7 +745,7 @@ mod tests {
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap(),
     };
     let mut data_msg4 = Data::default();
-    data_msg4.reader_id = *reader.get_entity_id();
+    data_msg4.reader_id = reader.get_entity_id();
     data_msg4.writer_id = writer_guid.entityId;
     data_msg4.writer_sn = SequenceNumber::from(5);
 
@@ -801,7 +809,7 @@ mod tests {
     let (send, rec) = mio_channel::sync_channel::<()>(10);
 
     let default_id = EntityId::default();
-    let reader_guid = GUID::new_with_prefix_and_id(*dp.get_guid_prefix(), default_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), default_id);
 
     let mut reader = Reader::new(
       reader_guid,
@@ -848,7 +856,7 @@ mod tests {
     };
 
     let mut data_msg = Data::default();
-    data_msg.reader_id = *reader.get_entity_id();
+    data_msg.reader_id = reader.get_entity_id();
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(0);
 
@@ -859,7 +867,7 @@ mod tests {
     };
 
     let mut data_msg2 = Data::default();
-    data_msg2.reader_id = *reader.get_entity_id();
+    data_msg2.reader_id = reader.get_entity_id();
     data_msg2.writer_id = writer_guid.entityId;
     data_msg2.writer_sn = SequenceNumber::from(1);
 
@@ -870,7 +878,7 @@ mod tests {
     };
 
     let mut data_msg3 = Data::default();
-    data_msg3.reader_id = *reader.get_entity_id();
+    data_msg3.reader_id = reader.get_entity_id();
     data_msg3.writer_id = writer_guid.entityId;
     data_msg3.writer_sn = SequenceNumber::from(2);
 
@@ -912,7 +920,6 @@ mod tests {
           println!("Their strings:");
           for d in data.unwrap().into_iter() {
             // Remove one notification for each data
-            datareader.notification_receiver.try_recv().unwrap();
             println!("{}", d.value.as_ref().unwrap().b);
           }
           println!();

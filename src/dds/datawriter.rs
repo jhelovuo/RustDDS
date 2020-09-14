@@ -38,7 +38,7 @@ pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D>> {
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
-  cc_upload: mio_channel::Sender<DDSData>,
+  cc_upload: mio_channel::SyncSender<DDSData>,
   dds_cache: Arc<RwLock<DDSCache>>,
   datasample_cache: DataSampleCache<D>,
   phantom: PhantomData<SA>,
@@ -54,7 +54,7 @@ where
     publisher: &'a Publisher,
     topic: &'a Topic,
     guid: Option<GUID>,
-    cc_upload: mio_channel::Sender<DDSData>,
+    cc_upload: mio_channel::SyncSender<DDSData>,
     dds_cache: Arc<RwLock<DDSCache>>,
   ) -> Result<DataWriter<'a, D, SA>> {
     let entity_id = match guid {
@@ -108,9 +108,12 @@ where
       None => DataSample::new(Timestamp::from(time::get_time()), data),
     };
 
-    match self.cc_upload.send(ddsdata) {
+    match self.cc_upload.try_send(ddsdata) {
       Ok(_) => Ok(()),
-      _ => Err(Error::OutOfResources),
+      Err(e) => {
+        println!("Failed to write new data. {:?}", e);
+        Err(Error::OutOfResources)
+      }
     }
   }
 
@@ -141,7 +144,7 @@ where
       None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::from(time::get_time()), key),
     };
 
-    match self.cc_upload.send(ddsdata) {
+    match self.cc_upload.try_send(ddsdata) {
       Ok(_) => Ok(()),
       Err(huh) => {
         println!("Error: {:?}", huh);

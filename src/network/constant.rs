@@ -79,6 +79,7 @@ pub enum TimerMessageType {
   writer_cache_cleaning,
 }
 
+#[derive(Debug)]
 pub enum DiscoveryNotificationType {
   ReadersInfoUpdated,
   WritersInfoUpdated,

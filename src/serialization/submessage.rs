@@ -16,7 +16,6 @@ pub enum SubmessageBody {
   Interpreter(InterpreterSubmessage),
 }
 
-
 impl<C: Context> Writable<C> for SubMessage {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_value(&self.header)?;
@@ -56,9 +55,7 @@ mod tests {
     };
     println!("{:?}", sub);
 
-    let messageBuffer = sub
-      .write_to_vec()
-      .expect("DATA serialization failed");
+    let messageBuffer = sub.write_to_vec().expect("DATA serialization failed");
 
     assert_eq!(serializedDataSubMessage, messageBuffer);
   }
@@ -75,7 +72,7 @@ mod tests {
       .expect("could not create submessage header");
     let flags = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(header.flags);
     let e = endianness_flag(header.flags);
-    let suba = Heartbeat::read_from_buffer_with_ctx(e,&serializedHeartbeatMessage[4..])
+    let suba = Heartbeat::read_from_buffer_with_ctx(e, &serializedHeartbeatMessage[4..])
       .expect("deserialization failed.");
     let sub = SubMessage {
       header,
@@ -83,13 +80,11 @@ mod tests {
     };
     println!("{:?}", sub);
 
-    let messageBuffer = sub
-      .write_to_vec()
-      .expect("serialization failed");
+    let messageBuffer = sub.write_to_vec().expect("serialization failed");
 
     assert_eq!(serializedHeartbeatMessage, messageBuffer);
   }
-  
+
   #[test]
   fn submessage_info_dst_deserialization() {
     let serializedInfoDSTMessage: Vec<u8> = vec![
@@ -101,7 +96,7 @@ mod tests {
       .expect("could not create submessage header");
     let flags = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(header.flags);
     let e = endianness_flag(header.flags);
-    let suba = InfoDestination::read_from_buffer_with_ctx(e,&serializedInfoDSTMessage[4..])
+    let suba = InfoDestination::read_from_buffer_with_ctx(e, &serializedInfoDSTMessage[4..])
       .expect("deserialization failed.");
     let sub = SubMessage {
       header,
@@ -109,13 +104,11 @@ mod tests {
     };
     println!("{:?}", sub);
 
-    let messageBuffer = sub
-      .write_to_vec()
-      .expect("serialization failed");
+    let messageBuffer = sub.write_to_vec().expect("serialization failed");
 
     assert_eq!(serializedInfoDSTMessage, messageBuffer);
   }
-  
+
   #[test]
   fn submessage_info_ts_deserialization() {
     let serializedInfoTSMessage: Vec<u8> = vec![
@@ -125,7 +118,7 @@ mod tests {
       .expect("could not create submessage header");
     let flags = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(header.flags);
     let e = endianness_flag(header.flags);
-    let suba = InfoTimestamp::read_from_buffer_with_ctx(e,&serializedInfoTSMessage[4..])
+    let suba = InfoTimestamp::read_from_buffer_with_ctx(e, &serializedInfoTSMessage[4..])
       .expect("deserialization failed.");
     let sub = SubMessage {
       header,
@@ -133,12 +126,8 @@ mod tests {
     };
     println!("{:?}", sub);
 
-    let messageBuffer = sub
-      .write_to_vec()
-      .expect("serialization failed");
+    let messageBuffer = sub.write_to_vec().expect("serialization failed");
 
     assert_eq!(serializedInfoTSMessage, messageBuffer);
-
   }
-  
 }

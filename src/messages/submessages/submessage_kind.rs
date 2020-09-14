@@ -3,7 +3,7 @@ use std::fmt;
 
 use speedy::{Readable, Writable};
 
-#[derive(PartialEq, Eq, Readable, Writable,Clone,Copy)]
+#[derive(PartialEq, Eq, Readable, Writable, Clone, Copy)]
 pub struct SubmessageKind {
   value: u8,
 }
@@ -40,7 +40,9 @@ impl Debug for SubmessageKind {
       SubmessageKind::HEARTBEAT_FRAG => fmt.write_str("HEARTBEAT_FRAG"),
       SubmessageKind::DATA => fmt.write_str("DATA"),
       SubmessageKind::DATA_FRAG => fmt.write_str("DATA_FRAG"),
-      SubmessageKind{ value: other } => fmt.write_fmt(format_args!("SubmessageKind {} (UNKNOWN!)",other)),
+      SubmessageKind { value: other } => {
+        fmt.write_fmt(format_args!("SubmessageKind {} (UNKNOWN!)", other))
+      }
     }
   }
 }

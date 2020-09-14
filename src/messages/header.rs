@@ -5,7 +5,7 @@ use crate::messages::vendor_id::VendorId;
 use crate::structure::guid::GuidPrefix;
 use speedy::{Readable, Writable};
 
-#[derive(Debug, Readable, Writable, PartialEq)]
+#[derive(Debug, Clone, Readable, Writable, PartialEq)]
 pub struct Header {
   pub protocol_id: ProtocolId,
   pub protocol_version: ProtocolVersion,

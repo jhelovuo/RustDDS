@@ -52,13 +52,16 @@ impl UDPListener {
     let mut message: Vec<u8> = vec![];
     let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
     //self.mio_socket().recv_from(buf)
-    let result = self.socket.recv(&mut buf);
-    if result.is_ok() {
-      let nbytes = result.unwrap();
-      message = buf[..nbytes].to_vec();
-    } else {
-      println!("UDPListener::get_message failed: {:?}", result);
-    }
+    match self.socket.recv(&mut buf) {
+      Ok(nbytes) => {
+        message = buf[..nbytes].to_vec();
+        return message;
+      }
+      Err(_) => {
+        // println!("UDPListener::get_message failed: {:?}", e);
+        ()
+      }
+    };
     message
   }
 
@@ -123,17 +126,16 @@ mod tests {
     //setsockopt(sender.socket.as_raw_fd(), IpMulticastLoop, &true)
     //  .expect("Unable set IpMulticastLoop option on socket");
 
-
     let data: Vec<u8> = vec![2, 4, 6];
 
     listener
       .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
       .expect("Failed to join multicast.");
-    
+
     sender
       .send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002)
       .expect("Failed to send multicast");
-    
+
     thread::sleep(time::Duration::from_secs(1));
 
     let rec_data = listener.get_message();

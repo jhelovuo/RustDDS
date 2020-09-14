@@ -18,6 +18,8 @@ pub mod submessage_header;
 pub mod submessage_kind;
 
 pub mod submessages {
+  pub use super::submessage_elements::RepresentationIdentifier;
+
   pub use super::submessage::*;
   pub use super::submessage_header::*;
   pub use super::submessage_flag::*;

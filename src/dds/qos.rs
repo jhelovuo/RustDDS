@@ -96,13 +96,13 @@ pub mod policy {
     pub value: i32,
   }
   */
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct Lifespan {
     pub duration: Duration,
   }
 
   // this is a policy
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum Durability {
     Volatile,
     TransientLocal,
@@ -110,7 +110,7 @@ pub mod policy {
     Persistent,
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct Presentation {
     pub access_scope: PresentationAccessScope,
     pub coherent_access: bool,
@@ -118,43 +118,43 @@ pub mod policy {
   }
 
   // This is not an independent QoS Policy but a component of Presentation
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum PresentationAccessScope {
     Instance,
     Topic,
     Group,
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct Deadline {
     pub period: Duration,
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct LatencyBudget {
     pub duration: Duration,
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum Ownership {
     Shared,
     Exclusive { strength: i32 }, // This also implements OwnershipStrength
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct Liveliness {
     pub kind: LivelinessKind,
     pub lease_duration: Duration,
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum LivelinessKind {
     Automatic,
     ManualByParticipant,
     ManulByTopic,
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct TimeBasedFilter {
     pub minimum_separation: Duration,
   }
@@ -165,25 +165,25 @@ pub mod policy {
   }
   */
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum DestinationOrder {
     ByReceptionTimestamp,
     BySourceTimeStamp,
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum History {
     KeepLast { depth: i32 },
     KeepAll,
   }
 
-  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct ResourceLimits {
     pub max_samples: i32,
     pub max_instances: i32,

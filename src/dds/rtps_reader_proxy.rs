@@ -164,13 +164,13 @@ impl RtpsReaderProxy {
     return min;
   }
 
-  pub fn next_unsent_change(&self) -> Option<&SequenceNumber> {
+  pub fn next_unsent_change(&self) -> Option<SequenceNumber> {
     let mut min_value = SequenceNumber::from(std::i64::MAX);
-    let mut min: Option<&SequenceNumber> = None;
-    for request in self.unsent_changes() {
-      if request < &min_value {
-        min = Some(&request);
-        min_value = *request;
+    let mut min: Option<SequenceNumber> = None;
+    for &request in self.unsent_changes() {
+      if request > SequenceNumber::from(0) && request < min_value {
+        min = Some(request);
+        min_value = request;
       }
     }
     return min;
@@ -186,14 +186,14 @@ impl RtpsReaderProxy {
 
   /// this should be called everytime a new CacheChange is set to RTPS writer HistoryCache
   pub fn unsend_changes_set(&mut self, sequence_number: SequenceNumber) {
-    self.unsent_changes.insert(sequence_number);
+    if sequence_number > SequenceNumber::from(0) {
+      self.unsent_changes.insert(sequence_number);
+    }
   }
 
   /// this should be called everytime next_unsent_change is called and change is sent
   pub fn remove_unsend_change(&mut self, sequence_number: SequenceNumber) {
-    if self.unsent_changes.remove(&sequence_number) {
-      println!("removeUnsend Change");
-    }
+    self.unsent_changes.remove(&sequence_number);
   }
   ///This operation changes the ChangeForReader status of a set of changes for the reader represented by
   ///ReaderProxy ‘the_reader_proxy.’ The set of changes with sequence number smaller than or equal to the value

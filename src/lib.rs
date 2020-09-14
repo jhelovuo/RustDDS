@@ -20,7 +20,7 @@ mod common;
 mod discovery;
 mod messages;
 mod network;
-mod structure;
+pub mod structure;
 mod test;
 
 pub mod dds;
