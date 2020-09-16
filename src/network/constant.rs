@@ -31,6 +31,7 @@ pub const REMOVE_DATAWRITER_TOKEN: Token = Token(19);
 pub const ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN: Token = Token(20);
 
 pub const DISCOVERY_UPDATE_NOTIFICATION_TOKEN: Token = Token(21);
+pub const DISCOVERY_COMMAND_TOKEN: Token = Token(22);
 
 pub const DISCOVERY_PARTICIPANT_DATA_TOKEN: Token = Token(30);
 pub const DISCOVERY_PARTICIPANT_CLEANUP_TOKEN: Token = Token(31);

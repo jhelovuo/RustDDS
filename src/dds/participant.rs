@@ -13,6 +13,7 @@ use std::{
 
 use crate::{
   network::{udp_listener::UDPListener, constant::*},
+  discovery::discovery::DiscoveryCommand,
 };
 
 use crate::dds::{
@@ -50,10 +51,10 @@ impl DomainParticipant {
       None => panic!("Unable to receive Discovery Updated Sender."),
     };
 
-    let discovery_stop_receiver = match dpd.discovery_stop_receiver.take() {
+    let discovery_command_receiver = match dpd.discovery_command_receiver.take() {
       Some(dsr) => dsr,
       // this error should never happen
-      None => panic!("Unable to get Discovery Stop Receiver."),
+      None => panic!("Unable to get Discovery Command Receiver."),
     };
 
     let dp = DomainParticipant { dpi: Arc::new(dpd) };
@@ -66,7 +67,7 @@ impl DomainParticipant {
       dp.discovery_db.clone(),
       discovery_started_sender,
       discovery_updated_sender,
-      discovery_stop_receiver,
+      discovery_command_receiver,
     );
 
     let _discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
@@ -189,8 +190,8 @@ pub struct DomainParticipant_Disc {
   dpi: Arc<DomainParticipant_Inner>,
   // Discovery control
   discovery_updated_sender: Option<mio_channel::SyncSender<DiscoveryNotificationType>>,
-  discovery_stop_receiver: Option<mio_channel::Receiver<()>>,
-  discovery_stop_channel: mio_channel::Sender<()>,
+  discovery_command_receiver: Option<mio_channel::Receiver<DiscoveryCommand>>,
+  discovery_command_channel: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
 impl DomainParticipant_Disc {
@@ -206,13 +207,14 @@ impl DomainParticipant_Disc {
 
     let dpi_arc = Arc::new(dpi);
 
-    let (discovery_stop_sender, discovery_stop_receiver) = mio_channel::channel();
+    let (discovery_command_sender, discovery_command_receiver) =
+      mio_channel::sync_channel::<DiscoveryCommand>(10);
 
     let dpd = DomainParticipant_Disc {
       dpi: dpi_arc.clone(),
       discovery_updated_sender: Some(discovery_update_notification_sender),
-      discovery_stop_receiver: Some(discovery_stop_receiver),
-      discovery_stop_channel: discovery_stop_sender,
+      discovery_command_receiver: Some(discovery_command_receiver),
+      discovery_command_channel: discovery_command_sender,
     };
 
     dpd
@@ -262,7 +264,10 @@ impl Deref for DomainParticipant_Disc {
 
 impl Drop for DomainParticipant_Disc {
   fn drop(&mut self) {
-    match self.discovery_stop_channel.send(()) {
+    match self
+      .discovery_command_channel
+      .send(DiscoveryCommand::STOP_DISCOVERY)
+    {
       Ok(_) => (),
       _ => {
         println!("Failed to send stop signal to Discovery");
@@ -468,8 +473,11 @@ impl DomainParticipant_Inner {
     domain_participant: &DomainParticipantWeak,
     qos: &QosPolicies,
   ) -> Result<Publisher> {
-    let add_writer_sender = match domain_participant.dpi.upgrade() {
-      Some(dpi) => dpi.get_add_writer_sender(),
+    let (add_writer_sender, discovery_command) = match domain_participant.dpi.upgrade() {
+      Some(dpi) => (
+        dpi.get_add_writer_sender(),
+        dpi.discovery_command_channel.clone(),
+      ),
       None => return Err(Error::OutOfResources),
     };
 
@@ -479,6 +487,7 @@ impl DomainParticipant_Inner {
       qos.clone(),
       qos.clone(),
       add_writer_sender,
+      discovery_command,
     ))
   }
 
@@ -487,12 +496,18 @@ impl DomainParticipant_Inner {
     domain_participant: &DomainParticipantWeak,
     qos: &QosPolicies,
   ) -> Result<Subscriber> {
+    let discovery_command = match domain_participant.dpi.upgrade() {
+      Some(dpi) => dpi.discovery_command_channel.clone(),
+      None => return Err(Error::OutOfResources),
+    };
+
     Ok(Subscriber::new(
       domain_participant.clone(),
       self.discovery_db.clone(),
       qos.clone(),
       self.sender_add_reader.clone(),
       self.sender_remove_reader.clone(),
+      discovery_command,
     ))
   }
 

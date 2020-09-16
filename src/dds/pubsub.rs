@@ -7,7 +7,10 @@ use std::{
 
 use serde::{Serialize, /*Deserialize,*/ de::DeserializeOwned};
 
-use crate::structure::{guid::GUID, /*time::Timestamp,*/ entity::Entity, guid::EntityId};
+use crate::{
+  structure::{guid::GUID, /*time::Timestamp,*/ entity::Entity, guid::EntityId},
+  discovery::discovery::DiscoveryCommand,
+};
 
 use crate::dds::{
   values::result::*,
@@ -43,6 +46,7 @@ pub struct Publisher {
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
   add_writer_sender: mio_channel::SyncSender<Writer>,
+  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
 // public interface for Publisher
@@ -53,6 +57,7 @@ impl<'a> Publisher {
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
     add_writer_sender: mio_channel::SyncSender<Writer>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Publisher {
     Publisher {
       domain_participant: dp,
@@ -60,6 +65,7 @@ impl<'a> Publisher {
       my_qos_policies: qos,
       default_datawriter_qos: default_dw_qos,
       add_writer_sender,
+      discovery_command,
     }
   }
 
@@ -108,8 +114,14 @@ impl<'a> Publisher {
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer =
-      DataWriter::<D, SA>::new(self, &topic, Some(guid), dwcc_upload, dp.get_dds_cache());
+    let matching_data_writer = DataWriter::<D, SA>::new(
+      self,
+      &topic,
+      Some(guid),
+      dwcc_upload,
+      self.discovery_command.clone(),
+      dp.get_dds_cache(),
+    );
 
     let matching_data_writer = match matching_data_writer {
       Ok(dw) => dw,
@@ -212,6 +224,7 @@ pub struct Subscriber {
   qos: QosPolicies,
   sender_add_reader: mio_channel::SyncSender<Reader>,
   sender_remove_reader: mio_channel::SyncSender<GUID>,
+  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
 impl<'s> Subscriber {
@@ -221,6 +234,7 @@ impl<'s> Subscriber {
     qos: QosPolicies,
     sender_add_reader: mio_channel::SyncSender<Reader>,
     sender_remove_reader: mio_channel::SyncSender<GUID>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Subscriber {
     Subscriber {
       domain_participant,
@@ -228,6 +242,7 @@ impl<'s> Subscriber {
       qos,
       sender_add_reader,
       sender_remove_reader,
+      discovery_command,
     }
   }
 
@@ -266,7 +281,7 @@ impl<'s> Subscriber {
     };
 
     let matching_datareader =
-      DataReader::<D, SA>::new(self, datareader_id, &topic, rec, dp.get_dds_cache());
+      DataReader::<D, SA>::new(self, datareader_id, &topic, rec, dp.get_dds_cache(), self.discovery_command.clone());
 
     let matching_datareader = match matching_datareader {
       Ok(dr) => dr,

@@ -225,7 +225,9 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
               }
             };
             match c {
-              113 => return,
+              113 => {
+                return
+              },
               65 => {
                 square.yadd(-1);
                 square_writer.write(square.clone(), None).unwrap();

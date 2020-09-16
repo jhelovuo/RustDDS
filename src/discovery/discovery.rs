@@ -43,13 +43,19 @@ use crate::network::constant::*;
 use super::data_types::topic_data::DiscoveredTopicData;
 use byteorder::LittleEndian;
 
+pub enum DiscoveryCommand {
+  STOP_DISCOVERY,
+  REMOVE_LOCAL_WRITER { guid: GUID },
+  REMOVE_LOCAL_READER { guid: GUID },
+}
+
 pub struct Discovery {
   poll: Poll,
   domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   discovery_started_sender: std::sync::mpsc::Sender<Result<(), Error>>,
   discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
-  discovery_stop_receiver: mio_channel::Receiver<()>,
+  discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
 }
 
 unsafe impl Sync for Discovery {}
@@ -68,7 +74,7 @@ impl Discovery {
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     discovery_started_sender: std::sync::mpsc::Sender<Result<(), Error>>,
     discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
-    discovery_stop_receiver: mio_channel::Receiver<()>,
+    discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
   ) -> Discovery {
     let poll = match mio::Poll::new() {
       Ok(p) => p,
@@ -87,7 +93,7 @@ impl Discovery {
       discovery_db,
       discovery_started_sender,
       discovery_updated_sender,
-      discovery_stop_receiver,
+      discovery_command_receiver,
     }
   }
 
@@ -100,8 +106,8 @@ impl Discovery {
 
   pub fn discovery_event_loop(discovery: Discovery) {
     match discovery.poll.register(
-      &discovery.discovery_stop_receiver,
-      STOP_POLL_TOKEN,
+      &discovery.discovery_command_receiver,
+      DISCOVERY_COMMAND_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
     ) {
@@ -607,40 +613,76 @@ impl Discovery {
       }
 
       for event in events.into_iter() {
-        if event.token() == STOP_POLL_TOKEN {
-          println!("Stopping Discovery");
+        if event.token() == DISCOVERY_COMMAND_TOKEN {
+          while let Ok(command) = discovery.discovery_command_receiver.try_recv() {
+            match command {
+              DiscoveryCommand::STOP_DISCOVERY => {
+                println!("Stopping Discovery");
 
-          // disposing readers
-          match discovery.discovery_db.read() {
-            Ok(db) => {
-              let readers = db.get_all_local_topic_readers();
-              for reader in readers {
-                dcps_subscription_writer
-                  .dispose(reader.reader_proxy.remote_reader_guid.unwrap(), None)
-                  .unwrap_or(());
+                // disposing readers
+                match discovery.discovery_db.read() {
+                  Ok(db) => {
+                    let readers = db.get_all_local_topic_readers();
+                    for reader in readers {
+                      dcps_subscription_writer
+                        .dispose(reader.reader_proxy.remote_reader_guid.unwrap(), None)
+                        .unwrap_or(());
+                    }
+                  }
+                  Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
+                };
+
+                // disposing writers
+                match discovery.discovery_db.read() {
+                  Ok(db) => {
+                    let writers = db.get_all_local_topic_writers();
+                    for writer in writers {
+                      dcps_publication_writer
+                        .dispose(writer.writer_proxy.remote_writer_guid.unwrap(), None)
+                        .unwrap_or(());
+                    }
+                  }
+                  Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
+                };
+
+                // finally disposing the participant we have
+                let guid = discovery.domain_participant.get_guid();
+                dcps_participant_writer.dispose(guid, None).unwrap_or(());
+
+                return;
               }
-            }
-            Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-          };
+              DiscoveryCommand::REMOVE_LOCAL_WRITER { guid } => {
+                if guid == dcps_publication_writer.get_guid() {
+                  continue;
+                }
 
-          // disposing writers
-          match discovery.discovery_db.read() {
-            Ok(db) => {
-              let writers = db.get_all_local_topic_writers();
-              for writer in writers {
-                dcps_publication_writer
-                  .dispose(writer.writer_proxy.remote_writer_guid.unwrap(), None)
-                  .unwrap_or(());
+                println!("Removing local writer {:?}", guid);
+                dcps_publication_writer.dispose(guid, None).unwrap_or(());
+
+                match discovery.discovery_db.write() {
+                  Ok(mut db) => {
+                    db.remove_local_topic_writer(guid);
+                  }
+                  Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
+                };
               }
-            }
-            Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-          };
+              DiscoveryCommand::REMOVE_LOCAL_READER { guid } => {
+                if guid == dcps_subscription_writer.get_guid() {
+                  continue;
+                }
 
-          // finally disposing the participant we have
-          let guid = discovery.domain_participant.get_guid();
-          dcps_participant_writer.dispose(guid, None).unwrap_or(());
+                println!("Removing local reader {:?}", guid);
+                dcps_subscription_writer.dispose(guid, None).unwrap_or(());
 
-          return;
+                match discovery.discovery_db.write() {
+                  Ok(mut db) => {
+                    db.remove_local_topic_reader(guid);
+                  }
+                  Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
+                };
+              }
+            };
+          }
         } else if event.token() == DISCOVERY_PARTICIPANT_DATA_TOKEN {
           let data = discovery.handle_participant_reader(&mut dcps_participant_reader);
           match data {

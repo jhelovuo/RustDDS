@@ -7,7 +7,7 @@ use mio_extras::channel as mio_channel;
 
 use serde::Serialize;
 
-use crate::structure::time::Timestamp;
+use crate::{structure::time::Timestamp, discovery::discovery::DiscoveryCommand};
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::{
   dds_cache::DDSCache,
@@ -39,9 +39,30 @@ pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D>> {
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   cc_upload: mio_channel::SyncSender<DDSData>,
+  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   dds_cache: Arc<RwLock<DDSCache>>,
   datasample_cache: DataSampleCache<D>,
   phantom: PhantomData<SA>,
+}
+
+impl<'a, D, SA> Drop for DataWriter<'a, D, SA>
+where
+  D: Keyed + Serialize,
+  SA: SerializerAdapter<D>,
+{
+  fn drop(&mut self) {
+    match self
+      .discovery_command
+      .send(DiscoveryCommand::REMOVE_LOCAL_WRITER {
+        guid: self.get_guid(),
+      }) {
+      Ok(_) => {}
+      Err(e) => println!(
+        "Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand. {:?}",
+        e
+      ),
+    }
+  }
 }
 
 impl<'a, D, SA> DataWriter<'a, D, SA>
@@ -55,6 +76,7 @@ where
     topic: &'a Topic,
     guid: Option<GUID>,
     cc_upload: mio_channel::SyncSender<DDSData>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: Arc<RwLock<DDSCache>>,
   ) -> Result<DataWriter<'a, D, SA>> {
     let entity_id = match guid {
@@ -90,6 +112,7 @@ where
       qos_policy: topic.get_qos().clone(),
       entity_attributes,
       cc_upload,
+      discovery_command,
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
       phantom: PhantomData,

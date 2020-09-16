@@ -5,10 +5,13 @@ use serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
-use crate::structure::{
-  entity::{Entity, EntityAttributes},
-  guid::{EntityId},
-  dds_cache::DDSCache,
+use crate::{
+  structure::{
+    entity::{Entity, EntityAttributes},
+    guid::{EntityId},
+    dds_cache::DDSCache,
+  },
+  discovery::discovery::DiscoveryCommand,
 };
 use crate::dds::{
   traits::key::*, traits::serde_adapters::*, values::result::*, qos::*, pubsub::Subscriber,
@@ -99,6 +102,7 @@ where
     topic: &'a Topic,
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Result<Self> {
     Ok(DataReader {
       keyed_datareader:
@@ -108,6 +112,7 @@ where
           topic,
           notification_receiver,
           dds_cache,
+          discovery_command,
         )?,
       result_cache: vec![],
     })

@@ -159,6 +159,26 @@ impl DiscoveryDB {
     self.writers_updated = true;
   }
 
+  pub fn remove_local_topic_writer(&mut self, guid: GUID) {
+    let pos =
+      self
+        .local_topic_writers
+        .iter()
+        .position(|w| match w.writer_proxy.remote_writer_guid {
+          Some(g) => g == guid,
+          None => false,
+        });
+
+    match pos {
+      Some(pos) => {
+        self.local_topic_writers.remove(pos);
+      }
+      None => (),
+    };
+
+    self.writers_updated = true;
+  }
+
   pub fn get_writers_reader_proxies<'a>(
     &'a self,
     guid: GUID,
@@ -560,6 +580,26 @@ impl DiscoveryDB {
     self.readers_updated = true;
   }
 
+  pub fn remove_local_topic_reader(&mut self, guid: GUID) {
+    let pos =
+      self
+        .local_topic_readers
+        .iter()
+        .position(|p| match p.reader_proxy.remote_reader_guid {
+          Some(g) => g == guid,
+          None => false,
+        });
+
+    match pos {
+      Some(pos) => {
+        self.local_topic_readers.remove(pos);
+      }
+      None => (),
+    };
+
+    self.readers_updated = true;
+  }
+
   pub fn is_readers_updated(&self) -> bool {
     self.readers_updated
   }
@@ -594,10 +634,7 @@ impl DiscoveryDB {
   }
 
   // TODO: return iterator somehow?
-  pub fn get_local_topic_readers<'a>(
-    &'a self,
-    topic: &'a Topic,
-  ) -> Vec<&DiscoveredReaderData> {
+  pub fn get_local_topic_readers<'a>(&'a self, topic: &'a Topic) -> Vec<&DiscoveredReaderData> {
     let topic_name = String::from(topic.get_name());
     self
       .local_topic_readers
@@ -607,7 +644,8 @@ impl DiscoveryDB {
           Some(t) => t,
           None => return false,
         } == topic_name
-      }).collect()
+      })
+      .collect()
   }
 }
 

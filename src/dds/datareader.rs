@@ -3,16 +3,19 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use std::marker::PhantomData;
 
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
-use crate::structure::{
-  entity::{Entity, EntityAttributes},
-  guid::{GUID, EntityId},
-  time::Timestamp,
-  dds_cache::DDSCache,
-  cache_change::{CacheChange, ChangeKind},
+use crate::{
+  structure::{
+    entity::{Entity, EntityAttributes},
+    guid::{GUID, EntityId},
+    time::Timestamp,
+    dds_cache::DDSCache,
+    cache_change::{CacheChange, ChangeKind},
+  },
+  discovery::discovery::DiscoveryCommand,
 };
 use crate::dds::{
   traits::key::*, traits::serde_adapters::*, values::result::*, qos::*, datasample::*,
@@ -46,6 +49,27 @@ pub struct DataReader<'a, D: Keyed, SA> {
   datasample_cache: DataSampleCache<D>,
   latest_instant: Instant,
   deserializer_type: PhantomData<SA>, // This is to provide use for SA
+
+  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+}
+
+impl<'a, D, SA> Drop for DataReader<'a, D, SA>
+where
+  D: Keyed,
+{
+  fn drop(&mut self) {
+    match self
+      .discovery_command
+      .send(DiscoveryCommand::REMOVE_LOCAL_READER {
+        guid: self.get_guid(),
+      }) {
+      Ok(_) => {}
+      Err(e) => println!(
+        "Failed to send REMOVE_LOCAL_READER DiscoveryCommand. {:?}",
+        e
+      ),
+    }
+  }
 }
 
 impl<'a, D, SA> DataReader<'a, D, SA>
@@ -61,6 +85,7 @@ where
     // Each notification sent to this channel must be try_recv'd
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Result<Self> {
     let dp = match subscriber.get_participant() {
       Some(dp) => dp,
@@ -88,6 +113,7 @@ where
       // added by the reader.
       latest_instant: Instant::now(),
       deserializer_type: PhantomData,
+      discovery_command,
     })
   }
 
@@ -445,7 +471,7 @@ where
 
 impl<'a, D, SA> Entity for DataReader<'a, D, SA>
 where
-  D: Deserialize<'a> + Keyed,
+  D: Keyed,
 {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes
@@ -527,7 +553,7 @@ mod tests {
     data.writer_id = writer_guid.entityId;
     data.writer_sn = SequenceNumber::from(0);
 
-    data.serialized_payload = Some (SerializedPayload {
+    data.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data).unwrap(),
