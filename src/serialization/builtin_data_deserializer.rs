@@ -130,26 +130,26 @@ impl BuiltinDataDeserializer {
   pub fn generate_spdp_participant_data(&self) -> SPDPDiscoveredParticipantData {
     SPDPDiscoveredParticipantData {
       updated_time: time::precise_time_ns(),
-      protocol_version: self.protocol_version.clone(),
-      vendor_id: self.vendor_id.clone(),
-      expects_inline_qos: self.expects_inline_qos.clone(),
-      participant_guid: self.participant_guid.clone(),
+      protocol_version: self.protocol_version,
+      vendor_id: self.vendor_id,
+      expects_inline_qos: self.expects_inline_qos,
+      participant_guid: self.participant_guid,
       metatraffic_unicast_locators: self.metatraffic_unicast_locators.clone(),
       metatraffic_multicast_locators: self.metatraffic_multicast_locators.clone(),
       default_unicast_locators: self.default_unicast_locators.clone(),
       default_multicast_locators: self.default_multicast_locators.clone(),
       available_builtin_endpoints: self.available_builtin_endpoints.clone(),
-      lease_duration: self.lease_duration.clone(),
-      manual_liveliness_count: self.manual_liveliness_count.clone(),
-      builtin_enpoint_qos: self.builtin_enpoint_qos.clone(),
+      lease_duration: self.lease_duration,
+      manual_liveliness_count: self.manual_liveliness_count,
+      builtin_enpoint_qos: self.builtin_enpoint_qos,
       entity_name: self.entity_name.clone(),
     }
   }
 
   pub fn generate_reader_proxy(&self) -> ReaderProxy {
     ReaderProxy {
-      remote_reader_guid: self.endpoint_guid.clone(),
-      expects_inline_qos: self.expects_inline_qos.clone(),
+      remote_reader_guid: self.endpoint_guid,
+      expects_inline_qos: self.expects_inline_qos,
       unicast_locator_list: self.unicast_locator_list.clone(),
       multicast_locator_list: self.multicast_locator_list.clone(),
     }
@@ -157,48 +157,48 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_writer_proxy(&self) -> WriterProxy {
     WriterProxy {
-      remote_writer_guid: self.endpoint_guid.clone(),
+      remote_writer_guid: self.endpoint_guid,
       unicast_locator_list: self.unicast_locator_list.clone(),
       multicast_locator_list: self.multicast_locator_list.clone(),
-      data_max_size_serialized: self.data_max_size_serialized.clone(),
+      data_max_size_serialized: self.data_max_size_serialized,
     }
   }
 
   pub fn generate_subscription_topic_data(&self) -> SubscriptionBuiltinTopicData {
     SubscriptionBuiltinTopicData {
-      key: self.endpoint_guid.clone(),
-      participant_key: self.participant_guid.clone(),
+      key: self.endpoint_guid,
+      participant_key: self.participant_guid,
       topic_name: self.topic_name.clone(),
       type_name: self.type_name.clone(),
-      durability: self.durability.clone(),
-      deadline: self.deadline.clone(),
-      latency_budget: self.latency_budget.clone(),
-      liveliness: self.liveliness.clone(),
-      reliability: self.reliability.clone(),
-      ownership: self.ownership.clone(),
-      destination_order: self.destination_order.clone(),
-      time_based_filter: self.time_based_filter.clone(),
-      presentation: self.presentation.clone(),
-      lifespan: self.lifespan.clone(),
+      durability: self.durability,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      liveliness: self.liveliness,
+      reliability: self.reliability,
+      ownership: self.ownership,
+      destination_order: self.destination_order,
+      time_based_filter: self.time_based_filter,
+      presentation: self.presentation,
+      lifespan: self.lifespan,
     }
   }
 
   pub fn generate_publication_topic_data(&self) -> PublicationBuiltinTopicData {
     PublicationBuiltinTopicData {
-      key: self.endpoint_guid.clone(),
-      participant_key: self.participant_guid.clone(),
+      key: self.endpoint_guid,
+      participant_key: self.participant_guid,
       topic_name: self.topic_name.clone(),
       type_name: self.type_name.clone(),
-      durability: self.durability.clone(),
-      deadline: self.deadline.clone(),
-      latency_budget: self.latency_budget.clone(),
-      liveliness: self.liveliness.clone(),
-      reliability: self.reliability.clone(),
-      lifespan: self.lifespan.clone(),
-      time_based_filter: self.time_based_filter.clone(),
-      ownership: self.ownership.clone(),
-      destination_order: self.destination_order.clone(),
-      presentation: self.presentation.clone(),
+      durability: self.durability,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      liveliness: self.liveliness,
+      reliability: self.reliability,
+      lifespan: self.lifespan,
+      time_based_filter: self.time_based_filter,
+      ownership: self.ownership,
+      destination_order: self.destination_order,
+      presentation: self.presentation,
     }
   }
 
@@ -222,7 +222,6 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn generate_discovered_reader_data(self) -> DiscoveredReaderData {
-    // TODO: refactor so that clones are not necessary
     let reader_proxy = self.generate_reader_proxy();
     let subscription_topic_data = self.generate_subscription_topic_data();
     DiscoveredReaderData {
@@ -233,7 +232,6 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn generate_discovered_writer_data(self) -> DiscoveredWriterData {
-    // TODO: refactor so that clones are not necessary
     let writer_proxy = self.generate_writer_proxy();
     let publication_topic_data = self.generate_publication_topic_data();
     DiscoveredWriterData {
@@ -253,7 +251,7 @@ impl BuiltinDataDeserializer {
   fn parse_data(mut self, buffer: &[u8], rep: RepresentationIdentifier) -> BuiltinDataDeserializer {
     let mut buffer = buffer.to_vec();
     while self.sentinel.is_none() && buffer.len() > 0 {
-      self = self.read_next(&mut buffer, rep.clone());
+      self = self.read_next(&mut buffer, rep);
     }
 
     self
@@ -264,20 +262,19 @@ impl BuiltinDataDeserializer {
     buffer: &mut Vec<u8>,
     rep: RepresentationIdentifier,
   ) -> BuiltinDataDeserializer {
-    let parameter_id = BuiltinDataDeserializer::read_parameter_id(&buffer, rep.clone()).unwrap();
+    let parameter_id = BuiltinDataDeserializer::read_parameter_id(&buffer, rep).unwrap();
     let mut parameter_length: usize =
-      BuiltinDataDeserializer::read_parameter_length(&buffer, rep.clone()).unwrap() as usize;
+      BuiltinDataDeserializer::read_parameter_length(&buffer, rep).unwrap() as usize;
 
     if (parameter_length + 4) > buffer.len() {
       parameter_length = buffer.len() - 4;
     }
-    // TODO: decrease/remove copying of the buffer
 
     match parameter_id {
       ParameterId::PID_PARTICIPANT_GUID => {
         let guid: Result<GUID, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match guid {
           Ok(gg) => {
@@ -290,8 +287,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PROTOCOL_VERSION => {
         let version: Result<ProtocolVersion, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match version {
           Ok(vv) => {
@@ -304,8 +301,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_VENDOR_ID => {
         let vendor: Result<VendorId, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match vendor {
           Ok(vv) => {
@@ -318,8 +315,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_EXPECTS_INLINE_QOS => {
         let inline_qos: Result<bool, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match inline_qos {
           Ok(qos) => {
@@ -332,8 +329,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match locator {
           Ok(loc) => {
@@ -346,8 +343,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match locator {
           Ok(loc) => {
@@ -360,8 +357,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match locator {
           Ok(loc) => {
@@ -374,8 +371,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match locator {
           Ok(loc) => {
@@ -388,8 +385,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_BUILTIN_ENDPOINT_SET => {
         let endpoints: Result<BuiltinEndpointSet, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match endpoints {
           Ok(ep) => {
@@ -402,8 +399,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PARTICIPANT_LEASE_DURATION => {
         let duration: Result<Duration, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match duration {
           Ok(dur) => {
@@ -416,8 +413,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT => {
         let count: Result<i32, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match count {
           Ok(c) => {
@@ -430,8 +427,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_BUILTIN_ENDPOINT_QOS => {
         let qos: Result<BuiltinEndpointQos, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match qos {
           Ok(q) => {
@@ -444,8 +441,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_ENTITY_NAME => {
         let name: Result<String, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match name {
           Ok(n) => {
@@ -458,8 +455,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_ENDPOINT_GUID => {
         let guid: Result<GUID, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match guid {
           Ok(gg) => {
@@ -472,8 +469,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match locator {
           Ok(loc) => {
@@ -486,8 +483,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match locator {
           Ok(loc) => {
@@ -500,8 +497,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_TOPIC_NAME => {
         let topic_name: Result<String, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match topic_name {
           Ok(name) => {
@@ -514,8 +511,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_TYPE_NAME => {
         let type_name: Result<String, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match type_name {
           Ok(name) => {
@@ -528,8 +525,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DURABILITY => {
         let durability: Result<Durability, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match durability {
           Ok(dur) => {
@@ -542,8 +539,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DEADLINE => {
         let deadline: Result<Deadline, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match deadline {
           Ok(dl) => {
@@ -556,8 +553,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_LATENCY_BUDGET => {
         let latency_budget: Result<LatencyBudget, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match latency_budget {
           Ok(lb) => {
@@ -570,8 +567,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_LIVELINESS => {
         let liveliness: Result<Liveliness, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match liveliness {
           Ok(liv) => {
@@ -591,8 +588,8 @@ impl BuiltinDataDeserializer {
 
         let reliability: Result<ReliabilityBestEffortData, Error> =
           CDR_deserializer_adapter::from_bytes(
-            &buffer[4..4 + parameter_length].to_vec(),
-            rep.clone(),
+            &buffer[4..4 + parameter_length],
+            rep,
           );
         match reliability {
           Ok(rel) => {
@@ -620,8 +617,8 @@ impl BuiltinDataDeserializer {
           EXCLUSIVE,
         }
         let ownership: Result<OwnershipKind, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match ownership {
           Ok(own) => {
@@ -647,8 +644,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_OWNERSHIP_STRENGTH => {
         let ownership_strength: Result<i32, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match ownership_strength {
           Ok(stri) => {
@@ -670,8 +667,8 @@ impl BuiltinDataDeserializer {
       ParameterId::PID_DESTINATION_ORDER => {
         let destination_order: Result<DestinationOrder, Error> =
           CDR_deserializer_adapter::from_bytes(
-            &buffer[4..4 + parameter_length].to_vec(),
-            rep.clone(),
+            &buffer[4..4 + parameter_length],
+            rep,
           );
         match destination_order {
           Ok(deor) => {
@@ -685,8 +682,8 @@ impl BuiltinDataDeserializer {
       ParameterId::PID_TIME_BASED_FILTER => {
         let time_based_filter: Result<TimeBasedFilter, Error> =
           CDR_deserializer_adapter::from_bytes(
-            &buffer[4..4 + parameter_length].to_vec(),
-            rep.clone(),
+            &buffer[4..4 + parameter_length],
+            rep,
           );
         match time_based_filter {
           Ok(tbf) => {
@@ -699,8 +696,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PRESENTATION => {
         let presentation: Result<Presentation, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match presentation {
           Ok(p) => {
@@ -713,8 +710,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_LIFESPAN => {
         let lifespan: Result<Lifespan, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match lifespan {
           Ok(ls) => {
@@ -728,8 +725,8 @@ impl BuiltinDataDeserializer {
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
         let content_filter: Result<ContentFilterProperty, Error> =
           CDR_deserializer_adapter::from_bytes(
-            &buffer[4..4 + parameter_length].to_vec(),
-            rep.clone(),
+            &buffer[4..4 + parameter_length],
+            rep,
           );
         match content_filter {
           Ok(cfp) => {
@@ -742,8 +739,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED => {
         let max_size: Result<u32, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match max_size {
           Ok(ms) => {
@@ -768,8 +765,8 @@ impl BuiltinDataDeserializer {
         }
 
         let history: Result<HistoryData, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match history {
           Ok(his) => {
@@ -786,8 +783,8 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_RESOURCE_LIMITS => {
         let resource_limits: Result<ResourceLimits, Error> = CDR_deserializer_adapter::from_bytes(
-          &buffer[4..4 + parameter_length].to_vec(),
-          rep.clone(),
+          &buffer[4..4 + parameter_length],
+          rep,
         );
         match resource_limits {
           Ok(lim) => {
@@ -812,7 +809,7 @@ impl BuiltinDataDeserializer {
 
   pub fn read_parameter_id(buffer: &Vec<u8>, rep: RepresentationIdentifier) -> Option<ParameterId> {
     let par: Result<ParameterId, Error> =
-      CDR_deserializer_adapter::from_bytes(&buffer[..2].to_vec(), rep.clone());
+      CDR_deserializer_adapter::from_bytes(&buffer[..2], rep);
     match par {
       Ok(val) => Some(val),
       _ => None,
@@ -824,7 +821,7 @@ impl BuiltinDataDeserializer {
       return Some(0);
     }
 
-    let parameter_length_value = CDR_deserializer_adapter::from_bytes(&buffer[2..4], rep.clone());
+    let parameter_length_value = CDR_deserializer_adapter::from_bytes(&buffer[2..4], rep);
     match parameter_length_value {
       Ok(val) => Some(val),
       _ => None,

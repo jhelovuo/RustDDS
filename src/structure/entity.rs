@@ -4,7 +4,7 @@ use crate::structure::guid::{GUID, EntityId, GuidPrefix};
 /// objects that are visible to other RTPS Entities on the network. As such,
 /// RTPS Entity objects have a globally-unique identifier (GUID) and can be
 /// referenced inside RTPS messages.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct EntityAttributes {
   /// Globally and uniquely identifies the RTPS Entity within the DDS domain.
   pub guid: GUID,

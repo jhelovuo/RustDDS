@@ -36,11 +36,11 @@ pub struct ProtocolVersionData {
 }
 
 impl ProtocolVersionData {
-  pub fn from(protocol_version: &ProtocolVersion) -> ProtocolVersionData {
+  pub fn from(protocol_version: ProtocolVersion) -> ProtocolVersionData {
     ProtocolVersionData {
       parameter_id: ParameterId::PID_PROTOCOL_VERSION,
       parameter_length: 4,
-      protocol_version: protocol_version.clone(),
+      protocol_version,
     }
   }
 }

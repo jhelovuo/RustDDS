@@ -202,9 +202,9 @@ pub mod policy {
 
   impl<D> QosData<D>
   where
-    D: Serialize + Clone,
+    D: Serialize + Copy + Clone,
   {
-    pub fn new(parameter_id: ParameterId, qosparam: &D) -> QosData<D> {
+    pub fn new(parameter_id: ParameterId, qosparam: D) -> QosData<D> {
       match parameter_id {
         ParameterId::PID_DURABILITY => QosData {
           parameter_id,

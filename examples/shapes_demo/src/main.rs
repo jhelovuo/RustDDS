@@ -22,6 +22,11 @@ use atosdds::{
   dds::qos::policy::LivelinessKind,
   dds::qos::policy::DestinationOrder,
   dds::qos::policy::ResourceLimits,
+  dds::qos::policy::Deadline,
+  dds::qos::policy::LatencyBudget,
+  dds::qos::policy::Presentation,
+  dds::qos::policy::PresentationAccessScope,
+  dds::qos::policy::Lifespan,
 };
 use std::{
   sync::{
@@ -67,10 +72,10 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
   let domain_participant = DomainParticipant::new(domain_id, participant_id);
 
   let mut pub_qos = QosPolicies::qos_none();
-  // pub_qos.reliability = Some(Reliability::BestEffort);
-  pub_qos.reliability = Some(Reliability::Reliable {
-    max_blocking_time: Duration::from(StdDuration::from_millis(100)),
-  });
+  pub_qos.reliability = Some(Reliability::BestEffort);
+  // pub_qos.reliability = Some(Reliability::Reliable {
+  //   max_blocking_time: Duration::from(StdDuration::from_millis(100)),
+  // });
   pub_qos.history = Some(History::KeepLast { depth: 1 });
   pub_qos.ownership = Some(Ownership::Shared);
   pub_qos.durability = Some(Durability::Volatile);
@@ -84,12 +89,32 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
     max_samples: std::i32::MAX,
     max_samples_per_instance: std::i32::MAX,
   });
+  pub_qos.deadline = Some(Deadline {
+    period: Duration::DURATION_INFINITE,
+  });
+  pub_qos.latency_budget = Some(LatencyBudget {
+    duration: Duration::DURATION_ZERO,
+  });
+  pub_qos.presentation = Some(Presentation {
+    access_scope: PresentationAccessScope::Instance,
+    coherent_access: false,
+    ordered_access: false,
+  });
+  pub_qos.lifespan = Some(Lifespan {
+    duration: Duration::DURATION_INFINITE,
+  });
 
   // declare topics, subscriber, publisher, readers and writers
   let square_topic = domain_participant
     .create_topic("Square", TypeDesc::new(String::from("ShapeType")), &pub_qos)
     .unwrap();
-  let triangle_topic = domain_participant.create_topic("Triangle", TypeDesc::new(String::from("ShapeType")), &pub_qos).unwrap();
+  let triangle_topic = domain_participant
+    .create_topic(
+      "Triangle",
+      TypeDesc::new(String::from("ShapeType")),
+      &pub_qos,
+    )
+    .unwrap();
 
   let square_sub = domain_participant
     .create_subscriber(&QosPolicies::qos_none())
@@ -131,19 +156,18 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
     )
     .unwrap();
 
-  let stdout = std::io::stdout();
-
+  let stdout_org = std::io::stdout();
   let mut areader = termion::async_stdin().bytes();
-
   {
-    let mut stdout = stdout.lock().into_raw_mode().unwrap();
+    let mut stdout = stdout_org.lock().into_raw_mode().unwrap();
     write!(
       stdout,
-      "{}{}",
+      "{}{} ",
       termion::clear::All,
       termion::cursor::Goto(1, 1)
     )
     .unwrap();
+    stdout.flush().unwrap();
   }
 
   let mut input_timer = Timer::default();
@@ -161,8 +185,9 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
   let mut square = Square::new(String::from("BLUE"), 0, 0, 30);
   loop {
     {
-      if row % 60 == 0 {
-        let mut stdout = stdout.lock().into_raw_mode().unwrap();
+      if row > 60 {
+        let mut stdout = stdout_org.lock().into_raw_mode().unwrap();
+        row = 1;
         write!(
           stdout,
           "{}{}",
@@ -170,21 +195,23 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
           termion::cursor::Goto(1, row)
         )
         .unwrap();
-        row = 1;
+        stdout.flush().unwrap();
       }
+
       let mut events = Events::with_capacity(10);
       poll.poll(&mut events, None).unwrap();
-      let mut stdout = stdout.lock().into_raw_mode().unwrap();
 
       for event in events.iter() {
+        let mut stdout = stdout_org.lock().into_raw_mode().unwrap();
+
         if event.token() == STOP_EVENT_LOOP_TOKEN {
           return;
         } else if event.token() == SQUARE_READER_TOKEN {
           let squares = fetch_squares(&mut square_reader);
           for square in squares.iter() {
             write!(stdout, "{}", termion::cursor::Goto(1, row)).unwrap();
-
-            println!("Item: {:?} received", square);
+            write!(stdout, "Item: {:?} received", square).unwrap();
+            stdout.flush().unwrap();
             row += 1;
           }
         } else if event.token() == KEYBOARD_CHECK_TOKEN {
@@ -201,27 +228,19 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
               113 => return,
               65 => {
                 square.yadd(-1);
-                println!("{:?}", square);
-                square_writer.write(square.clone(), None);
-                row += 1;
+                square_writer.write(square.clone(), None).unwrap();
               }
               66 => {
                 square.yadd(1);
-                println!("{:?}", square);
-                square_writer.write(square.clone(), None);
-                row += 1;
+                square_writer.write(square.clone(), None).unwrap();
               }
               67 => {
                 square.xadd(1);
-                println!("{:?}", square);
-                square_writer.write(square.clone(), None);
-                row += 1;
+                square_writer.write(square.clone(), None).unwrap();
               }
               68 => {
                 square.xadd(-1);
-                println!("{:?}", square);
-                square_writer.write(square.clone(), None);
-                row += 1;
+                square_writer.write(square.clone(), None).unwrap();
               }
               _ => continue,
             };

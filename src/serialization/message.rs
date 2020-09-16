@@ -62,9 +62,6 @@ impl<'a> Message {
   // top level to fix that. And there seems to be no reasonable way to change endianness.
   // TODO: The error type should be something better
   pub fn read_from_buffer(buffer: &'a [u8]) -> io::Result<Message> {
-    //let endianess = reader.endianness();
-    // message.header = SubMessage::deserialize_header(C, reader.)
-
     // The Header deserializes the same
     let rtps_header =
       Header::read_from_buffer(buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -458,7 +455,12 @@ mod tests {
       } => d,
       wtf => panic!("Unexpected message structure {:?}", wtf),
     };
-    let serializedPayload = dataSubmessage.serialized_payload.value.clone();
+    let serializedPayload = dataSubmessage
+      .serialized_payload
+      .as_ref()
+      .unwrap()
+      .value
+      .clone();
     println!();
     println!();
     println!("{:x?}", serializedPayload);

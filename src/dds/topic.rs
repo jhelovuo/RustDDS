@@ -44,7 +44,7 @@ impl Topic {
     &self.my_typedesc
   }
 
-  pub fn get_name(&self) -> &str {
+  pub fn get_name<'a>(&'a self) -> &'a str {
     &self.my_name
   }
 

@@ -287,6 +287,10 @@ where
         }
       }
     } // Else, cat't get mut datasample_vec, return no samples
+
+    // clearing receiver buffer
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
     Ok(result)
   }
 
@@ -341,6 +345,10 @@ where
         }
       }
     } // Else, cat't get mut datasample_vec, return no samples
+
+    // clearing receiver buffer
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
     Ok(result)
   }
 
@@ -519,11 +527,11 @@ mod tests {
     data.writer_id = writer_guid.entityId;
     data.writer_sn = SequenceNumber::from(0);
 
-    data.serialized_payload = SerializedPayload {
+    data.serialized_payload = Some (SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data).unwrap(),
-    };
+    });
     new_reader.handle_data_msg(data, mr_state.clone());
 
     matching_datareader.get_datasamples_from_cache();
@@ -547,11 +555,11 @@ mod tests {
     data2.writer_id = writer_guid.entityId;
     data2.writer_sn = SequenceNumber::from(1);
 
-    data2.serialized_payload = SerializedPayload {
+    data2.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap(),
-    };
+    });
 
     let random_data3 = RandomData {
       a: 1,
@@ -562,11 +570,11 @@ mod tests {
     data3.writer_id = writer_guid.entityId;
     data3.writer_sn = SequenceNumber::from(2);
 
-    data3.serialized_payload = SerializedPayload {
+    data3.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap(),
-    };
+    });
 
     new_reader.handle_data_msg(data2, mr_state.clone());
     new_reader.handle_data_msg(data3, mr_state);
@@ -640,22 +648,22 @@ mod tests {
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(0);
 
-    data_msg.serialized_payload = SerializedPayload {
+    data_msg.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&test_data).unwrap(),
-    };
+    });
 
     let mut data_msg2 = Data::default();
     data_msg2.reader_id = reader.get_entity_id();
     data_msg2.writer_id = writer_guid.entityId;
     data_msg2.writer_sn = SequenceNumber::from(1);
 
-    data_msg2.serialized_payload = SerializedPayload {
+    data_msg2.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap(),
-    };
+    });
     reader.handle_data_msg(data_msg, mr_state.clone());
     reader.handle_data_msg(data_msg2, mr_state.clone());
 
@@ -719,41 +727,41 @@ mod tests {
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(2);
 
-    data_msg.serialized_payload = SerializedPayload {
+    data_msg.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap(),
-    };
+    });
     let mut data_msg2 = Data::default();
     data_msg2.reader_id = reader.get_entity_id();
     data_msg2.writer_id = writer_guid.entityId;
     data_msg2.writer_sn = SequenceNumber::from(3);
 
-    data_msg2.serialized_payload = SerializedPayload {
+    data_msg2.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap(),
-    };
+    });
     let mut data_msg3 = Data::default();
     data_msg3.reader_id = reader.get_entity_id();
     data_msg3.writer_id = writer_guid.entityId;
     data_msg3.writer_sn = SequenceNumber::from(4);
 
-    data_msg3.serialized_payload = SerializedPayload {
+    data_msg3.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap(),
-    };
+    });
     let mut data_msg4 = Data::default();
     data_msg4.reader_id = reader.get_entity_id();
     data_msg4.writer_id = writer_guid.entityId;
     data_msg4.writer_sn = SequenceNumber::from(5);
 
-    data_msg4.serialized_payload = SerializedPayload {
+    data_msg4.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap(),
-    };
+    });
     reader.handle_data_msg(data_msg, mr_state.clone());
     reader.handle_data_msg(data_msg2, mr_state.clone());
     reader.handle_data_msg(data_msg3, mr_state.clone());
@@ -860,33 +868,33 @@ mod tests {
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(0);
 
-    data_msg.serialized_payload = SerializedPayload {
+    data_msg.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data1).unwrap(),
-    };
+    });
 
     let mut data_msg2 = Data::default();
     data_msg2.reader_id = reader.get_entity_id();
     data_msg2.writer_id = writer_guid.entityId;
     data_msg2.writer_sn = SequenceNumber::from(1);
 
-    data_msg2.serialized_payload = SerializedPayload {
+    data_msg2.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data2).unwrap(),
-    };
+    });
 
     let mut data_msg3 = Data::default();
     data_msg3.reader_id = reader.get_entity_id();
     data_msg3.writer_id = writer_guid.entityId;
     data_msg3.writer_sn = SequenceNumber::from(2);
 
-    data_msg3.serialized_payload = SerializedPayload {
+    data_msg3.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE as u16,
       representation_options: [0, 0],
       value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data3).unwrap(),
-    };
+    });
 
     let handle = std::thread::spawn(move || {
       reader.handle_data_msg(data_msg, mr_state.clone());

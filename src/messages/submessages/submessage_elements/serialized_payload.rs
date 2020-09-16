@@ -73,13 +73,6 @@ impl SerializedPayload {
   }
 }
 
-// TODO: Remove this. It does not make sense to have a default value for this. Except for testing.
-impl Default for SerializedPayload {
-  fn default() -> SerializedPayload {
-    SerializedPayload::new(RepresentationIdentifier::CDR_LE, b"fake data".to_vec())
-  }
-}
-
 impl<C: Context> Writable<C> for SerializedPayload {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
     let primitive: u16 = self.representation_identifier.into();

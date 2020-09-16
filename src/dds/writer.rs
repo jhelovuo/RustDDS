@@ -13,11 +13,14 @@ use std::{
 use std::hash::Hasher;
 
 //use crate::messages::submessages::info_destination::InfoDestination;
-use crate::messages::submessages::{
-  submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
-  info_timestamp::InfoTimestamp,
-  submessage_flag::*,
-  submessage_elements::serialized_payload::RepresentationIdentifier,
+use crate::{
+  messages::submessages::{
+    submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
+    info_timestamp::InfoTimestamp,
+    submessage_flag::*,
+    submessage_elements::serialized_payload::RepresentationIdentifier,
+  },
+  structure::parameter_id::ParameterId,
 };
 use crate::messages::submessages::data::Data;
 use crate::structure::time::Timestamp;
@@ -117,7 +120,7 @@ pub struct Writer {
   sequence_number_to_instant: BTreeMap<SequenceNumber, Instant>,
   //// Maps this writers local sequence numbers to DDSHistodyCache instants.
   /// Useful when datawriter dispose is recieved.
-  key_to_instant: HashMap<u64, Instant>,
+  key_to_instant: HashMap<u128, Instant>,
   /// Set of disposed samples.
   /// Useful when reader requires some sample with acknack.
   disposed_sequence_numbers: HashSet<SequenceNumber>,
@@ -165,7 +168,7 @@ impl Writer {
       cahce_cleaning_perioid: Duration::from_secs(2 * 60),
       nack_respose_delay: Duration::from_millis(200),
       nack_suppression_duration: Duration::from_nanos(0),
-      last_change_sequence_number: SequenceNumber::from(-1),
+      last_change_sequence_number: SequenceNumber::from(0),
       first_change_sequence_number: SequenceNumber::from(0),
       data_max_size_serialized: 999999999,
       entity_attributes,
@@ -349,15 +352,21 @@ impl Writer {
   }
 
   pub fn insert_to_history_cache(&mut self, data: DDSData) {
-    self.writer_is_disposed = false;
+    self.writer_is_disposed = match data.change_kind {
+      ChangeKind::ALIVE => false,
+      _ => true,
+    };
+
     self.increase_last_change_sequence_number();
     // If first write then set first change sequence number to 1
     if self.first_change_sequence_number == SequenceNumber::from(0) {
       self.first_change_sequence_number = SequenceNumber::from(1);
     }
-    let data_key = { data.value_key_hash.clone() };
+    let data_key = data.value_key_hash;
+    let change_kind = data.change_kind;
     let datavalue = Some(data);
     let new_cache_change = CacheChange::new(
+      change_kind,
       self.as_entity().guid,
       self.last_change_sequence_number,
       datavalue,
@@ -565,6 +574,7 @@ impl Writer {
         Some(c) => c,
         None => return None,
       };
+
       let reader_entity_id = reader_proxy.remote_reader_guid.entityId;
       let message = self.write_user_msg(change.clone(), reader_entity_id);
 
@@ -643,8 +653,10 @@ impl Writer {
       for l in multi_cast_locators {
         if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
           let a = l.to_socket_address();
-          // TODO: handle unwrap
-          self.udp_sender.send_ipv4_multicast(&buffer, a).unwrap();
+          match self.udp_sender.send_ipv4_multicast(&buffer, a) {
+            Ok(_) => (),
+            Err(e) => println!("Unable to send buffer to multicast {:?}. {:?}", a, e),
+          }
         }
       }
     }
@@ -773,17 +785,34 @@ impl Writer {
     //data_message.reader_id = reader_entity_id;
     //data_message.writer_sn = change.sequence_number;
 
+    let inline_qos = match change.kind {
+      ChangeKind::ALIVE => None,
+      _ => {
+        let mut param_list = ParameterList::new();
+        let key_hash = Parameter {
+          parameter_id: ParameterId::PID_KEY_HASH,
+          value: change.key.to_le_bytes().to_vec(),
+        };
+        param_list.parameters.push(key_hash);
+        let status_info = Parameter::create_pid_status_info_parameter(true, true, false);
+        param_list.parameters.push(status_info);
+        Some(param_list)
+      }
+    };
+
     let mut data_message = Data {
       reader_id: reader_entity_id,
       writer_id: self.get_entity_id(), // TODO! Is this the correct EntityId here?
       writer_sn: change.sequence_number,
-      inline_qos: None,                               // Change later, if needed.
-      serialized_payload: change.data_value.unwrap(), // TODO: Is the representation identifier already correct?
+      inline_qos,
+      serialized_payload: change.data_value,
     };
 
     if self.get_entity_id().get_kind() == 0xC2 {
-      data_message.serialized_payload.representation_identifier =
-        u16::from(RepresentationIdentifier::PL_CDR_LE);
+      match data_message.serialized_payload.as_mut() {
+        Some(sp) => sp.representation_identifier = u16::from(RepresentationIdentifier::PL_CDR_LE),
+        None => (),
+      }
     }
 
     let flags: BitFlags<DATA_Flags> = BitFlags::<DATA_Flags>::from_endianness(self.endianness)
@@ -791,23 +820,11 @@ impl Writer {
         if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
           // No data, we send key instead
           BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
-            | BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key)
         } else {
           BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data)
         }
         // normal case
       );
-
-    // if change kind is dispose then datawriter is telling to dispose the data instance
-    if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
-      let mut inline_qos_settings = ParameterList::new();
-      inline_qos_settings
-        .parameters
-        .push(Parameter::create_pid_status_info_parameter(
-          true, false, false,
-        ));
-      data_message.inline_qos = Some(inline_qos_settings);
-    }
 
     let size = data_message
       .write_to_vec_with_ctx(self.endianness)
@@ -824,6 +841,7 @@ impl Writer {
         flags,
       )),
     };
+
     return s;
   }
 

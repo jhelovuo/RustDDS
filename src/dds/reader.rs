@@ -1,4 +1,4 @@
-use crate::structure::entity::Entity;
+use crate::structure::{entity::Entity, cache_change::ChangeKind};
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::messages::submessages::submessages::*;
 
@@ -348,11 +348,17 @@ impl Reader {
 
   // update history cache
   fn make_cache_change(&mut self, data: Data, instant: Instant, writer_guid: GUID) {
-    let mut ddsdata = DDSData::new(data.serialized_payload);
+    let (change_kind, mut ddsdata) = match data.inline_qos {
+      Some(d) => (ChangeKind::NOT_ALIVE_DISPOSED, DDSData::new_disposed(d)),
+      None => match data.serialized_payload {
+        Some(pl) => (ChangeKind::ALIVE, DDSData::new(pl)),
+        None => return,
+      },
+    };
 
     ddsdata.set_reader_id(data.reader_id);
     ddsdata.set_writer_id(data.writer_id);
-    let cache_change = CacheChange::new(writer_guid, data.writer_sn, Some(ddsdata));
+    let cache_change = CacheChange::new(change_kind, writer_guid, data.writer_sn, Some(ddsdata));
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
@@ -557,8 +563,8 @@ mod tests {
       &new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
     );
 
-    let ddsdata = DDSData::new(d.serialized_payload);
-    let cc_built_here = CacheChange::new(writer_guid, d_seqnum, Some(ddsdata));
+    let ddsdata = DDSData::new(d.serialized_payload.unwrap());
+    let cc_built_here = CacheChange::new(ChangeKind::ALIVE, writer_guid, d_seqnum, Some(ddsdata));
 
     assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
   }
@@ -616,6 +622,7 @@ mod tests {
 
     // After ack_nack, will receive the following change
     let change = CacheChange::new(
+      ChangeKind::ALIVE,
       new_reader.get_guid(),
       SequenceNumber::from(1),
       Some(d.clone()),
@@ -648,6 +655,7 @@ mod tests {
 
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(
+      ChangeKind::ALIVE,
       new_reader.get_guid(),
       SequenceNumber::from(2),
       Some(d.clone()),
@@ -659,7 +667,7 @@ mod tests {
     );
     changes.push(change);
 
-    let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), Some(d));
+    let change = CacheChange::new(ChangeKind::ALIVE, new_reader.get_guid(), SequenceNumber::from(3), Some(d));
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
       &Instant::now(),

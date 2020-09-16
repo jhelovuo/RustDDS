@@ -50,7 +50,7 @@ pub struct DurationData {
 }
 
 impl DurationData {
-  pub fn from(duration: &Duration) -> DurationData {
+  pub fn from(duration: Duration) -> DurationData {
     DurationData {
       parameter_id: ParameterId::PID_PARTICIPANT_LEASE_DURATION,
       parameter_length: 8,

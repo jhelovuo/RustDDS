@@ -2,9 +2,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::{
   dds::{
-    traits::{
-      key::{Key, Keyed},
-    },
+    traits::{key::Keyed},
     rtps_reader_proxy::RtpsReaderProxy,
     participant::DomainParticipant,
     rtps_writer_proxy::RtpsWriterProxy,
@@ -52,11 +50,19 @@ pub struct SPDPDiscoveredParticipantData {
 }
 
 impl SPDPDiscoveredParticipantData {
-  pub fn as_reader_proxy(&self, is_metatraffic: bool) -> RtpsReaderProxy {
+  pub fn as_reader_proxy(
+    &self,
+    is_metatraffic: bool,
+    entity_id: Option<EntityId>,
+  ) -> RtpsReaderProxy {
     let remote_reader_guid = GUID::new_with_prefix_and_id(
       self.participant_guid.unwrap().guidPrefix,
-      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+      match entity_id {
+        Some(id) => id,
+        None => EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+      },
     );
+
     let mut proxy = RtpsReaderProxy::new(remote_reader_guid);
     proxy.expects_in_line_qos = match self.expects_inline_qos {
       Some(v) => v,
@@ -128,7 +134,7 @@ impl SPDPDiscoveredParticipantData {
 
     SPDPDiscoveredParticipantData {
       updated_time: time::precise_time_ns(),
-      protocol_version: Some(ProtocolVersion::PROTOCOLVERSION),
+      protocol_version: Some(ProtocolVersion::PROTOCOLVERSION_2_3),
       vendor_id: Some(VendorId::VENDOR_UNKNOWN),
       expects_inline_qos: Some(false),
       participant_guid: Some(participant.get_guid()),
@@ -146,13 +152,14 @@ impl SPDPDiscoveredParticipantData {
 }
 
 impl Keyed for SPDPDiscoveredParticipantData {
-  type K = u64; // placeholder
+  type K = GUID; // placeholder
   fn get_key(&self) -> Self::K {
-    self.updated_time
+    match self.participant_guid {
+      Some(g) => g,
+      None => GUID::GUID_UNKNOWN,
+    }
   }
 }
-
-impl Key for u64 {}
 
 impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -204,14 +211,14 @@ mod tests {
           EntitySubmessage::Data(d, _) => {
             let participant_data: SPDPDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(
-                &d.serialized_payload.value,
+                &d.serialized_payload.as_ref().unwrap().value,
                 RepresentationIdentifier::PL_CDR_LE,
               )
               .unwrap();
             let sdata =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
             // order cannot be known at this point
-            assert_eq!(sdata.len(), d.serialized_payload.value.len());
+            assert_eq!(sdata.len(), d.serialized_payload.as_ref().unwrap().value.len());
 
             let participant_data_2: SPDPDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)

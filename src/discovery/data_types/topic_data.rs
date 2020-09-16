@@ -11,7 +11,7 @@ use crate::{
       Deadline, Durability, LatencyBudget, Reliability, Ownership, DestinationOrder, Liveliness,
       TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
-    traits::key::{Key, Keyed},
+    traits::key::Keyed,
     traits::serde_adapters::SerializerAdapter,
     rtps_reader_proxy::RtpsReaderProxy,
     reader::Reader,
@@ -507,8 +507,6 @@ impl Keyed for DiscoveredTopicData {
     }
   }
 }
-
-impl Key for String {}
 
 #[cfg(test)]
 mod tests {

@@ -3,9 +3,12 @@ use serde::Serialize;
 use serde::Deserialize;
 
 #[allow(unused_imports)] // since this is testing code only
-use crate::dds::traits::{
-  key::{Key, Keyed},
-  //datasample_trait::DataSampleTrait,
+use crate::{
+  dds::traits::{
+    key::{Key, Keyed},
+    //datasample_trait::DataSampleTrait,
+  },
+  serialization::cdrSerializer::to_bytes,
 };
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Hash)]

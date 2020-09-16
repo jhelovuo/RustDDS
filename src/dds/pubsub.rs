@@ -42,7 +42,7 @@ pub struct Publisher {
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
-  add_writer_sender: mio_channel::Sender<Writer>,
+  add_writer_sender: mio_channel::SyncSender<Writer>,
 }
 
 // public interface for Publisher
@@ -52,7 +52,7 @@ impl<'a> Publisher {
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
-    add_writer_sender: mio_channel::Sender<Writer>,
+    add_writer_sender: mio_channel::SyncSender<Writer>,
   ) -> Publisher {
     Publisher {
       domain_participant: dp,
@@ -211,7 +211,7 @@ pub struct Subscriber {
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   qos: QosPolicies,
   sender_add_reader: mio_channel::SyncSender<Reader>,
-  sender_remove_reader: mio_channel::Sender<GUID>,
+  sender_remove_reader: mio_channel::SyncSender<GUID>,
 }
 
 impl<'s> Subscriber {
@@ -220,7 +220,7 @@ impl<'s> Subscriber {
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
     sender_add_reader: mio_channel::SyncSender<Reader>,
-    sender_remove_reader: mio_channel::Sender<GUID>,
+    sender_remove_reader: mio_channel::SyncSender<GUID>,
   ) -> Subscriber {
     Subscriber {
       domain_participant,

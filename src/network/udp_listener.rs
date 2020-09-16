@@ -117,7 +117,6 @@ mod tests {
     assert_eq!(rec_data, data);
   }
 
-  // TODO: there is something wrong with this test (possibly inability actually send or receive multicast)
   #[test]
   fn udpl_multicast_address() {
     let listener = UDPListener::new(Token(0), "0.0.0.0", 10002);

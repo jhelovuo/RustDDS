@@ -107,44 +107,44 @@ struct EntityName {
 
 pub struct BuiltinDataSerializer<'a> {
   // Participant Data
-  pub protocol_version: Option<&'a ProtocolVersion>,
-  pub vendor_id: Option<&'a VendorId>,
-  pub expects_inline_qos: Option<&'a bool>,
-  pub participant_guid: Option<&'a GUID>,
+  pub protocol_version: Option<ProtocolVersion>,
+  pub vendor_id: Option<VendorId>,
+  pub expects_inline_qos: Option<bool>,
+  pub participant_guid: Option<GUID>,
   pub metatraffic_unicast_locators: Option<&'a LocatorList>,
   pub metatraffic_multicast_locators: Option<&'a LocatorList>,
   pub default_unicast_locators: Option<&'a LocatorList>,
   pub default_multicast_locators: Option<&'a LocatorList>,
-  pub available_builtin_endpoints: Option<&'a BuiltinEndpointSet>,
-  pub lease_duration: Option<&'a Duration>,
-  pub manual_liveliness_count: Option<&'a i32>,
-  pub builtin_enpoint_qos: Option<&'a BuiltinEndpointQos>,
+  pub available_builtin_endpoints: Option<BuiltinEndpointSet>,
+  pub lease_duration: Option<Duration>,
+  pub manual_liveliness_count: Option<i32>,
+  pub builtin_enpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<&'a String>,
 
-  pub endpoint_guid: Option<&'a GUID>,
+  pub endpoint_guid: Option<GUID>,
 
   // Reader Proxy
   pub unicast_locator_list: Option<&'a LocatorList>,
   pub multicast_locator_list: Option<&'a LocatorList>,
 
   // Writer Proxy
-  pub data_max_size_serialized: Option<&'a u32>,
+  pub data_max_size_serialized: Option<u32>,
 
   // topic data
   pub topic_name: Option<&'a String>,
   pub type_name: Option<&'a String>,
-  pub durability: Option<&'a Durability>,
-  pub deadline: Option<&'a Deadline>,
-  pub latency_budget: Option<&'a LatencyBudget>,
-  pub liveliness: Option<&'a Liveliness>,
-  pub reliability: Option<&'a Reliability>,
-  pub ownership: Option<&'a Ownership>,
-  pub destination_order: Option<&'a DestinationOrder>,
-  pub time_based_filter: Option<&'a TimeBasedFilter>,
-  pub presentation: Option<&'a Presentation>,
-  pub lifespan: Option<&'a Lifespan>,
-  pub history: Option<&'a History>,
-  pub resource_limits: Option<&'a ResourceLimits>,
+  pub durability: Option<Durability>,
+  pub deadline: Option<Deadline>,
+  pub latency_budget: Option<LatencyBudget>,
+  pub liveliness: Option<Liveliness>,
+  pub reliability: Option<Reliability>,
+  pub ownership: Option<Ownership>,
+  pub destination_order: Option<DestinationOrder>,
+  pub time_based_filter: Option<TimeBasedFilter>,
+  pub presentation: Option<Presentation>,
+  pub lifespan: Option<Lifespan>,
+  pub history: Option<History>,
+  pub resource_limits: Option<ResourceLimits>,
 
   pub content_filter_property: Option<&'a ContentFilterProperty>,
 }
@@ -287,18 +287,18 @@ impl<'a> BuiltinDataSerializer<'a> {
     participant_data: &'a SPDPDiscoveredParticipantData,
   ) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
-      protocol_version: participant_data.protocol_version.as_ref(),
-      vendor_id: participant_data.vendor_id.as_ref(),
-      expects_inline_qos: participant_data.expects_inline_qos.as_ref(),
-      participant_guid: participant_data.participant_guid.as_ref(),
+      protocol_version: participant_data.protocol_version,
+      vendor_id: participant_data.vendor_id,
+      expects_inline_qos: participant_data.expects_inline_qos,
+      participant_guid: participant_data.participant_guid,
       metatraffic_unicast_locators: Some(&participant_data.metatraffic_unicast_locators),
       metatraffic_multicast_locators: Some(&participant_data.metatraffic_multicast_locators),
       default_unicast_locators: Some(&participant_data.default_unicast_locators),
       default_multicast_locators: Some(&participant_data.default_multicast_locators),
-      available_builtin_endpoints: participant_data.available_builtin_endpoints.as_ref(),
-      lease_duration: participant_data.lease_duration.as_ref(),
-      manual_liveliness_count: participant_data.manual_liveliness_count.as_ref(),
-      builtin_enpoint_qos: participant_data.builtin_enpoint_qos.as_ref(),
+      available_builtin_endpoints: participant_data.available_builtin_endpoints,
+      lease_duration: participant_data.lease_duration,
+      manual_liveliness_count: participant_data.manual_liveliness_count,
+      builtin_enpoint_qos: participant_data.builtin_enpoint_qos,
       entity_name: participant_data.entity_name.as_ref(),
       endpoint_guid: None,
       unicast_locator_list: None,
@@ -326,7 +326,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
       protocol_version: None,
       vendor_id: None,
-      expects_inline_qos: reader_proxy.expects_inline_qos.as_ref(),
+      expects_inline_qos: reader_proxy.expects_inline_qos,
       participant_guid: None,
       metatraffic_unicast_locators: None,
       metatraffic_multicast_locators: None,
@@ -337,7 +337,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: None,
       builtin_enpoint_qos: None,
       entity_name: None,
-      endpoint_guid: reader_proxy.remote_reader_guid.as_ref(),
+      endpoint_guid: reader_proxy.remote_reader_guid,
       unicast_locator_list: Some(&reader_proxy.unicast_locator_list),
       multicast_locator_list: Some(&reader_proxy.multicast_locator_list),
       data_max_size_serialized: None,
@@ -374,10 +374,10 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: None,
       builtin_enpoint_qos: None,
       entity_name: None,
-      endpoint_guid: writer_proxy.remote_writer_guid.as_ref(),
+      endpoint_guid: writer_proxy.remote_writer_guid,
       unicast_locator_list: Some(&writer_proxy.unicast_locator_list),
       multicast_locator_list: Some(&writer_proxy.multicast_locator_list),
-      data_max_size_serialized: writer_proxy.data_max_size_serialized.as_ref(),
+      data_max_size_serialized: writer_proxy.data_max_size_serialized,
       topic_name: None,
       type_name: None,
       durability: None,
@@ -403,7 +403,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       protocol_version: None,
       vendor_id: None,
       expects_inline_qos: None,
-      participant_guid: subscription_topic_data.participant_key.as_ref(),
+      participant_guid: subscription_topic_data.participant_key,
       metatraffic_unicast_locators: None,
       metatraffic_multicast_locators: None,
       default_unicast_locators: None,
@@ -413,22 +413,22 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: None,
       builtin_enpoint_qos: None,
       entity_name: None,
-      endpoint_guid: subscription_topic_data.key.as_ref(),
+      endpoint_guid: subscription_topic_data.key,
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
       topic_name: subscription_topic_data.topic_name.as_ref(),
       type_name: subscription_topic_data.type_name.as_ref(),
-      durability: subscription_topic_data.durability.as_ref(),
-      deadline: subscription_topic_data.deadline.as_ref(),
-      latency_budget: subscription_topic_data.latency_budget.as_ref(),
-      liveliness: subscription_topic_data.liveliness.as_ref(),
-      reliability: subscription_topic_data.reliability.as_ref(),
-      ownership: subscription_topic_data.ownership.as_ref(),
-      destination_order: subscription_topic_data.destination_order.as_ref(),
-      time_based_filter: subscription_topic_data.time_based_filter.as_ref(),
-      presentation: subscription_topic_data.presentation.as_ref(),
-      lifespan: subscription_topic_data.lifespan.as_ref(),
+      durability: subscription_topic_data.durability,
+      deadline: subscription_topic_data.deadline,
+      latency_budget: subscription_topic_data.latency_budget,
+      liveliness: subscription_topic_data.liveliness,
+      reliability: subscription_topic_data.reliability,
+      ownership: subscription_topic_data.ownership,
+      destination_order: subscription_topic_data.destination_order,
+      time_based_filter: subscription_topic_data.time_based_filter,
+      presentation: subscription_topic_data.presentation,
+      lifespan: subscription_topic_data.lifespan,
       history: None,
       resource_limits: None,
       content_filter_property: None,
@@ -442,7 +442,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       protocol_version: None,
       vendor_id: None,
       expects_inline_qos: None,
-      participant_guid: publication_topic_data.participant_key.as_ref(),
+      participant_guid: publication_topic_data.participant_key,
       metatraffic_unicast_locators: None,
       metatraffic_multicast_locators: None,
       default_unicast_locators: None,
@@ -452,22 +452,22 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: None,
       builtin_enpoint_qos: None,
       entity_name: None,
-      endpoint_guid: publication_topic_data.key.as_ref(),
+      endpoint_guid: publication_topic_data.key,
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
       topic_name: publication_topic_data.topic_name.as_ref(),
       type_name: publication_topic_data.type_name.as_ref(),
-      durability: publication_topic_data.durability.as_ref(),
-      deadline: publication_topic_data.deadline.as_ref(),
-      latency_budget: publication_topic_data.latency_budget.as_ref(),
-      liveliness: publication_topic_data.liveliness.as_ref(),
-      reliability: publication_topic_data.reliability.as_ref(),
-      ownership: publication_topic_data.ownership.as_ref(),
-      destination_order: publication_topic_data.destination_order.as_ref(),
-      time_based_filter: publication_topic_data.time_based_filter.as_ref(),
-      presentation: publication_topic_data.presentation.as_ref(),
-      lifespan: publication_topic_data.lifespan.as_ref(),
+      durability: publication_topic_data.durability,
+      deadline: publication_topic_data.deadline,
+      latency_budget: publication_topic_data.latency_budget,
+      liveliness: publication_topic_data.liveliness,
+      reliability: publication_topic_data.reliability,
+      ownership: publication_topic_data.ownership,
+      destination_order: publication_topic_data.destination_order,
+      time_based_filter: publication_topic_data.time_based_filter,
+      presentation: publication_topic_data.presentation,
+      lifespan: publication_topic_data.lifespan,
       history: None,
       resource_limits: None,
       content_filter_property: None,
@@ -489,24 +489,24 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: None,
       builtin_enpoint_qos: None,
       entity_name: None,
-      endpoint_guid: topic_data.key.as_ref(),
+      endpoint_guid: topic_data.key,
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
       topic_name: topic_data.name.as_ref(),
       type_name: topic_data.type_name.as_ref(),
-      durability: topic_data.durability.as_ref(),
-      deadline: topic_data.deadline.as_ref(),
-      latency_budget: topic_data.latency_budget.as_ref(),
-      liveliness: topic_data.liveliness.as_ref(),
-      reliability: topic_data.reliability.as_ref(),
-      ownership: topic_data.ownership.as_ref(),
-      destination_order: topic_data.destination_order.as_ref(),
+      durability: topic_data.durability,
+      deadline: topic_data.deadline,
+      latency_budget: topic_data.latency_budget,
+      liveliness: topic_data.liveliness,
+      reliability: topic_data.reliability,
+      ownership: topic_data.ownership,
+      destination_order: topic_data.destination_order,
       time_based_filter: None,
-      presentation: topic_data.presentation.as_ref(),
-      lifespan: topic_data.lifespan.as_ref(),
-      history: topic_data.history.as_ref(),
-      resource_limits: topic_data.resource_limits.as_ref(),
+      presentation: topic_data.presentation,
+      lifespan: topic_data.lifespan,
+      history: topic_data.history,
+      resource_limits: topic_data.resource_limits,
       content_filter_property: None,
     }
   }
@@ -636,32 +636,33 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_protocol_version<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.protocol_version.as_ref() {
+    match self.protocol_version {
       Some(pv) => {
-        s.serialize_field("protocol_version", &ProtocolVersionData::from(&pv))
+        s.serialize_field("protocol_version", &ProtocolVersionData::from(pv))
           .unwrap();
       }
-      None => (),
+      None => s.serialize_field("protocol_version", &ProtocolVersionData::from(ProtocolVersion::PROTOCOLVERSION_2_3)).unwrap(),
     }
   }
 
   fn add_vendor_id<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.vendor_id.as_ref() {
+    match self.vendor_id {
       Some(vid) => {
-        s.serialize_field("vendor_id", &VendorIdData::from(&vid))
+        s.serialize_field("vendor_id", &VendorIdData::from(vid))
           .unwrap();
       }
-      None => (),
+      None => s.serialize_field("vendor_id", &VendorIdData::from(VendorId::VENDOR_UNKNOWN))
+      .unwrap(),
     }
   }
 
   fn add_expects_inline_qos<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.expects_inline_qos.as_ref() {
+    match self.expects_inline_qos {
       Some(iqos) => {
         let iq = ExpectsInlineQos {
           parameter_id: ParameterId::PID_EXPECTS_INLINE_QOS,
           parameter_length: 4,
-          expects_inline_qos: *iqos.clone(),
+          expects_inline_qos: iqos,
         };
         s.serialize_field("expects_inline_qos", &iq).unwrap();
       }
@@ -670,11 +671,11 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_participant_guid<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.participant_guid.as_ref() {
+    match self.participant_guid {
       Some(guid) => {
         s.serialize_field(
           "participant_guid",
-          &GUIDData::from(guid, &ParameterId::PID_PARTICIPANT_GUID),
+          &GUIDData::from(guid, ParameterId::PID_PARTICIPANT_GUID),
         )
         .unwrap();
       }
@@ -747,11 +748,11 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_available_builtin_endpoint_set<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.available_builtin_endpoints.as_ref() {
+    match self.available_builtin_endpoints {
       Some(eps) => {
         s.serialize_field(
           "available_builtin_endpoints",
-          &BuiltinEndpointSetData::from(eps, &ParameterId::PID_BUILTIN_ENDPOINT_SET),
+          &BuiltinEndpointSetData::from(eps, ParameterId::PID_BUILTIN_ENDPOINT_SET),
         )
         .unwrap();
       }
@@ -760,7 +761,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_lease_duration<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.lease_duration.as_ref() {
+    match self.lease_duration {
       Some(dur) => {
         s.serialize_field("lease_duration", &DurationData::from(dur))
           .unwrap();
@@ -770,12 +771,12 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_manual_liveliness_count<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.manual_liveliness_count.as_ref() {
+    match self.manual_liveliness_count {
       Some(liv) => {
         let mliv = ManualLivelinessCount {
           parameter_id: ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT,
           parameter_length: 4,
-          manual_liveliness_count: *liv.clone(),
+          manual_liveliness_count: liv,
         };
         s.serialize_field("manual_liveliness_count", &mliv).unwrap();
       }
@@ -784,7 +785,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_builtin_endpoint_qos<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.builtin_enpoint_qos.as_ref() {
+    match self.builtin_enpoint_qos {
       Some(qos) => {
         s.serialize_field("builtin_endpoint_qos", &BuiltinEndpointQosData::from(qos))
           .unwrap();
@@ -809,11 +810,11 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_endpoint_guid<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.endpoint_guid.as_ref() {
+    match self.endpoint_guid {
       Some(guid) => {
         s.serialize_field(
           "endpoint_guid",
-          &GUIDData::from(guid, &ParameterId::PID_ENDPOINT_GUID),
+          &GUIDData::from(guid, ParameterId::PID_ENDPOINT_GUID),
         )
         .unwrap();
       }
@@ -880,7 +881,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_durability<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.durability.as_ref() {
+    match self.durability {
       Some(dur) => {
         s.serialize_field(
           "durability",
@@ -893,7 +894,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_deadline<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.deadline.as_ref() {
+    match self.deadline {
       Some(dl) => {
         s.serialize_field("deadline", &QosData::new(ParameterId::PID_DEADLINE, dl))
           .unwrap();
@@ -903,7 +904,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_latency_budget<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.latency_budget.as_ref() {
+    match self.latency_budget {
       Some(lb) => {
         s.serialize_field(
           "latency_budget",
@@ -916,7 +917,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_liveliness<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.liveliness.as_ref() {
+    match self.liveliness {
       Some(l) => {
         s.serialize_field("liveliness", &QosData::new(ParameterId::PID_LIVELINESS, l))
           .unwrap();
@@ -932,7 +933,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub max_blocking_time: Duration,
     }
 
-    match self.reliability.as_ref() {
+    match self.reliability {
       Some(rel) => match rel {
         Reliability::BestEffort => {
           let data = ReliabilityBestEffortData {
@@ -974,7 +975,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub parameter_length: u16,
       pub kind: OwnershipKind,
     }
-    match self.ownership.as_ref() {
+    match self.ownership {
       Some(own) => match own {
         Ownership::Shared => {
           s.serialize_field(
@@ -1009,7 +1010,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_destination_order<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.destination_order.as_ref() {
+    match self.destination_order {
       Some(deor) => {
         s.serialize_field(
           "destination_order",
@@ -1022,7 +1023,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_time_based_filter<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.time_based_filter.as_ref() {
+    match self.time_based_filter {
       Some(tbf) => {
         s.serialize_field(
           "time_based_filter",
@@ -1035,7 +1036,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_presentation<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.presentation.as_ref() {
+    match self.presentation {
       Some(p) => {
         s.serialize_field(
           "presentation",
@@ -1048,7 +1049,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_lifespan<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.lifespan.as_ref() {
+    match self.lifespan {
       Some(ls) => {
         s.serialize_field("lifespan", &QosData::new(ParameterId::PID_LIFESPAN, ls))
           .unwrap();
@@ -1070,14 +1071,13 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub depth: i32,
     }
 
-    match self.history.as_ref() {
+    match self.history {
       Some(hs) => {
         let history_data = match hs {
           History::KeepLast { depth } => HistoryData {
             kind: HistoryKind::KEEP_LAST,
-            depth: depth.clone(),
+            depth: depth,
           },
-          // TODO: should depth be ignored for serialization?
           History::KeepAll => HistoryData {
             kind: HistoryKind::KEEP_ALL,
             depth: 0,
@@ -1094,7 +1094,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_resource_limits<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.resource_limits.as_ref() {
+    match self.resource_limits {
       Some(rl) => {
         s.serialize_field(
           "resource_limits",
@@ -1107,7 +1107,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_content_filter_property<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.content_filter_property.as_ref() {
+    match self.content_filter_property {
       Some(cfp) => {
         s.serialize_field(
           "content_filter_property",
@@ -1120,8 +1120,8 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_data_max_size_serialized<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.data_max_size_serialized.as_ref() {
-      Some(&&dmss) => {
+    match self.data_max_size_serialized {
+      Some(dmss) => {
         s.serialize_field(
           "data_max_size_serialized",
           &U32Data::new(ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED, dmss),

@@ -3,7 +3,7 @@ use crate::structure::sequence_number::SequenceNumber;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::dds::ddsdata::DDSData;
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Copy, Clone)]
 pub enum ChangeKind {
   ALIVE,
   NOT_ALIVE_DISPOSED,
@@ -16,6 +16,7 @@ pub struct CacheChange {
   pub writer_guid: GUID,
   pub sequence_number: SequenceNumber,
   pub data_value: Option<SerializedPayload>,
+  pub key: u128,
   //pub inline_qos: ParameterList,
 
   //stps_chage_for_reader : RTPSChangeForReader
@@ -40,26 +41,22 @@ impl PartialEq for CacheChange {
 
 impl CacheChange {
   pub fn new(
+    kind: ChangeKind,
     writer_guid: GUID,
     sequence_number: SequenceNumber,
     data_value: Option<DDSData>,
   ) -> CacheChange {
-    /*let instance_handle;
-    let data_value = match data_value {
-      Some(ddsdata) => {
-        instance_handle = ddsdata.instance_key.clone();
-        ddsdata.value()
-      }
-      None => {
-        instance_handle = InstanceHandle::default();
-        None
-      }
-    };*/
+    let (key, data_value) = match data_value {
+      Some(d) => (d.value_key_hash, d.value()),
+      None => (0, None),
+    };
+
     CacheChange {
-      kind: ChangeKind::ALIVE,
+      kind,
       writer_guid,
       sequence_number,
-      data_value: data_value.unwrap().value(),
+      data_value,
+      key,
       //inline_qos: ParameterList::new(),
       //rtps_chage_for_reader : RTPSChangeForReader::new(),
     }
@@ -68,6 +65,11 @@ impl CacheChange {
 
 impl Default for CacheChange {
   fn default() -> Self {
-    CacheChange::new(GUID::default(), SequenceNumber::default(), None)
+    CacheChange::new(
+      ChangeKind::ALIVE,
+      GUID::default(),
+      SequenceNumber::default(),
+      None,
+    )
   }
 }

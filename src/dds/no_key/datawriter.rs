@@ -263,7 +263,7 @@ mod tests {
       b: "Fobar".to_string(),
     };
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let key = &data.get_key().get_hash();
+    let key = &data.get_key().into_hash_key();
     println!();
     println!("key: {:?}", key);
     println!();

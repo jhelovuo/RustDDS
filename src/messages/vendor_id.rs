@@ -27,7 +27,7 @@ pub struct VendorIdData {
 }
 
 impl VendorIdData {
-  pub fn from(vendor_id: &VendorId) -> VendorIdData {
+  pub fn from(vendor_id: VendorId) -> VendorIdData {
     VendorIdData {
       parameter_id: ParameterId::PID_VENDOR_ID,
       parameter_length: 4,

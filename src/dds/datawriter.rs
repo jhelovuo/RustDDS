@@ -75,11 +75,14 @@ where
       entity_id,
     ));
 
-    dds_cache.write().unwrap().add_new_topic(
-      &String::from(topic.get_name()),
-      TopicKind::NO_KEY,
-      topic.get_type(),
-    );
+    match dds_cache.write() {
+      Ok(mut cache) => cache.add_new_topic(
+        &String::from(topic.get_name()),
+        TopicKind::NO_KEY,
+        topic.get_type(),
+      ),
+      Err(e) => panic!("DDSCache is poisoned. {:?}", e),
+    };
 
     Ok(DataWriter {
       my_publisher: publisher.clone(),
@@ -101,7 +104,7 @@ where
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
-    ddsdata.value_key_hash = data.get_hash();
+    ddsdata.value_key_hash = data.get_key().into_hash_key();
 
     let _data_sample = match source_timestamp {
       Some(t) => DataSample::new(t, data),
@@ -136,7 +139,7 @@ where
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
-    ddsdata.value_key_hash = key.get_hash();
+    ddsdata.value_key_hash = key.into_hash_key();
 
     // What does this block of code do? What is the purpose of _data_sample?
     let _data_sample: DataSample<D> = match source_timestamp {
@@ -317,7 +320,7 @@ mod tests {
       b: "Fobar".to_string(),
     };
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let key = &data.get_key().get_hash();
+    let key = &data.get_key().into_hash_key();
     println!();
     println!("key: {:?}", key);
     println!();

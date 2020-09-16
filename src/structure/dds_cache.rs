@@ -70,14 +70,9 @@ impl DDSCache {
     topic_name: &String,
     instant: &Instant,
   ) -> Option<&CacheChange> {
-    if self.topic_caches.contains_key(topic_name) {
-      return self
-        .topic_caches
-        .get(topic_name)
-        .unwrap()
-        .get_change(instant);
-    } else {
-      panic!("Topic: '{:?}' is not in DDSCache", topic_name);
+    match self.topic_caches.get(topic_name) {
+      Some(tc) => tc.get_change(instant),
+      None => None,
     }
   }
 
@@ -309,13 +304,14 @@ mod tests {
       cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber,
     },
     messages::submessages::submessage_elements::serialized_payload::{SerializedPayload},
-  };
+  structure::cache_change::ChangeKind};
 
   #[test]
   fn create_dds_cache() {
     let cache = Arc::new(RwLock::new(DDSCache::new()));
     let topic_name = &String::from("ImJustATopic");
     let change1 = CacheChange::new(
+      ChangeKind::ALIVE,
       GUID::GUID_UNKNOWN,
       SequenceNumber::from(1),
       Some(DDSData::new(SerializedPayload::default())),
@@ -335,6 +331,7 @@ mod tests {
     thread::spawn(move || {
       let topic_name = &String::from("ImJustATopic");
       let cahange2 = CacheChange::new(
+        ChangeKind::ALIVE,
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(1),
         Some(DDSData::new(SerializedPayload::default())),
@@ -344,6 +341,7 @@ mod tests {
         .unwrap()
         .to_topic_add_change(topic_name, &Instant::now(), cahange2);
       let cahange3 = CacheChange::new(
+        ChangeKind::ALIVE,
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(2),
         Some(DDSData::new(SerializedPayload::default())),

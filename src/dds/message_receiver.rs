@@ -27,7 +27,7 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 pub struct MessageReceiver {
   pub available_readers: Vec<Reader>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
-  acknack_sender: mio_channel::Sender<(GuidPrefix, AckNack)>,
+  acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckNack)>,
 
   own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
@@ -46,7 +46,7 @@ pub struct MessageReceiver {
 impl MessageReceiver {
   pub fn new(
     participant_guid_prefix: GuidPrefix,
-    acknack_sender: mio_channel::Sender<(GuidPrefix, AckNack)>,
+    acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckNack)>,
   ) -> MessageReceiver {
     // could be passed in as a parameter
     let locator_kind = LocatorKind::LOCATOR_KIND_UDPv4;
@@ -226,11 +226,6 @@ impl MessageReceiver {
         } else {
           if let Some(target_reader) = self.get_reader(data.reader_id) {
             target_reader.handle_data_msg(data, mr_state);
-          } else {
-            println!(
-              "MessageReceiver could not find corresponding Reader {:?}",
-              data.reader_id
-            );
           }
         }
       }
@@ -251,29 +246,23 @@ impl MessageReceiver {
               flags.contains(HEARTBEAT_Flags::Final),
               mr_state,
             );
-          } else {
-            println!("MessageReceiver could not find corresponding Reader");
           }
         }
       }
       EntitySubmessage::Gap(gap, _flags) => {
         if let Some(target_reader) = self.get_reader(gap.reader_id) {
           target_reader.handle_gap_msg(gap, mr_state);
-        } else {
-          println!("MessageReceiver could not find corresponding Reader");
         }
       }
-      EntitySubmessage::AckNack(ackNack, _) => {
-        self
-          .acknack_sender
-          .send((self.source_guid_prefix, ackNack))
-          .unwrap();
+      EntitySubmessage::AckNack(acknack, _) => {
+        match self.acknack_sender.send((self.source_guid_prefix, acknack)) {
+          Ok(_) => (),
+          Err(e) => println!("Failed to send AckNack. {:?}", e),
+        }
       }
       EntitySubmessage::DataFrag(datafrag, _) => {
         if let Some(target_reader) = self.get_reader(datafrag.reader_id) {
           target_reader.handle_datafrag_msg(datafrag, mr_state);
-        } else {
-          println!("MessageReceiver could not find corresponding Reader");
         }
       }
       EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
@@ -285,8 +274,6 @@ impl MessageReceiver {
         } else {
           if let Some(target_reader) = self.get_reader(heartbeatfrag.reader_id) {
             target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
-          } else {
-            println!("MessageReceiver could not find corresponding Reader");
           }
         }
       }
@@ -398,7 +385,8 @@ mod tests {
       0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
     ]);
 
-    let (acknack_sender, _acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
+    let (acknack_sender, _acknack_reciever) =
+      mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
     let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
 
     let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
@@ -509,7 +497,7 @@ mod tests {
     ];
 
     let guid_new = GUID::new();
-    let (acknack_sender, _acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
+    let (acknack_sender, _acknack_reciever) = mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
     let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
 
     message_receiver.handle_user_msg(udp_bits1);

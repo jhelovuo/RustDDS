@@ -2,8 +2,11 @@
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use byteorder::BigEndian;
 use rand::Rng;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
+
+use crate::serialization::cdrSerializer::to_bytes;
 
 // A payload data object may be "Keyed": It allows a Key to be extracted from it.
 // The key is used to distinguish between different Instances of the data.
@@ -30,18 +33,35 @@ pub trait Key:
   Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned
 {
   // no methods required
+  fn into_hash_key(&self) -> u128 {
+    let cdr_bytes = match to_bytes::<Self, BigEndian>(&self) {
+      Ok(b) => b,
+      _ => Vec::new(),
+    };
 
-  // provides one method for convenience
-  fn get_hash(&self) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    self.hash(&mut hasher);
-    hasher.finish()
+    let digest = if cdr_bytes.len() > 16 {
+      md5::compute(&cdr_bytes).to_vec()
+    } else {
+      cdr_bytes
+    };
+
+    let mut digarr: [u8; 16] = [0; 16];
+    for i in 0..digest.len() {
+      digarr[i] = digest[i];
+    }
+
+    u128::from_le_bytes(digarr)
   }
 }
 
 impl Key for () {
-  // nothing
+  fn into_hash_key(&self) -> u128 {
+    0
+  }
 }
+
+// TODO: might want to implement this for each primitive?
+impl Key for String {}
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 // Key type to identicy data instances in builtin topics

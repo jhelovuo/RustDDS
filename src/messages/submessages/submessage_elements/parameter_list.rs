@@ -1,11 +1,13 @@
-use crate::messages::submessages::submessage_elements::parameter::Parameter;
-use speedy::{Readable, Writable};
+use crate::{
+  messages::submessages::submessage_elements::parameter::Parameter,
+};
+use speedy::{Readable, Writable, Context, Writer};
 
 /// ParameterList is used as part of several messages to encapsulate
 /// QoS parameters that may affect the interpretation of the message.
 /// The encapsulation of the parameters follows a mechanism that allows
 /// extensions to the QoS without breaking backwards compatibility.
-#[derive(Debug, PartialEq, Readable, Writable, Clone)]
+#[derive(Debug, PartialEq, Readable, Clone)]
 pub struct ParameterList {
   pub parameters: Vec<Parameter>,
 }
@@ -22,7 +24,17 @@ impl ParameterList {
 /// that follows and its length can be anything (as long as it is a multiple of
 /// 4)
 pub const PID_PAD: u16 = 0x00;
+const SENTINEL: u32 = 0x00000001;
 
-/// The PID_SENTINEL is used to terminate
-/// the parameter list and its length is ignore
-pub const PID_SENTINEL: u16 = 0x01;
+impl<C: Context> Writable<C> for ParameterList {
+  #[inline]
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    for param in self.parameters.iter() {
+      writer.write_value(param)?;
+    }
+
+    writer.write_u32(SENTINEL)?;
+
+    Ok(())
+  }
+}

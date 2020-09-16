@@ -1,7 +1,7 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use super::parameter_id::ParameterId;
 use crate::dds::traits::key::Key;
 
@@ -257,16 +257,7 @@ impl GUID {
   }
 }
 
-impl Key for GUID {
-  fn get_hash(&self) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    self.entityId.entityKind.hash(&mut hasher);
-    self.entityId.entityKey.hash(&mut hasher);
-    self.guidPrefix.entityKey.hash(&mut hasher);
-
-    hasher.finish()
-  }
-}
+impl Key for GUID {}
 
 #[derive(Serialize, Deserialize)]
 pub struct GUIDData {
@@ -276,11 +267,11 @@ pub struct GUIDData {
 }
 
 impl GUIDData {
-  pub fn from(guid: &GUID, parameter_id: &ParameterId) -> GUIDData {
+  pub fn from(guid: GUID, parameter_id: ParameterId) -> GUIDData {
     GUIDData {
-      parameter_id: parameter_id.clone(),
+      parameter_id: parameter_id,
       parameter_length: 16,
-      guid: guid.clone(),
+      guid: guid,
     }
   }
 }

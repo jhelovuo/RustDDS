@@ -7,7 +7,6 @@ use crate::structure::sequence_number::SequenceNumber;
 use speedy::{Readable, Writable, Context, Writer, Error};
 use enumflags2::BitFlags;
 use std::io;
-use super::submessage_elements::serialized_payload::RepresentationIdentifier;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -40,14 +39,13 @@ pub struct Data {
   /// the new value of the data-object after the change.
   /// If the KeyFlag is set, then it contains the encapsulation of
   /// the key of the data-object the message refers to.
-  pub serialized_payload: SerializedPayload,
+  pub serialized_payload: Option<SerializedPayload>,
 }
 
 impl Data {
   /// DATA submessage cannot be speedy Readable because deserializing this requires info from submessage header.
   /// Required iformation is  expect_qos and expect_payload whish are told on submessage headerflags.
 
-  // TODO: Handle errors, return a Result type.
   pub fn deserialize_data(buffer: &[u8], flags: BitFlags<DATA_Flags>) -> io::Result<Data> {
     let mut cursor = io::Cursor::new(buffer);
     let endianness = endianness_flag(flags.bits());
@@ -81,9 +79,11 @@ impl Data {
     };
 
     let payload = if expect_data {
-      SerializedPayload::from_bytes(&buffer[cursor.position() as usize..])?
+      Some(SerializedPayload::from_bytes(
+        &buffer[cursor.position() as usize..],
+      )?)
     } else {
-      SerializedPayload::new(RepresentationIdentifier::INVALID, vec![])
+      None
     };
 
     Ok(Data {
@@ -96,19 +96,6 @@ impl Data {
   }
 }
 
-// TODO: This should not be necessary.
-impl Default for Data {
-  fn default() -> Self {
-    Data {
-      reader_id: EntityId::default(),
-      writer_id: EntityId::default(),
-      writer_sn: SequenceNumber::default(),
-      inline_qos: None,
-      serialized_payload: SerializedPayload::default(),
-    }
-  }
-}
-
 impl<C: Context> Writable<C> for Data {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
     //This version of the protocol (2.3) should set all the bits in the extraFlags to zero
@@ -117,21 +104,19 @@ impl<C: Context> Writable<C> for Data {
     //this field until the first octet of the inlineQos SubmessageElement. If the inlineQos SubmessageElement is not
     //present (i.e., the InlineQosFlag is not set), then octetsToInlineQos contains the offset to the next field after
     //the inlineQos.
+    writer.write_u16(16)?;
 
-    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0 {
-      writer.write_value(&self.inline_qos)?;
-    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() == 0 {
-      writer.write_u16(16)?;
-    } else if self.inline_qos.is_none() {
-      writer.write_u16(16)?;
-    }
     writer.write_value(&self.reader_id)?;
     writer.write_value(&self.writer_id)?;
     writer.write_value(&self.writer_sn)?;
-    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0 {
-      writer.write_value(&self.inline_qos)?;
+    if let Some(inline_qos) = self.inline_qos.as_ref() {
+      writer.write_value(inline_qos)?;
     }
-    writer.write_value(&self.serialized_payload)?;
+
+    if let Some(serialized_payload) = self.serialized_payload.as_ref() {
+      writer.write_value(serialized_payload)?;
+    }
+
     Ok(())
   }
 }

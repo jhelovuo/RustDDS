@@ -1,6 +1,10 @@
 use serde::{Serialize /*, Deserialize*/};
 
-use crate::dds::traits::key::Keyed;
+use crate::{
+  dds::traits::key::Keyed,
+  messages::submessages::submessage_elements::parameter_list::ParameterList,
+  structure::parameter_id::ParameterId,
+};
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::serialization::cdrSerializer::{to_bytes};
@@ -18,7 +22,8 @@ pub struct DDSData {
   reader_id: EntityId,
   writer_id: EntityId,
   value: Option<SerializedPayload>,
-  pub value_key_hash: u64, // TODO: Is this used/needed ? If yes, please document its purpose here.
+  // needed to identify what instance type (unique key) this change is for 9.6.3.8
+  pub value_key_hash: u128,
 }
 
 impl DDSData {
@@ -30,6 +35,39 @@ impl DDSData {
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: Some(payload),
       value_key_hash: 0,
+    }
+  }
+
+  pub fn new_disposed(inline_qos: ParameterList) -> DDSData {
+    let mut change_kind = ChangeKind::ALIVE;
+    let mut value_key_hash = 0;
+    for param in inline_qos.parameters.iter() {
+      if param.parameter_id == ParameterId::PID_STATUS_INFO {
+        let last = match param.value.last() {
+          Some(l) => *l,
+          None => continue,
+        };
+
+        if last > 0 {
+          change_kind = ChangeKind::NOT_ALIVE_DISPOSED;
+        }
+      } else if param.parameter_id == ParameterId::PID_KEY_HASH {
+        let mut val: [u8; 16] = [0; 16];
+        // if for some reason hash is less than 16 bytes fill zeroes 9.6.3.8
+        for i in 0..param.value.len() {
+          val[i] = param.value[i]
+        }
+        value_key_hash = u128::from_be_bytes(val);
+      }
+    }
+
+    DDSData {
+      source_timestamp: Timestamp::from(time::get_time()),
+      change_kind,
+      reader_id: EntityId::ENTITYID_UNKNOWN,
+      writer_id: EntityId::ENTITYID_UNKNOWN,
+      value: None,
+      value_key_hash,
     }
   }
 

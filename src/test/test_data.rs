@@ -147,7 +147,7 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
         EntitySubmessage::Data(d, _) => {
           let mut participant_data: SPDPDiscoveredParticipantData =
             PlCdrDeserializerAdapter::<SPDPDiscoveredParticipantData>::from_bytes(
-              &d.serialized_payload.value,
+              &d.serialized_payload.as_ref().unwrap().value,
               RepresentationIdentifier::PL_CDR_LE,
             )
             .unwrap();
@@ -157,12 +157,13 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
           participant_data.default_unicast_locators.clear();
           participant_data.default_multicast_locators.clear();
 
-          let datalen = d.serialized_payload.value.len() as u16;
+          let datalen = d.serialized_payload.as_ref().unwrap().value.len() as u16;
           data =
             to_bytes::<SPDPDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
               .unwrap();
-          d.serialized_payload.value = data.clone();
-          submsglen = submsglen + d.serialized_payload.value.len() as u16 - datalen;
+          d.serialized_payload.as_mut().unwrap().value = data.clone();
+          submsglen =
+            submsglen + d.serialized_payload.as_ref().unwrap().value.len() as u16 - datalen;
         }
         _ => continue,
       },
@@ -186,7 +187,7 @@ pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
         EntitySubmessage::Data(d, _) => {
           let particiapant_data: SPDPDiscoveredParticipantData =
             PlCdrDeserializerAdapter::from_bytes(
-              &d.serialized_payload.value,
+              &d.serialized_payload.as_ref().unwrap().value,
               RepresentationIdentifier::PL_CDR_LE,
             )
             .unwrap();
@@ -381,7 +382,7 @@ pub fn create_rtps_data_message<D: Serialize>(
     writer_id,
     writer_sn: SequenceNumber::default(),
     inline_qos: None,
-    serialized_payload,
+    serialized_payload: Some(serialized_payload),
   };
 
   let data_size = data_message

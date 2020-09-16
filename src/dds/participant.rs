@@ -44,22 +44,46 @@ impl DomainParticipant {
   pub fn new(domain_id: u16, participant_id: u16) -> DomainParticipant {
     let mut dpd = DomainParticipant_Disc::new(domain_id, participant_id);
 
-    // TODO: handle unwrap
-    let discovery_updated_sender = dpd.discovery_updated_sender.take().unwrap();
-    let discovery_stop_receiver = dpd.discovery_stop_receiver.take().unwrap();
+    let discovery_updated_sender = match dpd.discovery_updated_sender.take() {
+      Some(dus) => dus,
+      // this error should never happen
+      None => panic!("Unable to receive Discovery Updated Sender."),
+    };
+
+    let discovery_stop_receiver = match dpd.discovery_stop_receiver.take() {
+      Some(dsr) => dsr,
+      // this error should never happen
+      None => panic!("Unable to get Discovery Stop Receiver."),
+    };
 
     let dp = DomainParticipant { dpi: Arc::new(dpd) };
+
+    let (discovery_started_sender, discovery_started_receiver) =
+      std::sync::mpsc::channel::<Result<()>>();
 
     let discovery = Discovery::new(
       dp.weak_clone(),
       dp.discovery_db.clone(),
+      discovery_started_sender,
       discovery_updated_sender,
       discovery_stop_receiver,
     );
 
     let _discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
 
-    dp
+    // blocking until discovery answers
+    let discovery_started = discovery_started_receiver.recv_timeout(Duration::from_secs(60));
+    match discovery_started {
+      Ok(ds) => match ds {
+        Ok(_) => dp,
+        Err(e) => {
+          std::mem::drop(dp);
+          // TODO: maybe return result on new?
+          panic!("Failed to start discovery. {:?}", e);
+        }
+      },
+      Err(_) => panic!("Channel error"),
+    }
   }
 
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
@@ -100,12 +124,14 @@ impl Deref for DomainParticipant {
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
   dpi: Weak<DomainParticipant_Disc>,
+  entity_attributes: EntityAttributes,
 }
 
 impl DomainParticipantWeak {
   pub fn new(dp: DomainParticipant) -> DomainParticipantWeak {
     DomainParticipantWeak {
       dpi: Arc::downgrade(&dp.dpi),
+      entity_attributes: dp.entity_attributes,
     }
   }
 
@@ -152,11 +178,17 @@ impl DomainParticipantWeak {
   }
 }
 
+impl Entity for DomainParticipantWeak {
+  fn as_entity(&self) -> &EntityAttributes {
+    &self.entity_attributes
+  }
+}
+
 // This struct exists only to control and stop Discovery when DomainParticipant should be dropped
 pub struct DomainParticipant_Disc {
   dpi: Arc<DomainParticipant_Inner>,
   // Discovery control
-  discovery_updated_sender: Option<mio_channel::Sender<DiscoveryNotificationType>>,
+  discovery_updated_sender: Option<mio_channel::SyncSender<DiscoveryNotificationType>>,
   discovery_stop_receiver: Option<mio_channel::Receiver<()>>,
   discovery_stop_channel: mio_channel::Sender<()>,
 }
@@ -164,7 +196,7 @@ pub struct DomainParticipant_Disc {
 impl DomainParticipant_Disc {
   pub fn new(domain_id: u16, participant_id: u16) -> DomainParticipant_Disc {
     let (discovery_update_notification_sender, discovery_update_notification_receiver) =
-      mio_channel::channel::<DiscoveryNotificationType>();
+      mio_channel::sync_channel::<DiscoveryNotificationType>(100);
 
     let dpi = DomainParticipant_Inner::new(
       domain_id,
@@ -253,19 +285,19 @@ pub struct DomainParticipant_Inner {
 
   // Adding Readers
   sender_add_reader: mio_channel::SyncSender<Reader>,
-  sender_remove_reader: mio_channel::Sender<GUID>,
+  sender_remove_reader: mio_channel::SyncSender<GUID>,
 
   // Adding DataReaders
-  sender_add_datareader_vec: Vec<mio_channel::Sender<()>>,
-  sender_remove_datareader_vec: Vec<mio_channel::Sender<GUID>>,
+  sender_add_datareader_vec: Vec<mio_channel::SyncSender<()>>,
+  sender_remove_datareader_vec: Vec<mio_channel::SyncSender<GUID>>,
 
   // dp_event_wrapper control
   stop_poll_sender: mio_channel::Sender<()>,
   ev_loop_handle: Option<JoinHandle<()>>,
 
   // Writers
-  add_writer_sender: mio_channel::Sender<Writer>,
-  remove_writer_sender: mio_channel::Sender<GUID>,
+  add_writer_sender: mio_channel::SyncSender<Writer>,
+  remove_writer_sender: mio_channel::SyncSender<GUID>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -335,15 +367,13 @@ impl DomainParticipant_Inner {
     );
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
-    let targets = HashMap::new();
-
     // Adding readers
     let (sender_add_reader, receiver_add_reader) = mio_channel::sync_channel::<Reader>(100);
-    let (sender_remove_reader, receiver_remove_reader) = mio_channel::channel::<GUID>();
+    let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(10);
 
     // Writers
-    let (add_writer_sender, add_writer_receiver) = mio_channel::channel::<Writer>();
-    let (remove_writer_sender, remove_writer_receiver) = mio_channel::channel::<GUID>();
+    let (add_writer_sender, add_writer_receiver) = mio_channel::sync_channel::<Writer>(10);
+    let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
 
     let new_guid = GUID::new();
 
@@ -358,7 +388,6 @@ impl DomainParticipant_Inner {
       listeners,
       a_r_cache.clone(),
       discovery_db.clone(),
-      targets,
       new_guid.guidPrefix,
       TokenReceiverPair {
         token: ADD_READER_TOKEN,
@@ -507,15 +536,15 @@ impl DomainParticipant_Inner {
     self.sender_add_reader.clone()
   }
 
-  pub(crate) fn get_remove_reader_sender(&self) -> mio_channel::Sender<GUID> {
+  pub(crate) fn get_remove_reader_sender(&self) -> mio_channel::SyncSender<GUID> {
     self.sender_remove_reader.clone()
   }
 
-  pub(crate) fn get_add_writer_sender(&self) -> mio_channel::Sender<Writer> {
+  pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<Writer> {
     self.add_writer_sender.clone()
   }
 
-  pub(crate) fn get_remove_writer_sender(&self) -> mio_channel::Sender<GUID> {
+  pub(crate) fn get_remove_writer_sender(&self) -> mio_channel::SyncSender<GUID> {
     self.remove_writer_sender.clone()
   }
 

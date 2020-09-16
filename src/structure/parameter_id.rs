@@ -1,7 +1,7 @@
 use speedy::{Readable, Writable};
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialEq, Eq, Readable, Writable, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Readable, Writable, Copy, Clone, Serialize, Deserialize)]
 pub struct ParameterId {
   value: u16,
 }

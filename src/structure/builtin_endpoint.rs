@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use super::parameter_id::ParameterId;
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub struct BuiltinEndpointSet {
   value: u32,
 }
@@ -21,7 +21,7 @@ impl BuiltinEndpointSet {
   }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct BuiltinEndpointSetData {
   parameter_id: ParameterId,
   parameter_length: u16,
@@ -30,8 +30,8 @@ pub struct BuiltinEndpointSetData {
 
 impl BuiltinEndpointSetData {
   pub fn from(
-    builtin_endpoint_set: &BuiltinEndpointSet,
-    parameter_id: &ParameterId,
+    builtin_endpoint_set: BuiltinEndpointSet,
+    parameter_id: ParameterId,
   ) -> BuiltinEndpointSetData {
     BuiltinEndpointSetData {
       parameter_id: parameter_id.clone(),
@@ -41,7 +41,7 @@ impl BuiltinEndpointSetData {
   }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub struct BuiltinEndpointQos {
   value: u32,
 }
@@ -58,7 +58,7 @@ pub struct BuiltinEndpointQosData {
 }
 
 impl BuiltinEndpointQosData {
-  pub fn from(builtin_endpoint_qos: &BuiltinEndpointQos) -> BuiltinEndpointQosData {
+  pub fn from(builtin_endpoint_qos: BuiltinEndpointQos) -> BuiltinEndpointQosData {
     BuiltinEndpointQosData {
       parameter_id: ParameterId::PID_BUILTIN_ENDPOINT_QOS,
       parameter_length: 4,

@@ -2,7 +2,7 @@ use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
 extern crate chrono;
 //use chrono::Duration;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::RwLockReadGuard};
 use std::{
   sync::{Arc, RwLock},
 };
@@ -29,7 +29,6 @@ pub struct DPEventWrapper {
   ddscache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   udp_listeners: HashMap<Token, UDPListener>,
-  send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
   message_receiver: MessageReceiver,
 
   // Adding readers
@@ -57,7 +56,6 @@ impl DPEventWrapper {
     udp_listeners: HashMap<Token, UDPListener>,
     ddscache: Arc<RwLock<DDSCache>>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
-    send_targets: HashMap<Token, mio_channel::Sender<Vec<u8>>>,
     participant_guid_prefix: GuidPrefix,
     add_reader_receiver: TokenReceiverPair<Reader>,
     remove_reader_receiver: TokenReceiverPair<GUID>,
@@ -67,7 +65,8 @@ impl DPEventWrapper {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
   ) -> DPEventWrapper {
     let poll = Poll::new().expect("Unable to create new poll.");
-    let (acknack_sender, acknack_reciever) = mio_channel::channel::<(GuidPrefix, AckNack)>();
+    let (acknack_sender, acknack_reciever) =
+      mio_channel::sync_channel::<(GuidPrefix, AckNack)>(100);
     let mut udp_listeners = udp_listeners;
     for (token, listener) in &mut udp_listeners {
       poll
@@ -148,7 +147,6 @@ impl DPEventWrapper {
       ddscache,
       discovery_db,
       udp_listeners,
-      send_targets,
       message_receiver: MessageReceiver::new(participant_guid_prefix, acknack_sender),
       add_reader_receiver,
       remove_reader_receiver,
@@ -281,8 +279,9 @@ impl DPEventWrapper {
         }
       }
       REMOVE_READER_TOKEN => {
-        let old_reader_guid = self.remove_reader_receiver.receiver.try_recv().unwrap();
-        self.message_receiver.remove_reader(old_reader_guid);
+        while let Ok(old_reader_guid) = self.remove_reader_receiver.receiver.try_recv() {
+          self.message_receiver.remove_reader(old_reader_guid);
+        }
       }
       _ => {}
     }
@@ -320,16 +319,12 @@ impl DPEventWrapper {
         }
       }
       REMOVE_WRITER_TOKEN => {
-        let writer = self.writers.remove(
-          &self
-            .remove_writer_receiver
-            .receiver
-            .try_recv()
-            .expect("Failed to get writer reciver guid"),
-        );
-        if let Some(w) = writer {
-          &self.poll.deregister(w.cache_change_receiver());
-        };
+        while let Ok(writer_guid) = &self.remove_writer_receiver.receiver.try_recv() {
+          let writer = self.writers.remove(writer_guid);
+          if let Some(w) = writer {
+            &self.poll.deregister(w.cache_change_receiver());
+          };
+        }
       }
       t => {
         let found_writer = self
@@ -341,7 +336,9 @@ impl DPEventWrapper {
           Some((_guid, w)) => {
             while let Ok(cc) = w.cache_change_receiver().try_recv() {
               if cc.change_kind == ChangeKind::NOT_ALIVE_DISPOSED {
-                w.handle_not_alive_disposed_cache_change(cc);
+                w.insert_to_history_cache(cc);
+                w.send_all_unsend_messages();
+              // w.handle_not_alive_disposed_cache_change(cc);
               } else if cc.change_kind == ChangeKind::ALIVE {
                 w.insert_to_history_cache(cc);
                 w.send_all_unsend_messages();
@@ -394,26 +391,20 @@ impl DPEventWrapper {
   }
 
   pub fn handle_writer_acknack_action(&mut self, _event: &Event) {
-    let recieved = self.ack_nack_reciever.try_recv();
-
-    if recieved.is_ok() {
-      let (acknack_sender_prefix, acknack_message) = recieved.unwrap();
+    while let Ok((acknack_sender_prefix, acknack_message)) = self.ack_nack_reciever.try_recv() {
       let target_writer_entity_id = { acknack_message.writer_id };
       let writer_guid = GUID::new_with_prefix_and_id(
         self.domain_participants_guid.guidPrefix,
         target_writer_entity_id,
       );
-      let found_writer = self.writers.get_mut(&writer_guid);
-      if found_writer.is_some() {
-        found_writer
-          .unwrap()
-          .handle_ack_nack(acknack_sender_prefix, acknack_message)
+      if let Some(found_writer) = self.writers.get_mut(&writer_guid) {
+        found_writer.handle_ack_nack(acknack_sender_prefix, acknack_message)
       } else {
         println!(
           "Couldn't handle acknack! did not find local rtps writer with GUID: {:x?}",
           writer_guid
         );
-        return;
+        continue;
       }
     }
   }
@@ -423,83 +414,35 @@ impl DPEventWrapper {
       Ok(db) => {
         for (_, writer) in self.writers.iter_mut() {
           if writer.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
-            // if writer is participant writer
-            writer.readers = db
-              .get_participants()
-              .filter(|p| {
-                p.participant_guid.as_ref().unwrap().guidPrefix != writer.get_guid_prefix()
-              })
-              .map(|p| p.as_reader_proxy(true).clone())
-              .collect();
-            let proxies: Option<Vec<RtpsReaderProxy>> =
-              db.get_writers_reader_proxies(writer.get_guid()).map(|p| {
-                p.into_iter()
-                  .map(|f| RtpsReaderProxy::from_discovered_reader_data(f).unwrap())
-                  .collect()
-              });
-            match proxies {
-              Some(mut pr) => writer.readers.append(&mut pr),
-              None => (),
-            };
+            DPEventWrapper::update_writer_readers_from_participants(
+              writer,
+              EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+              &db,
+            );
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
-            writer.readers = db
-              .get_participants()
-              .filter(|p| {
-                p.participant_guid.as_ref().unwrap().guidPrefix != writer.get_guid_prefix()
-              })
-              .map(|p| p.as_reader_proxy(true))
-              .map(|mut p| {
-                p.remote_reader_guid.entityId =
-                  EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER;
-                p
-              })
-              .collect();
-
-            // reset data sending
-            for reader in writer.readers.iter_mut() {
-              reader.unsend_changes_set(writer.last_change_sequence_number);
-            }
+            DPEventWrapper::update_writer_readers_from_participants(
+              writer,
+              EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+              &db,
+            );
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER {
-            writer.readers = db
-              .get_participants()
-              .filter(|p| {
-                p.participant_guid.as_ref().unwrap().guidPrefix != writer.get_guid_prefix()
-              })
-              .map(|p| p.as_reader_proxy(true))
-              .map(|mut p| {
-                p.remote_reader_guid.entityId = EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER;
-                p
-              })
-              .collect();
-
-            // reset data sending
-            for reader in writer.readers.iter_mut() {
-              reader.unsend_changes_set(writer.last_change_sequence_number);
-            }
+            DPEventWrapper::update_writer_readers_from_participants(
+              writer,
+              EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+              &db,
+            );
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER {
-            writer.readers = db
-              .get_participants()
-              .filter(|p| {
-                p.participant_guid.as_ref().unwrap().guidPrefix != writer.get_guid_prefix()
-              })
-              .map(|p| p.as_reader_proxy(true))
-              .map(|mut p| {
-                p.remote_reader_guid.entityId = EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER;
-                p
-              })
-              .collect();
-
-            // reset data sending
-            for reader in writer.readers.iter_mut() {
-              reader.unsend_changes_set(writer.last_change_sequence_number);
-            }
+            DPEventWrapper::update_writer_readers_from_participants(
+              writer,
+              EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
+              &db,
+            );
           } else {
             let proxies = db.get_writers_reader_proxies(writer.get_guid());
             match proxies {
               Some(v) => {
                 writer.readers = v
-                  .iter()
-                  .map(|&p| RtpsReaderProxy::from_discovered_reader_data(p).unwrap())
+                  .map(|p| RtpsReaderProxy::from_discovered_reader_data(p).unwrap())
                   .collect();
               }
               None => {
@@ -508,11 +451,7 @@ impl DPEventWrapper {
                   .filter(|p| {
                     p.participant_guid.as_ref().unwrap().guidPrefix != writer.get_guid_prefix()
                   })
-                  .map(|p| p.as_reader_proxy(false))
-                  .map(|mut p| {
-                    p.remote_reader_guid.entityId = EntityId::ENTITYID_UNKNOWN;
-                    p
-                  })
+                  .map(|p| p.as_reader_proxy(false, Some(EntityId::ENTITYID_UNKNOWN)))
                   .collect();
               }
             };
@@ -531,6 +470,48 @@ impl DPEventWrapper {
       }
       _ => panic!("DiscoveryDB is poisoned."),
     }
+  }
+
+  fn update_writer_readers_from_participants(
+    writer: &mut Writer,
+    reader_entity_id: EntityId,
+    db: &RwLockReadGuard<DiscoveryDB>,
+  ) {
+    let all_readers = db
+      .get_participants()
+      .filter_map(|p| match p.participant_guid {
+        Some(g) => Some((g, p)),
+        None => None,
+      })
+      .filter(|(g, _)| g.guidPrefix != writer.get_guid_prefix())
+      .map(|(g, p)| (g, p.as_reader_proxy(true, Some(reader_entity_id))));
+
+    let mut new_readers = all_readers.filter(|(g, p)| {
+      writer
+        .readers
+        .iter()
+        .find(|r| r.remote_reader_guid.guidPrefix == g.guidPrefix && **r != *p)
+        .is_none()
+    });
+
+    let old_readers: Vec<RtpsReaderProxy> = writer
+      .readers
+      .iter()
+      .filter(|r| {
+        new_readers
+          .find(|(g, _)| r.remote_reader_guid.guidPrefix == g.guidPrefix)
+          .is_none()
+      })
+      .map(|p| p.clone())
+      .collect();
+
+    writer.readers = old_readers
+      .into_iter()
+      .chain(new_readers.map(|(_, mut p)| {
+        p.unsend_changes_set(writer.last_change_sequence_number);
+        p
+      }))
+      .collect();
   }
 
   pub fn update_readers(&mut self) {
@@ -603,7 +584,7 @@ impl DPEventWrapper {
             match proxies {
               Some(v) => {
                 reader.clear_matched_writers();
-                v.iter().for_each(|p| {
+                v.for_each(|p| {
                   let guid = match p.writer_proxy.remote_writer_guid {
                     Some(g) => g.clone(),
                     None => return,
@@ -686,7 +667,6 @@ mod tests {
       HashMap::new(),
       ddshc,
       discovery_db,
-      HashMap::new(),
       GuidPrefix::default(),
       TokenReceiverPair {
         token: ADD_READER_TOKEN,
