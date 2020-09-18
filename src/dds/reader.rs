@@ -421,6 +421,10 @@ impl Reader {
       .unwrap();
     sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
   }
+
+  pub fn topic_name(&self) -> &String {
+    &self.topic_name
+  }
 } // impl
 
 impl HasQoSPolicy for Reader {
@@ -667,7 +671,12 @@ mod tests {
     );
     changes.push(change);
 
-    let change = CacheChange::new(ChangeKind::ALIVE, new_reader.get_guid(), SequenceNumber::from(3), Some(d));
+    let change = CacheChange::new(
+      ChangeKind::ALIVE,
+      new_reader.get_guid(),
+      SequenceNumber::from(3),
+      Some(d),
+    );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
       &Instant::now(),

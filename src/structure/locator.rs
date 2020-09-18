@@ -4,7 +4,7 @@ pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use serde::{Serialize, Deserialize};
 use super::parameter_id::ParameterId;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Readable, Writable, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Readable, Writable, Serialize, Deserialize)]
 pub struct LocatorKind {
   value: i32,
 }
@@ -16,7 +16,7 @@ impl LocatorKind {
   pub const LOCATOR_KIND_UDPv6: LocatorKind = LocatorKind { value: 2 };
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub struct Locator {
   pub kind: LocatorKind,
   pub port: u32,

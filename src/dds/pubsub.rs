@@ -280,8 +280,14 @@ impl<'s> Subscriber {
       }
     };
 
-    let matching_datareader =
-      DataReader::<D, SA>::new(self, datareader_id, &topic, rec, dp.get_dds_cache(), self.discovery_command.clone());
+    let matching_datareader = DataReader::<D, SA>::new(
+      self,
+      datareader_id,
+      &topic,
+      rec,
+      dp.get_dds_cache(),
+      self.discovery_command.clone(),
+    );
 
     let matching_datareader = match matching_datareader {
       Ok(dr) => dr,

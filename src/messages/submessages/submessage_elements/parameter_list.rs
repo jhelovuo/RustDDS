@@ -1,5 +1,6 @@
 use crate::{
   messages::submessages::submessage_elements::parameter::Parameter,
+  structure::parameter_id::ParameterId,
 };
 use speedy::{Readable, Writable, Context, Writer};
 
@@ -7,7 +8,7 @@ use speedy::{Readable, Writable, Context, Writer};
 /// QoS parameters that may affect the interpretation of the message.
 /// The encapsulation of the parameters follows a mechanism that allows
 /// extensions to the QoS without breaking backwards compatibility.
-#[derive(Debug, PartialEq, Readable, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ParameterList {
   pub parameters: Vec<Parameter>,
 }
@@ -36,5 +37,29 @@ impl<C: Context> Writable<C> for ParameterList {
     writer.write_u32(SENTINEL)?;
 
     Ok(())
+  }
+}
+
+impl<'a, C: Context> Readable<'a, C> for ParameterList {
+  #[inline]
+  fn read_from<R: speedy::Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+    let mut parameters = ParameterList::new();
+
+    // loop ends in failure to read something or catching sentinel
+    loop {
+      let parameter_id = ParameterId::read_from(reader)?;
+      if parameter_id == ParameterId::PID_SENTINEL {
+        return Ok(parameters);
+      }
+
+      let length = u16::read_from(reader)?;
+
+      let parameter = Parameter {
+        parameter_id,
+        value: reader.read_vec(length as usize)?,
+      };
+
+      parameters.parameters.push(parameter);
+    }
   }
 }

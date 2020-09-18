@@ -30,6 +30,8 @@ use crate::{
   },
 };
 
+use super::dp_event_wrapper::DomainInfo;
+
 #[derive(Clone)]
 // This is a smart pointer for DomainPArticipant_Inner for easier manipulation.
 pub struct DomainParticipant {
@@ -381,6 +383,11 @@ impl DomainParticipant_Inner {
     let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
 
     let new_guid = GUID::new();
+    let domain_info = DomainInfo {
+      domain_participant_guid: new_guid,
+      domain_id,
+      participant_id,
+    };
 
     let a_r_cache = Arc::new(RwLock::new(DDSCache::new()));
 
@@ -389,7 +396,7 @@ impl DomainParticipant_Inner {
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
     let ev_wrapper = DPEventWrapper::new(
-      new_guid,
+      domain_info,
       listeners,
       a_r_cache.clone(),
       discovery_db.clone(),

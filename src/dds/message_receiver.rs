@@ -497,7 +497,8 @@ mod tests {
     ];
 
     let guid_new = GUID::new();
-    let (acknack_sender, _acknack_reciever) = mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
+    let (acknack_sender, _acknack_reciever) =
+      mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
     let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
 
     message_receiver.handle_user_msg(udp_bits1);

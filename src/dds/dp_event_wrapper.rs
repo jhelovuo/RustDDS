@@ -7,7 +7,10 @@ use std::{
   sync::{Arc, RwLock},
 };
 
-use crate::dds::{message_receiver::MessageReceiver, reader::Reader, writer::Writer, qos::HasQoSPolicy};
+use crate::{
+  dds::{message_receiver::MessageReceiver, reader::Reader, writer::Writer, qos::HasQoSPolicy},
+  network::util::get_local_multicast_locators,
+};
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
@@ -23,8 +26,14 @@ use super::{
   qos::policy::Reliability,
 };
 
+pub struct DomainInfo {
+  pub domain_participant_guid: GUID,
+  pub domain_id: u16,
+  pub participant_id: u16,
+}
+
 pub struct DPEventWrapper {
-  domain_participants_guid: GUID,
+  domain_info: DomainInfo,
   poll: Poll,
   ddscache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -52,7 +61,7 @@ pub struct DPEventWrapper {
 impl DPEventWrapper {
   // This pub(crate) , because it should be constructed only by DomainParticipant.
   pub(crate) fn new(
-    domain_participants_guid: GUID,
+    domain_info: DomainInfo,
     udp_listeners: HashMap<Token, UDPListener>,
     ddscache: Arc<RwLock<DDSCache>>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -142,7 +151,7 @@ impl DPEventWrapper {
       .expect("Failed to register reader update notification.");
 
     DPEventWrapper {
-      domain_participants_guid,
+      domain_info,
       poll,
       ddscache,
       discovery_db,
@@ -394,7 +403,7 @@ impl DPEventWrapper {
     while let Ok((acknack_sender_prefix, acknack_message)) = self.ack_nack_reciever.try_recv() {
       let target_writer_entity_id = { acknack_message.writer_id };
       let writer_guid = GUID::new_with_prefix_and_id(
-        self.domain_participants_guid.guidPrefix,
+        self.domain_info.domain_participant_guid.guidPrefix,
         target_writer_entity_id,
       );
       if let Some(found_writer) = self.writers.get_mut(&writer_guid) {
@@ -419,6 +428,23 @@ impl DPEventWrapper {
               EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
               &db,
             );
+
+            let multicast_guid = GUID::new_with_prefix_and_id(
+              GuidPrefix::GUIDPREFIX_UNKNOWN,
+              EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+            );
+            if let None = writer
+              .readers
+              .iter()
+              .find(|p| p.remote_reader_guid == multicast_guid)
+            {
+              let mut multicast_reader = RtpsReaderProxy::new(multicast_guid);
+              multicast_reader.multicast_locator_list = get_local_multicast_locators(
+                get_spdp_well_known_multicast_port(self.domain_info.domain_id),
+              );
+
+              writer.readers.push(multicast_reader);
+            }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
             DPEventWrapper::update_writer_readers_from_participants(
               writer,
@@ -438,23 +464,14 @@ impl DPEventWrapper {
               &db,
             );
           } else {
-            let proxies = db.get_writers_reader_proxies(writer.get_guid());
-            match proxies {
-              Some(v) => {
-                writer.readers = v
-                  .map(|p| RtpsReaderProxy::from_discovered_reader_data(p).unwrap())
-                  .collect();
-              }
-              None => {
-                writer.readers = db
-                  .get_participants()
-                  .filter(|p| {
-                    p.participant_guid.as_ref().unwrap().guidPrefix != writer.get_guid_prefix()
-                  })
-                  .map(|p| p.as_reader_proxy(false, Some(EntityId::ENTITYID_UNKNOWN)))
-                  .collect();
-              }
-            };
+            writer.readers = db
+              .get_external_reader_proxies()
+              .filter(|p| match p.subscription_topic_data.topic_name.as_ref() {
+                Some(tn) => *writer.topic_name() == *tn,
+                None => false,
+              })
+              .filter_map(|p| RtpsReaderProxy::from_discovered_reader_data(p))
+              .collect();
 
             if let Some(Reliability::Reliable {
               max_blocking_time: _,
@@ -486,19 +503,26 @@ impl DPEventWrapper {
       .filter(|(g, _)| g.guidPrefix != writer.get_guid_prefix())
       .map(|(g, p)| (g, p.as_reader_proxy(true, Some(reader_entity_id))));
 
-    let mut new_readers = all_readers.filter(|(g, p)| {
-      writer
-        .readers
-        .iter()
-        .find(|r| r.remote_reader_guid.guidPrefix == g.guidPrefix && **r != *p)
-        .is_none()
-    });
+    let mut new_readers: HashMap<GUID, RtpsReaderProxy> = all_readers
+      .filter(|(g, p)| {
+        writer
+          .readers
+          .iter()
+          .find(|r| r.remote_reader_guid.guidPrefix == g.guidPrefix && **r != *p)
+          .is_none()
+      })
+      .collect();
+
+    new_readers
+      .iter_mut()
+      .for_each(|(_, p)| p.unsend_changes_set(writer.last_change_sequence_number));
 
     let old_readers: Vec<RtpsReaderProxy> = writer
       .readers
       .iter()
       .filter(|r| {
         new_readers
+          .iter()
           .find(|(g, _)| r.remote_reader_guid.guidPrefix == g.guidPrefix)
           .is_none()
       })
@@ -507,10 +531,7 @@ impl DPEventWrapper {
 
     writer.readers = old_readers
       .into_iter()
-      .chain(new_readers.map(|(_, mut p)| {
-        p.unsend_changes_set(writer.last_change_sequence_number);
-        p
-      }))
+      .chain(new_readers.iter().map(|(_, p)| p.clone()))
       .collect();
   }
 
@@ -580,26 +601,22 @@ impl DPEventWrapper {
               )
             }
           } else {
-            let proxies = db.get_readers_writer_proxies(reader.get_guid());
-            match proxies {
-              Some(v) => {
-                reader.clear_matched_writers();
-                v.for_each(|p| {
-                  let guid = match p.writer_proxy.remote_writer_guid {
-                    Some(g) => g.clone(),
-                    None => return,
-                  };
-                  // TODO: get actual group entityId
-                  reader.matched_writer_add(
-                    guid,
-                    EntityId::ENTITYID_UNKNOWN,
-                    p.writer_proxy.unicast_locator_list.clone(),
-                    p.writer_proxy.multicast_locator_list.clone(),
-                  );
-                })
-              }
-              None => (),
-            }
+            reader.clear_matched_writers();
+            let topic_name = reader.topic_name().clone();
+            db.get_external_writer_proxies()
+              .filter(|p| match p.publication_topic_data.topic_name.as_ref() {
+                Some(tn) => topic_name == *tn,
+                None => false,
+              })
+              .filter_map(|p| RtpsWriterProxy::from_discovered_writer_data(p))
+              .for_each(|p| {
+                reader.matched_writer_add(
+                  p.remote_writer_guid,
+                  p.remote_group_entity_id,
+                  p.unicast_locator_list,
+                  p.multicast_locator_list,
+                )
+              });
           }
         }
       }

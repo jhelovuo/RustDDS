@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use super::parameter_id::ParameterId;
 
 #[derive(
-  Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Serialize, Deserialize, Copy, Clone,
+  Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Readable, Writable, Serialize, Deserialize, Copy, Clone,
 )]
 pub struct Duration {
   seconds: i32,

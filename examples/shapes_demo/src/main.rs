@@ -27,6 +27,7 @@ use atosdds::{
   dds::qos::policy::Presentation,
   dds::qos::policy::PresentationAccessScope,
   dds::qos::policy::Lifespan,
+  dds::traits::key::Keyed,
 };
 use std::{
   sync::{
@@ -215,6 +216,9 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
             row += 1;
           }
         } else if event.token() == KEYBOARD_CHECK_TOKEN {
+          let mut square_moved = false;
+          let mut dispose_square = false;
+
           while let Some(c) = areader.next() {
             write!(stdout, "{}", termion::cursor::Goto(1, row)).unwrap();
 
@@ -225,27 +229,44 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
               }
             };
             match c {
-              113 => {
-                return
-              },
+              113 => return,
               65 => {
                 square.yadd(-1);
-                square_writer.write(square.clone(), None).unwrap();
+                square_moved = true;
               }
               66 => {
                 square.yadd(1);
-                square_writer.write(square.clone(), None).unwrap();
+                square_moved = true;
               }
               67 => {
                 square.xadd(1);
-                square_writer.write(square.clone(), None).unwrap();
+                square_moved = true;
               }
               68 => {
                 square.xadd(-1);
-                square_writer.write(square.clone(), None).unwrap();
+                square_moved = true;
               }
-              _ => continue,
+              100 => {
+                dispose_square = true;
+              }
+              _ => {
+                continue;
+              }
             };
+          }
+          if square_moved {
+            match square_writer.write(square.clone(), None) {
+              Ok(_) => (),
+              Err(e) => println!("Failed to write new square. {:?}", e),
+            };
+          }
+
+          if dispose_square {
+            println!("Disposing square");
+            match square_writer.dispose(square.get_key(), None) {
+              Ok(_) => (),
+              Err(e) => println!("Failed to dispose square. {:?}", e),
+            }
           }
 
           input_timer.set_timeout(StdDuration::from_millis(KEYBOARD_CHECK_TIMEOUT), ());

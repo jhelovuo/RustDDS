@@ -168,7 +168,7 @@ impl RtpsReaderProxy {
     let mut min_value = SequenceNumber::from(std::i64::MAX);
     let mut min: Option<SequenceNumber> = None;
     for &request in self.unsent_changes() {
-      if request > SequenceNumber::from(0) && request < min_value {
+      if request < min_value {
         min = Some(request);
         min_value = request;
       }
@@ -186,9 +186,7 @@ impl RtpsReaderProxy {
 
   /// this should be called everytime a new CacheChange is set to RTPS writer HistoryCache
   pub fn unsend_changes_set(&mut self, sequence_number: SequenceNumber) {
-    if sequence_number > SequenceNumber::from(0) {
-      self.unsent_changes.insert(sequence_number);
-    }
+    self.unsent_changes.insert(sequence_number);
   }
 
   /// this should be called everytime next_unsent_change is called and change is sent

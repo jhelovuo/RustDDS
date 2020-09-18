@@ -163,7 +163,7 @@ where
     <D as Keyed>::K: Key,
   {
     // begin dummy placeholder values
-    let sample_state = SampleState::Read;
+    let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;
     let instance_state = InstanceState::NotAlive_Disposed;
     let disposed_generation_count = 0;

@@ -4,11 +4,12 @@ use crate::dds::datasample::DataSample;
 use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy::History;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
   pub datasamples: BTreeMap<D::K, Vec<DataSample<D>>>,
+  distinct_keys: HashSet<D::K>,
 }
 
 impl<D> DataSampleCache<D>
@@ -20,11 +21,17 @@ where
     DataSampleCache {
       qos,
       datasamples: BTreeMap::new(),
+      distinct_keys: HashSet::new(),
     }
   }
 
   pub fn add_datasample(&mut self, data_sample: DataSample<D>) {
     let key: D::K = data_sample.get_key();
+
+    if !self.distinct_keys.contains(&key) {
+      self.distinct_keys.insert(key.clone());
+    }
+
     let block = self.datasamples.get_mut(&key);
 
     match self.qos.history() {
@@ -64,6 +71,14 @@ where
 
   pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
     self.datasamples.get(&key)
+  }
+
+  pub fn get_key(&self, key_hash: u128) -> Option<D::K> {
+    self
+      .distinct_keys
+      .iter()
+      .find(|key| key.into_hash_key() == key_hash)
+      .map(|key| key.clone())
   }
 
   pub fn get_datasamples_mut(&mut self, key: &D::K) -> Option<&mut Vec<DataSample<D>>> {

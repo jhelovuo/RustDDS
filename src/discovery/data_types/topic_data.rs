@@ -28,7 +28,7 @@ use crate::{
 };
 
 // Topic data contains all topic related (including reader and writer data structures for serialization and deserialization)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReaderProxy {
   pub remote_reader_guid: Option<GUID>,
   pub expects_inline_qos: Option<bool>,
@@ -79,7 +79,7 @@ impl Serialize for ReaderProxy {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubscriptionBuiltinTopicData {
   pub key: Option<GUID>,
   pub participant_key: Option<GUID>,
@@ -149,7 +149,7 @@ impl Serialize for SubscriptionBuiltinTopicData {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
@@ -227,7 +227,7 @@ impl Serialize for DiscoveredReaderData {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WriterProxy {
   pub remote_writer_guid: Option<GUID>,
   pub unicast_locator_list: LocatorList,
@@ -271,7 +271,7 @@ impl Serialize for WriterProxy {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PublicationBuiltinTopicData {
   pub key: Option<GUID>,
   pub participant_key: Option<GUID>,
@@ -349,7 +349,7 @@ impl Serialize for PublicationBuiltinTopicData {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredWriterData {
   pub writer_proxy: WriterProxy,
   pub publication_topic_data: PublicationBuiltinTopicData,

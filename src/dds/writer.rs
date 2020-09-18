@@ -631,19 +631,21 @@ impl Writer {
     let mut message_sequence_numbers = Vec::new();
 
     if let Some(reader) = self.get_some_reader_with_unsent_messages() {
+      rem_sequece_number = reader.next_unsent_change();
+
       remote_reader_guid = Some(reader.remote_reader_guid);
       let message = self.generate_message(reader);
       if let Some(message) = message {
         message_sequence_numbers = message.get_data_sub_message_sequence_numbers();
         if let Ok(data) = message.write_to_vec_with_ctx(context) {
           buffer = data;
-          rem_sequece_number = reader.next_unsent_change();
         }
       }
 
       self
         .udp_sender
         .send_to_locator_list(&buffer, &reader.unicast_locator_list);
+
       for loc in reader.multicast_locator_list.iter() {
         if loc.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
           multi_cast_locators.push(loc.clone())
@@ -1063,6 +1065,10 @@ impl Writer {
       }
       Err(e) => panic!("DDSCache is poisoned {:?}", e),
     }
+  }
+
+  pub fn topic_name(&self) -> &String {
+    &self.my_topic_name
   }
 }
 

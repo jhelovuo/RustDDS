@@ -5,9 +5,12 @@ use std::{
   slice::Iter,
 };
 
+use itertools::Itertools;
+
 use crate::{
   dds::qos::HasQoSPolicy, structure::guid::EntityId,
   network::util::get_local_unicast_socket_address, network::util::get_local_multicast_locators,
+  structure::guid::GuidPrefix,
 };
 
 use crate::structure::{guid::GUID, duration::Duration as SDuration, entity::Entity};
@@ -35,8 +38,8 @@ pub struct DiscoveryDB {
   // local reader proxies for topics (topic name acts as key)
   local_topic_readers: Vec<DiscoveredReaderData>,
 
-  writers_reader_proxies: HashMap<GUID, Vec<DiscoveredReaderData>>,
-  readers_writer_proxies: HashMap<GUID, Vec<DiscoveredWriterData>>,
+  external_topic_readers: Vec<DiscoveredReaderData>,
+  external_topic_writers: Vec<DiscoveredWriterData>,
 
   topics: HashMap<String, DiscoveredTopicData>,
 
@@ -50,8 +53,8 @@ impl DiscoveryDB {
       participant_proxies: HashMap::new(),
       local_topic_writers: Vec::new(),
       local_topic_readers: Vec::new(),
-      writers_reader_proxies: HashMap::new(),
-      readers_writer_proxies: HashMap::new(),
+      external_topic_readers: Vec::new(),
+      external_topic_writers: Vec::new(),
       topics: HashMap::new(),
       readers_updated: false,
       writers_updated: false,
@@ -68,6 +71,54 @@ impl DiscoveryDB {
       }
       _ => false,
     }
+  }
+
+  pub fn remove_participant(&mut self, guid: GUID) {
+    self.participant_proxies.remove(&guid);
+
+    self.remove_topic_reader_with_prefix(guid.guidPrefix);
+
+    self.remove_topic_writer_with_prefix(guid.guidPrefix);
+  }
+
+  fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {
+    self
+      .external_topic_readers
+      .retain(|d| match d.reader_proxy.remote_reader_guid {
+        Some(g) => g.guidPrefix != guid_prefix,
+        // removing non existent guids
+        None => false,
+      });
+  }
+
+  pub fn remove_topic_reader(&mut self, guid: GUID) {
+    self
+      .external_topic_readers
+      .retain(|d| match d.reader_proxy.remote_reader_guid {
+        Some(g) => g != guid,
+        // removing non existent guids
+        None => false,
+      });
+  }
+
+  fn remove_topic_writer_with_prefix(&mut self, guid_prefix: GuidPrefix) {
+    self
+      .external_topic_writers
+      .retain(|d| match d.writer_proxy.remote_writer_guid {
+        Some(g) => g.guidPrefix != guid_prefix,
+        // removing non existent guids
+        None => false,
+      });
+  }
+
+  pub fn remove_topic_writer(&mut self, guid: GUID) {
+    self
+      .external_topic_writers
+      .retain(|d| match d.writer_proxy.remote_writer_guid {
+        Some(g) => g != guid,
+        // removing non existent guids
+        None => false,
+      });
   }
 
   pub fn participant_cleanup(&mut self) {
@@ -179,151 +230,104 @@ impl DiscoveryDB {
     self.writers_updated = true;
   }
 
-  pub fn get_writers_reader_proxies<'a>(
-    &'a self,
-    guid: GUID,
-  ) -> Option<Iter<'a, DiscoveredReaderData>> {
-    self.writers_reader_proxies.get(&guid).map(|p| p.iter())
+  pub fn get_external_reader_proxies<'a>(&'a self) -> Iter<'a, DiscoveredReaderData> {
+    self.external_topic_readers.iter()
   }
 
-  pub fn get_readers_writer_proxies<'a>(
-    &'a self,
-    guid: GUID,
-  ) -> Option<Iter<'a, DiscoveredWriterData>> {
-    self.readers_writer_proxies.get(&guid).map(|p| p.iter())
+  pub fn get_external_writer_proxies<'a>(&'a self) -> Iter<'a, DiscoveredWriterData> {
+    self.external_topic_writers.iter()
   }
 
-  pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> bool {
+  fn add_reader_to_local_writer(&mut self, data: &DiscoveredReaderData) {
     let topic_name = match data.subscription_topic_data.topic_name.as_ref() {
-      Some(v) => v,
-      None => {
-        println!("Failed to update subscription. No topic name.");
-        println!("{:?}", data.subscription_topic_data);
-        return false;
-      }
+      Some(tn) => tn,
+      None => return,
     };
 
-    let writers: Vec<DiscoveredWriterData> = self
-      .local_topic_writers
-      .iter()
-      .filter(|p| {
-        let ptopic_name = p.publication_topic_data.topic_name.as_ref();
-        match ptopic_name {
+    let reader_proxy = RtpsReaderProxy::from_discovered_reader_data(data);
+
+    match reader_proxy {
+      Some(rp) => self
+        .local_topic_writers
+        .iter_mut()
+        .filter(|p| match p.publication_topic_data.topic_name.as_ref() {
           Some(tn) => *tn == *topic_name,
           None => false,
-        }
-      })
-      .map(|p| p.clone())
-      .collect();
+        })
+        .for_each(|p| {
+          p.writer_proxy
+            .unicast_locator_list
+            .append(&mut rp.unicast_locator_list.clone());
+          p.writer_proxy.unicast_locator_list = p
+            .writer_proxy
+            .unicast_locator_list
+            .clone()
+            .into_iter()
+            .unique()
+            .collect();
 
-    let rtps_reader_proxy = match RtpsReaderProxy::from_discovered_reader_data(&data) {
-      Some(v) => v,
-      None => {
-        println!("Failed to update subscription. Cannot parse RtpsReaderProxy.");
-        return false;
-      }
-    };
-
-    for writer in writers.into_iter() {
-      let guid = match writer.writer_proxy.remote_writer_guid {
-        Some(guid) => guid,
-        None => {
-          println!("warning: Writer doesn't have GUID.");
-          continue;
-        }
-      };
-
-      // update writers reader proxy
-      self.update_writers_reader_proxy(guid, data.clone());
-
-      // update writers local data
-      let wrp = self.writers_reader_proxies.get_mut(&guid);
-
-      match wrp {
-        Some(v) => v
-          .iter_mut()
-          .filter(|p| {
-            let guid = match &p.reader_proxy.remote_reader_guid {
-              Some(guid) => guid,
-              None => return false,
-            };
-            *guid == rtps_reader_proxy.remote_reader_guid
-          })
-          .for_each(|p| p.update(&rtps_reader_proxy)),
-        None => {
-          self
-            .writers_reader_proxies
-            .insert(guid.clone(), vec![data.clone()]);
-          continue;
-        }
-      };
+          // TODO: multicast locators
+        }),
+      None => return,
     }
-
-    true
   }
 
-  pub fn update_publication(&mut self, data: &DiscoveredWriterData) -> bool {
+  fn add_writer_to_local_reader(&mut self, data: &DiscoveredWriterData) {
     let topic_name = match data.publication_topic_data.topic_name.as_ref() {
-      Some(v) => v,
-      None => {
-        println!("Failed to update publication. No topic name.");
-        return false;
-      }
+      Some(tn) => tn,
+      None => return,
     };
 
-    let readers: Vec<DiscoveredReaderData> = self
-      .local_topic_readers
-      .iter()
-      .filter(|p| {
-        let ptopic_name = p.subscription_topic_data.topic_name.as_ref();
-        match ptopic_name {
+    let writer_proxy = RtpsWriterProxy::from_discovered_writer_data(data);
+
+    match writer_proxy {
+      Some(wp) => self
+        .local_topic_readers
+        .iter_mut()
+        .filter(|p| match p.subscription_topic_data.topic_name.as_ref() {
           Some(tn) => *tn == *topic_name,
           None => false,
-        }
-      })
-      .map(|p| p.clone())
-      .collect();
+        })
+        .for_each(|p| {
+          p.reader_proxy
+            .unicast_locator_list
+            .append(&mut wp.unicast_locator_list.clone());
+          p.reader_proxy.unicast_locator_list = p
+            .reader_proxy
+            .unicast_locator_list
+            .clone()
+            .into_iter()
+            .unique()
+            .collect();
 
-    let rtps_writer_proxy = match RtpsWriterProxy::from(&data) {
-      Some(v) => v,
-      None => {
-        println!("Failed to update publication. Cannot parse RtpsWriterProxy.");
-        return false;
-      }
-    };
-
-    for reader in readers.into_iter() {
-      let guid = match &reader.reader_proxy.remote_reader_guid {
-        Some(guid) => guid,
-        None => {
-          println!("warning: Reader doesn't have GUID");
-          continue;
-        }
-      };
-
-      // update reader writer proxy
-      self.update_readers_writer_proxy(guid, data.clone());
-
-      let rwp = self.readers_writer_proxies.get_mut(guid);
-
-      match rwp {
-        Some(v) => v
-          .iter_mut()
-          .filter(|p| match p.writer_proxy.remote_writer_guid {
-            Some(g) => g == rtps_writer_proxy.remote_writer_guid,
-            None => false,
-          })
-          .for_each(|p| p.update(&rtps_writer_proxy)),
-        None => {
-          self
-            .readers_writer_proxies
-            .insert(guid.clone(), vec![data.clone()]);
-          continue;
-        }
-      };
+          // TODO: multicast locators
+        }),
+      None => return,
     }
+  }
 
-    true
+  pub fn update_subscription(&mut self, data: &DiscoveredReaderData) {
+    self.add_reader_to_local_writer(data);
+
+    self.external_topic_readers.push(data.clone());
+    self.external_topic_readers = self
+      .external_topic_readers
+      .clone()
+      .into_iter()
+      .unique()
+      .collect();
+  }
+
+  pub fn update_publication(&mut self, data: &DiscoveredWriterData) {
+    self.add_writer_to_local_reader(data);
+
+    self.external_topic_writers.push(data.clone());
+    self.external_topic_writers = self
+      .external_topic_writers
+      .clone()
+      .into_iter()
+      .unique()
+      .collect();
   }
 
   pub fn update_topic_data_drd(&mut self, drd: &DiscoveredReaderData) {
@@ -408,8 +412,11 @@ impl DiscoveryDB {
     true
   }
 
-  pub fn initialize_participant_reader_proxy(&mut self, writer_guid: GUID, port: u16) {
-    let guid = writer_guid.from_prefix(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER);
+  pub fn initialize_participant_reader_proxy(&mut self, port: u16) {
+    let guid = GUID::new_with_prefix_and_id(
+      GuidPrefix::GUIDPREFIX_UNKNOWN,
+      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+    );
     let mut reader_proxy = ReaderProxy::new(guid);
     reader_proxy.multicast_locator_list = get_local_multicast_locators(port);
 
@@ -424,76 +431,8 @@ impl DiscoveryDB {
       subscription_topic_data: sub_topic_data,
       content_filter: None,
     };
-    self.writers_reader_proxies.insert(writer_guid, vec![drd]);
-  }
 
-  pub fn update_writers_reader_proxy(
-    &mut self,
-    writer: GUID,
-    reader: DiscoveredReaderData,
-  ) -> bool {
-    let mut proxies = match self.writers_reader_proxies.get(&writer) {
-      Some(prox) => prox.clone(),
-      None => Vec::new(),
-    };
-
-    let guid = match &reader.reader_proxy.remote_reader_guid {
-      Some(g) => g,
-      None => {
-        println!("Failed to update writers reader proxy. No reader guid.");
-        return false;
-      }
-    };
-
-    let value: Option<usize> =
-      proxies
-        .iter()
-        .position(|x| match x.reader_proxy.remote_reader_guid {
-          Some(xguid) => xguid == *guid,
-          None => false,
-        });
-    match value {
-      Some(val) => proxies[val] = reader,
-      None => proxies.push(reader),
-    };
-
-    self.writers_reader_proxies.insert(writer.clone(), proxies);
-    true
-  }
-
-  pub fn update_readers_writer_proxy(
-    &mut self,
-    reader: &GUID,
-    writer: DiscoveredWriterData,
-  ) -> bool {
-    let mut proxies = match self.readers_writer_proxies.get(&reader) {
-      Some(prox) => prox.clone(),
-      None => Vec::new(),
-    };
-
-    let guid = match &writer.writer_proxy.remote_writer_guid {
-      Some(g) => g,
-      None => {
-        println!("Failed to update readers writer proxy. No writer guid.");
-        return false;
-      }
-    };
-
-    let value: Option<usize> =
-      proxies
-        .iter()
-        .position(|x| match x.writer_proxy.remote_writer_guid {
-          Some(xguid) => xguid == *guid,
-          None => false,
-        });
-
-    match value {
-      Some(val) => proxies[val] = writer,
-      None => proxies.push(writer),
-    };
-
-    self.readers_writer_proxies.insert(reader.clone(), proxies);
-    true
+    self.add_reader_to_local_writer(&drd);
   }
 
   // local topic readers

@@ -151,7 +151,21 @@ where
       let ser_payload = match &cc.data_value {
         Some(s) => s,
         None => {
-          println!("DataReader cant access serialized payload");
+          match &cc.kind {
+            ChangeKind::NOT_ALIVE_DISPOSED => {
+              let key = self.datasample_cache.get_key(cc.key);
+              match key {
+                Some(key) => {
+                  let datasample = DataSample::new_disposed::<D::K>(Timestamp::TIME_INVALID, key);
+                  self.datasample_cache.add_datasample(datasample);
+                }
+                None => println!("DataReader cannot find key for keyhash {:x?}", cc.key),
+              }
+            }
+            _ => {
+              println!("DataReader cant access serialized payload");
+            }
+          }
           continue;
         }
       };

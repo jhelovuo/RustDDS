@@ -50,6 +50,8 @@ impl RtpsWriterProxy {
     }
   }
 
+
+
   pub fn changes_are_missing(&self, hb_last_sn: SequenceNumber) -> bool {
     let min_sn = match self.available_changes_min() {
       Some(sn) => *sn,
@@ -111,7 +113,7 @@ impl RtpsWriterProxy {
     result
   }
 
-  pub fn from(discovered_writer_data: &DiscoveredWriterData) -> Option<RtpsWriterProxy> {
+  pub fn from_discovered_writer_data(discovered_writer_data: &DiscoveredWriterData) -> Option<RtpsWriterProxy> {
     let remote_writer_guid = match &discovered_writer_data.writer_proxy.remote_writer_guid {
       Some(v) => v,
       None => {

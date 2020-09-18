@@ -50,7 +50,7 @@ pub trait Key:
       digarr[i] = digest[i];
     }
 
-    u128::from_le_bytes(digarr)
+    u128::from_be_bytes(digarr)
   }
 }
 

@@ -5,6 +5,8 @@ use mio_extras::channel as mio_channel;
 use std::{
   time::Duration as StdDuration,
   sync::{Arc, RwLock},
+  sync::RwLockReadGuard,
+  sync::RwLockWriteGuard,
 };
 
 use crate::{
@@ -588,10 +590,7 @@ impl Discovery {
       }
     };
 
-    discovery.initialize_participant(
-      &discovery.domain_participant,
-      dcps_participant_writer.get_guid(),
-    );
+    discovery.initialize_participant(&discovery.domain_participant);
 
     discovery.write_writers_info(&mut dcps_publication_writer);
     discovery.write_readers_info(&mut dcps_subscription_writer);
@@ -756,21 +755,11 @@ impl Discovery {
     }
   }
 
-  pub fn initialize_participant(&self, dp: &DomainParticipantWeak, writer_guid: GUID) {
-    match self.discovery_db.write() {
-      Ok(mut db) => {
-        let port = get_spdp_well_known_multicast_port(dp.domain_id());
-        db.initialize_participant_reader_proxy(writer_guid, port);
-        match self
-          .discovery_updated_sender
-          .send(DiscoveryNotificationType::WritersInfoUpdated)
-        {
-          Ok(_) => (),
-          Err(e) => println!("Failed to send WriterInfoUpdated. {:?}", e),
-        };
-      }
-      _ => panic!("DiscoveryDB is poisoned."),
-    }
+  pub fn initialize_participant(&self, dp: &DomainParticipantWeak) {
+    let mut db = self.discovery_db_write();
+    let port = get_spdp_well_known_multicast_port(dp.domain_id());
+    db.initialize_participant_reader_proxy(port);
+    self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
   }
 
   pub fn handle_participant_reader(
@@ -784,37 +773,26 @@ impl Discovery {
       Ok(d) => match d {
         Some(d) => match &d.value {
           Ok(aaaaa) => (aaaaa).clone(),
-          _ => return None,
+          Err(key) => {
+            // we should dispose participant here
+            self.discovery_db_write().remove_participant(*key);
+            self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+            self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
+            return None;
+          }
         },
         None => return None,
       },
       _ => return None,
     };
 
-    let dbres = self.discovery_db.write();
-    match dbres {
-      Ok(mut db) => {
-        let updated = (*db).update_participant(&participant_data);
-        if updated {
-          match self
-            .discovery_updated_sender
-            .send(DiscoveryNotificationType::WritersInfoUpdated)
-          {
-            Ok(_) => (),
-            Err(e) => println!("Failed to send WritersInfoUpdated. {:?}", e),
-          }
-          match self
-            .discovery_updated_sender
-            .send(DiscoveryNotificationType::ReadersInfoUpdated)
-          {
-            Ok(_) => (),
-            Err(e) => println!("Failed to send ReadersInfoUpdated. {:?}", e),
-          }
+    let mut db = self.discovery_db_write();
+    let updated = db.update_participant(&participant_data);
+    if updated {
+      self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+      self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
 
-          return Some(participant_data);
-        }
-      }
-      _ => return None,
+      return Some(participant_data);
     }
 
     None
@@ -824,76 +802,49 @@ impl Discovery {
     &self,
     reader: &mut DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
   ) {
-    let reader_data_vec: Option<Vec<DiscoveredReaderData>> =
-      match reader.take(100, ReadCondition::not_read()) {
-        Ok(d) => Some(
-          d.into_iter()
-            .map(|p| p.value)
-            .filter_map(Result::ok)
-            .collect(),
-        ),
-        _ => None,
-      };
-
-    let reader_data_vec: Vec<DiscoveredReaderData> = match reader_data_vec {
-      Some(d) => d,
-      None => return,
-    };
-
-    let _res = self.discovery_db.write().map(|mut p| {
-      for data in reader_data_vec.iter() {
-        let updated = p.update_subscription(data);
-        if updated {
-          match self
-            .discovery_updated_sender
-            .send(DiscoveryNotificationType::ReadersInfoUpdated)
-          {
-            Ok(_) => (),
-            Err(_) => println!("Unable to update writers proxy."),
-          };
-          p.update_topic_data_drd(data);
+    match reader.take(100, ReadCondition::not_read()) {
+      Ok(d) => {
+        let mut db = self.discovery_db_write();
+        for data in d.into_iter() {
+          match data.value {
+            Ok(val) => {
+              db.update_subscription(&val);
+              self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+              db.update_topic_data_drd(&val);
+            }
+            Err(guid) => {
+              db.remove_topic_reader(guid);
+              self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+            }
+          }
         }
       }
-    });
+      _ => (),
+    };
   }
 
   pub fn handle_publication_reader(
     &self,
     reader: &mut DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
   ) {
-    let writer_data_vec: Option<Vec<DiscoveredWriterData>> =
-      match reader.take(100, ReadCondition::not_read()) {
-        Ok(d) => Some(
-          d.into_iter()
-            .map(|p| p.value)
-            .filter_map(Result::ok)
-            .collect(),
-        ),
-        _ => None,
-      };
-
-    let writer_data_vec = match writer_data_vec {
-      Some(d) => d,
-      None => return,
-    };
-
-    match self.discovery_db.write().map(|mut p| {
-      writer_data_vec.iter().for_each(|data| {
-        let updated = p.update_publication(data);
-        if updated {
-          match self
-            .discovery_updated_sender
-            .send(DiscoveryNotificationType::ReadersInfoUpdated)
-          {
-            Ok(_) => (),
-            Err(_) => println!("Unable to update readers proxy."),
-          };
-          p.update_topic_data_dwd(data);
+    match reader.take(100, ReadCondition::not_read()) {
+      Ok(d) => {
+        let mut db = self.discovery_db_write();
+        for data in d.into_iter() {
+          match data.value {
+            Ok(val) => {
+              db.update_publication(&val);
+              self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
+              db.update_topic_data_dwd(&val);
+            }
+            Err(guid) => {
+              db.remove_topic_writer(guid);
+              self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
+            }
+          }
         }
-      })
-    }) {
-      Ok(_) => (),
-      _ => panic!("DiscoveryDB is poisoned."),
+      }
+      _ => (),
     };
   }
 
@@ -917,91 +868,48 @@ impl Discovery {
       None => return,
     };
 
-    match self.discovery_db.write().map(|mut p| {
-      topic_data_vec.iter().for_each(|data| {
-        let updated = p.update_topic_data(data);
-        if updated {
-          match self
-            .discovery_updated_sender
-            .send(DiscoveryNotificationType::TopicsInfoUpdated)
-          {
-            Ok(_) => (),
-            Err(_) => println!("Unable to update topics proxy"),
-          }
-        }
-      })
-    }) {
-      Ok(_) => (),
-      _ => panic!("DiscoveryDB is poisoned"),
-    }
+    let mut db = self.discovery_db_write();
+    topic_data_vec.iter().for_each(|data| {
+      let updated = db.update_topic_data(data);
+      if updated {
+        self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);
+      }
+    });
   }
 
   pub fn participant_cleanup(&self) {
-    let dbres = self.discovery_db.write();
-    match dbres {
-      Ok(mut db) => {
-        (*db).participant_cleanup();
-      }
-      _ => return (),
-    }
+    self.discovery_db_write().participant_cleanup();
   }
 
   pub fn topic_cleanup(&self) {
-    match self.discovery_db.write() {
-      Ok(mut db) => {
-        db.topic_cleanup();
-      }
-      _ => return,
-    }
+    self.discovery_db_write().topic_cleanup();
   }
 
   pub fn update_spdp_participant_writer(&self, data: SPDPDiscoveredParticipantData) -> bool {
-    let dbres = self.discovery_db.write();
-    let res = match dbres {
-      Ok(mut db) => (*db).update_participant(&data),
-      _ => return false,
-    };
-
-    if res {
-      match self
-        .discovery_updated_sender
-        .send(DiscoveryNotificationType::WritersInfoUpdated)
-      {
-        Ok(_) => (),
-        _ => println!("Failed to send participant writer notification"),
-      };
+    if !self.discovery_db_write().update_participant(&data) {
+      return false;
     }
 
-    res
+    self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+
+    true
   }
 
   pub fn read_readers_info(&self) -> bool {
-    let readers_info_updated = match self.discovery_db.read() {
-      Ok(db) => db.is_readers_updated(),
-      Err(e) => panic!("DiscoveryDB is poisoned {:?}", e),
-    };
+    let readers_info_updated = self.discovery_db_read().is_readers_updated();
 
     if readers_info_updated {
-      match self.discovery_db.write() {
-        Ok(mut db) => db.readers_updated(false),
-        Err(e) => panic!("DiscoveryDB is poisoned {:?}", e),
-      }
+      self.discovery_db_write().readers_updated(false);
     }
 
     readers_info_updated
   }
 
   pub fn read_writers_info(&self) -> bool {
-    let writers_info_updated = match self.discovery_db.read() {
-      Ok(db) => db.is_writers_updated(),
-      Err(e) => panic!("DiscoveryDB is poisoned {:?}", e),
-    };
+    let writers_info_updated = self.discovery_db_read().is_writers_updated();
 
     if writers_info_updated {
-      match self.discovery_db.write() {
-        Ok(mut db) => db.writers_updated(false),
-        Err(e) => panic!("DiscoveryDB is poisoned {:?}", e),
-      }
+      self.discovery_db_write().writers_updated(false);
     }
 
     writers_info_updated
@@ -1014,31 +922,26 @@ impl Discovery {
       CDR_serializer_adapter<DiscoveredReaderData, LittleEndian>,
     >,
   ) {
-    match self.discovery_db.read() {
-      Ok(db) => {
-        let datas = db.get_all_local_topic_readers();
-        for data in datas
-          // filtering out discoveries own readers
-          .filter(|p| {
-            let guid = match &p.reader_proxy.remote_reader_guid {
-              Some(g) => g,
-              None => return false,
-            };
-            let eid = &guid.entityId;
-
-            *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
-              && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
-              && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
-              && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
-          })
-        {
-          match writer.write(data.clone(), None) {
-            Ok(_) => (),
-            Err(e) => println!("Unable to write new readers info. {:?}", e),
-          }
-        }
+    let db = self.discovery_db_read();
+    let datas = db.get_all_local_topic_readers();
+    for data in datas
+      // filtering out discoveries own readers
+      .filter(|p| {
+        let guid = match &p.reader_proxy.remote_reader_guid {
+          Some(g) => g,
+          None => return false,
+        };
+        let eid = &guid.entityId;
+        *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
+          && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
+          && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
+          && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
+      })
+    {
+      match writer.write(data.clone(), None) {
+        Ok(_) => (),
+        Err(e) => println!("Unable to write new readers info. {:?}", e),
       }
-      _ => panic!("DiscoveryDB is poisoned."),
     }
   }
 
@@ -1049,28 +952,24 @@ impl Discovery {
       CDR_serializer_adapter<DiscoveredWriterData, LittleEndian>,
     >,
   ) {
-    match self.discovery_db.read() {
-      Ok(db) => {
-        let datas = db.get_all_local_topic_writers();
-        for data in datas.filter(|p| {
-          let guid = match &p.writer_proxy.remote_writer_guid {
-            Some(g) => g,
-            None => return false,
-          };
-          let eid = &guid.entityId;
+    let db = self.discovery_db_read();
+    let datas = db.get_all_local_topic_writers();
+    for data in datas.filter(|p| {
+      let guid = match &p.writer_proxy.remote_writer_guid {
+        Some(g) => g,
+        None => return false,
+      };
+      let eid = &guid.entityId;
 
-          *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
-            && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
-            && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER
-            && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER
-        }) {
-          match writer.write(data.clone(), None) {
-            Ok(_) => (),
-            _ => println!("Unable to write new readers info."),
-          }
-        }
+      *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
+        && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
+        && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER
+        && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER
+    }) {
+      match writer.write(data.clone(), None) {
+        Ok(_) => (),
+        _ => println!("Unable to write new readers info."),
       }
-      _ => panic!("DiscoveryDB is poisoned."),
     }
   }
 
@@ -1081,17 +980,13 @@ impl Discovery {
       CDR_serializer_adapter<DiscoveredTopicData, LittleEndian>,
     >,
   ) {
-    match self.discovery_db.read() {
-      Ok(db) => {
-        let datas = db.get_all_topics();
-        for data in datas {
-          match writer.write(data.clone(), None) {
-            Ok(_) => (),
-            _ => println!("Unable to write new topic info."),
-          }
-        }
+    let db = self.discovery_db_read();
+    let datas = db.get_all_topics();
+    for data in datas {
+      match writer.write(data.clone(), None) {
+        Ok(_) => (),
+        _ => println!("Unable to write new topic info."),
       }
-      _ => panic!("DiscoveryDB is poisoned."),
     }
   }
 
@@ -1125,6 +1020,27 @@ impl Discovery {
       max_samples_per_instance: std::i32::MAX,
     });
     qos
+  }
+
+  fn discovery_db_read(&self) -> RwLockReadGuard<DiscoveryDB> {
+    match self.discovery_db.read() {
+      Ok(db) => db,
+      Err(e) => panic!("DiscoveryDB is poisoned {:?}.", e),
+    }
+  }
+
+  fn discovery_db_write(&self) -> RwLockWriteGuard<DiscoveryDB> {
+    match self.discovery_db.write() {
+      Ok(db) => db,
+      Err(e) => panic!("DiscoveryDB is poisoned {:?}.", e),
+    }
+  }
+
+  fn send_discovery_notification(&self, dntype: DiscoveryNotificationType) {
+    match self.discovery_updated_sender.send(dntype) {
+      Ok(_) => (),
+      Err(e) => println!("Failed to send DiscoveryNotification {:?}", e),
+    }
   }
 }
 

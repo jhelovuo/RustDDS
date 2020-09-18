@@ -10,7 +10,7 @@ use crate::structure::parameter_id::ParameterId;
 /// filter class. If not, the Writer will simply ignore the filter information
 /// and not filter any data samples.
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ContentFilterProperty {
   /// Name of the Content-filtered Topic associated with the Reader.
   /// Must have non-zero length.
