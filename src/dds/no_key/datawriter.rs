@@ -2,11 +2,9 @@ use std::{
   //sync::{Arc, RwLock},
   time::{Duration},
 };
-use std::ops::Deref;
-use std::io;
 
 //use mio_extras::channel as mio_channel;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 
 use crate::structure::time::Timestamp;
 use crate::structure::entity::{Entity};
@@ -19,9 +17,7 @@ use crate::dds::values::result::{
   PublicationMatchedStatus,
 };
 use crate::dds::traits::dds_entity::DDSEntity;
-use crate::dds::traits::key::*;
 use crate::dds::traits::serde_adapters::SerializerAdapter;
-use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
 //use crate::dds::ddsdata::DDSData;
@@ -31,63 +27,10 @@ use crate::{
   dds::datawriter as datawriter_with_key,
 };
 
-use crate::serialization;
-
-// This structure should be private to no_key DataWriter
-// But it needs to be exposed to pubsub module to create DataWriter .
-pub(crate) struct NoKeyWrapper_Write<D> {
-  pub d: D,
-}
-
-// implement Deref so that &NoKeyWrapper_Write<D> is coercible to &D
-impl<D> Deref for NoKeyWrapper_Write<D> {
-  type Target = D;
-  fn deref(&self) -> &Self::Target {
-    &self.d
-  }
-}
-
-impl<D> Keyed for NoKeyWrapper_Write<D> {
-  type K = ();
-  fn get_key(&self) -> () {
-    ()
-  }
-}
-
-impl<D> Serialize for NoKeyWrapper_Write<D>
-where
-  D: Serialize,
-{
-  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    self.d.serialize(serializer)
-  }
-}
-
-impl<D> NoKeyWrapper_Write<D> {}
-
-pub(crate) struct SA_Wrapper<SA> {
-  inner: SA,
-}
-
-impl<D: Serialize, SA: SerializerAdapter<D>> SerializerAdapter<NoKeyWrapper_Write<D>>
-  for SA_Wrapper<SA>
-{
-  fn output_encoding() -> RepresentationIdentifier {
-    SA::output_encoding()
-  }
-  fn to_writer<W: io::Write>(
-    writer: W,
-    value: &NoKeyWrapper_Write<D>,
-  ) -> serialization::error::Result<()> {
-    SA::to_writer(writer, &value.d)
-  }
-}
+use super::wrappers::{NoKeyWrapper, SAWrapper};
 
 pub struct DataWriter<'a, D: Serialize, SA: SerializerAdapter<D>> {
-  keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>,
+  keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
 }
 
 impl<'a, D, SA> DataWriter<'a, D, SA>
@@ -104,13 +47,13 @@ where
     dds_cache: Arc<RwLock<DDSCache>>,
   ) -> Result<DataWriter<'a, D, SA>> {
     Ok( DataWriter {
-      keyed_datawriter: datawriter_with_key::DataWriter::<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>::new(
+      keyed_datawriter: datawriter_with_key::DataWriter::<'a, NoKeyWrapper<D>, SAWrapper<SA>>::new(
         publisher, topic, guid, cc_upload, dds_cache)?,
     })
   }
   */
   pub(crate) fn from_keyed(
-    keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper_Write<D>, SA_Wrapper<SA>>,
+    keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
   ) -> DataWriter<'a, D, SA> {
     DataWriter {
       keyed_datawriter: keyed,
@@ -121,7 +64,7 @@ where
   pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     self
       .keyed_datawriter
-      .write(NoKeyWrapper_Write::<D> { d: data }, source_timestamp)
+      .write(NoKeyWrapper::<D> { d: data }, source_timestamp)
   }
 
   // dispose
@@ -191,13 +134,14 @@ impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<'_, D, SA>
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::dds::participant::DomainParticipant;
+  use crate::dds::{participant::DomainParticipant, traits::key::Key};
   use crate::dds::typedesc::TypeDesc;
   use crate::test::random_data::*;
   use std::thread;
   use crate::dds::traits::key::Keyed;
   use crate::serialization::cdrSerializer::*;
   use byteorder::LittleEndian;
+  use log::info;
 
   #[test]
   fn dw_write_test() {
@@ -264,10 +208,7 @@ mod tests {
     };
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let key = &data.get_key().into_hash_key();
-    println!();
-    println!("key: {:?}", key);
-    println!();
-    println!();
+    info!("key: {:?}", key);
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());

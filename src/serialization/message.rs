@@ -8,6 +8,7 @@ use crate::{
   dds::writer::Writer as RtpsWriter,
   dds::rtps_reader_proxy::RtpsReaderProxy,
 };
+use log::warn;
 use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
 
@@ -197,7 +198,7 @@ impl<'a> Message {
           continue; // nothing to do here
         }
         unknown_kind => {
-          println!("Received unknown submessage kind {:?}", unknown_kind);
+          warn!("Received unknown submessage kind {:?}", unknown_kind);
           continue;
         }
       }; // match
@@ -263,6 +264,8 @@ impl<C: Context> Writable<C> for Message {
 #[cfg(test)]
 
 mod tests {
+  use log::info;
+
   use super::*;
   use crate::speedy::{Writable};
 
@@ -284,7 +287,7 @@ mod tests {
       0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00,
     ];
     let rtps = Message::read_from_buffer(&bits1).unwrap();
-    println!("{:?}", rtps);
+    info!("{:?}", rtps);
 
     let serialized = rtps
       .write_to_vec_with_ctx(Endianness::LittleEndian)
@@ -350,7 +353,7 @@ mod tests {
     ];
 
     let rtps = Message::read_from_buffer(&bits1).unwrap();
-    println!("{:?}", rtps);
+    info!("{:?}", rtps);
 
     let serialized = rtps
       .write_to_vec_with_ctx(Endianness::LittleEndian)
@@ -374,7 +377,7 @@ mod tests {
     ];
 
     let rtps = Message::read_from_buffer(&bits1).unwrap();
-    println!("{:?}", rtps);
+    info!("{:?}", rtps);
 
     let serialized = rtps
       .write_to_vec_with_ctx(Endianness::LittleEndian)
@@ -404,7 +407,7 @@ mod tests {
     ];
 
     let rtps = Message::read_from_buffer(&bits1).unwrap();
-    println!("{:?}", rtps);
+    info!("{:?}", rtps);
 
     let serialized = rtps
       .write_to_vec_with_ctx(Endianness::LittleEndian)
@@ -446,7 +449,7 @@ mod tests {
     ];
 
     let rtps = Message::read_from_buffer(&bits1).unwrap();
-    println!("{:?}", rtps);
+    info!("{:?}", rtps);
 
     let dataSubmessage = match &rtps.submessages[2] {
       SubMessage {
@@ -461,9 +464,7 @@ mod tests {
       .unwrap()
       .value
       .clone();
-    println!();
-    println!();
-    println!("{:x?}", serializedPayload);
+    info!("{:x?}", serializedPayload);
 
     let serialized = rtps
       .write_to_vec_with_ctx(Endianness::LittleEndian)

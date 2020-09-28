@@ -121,7 +121,6 @@ where
     let modulo: u32 = self.writer.count() as u32 % typeOctetAlignment as u32;
     if modulo != 0 {
       let paddingNeed: u32 = typeOctetAlignment as u32 - modulo;
-      //println!("need padding! {}", paddingNeed);
       for _x in 0..paddingNeed {
         self.writer.write_u8(0)?
       }
@@ -239,7 +238,6 @@ where
   }
 
   fn serialize_i16(self, v: i16) -> Result<()> {
-    println!("serialize_i16");
     self.calculate_padding_need_and_write_padding(2)?;
     self.writer.write_i16::<BO>(v)?;
     Ok(())
@@ -407,7 +405,6 @@ where
   // We make an educated guess that the design is similar to sequences:
   // First the number of key-value pairs, then each entry as a (key,value)-pair.
   fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
-    //println!("serialize_map");
     match len {
       None => Err(Error::SequenceLengthUnknown),
       Some(elem_count) => {
@@ -420,7 +417,6 @@ where
   // Similar to tuple. No need to mark the beginning.
   fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
     self.calculate_padding_need_and_write_padding(4)?;
-    //println!("serialize struct");
     // nothing to be done.
     Ok(self)
   }
@@ -564,6 +560,7 @@ mod tests {
   use crate::serialization::cdrSerializer::to_little_endian_binary;
   use crate::serialization::cdrSerializer::to_big_endian_binary;
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+  use log::info;
   use serde::{Serialize, Deserialize};
   use serde_repr::{Serialize_repr, Deserialize_repr};
 
@@ -589,8 +586,8 @@ mod tests {
     ];
     let serialized = to_little_endian_binary(&sequence_of_structs).unwrap();
     let deSerialized: Vec<OmaTyyppi> = deserialize_from_little_endian(&serialized).unwrap();
-    println!("deSerialized    {:?}", deSerialized);
-    println!("serialized    {:?}", serialized);
+    info!("deSerialized    {:?}", deSerialized);
+    info!("serialized    {:?}", serialized);
     assert_eq!(deSerialized, sequence_of_structs);
   }
 
@@ -630,62 +627,48 @@ mod tests {
     //let enum_object_10 = OmaEnumeration::similar_to_fourth(5,6,7,8);
 
     let serialized_1 = to_little_endian_binary(&enum_object_1).unwrap();
-    println!("{:?}", serialized_1);
+    info!("{:?}", serialized_1);
     let u32Value_1: u32 = deserialize_from_little_endian(&serialized_1).unwrap();
     let deserialized_1: OmaEnumeration = deserialize_from_little_endian(&serialized_1).unwrap();
-    println!("Deserialized 1: {:?}", deserialized_1);
+    info!("Deserialized 1: {:?}", deserialized_1);
     assert_eq!(deserialized_1, enum_object_1);
     assert_eq!(u32Value_1, 0);
 
     let serialized_2 = to_little_endian_binary(&enum_object_2).unwrap();
-    println!("{:?}", serialized_2);
+    info!("{:?}", serialized_2);
     let u32Value_2: u32 = deserialize_from_little_endian(&serialized_2).unwrap();
     let deserialized_2: OmaEnumeration = deserialize_from_little_endian(&serialized_2).unwrap();
-    println!("Deserialized 2: {:?}", deserialized_2);
+    info!("Deserialized 2: {:?}", deserialized_2);
     assert_eq!(deserialized_2, enum_object_2);
     assert_eq!(u32Value_2, 1);
 
     let serialized_3 = to_little_endian_binary(&enum_object_3).unwrap();
-    println!("{:?}", serialized_3);
+    info!("{:?}", serialized_3);
     let deserialized_3: OmaEnumeration = deserialize_from_little_endian(&serialized_3).unwrap();
     let u32Value_3: u32 = deserialize_from_little_endian(&serialized_3).unwrap();
-    println!("Deserialized 3: {:?}", deserialized_3);
+    info!("Deserialized 3: {:?}", deserialized_3);
     assert_eq!(deserialized_3, enum_object_3);
     assert_eq!(u32Value_3, 2);
 
     /*
     let serialized_4 = to_little_endian_binary(&enum_object_4).unwrap();
-    println!("{:?}", serialized_4);
     let deserialized_4 : OmaEnumeration = deserialize_from_little_endian(serialized_4).unwrap();
-    println!("Deserialized 4: {:?}", deserialized_4);
     */
 
     let serialized_7 = to_little_endian_binary(&enum_object_7).unwrap();
-    println!("{:?}", serialized_7);
+    info!("{:?}", serialized_7);
     let deserialized_7: OmaEnumeration = deserialize_from_little_endian(&serialized_7).unwrap();
     let u32Value_7: u32 = deserialize_from_little_endian(&serialized_7).unwrap();
-    println!("Deserialized 7: {:?}", deserialized_7);
+    info!("Deserialized 7: {:?}", deserialized_7);
     assert_eq!(deserialized_7, enum_object_7);
     assert_eq!(u32Value_7, 700);
 
     /*
     let serialized_5 = to_little_endian_binary(&enum_object_5).unwrap();
-    println!("{:?}", serialized_5);
-
     let serialized_6 = to_little_endian_binary(&enum_object_6).unwrap();
-    println!("{:?}", serialized_6);
-
-
-
     let serialized_8 = to_little_endian_binary(&enum_object_8).unwrap();
-    println!("{:?}", serialized_8);
-
     let serialized_9 = to_little_endian_binary(&enum_object_9).unwrap();
-    println!("{:?}", serialized_9);
-
     let serialized_10 = to_little_endian_binary(&enum_object_10).unwrap();
-    println!("{:?}", serialized_10);
-
     */
   }
 

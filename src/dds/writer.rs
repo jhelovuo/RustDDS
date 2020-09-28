@@ -1,5 +1,6 @@
 use chrono::Duration as chronoDuration;
 use enumflags2::BitFlags;
+use log::{debug, error, warn};
 use speedy::{Writable, Endianness};
 use time::Timespec;
 use time::get_time;
@@ -313,6 +314,24 @@ impl Writer {
           .unwrap()
           .push(*seqnum);
       }
+
+      if reader.unsent_changes().len() == 0 {
+        let mut rtps_message: Message = Message::new(message_header.clone());
+
+        rtps_message.add_submessage(Writer::get_DST_submessage(
+          endianness,
+          reader.remote_reader_guid.guidPrefix,
+        ));
+
+        rtps_message.add_submessage(self.get_heartbeat_msg(
+          reader.remote_reader_guid.entityId,
+          false,
+          false,
+        ));
+
+        self.send_unicast_message_to_reader(&rtps_message, reader);
+        self.send_multicast_message_to_reader(&rtps_message, reader);
+      }
     }
 
     let mut readers_guis = HashMap::new();
@@ -435,12 +454,11 @@ impl Writer {
         if removed.is_some() {
           removed_change_sequence_numbers.push(removed.unwrap().sequence_number);
         } else {
-          println!(
-            "ERROR remove from {:?} failed. No results with {:?}",
+          warn!(
+            "Remove from {:?} failed. No results with {:?}",
             &self.my_topic_name, i
           );
-          println!("{:?}", self.dds_cache);
-          //panic!("CahceChange remove failed");
+          debug!("{:?}", self.dds_cache);
         }
         index = index + 1;
       }
@@ -454,7 +472,7 @@ impl Writer {
       .write()
       .unwrap()
       .from_topic_remove_change(&self.my_topic_name, instant);
-    println!("removed change from DDShistoryCache {:?}", removed_change);
+    debug!("removed change from DDShistoryCache {:?}", removed_change);
     if removed_change.is_some() {
       self
         .disposed_sequence_numbers
@@ -657,7 +675,7 @@ impl Writer {
           let a = l.to_socket_address();
           match self.udp_sender.send_ipv4_multicast(&buffer, a) {
             Ok(_) => (),
-            Err(e) => println!("Unable to send buffer to multicast {:?}. {:?}", a, e),
+            Err(e) => error!("Unable to send buffer to multicast {:?}. {:?}", a, e),
           }
         }
       }
@@ -912,7 +930,7 @@ impl Writer {
   ///sending a HEARTBEAT message when the sample is no longer available
   pub fn handle_ack_nack(&mut self, guid_prefix: GuidPrefix, an: AckNack) {
     if !self.is_reliable() {
-      println!(
+      error!(
         "Writer {:x?} is best effort! It should not handle acknack messages!",
         self.get_entity_id()
       );
@@ -1022,6 +1040,9 @@ impl Writer {
       for _x in 0..sequenceNumbersCount {
         self.increase_heartbeat_counter();
       }
+      if sequenceNumbersCount == 0 {
+        self.increase_heartbeat_counter();
+      }
     }
   }
 
@@ -1105,6 +1126,7 @@ mod tests {
   use crate::dds::datawriter::DataWriter;
   use crate::serialization::cdrSerializer::CDR_serializer_adapter;
   use byteorder::LittleEndian;
+  use log::info;
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {
@@ -1144,19 +1166,19 @@ mod tests {
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let writeResult = data_writer.write(data, None).expect("Unable to write data");
 
-    println!("writerResult:  {:?}", writeResult);
+    info!("writerResult:  {:?}", writeResult);
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let writeResult = data_writer
       .write(data2, None)
       .expect("Unable to write data");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    println!("writerResult:  {:?}", writeResult);
+    info!("writerResult:  {:?}", writeResult);
     let writeResult = data_writer
       .write(data3, None)
       .expect("Unable to write data");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    println!("writerResult:  {:?}", writeResult);
+    info!("writerResult:  {:?}", writeResult);
   }
 }

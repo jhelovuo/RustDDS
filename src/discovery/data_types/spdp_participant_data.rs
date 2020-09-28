@@ -218,7 +218,10 @@ mod tests {
             let sdata =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
             // order cannot be known at this point
-            assert_eq!(sdata.len(), d.serialized_payload.as_ref().unwrap().value.len());
+            assert_eq!(
+              sdata.len(),
+              d.serialized_payload.as_ref().unwrap().value.len()
+            );
 
             let participant_data_2: SPDPDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)
@@ -236,9 +239,5 @@ mod tests {
         SubmessageBody::Interpreter(_) => (),
       }
     }
-
-    // let serializer = cdrDeserializer::CDR_deserializer::deserialize_from_little_endian(data);
-    // let res = data.serialize(serializer);
-    // println!("AAAA: {:?}", res);
   }
 }

@@ -61,8 +61,8 @@ impl<C: Context> Writable<C> for GuidPrefix {
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct EntityId {
-  entityKey: [u8; 3],
-  entityKind: u8,
+  pub entityKey: [u8; 3],
+  pub entityKind: u8,
 }
 
 impl EntityId {
@@ -129,13 +129,6 @@ impl EntityId {
     let x3 = self.entityKey[2] as i64;
     let x4 = self.entityKind as i64;
 
-    /*
-    println!("{:?}", (10_i64.pow(14) + x1 * 100000000000));
-    println!("{:?}", (10_i64.pow(10) + x2 * 10000000));
-    println!("{:?}", (10_i64.pow(6) + x3 * 1000) );
-    println!("{:?}", x4 as i64);
-    */
-
     ((10_i64.pow(14) + x1 * 100000000000)
       + (10_i64.pow(10) + x2 * 10000000)
       + (10_i64.pow(6) + x3 * 1000)
@@ -144,7 +137,6 @@ impl EntityId {
 
   /// Use this only with usize generated with EntityID::as_usize function.!!!
   pub fn from_usize(number: usize) -> Option<EntityId> {
-    //println!("{:?}",number);
     let numberAsString = number.to_string();
     let finalIndex = numberAsString.len();
     if finalIndex != 15 {
@@ -282,12 +274,13 @@ mod tests {
 
   use speedy::Endianness;
   use mio::Token;
+  use log::info;
 
   #[test]
   fn convert_entity_id_to_token_and_back() {
     let e = EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER;
     let _t = Token(e.as_usize());
-    println!("{:?}", e.as_usize());
+    info!("{:?}", e.as_usize());
     let entity = EntityId::from_usize(e.as_usize()).unwrap();
     assert_eq!(e, entity);
 

@@ -1,3 +1,4 @@
+use log::{error, info};
 use mio::{Ready, Poll, PollOpt, Events};
 use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
@@ -81,7 +82,7 @@ impl Discovery {
     let poll = match mio::Poll::new() {
       Ok(p) => p,
       Err(e) => {
-        println!("Failed to start discovery poll. {:?}", e);
+        error!("Failed to start discovery poll. {:?}", e);
         discovery_started_sender
           .send(Err(Error::PreconditionNotMet))
           .unwrap_or(());
@@ -115,7 +116,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Failed to register Discovery STOP. {:?}", e);
+        error!("Failed to register Discovery STOP. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -132,7 +133,7 @@ impl Discovery {
     {
       Ok(s) => s,
       Err(e) => {
-        println!("Unable to create Discovery Subscriber. {:?}", e);
+        error!("Unable to create Discovery Subscriber. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -149,7 +150,7 @@ impl Discovery {
     {
       Ok(p) => p,
       Err(e) => {
-        println!("Unable to create Discovery Publisher. {:?}", e);
+        error!("Unable to create Discovery Publisher. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -167,7 +168,7 @@ impl Discovery {
     ) {
       Ok(t) => t,
       Err(e) => {
-        println!("Unable to create DCPSParticipant topic. {:?}", e);
+        error!("Unable to create DCPSParticipant topic. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -181,11 +182,12 @@ impl Discovery {
       .create_datareader::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         &dcps_participant_topic,
-        &Discovery::create_spdp_patricipant_qos(),
+        None,
+        Discovery::create_spdp_patricipant_qos(),
       ) {
         Ok(r) => r,
         Err(e) => {
-          println!("Unable to create DataReader for DCPSParticipant. {:?}", e);
+          error!("Unable to create DataReader for DCPSParticipant. {:?}", e);
            // were trying to quit, if send fails just ignore
            discovery
             .discovery_started_sender
@@ -204,7 +206,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Failed to register participant reader to poll. {:?}", e);
+        error!("Failed to register participant reader to poll. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -228,7 +230,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to create participant cleanup timer. {:?}", e);
+        error!("Unable to create participant cleanup timer. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -246,7 +248,7 @@ impl Discovery {
       ) {
         Ok(w) => w,
         Err(e) => {
-          println!("Unable to create DataWriter for DCPSParticipant. {:?}", e);
+          error!("Unable to create DataWriter for DCPSParticipant. {:?}", e);
           // were trying to quit, if send fails just ignore
           discovery
             .discovery_started_sender
@@ -271,7 +273,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to register participant info sender. {:?}", e);
+        error!("Unable to register participant info sender. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -290,7 +292,7 @@ impl Discovery {
     ) {
       Ok(t) => t,
       Err(e) => {
-        println!("Unable to create DCPSSubscription topic. {:?}", e);
+        error!("Unable to create DCPSSubscription topic. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -304,11 +306,12 @@ impl Discovery {
       .create_datareader::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         &dcps_subscription_topic,
-        &Discovery::subscriber_qos(),
+        None,
+        Discovery::subscriber_qos(),
       ) {
       Ok(r) => r,
       Err(e) => {
-        println!("Unable to create DataReader for DCPSSubscription. {:?}", e);
+        error!("Unable to create DataReader for DCPSSubscription. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -326,7 +329,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to register subscription reader. {:?}", e);
+        error!("Unable to register subscription reader. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -344,7 +347,7 @@ impl Discovery {
       ) {
         Ok(w) => w,
         Err(e) => {
-          println!("Unable to create DataWriter for DCPSSubscription. {:?}", e);
+          error!("Unable to create DataWriter for DCPSSubscription. {:?}", e);
           // were trying to quit, if send fails just ignore
           discovery
             .discovery_started_sender
@@ -367,7 +370,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to register readers info sender. {:?}", e);
+        error!("Unable to register readers info sender. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -386,7 +389,7 @@ impl Discovery {
     ) {
       Ok(t) => t,
       Err(e) => {
-        println!("Unable to create DCPSPublication topic. {:?}", e);
+        error!("Unable to create DCPSPublication topic. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -400,11 +403,12 @@ impl Discovery {
       .create_datareader::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         &dcps_publication_topic,
-        &Discovery::subscriber_qos(),
+        None,
+        Discovery::subscriber_qos(),
       ) {
       Ok(r) => r,
       Err(e) => {
-        println!("Unable to create DataReader for DCPSPublication. {:?}", e);
+        error!("Unable to create DataReader for DCPSPublication. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -422,7 +426,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to regiser writers info sender. {:?}", e);
+        error!("Unable to regiser writers info sender. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -440,7 +444,7 @@ impl Discovery {
       ) {
         Ok(w) => w,
         Err(e) => {
-          println!("Unable to create DataWriter for DCPSPublication. {:?}", e);
+          error!("Unable to create DataWriter for DCPSPublication. {:?}", e);
           // were trying to quit, if send fails just ignore
           discovery
             .discovery_started_sender
@@ -463,7 +467,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to register readers info sender. {:?}", e);
+        error!("Unable to register readers info sender. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -482,7 +486,7 @@ impl Discovery {
     ) {
       Ok(t) => t,
       Err(e) => {
-        println!("Unable to create DCPSTopic topic. {:?}", e);
+        error!("Unable to create DCPSTopic topic. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -503,7 +507,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to register topic cleanup timer. {:?}", e);
+        error!("Unable to register topic cleanup timer. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -517,11 +521,12 @@ impl Discovery {
       .create_datareader::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         &dcps_topic,
-        &Discovery::subscriber_qos(),
+        None,
+        Discovery::subscriber_qos(),
       ) {
       Ok(r) => r,
       Err(e) => {
-        println!("Unable to create DataReader for DCPSTopic. {:?}", e);
+        error!("Unable to create DataReader for DCPSTopic. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -539,7 +544,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to register topic reader. {:?}", e);
+        error!("Unable to register topic reader. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -557,7 +562,7 @@ impl Discovery {
       ) {
         Ok(w) => w,
         Err(e) => {
-          println!("Unable to create DataWriter for DCPSTopic. {:?}", e);
+          error!("Unable to create DataWriter for DCPSTopic. {:?}", e);
           // were trying to quit, if send fails just ignore
           discovery
             .discovery_started_sender
@@ -580,7 +585,7 @@ impl Discovery {
     ) {
       Ok(_) => (),
       Err(e) => {
-        println!("Unable to register topic info sender. {:?}", e);
+        error!("Unable to register topic info sender. {:?}", e);
         // were trying to quit, if send fails just ignore
         discovery
           .discovery_started_sender
@@ -606,7 +611,7 @@ impl Discovery {
       match discovery.poll.poll(&mut events, None) {
         Ok(_) => (),
         Err(e) => {
-          println!("Failed in waiting of poll in discovery. {:?}", e);
+          error!("Failed in waiting of poll in discovery. {:?}", e);
           return;
         }
       }
@@ -616,7 +621,7 @@ impl Discovery {
           while let Ok(command) = discovery.discovery_command_receiver.try_recv() {
             match command {
               DiscoveryCommand::STOP_DISCOVERY => {
-                println!("Stopping Discovery");
+                info!("Stopping Discovery");
 
                 // disposing readers
                 match discovery.discovery_db.read() {
@@ -655,7 +660,6 @@ impl Discovery {
                   continue;
                 }
 
-                println!("Removing local writer {:?}", guid);
                 dcps_publication_writer.dispose(guid, None).unwrap_or(());
 
                 match discovery.discovery_db.write() {
@@ -670,7 +674,6 @@ impl Discovery {
                   continue;
                 }
 
-                println!("Removing local reader {:?}", guid);
                 dcps_subscription_writer.dispose(guid, None).unwrap_or(());
 
                 match discovery.discovery_db.write() {
@@ -703,7 +706,7 @@ impl Discovery {
           let strong_dp = match discovery.domain_participant.clone().upgrade() {
             Some(dp) => dp,
             None => {
-              println!("DomainParticipant doesn't exist anymore, exiting Discovery.");
+              error!("DomainParticipant doesn't exist anymore, exiting Discovery.");
               return;
             }
           };
@@ -759,7 +762,9 @@ impl Discovery {
     let mut db = self.discovery_db_write();
     let port = get_spdp_well_known_multicast_port(dp.domain_id());
     db.initialize_participant_reader_proxy(port);
-    self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+    self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
+      needs_new_cache_change: true,
+    });
   }
 
   pub fn handle_participant_reader(
@@ -776,7 +781,9 @@ impl Discovery {
           Err(key) => {
             // we should dispose participant here
             self.discovery_db_write().remove_participant(*key);
-            self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+            self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
+              needs_new_cache_change: false,
+            });
             self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
             return None;
           }
@@ -789,7 +796,9 @@ impl Discovery {
     let mut db = self.discovery_db_write();
     let updated = db.update_participant(&participant_data);
     if updated {
-      self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+      self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
+        needs_new_cache_change: false,
+      });
       self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
 
       return Some(participant_data);
@@ -809,12 +818,16 @@ impl Discovery {
           match data.value {
             Ok(val) => {
               db.update_subscription(&val);
-              self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+              self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
+                needs_new_cache_change: true,
+              });
               db.update_topic_data_drd(&val);
             }
             Err(guid) => {
               db.remove_topic_reader(guid);
-              self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+              self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
+                needs_new_cache_change: false,
+              });
             }
           }
         }
@@ -890,7 +903,9 @@ impl Discovery {
       return false;
     }
 
-    self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated);
+    self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
+      needs_new_cache_change: false,
+    });
 
     true
   }
@@ -940,7 +955,7 @@ impl Discovery {
     {
       match writer.write(data.clone(), None) {
         Ok(_) => (),
-        Err(e) => println!("Unable to write new readers info. {:?}", e),
+        Err(e) => error!("Unable to write new readers info. {:?}", e),
       }
     }
   }
@@ -968,7 +983,7 @@ impl Discovery {
     }) {
       match writer.write(data.clone(), None) {
         Ok(_) => (),
-        _ => println!("Unable to write new readers info."),
+        _ => error!("Unable to write new readers info."),
       }
     }
   }
@@ -985,7 +1000,7 @@ impl Discovery {
     for data in datas {
       match writer.write(data.clone(), None) {
         Ok(_) => (),
-        _ => println!("Unable to write new topic info."),
+        _ => error!("Unable to write new topic info."),
       }
     }
   }
@@ -1039,7 +1054,7 @@ impl Discovery {
   fn send_discovery_notification(&self, dntype: DiscoveryNotificationType) {
     match self.discovery_updated_sender.send(dntype) {
       Ok(_) => (),
-      Err(e) => println!("Failed to send DiscoveryNotification {:?}", e),
+      Err(e) => error!("Failed to send DiscoveryNotification {:?}", e),
     }
   }
 }
@@ -1141,7 +1156,8 @@ mod tests {
     let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(
       None,
       &topic,
-      &QosPolicies::qos_none(),
+      None,
+      QosPolicies::qos_none(),
     );
 
     let poll = Poll::new().unwrap();
@@ -1234,7 +1250,8 @@ mod tests {
     let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(
       None,
       &topic,
-      &QosPolicies::qos_none(),
+      None,
+      QosPolicies::qos_none(),
     );
 
     let poll = Poll::new().unwrap();
@@ -1284,7 +1301,7 @@ mod tests {
       .unwrap();
 
     while !udp_listener.get_message().is_empty() {
-      println!("Message received");
+      info!("Message received");
     }
 
     // small wait for stuff to happen

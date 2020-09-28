@@ -31,7 +31,7 @@ impl<'a> TimedEventHandler {
     if !self.timers.contains_key(&timer_type) {
       self.timers.insert(timer_type, Timer::new());
     }
-    //println!("START TIME {:?}  with messageType {:?}", Instant::now(),  timer_type);
+
     let new_chanenel = self.channel_send.clone();
     self.guards.insert(
       timer_type,
@@ -42,7 +42,6 @@ impl<'a> TimedEventHandler {
           .unwrap()
           .clone()
           .schedule_with_delay(duration.clone(), move || {
-            //println!("END TIME with message Type {:?} ",  timer_type);
             new_chanenel
               .try_send(timer_type)
               .expect("Unable to send timeout message of type ");

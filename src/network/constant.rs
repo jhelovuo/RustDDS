@@ -83,6 +83,6 @@ pub enum TimerMessageType {
 #[derive(Debug)]
 pub enum DiscoveryNotificationType {
   ReadersInfoUpdated,
-  WritersInfoUpdated,
+  WritersInfoUpdated { needs_new_cache_change: bool},
   TopicsInfoUpdated,
 }

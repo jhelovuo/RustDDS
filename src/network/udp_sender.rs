@@ -1,3 +1,4 @@
+use log::debug;
 use mio::net::UdpSocket;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -37,7 +38,7 @@ impl UDPSender {
     for address in addresses.iter() {
       match self.socket.send_to(buffer, address) {
         Ok(_) => (),
-        _ => println!("Unable to send to {}", address),
+        _ => debug!("Unable to send to {}", address),
       };
     }
   }
@@ -48,7 +49,7 @@ impl UDPSender {
         let a = SocketAddr::from(l.to_socket_address());
         match self.socket.send_to(buffer, &a) {
           Ok(_) => (),
-          _ => println!("Unable to send to {}", a),
+          _ => debug!("Unable to send to {}", a),
         };
       }
     }

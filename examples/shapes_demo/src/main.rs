@@ -126,7 +126,8 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, particip
     .create_datareader::<Square, CDR_deserializer_adapter<Square>>(
       None,
       &square_topic,
-      &QosPolicies::qos_none(),
+      None,
+      QosPolicies::qos_none(),
     )
     .unwrap();
 

@@ -21,6 +21,7 @@ use crate::{
 };
 
 use mio_extras::channel as mio_channel;
+use log::{debug, warn};
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
@@ -139,7 +140,6 @@ impl MessageReceiver {
     reader_id: EntityId,
     sequence_number: SequenceNumber,
   ) -> Option<DDSData> {
-    //println!("readers: {:?}", self.available_readers);
     let reader = self
       .available_readers
       .iter()
@@ -155,7 +155,6 @@ impl MessageReceiver {
     reader_id: EntityId,
     sequence_number: SequenceNumber,
   ) -> CacheChange {
-    //println!("readers: {:?}", self.available_readers);
     let reader = self
       .available_readers
       .iter()
@@ -191,7 +190,7 @@ impl MessageReceiver {
     let rtps_message = match Message::read_from_buffer(&msg_bytes) {
       Ok(m) => m,
       Err(speedy_err) => {
-        println!("RTPS deserialize error {:?}", speedy_err);
+        warn!("RTPS deserialize error {:?}", speedy_err);
         return;
       }
     };
@@ -209,9 +208,9 @@ impl MessageReceiver {
 
   fn send_submessage(&mut self, submessage: EntitySubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix {
-      println!("Messages are not for this participant?");
-      println!("dest_guid_prefix: {:?}", self.dest_guid_prefix);
-      println!("participant guid: {:?}", self.own_guid_prefix);
+      debug!("Messages are not for this participant?");
+      debug!("dest_guid_prefix: {:?}", self.dest_guid_prefix);
+      debug!("participant guid: {:?}", self.own_guid_prefix);
       return; // Wrong target received
     }
 
@@ -257,7 +256,7 @@ impl MessageReceiver {
       EntitySubmessage::AckNack(acknack, _) => {
         match self.acknack_sender.send((self.source_guid_prefix, acknack)) {
           Ok(_) => (),
-          Err(e) => println!("Failed to send AckNack. {:?}", e),
+          Err(e) => warn!("Failed to send AckNack. {:?}", e),
         }
       }
       EntitySubmessage::DataFrag(datafrag, _) => {
@@ -353,6 +352,7 @@ mod tests {
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use crate::serialization::cdrSerializer::to_bytes;
   use byteorder::LittleEndian;
+  use log::info;
   use serde::{Serialize, Deserialize};
   use crate::dds::writer::Writer;
   use mio_extras::channel as mio_channel;
@@ -413,7 +413,7 @@ mod tests {
     // this is not correct way to read history cache values but it serves as a test
     let sequenceNumbers =
       message_receiver.get_reader_history_cache_start_and_end_seq_num(new_guid.entityId);
-    println!(
+    info!(
       "history change sequence number range: {:?}",
       sequenceNumbers
     );
@@ -421,7 +421,7 @@ mod tests {
     let a = message_receiver
       .get_reader_and_history_cache_change(new_guid.entityId, *sequenceNumbers.first().unwrap())
       .unwrap();
-    println!("reader history chache DATA: {:?}", a.data());
+    info!("reader history chache DATA: {:?}", a.data());
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct ShapeType {
@@ -432,14 +432,8 @@ mod tests {
     }
 
     let deserializedShapeType: ShapeType = deserialize_from_little_endian(&a.data()).unwrap();
-    println!("deserialized shapeType: {:?}", deserializedShapeType);
+    info!("deserialized shapeType: {:?}", deserializedShapeType);
     assert_eq!(deserializedShapeType.color, "RED");
-
-    println!();
-    println!();
-    println!();
-    println!();
-    println!();
 
     // now try to serialize same message
 
@@ -457,20 +451,6 @@ mod tests {
       *sequenceNumbers.first().unwrap(),
     );
     change.sequence_number = SequenceNumber::from(91);
-
-    /*
-    let _created_user_message = writerObject.write_user_msg(change);
-
-    println!();
-    println!();
-
-    //assert_eq!(udp_bits1,createdUserMessage);
-    //message_receiver.handle_user_msg(createdUserMessage);
-    println!(
-      "messageReceiver submessageCount: {:?}",
-      message_receiver.submessage_count
-    );
-    */
   }
 
   #[test]

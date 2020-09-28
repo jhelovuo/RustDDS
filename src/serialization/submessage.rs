@@ -29,6 +29,7 @@ impl<C: Context> Writable<C> for SubMessage {
 #[cfg(test)]
 mod tests {
   use enumflags2::BitFlags;
+    use log::info;
   use super::SubMessage;
   use speedy::{Readable, Writable};
   use crate::{messages::submessages::submessages::*};
@@ -53,7 +54,7 @@ mod tests {
       header,
       body: SubmessageBody::Entity(EntitySubmessage::Data(suba, flags)),
     };
-    println!("{:?}", sub);
+    info!("{:?}", sub);
 
     let messageBuffer = sub.write_to_vec().expect("DATA serialization failed");
 
@@ -78,7 +79,7 @@ mod tests {
       header,
       body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(suba, flags)),
     };
-    println!("{:?}", sub);
+    info!("{:?}", sub);
 
     let messageBuffer = sub.write_to_vec().expect("serialization failed");
 
@@ -102,7 +103,7 @@ mod tests {
       header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(suba, flags)),
     };
-    println!("{:?}", sub);
+    info!("{:?}", sub);
 
     let messageBuffer = sub.write_to_vec().expect("serialization failed");
 
@@ -124,7 +125,7 @@ mod tests {
       header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(suba, flags)),
     };
-    println!("{:?}", sub);
+    info!("{:?}", sub);
 
     let messageBuffer = sub.write_to_vec().expect("serialization failed");
 

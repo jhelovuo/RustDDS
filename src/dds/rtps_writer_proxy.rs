@@ -1,3 +1,5 @@
+use log::warn;
+
 use crate::structure::locator::LocatorList;
 use crate::structure::guid::{EntityId, GUID};
 use crate::{
@@ -50,14 +52,18 @@ impl RtpsWriterProxy {
     }
   }
 
-
+  pub fn update_contents(&mut self, other: RtpsWriterProxy) {
+    self.unicast_locator_list = other.unicast_locator_list;
+    self.multicast_locator_list = other.multicast_locator_list;
+    self.remote_group_entity_id = other.remote_group_entity_id;
+  }
 
   pub fn changes_are_missing(&self, hb_last_sn: SequenceNumber) -> bool {
     let min_sn = match self.available_changes_min() {
       Some(sn) => *sn,
       None => SequenceNumber::from(0),
     };
-    (self.changes.len() as i64) > i64::from(hb_last_sn) - i64::from(min_sn)
+    i64::from(hb_last_sn) > i64::from(min_sn)
   }
 
   pub fn received_changes_add(&mut self, seq_num: SequenceNumber, instant: Instant) {
@@ -83,13 +89,22 @@ impl RtpsWriterProxy {
   }
 
   pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) -> Vec<Instant> {
-    let mut removed = Vec::new();
-    for (seqnum, _) in self.changes.clone().iter() {
-      if seqnum < &smallest_seqnum {
-        removed.push(self.changes.remove(seqnum).unwrap());
+    let mut remove = Vec::new();
+    for (&seqnum, _) in self.changes.iter() {
+      if seqnum < smallest_seqnum {
+        remove.push(seqnum);
       }
     }
-    removed
+
+    let mut instants = Vec::new();
+    for &rm in remove.iter() {
+      match self.changes.remove(&rm) {
+        Some(i) => instants.push(i),
+        None => (),
+      };
+    }
+
+    instants
   }
 
   pub fn missing_changes(&self, hb_last_sn: SequenceNumber) -> Vec<SequenceNumber> {
@@ -113,11 +128,13 @@ impl RtpsWriterProxy {
     result
   }
 
-  pub fn from_discovered_writer_data(discovered_writer_data: &DiscoveredWriterData) -> Option<RtpsWriterProxy> {
+  pub fn from_discovered_writer_data(
+    discovered_writer_data: &DiscoveredWriterData,
+  ) -> Option<RtpsWriterProxy> {
     let remote_writer_guid = match &discovered_writer_data.writer_proxy.remote_writer_guid {
       Some(v) => v,
       None => {
-        println!("Failed to convert DiscoveredWriterData to RtpsWriterProxy. No GUID.");
+        warn!("Failed to convert DiscoveredWriterData to RtpsWriterProxy. No GUID.");
         return None;
       }
     };

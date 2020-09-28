@@ -6,6 +6,7 @@ use crate::structure::sequence_number::SequenceNumber;
 
 use crate::messages::submessages::submessages::*;
 
+use log::debug;
 use speedy::{Context, Writer, Readable, Writable, Error};
 use enumflags2::BitFlags;
 
@@ -143,7 +144,7 @@ impl<C: Context> Writable<C> for DataFrag {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_u16(0)?;
     if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0 {
-      println!("self.inline_qos {:?}", self.inline_qos);
+      debug!("self.inline_qos {:?}", self.inline_qos);
       todo!()
     } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() == 0 {
       writer.write_u16(24)?;

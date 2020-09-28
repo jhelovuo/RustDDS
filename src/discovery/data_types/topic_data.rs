@@ -518,6 +518,7 @@ mod tests {
     Message,
   };
   use byteorder::LittleEndian;
+  use log::info;
   use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
 
   use crate::{
@@ -621,7 +622,7 @@ mod tests {
     ];
 
     let msg = Message::read_from_buffer(&raw_data).unwrap();
-    println!("{:?}", msg);
+    info!("{:?}", msg);
   }
 
   #[test]

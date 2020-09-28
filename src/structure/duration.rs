@@ -5,7 +5,18 @@ use serde::{Serialize, Deserialize};
 use super::parameter_id::ParameterId;
 
 #[derive(
-  Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Readable, Writable, Serialize, Deserialize, Copy, Clone,
+  Debug,
+  PartialEq,
+  Eq,
+  Hash,
+  PartialOrd,
+  Ord,
+  Readable,
+  Writable,
+  Serialize,
+  Deserialize,
+  Copy,
+  Clone,
 )]
 pub struct Duration {
   seconds: i32,
@@ -25,6 +36,13 @@ impl Duration {
     seconds: 0x7FFFFFFF,
     fraction: 0xFFFFFFFF,
   };
+
+  pub const fn from_std(duration: TDuration) -> Self {
+    Duration {
+      seconds: duration.as_secs() as i32,
+      fraction: duration.subsec_nanos() as u32,
+    }
+  } 
 }
 
 impl From<TDuration> for Duration {

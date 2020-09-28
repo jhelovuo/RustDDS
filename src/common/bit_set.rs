@@ -53,10 +53,13 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
 impl<C: Context> Writable<C> for BitSetRef {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    let bytes = self.0.get_ref().storage();
-    writer.write_u32((bytes.len() * 32) as u32)?;
+    let bytes = self.get_ref().storage();
+    let number_of_bytes = bytes.len() as u32 * 32;
+    writer.write_u32(number_of_bytes)?;
     for byte in bytes {
-      writer.write_u32(*byte)?;
+      let lz = byte.leading_zeros();
+      let foo = byte.rotate_left(lz);
+      writer.write_u32(foo)?;
     }
     Ok(())
   }

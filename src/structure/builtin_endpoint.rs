@@ -19,6 +19,10 @@ impl BuiltinEndpointSet {
   pub fn from_u32(val: u32) -> BuiltinEndpointSet {
     BuiltinEndpointSet { value: val }
   }
+
+  pub fn contains(&self, other: u32) -> bool {
+    (self.value & other) == other
+  }
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize)]

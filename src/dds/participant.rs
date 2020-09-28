@@ -1,5 +1,6 @@
 use mio::Token;
 use mio_extras::channel as mio_channel;
+use log::warn;
 
 use std::{
   thread,
@@ -272,7 +273,7 @@ impl Drop for DomainParticipant_Disc {
     {
       Ok(_) => (),
       _ => {
-        println!("Failed to send stop signal to Discovery");
+        warn!("Failed to send stop signal to Discovery");
         return;
       }
     }
@@ -597,6 +598,7 @@ impl std::fmt::Debug for DomainParticipant {
 mod tests {
   use std::{thread, net::SocketAddr};
   use enumflags2::BitFlags;
+  use log::info;
   use crate::speedy::Writable;
   use crate::{
     dds::{qos::QosPolicies, typedesc::TypeDesc},
@@ -720,7 +722,7 @@ mod tests {
     m.set_header(h);
     m.add_submessage(SubMessage::from(s));
     let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
-    println!("data to send via udp: {:?}", _data);
+    info!("data to send via udp: {:?}", _data);
     let loca = Locator {
       kind: LocatorKind::LOCATOR_KIND_UDPv4,
       port: portNumber as u32,

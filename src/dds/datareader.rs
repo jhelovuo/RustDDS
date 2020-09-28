@@ -3,8 +3,10 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use std::marker::PhantomData;
 
+use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
+use log::{error, warn};
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
@@ -64,7 +66,7 @@ where
         guid: self.get_guid(),
       }) {
       Ok(_) => {}
-      Err(e) => println!(
+      Err(e) => error!(
         "Failed to send REMOVE_LOCAL_READER DiscoveryCommand. {:?}",
         e
       ),
@@ -90,7 +92,7 @@ where
     let dp = match subscriber.get_participant() {
       Some(dp) => dp,
       None => {
-        println!("Cannot create new DataReader, DomainParticipant doesn't exist.");
+        error!("Cannot create new DataReader, DomainParticipant doesn't exist.");
         return Err(Error::PreconditionNotMet);
       }
     };
@@ -138,6 +140,7 @@ where
 
     let cache_changes: Vec<(&Instant, &CacheChange)> = cache_changes
       .into_iter()
+      .sorted_by(|(a, _), (b, _)| Ord::cmp(a, b))
       .filter(|(_, cc)| cc.writer_guid.guidPrefix != self.get_guid_prefix())
       .collect();
 
@@ -159,11 +162,11 @@ where
                   let datasample = DataSample::new_disposed::<D::K>(Timestamp::TIME_INVALID, key);
                   self.datasample_cache.add_datasample(datasample);
                 }
-                None => println!("DataReader cannot find key for keyhash {:x?}", cc.key),
+                None => warn!("DataReader cannot find key for keyhash {:x?}", cc.key),
               }
             }
             _ => {
-              println!("DataReader cant access serialized payload");
+              warn!("DataReader cant access serialized payload");
             }
           }
           continue;
@@ -175,7 +178,7 @@ where
           Ok(r) => r,
           Err(unknown_rep_id) => {
             // TODO: Maybe we should ask SA first? It may be able to handle this even though it is non-std.
-            println!(
+            warn!(
               "Datareader: Unknown representation id {:?}.",
               unknown_rep_id
             );
@@ -188,7 +191,7 @@ where
       let payload = match SA::from_bytes(bytes, rep_id) {
         Ok(pl) => pl,
         Err(e) => {
-          println!("Failed to deserialize bytes \n{}", e);
+          error!("Failed to deserialize bytes \n{}", e);
           continue;
         }
       };
@@ -500,6 +503,7 @@ mod tests {
   use crate::test::random_data::*;
   use crate::dds::traits::key::Keyed;
   use mio_extras::channel as mio_channel;
+  use log::info;
   use crate::dds::reader::Reader;
   use crate::messages::submessages::data::Data;
   use crate::dds::message_receiver::*;
@@ -538,7 +542,8 @@ mod tests {
       .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
         Some(datareader_id),
         &topic,
-        &qos,
+        None,
+        qos.clone(),
       )
       .unwrap();
 
@@ -655,7 +660,8 @@ mod tests {
       .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
         Some(default_id),
         &topic,
-        &qos,
+        None,
+        qos.clone(),
       )
       .unwrap();
 
@@ -807,23 +813,23 @@ mod tests {
     reader.handle_data_msg(data_msg3, mr_state.clone());
     reader.handle_data_msg(data_msg4, mr_state.clone());
 
-    println!("calling read with key 1 and this");
+    info!("calling read with key 1 and this");
     let results =
       datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::This);
     assert_eq!(&data_key1, results.unwrap()[0].value.as_ref().unwrap());
 
-    println!("calling read with None and this");
+    info!("calling read with None and this");
     // Takes the samllest key, 1 in this case.
     let results = datareader.read_instance(100, ReadCondition::any(), None, SelectByKey::This);
     assert_eq!(&data_key1, results.unwrap()[0].value.as_ref().unwrap());
 
-    println!("calling read with key 1 and next");
+    info!("calling read with key 1 and next");
     let results =
       datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::Next);
     assert_eq!(results.as_ref().unwrap().len(), 3);
     assert_eq!(&data_key2_2, results.unwrap()[1].value.as_ref().unwrap());
 
-    println!("calling take with key 2 and this");
+    info!("calling take with key 2 and this");
     let results =
       datareader.take_instance(100, ReadCondition::any(), Some(key2), SelectByKey::This);
     assert_eq!(results.as_ref().unwrap().len(), 3);
@@ -835,7 +841,7 @@ mod tests {
     assert_eq!(data_key2_2, d2);
     assert_eq!(data_key2_1, d1);
 
-    println!("calling take with key 2 and this");
+    info!("calling take with key 2 and this");
     let results =
       datareader.take_instance(100, ReadCondition::any(), Some(key2), SelectByKey::This);
     assert!(results.is_ok());
@@ -870,7 +876,8 @@ mod tests {
       .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
         Some(default_id),
         &topic,
-        &qos,
+        None,
+        qos.clone(),
       )
       .unwrap();
     datareader.notification_receiver = rec;
@@ -939,10 +946,10 @@ mod tests {
     let handle = std::thread::spawn(move || {
       reader.handle_data_msg(data_msg, mr_state.clone());
       thread::sleep(time::Duration::from_millis(2500));
-      println!("I'll send the second now..");
+      info!("I'll send the second now..");
       reader.handle_data_msg(data_msg2, mr_state.clone());
       thread::sleep(time::Duration::from_millis(2500));
-      println!("I'll send the third now..");
+      info!("I'll send the third now..");
       reader.handle_data_msg(data_msg3, mr_state.clone());
     });
 
@@ -954,27 +961,24 @@ mod tests {
     let mut count_to_stop = 0;
     'l: loop {
       let mut events = Events::with_capacity(1024);
-      println!("Going to poll");
+      info!("Going to poll");
       poll.poll(&mut events, None).unwrap();
 
       for event in events.into_iter() {
-        println!();
-        println!("Handling events");
+        info!("Handling events");
         if event.token() == Token(100) {
           let data = datareader.take(100, ReadCondition::any());
           let len = data.as_ref().unwrap().len();
-          println!();
-          println!("There were {} samples available.", len);
-          println!("Their strings:");
+          info!("There were {} samples available.", len);
+          info!("Their strings:");
           for d in data.unwrap().into_iter() {
             // Remove one notification for each data
-            println!("{}", d.value.as_ref().unwrap().b);
+            info!("{}", d.value.as_ref().unwrap().b);
           }
-          println!();
           count_to_stop += len;
         }
         if count_to_stop >= 3 {
-          println!("I'll stop now with count {}", count_to_stop);
+          info!("I'll stop now with count {}", count_to_stop);
           break 'l;
         }
       } // for

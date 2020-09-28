@@ -297,6 +297,8 @@ mod tests {
     time::{Duration, Instant},
     thread,
   };
+  use log::info;
+
   use super::DDSCache;
   use crate::{
     dds::{typedesc::TypeDesc, ddsdata::DDSData},
@@ -304,7 +306,8 @@ mod tests {
       cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber,
     },
     messages::submessages::submessage_elements::serialized_payload::{SerializedPayload},
-  structure::cache_change::ChangeKind};
+    structure::cache_change::ChangeKind,
+  };
 
   #[test]
   fn create_dds_cache() {
@@ -370,7 +373,7 @@ mod tests {
         .len(),
       3
     );
-    println!(
+    info!(
       "{:?}",
       cache.read().unwrap().from_topic_get_changes_in_range(
         topic_name,

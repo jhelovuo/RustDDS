@@ -112,7 +112,6 @@ where
     let modulo = self.serializedDataCount % typeOctetAligment;
     if modulo != 0 {
       let padding = typeOctetAligment - modulo;
-      //println!("need to remove padding! {}", padding);
       self.remove_bytes_from_input(padding)
     } else {
       Ok(())
@@ -237,7 +236,6 @@ where
   where
     V: Visitor<'de>,
   {
-    //println!("deserialize_str");
     // read string length
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let bytes_len = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
@@ -256,7 +254,6 @@ where
   where
     V: Visitor<'de>,
   {
-    //println!("deserialize_string");
     self.deserialize_str(visitor)
   }
 
@@ -318,13 +315,8 @@ where
   where
     V: Visitor<'de>,
   {
-    //println!("deserialize_seq");
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    //if self.serializedDataCount % 2 != 0 {
-    //  println!("seq does not start a multiple of 2 !");
-    //}
     let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
-    //println!("seq length: {}", element_count);
     visitor.visit_seq(SequenceHelper::new(&mut self, element_count))
   }
 
@@ -393,7 +385,6 @@ where
   where
     V: Visitor<'de>,
   {
-    println!("deserialize_identifier");
     self.deserialize_u32(visitor)
   }
 
@@ -401,7 +392,6 @@ where
   where
     V: Visitor<'de>,
   {
-    //println!("deserialize_ignored_any");
     self.deserialize_any(visitor)
   }
 }
@@ -455,7 +445,6 @@ where
   where
     T: DeserializeSeed<'de>,
   {
-    //println!("VariantAccess newtype_variant_seed");
     seed.deserialize(self.de)
   }
 
@@ -463,7 +452,6 @@ where
   where
     V: Visitor<'de>,
   {
-    //println!("VariantAccess tuple_variant");
     de::Deserializer::deserialize_seq(self.de, visitor)
   }
 
@@ -471,7 +459,6 @@ where
   where
     V: Visitor<'de>,
   {
-    //println!("VariantAccess struct_variant");
     de::Deserializer::deserialize_map(self.de, visitor)
   }
 }
@@ -507,7 +494,6 @@ where
     T: DeserializeSeed<'de>,
   {
     if self.elementCounter == self.expectedCount {
-      //println!("STOP SEQ");
       Ok(None)
     } else {
       self.elementCounter = self.elementCounter + 1;
@@ -529,7 +515,6 @@ where
     K: DeserializeSeed<'de>,
   {
     if self.elementCounter == self.expectedCount {
-      //println!("STOP MAP");
       Ok(None)
     } else {
       self.elementCounter = self.elementCounter + 1;
@@ -550,6 +535,7 @@ where
 mod tests {
   use crate::serialization::cdrSerializer::to_bytes;
   use byteorder::{BigEndian, LittleEndian};
+  use log::info;
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
   use serde::{Serialize, Deserialize};
@@ -637,20 +623,19 @@ mod tests {
     ];
 
     let sarjallistettu = to_bytes::<OmaTyyppi, LittleEndian>(&mikkiHiiri).unwrap();
-    //println!("{:?}",sarjallistettu);
 
     for x in 0..expected_serialized_result.len() {
       if expected_serialized_result[x] != sarjallistettu[x] {
-        println!("index: {}", x);
+        info!("index: {}", x);
       }
     }
     assert_eq!(sarjallistettu, expected_serialized_result);
-    println!("serialization successfull!");
+    info!("serialization successfull!");
 
     let rakennettu: OmaTyyppi =
       deserialize_from_little_endian(&expected_serialized_result).unwrap();
     assert_eq!(rakennettu, mikkiHiiri);
-    println!("deserialized: {:?}", rakennettu);
+    info!("deserialized: {:?}", rakennettu);
   }
 
   #[test]
@@ -697,7 +682,7 @@ mod tests {
     ];
 
     let deserializedMessage: String = deserialize_from_little_endian(&recievedCDRString).unwrap();
-    println!("{:?}", deserializedMessage);
+    info!("{:?}", deserializedMessage);
     assert_eq!("Square", deserializedMessage);
 
     let recievedCDRString2: Vec<u8> = vec![
@@ -706,7 +691,7 @@ mod tests {
     ];
 
     let deserializedMessage2: String = deserialize_from_little_endian(&recievedCDRString2).unwrap();
-    println!("{:?}", deserializedMessage2);
+    info!("{:?}", deserializedMessage2);
     assert_eq!("ShapeType", deserializedMessage2);
   }
 
@@ -745,11 +730,11 @@ mod tests {
       vec![0x00, 0x00, 0x00, 0x01, 0x61, 0x62, 0x63, 0x64,]
     );
 
-    println!("serialization success");
+    info!("serialization success");
 
     assert_eq!(deserialized_le, o);
     assert_eq!(deserialized_be, o);
-    println!("deserialition success");
+    info!("deserialition success");
   }
 
   #[test]
@@ -774,7 +759,7 @@ mod tests {
     ];
 
     let deserializedMessage: ShapeType = deserialize_from_little_endian(&recieved_message).unwrap();
-    println!("{:?}", deserializedMessage);
+    info!("{:?}", deserializedMessage);
 
     let serializedMessage = to_bytes::<ShapeType, LittleEndian>(&deserializedMessage).unwrap();
 
@@ -814,7 +799,7 @@ mod tests {
     ];
 
     let value: messageType = deserialize_from_little_endian(&recieved_message_le).unwrap();
-    println!("{:?}", value);
+    info!("{:?}", value);
     assert_eq!(value.test, "Toimiiko?");
   }
 
@@ -893,10 +878,10 @@ mod tests {
     let serializationResult_le = to_bytes::<InterestingMessage, LittleEndian>(&value).unwrap();
 
     assert_eq!(serializationResult_le, DATA);
-    println!("serialization success!");
+    info!("serialization success!");
     let deserializationResult: InterestingMessage = deserialize_from_little_endian(&DATA).unwrap();
 
-    println!("{:?}", deserializationResult);
+    info!("{:?}", deserializationResult);
   }
 
   #[test]

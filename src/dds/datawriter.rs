@@ -6,6 +6,7 @@ use std::{
 use mio_extras::channel as mio_channel;
 
 use serde::Serialize;
+use log::{error, warn};
 
 use crate::{structure::time::Timestamp, discovery::discovery::DiscoveryCommand};
 use crate::structure::entity::{Entity, EntityAttributes};
@@ -57,7 +58,7 @@ where
         guid: self.get_guid(),
       }) {
       Ok(_) => {}
-      Err(e) => println!(
+      Err(e) => error!(
         "Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand. {:?}",
         e
       ),
@@ -87,7 +88,7 @@ where
     let dp = match publisher.get_participant() {
       Some(dp) => dp,
       None => {
-        println!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
+        error!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
         return Err(Error::PreconditionNotMet);
       }
     };
@@ -107,7 +108,7 @@ where
     };
 
     Ok(DataWriter {
-      my_publisher: publisher.clone(),
+      my_publisher: publisher,
       my_topic: topic,
       qos_policy: topic.get_qos().clone(),
       entity_attributes,
@@ -137,7 +138,7 @@ where
     match self.cc_upload.try_send(ddsdata) {
       Ok(_) => Ok(()),
       Err(e) => {
-        println!("Failed to write new data. {:?}", e);
+        warn!("Failed to write new data. {:?}", e);
         Err(Error::OutOfResources)
       }
     }
@@ -173,7 +174,7 @@ where
     match self.cc_upload.try_send(ddsdata) {
       Ok(_) => Ok(()),
       Err(huh) => {
-        println!("Error: {:?}", huh);
+        warn!("Error: {:?}", huh);
         Err(Error::OutOfResources)
       }
     }
@@ -278,6 +279,7 @@ mod tests {
   use crate::dds::traits::key::Keyed;
   use crate::serialization::cdrSerializer::CDR_serializer_adapter;
   use byteorder::LittleEndian;
+  use log::info;
 
   #[test]
   fn dw_write_test() {
@@ -344,10 +346,7 @@ mod tests {
     };
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let key = &data.get_key().into_hash_key();
-    println!();
-    println!("key: {:?}", key);
-    println!();
-    println!();
+    info!("key: {:?}", key);
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());

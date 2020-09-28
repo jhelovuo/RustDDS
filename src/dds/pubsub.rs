@@ -1,4 +1,5 @@
 use mio_extras::channel as mio_channel;
+use log::error;
 
 use std::{
   sync::{RwLock, Arc},
@@ -21,7 +22,9 @@ use crate::dds::{
   reader::Reader,
   writer::Writer,
   datawriter::DataWriter,
+  no_key::datawriter::DataWriter as NoKeyDataWriter,
   datareader::DataReader,
+  no_key::datareader::DataReader as NoKeyDataReader,
   traits::key::{Keyed, Key},
   traits::serde_adapters::*,
 };
@@ -38,8 +41,11 @@ use crate::{
 
 use rand::Rng;
 
+use super::no_key::{wrappers::NoKeyWrapper, wrappers::SAWrapper};
+
 // -------------------------------------------------------------------
 
+#[derive(Clone)]
 pub struct Publisher {
   domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -95,7 +101,7 @@ impl<'a> Publisher {
     let dp = match self.get_participant() {
       Some(dp) => dp,
       None => {
-        println!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
+        error!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
         return Err(Error::PreconditionNotMet);
       }
     };
@@ -151,10 +157,18 @@ impl<'a> Publisher {
     D: Serialize,
     SA: SerializerAdapter<D>,
   {
-    let d = self.create_datawriter::
-      <no_key_datawriter::NoKeyWrapper_Write<D>,no_key_datawriter::SA_Wrapper<SA>>
-        (entity_id, topic, qos)?;
-    Ok(no_key_datawriter::DataWriter::<'a, D, SA>::from_keyed(d))
+    let entity_id = match entity_id {
+      Some(eid) => eid,
+      None => {
+        let mut rng = rand::thread_rng();
+        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x03);
+
+        eid
+      }
+    };
+    let d =
+      self.create_datawriter::<NoKeyWrapper<D>, SAWrapper<SA>>(Some(entity_id), topic, qos)?;
+    Ok(NoKeyDataWriter::<'a, D, SA>::from_keyed(d))
   }
 
   fn add_writer(&self, writer: Writer) -> Result<()> {
@@ -218,6 +232,7 @@ impl<'a> Publisher {
 // -------------------------------------------------------------------
 // -------------------------------------------------------------------
 
+#[derive(Clone)]
 pub struct Subscriber {
   domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -250,7 +265,8 @@ impl<'s> Subscriber {
     &'s self,
     entity_id: Option<EntityId>,
     topic: &'s Topic,
-    _qos: &QosPolicies,
+    topic_kind: Option<TopicKind>,
+    _qos: QosPolicies,
   ) -> Result<DataReader<'s, D, SA>>
   where
     D: DeserializeOwned + Keyed,
@@ -275,7 +291,7 @@ impl<'s> Subscriber {
     let dp = match self.get_participant() {
       Some(dp) => dp,
       None => {
-        println!("DomainParticipant doesn't exist anymore.");
+        error!("DomainParticipant doesn't exist anymore.");
         return Err(Error::PreconditionNotMet);
       }
     };
@@ -315,7 +331,10 @@ impl<'s> Subscriber {
     match dp.get_dds_cache().write() {
       Ok(mut rwlock) => rwlock.add_new_topic(
         &topic.get_name().to_string(),
-        TopicKind::WITH_KEY,
+        match topic_kind {
+          Some(k) => k,
+          None => TopicKind::WITH_KEY,
+        },
         topic.get_type(),
       ),
       Err(e) => panic!(
@@ -331,6 +350,35 @@ impl<'s> Subscriber {
       .try_send(new_reader)
       .expect("Could not send new Reader");
     Ok(matching_datareader)
+  }
+
+  pub fn create_datareader_no_key<D, SA>(
+    &'s self,
+    entity_id: Option<EntityId>,
+    topic: &'s Topic,
+    qos: QosPolicies,
+  ) -> Result<NoKeyDataReader<'s, D, SA>>
+  where
+    D: DeserializeOwned,
+    SA: DeserializerAdapter<D>,
+  {
+    let entity_id = match entity_id {
+      Some(eid) => eid,
+      None => {
+        let mut rng = rand::thread_rng();
+        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x04);
+        eid
+      }
+    };
+
+    let d = self.create_datareader::<NoKeyWrapper<D>, SAWrapper<SA>>(
+      Some(entity_id),
+      topic,
+      Some(TopicKind::NO_KEY),
+      qos,
+    )?;
+
+    Ok(NoKeyDataReader::<'s, D, SA>::from_keyed(d))
   }
 
   /// Retrieves a previously created DataReader belonging to the Subscriber.

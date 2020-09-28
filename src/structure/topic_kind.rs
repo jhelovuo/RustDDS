@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-#[derive(Debug, PartialEq, Eq, Readable, Writable)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Readable, Writable)]
 pub struct TopicKind {
   value: u32,
 }

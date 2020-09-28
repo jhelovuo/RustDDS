@@ -2,6 +2,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::io;
 
 use mio::Token;
+use log::debug;
 use mio::net::UdpSocket;
 use std::net::UdpSocket as StdUdpSocket;
 
@@ -57,8 +58,8 @@ impl UDPListener {
         message = buf[..nbytes].to_vec();
         return message;
       }
-      Err(_) => {
-        // println!("UDPListener::get_message failed: {:?}", e);
+      Err(e) => {
+        debug!("UDPListener::get_message failed: {:?}", e);
         ()
       }
     };

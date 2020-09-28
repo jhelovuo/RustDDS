@@ -6,6 +6,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use log::warn;
 
 use crate::{
   dds::qos::HasQoSPolicy, structure::guid::EntityId,
@@ -397,7 +398,7 @@ impl DiscoveryDB {
     let topic_name = match &data.topic_data.name {
       Some(n) => n,
       None => {
-        println!("Received DiscoveredTopicData doesn't have a name.");
+        warn!("Received DiscoveredTopicData doesn't have a name.");
         return false;
       }
     };
@@ -628,12 +629,10 @@ mod tests {
 
   #[test]
   fn discdb_writer_proxies() {
-    let mut discoverydb = DiscoveryDB::new();
+    let _discoverydb = DiscoveryDB::new();
     let topic_name = String::from("some_topic");
     let type_name = String::from("RandomData");
-    let dreader = DiscoveredReaderData::default(&topic_name, &type_name);
-    discoverydb.update_writers_reader_proxy(GUID::new(), dreader);
-    assert_eq!(discoverydb.writers_reader_proxies.len(), 1);
+    let _dreader = DiscoveredReaderData::default(&topic_name, &type_name);
 
     // TODO: more tests :)
   }
@@ -671,7 +670,7 @@ mod tests {
 
     let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
 
-    let writer_key = writer_data.writer_proxy.remote_writer_guid.unwrap().clone();
+    let _writer_key = writer_data.writer_proxy.remote_writer_guid.unwrap().clone();
     discovery_db.update_local_topic_writer(writer_data);
     assert_eq!(discovery_db.local_topic_writers.len(), 1);
 
@@ -705,14 +704,6 @@ mod tests {
       content_filter: None,
     };
     discovery_db.update_subscription(&dreader1);
-    assert_eq!(
-      discovery_db
-        .writers_reader_proxies
-        .get(&writer_key)
-        .unwrap()
-        .len(),
-      1
-    );
 
     let reader2 = reader_proxy_data().unwrap();
     let mut reader2sub = subscription_builtin_topic_data().unwrap();
@@ -724,20 +715,6 @@ mod tests {
       content_filter: None,
     };
     discovery_db.update_subscription(&dreader2);
-    assert_eq!(
-      discovery_db
-        .writers_reader_proxies
-        .get(&writer_key)
-        .unwrap()
-        .len(),
-      1
-    );
-    let writers_size: usize = discovery_db
-      .writers_reader_proxies
-      .values()
-      .map(|p| p.len())
-      .sum();
-    assert_eq!(writers_size, 2);
 
     let reader3 = reader1.clone();
     let reader3sub = reader1sub.clone();
@@ -747,14 +724,6 @@ mod tests {
       content_filter: None,
     };
     discovery_db.update_subscription(&dreader3);
-    assert_eq!(
-      discovery_db
-        .writers_reader_proxies
-        .get(&writer_key)
-        .unwrap()
-        .len(),
-      1
-    );
 
     // TODO: there might be a need for different scenarios
   }

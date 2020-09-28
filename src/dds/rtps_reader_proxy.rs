@@ -1,3 +1,5 @@
+use log::warn;
+
 use crate::structure::{
   locator::{Locator, LocatorList},
   guid::{EntityId, GUID},
@@ -62,7 +64,7 @@ impl RtpsReaderProxy {
     let remote_reader_guid = match &discovered_reader_data.reader_proxy.remote_reader_guid {
       Some(v) => v,
       None => {
-        println!("Failed to convert DiscoveredReaderData to RtpsReaderProxy. No GUID");
+        warn!("Failed to convert DiscoveredReaderData to RtpsReaderProxy. No GUID");
         return None;
       }
     };
@@ -208,6 +210,15 @@ impl RtpsReaderProxy {
       return true;
     }
     return false;
+  }
+
+  pub fn content_is_equal(&self, other: &RtpsReaderProxy) -> bool {
+    self.remote_reader_guid == other.remote_reader_guid
+      && self.remote_group_entity_id == other.remote_group_entity_id
+      && self.unicast_locator_list == other.unicast_locator_list
+      && self.multicast_locator_list == other.multicast_locator_list
+      && self.expects_in_line_qos == other.expects_in_line_qos
+      && self.is_active == other.is_active
   }
 }
 

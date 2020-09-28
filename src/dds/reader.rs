@@ -9,11 +9,15 @@ use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::locator::LocatorList;
 
-use std::sync::{Arc, RwLock};
+use std::{
+  slice::Iter,
+  sync::{Arc, RwLock},
+};
 use crate::structure::dds_cache::{DDSCache};
 use std::time::Instant;
 
 use mio_extras::channel as mio_channel;
+use log::{debug, error};
 use std::fmt;
 
 use std::collections::{HashSet, HashMap};
@@ -98,7 +102,7 @@ impl Reader {
       &self.seqnum_instant_map.get(&sequence_number).unwrap(),
     );
 
-    println!("history cache !!!! {:?}", cc);
+    debug!("history cache !!!! {:?}", cc);
 
     match cc {
       Some(cc) => Some(DDSData::new(cc.data_value.as_ref().unwrap().clone())),
@@ -108,13 +112,13 @@ impl Reader {
 
   // Used for test/debugging purposes
   pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
-    println!("{:?}", sequence_number);
+    debug!("{:?}", sequence_number);
     let dds_cache = self.dds_cache.read().unwrap();
     let cc = dds_cache.from_topic_get_change(
       &self.topic_name,
       &self.seqnum_instant_map.get(&sequence_number).unwrap(),
     );
-    println!("history cache !!!! {:?}", cc);
+    debug!("history cache !!!! {:?}", cc);
     match cc {
       Some(cc) => Some(cc.clone()),
       None => None,
@@ -128,6 +132,17 @@ impl Reader {
     return vec![*start, *end];
   }
 
+  // updates or adds a new writer proxy, doesn't touch changes
+  pub fn add_writer_proxy(&mut self, proxy: RtpsWriterProxy) {
+    let old_proxy = self.matched_writer_lookup(proxy.remote_writer_guid);
+    match old_proxy {
+      Some(op) => op.update_contents(proxy),
+      None => {
+        self.matched_writers.insert(proxy.remote_writer_guid, proxy);
+      }
+    };
+  }
+
   pub fn matched_writer_add(
     &mut self,
     remote_writer_guid: GUID,
@@ -135,36 +150,22 @@ impl Reader {
     unicast_locator_list: LocatorList,
     multicast_locator_list: LocatorList,
   ) {
-    match self.matched_writers.get_mut(&remote_writer_guid) {
-      Some(rp) => {
-        rp.remote_group_entity_id = remote_group_entity_id;
-        rp.unicast_locator_list = unicast_locator_list;
-        rp.multicast_locator_list = multicast_locator_list;
-      }
-      None => {
-        let new_writer_proxy = RtpsWriterProxy::new(
-          remote_writer_guid,
-          unicast_locator_list,
-          multicast_locator_list,
-          remote_group_entity_id,
-        );
-        self
-          .matched_writers
-          .insert(remote_writer_guid, new_writer_proxy);
-      }
-    };
+    let proxy = RtpsWriterProxy::new(
+      remote_writer_guid,
+      unicast_locator_list,
+      multicast_locator_list,
+      remote_group_entity_id,
+    );
+    self.add_writer_proxy(proxy);
   }
 
-  pub fn matched_writer_remove(&mut self, remote_writer_guid: GUID) -> Result<(), ()> {
-    if let Some(writer_proxy) = self.matched_writers.remove(&remote_writer_guid) {
-      drop(writer_proxy);
-      return Ok(());
-    };
-    Err(())
+  pub fn retain_matched_writers(&mut self, retvals: Iter<RtpsWriterProxy>) {
+    let rt: Vec<GUID> = retvals.map(|p| p.remote_writer_guid).collect();
+    self.matched_writers.retain(|guid, _| rt.contains(guid));
   }
 
-  pub fn clear_matched_writers(&mut self) {
-    self.matched_writers.clear();
+  pub fn matched_writer_remove(&mut self, remote_writer_guid: GUID) -> Option<RtpsWriterProxy> {
+    self.matched_writers.remove(&remote_writer_guid)
   }
 
   fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
@@ -185,11 +186,11 @@ impl Reader {
 
     if statefull {
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
-        if let Some(max_sn) = writer_proxy.available_changes_max() {
-          if seq_num <= max_sn {
-            return; // Should be ignored
-          }
-        }
+        // if let Some(max_sn) = writer_proxy.available_changes_max() {
+        //   if seq_num <= max_sn {
+        //     return; // Should be ignored
+        //   }
+        // }
         // Add the change and get the instant
         writer_proxy.received_changes_add(seq_num, instant);
       } // We checked that the writer can be found
@@ -256,9 +257,17 @@ impl Reader {
         Some(sn) => sn + SequenceNumber::from(1),
         None => SequenceNumber::from(1),
       };
+      let max_sn_plus_1 = if max_sn_plus_1 > heartbeat.first_sn {
+        max_sn_plus_1
+      } else {
+        heartbeat.first_sn
+      };
       let mut missing_seq_num_set = SequenceNumberSet::new(max_sn_plus_1);
       for seq_num in writer_proxy.missing_changes(heartbeat.last_sn) {
         missing_seq_num_set.insert(seq_num);
+      }
+      if writer_proxy.changes.len() == 0 {
+        missing_seq_num_set.insert(max_sn_plus_1);
       }
 
       let response_ack_nack = AckNack {
@@ -326,7 +335,6 @@ impl Reader {
     for instant in &removed_instances {
       cache.from_topic_remove_change(&self.topic_name, instant);
     }
-    drop(cache);
 
     // Is this needed?
     // self.notify_cache_change();
@@ -400,7 +408,7 @@ impl Reader {
     let submessage_len = match acknack.write_to_vec() {
       Ok(bytes) => bytes.len() as u16,
       Err(e) => {
-        println!("Reader couldn't write acknack to bytes. Error: {}", e);
+        error!("Reader couldn't write acknack to bytes. Error: {}", e);
         return;
       }
     };
