@@ -171,7 +171,7 @@ impl<'a> MainController<'a> {
         } else if event.token() == MainController::UPDATE_NODE_LIST_TOKEN {
           while let Ok(rec_nodes) = self.nodelist_receiver.try_recv() {
             match rec_nodes {
-              DataUpdate::UpdateNode { info } => {
+              DataUpdate::UpdateNode { mut info } => {
                 let nodes: Vec<NodeInfo> = info.nodes().iter().map(|p| p.clone()).collect();
 
                 write!(

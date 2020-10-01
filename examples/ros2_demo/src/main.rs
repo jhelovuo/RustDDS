@@ -87,7 +87,7 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
     ],
   };
   nodes.push(node_info);
-  let pinfo = ROSParticipantInfo::new(Gid::from_guid(domain_participant.get_guid()), nodes);
+  let mut pinfo = ROSParticipantInfo::new(Gid::from_guid(domain_participant.get_guid()), nodes);
 
   poll
     .register(
@@ -128,6 +128,13 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
         while let Ok(command) = command_receiver.try_recv() {
           match command {
             RosCommand::StopEventLoop => {
+              for node in pinfo.nodes() {
+                node.clear_all();
+              }
+              match node_writer.write(pinfo, None) {
+                Ok(_) => (),
+                Err(e) => error!("Failed to write into node_writer last time {:?}", e),
+              }
               return;
             }
             RosCommand::UpdateNode => {

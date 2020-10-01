@@ -157,6 +157,13 @@ pub struct NodeInfo {
   pub writer_guid: Vec<Gid>,
 }
 
+impl NodeInfo {
+  pub fn clear_all(&mut self) {
+    self.reader_guid.clear();
+    self.writer_guid.clear();
+  }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ROSParticipantInfo {
   guid: Gid,
@@ -172,8 +179,8 @@ impl ROSParticipantInfo {
     self.guid
   }
 
-  pub fn nodes(&self) -> &Vec<NodeInfo> {
-    &self.nodes
+  pub fn nodes(&mut self) -> &mut Vec<NodeInfo> {
+    &mut self.nodes
   }
 }
 
