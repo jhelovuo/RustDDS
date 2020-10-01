@@ -228,6 +228,8 @@ pub struct Log {
 
 #[cfg(test)]
 mod tests {
+  use std::{fs::File, io::Read};
+
   use atosdds::{
     dds::traits::serde_adapters::DeserializerAdapter,
     serialization::cdrDeserializer::CDR_deserializer_adapter,
@@ -325,5 +327,22 @@ mod tests {
 
     println!("\n{:x?}\n", DATA.to_vec());
     println!("{:x?}", data2);
+  }
+
+  #[test]
+  fn final_node_test() {
+    let mut f = File::open("error_bin.bin").unwrap();
+    let mut buffer: [u8; 1024] = [0; 1024];
+    let len = f.read(&mut buffer).unwrap();
+
+    println!("Buffer: size: {}\n{:?}", len, buffer.to_vec());
+    let rpi = CDR_deserializer_adapter::<ROSParticipantInfo>::from_bytes(
+      &buffer,
+      RepresentationIdentifier::CDR_LE,
+    )
+    .unwrap();
+    println!("RosParticipantInfo: \n{:?}", rpi);
+    let data2 = to_bytes::<ROSParticipantInfo, LittleEndian>(&rpi).unwrap();
+    println!("Data2: \n{:?}", data2);
   }
 }

@@ -1,5 +1,9 @@
-use crate::structure::guid::GuidPrefix;
+use crate::{serialization::SubMessage, serialization::SubmessageBody, structure::guid::GuidPrefix, submessages::SubmessageHeader};
+use enumflags2::BitFlags;
+use log::error;
 use speedy::{Readable, Writable};
+
+use super::{submessage::InterpreterSubmessage, submessage_flag::INFODESTINATION_Flags, submessage_kind::SubmessageKind};
 
 /// This message is sent from an RTPS Writer to an RTPS Reader
 /// to modify the GuidPrefix used to interpret the Reader entityIds
@@ -10,6 +14,29 @@ pub struct InfoDestination {
   /// of all the RTPS Reader entities whose EntityIds appears
   /// in the Submessages that follow.
   pub guid_prefix: GuidPrefix,
+}
+
+impl InfoDestination {
+  pub fn create_submessage(self, flags: BitFlags<INFODESTINATION_Flags>) -> Option<SubMessage> {
+    let submessage_len = match self.write_to_vec() {
+      Ok(bytes) => bytes.len() as u16,
+      Err(e) => {
+        error!("Reader couldn't write info destination to bytes. Error: {}", e);
+        return None;
+      }
+    };
+
+    let infodst_header = SubmessageHeader {
+      kind: SubmessageKind::INFO_DST,
+      flags: flags.bits(),
+      content_length: submessage_len,
+    };
+
+    Some(SubMessage {
+      header: infodst_header,
+      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(self, flags)),
+    })
+  }
 }
 
 #[cfg(test)]

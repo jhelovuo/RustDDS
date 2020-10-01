@@ -17,7 +17,7 @@ use crate::structure::dds_cache::{DDSCache};
 use std::time::Instant;
 
 use mio_extras::channel as mio_channel;
-use log::{debug, error};
+use log::{debug};
 use std::fmt;
 
 use std::collections::{HashSet, HashMap};
@@ -29,11 +29,6 @@ use crate::dds::message_receiver::MessageReceiverState;
 use crate::dds::qos::{QosPolicies, HasQoSPolicy};
 use crate::dds::values::result::Result as DDSResult;
 use crate::network::udp_sender::UDPSender;
-use crate::serialization::submessage::*;
-use crate::messages::submessages::submessage_header::SubmessageHeader;
-use crate::messages::submessages::submessage_kind::SubmessageKind;
-//use crate::messages::submessages::submessage_flag::SubmessageFlag;
-use crate::messages::submessages::submessage::EntitySubmessage;
 
 use crate::serialization::message::Message;
 use crate::messages::header::Header;
@@ -143,6 +138,14 @@ impl Reader {
     };
   }
 
+  pub fn contains_writer(&self, entity_id: EntityId) -> bool {
+    self
+      .matched_writers
+      .iter()
+      .find(|(&g, _)| g.entityId == entity_id)
+      .is_some()
+  }
+
   pub fn matched_writer_add(
     &mut self,
     remote_writer_guid: GUID,
@@ -184,20 +187,22 @@ impl Reader {
     // TODO
     let statefull = self.matched_writers.contains_key(&writer_guid);
 
+    let mut no_writers = false;
+
     if statefull {
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
-        // if let Some(max_sn) = writer_proxy.available_changes_max() {
-        //   if seq_num <= max_sn {
-        //     return; // Should be ignored
-        //   }
-        // }
+        if writer_proxy.contains_change(seq_num) {
+          // change already present
+          return;
+        }
         // Add the change and get the instant
         writer_proxy.received_changes_add(seq_num, instant);
-      } // We checked that the writer can be found
-        // lost changes update? All changes not received with lower seqnum should be marked as lost?
+      } else {
+        no_writers = true;
+      }
     }
 
-    self.make_cache_change(data, instant, writer_guid);
+    self.make_cache_change(data, instant, writer_guid, no_writers);
     // Add to own track-keeping datastructure
     self.seqnum_instant_map.insert(seq_num, instant);
 
@@ -252,28 +257,23 @@ impl Reader {
       None => return false, // Matching writer not found
     };
     // See if ack_nack is needed.
-    if writer_proxy.changes_are_missing(heartbeat.last_sn) || !final_flag_set {
-      let max_sn_plus_1 = match writer_proxy.available_changes_max() {
-        Some(sn) => sn + SequenceNumber::from(1),
-        None => SequenceNumber::from(1),
+    if writer_proxy.changes_are_missing(heartbeat.first_sn, heartbeat.last_sn) || !final_flag_set {
+      let missing_seqnums =
+        writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
+      let seqnum_base = missing_seqnums.iter().min();
+      let mut seqnum_set = match seqnum_base {
+        Some(&base) => SequenceNumberSet::new(base),
+        None => SequenceNumberSet::new(heartbeat.last_sn),
       };
-      let max_sn_plus_1 = if max_sn_plus_1 > heartbeat.first_sn {
-        max_sn_plus_1
-      } else {
-        heartbeat.first_sn
-      };
-      let mut missing_seq_num_set = SequenceNumberSet::new(max_sn_plus_1);
-      for seq_num in writer_proxy.missing_changes(heartbeat.last_sn) {
-        missing_seq_num_set.insert(seq_num);
-      }
-      if writer_proxy.changes.len() == 0 {
-        missing_seq_num_set.insert(max_sn_plus_1);
+
+      for seqnum in missing_seqnums {
+        seqnum_set.insert(seqnum);
       }
 
       let response_ack_nack = AckNack {
         reader_id: self.get_entity_id(),
         writer_id: heartbeat.writer_id,
-        reader_sn_state: missing_seq_num_set,
+        reader_sn_state: seqnum_set,
         count: self.sent_ack_nack_count,
       };
 
@@ -325,7 +325,10 @@ impl Reader {
     // Remove from writerProxy and DDSHistoryCache
     let mut removed_instances = Vec::new();
     for seq_num in &irrelevant_changes_set {
-      removed_instances.push(writer_proxy.set_irrelevant_change(*seq_num));
+      match writer_proxy.set_irrelevant_change(*seq_num) {
+        Some(i) => removed_instances.push(i),
+        None => (),
+      };
     }
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
@@ -355,11 +358,24 @@ impl Reader {
   }
 
   // update history cache
-  fn make_cache_change(&mut self, data: Data, instant: Instant, writer_guid: GUID) {
+  fn make_cache_change(
+    &mut self,
+    data: Data,
+    instant: Instant,
+    writer_guid: GUID,
+    no_writers: bool,
+  ) {
     let (change_kind, mut ddsdata) = match data.inline_qos {
       Some(d) => (ChangeKind::NOT_ALIVE_DISPOSED, DDSData::new_disposed(d)),
       None => match data.serialized_payload {
-        Some(pl) => (ChangeKind::ALIVE, DDSData::new(pl)),
+        Some(pl) => (
+          if !no_writers {
+            ChangeKind::ALIVE
+          } else {
+            ChangeKind::NOT_ALIVE_UNREGISTERED
+          },
+          DDSData::new(pl),
+        ),
         None => return,
       },
     };
@@ -398,6 +414,9 @@ impl Reader {
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
       | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
 
+    let infodst_flags =
+      BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
+
     let mut message = Message::new(Header {
       protocol_id: ProtocolId::default(),
       protocol_version: PROTOCOLVERSION,
@@ -405,22 +424,19 @@ impl Reader {
       guid_prefix: self.entity_attributes.guid.guidPrefix,
     });
 
-    let submessage_len = match acknack.write_to_vec() {
-      Ok(bytes) => bytes.len() as u16,
-      Err(e) => {
-        error!("Reader couldn't write acknack to bytes. Error: {}", e);
-        return;
-      }
+    let info_dst = InfoDestination {
+      guid_prefix: mr_state.source_guid_prefix,
     };
 
-    message.submessages.push(SubMessage {
-      header: SubmessageHeader {
-        kind: SubmessageKind::ACKNACK,
-        flags: flags.bits(),
-        content_length: submessage_len,
-      },
-      body: SubmessageBody::Entity(EntitySubmessage::AckNack(acknack, flags)),
-    });
+    match info_dst.create_submessage(infodst_flags) {
+      Some(m) => message.add_submessage(m),
+      None => return,
+    };
+
+    match acknack.create_submessage(flags) {
+      Some(m) => message.add_submessage(m),
+      None => return,
+    };
 
     /*let mut bytes = message.serialize_header();
     bytes.extend_from_slice(&submessage.serialize_msg()); */
@@ -428,6 +444,57 @@ impl Reader {
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .unwrap();
     sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
+  }
+
+  pub fn send_preemptive_acknacks(&mut self) {
+    let sender = UDPSender::new_with_random_port();
+
+    let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
+      | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
+
+    let infodst_flags =
+      BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
+
+    self.sent_ack_nack_count += 1;
+
+    for (_, writer_proxy) in self
+      .matched_writers
+      .iter()
+      .filter(|(_, p)| p.changes.is_empty())
+    {
+      let mut message = Message::new(Header {
+        protocol_id: ProtocolId::default(),
+        protocol_version: PROTOCOLVERSION,
+        vendor_id: VENDORID,
+        guid_prefix: self.entity_attributes.guid.guidPrefix,
+      });
+
+      let info_dst = InfoDestination {
+        guid_prefix: writer_proxy.remote_writer_guid.guidPrefix,
+      };
+
+      let acknack = AckNack {
+        reader_id: self.get_entity_id(),
+        writer_id: writer_proxy.remote_writer_guid.entityId,
+        reader_sn_state: SequenceNumberSet::new(SequenceNumber::from(1)),
+        count: self.sent_ack_nack_count,
+      };
+
+      match info_dst.create_submessage(infodst_flags) {
+        Some(m) => message.add_submessage(m),
+        None => continue,
+      };
+
+      match acknack.create_submessage(flags) {
+        Some(m) => message.add_submessage(m),
+        None => continue,
+      };
+
+      let bytes = message
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap();
+      sender.send_to_locator_list(&bytes, &writer_proxy.unicast_locator_list);
+    }
   }
 
   pub fn topic_name(&self) -> &String {

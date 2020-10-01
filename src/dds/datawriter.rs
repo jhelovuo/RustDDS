@@ -131,8 +131,8 @@ where
     ddsdata.value_key_hash = data.get_key().into_hash_key();
 
     let _data_sample = match source_timestamp {
-      Some(t) => DataSample::new(t, data),
-      None => DataSample::new(Timestamp::from(time::get_time()), data),
+      Some(t) => DataSample::new(t, data, self.get_guid()),
+      None => DataSample::new(Timestamp::from(time::get_time()), data, self.get_guid()),
     };
 
     match self.cc_upload.try_send(ddsdata) {
@@ -167,8 +167,12 @@ where
 
     // What does this block of code do? What is the purpose of _data_sample?
     let _data_sample: DataSample<D> = match source_timestamp {
-      Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, key),
-      None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::from(time::get_time()), key),
+      Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, key, self.get_guid()),
+      None => DataSample::new_disposed::<<D as Keyed>::K>(
+        Timestamp::from(time::get_time()),
+        key,
+        self.get_guid(),
+      ),
     };
 
     match self.cc_upload.try_send(ddsdata) {

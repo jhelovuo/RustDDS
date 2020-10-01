@@ -1,4 +1,4 @@
-use log::warn;
+use log::{debug, warn};
 
 use crate::structure::{
   locator::{Locator, LocatorList},
@@ -179,7 +179,9 @@ impl RtpsReaderProxy {
   }
 
   pub fn add_requested_changes(&mut self, sequence_numbers: BitSetRef) {
+    debug!("Sequence number set {:?}", sequence_numbers);
     for number in sequence_numbers.iter() {
+      debug!("Number {}", number);
       self
         .requested_changes
         .insert(SequenceNumber::from(number as i64));
@@ -195,6 +197,11 @@ impl RtpsReaderProxy {
   pub fn remove_unsend_change(&mut self, sequence_number: SequenceNumber) {
     self.unsent_changes.remove(&sequence_number);
   }
+
+  pub fn remove_requested_change(&mut self, sequence_number: SequenceNumber) {
+    self.requested_changes.remove(&sequence_number);
+  }
+
   ///This operation changes the ChangeForReader status of a set of changes for the reader represented by
   ///ReaderProxy ‘the_reader_proxy.’ The set of changes with sequence number smaller than or equal to the value
   ///‘committed_seq_num’ have their status changed to ACKNOWLEDGED
@@ -210,6 +217,28 @@ impl RtpsReaderProxy {
       return true;
     }
     return false;
+  }
+
+  pub fn unacked_changes(
+    &self,
+    smallest_change: SequenceNumber,
+    largest_change: SequenceNumber,
+  ) -> HashSet<SequenceNumber> {
+    let mut changes = HashSet::new();
+    let local_change = match self.largest_acked_change {
+      Some(a) => a,
+      None => SequenceNumber::from(0),
+    };
+    let local_change = if local_change > smallest_change {
+      local_change
+    } else {
+      smallest_change
+    };
+
+    for seq in i64::from(local_change)..i64::from(largest_change) {
+      changes.insert(SequenceNumber::from(seq));
+    }
+    changes
   }
 
   pub fn content_is_equal(&self, other: &RtpsReaderProxy) -> bool {

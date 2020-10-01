@@ -1,6 +1,6 @@
 use enumflags2::BitFlags;
 
-use crate::dds::traits::key::*;
+use crate::{dds::traits::key::*, structure::guid::GUID};
 use crate::structure::time::Timestamp;
 
 /// DDS spec 2.2.2.5.4
@@ -94,6 +94,8 @@ pub struct SampleInfo {
   //- (S.disposed_generation_count + S.no_writers_generation_count)
   pub absolute_generation_rank: i32,
   pub source_timestamp: Timestamp,
+
+  pub publication_handle: GUID,
 }
 
 #[allow(clippy::new_without_default)]
@@ -109,6 +111,7 @@ impl SampleInfo {
       generation_rank: 0,
       absolute_generation_rank: 0,
       source_timestamp: Timestamp::TIME_INVALID,
+      publication_handle: GUID::GUID_UNKNOWN,
     }
   }
 }
@@ -130,7 +133,7 @@ impl<D> DataSample<D>
 where
   D: Keyed,
 {
-  pub fn new(source_timestamp: Timestamp, payload: D) -> DataSample<D> {
+  pub fn new(source_timestamp: Timestamp, payload: D, writer_guid: GUID) -> DataSample<D> {
     // begin dummy placeholder values
     let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;
@@ -153,12 +156,13 @@ where
         generation_rank,
         absolute_generation_rank,
         source_timestamp,
+        publication_handle: writer_guid,
       },
       value: Ok(payload),
     }
   }
 
-  pub fn new_disposed<K>(source_timestamp: Timestamp, key: D::K) -> DataSample<D>
+  pub fn new_disposed<K>(source_timestamp: Timestamp, key: D::K, writer_guid: GUID) -> DataSample<D>
   where
     <D as Keyed>::K: Key,
   {
@@ -184,6 +188,7 @@ where
         generation_rank,
         absolute_generation_rank,
         source_timestamp,
+        publication_handle: writer_guid,
       },
       value: Err(key),
     }

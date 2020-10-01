@@ -14,6 +14,16 @@ impl SequenceNumber {
   pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber = SequenceNumber((std::u32::MAX as i64) << 32);
 }
 
+impl SequenceNumber {
+  pub fn sub(self, rhs: Self) -> SequenceNumber {
+    if self >= rhs {
+      self - rhs
+    } else {
+      SequenceNumber::from(0)
+    }
+  }
+}
+
 impl From<i64> for SequenceNumber {
   fn from(value: i64) -> Self {
     SequenceNumber(value)

@@ -42,7 +42,7 @@ impl Duration {
       seconds: duration.as_secs() as i32,
       fraction: duration.subsec_nanos() as u32,
     }
-  } 
+  }
 }
 
 impl From<TDuration> for Duration {

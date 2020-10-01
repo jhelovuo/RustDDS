@@ -31,8 +31,7 @@ use crate::structure::guid::{GuidPrefix, EntityId, GUID};
 use crate::structure::sequence_number::{SequenceNumber};
 use crate::{
   submessages::{
-    Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage, EntitySubmessage, AckNack,
-    InfoDestination,
+    Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage, AckNack, InfoDestination,
   },
   structure::cache_change::{CacheChange, ChangeKind},
   serialization::{SubMessage, Message, SubmessageBody},
@@ -50,8 +49,9 @@ use crate::{
   common::timed_event_handler::{TimedEventHandler},
 };
 use super::{
-  rtps_reader_proxy::RtpsReaderProxy,
   qos::{policy, QosPolicies},
+  rtps_reader_proxy::RtpsReaderProxy,
+  util::writer_util::WriterUtil,
 };
 use policy::{History, Reliability};
 //use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
@@ -129,8 +129,7 @@ pub struct Writer {
   //this is set true. If Datawriter after disposing sends new cahceChanges this falg is then
   //turned true.
   //When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with DisposedFlag
-  //TODO are messages send every heartbeat or just once ????
-  pub writer_is_disposed: bool,
+  // pub writer_is_disposed: bool,
   ///Contains timer that needs to be set to timeout with duration of self.heartbeat_perioid
   ///timed_event_handler sends notification when timer is up via miochannel to poll in Dp_eventWrapper
   ///this also handles writers cache cleaning timeouts.
@@ -154,7 +153,7 @@ impl Writer {
         Reliability::BestEffort => None,
         Reliability::Reliable {
           max_blocking_time: _,
-        } => Some(Duration::from_secs(3)),
+        } => Some(Duration::from_secs(1)),
       },
       None => None,
     };
@@ -189,7 +188,6 @@ impl Writer {
       sequence_number_to_instant: BTreeMap::new(),
       key_to_instant: HashMap::new(),
       disposed_sequence_numbers: HashSet::new(),
-      writer_is_disposed: false,
       timed_event_handler: None,
       qos_policies,
     }
@@ -275,85 +273,65 @@ impl Writer {
     let endianness = self.endianness;
 
     let mut seqnums: HashMap<GUID, Vec<SequenceNumber>> = HashMap::new();
+    let mut requested_seqnums: HashMap<GUID, Vec<SequenceNumber>> = HashMap::new();
 
     for reader in self.readers.iter() {
+      let reader_guid = reader.remote_reader_guid;
       seqnums.insert(reader.remote_reader_guid, Vec::new());
+      requested_seqnums.insert(reader.remote_reader_guid, Vec::new());
 
-      for seqnum in itertools::sorted(reader.unsent_changes().iter()) {
-        if reader.unicast_locator_list.len() > 0 {
-          let mut rtps_message: Message = Message::new(message_header.clone());
+      let mut rtps_message: Message = Message::new(message_header.clone());
+      rtps_message.add_submessage(Writer::get_DST_submessage(
+        endianness,
+        reader_guid.guidPrefix,
+      ));
 
-          rtps_message.add_submessage(Writer::get_DST_submessage(
-            endianness,
-            reader.remote_reader_guid.guidPrefix,
-          ));
+      let mut not_acked_changes = reader.unacked_changes(
+        self.first_change_sequence_number,
+        self.last_change_sequence_number,
+      );
+      not_acked_changes.extend(reader.requested_changes());
 
-          // adds data if there is unsent change
-          rtps_message.add_data_msg(*seqnum, &self, &reader);
-
-          rtps_message.add_submessage(self.get_heartbeat_msg(
-            reader.remote_reader_guid.entityId,
-            false,
-            false,
-          ));
-
-          self.send_unicast_message_to_reader(&rtps_message, reader);
-        }
-        if reader.multicast_locator_list.len() > 0 {
-          let mut RTPSMessage: Message = Message::new(self.create_message_header());
-          RTPSMessage.add_submessage(self.get_heartbeat_msg(
-            reader.remote_group_entity_id,
-            false,
-            false,
-          ));
-          self.send_multicast_message_to_reader(&RTPSMessage, reader);
-        }
-
-        seqnums
-          .get_mut(&reader.remote_reader_guid)
-          .unwrap()
-          .push(*seqnum);
+      for &seqnum in itertools::sorted(reader.unsent_changes().union(&not_acked_changes)) {
+        // adds data if there is unsent change
+        rtps_message.add_data_msg(seqnum, &self, &reader);
+        match seqnums.get_mut(&reader_guid) {
+          Some(v) => v.push(seqnum),
+          None => (),
+        };
       }
 
-      if reader.unsent_changes().len() == 0 {
-        let mut rtps_message: Message = Message::new(message_header.clone());
-
-        rtps_message.add_submessage(Writer::get_DST_submessage(
-          endianness,
-          reader.remote_reader_guid.guidPrefix,
-        ));
-
-        rtps_message.add_submessage(self.get_heartbeat_msg(
-          reader.remote_reader_guid.entityId,
-          false,
-          false,
-        ));
-
-        self.send_unicast_message_to_reader(&rtps_message, reader);
-        self.send_multicast_message_to_reader(&rtps_message, reader);
+      for &seqnum in itertools::sorted(reader.requested_changes().iter()) {
+        match requested_seqnums.get_mut(&reader_guid) {
+          Some(v) => v.push(seqnum),
+          None => (),
+        };
       }
+
+      match self.get_heartbeat_msg(reader_guid.entityId, false, false) {
+        Some(hb_msg) => rtps_message.add_submessage(hb_msg),
+        None => continue,
+      };
+
+      self.send_unicast_message_to_reader(&rtps_message, reader);
+      self.send_multicast_message_to_reader(&rtps_message, reader);
     }
 
-    let mut readers_guis = HashMap::new();
-    for reader in self.readers.iter_mut() {
-      let mut sequence_numbers = Vec::new();
-      for seqnum in seqnums
-        .get(&reader.remote_reader_guid)
-        .map(|p| p.clone())
+    for (guid, seqnum_vec) in seqnums {
+      self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(seqnum_vec, &Some(guid));
+    }
+
+    for (guid, seqnum_vec) in requested_seqnums {
+      match self
+        .readers
         .iter_mut()
-        .flat_map(|p| {
-          p.sort();
-          p
-        })
+        .find(|p| p.remote_reader_guid == guid)
       {
-        reader.remove_unsend_change(*seqnum);
-        sequence_numbers.push(*seqnum);
-      }
-      readers_guis.insert(reader.remote_reader_guid, sequence_numbers);
-    }
-
-    for (gui, seqnums) in readers_guis.into_iter() {
-      self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(seqnums, &Some(gui));
+        Some(r) => seqnum_vec
+          .iter()
+          .for_each(|&seq| r.remove_requested_change(seq)),
+        None => (),
+      };
     }
 
     self.set_heartbeat_timer();
@@ -371,35 +349,24 @@ impl Writer {
   }
 
   pub fn insert_to_history_cache(&mut self, data: DDSData) {
-    self.writer_is_disposed = match data.change_kind {
-      ChangeKind::ALIVE => false,
-      _ => true,
-    };
+    WriterUtil::increment_writer_sequence_number(self);
+    let new_cache_change = WriterUtil::create_cache_change_from_dds_data(self, data);
+    let data_key = new_cache_change.key;
 
-    self.increase_last_change_sequence_number();
-    // If first write then set first change sequence number to 1
-    if self.first_change_sequence_number == SequenceNumber::from(0) {
-      self.first_change_sequence_number = SequenceNumber::from(1);
-    }
-    let data_key = data.value_key_hash;
-    let change_kind = data.change_kind;
-    let datavalue = Some(data);
-    let new_cache_change = CacheChange::new(
-      change_kind,
-      self.as_entity().guid,
-      self.last_change_sequence_number,
-      datavalue,
-    );
+    // inserting to DDSCache
     let insta = Instant::now();
     self.dds_cache.write().unwrap().to_topic_add_change(
       &self.my_topic_name,
       &insta,
       new_cache_change,
     );
+
+    // keeping table of instant sequence number pairs
     self
       .sequence_number_to_instant
-      .insert(self.last_change_sequence_number, insta.clone());
-    self.key_to_instant.insert(data_key, insta.clone());
+      .insert(self.last_change_sequence_number, insta);
+    self.key_to_instant.insert(data_key, insta);
+
     self.writer_set_unsent_changes();
   }
 
@@ -407,7 +374,7 @@ impl Writer {
   /// This does not remove anything from datacahce but changes the status of writer to disposed.
   pub fn handle_not_alive_disposed_cache_change(&mut self, data: DDSData) {
     let instant = self.key_to_instant.get(&data.value_key_hash);
-    self.writer_is_disposed = true;
+
     if instant.is_some() {
       self
         .dds_cache
@@ -671,6 +638,9 @@ impl Writer {
       }
 
       for l in multi_cast_locators {
+        if self.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
+          debug!("Sending multicast {:?}", reader.remote_reader_guid);
+        }
         if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
           let a = l.to_socket_address();
           match self.udp_sender.send_ipv4_multicast(&buffer, a) {
@@ -870,7 +840,7 @@ impl Writer {
     reader_id: EntityId,
     set_final_flag: bool,
     set_liveliness_flag: bool,
-  ) -> SubMessage {
+  ) -> Option<SubMessage> {
     let first = self.first_change_sequence_number;
     let last = self.last_change_sequence_number;
 
@@ -891,17 +861,7 @@ impl Writer {
       flags.insert(HEARTBEAT_Flags::Liveliness)
     }
 
-    let mes = &mut heartbeat.write_to_vec_with_ctx(self.endianness).unwrap();
-    let size = mes.len();
-
-    SubMessage {
-      header: SubmessageHeader {
-        kind: SubmessageKind::HEARTBEAT,
-        flags: flags.bits(),
-        content_length: size as u16, // cannot overflow, heartbeat has fixed size
-      },
-      body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(heartbeat, flags)),
-    }
+    heartbeat.create_submessage(flags)
   }
 
   pub fn write_user_msg(&self, change: CacheChange, reader_entity_id: EntityId) -> Message {
@@ -919,6 +879,7 @@ impl Writer {
 
   /// AckNack Is negative if reader_sn_state contains some sequenceNumbers in reader_sn_state set
   fn test_if_ack_nack_contains_not_recieved_sequence_numbers(ack_nack: &AckNack) -> bool {
+    debug!("Testing ACKNACK set {:?}", ack_nack.reader_sn_state);
     if !&ack_nack.reader_sn_state.set.is_empty() {
       return true;
     }
@@ -1070,7 +1031,7 @@ impl Writer {
 
   pub fn writer_set_unsent_changes(&mut self) {
     for reader in &mut self.readers {
-      reader.unsend_changes_set(self.last_change_sequence_number.clone());
+      reader.unsend_changes_set(self.last_change_sequence_number);
     }
   }
 

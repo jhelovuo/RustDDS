@@ -1,4 +1,5 @@
 use log::error;
+use atosdds::structure::guid::GUID;
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
@@ -6,18 +7,27 @@ use termion::{event::Key, raw::RawTerminal, input::TermRead, AsyncReader};
 
 use std::{collections::HashMap, io::StdoutLock, io::Write, time::Duration as StdDuration};
 
-use crate::ros_data::{Gid, NodeInfo, ROSParticipantInfo};
+use crate::{
+  ros2::turtle_control::TurtleControl,
+  ros2::turtle_data::Twist,
+  ros_data::{Gid, NodeInfo, ROSParticipantInfo},
+};
 
 pub enum RosCommand {
   StopEventLoop,
   UpdateNode,
   AddNodeListSender {
-    sender: mio_channel::SyncSender<NodeListUpdate>,
+    sender: mio_channel::SyncSender<DataUpdate>,
+  },
+  TurtleCmdVel {
+    twist: Twist,
   },
 }
 
-pub enum NodeListUpdate {
-  Update { info: ROSParticipantInfo },
+pub enum DataUpdate {
+  UpdateNode { info: ROSParticipantInfo },
+  DeleteNode { guid: GUID },
+  TurtleCmdVel { twist: Twist },
 }
 
 pub struct MainController<'a> {
@@ -27,12 +37,12 @@ pub struct MainController<'a> {
   node_timer: Timer<()>,
   async_reader: termion::input::Events<AsyncReader>,
   command_sender: mio_channel::SyncSender<RosCommand>,
-  nodelist_receiver: mio_channel::Receiver<NodeListUpdate>,
+  nodelist_receiver: mio_channel::Receiver<DataUpdate>,
 }
 
 impl<'a> MainController<'a> {
-  const KEYBOARD_CHECK_TIMEOUT: u64 = 500;
-  const NODE_UPDATE_TIMEOUT: u64 = 5;
+  const KEYBOARD_CHECK_TIMEOUT: u64 = 50;
+  const NODE_UPDATE_TIMEOUT: u64 = 1;
 
   const KEYBOARD_CHECK_TOKEN: Token = Token(0);
   const NODE_TIMER_TOKEN: Token = Token(1);
@@ -96,6 +106,38 @@ impl<'a> MainController<'a> {
                   _ => (),
                 }
               }
+              termion::event::Event::Key(Key::Up) => {
+                let twist = TurtleControl::move_forward();
+                self.print_sent_turtle_cmd_vel(&twist);
+                self
+                  .command_sender
+                  .send(RosCommand::TurtleCmdVel { twist })
+                  .unwrap_or(());
+              }
+              termion::event::Event::Key(Key::Right) => {
+                let twist = TurtleControl::rotate_right();
+                self.print_sent_turtle_cmd_vel(&twist);
+                self
+                  .command_sender
+                  .send(RosCommand::TurtleCmdVel { twist })
+                  .unwrap_or(());
+              }
+              termion::event::Event::Key(Key::Down) => {
+                let twist = TurtleControl::move_backward();
+                self.print_sent_turtle_cmd_vel(&twist);
+                self
+                  .command_sender
+                  .send(RosCommand::TurtleCmdVel { twist })
+                  .unwrap_or(());
+              }
+              termion::event::Event::Key(Key::Left) => {
+                let twist = TurtleControl::rotate_left();
+                self.print_sent_turtle_cmd_vel(&twist);
+                self
+                  .command_sender
+                  .send(RosCommand::TurtleCmdVel { twist })
+                  .unwrap_or(());
+              }
               termion::event::Event::Key(key) => {
                 write!(
                   self.stdout,
@@ -117,18 +159,38 @@ impl<'a> MainController<'a> {
         } else if event.token() == MainController::NODE_TIMER_TOKEN {
           match self.command_sender.send(RosCommand::UpdateNode) {
             Ok(_) => (),
-            Err(e) => error!("Failed to send UPDATE_NODE command {:?}", e),
+            Err(e) => {
+              error!("Failed to send UPDATE_NODE command {:?}", e);
+              return;
+            }
           }
-          self.node_timer.set_timeout(
-            StdDuration::from_secs(MainController::NODE_UPDATE_TIMEOUT),
-            (),
-          );
+        // self.node_timer.set_timeout(
+        //   StdDuration::from_secs(MainController::NODE_UPDATE_TIMEOUT),
+        //   (),
+        // );
         } else if event.token() == MainController::UPDATE_NODE_LIST_TOKEN {
           while let Ok(rec_nodes) = self.nodelist_receiver.try_recv() {
             match rec_nodes {
-              NodeListUpdate::Update { info } => {
+              DataUpdate::UpdateNode { info } => {
                 let nodes: Vec<NodeInfo> = info.nodes().iter().map(|p| p.clone()).collect();
+
+                write!(
+                  self.stdout,
+                  "{}{}{}Nodes: {:?}",
+                  termion::cursor::Goto(1, 2),
+                  [' '; 39].to_vec().into_iter().collect::<String>(),
+                  termion::cursor::Goto(1, 2),
+                  nodes.len()
+                )
+                .unwrap();
+
                 node_list.insert(info.guid(), nodes);
+              }
+              DataUpdate::DeleteNode { guid } => {
+                node_list.remove(&Gid::from_guid(guid));
+              }
+              DataUpdate::TurtleCmdVel { twist } => {
+                self.print_turtle_cmd_vel(&twist);
               }
             }
           }
@@ -151,6 +213,7 @@ impl<'a> MainController<'a> {
             )
             .unwrap();
           }
+
           self.stdout.flush().unwrap();
         }
       }
@@ -196,5 +259,43 @@ impl<'a> MainController<'a> {
         PollOpt::edge(),
       )
       .unwrap();
+  }
+
+  fn print_turtle_cmd_vel(&mut self, twist: &Twist) {
+    write!(
+      self.stdout,
+      "{}{}{}",
+      termion::cursor::Goto(40, 1),
+      termion::clear::CurrentLine,
+      "Turtle cmd_vel"
+    )
+    .unwrap();
+    write!(
+      self.stdout,
+      "{}{}{:?}",
+      termion::cursor::Goto(40, 2),
+      termion::clear::CurrentLine,
+      twist
+    )
+    .unwrap();
+  }
+
+  fn print_sent_turtle_cmd_vel(&mut self, twist: &Twist) {
+    write!(
+      self.stdout,
+      "{}{}{}",
+      termion::cursor::Goto(40, 3),
+      termion::clear::CurrentLine,
+      "Sent Turtle cmd_vel"
+    )
+    .unwrap();
+    write!(
+      self.stdout,
+      "{}{}{:?}",
+      termion::cursor::Goto(40, 4),
+      termion::clear::CurrentLine,
+      twist
+    )
+    .unwrap();
   }
 }

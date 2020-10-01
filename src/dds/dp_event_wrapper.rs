@@ -1,9 +1,9 @@
-use log::{info, warn};
+use log::{debug, info, warn};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
 extern crate chrono;
 //use chrono::Duration;
-use std::{collections::HashMap, sync::RwLockReadGuard};
+use std::{collections::HashMap, sync::RwLockReadGuard, time::Duration};
 use std::{
   sync::{Arc, RwLock},
 };
@@ -172,6 +172,18 @@ impl DPEventWrapper {
   }
 
   pub fn event_loop(self) {
+    let mut acknack_timer = mio_extras::timer::Timer::default();
+    acknack_timer.set_timeout(Duration::from_secs(5), ());
+    self
+      .poll
+      .register(
+        &acknack_timer,
+        DPEV_ACKNACK_TIMER_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+
     // TODO: Use the dp to access stuff we need, e.g. historycache
     let mut ev_wrapper = self;
     loop {
@@ -205,6 +217,9 @@ impl DPEventWrapper {
               DiscoveryNotificationType::TopicsInfoUpdated => ev_wrapper.update_topics(),
             }
           }
+        } else if event.token() == DPEV_ACKNACK_TIMER_TOKEN {
+          ev_wrapper.message_receiver.send_preemptive_acknacks();
+          acknack_timer.set_timeout(Duration::from_secs(5), ());
         } else {
           info!("Unknown event");
         }
@@ -260,22 +275,9 @@ impl DPEventWrapper {
 
   pub fn handle_udp_traffic(&mut self, event: &Event) {
     let listener = self.udp_listeners.get(&event.token());
+    let datas;
     match listener {
-      Some(l) => loop {
-        let data = l.get_message();
-        if data.is_empty() {
-          return;
-        }
-        if event.token() == DISCOVERY_LISTENER_TOKEN
-          || event.token() == DISCOVERY_MUL_LISTENER_TOKEN
-        {
-          self.message_receiver.handle_discovery_msg(data);
-        } else if event.token() == USER_TRAFFIC_LISTENER_TOKEN
-          || event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
-        {
-          self.message_receiver.handle_user_msg(data);
-        }
-      },
+      Some(l) => datas = l.get_messages(),
       None => {
         print!(
           "Cannot handle upd traffic! No listener with token {:?}",
@@ -284,6 +286,16 @@ impl DPEventWrapper {
         return;
       }
     };
+    for data in datas.into_iter() {
+      if event.token() == DISCOVERY_LISTENER_TOKEN || event.token() == DISCOVERY_MUL_LISTENER_TOKEN
+      {
+        self.message_receiver.handle_discovery_msg(data);
+      } else if event.token() == USER_TRAFFIC_LISTENER_TOKEN
+        || event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
+      {
+        self.message_receiver.handle_user_msg(data);
+      }
+    }
   }
 
   pub fn handle_reader_action(&mut self, event: &Event) {
@@ -531,6 +543,7 @@ impl DPEventWrapper {
       get_local_multicast_locators(get_spdp_well_known_multicast_port(domain_id));
 
     DPEventWrapper::add_reader_to_writer(writer, multicast_reader);
+    debug!("SPDP Participant readers updated.");
   }
 
   fn update_pubsub_readers(
@@ -557,6 +570,32 @@ impl DPEventWrapper {
     // updating all data
     for reader in all_readers.map(|(_, p)| p).into_iter() {
       DPEventWrapper::add_reader_to_writer(writer, reader);
+    }
+  }
+
+  fn update_pubsub_writers(
+    reader: &mut Reader,
+    db: &RwLockReadGuard<DiscoveryDB>,
+    entity_id: EntityId,
+    expected_endpoint: u32,
+  ) {
+    let guid_prefix = reader.get_guid_prefix();
+
+    let all_writers = db
+      .get_participants()
+      .filter_map(|p| match p.participant_guid {
+        Some(g) => Some((g, p)),
+        None => None,
+      })
+      .filter(|(_, sp)| match sp.available_builtin_endpoints {
+        Some(ep) => ep.contains(expected_endpoint),
+        None => false,
+      })
+      .filter(|(g, _)| g.guidPrefix != guid_prefix)
+      .map(|(g, p)| (g, p.as_writer_proxy(true, Some(entity_id))));
+
+    for writer in all_writers.map(|(_, p)| p).into_iter() {
+      reader.add_writer_proxy(writer);
     }
   }
 
@@ -596,10 +635,11 @@ impl DPEventWrapper {
               None => false,
             })
             .filter(|p| p.participant_guid.unwrap().guidPrefix != reader.get_guid_prefix())
-            .map(|p| p.as_writer_proxy(true))
-            .map(|mut p| {
-              p.remote_writer_guid.entityId = EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER;
-              p
+            .map(|p| {
+              p.as_writer_proxy(
+                true,
+                Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
+              )
             })
             .collect();
 
@@ -609,26 +649,12 @@ impl DPEventWrapper {
           }
         }
         EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
-          let proxies: Vec<RtpsWriterProxy> = db
-            .get_participants()
-            .filter(|sp| match sp.available_builtin_endpoints {
-              Some(ep) => {
-                ep.contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER)
-              }
-              None => false,
-            })
-            .filter(|p| p.participant_guid.unwrap().guidPrefix != reader.get_guid_prefix())
-            .map(|p| p.as_writer_proxy(true))
-            .map(|mut p| {
-              p.remote_writer_guid.entityId = EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER;
-              p
-            })
-            .collect();
-
-          reader.retain_matched_writers(proxies.iter());
-          for proxy in proxies.into_iter() {
-            reader.add_writer_proxy(proxy);
-          }
+          DPEventWrapper::update_pubsub_writers(
+            reader,
+            &db,
+            EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER,
+          );
         }
         EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER => {
           let proxies: Vec<RtpsWriterProxy> = db
@@ -640,10 +666,11 @@ impl DPEventWrapper {
               None => false,
             })
             .filter(|p| p.participant_guid.unwrap().guidPrefix != reader.get_guid_prefix())
-            .map(|p| p.as_writer_proxy(true))
-            .map(|mut p| {
-              p.remote_writer_guid.entityId = EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER;
-              p
+            .map(|p| {
+              p.as_writer_proxy(
+                true,
+                Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
+              )
             })
             .collect();
           reader.retain_matched_writers(proxies.iter());

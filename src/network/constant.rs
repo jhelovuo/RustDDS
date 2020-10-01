@@ -44,6 +44,8 @@ pub const DISCOVERY_TOPIC_DATA_TOKEN: Token = Token(37);
 pub const DISCOVERY_TOPIC_CLEANUP_TOKEN: Token = Token(38);
 pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(39);
 
+pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(50);
+
 pub struct TokenReceiverPair<T> {
   pub token: Token,
   pub receiver: mio_channel::Receiver<T>,
@@ -83,6 +85,6 @@ pub enum TimerMessageType {
 #[derive(Debug)]
 pub enum DiscoveryNotificationType {
   ReadersInfoUpdated,
-  WritersInfoUpdated { needs_new_cache_change: bool},
+  WritersInfoUpdated { needs_new_cache_change: bool },
   TopicsInfoUpdated,
 }

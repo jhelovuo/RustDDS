@@ -65,7 +65,7 @@ unsafe impl Sync for Discovery {}
 unsafe impl Send for Discovery {}
 
 impl Discovery {
-  const PARTICIPANT_CLEANUP_PERIOD: u64 = 60;
+  const PARTICIPANT_CLEANUP_PERIOD: u64 = 2;
   const TOPIC_CLEANUP_PERIOD: u64 = 5 * 60; // timer for cleaning up inactive topics
   const SEND_PARTICIPANT_INFO_PERIOD: u64 = 5;
   const SEND_READERS_INFO_PERIOD: u64 = 5;
@@ -143,7 +143,7 @@ impl Discovery {
       }
     };
 
-    let discovery_publisher_qos = QosPolicies::qos_none();
+    let discovery_publisher_qos = Discovery::subscriber_qos();
     let discovery_publisher = match discovery
       .domain_participant
       .create_publisher(&discovery_publisher_qos)
@@ -600,11 +600,11 @@ impl Discovery {
     discovery.write_writers_info(&mut dcps_publication_writer);
     discovery.write_readers_info(&mut dcps_subscription_writer);
 
-    // Error here doesn't matter as there should be a timeout in participant
-    discovery
-      .discovery_started_sender
-      .send(Ok(()))
-      .unwrap_or(());
+    match discovery.discovery_started_sender.send(Ok(())) {
+      Ok(_) => (),
+      // Participant has probably crashed at this point
+      _ => return,
+    };
 
     loop {
       let mut events = Events::with_capacity(1024);
@@ -624,30 +624,20 @@ impl Discovery {
                 info!("Stopping Discovery");
 
                 // disposing readers
-                match discovery.discovery_db.read() {
-                  Ok(db) => {
-                    let readers = db.get_all_local_topic_readers();
-                    for reader in readers {
-                      dcps_subscription_writer
-                        .dispose(reader.reader_proxy.remote_reader_guid.unwrap(), None)
-                        .unwrap_or(());
-                    }
-                  }
-                  Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-                };
+                let db = discovery.discovery_db_read();
+                let readers = db.get_all_local_topic_readers();
+                for reader in readers {
+                  dcps_subscription_writer
+                    .dispose(reader.reader_proxy.remote_reader_guid.unwrap(), None)
+                    .unwrap_or(());
+                }
 
-                // disposing writers
-                match discovery.discovery_db.read() {
-                  Ok(db) => {
-                    let writers = db.get_all_local_topic_writers();
-                    for writer in writers {
-                      dcps_publication_writer
-                        .dispose(writer.writer_proxy.remote_writer_guid.unwrap(), None)
-                        .unwrap_or(());
-                    }
-                  }
-                  Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-                };
+                let writers = db.get_all_local_topic_writers();
+                for writer in writers {
+                  dcps_publication_writer
+                    .dispose(writer.writer_proxy.remote_writer_guid.unwrap(), None)
+                    .unwrap_or(());
+                }
 
                 // finally disposing the participant we have
                 let guid = discovery.domain_participant.get_guid();
@@ -1028,7 +1018,8 @@ impl Discovery {
       max_blocking_time: Duration::from(StdDuration::from_millis(100)),
     });
     qos.destination_order = Some(DestinationOrder::ByReceptionTimestamp);
-    qos.history = Some(History::KeepLast { depth: 1 });
+    // qos.history = Some(History::KeepLast { depth: 1 });
+    qos.history = Some(History::KeepAll);
     qos.resource_limits = Some(ResourceLimits {
       max_instances: std::i32::MAX,
       max_samples: std::i32::MAX,

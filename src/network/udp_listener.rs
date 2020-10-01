@@ -66,6 +66,17 @@ impl UDPListener {
     message
   }
 
+  pub fn get_messages(&self) -> Vec<Vec<u8>> {
+    let mut datas = vec![];
+    let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+
+    while let Ok(nbytes) = self.socket.recv(&mut buf) {
+      datas.push(buf[..nbytes].to_vec());
+    }
+
+    datas
+  }
+
   pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
     if address.is_multicast() {
       return self

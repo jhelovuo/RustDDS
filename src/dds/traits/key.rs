@@ -2,7 +2,7 @@
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use byteorder::BigEndian;
+use byteorder::{LittleEndian};
 use rand::Rng;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
@@ -34,7 +34,7 @@ pub trait Key:
 {
   // no methods required
   fn into_hash_key(&self) -> u128 {
-    let cdr_bytes = match to_bytes::<Self, BigEndian>(&self) {
+    let cdr_bytes = match to_bytes::<Self, LittleEndian>(&self) {
       Ok(b) => b,
       _ => Vec::new(),
     };

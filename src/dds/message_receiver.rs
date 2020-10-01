@@ -219,7 +219,11 @@ impl MessageReceiver {
       EntitySubmessage::Data(data, _) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
         if data.reader_id == EntityId::ENTITYID_UNKNOWN {
-          for reader in self.available_readers.iter_mut() {
+          for reader in self
+            .available_readers
+            .iter_mut()
+            .filter(|p| p.contains_writer(data.writer_id))
+          {
             reader.handle_data_msg(data.clone(), mr_state.clone());
           }
         } else {
@@ -231,7 +235,11 @@ impl MessageReceiver {
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
         if heartbeat.reader_id == EntityId::ENTITYID_UNKNOWN {
-          for reader in self.available_readers.iter_mut() {
+          for reader in self
+            .available_readers
+            .iter_mut()
+            .filter(|p| p.contains_writer(heartbeat.writer_id))
+          {
             reader.handle_heartbeat_msg(
               heartbeat.clone(),
               flags.contains(HEARTBEAT_Flags::Final),
@@ -267,7 +275,11 @@ impl MessageReceiver {
       EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
         if heartbeatfrag.reader_id == EntityId::ENTITYID_UNKNOWN {
-          for reader in self.available_readers.iter_mut() {
+          for reader in self
+            .available_readers
+            .iter_mut()
+            .filter(|p| p.contains_writer(heartbeatfrag.writer_id))
+          {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
         } else {
@@ -316,6 +328,13 @@ impl MessageReceiver {
           self.dest_guid_prefix = self.own_guid_prefix;
         }
       }
+    }
+  }
+
+  // sends 0 seqnum acknacks for those writer that haven't had any action
+  pub fn send_preemptive_acknacks(&mut self) {
+    for reader in self.available_readers.iter_mut() {
+      reader.send_preemptive_acknacks()
     }
   }
 } // impl messageReceiver

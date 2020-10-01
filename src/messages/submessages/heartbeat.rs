@@ -1,6 +1,15 @@
-use crate::structure::guid::EntityId;
+use crate::{
+  serialization::SubMessage, serialization::SubmessageBody, structure::guid::EntityId,
+  submessages::SubmessageHeader,
+};
 use crate::structure::sequence_number::SequenceNumber;
+use enumflags2::BitFlags;
+use log::error;
 use speedy::{Readable, Writable};
+
+use super::{
+  submessage::EntitySubmessage, submessage_flag::HEARTBEAT_Flags, submessage_kind::SubmessageKind,
+};
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers
@@ -35,6 +44,27 @@ pub struct Heartbeat {
   /// communication paths.
   pub count: i32,
   // Other present if GroupInfo flag is set
+}
+
+impl Heartbeat {
+  pub fn create_submessage(self, flags: BitFlags<HEARTBEAT_Flags>) -> Option<SubMessage> {
+    let submessage_len = match self.write_to_vec() {
+      Ok(bytes) => bytes.len() as u16,
+      Err(e) => {
+        error!("Reader couldn't write acknack to bytes. Error: {}", e);
+        return None;
+      }
+    };
+
+    Some(SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::HEARTBEAT,
+        flags: flags.bits(),
+        content_length: submessage_len,
+      },
+      body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(self, flags)),
+    })
+  }
 }
 
 #[cfg(test)]

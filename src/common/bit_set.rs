@@ -1,5 +1,6 @@
 use bit_set::BitSet;
 use bit_vec::BitVec;
+use log::debug;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::ops::{Deref, DerefMut};
 
@@ -34,13 +35,25 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let number_of_bits = reader.read_u32()?;
+    if number_of_bits == 0 {
+      return Ok(BitSetRef::new());
+    }
+
     let mut bit_vec = BitVec::with_capacity(number_of_bits as usize);
-    unsafe {
-      let inner = bit_vec.storage_mut();
-      for _ in 0..(number_of_bits / 32) {
-        inner.push(reader.read_u32()?);
+
+    for _ in 0..(number_of_bits / 32 + 1) {
+      let mut byte = reader.read_u32()?;
+      byte = byte.rotate_right(1);
+      debug!("Bytes {:b} - {}", byte, number_of_bits);
+      while byte > 0 {
+        let val = (byte & 0x80000000) > 0;
+        byte = byte << 1;
+        debug!("BIter {} - {:b}", val, byte);
+        bit_vec.push(val);
       }
     }
+
+    debug!("ReadBitVec {:?}", bit_vec);
     Ok(BitSetRef(BitSet::from_bit_vec(bit_vec)))
   }
 

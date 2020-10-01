@@ -1,4 +1,4 @@
-use crate::structure::time::Timestamp;
+use crate::structure::{guid::GUID, time::Timestamp};
 use crate::dds::datasample::{SampleState, ViewState, InstanceState, SampleInfo};
 
 /// DDS spec 2.2.2.5.4
@@ -10,7 +10,7 @@ pub struct DataSample<'a, D> {
 }
 
 impl<'a, D> DataSample<'a, D> {
-  pub fn new(source_timestamp: Timestamp, payload: &'a D) -> DataSample<D> {
+  pub fn new(source_timestamp: Timestamp, payload: &'a D, writer_guid: GUID) -> DataSample<D> {
     // begin dummy placeholder values
     let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;
@@ -33,6 +33,7 @@ impl<'a, D> DataSample<'a, D> {
         generation_rank,
         absolute_generation_rank,
         source_timestamp,
+        publication_handle: writer_guid,
       },
       value: payload,
     }

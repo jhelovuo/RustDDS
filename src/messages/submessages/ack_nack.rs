@@ -1,6 +1,15 @@
-use crate::structure::guid::EntityId;
+use crate::{
+  serialization::SubMessage, serialization::SubmessageBody, structure::guid::EntityId,
+  submessages::SubmessageHeader,
+};
 use crate::structure::sequence_number::SequenceNumberSet;
+use enumflags2::BitFlags;
+use log::error;
 use speedy::{Readable, Writable};
+
+use super::{
+  submessage::EntitySubmessage, submessage_flag::ACKNACK_Flags, submessage_kind::SubmessageKind,
+};
 
 /// This Submessage is used to communicate the state of a Reader to a
 /// Writer.
@@ -33,6 +42,29 @@ pub struct AckNack {
   /// Provides the means for a Writer to detect duplicate AckNack messages
   /// that can result from the presence of redundant communication paths.
   pub count: i32,
+}
+
+impl AckNack {
+  pub fn create_submessage(self, flags: BitFlags<ACKNACK_Flags>) -> Option<SubMessage> {
+    let submessage_len = match self.write_to_vec() {
+      Ok(bytes) => bytes.len() as u16,
+      Err(e) => {
+        error!("Reader couldn't write acknack to bytes. Error: {}", e);
+        return None;
+      }
+    };
+
+    let acknack_header = SubmessageHeader {
+      kind: SubmessageKind::ACKNACK,
+      flags: flags.bits(),
+      content_length: submessage_len,
+    };
+
+    Some(SubMessage {
+      header: acknack_header,
+      body: SubmessageBody::Entity(EntitySubmessage::AckNack(self, flags)),
+    })
+  }
 }
 
 #[cfg(test)]

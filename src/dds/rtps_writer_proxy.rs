@@ -58,12 +58,50 @@ impl RtpsWriterProxy {
     self.remote_group_entity_id = other.remote_group_entity_id;
   }
 
-  pub fn changes_are_missing(&self, hb_last_sn: SequenceNumber) -> bool {
-    let min_sn = match self.available_changes_min() {
-      Some(sn) => *sn,
-      None => SequenceNumber::from(0),
-    };
-    i64::from(hb_last_sn) > i64::from(min_sn)
+  pub fn get_missing_sequence_numbers(
+    &self,
+    hb_first_sn: SequenceNumber,
+    hb_last_sn: SequenceNumber,
+  ) -> Vec<SequenceNumber> {
+    // taking all available seqnums in range
+    let seqnums: Vec<SequenceNumber> = self
+      .changes
+      .iter()
+      .map(|(&sq, _)| sq)
+      .filter(|&sq| sq >= hb_first_sn && sq <= hb_last_sn)
+      .collect();
+
+    let mut missing_seqnums = Vec::new();
+    for sq in i64::from(hb_first_sn)..(i64::from(hb_last_sn) + 1) {
+      let msq = SequenceNumber::from(sq);
+      if !seqnums.contains(&msq) {
+        missing_seqnums.push(msq)
+      }
+    }
+
+    missing_seqnums
+  }
+
+  pub fn changes_are_missing(
+    &self,
+    hb_first_sn: SequenceNumber,
+    hb_last_sn: SequenceNumber,
+  ) -> bool {
+    if hb_last_sn == SequenceNumber::from(0) {
+      return false;
+    }
+    let range_length = i64::from(hb_last_sn.sub(hb_first_sn)) as usize + 1;
+    let seq_count = self
+      .changes
+      .iter()
+      .filter(|(&sq, _)| sq >= hb_first_sn && sq <= hb_last_sn)
+      .count();
+
+    seq_count < range_length
+  }
+
+  pub fn contains_change(&self, seqnum: SequenceNumber) -> bool {
+    self.changes.contains_key(&seqnum)
   }
 
   pub fn received_changes_add(&mut self, seq_num: SequenceNumber, instant: Instant) {
@@ -84,8 +122,8 @@ impl RtpsWriterProxy {
     None
   }
 
-  pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Instant {
-    self.changes.remove(&seq_num).unwrap()
+  pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Instant> {
+    self.changes.remove(&seq_num)
   }
 
   pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) -> Vec<Instant> {
@@ -105,27 +143,6 @@ impl RtpsWriterProxy {
     }
 
     instants
-  }
-
-  pub fn missing_changes(&self, hb_last_sn: SequenceNumber) -> Vec<SequenceNumber> {
-    let mut result: Vec<SequenceNumber> = Vec::new();
-
-    if !self.changes_are_missing(hb_last_sn) {
-      return result;
-    }
-
-    let min_sn = match self.available_changes_min() {
-      Some(sn) => *sn,
-      None => SequenceNumber::from(0),
-    };
-    // All changes between min and last_sn which are not in our local set
-    for sn_int in i64::from(min_sn)..i64::from(hb_last_sn) {
-      let sn = SequenceNumber::from(sn_int);
-      if !self.changes.contains_key(&sn) {
-        result.push(SequenceNumber::from(sn_int));
-      }
-    }
-    result
   }
 
   pub fn from_discovered_writer_data(

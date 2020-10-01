@@ -1,9 +1,10 @@
-use std::io;
+use std::{fs::File, io};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use std::marker::PhantomData;
 
 use itertools::Itertools;
+use io::Write;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 use log::{error, warn};
@@ -159,10 +160,13 @@ where
               let key = self.datasample_cache.get_key(cc.key);
               match key {
                 Some(key) => {
-                  let datasample = DataSample::new_disposed::<D::K>(Timestamp::TIME_INVALID, key);
+                  let datasample =
+                    DataSample::new_disposed::<D::K>(Timestamp::TIME_INVALID, key, cc.writer_guid);
                   self.datasample_cache.add_datasample(datasample);
                 }
-                None => warn!("DataReader cannot find key for keyhash {:x?}", cc.key),
+                None => {
+                  warn!("DataReader cannot find key for keyhash {:x?}", cc.key);
+                }
               }
             }
             _ => {
@@ -192,13 +196,17 @@ where
         Ok(pl) => pl,
         Err(e) => {
           error!("Failed to deserialize bytes \n{}", e);
+          File::create("error_bin.bin")
+            .unwrap()
+            .write_all(bytes)
+            .unwrap();
           continue;
         }
       };
 
       // TODO: how do we get the source_timestamp here? Is it needed?
       // TODO: Keeping track of and assigning  generation rank, sample rank etc.
-      let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload);
+      let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload, cc.writer_guid);
       datasample.sample_info.instance_state = Self::change_kind_to_instance_state(&cc.kind);
       self.datasample_cache.add_datasample(datasample);
     }

@@ -82,11 +82,19 @@ impl SPDPDiscoveredParticipantData {
     proxy
   }
 
-  pub fn as_writer_proxy(&self, is_metatraffic: bool) -> RtpsWriterProxy {
+  pub fn as_writer_proxy(
+    &self,
+    is_metatraffic: bool,
+    entity_id: Option<EntityId>,
+  ) -> RtpsWriterProxy {
     let remote_writer_guid = GUID::new_with_prefix_and_id(
       self.participant_guid.unwrap().guidPrefix,
-      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+      match entity_id {
+        Some(id) => id,
+        None => EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+      },
     );
+
     let mut proxy = RtpsWriterProxy::new(
       remote_writer_guid,
       Vec::new(),

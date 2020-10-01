@@ -1,0 +1,14 @@
+refresh_rate: 30 s
+
+appenders:
+  ff:
+    kind: file
+    path: "log/requests.log"
+    append: true
+    encoder:
+        kind: pattern
+
+root:
+  level: debug
+  appenders:
+    - ff

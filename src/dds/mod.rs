@@ -16,5 +16,6 @@ pub mod rtps_writer_proxy;
 pub mod topic;
 pub mod traits;
 pub mod typedesc;
+pub mod util;
 pub mod values;
 pub mod writer;
