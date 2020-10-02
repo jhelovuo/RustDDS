@@ -1,18 +1,13 @@
-use itertools::Itertools;
 use log::debug;
 
 use crate::{
   dds::traits::key::{Key, Keyed},
-  structure::guid::GUID,
 };
 use crate::dds::datasample::DataSample;
-//use crate::dds::values::result::Result;
 use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy::History;
 
 use std::collections::{BTreeMap, HashSet};
-
-use super::datasample::SampleInfo;
 
 pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
@@ -56,22 +51,8 @@ where
         History::KeepLast { depth } => match block {
           Some(prev_samples) => {
             prev_samples.push(data_sample);
-            let distinct_writers: Vec<GUID> = prev_samples
-              .iter()
-              .map(|p| p.sample_info.publication_handle)
-              .unique()
-              .collect();
-            let mut fsamples = Vec::new();
-            for g in distinct_writers.into_iter() {
-              let mut tmp: Vec<SampleInfo> = prev_samples
-                .into_iter()
-                .filter(|p| p.sample_info.publication_handle == g)
-                .map(|p| p.sample_info.clone())
-                .take((*depth) as usize)
-                .collect();
-              fsamples.append(&mut tmp);
-            }
-            prev_samples.retain(|p| fsamples.iter().find(|&c| *c == p.sample_info).is_some());
+            let val = prev_samples.len() - *depth as usize;
+            prev_samples.drain(0..val);
           }
           None => {
             self.datasamples.insert(key.clone(), vec![data_sample]);
@@ -82,22 +63,8 @@ where
         // using keep last 1 as default history policy
         Some(prev_samples) => {
           prev_samples.push(data_sample);
-          let distinct_writers: Vec<GUID> = prev_samples
-            .iter()
-            .map(|p| p.sample_info.publication_handle)
-            .unique()
-            .collect();
-          let mut fsamples = Vec::new();
-          for g in distinct_writers.into_iter() {
-            let mut tmp: Vec<SampleInfo> = prev_samples
-              .into_iter()
-              .filter(|p| p.sample_info.publication_handle == g)
-              .map(|p| p.sample_info.clone())
-              .take(1)
-              .collect();
-            fsamples.append(&mut tmp);
-          }
-          prev_samples.retain(|p| fsamples.iter().find(|&c| *c == p.sample_info).is_some());
+          let val = prev_samples.len() - 1;
+          prev_samples.drain(0..val);
         }
         None => {
           self.datasamples.insert(key.clone(), vec![data_sample]);
