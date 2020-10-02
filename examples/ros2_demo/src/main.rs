@@ -2,7 +2,7 @@ extern crate atosdds;
 extern crate mio;
 extern crate mio_extras;
 
-use std::{io::Write};
+use std::{io::Write, time::Duration};
 
 use atosdds::{
   dds::{
@@ -29,6 +29,7 @@ mod structures;
 const ROS2_COMMAND_TOKEN: Token = Token(1000);
 const ROS2_NODE_RECEIVED_TOKEN: Token = Token(1001);
 const TURTLE_CMD_VEL_RECEIVER_TOKEN: Token = Token(1002);
+const TOPIC_UPDATE_TIMER_TOKEN: Token = Token(1003);
 
 fn main() {
   log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
@@ -69,6 +70,10 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
   let turtle_control = TurtleControl::new(domain_participant.clone());
   let mut turtle_cmd_vel_reader = turtle_control.get_cmd_vel_reader();
   let mut turtle_cmd_vel_writer = turtle_control.get_cmd_vel_writer();
+
+  // topic update timer (or any update)
+  let mut update_timer = mio_extras::timer::Timer::default();
+  update_timer.set_timeout(Duration::from_secs(1), ());
 
   let poll = Poll::new().unwrap();
 
@@ -111,6 +116,15 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
     .register(
       &turtle_cmd_vel_reader,
       TURTLE_CMD_VEL_RECEIVER_TOKEN,
+      Ready::readable(),
+      PollOpt::edge(),
+    )
+    .unwrap();
+
+  poll
+    .register(
+      &update_timer,
+      TOPIC_UPDATE_TIMER_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
     )
@@ -159,6 +173,13 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
           Some(s) => handle_turtle_cmd_vel_reader(&mut turtle_cmd_vel_reader, s),
           None => (),
         }
+      } else if event.token() == TOPIC_UPDATE_TIMER_TOKEN {
+        let list = domain_participant.get_discovered_topics();
+        match &nodes_updated_sender {
+          Some(s) => s.send(DataUpdate::TopicList { list }).unwrap(),
+          None => (),
+        };
+        update_timer.set_timeout(Duration::from_secs(1), ());
       }
     }
   }

@@ -13,8 +13,9 @@ use std::{
 };
 
 use crate::{
-  network::{udp_listener::UDPListener, constant::*},
+  discovery::data_types::topic_data::DiscoveredTopicData,
   discovery::discovery::DiscoveryCommand,
+  network::{udp_listener::UDPListener, constant::*},
 };
 
 use crate::dds::{
@@ -112,6 +113,10 @@ impl DomainParticipant {
     self.dpi.participant_id()
   }
 
+  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+    self.dpi.get_discovered_topics()
+  }
+
   pub fn weak_clone(&self) -> DomainParticipantWeak {
     let dpc = self.clone();
     DomainParticipantWeak::new(dpc)
@@ -171,6 +176,13 @@ impl DomainParticipantWeak {
     match self.dpi.upgrade() {
       Some(dpi) => dpi.participant_id(),
       None => panic!("Unable to get original domain participant."),
+    }
+  }
+
+  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+    match self.dpi.upgrade() {
+      Some(dpi) => dpi.get_discovered_topics(),
+      None => Vec::new(),
     }
   }
 
@@ -577,6 +589,15 @@ impl DomainParticipant_Inner {
 
   pub fn participant_id(&self) -> u16 {
     self.participant_id
+  }
+
+  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+    let db = match self.discovery_db.read() {
+      Ok(db) => db,
+      Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
+    };
+
+    db.get_all_topics().map(|p| p.clone()).collect()
   }
 } // impl
 

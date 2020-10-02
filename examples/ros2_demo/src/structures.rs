@@ -4,6 +4,7 @@ use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
 use termion::{event::Key, raw::RawTerminal, input::TermRead, AsyncReader};
+use atosdds::DiscoveredTopicData;
 
 use std::{collections::HashMap, io::StdoutLock, io::Write, time::Duration as StdDuration};
 
@@ -28,6 +29,7 @@ pub enum DataUpdate {
   UpdateNode { info: ROSParticipantInfo },
   DeleteNode { guid: GUID },
   TurtleCmdVel { twist: Twist },
+  TopicList { list: Vec<DiscoveredTopicData> },
 }
 
 pub struct MainController<'a> {
@@ -88,6 +90,7 @@ impl<'a> MainController<'a> {
     self.stdout.flush().unwrap();
 
     let mut node_list: HashMap<Gid, Vec<NodeInfo>> = HashMap::new();
+    let mut topic_list: Vec<DiscoveredTopicData> = Vec::new();
 
     loop {
       write!(self.stdout, "{}", termion::cursor::Goto(1, 1)).unwrap();
@@ -186,6 +189,19 @@ impl<'a> MainController<'a> {
 
                 node_list.insert(info.guid(), nodes);
               }
+              DataUpdate::TopicList { list } => {
+                write!(
+                  self.stdout,
+                  "{}{}{}Topics: {:?}",
+                  termion::cursor::Goto(1, 3),
+                  [' '; 39].to_vec().into_iter().collect::<String>(),
+                  termion::cursor::Goto(1, 3),
+                  list.len()
+                )
+                .unwrap();
+
+                topic_list = list;
+              }
               DataUpdate::DeleteNode { guid } => {
                 node_list.remove(&Gid::from_guid(guid));
               }
@@ -203,6 +219,8 @@ impl<'a> MainController<'a> {
             node_list.iter().flat_map(|(_, nd)| nd.iter()).count(),
           )
           .unwrap();
+
+          let node_amount = node_list.iter().flat_map(|(_, nd)| nd.iter()).count();
           for (i, node_info) in node_list.iter().flat_map(|(_, nd)| nd.iter()).enumerate() {
             write!(
               self.stdout,
@@ -210,6 +228,133 @@ impl<'a> MainController<'a> {
               termion::cursor::Goto(1, 21 + i as u16),
               node_info.node_namespace,
               node_info.node_name
+            )
+            .unwrap();
+          }
+
+          let topic_start = 21 + node_amount + 2;
+
+          let (topics, services): (Vec<&DiscoveredTopicData>, Vec<&DiscoveredTopicData>) =
+            topic_list
+              .iter()
+              .partition(|p| p.get_topic_name().starts_with("rt"));
+          let (services_request, services): (Vec<&DiscoveredTopicData>, Vec<&DiscoveredTopicData>) =
+            services
+              .iter()
+              .partition(|p| p.get_topic_name().starts_with("rq"));
+          let (services_reply, dds_topics): (Vec<&DiscoveredTopicData>, Vec<&DiscoveredTopicData>) = services.iter().partition(|p| p.get_topic_name().starts_with("rr"));
+
+          write!(
+            self.stdout,
+            "{}Topics: {}",
+            termion::cursor::Goto(1, topic_start as u16),
+            topics.len(),
+          )
+          .unwrap();
+
+          let mut max_width = 9;
+          for (i, topic_info) in topics.iter().enumerate() {
+            let ft = format!(
+              "{} - {}",
+              topic_info.get_topic_name(),
+              topic_info.get_type_name()
+            );
+            max_width = if ft.len() > max_width {
+              ft.len()
+            } else {
+              max_width
+            };
+            write!(
+              self.stdout,
+              "{}{}",
+              termion::cursor::Goto(1, (topic_start + i + 1) as u16),
+              ft
+            )
+            .unwrap();
+          }
+
+          write!(
+            self.stdout,
+            "{}Services Request: {}",
+            termion::cursor::Goto(max_width as u16 + 2, topic_start as u16),
+            services_request.len(),
+          )
+          .unwrap();
+          for (i, service_info) in services_request.iter().enumerate() {
+            let ft = format!(
+              "{} - {}",
+              service_info.get_topic_name(),
+              service_info.get_type_name()
+            );
+            write!(
+              self.stdout,
+              "{}{}",
+              termion::cursor::Goto(max_width as u16 + 2, (topic_start + i + 1) as u16),
+              ft
+            )
+            .unwrap();
+          }
+
+          let dds_topic_start = topic_start
+          + (if services_request.len() > topics.len() {
+            services_request.len()
+          } else {
+            topics.len()
+          }) + 2;
+          write!(
+            self.stdout,
+            "{}Services Reply: {}",
+            termion::cursor::Goto(
+              1,
+              dds_topic_start as u16
+            ),
+            services_reply.len(),
+          )
+          .unwrap();
+
+          max_width = 20;
+          for (i, reply_info) in services_reply.iter().enumerate() {
+            let ft = format!(
+              "{} - {}",
+              reply_info.get_topic_name(),
+              reply_info.get_type_name()
+            );
+            max_width = if ft.len() > max_width {
+              ft.len()
+            } else {
+              max_width
+            };
+            write!(
+              self.stdout,
+              "{}{}",
+              termion::cursor::Goto(1, (dds_topic_start + i + 1) as u16),
+              ft
+            )
+            .unwrap();
+          }
+
+          write!(
+            self.stdout,
+            "{}DDS Topics: {}",
+            termion::cursor::Goto(
+              max_width as u16 + 2,
+              dds_topic_start as u16
+            ),
+            dds_topics.len(),
+          )
+          .unwrap();
+
+          for (i, dds_info) in dds_topics.iter().enumerate() {
+            let ft = format!(
+              "{} - {}",
+              dds_info.get_topic_name(),
+              dds_info.get_type_name()
+            );
+            write!(
+              self.stdout,
+              "{}{}",
+              termion::cursor::Goto(max_width as u16 + 2, (dds_topic_start + i + 1) as u16),
+              ft
             )
             .unwrap();
           }

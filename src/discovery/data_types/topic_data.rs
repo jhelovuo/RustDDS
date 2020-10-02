@@ -471,6 +471,20 @@ impl DiscoveredTopicData {
       topic_data,
     }
   }
+
+  pub fn get_topic_name(&self) -> String {
+    match &self.topic_data.name {
+      Some(n) => n.clone(),
+      None => String::from(""),
+    }
+  }
+
+  pub fn get_type_name(&self) -> String {
+    match &self.topic_data.type_name {
+      Some(t) => t.clone(),
+      None => String::from(""),
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for DiscoveredTopicData {

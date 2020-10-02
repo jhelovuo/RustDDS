@@ -1,8 +1,8 @@
 use std::{
-  time::Duration,
   collections::{hash_map::Iter as HashIter, HashMap},
   iter::Map,
   slice::Iter,
+  time::Duration,
 };
 
 use itertools::Itertools;
@@ -564,13 +564,12 @@ impl DiscoveryDB {
     self.local_topic_writers.iter()
   }
 
-  pub fn get_all_topics<'a>(
-    &'a self,
-  ) -> Map<
-    HashIter<'a, String, DiscoveredTopicData>,
-    fn((&'a String, &'a DiscoveredTopicData)) -> &'a DiscoveredTopicData,
-  > {
-    self.topics.iter().map(|(_, v)| v)
+  pub fn get_all_topics<'a>(&'a self) -> impl Iterator<Item = &'a DiscoveredTopicData> {
+    self
+      .topics
+      .iter()
+      .filter(|(s, _)| !s.starts_with("DCPS"))
+      .map(|(_, v)| v)
   }
 
   // TODO: return iterator somehow?

@@ -29,7 +29,7 @@ impl<C: Context> Writable<C> for SubMessage {
 #[cfg(test)]
 mod tests {
   use enumflags2::BitFlags;
-    use log::info;
+  use log::info;
   use super::SubMessage;
   use speedy::{Readable, Writable};
   use crate::{messages::submessages::submessages::*};
