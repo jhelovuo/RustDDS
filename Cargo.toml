@@ -27,7 +27,7 @@ byteorder = "1"
 uuid = { version = "0.8.1", features = ["v4"] }
 rand = "0.7.3"
 timer = "0.1"
-chrono = "0.2"
+chrono = "0.4.19"
 enumflags2 = "0.6"
 num_enum = "0.5.1"
 get_if_addrs = "0.5.3"

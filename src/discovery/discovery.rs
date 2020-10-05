@@ -66,7 +66,7 @@ unsafe impl Send for Discovery {}
 
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: u64 = 2;
-  const TOPIC_CLEANUP_PERIOD: u64 = 5 * 60; // timer for cleaning up inactive topics
+  const TOPIC_CLEANUP_PERIOD: u64 = 10; // timer for cleaning up inactive topics
   const SEND_PARTICIPANT_INFO_PERIOD: u64 = 5;
   const SEND_READERS_INFO_PERIOD: u64 = 5;
   const SEND_WRITERS_INFO_PERIOD: u64 = 5;

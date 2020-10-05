@@ -4,6 +4,8 @@ use speedy::{Readable, Writable};
 use serde::{Serialize, Deserialize};
 use std::convert::From;
 
+use super::duration::Duration;
+
 /// The representation of the time is the one defined by the IETF Network Time
 /// Protocol (NTP) Standard (IETF RFC 1305). In this representation, time is
 /// expressed in seconds and fraction of seconds using the formula:
@@ -34,6 +36,18 @@ impl Time {
     seconds: 0x7FFF_FFFF,
     fraction: 0xFFFF_FFFF,
   };
+
+  pub fn get_time_diff(&self) -> Duration {
+    let timespec = time::Timespec::from(self.clone());
+    let timespec_now = time::get_time();
+
+    let timediff = timespec_now - timespec;
+    let timediff = match timediff.to_std() {
+      Ok(td) => Duration::from_std(td),
+      _ => Duration::DURATION_ZERO,
+    };
+    timediff
+  }
 }
 
 const NANOS_PER_SEC: i64 = 1_000_000_000;

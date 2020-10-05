@@ -135,45 +135,70 @@ impl DiscoveryDB {
     });
   }
 
+  fn topic_has_writers_or_readers(&self, topic_name: &String) -> bool {
+    if let Some(_) =
+      self
+        .local_topic_readers
+        .iter()
+        .find(|p| match &p.subscription_topic_data.topic_name {
+          Some(tn) => tn == topic_name,
+          None => false,
+        })
+    {
+      return true;
+    }
+
+    if let Some(_) =
+      self
+        .local_topic_writers
+        .iter()
+        .find(|p| match &p.publication_topic_data.topic_name {
+          Some(tn) => tn == topic_name,
+          None => false,
+        })
+    {
+      return true;
+    }
+
+    if let Some(_) =
+      self
+        .external_topic_readers
+        .iter()
+        .find(|p| match &p.subscription_topic_data.topic_name {
+          Some(tn) => tn == topic_name,
+          None => false,
+        })
+    {
+      return true;
+    }
+
+    if let Some(_) =
+      self
+        .external_topic_writers
+        .iter()
+        .find(|p| match &p.publication_topic_data.topic_name {
+          Some(tn) => tn == topic_name,
+          None => false,
+        })
+    {
+      return true;
+    }
+
+    false
+  }
+
   pub fn topic_cleanup(&mut self) {
-    let instant = time::precise_time_ns();
-    self.topics = self
+    // removing topics that have no readers or writers
+    let dead_topics: Vec<_> = self
       .topics
       .iter()
-      .filter(|(name, p)| {
-        let dur = match &p.topic_data.lifespan {
-          Some(ls) => ls.duration.clone(),
-          // TODO: what is default lifespan
-          None => SDuration::from(Duration::from_secs(100)),
-        };
-        SDuration::from(Duration::from_nanos(instant - p.updated_time)) < dur
-          || self
-            .local_topic_readers
-            .iter()
-            .filter(|drd| {
-              let tname = match drd.subscription_topic_data.topic_name.as_ref() {
-                Some(tname) => tname,
-                None => return false,
-              };
-              *tname == **name
-            })
-            .count()
-            > 0
-          || self
-            .local_topic_writers
-            .iter()
-            .filter(|dwd| {
-              let tname = match dwd.publication_topic_data.topic_name.as_ref() {
-                Some(tname) => tname,
-                None => return false,
-              };
-              *tname == **name
-            })
-            .count()
-            > 0
-      })
-      .map(|(n, p)| (n.clone(), p.clone()))
+      .map(|(tn, _)| tn)
+      .filter(|tn| !self.topic_has_writers_or_readers(tn))
+      .map(|tn| tn.clone())
       .collect();
+    for dt in dead_topics.iter() {
+      self.topics.remove(dt);
+    }
   }
 
   pub fn get_participants<'a>(

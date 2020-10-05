@@ -37,8 +37,7 @@ pub struct MessageReceiver {
   pub dest_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: LocatorList,
   pub multicast_reply_locator_list: LocatorList,
-  pub have_timestamp: bool,
-  pub timestamp: Time,
+  pub timestamp: Option<Time>,
 
   pos: usize,
   pub submessage_count: usize,
@@ -71,8 +70,7 @@ impl MessageReceiver {
         address: Locator::LOCATOR_ADDRESS_INVALID,
         port: Locator::LOCATOR_PORT_INVALID,
       }],
-      have_timestamp: false,
-      timestamp: Time::TIME_INVALID,
+      timestamp: None,
 
       pos: 0,
       submessage_count: 0,
@@ -86,8 +84,7 @@ impl MessageReceiver {
     self.dest_guid_prefix = GuidPrefix::GUIDPREFIX_UNKNOWN;
     self.unicast_reply_locator_list.clear();
     self.multicast_reply_locator_list.clear();
-    self.have_timestamp = false;
-    self.timestamp = Time::TIME_INVALID;
+    self.timestamp = None;
 
     self.pos = 0;
     self.submessage_count = 0;
@@ -99,7 +96,6 @@ impl MessageReceiver {
       source_guid_prefix: self.source_guid_prefix,
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
-      have_timestamp: self.have_timestamp,
       timestamp: self.timestamp,
     }
   }
@@ -298,8 +294,7 @@ impl MessageReceiver {
     match interp_subm {
       InterpreterSubmessage::InfoTimestamp(ts_struct, flags) => {
         if flags.contains(INFOTIMESTAMP_Flags::Invalidate) {
-          self.have_timestamp = true;
-          self.timestamp = ts_struct.timestamp;
+          self.timestamp = Some(ts_struct.timestamp);
         }
       }
       InterpreterSubmessage::InfoSource(info_src, _flags) => {
@@ -308,7 +303,7 @@ impl MessageReceiver {
         self.source_vendor_id = info_src.vendor_id;
         self.unicast_reply_locator_list.clear(); // Or invalid?
         self.multicast_reply_locator_list.clear(); // Or invalid?
-        self.have_timestamp = false;
+        self.timestamp = None;
       }
       InterpreterSubmessage::InfoReply(info_reply, flags) => {
         self.unicast_reply_locator_list = info_reply.unicast_locator_list;
@@ -345,8 +340,7 @@ pub struct MessageReceiverState {
   pub source_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: LocatorList,
   pub multicast_reply_locator_list: LocatorList,
-  pub have_timestamp: bool,
-  pub timestamp: Time,
+  pub timestamp: Option<Time>,
 }
 
 impl Default for MessageReceiverState {
@@ -356,8 +350,7 @@ impl Default for MessageReceiverState {
       source_guid_prefix: GuidPrefix::default(),
       unicast_reply_locator_list: LocatorList::default(),
       multicast_reply_locator_list: LocatorList::default(),
-      have_timestamp: true,
-      timestamp: Timestamp::TIME_INVALID,
+      timestamp: Some(Timestamp::TIME_INVALID),
     }
   }
 }

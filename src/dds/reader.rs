@@ -1,4 +1,4 @@
-use crate::structure::{entity::Entity, cache_change::ChangeKind};
+use crate::structure::{cache_change::ChangeKind, entity::Entity};
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::messages::submessages::submessages::*;
 
@@ -8,6 +8,7 @@ use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::locator::LocatorList;
+use crate::structure::duration::Duration;
 
 use std::{
   slice::Iter,
@@ -21,7 +22,7 @@ use log::{debug};
 use std::fmt;
 
 use std::collections::{HashSet, HashMap};
-use std::time::Duration;
+use std::time::Duration as StdDuration;
 use enumflags2::BitFlags;
 
 use crate::structure::cache_change::CacheChange;
@@ -52,8 +53,8 @@ pub struct Reader {
   entity_attributes: EntityAttributes,
   pub enpoint_attributes: EndpointAttributes,
 
-  heartbeat_response_delay: Duration,
-  heartbeat_supression_duration: Duration,
+  heartbeat_response_delay: StdDuration,
+  heartbeat_supression_duration: StdDuration,
 
   sent_ack_nack_count: i32,
   received_hearbeat_count: i32,
@@ -79,8 +80,8 @@ impl Reader {
       entity_attributes: EntityAttributes { guid },
       enpoint_attributes: EndpointAttributes::default(),
 
-      heartbeat_response_delay: Duration::new(0, 500_000_000), // 0,5sec
-      heartbeat_supression_duration: Duration::new(0, 0),
+      heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
+      heartbeat_supression_duration: StdDuration::new(0, 0),
       sent_ack_nack_count: 0,
       received_hearbeat_count: 0,
       matched_writers: HashMap::new(),
@@ -177,6 +178,21 @@ impl Reader {
 
   // handles regular data message and updates history cache
   pub fn handle_data_msg(&mut self, data: Data, mr_state: MessageReceiverState) {
+    let duration = match mr_state.timestamp {
+      Some(ts) => ts.get_time_diff(),
+      None => Duration::DURATION_ZERO,
+    };
+
+    // checking lifespan for silent dropping of message
+    match self.get_qos().lifespan {
+      Some(ls) => {
+        if ls.duration < duration {
+          return;
+        }
+      }
+      None => (),
+    }
+
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let seq_num = data.writer_sn;
 
