@@ -110,7 +110,7 @@ where
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::structure::time::Timestamp;
+  use crate::structure::{guid::GUID, time::Timestamp};
   use crate::dds::ddsdata::DDSData;
   use crate::dds::traits::key::Keyed;
   use crate::test::random_data::*;

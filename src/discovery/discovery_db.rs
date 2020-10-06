@@ -2,19 +2,19 @@ use std::{
   collections::{hash_map::Iter as HashIter, HashMap},
   iter::Map,
   slice::Iter,
-  time::Duration,
+  time::Instant,
 };
 
 use itertools::Itertools;
 use log::warn;
 
 use crate::{
-  dds::qos::HasQoSPolicy, structure::guid::EntityId,
-  network::util::get_local_unicast_socket_address, network::util::get_local_multicast_locators,
+  ParticipantMessageData, dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators,
+  network::util::get_local_unicast_socket_address, structure::guid::EntityId,
   structure::guid::GuidPrefix,
 };
 
-use crate::structure::{guid::GUID, duration::Duration as SDuration, entity::Entity};
+use crate::structure::{guid::GUID, duration::Duration, entity::Entity};
 
 use crate::{
   network::constant::{get_user_traffic_unicast_port, get_user_traffic_multicast_port},
@@ -123,15 +123,36 @@ impl DiscoveryDB {
   }
 
   pub fn participant_cleanup(&mut self) {
-    let instant = time::precise_time_ns();
-    self.participant_proxies.retain(|_, d| {
-      let ld = match &d.lease_duration {
-        Some(ld) => ld.clone(),
-        // default is 100 secs
-        None => SDuration::from(Duration::from_secs(100)),
+    let inow = Instant::now();
+
+    let grouped = self
+      .external_topic_writers
+      .iter()
+      .filter(|p| p.writer_proxy.remote_writer_guid.is_some())
+      .map(|p| {
+        (
+          p.writer_proxy.remote_writer_guid.unwrap(),
+          inow.duration_since(p.last_updated),
+        )
+      })
+      .map(|(g, d)| (g, Duration::from_std(d)))
+      .group_by(|(p, _)| p.clone());
+
+    let durations: HashMap<GUID, Duration> =
+      grouped.into_iter().filter_map(|(_, p)| p.min()).collect();
+
+    self.participant_proxies.retain(|g, sp| {
+      let lease_duration = match sp.lease_duration {
+        Some(ld) => ld,
+        None => Duration::DURATION_INFINITE,
       };
 
-      SDuration::from(Duration::from_nanos(instant - d.updated_time)) < ld
+      let min_update = durations.get(g);
+
+      match min_update {
+        Some(&dur) => lease_duration > dur,
+        None => lease_duration > Duration::DURATION_INFINITE,
+      }
     });
   }
 
@@ -611,6 +632,18 @@ impl DiscoveryDB {
       })
       .collect()
   }
+
+  pub fn update_lease_duration(&mut self, data: ParticipantMessageData) {
+    let i = Instant::now();
+    self
+      .external_topic_writers
+      .iter_mut()
+      .filter(|p| match p.writer_proxy.remote_writer_guid {
+        Some(g) => g.guidPrefix == data.guid,
+        None => false,
+      })
+      .for_each(|p| p.last_updated = i);
+  }
 }
 
 #[cfg(test)]
@@ -631,12 +664,13 @@ mod tests {
   use crate::structure::guid::*;
   use crate::serialization::cdrSerializer::CDR_serializer_adapter;
   use byteorder::LittleEndian;
+  use std::time::Duration as StdDuration;
 
   #[test]
   fn discdb_participant_operations() {
     let mut discoverydb = DiscoveryDB::new();
     let mut data = spdp_participant_data().unwrap();
-    data.lease_duration = Some(SDuration::from(Duration::from_secs(1)));
+    data.lease_duration = Some(Duration::from(StdDuration::from_secs(1)));
 
     discoverydb.update_participant(&data);
     assert!(discoverydb.participant_proxies.len() == 1);
@@ -644,7 +678,7 @@ mod tests {
     discoverydb.update_participant(&data);
     assert!(discoverydb.participant_proxies.len() == 1);
 
-    std::thread::sleep(Duration::from_secs(2));
+    std::thread::sleep(StdDuration::from_secs(2));
     discoverydb.participant_cleanup();
     assert!(discoverydb.participant_proxies.len() == 0);
 

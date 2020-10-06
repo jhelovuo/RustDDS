@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use serde::Deserialize;
 
 use crate::structure::{
@@ -235,6 +237,7 @@ impl BuiltinDataDeserializer {
     let writer_proxy = self.generate_writer_proxy();
     let publication_topic_data = self.generate_publication_topic_data();
     DiscoveredWriterData {
+      last_updated: Instant::now(),
       writer_proxy,
       publication_topic_data,
     }

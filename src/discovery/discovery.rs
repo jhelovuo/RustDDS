@@ -1,17 +1,17 @@
-use log::{error, info};
+use log::{debug, error, info};
 use mio::{Ready, Poll, PollOpt, Events};
 use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
 
 use std::{
-  time::Duration as StdDuration,
   sync::{Arc, RwLock},
   sync::RwLockReadGuard,
   sync::RwLockWriteGuard,
+  time::Duration as StdDuration,
+  time::Instant,
 };
 
-use crate::{
-  dds::{
+use crate::{ParticipantMessageData, ParticipantMessageDataKind, dds::{
     participant::{DomainParticipantWeak},
     typedesc::TypeDesc,
     qos::{
@@ -24,11 +24,7 @@ use crate::{
     datareader::{DataReader},
     readcondition::ReadCondition,
     datawriter::DataWriter,
-  },
-  structure::guid::GUID,
-  structure::entity::Entity,
-  dds::values::result::Error,
-};
+  }, dds::values::result::Error, serialization::cdrDeserializer::CDR_deserializer_adapter, structure::entity::Entity, structure::guid::GUID};
 
 use crate::discovery::{
   data_types::spdp_participant_data::SPDPDiscoveredParticipantData,
@@ -50,6 +46,22 @@ pub enum DiscoveryCommand {
   STOP_DISCOVERY,
   REMOVE_LOCAL_WRITER { guid: GUID },
   REMOVE_LOCAL_READER { guid: GUID },
+  REFRESH_LAST_MANUAL_LIVELINESS,
+  ASSERT_TOPIC_LIVELINESS { writer_guid: GUID },
+}
+
+pub struct LivelinessState {
+  last_auto_update: Instant,
+  last_manual_participant_update: Instant,
+}
+
+impl LivelinessState {
+  pub fn new() -> LivelinessState {
+    LivelinessState {
+      last_auto_update: Instant::now(),
+      last_manual_participant_update: Instant::now(),
+    }
+  }
 }
 
 pub struct Discovery {
@@ -71,6 +83,24 @@ impl Discovery {
   const SEND_READERS_INFO_PERIOD: u64 = 5;
   const SEND_WRITERS_INFO_PERIOD: u64 = 5;
   const SEND_TOPIC_INFO_PERIOD: u64 = 20;
+  const CHECK_PARTICIPANT_MESSAGES: u64 = 1;
+
+  const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
+    durability: Some(Durability::TransientLocal),
+    presentation: None,
+    deadline: None,
+    latency_budget: None,
+    ownership: None,
+    liveliness: None,
+    time_based_filter: None,
+    reliability: Some(Reliability::Reliable {
+      max_blocking_time: Duration::DURATION_ZERO,
+    }),
+    destination_order: None,
+    history: Some(History::KeepLast { depth: 1 }),
+    resource_limits: None,
+    lifespan: None,
+  };
 
   pub fn new(
     domain_participant: DomainParticipantWeak,
@@ -108,6 +138,8 @@ impl Discovery {
   }
 
   pub fn discovery_event_loop(discovery: Discovery) {
+    let mut liveliness_state = LivelinessState::new();
+
     match discovery.poll.register(
       &discovery.discovery_command_receiver,
       DISCOVERY_COMMAND_TOKEN,
@@ -595,6 +627,96 @@ impl Discovery {
       }
     };
 
+    // Participant Message Data 8.4.13
+    let participant_message_data_topic = match discovery.domain_participant.create_topic(
+      "DCPSParticipantMessage",
+      TypeDesc::new(String::from("ParticipantMessageData")),
+      &Discovery::PARTICIPANT_MESSAGE_QOS,
+    ) {
+      Ok(t) => t,
+      Err(e) => {
+        error!("Unable to create DCPSParticipantMessage topic. {:?}", e);
+        discovery
+          .discovery_started_sender
+          .send(Err(Error::PreconditionNotMet))
+          .unwrap_or(());
+        return;
+      }
+    };
+
+    let mut dcps_participant_message_reader = match discovery_subscriber.create_datareader::<ParticipantMessageData, CDR_deserializer_adapter<ParticipantMessageData>>(
+      Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
+      &participant_message_data_topic,
+      None,
+      Discovery::PARTICIPANT_MESSAGE_QOS,
+    ) {
+      Ok(r) => r,
+      Err(e) => {
+        error!("Unable to create DCPSParticipantMessage reader. {:?}", e);
+        discovery
+          .discovery_started_sender
+          .send(Err(Error::PreconditionNotMet))
+          .unwrap_or(());
+        return;
+      }
+    };
+
+    match discovery.poll.register(
+      &dcps_participant_message_reader,
+      DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
+      Ready::readable(),
+      PollOpt::edge(),
+    ) {
+      Ok(_) => (),
+      Err(e) => {
+        error!("Unable to register DCPSParticipantMessage reader. {:?}", e);
+        discovery
+          .discovery_started_sender
+          .send(Err(Error::PreconditionNotMet))
+          .unwrap_or(());
+        return;
+      }
+    };
+
+    let mut dcps_participant_message_writer = match discovery_publisher
+      .create_datawriter::<ParticipantMessageData, CDR_serializer_adapter<ParticipantMessageData, LittleEndian>>(
+        Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER),
+        &participant_message_data_topic,
+        &Discovery::PARTICIPANT_MESSAGE_QOS,
+      ) {
+      Ok(w) => w,
+      Err(e) => {
+        error!("Unable to create DCPSParticipantMessage writer. {:?}", e);
+        discovery
+          .discovery_started_sender
+          .send(Err(Error::PreconditionNotMet))
+          .unwrap_or(());
+        return;
+      }
+    };
+
+    let mut dcps_participant_message_timer = mio_extras::timer::Timer::default();
+    dcps_participant_message_timer.set_timeout(
+      StdDuration::from_secs(Discovery::CHECK_PARTICIPANT_MESSAGES),
+      (),
+    );
+    match discovery.poll.register(
+      &dcps_participant_message_timer,
+      DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
+      Ready::readable(),
+      PollOpt::edge(),
+    ) {
+      Ok(_) => (),
+      Err(e) => {
+        error!("Unable to register DCPSParticipantMessage timer. {:?}", e);
+        discovery
+          .discovery_started_sender
+          .send(Err(Error::PreconditionNotMet))
+          .unwrap_or(());
+        return;
+      }
+    };
+
     discovery.initialize_participant(&discovery.domain_participant);
 
     discovery.write_writers_info(&mut dcps_publication_writer);
@@ -673,6 +795,12 @@ impl Discovery {
                   Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
                 };
               }
+              DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS => {
+                liveliness_state.last_manual_participant_update = Instant::now();
+              }
+              DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid } => {
+                discovery.send_discovery_notification(DiscoveryNotificationType::AssertTopicLiveliness { writer_guid });
+              }
             };
           }
         } else if event.token() == DISCOVERY_PARTICIPANT_DATA_TOKEN {
@@ -741,6 +869,15 @@ impl Discovery {
           discovery.write_topic_info(&mut dcps_writer);
           topic_info_send_timer.set_timeout(
             StdDuration::from_secs(Discovery::SEND_TOPIC_INFO_PERIOD),
+            (),
+          );
+        } else if event.token() == DISCOVERY_PARTICIPANT_MESSAGE_TOKEN {
+          discovery.handle_participant_message_reader(&mut dcps_participant_message_reader);
+        } else if event.token() == DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN {
+          discovery
+            .write_participant_message(&mut dcps_participant_message_writer, &mut liveliness_state);
+          dcps_participant_message_timer.set_timeout(
+            StdDuration::from_secs(Discovery::CHECK_PARTICIPANT_MESSAGES),
             (),
           );
         }
@@ -880,6 +1017,131 @@ impl Discovery {
     });
   }
 
+  pub fn handle_participant_message_reader(
+    &self,
+    reader: &mut DataReader<
+      ParticipantMessageData,
+      CDR_deserializer_adapter<ParticipantMessageData>,
+    >,
+  ) {
+    let participant_messages: Option<Vec<ParticipantMessageData>> =
+      match reader.take(100, ReadCondition::any()) {
+        Ok(msgs) => Some(
+          msgs
+            .into_iter()
+            .map(|p| p.value)
+            .filter_map(Result::ok)
+            .collect(),
+        ),
+        _ => None,
+      };
+
+    let msgs = match participant_messages {
+      Some(d) => d,
+      None => return,
+    };
+
+    let mut db = self.discovery_db_write();
+    for msg in msgs.into_iter() {
+      db.update_lease_duration(msg);
+    }
+  }
+
+  pub fn write_participant_message(
+    &self,
+    writer: &mut DataWriter<
+      ParticipantMessageData,
+      CDR_serializer_adapter<ParticipantMessageData, LittleEndian>,
+    >,
+    liveliness_state: &mut LivelinessState,
+  ) {
+    let db = self.discovery_db_read();
+
+    let writer_liveliness: Vec<Liveliness> = db
+      .get_all_local_topic_writers()
+      .filter_map(|p| {
+        let liveliness = match p.publication_topic_data.liveliness {
+          Some(lv) => lv,
+          None => return None,
+        };
+
+        Some(liveliness)
+      })
+      .collect();
+
+    let (automatic, manual): (Vec<&Liveliness>, Vec<&Liveliness>) =
+      writer_liveliness.iter().partition(|p| match p.kind {
+        LivelinessKind::Automatic => true,
+        LivelinessKind::ManualByParticipant => false,
+        LivelinessKind::ManulByTopic => false,
+      });
+
+    let (manual_by_participant, _manual_by_topic): (Vec<&Liveliness>, Vec<&Liveliness>) =
+      manual.iter().partition(|p| match p.kind {
+        LivelinessKind::Automatic => false,
+        LivelinessKind::ManualByParticipant => true,
+        LivelinessKind::ManulByTopic => false,
+      });
+
+    let inow = Instant::now();
+
+    // Automatic
+    {
+      let current_duration =
+        Duration::from(inow.duration_since(liveliness_state.last_auto_update) / 3);
+      let min_automatic = automatic.iter().map(|lv| lv.lease_duration).min();
+      debug!("Current auto duration {:?}. Min auto duration {:?}", current_duration, min_automatic);
+      match min_automatic {
+        Some(mm) => {
+          if current_duration > mm {
+            let pp = ParticipantMessageData {
+              guid: self.domain_participant.get_guid_prefix(),
+              kind:
+                ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE,
+              length: 0,
+              data: Vec::new(),
+            };
+            match writer.write(pp, None) {
+              Ok(_) => (),
+              Err(e) => {
+                error!("Failed to write ParticipantMessageData auto. {:?}",e);
+                return;
+              }
+            }
+            liveliness_state.last_auto_update = inow;
+          }
+        }
+        None => (),
+      };
+    }
+
+    // Manual By Participant
+    {
+      let current_duration = Duration::from(inow.duration_since(liveliness_state.last_manual_participant_update) / 3);
+      let min_manual_participant = manual_by_participant.iter().map(|lv| lv.lease_duration).min();
+      match min_manual_participant {
+        Some(dur) => {
+          if current_duration > dur {
+            let pp = ParticipantMessageData {
+              guid: self.domain_participant.get_guid_prefix(),
+              kind: ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
+              length: 0,
+              data: Vec::new(),
+            };
+            match writer.write(pp, None) {
+              Ok(_) => (),
+              Err(e) => {
+                error!("Failed to writer ParticipantMessageData manual. {:?}", e);
+                return;
+              }
+            }
+          }
+        }
+        None => (),
+      };
+    }
+  }
+
   pub fn participant_cleanup(&self) {
     self.discovery_db_write().participant_cleanup();
   }
@@ -1009,7 +1271,7 @@ impl Discovery {
     qos.ownership = Some(Ownership::Shared);
     qos.liveliness = Some(Liveliness {
       kind: LivelinessKind::Automatic,
-      lease_duration: Duration::DURATION_INVALID,
+      lease_duration: Duration::DURATION_INFINITE,
     });
     qos.time_based_filter = Some(TimeBasedFilter {
       minimum_separation: Duration::DURATION_ZERO,

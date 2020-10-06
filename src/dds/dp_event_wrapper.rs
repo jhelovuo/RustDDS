@@ -215,6 +215,16 @@ impl DPEventWrapper {
                 needs_new_cache_change,
               } => ev_wrapper.update_writers(needs_new_cache_change),
               DiscoveryNotificationType::TopicsInfoUpdated => ev_wrapper.update_topics(),
+              DiscoveryNotificationType::AssertTopicLiveliness { writer_guid} => {
+                let writer = ev_wrapper.writers.get_mut(&writer_guid);
+                match writer {
+                  Some(w) => {
+                    // Only need set heartbeat tick earlier
+                    w.handle_heartbeat_tick();
+                  },
+                  None => (),
+                };
+              }
             }
           }
         } else if event.token() == DPEV_ACKNACK_TIMER_TOKEN {
@@ -472,7 +482,14 @@ impl DPEventWrapper {
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER {
             // TODO:
-          } else {
+          } else if writer.get_entity_id() == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER {
+            DPEventWrapper::update_pubsub_readers(writer, &db, EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER, BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER);
+            if needs_new_cache_change {
+              for proxy in writer.readers.iter_mut() {
+                proxy.unsend_changes_set(writer.last_change_sequence_number);
+              }
+            }
+          } else  {
             writer.readers = db
               .get_external_reader_proxies()
               .filter(|p| match p.subscription_topic_data.topic_name.as_ref() {
@@ -657,26 +674,20 @@ impl DPEventWrapper {
           );
         }
         EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER => {
-          let proxies: Vec<RtpsWriterProxy> = db
-            .get_participants()
-            .filter(|sp| match sp.available_builtin_endpoints {
-              Some(ep) => {
-                ep.contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER)
-              }
-              None => false,
-            })
-            .filter(|p| p.participant_guid.unwrap().guidPrefix != reader.get_guid_prefix())
-            .map(|p| {
-              p.as_writer_proxy(
-                true,
-                Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
-              )
-            })
-            .collect();
-          reader.retain_matched_writers(proxies.iter());
-          for proxy in proxies.into_iter() {
-            reader.add_writer_proxy(proxy);
-          }
+          DPEventWrapper::update_pubsub_writers(
+            reader,
+            &db,
+            EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
+          );
+        }
+        EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
+          DPEventWrapper::update_pubsub_writers(
+            reader,
+            &db,
+            EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+            BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER,
+          );
         }
         _ => {
           let topic_name = reader.topic_name().clone();

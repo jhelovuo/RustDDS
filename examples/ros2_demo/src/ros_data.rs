@@ -238,7 +238,7 @@ mod tests {
   use std::{fs::File, io::Read};
 
   use atosdds::{
-    dds::traits::serde_adapters::DeserializerAdapter,
+    ParticipantMessageData, dds::traits::serde_adapters::DeserializerAdapter,
     serialization::cdrDeserializer::CDR_deserializer_adapter,
     serialization::cdrSerializer::to_bytes, submessages::RepresentationIdentifier,
   };
@@ -343,13 +343,13 @@ mod tests {
     let len = f.read(&mut buffer).unwrap();
 
     println!("Buffer: size: {}\n{:?}", len, buffer.to_vec());
-    let rpi = CDR_deserializer_adapter::<ROSParticipantInfo>::from_bytes(
+    let rpi = CDR_deserializer_adapter::<ParticipantMessageData>::from_bytes(
       &buffer,
       RepresentationIdentifier::CDR_LE,
     )
     .unwrap();
     println!("RosParticipantInfo: \n{:?}", rpi);
-    let data2 = to_bytes::<ROSParticipantInfo, LittleEndian>(&rpi).unwrap();
+    let data2 = to_bytes::<ParticipantMessageData, LittleEndian>(&rpi).unwrap();
     println!("Data2: \n{:?}", data2);
   }
 }

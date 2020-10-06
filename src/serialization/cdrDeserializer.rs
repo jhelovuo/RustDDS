@@ -25,9 +25,10 @@ pub struct CDR_deserializer_adapter<D> {
   // no-one home
 }
 
-const repr_ids: [RepresentationIdentifier; 2] = [
+const repr_ids: [RepresentationIdentifier; 3] = [
   RepresentationIdentifier::CDR_BE,
   RepresentationIdentifier::CDR_LE,
+  RepresentationIdentifier::PL_CDR_LE,
 ];
 
 impl<D> DeserializerAdapter<D> for CDR_deserializer_adapter<D>
@@ -40,7 +41,7 @@ where
 
   fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D> {
     match encoding {
-      RepresentationIdentifier::CDR_LE => deserialize_from_little_endian(input_bytes),
+      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => deserialize_from_little_endian(input_bytes),
       RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
       repr_id => Err(Error::Message(format!(
         "Unknown representaiton identifier {}.",

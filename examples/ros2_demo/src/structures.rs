@@ -242,7 +242,10 @@ impl<'a> MainController<'a> {
             services
               .iter()
               .partition(|p| p.get_topic_name().starts_with("rq"));
-          let (services_reply, dds_topics): (Vec<&DiscoveredTopicData>, Vec<&DiscoveredTopicData>) = services.iter().partition(|p| p.get_topic_name().starts_with("rr"));
+          let (services_reply, dds_topics): (Vec<&DiscoveredTopicData>, Vec<&DiscoveredTopicData>) =
+            services
+              .iter()
+              .partition(|p| p.get_topic_name().starts_with("rr"));
 
           write!(
             self.stdout,
@@ -296,18 +299,16 @@ impl<'a> MainController<'a> {
           }
 
           let dds_topic_start = topic_start
-          + (if services_request.len() > topics.len() {
-            services_request.len()
-          } else {
-            topics.len()
-          }) + 2;
+            + (if services_request.len() > topics.len() {
+              services_request.len()
+            } else {
+              topics.len()
+            })
+            + 2;
           write!(
             self.stdout,
             "{}Services Reply: {}",
-            termion::cursor::Goto(
-              1,
-              dds_topic_start as u16
-            ),
+            termion::cursor::Goto(1, dds_topic_start as u16),
             services_reply.len(),
           )
           .unwrap();
@@ -336,10 +337,7 @@ impl<'a> MainController<'a> {
           write!(
             self.stdout,
             "{}DDS Topics: {}",
-            termion::cursor::Goto(
-              max_width as u16 + 2,
-              dds_topic_start as u16
-            ),
+            termion::cursor::Goto(max_width as u16 + 2, dds_topic_start as u16),
             dds_topics.len(),
           )
           .unwrap();

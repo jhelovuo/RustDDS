@@ -158,6 +158,21 @@ impl Writer {
       None => None,
     };
 
+    let heartbeat_period = match heartbeat_period {
+      Some(hbp) => match qos_policies.liveliness {
+        Some(lv) => match lv.kind {
+          policy::LivelinessKind::Automatic => Some(hbp),
+          policy::LivelinessKind::ManualByParticipant => Some(hbp),
+          policy::LivelinessKind::ManulByTopic => {
+            let std_dur = Duration::from(lv.lease_duration);
+            Some(std_dur / 3)
+          }
+        },
+        None => Some(hbp),
+      },
+      None => None,
+    };
+
     Writer {
       source_version: ProtocolVersion::PROTOCOLVERSION_2_3,
       source_vendor_id: VendorId::VENDOR_UNKNOWN,

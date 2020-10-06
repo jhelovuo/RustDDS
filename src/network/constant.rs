@@ -1,6 +1,8 @@
 use mio::Token;
 use mio_extras::channel as mio_channel;
 
+use crate::structure::guid::GUID;
+
 pub const STOP_POLL_TOKEN: Token = Token(0);
 
 pub const DISCOVERY_SENDER_TOKEN: Token = Token(1);
@@ -43,6 +45,8 @@ pub const DISCOVERY_SEND_WRITERS_INFO_TOKEN: Token = Token(36);
 pub const DISCOVERY_TOPIC_DATA_TOKEN: Token = Token(37);
 pub const DISCOVERY_TOPIC_CLEANUP_TOKEN: Token = Token(38);
 pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(39);
+pub const DISCOVERY_PARTICIPANT_MESSAGE_TOKEN: Token = Token(40);
+pub const DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(41);
 
 pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(50);
 
@@ -87,4 +91,5 @@ pub enum DiscoveryNotificationType {
   ReadersInfoUpdated,
   WritersInfoUpdated { needs_new_cache_change: bool },
   TopicsInfoUpdated,
+  AssertTopicLiveliness { writer_guid: GUID },
 }

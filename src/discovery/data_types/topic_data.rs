@@ -1,11 +1,8 @@
+use std::time::Instant;
+
 use serde::{Serialize, Deserialize};
 
 use crate::{
-  serialization::{
-    builtin_data_serializer::BuiltinDataSerializer,
-    builtin_data_deserializer::BuiltinDataDeserializer,
-  },
-  structure::{locator::LocatorList, guid::GUID, entity::Entity},
   dds::{
     qos::policy::{
       Deadline, Durability, LatencyBudget, Reliability, Ownership, DestinationOrder, Liveliness,
@@ -20,11 +17,17 @@ use crate::{
     datawriter::DataWriter,
     rtps_writer_proxy::RtpsWriterProxy,
   },
+  dds::qos::HasQoSPolicy,
+  dds::qos::QosPolicies,
+  dds::traits::key::Key,
   discovery::content_filter_property::ContentFilterProperty,
   network::constant::get_user_traffic_unicast_port,
   network::util::get_local_unicast_socket_address,
-  dds::qos::QosPolicies,
-  dds::qos::HasQoSPolicy,
+  serialization::{
+    builtin_data_serializer::BuiltinDataSerializer,
+    builtin_data_deserializer::BuiltinDataDeserializer,
+  },
+  structure::{entity::Entity, guid::GUID, guid::GuidPrefix, locator::LocatorList},
 };
 
 // Topic data contains all topic related (including reader and writer data structures for serialization and deserialization)
@@ -351,6 +354,8 @@ impl Serialize for PublicationBuiltinTopicData {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredWriterData {
+  // last_updated is not serialized
+  pub last_updated: Instant,
   pub writer_proxy: WriterProxy,
   pub publication_topic_data: PublicationBuiltinTopicData,
 }
@@ -386,6 +391,7 @@ impl DiscoveredWriterData {
     publication_topic_data.read_qos(topic.get_qos());
 
     DiscoveredWriterData {
+      last_updated: Instant::now(),
       writer_proxy,
       publication_topic_data,
     }
@@ -522,14 +528,56 @@ impl Keyed for DiscoveredTopicData {
   }
 }
 
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+pub struct ParticipantMessageDataKind {
+  value: [u8; 4],
+}
+
+impl ParticipantMessageDataKind {
+  pub const PARTICIPANT_MESSAGE_DATA_KIND_UNKNOWN: ParticipantMessageDataKind =
+    ParticipantMessageDataKind {
+      value: [0x00, 0x00, 0x00, 0x00],
+    };
+  pub const PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE: ParticipantMessageDataKind =
+    ParticipantMessageDataKind {
+      value: [0x00, 0x00, 0x00, 0x01],
+    };
+  pub const PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE: ParticipantMessageDataKind =
+    ParticipantMessageDataKind {
+      value: [0x00, 0x00, 0x00, 0x02],
+    };
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ParticipantMessageData {
+  pub guid: GuidPrefix,
+  pub kind: ParticipantMessageDataKind,
+  // normally this should be empty
+  pub length: u32,
+  pub data: Vec<u8>,
+}
+
+impl Keyed for ParticipantMessageData {
+  type K = (GuidPrefix, ParticipantMessageDataKind);
+
+  fn get_key(&self) -> Self::K {
+    (self.guid, self.kind)
+  }
+}
+
+impl Key for (GuidPrefix, ParticipantMessageDataKind) {}
+
 #[cfg(test)]
 mod tests {
+  use std::{fs::File, io::Read};
+
   use super::*;
 
   //use crate::serialization::cdrSerializer::to_little_endian_binary;
   use crate::serialization::{
-    cdrSerializer::{to_bytes},
     Message,
+    cdrDeserializer::CDR_deserializer_adapter,
+    cdrSerializer::{to_bytes},
   };
   use byteorder::LittleEndian;
   use log::info;
@@ -646,13 +694,17 @@ mod tests {
     writer_proxy.remote_writer_guid = pub_topic_data.key.clone();
 
     let dwd = DiscoveredWriterData {
+      last_updated: Instant::now(),
       writer_proxy,
       publication_topic_data: pub_topic_data,
     };
 
     let sdata = to_bytes::<DiscoveredWriterData, LittleEndian>(&dwd).unwrap();
-    let dwd2: DiscoveredWriterData =
+    let mut dwd2: DiscoveredWriterData =
       PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
+    // last updated is not serialized thus copying value for correct result
+    dwd2.last_updated = dwd.last_updated;
+
     assert_eq!(dwd, dwd2);
     let sdata2 = to_bytes::<DiscoveredWriterData, LittleEndian>(&dwd2).unwrap();
     assert_eq!(sdata, sdata2);
@@ -682,5 +734,22 @@ mod tests {
     assert_eq!(dtd.topic_data, dtd2.topic_data);
     let sdata2 = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd2).unwrap();
     assert_eq!(sdata, sdata2);
+  }
+
+  #[test]
+  fn td_participant_message_data_ser_deser() {
+    let mut pmd_file = File::open("participant_message_data.bin").unwrap();
+    let mut buffer: [u8; 1024] = [0; 1024];
+    let len = pmd_file.read(&mut buffer).unwrap();
+
+    println!("Buffer: size: {}\n{:?}", len, buffer[..len].to_vec());
+    let rpi = CDR_deserializer_adapter::<ParticipantMessageData>::from_bytes(
+      &buffer,
+      RepresentationIdentifier::CDR_LE,
+    )
+    .unwrap();
+    println!("ParticipantMessageData: \n{:?}", rpi);
+    let data2 = to_bytes::<ParticipantMessageData, LittleEndian>(&rpi).unwrap();
+    println!("Data2: \n{:?}", data2);
   }
 }

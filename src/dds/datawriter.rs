@@ -107,6 +107,22 @@ where
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
     };
 
+    match topic.get_qos().liveliness {
+      Some(lv) => match lv.kind {
+        super::qos::policy::LivelinessKind::Automatic => (),
+        super::qos::policy::LivelinessKind::ManualByParticipant => {
+          match discovery_command.send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS) {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+            }
+          }
+        }
+        super::qos::policy::LivelinessKind::ManulByTopic => (),
+      },
+      None => (),
+    };
+
     Ok(DataWriter {
       my_publisher: publisher,
       my_topic: topic,
@@ -136,7 +152,10 @@ where
     };
 
     match self.cc_upload.try_send(ddsdata) {
-      Ok(_) => Ok(()),
+      Ok(_) => {
+        self.refresh_manual_liveliness();
+        Ok(())
+      }
       Err(e) => {
         warn!("Failed to write new data. {:?}", e);
         Err(Error::OutOfResources)
@@ -176,7 +195,10 @@ where
     };
 
     match self.cc_upload.try_send(ddsdata) {
-      Ok(_) => Ok(()),
+      Ok(_) => {
+        self.refresh_manual_liveliness();
+        Ok(())
+      }
       Err(huh) => {
         warn!("Error: {:?}", huh);
         Err(Error::OutOfResources)
@@ -226,8 +248,34 @@ where
   }
 
   pub fn assert_liveliness(&self) -> Result<()> {
-    // TODO: probably needs extra liveliness mio_channel to writer
-    unimplemented!()
+    self.refresh_manual_liveliness();
+
+    match self.get_qos().liveliness {
+      Some(lv) => {
+        match lv.kind {
+          super::qos::policy::LivelinessKind::Automatic => (),
+          super::qos::policy::LivelinessKind::ManualByParticipant => (),
+          super::qos::policy::LivelinessKind::ManulByTopic => {
+            match self
+              .discovery_command
+              .send(DiscoveryCommand::ASSERT_TOPIC_LIVELINESS {
+                writer_guid: self.get_guid(),
+              }) {
+              Ok(_) => (),
+              Err(e) => {
+                error!(
+                  "Failed to send DiscoveryCommand - AssertLiveliness. {:?}",
+                  e
+                );
+              }
+            }
+          }
+        };
+      }
+      None => (),
+    };
+
+    Ok(())
   }
 
   // DDS spec returns an InstanceHandles pointing to a BuiltInTopic reader
@@ -238,6 +286,27 @@ where
   // This one function provides both get_matched_subscrptions and get_matched_subscription_data
   // TODO: Maybe we could return references to the subscription data to avoid copying?
   // But then what if the result set changes while the application processes it?
+
+  fn refresh_manual_liveliness(&self) {
+    match self.get_qos().liveliness {
+      Some(lv) => match lv.kind {
+        super::qos::policy::LivelinessKind::Automatic => (),
+        super::qos::policy::LivelinessKind::ManualByParticipant => {
+          match self
+            .discovery_command
+            .send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS)
+          {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+            }
+          }
+        }
+        super::qos::policy::LivelinessKind::ManulByTopic => (),
+      },
+      None => (),
+    };
+  }
 }
 
 impl<D, SA> Entity for DataWriter<'_, D, SA>
