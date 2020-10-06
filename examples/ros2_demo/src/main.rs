@@ -57,7 +57,7 @@ fn main() {
 }
 
 fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
-  let domain_participant = DomainParticipant::new(0, 15);
+  let domain_participant = DomainParticipant::new(0);
   let node_control = NodeControl::new(domain_participant.clone());
 
   let mut node_reader = node_control.get_node_reader();

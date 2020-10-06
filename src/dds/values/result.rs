@@ -62,6 +62,11 @@ pub struct OfferedIncompatibleQosStatus {
   //TODO: policies: QosPolicyCountSeq
 }
 
+pub struct RequestedDeadlineMissedStatus {
+  pub total: CountWithChange,
+  // missing: last instance handle
+}
+
 pub struct RequestedIncompatibleQosStatus {
   pub total: CountWithChange,
   //TODO: last_policy_id: QosPolicyId_t

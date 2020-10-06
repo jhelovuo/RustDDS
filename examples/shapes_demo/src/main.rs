@@ -46,14 +46,13 @@ use byteorder::LittleEndian;
 mod shapes;
 
 fn main() {
+  env_logger::init();
+
   let domain_id = std::env::args().nth(1).unwrap_or(String::from("0"));
   let domain_id = domain_id.parse::<u16>().unwrap();
-  let participant_id = std::env::args().nth(2).unwrap_or(String::from("0"));
-  let participant_id = participant_id.parse::<u16>().unwrap();
 
   let (stop_channel_sender, stop_channel_receiver) = mio_channel::sync_channel(10);
-  let _jhandle =
-    std::thread::spawn(move || event_loop(stop_channel_receiver, domain_id, participant_id));
+  let _jhandle = std::thread::spawn(move || event_loop(stop_channel_receiver, domain_id));
 
   stop_control(stop_channel_sender);
 }
@@ -66,11 +65,11 @@ const STOP_EVENT_LOOP_TOKEN: Token = Token(1000);
 const SQUARE_READER_TOKEN: Token = Token(1001);
 const KEYBOARD_CHECK_TOKEN: Token = Token(1002);
 
-fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16, participant_id: u16) {
+fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
   let poll = Poll::new().unwrap();
 
   // adjust domain_id or participant_id if necessary to interoperability
-  let domain_participant = DomainParticipant::new(domain_id, participant_id);
+  let domain_participant = DomainParticipant::new(domain_id);
 
   let mut pub_qos = QosPolicies::qos_none();
   pub_qos.reliability = Some(Reliability::BestEffort);

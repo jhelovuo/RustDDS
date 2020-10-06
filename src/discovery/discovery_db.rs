@@ -699,7 +699,7 @@ mod tests {
   fn discdb_subscription_operations() {
     let mut discovery_db = DiscoveryDB::new();
 
-    let domain_participant = DomainParticipant::new(7, 0);
+    let domain_participant = DomainParticipant::new(0);
     let topic = domain_participant
       .create_topic(
         "Foobar",
@@ -788,7 +788,7 @@ mod tests {
 
   #[test]
   fn discdb_local_topic_reader() {
-    let dp = DomainParticipant::new(12, 0);
+    let dp = DomainParticipant::new(0);
     let topic = dp
       .create_topic(
         "some topic name",

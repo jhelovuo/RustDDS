@@ -145,7 +145,7 @@ mod tests {
 
   #[test]
   fn dw_write_test() {
-    let domain_participant = DomainParticipant::new(9, 0);
+    let domain_participant = DomainParticipant::new(0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     let publisher = domain_participant
@@ -184,7 +184,7 @@ mod tests {
 
   #[test]
   fn dw_dispose_test() {
-    let domain_participant = DomainParticipant::new(7, 0);
+    let domain_participant = DomainParticipant::new(0);
     let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(&qos)
@@ -228,7 +228,7 @@ mod tests {
 
   #[test]
   fn dw_wait_for_ack_test() {
-    let domain_participant = DomainParticipant::new(8, 0);
+    let domain_participant = DomainParticipant::new(0);
     let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(&qos)

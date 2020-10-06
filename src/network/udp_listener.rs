@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::io;
 
 use mio::Token;
-use log::debug;
+use log::{debug, error};
 use mio::net::UdpSocket;
 use std::net::UdpSocket as StdUdpSocket;
 
@@ -37,6 +37,40 @@ impl UDPListener {
       socket: socket,
       token: token,
     }
+  }
+
+  pub fn try_bind(token: Token, host: &str, port: u16) -> Option<UDPListener> {
+    let host = match host.parse() {
+      Ok(h) => h,
+      _ => return None,
+    };
+
+    let address = SocketAddr::new(host, port);
+    let err_msg = format!("Unable to bind address {}", address.to_string());
+    let std_socket = match StdUdpSocket::bind(address) {
+      Ok(sock) => sock,
+      Err(_) => {
+        error!("{}", &err_msg);
+        return None;
+      }
+    };
+    match std_socket.set_nonblocking(true) {
+      Ok(_) => (),
+      Err(e) => {
+        error!("Failed to set std socket to non blocking. {:?}", e);
+        return None;
+      }
+    };
+
+    let socket = match UdpSocket::from_socket(std_socket) {
+      Ok(s) => s,
+      Err(e) => {
+        error!("Failed to create mio socket. {:?}", e);
+        return None;
+      }
+    };
+
+    Some(UDPListener { socket, token })
   }
 
   pub fn get_token(&self) -> Token {

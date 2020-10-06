@@ -1,6 +1,6 @@
 use mio::Token;
 use mio_extras::channel as mio_channel;
-use log::warn;
+use log::{info, warn};
 
 use std::{
   thread,
@@ -46,8 +46,8 @@ unsafe impl Sync for DomainParticipant {}
 
 #[allow(clippy::new_without_default)]
 impl DomainParticipant {
-  pub fn new(domain_id: u16, participant_id: u16) -> DomainParticipant {
-    let mut dpd = DomainParticipant_Disc::new(domain_id, participant_id);
+  pub fn new(domain_id: u16) -> DomainParticipant {
+    let mut dpd = DomainParticipant_Disc::new(domain_id);
 
     let discovery_updated_sender = match dpd.discovery_updated_sender.take() {
       Some(dus) => dus,
@@ -210,15 +210,11 @@ pub struct DomainParticipant_Disc {
 }
 
 impl DomainParticipant_Disc {
-  pub fn new(domain_id: u16, participant_id: u16) -> DomainParticipant_Disc {
+  pub fn new(domain_id: u16) -> DomainParticipant_Disc {
     let (discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::sync_channel::<DiscoveryNotificationType>(100);
 
-    let dpi = DomainParticipant_Inner::new(
-      domain_id,
-      participant_id,
-      discovery_update_notification_receiver,
-    );
+    let dpi = DomainParticipant_Inner::new(domain_id, discovery_update_notification_receiver);
 
     let dpi_arc = Arc::new(dpi);
 
@@ -344,33 +340,77 @@ impl Drop for DomainParticipant_Inner {
 impl DomainParticipant_Inner {
   fn new(
     domain_id: u16,
-    participant_id: u16,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
   ) -> DomainParticipant_Inner {
+    let mut listeners = HashMap::new();
+
     // Creating UPD listeners for participantId 0 (change this if necessary)
-    let discovery_multicast_listener = UDPListener::new(
+    let discovery_multicast_listener = UDPListener::try_bind(
       DISCOVERY_SENDER_TOKEN,
       "0.0.0.0",
       get_spdp_well_known_multicast_port(domain_id),
     );
-    discovery_multicast_listener
-      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
-      .expect("Unable to join multicast 239.255.0.1:7400");
 
-    let discovery_listener = UDPListener::new(
-      DISCOVERY_SENDER_TOKEN,
-      "0.0.0.0",
-      get_spdp_well_known_unicast_port(domain_id, participant_id),
-    );
+    match discovery_multicast_listener {
+      Some(ls) => match ls.join_multicast(&Ipv4Addr::new(239, 255, 0, 1)) {
+        Ok(_) => {
+          listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, ls);
+        }
+        _ => {
+          info!("Cannot join multicast, possibly another instance running on this machine.");
+        }
+      },
+      None => {
+        info!("Cannot join multicast, possibly another instance running on this machine.");
+      }
+    };
 
-    let user_traffic_multicast_listener = UDPListener::new(
+    let mut participant_id = 1;
+
+    let mut discovery_listener = None;
+
+    while discovery_listener.is_none() {
+      discovery_listener = UDPListener::try_bind(
+        DISCOVERY_SENDER_TOKEN,
+        "0.0.0.0",
+        get_spdp_well_known_unicast_port(domain_id, participant_id),
+      );
+      if discovery_listener.is_none() {
+        participant_id += 1;
+      }
+    }
+
+    info!("ParticipantId {} selected.", participant_id);
+
+    // let discovery_listener = UDPListener::new(
+    //   DISCOVERY_SENDER_TOKEN,
+    //   "0.0.0.0",
+    //   get_spdp_well_known_unicast_port(domain_id, participant_id),
+    // );
+    let discovery_listener = match discovery_listener {
+      Some(dl) => dl,
+      None => panic!("Could not find free ParticipantId"),
+    };
+
+    let user_traffic_multicast_listener = UDPListener::try_bind(
       USER_TRAFFIC_SENDER_TOKEN,
       "0.0.0.0",
       get_user_traffic_multicast_port(domain_id),
     );
-    user_traffic_multicast_listener
-      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
-      .expect("Unable to join multicast 239.255.0.1:7401");
+
+    match user_traffic_multicast_listener {
+      Some(ls) => match ls.join_multicast(&Ipv4Addr::new(239, 255, 0, 1)) {
+        Ok(_) => {
+          listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, ls);
+        }
+        _ => {
+          info!("Cannot join multicast, possibly another instance running on this machine.");
+        }
+      },
+      None => {
+        info!("Cannot join multicast, possibly another instance running on this machine.");
+      }
+    };
 
     let user_traffic_listener = UDPListener::new(
       USER_TRAFFIC_SENDER_TOKEN,
@@ -378,13 +418,8 @@ impl DomainParticipant_Inner {
       get_user_traffic_unicast_port(domain_id, participant_id),
     );
 
-    let mut listeners = HashMap::new();
-    listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, discovery_multicast_listener);
     listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
-    listeners.insert(
-      USER_TRAFFIC_MUL_LISTENER_TOKEN,
-      user_traffic_multicast_listener,
-    );
+
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     // Adding readers
@@ -659,7 +694,7 @@ mod tests {
   }
   #[test]
   fn dp_writer_hearbeat_test() {
-    let domain_participant = DomainParticipant::new(5, 0);
+    let domain_participant = DomainParticipant::new(0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
@@ -689,7 +724,7 @@ mod tests {
   #[test]
   fn dp_recieve_acknack_message_test() {
     // TODO SEND ACKNACK
-    let domain_participant = DomainParticipant::new(6, 0);
+    let domain_participant = DomainParticipant::new(0);
 
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();

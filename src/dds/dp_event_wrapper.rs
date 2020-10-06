@@ -215,13 +215,13 @@ impl DPEventWrapper {
                 needs_new_cache_change,
               } => ev_wrapper.update_writers(needs_new_cache_change),
               DiscoveryNotificationType::TopicsInfoUpdated => ev_wrapper.update_topics(),
-              DiscoveryNotificationType::AssertTopicLiveliness { writer_guid} => {
+              DiscoveryNotificationType::AssertTopicLiveliness { writer_guid } => {
                 let writer = ev_wrapper.writers.get_mut(&writer_guid);
                 match writer {
                   Some(w) => {
                     // Only need set heartbeat tick earlier
                     w.handle_heartbeat_tick();
-                  },
+                  }
                   None => (),
                 };
               }
@@ -429,7 +429,9 @@ impl DPEventWrapper {
         target_writer_entity_id,
       );
       if let Some(found_writer) = self.writers.get_mut(&writer_guid) {
-        found_writer.handle_ack_nack(acknack_sender_prefix, acknack_message)
+        if found_writer.is_reliable() {
+          found_writer.handle_ack_nack(acknack_sender_prefix, acknack_message)
+        }
       } else {
         warn!(
           "Couldn't handle acknack! did not find local rtps writer with GUID: {:x?}",
@@ -482,14 +484,21 @@ impl DPEventWrapper {
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER {
             // TODO:
-          } else if writer.get_entity_id() == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER {
-            DPEventWrapper::update_pubsub_readers(writer, &db, EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER, BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER);
+          } else if writer.get_entity_id()
+            == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
+          {
+            DPEventWrapper::update_pubsub_readers(
+              writer,
+              &db,
+              EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+              BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER,
+            );
             if needs_new_cache_change {
               for proxy in writer.readers.iter_mut() {
                 proxy.unsend_changes_set(writer.last_change_sequence_number);
               }
             }
-          } else  {
+          } else {
             writer.readers = db
               .get_external_reader_proxies()
               .filter(|p| match p.subscription_topic_data.topic_name.as_ref() {

@@ -415,6 +415,12 @@ where
     Ok(ds.pop())
   }
 
+  // status queries
+
+  pub fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
+    todo!()
+  }
+
   // Helper functions
 
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
@@ -524,7 +530,7 @@ mod tests {
   use mio::{Events};
   #[test]
   fn dr_get_samples_from_ddschache() {
-    let dp = DomainParticipant::new(10, 0);
+    let dp = DomainParticipant::new(0);
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll);
 
@@ -642,7 +648,7 @@ mod tests {
 
   #[test]
   fn dr_read_and_take() {
-    let dp = DomainParticipant::new(11, 0);
+    let dp = DomainParticipant::new(0);
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing
@@ -858,7 +864,7 @@ mod tests {
 
   #[test]
   fn dr_wake_up() {
-    let dp = DomainParticipant::new(13, 1);
+    let dp = DomainParticipant::new(0);
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing

@@ -234,7 +234,7 @@ impl Writer {
     self.set_heartbeat_timer();
   }
 
-  fn is_reliable(&self) -> bool {
+  pub fn is_reliable(&self) -> bool {
     match self.qos_policies.reliability {
       Some(Reliability::Reliable {
         max_blocking_time: _,
@@ -1106,7 +1106,7 @@ mod tests {
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {
-    let domain_participant = DomainParticipant::new(4, 0);
+    let domain_participant = DomainParticipant::new(0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());

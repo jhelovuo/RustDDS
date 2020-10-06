@@ -11,7 +11,9 @@ use std::{
   time::Instant,
 };
 
-use crate::{ParticipantMessageData, ParticipantMessageDataKind, dds::{
+use crate::{
+  ParticipantMessageData, ParticipantMessageDataKind,
+  dds::{
     participant::{DomainParticipantWeak},
     typedesc::TypeDesc,
     qos::{
@@ -24,7 +26,12 @@ use crate::{ParticipantMessageData, ParticipantMessageDataKind, dds::{
     datareader::{DataReader},
     readcondition::ReadCondition,
     datawriter::DataWriter,
-  }, dds::values::result::Error, serialization::cdrDeserializer::CDR_deserializer_adapter, structure::entity::Entity, structure::guid::GUID};
+  },
+  dds::values::result::Error,
+  serialization::cdrDeserializer::CDR_deserializer_adapter,
+  structure::entity::Entity,
+  structure::guid::GUID,
+};
 
 use crate::discovery::{
   data_types::spdp_participant_data::SPDPDiscoveredParticipantData,
@@ -799,7 +806,9 @@ impl Discovery {
                 liveliness_state.last_manual_participant_update = Instant::now();
               }
               DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid } => {
-                discovery.send_discovery_notification(DiscoveryNotificationType::AssertTopicLiveliness { writer_guid });
+                discovery.send_discovery_notification(
+                  DiscoveryNotificationType::AssertTopicLiveliness { writer_guid },
+                );
               }
             };
           }
@@ -1090,7 +1099,10 @@ impl Discovery {
       let current_duration =
         Duration::from(inow.duration_since(liveliness_state.last_auto_update) / 3);
       let min_automatic = automatic.iter().map(|lv| lv.lease_duration).min();
-      debug!("Current auto duration {:?}. Min auto duration {:?}", current_duration, min_automatic);
+      debug!(
+        "Current auto duration {:?}. Min auto duration {:?}",
+        current_duration, min_automatic
+      );
       match min_automatic {
         Some(mm) => {
           if current_duration > mm {
@@ -1104,7 +1116,7 @@ impl Discovery {
             match writer.write(pp, None) {
               Ok(_) => (),
               Err(e) => {
-                error!("Failed to write ParticipantMessageData auto. {:?}",e);
+                error!("Failed to write ParticipantMessageData auto. {:?}", e);
                 return;
               }
             }
@@ -1117,14 +1129,19 @@ impl Discovery {
 
     // Manual By Participant
     {
-      let current_duration = Duration::from(inow.duration_since(liveliness_state.last_manual_participant_update) / 3);
-      let min_manual_participant = manual_by_participant.iter().map(|lv| lv.lease_duration).min();
+      let current_duration =
+        Duration::from(inow.duration_since(liveliness_state.last_manual_participant_update) / 3);
+      let min_manual_participant = manual_by_participant
+        .iter()
+        .map(|lv| lv.lease_duration)
+        .min();
       match min_manual_participant {
         Some(dur) => {
           if current_duration > dur {
             let pp = ParticipantMessageData {
               guid: self.domain_participant.get_guid_prefix(),
-              kind: ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
+              kind:
+                ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
               length: 0,
               data: Vec::new(),
             };
@@ -1344,7 +1361,7 @@ mod tests {
 
   #[test]
   fn discovery_participant_data_test() {
-    let _participant = DomainParticipant::new(0, 0);
+    let _participant = DomainParticipant::new(0);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11000);
@@ -1382,7 +1399,7 @@ mod tests {
 
   #[test]
   fn discovery_reader_data_test() {
-    let participant = DomainParticipant::new(14, 0);
+    let participant = DomainParticipant::new(0);
 
     let topic = participant
       .create_topic(
@@ -1476,7 +1493,7 @@ mod tests {
 
   #[test]
   fn discovery_writer_data_test() {
-    let participant = DomainParticipant::new(15, 0);
+    let participant = DomainParticipant::new(0);
 
     let topic = participant
       .create_topic(
@@ -1563,7 +1580,7 @@ mod tests {
 
   #[test]
   fn discovery_topic_data_test() {
-    let _participant = DomainParticipant::new(16, 0);
+    let _participant = DomainParticipant::new(0);
 
     let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
       key: None,
