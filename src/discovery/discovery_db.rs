@@ -757,6 +757,6 @@ mod tests {
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 2);
-    assert_eq!(discoverydb.get_all_local_topic_readers().len(), 2);
+    assert_eq!(discoverydb.get_all_local_topic_readers().count(), 2);
   }
 }

@@ -359,7 +359,7 @@ impl Default for MessageReceiverState {
 
 mod tests {
   use super::*;
-  use crate::messages::header::Header;
+  use crate::{dds::writer::WriterCommand, messages::header::Header};
   use crate::speedy::{Writable, Readable};
   use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
   use crate::serialization::cdrSerializer::to_bytes;
@@ -450,13 +450,15 @@ mod tests {
     // now try to serialize same message
 
     let _serializedPayload = to_bytes::<ShapeType, LittleEndian>(&deserializedShapeType);
-    let (_dwcc_upload, hccc_download) = mio_channel::channel::<DDSData>();
+    let (_dwcc_upload, hccc_download) = mio_channel::channel::<WriterCommand>();
+    let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
     let mut _writerObject = Writer::new(
       GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], 2)),
       hccc_download,
       Arc::new(RwLock::new(DDSCache::new())),
       String::from("topicName1"),
       QosPolicies::qos_none(),
+      status_sender,
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entityId,
