@@ -10,14 +10,12 @@ use log::warn;
 
 use crate::{
   ParticipantMessageData, dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators,
-  network::util::get_local_unicast_socket_address, structure::guid::EntityId,
-  structure::guid::GuidPrefix,
+  structure::guid::EntityId, structure::guid::GuidPrefix,
 };
 
 use crate::structure::{guid::GUID, duration::Duration, entity::Entity};
 
 use crate::{
-  network::constant::{get_user_traffic_unicast_port, get_user_traffic_multicast_port},
   dds::{
     rtps_reader_proxy::RtpsReaderProxy, reader::Reader, participant::DomainParticipant,
     topic::Topic, rtps_writer_proxy::RtpsWriterProxy,
@@ -35,9 +33,9 @@ use super::data_types::{
 pub struct DiscoveryDB {
   participant_proxies: HashMap<GUID, SPDPDiscoveredParticipantData>,
   // local writer proxies for topics (topic name acts as key)
-  local_topic_writers: Vec<DiscoveredWriterData>,
+  local_topic_writers: HashMap<GUID, DiscoveredWriterData>,
   // local reader proxies for topics (topic name acts as key)
-  local_topic_readers: Vec<DiscoveredReaderData>,
+  local_topic_readers: HashMap<GUID, DiscoveredReaderData>,
 
   external_topic_readers: Vec<DiscoveredReaderData>,
   external_topic_writers: Vec<DiscoveredWriterData>,
@@ -52,8 +50,8 @@ impl DiscoveryDB {
   pub fn new() -> DiscoveryDB {
     DiscoveryDB {
       participant_proxies: HashMap::new(),
-      local_topic_writers: Vec::new(),
-      local_topic_readers: Vec::new(),
+      local_topic_writers: HashMap::new(),
+      local_topic_readers: HashMap::new(),
       external_topic_readers: Vec::new(),
       external_topic_writers: Vec::new(),
       topics: HashMap::new(),
@@ -161,7 +159,7 @@ impl DiscoveryDB {
       self
         .local_topic_readers
         .iter()
-        .find(|p| match &p.subscription_topic_data.topic_name {
+        .find(|(_, p)| match &p.subscription_topic_data.topic_name {
           Some(tn) => tn == topic_name,
           None => false,
         })
@@ -173,7 +171,7 @@ impl DiscoveryDB {
       self
         .local_topic_writers
         .iter()
-        .find(|p| match &p.publication_topic_data.topic_name {
+        .find(|(_, p)| match &p.publication_topic_data.topic_name {
           Some(tn) => tn == topic_name,
           None => false,
         })
@@ -241,39 +239,17 @@ impl DiscoveryDB {
   }
 
   pub fn update_local_topic_writer(&mut self, writer: DiscoveredWriterData) {
-    let dbwriter = self
-      .local_topic_writers
-      .iter_mut()
-      .find(|p| p.writer_proxy.remote_writer_guid == writer.writer_proxy.remote_writer_guid);
-
-    match dbwriter {
-      Some(v) => {
-        *v = writer;
-        return;
-      }
-      None => self.local_topic_writers.push(writer),
+    let writer_guid = match writer.writer_proxy.remote_writer_guid {
+      Some(g) => g,
+      None => return,
     };
 
+    self.local_topic_writers.insert(writer_guid, writer);
     self.writers_updated = true;
   }
 
   pub fn remove_local_topic_writer(&mut self, guid: GUID) {
-    let pos =
-      self
-        .local_topic_writers
-        .iter()
-        .position(|w| match w.writer_proxy.remote_writer_guid {
-          Some(g) => g == guid,
-          None => false,
-        });
-
-    match pos {
-      Some(pos) => {
-        self.local_topic_writers.remove(pos);
-      }
-      None => (),
-    };
-
+    self.local_topic_writers.remove(&guid);
     self.writers_updated = true;
   }
 
@@ -297,11 +273,13 @@ impl DiscoveryDB {
       Some(rp) => self
         .local_topic_writers
         .iter_mut()
-        .filter(|p| match p.publication_topic_data.topic_name.as_ref() {
-          Some(tn) => *tn == *topic_name,
-          None => false,
-        })
-        .for_each(|p| {
+        .filter(
+          |(_, p)| match p.publication_topic_data.topic_name.as_ref() {
+            Some(tn) => *tn == *topic_name,
+            None => false,
+          },
+        )
+        .for_each(|(_, p)| {
           p.writer_proxy
             .unicast_locator_list
             .append(&mut rp.unicast_locator_list.clone());
@@ -331,11 +309,13 @@ impl DiscoveryDB {
       Some(wp) => self
         .local_topic_readers
         .iter_mut()
-        .filter(|p| match p.subscription_topic_data.topic_name.as_ref() {
-          Some(tn) => *tn == *topic_name,
-          None => false,
-        })
-        .for_each(|p| {
+        .filter(
+          |(_, p)| match p.subscription_topic_data.topic_name.as_ref() {
+            Some(tn) => *tn == *topic_name,
+            None => false,
+          },
+        )
+        .for_each(|(_, p)| {
           p.reader_proxy
             .unicast_locator_list
             .append(&mut wp.unicast_locator_list.clone());
@@ -491,22 +471,11 @@ impl DiscoveryDB {
   ) {
     let reader_guid = reader.get_guid();
 
-    let mut reader_proxy = RtpsReaderProxy::new(reader_guid);
-
-    let unicast_locators = get_local_unicast_socket_address(get_user_traffic_unicast_port(
+    let reader_proxy = RtpsReaderProxy::from_reader(
+      reader,
       domain_participant.domain_id(),
       domain_participant.participant_id(),
-    ));
-
-    let multicast_locators = get_local_multicast_locators(get_user_traffic_multicast_port(
-      domain_participant.domain_id(),
-    ));
-
-    reader_proxy.unicast_locator_list = unicast_locators;
-    reader_proxy.multicast_locator_list = multicast_locators;
-    // TODO: remove these constant evaluations
-    reader_proxy.expects_in_line_qos = false;
-    reader_proxy.is_active = true;
+    );
 
     let subscription_data = SubscriptionBuiltinTopicData {
       key: Some(reader_guid),
@@ -534,55 +503,15 @@ impl DiscoveryDB {
       content_filter,
     };
 
-    let topic_name = String::from(topic.get_name());
-
-    // updating local topic readers
-    let mut treaders: Vec<&mut DiscoveredReaderData> = self
+    self
       .local_topic_readers
-      .iter_mut()
-      .filter(|p| {
-        *match p.subscription_topic_data.topic_name.as_ref() {
-          Some(s) => s,
-          None => return false,
-        } == topic_name
-      })
-      .filter(|p| {
-        *match p.reader_proxy.remote_reader_guid.as_ref() {
-          Some(g) => g,
-          None => return false,
-        } == reader_guid
-      })
-      .collect();
-
-    if !treaders.is_empty() {
-      treaders
-        .iter_mut()
-        .filter(|p| match p.reader_proxy.remote_reader_guid { Some(g) => g, None => return false } == reader_guid)
-        .for_each(|p| **p = discovered_reader_data.clone());
-    } else {
-      self.local_topic_readers.push(discovered_reader_data);
-    }
+      .insert(reader_guid, discovered_reader_data);
 
     self.readers_updated = true;
   }
 
   pub fn remove_local_topic_reader(&mut self, guid: GUID) {
-    let pos =
-      self
-        .local_topic_readers
-        .iter()
-        .position(|p| match p.reader_proxy.remote_reader_guid {
-          Some(g) => g == guid,
-          None => false,
-        });
-
-    match pos {
-      Some(pos) => {
-        self.local_topic_readers.remove(pos);
-      }
-      None => (),
-    };
-
+    self.local_topic_readers.remove(&guid);
     self.readers_updated = true;
   }
 
@@ -602,12 +531,16 @@ impl DiscoveryDB {
     self.writers_updated = updated;
   }
 
-  pub fn get_all_local_topic_readers<'a>(&'a self) -> Iter<'a, DiscoveredReaderData> {
-    self.local_topic_readers.iter()
+  pub fn get_all_local_topic_readers<'a>(
+    &'a self,
+  ) -> impl Iterator<Item = &'a DiscoveredReaderData> {
+    self.local_topic_readers.iter().map(|(_, p)| p)
   }
 
-  pub fn get_all_local_topic_writers<'a>(&'a self) -> Iter<'a, DiscoveredWriterData> {
-    self.local_topic_writers.iter()
+  pub fn get_all_local_topic_writers<'a>(
+    &'a self,
+  ) -> impl Iterator<Item = &'a DiscoveredWriterData> {
+    self.local_topic_writers.iter().map(|(_, p)| p)
   }
 
   pub fn get_all_topics<'a>(&'a self) -> impl Iterator<Item = &'a DiscoveredTopicData> {
@@ -624,12 +557,13 @@ impl DiscoveryDB {
     self
       .local_topic_readers
       .iter()
-      .filter(|p| {
+      .filter(|(_, p)| {
         *match p.subscription_topic_data.topic_name.as_ref() {
           Some(t) => t,
           None => return false,
         } == topic_name
       })
+      .map(|(_, p)| p)
       .collect()
   }
 

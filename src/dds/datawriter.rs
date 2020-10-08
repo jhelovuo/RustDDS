@@ -1,9 +1,9 @@
 use std::{
-  sync::{Arc, RwLock},
-  time::{Duration},
   marker::PhantomData,
+  sync::{Arc, RwLock},
+  time::Duration,
 };
-use mio_extras::channel as mio_channel;
+use mio_extras::channel::{self as mio_channel, Receiver};
 
 use serde::Serialize;
 use log::{error, warn};
@@ -32,18 +32,19 @@ use crate::dds::qos::{
 use crate::dds::traits::serde_adapters::SerializerAdapter;
 use crate::dds::datasample::DataSample;
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
-use super::datasample_cache::DataSampleCache;
+use super::{datasample_cache::DataSampleCache, values::result::StatusChange, writer::WriterCommand};
 
 pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D>> {
   my_publisher: &'a Publisher,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
-  cc_upload: mio_channel::SyncSender<DDSData>,
+  cc_upload: mio_channel::SyncSender<WriterCommand>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   dds_cache: Arc<RwLock<DDSCache>>,
   datasample_cache: DataSampleCache<D>,
   phantom: PhantomData<SA>,
+  status_receiver: Receiver<StatusChange>,
 }
 
 impl<'a, D, SA> Drop for DataWriter<'a, D, SA>
@@ -76,9 +77,10 @@ where
     publisher: &'a Publisher,
     topic: &'a Topic,
     guid: Option<GUID>,
-    cc_upload: mio_channel::SyncSender<DDSData>,
+    cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: Arc<RwLock<DDSCache>>,
+    status_receiver: Receiver<StatusChange>,
   ) -> Result<DataWriter<'a, D, SA>> {
     let entity_id = match guid {
       Some(g) => g.entityId.clone(),
@@ -133,6 +135,7 @@ where
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
       phantom: PhantomData,
+      status_receiver,
     })
   }
 
@@ -151,7 +154,10 @@ where
       None => DataSample::new(Timestamp::from(time::get_time()), data, self.get_guid()),
     };
 
-    match self.cc_upload.try_send(ddsdata) {
+    match self
+      .cc_upload
+      .try_send(WriterCommand::DDSData { data: ddsdata })
+    {
       Ok(_) => {
         self.refresh_manual_liveliness();
         Ok(())
@@ -194,7 +200,10 @@ where
       ),
     };
 
-    match self.cc_upload.try_send(ddsdata) {
+    match self
+      .cc_upload
+      .try_send(WriterCommand::DDSData { data: ddsdata })
+    {
       Ok(_) => {
         self.refresh_manual_liveliness();
         Ok(())
@@ -226,11 +235,41 @@ where
   }
 
   // status queries
+  pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
+    match self
+      .cc_upload
+      .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
+        writer_guid: self.get_guid(),
+      }) {
+      Ok(_) => (),
+      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
+    };
+    &self.status_receiver
+  }
+
   pub fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
     unimplemented!()
   }
   pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
-    unimplemented!()
+    let mut fstatus = OfferedDeadlineMissedStatus::new();
+    while let Ok(status) = self.status_receiver.try_recv() {
+      match status {
+        StatusChange::OfferedDeadlineMissedStatus { status } => fstatus = status,
+        // TODO: possibly save old statuses
+        _ => (),
+      }
+    }
+
+    match self
+      .cc_upload
+      .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
+        writer_guid: self.get_guid(),
+      }) {
+      Ok(_) => (),
+      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
+    };
+
+    Ok(fstatus)
   }
   pub fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
     unimplemented!()

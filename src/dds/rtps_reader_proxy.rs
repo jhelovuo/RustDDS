@@ -1,9 +1,16 @@
 use log::{debug, warn};
 
-use crate::structure::{
-  locator::{Locator, LocatorList},
-  guid::{EntityId, GUID},
-  sequence_number::{SequenceNumber},
+use crate::{
+  network::constant::get_user_traffic_multicast_port,
+  network::constant::get_user_traffic_unicast_port,
+  network::util::get_local_multicast_locators,
+  network::util::get_local_unicast_socket_address,
+  structure::{
+    entity::Entity,
+    guid::{EntityId, GUID},
+    locator::{Locator, LocatorList},
+    sequence_number::{SequenceNumber},
+  },
 };
 use crate::{
   common::{bit_set::BitSetRef},
@@ -13,6 +20,8 @@ use std::{
   collections::HashSet,
   net::{SocketAddr, Ipv4Addr},
 };
+
+use super::reader::Reader;
 
 #[derive(Debug, PartialEq, Clone)]
 ///ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
@@ -50,6 +59,26 @@ impl RtpsReaderProxy {
       unicast_locator_list: LocatorList::new(),
       multicast_locator_list: LocatorList::new(),
       //changes_for_reader : writer.history_cache.clone(),
+      expects_in_line_qos: false,
+      is_active: true,
+      requested_changes: HashSet::new(),
+      unsent_changes: HashSet::new(),
+      largest_acked_change: None,
+    }
+  }
+
+  pub fn from_reader(reader: &Reader, domain_id: u16, participant_id: u16) -> RtpsReaderProxy {
+    let unicast_locator_list =
+      get_local_unicast_socket_address(get_user_traffic_unicast_port(domain_id, participant_id));
+
+    let multicast_locator_list =
+      get_local_multicast_locators(get_user_traffic_multicast_port(domain_id));
+
+    RtpsReaderProxy {
+      remote_reader_guid: reader.get_guid(),
+      remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
+      unicast_locator_list,
+      multicast_locator_list,
       expects_in_line_qos: false,
       is_active: true,
       requested_changes: HashSet::new(),

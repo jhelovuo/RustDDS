@@ -372,8 +372,17 @@ impl DPEventWrapper {
         match found_writer {
           Some((_guid, w)) => {
             while let Ok(cc) = w.cache_change_receiver().try_recv() {
-              w.insert_to_history_cache(cc);
-              w.send_all_unsend_messages();
+              match cc {
+                super::writer::WriterCommand::DDSData { data } => {
+                  w.insert_to_history_cache(data);
+                  w.send_all_unsend_messages();
+                }
+                super::writer::WriterCommand::ResetOfferedDeadlineMissedStatus {
+                  writer_guid: _,
+                } => {
+                  w.reset_offered_deadline_missed_status();
+                }
+              }
             }
           }
           None => {}

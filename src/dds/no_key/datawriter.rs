@@ -4,9 +4,10 @@ use std::{
 };
 
 //use mio_extras::channel as mio_channel;
+use mio_extras::channel::Receiver;
 use serde::Serialize;
 
-use crate::structure::time::Timestamp;
+use crate::{dds::values::result::StatusChange, structure::time::Timestamp};
 use crate::structure::entity::{Entity};
 //use crate::structure::{dds_cache::DDSCache, guid::{GUID} };
 
@@ -110,6 +111,10 @@ where
 
   pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     self.keyed_datawriter.get_matched_subscriptions()
+  }
+
+  pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
+    self.keyed_datawriter.get_status_listener()
   }
 }
 

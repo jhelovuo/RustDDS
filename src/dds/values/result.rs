@@ -21,6 +21,7 @@ pub enum Error {
   //NoData,  // this should be encoded as Option<SomeData>, not an error code
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct CountWithChange {
   pub count: i32,
   pub count_change: i32,
@@ -47,38 +48,90 @@ pub struct SampleRejectedStatus {
                                                  // missing: last_instance_handle: instance key indicating last rejected instance
 }
 
+#[derive(Debug)]
+pub enum StatusChange {
+  LivelinessLostStatus {
+    status: LivelinessLostStatus,
+  },
+  OfferedDeadlineMissedStatus {
+    status: OfferedDeadlineMissedStatus,
+  },
+  OfferedIncompatibleQosStatus {
+    status: OfferedIncompatibleQosStatus,
+  },
+  RequestedDeadlineMissedStatus {
+    status: RequestedDeadlineMissedStatus,
+  },
+  RequestedIncompatibleQosStatus {
+    status: RequestedIncompatibleQosStatus,
+  },
+  PublicationMatchedStatus {
+    status: PublicationMatchedStatus,
+  },
+  SubscriptionMatchedStatus {
+    status: SubscriptionMatchedStatus,
+  },
+}
+
+#[derive(Debug)]
 pub struct LivelinessLostStatus {
   pub total: CountWithChange,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct OfferedDeadlineMissedStatus {
   pub total: CountWithChange,
   // missing: last instance key
 }
 
+impl OfferedDeadlineMissedStatus {
+  pub fn new() -> OfferedDeadlineMissedStatus {
+    OfferedDeadlineMissedStatus {
+      total: CountWithChange {
+        count: 0,
+        count_change: 0,
+      },
+    }
+  }
+
+  pub fn increase(&mut self) {
+    self.total.count += 1;
+    self.total.count_change += 1;
+  }
+
+  pub fn reset_change(&mut self) {
+    self.total.count_change = 0;
+  }
+}
+
+#[derive(Debug)]
 pub struct OfferedIncompatibleQosStatus {
   pub total: CountWithChange,
   //TODO: last_policy_id: QosPolicyId_t
   //TODO: policies: QosPolicyCountSeq
 }
 
+#[derive(Debug)]
 pub struct RequestedDeadlineMissedStatus {
   pub total: CountWithChange,
   // missing: last instance handle
 }
 
+#[derive(Debug)]
 pub struct RequestedIncompatibleQosStatus {
   pub total: CountWithChange,
   //TODO: last_policy_id: QosPolicyId_t
   //TODO: policies: QosPolicyCountSeq
 }
 
+#[derive(Debug)]
 pub struct PublicationMatchedStatus {
   pub total: CountWithChange,
   pub current: CountWithChange,
   // Missing: reference to last instance key
 }
 
+#[derive(Debug)]
 pub struct SubscriptionMatchedStatus {
   pub total: CountWithChange,
   pub current: CountWithChange,

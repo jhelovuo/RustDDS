@@ -12,7 +12,7 @@ use atosdds::{
   serialization::cdrDeserializer::CDR_deserializer_adapter,
   structure::entity::Entity,
 };
-use log::{error};
+use log::{error, info};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{channel as mio_channel};
 use ros2::{node_control::NodeControl, turtle_control::TurtleControl, turtle_data::Twist};
@@ -130,6 +130,15 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
     )
     .unwrap();
 
+  poll
+    .register(
+      turtle_cmd_vel_writer.get_status_listener(),
+      Token(999),
+      Ready::readable(),
+      PollOpt::edge(),
+    )
+    .unwrap();
+
   // senders
   let mut nodes_updated_sender: Option<mio_channel::SyncSender<DataUpdate>> = None;
 
@@ -180,6 +189,10 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
           None => (),
         };
         update_timer.set_timeout(Duration::from_secs(1), ());
+      } else if event.token() == Token(999) {
+        while let Ok(val) = turtle_cmd_vel_writer.get_status_listener().try_recv() {
+          info!("Status Change {:?}", val);
+        }
       }
     }
   }

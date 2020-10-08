@@ -4,7 +4,7 @@ use log::{debug, error, warn};
 use speedy::{Writable, Endianness};
 use time::Timespec;
 use time::get_time;
-use mio_extras::channel as mio_channel;
+use mio_extras::channel::{self as mio_channel, SyncSender};
 use mio::Token;
 use std::{
   time::{Instant, Duration},
@@ -43,7 +43,7 @@ use crate::{
   structure::{
     entity::{Entity, EntityAttributes},
     endpoint::{EndpointAttributes, Endpoint},
-    locator::{Locator, LocatorKind},
+    locator::LocatorKind,
     dds_cache::DDSCache,
   },
   common::timed_event_handler::{TimedEventHandler},
@@ -52,6 +52,8 @@ use super::{
   qos::{policy, QosPolicies},
   rtps_reader_proxy::RtpsReaderProxy,
   util::writer_util::WriterUtil,
+  values::result::OfferedDeadlineMissedStatus,
+  values::result::StatusChange,
 };
 use policy::{History, Reliability};
 //use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
@@ -106,7 +108,7 @@ pub struct Writer {
   pub data_max_size_serialized: u64,
   endpoint_attributes: EndpointAttributes,
   entity_attributes: EntityAttributes,
-  cache_change_receiver: mio_channel::Receiver<DDSData>,
+  writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
   ///RTPS Reader
   pub readers: Vec<RtpsReaderProxy>,
@@ -136,15 +138,25 @@ pub struct Writer {
   timed_event_handler: Option<TimedEventHandler>,
 
   qos_policies: QosPolicies,
+
+  // Used for sending status info about messages sent
+  status_sender: SyncSender<StatusChange>,
+  offered_deadline_status: OfferedDeadlineMissedStatus,
+}
+
+pub enum WriterCommand {
+  DDSData { data: DDSData },
+  ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }
 
 impl Writer {
   pub fn new(
     guid: GUID,
-    cache_change_receiver: mio_channel::Receiver<DDSData>,
+    writer_command_receiver: mio_channel::Receiver<WriterCommand>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
     qos_policies: QosPolicies,
+    status_sender: SyncSender<StatusChange>,
   ) -> Writer {
     let entity_attributes = EntityAttributes::new(guid);
 
@@ -188,7 +200,7 @@ impl Writer {
       data_max_size_serialized: 999999999,
       entity_attributes,
       //enpoint_attributes: EndpointAttributes::default(),
-      cache_change_receiver,
+      writer_command_receiver,
       readers: vec![
         /*
         RtpsReaderProxy::new_for_unit_testing(1000),
@@ -205,6 +217,8 @@ impl Writer {
       disposed_sequence_numbers: HashSet::new(),
       timed_event_handler: None,
       qos_policies,
+      status_sender,
+      offered_deadline_status: OfferedDeadlineMissedStatus::new(),
     }
   }
 
@@ -224,8 +238,8 @@ impl Writer {
     Token(hashedID as usize)
   }
 
-  pub fn cache_change_receiver(&self) -> &mio_channel::Receiver<DDSData> {
-    &self.cache_change_receiver
+  pub fn cache_change_receiver(&self) -> &mio_channel::Receiver<WriterCommand> {
+    &self.writer_command_receiver
   }
 
   pub fn add_timed_event_handler(&mut self, time_handler: TimedEventHandler) {
@@ -296,6 +310,7 @@ impl Writer {
       requested_seqnums.insert(reader.remote_reader_guid, Vec::new());
 
       let mut rtps_message: Message = Message::new(message_header.clone());
+
       rtps_message.add_submessage(Writer::get_DST_submessage(
         endianness,
         reader_guid.guidPrefix,
@@ -307,6 +322,8 @@ impl Writer {
       );
       not_acked_changes.extend(reader.requested_changes());
 
+      let mut status_changes = Vec::new();
+
       for &seqnum in itertools::sorted(reader.unsent_changes().union(&not_acked_changes)) {
         // adds data if there is unsent change
         rtps_message.add_data_msg(seqnum, &self, &reader);
@@ -314,6 +331,21 @@ impl Writer {
           Some(v) => v.push(seqnum),
           None => (),
         };
+
+        // checking previous sequence number for deadline
+        let instant = self.sequence_number_to_instant(seqnum - SequenceNumber::from(1));
+
+        match self.get_qos().deadline {
+          Some(dl) => {
+            if let Some(instant) = instant {
+              if Duration::from(dl.period) < Instant::now() - *instant {
+                self.offered_deadline_status.increase();
+                status_changes.push(self.offered_deadline_status);
+              }
+            }
+          }
+          None => (),
+        }
       }
 
       for &seqnum in itertools::sorted(reader.requested_changes().iter()) {
@@ -330,6 +362,17 @@ impl Writer {
 
       self.send_unicast_message_to_reader(&rtps_message, reader);
       self.send_multicast_message_to_reader(&rtps_message, reader);
+
+      for sc in status_changes.into_iter() {
+        debug!("Trying to send status change {:?}", sc);
+        match self
+          .status_sender
+          .try_send(StatusChange::OfferedDeadlineMissedStatus { status: sc })
+        {
+          Ok(_) => (),
+          Err(e) => error!("Failed to send new message status. {:?}", e),
+        };
+      }
     }
 
     for (guid, seqnum_vec) in seqnums {
@@ -557,12 +600,18 @@ impl Writer {
     if reader_proxy.can_send() {
       let sequenceNumber = match reader_proxy.next_unsent_change() {
         Some(s) => s,
-        None => return None,
+        None => {
+          warn!("Failed to get next unsent change sequence number.");
+          return None;
+        }
       };
 
       let instant = match self.sequence_number_to_instant.get(&sequenceNumber) {
         Some(i) => i,
-        None => return None,
+        None => {
+          warn!("Failed to get instant from sequence number.");
+          return None;
+        }
       };
 
       let cache = match self.dds_cache.read() {
@@ -572,7 +621,10 @@ impl Writer {
 
       let change = match cache.from_topic_get_change(&self.my_topic_name, &instant) {
         Some(c) => c,
-        None => return None,
+        None => {
+          warn!("Failed to get cache change from topic.");
+          return None;
+        }
       };
 
       let reader_entity_id = reader_proxy.remote_reader_guid.entityId;
@@ -618,52 +670,49 @@ impl Writer {
   }
 
   fn send_next_unsend_message(&mut self) {
-    let mut multi_cast_locators: Vec<Locator> = vec![];
-    let mut buffer: Vec<u8> = vec![];
-    let mut context = self.endianness;
-
-    if self.endianness == Endianness::BigEndian {
-      context = Endianness::BigEndian
-    }
-
-    let mut remote_reader_guid = None;
-    let mut rem_sequece_number: Option<SequenceNumber> = None;
+    let remote_reader_guid;
+    let rem_sequece_number;
     let mut message_sequence_numbers = Vec::new();
 
     if let Some(reader) = self.get_some_reader_with_unsent_messages() {
       rem_sequece_number = reader.next_unsent_change();
 
-      remote_reader_guid = Some(reader.remote_reader_guid);
+      remote_reader_guid = reader.remote_reader_guid;
       let message = self.generate_message(reader);
       if let Some(message) = message {
         message_sequence_numbers = message.get_data_sub_message_sequence_numbers();
-        if let Ok(data) = message.write_to_vec_with_ctx(context) {
-          buffer = data;
-        }
-      }
 
-      self
-        .udp_sender
-        .send_to_locator_list(&buffer, &reader.unicast_locator_list);
+        self.send_unicast_message_to_reader(&message, reader);
+        self.send_multicast_message_to_reader(&message, reader);
 
-      for loc in reader.multicast_locator_list.iter() {
-        if loc.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
-          multi_cast_locators.push(loc.clone())
-        }
-      }
-
-      for l in multi_cast_locators {
-        if self.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
-          debug!("Sending multicast {:?}", reader.remote_reader_guid);
-        }
-        if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
-          let a = l.to_socket_address();
-          match self.udp_sender.send_ipv4_multicast(&buffer, a) {
-            Ok(_) => (),
-            Err(e) => error!("Unable to send buffer to multicast {:?}. {:?}", a, e),
+        if let Some(seqnum) = rem_sequece_number {
+          let instant = self.sequence_number_to_instant(seqnum - SequenceNumber::from(1));
+          match self.get_qos().deadline {
+            Some(dl) => {
+              if let Some(instant) = instant {
+                if Duration::from(dl.period) < Instant::now() - *instant {
+                  self.offered_deadline_status.increase();
+                  debug!(
+                    "Trying to send single status change {:?}",
+                    self.offered_deadline_status
+                  );
+                  match self
+                    .status_sender
+                    .try_send(StatusChange::OfferedDeadlineMissedStatus {
+                      status: self.offered_deadline_status,
+                    }) {
+                    Ok(_) => (),
+                    Err(e) => error!("Failed to send new message status. {:?}", e),
+                  };
+                }
+              }
+            }
+            None => (),
           }
         }
       }
+    } else {
+      return;
     }
 
     if let Some(rem_seq) = rem_sequece_number {
@@ -671,20 +720,19 @@ impl Writer {
         reader.remove_unsend_change(rem_seq);
       }
 
-      if let Some(remote_reader_guid) = remote_reader_guid {
-        self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
-          message_sequence_numbers,
-          &Some(remote_reader_guid),
-        )
-      }
+      self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
+        message_sequence_numbers,
+        &Some(remote_reader_guid),
+      );
     }
   }
 
   fn send_unicast_message_to_reader(&self, message: &Message, reader: &RtpsReaderProxy) {
-    let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
-    self
-      .udp_sender
-      .send_to_locator_list(&buffer, &reader.unicast_locator_list)
+    if let Ok(data) = message.write_to_vec_with_ctx(self.endianness) {
+      self
+        .udp_sender
+        .send_to_locator_list(&data, &reader.unicast_locator_list)
+    }
   }
 
   fn send_multicast_message_to_reader(&self, message: &Message, reader: &RtpsReaderProxy) {
@@ -1066,6 +1114,10 @@ impl Writer {
 
   pub fn topic_name(&self) -> &String {
     &self.my_topic_name
+  }
+
+  pub fn reset_offered_deadline_missed_status(&mut self) {
+    self.offered_deadline_status.reset_change();
   }
 }
 

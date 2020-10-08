@@ -357,15 +357,15 @@ impl DomainParticipant_Inner {
           listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, ls);
         }
         _ => {
-          info!("Cannot join multicast, possibly another instance running on this machine.");
+          warn!("Cannot join multicast, possibly another instance running on this machine.");
         }
       },
       None => {
-        info!("Cannot join multicast, possibly another instance running on this machine.");
+        warn!("Cannot join multicast, possibly another instance running on this machine.");
       }
     };
 
-    let mut participant_id = 1;
+    let mut participant_id = 0;
 
     let mut discovery_listener = None;
 

@@ -18,7 +18,6 @@ use crate::dds::{
   participant::*,
   topic::*,
   qos::*,
-  ddsdata::DDSData,
   reader::Reader,
   writer::Writer,
   datawriter::DataWriter,
@@ -41,7 +40,10 @@ use crate::{
 
 use rand::Rng;
 
-use super::no_key::{wrappers::NoKeyWrapper, wrappers::SAWrapper};
+use super::{
+  no_key::{wrappers::NoKeyWrapper, wrappers::SAWrapper},
+  writer::WriterCommand,
+};
 
 // -------------------------------------------------------------------
 
@@ -86,7 +88,8 @@ impl<'a> Publisher {
     <D as Keyed>::K: Key,
     SA: SerializerAdapter<D>,
   {
-    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<DDSData>(100);
+    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(100);
+    let (message_status_sender, message_status_receiver) = mio_channel::sync_channel(100);
 
     let entity_id = match entity_id {
       Some(eid) => eid,
@@ -113,6 +116,7 @@ impl<'a> Publisher {
       dp.get_dds_cache(),
       topic.get_name().to_string(),
       topic.get_qos().clone(),
+      message_status_sender,
     );
 
     self
@@ -127,6 +131,7 @@ impl<'a> Publisher {
       dwcc_upload,
       self.discovery_command.clone(),
       dp.get_dds_cache(),
+      message_status_receiver,
     );
 
     let matching_data_writer = match matching_data_writer {

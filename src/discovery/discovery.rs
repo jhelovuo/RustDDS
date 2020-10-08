@@ -86,9 +86,9 @@ unsafe impl Send for Discovery {}
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: u64 = 2;
   const TOPIC_CLEANUP_PERIOD: u64 = 10; // timer for cleaning up inactive topics
-  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 5;
-  const SEND_READERS_INFO_PERIOD: u64 = 5;
-  const SEND_WRITERS_INFO_PERIOD: u64 = 5;
+  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 2;
+  const SEND_READERS_INFO_PERIOD: u64 = 2;
+  const SEND_WRITERS_INFO_PERIOD: u64 = 2;
   const SEND_TOPIC_INFO_PERIOD: u64 = 20;
   const CHECK_PARTICIPANT_MESSAGES: u64 = 1;
 
@@ -1173,7 +1173,7 @@ impl Discovery {
     }
 
     self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
-      needs_new_cache_change: false,
+      needs_new_cache_change: true,
     });
 
     true
@@ -1220,6 +1220,7 @@ impl Discovery {
           && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
           && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
           && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
+          && *eid != EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
       })
     {
       match writer.write(data.clone(), None) {
@@ -1249,6 +1250,7 @@ impl Discovery {
         && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
         && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER
         && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER
+        && *eid != EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
     }) {
       match writer.write(data.clone(), None) {
         Ok(_) => (),

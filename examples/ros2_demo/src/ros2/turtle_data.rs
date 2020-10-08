@@ -8,6 +8,7 @@ use atosdds::{
 };
 
 use serde::{Serialize, Deserialize};
+use std::time::Duration as StdDuration;
 
 pub struct TurtleCmdVelTopic {}
 
@@ -16,7 +17,7 @@ impl TurtleCmdVelTopic {
     durability: Some(Durability::Volatile),
     presentation: None,
     deadline: Some(Deadline {
-      period: Duration::DURATION_INFINITE,
+      period: Duration::from_std(StdDuration::from_secs(1)),
     }),
     latency_budget: Some(LatencyBudget {
       duration: Duration::DURATION_ZERO,
