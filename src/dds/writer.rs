@@ -1147,7 +1147,9 @@ impl HasQoSPolicy for Writer {
 #[cfg(test)]
 mod tests {
   use crate::{
-    dds::{qos::QosPolicies, participant::DomainParticipant, typedesc::TypeDesc},
+    dds::{
+      interfaces::IDataWriter, participant::DomainParticipant, qos::QosPolicies, typedesc::TypeDesc,
+    },
   };
   use std::thread;
   use crate::test::random_data::*;
@@ -1192,7 +1194,8 @@ mod tests {
       b: "Fobar".to_string(),
     };
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let writeResult = data_writer.write(data, None).expect("Unable to write data");
+    let writeResult = <DataWriter<_, _> as IDataWriter<_, _>>::write(&mut data_writer, data, None)
+      .expect("Unable to write data");
 
     info!("writerResult:  {:?}", writeResult);
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());

@@ -3,6 +3,11 @@ use enumflags2::BitFlags;
 use crate::{dds::traits::key::*, structure::guid::GUID};
 use crate::structure::time::Timestamp;
 
+use super::{
+  interfaces::{IDataSample, IKeyedDataSample},
+  no_key::wrappers::NoKeyWrapper,
+};
+
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
 #[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
@@ -119,14 +124,14 @@ impl SampleInfo {
 /// DDS spec 2.2.2.5.4
 #[derive(PartialEq, Debug)]
 pub struct DataSample<D: Keyed> {
-  pub sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
+  sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
 
   /// This ia a bit unorthodox use of Result.
   /// It replaces the use of valid_data flag, because when valid_data = false, we should
   /// not provide any data value.
   /// Now Ok(D) means valid_data = true and there is a sample.
   /// Err(D::K) means there is valid_data = false, but only a Key and instance_state has changed.
-  pub value: std::result::Result<D, D::K>,
+  value: std::result::Result<D, D::K>,
 }
 
 impl<D> DataSample<D>
@@ -205,3 +210,81 @@ where
     }
   } // fn
 } // imlp
+
+impl<D: Keyed + 'static> IDataSample<D> for DataSample<D> {
+  fn get_sample_info(&self) -> &SampleInfo {
+    &self.sample_info
+  }
+
+  fn get_sample_info_mut(&mut self) -> &mut SampleInfo {
+    &mut self.sample_info
+  }
+
+  fn get_value(&self) -> Option<&D> {
+    match &self.value {
+      Ok(d) => Some(d),
+      _ => None,
+    }
+  }
+
+  fn into_value(self) -> Option<D> {
+    match self.value {
+      Ok(d) => Some(d),
+      _ => None,
+    }
+  }
+
+  fn as_idata_sample(&self) -> &dyn IDataSample<D> {
+    self
+  }
+
+  fn into_idata_sample(self) -> Box<dyn IDataSample<D>> {
+    Box::new(self)
+  }
+}
+
+impl<D: Keyed + 'static> IKeyedDataSample<D> for DataSample<D> {
+  fn get_keyed_value(&self) -> &Result<D, D::K> {
+    &self.value
+  }
+
+  fn as_ikeyed_data_sample(&self) -> &dyn IKeyedDataSample<D> {
+    self
+  }
+
+  fn into_ikeyed_data_sample(self) -> Box<dyn IKeyedDataSample<D>> {
+    Box::new(self)
+  }
+}
+
+impl<D: 'static> IDataSample<D> for DataSample<NoKeyWrapper<D>> {
+  fn get_sample_info(&self) -> &SampleInfo {
+    &self.sample_info
+  }
+
+  fn get_sample_info_mut(&mut self) -> &mut SampleInfo {
+    &mut self.sample_info
+  }
+
+  fn get_value(&self) -> Option<&D> {
+    match &self.value {
+      Ok(v) => Some(&v),
+      _ => None,
+    }
+  }
+
+  fn into_value(self) -> Option<D> {
+    match self.value {
+      Ok(v) => Some(v.unwrap()),
+      _ => None,
+    }
+  }
+
+  fn as_idata_sample(&self) -> &dyn IDataSample<D> {
+    self
+  }
+
+  fn into_idata_sample(self) -> Box<dyn IDataSample<D>> {
+    Box::new(self)
+  }
+}

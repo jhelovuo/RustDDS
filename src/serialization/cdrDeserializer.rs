@@ -41,7 +41,9 @@ where
 
   fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D> {
     match encoding {
-      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => deserialize_from_little_endian(input_bytes),
+      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
+        deserialize_from_little_endian(input_bytes)
+      }
       RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
       repr_id => Err(Error::Message(format!(
         "Unknown representaiton identifier {}.",

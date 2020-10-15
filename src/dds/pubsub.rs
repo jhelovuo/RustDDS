@@ -266,7 +266,7 @@ impl<'s> Subscriber {
     }
   }
 
-  pub fn create_datareader<D, SA>(
+  pub fn create_datareader<D: 'static, SA>(
     &'s self,
     entity_id: Option<EntityId>,
     topic: &'s Topic,
@@ -357,7 +357,7 @@ impl<'s> Subscriber {
     Ok(matching_datareader)
   }
 
-  pub fn create_datareader_no_key<D, SA>(
+  pub fn create_datareader_no_key<D: 'static, SA>(
     &'s self,
     entity_id: Option<EntityId>,
     topic: &'s Topic,

@@ -14,8 +14,10 @@ use std::{
 use crate::{
   ParticipantMessageData, ParticipantMessageDataKind,
   dds::{
+    datareader::{DataReader},
+    datawriter::DataWriter,
+    interfaces::{IDataWriter, IKeyedDataReader, IKeyedDataWriter},
     participant::{DomainParticipantWeak},
-    typedesc::TypeDesc,
     qos::{
       QosPolicies, HasQoSPolicy,
       policy::{
@@ -23,9 +25,8 @@ use crate::{
         Ownership, Liveliness, LivelinessKind, TimeBasedFilter, DestinationOrder, ResourceLimits,
       },
     },
-    datareader::{DataReader},
     readcondition::ReadCondition,
-    datawriter::DataWriter,
+    typedesc::TypeDesc,
   },
   dds::values::result::Error,
   serialization::cdrDeserializer::CDR_deserializer_adapter,
@@ -912,7 +913,7 @@ impl Discovery {
   ) -> Option<SPDPDiscoveredParticipantData> {
     let participant_data = match reader.take_next_sample() {
       Ok(d) => match d {
-        Some(d) => match &d.value {
+        Some(d) => match d.get_keyed_value() {
           Ok(aaaaa) => (aaaaa).clone(),
           Err(key) => {
             // we should dispose participant here
@@ -951,16 +952,16 @@ impl Discovery {
       Ok(d) => {
         let mut db = self.discovery_db_write();
         for data in d.into_iter() {
-          match data.value {
+          match data.get_keyed_value() {
             Ok(val) => {
-              db.update_subscription(&val);
+              db.update_subscription(val);
               self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
                 needs_new_cache_change: true,
               });
-              db.update_topic_data_drd(&val);
+              db.update_topic_data_drd(val);
             }
             Err(guid) => {
-              db.remove_topic_reader(guid);
+              db.remove_topic_reader(*guid);
               self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
                 needs_new_cache_change: false,
               });
@@ -980,14 +981,14 @@ impl Discovery {
       Ok(d) => {
         let mut db = self.discovery_db_write();
         for data in d.into_iter() {
-          match data.value {
+          match data.get_keyed_value() {
             Ok(val) => {
-              db.update_publication(&val);
+              db.update_publication(val);
               self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
-              db.update_topic_data_dwd(&val);
+              db.update_topic_data_dwd(val);
             }
             Err(guid) => {
-              db.remove_topic_writer(guid);
+              db.remove_topic_writer(*guid);
               self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
             }
           }
@@ -1005,7 +1006,7 @@ impl Discovery {
       match reader.take(100, ReadCondition::any()) {
         Ok(d) => Some(
           d.into_iter()
-            .map(|p| p.value)
+            .map(|p| p.get_keyed_value().clone())
             .filter_map(Result::ok)
             .collect(),
         ),
@@ -1038,7 +1039,7 @@ impl Discovery {
         Ok(msgs) => Some(
           msgs
             .into_iter()
-            .map(|p| p.value)
+            .map(|p| p.get_keyed_value().clone())
             .filter_map(Result::ok)
             .collect(),
         ),

@@ -32,7 +32,10 @@ use crate::dds::qos::{
 use crate::dds::traits::serde_adapters::SerializerAdapter;
 use crate::dds::datasample::DataSample;
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
-use super::{datasample_cache::DataSampleCache, values::result::StatusChange, writer::WriterCommand};
+use super::{
+  datasample_cache::DataSampleCache, interfaces::IDataWriter, interfaces::IKeyedDataWriter,
+  values::result::StatusChange, writer::WriterCommand,
+};
 
 pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D>> {
   my_publisher: &'a Publisher,
@@ -139,10 +142,39 @@ where
     })
   }
 
-  // write (with optional timestamp)
-  // This operation could take also in InstanceHandle, if we would use them.
-  // The _with_timestamp version is covered by the optional timestamp.
-  pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+  // This one function provides both get_matched_subscrptions and get_matched_subscription_data
+  // TODO: Maybe we could return references to the subscription data to avoid copying?
+  // But then what if the result set changes while the application processes it?
+
+  fn refresh_manual_liveliness(&self) {
+    match self.get_qos().liveliness {
+      Some(lv) => match lv.kind {
+        super::qos::policy::LivelinessKind::Automatic => (),
+        super::qos::policy::LivelinessKind::ManualByParticipant => {
+          match self
+            .discovery_command
+            .send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS)
+          {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+            }
+          }
+        }
+        super::qos::policy::LivelinessKind::ManulByTopic => (),
+      },
+      None => (),
+    };
+  }
+}
+
+impl<'a, D, SA> IDataWriter<D, SA> for DataWriter<'a, D, SA>
+where
+  D: Keyed + Serialize,
+  <D as Keyed>::K: Key,
+  SA: SerializerAdapter<D>,
+{
+  fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     let mut ddsdata = DDSData::from(&data, source_timestamp);
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
@@ -169,13 +201,124 @@ where
     }
   }
 
-  // dispose
-  // The data item is given only for identification, i.e. extracting the key
-  pub fn dispose(
-    &mut self,
-    key: <D as Keyed>::K,
-    source_timestamp: Option<Timestamp>,
-  ) -> Result<()> {
+  fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
+    match &self.qos_policy.reliability {
+      Some(rel) => match rel {
+        Reliability::BestEffort => return Ok(()),
+        Reliability::Reliable {
+          max_blocking_time: _,
+        } =>
+        // TODO: implement actual waiting for acks
+        {
+          ()
+        }
+      },
+      None => return Ok(()),
+    };
+
+    // TODO: wait for actual acknowledgements to writers writes
+    return Err(Error::Unsupported);
+  }
+
+  // status queries
+  fn get_status_listener(&self) -> &Receiver<StatusChange> {
+    match self
+      .cc_upload
+      .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
+        writer_guid: self.get_guid(),
+      }) {
+      Ok(_) => (),
+      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
+    };
+    &self.status_receiver
+  }
+
+  fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
+    todo!()
+  }
+
+  fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
+    let mut fstatus = OfferedDeadlineMissedStatus::new();
+    while let Ok(status) = self.status_receiver.try_recv() {
+      match status {
+        StatusChange::OfferedDeadlineMissedStatus { status } => fstatus = status,
+        // TODO: possibly save old statuses
+        _ => (),
+      }
+    }
+
+    match self
+      .cc_upload
+      .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
+        writer_guid: self.get_guid(),
+      }) {
+      Ok(_) => (),
+      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
+    };
+
+    Ok(fstatus)
+  }
+
+  fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
+    todo!()
+  }
+
+  fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
+    todo!()
+  }
+
+  // who are we connected to?
+  fn get_topic(&self) -> &Topic {
+    &self.my_topic
+  }
+
+  fn get_publisher(&self) -> &Publisher {
+    &self.my_publisher
+  }
+
+  fn assert_liveliness(&self) -> Result<()> {
+    self.refresh_manual_liveliness();
+
+    match self.get_qos().liveliness {
+      Some(lv) => {
+        match lv.kind {
+          super::qos::policy::LivelinessKind::Automatic => (),
+          super::qos::policy::LivelinessKind::ManualByParticipant => (),
+          super::qos::policy::LivelinessKind::ManulByTopic => {
+            match self
+              .discovery_command
+              .send(DiscoveryCommand::ASSERT_TOPIC_LIVELINESS {
+                writer_guid: self.get_guid(),
+              }) {
+              Ok(_) => (),
+              Err(e) => {
+                error!(
+                  "Failed to send DiscoveryCommand - AssertLiveliness. {:?}",
+                  e
+                );
+              }
+            }
+          }
+        };
+      }
+      None => (),
+    };
+
+    Ok(())
+  }
+
+  fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
+    todo!()
+  }
+}
+
+impl<D, SA> IKeyedDataWriter<D, SA> for DataWriter<'_, D, SA>
+where
+  D: Keyed + Serialize,
+  <D as Keyed>::K: Key,
+  SA: SerializerAdapter<D>,
+{
+  fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
     /*
 
     Removing this for now, as there is need to redesign the mechanism of transmitting dispose actions
@@ -213,138 +356,6 @@ where
         Err(Error::OutOfResources)
       }
     }
-  }
-
-  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
-    match &self.qos_policy.reliability {
-      Some(rel) => match rel {
-        Reliability::BestEffort => return Ok(()),
-        Reliability::Reliable {
-          max_blocking_time: _,
-        } =>
-        // TODO: implement actual waiting for acks
-        {
-          ()
-        }
-      },
-      None => return Ok(()),
-    };
-
-    // TODO: wait for actual acknowledgements to writers writes
-    return Err(Error::Unsupported);
-  }
-
-  // status queries
-  pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
-    match self
-      .cc_upload
-      .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
-        writer_guid: self.get_guid(),
-      }) {
-      Ok(_) => (),
-      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
-    };
-    &self.status_receiver
-  }
-
-  pub fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
-    unimplemented!()
-  }
-  pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
-    let mut fstatus = OfferedDeadlineMissedStatus::new();
-    while let Ok(status) = self.status_receiver.try_recv() {
-      match status {
-        StatusChange::OfferedDeadlineMissedStatus { status } => fstatus = status,
-        // TODO: possibly save old statuses
-        _ => (),
-      }
-    }
-
-    match self
-      .cc_upload
-      .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
-        writer_guid: self.get_guid(),
-      }) {
-      Ok(_) => (),
-      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
-    };
-
-    Ok(fstatus)
-  }
-  pub fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
-    unimplemented!()
-  }
-  pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
-    unimplemented!()
-  }
-
-  // who are we connected to?
-  pub fn get_topic(&self) -> &Topic {
-    &self.my_topic
-  }
-  pub fn get_publisher(&self) -> &Publisher {
-    &self.my_publisher
-  }
-
-  pub fn assert_liveliness(&self) -> Result<()> {
-    self.refresh_manual_liveliness();
-
-    match self.get_qos().liveliness {
-      Some(lv) => {
-        match lv.kind {
-          super::qos::policy::LivelinessKind::Automatic => (),
-          super::qos::policy::LivelinessKind::ManualByParticipant => (),
-          super::qos::policy::LivelinessKind::ManulByTopic => {
-            match self
-              .discovery_command
-              .send(DiscoveryCommand::ASSERT_TOPIC_LIVELINESS {
-                writer_guid: self.get_guid(),
-              }) {
-              Ok(_) => (),
-              Err(e) => {
-                error!(
-                  "Failed to send DiscoveryCommand - AssertLiveliness. {:?}",
-                  e
-                );
-              }
-            }
-          }
-        };
-      }
-      None => (),
-    };
-
-    Ok(())
-  }
-
-  // DDS spec returns an InstanceHandles pointing to a BuiltInTopic reader
-  //  but we do not use those, so return the actual data instead.
-  pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
-    unimplemented!()
-  }
-  // This one function provides both get_matched_subscrptions and get_matched_subscription_data
-  // TODO: Maybe we could return references to the subscription data to avoid copying?
-  // But then what if the result set changes while the application processes it?
-
-  fn refresh_manual_liveliness(&self) {
-    match self.get_qos().liveliness {
-      Some(lv) => match lv.kind {
-        super::qos::policy::LivelinessKind::Automatic => (),
-        super::qos::policy::LivelinessKind::ManualByParticipant => {
-          match self
-            .discovery_command
-            .send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS)
-          {
-            Ok(_) => (),
-            Err(e) => {
-              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
-            }
-          }
-        }
-        super::qos::policy::LivelinessKind::ManulByTopic => (),
-      },
-      None => (),
-    };
   }
 }
 

@@ -27,6 +27,8 @@ use crate::dds::{
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
+use super::interfaces::{IDataReader, IDataSample, IKeyedDataReader, IKeyedDataSample};
+
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
 /*#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Take {
@@ -75,7 +77,7 @@ where
   }
 }
 
-impl<'a, D, SA> DataReader<'a, D, SA>
+impl<'a, D: 'static, SA> DataReader<'a, D, SA>
 where
   D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
@@ -118,6 +120,75 @@ where
       deserializer_type: PhantomData,
       discovery_command,
     })
+  }
+
+  pub(crate) fn read_as_obj(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<&DataSample<D>>> {
+    self.get_datasamples_from_cache();
+    let mut result: Vec<&DataSample<D>> = Vec::new();
+    'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
+      for datasample in datasample_vec.iter_mut() {
+        if Self::matches_conditions(&read_condition, datasample) {
+          datasample.get_sample_info_mut().sample_state = SampleState::Read;
+          result.push(&*datasample);
+        }
+        if result.len() >= max_samples {
+          break 'outer;
+        }
+      }
+    }
+
+    // clearing receiver buffer
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
+    Ok(result)
+  }
+
+  pub(crate) fn take_as_obj(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<DataSample<D>>> {
+    self.get_datasamples_from_cache();
+
+    let mut result: Vec<DataSample<D>> = Vec::new();
+    'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
+      let mut ind = 0;
+      while ind < datasample_vec.len() {
+        // If a datasample is removed from the vec, all elements from the index
+        // onwards will be shifted left. Therefore, the next sample is accessible
+        // in the same index
+        if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
+          let mut datasample = datasample_vec.remove(ind);
+          datasample.get_sample_info_mut().sample_state = SampleState::Read;
+          result.push(datasample);
+        // Nothing removed, next element can be found in the next index.
+        } else {
+          ind += 1;
+        }
+        if result.len() >= max_samples {
+          break 'outer;
+        }
+      }
+    }
+
+    // clearing receiver buffer
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
+    Ok(result)
+  }
+
+  fn read_next_sample(&mut self) -> Result<Option<&DataSample<D>>> {
+    let mut ds = self.read_as_obj(1, ReadCondition::not_read())?;
+    Ok(ds.pop())
+  }
+
+  fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
+    let mut ds = self.take_as_obj(1, ReadCondition::not_read())?;
+    Ok(ds.pop())
   }
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
@@ -207,87 +278,10 @@ where
       // TODO: how do we get the source_timestamp here? Is it needed?
       // TODO: Keeping track of and assigning  generation rank, sample rank etc.
       let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload, cc.writer_guid);
-      datasample.sample_info.instance_state = Self::change_kind_to_instance_state(&cc.kind);
+      datasample.get_sample_info_mut().instance_state =
+        Self::change_kind_to_instance_state(&cc.kind);
       self.datasample_cache.add_datasample(datasample);
     }
-  }
-
-  /// This operation accesses a collection of Data values from the DataReader.
-  /// The function return references to the data.
-  /// The size of the returned collection will be limited to the specified max_samples.
-  /// The read_condition filters the samples accessed.
-  /// If no matching samples exist, then an empty Vec will be returned, but that is not an error.
-  /// In case a disposed sample is returned, it is indicated by InstanceState in SampleInfo and
-  /// DataSample.value will be Err containig the key of the disposed sample.
-  ///
-  /// View state and sample state are maintained for each DataReader separately. Instance state is
-  /// determined by global CacheChange objects concerning that instance.
-  ///
-  /// If the sample belongs to the most recent generation of the instance,
-  /// it will also set the view_state of the instance to NotNew.
-  ///
-  /// This should cover DDS DataReader methods read, read_w_condition and
-  /// read_next_sample.
-  pub fn read(
-    &mut self,
-    max_samples: usize,            // maximum number of DataSamples to return.
-    read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
-  ) -> Result<Vec<&DataSample<D>>> {
-    self.get_datasamples_from_cache();
-    let mut result = Vec::new();
-    'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
-      for datasample in datasample_vec.iter_mut() {
-        if Self::matches_conditions(&read_condition, datasample) {
-          datasample.sample_info.sample_state = SampleState::Read;
-          result.push(&*datasample);
-        }
-        if result.len() >= max_samples {
-          break 'outer;
-        }
-      }
-    }
-
-    // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
-
-    Ok(result)
-  }
-
-  /// Similar to read, but insted of references being returned, the datasamples
-  /// are removed from the DataReader and ownership is transferred to the caller.
-  /// Should cover take, take_w_condition and take_next_sample
-  pub fn take(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<D>>> {
-    self.get_datasamples_from_cache();
-
-    let mut result = Vec::new();
-    'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
-      let mut ind = 0;
-      while ind < datasample_vec.len() {
-        // If a datasample is removed from the vec, all elements from the index
-        // onwards will be shifted left. Therefore, the next sample is accessible
-        // in the same index
-        if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
-          let mut datasample = datasample_vec.remove(ind);
-          datasample.sample_info.sample_state = SampleState::Read;
-          result.push(datasample);
-        // Nothing removed, next element can be found in the next index.
-        } else {
-          ind += 1;
-        }
-        if result.len() >= max_samples {
-          break 'outer;
-        }
-      }
-    }
-
-    // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
-
-    Ok(result)
   }
 
   /// Works similarly to read(), but will return only samples from a specific instance.
@@ -298,7 +292,7 @@ where
   ///
   /// This should cover DDS DataReader methods read_instance, read_next_instance,
   /// read_next_instance_w_condition.
-  pub fn read_instance(
+  fn read_instance(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -330,7 +324,7 @@ where
     if let Some(datasample_vec) = self.datasample_cache.get_datasamples_mut(&key) {
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, datasample) {
-          datasample.sample_info.sample_state = SampleState::Read;
+          datasample.get_sample_info_mut().sample_state = SampleState::Read;
           result.push(&*datasample);
         }
         if result.len() >= max_samples {
@@ -348,7 +342,7 @@ where
   /// Similar to read_instance, but will return owned datasamples
   /// This should cover DDS DataReader methods take_instance, take_next_instance,
   /// take_next_instance_w_condition.
-  pub fn take_instance(
+  fn take_instance(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -385,7 +379,7 @@ where
         // in the same index
         if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
           let mut datasample = datasample_vec.remove(ind);
-          datasample.sample_info.sample_state = SampleState::Read;
+          datasample.get_sample_info_mut().sample_state = SampleState::Read;
           result.push(datasample);
         // Nothing removed, next element can be found in the next index.
         } else {
@@ -403,21 +397,9 @@ where
     Ok(result)
   }
 
-  /// This is a simplified API for reading the next not_read sample
-  /// If no new data is available, the return value is Ok(None).
-  pub fn read_next_sample(&mut self) -> Result<Option<&DataSample<D>>> {
-    let mut ds = self.read(1, ReadCondition::not_read())?;
-    Ok(ds.pop())
-  }
-
-  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
-    let mut ds = self.take(1, ReadCondition::not_read())?;
-    Ok(ds.pop())
-  }
-
   // status queries
 
-  pub fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
+  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
     todo!()
   }
 
@@ -426,19 +408,19 @@ where
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
     if !rcondition
       .sample_state_mask
-      .contains(dsample.sample_info.sample_state)
+      .contains(dsample.get_sample_info().sample_state)
     {
       return false;
     }
     if !rcondition
       .view_state_mask
-      .contains(dsample.sample_info.view_state)
+      .contains(dsample.get_sample_info().view_state)
     {
       return false;
     }
     if !rcondition
       .instance_state_mask
-      .contains(dsample.sample_info.instance_state)
+      .contains(dsample.get_sample_info().instance_state)
     {
       return false;
     }
@@ -454,6 +436,140 @@ where
     }
   }
 } // impl
+
+impl<'a, D: 'static, SA> IDataReader<D, SA> for DataReader<'a, D, SA>
+where
+  D: DeserializeOwned + Keyed,
+  <D as Keyed>::K: Key,
+  SA: DeserializerAdapter<D>,
+{
+  fn read(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<&dyn IDataSample<D>>> {
+    let samples = self.read_as_obj(max_samples, read_condition);
+    match samples {
+      Ok(d) => Ok(d.into_iter().map(|p| p.as_idata_sample()).collect()),
+      Err(e) => Err(e),
+    }
+  }
+
+  fn take(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<Box<dyn IDataSample<D>>>> {
+    let samples = self.take_as_obj(max_samples, read_condition);
+    match samples {
+      Ok(d) => Ok(d.into_iter().map(|p| p.into_idata_sample()).collect()),
+      Err(e) => Err(e),
+    }
+  }
+
+  fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>> {
+    let mut ds =
+      <DataReader<D, SA> as IDataReader<D, SA>>::read(self, 1, ReadCondition::not_read())?;
+    let val = match ds.pop() {
+      Some(v) => Some(v.as_idata_sample()),
+      None => None,
+    };
+    Ok(val)
+  }
+
+  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>> {
+    let ds = self.take_next_sample()?;
+    Ok(ds.into_iter().map(|p| p.into_idata_sample()).find(|_| true))
+  }
+
+  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
+    todo!()
+  }
+}
+
+impl<'a, D: 'static, SA> IKeyedDataReader<D, SA> for DataReader<'a, D, SA>
+where
+  D: DeserializeOwned + Keyed,
+  <D as Keyed>::K: Key,
+  SA: DeserializerAdapter<D>,
+{
+  fn read(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<&dyn IKeyedDataSample<D>>> {
+    let samples = self.read_as_obj(max_samples, read_condition);
+    match samples {
+      Ok(d) => Ok(d.into_iter().map(|p| p.as_ikeyed_data_sample()).collect()),
+      Err(e) => Err(e),
+    }
+  }
+
+  fn take(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<Box<dyn IKeyedDataSample<D>>>> {
+    let samples = self.take_as_obj(max_samples, read_condition);
+    match samples {
+      Ok(d) => Ok(d.into_iter().map(|p| p.into_ikeyed_data_sample()).collect()),
+      Err(e) => Err(e),
+    }
+  }
+
+  fn read_next_sample(&mut self) -> Result<Option<&dyn IKeyedDataSample<D>>> {
+    let mut ds =
+      <DataReader<D, SA> as IKeyedDataReader<D, SA>>::read(self, 1, ReadCondition::not_read())?;
+    let val = match ds.pop() {
+      Some(v) => Some(v.as_ikeyed_data_sample()),
+      None => None,
+    };
+    Ok(val)
+  }
+
+  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IKeyedDataSample<D>>>> {
+    let ds = self.take_next_sample()?;
+    Ok(
+      ds.into_iter()
+        .map(|p| p.into_ikeyed_data_sample())
+        .find(|_| true),
+    )
+  }
+
+  fn read_instance(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+    // Select only samples from instance specified by key. In case of None, select the
+    // "smallest" instance as specified by the key type Ord trait.
+    instance_key: Option<<D as Keyed>::K>,
+    // This = Select instance specified by key.
+    // Next = select next instance in the order specified by Ord on keys.
+    this_or_next: SelectByKey,
+  ) -> Result<Vec<&dyn IKeyedDataSample<D>>> {
+    let ds = self.read_instance(max_samples, read_condition, instance_key, this_or_next)?;
+    Ok(ds.into_iter().map(|p| p.as_ikeyed_data_sample()).collect())
+  }
+
+  fn take_instance(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+    // Select only samples from instance specified by key. In case of None, select the
+    // "smallest" instance as specified by the key type Ord trait.
+    instance_key: Option<<D as Keyed>::K>,
+    // This = Select instance specified by key.
+    // Next = select next instance in the order specified by Ord on keys.
+    this_or_next: SelectByKey,
+  ) -> Result<Vec<Box<dyn IKeyedDataSample<D>>>> {
+    let ds = self.take_instance(max_samples, read_condition, instance_key, this_or_next)?;
+    Ok(
+      ds.into_iter()
+        .map(|p| p.into_ikeyed_data_sample())
+        .collect(),
+    )
+  }
+}
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
@@ -598,8 +714,7 @@ mod tests {
       .datasample_cache
       .get_datasample(&data_key)
       .unwrap()[0]
-      .value
-      .as_ref()
+      .get_value()
       .unwrap();
 
     assert_eq!(deserialized_random_data, &random_data);
@@ -729,29 +844,40 @@ mod tests {
 
     // Read the same sample two times.
     {
-      let result_vec = datareader.read(100, ReadCondition::any()).unwrap();
-      let d = result_vec[0].value.as_ref().unwrap();
+      let result_vec =
+        <DataReader<_, _> as IDataReader<_, _>>::read(&mut datareader, 100, ReadCondition::any())
+          .unwrap();
+      let d = result_vec[0].get_value().unwrap();
       assert_eq!(&test_data, d);
     }
     {
-      let result_vec2 = datareader.read(100, ReadCondition::any()).unwrap();
-      let d2 = result_vec2[1].value.as_ref().unwrap();
+      let result_vec2 =
+        <DataReader<_, _> as IDataReader<_, _>>::read(&mut datareader, 100, ReadCondition::any())
+          .unwrap();
+      let d2 = result_vec2[1].get_value().unwrap();
       assert_eq!(&test_data2, d2);
     }
     {
-      let result_vec3 = datareader.read(100, ReadCondition::any()).unwrap();
-      let d3 = result_vec3[0].value.as_ref().unwrap();
+      let result_vec3 =
+        <DataReader<_, _> as IDataReader<_, _>>::read(&mut datareader, 100, ReadCondition::any())
+          .unwrap();
+      let d3 = result_vec3[0].get_value().unwrap();
       assert_eq!(&test_data, d3);
     }
 
     // Take
-    let mut result_vec = datareader.take(100, ReadCondition::any()).unwrap();
-    let result_vec2 = datareader.take(100, ReadCondition::any());
+    let mut result_vec =
+      <DataReader<_, _> as IDataReader<_, _>>::take(&mut datareader, 100, ReadCondition::any())
+        .unwrap();
+    let result_vec2 =
+      <DataReader<_, _> as IDataReader<_, _>>::take(&mut datareader, 100, ReadCondition::any());
 
-    let d2 = result_vec.pop().unwrap().value.unwrap();
-    let d1 = result_vec.pop().unwrap().value.unwrap();
-    assert_eq!(test_data2, d2);
-    assert_eq!(test_data, d1);
+    let d2 = result_vec.pop().unwrap();
+    let d2 = d2.get_value().unwrap();
+    let d1 = result_vec.pop().unwrap();
+    let d1 = d1.get_value().unwrap();
+    assert_eq!(&test_data2, d2);
+    assert_eq!(&test_data, d1);
     assert!(result_vec2.is_ok());
     assert_eq!(result_vec2.unwrap().len(), 0);
 
@@ -830,27 +956,39 @@ mod tests {
     info!("calling read with key 1 and this");
     let results =
       datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::This);
-    assert_eq!(&data_key1, results.unwrap()[0].value.as_ref().unwrap());
+    assert_eq!(
+      &data_key1,
+      results.unwrap()[0].get_keyed_value().as_ref().unwrap()
+    );
 
     info!("calling read with None and this");
     // Takes the samllest key, 1 in this case.
     let results = datareader.read_instance(100, ReadCondition::any(), None, SelectByKey::This);
-    assert_eq!(&data_key1, results.unwrap()[0].value.as_ref().unwrap());
+    assert_eq!(
+      &data_key1,
+      results.unwrap()[0].get_keyed_value().as_ref().unwrap()
+    );
 
     info!("calling read with key 1 and next");
     let results =
       datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::Next);
     assert_eq!(results.as_ref().unwrap().len(), 3);
-    assert_eq!(&data_key2_2, results.unwrap()[1].value.as_ref().unwrap());
+    assert_eq!(
+      &data_key2_2,
+      results.unwrap()[1].get_keyed_value().as_ref().unwrap()
+    );
 
     info!("calling take with key 2 and this");
     let results =
       datareader.take_instance(100, ReadCondition::any(), Some(key2), SelectByKey::This);
     assert_eq!(results.as_ref().unwrap().len(), 3);
     let mut vec = results.unwrap();
-    let d3 = vec.pop().unwrap().value.unwrap();
-    let d2 = vec.pop().unwrap().value.unwrap();
-    let d1 = vec.pop().unwrap().value.unwrap();
+    let d3 = vec.pop().unwrap();
+    let d3 = d3.into_value().unwrap();
+    let d2 = vec.pop().unwrap();
+    let d2 = d2.into_value().unwrap();
+    let d1 = vec.pop().unwrap();
+    let d1 = d1.into_value().unwrap();
     assert_eq!(data_key2_3, d3);
     assert_eq!(data_key2_2, d2);
     assert_eq!(data_key2_1, d1);
@@ -981,13 +1119,17 @@ mod tests {
       for event in events.into_iter() {
         info!("Handling events");
         if event.token() == Token(100) {
-          let data = datareader.take(100, ReadCondition::any());
+          let data = <DataReader<_, _> as IDataReader<_, _>>::take(
+            &mut datareader,
+            100,
+            ReadCondition::any(),
+          );
           let len = data.as_ref().unwrap().len();
           info!("There were {} samples available.", len);
           info!("Their strings:");
           for d in data.unwrap().into_iter() {
             // Remove one notification for each data
-            info!("{}", d.value.as_ref().unwrap().b);
+            info!("{}", d.get_value().as_ref().unwrap().b);
           }
           count_to_stop += len;
         }

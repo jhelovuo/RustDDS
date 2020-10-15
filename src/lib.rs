@@ -24,6 +24,7 @@ pub mod structure;
 mod test;
 
 pub mod dds;
+pub mod ros2;
 pub mod serialization;
 pub use messages::submessages::submessages;
 pub use discovery::data_types::topic_data::*;

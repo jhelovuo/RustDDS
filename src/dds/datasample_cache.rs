@@ -110,7 +110,10 @@ where
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::structure::{guid::GUID, time::Timestamp};
+  use crate::{
+    dds::interfaces::IKeyedDataSample,
+    structure::{guid::GUID, time::Timestamp},
+  };
   use crate::dds::ddsdata::DDSData;
   use crate::dds::traits::key::Keyed;
   use crate::test::random_data::*;
@@ -137,7 +140,7 @@ mod tests {
     match samples {
       Some(ss) => {
         assert_eq!(ss.len(), 1);
-        match &ss.get(0).unwrap().value {
+        match &ss.get(0).unwrap().get_keyed_value() {
           Ok(huh) => {
             let ddssample = DDSData::from(&*huh, Some(timestamp));
             assert_eq!(org_ddsdata, ddssample);

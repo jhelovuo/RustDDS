@@ -4,6 +4,7 @@ mod datasample_cache;
 pub mod datawriter;
 pub mod ddsdata;
 mod dp_event_wrapper;
+pub mod interfaces;
 mod message_receiver;
 pub mod no_key;
 pub mod participant;

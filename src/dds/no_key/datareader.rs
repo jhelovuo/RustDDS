@@ -5,12 +5,15 @@ use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
+  dds::datasample::DataSample,
+  dds::interfaces::IDataReader,
+  dds::interfaces::IDataSample,
+  discovery::discovery::DiscoveryCommand,
   structure::{
     entity::{Entity, EntityAttributes},
     guid::{EntityId},
     dds_cache::DDSCache,
   },
-  discovery::discovery::DiscoveryCommand,
 };
 use crate::dds::{
   traits::serde_adapters::*, values::result::*, qos::*, pubsub::Subscriber, topic::Topic,
@@ -18,12 +21,12 @@ use crate::dds::{
 };
 
 use crate::dds::datareader as datareader_with_key;
-use crate::dds::datasample as datasample_with_key;
-use crate::dds::no_key::datasample::*;
 
 use std::sync::{Arc, RwLock};
 
-use super::wrappers::{NoKeyWrapper, SAWrapper};
+use super::{
+  wrappers::{NoKeyWrapper, SAWrapper},
+};
 
 // ----------------------------------------------------
 
@@ -33,7 +36,7 @@ pub struct DataReader<'a, D, SA> {
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
-impl<'a, D, SA> DataReader<'a, D, SA>
+impl<'a, D: 'static, SA> DataReader<'a, D, SA>
 where
   D: DeserializeOwned, // + Deserialize<'s>,
   SA: DeserializerAdapter<D>,
@@ -58,90 +61,79 @@ where
     })
   }
 
-  pub(crate) fn from_keyed(
+  pub fn from_keyed(
     keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
   ) -> DataReader<'a, D, SA> {
     DataReader {
       keyed_datareader: keyed,
     }
   }
+} // impl
 
-  pub fn read(
+impl<'a, D: 'static, SA> IDataReader<D, SA> for DataReader<'a, D, SA>
+where
+  D: DeserializeOwned, // + Deserialize<'s>,
+  SA: DeserializerAdapter<D>,
+{
+  fn read(
     &mut self,
-    max_samples: usize,            // maximum number of DataSamples to return.
-    read_condition: ReadCondition, // use e.g. ReadCondition::any() or ReadCondition::not_read()
-  ) -> Result<Vec<DataSample<D>>> {
-    let kv: Result<Vec<&datasample_with_key::DataSample<NoKeyWrapper<D>>>> =
-      self.keyed_datareader.read(max_samples, read_condition);
-    let temp_kv = match kv {
-      Err(e) => return Err(e),
-      Ok(v) => v
-        .iter()
-        .map(
-          move |&datasample_with_key::DataSample { sample_info, value }| DataSample {
-            sample_info: sample_info.clone(),
-            value: &value
-              .as_ref()
-              .expect("Received instance state change for no_key data. What to do?")
-              .d,
-          },
-        )
-        .collect(),
-    };
-    Ok(temp_kv)
-    // match kv {
-    //   Err(e) => Err(e),
-    //   Ok(v) => Ok(
-    //     v.into_iter()
-    //       .map(
-    //         |datasample_with_key::DataSample { sample_info, value }| DataSample {
-    //           sample_info: sample_info.clone(),
-    //           value: &value
-    //             .as_ref()
-    //             .expect("Received instance state change for no_key data. What to do?")
-    //             .d,
-    //         },
-    //       )
-    //       .collect(),
-    //   ),
-    // }
-    /*
-    kv.map(move |v| {
-      v.iter()
-        .map(
-          move | &datasample_with_key::DataSample { sample_info, value }| DataSample {
-            sample_info: sample_info.clone(),
-            value: value.as_ref().expect("Received instance state change for no_key data. What to do?")
-              /*.as_ref()
-              .expect("Received instance state change for no_key data. What to do?")
-              .clone() */ ,
-          },
-        )
-        .collect()
-    })*/
-  }
-
-  // It does not make any sense to implement read_instance(), by definition of "no_key".
-  /*
-  pub fn read_instance(
-    &self,
-    take: Take,
     max_samples: usize,
     read_condition: ReadCondition,
-    instance_key: Option<<D as Keyed>::K>,
-    this_or_next: SelectByKey,
-  ) -> Result<Vec<DataSample<D>>> {
-    unimplemented!()
+  ) -> Result<Vec<&dyn IDataSample<D>>> {
+    let values: Vec<&dyn IDataSample<D>> = match self
+      .keyed_datareader
+      .read_as_obj(max_samples, read_condition)
+    {
+      Ok(v) => v
+        .iter()
+        .map(|p| <DataSample<NoKeyWrapper<D>> as IDataSample<D>>::as_idata_sample(p))
+        .collect(),
+      Err(e) => return Err(e),
+    };
+    Ok(values)
   }
-  */
 
-  /// This is a simplified API for reading the next not_read sample
-  /// If no new data is available, the return value is Ok(None).  
-  pub fn read_next_sample(&'a mut self) -> Result<Option<DataSample<D>>> {
-    let mut ds = self.read(1, ReadCondition::not_read())?;
-    Ok(ds.pop())
+  fn take(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<Box<dyn IDataSample<D>>>> {
+    let values: Vec<Box<dyn IDataSample<D>>> = match self
+      .keyed_datareader
+      .take_as_obj(max_samples, read_condition)
+    {
+      Ok(v) => v
+        .into_iter()
+        .map(|p| <DataSample<NoKeyWrapper<D>> as IDataSample<D>>::into_idata_sample(p))
+        .collect(),
+      Err(e) => return Err(e),
+    };
+
+    Ok(values)
   }
-} // impl
+
+  fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>> {
+    let mut ds = self.read(1, ReadCondition::not_read())?;
+    let val = match ds.pop() {
+      Some(v) => Some(v.as_idata_sample()),
+      None => None,
+    };
+    Ok(val)
+  }
+
+  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>> {
+    let mut ds = self.take(1, ReadCondition::not_read())?;
+    let val = match ds.pop() {
+      Some(v) => Some(v),
+      None => None,
+    };
+    Ok(val)
+  }
+
+  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
+    todo!()
+  }
+}
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).

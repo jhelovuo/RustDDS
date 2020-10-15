@@ -7,7 +7,9 @@ use std::{
 use mio_extras::channel::Receiver;
 use serde::Serialize;
 
-use crate::{dds::values::result::StatusChange, structure::time::Timestamp};
+use crate::{
+  dds::interfaces::IDataWriter, dds::values::result::StatusChange, structure::time::Timestamp,
+};
 use crate::structure::entity::{Entity};
 //use crate::structure::{dds_cache::DDSCache, guid::{GUID} };
 
@@ -60,60 +62,55 @@ where
       keyed_datawriter: keyed,
     }
   }
+}
 
+impl<D: Serialize, SA: SerializerAdapter<D>> IDataWriter<D, SA> for DataWriter<'_, D, SA> {
   // write (with optional timestamp)
-  pub fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+  fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     self
       .keyed_datawriter
       .write(NoKeyWrapper::<D> { d: data }, source_timestamp)
   }
 
-  // dispose
-  // The data item is given only for identification, i.e. extracting the key
-  // NO_KEY data cannot be disposed. So this method should not even exist.
-  // pub fn dispose(
-  //   &mut self,
-  //   key: <D as Keyed>::K,
-  //   source_timestamp: Option<Timestamp>,
-  // ) -> Result<()> {
-
-  // }
-
-  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
+  fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
     self.keyed_datawriter.wait_for_acknowledgments(max_wait)
   }
 
   // status queries
-  pub fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
+  fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
     self.keyed_datawriter.get_liveliness_lost_status()
   }
-  pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
+
+  fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
     self.keyed_datawriter.get_offered_deadline_missed_status()
   }
-  pub fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
+
+  fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
     self.keyed_datawriter.get_offered_incompatible_qos_status()
   }
-  pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
+
+  fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     self.keyed_datawriter.get_publication_matched_status()
   }
 
   // who are we connected to?
-  pub fn get_topic(&self) -> &Topic {
+  fn get_topic(&self) -> &Topic {
     &self.keyed_datawriter.get_topic()
   }
-  pub fn get_publisher(&self) -> &Publisher {
+
+  fn get_publisher(&self) -> &Publisher {
     &self.keyed_datawriter.get_publisher()
   }
 
-  pub fn assert_liveliness(&self) -> Result<()> {
+  fn assert_liveliness(&self) -> Result<()> {
     self.keyed_datawriter.assert_liveliness()
   }
 
-  pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
+  fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     self.keyed_datawriter.get_matched_subscriptions()
   }
 
-  pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
+  fn get_status_listener(&self) -> &Receiver<StatusChange> {
     self.keyed_datawriter.get_status_listener()
   }
 }

@@ -10,8 +10,12 @@ use atosdds::{
     cdrSerializer::CDR_serializer_adapter, cdrDeserializer::CDR_deserializer_adapter,
   },
   dds::{
-    typedesc::TypeDesc, participant::DomainParticipant, qos::QosPolicies, datareader::DataReader,
+    typedesc::TypeDesc,
+    participant::DomainParticipant,
+    qos::QosPolicies,
+    datareader::DataReader,
     readcondition::ReadCondition,
+    interfaces::{IDataWriter, IKeyedDataWriter, IKeyedDataReader},
   },
   dds::qos::policy::Reliability,
   structure::duration::Duration,
@@ -280,9 +284,8 @@ fn fetch_squares(reader: &mut DataReader<Square, CDR_deserializer_adapter<Square
   match reader.take(100, ReadCondition::any()) {
     Ok(ds) => ds
       .iter()
-      .map(|p| p.value.as_ref())
-      .filter(|p| p.is_ok())
-      .map(|p| (*p.unwrap()).clone())
+      .filter_map(|p| p.get_value())
+      .map(|p| p.clone())
       .collect(),
     Err(_) => {
       println!("Failed to read squares");

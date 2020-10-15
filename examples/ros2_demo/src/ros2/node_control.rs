@@ -9,13 +9,12 @@ use atosdds::{
   dds::typedesc::TypeDesc,
   serialization::cdrDeserializer::CDR_deserializer_adapter,
   serialization::cdrSerializer::CDR_serializer_adapter,
+  ros2::builtin_topics::ROSDiscoveryTopic,
 };
 use byteorder::LittleEndian;
 
 use crate::{
-  ros_data::{
-    Log, ParameterEvents, ParameterEventsTopic, ROSDiscoveryTopic, ROSParticipantInfo, RosOutTopic,
-  },
+  ros_data::{Log, ParameterEvents, ParameterEventsTopic, ROSParticipantInfo, RosOutTopic},
 };
 
 pub struct NodeControl {

@@ -16,9 +16,9 @@ pub struct NoKeyWrapper<D> {
   pub d: D,
 }
 
-impl<D> NoKeyWrapper<D> {
-  pub fn unwrap(self) -> D {
-    self.d
+impl<D> From<D> for NoKeyWrapper<D> {
+  fn from(d: D) -> Self {
+    NoKeyWrapper { d }
   }
 }
 
@@ -91,4 +91,8 @@ impl<D: DeserializeOwned, SA: DeserializerAdapter<D>> DeserializerAdapter<NoKeyW
   }
 }
 
-impl<D> NoKeyWrapper<D> {}
+impl<D> NoKeyWrapper<D> {
+  pub fn unwrap(self) -> D {
+    self.d
+  }
+}

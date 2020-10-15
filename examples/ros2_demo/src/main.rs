@@ -6,8 +6,9 @@ use std::{io::Write, time::Duration};
 
 use atosdds::{
   dds::{
-    participant::DomainParticipant, readcondition::ReadCondition,
-    no_key::datareader::DataReader as NoKeyDataReader,
+    interfaces::IDataReader, interfaces::IDataWriter,
+    no_key::datareader::DataReader as NoKeyDataReader, participant::DomainParticipant,
+    readcondition::ReadCondition,
   },
   serialization::cdrDeserializer::CDR_deserializer_adapter,
   structure::entity::Entity,
@@ -208,16 +209,22 @@ fn handle_node_reader<'a>(
 ) {
   if let Ok(data) = node_reader.read(100, ReadCondition::not_read()) {
     data.iter().for_each(|p| {
-      match p.sample_info.instance_state {
-        atosdds::dds::datasample::InstanceState::Alive => sender
-          .send(DataUpdate::UpdateNode {
-            info: p.value.clone(),
-          })
-          .unwrap(),
+      match p.get_sample_info().instance_state {
+        atosdds::dds::datasample::InstanceState::Alive => {
+          match p.get_value() {
+            Some(v) => {
+              sender
+                .send(DataUpdate::UpdateNode {
+                  info: v.clone(),
+              }).unwrap()
+            },
+            None => (),
+          };
+        },
         atosdds::dds::datasample::InstanceState::NotAlive_Disposed
         | atosdds::dds::datasample::InstanceState::NotAlive_NoWriters => sender
           .send(DataUpdate::DeleteNode {
-            guid: p.sample_info.publication_handle,
+            guid: p.get_sample_info().publication_handle,
           })
           .unwrap(),
       };
@@ -231,11 +238,16 @@ fn handle_turtle_cmd_vel_reader<'a>(
 ) {
   if let Ok(data) = turle_cmd_vel_reader.read(100, ReadCondition::not_read()) {
     data.iter().for_each(|p| {
-      sender
-        .send(DataUpdate::TurtleCmdVel {
-          twist: p.value.clone(),
-        })
-        .unwrap()
+      match p.get_value() {
+        Some(v) => {
+          sender
+            .send(DataUpdate::TurtleCmdVel {
+              twist: v.clone(),
+            })
+            .unwrap()
+        },
+        None => (),
+      }
     });
   }
 }
