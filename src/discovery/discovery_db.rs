@@ -656,7 +656,7 @@ mod tests {
       .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
         None,
         &topic,
-        &QosPolicies::qos_none(),
+        QosPolicies::qos_none(),
       )
       .unwrap();
 
@@ -673,7 +673,7 @@ mod tests {
       .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
         None,
         &topic,
-        &QosPolicies::qos_none(),
+        QosPolicies::qos_none(),
       )
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);

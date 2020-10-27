@@ -174,7 +174,7 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
-  fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+  fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     let mut ddsdata = DDSData::from(&data, source_timestamp);
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
@@ -416,13 +416,10 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer: DataWriter<
-      '_,
-      RandomData,
-      CDR_serializer_adapter<RandomData, LittleEndian>,
-    > = publisher
-      .create_datawriter(None, &topic, &qos)
-      .expect("Failed to create datawriter");
+    let data_writer: DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData, LittleEndian>> =
+      publisher
+        .create_datawriter(None, &topic, qos)
+        .expect("Failed to create datawriter");
 
     let mut data = RandomData {
       a: 4,
@@ -459,7 +456,7 @@ mod tests {
       RandomData,
       CDR_serializer_adapter<RandomData, LittleEndian>,
     > = publisher
-      .create_datawriter(None, &topic, &qos)
+      .create_datawriter(None, &topic, qos)
       .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
@@ -496,13 +493,10 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer: DataWriter<
-      '_,
-      RandomData,
-      CDR_serializer_adapter<RandomData, LittleEndian>,
-    > = publisher
-      .create_datawriter(None, &topic, &qos)
-      .expect("Failed to create datawriter");
+    let data_writer: DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData, LittleEndian>> =
+      publisher
+        .create_datawriter(None, &topic, qos)
+        .expect("Failed to create datawriter");
 
     let data = RandomData {
       a: 4,

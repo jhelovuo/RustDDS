@@ -482,7 +482,7 @@ where
     Ok(ds.into_iter().map(|p| p.into_idata_sample()).find(|_| true))
   }
 
-  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
+  fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     todo!()
   }
 }

@@ -130,7 +130,7 @@ where
     Ok(val)
   }
 
-  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
+  fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     todo!()
   }
 }

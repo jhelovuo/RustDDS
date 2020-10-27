@@ -1,22 +1,19 @@
-use log::error;
-use atosdds::structure::guid::GUID;
+use log::{debug, error};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
 use termion::{event::Key, raw::RawTerminal, input::TermRead, AsyncReader};
-use atosdds::DiscoveredTopicData;
+use atosdds::{
+  DiscoveredTopicData,
+  ros2::builtin_datatypes::{ROSParticipantInfo, NodeInfo, Gid},
+};
 
 use std::{collections::HashMap, io::StdoutLock, io::Write, time::Duration as StdDuration};
 
-use crate::{
-  ros2::turtle_control::TurtleControl,
-  ros2::turtle_data::Twist,
-  ros_data::{Gid, NodeInfo, ROSParticipantInfo},
-};
+use crate::{ros2::turtle_control::TurtleControl, ros2::turtle_data::Twist};
 
 pub enum RosCommand {
   StopEventLoop,
-  UpdateNode,
   AddNodeListSender {
     sender: mio_channel::SyncSender<DataUpdate>,
   },
@@ -27,7 +24,6 @@ pub enum RosCommand {
 
 pub enum DataUpdate {
   UpdateNode { info: ROSParticipantInfo },
-  DeleteNode { guid: GUID },
   TurtleCmdVel { twist: Twist },
   TopicList { list: Vec<DiscoveredTopicData> },
 }
@@ -47,8 +43,7 @@ impl<'a> MainController<'a> {
   const NODE_UPDATE_TIMEOUT: u64 = 1;
 
   const KEYBOARD_CHECK_TOKEN: Token = Token(0);
-  const NODE_TIMER_TOKEN: Token = Token(1);
-  const UPDATE_NODE_LIST_TOKEN: Token = Token(2);
+  const UPDATE_NODE_LIST_TOKEN: Token = Token(1);
 
   pub fn new(
     stdout: RawTerminal<StdoutLock<'a>>,
@@ -101,45 +96,44 @@ impl<'a> MainController<'a> {
 
       for event in events.iter() {
         if event.token() == MainController::KEYBOARD_CHECK_TOKEN {
-          while let Some(kevent) = &self.async_reader.next() {
-            match kevent.as_ref().unwrap() {
+          while let Some(Ok(kevent)) = &self.async_reader.next() {
+            match kevent {
               termion::event::Event::Key(Key::Char('q')) => {
-                match self.command_sender.send(RosCommand::StopEventLoop) {
-                  Ok(_) => return,
-                  _ => (),
-                }
+                debug!("Quit.");
+                self.send_command(RosCommand::StopEventLoop);
+                return;
               }
               termion::event::Event::Key(Key::Up) => {
+                debug!("Move left.");
                 let twist = TurtleControl::move_forward();
                 self.print_sent_turtle_cmd_vel(&twist);
-                self
-                  .command_sender
-                  .send(RosCommand::TurtleCmdVel { twist })
-                  .unwrap_or(());
+                if !self.send_command(RosCommand::TurtleCmdVel { twist }) {
+                  return;
+                }
               }
               termion::event::Event::Key(Key::Right) => {
+                debug!("Move right.");
                 let twist = TurtleControl::rotate_right();
                 self.print_sent_turtle_cmd_vel(&twist);
-                self
-                  .command_sender
-                  .send(RosCommand::TurtleCmdVel { twist })
-                  .unwrap_or(());
+                if !self.send_command(RosCommand::TurtleCmdVel { twist }) {
+                  return;
+                }
               }
               termion::event::Event::Key(Key::Down) => {
+                debug!("Move down.");
                 let twist = TurtleControl::move_backward();
                 self.print_sent_turtle_cmd_vel(&twist);
-                self
-                  .command_sender
-                  .send(RosCommand::TurtleCmdVel { twist })
-                  .unwrap_or(());
+                if !self.send_command(RosCommand::TurtleCmdVel { twist }) {
+                  return;
+                }
               }
               termion::event::Event::Key(Key::Left) => {
+                debug!("Move left.");
                 let twist = TurtleControl::rotate_left();
                 self.print_sent_turtle_cmd_vel(&twist);
-                self
-                  .command_sender
-                  .send(RosCommand::TurtleCmdVel { twist })
-                  .unwrap_or(());
+                if !self.send_command(RosCommand::TurtleCmdVel { twist }) {
+                  return;
+                }
               }
               termion::event::Event::Key(key) => {
                 write!(
@@ -159,22 +153,10 @@ impl<'a> MainController<'a> {
             StdDuration::from_millis(MainController::KEYBOARD_CHECK_TIMEOUT),
             (),
           );
-        } else if event.token() == MainController::NODE_TIMER_TOKEN {
-          match self.command_sender.send(RosCommand::UpdateNode) {
-            Ok(_) => (),
-            Err(e) => {
-              error!("Failed to send UPDATE_NODE command {:?}", e);
-              return;
-            }
-          }
-        // self.node_timer.set_timeout(
-        //   StdDuration::from_secs(MainController::NODE_UPDATE_TIMEOUT),
-        //   (),
-        // );
         } else if event.token() == MainController::UPDATE_NODE_LIST_TOKEN {
           while let Ok(rec_nodes) = self.nodelist_receiver.try_recv() {
             match rec_nodes {
-              DataUpdate::UpdateNode { mut info } => {
+              DataUpdate::UpdateNode { info } => {
                 let nodes: Vec<NodeInfo> = info.nodes().iter().map(|p| p.clone()).collect();
 
                 write!(
@@ -202,14 +184,13 @@ impl<'a> MainController<'a> {
 
                 topic_list = list;
               }
-              DataUpdate::DeleteNode { guid } => {
-                node_list.remove(&Gid::from_guid(guid));
-              }
               DataUpdate::TurtleCmdVel { twist } => {
                 self.print_turtle_cmd_vel(&twist);
               }
             }
           }
+
+          node_list.retain(|_, p| !p.is_empty());
 
           write!(
             self.stdout,
@@ -363,6 +344,14 @@ impl<'a> MainController<'a> {
     }
   }
 
+  fn send_command(&self, command: RosCommand) -> bool {
+    match self.command_sender.try_send(command) {
+      Ok(_) => return true,
+      Err(e) => error!("Failed to send command. {:?}", e),
+    };
+    return false;
+  }
+
   fn init_main_registers(&mut self) {
     self.input_timer.set_timeout(
       StdDuration::from_millis(MainController::KEYBOARD_CHECK_TIMEOUT),
@@ -378,16 +367,6 @@ impl<'a> MainController<'a> {
       .register(
         &self.input_timer,
         MainController::KEYBOARD_CHECK_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
-
-    self
-      .poll
-      .register(
-        &self.node_timer,
-        MainController::NODE_TIMER_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
       )

@@ -284,7 +284,7 @@ impl Discovery {
       .create_datawriter::<SPDPDiscoveredParticipantData, CDR_serializer_adapter<SPDPDiscoveredParticipantData,LittleEndian> >(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
         &dcps_participant_topic,
-        &Discovery::create_spdp_patricipant_qos(),
+        Discovery::create_spdp_patricipant_qos(),
       ) {
         Ok(w) => w,
         Err(e) => {
@@ -383,7 +383,7 @@ impl Discovery {
       .create_datawriter::<DiscoveredReaderData,CDR_serializer_adapter<DiscoveredReaderData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
         &dcps_subscription_topic,
-        dcps_subscription_topic.get_qos(),
+        dcps_subscription_topic.get_qos().clone(),
       ) {
         Ok(w) => w,
         Err(e) => {
@@ -480,7 +480,7 @@ impl Discovery {
       .create_datawriter::<DiscoveredWriterData, CDR_serializer_adapter<DiscoveredWriterData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
         &dcps_publication_topic,
-        dcps_publication_topic.get_qos(),
+        dcps_publication_topic.get_qos().clone(),
       ) {
         Ok(w) => w,
         Err(e) => {
@@ -598,7 +598,7 @@ impl Discovery {
       .create_datawriter::<DiscoveredTopicData, CDR_serializer_adapter<DiscoveredTopicData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
         &dcps_topic,
-        &Discovery::subscriber_qos(),
+        Discovery::subscriber_qos(),
       ) {
         Ok(w) => w,
         Err(e) => {
@@ -690,7 +690,7 @@ impl Discovery {
       .create_datawriter::<ParticipantMessageData, CDR_serializer_adapter<ParticipantMessageData, LittleEndian>>(
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER),
         &participant_message_data_topic,
-        &Discovery::PARTICIPANT_MESSAGE_QOS,
+        Discovery::PARTICIPANT_MESSAGE_QOS,
       ) {
       Ok(w) => w,
       Err(e) => {
@@ -1419,7 +1419,7 @@ mod tests {
       .create_datawriter::<ShapeType, CDR_serializer_adapter<ShapeType, LittleEndian>>(
         None,
         &topic,
-        &QosPolicies::qos_none(),
+        QosPolicies::qos_none(),
       )
       .unwrap();
 
@@ -1513,7 +1513,7 @@ mod tests {
       .create_datawriter::<ShapeType, CDR_serializer_adapter<ShapeType, LittleEndian>>(
         None,
         &topic,
-        &QosPolicies::qos_none(),
+        QosPolicies::qos_none(),
       )
       .unwrap();
 

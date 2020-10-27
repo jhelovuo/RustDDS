@@ -81,7 +81,7 @@ impl<'a> Publisher {
     &'a self,
     entity_id: Option<EntityId>,
     topic: &'a Topic,
-    _qos: &QosPolicies,
+    _qos: QosPolicies,
   ) -> Result<DataWriter<'a, D, SA>>
   where
     D: Keyed + Serialize,
@@ -156,7 +156,7 @@ impl<'a> Publisher {
     &'a self,
     entity_id: Option<EntityId>,
     topic: &'a Topic,
-    qos: &QosPolicies,
+    qos: QosPolicies,
   ) -> Result<no_key_datawriter::DataWriter<'a, D, SA>>
   where
     D: Serialize,

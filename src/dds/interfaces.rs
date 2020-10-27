@@ -1,22 +1,16 @@
 use std::time::Duration;
 
+use mio::Evented;
 use mio_extras::channel::Receiver;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{SubscriptionBuiltinTopicData, structure::time::Timestamp};
+use crate::{SubscriptionBuiltinTopicData, structure::{entity::Entity, time::Timestamp}};
 
-use super::{
-  datareader::SelectByKey, datasample::SampleInfo, pubsub::Publisher, readcondition::ReadCondition,
-  topic::Topic, traits::key::Key, traits::key::Keyed, traits::serde_adapters::DeserializerAdapter,
-  traits::serde_adapters::SerializerAdapter, values::result::Error,
-  values::result::LivelinessLostStatus, values::result::OfferedDeadlineMissedStatus,
-  values::result::OfferedIncompatibleQosStatus, values::result::PublicationMatchedStatus,
-  values::result::RequestedDeadlineMissedStatus, values::result::StatusChange,
-};
+use super::{qos::HasQoSPolicy, datareader::SelectByKey, datasample::SampleInfo, pubsub::Publisher, readcondition::ReadCondition, topic::Topic, traits::key::Key, traits::key::Keyed, traits::serde_adapters::DeserializerAdapter, traits::serde_adapters::SerializerAdapter, values::result::Error, values::result::LivelinessLostStatus, values::result::OfferedDeadlineMissedStatus, values::result::OfferedIncompatibleQosStatus, values::result::PublicationMatchedStatus, values::result::RequestedDeadlineMissedStatus, values::result::StatusChange};
 
 type Result<T> = std::result::Result<T, Error>;
 
-pub trait IDataWriter<D, SA>
+pub trait IDataWriter<D, SA>: Entity + HasQoSPolicy
 where
   D: Serialize,
   SA: SerializerAdapter<D>,
@@ -24,7 +18,7 @@ where
   // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
-  fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>;
+  fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>;
   fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()>;
 
   // status
@@ -82,7 +76,7 @@ where
   fn into_ikeyed_data_sample(self) -> Box<dyn IKeyedDataSample<D>>;
 }
 
-pub trait IDataReader<D, DA>
+pub trait IDataReader<D, DA>: Evented + Entity + HasQoSPolicy
 where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -124,7 +118,7 @@ where
   fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>>;
 
   // status queries
-  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus>;
+  fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus>;
 }
 
 pub trait IKeyedDataReader<D, DA>: IDataReader<D, DA>

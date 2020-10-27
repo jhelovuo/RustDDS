@@ -66,7 +66,7 @@ where
 
 impl<D: Serialize, SA: SerializerAdapter<D>> IDataWriter<D, SA> for DataWriter<'_, D, SA> {
   // write (with optional timestamp)
-  fn write(&mut self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+  fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     self
       .keyed_datawriter
       .write(NoKeyWrapper::<D> { d: data }, source_timestamp)
@@ -157,13 +157,10 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer: DataWriter<
-      '_,
-      RandomData,
-      CDR_serializer_adapter<RandomData, LittleEndian>,
-    > = publisher
-      .create_datawriter_no_key(None, &topic, &qos)
-      .expect("Failed to create datawriter");
+    let data_writer: DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData, LittleEndian>> =
+      publisher
+        .create_datawriter_no_key(None, &topic, qos)
+        .expect("Failed to create datawriter");
 
     let mut data = RandomData {
       a: 4,
@@ -195,13 +192,10 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer: DataWriter<
-      '_,
-      RandomData,
-      CDR_serializer_adapter<RandomData, LittleEndian>,
-    > = publisher
-      .create_datawriter_no_key(None, &topic, &qos)
-      .expect("Failed to create datawriter");
+    let data_writer: DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData, LittleEndian>> =
+      publisher
+        .create_datawriter_no_key(None, &topic, qos)
+        .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let data = RandomData {
@@ -239,13 +233,10 @@ mod tests {
       .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
       .expect("Failed to create topic");
 
-    let mut data_writer: DataWriter<
-      '_,
-      RandomData,
-      CDR_serializer_adapter<RandomData, LittleEndian>,
-    > = publisher
-      .create_datawriter_no_key(None, &topic, &qos)
-      .expect("Failed to create datawriter");
+    let data_writer: DataWriter<'_, RandomData, CDR_serializer_adapter<RandomData, LittleEndian>> =
+      publisher
+        .create_datawriter_no_key(None, &topic, qos)
+        .expect("Failed to create datawriter");
 
     let data = RandomData {
       a: 4,

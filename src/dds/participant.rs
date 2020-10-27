@@ -714,7 +714,7 @@ mod tests {
       .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
         None,
         &topic,
-        &qos.clone(),
+        qos.clone(),
       )
       .expect("Failed to create datawriter");
 
@@ -741,7 +741,7 @@ mod tests {
       .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
         None,
         &topic,
-        &qos.clone(),
+        qos.clone(),
       )
       .expect("Failed to create datawriter");
 

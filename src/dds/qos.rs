@@ -35,6 +35,123 @@ pub enum QosPolicyId {
   //DurabilityService, // 22
 }
 
+pub struct QosPolicyBuilder {
+  durability: Option<policy::Durability>,
+  presentation: Option<policy::Presentation>,
+  deadline: Option<policy::Deadline>,
+  latency_budget: Option<policy::LatencyBudget>,
+  ownership: Option<policy::Ownership>,
+  liveliness: Option<policy::Liveliness>,
+  time_based_filter: Option<policy::TimeBasedFilter>,
+  reliability: Option<policy::Reliability>,
+  destination_order: Option<policy::DestinationOrder>,
+  history: Option<policy::History>,
+  resource_limits: Option<policy::ResourceLimits>,
+  lifespan: Option<policy::Lifespan>,
+}
+
+impl QosPolicyBuilder {
+  pub fn new() -> QosPolicyBuilder {
+    QosPolicyBuilder {
+      durability: None,
+      presentation: None,
+      deadline: None,
+      latency_budget: None,
+      ownership: None,
+      liveliness: None,
+      time_based_filter: None,
+      reliability: None,
+      destination_order: None,
+      history: None,
+      resource_limits: None,
+      lifespan: None,
+    }
+  }
+
+  pub fn durability(mut self, durability: policy::Durability) -> QosPolicyBuilder {
+    self.durability = Some(durability);
+    self
+  }
+
+  pub fn presentation(mut self, presentation: policy::Presentation) -> QosPolicyBuilder {
+    self.presentation = Some(presentation);
+    self
+  }
+
+  pub fn deadline(mut self, deadline: policy::Deadline) -> QosPolicyBuilder {
+    self.deadline = Some(deadline);
+    self
+  }
+
+  pub fn latency_budget(mut self, latency_budget: policy::LatencyBudget) -> QosPolicyBuilder {
+    self.latency_budget = Some(latency_budget);
+    self
+  }
+
+  pub fn ownership(mut self, ownership: policy::Ownership) -> QosPolicyBuilder {
+    self.ownership = Some(ownership);
+    self
+  }
+
+  pub fn liveliness(mut self, liveliness: policy::Liveliness) -> QosPolicyBuilder {
+    self.liveliness = Some(liveliness);
+    self
+  }
+
+  pub fn time_based_filter(
+    mut self,
+    time_based_filter: policy::TimeBasedFilter,
+  ) -> QosPolicyBuilder {
+    self.time_based_filter = Some(time_based_filter);
+    self
+  }
+
+  pub fn reliability(mut self, reliability: policy::Reliability) -> QosPolicyBuilder {
+    self.reliability = Some(reliability);
+    self
+  }
+
+  pub fn destination_order(
+    mut self,
+    destination_order: policy::DestinationOrder,
+  ) -> QosPolicyBuilder {
+    self.destination_order = Some(destination_order);
+    self
+  }
+
+  pub fn history(mut self, history: policy::History) -> QosPolicyBuilder {
+    self.history = Some(history);
+    self
+  }
+
+  pub fn resource_limits(mut self, resource_limits: policy::ResourceLimits) -> QosPolicyBuilder {
+    self.resource_limits = Some(resource_limits);
+    self
+  }
+
+  pub fn lifespan(mut self, lifespan: policy::Lifespan) -> QosPolicyBuilder {
+    self.lifespan = Some(lifespan);
+    self
+  }
+
+  pub fn build(self) -> QosPolicies {
+    QosPolicies {
+      durability: self.durability,
+      presentation: self.presentation,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      ownership: self.ownership,
+      liveliness: self.liveliness,
+      time_based_filter: self.time_based_filter,
+      reliability: self.reliability,
+      destination_order: self.destination_order,
+      history: self.history,
+      resource_limits: self.resource_limits,
+      lifespan: self.lifespan,
+    }
+  }
+}
+
 #[derive(Clone, Debug)]
 pub struct QosPolicies {
   pub durability: Option<policy::Durability>,
@@ -67,6 +184,10 @@ impl QosPolicies {
       resource_limits: None,
       lifespan: None,
     }
+  }
+
+  pub fn builder() -> QosPolicyBuilder {
+    QosPolicyBuilder::new()
   }
 
   pub fn history(&self) -> &Option<policy::History> {
