@@ -1,6 +1,6 @@
 use crate::{
   serialization::SubMessage, serialization::SubmessageBody, structure::guid::GuidPrefix,
-  submessages::SubmessageHeader,
+  messages::submessages::submessages::SubmessageHeader,
 };
 use enumflags2::BitFlags;
 use log::error;

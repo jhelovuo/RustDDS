@@ -1,6 +1,7 @@
 use crate::{
   messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-  submessages::RepresentationIdentifier, submessages::Data, structure::guid::EntityId,
+  messages::submessages::submessages::{RepresentationIdentifier, Data},
+  structure::guid::EntityId,
   structure::sequence_number::SequenceNumber,
 };
 

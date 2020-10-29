@@ -7,7 +7,7 @@ use crate::{
 };
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::serialization::cdrSerializer::{to_bytes};
+use crate::serialization::cdr_serializer::{to_bytes};
 use byteorder::{LittleEndian /*,BigEndian*/};
 
 use crate::structure::guid::EntityId;

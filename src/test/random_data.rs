@@ -8,7 +8,7 @@ use crate::{
     key::{Key, Keyed},
     //datasample_trait::DataSampleTrait,
   },
-  serialization::cdrSerializer::to_bytes,
+  serialization::cdr_serializer::to_bytes,
 };
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Hash)]

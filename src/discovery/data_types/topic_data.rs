@@ -464,6 +464,8 @@ impl Serialize for TopicBuiltinTopicData {
   }
 }
 
+/// DDS Spec defined DiscoveredTopicData with extra updated time attribute.
+/// Practically this is gotten from [DomainParticipant](../participant/struct.DomainParticipant.html) during runtime
 #[derive(Debug, PartialEq, Clone)]
 pub struct DiscoveredTopicData {
   pub updated_time: u64,
@@ -573,11 +575,11 @@ mod tests {
 
   use super::*;
 
-  //use crate::serialization::cdrSerializer::to_little_endian_binary;
+  //use crate::serialization::cdr_serializer::to_little_endian_binary;
   use crate::serialization::{
     Message,
-    cdrDeserializer::CDR_deserializer_adapter,
-    cdrSerializer::{to_bytes},
+    cdr_deserializer::CDRDeserializerAdapter,
+    cdr_serializer::{to_bytes},
   };
   use byteorder::LittleEndian;
   use log::info;
@@ -743,7 +745,7 @@ mod tests {
     let len = pmd_file.read(&mut buffer).unwrap();
 
     println!("Buffer: size: {}\n{:?}", len, buffer[..len].to_vec());
-    let rpi = CDR_deserializer_adapter::<ParticipantMessageData>::from_bytes(
+    let rpi = CDRDeserializerAdapter::<ParticipantMessageData>::from_bytes(
       &buffer,
       RepresentationIdentifier::CDR_LE,
     )

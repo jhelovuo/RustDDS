@@ -38,7 +38,7 @@ use crate::{
   },
 };
 
-use super::cdrDeserializer::CDR_deserializer_adapter;
+use super::cdr_deserializer::CDRDeserializerAdapter;
 
 #[derive(Debug)]
 pub struct BuiltinDataDeserializer {
@@ -276,7 +276,7 @@ impl BuiltinDataDeserializer {
     match parameter_id {
       ParameterId::PID_PARTICIPANT_GUID => {
         let guid: Result<GUID, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match guid {
           Ok(gg) => {
             self.participant_guid = Some(gg);
@@ -288,7 +288,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PROTOCOL_VERSION => {
         let version: Result<ProtocolVersion, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match version {
           Ok(vv) => {
             self.protocol_version = Some(vv);
@@ -300,7 +300,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_VENDOR_ID => {
         let vendor: Result<VendorId, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match vendor {
           Ok(vv) => {
             self.vendor_id = Some(vv);
@@ -312,7 +312,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_EXPECTS_INLINE_QOS => {
         let inline_qos: Result<bool, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match inline_qos {
           Ok(qos) => {
             self.expects_inline_qos = Some(qos);
@@ -324,7 +324,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match locator {
           Ok(loc) => {
             self.metatraffic_unicast_locators.push(loc);
@@ -336,7 +336,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match locator {
           Ok(loc) => {
             self.metatraffic_multicast_locators.push(loc);
@@ -348,7 +348,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match locator {
           Ok(loc) => {
             self.default_unicast_locators.push(loc);
@@ -360,7 +360,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match locator {
           Ok(loc) => {
             self.default_multicast_locators.push(loc);
@@ -372,7 +372,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_BUILTIN_ENDPOINT_SET => {
         let endpoints: Result<BuiltinEndpointSet, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match endpoints {
           Ok(ep) => {
             self.available_builtin_endpoints = Some(ep);
@@ -384,7 +384,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PARTICIPANT_LEASE_DURATION => {
         let duration: Result<Duration, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match duration {
           Ok(dur) => {
             self.lease_duration = Some(dur);
@@ -396,7 +396,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT => {
         let count: Result<i32, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match count {
           Ok(c) => {
             self.manual_liveliness_count = Some(c);
@@ -408,7 +408,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_BUILTIN_ENDPOINT_QOS => {
         let qos: Result<BuiltinEndpointQos, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match qos {
           Ok(q) => {
             self.builtin_enpoint_qos = Some(q);
@@ -420,7 +420,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_ENTITY_NAME => {
         let name: Result<String, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match name {
           Ok(n) => {
             self.entity_name = Some(n);
@@ -432,7 +432,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_ENDPOINT_GUID => {
         let guid: Result<GUID, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match guid {
           Ok(gg) => {
             self.endpoint_guid = Some(gg);
@@ -444,7 +444,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match locator {
           Ok(loc) => {
             self.unicast_locator_list.push(loc);
@@ -456,7 +456,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match locator {
           Ok(loc) => {
             self.multicast_locator_list.push(loc);
@@ -468,7 +468,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_TOPIC_NAME => {
         let topic_name: Result<String, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match topic_name {
           Ok(name) => {
             self.topic_name = Some(name);
@@ -480,7 +480,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_TYPE_NAME => {
         let type_name: Result<String, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match type_name {
           Ok(name) => {
             self.type_name = Some(name);
@@ -492,7 +492,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DURABILITY => {
         let durability: Result<Durability, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match durability {
           Ok(dur) => {
             self.durability = Some(dur);
@@ -504,7 +504,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DEADLINE => {
         let deadline: Result<Deadline, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match deadline {
           Ok(dl) => {
             self.deadline = Some(dl);
@@ -516,7 +516,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_LATENCY_BUDGET => {
         let latency_budget: Result<LatencyBudget, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match latency_budget {
           Ok(lb) => {
             self.latency_budget = Some(lb);
@@ -528,7 +528,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_LIVELINESS => {
         let liveliness: Result<Liveliness, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match liveliness {
           Ok(liv) => {
             self.liveliness = Some(liv);
@@ -546,7 +546,7 @@ impl BuiltinDataDeserializer {
         }
 
         let reliability: Result<ReliabilityBestEffortData, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match reliability {
           Ok(rel) => {
             self.reliability = match rel.reliability_kind {
@@ -573,7 +573,7 @@ impl BuiltinDataDeserializer {
           EXCLUSIVE,
         }
         let ownership: Result<OwnershipKind, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match ownership {
           Ok(own) => {
             let strength = match self.ownership {
@@ -598,7 +598,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_OWNERSHIP_STRENGTH => {
         let ownership_strength: Result<i32, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match ownership_strength {
           Ok(stri) => {
             self.ownership = match self.ownership {
@@ -618,7 +618,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_DESTINATION_ORDER => {
         let destination_order: Result<DestinationOrder, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match destination_order {
           Ok(deor) => {
             self.destination_order = Some(deor);
@@ -630,7 +630,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_TIME_BASED_FILTER => {
         let time_based_filter: Result<TimeBasedFilter, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match time_based_filter {
           Ok(tbf) => {
             self.time_based_filter = Some(tbf);
@@ -642,7 +642,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_PRESENTATION => {
         let presentation: Result<Presentation, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match presentation {
           Ok(p) => {
             self.presentation = Some(p);
@@ -654,7 +654,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_LIFESPAN => {
         let lifespan: Result<Lifespan, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match lifespan {
           Ok(ls) => {
             self.lifespan = Some(ls);
@@ -666,7 +666,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
         let content_filter: Result<ContentFilterProperty, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match content_filter {
           Ok(cfp) => {
             self.content_filter_property = Some(cfp);
@@ -678,7 +678,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED => {
         let max_size: Result<u32, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match max_size {
           Ok(ms) => {
             self.data_max_size_serialized = Some(ms);
@@ -702,7 +702,7 @@ impl BuiltinDataDeserializer {
         }
 
         let history: Result<HistoryData, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match history {
           Ok(his) => {
             let h = match his.kind {
@@ -718,7 +718,7 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_RESOURCE_LIMITS => {
         let resource_limits: Result<ResourceLimits, Error> =
-          CDR_deserializer_adapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match resource_limits {
           Ok(lim) => {
             self.resource_limits = Some(lim);
@@ -741,7 +741,7 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn read_parameter_id(buffer: &Vec<u8>, rep: RepresentationIdentifier) -> Option<ParameterId> {
-    let par: Result<ParameterId, Error> = CDR_deserializer_adapter::from_bytes(&buffer[..2], rep);
+    let par: Result<ParameterId, Error> = CDRDeserializerAdapter::from_bytes(&buffer[..2], rep);
     match par {
       Ok(val) => Some(val),
       _ => None,
@@ -753,7 +753,7 @@ impl BuiltinDataDeserializer {
       return Some(0);
     }
 
-    let parameter_length_value = CDR_deserializer_adapter::from_bytes(&buffer[2..4], rep);
+    let parameter_length_value = CDRDeserializerAdapter::from_bytes(&buffer[2..4], rep);
     match parameter_length_value {
       Ok(val) => Some(val),
       _ => None,

@@ -6,7 +6,7 @@ use byteorder::{LittleEndian};
 use rand::Rng;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
-use crate::serialization::cdrSerializer::to_bytes;
+use crate::serialization::cdr_serializer::to_bytes;
 
 // A payload data object may be "Keyed": It allows a Key to be extracted from it.
 // The key is used to distinguish between different Instances of the data.

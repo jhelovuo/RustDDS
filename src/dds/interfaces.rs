@@ -4,9 +4,20 @@ use mio::Evented;
 use mio_extras::channel::Receiver;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{SubscriptionBuiltinTopicData, structure::{entity::Entity, time::Timestamp}};
+use crate::{
+  discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
+  structure::{entity::Entity, time::Timestamp},
+};
 
-use super::{qos::HasQoSPolicy, datareader::SelectByKey, datasample::SampleInfo, pubsub::Publisher, readcondition::ReadCondition, topic::Topic, traits::key::Key, traits::key::Keyed, traits::serde_adapters::DeserializerAdapter, traits::serde_adapters::SerializerAdapter, values::result::Error, values::result::LivelinessLostStatus, values::result::OfferedDeadlineMissedStatus, values::result::OfferedIncompatibleQosStatus, values::result::PublicationMatchedStatus, values::result::RequestedDeadlineMissedStatus, values::result::StatusChange};
+use super::{
+  qos::HasQoSPolicy, datareader::SelectByKey, datasample::SampleInfo, pubsub::Publisher,
+  readcondition::ReadCondition, topic::Topic, traits::key::Key, traits::key::Keyed,
+  traits::serde_adapters::DeserializerAdapter, traits::serde_adapters::SerializerAdapter,
+  values::result::Error, values::result::LivelinessLostStatus,
+  values::result::OfferedDeadlineMissedStatus, values::result::OfferedIncompatibleQosStatus,
+  values::result::PublicationMatchedStatus, values::result::RequestedDeadlineMissedStatus,
+  values::result::StatusChange,
+};
 
 type Result<T> = std::result::Result<T, Error>;
 

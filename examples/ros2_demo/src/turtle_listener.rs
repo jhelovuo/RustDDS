@@ -1,7 +1,6 @@
 use atosdds::{
-  dds::participant::DomainParticipant, ros2::ros_node::NodeOptions, ros2::ros_node::RosContext,
-  ros2::ros_node::RosNode, ros2::ros_node::RosNodeBuilder,
-  serialization::cdrDeserializer::CDR_deserializer_adapter, ros2::ros_node::IRosNodeControl,
+  dds::DomainParticipant, ros2::NodeOptions, ros2::RosContext, ros2::RosNode, ros2::RosNodeBuilder,
+  serialization::CDRDeserializerAdapter, ros2::IRosNodeControl,
 };
 
 use log::{info, warn};
@@ -47,7 +46,7 @@ impl TurtleListener {
         .unwrap();
 
       let mut turtle_cmd_vel_reader = ros_node
-        .create_ros_nokey_subscriber::<Twist, CDR_deserializer_adapter<Twist>>(
+        .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(
           &turtle_cmd_vel_topic,
           None,
         )

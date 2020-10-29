@@ -13,7 +13,7 @@ use crate::dds::reader::Reader;
 use crate::dds::ddsdata::DDSData;
 use crate::structure::guid::EntityId;
 use crate::{
-  submessages::AckNack,
+  messages::submessages::submessages::AckNack,
   structure::{
     cache_change::CacheChange,
     sequence_number::{SequenceNumber},
@@ -361,8 +361,8 @@ mod tests {
   use super::*;
   use crate::{dds::writer::WriterCommand, messages::header::Header};
   use crate::speedy::{Writable, Readable};
-  use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
-  use crate::serialization::cdrSerializer::to_bytes;
+  use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
+  use crate::serialization::cdr_serializer::to_bytes;
   use byteorder::LittleEndian;
   use log::info;
   use serde::{Serialize, Deserialize};

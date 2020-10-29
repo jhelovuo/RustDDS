@@ -5,10 +5,8 @@ extern crate mio_extras;
 use std::{io::Write, time::Duration};
 
 use atosdds::{
-  dds::participant::DomainParticipant,
-  ros2::{
-    ros_node::{RosContext, RosParticipant},
-  },
+  dds::DomainParticipant,
+  ros2::{RosContext, RosParticipant},
 };
 use commands::ThreadControl;
 use log::{debug, error};

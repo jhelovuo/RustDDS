@@ -1,10 +1,8 @@
 use atosdds::{
-  dds::participant::DomainParticipant, ros2::ros_node::NodeOptions, ros2::ros_node::RosContext,
-  ros2::ros_node::RosNode, ros2::ros_node::RosNodeBuilder,
-  serialization::cdrSerializer::CDR_serializer_adapter, ros2::ros_node::IRosNodeControl,
+  dds::DomainParticipant, ros2::NodeOptions, ros2::RosContext, ros2::RosNode, ros2::RosNodeBuilder,
+  serialization::CDRSerializerAdapter, ros2::IRosNodeControl,
 };
 
-use byteorder::LittleEndian;
 use log::{error, info};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
@@ -48,7 +46,7 @@ impl TurtleSender {
         .unwrap();
 
       let turtle_cmd_vel_writer = ros_node
-        .create_ros_nokey_publisher::<Twist, CDR_serializer_adapter<Twist, LittleEndian>>(
+        .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(
           &turtle_cmd_vel_topic,
           None,
         )

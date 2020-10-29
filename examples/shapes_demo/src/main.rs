@@ -6,19 +6,13 @@ extern crate byteorder;
 extern crate termion;
 
 use atosdds::{
-  serialization::{
-    cdrSerializer::CDR_serializer_adapter, cdrDeserializer::CDR_deserializer_adapter,
-  },
+  serialization::{CDRSerializerAdapter, CDRDeserializerAdapter},
   dds::{
-    typedesc::TypeDesc,
-    participant::DomainParticipant,
-    qos::QosPolicies,
-    datareader::DataReader,
-    readcondition::ReadCondition,
-    interfaces::{IDataWriter, IKeyedDataWriter, IKeyedDataReader},
+    DomainParticipant, qos::QosPolicies, data_types::ReadCondition, IDataWriter, IDataReader,
+    IKeyedDataWriter,
   },
   dds::qos::policy::Reliability,
-  structure::duration::Duration,
+  dds::data_types::DDSDuration,
   dds::qos::policy::History,
   dds::qos::policy::Ownership,
   dds::qos::policy::Durability,
@@ -31,7 +25,7 @@ use atosdds::{
   dds::qos::policy::Presentation,
   dds::qos::policy::PresentationAccessScope,
   dds::qos::policy::Lifespan,
-  dds::traits::key::Keyed,
+  dds::traits::Keyed,
 };
 use std::{
   sync::{
@@ -85,7 +79,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
   pub_qos.durability = Some(Durability::Volatile);
   pub_qos.liveliness = Some(Liveliness {
     kind: LivelinessKind::Automatic,
-    lease_duration: Duration::DURATION_INFINITE,
+    lease_duration: DDSDuration::DURATION_INFINITE,
   });
   pub_qos.destination_order = Some(DestinationOrder::ByReceptionTimestamp);
   pub_qos.resource_limits = Some(ResourceLimits {
@@ -94,10 +88,10 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
     max_samples_per_instance: std::i32::MAX,
   });
   pub_qos.deadline = Some(Deadline {
-    period: Duration::DURATION_INFINITE,
+    period: DDSDuration::DURATION_INFINITE,
   });
   pub_qos.latency_budget = Some(LatencyBudget {
-    duration: Duration::DURATION_ZERO,
+    duration: DDSDuration::DURATION_ZERO,
   });
   pub_qos.presentation = Some(Presentation {
     access_scope: PresentationAccessScope::Instance,
@@ -105,19 +99,15 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
     ordered_access: false,
   });
   pub_qos.lifespan = Some(Lifespan {
-    duration: Duration::DURATION_INFINITE,
+    duration: DDSDuration::DURATION_INFINITE,
   });
 
   // declare topics, subscriber, publisher, readers and writers
   let square_topic = domain_participant
-    .create_topic("Square", TypeDesc::new(String::from("ShapeType")), &pub_qos)
+    .create_topic("Square", "ShapeType", &pub_qos)
     .unwrap();
   let triangle_topic = domain_participant
-    .create_topic(
-      "Triangle",
-      TypeDesc::new(String::from("ShapeType")),
-      &pub_qos,
-    )
+    .create_topic("Triangle", "ShapeType", &pub_qos)
     .unwrap();
 
   let square_sub = domain_participant
@@ -126,7 +116,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
 
   // reader needs to be mutable if you want to read/take something from it
   let mut square_reader = square_sub
-    .create_datareader::<Square, CDR_deserializer_adapter<Square>>(
+    .create_datareader::<Square, CDRDeserializerAdapter<Square>>(
       None,
       &square_topic,
       None,
@@ -136,10 +126,10 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
 
   let square_pub = domain_participant.create_publisher(&pub_qos).unwrap();
   let mut square_writer = square_pub
-    .create_datawriter::<Square, CDR_serializer_adapter<Square, LittleEndian>>(
+    .create_datawriter::<Square, CDRSerializerAdapter<Square, LittleEndian>>(
       None,
       &triangle_topic,
-      &pub_qos,
+      pub_qos,
     )
     .unwrap();
 
@@ -280,7 +270,9 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
   }
 }
 
-fn fetch_squares(reader: &mut DataReader<Square, CDR_deserializer_adapter<Square>>) -> Vec<Square> {
+fn fetch_squares(
+  reader: &mut dyn IDataReader<Square, CDRDeserializerAdapter<Square>>,
+) -> Vec<Square> {
   match reader.take(100, ReadCondition::any()) {
     Ok(ds) => ds
       .iter()

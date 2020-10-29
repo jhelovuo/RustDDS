@@ -1,13 +1,19 @@
-pub mod builtin_data_deserializer;
-pub mod builtin_data_serializer;
-pub mod cdrDeserializer;
-pub mod cdrSerializer;
-pub mod error;
-pub mod pl_cdr_deserializer;
-pub mod visitors;
+pub(crate) mod builtin_data_deserializer;
+pub(crate) mod builtin_data_serializer;
+pub(crate) mod cdr_deserializer;
+pub(crate) mod cdr_serializer;
+pub(crate) mod error;
+pub(crate) mod pl_cdr_deserializer;
+pub(crate) mod visitors;
 
-pub mod message;
-pub mod submessage;
+pub(crate) mod message;
+pub(crate) mod submessage;
 
-pub use message::*;
-pub use submessage::*;
+// crate exports
+pub(crate) use message::*;
+pub(crate) use submessage::*;
+
+// public exports
+pub use cdr_serializer::{CDRSerializerAdapter};
+pub use cdr_deserializer::{CDRDeserializerAdapter};
+pub use crate::dds::traits::serde_adapters::{SerializerAdapter, DeserializerAdapter};

@@ -34,6 +34,7 @@ use crate::{
 
 use super::dp_event_wrapper::DomainInfo;
 
+/// DDS DomainParticipant generally only one per domain per machine should be active
 #[derive(Clone)]
 // This is a smart pointer for DomainPArticipant_Inner for easier manipulation.
 pub struct DomainParticipant {
@@ -99,7 +100,7 @@ impl DomainParticipant {
     self.dpi.create_subscriber(&self.weak_clone(), qos)
   }
 
-  pub fn create_topic(&self, name: &str, type_desc: TypeDesc, qos: &QosPolicies) -> Result<Topic> {
+  pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies) -> Result<Topic> {
     self
       .dpi
       .create_topic(&self.weak_clone(), name, type_desc, qos)
@@ -158,7 +159,7 @@ impl DomainParticipantWeak {
     }
   }
 
-  pub fn create_topic(&self, name: &str, type_desc: TypeDesc, qos: &QosPolicies) -> Result<Topic> {
+  pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies) -> Result<Topic> {
     match self.dpi.upgrade() {
       Some(dpi) => dpi.create_topic(&self, name, type_desc, qos),
       None => Err(Error::OutOfResources),
@@ -251,7 +252,7 @@ impl DomainParticipant_Disc {
     &self,
     dp: &DomainParticipantWeak,
     name: &str,
-    type_desc: TypeDesc,
+    type_desc: &str,
     qos: &QosPolicies,
   ) -> Result<Topic> {
     self.dpi.create_topic(&dp, name, type_desc, qos)
@@ -574,10 +575,15 @@ impl DomainParticipant_Inner {
     &self,
     domain_participant: &DomainParticipantWeak,
     name: &str,
-    type_desc: TypeDesc,
+    type_desc: &str,
     qos: &QosPolicies,
   ) -> Result<Topic> {
-    let topic = Topic::new(domain_participant, name.to_string(), type_desc, &qos);
+    let topic = Topic::new(
+      domain_participant,
+      name.to_string(),
+      TypeDesc::new(type_desc.to_string()),
+      &qos,
+    );
     Ok(topic)
 
     // TODO: refine
@@ -657,7 +663,7 @@ mod tests {
   use log::info;
   use crate::speedy::Writable;
   use crate::{
-    dds::{qos::QosPolicies, typedesc::TypeDesc},
+    dds::qos::QosPolicies,
     network::{udp_sender::UDPSender, constant::get_user_traffic_unicast_port},
     test::random_data::RandomData,
     structure::{
@@ -665,7 +671,9 @@ mod tests {
       guid::{EntityId, GUID},
       sequence_number::{SequenceNumber, SequenceNumberSet},
     },
-    submessages::{EntitySubmessage, AckNack, SubmessageHeader, SubmessageKind},
+    messages::submessages::submessages::{
+      EntitySubmessage, AckNack, SubmessageHeader, SubmessageKind,
+    },
     common::bit_set::BitSetRef,
     serialization::{SubMessage, Message, submessage::*},
     messages::{
@@ -676,7 +684,7 @@ mod tests {
   use super::DomainParticipant;
   use speedy::Endianness;
 
-  use crate::serialization::cdrSerializer::CDR_serializer_adapter;
+  use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
 
   // TODO: improve basic test when more or the structure is known
@@ -703,15 +711,11 @@ mod tests {
       .expect("Failed to create publisher");
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let topic = domain_participant
-      .create_topic(
-        "Aasii",
-        TypeDesc::new("RandomData".to_string()),
-        &qos.clone(),
-      )
+      .create_topic("Aasii", "RandomData", &qos.clone())
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let mut _data_writer = publisher
-      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
         None,
         &topic,
         qos.clone(),
@@ -734,11 +738,11 @@ mod tests {
       .expect("Failed to create publisher");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let topic = domain_participant
-      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos.clone())
+      .create_topic("Aasii", "Huh?", &qos.clone())
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let mut _data_writer = publisher
-      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
         None,
         &topic,
         qos.clone(),

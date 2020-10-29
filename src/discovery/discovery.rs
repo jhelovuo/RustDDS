@@ -12,7 +12,6 @@ use std::{
 };
 
 use crate::{
-  ParticipantMessageData, ParticipantMessageDataKind,
   dds::{
     datareader::{DataReader},
     datawriter::DataWriter,
@@ -26,10 +25,9 @@ use crate::{
       },
     },
     readcondition::ReadCondition,
-    typedesc::TypeDesc,
   },
   dds::values::result::Error,
-  serialization::cdrDeserializer::CDR_deserializer_adapter,
+  serialization::CDRDeserializerAdapter,
   structure::entity::Entity,
   structure::guid::GUID,
 };
@@ -42,12 +40,12 @@ use crate::discovery::{
 
 use crate::structure::{duration::Duration, guid::EntityId};
 
-use crate::serialization::{
-  cdrSerializer::CDR_serializer_adapter, pl_cdr_deserializer::PlCdrDeserializerAdapter,
-};
+use crate::serialization::{CDRSerializerAdapter, pl_cdr_deserializer::PlCdrDeserializerAdapter};
 
 use crate::network::constant::*;
-use super::data_types::topic_data::DiscoveredTopicData;
+use super::data_types::topic_data::{
+  DiscoveredTopicData, ParticipantMessageData, ParticipantMessageDataKind,
+};
 use byteorder::LittleEndian;
 
 pub enum DiscoveryCommand {
@@ -203,7 +201,7 @@ impl Discovery {
     // Participant
     let dcps_participant_topic = match discovery.domain_participant.create_topic(
       "DCPSParticipant",
-      TypeDesc::new(String::from("SPDPDiscoveredParticipantData")),
+      "SPDPDiscoveredParticipantData",
       &Discovery::create_spdp_patricipant_qos(),
     ) {
       Ok(t) => t,
@@ -281,7 +279,7 @@ impl Discovery {
     };
 
     let mut dcps_participant_writer = match discovery_publisher
-      .create_datawriter::<SPDPDiscoveredParticipantData, CDR_serializer_adapter<SPDPDiscoveredParticipantData,LittleEndian> >(
+      .create_datawriter::<SPDPDiscoveredParticipantData, CDRSerializerAdapter<SPDPDiscoveredParticipantData,LittleEndian> >(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
         &dcps_participant_topic,
         Discovery::create_spdp_patricipant_qos(),
@@ -327,7 +325,7 @@ impl Discovery {
     let dcps_subscription_qos = Discovery::subscriber_qos();
     let dcps_subscription_topic = match discovery.domain_participant.create_topic(
       "DCPSSubscription",
-      TypeDesc::new(String::from("DiscoveredReaderData")),
+      "DiscoveredReaderData",
       &dcps_subscription_qos,
     ) {
       Ok(t) => t,
@@ -380,7 +378,7 @@ impl Discovery {
     };
 
     let mut dcps_subscription_writer = match discovery_publisher
-      .create_datawriter::<DiscoveredReaderData,CDR_serializer_adapter<DiscoveredReaderData,LittleEndian>>(
+      .create_datawriter::<DiscoveredReaderData,CDRSerializerAdapter<DiscoveredReaderData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
         &dcps_subscription_topic,
         dcps_subscription_topic.get_qos().clone(),
@@ -424,7 +422,7 @@ impl Discovery {
     let dcps_publication_qos = Discovery::subscriber_qos();
     let dcps_publication_topic = match discovery.domain_participant.create_topic(
       "DCPSPublication",
-      TypeDesc::new(String::from("DiscoveredWriterData")),
+      "DiscoveredWriterData",
       &dcps_publication_qos,
     ) {
       Ok(t) => t,
@@ -477,7 +475,7 @@ impl Discovery {
     };
 
     let mut dcps_publication_writer = match discovery_publisher
-      .create_datawriter::<DiscoveredWriterData, CDR_serializer_adapter<DiscoveredWriterData,LittleEndian>>(
+      .create_datawriter::<DiscoveredWriterData, CDRSerializerAdapter<DiscoveredWriterData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
         &dcps_publication_topic,
         dcps_publication_topic.get_qos().clone(),
@@ -521,7 +519,7 @@ impl Discovery {
     let dcps_topic_qos = QosPolicies::qos_none();
     let dcps_topic = match discovery.domain_participant.create_topic(
       "DCPSTopic",
-      TypeDesc::new("DiscoveredTopicData".to_string()),
+      "DiscoveredTopicData",
       &dcps_topic_qos,
     ) {
       Ok(t) => t,
@@ -595,7 +593,7 @@ impl Discovery {
     };
 
     let mut dcps_writer = match discovery_publisher
-      .create_datawriter::<DiscoveredTopicData, CDR_serializer_adapter<DiscoveredTopicData,LittleEndian>>(
+      .create_datawriter::<DiscoveredTopicData, CDRSerializerAdapter<DiscoveredTopicData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
         &dcps_topic,
         Discovery::subscriber_qos(),
@@ -638,7 +636,7 @@ impl Discovery {
     // Participant Message Data 8.4.13
     let participant_message_data_topic = match discovery.domain_participant.create_topic(
       "DCPSParticipantMessage",
-      TypeDesc::new(String::from("ParticipantMessageData")),
+      "ParticipantMessageData",
       &Discovery::PARTICIPANT_MESSAGE_QOS,
     ) {
       Ok(t) => t,
@@ -652,12 +650,13 @@ impl Discovery {
       }
     };
 
-    let mut dcps_participant_message_reader = match discovery_subscriber.create_datareader::<ParticipantMessageData, CDR_deserializer_adapter<ParticipantMessageData>>(
-      Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
-      &participant_message_data_topic,
-      None,
-      Discovery::PARTICIPANT_MESSAGE_QOS,
-    ) {
+    let mut dcps_participant_message_reader = match discovery_subscriber
+      .create_datareader::<ParticipantMessageData, CDRDeserializerAdapter<ParticipantMessageData>>(
+        Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
+        &participant_message_data_topic,
+        None,
+        Discovery::PARTICIPANT_MESSAGE_QOS,
+      ) {
       Ok(r) => r,
       Err(e) => {
         error!("Unable to create DCPSParticipantMessage reader. {:?}", e);
@@ -687,7 +686,7 @@ impl Discovery {
     };
 
     let mut dcps_participant_message_writer = match discovery_publisher
-      .create_datawriter::<ParticipantMessageData, CDR_serializer_adapter<ParticipantMessageData, LittleEndian>>(
+      .create_datawriter::<ParticipantMessageData, CDRSerializerAdapter<ParticipantMessageData, LittleEndian>>(
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER),
         &participant_message_data_topic,
         Discovery::PARTICIPANT_MESSAGE_QOS,
@@ -1029,10 +1028,7 @@ impl Discovery {
 
   pub fn handle_participant_message_reader(
     &self,
-    reader: &mut DataReader<
-      ParticipantMessageData,
-      CDR_deserializer_adapter<ParticipantMessageData>,
-    >,
+    reader: &mut DataReader<ParticipantMessageData, CDRDeserializerAdapter<ParticipantMessageData>>,
   ) {
     let participant_messages: Option<Vec<ParticipantMessageData>> =
       match reader.take(100, ReadCondition::any()) {
@@ -1061,7 +1057,7 @@ impl Discovery {
     &self,
     writer: &mut DataWriter<
       ParticipantMessageData,
-      CDR_serializer_adapter<ParticipantMessageData, LittleEndian>,
+      CDRSerializerAdapter<ParticipantMessageData, LittleEndian>,
     >,
     liveliness_state: &mut LivelinessState,
   ) {
@@ -1204,7 +1200,7 @@ impl Discovery {
     &self,
     writer: &mut DataWriter<
       DiscoveredReaderData,
-      CDR_serializer_adapter<DiscoveredReaderData, LittleEndian>,
+      CDRSerializerAdapter<DiscoveredReaderData, LittleEndian>,
     >,
   ) {
     let db = self.discovery_db_read();
@@ -1235,7 +1231,7 @@ impl Discovery {
     &self,
     writer: &mut DataWriter<
       DiscoveredWriterData,
-      CDR_serializer_adapter<DiscoveredWriterData, LittleEndian>,
+      CDRSerializerAdapter<DiscoveredWriterData, LittleEndian>,
     >,
   ) {
     let db = self.discovery_db_read();
@@ -1264,7 +1260,7 @@ impl Discovery {
     &self,
     writer: &mut DataWriter<
       DiscoveredTopicData,
-      CDR_serializer_adapter<DiscoveredTopicData, LittleEndian>,
+      CDRSerializerAdapter<DiscoveredTopicData, LittleEndian>,
     >,
   ) {
     let db = self.discovery_db_read();
@@ -1345,8 +1341,8 @@ mod tests {
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
     structure::{entity::Entity, locator::Locator},
-    serialization::{cdrSerializer::to_bytes, cdrDeserializer::CDR_deserializer_adapter},
-    submessages::{InterpreterSubmessage, EntitySubmessage},
+    serialization::{cdr_serializer::to_bytes, cdr_deserializer::CDRDeserializerAdapter},
+    messages::submessages::submessages::{InterpreterSubmessage, EntitySubmessage},
     messages::{
       submessages::submessage_elements::serialized_payload::{RepresentationIdentifier},
     },
@@ -1405,18 +1401,14 @@ mod tests {
     let participant = DomainParticipant::new(0);
 
     let topic = participant
-      .create_topic(
-        "Square",
-        TypeDesc::new(String::from("ShapeType")),
-        &QosPolicies::qos_none(),
-      )
+      .create_topic("Square", "ShapeType", &QosPolicies::qos_none())
       .unwrap();
 
     let publisher = participant
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType, CDR_serializer_adapter<ShapeType, LittleEndian>>(
+      .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
         None,
         &topic,
         QosPolicies::qos_none(),
@@ -1426,7 +1418,7 @@ mod tests {
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
-    let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(
+    let _reader = subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(
       None,
       &topic,
       None,
@@ -1499,18 +1491,14 @@ mod tests {
     let participant = DomainParticipant::new(0);
 
     let topic = participant
-      .create_topic(
-        "Square",
-        TypeDesc::new(String::from("ShapeType")),
-        &QosPolicies::qos_none(),
-      )
+      .create_topic("Square", "ShapeType", &QosPolicies::qos_none())
       .unwrap();
 
     let publisher = participant
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType, CDR_serializer_adapter<ShapeType, LittleEndian>>(
+      .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
         None,
         &topic,
         QosPolicies::qos_none(),
@@ -1520,7 +1508,7 @@ mod tests {
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
-    let _reader = subscriber.create_datareader::<ShapeType, CDR_deserializer_adapter<ShapeType>>(
+    let _reader = subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(
       None,
       &topic,
       None,

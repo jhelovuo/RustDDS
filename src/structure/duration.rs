@@ -18,6 +18,8 @@ use super::parameter_id::ParameterId;
   Copy,
   Clone,
 )]
+
+/// Duration for Qos and wire interoperability
 pub struct Duration {
   seconds: i32,
   fraction: u32,

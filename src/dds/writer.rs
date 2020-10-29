@@ -16,10 +16,11 @@ use std::hash::Hasher;
 //use crate::messages::submessages::info_destination::InfoDestination;
 use crate::{
   messages::submessages::{
-    submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
+    submessage::EntitySubmessage,
     info_timestamp::InfoTimestamp,
-    submessage_flag::*,
+    submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
     submessage_elements::serialized_payload::RepresentationIdentifier,
+    submessage_flag::*,
   },
   structure::parameter_id::ParameterId,
 };
@@ -30,7 +31,7 @@ use crate::messages::{header::Header, vendor_id::VendorId, protocol_id::Protocol
 use crate::structure::guid::{GuidPrefix, EntityId, GUID};
 use crate::structure::sequence_number::{SequenceNumber};
 use crate::{
-  submessages::{
+  messages::submessages::submessages::{
     Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage, AckNack, InfoDestination,
   },
   structure::cache_change::{CacheChange, ChangeKind},
@@ -889,10 +890,7 @@ impl Writer {
         flags: flags.bits(),
         content_length: size,
       },
-      body: SubmessageBody::Entity(crate::submessages::EntitySubmessage::Data(
-        data_message,
-        flags,
-      )),
+      body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, flags)),
     };
 
     return s;
@@ -1147,14 +1145,12 @@ impl HasQoSPolicy for Writer {
 #[cfg(test)]
 mod tests {
   use crate::{
-    dds::{
-      interfaces::IDataWriter, participant::DomainParticipant, qos::QosPolicies, typedesc::TypeDesc,
-    },
+    dds::{interfaces::IDataWriter, participant::DomainParticipant, qos::QosPolicies},
   };
   use std::thread;
   use crate::test::random_data::*;
   use crate::dds::datawriter::DataWriter;
-  use crate::serialization::cdrSerializer::CDR_serializer_adapter;
+  use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
   use log::info;
 
@@ -1169,12 +1165,12 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", TypeDesc::new("Huh?".to_string()), &qos)
+      .create_topic("Aasii", "Huh?", &qos)
       .expect("Failed to create topic");
     let mut data_writer: DataWriter<
       '_,
       RandomData,
-      CDR_serializer_adapter<RandomData, LittleEndian>,
+      CDRSerializerAdapter<RandomData, LittleEndian>,
     > = publisher
       .create_datawriter(None, &topic, qos)
       .expect("Failed to create datawriter");

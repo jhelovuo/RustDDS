@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwn
 use crate::{
   dds::traits::key::Keyed, dds::traits::serde_adapters::DeserializerAdapter,
   dds::traits::serde_adapters::SerializerAdapter, serialization,
-  submessages::RepresentationIdentifier,
+  messages::submessages::submessages::RepresentationIdentifier,
 };
 
 // We should not expose the NoKeyWrapper type.

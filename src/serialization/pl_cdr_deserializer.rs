@@ -8,7 +8,7 @@ use crate::{
 };
 
 use crate::dds::traits::serde_adapters::DeserializerAdapter;
-use super::{cdrSerializer::to_bytes};
+use super::{cdr_serializer::to_bytes};
 use byteorder::LittleEndian;
 
 pub struct PlCdrDeserializerAdapter<D> {

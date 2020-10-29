@@ -4,7 +4,7 @@ use std::io;
 use std::io::Write;
 
 extern crate byteorder;
-use crate::serialization::cdrSerializer::byteorder::WriteBytesExt;
+use crate::serialization::cdr_serializer::byteorder::WriteBytesExt;
 use byteorder::{BigEndian, LittleEndian, ByteOrder};
 
 use crate::serialization::error::Error;
@@ -58,7 +58,7 @@ where
 // ---------------------------------------------------------------------------------
 
 // A struct separate from CDR_serializer is needed, because the neme to_writer is already taken
-pub struct CDR_serializer_adapter<D, BO>
+pub struct CDRSerializerAdapter<D, BO = LittleEndian>
 where
   BO: ByteOrder,
 {
@@ -66,7 +66,7 @@ where
   ghost: PhantomData<BO>,
 }
 
-impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D, LittleEndian>
+impl<D> SerializerAdapter<D> for CDRSerializerAdapter<D, LittleEndian>
 where
   D: Serialize,
 {
@@ -79,7 +79,7 @@ where
   }
 }
 
-impl<D> SerializerAdapter<D> for CDR_serializer_adapter<D, BigEndian>
+impl<D> SerializerAdapter<D> for CDRSerializerAdapter<D, BigEndian>
 where
   D: Serialize,
 {
@@ -557,9 +557,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStructVariant
 
 #[cfg(test)]
 mod tests {
-  use crate::serialization::cdrSerializer::to_little_endian_binary;
-  use crate::serialization::cdrSerializer::to_big_endian_binary;
-  use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
+  use crate::serialization::cdr_serializer::to_little_endian_binary;
+  use crate::serialization::cdr_serializer::to_big_endian_binary;
+  use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
   use log::info;
   use serde::{Serialize, Deserialize};
   use serde_repr::{Serialize_repr, Deserialize_repr};

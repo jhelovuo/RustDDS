@@ -74,7 +74,7 @@ pub fn spdp_publication_data_raw() -> Vec<u8> {
 
 use crate::{
   serialization::{
-    Message, cdrSerializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, SubMessage,
+    Message, cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, SubMessage,
     SubmessageBody,
   },
   discovery::{
@@ -87,7 +87,7 @@ use crate::{
       spdp_participant_data::SPDPDiscoveredParticipantData,
     },
   },
-  submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader},
+  messages::submessages::submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader},
   structure::{
     locator::Locator,
     guid::{EntityId, GUID},
@@ -401,10 +401,7 @@ pub fn create_rtps_data_message<D: Serialize>(
 
   let submessage: SubMessage = SubMessage {
     header: submessage_header,
-    body: SubmessageBody::Entity(crate::submessages::EntitySubmessage::Data(
-      data_message,
-      sub_flags,
-    )),
+    body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, sub_flags)),
   };
   rtps_message.add_submessage(submessage);
 

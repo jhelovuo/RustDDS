@@ -4,7 +4,7 @@ use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
 use termion::{event::Key, raw::RawTerminal, input::TermRead, AsyncReader};
 use atosdds::{
-  DiscoveredTopicData,
+  dds::data_types::DiscoveredTopicData,
   ros2::builtin_datatypes::{ROSParticipantInfo, NodeInfo, Gid},
 };
 
@@ -207,8 +207,8 @@ impl<'a> MainController<'a> {
               self.stdout,
               "{}{}{}",
               termion::cursor::Goto(1, 21 + i as u16),
-              node_info.node_namespace,
-              node_info.node_name
+              node_info.get_namespace(),
+              node_info.get_name()
             )
             .unwrap();
           }

@@ -196,11 +196,11 @@ impl Serialize for SPDPDiscoveredParticipantData {
 mod tests {
   use super::*;
 
-  use crate::submessages::EntitySubmessage;
+  use crate::messages::submessages::submessages::EntitySubmessage;
   use crate::serialization::message::Message;
   use crate::serialization::submessage::*;
   use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
-  use crate::serialization::cdrSerializer::{to_bytes};
+  use crate::serialization::cdr_serializer::{to_bytes};
   use byteorder::LittleEndian;
   use crate::{
     messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,

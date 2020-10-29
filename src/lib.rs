@@ -20,11 +20,13 @@ mod common;
 mod discovery;
 mod messages;
 mod network;
-pub mod structure;
+pub(crate) mod structure;
 mod test;
 
+/// DDS interface
 pub mod dds;
+
 pub mod ros2;
+
+/// Helpers for (De)serialization and definitions of (De)serializer adapters
 pub mod serialization;
-pub use messages::submessages::submessages;
-pub use discovery::data_types::topic_data::*;

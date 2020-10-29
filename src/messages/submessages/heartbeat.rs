@@ -1,6 +1,6 @@
 use crate::{
   serialization::SubMessage, serialization::SubmessageBody, structure::guid::EntityId,
-  submessages::SubmessageHeader,
+  messages::submessages::submessages::SubmessageHeader,
 };
 use crate::structure::sequence_number::SequenceNumber;
 use enumflags2::BitFlags;

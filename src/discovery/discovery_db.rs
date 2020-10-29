@@ -9,8 +9,8 @@ use itertools::Itertools;
 use log::warn;
 
 use crate::{
-  ParticipantMessageData, dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators,
-  structure::guid::EntityId, structure::guid::GuidPrefix,
+  dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators, structure::guid::EntityId,
+  structure::guid::GuidPrefix,
 };
 
 use crate::structure::{guid::GUID, duration::Duration, entity::Entity};
@@ -23,11 +23,11 @@ use crate::{
 };
 
 use super::data_types::{
-  topic_data::{
-    SubscriptionBuiltinTopicData, DiscoveredReaderData, ReaderProxy, DiscoveredWriterData,
-    DiscoveredTopicData, TopicBuiltinTopicData,
-  },
   spdp_participant_data::SPDPDiscoveredParticipantData,
+  topic_data::{
+    DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
+    ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
+  },
 };
 
 pub struct DiscoveryDB {
@@ -591,12 +591,12 @@ mod tests {
       random_data::RandomData,
       test_data::{subscription_builtin_topic_data, spdp_participant_data, reader_proxy_data},
     },
-    dds::{qos::QosPolicies, typedesc::TypeDesc},
+    dds::qos::QosPolicies,
   };
   use std::sync::{RwLock, Arc};
 
   use crate::structure::guid::*;
-  use crate::serialization::cdrSerializer::CDR_serializer_adapter;
+  use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
   use std::time::Duration as StdDuration;
 
@@ -635,25 +635,17 @@ mod tests {
 
     let domain_participant = DomainParticipant::new(0);
     let topic = domain_participant
-      .create_topic(
-        "Foobar",
-        TypeDesc::new(String::from("RandomData")),
-        &QosPolicies::qos_none(),
-      )
+      .create_topic("Foobar", "RandomData", &QosPolicies::qos_none())
       .unwrap();
     let topic2 = domain_participant
-      .create_topic(
-        "Barfoo",
-        TypeDesc::new(String::from("RandomData")),
-        &QosPolicies::qos_none(),
-      )
+      .create_topic("Barfoo", "RandomData", &QosPolicies::qos_none())
       .unwrap();
 
     let publisher1 = domain_participant
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let dw = publisher1
-      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
         None,
         &topic,
         QosPolicies::qos_none(),
@@ -670,7 +662,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let dw2 = publisher2
-      .create_datawriter::<RandomData, CDR_serializer_adapter<RandomData, LittleEndian>>(
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
         None,
         &topic,
         QosPolicies::qos_none(),
@@ -724,11 +716,7 @@ mod tests {
   fn discdb_local_topic_reader() {
     let dp = DomainParticipant::new(0);
     let topic = dp
-      .create_topic(
-        "some topic name",
-        TypeDesc::new(String::from("Wazzup")),
-        &QosPolicies::qos_none(),
-      )
+      .create_topic("some topic name", "Wazzup", &QosPolicies::qos_none())
       .unwrap();
     let mut discoverydb = DiscoveryDB::new();
 

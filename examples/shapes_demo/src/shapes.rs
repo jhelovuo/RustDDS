@@ -1,4 +1,4 @@
-use atosdds::dds::traits::key::Keyed;
+use atosdds::dds::traits::Keyed;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,10 +40,9 @@ impl Keyed for Square {
 mod tests {
   use super::*;
   use atosdds::{
-    submessages::RepresentationIdentifier,
-    serialization::cdrDeserializer::CDR_deserializer_adapter,
+    submessages::RepresentationIdentifier, serialization::cdr_deserializer::CDRDeserializerAdapter,
     dds::traits::serde_adapters::DeserializerAdapter,
-    serialization::cdrSerializer::to_little_endian_binary,
+    serialization::cdr_serializer::to_little_endian_binary,
   };
 
   #[test]
@@ -53,9 +52,8 @@ mod tests {
       0x00, 0x1e, 0x00, 0x00, 0x00,
     ];
 
-    let sq =
-      CDR_deserializer_adapter::<Square>::from_bytes(&data, RepresentationIdentifier::CDR_LE)
-        .unwrap();
+    let sq = CDRDeserializerAdapter::<Square>::from_bytes(&data, RepresentationIdentifier::CDR_LE)
+      .unwrap();
 
     let sq2 = Square {
       color: String::from("RED"),

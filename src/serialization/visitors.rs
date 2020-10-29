@@ -2,7 +2,7 @@ use serde::{
   de::{Visitor, Error},
 };
 use super::{
-  builtin_data_deserializer::BuiltinDataDeserializer, cdrDeserializer::CDR_deserializer_adapter,
+  builtin_data_deserializer::BuiltinDataDeserializer, cdr_deserializer::CDRDeserializerAdapter,
 };
 
 use crate::{messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier};
@@ -21,16 +21,14 @@ impl<'de> Visitor<'de> for BuiltinDataDeserializer {
   where
     E: Error,
   {
-    let rep: RepresentationIdentifier = match CDR_deserializer_adapter::<u16>::from_bytes(
-      &v[..2],
-      RepresentationIdentifier::CDR_LE,
-    ) {
-      Ok(v) => match RepresentationIdentifier::try_from(v) {
-        Ok(v) => v,
-        _ => return Err(E::missing_field("representation identifier")),
-      },
-      Err(_) => return Err(E::missing_field("representation identifier")),
-    };
+    let rep: RepresentationIdentifier =
+      match CDRDeserializerAdapter::<u16>::from_bytes(&v[..2], RepresentationIdentifier::CDR_LE) {
+        Ok(v) => match RepresentationIdentifier::try_from(v) {
+          Ok(v) => v,
+          _ => return Err(E::missing_field("representation identifier")),
+        },
+        Err(_) => return Err(E::missing_field("representation identifier")),
+      };
 
     match rep {
       RepresentationIdentifier::PL_CDR_LE => Ok(self.parse_data_little_endian(&v[2..])),

@@ -3,7 +3,7 @@ use std::io;
 use crate::{
   structure::{sequence_number::SequenceNumber, guid::GuidPrefix},
   serialization::submessage::{SubMessage, SubmessageBody},
-  submessages::*,
+  messages::submessages::submessages::*,
   messages::header::Header,
   dds::writer::Writer as RtpsWriter,
   dds::rtps_reader_proxy::RtpsReaderProxy,

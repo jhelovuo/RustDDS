@@ -629,7 +629,6 @@ where
 mod tests {
   use super::*;
   use crate::dds::participant::DomainParticipant;
-  use crate::dds::typedesc::TypeDesc;
   use crate::test::random_data::*;
   use crate::dds::traits::key::Keyed;
   use mio_extras::channel as mio_channel;
@@ -639,7 +638,7 @@ mod tests {
   use crate::dds::message_receiver::*;
   use crate::structure::guid::GuidPrefix;
   use crate::structure::sequence_number::SequenceNumber;
-  use crate::serialization::{cdrDeserializer::CDR_deserializer_adapter, cdrSerializer::to_bytes};
+  use crate::serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes};
   use byteorder::LittleEndian;
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
   use std::{thread, time};
@@ -651,9 +650,7 @@ mod tests {
     qos.history = Some(policy::History::KeepAll);
 
     let sub = dp.create_subscriber(&qos).unwrap();
-    let topic = dp
-      .create_topic("dr", TypeDesc::new("drtest?".to_string()), &qos)
-      .unwrap();
+    let topic = dp.create_topic("dr", "drtest?", &qos).unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
 
@@ -669,7 +666,7 @@ mod tests {
     );
 
     let mut matching_datareader = sub
-      .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
         Some(datareader_id),
         &topic,
         None,
@@ -769,9 +766,7 @@ mod tests {
     qos.history = Some(policy::History::KeepAll); // Just for testing
 
     let sub = dp.create_subscriber(&qos).unwrap();
-    let topic = dp
-      .create_topic("dr read", TypeDesc::new("read fn test?".to_string()), &qos)
-      .unwrap();
+    let topic = dp.create_topic("dr read", "read fn test?", &qos).unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
 
@@ -786,7 +781,7 @@ mod tests {
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
         Some(default_id),
         &topic,
         None,
@@ -1008,9 +1003,7 @@ mod tests {
     qos.history = Some(policy::History::KeepAll); // Just for testing
 
     let sub = dp.create_subscriber(&qos).unwrap();
-    let topic = dp
-      .create_topic("wakeup", TypeDesc::new("Wake up!".to_string()), &qos)
-      .unwrap();
+    let topic = dp.create_topic("wakeup", "Wake up!", &qos).unwrap();
 
     let (send, rec) = mio_channel::sync_channel::<()>(10);
 
@@ -1025,7 +1018,7 @@ mod tests {
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
         Some(default_id),
         &topic,
         None,

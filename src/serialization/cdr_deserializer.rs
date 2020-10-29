@@ -20,7 +20,7 @@ use crate::messages::submessages::submessage_elements::serialized_payload::Repre
 /// This type adapts CDR_deserializer (which implements serde::Deserializer) to work as a
 /// DeserializerAdapter. CDR_deserializer cannot directly implement the trait itself, because
 /// CDR_deserializer has the type parameter BO open, and the adapter needs to be bi-endian.
-pub struct CDR_deserializer_adapter<D> {
+pub struct CDRDeserializerAdapter<D> {
   phantom: PhantomData<D>,
   // no-one home
 }
@@ -31,7 +31,7 @@ const repr_ids: [RepresentationIdentifier; 3] = [
   RepresentationIdentifier::PL_CDR_LE,
 ];
 
-impl<D> DeserializerAdapter<D> for CDR_deserializer_adapter<D>
+impl<D> DeserializerAdapter<D> for CDRDeserializerAdapter<D>
 where
   D: DeserializeOwned,
 {
@@ -293,7 +293,7 @@ where
   where
     V: Visitor<'de>,
   {
-    // Unit data is not put on wire, to match behavior with cdrSerializer
+    // Unit data is not put on wire, to match behavior with cdr_serializer
     visitor.visit_unit()
   }
 
@@ -536,11 +536,11 @@ where
 
 #[cfg(test)]
 mod tests {
-  use crate::serialization::cdrSerializer::to_bytes;
+  use crate::serialization::cdr_serializer::to_bytes;
   use byteorder::{BigEndian, LittleEndian};
   use log::info;
-  use crate::serialization::cdrDeserializer::deserialize_from_little_endian;
-  use crate::serialization::cdrDeserializer::deserialize_from_big_endian;
+  use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
+  use crate::serialization::cdr_deserializer::deserialize_from_big_endian;
   use serde::{Serialize, Deserialize};
   use std::any::type_name;
 
