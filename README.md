@@ -4,6 +4,26 @@ The Data Distribution Service for real-time systems (DDS) is an Object Managemen
 
 This is a pure Rust implementation of DDS. We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions, so the API is not quite the same as with DDS specification.
 
+# Current implementation status
+
+This is still work-in-progress. The most immediate goal is to have enough functionality to be able to communicate with [ROS2][ros2-url] software.
+
+# Data serialization and keying
+
+Some existing DDS implementation use code generation to implement DataReader and DataWriter calsses for each payload type.
+
+We do not rely on code generation, but Rust generic programming instead: There is a generic DataReader and DataWriter, parameterized with the payload type D and a serializer adapter type SA. The [Serde][serde-url] library is used for payload data serialization/deserialization.
+
+The payload type D is required to implement `serde::Serialize` when used with a DataWriter, and 
+`serde::DeserializeOwned` when used with a DataReader. If the payload D is communicated in a WITH_KEY topic, then D is additionally required to implement trait `Keyed`.
+
+Many existing Rust types and libraries already support Serde, so they are good to go as-is.
+
+The trait `Keyed` requires one method: `get_key(&self) -> Self::K` , which is used to extract a key of an associated type `K` from `D`. They key type `K` must implement trait `Key`, which is a combination of pre-existing traits `Eq + 
+PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned` and no additional methods.
+
+A serializer adapter type SA (wrapper for a Serde data format) is provided for OMG Common Data Representation (CDR), as this is the default serialization format used by DDS/RTPS. It is possible to use another serialization format for the objects communicated over DDS by providing a Serde [data format][serde-data-format-url] implementation.
+
 # Intentional deviations from DDS specification
 
 ## Rationale
@@ -41,7 +61,7 @@ The list of standard method return codes specifed by DDS (section 2.2.1.1) is mo
 
 The DDS specification specifies multiple functions to read received data samples out of a DataReader:
 
-* `read`: Borrows desrialized data objects from DataReader. Marks them read. Can be read again, if already read samples are requested.
+* `read`: Accesses deserialized data objects from DataReader. Marks them read. Can be read again, if already read samples are requested.
 * `take`: Like read, but removes returned objects from DataReader, so they cannot be read again.
 * `read_w_condition`, `take_w_condition`: Read/take samples that match specified condition.
 * `read_next_sample`, `take_next_sample`: Read/take next non-previously accessed sample.
@@ -57,11 +77,10 @@ We have decided to not implement all 12 of these. Instead, we implement smaller 
 
 There are also methods  `read_next_sample`, `take_next_sample` , but these are essentially simplification wrappers for read/take.
 
+# Memory management
 
-
-# Current status
-
-This is still work-in-progress. The most immediate goal is to have enough functionality to be able to communicate with [ROS2][ros2-url] software.
+The DDS specification specifies manual memory management in the sense that many object types are created with a 
+`create_` method call and destoryed with a matching `delete_` method call. We have opted to rely on Rust memory management wherever possible, including handling of payload data.
 
 # Based on rtps-rs
 
@@ -73,3 +92,5 @@ The RTPS implementation used here is derived from [rtps-rs][klapeyron-rtps-rs-ur
 [klapeyron-rtps-rs-url]: https://github.com/Klapeyron/rtps-rs
 [ros2-url]: https://index.ros.org/doc/ros2/
 [metal-io-url]: https://docs.rs/mio/0.6.22/mio/
+[serde-url]: https://serde.rs/
+[serde-data-format-url]: https://serde.rs/data-format.html
