@@ -23,9 +23,8 @@ mod network;
 pub(crate) mod structure;
 mod test;
 
-/// DDS interface
+// Public modules
 pub mod dds;
-
 pub mod ros2;
 
 /// Helpers for (De)serialization and definitions of (De)serializer adapters

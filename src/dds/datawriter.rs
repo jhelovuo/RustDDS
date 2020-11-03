@@ -8,7 +8,10 @@ use mio_extras::channel::{self as mio_channel, Receiver};
 use serde::Serialize;
 use log::{error, warn};
 
-use crate::{structure::time::Timestamp, discovery::discovery::DiscoveryCommand};
+use crate::{
+  serialization::CDRSerializerAdapter, discovery::discovery::DiscoveryCommand,
+  structure::time::Timestamp,
+};
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::{
   dds_cache::DDSCache,
@@ -24,6 +27,7 @@ use crate::dds::values::result::{
 };
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::key::*;
+use crate::dds::traits::TopicDescription;
 
 use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
@@ -37,7 +41,9 @@ use super::{
   values::result::StatusChange, writer::WriterCommand,
 };
 
-pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D>> {
+/// DDS DataWriter for keyed topics
+pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>>
+{
   my_publisher: &'a Publisher,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -76,7 +82,7 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
-  pub fn new(
+  pub(crate) fn new(
     publisher: &'a Publisher,
     topic: &'a Topic,
     guid: Option<GUID>,
@@ -220,7 +226,6 @@ where
     return Err(Error::Unsupported);
   }
 
-  // status queries
   fn get_status_listener(&self) -> &Receiver<StatusChange> {
     match self
       .cc_upload
@@ -233,10 +238,12 @@ where
     &self.status_receiver
   }
 
+  /// Unimplemented. <b>Do not use</b>.
   fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
     todo!()
   }
 
+  /// Should get latest offered deadline missed status. <b>Do not use yet</b> use `get_status_lister` instead for the moment.
   fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
     let mut fstatus = OfferedDeadlineMissedStatus::new();
     while let Ok(status) = self.status_receiver.try_recv() {
@@ -259,15 +266,16 @@ where
     Ok(fstatus)
   }
 
+  /// Unimplemented. <b>Do not use</b>.
   fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
     todo!()
   }
 
+  /// Unimplemented. <b>Do not use</b>.
   fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     todo!()
   }
 
-  // who are we connected to?
   fn get_topic(&self) -> &Topic {
     &self.my_topic
   }
@@ -307,6 +315,7 @@ where
     Ok(())
   }
 
+  /// Unimplemented. <b>Do not use</b>.
   fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     todo!()
   }
@@ -318,6 +327,12 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
+  /// Disposes data instance with specified key
+  ///
+  /// # Arguments
+  ///
+  /// * `key` - Key of the instance
+  /// * `source_timestamp` - DDS source timestamp (None uses now as time as specified in DDS spec)
   fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
     /*
 
@@ -417,7 +432,7 @@ mod tests {
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, &topic, qos)
+        .create_datawriter(None, &topic, None)
         .expect("Failed to create datawriter");
 
     let mut data = RandomData {
@@ -455,7 +470,7 @@ mod tests {
       RandomData,
       CDRSerializerAdapter<RandomData, LittleEndian>,
     > = publisher
-      .create_datawriter(None, &topic, qos)
+      .create_datawriter(None, &topic, None)
       .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
@@ -494,7 +509,7 @@ mod tests {
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, &topic, qos)
+        .create_datawriter(None, &topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

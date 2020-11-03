@@ -19,7 +19,7 @@ use crate::{
   },
   dds::qos::HasQoSPolicy,
   dds::qos::QosPolicies,
-  dds::traits::key::Key,
+  dds::traits::{key::Key, TopicDescription},
   discovery::content_filter_property::ContentFilterProperty,
   network::constant::get_user_traffic_unicast_port,
   network::util::get_local_unicast_socket_address,

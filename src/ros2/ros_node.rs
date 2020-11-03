@@ -146,11 +146,11 @@ impl<'a> RosParticipant<'a> {
 
     let node_reader = ros_context
       .get_ros_discovery_subscriber()
-      .create_datareader_no_key(None, dtopic, ROSDiscoveryTopic::get_qos())?;
+      .create_datareader_no_key(dtopic, None,  None)?;
 
     let node_writer = ros_context
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(None, dtopic, ROSDiscoveryTopic::get_qos())?;
+      .create_datawriter_no_key(None, dtopic, None)?;
 
     Ok(RosParticipant {
       nodes: HashMap::new(),
@@ -442,7 +442,7 @@ impl<'a> RosNode<'a> {
       Some(
         ros_context
           .get_ros_discovery_publisher()
-          .create_datawriter_no_key(None, rosout_topic, RosOutTopic::get_qos())?,
+          .create_datawriter_no_key(None, rosout_topic, None)?,
       )
     } else {
       None
@@ -450,7 +450,7 @@ impl<'a> RosNode<'a> {
 
     let parameter_events_writer = ros_context
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(None, paramtopic, ParameterEventsTopic::get_qos())?;
+      .create_datawriter_no_key(None, paramtopic, None)?;
 
     Ok(RosNode {
       name: String::from(name),
@@ -587,15 +587,10 @@ impl<'a> IRosNodeControl<'a> for RosNode<'a> {
     topic: &'a Topic,
     qos: Option<QosPolicies>,
   ) -> Result<Box<dyn IDataReader<D, DA> + 'a>, Error> {
-    let qos = match qos {
-      Some(qos) => qos,
-      None => QosPolicies::qos_none(),
-    };
-
     match self
       .ros_context
       .get_ros_discovery_subscriber()
-      .create_datareader_no_key::<D, DA>(None, topic, qos)
+      .create_datareader_no_key::<D, DA>(topic, None,  qos)
     {
       Ok(dr) => Ok(Box::new(dr)),
       Err(e) => Err(e),
@@ -611,15 +606,10 @@ impl<'a> IRosNodeControl<'a> for RosNode<'a> {
     D: Keyed + DeserializeOwned + 'static,
     D::K: Key,
   {
-    let qos = match qos {
-      Some(qos) => qos,
-      None => QosPolicies::qos_none(),
-    };
-
     match self
       .ros_context
       .get_ros_discovery_subscriber()
-      .create_datareader::<D, DA>(None, topic, None, qos)
+      .create_datareader::<D, DA>(topic, None,  qos)
     {
       Ok(dr) => Ok(Box::new(dr)),
       Err(e) => Err(e),
@@ -631,11 +621,6 @@ impl<'a> IRosNodeControl<'a> for RosNode<'a> {
     topic: &'a Topic,
     qos: Option<QosPolicies>,
   ) -> Result<Box<dyn IDataWriter<D, SA> + 'a>, Error> {
-    let qos = match qos {
-      Some(qos) => qos,
-      None => QosPolicies::qos_none(),
-    };
-
     match self
       .ros_context
       .get_ros_discovery_publisher()
@@ -655,11 +640,6 @@ impl<'a> IRosNodeControl<'a> for RosNode<'a> {
     D: Keyed + Serialize + 'a,
     D::K: Key,
   {
-    let qos = match qos {
-      Some(qos) => qos,
-      None => QosPolicies::qos_none(),
-    };
-
     match self
       .ros_context
       .get_ros_discovery_publisher()

@@ -252,7 +252,7 @@ impl GUID {
 impl Key for GUID {}
 
 #[derive(Serialize, Deserialize)]
-pub struct GUIDData {
+pub(crate) struct GUIDData {
   parameter_id: ParameterId,
   parameter_length: u16,
   guid: GUID,

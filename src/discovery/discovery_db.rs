@@ -18,7 +18,7 @@ use crate::structure::{guid::GUID, duration::Duration, entity::Entity};
 use crate::{
   dds::{
     rtps_reader_proxy::RtpsReaderProxy, reader::Reader, participant::DomainParticipant,
-    topic::Topic, rtps_writer_proxy::RtpsWriterProxy,
+    topic::Topic, rtps_writer_proxy::RtpsWriterProxy, traits::TopicDescription,
   },
 };
 
@@ -646,9 +646,7 @@ mod tests {
       .unwrap();
     let dw = publisher1
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None,
-        &topic,
-        QosPolicies::qos_none(),
+        None, &topic, None,
       )
       .unwrap();
 
@@ -663,9 +661,7 @@ mod tests {
       .unwrap();
     let dw2 = publisher2
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None,
-        &topic,
-        QosPolicies::qos_none(),
+        None, &topic, None,
       )
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);

@@ -4,3 +4,5 @@ pub(crate) mod serde_adapters;
 
 pub use dds_entity::*;
 pub use key::*;
+
+pub use super::topic::TopicDescription;

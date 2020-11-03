@@ -3,10 +3,7 @@ use enumflags2::BitFlags;
 use crate::{dds::traits::key::*, structure::guid::GUID};
 use crate::structure::time::Timestamp;
 
-use super::{
-  interfaces::{IDataSample, IKeyedDataSample},
-  no_key::wrappers::NoKeyWrapper,
-};
+use super::{interfaces::{IDataSample, IDataSampleConvert, IKeyedDataSample, IKeyedDataSampleConvert}, no_key::wrappers::NoKeyWrapper};
 
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
@@ -211,6 +208,16 @@ where
   } // fn
 } // imlp
 
+impl<D: Keyed + 'static> IDataSampleConvert<D> for DataSample<D> {
+  fn as_idata_sample(&self) -> &dyn IDataSample<D> {
+    self
+  }
+
+  fn into_idata_sample(self) -> Box<dyn IDataSample<D>> {
+    Box::new(self)
+  }
+}
+
 impl<D: Keyed + 'static> IDataSample<D> for DataSample<D> {
   fn get_sample_info(&self) -> &SampleInfo {
     &self.sample_info
@@ -233,12 +240,14 @@ impl<D: Keyed + 'static> IDataSample<D> for DataSample<D> {
       _ => None,
     }
   }
+}
 
-  fn as_idata_sample(&self) -> &dyn IDataSample<D> {
+impl<D: Keyed + 'static> IKeyedDataSampleConvert<D> for DataSample<D> {
+  fn as_ikeyed_data_sample(&self) -> &dyn IKeyedDataSample<D> {
     self
   }
 
-  fn into_idata_sample(self) -> Box<dyn IDataSample<D>> {
+  fn into_ikeyed_data_sample(self) -> Box<dyn IKeyedDataSample<D>> {
     Box::new(self)
   }
 }
@@ -247,12 +256,14 @@ impl<D: Keyed + 'static> IKeyedDataSample<D> for DataSample<D> {
   fn get_keyed_value(&self) -> &Result<D, D::K> {
     &self.value
   }
+}
 
-  fn as_ikeyed_data_sample(&self) -> &dyn IKeyedDataSample<D> {
+impl<D: 'static> IDataSampleConvert<D> for DataSample<NoKeyWrapper<D>> {
+  fn as_idata_sample(&self) -> &dyn IDataSample<D> {
     self
   }
 
-  fn into_ikeyed_data_sample(self) -> Box<dyn IKeyedDataSample<D>> {
+  fn into_idata_sample(self) -> Box<dyn IDataSample<D>> {
     Box::new(self)
   }
 }
@@ -278,13 +289,5 @@ impl<D: 'static> IDataSample<D> for DataSample<NoKeyWrapper<D>> {
       Ok(v) => Some(v.unwrap()),
       _ => None,
     }
-  }
-
-  fn as_idata_sample(&self) -> &dyn IDataSample<D> {
-    self
-  }
-
-  fn into_idata_sample(self) -> Box<dyn IDataSample<D>> {
-    Box::new(self)
   }
 }

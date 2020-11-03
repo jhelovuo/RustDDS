@@ -1172,7 +1172,7 @@ mod tests {
       RandomData,
       CDRSerializerAdapter<RandomData, LittleEndian>,
     > = publisher
-      .create_datawriter(None, &topic, qos)
+      .create_datawriter(None, &topic, None)
       .expect("Failed to create datawriter");
 
     let data = RandomData {

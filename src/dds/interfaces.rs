@@ -21,6 +21,7 @@ use super::{
 
 type Result<T> = std::result::Result<T, Error>;
 
+/// Interface for DDS DataWriter.
 pub trait IDataWriter<D, SA>: Entity + HasQoSPolicy
 where
   D: Serialize,
@@ -29,10 +30,20 @@ where
   // write (with optional timestamp)
   // This operation could take also in InstanceHandle, if we would use them.
   // The _with_timestamp version is covered by the optional timestamp.
+
+  /// Writes data to writers topic.
+  ///
+  /// # Arguments
+  ///
+  /// * `data` - Data that is written
+  /// * `source_timestamp` - DDS source timestamp (None is automatically now)
   fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()>;
+
+  /// Intended for waiting of all ack messages to finish. Currently <b>not implemented</b> and returns error
   fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()>;
 
   // status
+  /// Gets mio Receiver for status changes (needs to be manually read)
   fn get_status_listener(&self) -> &Receiver<StatusChange>;
   fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus>;
   fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus>;
@@ -40,8 +51,11 @@ where
   fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus>;
 
   // general
+  /// Topic we are connected to.
   fn get_topic(&self) -> &Topic;
+  /// Gets our publisher.
   fn get_publisher(&self) -> &Publisher;
+  /// Manually asserts liveliness depending on the QoS policy.
   fn assert_liveliness(&self) -> Result<()>;
 
   // DDS spec returns an InstanceHandles pointing to a BuiltInTopic reader
@@ -49,6 +63,7 @@ where
   fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData>;
 }
 
+/// Interface for DDS DataWriter that has keyed data
 pub trait IKeyedDataWriter<D, SA>: IDataWriter<D, SA>
 where
   D: Keyed + Serialize,
@@ -60,7 +75,14 @@ where
   fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()>;
 }
 
-pub trait IDataSample<D>
+pub trait IDataSampleConvert<D> {
+  // conversions
+  fn as_idata_sample(&self) -> &dyn IDataSample<D>;
+  fn into_idata_sample(self) -> Box<dyn IDataSample<D>>;
+}
+
+/// Interface for DDS DataSample
+pub trait IDataSample<D>: IDataSampleConvert<D>
 where
   D: Sized,
 {
@@ -70,23 +92,23 @@ where
   // either there is a value or there is not. Use IKeyedDataSample for keyed
   fn get_value(&self) -> Option<&D>;
   fn into_value(self) -> Option<D>;
-
-  // conversions
-  fn as_idata_sample(&self) -> &dyn IDataSample<D>;
-  fn into_idata_sample(self) -> Box<dyn IDataSample<D>>;
 }
 
-pub trait IKeyedDataSample<D>: IDataSample<D>
-where
-  D: Keyed,
-{
-  fn get_keyed_value(&self) -> &std::result::Result<D, D::K>;
-
+pub trait IKeyedDataSampleConvert<D> {
   // conversions
   fn as_ikeyed_data_sample(&self) -> &dyn IKeyedDataSample<D>;
   fn into_ikeyed_data_sample(self) -> Box<dyn IKeyedDataSample<D>>;
 }
 
+/// Interface for DDS DataSample that has keyed data
+pub trait IKeyedDataSample<D>: IDataSample<D> + IKeyedDataSampleConvert<D>
+where
+  D: Keyed,
+{
+  fn get_keyed_value(&self) -> &std::result::Result<D, D::K>;
+}
+
+/// Interface for DDS DataReader
 pub trait IDataReader<D, DA>: Evented + Entity + HasQoSPolicy
 where
   D: DeserializeOwned,
@@ -108,6 +130,11 @@ where
   ///
   /// This should cover DDS DataReader methods read, read_w_condition and
   /// read_next_sample.
+  ///
+  /// # Arguments
+  ///
+  /// * `max_samples` - Maximum amount of samples that are read
+  /// * `read_condition` - Set read condition. For example you can get already read samples or you can restrict to not read.
   fn read(
     &mut self,
     max_samples: usize,
@@ -117,6 +144,11 @@ where
   /// Similar to read, but insted of references being returned, the datasamples
   /// are removed from the DataReader and ownership is transferred to the caller.
   /// Should cover take, take_w_condition and take_next_sample
+  ///
+  /// # Arguments
+  ///
+  /// * `max_samples` - Maximum amount of samples that are taken
+  /// * `read_condition` - Takes samples by condition (you can also take already read samples).
   fn take(
     &mut self,
     max_samples: usize,
@@ -126,12 +158,15 @@ where
   /// This is a simplified API for reading the next not_read sample
   /// If no new data is available, the return value is Ok(None).
   fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>>;
+  /// Takes only one sample. Returns Ok(None) if there is nothing available.
   fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>>;
 
   // status queries
+  /// Gets current [RequestedDeadlineMissedStatus](error/struct.RequestedDeadlineMissedStatus.html).
   fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus>;
 }
 
+/// Interface for DDS DataReader that has keyed data
 pub trait IKeyedDataReader<D, DA>: IDataReader<D, DA>
 where
   D: DeserializeOwned + Keyed,

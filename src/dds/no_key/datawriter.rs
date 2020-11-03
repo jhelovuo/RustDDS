@@ -8,7 +8,8 @@ use mio_extras::channel::Receiver;
 use serde::Serialize;
 
 use crate::{
-  dds::interfaces::IDataWriter, dds::values::result::StatusChange, structure::time::Timestamp,
+  serialization::CDRSerializerAdapter, dds::interfaces::IDataWriter,
+  dds::values::result::StatusChange, structure::time::Timestamp,
 };
 use crate::structure::entity::{Entity};
 //use crate::structure::{dds_cache::DDSCache, guid::{GUID} };
@@ -32,7 +33,8 @@ use crate::{
 
 use super::wrappers::{NoKeyWrapper, SAWrapper};
 
-pub struct DataWriter<'a, D: Serialize, SA: SerializerAdapter<D>> {
+/// DataWriter for no key topics
+pub struct DataWriter<'a, D: Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
   keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
 }
 
@@ -41,20 +43,6 @@ where
   D: Serialize,
   SA: SerializerAdapter<D>,
 {
-  /*
-  pub fn new(
-    publisher: &'a Publisher,
-    topic: &'a Topic,
-    guid: Option<GUID>,
-    cc_upload: mio_channel::Sender<DDSData>,
-    dds_cache: Arc<RwLock<DDSCache>>,
-  ) -> Result<DataWriter<'a, D, SA>> {
-    Ok( DataWriter {
-      keyed_datawriter: datawriter_with_key::DataWriter::<'a, NoKeyWrapper<D>, SAWrapper<SA>>::new(
-        publisher, topic, guid, cc_upload, dds_cache)?,
-    })
-  }
-  */
   pub(crate) fn from_keyed(
     keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
   ) -> DataWriter<'a, D, SA> {
@@ -77,18 +65,22 @@ impl<D: Serialize, SA: SerializerAdapter<D>> IDataWriter<D, SA> for DataWriter<'
   }
 
   // status queries
+  /// Unimplemented. <b>Do not use</b>.
   fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
     self.keyed_datawriter.get_liveliness_lost_status()
   }
 
+  /// Should get latest offered deadline missed status. <b>Do not use yet</b> use `get_status_lister` instead for the moment.
   fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
     self.keyed_datawriter.get_offered_deadline_missed_status()
   }
 
+  /// Unimplemented. <b>Do not use</b>.
   fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
     self.keyed_datawriter.get_offered_incompatible_qos_status()
   }
 
+  /// Unimplemented. <b>Do not use</b>.
   fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     self.keyed_datawriter.get_publication_matched_status()
   }
@@ -106,6 +98,7 @@ impl<D: Serialize, SA: SerializerAdapter<D>> IDataWriter<D, SA> for DataWriter<'
     self.keyed_datawriter.assert_liveliness()
   }
 
+  /// Unimplemented. <b>Do not use</b>.
   fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     self.keyed_datawriter.get_matched_subscriptions()
   }
@@ -158,7 +151,7 @@ mod tests {
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter_no_key(None, &topic, qos)
+        .create_datawriter_no_key(None, &topic, None)
         .expect("Failed to create datawriter");
 
     let mut data = RandomData {
@@ -193,7 +186,7 @@ mod tests {
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter_no_key(None, &topic, qos)
+        .create_datawriter_no_key(None, &topic, None)
         .expect("Failed to create datawriter");
 
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
@@ -234,7 +227,7 @@ mod tests {
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter_no_key(None, &topic, qos)
+        .create_datawriter_no_key(None, &topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

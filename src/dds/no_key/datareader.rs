@@ -1,28 +1,21 @@
 use std::io;
 
 use serde::{de::DeserializeOwned};
-use mio_extras::channel as mio_channel;
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
   dds::datasample::DataSample,
   dds::interfaces::IDataReader,
   dds::interfaces::IDataSample,
-  discovery::discovery::DiscoveryCommand,
+  serialization::CDRDeserializerAdapter,
+  dds::interfaces::IDataSampleConvert,
   structure::{
     entity::{Entity, EntityAttributes},
-    guid::{EntityId},
-    dds_cache::DDSCache,
   },
 };
-use crate::dds::{
-  traits::serde_adapters::*, values::result::*, qos::*, pubsub::Subscriber, topic::Topic,
-  readcondition::*,
-};
+use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*, readcondition::*};
 
 use crate::dds::datareader as datareader_with_key;
-
-use std::sync::{Arc, RwLock};
 
 use super::{
   wrappers::{NoKeyWrapper, SAWrapper},
@@ -31,49 +24,34 @@ use super::{
 // ----------------------------------------------------
 
 // DataReader for NO_KEY data. Does not require "D: Keyed"
-pub struct DataReader<'a, D, SA> {
-  keyed_datareader: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
+/// DDS DataReader for no key topics.
+pub struct DataReader<
+  'a,
+  D: DeserializeOwned,
+  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+> {
+  keyed_datareader: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<DA>>,
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
-impl<'a, D: 'static, SA> DataReader<'a, D, SA>
+impl<'a, D: 'static, DA> DataReader<'a, D, DA>
 where
-  D: DeserializeOwned, // + Deserialize<'s>,
-  SA: DeserializerAdapter<D>,
+  D: DeserializeOwned,
+  DA: DeserializerAdapter<D>,
 {
-  pub fn new(
-    subscriber: &'a Subscriber,
-    my_id: EntityId,
-    topic: &'a Topic,
-    notification_receiver: mio_channel::Receiver<()>,
-    dds_cache: Arc<RwLock<DDSCache>>,
-    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Result<Self> {
-    Ok(DataReader {
-      keyed_datareader: datareader_with_key::DataReader::<'a, NoKeyWrapper<D>, SAWrapper<SA>>::new(
-        subscriber,
-        my_id,
-        topic,
-        notification_receiver,
-        dds_cache,
-        discovery_command,
-      )?,
-    })
-  }
-
-  pub fn from_keyed(
-    keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
-  ) -> DataReader<'a, D, SA> {
+  pub(crate) fn from_keyed(
+    keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<DA>>,
+  ) -> DataReader<'a, D, DA> {
     DataReader {
       keyed_datareader: keyed,
     }
   }
 } // impl
 
-impl<'a, D: 'static, SA> IDataReader<D, SA> for DataReader<'a, D, SA>
+impl<'a, D: 'static, DA> IDataReader<D, DA> for DataReader<'a, D, DA>
 where
   D: DeserializeOwned, // + Deserialize<'s>,
-  SA: DeserializerAdapter<D>,
+  DA: DeserializerAdapter<D>,
 {
   fn read(
     &mut self,
@@ -86,7 +64,7 @@ where
     {
       Ok(v) => v
         .iter()
-        .map(|p| <DataSample<NoKeyWrapper<D>> as IDataSample<D>>::as_idata_sample(p))
+        .map(|p| <DataSample<NoKeyWrapper<D>> as IDataSampleConvert<D>>::as_idata_sample(p))
         .collect(),
       Err(e) => return Err(e),
     };
@@ -104,7 +82,7 @@ where
     {
       Ok(v) => v
         .into_iter()
-        .map(|p| <DataSample<NoKeyWrapper<D>> as IDataSample<D>>::into_idata_sample(p))
+        .map(|p| <DataSample<NoKeyWrapper<D>> as IDataSampleConvert<D>>::into_idata_sample(p))
         .collect(),
       Err(e) => return Err(e),
     };
@@ -131,13 +109,17 @@ where
   }
 
   fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
-    todo!()
+    self.keyed_datareader.get_requested_deadline_missed_status()
   }
 }
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D, SA> Evented for DataReader<'a, D, SA> {
+impl<'a, D, DA> Evented for DataReader<'a, D, DA>
+where
+  D: DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
   // We just delegate all the operations to notification_receiver, since it alrady implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
@@ -164,7 +146,11 @@ impl<'a, D, SA> Evented for DataReader<'a, D, SA> {
   }
 }
 
-impl<D, SA> HasQoSPolicy for DataReader<'_, D, SA> {
+impl<D, DA> HasQoSPolicy for DataReader<'_, D, DA>
+where
+  D: DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     self.keyed_datareader.set_qos(policy)
   }
@@ -174,10 +160,10 @@ impl<D, SA> HasQoSPolicy for DataReader<'_, D, SA> {
   }
 }
 
-impl<'a, D, SA> Entity for DataReader<'a, D, SA>
+impl<'a, D, DA> Entity for DataReader<'a, D, DA>
 where
   D: DeserializeOwned,
-  SA: DeserializerAdapter<D>,
+  DA: DeserializerAdapter<D>,
 {
   fn as_entity(&self) -> &EntityAttributes {
     self.keyed_datareader.as_entity()

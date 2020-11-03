@@ -36,7 +36,7 @@ use super::dp_event_wrapper::DomainInfo;
 
 /// DDS DomainParticipant generally only one per domain per machine should be active
 #[derive(Clone)]
-// This is a smart pointer for DomainPArticipant_Inner for easier manipulation.
+// This is a smart pointer for DomainParticipant_Inner for easier manipulation.
 pub struct DomainParticipant {
   dpi: Arc<DomainParticipant_Disc>,
 }
@@ -92,33 +92,53 @@ impl DomainParticipant {
     }
   }
 
+  /// Creates DDS Publisher
+  ///
+  /// # Arguments
+  ///
+  /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) for publisher and given to DataWriter as default.
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
     self.dpi.create_publisher(&self.weak_clone(), qos)
   }
 
-  pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  /// Creates DDS Subscriber
+  ///
+  /// # Arguments
+  ///
+  /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) for subscriber and given to DataReader as default.
+  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
     self.dpi.create_subscriber(&self.weak_clone(), qos)
   }
 
+  /// Create DDS Topic
+  ///
+  /// # Arguments
+  ///
+  /// * `name` - Name of the topic.
+  /// * `type_desc` - Name of the type this topic is supposed to deliver.
+  /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) that are distributed to DataReaders and DataWriters.
   pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies) -> Result<Topic> {
     self
       .dpi
       .create_topic(&self.weak_clone(), name, type_desc, qos)
   }
 
+  /// Gets this DomainParticipants domain_id
   pub fn domain_id(&self) -> u16 {
     self.dpi.domain_id()
   }
 
+  /// Gets the generated participant id for this DomainParticipant
   pub fn participant_id(&self) -> u16 {
     self.dpi.participant_id()
   }
 
+  /// Gets all DiscoveredTopics from DDS network
   pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
     self.dpi.get_discovered_topics()
   }
 
-  pub fn weak_clone(&self) -> DomainParticipantWeak {
+  pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
     let dpc = self.clone();
     DomainParticipantWeak::new(dpc)
   }
@@ -716,9 +736,7 @@ mod tests {
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let mut _data_writer = publisher
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None,
-        &topic,
-        qos.clone(),
+        None, &topic, None,
       )
       .expect("Failed to create datawriter");
 
@@ -743,9 +761,7 @@ mod tests {
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let mut _data_writer = publisher
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None,
-        &topic,
-        qos.clone(),
+        None, &topic, None,
       )
       .expect("Failed to create datawriter");
 

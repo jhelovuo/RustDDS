@@ -11,6 +11,8 @@ use log::{error, warn};
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
+  serialization::CDRDeserializerAdapter,
+  discovery::discovery::DiscoveryCommand,
   structure::{
     entity::{Entity, EntityAttributes},
     guid::{GUID, EntityId},
@@ -18,16 +20,22 @@ use crate::{
     dds_cache::DDSCache,
     cache_change::{CacheChange, ChangeKind},
   },
-  discovery::discovery::DiscoveryCommand,
 };
 use crate::dds::{
-  traits::key::*, traits::serde_adapters::*, values::result::*, qos::*, datasample::*,
-  datasample_cache::DataSampleCache, pubsub::Subscriber, topic::Topic, readcondition::*,
+  traits::{key::*, TopicDescription},
+  traits::serde_adapters::*,
+  values::result::*,
+  qos::*,
+  datasample::*,
+  datasample_cache::DataSampleCache,
+  pubsub::Subscriber,
+  topic::Topic,
+  readcondition::*,
 };
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
-use super::interfaces::{IDataReader, IDataSample, IKeyedDataReader, IKeyedDataSample};
+use super::interfaces::{IDataReader, IDataSample, IDataSampleConvert, IKeyedDataReader, IKeyedDataSample, IKeyedDataSampleConvert};
 
 /// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
 /*#[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,7 +50,12 @@ pub enum SelectByKey {
   Next,
 }
 
-pub struct DataReader<'a, D: Keyed, SA> {
+/// DDS DataReader for keyed topics
+pub struct DataReader<
+  'a,
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+> {
   my_subscriber: &'a Subscriber,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -53,14 +66,15 @@ pub struct DataReader<'a, D: Keyed, SA> {
 
   datasample_cache: DataSampleCache<D>,
   latest_instant: Instant,
-  deserializer_type: PhantomData<SA>, // This is to provide use for SA
+  deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
-impl<'a, D, SA> Drop for DataReader<'a, D, SA>
+impl<'a, D, DA> Drop for DataReader<'a, D, DA>
 where
-  D: Keyed,
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
 {
   fn drop(&mut self) {
     match self
@@ -77,13 +91,13 @@ where
   }
 }
 
-impl<'a, D: 'static, SA> DataReader<'a, D, SA>
+impl<'a, D: 'static, DA> DataReader<'a, D, DA>
 where
   D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
-  SA: DeserializerAdapter<D>,
+  DA: DeserializerAdapter<D>,
 {
-  pub fn new(
+  pub(crate) fn new(
     subscriber: &'a Subscriber,
     my_id: EntityId,
     topic: &'a Topic,
@@ -252,7 +266,7 @@ where
         match RepresentationIdentifier::try_from_u16(ser_payload.representation_identifier) {
           Ok(r) => r,
           Err(unknown_rep_id) => {
-            // TODO: Maybe we should ask SA first? It may be able to handle this even though it is non-std.
+            // TODO: Maybe we should ask DA first? It may be able to handle this even though it is non-std.
             warn!(
               "Datareader: Unknown representation id {:?}.",
               unknown_rep_id
@@ -263,7 +277,7 @@ where
 
       let bytes = &ser_payload.value;
 
-      let payload = match SA::from_bytes(bytes, rep_id) {
+      let payload = match DA::from_bytes(bytes, rep_id) {
         Ok(pl) => pl,
         Err(e) => {
           error!("Failed to deserialize bytes \n{}", e);
@@ -398,7 +412,6 @@ where
   }
 
   // status queries
-
   fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
     todo!()
   }
@@ -437,11 +450,11 @@ where
   }
 } // impl
 
-impl<'a, D: 'static, SA> IDataReader<D, SA> for DataReader<'a, D, SA>
+impl<'a, D: 'static, DA> IDataReader<D, DA> for DataReader<'a, D, DA>
 where
   D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
-  SA: DeserializerAdapter<D>,
+  DA: DeserializerAdapter<D>,
 {
   fn read(
     &mut self,
@@ -469,7 +482,7 @@ where
 
   fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>> {
     let mut ds =
-      <DataReader<D, SA> as IDataReader<D, SA>>::read(self, 1, ReadCondition::not_read())?;
+      <DataReader<D, DA> as IDataReader<D, DA>>::read(self, 1, ReadCondition::not_read())?;
     let val = match ds.pop() {
       Some(v) => Some(v.as_idata_sample()),
       None => None,
@@ -482,16 +495,17 @@ where
     Ok(ds.into_iter().map(|p| p.into_idata_sample()).find(|_| true))
   }
 
+  /// <b>Unimplemented. Do not use.</b>
   fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     todo!()
   }
 }
 
-impl<'a, D: 'static, SA> IKeyedDataReader<D, SA> for DataReader<'a, D, SA>
+impl<'a, D: 'static, DA> IKeyedDataReader<D, DA> for DataReader<'a, D, DA>
 where
   D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
-  SA: DeserializerAdapter<D>,
+  DA: DeserializerAdapter<D>,
 {
   fn read(
     &mut self,
@@ -519,7 +533,7 @@ where
 
   fn read_next_sample(&mut self) -> Result<Option<&dyn IKeyedDataSample<D>>> {
     let mut ds =
-      <DataReader<D, SA> as IKeyedDataReader<D, SA>>::read(self, 1, ReadCondition::not_read())?;
+      <DataReader<D, DA> as IKeyedDataReader<D, DA>>::read(self, 1, ReadCondition::not_read())?;
     let val = match ds.pop() {
       Some(v) => Some(v.as_ikeyed_data_sample()),
       None => None,
@@ -573,9 +587,10 @@ where
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D, SA> Evented for DataReader<'a, D, SA>
+impl<'a, D, DA> Evented for DataReader<'a, D, DA>
 where
-  D: Keyed,
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it already implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
@@ -601,9 +616,10 @@ where
   }
 }
 
-impl<D, SA> HasQoSPolicy for DataReader<'_, D, SA>
+impl<D, DA> HasQoSPolicy for DataReader<'_, D, DA>
 where
-  D: Keyed,
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
 {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     // TODO: check liveliness of qos_policy
@@ -616,9 +632,10 @@ where
   }
 }
 
-impl<'a, D, SA> Entity for DataReader<'a, D, SA>
+impl<'a, D, DA> Entity for DataReader<'a, D, DA>
 where
-  D: Keyed,
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
 {
   fn as_entity(&self) -> &EntityAttributes {
     &self.entity_attributes
@@ -667,10 +684,9 @@ mod tests {
 
     let mut matching_datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        Some(datareader_id),
         &topic,
+        Some(datareader_id),
         None,
-        qos.clone(),
       )
       .unwrap();
 
@@ -782,10 +798,9 @@ mod tests {
 
     let mut datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        Some(default_id),
         &topic,
+        Some(default_id),
         None,
-        qos.clone(),
       )
       .unwrap();
 
@@ -1019,10 +1034,9 @@ mod tests {
 
     let mut datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        Some(default_id),
         &topic,
+        Some(default_id),
         None,
-        qos.clone(),
       )
       .unwrap();
     datareader.notification_receiver = rec;

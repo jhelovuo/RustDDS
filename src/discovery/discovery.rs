@@ -18,7 +18,7 @@ use crate::{
     interfaces::{IDataWriter, IKeyedDataReader, IKeyedDataWriter},
     participant::{DomainParticipantWeak},
     qos::{
-      QosPolicies, HasQoSPolicy,
+      QosPolicies,
       policy::{
         Reliability, History, Durability, Presentation, PresentationAccessScope, Deadline,
         Ownership, Liveliness, LivelinessKind, TimeBasedFilter, DestinationOrder, ResourceLimits,
@@ -218,10 +218,9 @@ impl Discovery {
 
     let mut dcps_participant_reader = match discovery_subscriber
       .create_datareader::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
-        Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         &dcps_participant_topic,
+        Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         None,
-        Discovery::create_spdp_patricipant_qos(),
       ) {
         Ok(r) => r,
         Err(e) => {
@@ -282,7 +281,7 @@ impl Discovery {
       .create_datawriter::<SPDPDiscoveredParticipantData, CDRSerializerAdapter<SPDPDiscoveredParticipantData,LittleEndian> >(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
         &dcps_participant_topic,
-        Discovery::create_spdp_patricipant_qos(),
+        None,
       ) {
         Ok(w) => w,
         Err(e) => {
@@ -342,10 +341,9 @@ impl Discovery {
 
     let mut dcps_subscription_reader = match discovery_subscriber
       .create_datareader::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         &dcps_subscription_topic,
+        Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         None,
-        Discovery::subscriber_qos(),
       ) {
       Ok(r) => r,
       Err(e) => {
@@ -381,7 +379,7 @@ impl Discovery {
       .create_datawriter::<DiscoveredReaderData,CDRSerializerAdapter<DiscoveredReaderData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
         &dcps_subscription_topic,
-        dcps_subscription_topic.get_qos().clone(),
+        None,
       ) {
         Ok(w) => w,
         Err(e) => {
@@ -439,10 +437,9 @@ impl Discovery {
 
     let mut dcps_publication_reader = match discovery_subscriber
       .create_datareader::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         &dcps_publication_topic,
+        Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         None,
-        Discovery::subscriber_qos(),
       ) {
       Ok(r) => r,
       Err(e) => {
@@ -478,7 +475,7 @@ impl Discovery {
       .create_datawriter::<DiscoveredWriterData, CDRSerializerAdapter<DiscoveredWriterData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
         &dcps_publication_topic,
-        dcps_publication_topic.get_qos().clone(),
+        None,
       ) {
         Ok(w) => w,
         Err(e) => {
@@ -557,10 +554,9 @@ impl Discovery {
 
     let mut dcps_reader = match discovery_subscriber
       .create_datareader::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         &dcps_topic,
+        Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         None,
-        Discovery::subscriber_qos(),
       ) {
       Ok(r) => r,
       Err(e) => {
@@ -596,7 +592,7 @@ impl Discovery {
       .create_datawriter::<DiscoveredTopicData, CDRSerializerAdapter<DiscoveredTopicData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
         &dcps_topic,
-        Discovery::subscriber_qos(),
+        None,
       ) {
         Ok(w) => w,
         Err(e) => {
@@ -652,10 +648,9 @@ impl Discovery {
 
     let mut dcps_participant_message_reader = match discovery_subscriber
       .create_datareader::<ParticipantMessageData, CDRDeserializerAdapter<ParticipantMessageData>>(
-        Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
         &participant_message_data_topic,
+        Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
         None,
-        Discovery::PARTICIPANT_MESSAGE_QOS,
       ) {
       Ok(r) => r,
       Err(e) => {
@@ -689,7 +684,7 @@ impl Discovery {
       .create_datawriter::<ParticipantMessageData, CDRSerializerAdapter<ParticipantMessageData, LittleEndian>>(
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER),
         &participant_message_data_topic,
-        Discovery::PARTICIPANT_MESSAGE_QOS,
+        None,
       ) {
       Ok(w) => w,
       Err(e) => {
@@ -1409,21 +1404,15 @@ mod tests {
       .unwrap();
     let _writer = publisher
       .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
-        None,
-        &topic,
-        QosPolicies::qos_none(),
+        None, &topic, None,
       )
       .unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
-    let _reader = subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(
-      None,
-      &topic,
-      None,
-      QosPolicies::qos_none(),
-    );
+    let _reader = subscriber
+      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(&topic, None, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11001);
@@ -1499,21 +1488,15 @@ mod tests {
       .unwrap();
     let _writer = publisher
       .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
-        None,
-        &topic,
-        QosPolicies::qos_none(),
+        None, &topic, None,
       )
       .unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
-    let _reader = subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(
-      None,
-      &topic,
-      None,
-      QosPolicies::qos_none(),
-    );
+    let _reader = subscriber
+      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(&topic, None, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11002);

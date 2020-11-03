@@ -3,11 +3,12 @@ use crate::{
 };
 
 pub trait TopicDescription {
-  fn get_participant(&self) -> DomainParticipant;
+  fn get_participant(&self) -> Option<DomainParticipant>;
   fn get_type(&self) -> &TypeDesc; // This replaces get_type_name() from spec
   fn get_name(&self) -> &str;
 }
 
+/// DDS Topic
 #[derive(Clone)]
 pub struct Topic {
   my_domainparticipant: DomainParticipantWeak,
@@ -33,37 +34,39 @@ impl Topic {
     }
   }
 
-  pub fn get_participant(&self) -> DomainParticipant {
-    match self.my_domainparticipant.clone().upgrade() {
-      Some(dp) => dp,
-      None => panic!("Cannot restore original DomainParticipant"),
-    }
+  fn get_participant(&self) -> Option<DomainParticipant> {
+    self.my_domainparticipant.clone().upgrade()
   }
 
-  pub fn get_type(&self) -> &TypeDesc {
+  fn get_type(&self) -> &TypeDesc {
     &self.my_typedesc
   }
 
-  pub fn get_name<'a>(&'a self) -> &'a str {
+  fn get_name<'a>(&'a self) -> &'a str {
     &self.my_name
   }
 
   // DDS spec 2.2.2.3.2 Topic Class
   // specifies only method get_inconsistent_topic_status
-  pub fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> {
+  // TODO: implement
+  pub(crate) fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> {
     unimplemented!()
   }
 }
 
+/// Implements some default topic interfaces functions defined in DDS spec
 impl TopicDescription for Topic {
-  fn get_participant(&self) -> DomainParticipant {
+  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it is still alive.
+  fn get_participant(&self) -> Option<DomainParticipant> {
     self.get_participant()
   }
 
+  /// Gets type description of this Topic
   fn get_type(&self) -> &TypeDesc {
     self.get_type()
   }
 
+  /// Gets name of this topic
   fn get_name(&self) -> &str {
     self.get_name()
   }

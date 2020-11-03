@@ -9,8 +9,8 @@ use std::{
 use serde::{Serialize, /*Deserialize,*/ de::DeserializeOwned};
 
 use crate::{
-  structure::{guid::GUID, /*time::Timestamp,*/ entity::Entity, guid::EntityId},
   discovery::discovery::DiscoveryCommand,
+  structure::{guid::GUID, /*time::Timestamp,*/ entity::Entity, guid::EntityId},
 };
 
 use crate::dds::{
@@ -47,6 +47,7 @@ use super::{
 
 // -------------------------------------------------------------------
 
+/// DDS Publisher
 #[derive(Clone)]
 pub struct Publisher {
   domain_participant: DomainParticipantWeak,
@@ -59,7 +60,7 @@ pub struct Publisher {
 
 // public interface for Publisher
 impl<'a> Publisher {
-  pub fn new(
+  pub(super) fn new(
     dp: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
@@ -77,11 +78,18 @@ impl<'a> Publisher {
     }
   }
 
+  /// Creates DDS [DataWriter](struct.KeyedDataWriter.html) for Keyed topic
+  ///
+  /// # Arguments
+  ///
+  /// * `entity_id` - Custom entity id if necessary for the user to define it
+  /// * `topic` - Reference to DDS Topic this writer is created to
+  /// * `qos` - Not currently in use
   pub fn create_datawriter<D, SA>(
     &'a self,
     entity_id: Option<EntityId>,
     topic: &'a Topic,
-    _qos: QosPolicies,
+    qos: Option<QosPolicies>,
   ) -> Result<DataWriter<'a, D, SA>>
   where
     D: Keyed + Serialize,
@@ -90,6 +98,12 @@ impl<'a> Publisher {
   {
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(100);
     let (message_status_sender, message_status_receiver) = mio_channel::sync_channel(100);
+
+    // TODO: check compatible qos and use QOS
+    let _qos = match qos {
+      Some(q) => q.clone(),
+      None => topic.get_qos().clone(),
+    };
 
     let entity_id = match entity_id {
       Some(eid) => eid,
@@ -152,11 +166,18 @@ impl<'a> Publisher {
     Ok(matching_data_writer)
   }
 
+  /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
+  ///
+  /// # Arguments
+  ///
+  /// * `entity_id` - Custom entity id if necessary for the user to define it
+  /// * `topic` - Reference to DDS Topic this writer is created to
+  /// * `qos` - Not currently in use
   pub fn create_datawriter_no_key<D, SA>(
     &'a self,
     entity_id: Option<EntityId>,
     topic: &'a Topic,
-    qos: QosPolicies,
+    qos: Option<QosPolicies>,
   ) -> Result<no_key_datawriter::DataWriter<'a, D, SA>>
   where
     D: Serialize,
@@ -189,9 +210,12 @@ impl<'a> Publisher {
 
   // Suspend and resume publications are preformance optimization methods.
   // The minimal correct implementation is to do nothing. See DDS spec 2.2.2.4.1.8 and .9
+  /// Currently does nothing
   pub fn suspend_publications(&self) -> Result<()> {
     Ok(())
   }
+
+  /// Currently does nothing
   pub fn resume_publications(&self) -> Result<()> {
     Ok(())
   }
@@ -199,28 +223,36 @@ impl<'a> Publisher {
   // coherent change set
   // In case such QoS is not supported, these should be no-ops.
   // TODO: Implement these when coherent change-sets are supported.
+  /// Coherent set not implemented and currently does nothing
   pub fn begin_coherent_changes(&self) -> Result<()> {
     Ok(())
   }
+
+  /// Coherent set not implemented and currently does nothing
   pub fn end_coherent_changes(&self) -> Result<()> {
     Ok(())
   }
 
   // Wait for all matched reliable DataReaders acknowledge data written so far, or timeout.
-  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
+  // TODO: implement
+  pub(crate) fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     unimplemented!();
   }
 
   // What is the use case for this? (is it useful in Rust style of programming? Should it be public?)
+  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it has not disappeared from all scopes.
   pub fn get_participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }
 
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
 
+  /// Returns default DataWriter qos. Currently default qos is not used.
   pub fn get_default_datawriter_qos(&self) -> &QosPolicies {
     &self.default_datawriter_qos
   }
+
+  /// Sets default DataWriter qos. Currenly default qos is not used.
   pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
     self.default_datawriter_qos = q.clone();
   }
@@ -237,6 +269,7 @@ impl<'a> Publisher {
 // -------------------------------------------------------------------
 // -------------------------------------------------------------------
 
+/// DDS Subscriber
 #[derive(Clone)]
 pub struct Subscriber {
   domain_participant: DomainParticipantWeak,
@@ -248,7 +281,7 @@ pub struct Subscriber {
 }
 
 impl<'s> Subscriber {
-  pub fn new(
+  pub(super) fn new(
     domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
@@ -266,12 +299,12 @@ impl<'s> Subscriber {
     }
   }
 
-  pub fn create_datareader<D: 'static, SA>(
+  pub(super) fn create_datareader_internal<D: 'static, SA>(
     &'s self,
     entity_id: Option<EntityId>,
     topic: &'s Topic,
     topic_kind: Option<TopicKind>,
-    _qos: QosPolicies,
+    qos: Option<QosPolicies>,
   ) -> Result<DataReader<'s, D, SA>>
   where
     D: DeserializeOwned + Keyed,
@@ -280,6 +313,12 @@ impl<'s> Subscriber {
   {
     // What is the bound?
     let (send, rec) = mio_channel::sync_channel::<()>(10);
+
+    // TODO: use qos
+    let _qos = match qos {
+      Some(q) => q,
+      None => topic.get_qos().clone(),
+    };
 
     let entity_id = match entity_id {
       Some(eid) => eid,
@@ -357,11 +396,39 @@ impl<'s> Subscriber {
     Ok(matching_datareader)
   }
 
+  /// Creates DDS DataReader for keyed Topics
+  ///
+  /// # Arguments
+  ///
+  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
+  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
+  /// * `qos` - Not in use  
+  pub fn create_datareader<D: 'static, SA>(
+    &'s self,
+    topic: &'s Topic,
+    entity_id: Option<EntityId>,
+    qos: Option<QosPolicies>,
+  ) -> Result<DataReader<'s, D, SA>>
+  where
+    D: DeserializeOwned + Keyed,
+    <D as Keyed>::K: Key,
+    SA: DeserializerAdapter<D>,
+  {
+    self.create_datareader_internal(entity_id, topic, None, qos)
+  }
+
+  /// Create DDS DataReader for non keyed Topics
+  ///
+  /// # Arguments
+  ///
+  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
+  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
+  /// * `qos` - Not in use  
   pub fn create_datareader_no_key<D: 'static, SA>(
     &'s self,
-    entity_id: Option<EntityId>,
     topic: &'s Topic,
-    qos: QosPolicies,
+    entity_id: Option<EntityId>,
+    qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<'s, D, SA>>
   where
     D: DeserializeOwned,
@@ -376,7 +443,7 @@ impl<'s> Subscriber {
       }
     };
 
-    let d = self.create_datareader::<NoKeyWrapper<D>, SAWrapper<SA>>(
+    let d = self.create_datareader_internal::<NoKeyWrapper<D>, SAWrapper<SA>>(
       Some(entity_id),
       topic,
       Some(TopicKind::NO_KEY),
@@ -387,7 +454,8 @@ impl<'s> Subscriber {
   }
 
   /// Retrieves a previously created DataReader belonging to the Subscriber.
-  pub fn lookup_datareader<D, SA>(&self, _topic_name: &str) -> Option<DataReader<D, SA>>
+  // TODO: Is this even possible. Whould probably need to return reference and store references on creation
+  pub(crate) fn lookup_datareader<D, SA>(&self, _topic_name: &str) -> Option<DataReader<D, SA>>
   where
     D: Keyed + DeserializeOwned,
     SA: DeserializerAdapter<D>,
@@ -397,6 +465,7 @@ impl<'s> Subscriber {
     // types D and SA. Sould we just trust whoever creates DataReaders to also remember them?
   }
 
+  /// Returns [DomainParticipant](struct.DomainParticipant.html) if it is sill alive.
   pub fn get_participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }

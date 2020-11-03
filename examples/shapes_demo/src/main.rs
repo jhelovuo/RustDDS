@@ -116,12 +116,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
 
   // reader needs to be mutable if you want to read/take something from it
   let mut square_reader = square_sub
-    .create_datareader::<Square, CDRDeserializerAdapter<Square>>(
-      None,
-      &square_topic,
-      None,
-      QosPolicies::qos_none(),
-    )
+    .create_datareader::<Square, CDRDeserializerAdapter<Square>>(&square_topic, None, None)
     .unwrap();
 
   let square_pub = domain_participant.create_publisher(&pub_qos).unwrap();
@@ -129,7 +124,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
     .create_datawriter::<Square, CDRSerializerAdapter<Square, LittleEndian>>(
       None,
       &triangle_topic,
-      pub_qos,
+      None,
     )
     .unwrap();
 
