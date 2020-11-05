@@ -46,7 +46,7 @@ where
     }
   }
 
-  fn read(
+  pub fn read(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -61,7 +61,7 @@ where
     Ok(result)
   }
 
-  fn take(
+  pub fn take(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -75,7 +75,7 @@ where
     Ok(result)
   }
 
-  fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
+  pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
     /*let val = match ds.pop() {
@@ -85,7 +85,7 @@ where
     Ok(val)*/
   }
 
-  fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
+  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
     /*
@@ -96,7 +96,7 @@ where
     Ok(val) */
   }
 
-  fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
+  pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     self.keyed_datareader.get_requested_deadline_missed_status()
   }
 }

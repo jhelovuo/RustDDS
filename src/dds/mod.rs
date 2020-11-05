@@ -102,6 +102,8 @@ pub mod data_types {
   // TODO: move typedesc module somewhere better
   pub use crate::dds::typedesc::TypeDesc;
   pub use crate::dds::sampleinfo::SampleInfo;
+  pub use crate::structure::topic_kind::TopicKind; // also dds::topic::TopicKind
+  pub use crate::structure::entity::Entity;
 }
 
 /// DDS Error

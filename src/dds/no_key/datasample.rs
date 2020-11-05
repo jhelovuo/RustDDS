@@ -68,4 +68,20 @@ impl<D> DataSample<D>
     }
   }
 
+  pub fn value(&self) -> &D {
+    &self.value
+  }
+
+  pub fn into_value(self) -> D {
+    self.value
+  }
+
+  pub fn sample_info(&self) -> &SampleInfo {
+    &self.sample_info
+  }
+
+  pub fn sample_info_mut(&mut self) -> &mut SampleInfo {
+    &mut self.sample_info
+  }
+
 } // impl

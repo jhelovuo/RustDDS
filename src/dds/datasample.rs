@@ -98,6 +98,10 @@ where
     &self.value
   }
 
+  pub fn into_value(self) -> Result<D, D::K> {
+    self.value
+  }
+
   pub fn sample_info(&self) -> &SampleInfo {
     &self.sample_info
   }
@@ -107,88 +111,3 @@ where
   }
 } // impl
 
-/*
-impl<D: Keyed + 'static> IDataSampleConvert<D> for DataSample<D> {
-  fn as_idata_sample(&self) -> &dyn IDataSample<D> {
-    self
-  }
-
-  fn into_idata_sample(self) -> Box<dyn IDataSample<D>> {
-    Box::new(self)
-  }
-}
-
-impl<D: Keyed + 'static> IDataSample<D> for DataSample<D> {
-  fn get_sample_info(&self) -> &SampleInfo {
-    &self.sample_info
-  }
-
-  fn get_sample_info_mut(&mut self) -> &mut SampleInfo {
-    &mut self.sample_info
-  }
-
-  fn get_value(&self) -> Option<&D> {
-    match &self.value {
-      Ok(d) => Some(d),
-      _ => None,
-    }
-  }
-
-  fn into_value(self) -> Option<D> {
-    match self.value {
-      Ok(d) => Some(d),
-      _ => None,
-    }
-  }
-}
-
-impl<D: Keyed + 'static> IKeyedDataSampleConvert<D> for DataSample<D> {
-  fn as_ikeyed_data_sample(&self) -> &dyn IKeyedDataSample<D> {
-    self
-  }
-
-  fn into_ikeyed_data_sample(self) -> Box<dyn IKeyedDataSample<D>> {
-    Box::new(self)
-  }
-}
-
-impl<D: Keyed + 'static> IKeyedDataSample<D> for DataSample<D> {
-  fn get_keyed_value(&self) -> &Result<D, D::K> {
-    &self.value
-  }
-}
-
-impl<D: 'static> IDataSampleConvert<D> for DataSample<NoKeyWrapper<D>> {
-  fn as_idata_sample(&self) -> &dyn IDataSample<D> {
-    self
-  }
-
-  fn into_idata_sample(self) -> Box<dyn IDataSample<D>> {
-    Box::new(self)
-  }
-}
-
-impl<D: 'static> IDataSample<D> for DataSample<NoKeyWrapper<D>> {
-  fn get_sample_info(&self) -> &SampleInfo {
-    &self.sample_info
-  }
-
-  fn get_sample_info_mut(&mut self) -> &mut SampleInfo {
-    &mut self.sample_info
-  }
-
-  fn get_value(&self) -> Option<&D> {
-    match &self.value {
-      Ok(v) => Some(&v),
-      _ => None,
-    }
-  }
-
-  fn into_value(self) -> Option<D> {
-    match self.value {
-      Ok(v) => Some(v.unwrap()),
-      _ => None,
-    }
-  }
-}
-*/

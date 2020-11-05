@@ -4,7 +4,7 @@ use atosdds::{
     policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::LivelinessKind,
     policy::Ownership, policy::Reliability,
   },
-  dds::data_types::DDSDuration,
+  dds::data_types::{DDSDuration,TopicKind},
 };
 
 use serde::{Serialize, Deserialize};
@@ -40,6 +40,10 @@ impl TurtleCmdVelTopic {
 
   pub fn topic_name() -> String {
     String::from("/turtle1/cmd_vel")
+  }
+
+  pub fn topic_kind() -> TopicKind {
+    TopicKind::NO_KEY
   }
 
   pub fn type_name() -> String {

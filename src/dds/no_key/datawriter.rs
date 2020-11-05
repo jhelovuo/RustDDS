@@ -52,56 +52,56 @@ where
   }
 
   // write (with optional timestamp)
-  fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+  pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     self
       .keyed_datawriter
       .write(NoKeyWrapper::<D> { d: data }, source_timestamp)
   }
 
-  fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
+  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
     self.keyed_datawriter.wait_for_acknowledgments(max_wait)
   }
 
   // status queries
   /// Unimplemented. <b>Do not use</b>.
-  fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
+  pub fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
     self.keyed_datawriter.get_liveliness_lost_status()
   }
 
   /// Should get latest offered deadline missed status. <b>Do not use yet</b> use `get_status_lister` instead for the moment.
-  fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
+  pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
     self.keyed_datawriter.get_offered_deadline_missed_status()
   }
 
   /// Unimplemented. <b>Do not use</b>.
-  fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
+  pub fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
     self.keyed_datawriter.get_offered_incompatible_qos_status()
   }
 
   /// Unimplemented. <b>Do not use</b>.
-  fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
+  pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     self.keyed_datawriter.get_publication_matched_status()
   }
 
   // who are we connected to?
-  fn get_topic(&self) -> &Topic {
+  pub fn get_topic(&self) -> &Topic {
     &self.keyed_datawriter.get_topic()
   }
 
-  fn get_publisher(&self) -> &Publisher {
+  pub fn get_publisher(&self) -> &Publisher {
     &self.keyed_datawriter.get_publisher()
   }
 
-  fn assert_liveliness(&self) -> Result<()> {
+  pub fn assert_liveliness(&self) -> Result<()> {
     self.keyed_datawriter.assert_liveliness()
   }
 
   /// Unimplemented. <b>Do not use</b>.
-  fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
+  pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     self.keyed_datawriter.get_matched_subscriptions()
   }
 
-  fn get_status_listener(&self) -> &Receiver<StatusChange> {
+  pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
     self.keyed_datawriter.get_status_listener()
   }
 }

@@ -1,5 +1,7 @@
 use atosdds::{
-  dds::DomainParticipant, ros2::NodeOptions, ros2::RosContext, ros2::RosNode, ros2::RosNodeBuilder,
+  dds::DomainParticipant, 
+  dds::data_types::Entity,
+  ros2::NodeOptions, ros2::RosContext, ros2::RosNode, ros2::RosNodeBuilder,
   serialization::CDRSerializerAdapter, ros2::IRosNodeControl,
 };
 
@@ -33,6 +35,7 @@ impl TurtleSender {
       &TurtleCmdVelTopic::topic_name(),
       &TurtleCmdVelTopic::type_name(),
       TurtleCmdVelTopic::get_qos(),
+      TurtleCmdVelTopic::topic_kind(),
     )
     .unwrap();
 
