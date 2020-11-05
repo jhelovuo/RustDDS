@@ -8,7 +8,8 @@ extern crate termion;
 use atosdds::{
   serialization::{CDRSerializerAdapter, CDRDeserializerAdapter},
   dds::{
-    DomainParticipant, qos::QosPolicies, data_types::ReadCondition, KeyedDataReader, data_types::TopicKind,
+    DomainParticipant, qos::QosPolicies, data_types::ReadCondition, KeyedDataReader,
+    data_types::TopicKind,
   },
   dds::qos::policy::Reliability,
   dds::data_types::DDSDuration,
@@ -103,10 +104,10 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
 
   // declare topics, subscriber, publisher, readers and writers
   let square_topic = domain_participant
-    .create_topic("Square", "ShapeType", &pub_qos, TopicKind::NO_KEY)
+    .create_topic("Square", "ShapeType", &pub_qos, TopicKind::WITH_KEY)
     .unwrap();
   let triangle_topic = domain_participant
-    .create_topic("Triangle", "ShapeType", &pub_qos, TopicKind::NO_KEY)
+    .create_topic("Triangle", "ShapeType", &pub_qos, TopicKind::WITH_KEY)
     .unwrap();
 
   let square_sub = domain_participant
@@ -268,10 +269,7 @@ fn fetch_squares(
   reader: &mut KeyedDataReader<Square, CDRDeserializerAdapter<Square>>,
 ) -> Vec<Square> {
   match reader.take(100, ReadCondition::any()) {
-    Ok(ds) => ds
-      .into_iter()
-      .filter_map(|p| p.into_value().ok())
-      .collect(),
+    Ok(ds) => ds.into_iter().filter_map(|p| p.into_value().ok()).collect(),
     Err(_) => {
       println!("Failed to read squares");
       vec![]
