@@ -75,13 +75,13 @@ pub(crate) mod ros_node;
 pub use ros_node::*;
 
 /// RosSubscriber wrapper for slightly inconvenient boxed type
-pub type RosSubscriber<'a, D, DA> = crate::dds::no_key::datareader::DataReader<'a, D,DA>; //  Box<dyn crate::dds::IDataReader<D, DA> + 'a>;
+pub type RosSubscriber<'a, D, DA> = crate::dds::no_key::datareader::DataReader<'a, D,DA>; 
 
 /// KeyedRosSubscriber wrapper for slightly inconvenient boxed type
-pub type KeyedRosSubscriber<'a, D, DA> = crate::dds::datareader::DataReader<'a, D,DA>; //Box<dyn crate::dds::IKeyedDataReader<D, DA> + 'a>;
+pub type KeyedRosSubscriber<'a, D, DA> = crate::dds::datareader::DataReader<'a, D,DA>; 
 
 /// RosPublisher wrapper for slightly inconvenient boxed type
-pub type RosPublisher<'a, D, SA> = crate::dds::no_key::datawriter::DataWriter<'a,D,SA>; //Box<dyn crate::dds::IDataWriter<D, SA> + 'a>;
+pub type RosPublisher<'a, D, SA> = crate::dds::no_key::datawriter::DataWriter<'a,D,SA>; 
 
 /// KeyedRosPublisher wrapper for slightly inconvenient boxed type
-pub type KeyedRosPublisher<'a, D, SA> = crate::dds::datawriter::DataWriter<'a,D,SA>; //Box<dyn crate::dds::IKeyedDataWriter<D, SA> + 'a>;
+pub type KeyedRosPublisher<'a, D, SA> = crate::dds::datawriter::DataWriter<'a,D,SA>; 

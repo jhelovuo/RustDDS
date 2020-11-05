@@ -102,7 +102,7 @@ pub mod data_types {
   // TODO: move typedesc module somewhere better
   pub use crate::dds::typedesc::TypeDesc;
   pub use crate::dds::sampleinfo::SampleInfo;
-  pub use crate::structure::topic_kind::TopicKind; // also dds::topic::TopicKind
+  pub use crate::structure::topic_kind::TopicKind; // AKA dds::topic::TopicKind
   pub use crate::structure::entity::Entity;
 }
 
@@ -122,8 +122,3 @@ pub use no_key::datawriter::DataWriter;
 pub use datareader::DataReader as KeyedDataReader;
 pub use no_key::datareader::DataReader;
 
-/*
-pub use interfaces::{
-  //IDataReader, IKeyedDataReader, IDataWriter, IKeyedDataWriter, 
-  IDataSample, IKeyedDataSample,
-};*/
