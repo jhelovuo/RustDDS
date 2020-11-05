@@ -2,13 +2,15 @@ use std::time::Duration;
 
 use mio::Evented;
 use mio_extras::channel::Receiver;
-use serde::{Serialize, de::DeserializeOwned};
+//use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
   discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
   structure::{entity::Entity, time::Timestamp},
 };
+use super::values::result::Error;
 
+/*
 use super::{
   qos::HasQoSPolicy, datareader::SelectByKey, datasample::SampleInfo, pubsub::Publisher,
   readcondition::ReadCondition, topic::Topic, traits::key::Key, traits::key::Keyed,
@@ -18,9 +20,9 @@ use super::{
   values::result::PublicationMatchedStatus, values::result::RequestedDeadlineMissedStatus,
   values::result::StatusChange,
 };
-
-type Result<T> = std::result::Result<T, Error>;
-
+*/
+//type Result<T> = std::result::Result<T, Error>;
+/*
 /// Interface for DDS DataWriter.
 pub trait IDataWriter<D, SA>: Entity + HasQoSPolicy
 where
@@ -52,7 +54,7 @@ where
 
   // general
   /// Topic we are connected to.
-  fn get_topic(&self) -> &Topic;
+  //fn get_topic<D>(&self) -> &Topic<D>;
   /// Gets our publisher.
   fn get_publisher(&self) -> &Publisher;
   /// Manually asserts liveliness depending on the QoS policy.
@@ -74,7 +76,8 @@ where
   // The data item is given only for identification, i.e. extracting the key
   fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()>;
 }
-
+*/
+/*
 pub trait IDataSampleConvert<D> {
   // conversions
   fn as_idata_sample(&self) -> &dyn IDataSample<D>;
@@ -107,7 +110,8 @@ where
 {
   fn get_keyed_value(&self) -> &std::result::Result<D, D::K>;
 }
-
+*/
+/*
 /// Interface for DDS DataReader
 pub trait IDataReader<D, DA>: Evented + Entity + HasQoSPolicy
 where
@@ -212,3 +216,4 @@ where
     this_or_next: SelectByKey,
   ) -> Result<Vec<Box<dyn IKeyedDataSample<D>>>>;
 }
+*/

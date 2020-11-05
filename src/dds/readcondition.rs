@@ -1,6 +1,7 @@
 use enumflags2::BitFlags;
 
-use crate::dds::datasample::*;
+//use crate::dds::datasample::*;
+use crate::dds::sampleinfo::*;
 
 // This is used to specify which samples are to be read or taken.
 // To be selected, the current state of the sample must be included in the corresponding bitflags.

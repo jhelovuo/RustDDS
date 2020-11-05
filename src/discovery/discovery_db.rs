@@ -552,7 +552,7 @@ impl DiscoveryDB {
   }
 
   // TODO: return iterator somehow?
-  pub fn get_local_topic_readers<'a>(&'a self, topic: &'a Topic) -> Vec<&DiscoveredReaderData> {
+  pub fn get_local_topic_readers<'a, T: TopicDescription >(&'a self, topic: &'a T) -> Vec<&DiscoveredReaderData> {
     let topic_name = String::from(topic.get_name());
     self
       .local_topic_readers

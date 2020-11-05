@@ -59,11 +59,12 @@
 
 pub(crate) mod datareader;
 pub(crate) mod datasample;
+mod sampleinfo;
 mod datasample_cache;
 pub(crate) mod datawriter;
 pub(crate) mod ddsdata;
 mod dp_event_wrapper;
-pub(crate) mod interfaces;
+//pub(crate) mod interfaces;
 mod message_receiver;
 pub(crate) mod no_key;
 pub(crate) mod participant;
@@ -100,7 +101,7 @@ pub mod data_types {
   pub use crate::structure::guid::*;
   // TODO: move typedesc module somewhere better
   pub use crate::dds::typedesc::TypeDesc;
-  pub use crate::dds::datasample::SampleInfo;
+  pub use crate::dds::sampleinfo::SampleInfo;
 }
 
 /// DDS Error
@@ -119,6 +120,8 @@ pub use no_key::datawriter::DataWriter;
 pub use datareader::DataReader as KeyedDataReader;
 pub use no_key::datareader::DataReader;
 
+/*
 pub use interfaces::{
-  IDataReader, IKeyedDataReader, IDataWriter, IKeyedDataWriter, IDataSample, IKeyedDataSample,
-};
+  //IDataReader, IKeyedDataReader, IDataWriter, IKeyedDataWriter, 
+  IDataSample, IKeyedDataSample,
+};*/

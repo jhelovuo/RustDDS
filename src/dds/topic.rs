@@ -1,6 +1,10 @@
+//use std::marker::PhantomData;
+
 use crate::{
-  dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity},
+  dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity, },
 };
+
+pub use crate::structure::topic_kind::TopicKind;
 
 pub trait TopicDescription {
   fn get_participant(&self) -> Option<DomainParticipant>;
@@ -15,6 +19,7 @@ pub struct Topic {
   my_name: String,
   my_typedesc: TypeDesc,
   my_qos_policies: QosPolicies,
+  pub topic_kind: TopicKind, // WITH_KEY or NO_KEY
 }
 
 impl Topic {
@@ -25,12 +30,14 @@ impl Topic {
     my_name: String,
     my_typedesc: TypeDesc,
     my_qos_policies: &QosPolicies,
+    topic_kind: TopicKind,
   ) -> Topic {
     Topic {
       my_domainparticipant: my_domainparticipant.clone(),
       my_name,
       my_typedesc,
       my_qos_policies: my_qos_policies.clone(),
+      topic_kind,
     }
   }
 

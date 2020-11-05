@@ -61,8 +61,8 @@ The list of standard method return codes specifed by DDS (section 2.2.1.1) is mo
 
 The DDS specification specifies multiple functions to read received data samples out of a DataReader:
 
-* `read`: Accesses deserialized data objects from DataReader. Marks them read. Can be read again, if already read samples are requested.
-* `take`: Like read, but removes returned objects from DataReader, so they cannot be read again.
+* `read`: Accesses deserialized data objects from DataReader, and marks them read. Same samples can be read again, if already read samples are requested.
+* `take`: Like read, but removes returned objects from DataReader, so they cannot be accessed again.
 * `read_w_condition`, `take_w_condition`: Read/take samples that match specified condition.
 * `read_next_sample`, `take_next_sample`: Read/take next non-previously accessed sample.
 * `read_instance`, `take_instance`: Read/take samples belonging to a single instance (having the same key).

@@ -9,6 +9,10 @@ use crate::dds::qos::policy::History;
 
 use std::collections::{BTreeMap, HashSet};
 
+// DataSampleCache is a structure local to DataReader and DataWriter. It acts as a buffer
+// between e.g. RTPS Reader and the application-facing DataReader. It keeps track of what each
+// DataReader has "read" or "taken".
+
 pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
   pub datasamples: BTreeMap<D::K, Vec<DataSample<D>>>,

@@ -60,6 +60,13 @@ impl Key for () {
   }
 }
 
+impl<D:Keyed> Keyed for &D {
+  type K = D::K;
+  fn get_key(&self) -> Self::K {
+    (*self).get_key()
+  }
+}
+
 // TODO: might want to implement this for each primitive?
 impl Key for String {}
 

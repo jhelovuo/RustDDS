@@ -8,7 +8,7 @@ use mio_extras::channel::Receiver;
 use serde::Serialize;
 
 use crate::{
-  serialization::CDRSerializerAdapter, dds::interfaces::IDataWriter,
+  serialization::CDRSerializerAdapter, //dds::interfaces::IDataWriter,
   dds::values::result::StatusChange, structure::time::Timestamp,
 };
 use crate::structure::entity::{Entity};
@@ -50,9 +50,7 @@ where
       keyed_datawriter: keyed,
     }
   }
-}
 
-impl<D: Serialize, SA: SerializerAdapter<D>> IDataWriter<D, SA> for DataWriter<'_, D, SA> {
   // write (with optional timestamp)
   fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     self

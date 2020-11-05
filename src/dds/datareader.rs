@@ -26,23 +26,17 @@ use crate::dds::{
   traits::serde_adapters::*,
   values::result::*,
   qos::*,
-  datasample::*,
+  datasample::*, sampleinfo::*,
   datasample_cache::DataSampleCache,
   pubsub::Subscriber,
   topic::Topic,
+  //no_key::topic::Topic as NoKeyTopic,
   readcondition::*,
 };
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
-use super::interfaces::{IDataReader, IDataSample, IDataSampleConvert, IKeyedDataReader, IKeyedDataSample, IKeyedDataSampleConvert};
-
-/// Specifies if a read operation should "take" the data, i.e. make it unavailable in the Datareader
-/*#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Take {
-  No,
-  Yes,
-}*/
+//use super::interfaces::{/*IDataReader,*/ IDataSample, IDataSampleConvert, /*IKeyedDataReader,*/ IKeyedDataSample, IKeyedDataSampleConvert};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectByKey {
@@ -91,6 +85,16 @@ where
   }
 }
 
+// helper
+// somewhat like result.as_ref()
+fn result_ok_as_ref_err_clone<T,E:Clone>(r : &std::result::Result<T,E>) -> std::result::Result<&T,E> {
+  match *r {
+    Ok(ref x) => Ok(x),
+    Err(ref x) => Err(x.clone()),
+  }
+}
+
+
 impl<'a, D: 'static, DA> DataReader<'a, D, DA>
 where
   D: DeserializeOwned + Keyed,
@@ -136,18 +140,39 @@ where
     })
   }
 
+  pub fn read(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<DataSample<&D>>> {
+    self.read_as_obj(max_samples, read_condition)
+  }
+
+  pub fn take(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<DataSample<D>>> {
+    self.take_as_obj(max_samples, read_condition)
+  }
+
   pub(crate) fn read_as_obj(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<&DataSample<D>>> {
+  ) -> Result<Vec<DataSample<&D>>> {
+
     self.get_datasamples_from_cache();
-    let mut result: Vec<&DataSample<D>> = Vec::new();
+
+    let mut result: Vec<DataSample<&D>> = Vec::new();
     'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
       for datasample in datasample_vec.iter_mut() {
-        if Self::matches_conditions(&read_condition, datasample) {
-          datasample.get_sample_info_mut().sample_state = SampleState::Read;
-          result.push(&*datasample);
+        if Self::matches_conditions(&read_condition, &datasample) {
+          datasample.sample_info_mut().sample_state = SampleState::Read;
+          let ref_datasample = DataSample { sample_info: datasample.sample_info.clone(),
+                                            value: result_ok_as_ref_err_clone(&datasample.value)
+                                          };
+          result.push(ref_datasample);
         }
         if result.len() >= max_samples {
           break 'outer;
@@ -161,11 +186,13 @@ where
     Ok(result)
   }
 
+
   pub(crate) fn take_as_obj(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
+
     self.get_datasamples_from_cache();
 
     let mut result: Vec<DataSample<D>> = Vec::new();
@@ -177,7 +204,7 @@ where
         // in the same index
         if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
           let mut datasample = datasample_vec.remove(ind);
-          datasample.get_sample_info_mut().sample_state = SampleState::Read;
+          datasample.sample_info_mut().sample_state = SampleState::Read;
           result.push(datasample);
         // Nothing removed, next element can be found in the next index.
         } else {
@@ -195,12 +222,12 @@ where
     Ok(result)
   }
 
-  fn read_next_sample(&mut self) -> Result<Option<&DataSample<D>>> {
+  pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read_as_obj(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 
-  fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
+  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take_as_obj(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
@@ -292,7 +319,7 @@ where
       // TODO: how do we get the source_timestamp here? Is it needed?
       // TODO: Keeping track of and assigning  generation rank, sample rank etc.
       let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload, cc.writer_guid);
-      datasample.get_sample_info_mut().instance_state =
+      datasample.sample_info_mut().instance_state =
         Self::change_kind_to_instance_state(&cc.kind);
       self.datasample_cache.add_datasample(datasample);
     }
@@ -306,7 +333,7 @@ where
   ///
   /// This should cover DDS DataReader methods read_instance, read_next_instance,
   /// read_next_instance_w_condition.
-  fn read_instance(
+  pub fn read_instance(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -338,7 +365,7 @@ where
     if let Some(datasample_vec) = self.datasample_cache.get_datasamples_mut(&key) {
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, datasample) {
-          datasample.get_sample_info_mut().sample_state = SampleState::Read;
+          datasample.sample_info_mut().sample_state = SampleState::Read;
           result.push(&*datasample);
         }
         if result.len() >= max_samples {
@@ -356,7 +383,7 @@ where
   /// Similar to read_instance, but will return owned datasamples
   /// This should cover DDS DataReader methods take_instance, take_next_instance,
   /// take_next_instance_w_condition.
-  fn take_instance(
+  pub fn take_instance(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -393,7 +420,7 @@ where
         // in the same index
         if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
           let mut datasample = datasample_vec.remove(ind);
-          datasample.get_sample_info_mut().sample_state = SampleState::Read;
+          datasample.sample_info_mut().sample_state = SampleState::Read;
           result.push(datasample);
         // Nothing removed, next element can be found in the next index.
         } else {
@@ -411,29 +438,25 @@ where
     Ok(result)
   }
 
-  // status queries
-  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
-    todo!()
-  }
 
   // Helper functions
 
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
     if !rcondition
       .sample_state_mask
-      .contains(dsample.get_sample_info().sample_state)
+      .contains(dsample.sample_info().sample_state)
     {
       return false;
     }
     if !rcondition
       .view_state_mask
-      .contains(dsample.get_sample_info().view_state)
+      .contains(dsample.sample_info().view_state)
     {
       return false;
     }
     if !rcondition
       .instance_state_mask
-      .contains(dsample.get_sample_info().instance_state)
+      .contains(dsample.sample_info().instance_state)
     {
       return false;
     }
@@ -448,108 +471,12 @@ where
       ChangeKind::NOT_ALIVE_UNREGISTERED => InstanceState::NotAlive_NoWriters,
     }
   }
-} // impl
-
-impl<'a, D: 'static, DA> IDataReader<D, DA> for DataReader<'a, D, DA>
-where
-  D: DeserializeOwned + Keyed,
-  <D as Keyed>::K: Key,
-  DA: DeserializerAdapter<D>,
-{
-  fn read(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<&dyn IDataSample<D>>> {
-    let samples = self.read_as_obj(max_samples, read_condition);
-    match samples {
-      Ok(d) => Ok(d.into_iter().map(|p| p.as_idata_sample()).collect()),
-      Err(e) => Err(e),
-    }
-  }
-
-  fn take(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<Box<dyn IDataSample<D>>>> {
-    let samples = self.take_as_obj(max_samples, read_condition);
-    match samples {
-      Ok(d) => Ok(d.into_iter().map(|p| p.into_idata_sample()).collect()),
-      Err(e) => Err(e),
-    }
-  }
-
-  fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>> {
-    let mut ds =
-      <DataReader<D, DA> as IDataReader<D, DA>>::read(self, 1, ReadCondition::not_read())?;
-    let val = match ds.pop() {
-      Some(v) => Some(v.as_idata_sample()),
-      None => None,
-    };
-    Ok(val)
-  }
-
-  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>> {
-    let ds = self.take_next_sample()?;
-    Ok(ds.into_iter().map(|p| p.into_idata_sample()).find(|_| true))
-  }
 
   /// <b>Unimplemented. Do not use.</b>
-  fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
+  pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     todo!()
   }
-}
-
-impl<'a, D: 'static, DA> IKeyedDataReader<D, DA> for DataReader<'a, D, DA>
-where
-  D: DeserializeOwned + Keyed,
-  <D as Keyed>::K: Key,
-  DA: DeserializerAdapter<D>,
-{
-  fn read(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<&dyn IKeyedDataSample<D>>> {
-    let samples = self.read_as_obj(max_samples, read_condition);
-    match samples {
-      Ok(d) => Ok(d.into_iter().map(|p| p.as_ikeyed_data_sample()).collect()),
-      Err(e) => Err(e),
-    }
-  }
-
-  fn take(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<Box<dyn IKeyedDataSample<D>>>> {
-    let samples = self.take_as_obj(max_samples, read_condition);
-    match samples {
-      Ok(d) => Ok(d.into_iter().map(|p| p.into_ikeyed_data_sample()).collect()),
-      Err(e) => Err(e),
-    }
-  }
-
-  fn read_next_sample(&mut self) -> Result<Option<&dyn IKeyedDataSample<D>>> {
-    let mut ds =
-      <DataReader<D, DA> as IKeyedDataReader<D, DA>>::read(self, 1, ReadCondition::not_read())?;
-    let val = match ds.pop() {
-      Some(v) => Some(v.as_ikeyed_data_sample()),
-      None => None,
-    };
-    Ok(val)
-  }
-
-  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IKeyedDataSample<D>>>> {
-    let ds = self.take_next_sample()?;
-    Ok(
-      ds.into_iter()
-        .map(|p| p.into_ikeyed_data_sample())
-        .find(|_| true),
-    )
-  }
-
+  /*
   fn read_instance(
     &mut self,
     max_samples: usize,
@@ -560,7 +487,7 @@ where
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
-  ) -> Result<Vec<&dyn IKeyedDataSample<D>>> {
+  ) -> Result<Vec<&DataSample<D>>> {
     let ds = self.read_instance(max_samples, read_condition, instance_key, this_or_next)?;
     Ok(ds.into_iter().map(|p| p.as_ikeyed_data_sample()).collect())
   }
@@ -575,14 +502,15 @@ where
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
-  ) -> Result<Vec<Box<dyn IKeyedDataSample<D>>>> {
+  ) -> Result<Vec<Box<DataSample<D>>>> {
     let ds = self.take_instance(max_samples, read_condition, instance_key, this_or_next)?;
     Ok(
       ds.into_iter()
-        .map(|p| p.into_ikeyed_data_sample())
+        //.map(|p| p.into_ikeyed_data_sample())
         .collect(),
     )
   }
+  */
 }
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously

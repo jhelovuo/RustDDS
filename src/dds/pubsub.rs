@@ -28,7 +28,6 @@ use crate::dds::{
   traits::serde_adapters::*,
 };
 
-use crate::dds::no_key::datawriter as no_key_datawriter;
 
 use crate::{
   discovery::{
@@ -178,7 +177,7 @@ impl<'a> Publisher {
     entity_id: Option<EntityId>,
     topic: &'a Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<no_key_datawriter::DataWriter<'a, D, SA>>
+  ) -> Result<NoKeyDataWriter<'a, D, SA>>
   where
     D: Serialize,
     SA: SerializerAdapter<D>,
@@ -299,11 +298,11 @@ impl<'s> Subscriber {
     }
   }
 
-  pub(super) fn create_datareader_internal<D: 'static, SA>(
+  /*pub(super)*/ fn create_datareader_internal<D: 'static, SA>(
     &'s self,
     entity_id: Option<EntityId>,
     topic: &'s Topic,
-    topic_kind: Option<TopicKind>,
+    //topic_kind: Option<TopicKind>,
     qos: Option<QosPolicies>,
   ) -> Result<DataReader<'s, D, SA>>
   where
@@ -373,14 +372,12 @@ impl<'s> Subscriber {
 
     // Create new topic to DDScache if one isn't present
     match dp.get_dds_cache().write() {
-      Ok(mut rwlock) => rwlock.add_new_topic(
-        &topic.get_name().to_string(),
-        match topic_kind {
-          Some(k) => k,
-          None => TopicKind::WITH_KEY,
-        },
-        topic.get_type(),
-      ),
+      Ok(mut rwlock) => 
+        rwlock.add_new_topic(
+          &topic.get_name().to_string(),
+          topic.topic_kind,
+          topic.get_type(),
+        ),
       Err(e) => panic!(
         "The DDSCache of domain participant {:?} is poisoned. Error: {}",
         dp.get_guid(),
@@ -414,7 +411,10 @@ impl<'s> Subscriber {
     <D as Keyed>::K: Key,
     SA: DeserializerAdapter<D>,
   {
-    self.create_datareader_internal(entity_id, topic, None, qos)
+    if topic.topic_kind != TopicKind::WITH_KEY {
+      return Err(Error::PreconditionNotMet) // TopicKind mismatch
+    }
+    self.create_datareader_internal(entity_id, topic, qos)
   }
 
   /// Create DDS DataReader for non keyed Topics
@@ -434,6 +434,10 @@ impl<'s> Subscriber {
     D: DeserializeOwned,
     SA: DeserializerAdapter<D>,
   {
+    if topic.topic_kind != TopicKind::NO_KEY {
+      return Err(Error::PreconditionNotMet) // TopicKind mismatch
+    }
+
     let entity_id = match entity_id {
       Some(eid) => eid,
       None => {
@@ -446,7 +450,6 @@ impl<'s> Subscriber {
     let d = self.create_datareader_internal::<NoKeyWrapper<D>, SAWrapper<SA>>(
       Some(entity_id),
       topic,
-      Some(TopicKind::NO_KEY),
       qos,
     )?;
 

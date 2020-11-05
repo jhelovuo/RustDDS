@@ -25,7 +25,7 @@ mod test;
 
 // Public modules
 pub mod dds;
-pub mod ros2;
+// switch off for refactoring pub mod ros2;
 
 /// Helpers for (De)serialization and definitions of (De)serializer adapters
 pub mod serialization;

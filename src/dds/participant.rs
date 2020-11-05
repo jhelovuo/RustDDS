@@ -21,6 +21,8 @@ use crate::{
 use crate::dds::{
   dp_event_wrapper::DPEventWrapper, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*,
   qos::*, values::result::*,
+  //no_key::topic::Topic as NoKeyTopic,
+  //traits::key::Keyed,
 };
 
 use crate::{
@@ -117,10 +119,12 @@ impl DomainParticipant {
   /// * `name` - Name of the topic.
   /// * `type_desc` - Name of the type this topic is supposed to deliver.
   /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) that are distributed to DataReaders and DataWriters.
-  pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies) -> Result<Topic> {
+  pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies, topic_kind: TopicKind) -> 
+    Result<Topic> 
+  {
     self
       .dpi
-      .create_topic(&self.weak_clone(), name, type_desc, qos)
+      .create_topic(&self.weak_clone(), name, type_desc, qos, topic_kind)
   }
 
   /// Gets this DomainParticipants domain_id
@@ -179,9 +183,9 @@ impl DomainParticipantWeak {
     }
   }
 
-  pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies) -> Result<Topic> {
+  pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies, topic_kind: TopicKind) -> Result<Topic> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.create_topic(&self, name, type_desc, qos),
+      Some(dpi) => dpi.create_topic(&self, name, type_desc, qos, topic_kind),
       None => Err(Error::OutOfResources),
     }
   }
@@ -274,8 +278,9 @@ impl DomainParticipant_Disc {
     name: &str,
     type_desc: &str,
     qos: &QosPolicies,
+    topic_kind: TopicKind
   ) -> Result<Topic> {
-    self.dpi.create_topic(&dp, name, type_desc, qos)
+    self.dpi.create_topic(&dp, name, type_desc, qos, topic_kind)
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -597,17 +602,20 @@ impl DomainParticipant_Inner {
     name: &str,
     type_desc: &str,
     qos: &QosPolicies,
+    topic_kind: TopicKind,
   ) -> Result<Topic> {
     let topic = Topic::new(
       domain_participant,
       name.to_string(),
       TypeDesc::new(type_desc.to_string()),
       &qos,
+      topic_kind,
     );
     Ok(topic)
 
     // TODO: refine
   }
+
 
   // Do not implement contentfilteredtopics or multitopics (yet)
 

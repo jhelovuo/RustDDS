@@ -37,7 +37,7 @@ use crate::dds::traits::serde_adapters::SerializerAdapter;
 use crate::dds::datasample::DataSample;
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
 use super::{
-  datasample_cache::DataSampleCache, interfaces::IDataWriter, interfaces::IKeyedDataWriter,
+  datasample_cache::DataSampleCache, //interfaces::IDataWriter, interfaces::IKeyedDataWriter,
   values::result::StatusChange, writer::WriterCommand,
 };
 
@@ -152,7 +152,7 @@ where
   // TODO: Maybe we could return references to the subscription data to avoid copying?
   // But then what if the result set changes while the application processes it?
 
-  fn refresh_manual_liveliness(&self) {
+  pub fn refresh_manual_liveliness(&self) {
     match self.get_qos().liveliness {
       Some(lv) => match lv.kind {
         super::qos::policy::LivelinessKind::Automatic => (),
@@ -172,15 +172,9 @@ where
       None => (),
     };
   }
-}
 
-impl<'a, D, SA> IDataWriter<D, SA> for DataWriter<'a, D, SA>
-where
-  D: Keyed + Serialize,
-  <D as Keyed>::K: Key,
-  SA: SerializerAdapter<D>,
-{
-  fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+
+  pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     let mut ddsdata = DDSData::from(&data, source_timestamp);
     // TODO key value should be unique always. This is not always unique.
     // If sample with same values is given then hash is same for both samples.
@@ -207,7 +201,7 @@ where
     }
   }
 
-  fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
+  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     match &self.qos_policy.reliability {
       Some(rel) => match rel {
         Reliability::BestEffort => return Ok(()),
@@ -226,7 +220,7 @@ where
     return Err(Error::Unsupported);
   }
 
-  fn get_status_listener(&self) -> &Receiver<StatusChange> {
+  pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
     match self
       .cc_upload
       .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
@@ -239,12 +233,12 @@ where
   }
 
   /// Unimplemented. <b>Do not use</b>.
-  fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
+  pub fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
     todo!()
   }
 
   /// Should get latest offered deadline missed status. <b>Do not use yet</b> use `get_status_lister` instead for the moment.
-  fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
+  pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
     let mut fstatus = OfferedDeadlineMissedStatus::new();
     while let Ok(status) = self.status_receiver.try_recv() {
       match status {
@@ -267,24 +261,24 @@ where
   }
 
   /// Unimplemented. <b>Do not use</b>.
-  fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
+  pub fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
     todo!()
   }
 
   /// Unimplemented. <b>Do not use</b>.
-  fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
+  pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     todo!()
   }
 
-  fn get_topic(&self) -> &Topic {
+  pub fn get_topic(&self) -> &Topic {
     &self.my_topic
   }
 
-  fn get_publisher(&self) -> &Publisher {
+  pub fn get_publisher(&self) -> &Publisher {
     &self.my_publisher
   }
 
-  fn assert_liveliness(&self) -> Result<()> {
+  pub fn assert_liveliness(&self) -> Result<()> {
     self.refresh_manual_liveliness();
 
     match self.get_qos().liveliness {
@@ -316,24 +310,17 @@ where
   }
 
   /// Unimplemented. <b>Do not use</b>.
-  fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
+  pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     todo!()
   }
-}
 
-impl<D, SA> IKeyedDataWriter<D, SA> for DataWriter<'_, D, SA>
-where
-  D: Keyed + Serialize,
-  <D as Keyed>::K: Key,
-  SA: SerializerAdapter<D>,
-{
   /// Disposes data instance with specified key
   ///
   /// # Arguments
   ///
   /// * `key` - Key of the instance
   /// * `source_timestamp` - DDS source timestamp (None uses now as time as specified in DDS spec)
-  fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
+  pub fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
     /*
 
     Removing this for now, as there is need to redesign the mechanism of transmitting dispose actions

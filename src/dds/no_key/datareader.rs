@@ -4,11 +4,7 @@ use serde::{de::DeserializeOwned};
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
-  dds::datasample::DataSample,
-  dds::interfaces::IDataReader,
-  dds::interfaces::IDataSample,
   serialization::CDRDeserializerAdapter,
-  dds::interfaces::IDataSampleConvert,
   structure::{
     entity::{Entity, EntityAttributes},
   },
@@ -16,6 +12,9 @@ use crate::{
 use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*, readcondition::*};
 
 use crate::dds::datareader as datareader_with_key;
+use crate::dds::datasample::DataSample as WithKeyDataSample;
+use crate::dds::no_key::datasample::DataSample;
+
 
 use super::{
   wrappers::{NoKeyWrapper, SAWrapper},
@@ -46,66 +45,55 @@ where
       keyed_datareader: keyed,
     }
   }
-} // impl
 
-impl<'a, D: 'static, DA> IDataReader<D, DA> for DataReader<'a, D, DA>
-where
-  D: DeserializeOwned, // + Deserialize<'s>,
-  DA: DeserializerAdapter<D>,
-{
   fn read(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<&dyn IDataSample<D>>> {
-    let values: Vec<&dyn IDataSample<D>> = match self
-      .keyed_datareader
-      .read_as_obj(max_samples, read_condition)
-    {
-      Ok(v) => v
-        .iter()
-        .map(|p| <DataSample<NoKeyWrapper<D>> as IDataSampleConvert<D>>::as_idata_sample(p))
-        .collect(),
-      Err(e) => return Err(e),
-    };
-    Ok(values)
+  ) -> Result<Vec<DataSample<&D>>> 
+  {
+    let values: Vec<WithKeyDataSample<&NoKeyWrapper<D>>> = self.keyed_datareader
+      .read_as_obj(max_samples, read_condition)?;
+    let mut result = Vec::with_capacity(values.len());
+    for ks in values {
+      if let Some(s) = DataSample::<D>::from_with_key_ref(ks) { result.push(s) }
+    }
+    Ok(result)
   }
 
   fn take(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<Box<dyn IDataSample<D>>>> {
-    let values: Vec<Box<dyn IDataSample<D>>> = match self
-      .keyed_datareader
-      .take_as_obj(max_samples, read_condition)
-    {
-      Ok(v) => v
-        .into_iter()
-        .map(|p| <DataSample<NoKeyWrapper<D>> as IDataSampleConvert<D>>::into_idata_sample(p))
-        .collect(),
-      Err(e) => return Err(e),
-    };
-
-    Ok(values)
+  ) -> Result<Vec<DataSample<D>>> {
+    let values: Vec<WithKeyDataSample<NoKeyWrapper<D>>> = self.keyed_datareader
+      .take_as_obj(max_samples, read_condition)?;
+    let mut result = Vec::with_capacity(values.len());
+    for ks in values {
+      if let Some(s) = DataSample::<D>::from_with_key(ks) { result.push(s) }
+    }
+    Ok(result)
   }
 
-  fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>> {
+  fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
-    let val = match ds.pop() {
+    Ok(ds.pop())
+    /*let val = match ds.pop() {
       Some(v) => Some(v.as_idata_sample()),
       None => None,
     };
-    Ok(val)
+    Ok(val)*/
   }
 
-  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>> {
+  fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
+    Ok(ds.pop())
+    /*
     let val = match ds.pop() {
       Some(v) => Some(v),
       None => None,
     };
-    Ok(val)
+    Ok(val) */
   }
 
   fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {

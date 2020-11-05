@@ -7,10 +7,10 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
   dds::{
-    interfaces::IDataReader,
-    interfaces::IDataWriter,
-    interfaces::IKeyedDataReader,
-    interfaces::IKeyedDataWriter,
+    //interfaces::IDataReader,
+    //interfaces::IDataWriter,
+    //interfaces::IKeyedDataReader,
+    //interfaces::IKeyedDataWriter,
     no_key::{
       datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
     },
@@ -239,8 +239,8 @@ pub struct RosContext {
   ros_discovery_topic: Option<Topic>,
   ros_discovery_publisher: Publisher,
   ros_discovery_subscriber: Subscriber,
-  ros_parameter_events_topic: Topic,
-  ros_rosout_topic: Topic,
+  ros_parameter_events_topic: Topic<ParameterEvents>,
+  ros_rosout_topic: Topic<Log>,
 }
 
 impl RosContext {
