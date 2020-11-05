@@ -1,16 +1,20 @@
-use std::io;
+use std::{collections::HashSet, io};
 
 use crate::{
-  structure::{sequence_number::SequenceNumber, guid::GuidPrefix},
-  serialization::submessage::{SubMessage, SubmessageBody},
-  messages::submessages::submessages::*,
+  structure::entity::Entity,
+  dds::{
+    data_types::{DDSTimestamp, GUID},
+    writer::Writer as RtpsWriter,
+  },
   messages::header::Header,
-  dds::writer::Writer as RtpsWriter,
-  dds::rtps_reader_proxy::RtpsReaderProxy,
+  messages::submessages::submessages::*,
+  serialization::submessage::{SubMessage, SubmessageBody},
+  structure::{sequence_number::SequenceNumber, guid::GuidPrefix},
 };
 use log::warn;
 use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
+use time::{Timespec, get_time};
 
 #[derive(Debug)]
 pub struct Message {
@@ -48,11 +52,11 @@ impl<'a> Message {
     self.header = header;
   }
 
-  pub fn get_data_sub_message_sequence_numbers(&self) -> Vec<SequenceNumber> {
-    let mut sequence_numbers: Vec<SequenceNumber> = vec![];
+  pub fn get_data_sub_message_sequence_numbers(&self) -> HashSet<SequenceNumber> {
+    let mut sequence_numbers = HashSet::new();
     for mes in self.submessages.iter() {
       if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm, _)) = &mes.body {
-        sequence_numbers.push(data_subm.writer_sn);
+        sequence_numbers.insert(data_subm.writer_sn);
       }
     }
     sequence_numbers
@@ -217,29 +221,6 @@ impl Message {
       submessages: vec![],
     }
   }
-
-  pub fn add_data_msg(
-    &mut self,
-    seqnum: SequenceNumber,
-    writer: &RtpsWriter,
-    reader: &RtpsReaderProxy,
-  ) {
-    let instant = match writer.sequence_number_to_instant(seqnum) {
-      Some(i) => i,
-      None => return,
-    };
-
-    let cache_change = match writer.find_cache_change(instant) {
-      Some(cc) => cc,
-      None => return,
-    };
-
-    let data_msg =
-      writer.get_DATA_msg_from_cache_change(cache_change, reader.remote_reader_guid.entityId);
-
-    self.add_submessage(writer.get_TS_submessage(false));
-    self.add_submessage(data_msg);
-  }
 }
 
 impl Default for Message {
@@ -258,6 +239,147 @@ impl<C: Context> Writable<C> for Message {
       writer.write_value(&x)?;
     }
     Ok(())
+  }
+}
+
+pub struct MessageBuilder {
+  header: Option<Header>,
+  submessages: Vec<SubMessage>,
+}
+
+impl MessageBuilder {
+  pub fn new() -> MessageBuilder {
+    MessageBuilder {
+      header: None,
+      submessages: Vec::new(),
+    }
+  }
+
+  pub fn header(mut self, message_header: Header) -> MessageBuilder {
+    self.header = Some(message_header);
+    self
+  }
+
+  pub fn dst_submessage(
+    mut self,
+    endianness: Endianness,
+    guid_prefix: GuidPrefix,
+  ) -> MessageBuilder {
+    let flags = BitFlags::<INFODESTINATION_Flags>::from_endianness(endianness);
+    let submessageHeader = SubmessageHeader {
+      kind: SubmessageKind::INFO_DST,
+      flags: flags.bits(),
+      content_length: 12u16,
+      //InfoDST length is always 12 because message contains only GuidPrefix
+    };
+    let dst_submessage = SubMessage {
+      header: submessageHeader,
+      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(
+        InfoDestination { guid_prefix },
+        flags,
+      )),
+    };
+
+    self.submessages.push(dst_submessage);
+    self
+  }
+
+  pub fn ts_msg(mut self, endianness: Endianness, invalidate_flagset: bool) -> MessageBuilder {
+    let currentTime: Timespec = get_time();
+    let timestamp = InfoTimestamp {
+      timestamp: DDSTimestamp::from(currentTime),
+    };
+    let mes = &mut timestamp.write_to_vec_with_ctx(endianness).unwrap();
+
+    let flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(endianness)
+      | (if invalidate_flagset {
+        INFOTIMESTAMP_Flags::Invalidate.into()
+      } else {
+        BitFlags::<INFOTIMESTAMP_Flags>::empty()
+      });
+
+    let submessageHeader = SubmessageHeader {
+      kind: SubmessageKind::INFO_TS,
+      flags: flags.bits(),
+      content_length: mes.len() as u16, // This conversion should be safe, as timestamp length cannot exceed u16
+    };
+
+    let submsg = SubMessage {
+      header: submessageHeader,
+      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(timestamp, flags)),
+    };
+
+    self.submessages.push(submsg);
+    self
+  }
+
+  pub fn data_msg(
+    mut self,
+    seqnum: SequenceNumber,
+    writer: &RtpsWriter,
+    reader_guid: GUID,
+  ) -> MessageBuilder {
+    let instant = match writer.sequence_number_to_instant(seqnum) {
+      Some(i) => i,
+      None => return self,
+    };
+
+    let cache_change = match writer.find_cache_change(instant) {
+      Some(cc) => cc,
+      None => return self,
+    };
+
+    let data_msg = writer.get_DATA_msg_from_cache_change(cache_change, reader_guid.entityId);
+
+    self.submessages.push(data_msg);
+    self
+  }
+
+  pub fn heartbeat_msg(
+    mut self,
+    writer: &RtpsWriter,
+    reader_guid: GUID,
+    set_final_flag: bool,
+    set_liveliness_flag: bool,
+  ) -> MessageBuilder {
+    let first = writer.first_change_sequence_number;
+    let last = writer.last_change_sequence_number;
+
+    let heartbeat = Heartbeat {
+      reader_id: reader_guid.entityId,
+      writer_id: writer.get_entity_id(),
+      first_sn: first,
+      last_sn: last,
+      count: writer.heartbeat_message_counter,
+    };
+
+    let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(writer.endianness);
+
+    if set_final_flag {
+      flags.insert(HEARTBEAT_Flags::Final)
+    }
+    if set_liveliness_flag {
+      flags.insert(HEARTBEAT_Flags::Liveliness)
+    }
+
+    let submessage = heartbeat.create_submessage(flags);
+    match submessage {
+      Some(sm) => self.submessages.push(sm),
+      None => return self,
+    }
+    self
+  }
+
+  pub fn build(self) -> Result<Message, String> {
+    let header = match self.header {
+      Some(h) => h,
+      None => return Err(String::from("Failed to build message. Missing header.")),
+    };
+
+    Ok(Message {
+      header,
+      submessages: self.submessages,
+    })
   }
 }
 

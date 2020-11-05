@@ -41,19 +41,35 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
 
     let mut bit_vec = BitVec::with_capacity(number_of_bits as usize);
 
-    for _ in 0..(number_of_bits / 32 + 1) {
+    for _ in 0..(number_of_bits / 32) {
+      // read value should be directly correct
       let mut byte = reader.read_u32()?;
-      byte = byte.rotate_right(1);
-      debug!("Bytes {:b} - {}", byte, number_of_bits);
+
+      // reading whoe buffer to bitvec
       while byte > 0 {
         let val = (byte & 0x80000000) > 0;
         byte = byte << 1;
-        debug!("BIter {} - {:b}", val, byte);
         bit_vec.push(val);
       }
     }
 
-    debug!("ReadBitVec {:?}", bit_vec);
+    if number_of_bits % 32 != 0 {
+      // uneven number of bits
+      let mut byte = reader.read_u32()?;
+      debug!("Read ack: {:x?} :: {:b}", byte, byte);
+      // rotating to correct alignment
+      // byte = byte.rotate_right(32 - number_of_bits % 32);
+
+      // reading whoe buffer to bitvec
+      while byte > 0 {
+        let val = (byte & 0x80000000) > 0;
+        byte = byte << 1;
+        bit_vec.push(val);
+      }
+    }
+
+    debug!("Full Bitvec: {:x?} :: {:?}", bit_vec, bit_vec);
+
     Ok(BitSetRef(BitSet::from_bit_vec(bit_vec)))
   }
 
@@ -66,14 +82,34 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
 impl<C: Context> Writable<C> for BitSetRef {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    let bytes = self.get_ref().storage();
-    let number_of_bytes = bytes.len() as u32 * 32;
-    writer.write_u32(number_of_bytes)?;
-    for byte in bytes {
-      let lz = byte.leading_zeros();
-      let foo = byte.rotate_left(lz);
-      writer.write_u32(foo)?;
+    let mut number_of_bytes = 0;
+
+    let mut values = Vec::new();
+    let mut value: i32 = 0;
+    for b in self.get_ref().iter() {
+      number_of_bytes += 1;
+      value = value << 1;
+      value += if b { 1 } else { 0 };
+      if number_of_bytes % 32 == 0 {
+        values.push(value);
+        value = 0;
+      }
     }
+
+    writer.write_u32(number_of_bytes)?;
+
+    for val in values.iter_mut() {
+      let lz = val.leading_zeros();
+      let foo = val.rotate_left(lz);
+      writer.write_i32(foo)?;
+    }
+
+    if values.is_empty() && number_of_bytes > 0 {
+      let lz = value.leading_zeros();
+      let foo = value.rotate_left(lz);
+      writer.write_i32(foo)?;
+    }
+
     Ok(())
   }
 }
@@ -99,8 +135,10 @@ mod tests {
           set
       })(),
       le = [0x40, 0x00, 0x00, 0x00,
-            0x81, 0x00, 0x00, 0x00,
-            0x00, 0x04, 0x00, 0x00],
+            0x81, 0x00, 0x00, 0x00,],
+      // le = [0x40, 0x00, 0x00, 0x00,
+      //       0x81, 0x00, 0x00, 0x00,
+      //       0x00, 0x04, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x40,
             0x00, 0x00, 0x00, 0x81,
             0x00, 0x00, 0x04, 0x00]

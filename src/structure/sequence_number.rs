@@ -1,6 +1,6 @@
 use num_derive::{FromPrimitive, NumOps, ToPrimitive};
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::convert::From;
+use std::{convert::From};
 use std::mem::size_of;
 
 use crate::common::ranged_bit_set::RangedBitSet;

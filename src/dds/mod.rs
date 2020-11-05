@@ -25,6 +25,7 @@
 //!
 //! ```
 //! use atosdds::dds::DomainParticipant;
+//! use atosdds::dds::{IDataReader, IDataWriter, IDataSample};
 //! use atosdds::dds::qos::QosPolicyBuilder;
 //! use atosdds::dds::qos::policy::Reliability;
 //! use atosdds::dds::data_types::DDSDuration;
@@ -57,7 +58,8 @@
 //! }
 //!
 //! // Creating DataReader requires type and deserializer adapter (which is recommended to be CDR).
-//! let reader = subscriber
+//! // Reader needs to be mutable if any operations are used.
+//! let mut reader = subscriber
 //!   .create_datareader_no_key::<SomeType, CDRDeserializerAdapter<SomeType>>(
 //!     &some_topic,
 //!     None,
@@ -76,6 +78,20 @@
 //! // std::sync::mpcs and can be handled the same way for reading the data
 //!
 //! let some_data = SomeType { a: 1 };
+//!
+//! // This should send the data to all who listen "some_topic" topic.
+//! writer.write(some_data, None).unwrap();
+//!
+//! // ... Some data has arrived at some point for the reader
+//! let data_sample = if let Ok(Some(value)) = reader.read_next_sample() {
+//!   value
+//! } else {
+//!   // no data has arrived
+//!   return;
+//! };
+//!
+//! // Getting reference to actual data from the data sample
+//! let actual_data = data_sample.get_value().unwrap();
 //! ```
 
 mod sampleinfo;

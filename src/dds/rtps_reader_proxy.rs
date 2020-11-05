@@ -42,6 +42,9 @@ pub struct RtpsReaderProxy {
   /// Specifies whether the remote Reader is responsive to the Writer
   pub is_active: bool,
 
+  // keeps list of changes where response has been received
+  acked_changes: HashSet<SequenceNumber>,
+
   // this list keeps sequence numbers from reader negative acknack messages
   requested_changes: HashSet<SequenceNumber>,
 
@@ -61,6 +64,7 @@ impl RtpsReaderProxy {
       //changes_for_reader : writer.history_cache.clone(),
       expects_in_line_qos: false,
       is_active: true,
+      acked_changes: HashSet::new(),
       requested_changes: HashSet::new(),
       unsent_changes: HashSet::new(),
       largest_acked_change: None,
@@ -81,6 +85,7 @@ impl RtpsReaderProxy {
       multicast_locator_list,
       expects_in_line_qos: false,
       is_active: true,
+      acked_changes: HashSet::new(),
       requested_changes: HashSet::new(),
       unsent_changes: HashSet::new(),
       largest_acked_change: None,
@@ -116,6 +121,7 @@ impl RtpsReaderProxy {
         .clone(),
       expects_in_line_qos: expects_inline_qos,
       is_active: true,
+      acked_changes: HashSet::new(),
       requested_changes: HashSet::new(),
       unsent_changes: HashSet::new(),
       largest_acked_change: None,
@@ -146,6 +152,7 @@ impl RtpsReaderProxy {
       expects_in_line_qos: false,
 
       is_active: true,
+      acked_changes: HashSet::new(),
       requested_changes: HashSet::new(),
       unsent_changes: HashSet::new(),
       largest_acked_change: None,
@@ -207,13 +214,35 @@ impl RtpsReaderProxy {
     return min;
   }
 
-  pub fn add_requested_changes(&mut self, sequence_numbers: BitSetRef) {
+  pub fn add_acked_changes(
+    &mut self,
+    first_sn: SequenceNumber,
+    last_sn: SequenceNumber,
+    base: SequenceNumber,
+    sequence_numbers: &BitSetRef,
+  ) {
+    let mut acks = HashSet::new();
+    for sn in i64::from(first_sn)..i64::from(last_sn) {
+      acks.insert(SequenceNumber::from(sn));
+    }
+
+    let mut acked = HashSet::new();
+    for number in sequence_numbers.iter() {
+      let num = SequenceNumber::from(number as i64) + base;
+      acked.insert(num);
+    }
+
+    let new_acks = acks.difference(&acked).map(|s| *s).collect();
+
+    self.acked_changes = new_acks;
+  }
+
+  pub fn add_requested_changes(&mut self, base: SequenceNumber, sequence_numbers: BitSetRef) {
     debug!("Sequence number set {:?}", sequence_numbers);
     for number in sequence_numbers.iter() {
-      debug!("Number {}", number);
-      self
-        .requested_changes
-        .insert(SequenceNumber::from(number as i64));
+      let num = SequenceNumber::from(number as i64) + base;
+      debug!("Number {:?}", num);
+      self.requested_changes.insert(num);
     }
   }
 
@@ -225,6 +254,15 @@ impl RtpsReaderProxy {
   /// this should be called everytime next_unsent_change is called and change is sent
   pub fn remove_unsend_change(&mut self, sequence_number: SequenceNumber) {
     self.unsent_changes.remove(&sequence_number);
+  }
+
+  pub fn remove_unsend_changes(&mut self, sequence_numbers: &HashSet<SequenceNumber>) {
+    let new_us_changes = self
+      .unsent_changes()
+      .difference(sequence_numbers)
+      .map(|s| *s)
+      .collect();
+    self.unsent_changes = new_us_changes;
   }
 
   pub fn remove_requested_change(&mut self, sequence_number: SequenceNumber) {
@@ -254,20 +292,14 @@ impl RtpsReaderProxy {
     largest_change: SequenceNumber,
   ) -> HashSet<SequenceNumber> {
     let mut changes = HashSet::new();
-    let local_change = match self.largest_acked_change {
-      Some(a) => a,
-      None => SequenceNumber::from(0),
-    };
-    let local_change = if local_change > smallest_change {
-      local_change
-    } else {
-      smallest_change
-    };
-
-    for seq in i64::from(local_change)..i64::from(largest_change) {
+    for seq in i64::from(smallest_change)..i64::from(largest_change) {
       changes.insert(SequenceNumber::from(seq));
     }
+
     changes
+      .difference(&self.acked_changes)
+      .map(|s| *s)
+      .collect()
   }
 
   pub fn content_is_equal(&self, other: &RtpsReaderProxy) -> bool {

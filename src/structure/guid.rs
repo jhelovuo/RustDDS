@@ -5,6 +5,7 @@ use std::hash::Hash;
 use super::parameter_id::ParameterId;
 use crate::dds::traits::key::Key;
 
+/// DDS/RTPS Participant GuidPrefix
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct GuidPrefix {
   pub entityKey: [u8; 12],
@@ -59,6 +60,7 @@ impl<C: Context> Writable<C> for GuidPrefix {
   }
 }
 
+/// RTPS EntityId
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct EntityId {
   pub entityKey: [u8; 3],
@@ -198,6 +200,7 @@ impl<C: Context> Writable<C> for EntityId {
   }
 }
 
+/// DDS/RTPS GUID
 #[derive(
   Copy,
   Clone,
@@ -224,7 +227,7 @@ impl GUID {
     entityId: EntityId::ENTITYID_UNKNOWN,
   };
 
-  /// Generates new GUID for Participant
+  /// Generates new GUID for Participant when `guidPrefix` is random
   pub fn new() -> GUID {
     let guid = Uuid::new_v4();
     GUID {
@@ -241,6 +244,7 @@ impl GUID {
     }
   }
 
+  /// Creates GUID from known values
   pub fn new_with_prefix_and_id(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
     GUID {
       guidPrefix: prefix,

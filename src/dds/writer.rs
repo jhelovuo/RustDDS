@@ -15,6 +15,7 @@ use std::hash::Hasher;
 
 //use crate::messages::submessages::info_destination::InfoDestination;
 use crate::{
+  serialization::MessageBuilder,
   messages::submessages::{
     submessage::EntitySubmessage,
     info_timestamp::InfoTimestamp,
@@ -63,7 +64,7 @@ pub struct Writer {
   source_version: ProtocolVersion,
   source_vendor_id: VendorId,
   pub endianness: Endianness,
-  heartbeat_message_counter: i32,
+  pub heartbeat_message_counter: i32,
   /// Configures the mode in which the
   ///Writer operates. If
   ///pushMode==true, then the Writer
@@ -292,6 +293,22 @@ impl Writer {
     )
   }
 
+  fn create_heartbeat_message_wdata(
+    message_header: Header,
+    endianness: Endianness,
+    seqnum: SequenceNumber,
+    writer: &Writer,
+    reader_guid: GUID,
+  ) -> Result<Message, String> {
+    MessageBuilder::new()
+      .header(message_header)
+      .dst_submessage(endianness, reader_guid.guidPrefix)
+      .ts_msg(endianness, false)
+      .data_msg(seqnum, writer, reader_guid)
+      .heartbeat_msg(writer, reader_guid, false, false)
+      .build()
+  }
+
   /// this should be called everytime heartbeat message with token is recieved.
   pub fn handle_heartbeat_tick(&mut self) {
     // TODO Set some guidprefix if needed at all.
@@ -302,77 +319,98 @@ impl Writer {
     let message_header: Header = self.create_message_header();
     let endianness = self.endianness;
 
-    let mut seqnums: HashMap<GUID, Vec<SequenceNumber>> = HashMap::new();
-    let mut requested_seqnums: HashMap<GUID, Vec<SequenceNumber>> = HashMap::new();
+    let mut seqnums: HashMap<GUID, HashSet<SequenceNumber>> = HashMap::new();
+    let mut requested_seqnums: HashMap<GUID, HashSet<SequenceNumber>> = HashMap::new();
 
     for reader in self.readers.iter() {
+      let mut rtps_messages = Vec::new();
       let reader_guid = reader.remote_reader_guid;
-      seqnums.insert(reader.remote_reader_guid, Vec::new());
-      requested_seqnums.insert(reader.remote_reader_guid, Vec::new());
+      seqnums.insert(reader.remote_reader_guid, HashSet::new());
+      requested_seqnums.insert(reader.remote_reader_guid, HashSet::new());
 
-      let mut rtps_message: Message = Message::new(message_header.clone());
-
-      rtps_message.add_submessage(Writer::get_DST_submessage(
-        endianness,
-        reader_guid.guidPrefix,
-      ));
-
-      let mut not_acked_changes = reader.unacked_changes(
+      let unacked_changes = reader.unacked_changes(
         self.first_change_sequence_number,
         self.last_change_sequence_number,
       );
-      not_acked_changes.extend(reader.requested_changes());
 
-      let mut status_changes = Vec::new();
+      let requested_changes = reader.requested_changes();
 
-      for &seqnum in itertools::sorted(reader.unsent_changes().union(&not_acked_changes)) {
-        // adds data if there is unsent change
-        rtps_message.add_data_msg(seqnum, &self, &reader);
-        match seqnums.get_mut(&reader_guid) {
-          Some(v) => v.push(seqnum),
-          None => (),
-        };
+      let unsent_changes = reader.unsent_changes();
 
-        // checking previous sequence number for deadline
-        let instant = self.sequence_number_to_instant(seqnum - SequenceNumber::from(1));
+      let mut all_changes = HashSet::new();
+      all_changes.extend(unacked_changes);
+      all_changes.extend(requested_changes);
+      all_changes.extend(unsent_changes);
 
-        match self.get_qos().deadline {
-          Some(dl) => {
-            if let Some(instant) = instant {
-              if Duration::from(dl.period) < Instant::now() - *instant {
-                self.offered_deadline_status.increase();
-                status_changes.push(self.offered_deadline_status);
+      for &seqnum in itertools::sorted(all_changes.iter()) {
+        match Writer::create_heartbeat_message_wdata(
+          message_header.clone(),
+          endianness,
+          seqnum,
+          &self,
+          reader_guid,
+        ) {
+          Ok(m) => {
+            // adding sequence number of change we're gonna send
+            match seqnums.get_mut(&reader_guid) {
+              Some(v) => {
+                v.insert(seqnum);
               }
+              None => (),
+            };
+            // adding the generated message
+            rtps_messages.push(m)
+          }
+          _ => (),
+        };
+      }
+
+      // updating deadline for added sequence numbers
+      match seqnums.get(&reader_guid) {
+        Some(sqs) => {
+          for &seqnum in sqs.iter() {
+            // checking previous sequence number for deadline
+            let instant = self.sequence_number_to_instant(seqnum - SequenceNumber::from(1));
+
+            match self.get_qos().deadline {
+              Some(dl) => {
+                if let Some(instant) = instant {
+                  if Duration::from(dl.period) < Instant::now() - *instant {
+                    self.offered_deadline_status.increase();
+                    debug!(
+                      "Trying to send status change {:?}",
+                      self.offered_deadline_status
+                    );
+                    match self
+                      .status_sender
+                      .try_send(StatusChange::OfferedDeadlineMissedStatus {
+                        status: self.offered_deadline_status,
+                      }) {
+                      Ok(_) => (),
+                      Err(e) => error!("Failed to send new message status. {:?}", e),
+                    };
+                  }
+                }
+              }
+              None => (),
             }
           }
-          None => (),
         }
+        None => (),
       }
 
-      for &seqnum in itertools::sorted(reader.requested_changes().iter()) {
-        match requested_seqnums.get_mut(&reader_guid) {
-          Some(v) => v.push(seqnum),
+      match requested_seqnums.get_mut(&reader_guid) {
+        Some(v) => match seqnums.get(&reader_guid) {
+          Some(sqs) => v.extend(sqs.intersection(requested_changes)),
           None => (),
-        };
-      }
-
-      match self.get_heartbeat_msg(reader_guid.entityId, false, false) {
-        Some(hb_msg) => rtps_message.add_submessage(hb_msg),
-        None => continue,
+        },
+        None => (),
       };
 
-      self.send_unicast_message_to_reader(&rtps_message, reader);
-      self.send_multicast_message_to_reader(&rtps_message, reader);
-
-      for sc in status_changes.into_iter() {
-        debug!("Trying to send status change {:?}", sc);
-        match self
-          .status_sender
-          .try_send(StatusChange::OfferedDeadlineMissedStatus { status: sc })
-        {
-          Ok(_) => (),
-          Err(e) => error!("Failed to send new message status. {:?}", e),
-        };
+      // finally sending the messages
+      for rtps_message in rtps_messages.iter() {
+        self.send_unicast_message_to_reader(rtps_message, reader);
+        self.send_multicast_message_to_reader(rtps_message, reader);
       }
     }
 
@@ -673,7 +711,7 @@ impl Writer {
   fn send_next_unsend_message(&mut self) {
     let remote_reader_guid;
     let rem_sequece_number;
-    let mut message_sequence_numbers = Vec::new();
+    let mut message_sequence_numbers = HashSet::new();
 
     if let Some(reader) = self.get_some_reader_with_unsent_messages() {
       rem_sequece_number = reader.next_unsent_change();
@@ -959,10 +997,19 @@ impl Writer {
       return;
     }
 
+    let first_change_sq = self.first_change_sequence_number;
+    let last_change_sq = self.last_change_sequence_number;
+
     if let Some(reader_proxy) = self.matched_reader_lookup(guid_prefix, an.reader_id) {
+      reader_proxy.add_acked_changes(
+        first_change_sq,
+        last_change_sq,
+        an.reader_sn_state.base,
+        &an.reader_sn_state.set,
+      );
       if Writer::test_if_ack_nack_contains_not_recieved_sequence_numbers(&an) {
         // if ack nac says reader has NOT recieved data then add data to requested changes
-        reader_proxy.add_requested_changes(an.reader_sn_state.set);
+        reader_proxy.add_requested_changes(an.reader_sn_state.base, an.reader_sn_state.set);
       } else {
         reader_proxy.acked_changes_set(an.reader_sn_state.base);
       }
@@ -1042,29 +1089,24 @@ impl Writer {
 
   pub fn increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
     &mut self,
-    sequence_numbers: Vec<SequenceNumber>,
+    sequence_numbers: HashSet<SequenceNumber>,
     remote_reader_guid: &Option<GUID>,
   ) {
     let sequenceNumbersCount: usize = { sequence_numbers.len() };
-    if remote_reader_guid.is_some() {
-      let readerProxy = self.matched_reader_lookup(
-        remote_reader_guid.unwrap().guidPrefix,
-        remote_reader_guid.unwrap().entityId,
-      );
-      if readerProxy.is_some() {
-        let reader_prox = readerProxy.unwrap();
-        for sequence_number in sequence_numbers {
-          reader_prox.remove_unsend_change(sequence_number);
+
+    match remote_reader_guid {
+      Some(guid) => {
+        match self.matched_reader_lookup(guid.guidPrefix, guid.entityId) {
+          Some(rtps_reader_proxy) => {
+            rtps_reader_proxy.remove_unsend_changes(&sequence_numbers);
+          }
+          None => (),
+        };
+        for _ in 0..sequenceNumbersCount + 1 {
+          self.increase_heartbeat_counter();
         }
       }
-    }
-    if remote_reader_guid.is_some() {
-      for _x in 0..sequenceNumbersCount {
-        self.increase_heartbeat_counter();
-      }
-      if sequenceNumbersCount == 0 {
-        self.increase_heartbeat_counter();
-      }
+      None => (),
     }
   }
 
