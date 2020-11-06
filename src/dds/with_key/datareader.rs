@@ -139,23 +139,7 @@ where
     })
   }
 
-  pub fn read(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<&D>>> {
-    self.read_as_obj(max_samples, read_condition)
-  }
-
-  pub fn take(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<D>>> {
-    self.take_as_obj(max_samples, read_condition)
-  }
-
-  pub(crate) fn read_as_obj(
+  pub(crate) fn read(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -186,7 +170,7 @@ where
   }
 
 
-  pub(crate) fn take_as_obj(
+  pub(crate) fn take(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -222,12 +206,12 @@ where
   }
 
   pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
-    let mut ds = self.read_as_obj(1, ReadCondition::not_read())?;
+    let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 
   pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
-    let mut ds = self.take_as_obj(1, ReadCondition::not_read())?;
+    let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 
@@ -475,41 +459,7 @@ where
   pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     todo!()
   }
-  /*
-  fn read_instance(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-    // Select only samples from instance specified by key. In case of None, select the
-    // "smallest" instance as specified by the key type Ord trait.
-    instance_key: Option<<D as Keyed>::K>,
-    // This = Select instance specified by key.
-    // Next = select next instance in the order specified by Ord on keys.
-    this_or_next: SelectByKey,
-  ) -> Result<Vec<&DataSample<D>>> {
-    let ds = self.read_instance(max_samples, read_condition, instance_key, this_or_next)?;
-    Ok(ds.into_iter().map(|p| p.as_ikeyed_data_sample()).collect())
-  }
-
-  fn take_instance(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-    // Select only samples from instance specified by key. In case of None, select the
-    // "smallest" instance as specified by the key type Ord trait.
-    instance_key: Option<<D as Keyed>::K>,
-    // This = Select instance specified by key.
-    // Next = select next instance in the order specified by Ord on keys.
-    this_or_next: SelectByKey,
-  ) -> Result<Vec<Box<DataSample<D>>>> {
-    let ds = self.take_instance(max_samples, read_condition, instance_key, this_or_next)?;
-    Ok(
-      ds.into_iter()
-        //.map(|p| p.into_ikeyed_data_sample())
-        .collect(),
-    )
-  }
-  */
+  
 }
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously

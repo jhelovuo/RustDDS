@@ -54,7 +54,7 @@ where
   ) -> Result<Vec<DataSample<&D>>> 
   {
     let values: Vec<WithKeyDataSample<&NoKeyWrapper<D>>> = self.keyed_datareader
-      .read_as_obj(max_samples, read_condition)?;
+      .read(max_samples, read_condition)?;
     let mut result = Vec::with_capacity(values.len());
     for ks in values {
       if let Some(s) = DataSample::<D>::from_with_key_ref(ks) { result.push(s) }
@@ -68,7 +68,7 @@ where
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
     let values: Vec<WithKeyDataSample<NoKeyWrapper<D>>> = self.keyed_datareader
-      .take_as_obj(max_samples, read_condition)?;
+      .take(max_samples, read_condition)?;
     let mut result = Vec::with_capacity(values.len());
     for ks in values {
       if let Some(s) = DataSample::<D>::from_with_key(ks) { result.push(s) }
@@ -79,22 +79,11 @@ where
   pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
-    /*let val = match ds.pop() {
-      Some(v) => Some(v.as_idata_sample()),
-      None => None,
-    };
-    Ok(val)*/
   }
 
   pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
-    /*
-    let val = match ds.pop() {
-      Some(v) => Some(v),
-      None => None,
-    };
-    Ok(val) */
   }
 
   pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
