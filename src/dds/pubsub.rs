@@ -77,7 +77,7 @@ impl<'a> Publisher {
     }
   }
 
-  /// Creates DDS [DataWriter](struct.KeyedDataWriter.html) for Keyed topic
+  /// Creates DDS [DataWriter](struct.With_Key_DataWriter.html) for Keyed topic
   ///
   /// # Arguments
   ///

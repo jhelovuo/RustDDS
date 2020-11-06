@@ -8,7 +8,7 @@ extern crate termion;
 use atosdds::{
   serialization::{CDRSerializerAdapter, CDRDeserializerAdapter},
   dds::{
-    DomainParticipant, qos::QosPolicies, data_types::ReadCondition, KeyedDataReader,
+    DomainParticipant, qos::QosPolicies, data_types::ReadCondition, With_Key_DataReader,
     data_types::TopicKind,
   },
   dds::qos::policy::Reliability,
@@ -266,7 +266,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
 }
 
 fn fetch_squares(
-  reader: &mut KeyedDataReader<Square, CDRDeserializerAdapter<Square>>,
+  reader: &mut With_Key_DataReader<Square, CDRDeserializerAdapter<Square>>,
 ) -> Vec<Square> {
   match reader.take(100, ReadCondition::any()) {
     Ok(ds) => ds.into_iter().filter_map(|p| p.into_value().ok()).collect(),

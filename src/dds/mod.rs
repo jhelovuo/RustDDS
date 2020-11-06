@@ -137,10 +137,16 @@ pub use participant::DomainParticipant;
 pub use topic::Topic;
 pub use pubsub::Subscriber;
 pub use pubsub::Publisher;
-#[doc(inline)]
-pub use with_key::datawriter::DataWriter as KeyedDataWriter;
-pub use no_key::datawriter::DataWriter;
-#[doc(inline)]
-pub use with_key::datareader::DataReader as KeyedDataReader;
-pub use no_key::datareader::DataReader;
+
+/// DDS DataWriter for with_key topics.
+pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
+
+/// DDS DataWriter for no_key topics.
+pub use no_key::datawriter::DataWriter as No_Key_DataWriter;
+
+/// DDS DataReader for with_key topics.
+pub use with_key::datareader::DataReader as With_Key_DataReader;
+
+/// DDS DataReader for no_key topics.
+pub use no_key::datareader::DataReader as No_Key_DataReader;
 

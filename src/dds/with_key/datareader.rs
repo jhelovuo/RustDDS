@@ -139,7 +139,7 @@ where
     })
   }
 
-  pub(crate) fn read(
+  pub fn read(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
@@ -170,7 +170,7 @@ where
   }
 
 
-  pub(crate) fn take(
+  pub fn take(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
