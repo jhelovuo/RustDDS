@@ -6,11 +6,11 @@ use std::{
   time::Duration,
 };
 
-use serde::{Serialize, /*Deserialize,*/ de::DeserializeOwned};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
   discovery::discovery::DiscoveryCommand,
-  structure::{guid::GUID, /*time::Timestamp,*/ entity::Entity, guid::EntityId},
+  structure::{guid::GUID, entity::Entity, guid::EntityId},
 };
 
 use crate::dds::{

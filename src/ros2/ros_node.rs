@@ -7,10 +7,6 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
   dds::{
-    //interfaces::IDataReader,
-    //interfaces::IDataWriter,
-    //interfaces::IKeyedDataReader,
-    //interfaces::IKeyedDataWriter,
     no_key::{
       datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
     },

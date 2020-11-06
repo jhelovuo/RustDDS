@@ -21,8 +21,6 @@ use crate::{
 use crate::dds::{
   dp_event_wrapper::DPEventWrapper, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*,
   qos::*, values::result::*,
-  //no_key::topic::Topic as NoKeyTopic,
-  //traits::key::Keyed,
 };
 
 use crate::{

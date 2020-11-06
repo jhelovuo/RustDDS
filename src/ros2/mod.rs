@@ -74,14 +74,10 @@ pub(crate) mod ros_node;
 
 pub use ros_node::*;
 
-/// RosSubscriber wrapper for slightly inconvenient boxed type
 pub type RosSubscriber<'a, D, DA> = crate::dds::no_key::datareader::DataReader<'a, D,DA>; 
 
-/// KeyedRosSubscriber wrapper for slightly inconvenient boxed type
 pub type KeyedRosSubscriber<'a, D, DA> = crate::dds::with_key::datareader::DataReader<'a, D,DA>; 
 
-/// RosPublisher wrapper for slightly inconvenient boxed type
 pub type RosPublisher<'a, D, SA> = crate::dds::no_key::datawriter::DataWriter<'a,D,SA>; 
 
-/// KeyedRosPublisher wrapper for slightly inconvenient boxed type
 pub type KeyedRosPublisher<'a, D, SA> = crate::dds::with_key::datawriter::DataWriter<'a,D,SA>; 

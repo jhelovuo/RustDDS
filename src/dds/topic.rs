@@ -1,5 +1,3 @@
-//use std::marker::PhantomData;
-
 use crate::{
   dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity, },
 };
