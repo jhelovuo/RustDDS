@@ -1,4 +1,25 @@
 //! DDS interface
+//! 
+//! # DDS usage summary
+//! 
+//! * Crate a `DomaniParticipant`. You have to choose a domain id. The default value is zero. 
+//! * Create or find a `Topic` from the `DomainParticipant`. Topics have a name and a type.
+//! * Create a `Publisher` and/or `Subscriber` from the `DomainParticipant`.
+//! * To receive data, create a `DataReader` from `Subscriber` and `Topic`.
+//! * To send data, create a `DataWriter`from `Publisher` and `Topic`.
+//! * Data from `DataReader` can be read or taken. Taking removes the data samples from the DataReader, 
+//!   whereas reading only marks them as read.
+//! * Topics are either WITH_KEY or NO_KEY. WITH_KEY topics are like map data structures, containing multiple
+//!   instances (map items), identified by key. The key must be something that can be extracted from the
+//!   data samples. Instances can be created (published) and deleted (disposed). 
+//!   NO_KEY topics have always only one instance of the data.
+//! * Data is sent and received in consecutive samples. When read, a smaple is accompanied with metadata (SampleInfo).
+//!
+//! # Interfacing Rust data types to DDS
+//! * DDS takes care of serialization and deserialization. 
+//! In order to do this, the payload data must be Serde serializable/deserializable.
+//! * If your data is to be communicated over a WITH_KEY topic, the payload data type must
+//!   implement `Keyed` trait from this crate.
 //!
 //! # Examples
 //!
@@ -63,7 +84,9 @@ pub(crate) mod ddsdata;
 mod dp_event_wrapper;
 mod message_receiver;
 
+/// Participating in NO_KEY topics.
 pub mod no_key;
+/// Participating in WITH_KEY topics.
 pub mod with_key;
 
 pub(crate) mod participant;
