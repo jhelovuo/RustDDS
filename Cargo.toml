@@ -1,10 +1,10 @@
 [package]
 name = "atosdds"
 version = "0.0.1"
-authors = [""]
+authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", "Oiva Moisio <oiva.moisio@atostek.com>", "Miska Melkinen <miska.melkinen@atostek.com>"]
 description = "DSS implementation with RTPS"
 readme = "README.md"
-keywords = ["protocol, dds, rtps"]
+keywords = ["protocol","dds","rtps"]
 license = "Apache-2.0"
 edition = "2018"
 
@@ -12,7 +12,7 @@ edition = "2018"
 time = "0.1.39"
 bytes = "0.5.4"
 mio = "0.6.22"
-mio-extras = "2.0"
+mio-extras = "2.0.6"
 tokio-util = { version = "0.3.1", features = ["codec"] }
 bit-set = "0.5.2"
 bit-vec = "0.6.2"
@@ -23,7 +23,7 @@ num-traits = "0.2"
 num-derive = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = {version = "0.1" }
-byteorder = "1"
+byteorder = "1.3"
 uuid = { version = "0.8.1", features = ["v4"] }
 rand = "0.7.3"
 timer = "0.1"
@@ -34,3 +34,18 @@ get_if_addrs = "0.5.3"
 paste = "1"
 itertools = "0.9.0"
 md5 = "0.7.0"
+
+[[example]]
+name = "shapes_demo"
+
+
+[[example]]
+name = "ros2_demo"
+
+[dev-dependencies]
+# shapes-demo:
+ctrlc = "3.1.6"     
+termion = "1.5.5"
+env_logger = "0.7.1"
+# ros2-demo
+log4rs = "0.13.0"

@@ -32,7 +32,7 @@ const TOPIC_UPDATE_TIMER_TOKEN: Token = Token(1003);
 const NODE_INFO_TOKEN: Token = Token(1004);
 
 fn main() {
-  log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
+  log4rs::init_file("examples/ros2_demo/log4rs.yaml", Default::default()).unwrap();
 
   let (command_sender, command_receiver) = mio_channel::sync_channel::<RosCommand>(10);
 

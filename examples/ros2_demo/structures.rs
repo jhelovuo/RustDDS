@@ -138,10 +138,11 @@ impl<'a> MainController<'a> {
               termion::event::Event::Key(key) => {
                 write!(
                   self.stdout,
-                  "{}{}{:?}",
+                  "{}{}{:?} : {}",
                   termion::cursor::Goto(1, 1),
                   termion::clear::CurrentLine,
-                  key
+                  key,
+                  "Press q to quit, cursor keys to control turtle.",
                 )
                 .unwrap();
               }

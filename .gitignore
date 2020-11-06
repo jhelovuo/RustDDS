@@ -4,3 +4,4 @@ Cargo.lock
 src/.vscode/launch.json
 *.code-workspace
 *.bin
+/log/
