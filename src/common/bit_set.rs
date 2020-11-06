@@ -40,31 +40,13 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
     }
 
     let mut bit_vec = BitVec::with_capacity(number_of_bits as usize);
-
-    for _ in 0..(number_of_bits / 32) {
+    
+    for _ in 0..(number_of_bits / 32) + 1 {
       // read value should be directly correct
-      let mut byte = reader.read_u32()?;
-
-      // reading whoe buffer to bitvec
-      while byte > 0 {
-        let val = (byte & 0x80000000) > 0;
-        byte = byte << 1;
-        bit_vec.push(val);
-      }
-    }
-
-    if number_of_bits % 32 != 0 {
-      // uneven number of bits
-      let mut byte = reader.read_u32()?;
-      debug!("Read ack: {:x?} :: {:b}", byte, byte);
-      // rotating to correct alignment
-      // byte = byte.rotate_right(32 - number_of_bits % 32);
-
-      // reading whoe buffer to bitvec
-      while byte > 0 {
-        let val = (byte & 0x80000000) > 0;
-        byte = byte << 1;
-        bit_vec.push(val);
+      let byte = reader.read_u32()?.reverse_bits();
+      unsafe {
+        let inner = bit_vec.storage_mut();
+        inner.push(byte);
       }
     }
 
@@ -82,32 +64,18 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
 impl<C: Context> Writable<C> for BitSetRef {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    let mut number_of_bytes = 0;
-
+    let number_of_bytes = self.get_ref().iter().count();
     let mut values = Vec::new();
-    let mut value: i32 = 0;
-    for b in self.get_ref().iter() {
-      number_of_bytes += 1;
-      value = value << 1;
-      value += if b { 1 } else { 0 };
-      if number_of_bytes % 32 == 0 {
-        values.push(value);
-        value = 0;
-      }
+
+    for &value in self.get_ref().storage() {
+      values.push(value);
     }
 
-    writer.write_u32(number_of_bytes)?;
+    writer.write_u32(number_of_bytes as u32)?;
 
     for val in values.iter_mut() {
-      let lz = val.leading_zeros();
-      let foo = val.rotate_left(lz);
-      writer.write_i32(foo)?;
-    }
-
-    if values.is_empty() && number_of_bytes > 0 {
-      let lz = value.leading_zeros();
-      let foo = value.rotate_left(lz);
-      writer.write_i32(foo)?;
+      let foo = val.reverse_bits();
+      writer.write_u32(foo)?;
     }
 
     Ok(())
@@ -134,13 +102,11 @@ mod tests {
           set.insert(7);
           set
       })(),
-      le = [0x40, 0x00, 0x00, 0x00,
-            0x81, 0x00, 0x00, 0x00,],
-      // le = [0x40, 0x00, 0x00, 0x00,
-      //       0x81, 0x00, 0x00, 0x00,
-      //       0x00, 0x04, 0x00, 0x00],
-      be = [0x00, 0x00, 0x00, 0x40,
+      le = [0x2B, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x81,
-            0x00, 0x00, 0x04, 0x00]
+            0x00, 0x00, 0x20, 0x00],
+      be = [0x00, 0x00, 0x00, 0x2B,
+            0x81, 0x00, 0x00, 0x00,
+            0x00, 0x20, 0x00, 0x00]
   });
 }
