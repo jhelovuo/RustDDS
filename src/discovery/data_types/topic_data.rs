@@ -742,16 +742,14 @@ mod tests {
   fn td_participant_message_data_ser_deser() {
     let mut pmd_file = File::open("participant_message_data.bin").unwrap();
     let mut buffer: [u8; 1024] = [0; 1024];
-    let len = pmd_file.read(&mut buffer).unwrap();
+    let _len = pmd_file.read(&mut buffer).unwrap();
 
-    println!("Buffer: size: {}\n{:?}", len, buffer[..len].to_vec());
     let rpi = CDRDeserializerAdapter::<ParticipantMessageData>::from_bytes(
       &buffer,
       RepresentationIdentifier::CDR_LE,
     )
     .unwrap();
-    println!("ParticipantMessageData: \n{:?}", rpi);
-    let data2 = to_bytes::<ParticipantMessageData, LittleEndian>(&rpi).unwrap();
-    println!("Data2: \n{:?}", data2);
+
+    let _data2 = to_bytes::<ParticipantMessageData, LittleEndian>(&rpi).unwrap();
   }
 }

@@ -731,7 +731,6 @@ mod tests {
     let domain_participant = DomainParticipant::new(0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
-    thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let publisher = domain_participant
       .create_publisher(&qos.clone())
       .expect("Failed to create publisher");
@@ -745,8 +744,6 @@ mod tests {
         None, &topic, None,
       )
       .expect("Failed to create datawriter");
-
-    thread::sleep(time::Duration::seconds(5).to_std().unwrap());
   }
 
   #[test]
@@ -816,7 +813,5 @@ mod tests {
     };
     let locas = vec![loca];
     _sender.send_to_locator_list(&_data, &locas);
-
-    thread::sleep(time::Duration::seconds(5).to_std().unwrap());
   }
 }

@@ -1353,15 +1353,13 @@ mod tests {
   };
   use crate::serialization::submessage::*;
 
-  use std::{time::Duration, net::SocketAddr};
+  use std::{net::SocketAddr};
   use mio::Token;
   use speedy::{Writable, Endianness};
   use byteorder::LittleEndian;
 
   #[test]
   fn discovery_participant_data_test() {
-    let _participant = DomainParticipant::new(0);
-
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11000);
     poll
@@ -1389,7 +1387,7 @@ mod tests {
 
     let mut events = Events::with_capacity(10);
     poll
-      .poll(&mut events, Some(StdDuration::from_secs(10)))
+      .poll(&mut events, Some(StdDuration::from_secs(1)))
       .unwrap();
 
     let _data2 = udp_listener.get_message();
@@ -1549,12 +1547,9 @@ mod tests {
       .poll(&mut events, Some(StdDuration::from_secs(10)))
       .unwrap();
 
-    while !udp_listener.get_message().is_empty() {
+    for _ in udp_listener.get_messages() {
       info!("Message received");
     }
-
-    // small wait for stuff to happen
-    std::thread::sleep(Duration::from_secs(2));
   }
 
   #[test]
@@ -1595,8 +1590,5 @@ mod tests {
       .unwrap();
 
     udp_sender.send_to_all(&rr, &addresses);
-
-    // wait for stuff to happen
-    std::thread::sleep(Duration::from_secs(5));
   }
 }
