@@ -14,7 +14,7 @@ use crate::{
     reader::Reader,
     participant::DomainParticipant,
     topic::Topic,
-    datawriter::DataWriter,
+    with_key::datawriter::DataWriter,
     rtps_writer_proxy::RtpsWriterProxy,
   },
   dds::qos::HasQoSPolicy,

@@ -3,7 +3,7 @@ use log::debug;
 use crate::{
   dds::traits::key::{Key, Keyed},
 };
-use crate::dds::datasample::DataSample;
+use crate::dds::with_key::datasample::DataSample;
 use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy::History;
 

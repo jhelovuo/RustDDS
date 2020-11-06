@@ -20,9 +20,9 @@ use crate::dds::{
   qos::*,
   reader::Reader,
   writer::Writer,
-  datawriter::DataWriter,
+  with_key::datawriter::DataWriter as WithKeyDataWriter, 
   no_key::datawriter::DataWriter as NoKeyDataWriter,
-  datareader::DataReader,
+  with_key::datareader::DataReader as WithKeyDataReader,
   no_key::datareader::DataReader as NoKeyDataReader,
   traits::key::{Keyed, Key},
   traits::serde_adapters::*,
@@ -89,7 +89,7 @@ impl<'a> Publisher {
     entity_id: Option<EntityId>,
     topic: &'a Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<DataWriter<'a, D, SA>>
+  ) -> Result<WithKeyDataWriter<'a, D, SA>>
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
@@ -137,7 +137,7 @@ impl<'a> Publisher {
       .send(new_writer)
       .expect("Adding new writer failed");
 
-    let matching_data_writer = DataWriter::<D, SA>::new(
+    let matching_data_writer = WithKeyDataWriter::<D, SA>::new(
       self,
       &topic,
       Some(guid),
@@ -304,7 +304,7 @@ impl<'s> Subscriber {
     topic: &'s Topic,
     //topic_kind: Option<TopicKind>,
     qos: Option<QosPolicies>,
-  ) -> Result<DataReader<'s, D, SA>>
+  ) -> Result<WithKeyDataReader<'s, D, SA>>
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
@@ -339,7 +339,7 @@ impl<'s> Subscriber {
       }
     };
 
-    let matching_datareader = DataReader::<D, SA>::new(
+    let matching_datareader = WithKeyDataReader::<D, SA>::new(
       self,
       datareader_id,
       &topic,
@@ -405,7 +405,7 @@ impl<'s> Subscriber {
     topic: &'s Topic,
     entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
-  ) -> Result<DataReader<'s, D, SA>>
+  ) -> Result<WithKeyDataReader<'s, D, SA>>
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
@@ -458,7 +458,7 @@ impl<'s> Subscriber {
 
   /// Retrieves a previously created DataReader belonging to the Subscriber.
   // TODO: Is this even possible. Whould probably need to return reference and store references on creation
-  pub(crate) fn lookup_datareader<D, SA>(&self, _topic_name: &str) -> Option<DataReader<D, SA>>
+  pub(crate) fn lookup_datareader<D, SA>(&self, _topic_name: &str) -> Option<WithKeyDataReader<D, SA>>
   where
     D: Keyed + DeserializeOwned,
     SA: DeserializerAdapter<D>,

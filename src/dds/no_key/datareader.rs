@@ -11,8 +11,9 @@ use crate::{
 };
 use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*, readcondition::*};
 
-use crate::dds::datareader as datareader_with_key;
-use crate::dds::datasample::DataSample as WithKeyDataSample;
+use crate::dds::with_key::datareader as datareader_with_key;
+use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
+
 use crate::dds::no_key::datasample::DataSample;
 
 

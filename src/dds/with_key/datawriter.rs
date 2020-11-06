@@ -32,11 +32,12 @@ use crate::dds::traits::TopicDescription;
 use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
   policy::{Reliability},
+  policy::LivelinessKind,
 };
 use crate::dds::traits::serde_adapters::SerializerAdapter;
-use crate::dds::datasample::DataSample;
+use crate::dds::with_key::datasample::DataSample;
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
-use super::{
+use super::super::{
   datasample_cache::DataSampleCache, //interfaces::IDataWriter, interfaces::IKeyedDataWriter,
   values::result::StatusChange, writer::WriterCommand,
 };
@@ -120,8 +121,8 @@ where
 
     match topic.get_qos().liveliness {
       Some(lv) => match lv.kind {
-        super::qos::policy::LivelinessKind::Automatic => (),
-        super::qos::policy::LivelinessKind::ManualByParticipant => {
+        LivelinessKind::Automatic => (),
+        LivelinessKind::ManualByParticipant => {
           match discovery_command.send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS) {
             Ok(_) => (),
             Err(e) => {
@@ -129,7 +130,7 @@ where
             }
           }
         }
-        super::qos::policy::LivelinessKind::ManulByTopic => (),
+        LivelinessKind::ManulByTopic => (),
       },
       None => (),
     };
@@ -155,8 +156,8 @@ where
   pub fn refresh_manual_liveliness(&self) {
     match self.get_qos().liveliness {
       Some(lv) => match lv.kind {
-        super::qos::policy::LivelinessKind::Automatic => (),
-        super::qos::policy::LivelinessKind::ManualByParticipant => {
+        LivelinessKind::Automatic => (),
+        LivelinessKind::ManualByParticipant => {
           match self
             .discovery_command
             .send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS)
@@ -167,7 +168,7 @@ where
             }
           }
         }
-        super::qos::policy::LivelinessKind::ManulByTopic => (),
+        LivelinessKind::ManulByTopic => (),
       },
       None => (),
     };
@@ -284,9 +285,9 @@ where
     match self.get_qos().liveliness {
       Some(lv) => {
         match lv.kind {
-          super::qos::policy::LivelinessKind::Automatic => (),
-          super::qos::policy::LivelinessKind::ManualByParticipant => (),
-          super::qos::policy::LivelinessKind::ManulByTopic => {
+          LivelinessKind::Automatic => (),
+          LivelinessKind::ManualByParticipant => (),
+          LivelinessKind::ManulByTopic => {
             match self
               .discovery_command
               .send(DiscoveryCommand::ASSERT_TOPIC_LIVELINESS {

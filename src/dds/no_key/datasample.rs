@@ -4,7 +4,7 @@ use crate::structure::time::Timestamp;
 use crate::dds::sampleinfo::*;
 
 use crate::dds::no_key::wrappers::NoKeyWrapper;
-use crate::dds::datasample::DataSample as WithKeyDataSample;
+use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
 
 /// DDS spec 2.2.2.5.4
 #[derive(PartialEq, Debug)]

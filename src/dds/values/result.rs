@@ -6,7 +6,7 @@ pub type Result<T> = result::Result<T, Error>;
 // This roughly corresponds to "Return codes" in DDS spec 2.2.1.1 Format and Conventions
 #[derive(Debug)]
 pub enum Error {
-  // OK is not included. It is not an error.
+  // OK is not included. It is not an error. Ok/Error shoudl be distinguished with the Result type.
   // Error, // unspecified, please do not use these
   BadParameter,
   Unsupported,

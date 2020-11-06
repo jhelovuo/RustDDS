@@ -1,18 +1,15 @@
 use std::{
-  //sync::{Arc, RwLock},
   time::{Duration},
 };
 
-//use mio_extras::channel as mio_channel;
 use mio_extras::channel::Receiver;
 use serde::Serialize;
 
 use crate::{
-  serialization::CDRSerializerAdapter, //dds::interfaces::IDataWriter,
+  serialization::CDRSerializerAdapter, 
   dds::values::result::StatusChange, structure::time::Timestamp,
 };
 use crate::structure::entity::{Entity};
-//use crate::structure::{dds_cache::DDSCache, guid::{GUID} };
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
@@ -24,11 +21,10 @@ use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::serde_adapters::SerializerAdapter;
 
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
-//use crate::dds::ddsdata::DDSData;
 
 use crate::{
   discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
-  dds::datawriter as datawriter_with_key,
+  dds::with_key::datawriter as datawriter_with_key,
 };
 
 use super::wrappers::{NoKeyWrapper, SAWrapper};

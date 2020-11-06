@@ -57,16 +57,15 @@
 //! let some_data = SomeType { a: 1 };
 //! ```
 
-pub(crate) mod datareader;
-pub(crate) mod datasample;
 mod sampleinfo;
 mod datasample_cache;
-pub(crate) mod datawriter;
 pub(crate) mod ddsdata;
 mod dp_event_wrapper;
-//pub(crate) mod interfaces;
 mod message_receiver;
-pub(crate) mod no_key;
+
+pub mod no_key;
+pub mod with_key;
+
 pub(crate) mod participant;
 pub(crate) mod pubsub;
 pub(crate) mod readcondition;
@@ -93,7 +92,7 @@ pub mod data_types {
   #[doc(inline)]
   pub use crate::structure::duration::Duration as DDSDuration;
   pub use super::readcondition::ReadCondition;
-  pub use super::datareader::SelectByKey;
+  pub use super::with_key::datareader::SelectByKey;
   #[doc(inline)]
   pub use crate::structure::time::Time as DDSTime;
   #[doc(inline)]
@@ -116,9 +115,9 @@ pub use topic::Topic;
 pub use pubsub::Subscriber;
 pub use pubsub::Publisher;
 #[doc(inline)]
-pub use datawriter::DataWriter as KeyedDataWriter;
+pub use with_key::datawriter::DataWriter as KeyedDataWriter;
 pub use no_key::datawriter::DataWriter;
 #[doc(inline)]
-pub use datareader::DataReader as KeyedDataReader;
+pub use with_key::datareader::DataReader as KeyedDataReader;
 pub use no_key::datareader::DataReader;
 
