@@ -1,7 +1,25 @@
+//! A pure Rust implementation of Data Distribution Service (DDS).
+//!
+//! DDS is an object-oriented API [specified](https://www.omg.org/spec/DDSI-RTPS/2.3) by 
+//! the Object Management Group.
+//!
+//! DDS communicates over the network using the [RTPS](https://www.omg.org/spec/DDSI-RTPS/2.3) 
+//! protocol, which by default runs over UDP/IP.
+//!
+//! This implementation does not attempt to make an accurate implementation of the DDS object API,
+//! as it would be quite unnatural to use in Rust as such. However, we aim for functional compatibility, 
+//! while at the same time using Rust techniques and conventions.
+//!
+//! Additionally, there is a [ROS2](https://index.ros.org/doc/ros2/) interface, that is simpler to use than DDS
+//! when communicating to ROS2 components.
+//!
+
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+
+
 
 extern crate bit_set;
 extern crate bit_vec;
@@ -22,6 +40,8 @@ mod messages;
 mod network;
 pub(crate) mod structure;
 mod test;
+
+
 
 // Public modules
 pub mod dds;

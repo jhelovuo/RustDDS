@@ -204,7 +204,7 @@ where
 
     Ok(result)
   }
-
+  
   pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
@@ -214,6 +214,59 @@ where
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
+  
+
+  // Iterator interface
+
+  /// Produces an interator over the currently available NOT_READ samples.
+  /// Yields only payload data, not SampleInfo metadata
+  /// This is not called `iter()` because it takes a mutable reference to self.
+  pub fn iterator(&mut self) -> Result<impl Iterator<Item=std::result::Result<&D,D::K>>> {
+    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    Ok(self.read(usize::MAX, ReadCondition::not_read())?
+        .into_iter()
+        .map( |ds| ds.value ) 
+      )
+  }
+
+  /// Produces an interator over the samples filtered b ygiven condition.
+  /// Yields only payload data, not SampleInfo metadata
+  pub fn conditional_iterator(&mut self, read_condition: ReadCondition) 
+    -> Result<impl Iterator<Item=std::result::Result<&D,D::K>>> 
+  {
+    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    Ok(self.read(usize::MAX, read_condition)?
+        .into_iter()
+        .map( |ds| ds.value ) 
+      )
+  }
+
+  /// Produces an interator over the currently available NOT_READ samples.
+  /// Yields only payload data, not SampleInfo metadata
+  /// Removes samples from `DataReader`. 
+  /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
+  /// are still removed from the `Datareader`.
+  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item=std::result::Result<D,D::K>>> {
+    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    Ok(self.take(usize::MAX, ReadCondition::not_read())?
+        .into_iter()
+        .map( |ds| ds.value ) 
+      )
+  }
+
+  /// Produces an interator over the samples filtered b ygiven condition.
+  /// Yields only payload data, not SampleInfo metadata
+  /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
+  /// are still removed from the `Datareader`.
+  pub fn into_conditional_iterator(&mut self, read_condition: ReadCondition) -> Result<impl Iterator<Item=std::result::Result<D,D::K>>> {
+    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    Ok(self.take(usize::MAX, read_condition)?
+        .into_iter()
+        .map( |ds| ds.value ) 
+      )
+  }
+
+
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
