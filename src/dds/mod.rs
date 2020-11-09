@@ -25,7 +25,7 @@
 //!
 //! ```
 //! use atosdds::dds::DomainParticipant;
-//! use atosdds::dds::{DataReader, DataWriter, no_key::datasample::DataSample};
+//! use atosdds::dds::{No_Key_DataReader as DataReader, No_Key_DataWriter as DataWriter, no_key::datasample::DataSample};
 //! use atosdds::dds::qos::QosPolicyBuilder;
 //! use atosdds::dds::qos::policy::Reliability;
 //! use atosdds::dds::data_types::DDSDuration;
