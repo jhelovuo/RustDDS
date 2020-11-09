@@ -20,14 +20,13 @@ use crate::dds::{
   qos::*,
   reader::Reader,
   writer::Writer,
-  with_key::datawriter::DataWriter as WithKeyDataWriter, 
+  with_key::datawriter::DataWriter as WithKeyDataWriter,
   no_key::datawriter::DataWriter as NoKeyDataWriter,
   with_key::datareader::DataReader as WithKeyDataReader,
   no_key::datareader::DataReader as NoKeyDataReader,
   traits::key::{Keyed, Key},
   traits::serde_adapters::*,
 };
-
 
 use crate::{
   discovery::{
@@ -298,7 +297,8 @@ impl<'s> Subscriber {
     }
   }
 
-  /*pub(super)*/ fn create_datareader_internal<D: 'static, SA>(
+  /*pub(super)*/
+  fn create_datareader_internal<D: 'static, SA>(
     &'s self,
     entity_id: Option<EntityId>,
     topic: &'s Topic,
@@ -372,12 +372,11 @@ impl<'s> Subscriber {
 
     // Create new topic to DDScache if one isn't present
     match dp.get_dds_cache().write() {
-      Ok(mut rwlock) => 
-        rwlock.add_new_topic(
-          &topic.get_name().to_string(),
-          topic.topic_kind,
-          topic.get_type(),
-        ),
+      Ok(mut rwlock) => rwlock.add_new_topic(
+        &topic.get_name().to_string(),
+        topic.topic_kind,
+        topic.get_type(),
+      ),
       Err(e) => panic!(
         "The DDSCache of domain participant {:?} is poisoned. Error: {}",
         dp.get_guid(),
@@ -412,7 +411,7 @@ impl<'s> Subscriber {
     SA: DeserializerAdapter<D>,
   {
     if topic.topic_kind != TopicKind::WITH_KEY {
-      return Err(Error::PreconditionNotMet) // TopicKind mismatch
+      return Err(Error::PreconditionNotMet); // TopicKind mismatch
     }
     self.create_datareader_internal(entity_id, topic, qos)
   }
@@ -435,7 +434,7 @@ impl<'s> Subscriber {
     SA: DeserializerAdapter<D>,
   {
     if topic.topic_kind != TopicKind::NO_KEY {
-      return Err(Error::PreconditionNotMet) // TopicKind mismatch
+      return Err(Error::PreconditionNotMet); // TopicKind mismatch
     }
 
     let entity_id = match entity_id {
@@ -458,7 +457,10 @@ impl<'s> Subscriber {
 
   /// Retrieves a previously created DataReader belonging to the Subscriber.
   // TODO: Is this even possible. Whould probably need to return reference and store references on creation
-  pub(crate) fn lookup_datareader<D, SA>(&self, _topic_name: &str) -> Option<WithKeyDataReader<D, SA>>
+  pub(crate) fn lookup_datareader<D, SA>(
+    &self,
+    _topic_name: &str,
+  ) -> Option<WithKeyDataReader<D, SA>>
   where
     D: Keyed + DeserializeOwned,
     SA: DeserializerAdapter<D>,

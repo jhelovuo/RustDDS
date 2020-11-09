@@ -4,6 +4,8 @@
 //!
 //! ```
 //! use atosdds::dds::DomainParticipant;
+//! use atosdds::dds::data_types::TopicKind;
+//! use atosdds::dds::data_types::Entity;
 //! use atosdds::ros2::RosContext;
 //! use atosdds::ros2::RosParticipant;
 //! use atosdds::ros2::NodeOptions;
@@ -33,7 +35,8 @@
 //!     &domain_participant,
 //!     "some_topic_name",
 //!     "NodeInfo",
-//!     QosPolicies::qos_none() )
+//!     QosPolicies::qos_none(),
+//!     TopicKind::NO_KEY)
 //!   .unwrap();
 //!
 //! // Topic has to live longer that node or readers/writers
@@ -74,10 +77,10 @@ pub(crate) mod ros_node;
 
 pub use ros_node::*;
 
-pub type RosSubscriber<'a, D, DA> = crate::dds::no_key::datareader::DataReader<'a, D,DA>; 
+pub type RosSubscriber<'a, D, DA> = crate::dds::no_key::datareader::DataReader<'a, D, DA>;
 
-pub type KeyedRosSubscriber<'a, D, DA> = crate::dds::with_key::datareader::DataReader<'a, D,DA>; 
+pub type KeyedRosSubscriber<'a, D, DA> = crate::dds::with_key::datareader::DataReader<'a, D, DA>;
 
-pub type RosPublisher<'a, D, SA> = crate::dds::no_key::datawriter::DataWriter<'a,D,SA>; 
+pub type RosPublisher<'a, D, SA> = crate::dds::no_key::datawriter::DataWriter<'a, D, SA>;
 
-pub type KeyedRosPublisher<'a, D, SA> = crate::dds::with_key::datawriter::DataWriter<'a,D,SA>; 
+pub type KeyedRosPublisher<'a, D, SA> = crate::dds::with_key::datawriter::DataWriter<'a, D, SA>;

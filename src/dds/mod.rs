@@ -1,22 +1,22 @@
 //! DDS interface
-//! 
+//!
 //! # DDS usage summary
-//! 
-//! * Crate a `DomaniParticipant`. You have to choose a domain id. The default value is zero. 
+//!
+//! * Crate a `DomaniParticipant`. You have to choose a domain id. The default value is zero.
 //! * Create or find a `Topic` from the `DomainParticipant`. Topics have a name and a type.
 //! * Create a `Publisher` and/or `Subscriber` from the `DomainParticipant`.
 //! * To receive data, create a `DataReader` from `Subscriber` and `Topic`.
 //! * To send data, create a `DataWriter`from `Publisher` and `Topic`.
-//! * Data from `DataReader` can be read or taken. Taking removes the data samples from the DataReader, 
+//! * Data from `DataReader` can be read or taken. Taking removes the data samples from the DataReader,
 //!   whereas reading only marks them as read.
 //! * Topics are either WITH_KEY or NO_KEY. WITH_KEY topics are like map data structures, containing multiple
 //!   instances (map items), identified by key. The key must be something that can be extracted from the
-//!   data samples. Instances can be created (published) and deleted (disposed). 
+//!   data samples. Instances can be created (published) and deleted (disposed).
 //!   NO_KEY topics have always only one instance of the data.
 //! * Data is sent and received in consecutive samples. When read, a smaple is accompanied with metadata (SampleInfo).
 //!
 //! # Interfacing Rust data types to DDS
-//! * DDS takes care of serialization and deserialization. 
+//! * DDS takes care of serialization and deserialization.
 //! In order to do this, the payload data must be Serde serializable/deserializable.
 //! * If your data is to be communicated over a WITH_KEY topic, the payload data type must
 //!   implement `Keyed` trait from this crate.
@@ -25,10 +25,11 @@
 //!
 //! ```
 //! use atosdds::dds::DomainParticipant;
-//! use atosdds::dds::{IDataReader, IDataWriter, IDataSample};
+//! use atosdds::dds::{DataReader, DataWriter, no_key::datasample::DataSample};
 //! use atosdds::dds::qos::QosPolicyBuilder;
 //! use atosdds::dds::qos::policy::Reliability;
 //! use atosdds::dds::data_types::DDSDuration;
+//! use atosdds::dds::data_types::TopicKind;
 //! use atosdds::serialization::{CDRSerializerAdapter, CDRDeserializerAdapter};
 //! use serde::{Serialize, Deserialize};
 //!
@@ -49,7 +50,7 @@
 //!
 //! // Some DDS Topic that we can write and read from (basically only binds readers
 //! // and writers together)
-//! let some_topic = domain_participant.create_topic("some_topic", "SomeType", &qos).unwrap();
+//! let some_topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NO_KEY).unwrap();
 //!
 //! // Used type needs Serialize for writers and Deserialize for readers
 //! #[derive(Serialize, Deserialize)]
@@ -91,14 +92,14 @@
 //! };
 //!
 //! // Getting reference to actual data from the data sample
-//! let actual_data = data_sample.get_value().unwrap();
+//! let actual_data = data_sample.value();
 //! ```
 
-mod sampleinfo;
 mod datasample_cache;
 pub(crate) mod ddsdata;
 mod dp_event_wrapper;
 mod message_receiver;
+mod sampleinfo;
 
 /// Participating in NO_KEY topics.
 pub mod no_key;
@@ -155,14 +156,17 @@ pub use pubsub::Subscriber;
 pub use pubsub::Publisher;
 
 /// DDS DataWriter for with_key topics.
+#[doc(inline)]
 pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
 
 /// DDS DataWriter for no_key topics.
+#[doc(inline)]
 pub use no_key::datawriter::DataWriter as No_Key_DataWriter;
 
 /// DDS DataReader for with_key topics.
+#[doc(inline)]
 pub use with_key::datareader::DataReader as With_Key_DataReader;
 
 /// DDS DataReader for no_key topics.
+#[doc(inline)]
 pub use no_key::datareader::DataReader as No_Key_DataReader;
-

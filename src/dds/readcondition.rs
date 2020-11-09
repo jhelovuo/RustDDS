@@ -33,15 +33,15 @@ impl ReadCondition {
     }
   }
 
-  pub fn get_sample_state_mask(&self) -> &BitFlags<SampleState> {
+  pub fn sample_state_mask(&self) -> &BitFlags<SampleState> {
     &self.sample_state_mask
   }
 
-  pub fn get_view_state_mask(&self) -> &BitFlags<ViewState> {
+  pub fn view_state_mask(&self) -> &BitFlags<ViewState> {
     &self.view_state_mask
   }
 
-  pub fn get_instance_state_mask(&self) -> &BitFlags<InstanceState> {
+  pub fn instance_state_mask(&self) -> &BitFlags<InstanceState> {
     &self.instance_state_mask
   }
 }

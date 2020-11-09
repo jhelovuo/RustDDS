@@ -60,7 +60,7 @@ impl Key for () {
   }
 }
 
-impl<D:Keyed> Keyed for &D {
+impl<D: Keyed> Keyed for &D {
   type K = D::K;
   fn get_key(&self) -> Self::K {
     (*self).get_key()

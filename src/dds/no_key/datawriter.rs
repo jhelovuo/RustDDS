@@ -6,8 +6,8 @@ use mio_extras::channel::Receiver;
 use serde::Serialize;
 
 use crate::{
-  serialization::CDRSerializerAdapter, 
-  dds::values::result::StatusChange, structure::time::Timestamp,
+  serialization::CDRSerializerAdapter, dds::values::result::StatusChange,
+  structure::time::Timestamp,
 };
 use crate::structure::entity::{Entity};
 
@@ -123,7 +123,7 @@ impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<'_, D, SA>
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::dds::{participant::DomainParticipant, traits::key::Key};
+  use crate::dds::{participant::DomainParticipant, traits::key::Key, topic::TopicKind};
   use crate::test::random_data::*;
   use std::thread;
   use crate::dds::traits::key::Keyed;
@@ -140,7 +140,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::NO_KEY)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -175,7 +175,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::NO_KEY)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -216,7 +216,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::NO_KEY)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =

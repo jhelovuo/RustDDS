@@ -1,5 +1,5 @@
 use crate::{
-  dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity, },
+  dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity},
 };
 
 pub use crate::structure::topic_kind::TopicKind;

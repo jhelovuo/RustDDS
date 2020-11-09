@@ -14,7 +14,7 @@ use crate::{
     pubsub::Publisher,
     pubsub::Subscriber,
     qos::QosPolicies,
-    topic::{Topic,TopicKind},
+    topic::{Topic, TopicKind},
     traits::key::Key,
     traits::key::Keyed,
     traits::serde_adapters::DeserializerAdapter,
@@ -144,7 +144,7 @@ impl<'a> RosParticipant<'a> {
 
     let node_reader = ros_context
       .get_ros_discovery_subscriber()
-      .create_datareader_no_key(dtopic, None,  None)?;
+      .create_datareader_no_key(dtopic, None, None)?;
 
     let node_writer = ros_context
       .get_ros_discovery_publisher()
@@ -588,7 +588,7 @@ impl<'a> IRosNodeControl<'a> for RosNode<'a> {
     self
       .ros_context
       .get_ros_discovery_subscriber()
-      .create_datareader_no_key::<D, DA>(topic, None,  qos)
+      .create_datareader_no_key::<D, DA>(topic, None, qos)
   }
 
   fn create_ros_subscriber<D, DA: DeserializerAdapter<D> + 'a>(
@@ -603,7 +603,7 @@ impl<'a> IRosNodeControl<'a> for RosNode<'a> {
     self
       .ros_context
       .get_ros_discovery_subscriber()
-      .create_datareader::<D, DA>(topic, None,  qos)
+      .create_datareader::<D, DA>(topic, None, qos)
   }
 
   fn create_ros_nokey_publisher<D: Serialize + 'a, SA: SerializerAdapter<D> + 'a>(

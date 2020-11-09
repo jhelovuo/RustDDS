@@ -38,8 +38,7 @@ use crate::dds::traits::serde_adapters::SerializerAdapter;
 use crate::dds::with_key::datasample::DataSample;
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
 use super::super::{
-  datasample_cache::DataSampleCache, 
-  values::result::StatusChange, writer::WriterCommand,
+  datasample_cache::DataSampleCache, values::result::StatusChange, writer::WriterCommand,
 };
 
 /// DDS DataWriter for keyed topics
@@ -173,7 +172,6 @@ where
       None => (),
     };
   }
-
 
   pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     let mut ddsdata = DDSData::from(&data, source_timestamp);
@@ -321,7 +319,11 @@ where
   ///
   /// * `key` - Key of the instance
   /// * `source_timestamp` - DDS source timestamp (None uses now as time as specified in DDS spec)
-  pub fn dispose(&mut self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
+  pub fn dispose(
+    &mut self,
+    key: <D as Keyed>::K,
+    source_timestamp: Option<Timestamp>,
+  ) -> Result<()> {
     /*
 
     Removing this for now, as there is need to redesign the mechanism of transmitting dispose actions
@@ -415,7 +417,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::WITH_KEY)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -450,7 +452,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::WITH_KEY)
       .expect("Failed to create topic");
 
     let mut data_writer: DataWriter<
@@ -492,7 +494,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::WITH_KEY)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =

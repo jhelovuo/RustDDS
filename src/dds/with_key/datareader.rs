@@ -26,7 +26,7 @@ use crate::dds::{
   traits::serde_adapters::*,
   values::result::*,
   qos::*,
-  with_key::datasample::*, 
+  with_key::datasample::*,
   sampleinfo::*,
   datasample_cache::DataSampleCache,
   pubsub::Subscriber,
@@ -35,7 +35,6 @@ use crate::dds::{
 };
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectByKey {
@@ -86,13 +85,14 @@ where
 
 // helper
 // somewhat like result.as_ref()
-fn result_ok_as_ref_err_clone<T,E:Clone>(r : &std::result::Result<T,E>) -> std::result::Result<&T,E> {
+fn result_ok_as_ref_err_clone<T, E: Clone>(
+  r: &std::result::Result<T, E>,
+) -> std::result::Result<&T, E> {
   match *r {
     Ok(ref x) => Ok(x),
     Err(ref x) => Err(x.clone()),
   }
 }
-
 
 impl<'a, D: 'static, DA> DataReader<'a, D, DA>
 where
@@ -144,7 +144,6 @@ where
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<&D>>> {
-
     self.get_datasamples_from_cache();
 
     let mut result: Vec<DataSample<&D>> = Vec::new();
@@ -152,9 +151,10 @@ where
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, &datasample) {
           datasample.sample_info_mut().sample_state = SampleState::Read;
-          let ref_datasample = DataSample { sample_info: datasample.sample_info.clone(),
-                                            value: result_ok_as_ref_err_clone(&datasample.value)
-                                          };
+          let ref_datasample = DataSample {
+            sample_info: datasample.sample_info.clone(),
+            value: result_ok_as_ref_err_clone(&datasample.value),
+          };
           result.push(ref_datasample);
         }
         if result.len() >= max_samples {
@@ -169,13 +169,11 @@ where
     Ok(result)
   }
 
-
   pub fn take(
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
-
     self.get_datasamples_from_cache();
 
     let mut result: Vec<DataSample<D>> = Vec::new();
@@ -204,7 +202,7 @@ where
 
     Ok(result)
   }
-  
+
   pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
@@ -214,59 +212,68 @@ where
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
-  
 
   // Iterator interface
 
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
-  pub fn iterator(&mut self) -> Result<impl Iterator<Item=std::result::Result<&D,D::K>>> {
+  pub fn iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
-    Ok(self.read(usize::MAX, ReadCondition::not_read())?
+    Ok(
+      self
+        .read(std::usize::MAX, ReadCondition::not_read())?
         .into_iter()
-        .map( |ds| ds.value ) 
-      )
+        .map(|ds| ds.value),
+    )
   }
 
   /// Produces an interator over the samples filtered b ygiven condition.
   /// Yields only payload data, not SampleInfo metadata
-  pub fn conditional_iterator(&mut self, read_condition: ReadCondition) 
-    -> Result<impl Iterator<Item=std::result::Result<&D,D::K>>> 
-  {
+  pub fn conditional_iterator(
+    &mut self,
+    read_condition: ReadCondition,
+  ) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
-    Ok(self.read(usize::MAX, read_condition)?
+    Ok(
+      self
+        .read(std::usize::MAX, read_condition)?
         .into_iter()
-        .map( |ds| ds.value ) 
-      )
+        .map(|ds| ds.value),
+    )
   }
 
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
-  /// Removes samples from `DataReader`. 
+  /// Removes samples from `DataReader`.
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
   /// are still removed from the `Datareader`.
-  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item=std::result::Result<D,D::K>>> {
+  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
-    Ok(self.take(usize::MAX, ReadCondition::not_read())?
+    Ok(
+      self
+        .take(std::usize::MAX, ReadCondition::not_read())?
         .into_iter()
-        .map( |ds| ds.value ) 
-      )
+        .map(|ds| ds.value),
+    )
   }
 
   /// Produces an interator over the samples filtered b ygiven condition.
   /// Yields only payload data, not SampleInfo metadata
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
   /// are still removed from the `Datareader`.
-  pub fn into_conditional_iterator(&mut self, read_condition: ReadCondition) -> Result<impl Iterator<Item=std::result::Result<D,D::K>>> {
+  pub fn into_conditional_iterator(
+    &mut self,
+    read_condition: ReadCondition,
+  ) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
-    Ok(self.take(usize::MAX, read_condition)?
+    Ok(
+      self
+        .take(std::usize::MAX, read_condition)?
         .into_iter()
-        .map( |ds| ds.value ) 
-      )
+        .map(|ds| ds.value),
+    )
   }
-
-
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
@@ -355,8 +362,7 @@ where
       // TODO: how do we get the source_timestamp here? Is it needed?
       // TODO: Keeping track of and assigning  generation rank, sample rank etc.
       let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload, cc.writer_guid);
-      datasample.sample_info_mut().instance_state =
-        Self::change_kind_to_instance_state(&cc.kind);
+      datasample.sample_info_mut().instance_state = Self::change_kind_to_instance_state(&cc.kind);
       self.datasample_cache.add_datasample(datasample);
     }
   }
@@ -474,24 +480,23 @@ where
     Ok(result)
   }
 
-
   // Helper functions
 
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
     if !rcondition
-      .sample_state_mask
+      .sample_state_mask()
       .contains(dsample.sample_info().sample_state)
     {
       return false;
     }
     if !rcondition
-      .view_state_mask
+      .view_state_mask()
       .contains(dsample.sample_info().view_state)
     {
       return false;
     }
     if !rcondition
-      .instance_state_mask
+      .instance_state_mask()
       .contains(dsample.sample_info().instance_state)
     {
       return false;
@@ -512,7 +517,6 @@ where
   pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     todo!()
   }
-  
 }
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
@@ -575,7 +579,7 @@ where
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::dds::participant::DomainParticipant;
+  use crate::dds::{participant::DomainParticipant, topic::TopicKind};
   use crate::test::random_data::*;
   use crate::dds::traits::key::Keyed;
   use mio_extras::channel as mio_channel;
@@ -597,7 +601,9 @@ mod tests {
     qos.history = Some(policy::History::KeepAll);
 
     let sub = dp.create_subscriber(&qos).unwrap();
-    let topic = dp.create_topic("dr", "drtest?", &qos).unwrap();
+    let topic = dp
+      .create_topic("dr", "drtest?", &qos, TopicKind::WITH_KEY)
+      .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
 
@@ -657,10 +663,11 @@ mod tests {
       .datasample_cache
       .get_datasample(&data_key)
       .unwrap()[0]
-      .get_value()
+      .value()
+      .clone()
       .unwrap();
 
-    assert_eq!(deserialized_random_data, &random_data);
+    assert_eq!(deserialized_random_data, random_data);
 
     // Test getting of next samples.
     let random_data2 = RandomData {
@@ -712,7 +719,9 @@ mod tests {
     qos.history = Some(policy::History::KeepAll); // Just for testing
 
     let sub = dp.create_subscriber(&qos).unwrap();
-    let topic = dp.create_topic("dr read", "read fn test?", &qos).unwrap();
+    let topic = dp
+      .create_topic("dr read", "read fn test?", &qos, TopicKind::WITH_KEY)
+      .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
 
@@ -784,40 +793,31 @@ mod tests {
 
     // Read the same sample two times.
     {
-      let result_vec =
-        <DataReader<_, _> as IDataReader<_, _>>::read(&mut datareader, 100, ReadCondition::any())
-          .unwrap();
-      let d = result_vec[0].get_value().unwrap();
+      let result_vec = datareader.read(100, ReadCondition::any()).unwrap();
+      let d = result_vec[0].value().unwrap();
       assert_eq!(&test_data, d);
     }
     {
-      let result_vec2 =
-        <DataReader<_, _> as IDataReader<_, _>>::read(&mut datareader, 100, ReadCondition::any())
-          .unwrap();
-      let d2 = result_vec2[1].get_value().unwrap();
+      let result_vec2 = datareader.read(100, ReadCondition::any()).unwrap();
+      let d2 = result_vec2[1].value().unwrap();
       assert_eq!(&test_data2, d2);
     }
     {
-      let result_vec3 =
-        <DataReader<_, _> as IDataReader<_, _>>::read(&mut datareader, 100, ReadCondition::any())
-          .unwrap();
-      let d3 = result_vec3[0].get_value().unwrap();
+      let result_vec3 = datareader.read(100, ReadCondition::any()).unwrap();
+      let d3 = result_vec3[0].value().unwrap();
       assert_eq!(&test_data, d3);
     }
 
     // Take
-    let mut result_vec =
-      <DataReader<_, _> as IDataReader<_, _>>::take(&mut datareader, 100, ReadCondition::any())
-        .unwrap();
-    let result_vec2 =
-      <DataReader<_, _> as IDataReader<_, _>>::take(&mut datareader, 100, ReadCondition::any());
+    let mut result_vec = datareader.take(100, ReadCondition::any()).unwrap();
+    let result_vec2 = datareader.take(100, ReadCondition::any());
 
     let d2 = result_vec.pop().unwrap();
-    let d2 = d2.get_value().unwrap();
+    let d2 = d2.value().as_ref().unwrap().clone();
     let d1 = result_vec.pop().unwrap();
-    let d1 = d1.get_value().unwrap();
-    assert_eq!(&test_data2, d2);
-    assert_eq!(&test_data, d1);
+    let d1 = d1.value().as_ref().unwrap().clone();
+    assert_eq!(test_data2, d2);
+    assert_eq!(test_data, d1);
     assert!(result_vec2.is_ok());
     assert_eq!(result_vec2.unwrap().len(), 0);
 
@@ -896,27 +896,18 @@ mod tests {
     info!("calling read with key 1 and this");
     let results =
       datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::This);
-    assert_eq!(
-      &data_key1,
-      results.unwrap()[0].get_keyed_value().as_ref().unwrap()
-    );
+    assert_eq!(&data_key1, results.unwrap()[0].value().as_ref().unwrap());
 
     info!("calling read with None and this");
     // Takes the samllest key, 1 in this case.
     let results = datareader.read_instance(100, ReadCondition::any(), None, SelectByKey::This);
-    assert_eq!(
-      &data_key1,
-      results.unwrap()[0].get_keyed_value().as_ref().unwrap()
-    );
+    assert_eq!(&data_key1, results.unwrap()[0].value().as_ref().unwrap());
 
     info!("calling read with key 1 and next");
     let results =
       datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::Next);
     assert_eq!(results.as_ref().unwrap().len(), 3);
-    assert_eq!(
-      &data_key2_2,
-      results.unwrap()[1].get_keyed_value().as_ref().unwrap()
-    );
+    assert_eq!(&data_key2_2, results.unwrap()[1].value().as_ref().unwrap());
 
     info!("calling take with key 2 and this");
     let results =
@@ -948,7 +939,9 @@ mod tests {
     qos.history = Some(policy::History::KeepAll); // Just for testing
 
     let sub = dp.create_subscriber(&qos).unwrap();
-    let topic = dp.create_topic("wakeup", "Wake up!", &qos).unwrap();
+    let topic = dp
+      .create_topic("wakeup", "Wake up!", &qos, TopicKind::WITH_KEY)
+      .unwrap();
 
     let (send, rec) = mio_channel::sync_channel::<()>(10);
 
@@ -1056,17 +1049,13 @@ mod tests {
       for event in events.into_iter() {
         info!("Handling events");
         if event.token() == Token(100) {
-          let data = <DataReader<_, _> as IDataReader<_, _>>::take(
-            &mut datareader,
-            100,
-            ReadCondition::any(),
-          );
+          let data = datareader.take(100, ReadCondition::any());
           let len = data.as_ref().unwrap().len();
           info!("There were {} samples available.", len);
           info!("Their strings:");
           for d in data.unwrap().into_iter() {
             // Remove one notification for each data
-            info!("{}", d.get_value().as_ref().unwrap().b);
+            info!("{}", d.value().as_ref().unwrap().b);
           }
           count_to_stop += len;
         }

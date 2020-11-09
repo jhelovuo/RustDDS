@@ -16,7 +16,6 @@ use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
 
 use crate::dds::no_key::datasample::DataSample;
 
-
 use super::{
   wrappers::{NoKeyWrapper, SAWrapper},
 };
@@ -51,13 +50,14 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<&D>>> 
-  {
-    let values: Vec<WithKeyDataSample<&NoKeyWrapper<D>>> = self.keyed_datareader
-      .read(max_samples, read_condition)?;
+  ) -> Result<Vec<DataSample<&D>>> {
+    let values: Vec<WithKeyDataSample<&NoKeyWrapper<D>>> =
+      self.keyed_datareader.read(max_samples, read_condition)?;
     let mut result = Vec::with_capacity(values.len());
     for ks in values {
-      if let Some(s) = DataSample::<D>::from_with_key_ref(ks) { result.push(s) }
+      if let Some(s) = DataSample::<D>::from_with_key_ref(ks) {
+        result.push(s)
+      }
     }
     Ok(result)
   }
@@ -67,15 +67,17 @@ where
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
-    let values: Vec<WithKeyDataSample<NoKeyWrapper<D>>> = self.keyed_datareader
-      .take(max_samples, read_condition)?;
+    let values: Vec<WithKeyDataSample<NoKeyWrapper<D>>> =
+      self.keyed_datareader.take(max_samples, read_condition)?;
     let mut result = Vec::with_capacity(values.len());
     for ks in values {
-      if let Some(s) = DataSample::<D>::from_with_key(ks) { result.push(s) }
+      if let Some(s) = DataSample::<D>::from_with_key(ks) {
+        result.push(s)
+      }
     }
     Ok(result)
   }
-  
+
   pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
@@ -85,58 +87,68 @@ where
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
-  
+
   // Iterator interface
 
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
-  pub fn iterator(&mut self) -> Result<impl Iterator<Item=&D>> {
+  pub fn iterator(&mut self) -> Result<impl Iterator<Item = &D>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
-    Ok(self.read(usize::MAX, ReadCondition::not_read())?
+    Ok(
+      self
+        .read(std::usize::MAX, ReadCondition::not_read())?
         .into_iter()
-        .map( |ds| ds.value ) 
-      )
+        .map(|ds| ds.value),
+    )
   }
 
   /// Produces an interator over the samples filtered b ygiven condition.
   /// Yields only payload data, not SampleInfo metadata
-  pub fn conditional_iterator(&mut self, read_condition: ReadCondition) -> Result<impl Iterator<Item=&D>> {
+  pub fn conditional_iterator(
+    &mut self,
+    read_condition: ReadCondition,
+  ) -> Result<impl Iterator<Item = &D>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
-    Ok(self.read(usize::MAX, read_condition)?
+    Ok(
+      self
+        .read(std::usize::MAX, read_condition)?
         .into_iter()
-        .map( |ds| ds.value ) 
-      )
+        .map(|ds| ds.value),
+    )
   }
 
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
-  /// Removes samples from `DataReader`. 
+  /// Removes samples from `DataReader`.
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
   /// are still removed from the `Datareader`.
-  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item=D>> {
+  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = D>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
-    Ok(self.take(usize::MAX, ReadCondition::not_read())?
+    Ok(
+      self
+        .take(std::usize::MAX, ReadCondition::not_read())?
         .into_iter()
-        .map( |ds| ds.value ) 
-      )
+        .map(|ds| ds.value),
+    )
   }
 
   /// Produces an interator over the samples filtered b ygiven condition.
   /// Yields only payload data, not SampleInfo metadata
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
   /// are still removed from the `Datareader`.
-  pub fn into_conditional_iterator(&mut self, read_condition: ReadCondition) -> Result<impl Iterator<Item=D>> {
+  pub fn into_conditional_iterator(
+    &mut self,
+    read_condition: ReadCondition,
+  ) -> Result<impl Iterator<Item = D>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
-    Ok(self.take(usize::MAX, read_condition)?
+    Ok(
+      self
+        .take(std::usize::MAX, read_condition)?
         .into_iter()
-        .map( |ds| ds.value ) 
-      )
+        .map(|ds| ds.value),
+    )
   }
-
-
-
-
 
   pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     self.keyed_datareader.get_requested_deadline_missed_status()

@@ -1187,11 +1187,13 @@ impl HasQoSPolicy for Writer {
 #[cfg(test)]
 mod tests {
   use crate::{
-    dds::{interfaces::IDataWriter, participant::DomainParticipant, qos::QosPolicies},
+    dds::{
+      participant::DomainParticipant, qos::QosPolicies, with_key::datawriter::DataWriter,
+      topic::TopicKind,
+    },
   };
   use std::thread;
   use crate::test::random_data::*;
-  use crate::dds::datawriter::DataWriter;
   use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
   use log::info;
@@ -1207,15 +1209,12 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::WITH_KEY)
       .expect("Failed to create topic");
-    let mut data_writer: DataWriter<
-      '_,
-      RandomData,
-      CDRSerializerAdapter<RandomData, LittleEndian>,
-    > = publisher
-      .create_datawriter(None, &topic, None)
-      .expect("Failed to create datawriter");
+    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
+      publisher
+        .create_datawriter(None, &topic, None)
+        .expect("Failed to create datawriter");
 
     let data = RandomData {
       a: 4,
@@ -1232,8 +1231,7 @@ mod tests {
       b: "Fobar".to_string(),
     };
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let writeResult = <DataWriter<_, _> as IDataWriter<_, _>>::write(&mut data_writer, data, None)
-      .expect("Unable to write data");
+    let writeResult = data_writer.write(data, None).expect("Unable to write data");
 
     info!("writerResult:  {:?}", writeResult);
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());

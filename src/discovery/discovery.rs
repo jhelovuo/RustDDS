@@ -1399,7 +1399,12 @@ mod tests {
     let participant = DomainParticipant::new(0);
 
     let topic = participant
-      .create_topic("Square", "ShapeType", &QosPolicies::qos_none())
+      .create_topic(
+        "Square",
+        "ShapeType",
+        &QosPolicies::qos_none(),
+        TopicKind::WITH_KEY,
+      )
       .unwrap();
 
     let publisher = participant
@@ -1483,7 +1488,12 @@ mod tests {
     let participant = DomainParticipant::new(0);
 
     let topic = participant
-      .create_topic("Square", "ShapeType", &QosPolicies::qos_none())
+      .create_topic(
+        "Square",
+        "ShapeType",
+        &QosPolicies::qos_none(),
+        TopicKind::WITH_KEY,
+      )
       .unwrap();
 
     let publisher = participant

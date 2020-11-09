@@ -117,9 +117,13 @@ impl DomainParticipant {
   /// * `name` - Name of the topic.
   /// * `type_desc` - Name of the type this topic is supposed to deliver.
   /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) that are distributed to DataReaders and DataWriters.
-  pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies, topic_kind: TopicKind) -> 
-    Result<Topic> 
-  {
+  pub fn create_topic(
+    &self,
+    name: &str,
+    type_desc: &str,
+    qos: &QosPolicies,
+    topic_kind: TopicKind,
+  ) -> Result<Topic> {
     self
       .dpi
       .create_topic(&self.weak_clone(), name, type_desc, qos, topic_kind)
@@ -181,7 +185,13 @@ impl DomainParticipantWeak {
     }
   }
 
-  pub fn create_topic(&self, name: &str, type_desc: &str, qos: &QosPolicies, topic_kind: TopicKind) -> Result<Topic> {
+  pub fn create_topic(
+    &self,
+    name: &str,
+    type_desc: &str,
+    qos: &QosPolicies,
+    topic_kind: TopicKind,
+  ) -> Result<Topic> {
     match self.dpi.upgrade() {
       Some(dpi) => dpi.create_topic(&self, name, type_desc, qos, topic_kind),
       None => Err(Error::OutOfResources),
@@ -276,7 +286,7 @@ impl DomainParticipant_Disc {
     name: &str,
     type_desc: &str,
     qos: &QosPolicies,
-    topic_kind: TopicKind
+    topic_kind: TopicKind,
   ) -> Result<Topic> {
     self.dpi.create_topic(&dp, name, type_desc, qos, topic_kind)
   }
@@ -614,7 +624,6 @@ impl DomainParticipant_Inner {
     // TODO: refine
   }
 
-
   // Do not implement contentfilteredtopics or multitopics (yet)
 
   pub fn find_topic(self, _name: &str, _timeout: Duration) -> Result<Topic> {
@@ -687,7 +696,7 @@ mod tests {
   use std::{thread, net::SocketAddr};
   use enumflags2::BitFlags;
   use log::info;
-  use crate::speedy::Writable;
+  use crate::{dds::topic::TopicKind, speedy::Writable};
   use crate::{
     dds::qos::QosPolicies,
     network::{udp_sender::UDPSender, constant::get_user_traffic_unicast_port},
@@ -736,7 +745,7 @@ mod tests {
       .expect("Failed to create publisher");
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let topic = domain_participant
-      .create_topic("Aasii", "RandomData", &qos.clone())
+      .create_topic("Aasii", "RandomData", &qos.clone(), TopicKind::WITH_KEY)
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let mut _data_writer = publisher
@@ -759,7 +768,7 @@ mod tests {
       .expect("Failed to create publisher");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos.clone())
+      .create_topic("Aasii", "Huh?", &qos.clone(), TopicKind::WITH_KEY)
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let mut _data_writer = publisher

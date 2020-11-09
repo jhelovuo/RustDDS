@@ -14,8 +14,7 @@ pub struct DataSample<D> {
   pub(crate) value: D,
 }
 
-impl<D> DataSample<D>
-{  
+impl<D> DataSample<D> {
   //TODO: At least rename this. This is not a proper constructor.
   pub fn new(source_timestamp: Timestamp, payload: D, writer_guid: GUID) -> DataSample<D> {
     // begin dummy placeholder values
@@ -46,24 +45,22 @@ impl<D> DataSample<D>
     }
   }
 
-  pub fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> 
-  {
+  pub fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> {
     match keyed.value {
       Ok(kv) => Some(DataSample::<D> {
-                  sample_info: keyed.sample_info,
-                  value: kv.d,
-                }),
+        sample_info: keyed.sample_info,
+        value: kv.d,
+      }),
       Err(_) => None,
     }
   }
 
-  pub fn from_with_key_ref(keyed: WithKeyDataSample<&NoKeyWrapper<D>>) -> Option<DataSample<&D>> 
-  {
+  pub fn from_with_key_ref(keyed: WithKeyDataSample<&NoKeyWrapper<D>>) -> Option<DataSample<&D>> {
     match keyed.value {
       Ok(ref kv) => Some(DataSample::<&D> {
-                  sample_info: keyed.sample_info,
-                  value: &kv.d,
-                }),
+        sample_info: keyed.sample_info,
+        value: &kv.d,
+      }),
       Err(_) => None,
     }
   }
@@ -83,5 +80,4 @@ impl<D> DataSample<D>
   pub fn sample_info_mut(&mut self) -> &mut SampleInfo {
     &mut self.sample_info
   }
-
 } // impl

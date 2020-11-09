@@ -552,7 +552,10 @@ impl DiscoveryDB {
   }
 
   // TODO: return iterator somehow?
-  pub fn get_local_topic_readers<'a, T: TopicDescription >(&'a self, topic: &'a T) -> Vec<&DiscoveredReaderData> {
+  pub fn get_local_topic_readers<'a, T: TopicDescription>(
+    &'a self,
+    topic: &'a T,
+  ) -> Vec<&DiscoveredReaderData> {
     let topic_name = String::from(topic.get_name());
     self
       .local_topic_readers
@@ -586,12 +589,13 @@ mod tests {
   use super::*;
 
   use crate::{
+    dds::qos::QosPolicies,
     structure::dds_cache::DDSCache,
+    dds::topic::TopicKind,
     test::{
       random_data::RandomData,
       test_data::{subscription_builtin_topic_data, spdp_participant_data, reader_proxy_data},
     },
-    dds::qos::QosPolicies,
   };
   use std::sync::{RwLock, Arc};
 
@@ -635,10 +639,20 @@ mod tests {
 
     let domain_participant = DomainParticipant::new(0);
     let topic = domain_participant
-      .create_topic("Foobar", "RandomData", &QosPolicies::qos_none())
+      .create_topic(
+        "Foobar",
+        "RandomData",
+        &QosPolicies::qos_none(),
+        TopicKind::WITH_KEY,
+      )
       .unwrap();
     let topic2 = domain_participant
-      .create_topic("Barfoo", "RandomData", &QosPolicies::qos_none())
+      .create_topic(
+        "Barfoo",
+        "RandomData",
+        &QosPolicies::qos_none(),
+        TopicKind::WITH_KEY,
+      )
       .unwrap();
 
     let publisher1 = domain_participant
@@ -712,7 +726,12 @@ mod tests {
   fn discdb_local_topic_reader() {
     let dp = DomainParticipant::new(0);
     let topic = dp
-      .create_topic("some topic name", "Wazzup", &QosPolicies::qos_none())
+      .create_topic(
+        "some topic name",
+        "Wazzup",
+        &QosPolicies::qos_none(),
+        TopicKind::WITH_KEY,
+      )
       .unwrap();
     let mut discoverydb = DiscoveryDB::new();
 

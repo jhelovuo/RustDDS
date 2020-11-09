@@ -1,4 +1,3 @@
-
 use crate::{dds::traits::key::*, structure::guid::GUID};
 use crate::structure::time::Timestamp;
 use crate::dds::sampleinfo::*;
@@ -110,4 +109,3 @@ where
     &mut self.sample_info
   }
 } // impl
-
