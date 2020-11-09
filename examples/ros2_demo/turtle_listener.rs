@@ -1,8 +1,7 @@
 use atosdds::{
-  dds::DomainParticipant, 
-  dds::data_types::Entity,
-  ros2::NodeOptions, ros2::RosContext, ros2::RosNode, ros2::RosNodeBuilder,
-  serialization::CDRDeserializerAdapter, ros2::IRosNodeControl, 
+  dds::DomainParticipant, dds::traits::Entity, ros2::NodeOptions, ros2::RosContext,
+  ros2::RosNode, ros2::RosNodeBuilder, serialization::CDRDeserializerAdapter,
+  ros2::IRosNodeControl,
 };
 
 use log::{info, warn};
@@ -105,8 +104,9 @@ impl TurtleListener {
             }
           } else if event.token() == TurtleListener::TURTLE_CMD_VEL_READER_TOKEN {
             while let Ok(Some(data_sample)) = turtle_cmd_vel_reader.take_next_sample() {
-              sender.send(data_sample.into_value())
-                    .unwrap_or_else( |e| warn!("Failed to send received Twist. {:?}", e) )
+              sender
+                .send(data_sample.into_value())
+                .unwrap_or_else(|e| warn!("Failed to send received Twist. {:?}", e))
             }
           }
         }

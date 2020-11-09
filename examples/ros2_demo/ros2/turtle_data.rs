@@ -4,7 +4,7 @@ use atosdds::{
     policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::LivelinessKind,
     policy::Ownership, policy::Reliability,
   },
-  dds::data_types::{DDSDuration,TopicKind},
+  dds::data_types::{DDSDuration, TopicKind},
 };
 
 use serde::{Serialize, Deserialize};

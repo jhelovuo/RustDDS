@@ -196,6 +196,7 @@ impl QosPolicies {
 }
 
 // put these into a submodule to avoid repeating the word "policy" or "qospolicy"
+/// Contains all available QoSPolicies
 pub mod policy {
   use crate::structure::{parameter_id::ParameterId, duration::Duration};
   use serde::{Serialize, Deserialize};

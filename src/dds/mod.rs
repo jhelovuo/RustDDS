@@ -25,7 +25,7 @@
 //!
 //! ```
 //! use atosdds::dds::DomainParticipant;
-//! use atosdds::dds::{No_Key_DataReader as DataReader, No_Key_DataWriter as DataWriter, no_key::datasample::DataSample};
+//! use atosdds::dds::{No_Key_DataReader as DataReader, No_Key_DataWriter as DataWriter, no_key::DataSample};
 //! use atosdds::dds::qos::QosPolicyBuilder;
 //! use atosdds::dds::qos::policy::Reliability;
 //! use atosdds::dds::data_types::DDSDuration;
@@ -132,6 +132,7 @@ pub mod data_types {
   #[doc(inline)]
   pub use crate::structure::duration::Duration as DDSDuration;
   pub use super::readcondition::ReadCondition;
+  #[doc(inline)]
   pub use super::with_key::datareader::SelectByKey;
   #[doc(inline)]
   pub use crate::structure::time::Time as DDSTime;
@@ -142,7 +143,7 @@ pub mod data_types {
   pub use crate::dds::typedesc::TypeDesc;
   pub use crate::dds::sampleinfo::SampleInfo;
   pub use crate::structure::topic_kind::TopicKind; // AKA dds::topic::TopicKind
-  pub use crate::structure::entity::Entity;
+  pub use super::traits::key::BuiltInTopicKey;
 }
 
 /// DDS Error
