@@ -181,8 +181,11 @@ where
     ddsdata.value_key_hash = data.get_key().into_hash_key();
 
     let _data_sample = match source_timestamp {
-      Some(t) => DataSample::new(t, data, self.get_guid()),
-      None => DataSample::new(Timestamp::from(time::get_time()), data, self.get_guid()),
+      // TODO: fix this to use something else than new_deprecated.
+      // We cannot generate DataSample at the writer side, because most of the
+      // SampleInfo fields cannot be known.
+      Some(t) => DataSample::new_deprecated(t, data, self.get_guid()),
+      None => DataSample::new_deprecated(Timestamp::from(time::get_time()), data, self.get_guid()),
     };
 
     match self

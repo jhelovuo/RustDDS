@@ -3,6 +3,8 @@ use enumflags2::BitFlags;
 use crate::{structure::guid::GUID};
 use crate::structure::time::Timestamp;
 
+//use std::num::Zero; // unstable
+
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
 #[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
@@ -61,6 +63,36 @@ impl InstanceState {
   }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NotAliveGenerationCounts {
+  pub disposed_generation_count: i32, 
+  pub no_writers_generation_count: i32,
+}
+
+impl NotAliveGenerationCounts {
+  /// Initial count value
+  pub fn zero() -> Self {
+    NotAliveGenerationCounts {
+      disposed_generation_count: 0,
+      no_writers_generation_count: 0,
+    }
+  }
+
+  /// Marker value for "never accessed"
+  pub fn sub_zero() -> Self {
+    NotAliveGenerationCounts {
+      disposed_generation_count: -1,
+      no_writers_generation_count: -1,
+    }
+  }
+
+
+  pub fn total(&self) -> i32 {
+    self.disposed_generation_count + self.no_writers_generation_count
+  }
+}
+
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SampleInfo {
   pub sample_state: SampleState,
@@ -69,8 +101,7 @@ pub struct SampleInfo {
   // For each instance the middleware internally maintains these counts relative
   // to each DataReader. The counts capture snapshots if the corresponding
   // counters at the time the sample was received.
-  pub disposed_generation_count: i32,
-  pub no_writers_generation_count: i32,
+  pub generation_counts: NotAliveGenerationCounts,
   // The ranks are are computed based solely on the actual samples in the
   // ordered collection returned by the read or take.
   // The sample_rank indicates the number of samples of the same instance that
@@ -93,24 +124,25 @@ pub struct SampleInfo {
   //(MRS.disposed_generation_count + MRS.no_writers_generation_count)
   //- (S.disposed_generation_count + S.no_writers_generation_count)
   pub absolute_generation_rank: i32,
-  pub source_timestamp: Timestamp,
+  pub source_timestamp: Option<Timestamp>,
 
+  // the publication_handle that identifies locally the DataWriter that modified 
+  // the instance (wrote the sample)
   pub publication_handle: GUID,
 }
 
 #[allow(clippy::new_without_default)]
 impl SampleInfo {
-  pub fn new() -> Self {
+  pub fn new_deprecated() -> Self {
     Self {
       sample_state: SampleState::NotRead,
       view_state: ViewState::New,
       instance_state: InstanceState::Alive,
-      disposed_generation_count: 0,
-      no_writers_generation_count: 0,
+      generation_counts: NotAliveGenerationCounts::zero(),
       sample_rank: 0,
       generation_rank: 0,
       absolute_generation_rank: 0,
-      source_timestamp: Timestamp::TIME_INVALID,
+      source_timestamp: None,
       publication_handle: GUID::GUID_UNKNOWN,
     }
   }

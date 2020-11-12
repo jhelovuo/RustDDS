@@ -21,13 +21,15 @@ impl<D> DataSample<D>
 where
   D: Keyed,
 {
-  pub fn new(source_timestamp: Timestamp, payload: D, writer_guid: GUID) -> DataSample<D> {
+  pub fn new(sample_info: SampleInfo, value:std::result::Result<D, D::K>) -> Self {
+    DataSample{ sample_info , value }
+  }
+
+  pub fn new_deprecated(source_timestamp: Timestamp, payload: D, writer_guid: GUID) -> DataSample<D> {
     // begin dummy placeholder values
     let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
-    let disposed_generation_count = 0;
-    let no_writers_generation_count = 0;
     let sample_rank = 0;
     let generation_rank = 0;
     let absolute_generation_rank = 0;
@@ -38,12 +40,11 @@ where
         sample_state,
         view_state,
         instance_state,
-        disposed_generation_count,
-        no_writers_generation_count,
+        generation_counts: NotAliveGenerationCounts::zero(),
         sample_rank,
         generation_rank,
         absolute_generation_rank,
-        source_timestamp,
+        source_timestamp: Some(source_timestamp),
         publication_handle: writer_guid,
       },
       value: Ok(payload),
@@ -58,8 +59,6 @@ where
     let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;
     let instance_state = InstanceState::NotAlive_Disposed;
-    let disposed_generation_count = 0;
-    let no_writers_generation_count = 0;
     let sample_rank = 0;
     let generation_rank = 0;
     let absolute_generation_rank = 0;
@@ -70,12 +69,11 @@ where
         sample_state,
         view_state,
         instance_state,
-        disposed_generation_count,
-        no_writers_generation_count,
+        generation_counts: NotAliveGenerationCounts::zero(),
         sample_rank,
         generation_rank,
         absolute_generation_rank,
-        source_timestamp,
+        source_timestamp: Some(source_timestamp),
         publication_handle: writer_guid,
       },
       value: Err(key),

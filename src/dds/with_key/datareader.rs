@@ -83,16 +83,6 @@ where
   }
 }
 
-// helper
-// somewhat like result.as_ref()
-fn result_ok_as_ref_err_clone<T, E: Clone>(
-  r: &std::result::Result<T, E>,
-) -> std::result::Result<&T, E> {
-  match *r {
-    Ok(ref x) => Ok(x),
-    Err(ref x) => Err(x.clone()),
-  }
-}
 
 impl<'a, D: 'static, DA> DataReader<'a, D, DA>
 where
@@ -144,8 +134,14 @@ where
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<&D>>> {
-    self.get_datasamples_from_cache();
+    
+    self.fill_local_datasample_cache();
 
+    let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    selected.truncate(max_samples);
+
+    let result = self.datasample_cache.read_by_keys(&selected);
+    /*
     let mut result: Vec<DataSample<&D>> = Vec::new();
     'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
       for datasample in datasample_vec.iter_mut() {
@@ -162,7 +158,7 @@ where
         }
       }
     }
-
+    */
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
 
@@ -174,8 +170,14 @@ where
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
-    self.get_datasamples_from_cache();
+    self.fill_local_datasample_cache();
 
+    let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    selected.truncate(max_samples);
+
+    let result = self.datasample_cache.take_by_keys(&selected);
+
+    /*
     let mut result: Vec<DataSample<D>> = Vec::new();
     'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
       let mut ind = 0;
@@ -195,7 +197,7 @@ where
           break 'outer;
         }
       }
-    }
+    } */
 
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
@@ -278,7 +280,7 @@ where
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
-  fn get_datasamples_from_cache(&mut self) {
+  fn fill_local_datasample_cache(&mut self) {
     let dds_cache = match self.dds_cache.read() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
@@ -289,10 +291,10 @@ where
     };
 
     let cache_changes = dds_cache.from_topic_get_changes_in_range(
-      &self.my_topic.get_name().to_string(),
-      &self.latest_instant,
-      &Instant::now(),
-    );
+          &self.my_topic.get_name().to_string(),
+          &self.latest_instant,
+          &Instant::now(),
+        );
 
     let cache_changes: Vec<(&Instant, &CacheChange)> = cache_changes
       .into_iter()
@@ -306,64 +308,58 @@ where
       None => return,
     };
 
-    for (_instant, cc) in cache_changes {
-      let ser_payload = match &cc.data_value {
-        Some(s) => s,
-        None => {
-          match &cc.kind {
-            ChangeKind::NOT_ALIVE_DISPOSED => {
-              let key = self.datasample_cache.get_key(cc.key);
-              match key {
-                Some(key) => {
-                  let datasample =
-                    DataSample::new_disposed::<D::K>(Timestamp::TIME_INVALID, key, cc.writer_guid);
-                  self.datasample_cache.add_datasample(datasample);
-                }
-                None => {
-                  warn!("DataReader cannot find key for keyhash {:x?}", cc.key);
-                }
-              }
-            }
-            _ => {
-              warn!("DataReader cant access serialized payload");
-            }
+    for (instant, CacheChange{kind, writer_guid, sequence_number, data_value: payload_opt, key: key_hash}) in cache_changes {
+      match kind {
+        ChangeKind::NOT_ALIVE_UNREGISTERED => (), // presumably causes no local cache update?
+
+        ChangeKind::NOT_ALIVE_DISPOSED => {
+          /* TODO: Instance to be disposed could be specified by serialized payload also, not only key_hash? */
+          match self.datasample_cache.get_key_by_hash(*key_hash) {
+            Some(key) => self.datasample_cache.add_sample( Err(key), *writer_guid, instant, None),
+            /* TODO: How to get source timestamps other then None ?? */
+            None => warn!("Tried to dispose with unkonwn key hash: {:x?}",key_hash),
           }
-          continue;
         }
-      };
+        ChangeKind::ALIVE => {
+          match payload_opt {
+            Some(serialized_payload) => {
+              // what is our data serialization format (representation identifier) ?
+              let rep_id = 
+                match RepresentationIdentifier::try_from_u16(serialized_payload.representation_identifier) {
+                  Ok(r) => r,
+                  // cannot use .or_else() because need to "continue" the for-loop
+                  Err(other_rep_id) =>
+                    if let Some(ri) = DA::supported_encodings().iter().find(|r| **r as u16 == other_rep_id) {
+                      *ri // no worries, our DeserializerAdapter recognizes this representation
+                    } else {
+                      warn!("Datareader: Unknown representation id {:?}.",other_rep_id);
+                      continue;  // skip this sample, as we cannot decode it
+                    }
+                };
 
-      let rep_id =
-        match RepresentationIdentifier::try_from_u16(ser_payload.representation_identifier) {
-          Ok(r) => r,
-          Err(unknown_rep_id) => {
-            // TODO: Maybe we should ask DA first? It may be able to handle this even though it is non-std.
-            warn!(
-              "Datareader: Unknown representation id {:?}.",
-              unknown_rep_id
-            );
-            continue;
+              // deserialize
+              let payload = match DA::from_bytes( &serialized_payload.value , rep_id ) {
+                  Ok(p) => p,
+                  // cannot use .or_else() because need to "continue" the for-loop
+                  Err(e) =>  {
+                      error!("Failed to deserialize bytes \n{}", e);
+                      // TODO: Wrap this in a debug conditional. We cannot go writing
+                      // to the file system unless requested by user!
+                      File::create("error_bin.bin")
+                        .unwrap()
+                        .write_all(&serialized_payload.value)
+                        .unwrap();
+                      continue;
+                    }
+                };
+              // insert to local cache
+              self.datasample_cache.add_sample( Ok(payload), *writer_guid, instant, None)
+              /* TODO: How to get source timestamps other then None ?? */
+            }
+            None => warn!("Got CacheChange kind=ALIVE , but no serialized payload!"),
           }
-        };
-
-      let bytes = &ser_payload.value;
-
-      let payload = match DA::from_bytes(bytes, rep_id) {
-        Ok(pl) => pl,
-        Err(e) => {
-          error!("Failed to deserialize bytes \n{}", e);
-          File::create("error_bin.bin")
-            .unwrap()
-            .write_all(bytes)
-            .unwrap();
-          continue;
         }
-      };
-
-      // TODO: how do we get the source_timestamp here? Is it needed?
-      // TODO: Keeping track of and assigning  generation rank, sample rank etc.
-      let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload, cc.writer_guid);
-      datasample.sample_info_mut().instance_state = Self::change_kind_to_instance_state(&cc.kind);
-      self.datasample_cache.add_datasample(datasample);
+      }
     }
   }
 
@@ -385,9 +381,9 @@ where
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
-  ) -> Result<Vec<&DataSample<D>>> {
-    let mut result = Vec::new();
-    self.get_datasamples_from_cache();
+  ) -> Result<Vec<DataSample<&D>>> {
+    //let mut result = Vec::new();
+    self.fill_local_datasample_cache();
 
     // Infer the key
     let key = match instance_key {
@@ -395,15 +391,21 @@ where
         SelectByKey::This => k,
         SelectByKey::Next => match self.datasample_cache.get_next_key(&k) {
           Some(key) => key,
-          None => return Ok(result), // no next key in datasamplecache. No samples to return
+          None => return Ok(Vec::new()), // no next key in datasamplecache. No samples to return
         },
       },
-      None => match self.datasample_cache.datasamples.keys().min() {
+      None => match self.datasample_cache.instance_map.keys().next() {
         Some(key) => key.clone(),
-        None => return Ok(result), // no keys in datasamplecache. No samples to return
+        None => return Ok(Vec::new()), // no keys in datasamplecache. No samples to return
       },
     };
 
+    let mut selected = self.datasample_cache.select_instance_keys_for_access(key, read_condition);
+    selected.truncate(max_samples);
+
+    let result = self.datasample_cache.read_by_keys(&selected);
+
+    /*
     if let Some(datasample_vec) = self.datasample_cache.get_datasamples_mut(&key) {
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, datasample) {
@@ -415,7 +417,7 @@ where
         }
       }
     } // Else, cat't get mut datasample_vec, return no samples
-
+    */
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
 
@@ -436,8 +438,8 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
-    let mut result = Vec::new();
-    self.get_datasamples_from_cache();
+    //let mut result = Vec::new();
+    self.fill_local_datasample_cache();
 
     // Infer the key
     let key = match instance_key {
@@ -445,15 +447,21 @@ where
         SelectByKey::This => k,
         SelectByKey::Next => match self.datasample_cache.get_next_key(&k) {
           Some(key) => key,
-          None => return Ok(result), // no next key in datasamplecache. No samples to return
+          None => return Ok(Vec::new()), // no next key in datasamplecache. No samples to return
         },
       },
-      None => match self.datasample_cache.datasamples.keys().min() {
+      None => match self.datasample_cache.instance_map.keys().next() {
         Some(key) => key.clone(),
-        None => return Ok(result), // no keys in datasamplecache. No samples to return
+        None => return Ok(Vec::new()), // no keys in datasamplecache. No samples to return
       },
     };
 
+    let mut selected = self.datasample_cache.select_instance_keys_for_access(key, read_condition);
+    selected.truncate(max_samples);
+
+    let result = self.datasample_cache.take_by_keys(&selected);
+
+    /*
     if let Some(datasample_vec) = self.datasample_cache.datasamples.get_mut(&key) {
       let mut ind = 0;
       while ind < datasample_vec.len() {
@@ -473,7 +481,7 @@ where
         }
       }
     } // Else, cat't get mut datasample_vec, return no samples
-
+    */
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
 
@@ -658,7 +666,7 @@ mod tests {
     });
     new_reader.handle_data_msg(data, mr_state.clone());
 
-    matching_datareader.get_datasamples_from_cache();
+    matching_datareader.fill_local_datasample_cache();
     let deserialized_random_data = matching_datareader
       .datasample_cache
       .get_datasample(&data_key)
@@ -703,7 +711,7 @@ mod tests {
     new_reader.handle_data_msg(data2, mr_state.clone());
     new_reader.handle_data_msg(data3, mr_state);
 
-    matching_datareader.get_datasamples_from_cache();
+    matching_datareader.fill_local_datasample_cache();
     let random_data_vec = matching_datareader
       .datasample_cache
       .get_datasample(&data_key)
