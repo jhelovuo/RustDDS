@@ -603,6 +603,8 @@ mod tests {
   use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
   use std::time::Duration as StdDuration;
+  use crate::dds::values::result::StatusChange;
+  use crate::dds::with_key::datareader::ReaderCommand;
 
   #[test]
   fn discdb_participant_operations() {

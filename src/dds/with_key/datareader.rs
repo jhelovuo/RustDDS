@@ -42,16 +42,6 @@ pub enum SelectByKey {
   Next,
 }
 
-<<<<<<< HEAD:src/dds/with_key/datareader.rs
-/// DDS DataReader for keyed topics
-pub struct DataReader<
-  'a,
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> {
-||||||| merged common ancestors
-pub struct DataReader<'a, D: Keyed, SA> {
-=======
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReaderCommand {
   RESET_REQUESTED_DEADLINE_STATUS,
@@ -82,8 +72,12 @@ impl CurrentStatusChanges {
   }
 }
 
-pub struct DataReader<'a, D: Keyed, SA> {
->>>>>>> Reader QOS deadline:src/dds/datareader.rs
+pub struct DataReader<
+  'a,
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+> {
+
   my_subscriber: &'a Subscriber,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -524,15 +518,6 @@ where
     Ok(result)
   }
 
-<<<<<<< HEAD:src/dds/with_key/datareader.rs
-||||||| merged common ancestors
-  // status queries
-
-  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
-    todo!()
-  }
-
-=======
   // status queries
 
   
@@ -613,7 +598,6 @@ where
   }
   */
 
->>>>>>> Reader QOS deadline:src/dds/datareader.rs
   // Helper functions
 
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
@@ -646,55 +630,6 @@ where
       ChangeKind::NOT_ALIVE_UNREGISTERED => InstanceState::NotAlive_NoWriters,
     }
   }
-<<<<<<< HEAD:src/dds/with_key/datareader.rs
-||||||| merged common ancestors
-} // impl
-
-impl<'a, D: 'static, SA> IDataReader<D, SA> for DataReader<'a, D, SA>
-where
-  D: DeserializeOwned + Keyed,
-  <D as Keyed>::K: Key,
-  SA: DeserializerAdapter<D>,
-{
-  fn read(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<&dyn IDataSample<D>>> {
-    let samples = self.read_as_obj(max_samples, read_condition);
-    match samples {
-      Ok(d) => Ok(d.into_iter().map(|p| p.as_idata_sample()).collect()),
-      Err(e) => Err(e),
-    }
-  }
-
-  fn take(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<Box<dyn IDataSample<D>>>> {
-    let samples = self.take_as_obj(max_samples, read_condition);
-    match samples {
-      Ok(d) => Ok(d.into_iter().map(|p| p.into_idata_sample()).collect()),
-      Err(e) => Err(e),
-    }
-  }
-
-  fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>> {
-    let mut ds =
-      <DataReader<D, SA> as IDataReader<D, SA>>::read(self, 1, ReadCondition::not_read())?;
-    let val = match ds.pop() {
-      Some(v) => Some(v.as_idata_sample()),
-      None => None,
-    };
-    Ok(val)
-  }
-
-  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>> {
-    let ds = self.take_next_sample()?;
-    Ok(ds.into_iter().map(|p| p.into_idata_sample()).find(|_| true))
-  }
-=======
   
  
   
@@ -713,10 +648,18 @@ where
     self.reader_command = sender;
   }
   
+  pub fn get_requested_deadline_missed_status(&mut self) -> Result<Option<RequestedDeadlineMissedStatus>> {
+    self.fetch_readers_current_status()?;
+    let value_before_reset = self.current_status.requestedDeadlineMissed.clone();
+    self.reset_local_requested_deadline_status_change();
+    return Ok(value_before_reset);
+
+  }
  
 
 } // impl
 
+/*
 impl<'a, D: 'static, SA> IDataReader<D, SA> for DataReader<'a, D, SA>
 where
   D: DeserializeOwned + Keyed,
@@ -761,25 +704,16 @@ where
     let ds = self.take_next_sample()?;
     Ok(ds.into_iter().map(|p| p.into_idata_sample()).find(|_| true))
   }
->>>>>>> Reader QOS deadline:src/dds/datareader.rs
 
-<<<<<<< HEAD:src/dds/with_key/datareader.rs
-  /// <b>Unimplemented. Do not use.</b>
-  pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
-    todo!()
-||||||| merged common ancestors
-  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
-    todo!()
-=======
   fn get_requested_deadline_missed_status(&mut self) -> Result<Option<RequestedDeadlineMissedStatus>> {
     self.fetch_readers_current_status()?;
     let value_before_reset = self.current_status.requestedDeadlineMissed.clone();
     self.reset_local_requested_deadline_status_change();
     return Ok(value_before_reset);
 
->>>>>>> Reader QOS deadline:src/dds/datareader.rs
   }
 }
+*/
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
@@ -1206,7 +1140,6 @@ mod tests {
 
   #[test]
   fn dr_wake_up() {
-    env_logger::init();
     let dp = DomainParticipant::new(0);
 
     let mut qos = QosPolicies::qos_none();

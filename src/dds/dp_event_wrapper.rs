@@ -23,7 +23,8 @@ use crate::{
   structure::{dds_cache::DDSCache, topic_kind::TopicKind},
   messages::submessages::submessages::AckNack,
 };
-use super::{datareader::ReaderCommand, qos::policy::Reliability, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy, typedesc::TypeDesc};
+use crate::dds::with_key::datareader::ReaderCommand;
+use super::{ qos::policy::Reliability, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy, typedesc::TypeDesc};
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
@@ -861,9 +862,9 @@ mod tests {
   use super::*;
   use std::thread;
   use std::time::Duration;
-  use crate::{dds::datareader::DataReader, dds::participant::DomainParticipant, dds::values::result::RequestedDeadlineMissedStatus, serialization::cdrDeserializer::CDR_deserializer_adapter, dds::values::result::CountWithChange, structure::duration::Duration as DurationDDS, test::random_data::RandomData};
+  use crate::{dds::with_key::datareader::DataReader, dds::participant::DomainParticipant, dds::values::result::RequestedDeadlineMissedStatus, serialization::cdr_deserializer::CDRDeserializerAdapter, dds::values::result::CountWithChange, structure::duration::Duration as DurationDDS, test::random_data::RandomData};
   use mio::{Ready, PollOpt};
-  use crate::{dds::datareader::ReaderCommand, dds::{qos::policy::Deadline, values::result::StatusChange}, structure::entity::Entity, dds::qos::QosPolicies};
+  use crate::{dds::with_key::datareader::ReaderCommand, dds::{qos::policy::Deadline, values::result::StatusChange}, structure::entity::Entity, dds::qos::QosPolicies};
   use crate::structure::dds_cache::DDSCache;
   use crate::dds::topic::Topic;
 
@@ -971,7 +972,6 @@ mod tests {
 
   #[test]
   fn dpew_test_reader_commands() {
-    env_logger::init();
 
     let somePolicies = QosPolicies{
       durability: None,
@@ -990,9 +990,9 @@ mod tests {
     let dp = DomainParticipant::new(0);
     let sub = dp.create_subscriber(&somePolicies).unwrap();
 
-    let topic_1 = dp.create_topic("TOPIC_1", TypeDesc::new("Wake up!".to_string()), &somePolicies).unwrap();
-    let _topic_2 = dp.create_topic("TOPIC_2", TypeDesc::new("Wake up!".to_string()), &somePolicies).unwrap();
-    let _topic_3 = dp.create_topic("TOPIC_3", TypeDesc::new("Wake up!".to_string()), &somePolicies).unwrap();
+    let topic_1 = dp.create_topic("TOPIC_1", "jotain", &somePolicies, TopicKind::WITH_KEY).unwrap();
+    let _topic_2 = dp.create_topic("TOPIC_2", "jotain", &somePolicies,TopicKind::WITH_KEY).unwrap();
+    let _topic_3 = dp.create_topic("TOPIC_3", "jotain", &somePolicies, TopicKind::WITH_KEY).unwrap();
 
     
 
@@ -1060,7 +1060,7 @@ mod tests {
     let n = 1;
 
     let mut reader_guids = Vec::new();
-    let mut data_readers : Vec<DataReader<RandomData, CDR_deserializer_adapter<RandomData>>> = vec![];
+    let mut data_readers : Vec<DataReader<RandomData, CDRDeserializerAdapter<RandomData>>> = vec![];
     let  _topics: Vec<Topic> = vec![];
     for i in 0..n {
       
@@ -1097,12 +1097,10 @@ mod tests {
       };
 
 
-      let mut datareader = sub.create_datareader::<RandomData, CDR_deserializer_adapter<RandomData>>(
-      Some(EntityId::ENTITYID_UNKNOWN),
-      //& topics[i],
+      let mut datareader = sub.create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
       &topic_1,
-      None,
-      somePolicies.clone(),
+      Some(EntityId::ENTITYID_UNKNOWN),
+      Some(somePolicies.clone()),
       ).unwrap();
 
 

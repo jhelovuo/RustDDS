@@ -359,7 +359,7 @@ impl Default for MessageReceiverState {
 
 mod tests {
   use super::*;
-  use crate::{dds::values::result::StatusChange, dds::writer::WriterCommand, messages::header::Header, dds::datareader::ReaderCommand};
+  use crate::{dds::values::result::StatusChange, dds::writer::WriterCommand, messages::header::Header, dds::with_key::datareader::ReaderCommand};
   use crate::speedy::{Writable, Readable};
   use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
   use crate::serialization::cdr_serializer::to_bytes;

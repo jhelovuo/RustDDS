@@ -38,7 +38,7 @@ use crate::{
 
 use rand::Rng;
 
-use super::{datareader::ReaderCommand, no_key::{wrappers::NoKeyWrapper, wrappers::SAWrapper}, writer::WriterCommand};
+use super::{with_key::datareader::ReaderCommand, no_key::{wrappers::NoKeyWrapper, wrappers::SAWrapper}, writer::WriterCommand};
 
 // -------------------------------------------------------------------
 
@@ -339,11 +339,6 @@ impl<'s> Subscriber {
       }
     };
 
-<<<<<<< HEAD
-    let matching_datareader = WithKeyDataReader::<D, SA>::new(
-||||||| merged common ancestors
-    let matching_datareader = DataReader::<D, SA>::new(
-=======
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
 
     let new_reader = Reader::new(
@@ -355,8 +350,7 @@ impl<'s> Subscriber {
       reader_command_receiver
     );
 
-    let matching_datareader = DataReader::<D, SA>::new(
->>>>>>> Reader QOS deadline
+    let matching_datareader = WithKeyDataReader::<D, SA>::new(
       self,
       datareader_id,
       &topic,
