@@ -140,24 +140,6 @@ where
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.read_by_keys(&selected);
-    /*
-    let mut result: Vec<DataSample<&D>> = Vec::new();
-    'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
-      for datasample in datasample_vec.iter_mut() {
-        if Self::matches_conditions(&read_condition, &datasample) {
-          datasample.sample_info_mut().sample_state = SampleState::Read;
-          let ref_datasample = DataSample {
-            sample_info: datasample.sample_info.clone(),
-            value: result_ok_as_ref_err_clone(&datasample.value),
-          };
-          result.push(ref_datasample);
-        }
-        if result.len() >= max_samples {
-          break 'outer;
-        }
-      }
-    }
-    */
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
 
@@ -175,28 +157,6 @@ where
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.take_by_keys(&selected);
-
-    /*
-    let mut result: Vec<DataSample<D>> = Vec::new();
-    'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
-      let mut ind = 0;
-      while ind < datasample_vec.len() {
-        // If a datasample is removed from the vec, all elements from the index
-        // onwards will be shifted left. Therefore, the next sample is accessible
-        // in the same index
-        if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
-          let mut datasample = datasample_vec.remove(ind);
-          datasample.sample_info_mut().sample_state = SampleState::Read;
-          result.push(datasample);
-        // Nothing removed, next element can be found in the next index.
-        } else {
-          ind += 1;
-        }
-        if result.len() >= max_samples {
-          break 'outer;
-        }
-      }
-    } */
 
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
@@ -362,6 +322,16 @@ where
     }
   }
 
+  fn infer_key(&self, instance_key: Option<<D as Keyed>::K>, this_or_next: SelectByKey,) -> Option<<D as Keyed>::K> {
+    match instance_key {
+      Some(k) => match this_or_next {
+        SelectByKey::This => Some(k),
+        SelectByKey::Next => self.datasample_cache.get_next_key(&k),
+      },
+      None => self.datasample_cache.instance_map.keys().next().map( |k| k.clone())
+    }
+  }
+
   /// Works similarly to read(), but will return only samples from a specific instance.
   /// The instance is specified by an optional key. In case the key is not specified, the smallest
   /// (in key order) instance is selected.
@@ -381,22 +351,12 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<&D>>> {
-    //let mut result = Vec::new();
+
     self.fill_local_datasample_cache();
 
-    // Infer the key
-    let key = match instance_key {
-      Some(k) => match this_or_next {
-        SelectByKey::This => k,
-        SelectByKey::Next => match self.datasample_cache.get_next_key(&k) {
-          Some(key) => key,
-          None => return Ok(Vec::new()), // no next key in datasamplecache. No samples to return
-        },
-      },
-      None => match self.datasample_cache.instance_map.keys().next() {
-        Some(key) => key.clone(),
-        None => return Ok(Vec::new()), // no keys in datasamplecache. No samples to return
-      },
+    let key = match self.infer_key(instance_key, this_or_next) {
+      Some(k) => k,
+      None => return Ok(Vec::new()),
     };
 
     let mut selected = self.datasample_cache.select_instance_keys_for_access(key, read_condition);
@@ -404,19 +364,6 @@ where
 
     let result = self.datasample_cache.read_by_keys(&selected);
 
-    /*
-    if let Some(datasample_vec) = self.datasample_cache.get_datasamples_mut(&key) {
-      for datasample in datasample_vec.iter_mut() {
-        if Self::matches_conditions(&read_condition, datasample) {
-          datasample.sample_info_mut().sample_state = SampleState::Read;
-          result.push(&*datasample);
-        }
-        if result.len() >= max_samples {
-          break;
-        }
-      }
-    } // Else, cat't get mut datasample_vec, return no samples
-    */
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
 
@@ -437,22 +384,12 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
-    //let mut result = Vec::new();
+
     self.fill_local_datasample_cache();
 
-    // Infer the key
-    let key = match instance_key {
-      Some(k) => match this_or_next {
-        SelectByKey::This => k,
-        SelectByKey::Next => match self.datasample_cache.get_next_key(&k) {
-          Some(key) => key,
-          None => return Ok(Vec::new()), // no next key in datasamplecache. No samples to return
-        },
-      },
-      None => match self.datasample_cache.instance_map.keys().next() {
-        Some(key) => key.clone(),
-        None => return Ok(Vec::new()), // no keys in datasamplecache. No samples to return
-      },
+    let key = match self.infer_key(instance_key, this_or_next) {
+      Some(k) => k,
+      None => return Ok(Vec::new()),
     };
 
     let mut selected = self.datasample_cache.select_instance_keys_for_access(key, read_condition);
@@ -460,27 +397,6 @@ where
 
     let result = self.datasample_cache.take_by_keys(&selected);
 
-    /*
-    if let Some(datasample_vec) = self.datasample_cache.datasamples.get_mut(&key) {
-      let mut ind = 0;
-      while ind < datasample_vec.len() {
-        // If a datasample is removed from the vec, all elements from the index
-        // onwards will be shifted left. Therefore, the next sample is accessible
-        // in the same index
-        if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
-          let mut datasample = datasample_vec.remove(ind);
-          datasample.sample_info_mut().sample_state = SampleState::Read;
-          result.push(datasample);
-        // Nothing removed, next element can be found in the next index.
-        } else {
-          ind += 1;
-        }
-        if result.len() >= max_samples {
-          break;
-        }
-      }
-    } // Else, cat't get mut datasample_vec, return no samples
-    */
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
 

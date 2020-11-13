@@ -4,7 +4,7 @@ use std::io::Read;
 use byteorder::{ReadBytesExt, BigEndian};
 
 use num_enum::{TryFromPrimitive, IntoPrimitive};
-//use std::convert::TryFrom;
+
 
 #[derive(Debug, PartialEq, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
 #[repr(u16)]

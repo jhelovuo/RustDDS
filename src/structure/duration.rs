@@ -34,13 +34,6 @@ impl Duration {
     fraction: 0,
   };
   
-  /*fn from_ticks(ticks: i64) -> Duration {
-    Duration {
-      seconds: (ticks << 32) as i32,
-      fraction: ticks as u32
-    }
-  }*/
-
   pub const fn from_secs(secs: i32) -> Duration {
     Duration { 
       seconds: secs, // loss of range here
@@ -66,8 +59,7 @@ impl Duration {
     }
   }
 
-
-  /* This is not part of the spec. And it is also dangerous, as it is plausibel someone could
+  /* DURATION_INVALID is not part of the spec. And it is also dangerous, as it is plausible someone could
   legitimately measure such an interval, and others would interpret it as "invalid".
   pub const DURATION_INVALID: Duration = Duration {
     seconds: -1,
