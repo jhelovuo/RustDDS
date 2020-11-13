@@ -203,7 +203,7 @@ impl Discovery {
       "DCPSParticipant",
       "SPDPDiscoveredParticipantData",
       &Discovery::create_spdp_patricipant_qos(),
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -327,7 +327,7 @@ impl Discovery {
       "DCPSSubscription",
       "DiscoveredReaderData",
       &dcps_subscription_qos,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -424,7 +424,7 @@ impl Discovery {
       "DCPSPublication",
       "DiscoveredWriterData",
       &dcps_publication_qos,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -521,7 +521,7 @@ impl Discovery {
       "DCPSTopic",
       "DiscoveredTopicData",
       &dcps_topic_qos,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -638,7 +638,7 @@ impl Discovery {
       "DCPSParticipantMessage",
       "ParticipantMessageData",
       &Discovery::PARTICIPANT_MESSAGE_QOS,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -1403,7 +1403,7 @@ mod tests {
         "Square",
         "ShapeType",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
 
@@ -1492,7 +1492,7 @@ mod tests {
         "Square",
         "ShapeType",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
 

@@ -321,7 +321,7 @@ mod tests {
     );
     cache.write().unwrap().add_new_topic(
       topic_name,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
       &TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
     );
     cache

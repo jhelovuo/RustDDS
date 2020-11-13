@@ -36,7 +36,7 @@
 //!     "some_topic_name",
 //!     "NodeInfo",
 //!     QosPolicies::qos_none(),
-//!     TopicKind::NO_KEY)
+//!     TopicKind::NoKey)
 //!   .unwrap();
 //!
 //! // Topic has to live longer that node or readers/writers

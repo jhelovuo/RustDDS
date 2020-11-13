@@ -73,7 +73,7 @@ pub enum StatusChange {
   },
 }
 
-#[derive(Debug,Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct LivelinessLostStatus {
   pub total: CountWithChange,
 }
@@ -103,7 +103,6 @@ impl OfferedDeadlineMissedStatus {
     self.total.count_change = 0;
   }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct OfferedIncompatibleQosStatus {
@@ -138,13 +137,12 @@ impl RequestedDeadlineMissedStatus {
   }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct RequestedIncompatibleQosStatus {
   pub total: CountWithChange,
   //TODO: last_policy_id: QosPolicyId_t
   //TODO: policies: QosPolicyCountSeq
 }
-
 
 #[derive(Debug, Copy, Clone)]
 pub struct PublicationMatchedStatus {
@@ -152,7 +150,6 @@ pub struct PublicationMatchedStatus {
   pub current: CountWithChange,
   // Missing: reference to last instance key
 }
-
 
 #[derive(Debug, Copy, Clone)]
 pub struct SubscriptionMatchedStatus {

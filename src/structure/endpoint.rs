@@ -36,7 +36,7 @@ pub struct EndpointAttributes {
 impl EndpointAttributes {
   fn new() -> EndpointAttributes {
     EndpointAttributes {
-      topic_kind: topic_kind::TopicKind::NO_KEY,
+      topic_kind: topic_kind::TopicKind::NoKey,
       reliability_level: ReliabilityKind::BEST_EFFORT,
       unicast_locator_list: LocatorList::new(),
       multicast_locator_list: LocatorList::new(),

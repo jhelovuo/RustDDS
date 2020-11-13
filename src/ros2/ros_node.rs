@@ -58,7 +58,7 @@ pub trait IRosNodeControl<'a> {
   /// * `name` - Name of the topic
   /// * `type_name` - What type the topic holds in string form
   /// * `qos` - Quality of Service parameters for the topic (not restricted only to ROS2)
-  /// * `topic_kind` - Does the topic have a key (multiple DDS instances)? NO_KEY or WITH_KEY
+  /// * `topic_kind` - Does the topic have a key (multiple DDS instances)? NoKey or WithKey
   fn create_ros_topic(
     domain_participant: &DomainParticipant,
     name: &str,
@@ -252,7 +252,7 @@ impl RosContext {
         ROSDiscoveryTopic::topic_name(),
         ROSDiscoveryTopic::type_name(),
         &ROSDiscoveryTopic::get_qos(),
-        TopicKind::NO_KEY,
+        TopicKind::NoKey,
       )?)
     } else {
       None
@@ -267,14 +267,14 @@ impl RosContext {
       ParameterEventsTopic::topic_name(),
       ParameterEventsTopic::type_name(),
       &ParameterEventsTopic::get_qos(),
-      TopicKind::NO_KEY,
+      TopicKind::NoKey,
     )?;
 
     let ros_rosout_topic = domain_participant.create_topic(
       RosOutTopic::topic_name(),
       RosOutTopic::type_name(),
       &RosOutTopic::get_qos(),
-      TopicKind::NO_KEY,
+      TopicKind::NoKey,
     )?;
 
     Ok(RosContext {

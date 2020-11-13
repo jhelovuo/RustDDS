@@ -639,7 +639,7 @@ mod tests {
         "Foobar",
         "RandomData",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
     let topic2 = domain_participant
@@ -647,7 +647,7 @@ mod tests {
         "Barfoo",
         "RandomData",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
 
@@ -726,23 +726,25 @@ mod tests {
         "some topic name",
         "Wazzup",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
     let mut discoverydb = DiscoveryDB::new();
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
-    let (status_sender, _status_reciever) =  mio_extras::channel::sync_channel::<StatusChange>(100);
-    let (_reader_commander1, reader_command_receiver1) =  mio_extras::channel::sync_channel::<ReaderCommand>(100);
-    let (_reader_commander2, reader_command_receiver2) =  mio_extras::channel::sync_channel::<ReaderCommand>(100);
-  
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander1, reader_command_receiver1) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
+    let (_reader_commander2, reader_command_receiver2) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
+
     let reader = Reader::new(
       GUID::new(),
       notification_sender.clone(),
       status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
       topic.get_name().to_string(),
-      reader_command_receiver1
+      reader_command_receiver1,
     );
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);
@@ -759,7 +761,7 @@ mod tests {
       status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
       topic.get_name().to_string(),
-      reader_command_receiver2
+      reader_command_receiver2,
     );
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);

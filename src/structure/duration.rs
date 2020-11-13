@@ -47,7 +47,7 @@ impl Duration {
   }
 
   pub fn to_std(&self) -> std::time::Duration {
-    return std::time::Duration::new(self.seconds as u64, self.fraction)
+    return std::time::Duration::new(self.seconds as u64, self.fraction);
   }
 }
 

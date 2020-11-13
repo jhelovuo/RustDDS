@@ -1209,7 +1209,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::WITH_KEY)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher

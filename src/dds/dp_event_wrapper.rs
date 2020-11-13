@@ -24,7 +24,10 @@ use crate::{
   messages::submessages::submessages::AckNack,
 };
 use crate::dds::with_key::datareader::ReaderCommand;
-use super::{ qos::policy::Reliability, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy, typedesc::TypeDesc};
+use super::{
+  qos::policy::Reliability, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy,
+  typedesc::TypeDesc,
+};
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
@@ -162,8 +165,8 @@ impl DPEventWrapper {
       message_receiver: MessageReceiver::new(participant_guid_prefix, acknack_sender),
       add_reader_receiver,
       remove_reader_receiver,
-      reader_timed_event_receiver : HashMap::new(),
-      reader_command_receiver_identification : HashMap::new(),
+      reader_timed_event_receiver: HashMap::new(),
+      reader_command_receiver_identification: HashMap::new(),
       add_writer_receiver,
       remove_writer_receiver,
       writer_timed_event_reciever: HashMap::new(),
@@ -204,9 +207,9 @@ impl DPEventWrapper {
           ev_wrapper.handle_udp_traffic(&event);
         } else if DPEventWrapper::is_reader_action(&event) {
           ev_wrapper.handle_reader_action(&event);
-        } else if ev_wrapper.is_reader_timed_event_action(&event){
+        } else if ev_wrapper.is_reader_timed_event_action(&event) {
           ev_wrapper.handle_reader_timed_event(&event);
-        } else if ev_wrapper.is_reader_command_action(&event){
+        } else if ev_wrapper.is_reader_command_action(&event) {
           ev_wrapper.handle_reader_command_event(&event);
         } else if DPEventWrapper::is_writer_action(&event) {
           ev_wrapper.handle_writer_action(&event);
@@ -282,19 +285,24 @@ impl DPEventWrapper {
     return false;
   }
 
-  pub fn is_reader_timed_event_action(&self,event: &Event) -> bool {
-    if self.reader_timed_event_receiver.contains_key(&event.token()){
+  pub fn is_reader_timed_event_action(&self, event: &Event) -> bool {
+    if self
+      .reader_timed_event_receiver
+      .contains_key(&event.token())
+    {
       return true;
-    }else{
+    } else {
       return false;
     }
   }
 
   pub fn is_reader_command_action(&self, event: &Event) -> bool {
-    if self.reader_command_receiver_identification.contains_key(&event.token()){
+    if self
+      .reader_command_receiver_identification
+      .contains_key(&event.token())
+    {
       return true;
-    }
-    else{
+    } else {
       return false;
     }
   }
@@ -337,35 +345,40 @@ impl DPEventWrapper {
       ADD_READER_TOKEN => {
         info!("add reader(s)");
         while let Ok(mut new_reader) = self.add_reader_receiver.receiver.try_recv() {
-         
           let (timed_action_sender, timed_action_receiver) =
-          mio_channel::sync_channel::<TimerMessageType>(10);
+            mio_channel::sync_channel::<TimerMessageType>(10);
           let time_handler: TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
           new_reader.add_timed_event_handler(time_handler);
 
           self
-          .poll
-          .register(
-            &timed_action_receiver,
-            new_reader.get_entity_token(),
-            Ready::readable(),
-            PollOpt::edge(),
-          )
-          .expect("Reader timer channel registeration failed!");
-        self.reader_timed_event_receiver.insert(
-          new_reader.get_entity_token(),
-          timed_action_receiver,
-        );
+            .poll
+            .register(
+              &timed_action_receiver,
+              new_reader.get_entity_token(),
+              Ready::readable(),
+              PollOpt::edge(),
+            )
+            .expect("Reader timer channel registeration failed!");
+          self
+            .reader_timed_event_receiver
+            .insert(new_reader.get_entity_token(), timed_action_receiver);
 
-        self.poll.register(&new_reader.data_reader_command_receiver,
-           new_reader.get_reader_command_entity_token(),
-            Ready::readable(),
-            PollOpt::edge())
+          self
+            .poll
+            .register(
+              &new_reader.data_reader_command_receiver,
+              new_reader.get_reader_command_entity_token(),
+              Ready::readable(),
+              PollOpt::edge(),
+            )
             .expect("Reader command channel registration failed!!!");
 
-        self.reader_command_receiver_identification.insert(new_reader.get_reader_command_entity_token(), new_reader.get_guid());
-        new_reader.set_requested_deadline_check_timer();
-        self.message_receiver.add_reader(new_reader);
+          self.reader_command_receiver_identification.insert(
+            new_reader.get_reader_command_entity_token(),
+            new_reader.get_guid(),
+          );
+          new_reader.set_requested_deadline_check_timer();
+          self.message_receiver.add_reader(new_reader);
         }
       }
       REMOVE_READER_TOKEN => {
@@ -373,9 +386,8 @@ impl DPEventWrapper {
           self.message_receiver.remove_reader(old_reader_guid);
         }
       }
-      _ =>{}
+      _ => {}
     }
-    
   }
 
   pub fn handle_writer_action(&mut self, event: &Event) {
@@ -484,29 +496,34 @@ impl DPEventWrapper {
     }
   }
 
-  pub fn handle_reader_timed_event(&mut self, event: &Event){
-    let reciever = self.reader_timed_event_receiver.get(&event.token()).expect("Did not found reader timed event reciever!");
+  pub fn handle_reader_timed_event(&mut self, event: &Event) {
+    let reciever = self
+      .reader_timed_event_receiver
+      .get(&event.token())
+      .expect("Did not found reader timed event reciever!");
     let mut message_queue: Vec<TimerMessageType> = vec![];
     while let Ok(res) = reciever.try_recv() {
       message_queue.push(res);
     }
 
-    for timer_message in message_queue{
+    for timer_message in message_queue {
       match timer_message {
-        TimerMessageType::reader_deadline_missed_check =>{
+        TimerMessageType::reader_deadline_missed_check => {
           let maybe_found_reader_with_stuff_to_do = self
-          .message_receiver.available_readers
-          .iter_mut()
-          .find(|reader| reader.get_entity_token() == event.token());
+            .message_receiver
+            .available_readers
+            .iter_mut()
+            .find(|reader| reader.get_entity_token() == event.token());
 
-          match maybe_found_reader_with_stuff_to_do{
-            Some(r) =>{
+          match maybe_found_reader_with_stuff_to_do {
+            Some(r) => {
               r.handle_requested_deadline_event();
-            }None =>{
+            }
+            None => {
               error!("Reader was not found with entity token");
             }
-          }          
-        },
+          }
+        }
         _ => {
           todo!();
         }
@@ -514,16 +531,25 @@ impl DPEventWrapper {
     }
   }
 
-  pub fn handle_reader_command_event(&mut self, event: &Event){
-    let reader_guid = self.reader_command_receiver_identification.get(&event.token()).expect(&"Did not found reader command reciever!");
-    let reader = self.message_receiver.get_reader(reader_guid.entityId).expect( &format!("Message received id not contain reade with entityID: {:?}", reader_guid.entityId));
+  pub fn handle_reader_command_event(&mut self, event: &Event) {
+    let reader_guid = self
+      .reader_command_receiver_identification
+      .get(&event.token())
+      .expect(&"Did not found reader command reciever!");
+    let reader = self
+      .message_receiver
+      .get_reader(reader_guid.entityId)
+      .expect(&format!(
+        "Message received id not contain reade with entityID: {:?}",
+        reader_guid.entityId
+      ));
 
     let mut message_queue: Vec<ReaderCommand> = vec![];
     while let Ok(res) = reader.data_reader_command_receiver.try_recv() {
       message_queue.push(res);
     }
 
-    for command in message_queue{
+    for command in message_queue {
       match command {
         ReaderCommand::RESET_REQUESTED_DEADLINE_STATUS => {
           reader.reset_requested_deadline_missed_status();
@@ -840,8 +866,8 @@ impl DPEventWrapper {
             };
             // TODO: how do you know when topic is keyed and is not
             let topic_kind = match &topic.topic_data.key {
-              Some(_) => TopicKind::WITH_KEY,
-              None => TopicKind::NO_KEY,
+              Some(_) => TopicKind::WithKey,
+              None => TopicKind::NoKey,
             };
             let topic_data_type = match &topic.topic_data.type_name {
               Some(tn) => tn.clone(),
@@ -862,12 +888,21 @@ mod tests {
   use super::*;
   use std::thread;
   use std::time::Duration;
-  use crate::{dds::with_key::datareader::DataReader, dds::participant::DomainParticipant, dds::values::result::RequestedDeadlineMissedStatus, serialization::cdr_deserializer::CDRDeserializerAdapter, dds::values::result::CountWithChange, structure::duration::Duration as DurationDDS, test::random_data::RandomData};
+  use crate::{
+    dds::with_key::datareader::DataReader, dds::participant::DomainParticipant,
+    dds::values::result::RequestedDeadlineMissedStatus,
+    serialization::cdr_deserializer::CDRDeserializerAdapter, dds::values::result::CountWithChange,
+    structure::duration::Duration as DurationDDS, test::random_data::RandomData,
+  };
   use mio::{Ready, PollOpt};
-  use crate::{dds::with_key::datareader::ReaderCommand, dds::{qos::policy::Deadline, values::result::StatusChange}, structure::entity::Entity, dds::qos::QosPolicies};
+  use crate::{
+    dds::with_key::datareader::ReaderCommand,
+    dds::{qos::policy::Deadline, values::result::StatusChange},
+    structure::entity::Entity,
+    dds::qos::QosPolicies,
+  };
   use crate::structure::dds_cache::DDSCache;
   use crate::dds::topic::Topic;
-
 
   #[test]
   fn dpew_add_and_remove_readers() {
@@ -938,9 +973,10 @@ mod tests {
       let new_guid = GUID::new();
 
       let (send, _rec) = mio_channel::sync_channel::<()>(100);
-      let (status_sender, _status_reciever) =  mio_extras::channel::sync_channel::<StatusChange>(100);
-      let (_reader_commander, reader_command_receiver) =  mio_extras::channel::sync_channel::<ReaderCommand>(100);
-  
+      let (status_sender, _status_reciever) =
+        mio_extras::channel::sync_channel::<StatusChange>(100);
+      let (_reader_commander, reader_command_receiver) =
+        mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
       let new_reader = Reader::new(
         new_guid,
@@ -948,7 +984,7 @@ mod tests {
         status_sender,
         Arc::new(RwLock::new(DDSCache::new())),
         "test".to_string(),
-        reader_command_receiver
+        reader_command_receiver,
       );
 
       reader_guids.push(new_reader.get_guid().clone());
@@ -967,16 +1003,14 @@ mod tests {
     child.join().unwrap();
   }
 
-
-
-
   #[test]
   fn dpew_test_reader_commands() {
-
-    let somePolicies = QosPolicies{
+    let somePolicies = QosPolicies {
       durability: None,
       presentation: None,
-      deadline: Some(Deadline{period:  DurationDDS::from_std(Duration::from_millis(500))}),
+      deadline: Some(Deadline {
+        period: DurationDDS::from_std(Duration::from_millis(500)),
+      }),
       latency_budget: None,
       ownership: None,
       liveliness: None,
@@ -990,11 +1024,15 @@ mod tests {
     let dp = DomainParticipant::new(0);
     let sub = dp.create_subscriber(&somePolicies).unwrap();
 
-    let topic_1 = dp.create_topic("TOPIC_1", "jotain", &somePolicies, TopicKind::WITH_KEY).unwrap();
-    let _topic_2 = dp.create_topic("TOPIC_2", "jotain", &somePolicies,TopicKind::WITH_KEY).unwrap();
-    let _topic_3 = dp.create_topic("TOPIC_3", "jotain", &somePolicies, TopicKind::WITH_KEY).unwrap();
-
-    
+    let topic_1 = dp
+      .create_topic("TOPIC_1", "jotain", &somePolicies, TopicKind::WithKey)
+      .unwrap();
+    let _topic_2 = dp
+      .create_topic("TOPIC_2", "jotain", &somePolicies, TopicKind::WithKey)
+      .unwrap();
+    let _topic_3 = dp
+      .create_topic("TOPIC_3", "jotain", &somePolicies, TopicKind::WithKey)
+      .unwrap();
 
     // Adding readers
     let (sender_add_reader, receiver_add) = mio_channel::channel::<Reader>();
@@ -1056,20 +1094,21 @@ mod tests {
 
     let child = thread::spawn(move || DPEventWrapper::event_loop(dp_event_wrapper));
 
-    //TODO IF THIS IS SET TO 1 TEST SUCCEEDS 
+    //TODO IF THIS IS SET TO 1 TEST SUCCEEDS
     let n = 1;
 
     let mut reader_guids = Vec::new();
-    let mut data_readers : Vec<DataReader<RandomData, CDRDeserializerAdapter<RandomData>>> = vec![];
-    let  _topics: Vec<Topic> = vec![];
+    let mut data_readers: Vec<DataReader<RandomData, CDRDeserializerAdapter<RandomData>>> = vec![];
+    let _topics: Vec<Topic> = vec![];
     for i in 0..n {
-      
       //topics.push(topic);
       let new_guid = GUID::new();
 
       let (send, _rec) = mio_channel::sync_channel::<()>(100);
-      let (status_sender, status_reciever_DataReader) =  mio_extras::channel::sync_channel::<StatusChange>(1000);
-      let (reader_commander, reader_command_receiver) =  mio_extras::channel::sync_channel::<ReaderCommand>(1000);
+      let (status_sender, status_reciever_DataReader) =
+        mio_extras::channel::sync_channel::<StatusChange>(1000);
+      let (reader_commander, reader_command_receiver) =
+        mio_extras::channel::sync_channel::<ReaderCommand>(1000);
 
       let mut new_reader = Reader::new(
         new_guid,
@@ -1077,14 +1116,15 @@ mod tests {
         status_sender,
         Arc::new(RwLock::new(DDSCache::new())),
         "test".to_string(),
-        reader_command_receiver
+        reader_command_receiver,
       );
-      
-      
-      let somePolicies = QosPolicies{
+
+      let somePolicies = QosPolicies {
         durability: None,
         presentation: None,
-        deadline: Some(Deadline{period:  DurationDDS::from_std(Duration::from_millis(50))}),
+        deadline: Some(Deadline {
+          period: DurationDDS::from_std(Duration::from_millis(50)),
+        }),
         latency_budget: None,
         ownership: None,
         liveliness: None,
@@ -1096,52 +1136,92 @@ mod tests {
         lifespan: None,
       };
 
-
-      let mut datareader = sub.create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-      &topic_1,
-      Some(EntityId::ENTITYID_UNKNOWN),
-      Some(somePolicies.clone()),
-      ).unwrap();
-
-
+      let mut datareader = sub
+        .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
+          &topic_1,
+          Some(EntityId::ENTITYID_UNKNOWN),
+          Some(somePolicies.clone()),
+        )
+        .unwrap();
 
       datareader.TEST_FUNCTION_set_status_change_receiver(status_reciever_DataReader);
       datareader.TEST_FUNCTION_set_reader_commander(reader_commander);
       data_readers.push(datareader);
 
-      
       new_reader.set_qos(&somePolicies).unwrap();
       new_reader.matched_writer_add(GUID::new(), EntityId::ENTITYID_UNKNOWN, vec![], vec![]);
       reader_guids.push(new_reader.get_guid().clone());
       info!("\nSent reader number {}: {:?}\n", i, &new_reader);
       sender_add_reader.send(new_reader).unwrap();
       std::thread::sleep(Duration::from_millis(100));
-    }    
+    }
     thread::sleep(Duration::from_millis(100));
 
-    let status = data_readers.get_mut(0).unwrap().TEST_FUNCTION_get_requested_deadline_missed_status();
+    let status = data_readers
+      .get_mut(0)
+      .unwrap()
+      .TEST_FUNCTION_get_requested_deadline_missed_status();
     info!("Received status change: {:?}", status);
-    assert_eq!(status.unwrap(), Some(RequestedDeadlineMissedStatus{total: CountWithChange {count : 3, count_change : 3}}));
+    assert_eq!(
+      status.unwrap(),
+      Some(RequestedDeadlineMissedStatus {
+        total: CountWithChange {
+          count: 3,
+          count_change: 3
+        }
+      })
+    );
     thread::sleep(Duration::from_millis(150));
 
-    let status2 = data_readers.get_mut(0).unwrap().TEST_FUNCTION_get_requested_deadline_missed_status();
+    let status2 = data_readers
+      .get_mut(0)
+      .unwrap()
+      .TEST_FUNCTION_get_requested_deadline_missed_status();
     info!("Received status change: {:?}", status2);
-    assert_eq!(status2.unwrap(), Some(RequestedDeadlineMissedStatus{total: CountWithChange {count : 6, count_change : 3}}));
+    assert_eq!(
+      status2.unwrap(),
+      Some(RequestedDeadlineMissedStatus {
+        total: CountWithChange {
+          count: 6,
+          count_change: 3
+        }
+      })
+    );
 
-    let status3 = data_readers.get_mut(0).unwrap().TEST_FUNCTION_get_requested_deadline_missed_status();
+    let status3 = data_readers
+      .get_mut(0)
+      .unwrap()
+      .TEST_FUNCTION_get_requested_deadline_missed_status();
     info!("Received status change: {:?}", status3);
-    assert_eq!(status3.unwrap(),  Some(RequestedDeadlineMissedStatus{total: CountWithChange {count : 6, count_change : 0}}));
-   
+    assert_eq!(
+      status3.unwrap(),
+      Some(RequestedDeadlineMissedStatus {
+        total: CountWithChange {
+          count: 6,
+          count_change: 0
+        }
+      })
+    );
+
     thread::sleep(Duration::from_millis(50));
 
-    let status4 = data_readers.get_mut(0).unwrap().TEST_FUNCTION_get_requested_deadline_missed_status();
+    let status4 = data_readers
+      .get_mut(0)
+      .unwrap()
+      .TEST_FUNCTION_get_requested_deadline_missed_status();
     info!("Received status change: {:?}", status4);
-    assert_eq!(status4.unwrap(), Some(RequestedDeadlineMissedStatus{total: CountWithChange {count : 7, count_change : 1}}));
+    assert_eq!(
+      status4.unwrap(),
+      Some(RequestedDeadlineMissedStatus {
+        total: CountWithChange {
+          count: 7,
+          count_change: 1
+        }
+      })
+    );
 
     info!("\nLopetustoken lähtee\n");
     sender_stop.send(0).unwrap();
     child.join().unwrap();
   }
-
-
 }

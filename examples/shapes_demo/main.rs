@@ -104,10 +104,10 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
 
   // declare topics, subscriber, publisher, readers and writers
   let square_topic = domain_participant
-    .create_topic("Square", "ShapeType", &pub_qos, TopicKind::WITH_KEY)
+    .create_topic("Square", "ShapeType", &pub_qos, TopicKind::WithKey)
     .unwrap();
   let triangle_topic = domain_participant
-    .create_topic("Triangle", "ShapeType", &pub_qos, TopicKind::WITH_KEY)
+    .create_topic("Triangle", "ShapeType", &pub_qos, TopicKind::WithKey)
     .unwrap();
 
   let square_sub = domain_participant

@@ -9,16 +9,16 @@
 //! * To send data, create a `DataWriter`from `Publisher` and `Topic`.
 //! * Data from `DataReader` can be read or taken. Taking removes the data samples from the DataReader,
 //!   whereas reading only marks them as read.
-//! * Topics are either WITH_KEY or NO_KEY. WITH_KEY topics are like map data structures, containing multiple
+//! * Topics are either WithKey or NoKey. WithKey topics are like map data structures, containing multiple
 //!   instances (map items), identified by key. The key must be something that can be extracted from the
 //!   data samples. Instances can be created (published) and deleted (disposed).
-//!   NO_KEY topics have always only one instance of the data.
+//!   NoKey topics have always only one instance of the data.
 //! * Data is sent and received in consecutive samples. When read, a smaple is accompanied with metadata (SampleInfo).
 //!
 //! # Interfacing Rust data types to DDS
 //! * DDS takes care of serialization and deserialization.
 //! In order to do this, the payload data must be Serde serializable/deserializable.
-//! * If your data is to be communicated over a WITH_KEY topic, the payload data type must
+//! * If your data is to be communicated over a WithKey topic, the payload data type must
 //!   implement `Keyed` trait from this crate.
 //!
 //! # Examples
@@ -50,7 +50,7 @@
 //!
 //! // Some DDS Topic that we can write and read from (basically only binds readers
 //! // and writers together)
-//! let some_topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NO_KEY).unwrap();
+//! let some_topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
 //!
 //! // Used type needs Serialize for writers and Deserialize for readers
 //! #[derive(Serialize, Deserialize)]
@@ -101,9 +101,9 @@ mod dp_event_wrapper;
 mod message_receiver;
 mod sampleinfo;
 
-/// Participating in NO_KEY topics.
+/// Participating in NoKey topics.
 pub mod no_key;
-/// Participating in WITH_KEY topics.
+/// Participating in WithKey topics.
 pub mod with_key;
 
 pub(crate) mod participant;
@@ -142,6 +142,7 @@ pub mod data_types {
   // TODO: move typedesc module somewhere better
   pub use crate::dds::typedesc::TypeDesc;
   pub use crate::dds::sampleinfo::SampleInfo;
+  #[doc(inline)]
   pub use crate::structure::topic_kind::TopicKind; // AKA dds::topic::TopicKind
   pub use super::traits::key::BuiltInTopicKey;
 }

@@ -112,7 +112,7 @@ where
     match dds_cache.write() {
       Ok(mut cache) => cache.add_new_topic(
         &String::from(topic.get_name()),
-        TopicKind::NO_KEY,
+        TopicKind::NoKey,
         topic.get_type(),
       ),
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
@@ -417,7 +417,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::WITH_KEY)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -452,7 +452,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::WITH_KEY)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
 
     let mut data_writer: DataWriter<
@@ -494,7 +494,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::WITH_KEY)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =

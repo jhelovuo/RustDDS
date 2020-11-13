@@ -43,7 +43,7 @@ impl TurtleCmdVelTopic {
   }
 
   pub fn topic_kind() -> TopicKind {
-    TopicKind::NO_KEY
+    TopicKind::NoKey
   }
 
   pub fn type_name() -> String {

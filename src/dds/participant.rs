@@ -758,7 +758,7 @@ mod tests {
       .expect("Failed to create publisher");
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let topic = domain_participant
-      .create_topic("Aasii", "RandomData", &qos.clone(), TopicKind::WITH_KEY)
+      .create_topic("Aasii", "RandomData", &qos.clone(), TopicKind::WithKey)
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
     let mut _data_writer = publisher
@@ -781,7 +781,7 @@ mod tests {
       .expect("Failed to create publisher");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos.clone(), TopicKind::WITH_KEY)
+      .create_topic("Aasii", "Huh?", &qos.clone(), TopicKind::WithKey)
       .expect("Failed to create topic");
     thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let mut _data_writer = publisher
