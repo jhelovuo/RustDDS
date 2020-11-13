@@ -47,27 +47,26 @@ pub enum ReaderCommand {
   RESET_REQUESTED_DEADLINE_STATUS,
 }
 
-pub struct CurrentStatusChanges
-{
-  pub livelinessLost : Option<LivelinessLostStatus>,
-  pub offeredDeadlineMissed : Option<OfferedDeadlineMissedStatus>,
-  pub offeredIncompatibleQos : Option<OfferedIncompatibleQosStatus>,
-  pub requestedDeadlineMissed : Option<RequestedDeadlineMissedStatus>,
-  pub requestedIncompatibleQos : Option<RequestedIncompatibleQosStatus>,
-  pub publicationMatched : Option<PublicationMatchedStatus>,
-  pub subscriptionMatched : Option<SubscriptionMatchedStatus>
+pub struct CurrentStatusChanges {
+  pub livelinessLost: Option<LivelinessLostStatus>,
+  pub offeredDeadlineMissed: Option<OfferedDeadlineMissedStatus>,
+  pub offeredIncompatibleQos: Option<OfferedIncompatibleQosStatus>,
+  pub requestedDeadlineMissed: Option<RequestedDeadlineMissedStatus>,
+  pub requestedIncompatibleQos: Option<RequestedIncompatibleQosStatus>,
+  pub publicationMatched: Option<PublicationMatchedStatus>,
+  pub subscriptionMatched: Option<SubscriptionMatchedStatus>,
 }
 
 impl CurrentStatusChanges {
   pub fn new() -> CurrentStatusChanges {
     CurrentStatusChanges {
-      livelinessLost : None,
-      offeredDeadlineMissed : None,
+      livelinessLost: None,
+      offeredDeadlineMissed: None,
       offeredIncompatibleQos: None,
-      requestedDeadlineMissed : None,
-      requestedIncompatibleQos : None,
-      publicationMatched : None,
-      subscriptionMatched : None,
+      requestedDeadlineMissed: None,
+      requestedIncompatibleQos: None,
+      publicationMatched: None,
+      subscriptionMatched: None,
     }
   }
 }
@@ -77,7 +76,6 @@ pub struct DataReader<
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > {
-
   my_subscriber: &'a Subscriber,
   my_topic: &'a Topic,
   qos_policy: QosPolicies,
@@ -93,7 +91,7 @@ pub struct DataReader<
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   status_receiver: mio_channel::Receiver<StatusChange>,
   current_status: CurrentStatusChanges,
-  reader_command: mio_channel::SyncSender<ReaderCommand>
+  reader_command: mio_channel::SyncSender<ReaderCommand>,
 }
 
 impl<'a, D, DA> Drop for DataReader<'a, D, DA>
@@ -142,7 +140,7 @@ where
     dds_cache: Arc<RwLock<DDSCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     status_receiver: mio_channel::Receiver<StatusChange>,
-    reader_command:mio_channel::SyncSender<ReaderCommand>
+    reader_command: mio_channel::SyncSender<ReaderCommand>,
   ) -> Result<Self> {
     let dp = match subscriber.get_participant() {
       Some(dp) => dp,
@@ -172,7 +170,7 @@ where
       deserializer_type: PhantomData,
       discovery_command,
       status_receiver,
-      current_status : CurrentStatusChanges::new(),
+      current_status: CurrentStatusChanges::new(),
       reader_command,
     })
   }
@@ -530,72 +528,96 @@ where
 
   // status queries
 
-  
-
-  fn reset_local_requested_deadline_status_change(&mut self){
-    info!("reset_local_requested_deadline_status_change current {:?}", self.current_status.requestedDeadlineMissed);
+  fn reset_local_requested_deadline_status_change(&mut self) {
+    info!(
+      "reset_local_requested_deadline_status_change current {:?}",
+      self.current_status.requestedDeadlineMissed
+    );
     match self.current_status.requestedDeadlineMissed {
-      Some(_s) =>{
-        self.current_status.requestedDeadlineMissed.as_mut().unwrap().reset_change();
-      }None => {}
+      Some(_s) => {
+        self
+          .current_status
+          .requestedDeadlineMissed
+          .as_mut()
+          .unwrap()
+          .reset_change();
+      }
+      None => {}
     }
   }
 
-  fn fetch_readers_current_status(& mut self) -> Result<()>{
+  fn fetch_readers_current_status(&mut self) -> Result<()> {
     //self.TEST_FUNCTION_get_requested_deadline_missed_status();
-    let mut received_requested_deadline_status_change : bool = false;
-    loop{
+    let mut received_requested_deadline_status_change: bool = false;
+    loop {
       let received_status = self.status_receiver.try_recv();
       match received_status {
-        Ok(s) => {
-          match s {
-            StatusChange::LivelinessLostStatus {status} => {
-              self.current_status.livelinessLost = Some(status);
-            } StatusChange::OfferedDeadlineMissedStatus{status} => {
-              self.current_status.offeredDeadlineMissed = Some(status);
-            }StatusChange:: OfferedIncompatibleQosStatus{status} => {
-              self.current_status.offeredIncompatibleQos = Some(status);
-            } StatusChange::RequestedDeadlineMissedStatus{status} => {
-              self.current_status.requestedDeadlineMissed = Some(status);
-              received_requested_deadline_status_change = true;
-            } StatusChange::RequestedIncompatibleQosStatus{status} => {
-              self.current_status.requestedIncompatibleQos = Some(status);
-            } StatusChange::PublicationMatchedStatus{status} => {
-              self.current_status.publicationMatched = Some(status);
-            } StatusChange::SubscriptionMatchedStatus{status}=> {
-              self.current_status.subscriptionMatched = Some(status);
-            }
+        Ok(s) => match s {
+          StatusChange::LivelinessLostStatus { status } => {
+            self.current_status.livelinessLost = Some(status);
           }
-        }Err(e) =>{
+          StatusChange::OfferedDeadlineMissedStatus { status } => {
+            self.current_status.offeredDeadlineMissed = Some(status);
+          }
+          StatusChange::OfferedIncompatibleQosStatus { status } => {
+            self.current_status.offeredIncompatibleQos = Some(status);
+          }
+          StatusChange::RequestedDeadlineMissedStatus { status } => {
+            self.current_status.requestedDeadlineMissed = Some(status);
+            received_requested_deadline_status_change = true;
+          }
+          StatusChange::RequestedIncompatibleQosStatus { status } => {
+            self.current_status.requestedIncompatibleQos = Some(status);
+          }
+          StatusChange::PublicationMatchedStatus { status } => {
+            self.current_status.publicationMatched = Some(status);
+          }
+          StatusChange::SubscriptionMatchedStatus { status } => {
+            self.current_status.subscriptionMatched = Some(status);
+          }
+        },
+        Err(e) => {
           match e {
-              
-              std::sync::mpsc::TryRecvError::Empty => {
-                break;
-              }
-              std::sync::mpsc::TryRecvError::Disconnected => {
-                error!(" Reader disconnected, could not fetch status change: {:?}", e);
-                // return disconnect status!!!
-                return Err(Error::OutOfResources);
-              }
+            std::sync::mpsc::TryRecvError::Empty => {
+              break;
+            }
+            std::sync::mpsc::TryRecvError::Disconnected => {
+              error!(
+                " Reader disconnected, could not fetch status change: {:?}",
+                e
+              );
+              // return disconnect status!!!
+              return Err(Error::OutOfResources);
+            }
           }
         }
       }
     }
     // after looping set command to reset requested deadeline status if needed. Also reset local status.
     match received_requested_deadline_status_change {
-      true =>{
-        self.current_status.requestedDeadlineMissed.unwrap().reset_change();
-        match self.reader_command.try_send(ReaderCommand::RESET_REQUESTED_DEADLINE_STATUS){
-          Ok(()) =>{ return Ok(()); }
-          Err(e) =>{
+      true => {
+        self
+          .current_status
+          .requestedDeadlineMissed
+          .unwrap()
+          .reset_change();
+        match self
+          .reader_command
+          .try_send(ReaderCommand::RESET_REQUESTED_DEADLINE_STATUS)
+        {
+          Ok(()) => {
+            return Ok(());
+          }
+          Err(e) => {
             error!("Unable to send RESET_REQUESTED_DEADLINE_STATUS: {:?}", e);
             return Err(Error::OutOfResources);
           }
-        }          
+        }
       }
-      false => {return Ok(());}
+      false => {
+        return Ok(());
+      }
     }
-    
   }
   /*
   pub fn register_status_change_notificator(&self, poll: & Poll, token: Token, interest: Ready, opts: PollOpt) -> Result<()>{
@@ -604,7 +626,7 @@ where
 
     //self.TEST_FUNCTION_get_requested_deadline_missed_status();
     //info!("register datareader status reciever to poll with token {:?}", token );
-    //return res; 
+    //return res;
   }
   */
 
@@ -640,33 +662,38 @@ where
       ChangeKind::NOT_ALIVE_UNREGISTERED => InstanceState::NotAlive_NoWriters,
     }
   }
-  
- 
-  
+
   #[cfg(test)]
-  pub fn TEST_FUNCTION_set_status_change_receiver(&mut self, receiver : mio_channel::Receiver<StatusChange>){
-     self.status_receiver = receiver;
+  pub fn TEST_FUNCTION_set_status_change_receiver(
+    &mut self,
+    receiver: mio_channel::Receiver<StatusChange>,
+  ) {
+    self.status_receiver = receiver;
   }
-  
+
   #[cfg(test)]
-  pub fn TEST_FUNCTION_get_requested_deadline_missed_status(&mut self)-> Result<Option<RequestedDeadlineMissedStatus>>{
+  pub fn TEST_FUNCTION_get_requested_deadline_missed_status(
+    &mut self,
+  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
     self.get_requested_deadline_missed_status()
   }
-  
+
   #[cfg(test)]
-  pub fn TEST_FUNCTION_set_reader_commander(&mut self, sender : mio_channel::SyncSender<ReaderCommand> ){
+  pub fn TEST_FUNCTION_set_reader_commander(
+    &mut self,
+    sender: mio_channel::SyncSender<ReaderCommand>,
+  ) {
     self.reader_command = sender;
   }
-  
-  pub fn get_requested_deadline_missed_status(&mut self) -> Result<Option<RequestedDeadlineMissedStatus>> {
+
+  pub fn get_requested_deadline_missed_status(
+    &mut self,
+  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
     self.fetch_readers_current_status()?;
     let value_before_reset = self.current_status.requestedDeadlineMissed.clone();
     self.reset_local_requested_deadline_status_change();
     return Ok(value_before_reset);
-
   }
- 
-
 } // impl
 
 /*
@@ -799,7 +826,10 @@ mod tests {
   use crate::serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes};
   use byteorder::LittleEndian;
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-  use std::{thread, time::{self}};
+  use std::{
+    thread,
+    time::{self},
+  };
   use mio::{Events};
   #[test]
   fn dr_get_samples_from_ddschache() {
@@ -813,9 +843,9 @@ mod tests {
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) =  mio_extras::channel::sync_channel::<StatusChange>(100);
-    let (_reader_commander, reader_command_receiver) =  mio_extras::channel::sync_channel::<ReaderCommand>(100);
-  
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander, reader_command_receiver) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let reader_id = EntityId::default();
     let datareader_id = EntityId::default();
@@ -827,7 +857,7 @@ mod tests {
       status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
-      reader_command_receiver
+      reader_command_receiver,
     );
 
     let mut matching_datareader = sub
@@ -936,9 +966,9 @@ mod tests {
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) =  mio_extras::channel::sync_channel::<StatusChange>(100);
-    let (_reader_commander, reader_command_receiver) =  mio_extras::channel::sync_channel::<ReaderCommand>(100);
-  
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander, reader_command_receiver) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let default_id = EntityId::default();
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), default_id);
@@ -949,7 +979,7 @@ mod tests {
       status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
-      reader_command_receiver
+      reader_command_receiver,
     );
 
     let mut datareader = sub
@@ -1161,9 +1191,9 @@ mod tests {
       .unwrap();
 
     let (send, rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) =  mio_extras::channel::sync_channel::<StatusChange>(100);
-    let (_reader_commander, reader_command_receiver) =  mio_extras::channel::sync_channel::<ReaderCommand>(100);
-  
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander, reader_command_receiver) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let default_id = EntityId::default();
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), default_id);
@@ -1174,7 +1204,7 @@ mod tests {
       status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
-      reader_command_receiver
+      reader_command_receiver,
     );
 
     let mut datareader = sub

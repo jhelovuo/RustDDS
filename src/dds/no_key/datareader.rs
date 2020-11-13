@@ -3,24 +3,17 @@ use std::io;
 use serde::{de::DeserializeOwned};
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
-use crate::{/*dds::interfaces::IDataReader, */ /*dds::interfaces::IDataSample , */ discovery::discovery::DiscoveryCommand, dds::with_key::datareader::ReaderCommand, structure::{
+use crate::{
+  structure::{
     entity::{Entity, EntityAttributes},
-    guid::{EntityId},
-    dds_cache::DDSCache,
-  }};
-use crate::dds::{
-  traits::serde_adapters::*, values::result::*, qos::*, pubsub::Subscriber, topic::Topic,
-  readcondition::*,
+  },
 };
+use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*, readcondition::*};
 
 use crate::dds::with_key::datareader as datareader_with_key;
 use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
-use mio_extras::channel as mio_channel;
 use crate::serialization::CDRDeserializerAdapter;
 use crate::dds::no_key::datasample::DataSample;
-use std::{
-  sync::{Arc, RwLock},
-};
 use super::{
   wrappers::{NoKeyWrapper, SAWrapper},
 };
@@ -43,7 +36,6 @@ where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  
   pub fn from_keyed(
     keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<DA>>,
   ) -> DataReader<'a, D, DA> {
@@ -156,7 +148,9 @@ where
     )
   }
 
-  pub fn get_requested_deadline_missed_status(&mut self) -> Result<Option<RequestedDeadlineMissedStatus>> {
+  pub fn get_requested_deadline_missed_status(
+    &mut self,
+  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
     self.keyed_datareader.get_requested_deadline_missed_status()
   }
 }
