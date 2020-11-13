@@ -7,7 +7,6 @@ use crate::{
   structure::duration::Duration,
 };
 
-use std::time::Duration as StdDuration;
 
 pub struct ROSDiscoveryTopic {}
 

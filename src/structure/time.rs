@@ -1,8 +1,8 @@
 
 use speedy::{Readable, Writable};
 use serde::{Serialize, Deserialize};
-use std::convert::From;
 use std::ops::Sub;
+use chrono;
 
 use super::duration::Duration;
 
@@ -47,7 +47,7 @@ impl Timestamp {
   };
 
   pub fn now() -> Timestamp {
-    unimplemented!();
+    Timestamp::from_nanos( chrono::Utc::now().timestamp_nanos() as u64)
   }
 
   fn to_ticks(&self) -> u64 {
@@ -61,22 +61,17 @@ impl Timestamp {
     }
   }
 
+  fn from_nanos(nanos_since_unix_epoch: u64) -> Timestamp {
+    Timestamp {
+      seconds: (nanos_since_unix_epoch / 1_000_000_000) as u32,
+      fraction: (((nanos_since_unix_epoch % 1_000_000_000) << 32) / 1_000_000_000) as u32
+    }
+  }
+
   pub fn duration_since(&self, since:Timestamp) -> Duration {
     *self - since
   }
 
-  /* what is this?
-  pub fn get_time_diff(&self) -> Duration {
-    let timespec = time::Timespec::from(self.clone());
-    let timespec_now = time::get_time();
-
-    let timediff = timespec_now - timespec;
-    let timediff = match timediff.to_std() {
-      Ok(td) => Duration::from_std(td),
-      _ => Duration::DURATION_ZERO,
-    };
-    timediff
-  } */
 }
 
 
@@ -91,28 +86,6 @@ impl Sub for Timestamp {
     Duration::from_ticks( a.wrapping_sub(b) as i64) 
   }
 }
-
-/*
-const NANOS_PER_SEC: i64 = 1_000_000_000;
-
-impl From<time::Timespec> for Time {
-  fn from(timespec: time::Timespec) -> Self {
-    Time {
-      seconds: timespec.sec as i32,
-      fraction: ((i64::from(timespec.nsec) << 32) / NANOS_PER_SEC) as u32,
-    }
-  }
-}
-
-impl From<Time> for time::Timespec {
-  fn from(time: Time) -> Self {
-    time::Timespec {
-      sec: i64::from(time.seconds),
-      nsec: ((i64::from(time.fraction) * NANOS_PER_SEC) >> 32) as i32,
-    }
-  }
-}
-*/
 
 #[cfg(test)]
 mod tests {

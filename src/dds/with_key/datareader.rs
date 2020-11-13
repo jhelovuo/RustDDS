@@ -307,7 +307,7 @@ where
       None => return,
     };
 
-    for (instant, CacheChange{kind, writer_guid, sequence_number, data_value: payload_opt, key: key_hash}) in cache_changes {
+    for (instant, CacheChange{kind, writer_guid, sequence_number:_, data_value: payload_opt, key: key_hash}) in cache_changes {
       match kind {
         ChangeKind::NOT_ALIVE_UNREGISTERED => (), // presumably causes no local cache update?
 

@@ -1,4 +1,4 @@
-use log::debug;
+//use log::debug;
 
 use crate::structure::{ time::Timestamp, guid::GUID };
 
@@ -13,7 +13,7 @@ use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy;
 use crate::dds::readcondition::ReadCondition;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet, HashMap,VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap,VecDeque};
 use std::ops::Bound::*;
 
 //use std::num::Zero; unstable
@@ -172,7 +172,7 @@ where
         None => Some(1), // default history policy
       };
     let sample_keep_resource_limit = 
-      if let Some(policy::ResourceLimits {max_samples, max_instances, max_samples_per_instance}) 
+      if let Some(policy::ResourceLimits {max_samples:_, max_instances:_, max_samples_per_instance}) 
         = self.qos.resource_limits {
           Some(max_samples_per_instance)
         } else {None};
@@ -251,177 +251,164 @@ where
     )
   }
 
+  fn make_sample_info(dswm: &SampleWithMetaData<D>, imd: &InstanceMetaData, sample_rank: usize, 
+    mrs_generations: i32, mrsic_generations: i32) -> SampleInfo
+  {
+    SampleInfo {
+      sample_state: if dswm.sample_has_been_read { SampleState::Read } else { SampleState::NotRead },
+      view_state: if dswm.generation_counts.total() > imd.last_generation_accessed.total() { 
+        ViewState::New } else { ViewState::NotNew },
+      instance_state: imd.instance_state,
+      generation_counts: dswm.generation_counts.clone(),
+      sample_rank: sample_rank as i32, // how many samples follow this one
+      generation_rank: mrsic_generations - dswm.generation_counts.total(),
+      absolute_generation_rank: mrs_generations - dswm.generation_counts.total(),
+      source_timestamp: dswm.source_timestamp.clone(),
+      publication_handle: dswm.writer_guid,
+    }
+  }
+
+  fn record_instance_generation_viewed(
+      instance_generations: &mut HashMap<D::K,NotAliveGenerationCounts>,
+      accessed_generations: NotAliveGenerationCounts, 
+      instance_key: &D::K ) {
+    instance_generations.entry(instance_key.clone())
+      .and_modify( |old_gens| 
+            if accessed_generations.total() > old_gens.total() 
+              { *old_gens = accessed_generations }  
+          )
+      .or_insert( accessed_generations );
+  }
+
+  fn mark_instances_viewed(&mut self, instance_generations: HashMap<D::K,NotAliveGenerationCounts> ) {
+    for (inst,gen) in instance_generations.iter() {
+      if let Some(imd) = self.instance_map.get_mut(inst) {
+        imd.last_generation_accessed = *gen;
+      } else { panic!("Instance disappeared!?!!1!") }
+    }    
+  }
 
   // read methods perform actual read or take. They must be called with key vectors
   // obtained from select_*_for_access -methods above, or their subvectors.
+  //
+  // Therea are two versions of both read and take: Return DataSample<D> (incl. metadata)
+  // and "bare" versions without metadata.
   pub fn read_by_keys(&mut self, keys: &[(Timestamp,D::K)] ) -> Vec<DataSample<&D>> {
     let len = keys.len();    
     let mut result = Vec::with_capacity(len);
+
+    if len == 0 { return result }
+
     let mut instance_generations : HashMap<D::K,NotAliveGenerationCounts> = HashMap::new();
-    if len > 0 {
-      let mrsic_total = self.instance_map.get( &keys.last().unwrap().1 ).unwrap()
-                          .latest_generation_available.total();
-      let mrs_total = self.datasamples.iter()
-                        .next_back().unwrap().1
-                        .generation_counts.total();
-      let mut sample_infos = VecDeque::with_capacity(len);
-      // construct SampleInfos
-      for (index,(ts,key)) in keys.iter().enumerate() {
-        let dswm = self.datasamples.get_mut(ts).unwrap();
-        let imd = self.instance_map.get(key).unwrap();
-        let sample_info = SampleInfo {
-          sample_state: if dswm.sample_has_been_read { SampleState::Read } else { SampleState::NotRead },
-          view_state: if dswm.generation_counts.total() > imd.last_generation_accessed.total() { 
-            ViewState::New } else { ViewState::NotNew },
-          instance_state: imd.instance_state,
-          generation_counts: dswm.generation_counts.clone(),
-          sample_rank: (len - index - 1) as i32, // how many samples follow this one
-          generation_rank: mrsic_total - dswm.generation_counts.total(),
-          absolute_generation_rank: mrs_total - dswm.generation_counts.total(),
-          source_timestamp: dswm.source_timestamp.clone(),
-          publication_handle: dswm.writer_guid,
-        };
-        dswm.sample_has_been_read = true; // mark read
-        // record instance generation accessed
-        instance_generations.entry(key.clone())
-          .and_modify( |old_gens| 
-                if dswm.generation_counts.total() > old_gens.total() 
-                  { *old_gens = dswm.generation_counts }  
-              )
-          .or_insert( dswm.generation_counts );
-        sample_infos.push_back(sample_info);
-      } 
+    let mrsic_total = self.instance_map.get( &keys.last().unwrap().1 ).unwrap()
+                        .latest_generation_available.total();
+    let mrs_total = self.datasamples.iter()
+                      .next_back().unwrap().1
+                      .generation_counts.total();
+    let mut sample_infos = VecDeque::with_capacity(len);
+    // construct SampleInfos and record read/viewed
+    for (index,(ts,key)) in keys.iter().enumerate() {
+      let dswm = self.datasamples.get_mut(ts).unwrap();
+      let imd = self.instance_map.get(key).unwrap();
 
-      // mark instances viewed
-      for (inst,gen) in instance_generations.iter() {
-        if let Some(imd) = self.instance_map.get_mut(inst) {
-          imd.last_generation_accessed = *gen;
-        } else { panic!("Instance disappeared!?!!1!") }
-      }
-    
-      // We need to do SampleInfo construction and final result construction as separate passes.
-      // This is becaue SampleInfo construction needs to mark items as read and generations 
-      // as viewed, i.e. needs mutable reference to data_samples.
-      // Result construction (in read, not take) needs to hand out multiple references into
-      // data_samples, therefore it needs immutable access, not mutable.
+      let sample_info = Self::make_sample_info(dswm, imd, len - index - 1, mrs_total, mrsic_total);
+      dswm.sample_has_been_read = true; // mark as read
+      Self::record_instance_generation_viewed(&mut instance_generations, dswm.generation_counts, key);
+      sample_infos.push_back(sample_info);
+    } 
 
-      // construct results
-      for (ts,_key) in keys.iter() {
-          let sample_info = sample_infos.pop_front().unwrap();
-          let sample : &std::result::Result<D, D::K> 
-              = &self.datasamples.get(ts).unwrap().sample;
-          result.push( DataSample::new(sample_info, result_ok_as_ref_err_clone( sample ) ) );
-      }
-    } // if len > 0
+    // mark instances viewed
+    self.mark_instances_viewed(instance_generations);
+  
+    // We need to do SampleInfo construction and final result construction as separate passes.
+    // This is becaue SampleInfo construction needs to mark items as read and generations 
+    // as viewed, i.e. needs mutable reference to data_samples.
+    // Result construction (in read, not take) needs to hand out multiple references into
+    // data_samples, therefore it needs immutable access, not mutable.
 
-    // return result
+    // construct results
+    for (ts,_key) in keys.iter() {
+        let sample_info = sample_infos.pop_front().unwrap();
+        let sample : &std::result::Result<D, D::K> 
+            = &self.datasamples.get(ts).unwrap().sample;
+        result.push( DataSample::new(sample_info, result_ok_as_ref_err_clone( sample ) ) );
+    }
+
     result
   }
 
   pub fn take_by_keys(&mut self, keys: &[(Timestamp,D::K)] ) -> Vec<DataSample<D>> {
-    let mut result = Vec::with_capacity(keys.len());
     let len = keys.len();
+    let mut result = Vec::with_capacity(len);
+
+    if len == 0 { return result }
+
     let mut instance_generations : HashMap<D::K,NotAliveGenerationCounts> = HashMap::new();
-    if len > 0 {
-      let mrsic_total = self.instance_map.get( &keys.last().unwrap().1 ).unwrap()
-                          .latest_generation_available.total();
-      let mrs_total = self.datasamples.iter()
-                        .next_back().unwrap().1
-                        .generation_counts.total();
-      // collect result
-      for (index,(ts,key)) in keys.iter().enumerate() {
-        let dswm = self.datasamples.remove(ts).unwrap();
-        let imd = self.instance_map.get(key).unwrap();
-        let sample_info = SampleInfo {
-          sample_state: if dswm.sample_has_been_read { SampleState::Read } else { SampleState::NotRead },
-          view_state: if dswm.generation_counts.total() > imd.last_generation_accessed.total() { 
-            ViewState::New } else { ViewState::NotNew },
-          instance_state: imd.instance_state,
-          generation_counts: dswm.generation_counts.clone(),
-          sample_rank: (len-index-1) as i32, // how many samples follow this one
-          generation_rank: mrsic_total - dswm.generation_counts.total(),
-          absolute_generation_rank: mrs_total - dswm.generation_counts.total(),
-          source_timestamp: dswm.source_timestamp.clone(),
-          publication_handle: dswm.writer_guid,
-        };
-        //dwsm.sample_has_been_read = true; // mark read
-        // record instance generation accessed
-        instance_generations.entry(key.clone())
-          .and_modify( |old_gens| 
-              if dswm.generation_counts.total() > old_gens.total() 
-                { *old_gens = dswm.generation_counts.clone() }
-            )  
-          .or_insert( dswm.generation_counts.clone() );
+    let mrsic_total = self.instance_map.get( &keys.last().unwrap().1 ).unwrap()
+                        .latest_generation_available.total();
+    let mrs_total = self.datasamples.iter()
+                      .next_back().unwrap().1
+                      .generation_counts.total();
+    // collect result
+    for (index,(ts,key)) in keys.iter().enumerate() {
+      let dswm = self.datasamples.remove(ts).unwrap();
+      let imd = self.instance_map.get(key).unwrap();
+      let sample_info = Self::make_sample_info(&dswm, imd, len - index - 1, mrs_total, mrsic_total);
+      //dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is about to be destroyed
+      Self::record_instance_generation_viewed(&mut instance_generations, dswm.generation_counts, key);
+      result.push( DataSample::new(sample_info, dswm.sample ) );
+    } 
 
-        result.push( DataSample::new(sample_info, dswm.sample ) );
-      } // for
-
-      // mark instances viewed
-      for (inst,gen) in instance_generations.iter() {
-        if let Some(imd) = self.instance_map.get_mut(inst) {
-          imd.last_generation_accessed = *gen;
-        } else { panic!("Instance disappeared!?!!1!") }
-      }
-    }
-
+    self.mark_instances_viewed(instance_generations);
     result
   }
 
-  pub fn read_bare_by_keys (&mut self, keys: &[(Timestamp,D::K)] ) -> Vec<&D> {
-    unimplemented!();
-  }
+  pub fn read_bare_by_keys (&mut self, keys: &[(Timestamp,D::K)] ) -> Vec<std::result::Result<&D, D::K>> {
+    let len = keys.len();    
+    let mut result = Vec::with_capacity(len);
 
-  pub fn take_bare_by_keys (&mut self, keys: &[(Timestamp,D::K)] ) -> Vec<D> {
-    unimplemented!();    
-  }
+    if len == 0 { return result }
 
+    let mut instance_generations : HashMap<D::K,NotAliveGenerationCounts> = HashMap::new();
 
-  /*
-  pub fn add_datasample(&mut self, data_sample: DataSample<D>) {
-    let key: D::K = data_sample.get_key();
+    // construct SampleInfos and record read/viewed
+    for (ts,key) in keys.iter() {
+      let dswm = self.datasamples.get_mut(ts).unwrap();
+      dswm.sample_has_been_read = true; // mark as read
+      Self::record_instance_generation_viewed(&mut instance_generations, dswm.generation_counts, key);
+    } 
 
-    if !self.distinct_keys.contains(&key) {
-      debug!("Adding key with hash {:x?}", key.into_hash_key());
-      self.distinct_keys.insert(key.clone());
+    self.mark_instances_viewed(instance_generations);
+
+    // We need to do SampleInfo construction and final result construction as separate passes.
+    // See reason in read function above.
+
+    // construct results
+    for (ts,_key) in keys.iter() {
+        result.push( result_ok_as_ref_err_clone( &self.datasamples.get(ts).unwrap().sample ) );
     }
-
-    let block = self.datasamples.get_mut(&key);
-
-    match self.qos.history() {
-      Some(history) => match history {
-        History::KeepAll => match block {
-          Some(prev_samples) => prev_samples.push(data_sample),
-          None => {
-            self.datasamples.insert(key.clone(), vec![data_sample]);
-            // TODO: Check if DDS resource limits are exceeded by this insert, and
-            // discard older samples as needed.
-          }
-        },
-        History::KeepLast { depth } => match block {
-          Some(prev_samples) => {
-            prev_samples.push(data_sample);
-            let val = prev_samples.len() - *depth as usize;
-            prev_samples.drain(0..val);
-          }
-          None => {
-            self.datasamples.insert(key.clone(), vec![data_sample]);
-          }
-        },
-      },
-      None => match block {
-        // using keep last 1 as default history policy
-        Some(prev_samples) => {
-          prev_samples.push(data_sample);
-          let val = prev_samples.len() - 1;
-          prev_samples.drain(0..val);
-        }
-        None => {
-          self.datasamples.insert(key.clone(), vec![data_sample]);
-        }
-      },
-    }
+    result
   }
-  */
+
+  pub fn take_bare_by_keys (&mut self, keys: &[(Timestamp,D::K)] ) -> Vec<std::result::Result<D, D::K>> {
+    let len = keys.len();    
+    let mut result = Vec::with_capacity(len);
+    
+    if len == 0 { return result }
+    
+    let mut instance_generations : HashMap<D::K,NotAliveGenerationCounts> = HashMap::new();
+
+    for (ts,key) in keys.iter() {
+      let dswm = self.datasamples.remove(ts).unwrap();
+      //dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is about to be destroyed
+      Self::record_instance_generation_viewed(&mut instance_generations, dswm.generation_counts, key);
+      result.push( dswm.sample );
+    } 
+
+    self.mark_instances_viewed(instance_generations);
+    result 
+  }
+
 
   /* this seems to be for tests only?
   pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
@@ -433,28 +420,10 @@ where
     self.hash_to_key_map.get(&key_hash).map(|key| key.clone())
   }
 
-  /*pub fn get_datasamples_mut(&mut self, key: &D::K) -> Option<&mut Vec<DataSample<D>>> {
-    self.datasamples.get_mut(&key)
-  }*/
-
   pub fn get_next_key(&self, key: &D::K) -> Option<D::K> {
     self.instance_map.range( (Excluded(key),Unbounded) ).map( |(k,_)| k.clone() ).next()
-    /*
-    if let Some(pos) = self.datasamples.iter().position(|(k, _)| k == key) {
-      if let Some(next) = self.datasamples.iter().nth(pos + 1) {
-        return Some(next.0.clone());
-      };
-    };
-    None
-    */
   }
   
-  /*
-  pub fn remove_datasamples(&mut self, key: &D::K) -> Option<Vec<DataSample<D>>> {
-    self.datasamples.remove(&key)
-  }
-  */
-
   pub fn set_qos_policy(&mut self, qos: QosPolicies) {
     self.qos = qos
   }

@@ -21,8 +21,6 @@ impl<D> DataSample<D> {
     let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;
     let instance_state = InstanceState::Alive;
-    let disposed_generation_count = 0;
-    let no_writers_generation_count = 0;
     let sample_rank = 0;
     let generation_rank = 0;
     let absolute_generation_rank = 0;
