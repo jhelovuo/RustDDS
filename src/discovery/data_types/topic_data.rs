@@ -2,6 +2,8 @@ use std::time::Instant;
 
 use serde::{Serialize, Deserialize};
 
+use chrono::Utc;
+
 use crate::{
   dds::{
     qos::policy::{
@@ -475,7 +477,7 @@ pub struct DiscoveredTopicData {
 impl DiscoveredTopicData {
   pub fn new(topic_data: TopicBuiltinTopicData) -> DiscoveredTopicData {
     DiscoveredTopicData {
-      updated_time: time::precise_time_ns(),
+      updated_time: Utc::now().timestamp_nanos() as u64,
       topic_data,
     }
   }

@@ -7,8 +7,6 @@ use std::{
   sync::{Arc, RwLock},
   sync::RwLockReadGuard,
   sync::RwLockWriteGuard,
-  time::Duration as StdDuration,
-  time::Instant,
 };
 
 use crate::{
@@ -38,7 +36,7 @@ use crate::discovery::{
   discovery_db::DiscoveryDB,
 };
 
-use crate::structure::{duration::Duration, guid::EntityId};
+use crate::structure::{duration::Duration, guid::EntityId, time::Timestamp};
 
 use crate::serialization::{CDRSerializerAdapter, pl_cdr_deserializer::PlCdrDeserializerAdapter};
 
@@ -47,6 +45,8 @@ use super::data_types::topic_data::{
   DiscoveredTopicData, ParticipantMessageData, ParticipantMessageDataKind,
 };
 use byteorder::LittleEndian;
+
+use std::time::Duration as std_Duration;
 
 pub enum DiscoveryCommand {
   STOP_DISCOVERY,
@@ -57,15 +57,15 @@ pub enum DiscoveryCommand {
 }
 
 pub struct LivelinessState {
-  last_auto_update: Instant,
-  last_manual_participant_update: Instant,
+  last_auto_update: Timestamp,
+  last_manual_participant_update: Timestamp,
 }
 
 impl LivelinessState {
   pub fn new() -> LivelinessState {
     LivelinessState {
-      last_auto_update: Instant::now(),
-      last_manual_participant_update: Instant::now(),
+      last_auto_update: Timestamp::now(),
+      last_manual_participant_update: Timestamp::now(),
     }
   }
 }
@@ -83,13 +83,13 @@ unsafe impl Sync for Discovery {}
 unsafe impl Send for Discovery {}
 
 impl Discovery {
-  const PARTICIPANT_CLEANUP_PERIOD: u64 = 2;
-  const TOPIC_CLEANUP_PERIOD: u64 = 10; // timer for cleaning up inactive topics
-  const SEND_PARTICIPANT_INFO_PERIOD: u64 = 2;
-  const SEND_READERS_INFO_PERIOD: u64 = 2;
-  const SEND_WRITERS_INFO_PERIOD: u64 = 2;
-  const SEND_TOPIC_INFO_PERIOD: u64 = 20;
-  const CHECK_PARTICIPANT_MESSAGES: u64 = 1;
+  const PARTICIPANT_CLEANUP_PERIOD :std_Duration = std_Duration::from_secs(2);
+  const TOPIC_CLEANUP_PERIOD :std_Duration = std_Duration::from_secs(10); // timer for cleaning up inactive topics
+  const SEND_PARTICIPANT_INFO_PERIOD :std_Duration = std_Duration::from_secs(2);
+  const SEND_READERS_INFO_PERIOD :std_Duration = std_Duration::from_secs(2);
+  const SEND_WRITERS_INFO_PERIOD :std_Duration  = std_Duration::from_secs(2);
+  const SEND_TOPIC_INFO_PERIOD :std_Duration = std_Duration::from_secs(20);
+  const CHECK_PARTICIPANT_MESSAGES :std_Duration = std_Duration::from_secs(1);
 
   const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
@@ -256,8 +256,7 @@ impl Discovery {
 
     // create lease duration check timer
     let mut participant_cleanup_timer: Timer<()> = Timer::default();
-    participant_cleanup_timer.set_timeout(
-      StdDuration::from_secs(Discovery::PARTICIPANT_CLEANUP_PERIOD),
+    participant_cleanup_timer.set_timeout(Discovery::PARTICIPANT_CLEANUP_PERIOD,
       (),
     );
     match discovery.poll.register(
@@ -299,7 +298,7 @@ impl Discovery {
     // creating timer for sending out own participant data
     let mut participant_send_info_timer: Timer<()> = Timer::default();
     participant_send_info_timer.set_timeout(
-      StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+      Discovery::SEND_PARTICIPANT_INFO_PERIOD,
       (),
     );
 
@@ -397,7 +396,7 @@ impl Discovery {
 
     let mut readers_send_info_timer: Timer<()> = Timer::default();
     readers_send_info_timer.set_timeout(
-      StdDuration::from_secs(Discovery::SEND_READERS_INFO_PERIOD),
+      Discovery::SEND_READERS_INFO_PERIOD,
       (),
     );
     match discovery.poll.register(
@@ -494,7 +493,7 @@ impl Discovery {
 
     let mut writers_send_info_timer: Timer<()> = Timer::default();
     writers_send_info_timer.set_timeout(
-      StdDuration::from_secs(Discovery::SEND_WRITERS_INFO_PERIOD),
+      Discovery::SEND_WRITERS_INFO_PERIOD,
       (),
     );
     match discovery.poll.register(
@@ -537,7 +536,7 @@ impl Discovery {
 
     // create lease duration check timer
     let mut topic_cleanup_timer: Timer<()> = Timer::default();
-    topic_cleanup_timer.set_timeout(StdDuration::from_secs(Discovery::TOPIC_CLEANUP_PERIOD), ());
+    topic_cleanup_timer.set_timeout(Discovery::TOPIC_CLEANUP_PERIOD, ());
     match discovery.poll.register(
       &topic_cleanup_timer,
       DISCOVERY_TOPIC_CLEANUP_TOKEN,
@@ -612,7 +611,7 @@ impl Discovery {
 
     let mut topic_info_send_timer: Timer<()> = Timer::default();
     topic_info_send_timer.set_timeout(
-      StdDuration::from_secs(Discovery::SEND_TOPIC_INFO_PERIOD),
+      Discovery::SEND_TOPIC_INFO_PERIOD,
       (),
     );
     match discovery.poll.register(
@@ -704,7 +703,7 @@ impl Discovery {
 
     let mut dcps_participant_message_timer = mio_extras::timer::Timer::default();
     dcps_participant_message_timer.set_timeout(
-      StdDuration::from_secs(Discovery::CHECK_PARTICIPANT_MESSAGES),
+      Discovery::CHECK_PARTICIPANT_MESSAGES,
       (),
     );
     match discovery.poll.register(
@@ -803,7 +802,7 @@ impl Discovery {
                 };
               }
               DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS => {
-                liveliness_state.last_manual_participant_update = Instant::now();
+                liveliness_state.last_manual_participant_update = Timestamp::now();
               }
               DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid } => {
                 discovery.send_discovery_notification(
@@ -824,12 +823,14 @@ impl Discovery {
           discovery.participant_cleanup();
           // setting next cleanup timeout
           participant_cleanup_timer.set_timeout(
-            StdDuration::from_secs(Discovery::PARTICIPANT_CLEANUP_PERIOD),
+            Discovery::PARTICIPANT_CLEANUP_PERIOD,
             (),
           );
         } else if event.token() == DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN {
           // setting 3 times the duration so lease doesn't break if we fail once for some reason
-          let lease_duration = StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD * 3);
+          let lease_duration = Discovery::SEND_PARTICIPANT_INFO_PERIOD 
+            + Discovery::SEND_PARTICIPANT_INFO_PERIOD 
+            + Discovery::SEND_PARTICIPANT_INFO_PERIOD;
           let strong_dp = match discovery.domain_participant.clone().upgrade() {
             Some(dp) => dp,
             None => {
@@ -837,12 +838,12 @@ impl Discovery {
               return;
             }
           };
-          let data = SPDPDiscoveredParticipantData::from_participant(&strong_dp, lease_duration);
+          let data = SPDPDiscoveredParticipantData::from_participant(&strong_dp, Duration::from(lease_duration)) ;
 
           dcps_participant_writer.write(data, None).unwrap_or(());
           // reschedule timer
           participant_send_info_timer.set_timeout(
-            StdDuration::from_secs(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+            Discovery::SEND_PARTICIPANT_INFO_PERIOD,
             (),
           );
         } else if event.token() == DISCOVERY_READER_DATA_TOKEN {
@@ -853,7 +854,7 @@ impl Discovery {
           }
 
           readers_send_info_timer.set_timeout(
-            StdDuration::from_secs(Discovery::SEND_READERS_INFO_PERIOD),
+            Discovery::SEND_READERS_INFO_PERIOD,
             (),
           );
         } else if event.token() == DISCOVERY_WRITER_DATA_TOKEN {
@@ -864,7 +865,7 @@ impl Discovery {
           }
 
           writers_send_info_timer.set_timeout(
-            StdDuration::from_secs(Discovery::SEND_WRITERS_INFO_PERIOD),
+            Discovery::SEND_WRITERS_INFO_PERIOD,
             (),
           );
         } else if event.token() == DISCOVERY_TOPIC_DATA_TOKEN {
@@ -873,11 +874,11 @@ impl Discovery {
           discovery.topic_cleanup();
 
           topic_cleanup_timer
-            .set_timeout(StdDuration::from_secs(Discovery::TOPIC_CLEANUP_PERIOD), ());
+            .set_timeout(Discovery::TOPIC_CLEANUP_PERIOD, ());
         } else if event.token() == DISCOVERY_SEND_TOPIC_INFO_TOKEN {
           discovery.write_topic_info(&mut dcps_writer);
           topic_info_send_timer.set_timeout(
-            StdDuration::from_secs(Discovery::SEND_TOPIC_INFO_PERIOD),
+            Discovery::SEND_TOPIC_INFO_PERIOD,
             (),
           );
         } else if event.token() == DISCOVERY_PARTICIPANT_MESSAGE_TOKEN {
@@ -886,7 +887,7 @@ impl Discovery {
           discovery
             .write_participant_message(&mut dcps_participant_message_writer, &mut liveliness_state);
           dcps_participant_message_timer.set_timeout(
-            StdDuration::from_secs(Discovery::CHECK_PARTICIPANT_MESSAGES),
+            Discovery::CHECK_PARTICIPANT_MESSAGES,
             (),
           );
         }
@@ -1089,7 +1090,7 @@ impl Discovery {
         LivelinessKind::ManulByTopic => false,
       });
 
-    let inow = Instant::now();
+    let inow = Timestamp::now();
 
     // Automatic
     {
@@ -1293,7 +1294,7 @@ impl Discovery {
       minimum_separation: Duration::DURATION_ZERO,
     });
     qos.reliability = Some(Reliability::Reliable {
-      max_blocking_time: Duration::from(StdDuration::from_millis(100)),
+      max_blocking_time: Duration::from(Duration::from_millis(100)),
     });
     qos.destination_order = Some(DestinationOrder::ByReceptionTimestamp);
     // qos.history = Some(History::KeepLast { depth: 1 });
@@ -1387,7 +1388,7 @@ mod tests {
 
     let mut events = Events::with_capacity(10);
     poll
-      .poll(&mut events, Some(StdDuration::from_secs(1)))
+      .poll(&mut events, Some(Duration::from_secs(1)))
       .unwrap();
 
     let _data2 = udp_listener.get_message();
@@ -1477,7 +1478,7 @@ mod tests {
 
     let mut events = Events::with_capacity(10);
     poll
-      .poll(&mut events, Some(StdDuration::from_secs(10)))
+      .poll(&mut events, Some(Duration::from_secs(10)))
       .unwrap();
 
     let _data2 = udp_listener.get_message();
@@ -1554,7 +1555,7 @@ mod tests {
 
     let mut events = Events::with_capacity(10);
     poll
-      .poll(&mut events, Some(StdDuration::from_secs(10)))
+      .poll(&mut events, Some(Duration::from_secs(10)))
       .unwrap();
 
     for _ in udp_listener.get_messages() {

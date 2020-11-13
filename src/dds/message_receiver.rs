@@ -5,7 +5,7 @@ use crate::messages::submessages::submessages::*;
 use crate::structure::guid::{GuidPrefix, GUID};
 use crate::structure::entity::Entity;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
-use crate::structure::time::{Time, Timestamp};
+use crate::structure::time::Timestamp;
 use crate::serialization::Message;
 use crate::serialization::submessage::SubmessageBody;
 
@@ -37,7 +37,7 @@ pub struct MessageReceiver {
   pub dest_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: LocatorList,
   pub multicast_reply_locator_list: LocatorList,
-  pub timestamp: Option<Time>,
+  pub timestamp: Option<Timestamp>,
 
   pos: usize,
   pub submessage_count: usize,
@@ -340,7 +340,7 @@ pub struct MessageReceiverState {
   pub source_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: LocatorList,
   pub multicast_reply_locator_list: LocatorList,
-  pub timestamp: Option<Time>,
+  pub timestamp: Option<Timestamp>,
 }
 
 impl Default for MessageReceiverState {

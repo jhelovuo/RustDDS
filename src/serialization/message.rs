@@ -14,7 +14,7 @@ use crate::{
 use log::warn;
 use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
-use time::{Timespec, get_time};
+//use time::{Timespec, get_time};
 
 #[derive(Debug)]
 pub struct Message {
@@ -285,9 +285,8 @@ impl MessageBuilder {
   }
 
   pub fn ts_msg(mut self, endianness: Endianness, invalidate_flagset: bool) -> MessageBuilder {
-    let currentTime: Timespec = get_time();
     let timestamp = InfoTimestamp {
-      timestamp: DDSTimestamp::from(currentTime),
+      timestamp: DDSTimestamp::now(),
     };
     let mes = &mut timestamp.write_to_vec_with_ctx(endianness).unwrap();
 

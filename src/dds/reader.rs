@@ -8,14 +8,14 @@ use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::locator::LocatorList;
-use crate::structure::duration::Duration;
+use crate::structure::{duration::Duration, time::Timestamp};
 
 use std::{
   slice::Iter,
   sync::{Arc, RwLock},
 };
 use crate::structure::dds_cache::{DDSCache};
-use std::time::Instant;
+//use std::time::Instant;
 
 use mio_extras::channel as mio_channel;
 use log::{debug};
@@ -46,7 +46,7 @@ pub struct Reader {
   notification_sender: mio_channel::SyncSender<()>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
-  seqnum_instant_map: HashMap<SequenceNumber, Instant>,
+  seqnum_instant_map: HashMap<SequenceNumber, Timestamp>,
   topic_name: String,
   qos_policy: QosPolicies,
 
@@ -179,7 +179,7 @@ impl Reader {
   // handles regular data message and updates history cache
   pub fn handle_data_msg(&mut self, data: Data, mr_state: MessageReceiverState) {
     let duration = match mr_state.timestamp {
-      Some(ts) => ts.get_time_diff(),
+      Some(ts) => Timestamp::now().duration_since(ts),
       None => Duration::DURATION_ZERO,
     };
 
@@ -196,7 +196,7 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let seq_num = data.writer_sn;
 
-    let instant = Instant::now();
+    let instant = Timestamp::now();
 
     // Really should be checked from qosPolicy?
     // Added in order to test stateless actions.
@@ -377,7 +377,7 @@ impl Reader {
   fn make_cache_change(
     &mut self,
     data: Data,
-    instant: Instant,
+    instant: Timestamp,
     writer_guid: GUID,
     no_writers: bool,
   ) {
@@ -724,7 +724,7 @@ mod tests {
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
-      &Instant::now(),
+      &Timestamp::now(),
       change.clone(),
     );
     changes.push(change);
@@ -757,7 +757,7 @@ mod tests {
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
-      &Instant::now(),
+      &Timestamp::now(),
       change.clone(),
     );
     changes.push(change);
@@ -770,7 +770,7 @@ mod tests {
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
-      &Instant::now(),
+      &Timestamp::now(),
       change.clone(),
     );
     changes.push(change);

@@ -1,6 +1,5 @@
 use std::{fs::File, io};
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
 use std::marker::PhantomData;
 
 use itertools::Itertools;
@@ -57,7 +56,7 @@ pub struct DataReader<
   dds_cache: Arc<RwLock<DDSCache>>,
 
   datasample_cache: DataSampleCache<D>,
-  latest_instant: Instant,
+  latest_instant: Timestamp,
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
@@ -123,7 +122,7 @@ where
       // The reader is created before the datareader, hence initializing the
       // latest_instant to now should be fine. There should be no smaller instants
       // added by the reader.
-      latest_instant: Instant::now(),
+      latest_instant: Timestamp::now(),
       deserializer_type: PhantomData,
       discovery_command,
     })
@@ -293,10 +292,10 @@ where
     let cache_changes = dds_cache.from_topic_get_changes_in_range(
           &self.my_topic.get_name().to_string(),
           &self.latest_instant,
-          &Instant::now(),
+          &Timestamp::now(),
         );
 
-    let cache_changes: Vec<(&Instant, &CacheChange)> = cache_changes
+    let cache_changes: Vec<(&Timestamp, &CacheChange)> = cache_changes
       .into_iter()
       .sorted_by(|(a, _), (b, _)| Ord::cmp(a, b))
       .filter(|(_, cc)| cc.writer_guid.guidPrefix != self.get_guid_prefix())
@@ -315,7 +314,7 @@ where
         ChangeKind::NOT_ALIVE_DISPOSED => {
           /* TODO: Instance to be disposed could be specified by serialized payload also, not only key_hash? */
           match self.datasample_cache.get_key_by_hash(*key_hash) {
-            Some(key) => self.datasample_cache.add_sample( Err(key), *writer_guid, instant, None),
+            Some(key) => self.datasample_cache.add_sample( Err(key), *writer_guid, *instant, None),
             /* TODO: How to get source timestamps other then None ?? */
             None => warn!("Tried to dispose with unkonwn key hash: {:x?}",key_hash),
           }
@@ -353,7 +352,7 @@ where
                     }
                 };
               // insert to local cache
-              self.datasample_cache.add_sample( Ok(payload), *writer_guid, instant, None)
+              self.datasample_cache.add_sample( Ok(payload), *writer_guid, *instant, None)
               /* TODO: How to get source timestamps other then None ?? */
             }
             None => warn!("Got CacheChange kind=ALIVE , but no serialized payload!"),

@@ -5,9 +5,10 @@ use crate::structure::guid::{EntityId, GUID};
 use crate::{
   discovery::data_types::topic_data::DiscoveredWriterData,
   structure::sequence_number::{SequenceNumber},
+  structure::time::Timestamp,
 };
 use std::collections::HashMap;
-use std::time::Instant;
+//use std::time::Instant;
 
 #[derive(Debug)]
 pub struct RtpsWriterProxy {
@@ -27,7 +28,7 @@ pub struct RtpsWriterProxy {
 
   /// List of sequence_numbers received from the matched RTPS Writer
   // TODO: When should they be removed from here?
-  pub changes: HashMap<SequenceNumber, Instant>,
+  pub changes: HashMap<SequenceNumber, Timestamp>,
 
   pub received_heartbeat_count: i32,
 
@@ -104,7 +105,7 @@ impl RtpsWriterProxy {
     self.changes.contains_key(&seqnum)
   }
 
-  pub fn received_changes_add(&mut self, seq_num: SequenceNumber, instant: Instant) {
+  pub fn received_changes_add(&mut self, seq_num: SequenceNumber, instant: Timestamp) {
     self.changes.insert(seq_num, instant);
   }
 
@@ -122,11 +123,11 @@ impl RtpsWriterProxy {
     None
   }
 
-  pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Instant> {
+  pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Timestamp> {
     self.changes.remove(&seq_num)
   }
 
-  pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) -> Vec<Instant> {
+  pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) -> Vec<Timestamp> {
     let mut remove = Vec::new();
     for (&seqnum, _) in self.changes.iter() {
       if seqnum < smallest_seqnum {

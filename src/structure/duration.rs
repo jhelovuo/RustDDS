@@ -1,8 +1,10 @@
 use speedy::{Readable, Writable};
 use std::convert::From;
-use std::time::Duration as TDuration;
+use std::ops::Div;
 use serde::{Serialize, Deserialize};
 use super::parameter_id::ParameterId;
+
+use chrono;
 
 #[derive(
   Debug,
@@ -20,9 +22,10 @@ use super::parameter_id::ParameterId;
 )]
 
 /// Duration for Qos and wire interoperability
+/// Specified (as Duration_t) in RTPS spec 9.3.2
 pub struct Duration {
   seconds: i32,
-  fraction: u32,
+  fraction: u32, // unit is sec/2^32
 }
 
 impl Duration {
@@ -30,37 +33,90 @@ impl Duration {
     seconds: 0,
     fraction: 0,
   };
+  
+  /*fn from_ticks(ticks: i64) -> Duration {
+    Duration {
+      seconds: (ticks << 32) as i32,
+      fraction: ticks as u32
+    }
+  }*/
+
+  pub const fn from_secs(secs: i32) -> Duration {
+    Duration { 
+      seconds: secs, // loss of range here
+      fraction: 0,
+    }
+  }
+
+  pub const fn from_millis(millis: i64) -> Duration {
+    Duration { 
+      seconds: (millis / 1000) as i32,
+      fraction: ((millis % 1000) << 32 / 1000) as u32,  // correct formula?
+    }
+  }
+
+  pub(crate) fn to_ticks(&self) -> i64 {
+    ((self.seconds as i64) << 32) + (self.fraction as i64)
+  }
+
+  pub(crate) fn from_ticks(ticks :i64) -> Duration {
+    Duration {
+      seconds: (ticks >> 32) as i32,
+      fraction: ticks as u32,
+    }
+  }
+
+
+  /* This is not part of the spec. And it is also dangerous, as it is plausibel someone could
+  legitimately measure such an interval, and others would interpret it as "invalid".
   pub const DURATION_INVALID: Duration = Duration {
     seconds: -1,
     fraction: 0xFFFFFFFF,
-  };
+  };*/
+
   pub const DURATION_INFINITE: Duration = Duration {
     seconds: 0x7FFFFFFF,
     fraction: 0xFFFFFFFF,
   };
 
-  pub const fn from_std(duration: TDuration) -> Self {
+  pub fn from_std(duration: std::time::Duration) -> Self {
+    Duration::from( duration )
+  }
+}
+
+impl From<Duration> for chrono::Duration {
+  fn from(d: Duration) -> chrono::Duration {
+    chrono::Duration::nanoseconds( ((d.to_ticks() as i128 * 1_000_000_000) >> 32) as i64 )
+  }
+}
+
+
+impl From<std::time::Duration> for Duration {
+  fn from(duration: std::time::Duration) -> Self {
     Duration {
       seconds: duration.as_secs() as i32,
-      fraction: duration.subsec_nanos() as u32,
+      fraction: (((duration.subsec_nanos() as u64) << 32) / 1_000_000_000) as u32,
     }
   }
 }
 
-impl From<TDuration> for Duration {
-  fn from(duration: TDuration) -> Self {
-    Duration {
-      seconds: duration.as_secs() as i32,
-      fraction: duration.subsec_nanos() as u32,
-    }
+impl Div<i64> for Duration 
+{
+  type Output = Self;
+
+  fn div(self, rhs:i64) -> Duration {
+    Duration::from_ticks( self.to_ticks() / rhs )
   }
 }
 
-impl From<Duration> for TDuration {
+
+/*
+impl From<Duration> for std::time::Duration {
   fn from(duration: Duration) -> Self {
-    TDuration::new(duration.seconds as u64, duration.fraction)
+    std::time::Duration::new(duration.seconds as u64, duration.fraction)
   }
 }
+*/
 
 #[derive(Serialize, Deserialize)]
 pub struct DurationData {
@@ -119,7 +175,7 @@ mod tests {
 
   #[test]
   fn convert_from_duration() {
-    let duration = TDuration::from_nanos(1_519_152_761 * NANOS_PER_SEC + 328_210_046);
+    let duration = std::time::Duration::from_nanos(1_519_152_761 * NANOS_PER_SEC + 328_210_046);
     let duration: Duration = duration.into();
 
     assert_eq!(
@@ -137,11 +193,11 @@ mod tests {
       seconds: 1_519_152_760,
       fraction: 1_328_210_046,
     };
-    let duration: TDuration = duration.into();
+    let duration: std::time::Duration = duration.into();
 
     assert_eq!(
       duration,
-      TDuration::from_nanos(1_519_152_760 * NANOS_PER_SEC + 1_328_210_046)
+      std::time::Duration::from_nanos(1_519_152_760 * NANOS_PER_SEC + 1_328_210_046)
     );
   }
 }

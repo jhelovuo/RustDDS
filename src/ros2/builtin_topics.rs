@@ -115,7 +115,7 @@ impl RosOutTopic {
     history: Some(History::KeepLast { depth: 1 }),
     resource_limits: None,
     lifespan: Some(Lifespan {
-      duration: Duration::from_std(StdDuration::from_secs(10)),
+      duration: Duration::from_secs(10),
     }),
   };
 

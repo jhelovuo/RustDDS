@@ -2,6 +2,8 @@ use std::time::Instant;
 
 use serde::Deserialize;
 
+use chrono::Utc;
+
 use crate::structure::{
   guid::GUID,
   parameter_id::ParameterId,
@@ -131,7 +133,7 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_spdp_participant_data(&self) -> SPDPDiscoveredParticipantData {
     SPDPDiscoveredParticipantData {
-      updated_time: time::precise_time_ns(),
+      updated_time: Utc::now().timestamp_nanos() as u64,
       protocol_version: self.protocol_version,
       vendor_id: self.vendor_id,
       expects_inline_qos: self.expects_inline_qos,

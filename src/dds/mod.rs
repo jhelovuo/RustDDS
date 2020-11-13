@@ -134,8 +134,6 @@ pub mod data_types {
   pub use super::readcondition::ReadCondition;
   pub use super::with_key::datareader::SelectByKey;
   #[doc(inline)]
-  pub use crate::structure::time::Time as DDSTime;
-  #[doc(inline)]
   pub use crate::structure::time::Timestamp as DDSTimestamp;
   pub use crate::structure::guid::*;
   // TODO: move typedesc module somewhere better

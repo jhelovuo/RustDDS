@@ -13,8 +13,8 @@ use crate::dds::qos::QosPolicies;
 use crate::dds::qos::policy;
 use crate::dds::readcondition::ReadCondition;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet, HashMap};
- use std::ops::Bound::*;
+use std::collections::{BTreeMap, BTreeSet, HashSet, HashMap,VecDeque};
+use std::ops::Bound::*;
 
 //use std::num::Zero; unstable
 
@@ -31,7 +31,7 @@ pub struct DataSampleCache<D: Keyed> {
 */
 
 // helper function
-// somewhat like result.as_ref()
+// somewhat like result.as_ref() , but one-sided only
 pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(
   r: &std::result::Result<T, E>,
 ) -> std::result::Result<&T, E> {
@@ -47,12 +47,12 @@ pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(
 // clock ticks frequently enough.
 pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
-  pub datasamples: BTreeMap<Timestamp, SampleWithMetaData<D>>,  // ordered storage for deserialized samples
-  pub instance_map: BTreeMap<D::K,InstanceMetaData>, // ordered storage for instances
-  pub hash_to_key_map: BTreeMap<u128, D::K>,
+  datasamples: BTreeMap<Timestamp, SampleWithMetaData<D>>,  // ordered storage for deserialized samples
+  pub(crate) instance_map: BTreeMap<D::K,InstanceMetaData>, // ordered storage for instances
+  hash_to_key_map: BTreeMap<u128, D::K>,
 }
 
-struct InstanceMetaData {
+pub(crate) struct InstanceMetaData {
   instance_samples: BTreeSet<Timestamp>,  // which samples belong to this instance
   instance_state: InstanceState, // latest known alive/not_alive state for this instance
   latest_generation_available: NotAliveGenerationCounts, // in this instance
@@ -79,7 +79,7 @@ where
   <D as Keyed>::K: Key,
 {
   pub fn get_key(&self) -> D::K {
-    match self.sample {
+    match &self.sample {
       Ok(d) => d.get_key(),
       Err(k) => k.clone(),
     }
@@ -102,9 +102,9 @@ where
 
   pub fn add_sample(&mut self, new_sample: Result<D, D::K>, writer_guid: GUID, 
                     receive_timestamp: Timestamp, source_timestamp: Option<Timestamp> ) {
-    let instance_key = match new_sample {
+    let instance_key = match &new_sample {
       Ok(d) => d.get_key(),
-      Err(k) => k,
+      Err(k) => k.clone(),
     };
 
     let new_instance_state =
@@ -114,8 +114,10 @@ where
       };
 
     // find or create metadata record
-    let instance_metadata = self.instance_map.get_mut(&instance_key)
-      .unwrap_or_else( || { 
+    let instance_metadata = match self.instance_map.get_mut(&instance_key) {
+      // cannot use unwrap_or_else here, because of multiple borrowing.
+      Some(imd) => imd,
+      None => { // not found, create new one.
         let imd = InstanceMetaData { 
             instance_samples: BTreeSet::new(),
             instance_state: new_instance_state, 
@@ -125,7 +127,8 @@ where
         self.instance_map.insert( instance_key.clone(), imd);
         self.hash_to_key_map.insert( instance_key.into_hash_key() ,  instance_key.clone());
         self.instance_map.get_mut(&instance_key).unwrap() // must succeed, since this was just inserted
-      });
+      }
+    };
 
     // update instance metadata
     instance_metadata.instance_samples.insert(receive_timestamp.clone());
@@ -180,10 +183,11 @@ where
         let keys_to_remove :Vec<_> = 
           instance_metadata.instance_samples.iter()
             .take(remove_count as usize)
+            .cloned()
             .collect();
         for k in keys_to_remove {
-          instance_metadata.instance_samples.remove(k);
-          self.datasamples.remove(k);
+          instance_metadata.instance_samples.remove(&k);
+          self.datasamples.remove(&k);
         }
       }
     }
@@ -251,8 +255,8 @@ where
   // read methods perform actual read or take. They must be called with key vectors
   // obtained from select_*_for_access -methods above, or their subvectors.
   pub fn read_by_keys(&mut self, keys: &[(Timestamp,D::K)] ) -> Vec<DataSample<&D>> {
-    let mut result = Vec::with_capacity(keys.len());
-    let len = keys.len();
+    let len = keys.len();    
+    let mut result = Vec::with_capacity(len);
     let mut instance_generations : HashMap<D::K,NotAliveGenerationCounts> = HashMap::new();
     if len > 0 {
       let mrsic_total = self.instance_map.get( &keys.last().unwrap().1 ).unwrap()
@@ -260,7 +264,8 @@ where
       let mrs_total = self.datasamples.iter()
                         .next_back().unwrap().1
                         .generation_counts.total();
-      // collect result
+      let mut sample_infos = VecDeque::with_capacity(len);
+      // construct SampleInfos
       for (index,(ts,key)) in keys.iter().enumerate() {
         let dswm = self.datasamples.get_mut(ts).unwrap();
         let imd = self.instance_map.get(key).unwrap();
@@ -278,14 +283,14 @@ where
         };
         dswm.sample_has_been_read = true; // mark read
         // record instance generation accessed
-        instance_generations.entry(*key)
+        instance_generations.entry(key.clone())
           .and_modify( |old_gens| 
                 if dswm.generation_counts.total() > old_gens.total() 
                   { *old_gens = dswm.generation_counts }  
               )
           .or_insert( dswm.generation_counts );
-        result.push( DataSample::new(sample_info, result_ok_as_ref_err_clone(&dswm.sample) ) );
-      } // for
+        sample_infos.push_back(sample_info);
+      } 
 
       // mark instances viewed
       for (inst,gen) in instance_generations.iter() {
@@ -293,7 +298,21 @@ where
           imd.last_generation_accessed = *gen;
         } else { panic!("Instance disappeared!?!!1!") }
       }
-    }
+    
+      // We need to do SampleInfo construction and final result construction as separate passes.
+      // This is becaue SampleInfo construction needs to mark items as read and generations 
+      // as viewed, i.e. needs mutable reference to data_samples.
+      // Result construction (in read, not take) needs to hand out multiple references into
+      // data_samples, therefore it needs immutable access, not mutable.
+
+      // construct results
+      for (ts,_key) in keys.iter() {
+          let sample_info = sample_infos.pop_front().unwrap();
+          let sample : &std::result::Result<D, D::K> 
+              = &self.datasamples.get(ts).unwrap().sample;
+          result.push( DataSample::new(sample_info, result_ok_as_ref_err_clone( sample ) ) );
+      }
+    } // if len > 0
 
     // return result
     result
@@ -327,7 +346,7 @@ where
         };
         //dwsm.sample_has_been_read = true; // mark read
         // record instance generation accessed
-        instance_generations.entry(*key)
+        instance_generations.entry(key.clone())
           .and_modify( |old_gens| 
               if dswm.generation_counts.total() > old_gens.total() 
                 { *old_gens = dswm.generation_counts.clone() }

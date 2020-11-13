@@ -1,8 +1,9 @@
 use std::{
-  time::Instant,
   collections::{BTreeMap, HashMap, btree_map::Range},
 };
 use crate::dds::{typedesc::TypeDesc, qos::QosPolicies};
+use crate::structure::time::Timestamp;
+
 use super::{
   topic_kind::TopicKind,
   cache_change::{ChangeKind, CacheChange},
@@ -68,7 +69,7 @@ impl DDSCache {
   pub fn from_topic_get_change(
     &self,
     topic_name: &String,
-    instant: &Instant,
+    instant: &Timestamp,
   ) -> Option<&CacheChange> {
     match self.topic_caches.get(topic_name) {
       Some(tc) => tc.get_change(instant),
@@ -80,7 +81,7 @@ impl DDSCache {
   pub fn from_topic_set_change_to_not_alive_disposed(
     &mut self,
     topic_name: &String,
-    instant: &Instant,
+    instant: &Timestamp,
   ) {
     if self.topic_caches.contains_key(topic_name) {
       self
@@ -97,7 +98,7 @@ impl DDSCache {
   pub fn from_topic_remove_change(
     &mut self,
     topic_name: &String,
-    instant: &Instant,
+    instant: &Timestamp,
   ) -> Option<CacheChange> {
     if self.topic_caches.contains_key(topic_name) {
       return self
@@ -110,7 +111,7 @@ impl DDSCache {
     }
   }
 
-  pub fn from_topic_get_all_changes(&self, topic_name: &str) -> Vec<(&Instant, &CacheChange)> {
+  pub fn from_topic_get_all_changes(&self, topic_name: &str) -> Vec<(&Timestamp, &CacheChange)> {
     match self.topic_caches.get(topic_name) {
       Some(r) => r.get_all_changes(),
       None => vec![],
@@ -120,9 +121,9 @@ impl DDSCache {
   pub fn from_topic_get_changes_in_range(
     &self,
     topic_name: &String,
-    start_instant: &Instant,
-    end_instant: &Instant,
-  ) -> Vec<(&Instant, &CacheChange)> {
+    start_instant: &Timestamp,
+    end_instant: &Timestamp,
+  ) -> Vec<(&Timestamp, &CacheChange)> {
     if self.topic_caches.contains_key(topic_name) {
       return self
         .topic_caches
@@ -137,7 +138,7 @@ impl DDSCache {
   pub fn to_topic_add_change(
     &mut self,
     topic_name: &String,
-    instant: &Instant,
+    instant: &Timestamp,
     cache_change: CacheChange,
   ) {
     if self.topic_caches.contains_key(topic_name) {
@@ -169,34 +170,34 @@ impl TopicCache {
       history_cache: DDSHistoryCache::new(),
     }
   }
-  pub fn get_change(&self, instant: &Instant) -> Option<&CacheChange> {
+  pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
     self.history_cache.get_change(instant)
   }
 
-  pub fn add_change(&mut self, instant: &Instant, cache_change: CacheChange) {
+  pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
     self.history_cache.add_change(instant, cache_change)
   }
 
-  pub fn get_all_changes(&self) -> Vec<(&Instant, &CacheChange)> {
+  pub fn get_all_changes(&self) -> Vec<(&Timestamp, &CacheChange)> {
     self.history_cache.get_all_changes()
   }
 
   pub fn get_changes_in_range(
     &self,
-    start_instant: &Instant,
-    end_instant: &Instant,
-  ) -> Vec<(&Instant, &CacheChange)> {
+    start_instant: &Timestamp,
+    end_instant: &Timestamp,
+  ) -> Vec<(&Timestamp, &CacheChange)> {
     self
       .history_cache
       .get_range_of_changes_vec(start_instant, end_instant)
   }
 
   ///Removes and returns value if it was found
-  pub fn remove_change(&mut self, instant: &Instant) -> Option<CacheChange> {
+  pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
     return self.history_cache.remove_change(instant);
   }
 
-  pub fn set_change_to_not_alive_disposed(&mut self, instant: &Instant) {
+  pub fn set_change_to_not_alive_disposed(&mut self, instant: &Timestamp) {
     self
       .history_cache
       .change_change_kind(instant, ChangeKind::NOT_ALIVE_DISPOSED);
@@ -206,7 +207,7 @@ impl TopicCache {
 // This is contained in a TopicCache
 #[derive(Debug)]
 pub struct DDSHistoryCache {
-  changes: BTreeMap<Instant, CacheChange>,
+  changes: BTreeMap<Timestamp, CacheChange>,
 }
 
 impl DDSHistoryCache {
@@ -216,7 +217,7 @@ impl DDSHistoryCache {
     }
   }
 
-  pub fn add_change(&mut self, instant: &Instant, cache_change: CacheChange) {
+  pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
     let result = self.changes.insert(*instant, cache_change);
     if result.is_none() {
       // all is good. timestamp was not inserted before.
@@ -226,19 +227,19 @@ impl DDSHistoryCache {
     }
   }
 
-  pub fn get_all_changes(&self) -> Vec<(&Instant, &CacheChange)> {
+  pub fn get_all_changes(&self) -> Vec<(&Timestamp, &CacheChange)> {
     self.changes.iter().collect()
   }
 
-  pub fn get_change(&self, instant: &Instant) -> Option<&CacheChange> {
+  pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
     self.changes.get(instant)
   }
 
   pub fn get_range_of_changes(
     &self,
-    start_instant: &Instant,
-    end_instant: &Instant,
-  ) -> Range<Instant, CacheChange> {
+    start_instant: &Timestamp,
+    end_instant: &Timestamp,
+  ) -> Range<Timestamp, CacheChange> {
     self
       .changes
       .range((Included(start_instant), Included(end_instant)))
@@ -246,10 +247,10 @@ impl DDSHistoryCache {
 
   pub fn get_range_of_changes_vec(
     &self,
-    start_instant: &Instant,
-    end_instant: &Instant,
-  ) -> Vec<(&Instant, &CacheChange)> {
-    let mut changes: Vec<(&Instant, &CacheChange)> = vec![];
+    start_instant: &Timestamp,
+    end_instant: &Timestamp,
+  ) -> Vec<(&Timestamp, &CacheChange)> {
+    let mut changes: Vec<(&Timestamp, &CacheChange)> = vec![];
     for (i, c) in self
       .changes
       .range((Excluded(start_instant), Included(end_instant)))
@@ -259,7 +260,7 @@ impl DDSHistoryCache {
     return changes;
   }
 
-  pub fn change_change_kind(&mut self, instant: &Instant, change_kind: ChangeKind) {
+  pub fn change_change_kind(&mut self, instant: &Timestamp, change_kind: ChangeKind) {
     let change = self.changes.get_mut(instant);
     if change.is_some() {
       change.unwrap().kind = change_kind;
@@ -285,7 +286,7 @@ impl DDSHistoryCache {
   */
 
   /// Removes and returns value if it was found
-  pub fn remove_change(&mut self, instant: &Instant) -> Option<CacheChange> {
+  pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
     self.changes.remove(instant)
   }
 }
@@ -294,7 +295,6 @@ impl DDSHistoryCache {
 mod tests {
   use std::sync::{Arc, RwLock};
   use std::{
-    time::{Duration, Instant},
     thread,
   };
   use log::info;

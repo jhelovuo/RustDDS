@@ -29,7 +29,7 @@ pub struct DDSData {
 impl DDSData {
   pub fn new(payload: SerializedPayload) -> DDSData {
     DDSData {
-      source_timestamp: Timestamp::from(time::get_time()),
+      source_timestamp: Timestamp::now(),
       change_kind: ChangeKind::ALIVE,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
@@ -62,7 +62,7 @@ impl DDSData {
     }
 
     DDSData {
-      source_timestamp: Timestamp::from(time::get_time()),
+      source_timestamp: Timestamp::now(),
       change_kind,
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
@@ -80,7 +80,7 @@ impl DDSData {
 
     let ts: Timestamp = match source_timestamp {
       Some(t) => t,
-      None => Timestamp::from(time::get_time()),
+      None => Timestamp::now(),
     };
 
     let serialized_payload = SerializedPayload::new(RepresentationIdentifier::CDR_LE, value);
@@ -101,7 +101,7 @@ impl DDSData {
   {
     let ts: Timestamp = match source_timestamp {
       Some(t) => t,
-      None => Timestamp::from(time::get_time()),
+      None => Timestamp::now(),
     };
 
     // TODO: Serialize key

@@ -2,12 +2,12 @@ use chrono::Duration as chronoDuration;
 use enumflags2::BitFlags;
 use log::{debug, error, warn};
 use speedy::{Writable, Endianness};
-use time::Timespec;
-use time::get_time;
+//use time::Timespec;
+//use time::get_time;
 use mio_extras::channel::{self as mio_channel, SyncSender};
 use mio::Token;
 use std::{
-  time::{Instant, Duration},
+  //time::{Instant, Duration},
   sync::{RwLock, Arc},
   collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
 };
@@ -27,6 +27,7 @@ use crate::{
 };
 use crate::messages::submessages::data::Data;
 use crate::structure::time::Timestamp;
+use crate::structure::duration::Duration;
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::{header::Header, vendor_id::VendorId, protocol_id::ProtocolId};
 use crate::structure::guid::{GuidPrefix, EntityId, GUID};
@@ -122,10 +123,10 @@ pub struct Writer {
   my_topic_name: String,
   /// Maps this writers local sequence numbers to DDSHistodyCache instants.
   /// Useful when negative acknack is recieved.
-  sequence_number_to_instant: BTreeMap<SequenceNumber, Instant>,
+  sequence_number_to_instant: BTreeMap<SequenceNumber, Timestamp>,
   //// Maps this writers local sequence numbers to DDSHistodyCache instants.
   /// Useful when datawriter dispose is recieved.
-  key_to_instant: HashMap<u128, Instant>,
+  key_to_instant: HashMap<u128, Timestamp>,
   /// Set of disposed samples.
   /// Useful when reader requires some sample with acknack.
   disposed_sequence_numbers: HashSet<SequenceNumber>,
@@ -196,7 +197,7 @@ impl Writer {
       heartbeat_period,
       cahce_cleaning_perioid: Duration::from_secs(2 * 60),
       nack_respose_delay: Duration::from_millis(200),
-      nack_suppression_duration: Duration::from_nanos(0),
+      nack_suppression_duration: Duration::from_millis(0),
       last_change_sequence_number: SequenceNumber::from(0),
       first_change_sequence_number: SequenceNumber::from(0),
       data_max_size_serialized: 999999999,
@@ -288,7 +289,7 @@ impl Writer {
 
   fn set_cache_cleaning_timer(&mut self) {
     self.timed_event_handler.as_mut().unwrap().set_timeout(
-      &chronoDuration::from_std(self.cahce_cleaning_perioid).unwrap(),
+      &chronoDuration::from(self.cahce_cleaning_perioid),
       TimerMessageType::writer_cache_cleaning,
     )
   }
@@ -375,7 +376,7 @@ impl Writer {
             match self.get_qos().deadline {
               Some(dl) => {
                 if let Some(instant) = instant {
-                  if Duration::from(dl.period) < Instant::now() - *instant {
+                  if Duration::from(dl.period) < Timestamp::now() - *instant {
                     self.offered_deadline_status.increase();
                     debug!(
                       "Trying to send status change {:?}",
@@ -438,7 +439,7 @@ impl Writer {
   fn set_heartbeat_timer(&mut self) {
     match self.heartbeat_period {
       Some(period) => self.timed_event_handler.as_mut().unwrap().set_timeout(
-        &chronoDuration::from_std(period).unwrap(),
+        &chronoDuration::from(period),
         TimerMessageType::writer_heartbeat,
       ),
       None => (),
@@ -451,7 +452,7 @@ impl Writer {
     let data_key = new_cache_change.key;
 
     // inserting to DDSCache
-    let insta = Instant::now();
+    let insta = Timestamp::now();
     self.dds_cache.write().unwrap().to_topic_add_change(
       &self.my_topic_name,
       &insta,
@@ -490,8 +491,8 @@ impl Writer {
     let amount_need_to_remove;
     let mut removed_change_sequence_numbers = vec![];
     let acked_by_all_readers = {
-      //let mut acked_by_all: Vec<(&Instant, &SequenceNumber)> = vec![];
-      let mut acked_by_all: BTreeMap<&Instant, &SequenceNumber> = BTreeMap::new();
+      //let mut acked_by_all: Vec<(&Timestamp, &SequenceNumber)> = vec![];
+      let mut acked_by_all: BTreeMap<&Timestamp, &SequenceNumber> = BTreeMap::new();
       for (sq, i) in self.sequence_number_to_instant.iter() {
         if self.change_with_sequence_number_is_acked_by_all(&sq) {
           acked_by_all.insert(i, sq);
@@ -530,7 +531,7 @@ impl Writer {
     return removed_change_sequence_numbers;
   }
 
-  fn remove_from_history_cache(&mut self, instant: &Instant) {
+  fn remove_from_history_cache(&mut self, instant: &Timestamp) {
     let removed_change = self
       .dds_cache
       .write()
@@ -729,7 +730,7 @@ impl Writer {
           match self.get_qos().deadline {
             Some(dl) => {
               if let Some(instant) = instant {
-                if Duration::from(dl.period) < Instant::now() - *instant {
+                if Duration::from(dl.period) < Timestamp::now() - *instant {
                   self.offered_deadline_status.increase();
                   debug!(
                     "Trying to send single status change {:?}",
@@ -813,10 +814,10 @@ impl Writer {
     return head;
   }
 
+  // TODO: Is this copy-pase code from serialization/message.rs
   pub fn get_TS_submessage(&self, invalidiateFlagSet: bool) -> SubMessage {
-    let currentTime: Timespec = get_time();
     let timestamp = InfoTimestamp {
-      timestamp: Timestamp::from(currentTime),
+      timestamp: Timestamp::now(),
     };
     let mes = &mut timestamp.write_to_vec_with_ctx(self.endianness).unwrap();
 
@@ -838,6 +839,7 @@ impl Writer {
     }
   }
 
+  // TODO: Is this copy-pase code from serialization/message.rs
   pub fn get_DST_submessage(endianness: Endianness, guid_prefix: GuidPrefix) -> SubMessage {
     let flags = BitFlags::<INFODESTINATION_Flags>::from_endianness(endianness);
     let submessageHeader = SubmessageHeader {
@@ -1138,11 +1140,11 @@ impl Writer {
     }
   }
 
-  pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<&Instant> {
+  pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<&Timestamp> {
     self.sequence_number_to_instant.get(&seqnumber)
   }
 
-  pub fn find_cache_change(&self, instant: &Instant) -> Option<CacheChange> {
+  pub fn find_cache_change(&self, instant: &Timestamp) -> Option<CacheChange> {
     match self.dds_cache.read() {
       Ok(dc) => {
         let cc = dc.from_topic_get_change(&self.my_topic_name, instant);

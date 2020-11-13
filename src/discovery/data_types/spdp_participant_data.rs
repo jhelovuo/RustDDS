@@ -30,7 +30,10 @@ use crate::{
   network::constant::*,
 };
 
-use std::{time::Duration as StdDuration};
+//use std::{time::Duration as StdDuration};
+
+use chrono::Utc;
+
 #[derive(Debug, Clone)]
 pub struct SPDPDiscoveredParticipantData {
   pub updated_time: u64,
@@ -115,7 +118,7 @@ impl SPDPDiscoveredParticipantData {
 
   pub fn from_participant(
     participant: &DomainParticipant,
-    lease_duration: StdDuration,
+    lease_duration: Duration,
   ) -> SPDPDiscoveredParticipantData {
     let spdp_multicast_port = get_spdp_well_known_multicast_port(participant.domain_id());
     let metatraffic_multicast_locators = get_local_multicast_locators(spdp_multicast_port);
@@ -143,7 +146,7 @@ impl SPDPDiscoveredParticipantData {
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR;
 
     SPDPDiscoveredParticipantData {
-      updated_time: time::precise_time_ns(),
+      updated_time: Utc::now().timestamp_nanos() as u64,  
       protocol_version: Some(ProtocolVersion::PROTOCOLVERSION_2_3),
       vendor_id: Some(VendorId::VENDOR_UNKNOWN),
       expects_inline_qos: Some(false),

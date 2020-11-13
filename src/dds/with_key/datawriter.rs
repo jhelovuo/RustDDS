@@ -185,7 +185,7 @@ where
       // We cannot generate DataSample at the writer side, because most of the
       // SampleInfo fields cannot be known.
       Some(t) => DataSample::new_deprecated(t, data, self.get_guid()),
-      None => DataSample::new_deprecated(Timestamp::from(time::get_time()), data, self.get_guid()),
+      None => DataSample::new_deprecated(Timestamp::now(), data, self.get_guid()),
     };
 
     match self
@@ -345,7 +345,7 @@ where
     let _data_sample: DataSample<D> = match source_timestamp {
       Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, key, self.get_guid()),
       None => DataSample::new_disposed::<<D as Keyed>::K>(
-        Timestamp::from(time::get_time()),
+        Timestamp::now(),
         key,
         self.get_guid(),
       ),
@@ -438,7 +438,7 @@ mod tests {
       .expect("Unable to write data");
 
     data.a = 5;
-    let timestamp: Timestamp = Timestamp::from(time::get_time());
+    let timestamp: Timestamp = Timestamp:now();
     data_writer
       .write(data, Some(timestamp))
       .expect("Unable to write data with timestamp");
