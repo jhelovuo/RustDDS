@@ -91,7 +91,7 @@ impl Discovery {
   const SEND_TOPIC_INFO_PERIOD: u64 = 20;
   const CHECK_PARTICIPANT_MESSAGES: u64 = 1;
 
-  const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
+  pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
     presentation: None,
     deadline: None,
@@ -1512,7 +1512,7 @@ mod tests {
       .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(&topic, None, None);
 
     let poll = Poll::new().unwrap();
-    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11002);
+    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 0);
     poll
       .register(
         udp_listener.mio_socket(),
@@ -1541,7 +1541,7 @@ mod tests {
       }
     }
 
-    let par_msg_data = spdp_participant_msg_mod(11002)
+    let par_msg_data = spdp_participant_msg_mod(udp_listener.port())
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .expect("Failed to write participant data.");
 

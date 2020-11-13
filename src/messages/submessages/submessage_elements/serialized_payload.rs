@@ -71,6 +71,13 @@ impl SerializedPayload {
       value,
     })
   }
+
+  pub fn representation_identifier(&self) -> RepresentationIdentifier {
+    match RepresentationIdentifier::try_from_u16(self.representation_identifier) {
+      Ok(r) => r,
+      _ => RepresentationIdentifier::CDR_LE,
+    }
+  }
 }
 
 impl<C: Context> Writable<C> for SerializedPayload {

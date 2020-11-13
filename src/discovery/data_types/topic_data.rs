@@ -21,6 +21,7 @@ use crate::{
   dds::qos::QosPolicies,
   dds::traits::{key::Key, TopicDescription},
   discovery::content_filter_property::ContentFilterProperty,
+  dds::qos::QosPolicyBuilder,
   network::constant::get_user_traffic_unicast_port,
   network::util::get_local_unicast_socket_address,
   serialization::{
@@ -82,41 +83,42 @@ impl Serialize for ReaderProxy {
   }
 }
 
+/// DDS SubscriptionBuiltinTopicData
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubscriptionBuiltinTopicData {
-  pub key: Option<GUID>,
-  pub participant_key: Option<GUID>,
-  pub topic_name: Option<String>,
-  pub type_name: Option<String>,
-  pub durability: Option<Durability>,
-  pub deadline: Option<Deadline>,
-  pub latency_budget: Option<LatencyBudget>,
-  pub liveliness: Option<Liveliness>,
-  pub reliability: Option<Reliability>,
-  pub ownership: Option<Ownership>,
-  pub destination_order: Option<DestinationOrder>,
+  key: Option<GUID>,
+  participant_key: Option<GUID>,
+  topic_name: Option<String>,
+  type_name: Option<String>,
+  durability: Option<Durability>,
+  deadline: Option<Deadline>,
+  latency_budget: Option<LatencyBudget>,
+  liveliness: Option<Liveliness>,
+  reliability: Option<Reliability>,
+  ownership: Option<Ownership>,
+  destination_order: Option<DestinationOrder>,
   // pub user_data: Option<UserData>,
-  pub time_based_filter: Option<TimeBasedFilter>,
-  pub presentation: Option<Presentation>,
+  time_based_filter: Option<TimeBasedFilter>,
+  presentation: Option<Presentation>,
   // pub partition: Option<Partition>,
   // pub topic_data: Option<TopicData>,
   // pub group_data: Option<GroupData>,
   // pub durability_service: Option<DurabilityService>,
-  pub lifespan: Option<Lifespan>,
+  lifespan: Option<Lifespan>,
 }
 
 impl SubscriptionBuiltinTopicData {
   pub fn new(
     key: GUID,
-    participant_key: GUID,
-    topic_name: &String,
-    type_name: &String,
+    topic_name: &str,
+    type_name: &str,
+    qos: &QosPolicies,
   ) -> SubscriptionBuiltinTopicData {
-    SubscriptionBuiltinTopicData {
+    let mut sbtd = SubscriptionBuiltinTopicData {
       key: Some(key),
-      participant_key: Some(participant_key),
-      topic_name: Some(topic_name.clone()),
-      type_name: Some(type_name.clone()),
+      participant_key: None,
+      topic_name: Some(topic_name.to_string()),
+      type_name: Some(type_name.to_string()),
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -127,7 +129,107 @@ impl SubscriptionBuiltinTopicData {
       time_based_filter: None,
       presentation: None,
       lifespan: None,
-    }
+    };
+
+    sbtd.set_qos(qos);
+    sbtd
+  }
+
+  pub fn key(&self) -> &Option<GUID> {
+    &self.key
+  }
+
+  pub fn set_key(&mut self, key: GUID) {
+    self.key = Some(key);
+  }
+
+  pub fn participant_key(&self) -> &Option<GUID> {
+    &self.participant_key
+  }
+
+  pub fn set_participant_key(&mut self, participant_key: GUID) {
+    self.participant_key = Some(participant_key);
+  }
+
+  pub fn topic_name(&self) -> &Option<String> {
+    &self.topic_name
+  }
+
+  pub fn set_topic_name(&mut self, topic_name: &str) {
+    self.topic_name = Some(String::from(topic_name));
+  }
+
+  pub fn type_name(&self) -> &Option<String> {
+    &self.type_name
+  }
+
+  pub fn set_type_name(&mut self, type_name: &str) {
+    self.type_name = Some(String::from(type_name));
+  }
+
+  pub fn durability(&self) -> &Option<Durability> {
+    &self.durability
+  }
+
+  pub fn deadline(&self) -> &Option<Deadline> {
+    &self.deadline
+  }
+
+  pub fn latency_budget(&self) -> &Option<LatencyBudget> {
+    &self.latency_budget
+  }
+
+  pub fn liveliness(&self) -> &Option<Liveliness> {
+    &self.liveliness
+  }
+
+  pub fn reliability(&self) -> &Option<Reliability> {
+    &self.reliability
+  }
+
+  pub fn ownership(&self) -> &Option<Ownership> {
+    &self.ownership
+  }
+
+  pub fn destination_order(&self) -> &Option<DestinationOrder> {
+    &self.destination_order
+  }
+
+  pub fn time_based_filter(&self) -> &Option<TimeBasedFilter> {
+    &self.time_based_filter
+  }
+
+  pub fn presentation(&self) -> &Option<Presentation> {
+    &self.presentation
+  }
+
+  pub fn lifespan(&self) -> &Option<Lifespan> {
+    &self.lifespan
+  }
+
+  pub fn set_qos(&mut self, qos: &QosPolicies) {
+    self.durability = qos.durability.clone();
+    self.deadline = qos.deadline.clone();
+    self.latency_budget = qos.latency_budget.clone();
+    self.liveliness = qos.liveliness.clone();
+    self.reliability = qos.reliability.clone();
+    self.ownership = qos.ownership.clone();
+    self.destination_order = qos.destination_order.clone();
+    self.time_based_filter = qos.time_based_filter.clone();
+    self.presentation = qos.presentation.clone();
+    self.lifespan = qos.lifespan.clone();
+  }
+
+  pub fn generate_qos(&self) -> QosPolicies {
+    let qos = QosPolicyBuilder::new();
+
+    let qos = match self.durability {
+      Some(d) => qos.durability(d),
+      None => qos,
+    };
+
+    // TODO: fill all fields, continue
+    qos.build()
   }
 }
 
@@ -138,7 +240,9 @@ impl<'de> Deserialize<'de> for SubscriptionBuiltinTopicData {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    Ok(res.generate_subscription_topic_data())
+    res
+      .generate_subscription_topic_data()
+      .map_err(serde::de::Error::custom)
   }
 }
 
@@ -162,12 +266,14 @@ pub struct DiscoveredReaderData {
 impl DiscoveredReaderData {
   pub fn new(reader: &Reader, dp: &DomainParticipant, topic: &Topic) -> DiscoveredReaderData {
     let reader_proxy = ReaderProxy::new(reader.get_guid());
-    let subscription_topic_data = SubscriptionBuiltinTopicData::new(
+    let mut subscription_topic_data = SubscriptionBuiltinTopicData::new(
       reader.get_guid(),
-      dp.get_guid(),
       &topic.get_name().to_string(),
       &topic.get_type().name().to_string(),
+      topic.get_qos(),
     );
+    subscription_topic_data.set_participant_key(dp.get_guid());
+
     DiscoveredReaderData {
       reader_proxy,
       subscription_topic_data,
@@ -178,10 +284,8 @@ impl DiscoveredReaderData {
   pub fn default(topic_name: &String, type_name: &String) -> DiscoveredReaderData {
     let rguid = GUID::new();
     let reader_proxy = ReaderProxy::new(rguid);
-    let mut pguid = GUID::new();
-    pguid.guidPrefix = rguid.guidPrefix.clone();
     let subscription_topic_data =
-      SubscriptionBuiltinTopicData::new(rguid, pguid, topic_name, type_name);
+      SubscriptionBuiltinTopicData::new(rguid, topic_name, type_name, &QosPolicies::qos_none());
     DiscoveredReaderData {
       reader_proxy,
       subscription_topic_data,
@@ -214,7 +318,9 @@ impl<'de> Deserialize<'de> for DiscoveredReaderData {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    Ok(res.generate_discovered_reader_data())
+    res
+      .generate_discovered_reader_data()
+      .map_err(serde::de::Error::custom)
   }
 }
 

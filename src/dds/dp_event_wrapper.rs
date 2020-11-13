@@ -612,7 +612,7 @@ impl DPEventWrapper {
           } else {
             writer.readers = db
               .get_external_reader_proxies()
-              .filter(|p| match p.subscription_topic_data.topic_name.as_ref() {
+              .filter(|p| match p.subscription_topic_data.topic_name().as_ref() {
                 Some(tn) => *writer.topic_name() == *tn,
                 None => false,
               })

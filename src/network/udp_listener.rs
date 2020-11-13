@@ -81,6 +81,13 @@ impl UDPListener {
     &mut self.socket
   }
 
+  pub fn port(&self) -> u16 {
+    match self.socket.local_addr() {
+      Ok(add) => add.port(),
+      _ => 0,
+    }
+  }
+
   /// Returns all messages that have come from listen_addresses.
   /// Converts/prunes individual results to Vec
   pub fn get_message(&self) -> Vec<u8> {

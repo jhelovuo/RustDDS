@@ -5,6 +5,7 @@ pub mod duration;
 pub mod endpoint;
 pub mod entity;
 pub mod guid;
+pub mod inline_qos;
 pub mod locator;
 pub mod parameter_id;
 pub mod participant;

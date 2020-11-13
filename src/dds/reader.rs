@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use mio::Token;
 use mio_extras::channel as mio_channel;
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::fmt;
 
 use std::collections::{HashSet, HashMap};
@@ -38,6 +38,8 @@ use speedy::{Writable, Endianness};
 use chrono::Duration as chronoDuration;
 
 use super::{with_key::datareader::ReaderCommand, values::result::{RequestedDeadlineMissedStatus, StatusChange}};
+
+use super::qos::InlineQos;
 
 const PROTOCOLVERSION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_3;
 const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
@@ -401,9 +403,10 @@ impl Reader {
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
     for instant in removed_instances.iter() {
-      cache
-        .from_topic_remove_change(&self.topic_name, instant)
-        .expect("WriterProxy told to remove an instant which was not present");
+      match cache.from_topic_remove_change(&self.topic_name, instant) {
+        Some(_) => (),
+        None => warn!("WriterProxy told to remove an instant which was not present"),
+      }
     }
     drop(cache);
 
@@ -520,19 +523,46 @@ impl Reader {
     writer_guid: GUID,
     no_writers: bool,
   ) {
-    let (change_kind, mut ddsdata) = match data.inline_qos {
-      Some(d) => (ChangeKind::NOT_ALIVE_DISPOSED, DDSData::new_disposed(d)),
-      None => match data.serialized_payload {
-        Some(pl) => (
-          if !no_writers {
-            ChangeKind::ALIVE
-          } else {
-            ChangeKind::NOT_ALIVE_UNREGISTERED
-          },
-          DDSData::new(pl),
-        ),
+    let representation_identifier = match &data.serialized_payload {
+      Some(sp) => sp.representation_identifier(),
+      None => RepresentationIdentifier::CDR_LE,
+    };
+
+    let status_info = match &data.inline_qos {
+      Some(iqos) => InlineQos::status_info(iqos, representation_identifier).ok(),
+      None => None,
+    };
+
+    let key_hash = match &data.inline_qos {
+      Some(iqos) => InlineQos::key_hash(iqos, representation_identifier).ok(),
+      None => None,
+    };
+
+    let change_kind = match status_info {
+      Some(si) => si.change_kind(),
+      None => {
+        if !no_writers {
+          ChangeKind::ALIVE
+        } else {
+          ChangeKind::NOT_ALIVE_UNREGISTERED
+        }
+      }
+    };
+
+    if change_kind != ChangeKind::ALIVE {
+      debug!(
+        "Changed writer {:?} status to {:?}",
+        writer_guid, change_kind
+      );
+    }
+
+    let mut ddsdata = if change_kind != ChangeKind::ALIVE {
+      DDSData::new_disposed(status_info, key_hash)
+    } else {
+      match data.serialized_payload {
+        Some(pl) => DDSData::new(pl),
         None => return,
-      },
+      }
     };
 
     ddsdata.set_reader_id(data.reader_id);

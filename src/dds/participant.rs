@@ -1,6 +1,6 @@
 use mio::Token;
 use mio_extras::channel as mio_channel;
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use std::{
   thread,
@@ -48,7 +48,8 @@ unsafe impl Sync for DomainParticipant {}
 #[allow(clippy::new_without_default)]
 impl DomainParticipant {
   pub fn new(domain_id: u16) -> DomainParticipant {
-    let mut dpd = DomainParticipant_Disc::new(domain_id);
+    let (djh_sender, djh_receiver) = mio_channel::channel();
+    let mut dpd = DomainParticipant_Disc::new(domain_id, djh_receiver);
 
     let discovery_updated_sender = match dpd.discovery_updated_sender.take() {
       Some(dus) => dus,
@@ -75,7 +76,8 @@ impl DomainParticipant {
       discovery_command_receiver,
     );
 
-    let _discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
+    let discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
+    djh_sender.send(discovery_handle).unwrap_or(());
 
     // blocking until discovery answers
     let discovery_started = discovery_started_receiver.recv_timeout(Duration::from_secs(60));
@@ -240,10 +242,14 @@ pub struct DomainParticipant_Disc {
   discovery_updated_sender: Option<mio_channel::SyncSender<DiscoveryNotificationType>>,
   discovery_command_receiver: Option<mio_channel::Receiver<DiscoveryCommand>>,
   discovery_command_channel: mio_channel::SyncSender<DiscoveryCommand>,
+  discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
 }
 
 impl DomainParticipant_Disc {
-  pub fn new(domain_id: u16) -> DomainParticipant_Disc {
+  pub fn new(
+    domain_id: u16,
+    discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
+  ) -> DomainParticipant_Disc {
     let (discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::sync_channel::<DiscoveryNotificationType>(100);
 
@@ -259,6 +265,7 @@ impl DomainParticipant_Disc {
       discovery_updated_sender: Some(discovery_update_notification_sender),
       discovery_command_receiver: Some(discovery_command_receiver),
       discovery_command_channel: discovery_command_sender,
+      discovery_join_handle,
     };
 
     dpd
@@ -309,6 +316,7 @@ impl Deref for DomainParticipant_Disc {
 
 impl Drop for DomainParticipant_Disc {
   fn drop(&mut self) {
+    debug!("Sending Discovery Stop signal.");
     match self
       .discovery_command_channel
       .send(DiscoveryCommand::STOP_DISCOVERY)
@@ -320,8 +328,11 @@ impl Drop for DomainParticipant_Disc {
       }
     }
 
-    // waiting and hoping that Discovery shuts down
-    std::thread::sleep(Duration::from_millis(200))
+    debug!("Waiting for Discovery join.");
+    if let Ok(handle) = self.discovery_join_handle.try_recv() {
+      handle.join().unwrap();
+      debug!("Joined Discovery.");
+    }
   }
 }
 
@@ -361,12 +372,14 @@ impl Drop for DomainParticipant_Inner {
       _ => return (),
     };
 
+    debug!("Waiting for EvLoop join");
     // handle should always exist
     // ignoring errors on join
     match self.ev_loop_handle.take().unwrap().join() {
       Ok(s) => s,
       _ => (),
     };
+    debug!("Joined EvLoop");
   }
 }
 

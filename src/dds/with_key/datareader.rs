@@ -188,7 +188,9 @@ where
     'outer: for (_, datasample_vec) in self.datasample_cache.datasamples.iter_mut() {
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, &datasample) {
-          datasample.sample_info_mut().sample_state = SampleState::Read;
+          datasample
+            .sample_info_mut()
+            .set_sample_state(SampleState::Read);
           let ref_datasample = DataSample {
             sample_info: datasample.sample_info.clone(),
             value: result_ok_as_ref_err_clone(&datasample.value),
@@ -223,7 +225,9 @@ where
         // in the same index
         if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
           let mut datasample = datasample_vec.remove(ind);
-          datasample.sample_info_mut().sample_state = SampleState::Read;
+          datasample
+            .sample_info_mut()
+            .set_sample_state(SampleState::Read);
           result.push(datasample);
         // Nothing removed, next element can be found in the next index.
         } else {
@@ -400,7 +404,9 @@ where
       // TODO: how do we get the source_timestamp here? Is it needed?
       // TODO: Keeping track of and assigning  generation rank, sample rank etc.
       let mut datasample = DataSample::new(Timestamp::TIME_INVALID, payload, cc.writer_guid);
-      datasample.sample_info_mut().instance_state = Self::change_kind_to_instance_state(&cc.kind);
+      datasample
+        .sample_info_mut()
+        .set_instance_state(Self::change_kind_to_instance_state(&cc.kind));
       self.datasample_cache.add_datasample(datasample);
     }
   }
@@ -445,7 +451,9 @@ where
     if let Some(datasample_vec) = self.datasample_cache.get_datasamples_mut(&key) {
       for datasample in datasample_vec.iter_mut() {
         if Self::matches_conditions(&read_condition, datasample) {
-          datasample.sample_info_mut().sample_state = SampleState::Read;
+          datasample
+            .sample_info_mut()
+            .set_sample_state(SampleState::Read);
           result.push(&*datasample);
         }
         if result.len() >= max_samples {
@@ -500,7 +508,9 @@ where
         // in the same index
         if Self::matches_conditions(&read_condition, &datasample_vec[ind]) {
           let mut datasample = datasample_vec.remove(ind);
-          datasample.sample_info_mut().sample_state = SampleState::Read;
+          datasample
+            .sample_info_mut()
+            .set_sample_state(SampleState::Read);
           result.push(datasample);
         // Nothing removed, next element can be found in the next index.
         } else {
@@ -603,19 +613,19 @@ where
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
     if !rcondition
       .sample_state_mask()
-      .contains(dsample.sample_info().sample_state)
+      .contains(dsample.sample_info().sample_state())
     {
       return false;
     }
     if !rcondition
       .view_state_mask()
-      .contains(dsample.sample_info().view_state)
+      .contains(dsample.sample_info().view_state())
     {
       return false;
     }
     if !rcondition
       .instance_state_mask()
-      .contains(dsample.sample_info().instance_state)
+      .contains(dsample.sample_info().instance_state())
     {
       return false;
     }

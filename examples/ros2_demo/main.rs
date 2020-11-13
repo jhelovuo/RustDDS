@@ -54,6 +54,9 @@ fn main() {
   main_control.start();
 
   jhandle.join().unwrap();
+
+  // need to wait a bit for cleanup, beacuse drop is not waited for join
+  std::thread::sleep(Duration::from_millis(10));
 }
 
 fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
@@ -136,7 +139,7 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
     // senders
     let mut nodes_updated_sender: Option<mio_channel::SyncSender<DataUpdate>> = None;
 
-    loop {
+    'asdf: loop {
       let mut events = Events::with_capacity(100);
       poll.poll(&mut events, None).unwrap();
 
@@ -149,7 +152,7 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
                 tc_tl_sender.send(ThreadControl::Stop).unwrap_or(());
 
                 ros_participant.clear();
-                return;
+                break 'asdf;
               }
               RosCommand::AddNodeListSender { sender } => nodes_updated_sender = Some(sender),
               RosCommand::TurtleCmdVel { twist } => match tsender_sender.send(twist) {
