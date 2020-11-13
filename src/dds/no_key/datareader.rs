@@ -3,13 +3,43 @@ use std::io;
 use serde::{de::DeserializeOwned};
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
+<<<<<<< HEAD
 use crate::{
   serialization::CDRDeserializerAdapter,
   structure::{
+||||||| merged common ancestors
+use crate::{
+  dds::datasample::DataSample,
+  dds::interfaces::IDataReader,
+  dds::interfaces::IDataSample,
+  discovery::discovery::DiscoveryCommand,
+  structure::{
+=======
+use crate::{dds::datasample::DataSample, dds::interfaces::IDataReader, dds::interfaces::IDataSample, discovery::discovery::DiscoveryCommand, dds::datareader::ReaderCommand, structure::{
+>>>>>>> Reader QOS deadline
     entity::{Entity, EntityAttributes},
+<<<<<<< HEAD
   },
 };
 use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*, readcondition::*};
+||||||| merged common ancestors
+    guid::{EntityId},
+    dds_cache::DDSCache,
+  },
+};
+use crate::dds::{
+  traits::serde_adapters::*, values::result::*, qos::*, pubsub::Subscriber, topic::Topic,
+  readcondition::*,
+};
+=======
+    guid::{EntityId},
+    dds_cache::DDSCache,
+  }};
+use crate::dds::{
+  traits::serde_adapters::*, values::result::*, qos::*, pubsub::Subscriber, topic::Topic,
+  readcondition::*,
+};
+>>>>>>> Reader QOS deadline
 
 use crate::dds::with_key::datareader as datareader_with_key;
 use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
@@ -38,9 +68,63 @@ where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
+<<<<<<< HEAD
   pub(crate) fn from_keyed(
     keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<DA>>,
   ) -> DataReader<'a, D, DA> {
+||||||| merged common ancestors
+  pub fn new(
+    subscriber: &'a Subscriber,
+    my_id: EntityId,
+    topic: &'a Topic,
+    notification_receiver: mio_channel::Receiver<()>,
+    dds_cache: Arc<RwLock<DDSCache>>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+  ) -> Result<Self> {
+    Ok(DataReader {
+      keyed_datareader: datareader_with_key::DataReader::<'a, NoKeyWrapper<D>, SAWrapper<SA>>::new(
+        subscriber,
+        my_id,
+        topic,
+        notification_receiver,
+        dds_cache,
+        discovery_command,
+      )?,
+    })
+  }
+
+  pub fn from_keyed(
+    keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
+  ) -> DataReader<'a, D, SA> {
+=======
+  pub fn new(
+    subscriber: &'a Subscriber,
+    my_id: EntityId,
+    topic: &'a Topic,
+    notification_receiver: mio_channel::Receiver<()>,
+    dds_cache: Arc<RwLock<DDSCache>>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    status_receiver: mio_channel::Receiver<StatusChange>,
+    reader_command: mio_channel::SyncSender<ReaderCommand>
+  ) -> Result<Self> {
+    Ok(DataReader {
+      keyed_datareader: datareader_with_key::DataReader::<'a, NoKeyWrapper<D>, SAWrapper<SA>>::new(
+        subscriber,
+        my_id,
+        topic,
+        notification_receiver,
+        dds_cache,
+        discovery_command,
+        status_receiver,
+        reader_command
+      )?,
+    })
+  }
+
+  pub fn from_keyed(
+    keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
+  ) -> DataReader<'a, D, SA> {
+>>>>>>> Reader QOS deadline
     DataReader {
       keyed_datareader: keyed,
     }
@@ -150,8 +234,16 @@ where
     )
   }
 
+<<<<<<< HEAD
   pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
     self.keyed_datareader.get_requested_deadline_missed_status()
+||||||| merged common ancestors
+  fn get_requested_deadline_missed_status() -> Result<RequestedDeadlineMissedStatus> {
+    todo!()
+=======
+  fn get_requested_deadline_missed_status(&mut self) -> Result<Option<RequestedDeadlineMissedStatus>> {
+    self.keyed_datareader.get_requested_deadline_missed_status()
+>>>>>>> Reader QOS deadline
   }
 }
 

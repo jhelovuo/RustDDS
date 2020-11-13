@@ -45,6 +45,10 @@ impl Duration {
       fraction: duration.subsec_nanos() as u32,
     }
   }
+
+  pub fn to_std(&self) -> std::time::Duration {
+    return std::time::Duration::new(self.seconds as u64, self.fraction)
+  }
 }
 
 impl From<TDuration> for Duration {

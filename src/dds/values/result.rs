@@ -21,7 +21,7 @@ pub enum Error {
   //NoData,  // this should be encoded as Option<SomeData>, not an error code
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct CountWithChange {
   pub count: i32,
   pub count_change: i32,
@@ -48,7 +48,7 @@ pub struct SampleRejectedStatus {
                                                  // missing: last_instance_handle: instance key indicating last rejected instance
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StatusChange {
   LivelinessLostStatus {
     status: LivelinessLostStatus,
@@ -73,7 +73,7 @@ pub enum StatusChange {
   },
 }
 
-#[derive(Debug)]
+#[derive(Debug,Copy, Clone)]
 pub struct LivelinessLostStatus {
   pub total: CountWithChange,
 }
@@ -104,34 +104,57 @@ impl OfferedDeadlineMissedStatus {
   }
 }
 
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
 pub struct OfferedIncompatibleQosStatus {
   pub total: CountWithChange,
   //TODO: last_policy_id: QosPolicyId_t
   //TODO: policies: QosPolicyCountSeq
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct RequestedDeadlineMissedStatus {
   pub total: CountWithChange,
   // missing: last instance handle
 }
 
-#[derive(Debug)]
+impl RequestedDeadlineMissedStatus {
+  pub fn new() -> RequestedDeadlineMissedStatus {
+    RequestedDeadlineMissedStatus {
+      total: CountWithChange {
+        count: 0,
+        count_change: 0,
+      },
+    }
+  }
+
+  pub fn increase(&mut self) {
+    self.total.count += 1;
+    self.total.count_change += 1;
+  }
+
+  pub fn reset_change(&mut self) {
+    self.total.count_change = 0;
+  }
+}
+
+#[derive(Debug,Clone)]
 pub struct RequestedIncompatibleQosStatus {
   pub total: CountWithChange,
   //TODO: last_policy_id: QosPolicyId_t
   //TODO: policies: QosPolicyCountSeq
 }
 
-#[derive(Debug)]
+
+#[derive(Debug, Copy, Clone)]
 pub struct PublicationMatchedStatus {
   pub total: CountWithChange,
   pub current: CountWithChange,
   // Missing: reference to last instance key
 }
 
-#[derive(Debug)]
+
+#[derive(Debug, Copy, Clone)]
 pub struct SubscriptionMatchedStatus {
   pub total: CountWithChange,
   pub current: CountWithChange,

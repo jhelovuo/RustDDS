@@ -736,11 +736,17 @@ mod tests {
     let mut discoverydb = DiscoveryDB::new();
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
+    let (status_sender, _status_reciever) =  mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander1, reader_command_receiver1) =  mio_extras::channel::sync_channel::<ReaderCommand>(100);
+    let (_reader_commander2, reader_command_receiver2) =  mio_extras::channel::sync_channel::<ReaderCommand>(100);
+  
     let reader = Reader::new(
       GUID::new(),
       notification_sender.clone(),
+      status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
       topic.get_name().to_string(),
+      reader_command_receiver1
     );
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);
@@ -754,8 +760,10 @@ mod tests {
     let reader = Reader::new(
       GUID::new(),
       notification_sender.clone(),
+      status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
       topic.get_name().to_string(),
+      reader_command_receiver2
     );
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);
