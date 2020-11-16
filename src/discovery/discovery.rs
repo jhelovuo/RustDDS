@@ -28,6 +28,7 @@ use crate::{
   serialization::CDRDeserializerAdapter,
   structure::entity::Entity,
   structure::guid::GUID,
+  dds::qos::QosPolicyBuilder,
 };
 
 use crate::discovery::{
@@ -137,10 +138,10 @@ impl Discovery {
   }
 
   fn create_spdp_patricipant_qos() -> QosPolicies {
-    let mut qos = QosPolicies::qos_none();
-    qos.reliability = Some(Reliability::BestEffort);
-    qos.history = Some(History::KeepLast { depth: 1 });
-    qos
+    QosPolicyBuilder::new()
+      .reliability(Reliability::BestEffort)
+      .history(History::KeepLast { depth: 1 })
+      .build()
   }
 
   pub fn discovery_event_loop(discovery: Discovery) {
@@ -515,7 +516,7 @@ impl Discovery {
     };
 
     // Topic
-    let dcps_topic_qos = QosPolicies::qos_none();
+    let dcps_topic_qos = QosPolicyBuilder::new().build();
     let dcps_topic = match discovery.domain_participant.create_topic(
       "DCPSTopic",
       "DiscoveredTopicData",
@@ -1275,36 +1276,35 @@ impl Discovery {
   }
 
   pub fn subscriber_qos() -> QosPolicies {
-    let mut qos = QosPolicies::qos_none();
-    qos.durability = Some(Durability::TransientLocal);
-    qos.presentation = Some(Presentation {
-      access_scope: PresentationAccessScope::Topic,
-      coherent_access: false,
-      ordered_access: false,
-    });
-    qos.deadline = Some(Deadline {
-      period: Duration::DURATION_INFINITE,
-    });
-    qos.ownership = Some(Ownership::Shared);
-    qos.liveliness = Some(Liveliness {
-      kind: LivelinessKind::Automatic,
-      lease_duration: Duration::DURATION_INFINITE,
-    });
-    qos.time_based_filter = Some(TimeBasedFilter {
-      minimum_separation: Duration::DURATION_ZERO,
-    });
-    qos.reliability = Some(Reliability::Reliable {
-      max_blocking_time: Duration::from(Duration::from_millis(100)),
-    });
-    qos.destination_order = Some(DestinationOrder::ByReceptionTimestamp);
-    // qos.history = Some(History::KeepLast { depth: 1 });
-    qos.history = Some(History::KeepAll);
-    qos.resource_limits = Some(ResourceLimits {
-      max_instances: std::i32::MAX,
-      max_samples: std::i32::MAX,
-      max_samples_per_instance: std::i32::MAX,
-    });
-    qos
+    QosPolicyBuilder::new()
+      .durability(Durability::TransientLocal)
+      .presentation(Presentation {
+        access_scope: PresentationAccessScope::Topic,
+        coherent_access: false,
+        ordered_access: false,
+      })
+      .deadline(Deadline {
+        period: Duration::DURATION_INFINITE,
+      })
+      .ownership(Ownership::Shared)
+      .liveliness(Liveliness {
+        kind: LivelinessKind::Automatic,
+        lease_duration: Duration::DURATION_INFINITE,
+      })
+      .time_based_filter(TimeBasedFilter {
+        minimum_separation: Duration::DURATION_ZERO,
+      })
+      .reliability(Reliability::Reliable {
+        max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
+      })
+      .destination_order(DestinationOrder::ByReceptionTimestamp)
+      .history(History::KeepAll)
+      .resource_limits(ResourceLimits {
+        max_instances: std::i32::MAX,
+        max_samples: std::i32::MAX,
+        max_samples_per_instance: std::i32::MAX,
+      })
+      .build()
   }
 
   fn discovery_db_read(&self) -> RwLockReadGuard<DiscoveryDB> {

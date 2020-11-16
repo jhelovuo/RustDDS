@@ -244,7 +244,7 @@ where
     let mut fstatus = OfferedDeadlineMissedStatus::new();
     while let Ok(status) = self.status_receiver.try_recv() {
       match status {
-        StatusChange::OfferedDeadlineMissedStatus { status } => fstatus = status,
+        StatusChange::OfferedDeadlineMissedStatus(status) => fstatus = status,
         // TODO: possibly save old statuses
         _ => (),
       }

@@ -47,8 +47,9 @@ use speedy::{Writable, Endianness};
 use chrono::Duration as chronoDuration;
 
 use super::{
-  with_key::datareader::ReaderCommand,
+  qos::QosPolicyBuilder,
   values::result::{RequestedDeadlineMissedStatus, StatusChange},
+  with_key::datareader::ReaderCommand,
 };
 
 use super::qos::InlineQos;
@@ -97,7 +98,7 @@ impl Reader {
       status_sender,
       dds_cache,
       topic_name,
-      qos_policy: QosPolicies::qos_none(),
+      qos_policy: QosPolicyBuilder::new().build(),
 
       seqnum_instant_map: HashMap::new(),
       entity_attributes: EntityAttributes { guid },
@@ -212,9 +213,9 @@ impl Reader {
               // if time singe last received message is greater than deadline increase status and return notification.
               if perioid > self.qos_policy.deadline.unwrap().period {
                 self.requested_deadline_missed_status.increase();
-                changes.push(StatusChange::RequestedDeadlineMissedStatus {
-                  status: self.requested_deadline_missed_status,
-                });
+                changes.push(StatusChange::RequestedDeadlineMissedStatus(
+                  self.requested_deadline_missed_status,
+                ));
               } else {
                 continue;
               }
@@ -222,9 +223,9 @@ impl Reader {
             }
             None => {
               self.requested_deadline_missed_status.increase();
-              changes.push(StatusChange::RequestedDeadlineMissedStatus {
-                status: self.requested_deadline_missed_status,
-              });
+              changes.push(StatusChange::RequestedDeadlineMissedStatus(
+                self.requested_deadline_missed_status,
+              ));
             }
           }
         }

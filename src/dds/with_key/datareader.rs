@@ -35,6 +35,7 @@ use crate::dds::{
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
+/// Parameter for reading [Readers](../struct.With_Key_DataReader.html) data with key or with next from current key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectByKey {
   This,
@@ -466,26 +467,26 @@ where
       let received_status = self.status_receiver.try_recv();
       match received_status {
         Ok(s) => match s {
-          StatusChange::LivelinessLostStatus { status } => {
+          StatusChange::LivelinessLostStatus(status) => {
             self.current_status.livelinessLost = Some(status);
           }
-          StatusChange::OfferedDeadlineMissedStatus { status } => {
+          StatusChange::OfferedDeadlineMissedStatus(status) => {
             self.current_status.offeredDeadlineMissed = Some(status);
           }
-          StatusChange::OfferedIncompatibleQosStatus { status } => {
+          StatusChange::OfferedIncompatibleQosStatus(status) => {
             self.current_status.offeredIncompatibleQos = Some(status);
           }
-          StatusChange::RequestedDeadlineMissedStatus { status } => {
+          StatusChange::RequestedDeadlineMissedStatus(status) => {
             self.current_status.requestedDeadlineMissed = Some(status);
             received_requested_deadline_status_change = true;
           }
-          StatusChange::RequestedIncompatibleQosStatus { status } => {
+          StatusChange::RequestedIncompatibleQosStatus(status) => {
             self.current_status.requestedIncompatibleQos = Some(status);
           }
-          StatusChange::PublicationMatchedStatus { status } => {
+          StatusChange::PublicationMatchedStatus(status) => {
             self.current_status.publicationMatched = Some(status);
           }
-          StatusChange::SubscriptionMatchedStatus { status } => {
+          StatusChange::SubscriptionMatchedStatus(status) => {
             self.current_status.subscriptionMatched = Some(status);
           }
         },

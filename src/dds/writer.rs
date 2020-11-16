@@ -382,11 +382,7 @@ impl Writer {
                       "Trying to send status change {:?}",
                       self.offered_deadline_status
                     );
-                    match self
-                      .status_sender
-                      .try_send(StatusChange::OfferedDeadlineMissedStatus {
-                        status: self.offered_deadline_status,
-                      }) {
+                    match self.status_sender.try_send(StatusChange::OfferedDeadlineMissedStatus(self.offered_deadline_status)) {
                       Ok(_) => (),
                       Err(e) => error!("Failed to send new message status. {:?}", e),
                     };
@@ -736,11 +732,7 @@ impl Writer {
                     "Trying to send single status change {:?}",
                     self.offered_deadline_status
                   );
-                  match self
-                    .status_sender
-                    .try_send(StatusChange::OfferedDeadlineMissedStatus {
-                      status: self.offered_deadline_status,
-                    }) {
+                  match self.status_sender.try_send(StatusChange::OfferedDeadlineMissedStatus(self.offered_deadline_status)) {
                     Ok(_) => (),
                     Err(e) => error!("Failed to send new message status. {:?}", e),
                   };

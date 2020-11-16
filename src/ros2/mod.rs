@@ -35,7 +35,7 @@
 //!     &domain_participant,
 //!     "some_topic_name",
 //!     "NodeInfo",
-//!     QosPolicies::qos_none(),
+//!     QosPolicies::builder().build(),
 //!     TopicKind::NoKey)
 //!   .unwrap();
 //!

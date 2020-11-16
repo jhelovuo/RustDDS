@@ -8,13 +8,14 @@ use crate::{
 };
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
+/// Trait that is implemented by all necessary DDS Entities that are required to provide QosPolicies.
 pub trait HasQoSPolicy {
   fn get_qos(&self) -> &QosPolicies;
   fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<()>;
 }
 
-// DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.
-// numbering is from IDL PSM, but it should be unnecessary at the Rust application interface
+/// DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.
+/// numbering is from IDL PSM, but it should be unnecessary at the Rust application interface
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum QosPolicyId {
   //Invalid  // We should represent this using Option<QosPolicyId> where needed
@@ -42,6 +43,7 @@ pub enum QosPolicyId {
   //DurabilityService, // 22
 }
 
+/// Utility for building [QosPolicies](struct.QosPolicies.html)
 pub struct QosPolicyBuilder {
   durability: Option<policy::Durability>,
   presentation: Option<policy::Presentation>,
@@ -58,7 +60,7 @@ pub struct QosPolicyBuilder {
 }
 
 impl QosPolicyBuilder {
-  pub fn new() -> QosPolicyBuilder {
+  pub const fn new() -> QosPolicyBuilder {
     QosPolicyBuilder {
       durability: None,
       presentation: None,
@@ -75,37 +77,37 @@ impl QosPolicyBuilder {
     }
   }
 
-  pub fn durability(mut self, durability: policy::Durability) -> QosPolicyBuilder {
+  pub const fn durability(mut self, durability: policy::Durability) -> QosPolicyBuilder {
     self.durability = Some(durability);
     self
   }
 
-  pub fn presentation(mut self, presentation: policy::Presentation) -> QosPolicyBuilder {
+  pub const fn presentation(mut self, presentation: policy::Presentation) -> QosPolicyBuilder {
     self.presentation = Some(presentation);
     self
   }
 
-  pub fn deadline(mut self, deadline: policy::Deadline) -> QosPolicyBuilder {
+  pub const fn deadline(mut self, deadline: policy::Deadline) -> QosPolicyBuilder {
     self.deadline = Some(deadline);
     self
   }
 
-  pub fn latency_budget(mut self, latency_budget: policy::LatencyBudget) -> QosPolicyBuilder {
+  pub const fn latency_budget(mut self, latency_budget: policy::LatencyBudget) -> QosPolicyBuilder {
     self.latency_budget = Some(latency_budget);
     self
   }
 
-  pub fn ownership(mut self, ownership: policy::Ownership) -> QosPolicyBuilder {
+  pub const fn ownership(mut self, ownership: policy::Ownership) -> QosPolicyBuilder {
     self.ownership = Some(ownership);
     self
   }
 
-  pub fn liveliness(mut self, liveliness: policy::Liveliness) -> QosPolicyBuilder {
+  pub const fn liveliness(mut self, liveliness: policy::Liveliness) -> QosPolicyBuilder {
     self.liveliness = Some(liveliness);
     self
   }
 
-  pub fn time_based_filter(
+  pub const fn time_based_filter(
     mut self,
     time_based_filter: policy::TimeBasedFilter,
   ) -> QosPolicyBuilder {
@@ -113,12 +115,12 @@ impl QosPolicyBuilder {
     self
   }
 
-  pub fn reliability(mut self, reliability: policy::Reliability) -> QosPolicyBuilder {
+  pub const fn reliability(mut self, reliability: policy::Reliability) -> QosPolicyBuilder {
     self.reliability = Some(reliability);
     self
   }
 
-  pub fn destination_order(
+  pub const fn destination_order(
     mut self,
     destination_order: policy::DestinationOrder,
   ) -> QosPolicyBuilder {
@@ -126,22 +128,25 @@ impl QosPolicyBuilder {
     self
   }
 
-  pub fn history(mut self, history: policy::History) -> QosPolicyBuilder {
+  pub const fn history(mut self, history: policy::History) -> QosPolicyBuilder {
     self.history = Some(history);
     self
   }
 
-  pub fn resource_limits(mut self, resource_limits: policy::ResourceLimits) -> QosPolicyBuilder {
+  pub const fn resource_limits(
+    mut self,
+    resource_limits: policy::ResourceLimits,
+  ) -> QosPolicyBuilder {
     self.resource_limits = Some(resource_limits);
     self
   }
 
-  pub fn lifespan(mut self, lifespan: policy::Lifespan) -> QosPolicyBuilder {
+  pub const fn lifespan(mut self, lifespan: policy::Lifespan) -> QosPolicyBuilder {
     self.lifespan = Some(lifespan);
     self
   }
 
-  pub fn build(self) -> QosPolicies {
+  pub const fn build(self) -> QosPolicies {
     QosPolicies {
       durability: self.durability,
       presentation: self.presentation,
@@ -161,21 +166,23 @@ impl QosPolicyBuilder {
 
 #[derive(Clone, Debug)]
 pub struct QosPolicies {
-  pub durability: Option<policy::Durability>,
-  pub presentation: Option<policy::Presentation>,
-  pub deadline: Option<policy::Deadline>,
-  pub latency_budget: Option<policy::LatencyBudget>,
-  pub ownership: Option<policy::Ownership>,
-  pub liveliness: Option<policy::Liveliness>,
-  pub time_based_filter: Option<policy::TimeBasedFilter>,
-  pub reliability: Option<policy::Reliability>,
-  pub destination_order: Option<policy::DestinationOrder>,
-  pub history: Option<policy::History>,
-  pub resource_limits: Option<policy::ResourceLimits>,
-  pub lifespan: Option<policy::Lifespan>,
+  // pub(crate) beacuse as we want to have some builtin QoS Policies as constant.
+  pub(crate) durability: Option<policy::Durability>,
+  pub(crate) presentation: Option<policy::Presentation>,
+  pub(crate) deadline: Option<policy::Deadline>,
+  pub(crate) latency_budget: Option<policy::LatencyBudget>,
+  pub(crate) ownership: Option<policy::Ownership>,
+  pub(crate) liveliness: Option<policy::Liveliness>,
+  pub(crate) time_based_filter: Option<policy::TimeBasedFilter>,
+  pub(crate) reliability: Option<policy::Reliability>,
+  pub(crate) destination_order: Option<policy::DestinationOrder>,
+  pub(crate) history: Option<policy::History>,
+  pub(crate) resource_limits: Option<policy::ResourceLimits>,
+  pub(crate) lifespan: Option<policy::Lifespan>,
 }
 
 impl QosPolicies {
+  #[cfg(test)]
   pub fn qos_none() -> QosPolicies {
     QosPolicies {
       durability: None,
@@ -197,8 +204,48 @@ impl QosPolicies {
     QosPolicyBuilder::new()
   }
 
-  pub fn history(&self) -> &Option<policy::History> {
-    &self.history
+  pub fn durability(&self) -> Option<policy::Durability> {
+    self.durability
+  }
+
+  pub fn presentation(&self) -> Option<policy::Presentation> {
+    self.presentation
+  }
+
+  pub fn latency_budget(&self) -> Option<policy::LatencyBudget> {
+    self.latency_budget
+  }
+
+  pub fn ownership(&self) -> Option<policy::Ownership> {
+    self.ownership
+  }
+
+  pub fn liveliness(&self) -> Option<policy::Liveliness> {
+    self.liveliness
+  }
+
+  pub fn time_based_filter(&self) -> Option<policy::TimeBasedFilter> {
+    self.time_based_filter
+  }
+
+  pub fn reliability(&self) -> Option<policy::Reliability> {
+    self.reliability
+  }
+
+  pub fn destination_order(&self) -> Option<policy::DestinationOrder> {
+    self.destination_order
+  }
+
+  pub fn history(&self) -> Option<policy::History> {
+    self.history
+  }
+
+  pub fn resource_limits(&self) -> Option<policy::ResourceLimits> {
+    self.resource_limits
+  }
+
+  pub fn lifespan(&self) -> Option<policy::Lifespan> {
+    self.lifespan
   }
 }
 
@@ -378,7 +425,7 @@ pub mod policy {
 }
 
 // Utility for parsing RTPS inlineQoS parameters
-pub struct InlineQos {}
+pub(crate) struct InlineQos {}
 
 impl InlineQos {
   pub fn status_info(

@@ -12,31 +12,28 @@ use serde::{Serialize, Deserialize};
 pub struct TurtleCmdVelTopic {}
 
 impl TurtleCmdVelTopic {
-  const QOS: QosPolicies = QosPolicies {
-    durability: Some(Durability::Volatile),
-    presentation: None,
-    deadline: Some(Deadline {
+  const QOS: QosPolicies = QosPolicyBuilder::new()
+    .durability(Durability::Volatile)
+    .deadline(Deadline {
       period: DDSDuration::DURATION_INFINITE,
-    }),
-    latency_budget: Some(LatencyBudget {
+    })
+    .latency_budget(LatencyBudget {
       duration: DDSDuration::DURATION_ZERO,
-    }),
-    ownership: Some(Ownership::Shared),
-    liveliness: Some(Liveliness {
+    })
+    .ownership(Ownership::Shared)
+    .liveliness(Liveliness {
       kind: LivelinessKind::Automatic,
       lease_duration: DDSDuration::DURATION_INFINITE,
-    }),
-    time_based_filter: None,
-    reliability: Some(Reliability::Reliable {
+    })
+    .reliability(Reliability::Reliable {
       max_blocking_time: DDSDuration::DURATION_ZERO,
-    }),
-    destination_order: Some(DestinationOrder::ByReceptionTimestamp),
-    history: Some(History::KeepLast { depth: 10 }),
-    resource_limits: None,
-    lifespan: Some(Lifespan {
+    })
+    .destination_order(DestinationOrder::ByReceptionTimestamp)
+    .history(History::KeepLast { depth: 10 })
+    .lifespan(Lifespan {
       duration: DDSDuration::DURATION_INFINITE,
-    }),
-  };
+    })
+    .build();
 
   pub fn topic_name() -> String {
     String::from("/turtle1/cmd_vel")

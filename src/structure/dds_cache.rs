@@ -1,7 +1,7 @@
 use std::{
   collections::{BTreeMap, HashMap, btree_map::Range},
 };
-use crate::dds::{typedesc::TypeDesc, qos::QosPolicies};
+use crate::dds::{typedesc::TypeDesc, qos::{QosPolicies, QosPolicyBuilder}};
 use crate::structure::time::Timestamp;
 
 use super::{
@@ -166,7 +166,7 @@ impl TopicCache {
     TopicCache {
       topic_data_type: topic_data_type,
       topic_kind: topic_kind,
-      topic_qos: QosPolicies::qos_none(),
+      topic_qos: QosPolicyBuilder::new().build(),
       history_cache: DDSHistoryCache::new(),
     }
   }

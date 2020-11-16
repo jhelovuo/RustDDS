@@ -69,38 +69,36 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
   // adjust domain_id or participant_id if necessary to interoperability
   let domain_participant = DomainParticipant::new(domain_id);
 
-  let mut pub_qos = QosPolicies::qos_none();
-  pub_qos.reliability = Some(Reliability::BestEffort);
-  // pub_qos.reliability = Some(Reliability::Reliable {
-  //   max_blocking_time: Duration::from(StdDuration::from_millis(100)),
-  // });
-  pub_qos.history = Some(History::KeepLast { depth: 1 });
-  pub_qos.ownership = Some(Ownership::Shared);
-  pub_qos.durability = Some(Durability::Volatile);
-  pub_qos.liveliness = Some(Liveliness {
-    kind: LivelinessKind::Automatic,
-    lease_duration: DDSDuration::DURATION_INFINITE,
-  });
-  pub_qos.destination_order = Some(DestinationOrder::ByReceptionTimestamp);
-  pub_qos.resource_limits = Some(ResourceLimits {
-    max_instances: std::i32::MAX,
-    max_samples: std::i32::MAX,
-    max_samples_per_instance: std::i32::MAX,
-  });
-  pub_qos.deadline = Some(Deadline {
-    period: DDSDuration::DURATION_INFINITE,
-  });
-  pub_qos.latency_budget = Some(LatencyBudget {
-    duration: DDSDuration::DURATION_ZERO,
-  });
-  pub_qos.presentation = Some(Presentation {
-    access_scope: PresentationAccessScope::Instance,
-    coherent_access: false,
-    ordered_access: false,
-  });
-  pub_qos.lifespan = Some(Lifespan {
-    duration: DDSDuration::DURATION_INFINITE,
-  });
+  let pub_qos = QosPolicies::builder()
+    .reliability(Reliability::BestEffort)
+    .history(History::KeepLast { depth: 1 })
+    .ownership(Ownership::Shared)
+    .durability(Durability::Volatile)
+    .liveliness(Liveliness {
+      kind: LivelinessKind::Automatic,
+      lease_duration: DDSDuration::DURATION_INFINITE,
+    })
+    .destination_order(DestinationOrder::ByReceptionTimestamp)
+    .resource_limits(ResourceLimits {
+      max_instances: std::i32::MAX,
+      max_samples: std::i32::MAX,
+      max_samples_per_instance: std::i32::MAX,
+    })
+    .deadline(Deadline {
+      period: DDSDuration::DURATION_INFINITE,
+    })
+    .latency_budget(LatencyBudget {
+      duration: DDSDuration::DURATION_ZERO,
+    })
+    .presentation(Presentation {
+      access_scope: PresentationAccessScope::Instance,
+      coherent_access: false,
+      ordered_access: false,
+    })
+    .lifespan(Lifespan {
+      duration: DDSDuration::DURATION_INFINITE,
+    })
+    .build();
 
   // declare topics, subscriber, publisher, readers and writers
   let square_topic = domain_participant
@@ -111,7 +109,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
     .unwrap();
 
   let square_sub = domain_participant
-    .create_subscriber(&QosPolicies::qos_none())
+    .create_subscriber(&QosPolicies::builder().build())
     .unwrap();
 
   // reader needs to be mutable if you want to read/take something from it

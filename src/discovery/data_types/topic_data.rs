@@ -286,8 +286,12 @@ impl DiscoveredReaderData {
   pub fn default(topic_name: &String, type_name: &String) -> DiscoveredReaderData {
     let rguid = GUID::new();
     let reader_proxy = ReaderProxy::new(rguid);
-    let subscription_topic_data =
-      SubscriptionBuiltinTopicData::new(rguid, topic_name, type_name, &QosPolicies::qos_none());
+    let subscription_topic_data = SubscriptionBuiltinTopicData::new(
+      rguid,
+      topic_name,
+      type_name,
+      &QosPolicies::builder().build(),
+    );
     DiscoveredReaderData {
       reader_proxy,
       subscription_topic_data,

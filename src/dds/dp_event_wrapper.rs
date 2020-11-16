@@ -1164,12 +1164,9 @@ mod tests {
     info!("Received status change: {:?}", status);
     assert_eq!(
       status.unwrap(),
-      Some(RequestedDeadlineMissedStatus {
-        total: CountWithChange {
-          count: 3,
-          count_change: 3
-        }
-      })
+      Some(RequestedDeadlineMissedStatus::from_count(
+        CountWithChange::start_from(3, 3)
+      )),
     );
     thread::sleep(Duration::from_millis(150));
 
@@ -1180,12 +1177,9 @@ mod tests {
     info!("Received status change: {:?}", status2);
     assert_eq!(
       status2.unwrap(),
-      Some(RequestedDeadlineMissedStatus {
-        total: CountWithChange {
-          count: 6,
-          count_change: 3
-        }
-      })
+      Some(RequestedDeadlineMissedStatus::from_count(
+        CountWithChange::start_from(6, 3)
+      ))
     );
 
     let status3 = data_readers
@@ -1195,12 +1189,9 @@ mod tests {
     info!("Received status change: {:?}", status3);
     assert_eq!(
       status3.unwrap(),
-      Some(RequestedDeadlineMissedStatus {
-        total: CountWithChange {
-          count: 6,
-          count_change: 0
-        }
-      })
+      Some(RequestedDeadlineMissedStatus::from_count(
+        CountWithChange::start_from(6, 0)
+      ))
     );
 
     thread::sleep(Duration::from_millis(50));
@@ -1212,12 +1203,9 @@ mod tests {
     info!("Received status change: {:?}", status4);
     assert_eq!(
       status4.unwrap(),
-      Some(RequestedDeadlineMissedStatus {
-        total: CountWithChange {
-          count: 7,
-          count_change: 1
-        }
-      })
+      Some(RequestedDeadlineMissedStatus::from_count(
+        CountWithChange::start_from(7, 1)
+      ))
     );
 
     info!("\nLopetustoken lähtee\n");
