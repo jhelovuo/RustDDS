@@ -81,10 +81,11 @@ There are also methods  `read_next_sample`, `take_next_sample` , but these are e
 
 In addition to these, we also provide a Rust Iterator interface for reading data.
 
-# Memory management
+## Memory management
 
 The DDS specification specifies manual memory management in the sense that many object types are created with a 
 `create_` method call and destoryed with a matching `delete_` method call. We have opted to rely on Rust memory management wherever possible, including handling of payload data.
+
 
 # Based on rtps-rs
 
