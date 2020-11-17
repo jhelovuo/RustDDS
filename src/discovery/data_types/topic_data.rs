@@ -683,14 +683,11 @@ impl Key for (GuidPrefix, ParticipantMessageDataKind) {}
 
 #[cfg(test)]
 mod tests {
-  use std::{fs::File, io::Read};
-
   use super::*;
 
   //use crate::serialization::cdr_serializer::to_little_endian_binary;
   use crate::serialization::{
     Message,
-    cdr_deserializer::CDRDeserializerAdapter,
     cdr_serializer::{to_bytes},
   };
   use byteorder::LittleEndian;
@@ -850,18 +847,19 @@ mod tests {
     assert_eq!(sdata, sdata2);
   }
 
-  #[test]
-  fn td_participant_message_data_ser_deser() {
-    let mut pmd_file = File::open("participant_message_data.bin").unwrap();
-    let mut buffer: [u8; 1024] = [0; 1024];
-    let _len = pmd_file.read(&mut buffer).unwrap();
+  // TODO: somehow get some actual bytes of ParticipantMessageData
+  // #[test]
+  // fn td_participant_message_data_ser_deser() {
+  //   let mut pmd_file = File::open("participant_message_data.bin").unwrap();
+  //   let mut buffer: [u8; 1024] = [0; 1024];
+  //   let _len = pmd_file.read(&mut buffer).unwrap();
 
-    let rpi = CDRDeserializerAdapter::<ParticipantMessageData>::from_bytes(
-      &buffer,
-      RepresentationIdentifier::CDR_LE,
-    )
-    .unwrap();
+  //   let rpi = CDRDeserializerAdapter::<ParticipantMessageData>::from_bytes(
+  //     &buffer,
+  //     RepresentationIdentifier::CDR_LE,
+  //   )
+  //   .unwrap();
 
-    let _data2 = to_bytes::<ParticipantMessageData, LittleEndian>(&rpi).unwrap();
-  }
+  //   let _data2 = to_bytes::<ParticipantMessageData, LittleEndian>(&rpi).unwrap();
+  // }
 }
