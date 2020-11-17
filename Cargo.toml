@@ -2,11 +2,15 @@
 name = "rustdds"
 version = "0.0.1"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", "Oiva Moisio <oiva.moisio@atostek.com>", "Miska Melkinen <miska.melkinen@atostek.com>"]
-description = "DSS implementation with RTPS"
+description = "Rust DDS implementation with RTPS"
 readme = "README.md"
-keywords = ["protocol","dds","rtps"]
+keywords = ["network-pro","dds","rtps"]
 license = "Apache-2.0"
 edition = "2018"
+homepage = ""  # placeholder
+repository = ""
+categories = ["network-programming", "science-robotics"] 
+# the science-robotics category is because of ROS2
 
 [dependencies]
 bytes = "0.5.4"
