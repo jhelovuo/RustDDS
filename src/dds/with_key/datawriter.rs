@@ -344,11 +344,7 @@ where
     // What does this block of code do? What is the purpose of _data_sample?
     let _data_sample: DataSample<D> = match source_timestamp {
       Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, key, self.get_guid()),
-      None => DataSample::new_disposed::<<D as Keyed>::K>(
-        Timestamp::now(),
-        key,
-        self.get_guid(),
-      ),
+      None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::now(), key, self.get_guid()),
     };
 
     match self
@@ -438,7 +434,7 @@ mod tests {
       .expect("Unable to write data");
 
     data.a = 5;
-    let timestamp: Timestamp = Timestamp:now();
+    let timestamp = Timestamp::now();
     data_writer
       .write(data, Some(timestamp))
       .expect("Unable to write data with timestamp");
@@ -466,22 +462,19 @@ mod tests {
       .create_datawriter(None, &topic, None)
       .expect("Failed to create datawriter");
 
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let data = RandomData {
       a: 4,
       b: "Fobar".to_string(),
     };
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+
     let key = &data.get_key().into_hash_key();
     info!("key: {:?}", key);
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
 
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     data_writer
       .write(data.clone(), None)
       .expect("Unable to write data");
 
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    thread::sleep(Duration::from_millis(100));
     data_writer
       .dispose(data.get_key(), None)
       .expect("Unable to dispose data");

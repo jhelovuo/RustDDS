@@ -382,7 +382,11 @@ impl Writer {
                       "Trying to send status change {:?}",
                       self.offered_deadline_status
                     );
-                    match self.status_sender.try_send(StatusChange::OfferedDeadlineMissedStatus(self.offered_deadline_status)) {
+                    match self
+                      .status_sender
+                      .try_send(StatusChange::OfferedDeadlineMissedStatus(
+                        self.offered_deadline_status,
+                      )) {
                       Ok(_) => (),
                       Err(e) => error!("Failed to send new message status. {:?}", e),
                     };
@@ -732,7 +736,11 @@ impl Writer {
                     "Trying to send single status change {:?}",
                     self.offered_deadline_status
                   );
-                  match self.status_sender.try_send(StatusChange::OfferedDeadlineMissedStatus(self.offered_deadline_status)) {
+                  match self
+                    .status_sender
+                    .try_send(StatusChange::OfferedDeadlineMissedStatus(
+                      self.offered_deadline_status,
+                    )) {
                     Ok(_) => (),
                     Err(e) => error!("Failed to send new message status. {:?}", e),
                   };
@@ -1197,7 +1205,6 @@ mod tests {
     let domain_participant = DomainParticipant::new(0);
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
 
     let publisher = domain_participant
       .create_publisher(&qos)
@@ -1224,22 +1231,20 @@ mod tests {
       a: 3,
       b: "Fobar".to_string(),
     };
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+
     let writeResult = data_writer.write(data, None).expect("Unable to write data");
 
     info!("writerResult:  {:?}", writeResult);
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     let writeResult = data_writer
       .write(data2, None)
       .expect("Unable to write data");
 
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
     info!("writerResult:  {:?}", writeResult);
     let writeResult = data_writer
       .write(data3, None)
       .expect("Unable to write data");
 
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+    thread::sleep(std::time::Duration::from_millis(100));
     info!("writerResult:  {:?}", writeResult);
   }
 }

@@ -33,18 +33,18 @@ impl Duration {
     seconds: 0,
     fraction: 0,
   };
-  
+
   pub const fn from_secs(secs: i32) -> Duration {
-    Duration { 
+    Duration {
       seconds: secs, // loss of range here
       fraction: 0,
     }
   }
 
   pub const fn from_millis(millis: i64) -> Duration {
-    Duration { 
+    Duration {
       seconds: (millis / 1000) as i32,
-      fraction: ((millis % 1000) << 32 / 1000) as u32,  // correct formula?
+      fraction: ((millis % 1000) << 32 / 1000) as u32, // correct formula?
     }
   }
 
@@ -52,7 +52,7 @@ impl Duration {
     ((self.seconds as i64) << 32) + (self.fraction as i64)
   }
 
-  pub(crate) fn from_ticks(ticks :i64) -> Duration {
+  pub(crate) fn from_ticks(ticks: i64) -> Duration {
     Duration {
       seconds: (ticks >> 32) as i32,
       fraction: ticks as u32,
@@ -73,24 +73,21 @@ impl Duration {
 
   pub fn to_nanoseconds(&self) -> i64 {
     ((self.to_ticks() as i128 * 1_000_000_000) >> 32) as i64
-  } 
+  }
 
   pub fn from_std(duration: std::time::Duration) -> Self {
-    Duration::from( duration )
+    Duration::from(duration)
   }
 
   pub fn to_std(&self) -> std::time::Duration {
-    std::time::Duration::from( *self )
+    std::time::Duration::from(*self)
   }
-  
 }
 
 impl From<Duration> for chrono::Duration {
   fn from(d: Duration) -> chrono::Duration {
-    chrono::Duration::nanoseconds( d.to_nanoseconds() 
-      )
+    chrono::Duration::nanoseconds(d.to_nanoseconds())
   }
-
 }
 
 impl From<std::time::Duration> for Duration {
@@ -103,22 +100,20 @@ impl From<std::time::Duration> for Duration {
 }
 
 impl From<Duration> for std::time::Duration {
-  fn from(d : Duration) -> std::time::Duration {
-   std::time::Duration::from_nanos( 
-      u64::try_from( d.to_nanoseconds() ).unwrap_or( 0 ) // saturate to zero, becaues std::time::Duraiton is unsigned
-    ) 
+  fn from(d: Duration) -> std::time::Duration {
+    std::time::Duration::from_nanos(
+      u64::try_from(d.to_nanoseconds()).unwrap_or(0), // saturate to zero, becaues std::time::Duraiton is unsigned
+    )
   }
 }
 
-impl Div<i64> for Duration 
-{
+impl Div<i64> for Duration {
   type Output = Self;
 
-  fn div(self, rhs:i64) -> Duration {
-    Duration::from_ticks( self.to_ticks() / rhs )
+  fn div(self, rhs: i64) -> Duration {
+    Duration::from_ticks(self.to_ticks() / rhs)
   }
 }
-
 
 /*
 impl From<Duration> for std::time::Duration {
@@ -157,12 +152,6 @@ mod tests {
       be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   },
   {
-      duration_invalid,
-      Duration::DURATION_INVALID,
-      le = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
-      be = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
-  },
-  {
       duration_infinite,
       Duration::DURATION_INFINITE,
       le = [0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF],
@@ -192,7 +181,7 @@ mod tests {
       duration,
       Duration {
         seconds: 1_519_152_761,
-        fraction: 328_210_046,
+        fraction: 1_409_651_413,
       }
     );
   }
@@ -207,7 +196,7 @@ mod tests {
 
     assert_eq!(
       duration,
-      std::time::Duration::from_nanos(1_519_152_760 * NANOS_PER_SEC + 1_328_210_046)
+      std::time::Duration::from_nanos(1_519_152_760 * NANOS_PER_SEC + 309_247_999)
     );
   }
 }

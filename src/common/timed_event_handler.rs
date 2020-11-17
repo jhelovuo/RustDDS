@@ -90,6 +90,8 @@ mod tests {
       TimerMessageType::writer_heartbeat,
     );
 
-    thread::sleep(time::Duration::milliseconds(1000 * 2).to_std().unwrap());
+    thread::sleep(
+      std::time::Duration::from_secs(2),
+    );
   }
 }

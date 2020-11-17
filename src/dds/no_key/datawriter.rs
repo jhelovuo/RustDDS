@@ -123,13 +123,10 @@ impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<'_, D, SA>
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::dds::{participant::DomainParticipant, traits::key::Key, topic::TopicKind};
+  use crate::dds::{participant::DomainParticipant, topic::TopicKind};
   use crate::test::random_data::*;
-  use std::thread;
-  use crate::dds::traits::key::Keyed;
   use crate::serialization::cdr_serializer::*;
   use byteorder::LittleEndian;
-  use log::info;
 
   #[test]
   fn dw_write_test() {
@@ -158,54 +155,13 @@ mod tests {
       .expect("Unable to write data");
 
     data.a = 5;
-    let timestamp: Timestamp = Timestamp::from(time::get_time());
+    let timestamp: Timestamp = Timestamp::now();
     data_writer
       .write(data, Some(timestamp))
       .expect("Unable to write data with timestamp");
 
     // TODO: verify that data is sent/writtent correctly
     // TODO: write also with timestamp
-  }
-
-  #[test]
-  fn dw_dispose_test() {
-    let domain_participant = DomainParticipant::new(0);
-    let qos = QosPolicies::qos_none();
-    let publisher = domain_participant
-      .create_publisher(&qos)
-      .expect("Failed to create publisher");
-    let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::NoKey)
-      .expect("Failed to create topic");
-
-    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
-      publisher
-        .create_datawriter_no_key(None, &topic, None)
-        .expect("Failed to create datawriter");
-
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let data = RandomData {
-      a: 4,
-      b: "Fobar".to_string(),
-    };
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    let key = &data.get_key().into_hash_key();
-    info!("key: {:?}", key);
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    data_writer
-      .write(data.clone(), None)
-      .expect("Unable to write data");
-
-    /* Keyless topics cannot dispose.
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
-    data_writer
-      .dispose(data.get_key(), None)
-      .expect("Unable to dispose data");
-
-    // TODO: verify that dispose is sent correctly
-    */
   }
 
   #[test]

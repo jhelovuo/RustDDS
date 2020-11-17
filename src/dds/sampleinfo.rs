@@ -65,7 +65,7 @@ impl InstanceState {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NotAliveGenerationCounts {
-  pub disposed_generation_count: i32, 
+  pub disposed_generation_count: i32,
   pub no_writers_generation_count: i32,
 }
 
@@ -86,12 +86,10 @@ impl NotAliveGenerationCounts {
     }
   }
 
-
   pub fn total(&self) -> i32 {
     self.disposed_generation_count + self.no_writers_generation_count
   }
 }
-
 
 /// DDS SampleInfo
 #[derive(Debug, Clone, PartialEq)]
@@ -127,7 +125,7 @@ pub struct SampleInfo {
   pub absolute_generation_rank: i32,
   pub source_timestamp: Option<Timestamp>,
 
-  // the publication_handle that identifies locally the DataWriter that modified 
+  // the publication_handle that identifies locally the DataWriter that modified
   // the instance (wrote the sample)
   pub publication_handle: GUID,
 }
@@ -150,7 +148,7 @@ impl SampleInfo {
 
   /* These accessor methods should not be needed, as the SampleInfo structure is likely
      not about to change too much, as it is specified by the DDS spec.
-     
+
   pub fn sample_state(&self) -> SampleState {
     self.sample_state
   }

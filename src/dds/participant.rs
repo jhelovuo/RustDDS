@@ -706,7 +706,7 @@ impl std::fmt::Debug for DomainParticipant {
 
 #[cfg(test)]
 mod tests {
-  use std::{thread, net::SocketAddr};
+  use std::{net::SocketAddr};
   use enumflags2::BitFlags;
   use log::info;
   use crate::{dds::topic::TopicKind, speedy::Writable};
@@ -756,11 +756,11 @@ mod tests {
     let publisher = domain_participant
       .create_publisher(&qos.clone())
       .expect("Failed to create publisher");
-    thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
+
     let topic = domain_participant
       .create_topic("Aasii", "RandomData", &qos.clone(), TopicKind::WithKey)
       .expect("Failed to create topic");
-    thread::sleep(time::Duration::milliseconds(1000).to_std().unwrap());
+
     let mut _data_writer = publisher
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
         None, &topic, None,
@@ -775,15 +775,15 @@ mod tests {
 
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+
     let publisher = domain_participant
       .create_publisher(&qos.clone())
       .expect("Failed to create publisher");
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+
     let topic = domain_participant
       .create_topic("Aasii", "Huh?", &qos.clone(), TopicKind::WithKey)
       .expect("Failed to create topic");
-    thread::sleep(time::Duration::milliseconds(100).to_std().unwrap());
+
     let mut _data_writer = publisher
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
         None, &topic, None,

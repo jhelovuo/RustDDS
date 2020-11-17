@@ -1,7 +1,10 @@
 use std::{
   collections::{BTreeMap, HashMap, btree_map::Range},
 };
-use crate::dds::{typedesc::TypeDesc, qos::{QosPolicies, QosPolicyBuilder}};
+use crate::dds::{
+  typedesc::TypeDesc,
+  qos::{QosPolicies, QosPolicyBuilder},
+};
 use crate::structure::time::Timestamp;
 
 use super::{
@@ -294,18 +297,18 @@ impl DDSHistoryCache {
 #[cfg(test)]
 mod tests {
   use std::sync::{Arc, RwLock};
-  use std::{
-    thread,
-  };
+  use std::{thread};
   use log::info;
 
   use super::DDSCache;
   use crate::{
-    dds::{typedesc::TypeDesc, ddsdata::DDSData},
+    dds::{
+      data_types::DDSTimestamp, ddsdata::DDSData, data_types::DDSDuration, typedesc::TypeDesc,
+    },
+    messages::submessages::submessage_elements::serialized_payload::{SerializedPayload},
     structure::{
       cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber,
     },
-    messages::submessages::submessage_elements::serialized_payload::{SerializedPayload},
     structure::cache_change::ChangeKind,
   };
 
@@ -327,7 +330,7 @@ mod tests {
     cache
       .write()
       .unwrap()
-      .to_topic_add_change(topic_name, &Instant::now(), change1);
+      .to_topic_add_change(topic_name, &DDSTimestamp::now(), change1);
 
     let pointerToCache1 = cache.clone();
 
@@ -339,20 +342,22 @@ mod tests {
         SequenceNumber::from(1),
         Some(DDSData::new(SerializedPayload::default())),
       );
-      pointerToCache1
-        .write()
-        .unwrap()
-        .to_topic_add_change(topic_name, &Instant::now(), cahange2);
+      pointerToCache1.write().unwrap().to_topic_add_change(
+        topic_name,
+        &DDSTimestamp::now(),
+        cahange2,
+      );
       let cahange3 = CacheChange::new(
         ChangeKind::ALIVE,
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(2),
         Some(DDSData::new(SerializedPayload::default())),
       );
-      pointerToCache1
-        .write()
-        .unwrap()
-        .to_topic_add_change(topic_name, &Instant::now(), cahange3);
+      pointerToCache1.write().unwrap().to_topic_add_change(
+        topic_name,
+        &DDSTimestamp::now(),
+        cahange3,
+      );
     })
     .join()
     .unwrap();
@@ -360,15 +365,15 @@ mod tests {
     cache
       .read()
       .unwrap()
-      .from_topic_get_change(topic_name, &Instant::now());
+      .from_topic_get_change(topic_name, &DDSTimestamp::now());
     assert_eq!(
       cache
         .read()
         .unwrap()
         .from_topic_get_changes_in_range(
           topic_name,
-          &(Instant::now() - Duration::from_secs(23)),
-          &Instant::now()
+          &(DDSTimestamp::now() - DDSDuration::from_secs(23)),
+          &DDSTimestamp::now()
         )
         .len(),
       3
@@ -377,8 +382,8 @@ mod tests {
       "{:?}",
       cache.read().unwrap().from_topic_get_changes_in_range(
         topic_name,
-        &(Instant::now() - Duration::from_secs(23)),
-        &Instant::now()
+        &(DDSTimestamp::now() - DDSDuration::from_secs(23)),
+        &DDSTimestamp::now()
       )
     );
   }
