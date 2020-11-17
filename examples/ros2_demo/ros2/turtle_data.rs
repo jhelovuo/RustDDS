@@ -1,10 +1,10 @@
 use rustdds::{
+  dds::data_types::{DDSDuration, TopicKind},
   dds::qos::{
     QosPolicies, policy::Deadline, policy::DestinationOrder, policy::Durability, policy::History,
     policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::LivelinessKind,
-    policy::Ownership, policy::Reliability,
+    policy::Ownership, QosPolicyBuilder, policy::Reliability,
   },
-  dds::data_types::{DDSDuration, TopicKind},
 };
 
 use serde::{Serialize, Deserialize};
