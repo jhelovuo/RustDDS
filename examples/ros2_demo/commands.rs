@@ -1,4 +1,4 @@
-use atosdds::ros2::builtin_datatypes::NodeInfo;
+use rustdds::ros2::builtin_datatypes::NodeInfo;
 
 pub enum NodeInfoCommand {
   Add { node_info: NodeInfo },

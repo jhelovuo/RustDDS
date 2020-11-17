@@ -3,18 +3,18 @@
 //! # Examples
 //!
 //! ```
-//! use atosdds::dds::DomainParticipant;
-//! use atosdds::dds::data_types::TopicKind;
-//! use atosdds::dds::traits::Entity;
-//! use atosdds::ros2::RosContext;
-//! use atosdds::ros2::RosParticipant;
-//! use atosdds::ros2::NodeOptions;
-//! use atosdds::ros2::RosNode;
-//! use atosdds::ros2::IRosNodeControl;
-//! use atosdds::ros2::RosNodeBuilder;
-//! use atosdds::ros2::builtin_datatypes::NodeInfo;
-//! use atosdds::dds::qos::QosPolicies;
-//! use atosdds::serialization::CDRSerializerAdapter;
+//! use rustdds::dds::DomainParticipant;
+//! use rustdds::dds::data_types::TopicKind;
+//! use rustdds::dds::traits::Entity;
+//! use rustdds::ros2::RosContext;
+//! use rustdds::ros2::RosParticipant;
+//! use rustdds::ros2::NodeOptions;
+//! use rustdds::ros2::RosNode;
+//! use rustdds::ros2::IRosNodeControl;
+//! use rustdds::ros2::RosNodeBuilder;
+//! use rustdds::ros2::builtin_datatypes::NodeInfo;
+//! use rustdds::dds::qos::QosPolicies;
+//! use rustdds::serialization::CDRSerializerAdapter;
 //!
 //!
 //! // DomainParticipant is always needed

@@ -3,7 +3,7 @@ use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
 use termion::{event::Key, raw::RawTerminal, input::TermRead, AsyncReader};
-use atosdds::{
+use rustdds::{
   dds::data_types::DiscoveredTopicData,
   ros2::builtin_datatypes::{ROSParticipantInfo, NodeInfo, Gid},
 };

@@ -1,4 +1,4 @@
-use atosdds::{
+use rustdds::{
   dds::DomainParticipant, dds::traits::Entity, ros2::NodeOptions, ros2::RosContext, ros2::RosNode,
   ros2::RosNodeBuilder, serialization::CDRSerializerAdapter, ros2::IRosNodeControl,
 };

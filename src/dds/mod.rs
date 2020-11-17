@@ -24,13 +24,13 @@
 //! # Examples
 //!
 //! ```
-//! use atosdds::dds::DomainParticipant;
-//! use atosdds::dds::{No_Key_DataReader as DataReader, No_Key_DataWriter as DataWriter, no_key::DataSample};
-//! use atosdds::dds::qos::QosPolicyBuilder;
-//! use atosdds::dds::qos::policy::Reliability;
-//! use atosdds::dds::data_types::DDSDuration;
-//! use atosdds::dds::data_types::TopicKind;
-//! use atosdds::serialization::{CDRSerializerAdapter, CDRDeserializerAdapter};
+//! use rustdds::dds::DomainParticipant;
+//! use rustdds::dds::{No_Key_DataReader as DataReader, No_Key_DataWriter as DataWriter, no_key::DataSample};
+//! use rustdds::dds::qos::QosPolicyBuilder;
+//! use rustdds::dds::qos::policy::Reliability;
+//! use rustdds::dds::data_types::DDSDuration;
+//! use rustdds::dds::data_types::TopicKind;
+//! use rustdds::serialization::{CDRSerializerAdapter, CDRDeserializerAdapter};
 //! use serde::{Serialize, Deserialize};
 //!
 //! // DomainParticipant is always necessary

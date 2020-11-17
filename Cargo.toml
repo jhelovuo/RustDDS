@@ -1,5 +1,5 @@
 [package]
-name = "atosdds"
+name = "rustdds"
 version = "0.0.1"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", "Oiva Moisio <oiva.moisio@atostek.com>", "Miska Melkinen <miska.melkinen@atostek.com>"]
 description = "DSS implementation with RTPS"

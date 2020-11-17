@@ -1,11 +1,11 @@
-extern crate atosdds;
+extern crate rustdds;
 extern crate serde;
 extern crate mio;
 extern crate mio_extras;
 extern crate byteorder;
 extern crate termion;
 
-use atosdds::{
+use rustdds::{
   serialization::{CDRSerializerAdapter, CDRDeserializerAdapter},
   dds::{
     DomainParticipant, qos::QosPolicies, data_types::ReadCondition, With_Key_DataReader,

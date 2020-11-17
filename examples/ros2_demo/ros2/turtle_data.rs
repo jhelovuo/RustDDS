@@ -1,4 +1,4 @@
-use atosdds::{
+use rustdds::{
   dds::qos::{
     QosPolicies, policy::Deadline, policy::DestinationOrder, policy::Durability, policy::History,
     policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::LivelinessKind,
@@ -70,7 +70,7 @@ pub struct Vector3 {
 
 #[cfg(test)]
 mod tests {
-  use atosdds::{
+  use rustdds::{
     dds::traits::serde_adapters::DeserializerAdapter,
     serialization::cdr_deserializer::CDRDeserializerAdapter,
     serialization::cdr_serializer::to_bytes, submessages::RepresentationIdentifier,

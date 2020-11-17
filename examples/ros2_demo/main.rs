@@ -1,10 +1,10 @@
-extern crate atosdds;
+extern crate rustdds;
 extern crate mio;
 extern crate mio_extras;
 
 use std::{io::Write, time::Duration};
 
-use atosdds::{
+use rustdds::{
   dds::DomainParticipant,
   ros2::{RosContext, RosParticipant},
 };

@@ -1,4 +1,4 @@
-use atosdds::dds::traits::Keyed;
+use rustdds::dds::traits::Keyed;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,7 +39,7 @@ impl Keyed for Square {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use atosdds::{
+  use rustdds::{
     submessages::RepresentationIdentifier, serialization::cdr_deserializer::CDRDeserializerAdapter,
     dds::traits::serde_adapters::DeserializerAdapter,
     serialization::cdr_serializer::to_little_endian_binary,
