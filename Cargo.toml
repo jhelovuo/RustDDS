@@ -9,7 +9,7 @@ license = "Apache-2.0"
 edition = "2018"
 homepage = "https://github.com/jhelovuo/RustDDS"  # placeholder home page
 repository = "https://github.com/jhelovuo/RustDDS"
-categories = ["network-programming", "science-robotics"] 
+categories = ["network-programming", "science::robotics"] 
 # the science-robotics category is because of ROS2
 
 [dependencies]
