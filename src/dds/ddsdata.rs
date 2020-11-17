@@ -2,8 +2,9 @@ use serde::{Serialize /*, Deserialize*/};
 
 use crate::{
   dds::traits::key::Keyed,
-  messages::submessages::submessage_elements::parameter_list::ParameterList,
-  structure::parameter_id::ParameterId,
+  structure::{
+    inline_qos::{KeyHash, StatusInfo},
+  },
 };
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
@@ -38,28 +39,17 @@ impl DDSData {
     }
   }
 
-  pub fn new_disposed(inline_qos: ParameterList) -> DDSData {
-    let mut change_kind = ChangeKind::ALIVE;
-    let mut value_key_hash = 0;
-    for param in inline_qos.parameters.iter() {
-      if param.parameter_id == ParameterId::PID_STATUS_INFO {
-        let last = match param.value.last() {
-          Some(l) => *l,
-          None => continue,
-        };
+  pub fn new_disposed(status_info: Option<StatusInfo>, key_hash: Option<KeyHash>) -> DDSData {
+    let change_kind = match status_info {
+      Some(i) => i.change_kind(),
+      // no change kind/status info means that it's still alive
+      None => ChangeKind::ALIVE,
+    };
 
-        if last > 0 {
-          change_kind = ChangeKind::NOT_ALIVE_DISPOSED;
-        }
-      } else if param.parameter_id == ParameterId::PID_KEY_HASH {
-        let mut val: [u8; 16] = [0; 16];
-        // if for some reason hash is less than 16 bytes fill zeroes 9.6.3.8
-        for i in 0..param.value.len() {
-          val[i] = param.value[i]
-        }
-        value_key_hash = u128::from_be_bytes(val);
-      }
-    }
+    let value_key_hash = match key_hash {
+      Some(v) => v,
+      None => KeyHash::empty(),
+    };
 
     DDSData {
       source_timestamp: Timestamp::now(),
@@ -67,7 +57,7 @@ impl DDSData {
       reader_id: EntityId::ENTITYID_UNKNOWN,
       writer_id: EntityId::ENTITYID_UNKNOWN,
       value: None,
-      value_key_hash,
+      value_key_hash: value_key_hash.value(),
     }
   }
 

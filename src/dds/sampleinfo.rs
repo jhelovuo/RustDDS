@@ -93,6 +93,7 @@ impl NotAliveGenerationCounts {
 }
 
 
+/// DDS SampleInfo
 #[derive(Debug, Clone, PartialEq)]
 pub struct SampleInfo {
   pub sample_state: SampleState,
@@ -146,4 +147,68 @@ impl SampleInfo {
       publication_handle: GUID::GUID_UNKNOWN,
     }
   }
+
+  /* These accessor methods should not be needed, as the SampleInfo structure is likely
+     not about to change too much, as it is specified by the DDS spec.
+     
+  pub fn sample_state(&self) -> SampleState {
+    self.sample_state
+  }
+
+  pub fn set_sample_state(&mut self, sample_state: SampleState) {
+    self.sample_state = sample_state
+  }
+
+  pub fn view_state(&self) -> ViewState {
+    self.view_state
+  }
+
+  pub fn set_view_state(&mut self, view_state: ViewState) {
+    self.view_state = view_state
+  }
+
+  pub fn instance_state(&self) -> InstanceState {
+    self.instance_state
+  }
+
+  pub fn set_instance_state(&mut self, instance_state: InstanceState) {
+    self.instance_state = instance_state
+  }
+
+  pub fn disposed_generation_count(&self) -> i32 {
+    self.disposed_generation_count
+  }
+
+  pub fn no_writers_generation_count(&self) -> i32 {
+    self.no_writers_generation_count
+  }
+
+  pub fn sample_rank(&self) -> i32 {
+    self.sample_rank
+  }
+
+  pub fn generation_rank(&self) -> i32 {
+    self.generation_rank
+  }
+
+  pub fn absolute_generation_rank(&self) -> i32 {
+    self.absolute_generation_rank
+  }
+
+  pub fn source_timestamp(&self) -> Timestamp {
+    self.source_timestamp
+  }
+
+  pub fn set_source_timestamp(&mut self, source_timestamp: Timestamp) {
+    self.source_timestamp = source_timestamp
+  }
+
+  pub fn publication_handle(&self) -> GUID {
+    self.publication_handle
+  }
+
+  pub fn set_publication_handle(&mut self, publication_handle: GUID) {
+    self.publication_handle = publication_handle
+  }
+  */
 }

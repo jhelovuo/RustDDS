@@ -1,5 +1,5 @@
 use speedy::{Readable, Writable};
-use std::convert::From;
+use std::convert::{From, TryFrom};
 use std::ops::Div;
 use serde::{Serialize, Deserialize};
 use super::parameter_id::ParameterId;
@@ -71,17 +71,27 @@ impl Duration {
     fraction: 0xFFFFFFFF,
   };
 
+  pub fn to_nanoseconds(&self) -> i64 {
+    ((self.to_ticks() as i128 * 1_000_000_000) >> 32) as i64
+  } 
+
   pub fn from_std(duration: std::time::Duration) -> Self {
     Duration::from( duration )
   }
+
+  pub fn to_std(&self) -> std::time::Duration {
+    std::time::Duration::from( *self )
+  }
+  
 }
 
 impl From<Duration> for chrono::Duration {
   fn from(d: Duration) -> chrono::Duration {
-    chrono::Duration::nanoseconds( ((d.to_ticks() as i128 * 1_000_000_000) >> 32) as i64 )
+    chrono::Duration::nanoseconds( d.to_nanoseconds() 
+      )
   }
-}
 
+}
 
 impl From<std::time::Duration> for Duration {
   fn from(duration: std::time::Duration) -> Self {
@@ -89,6 +99,14 @@ impl From<std::time::Duration> for Duration {
       seconds: duration.as_secs() as i32,
       fraction: (((duration.subsec_nanos() as u64) << 32) / 1_000_000_000) as u32,
     }
+  }
+}
+
+impl From<Duration> for std::time::Duration {
+  fn from(d : Duration) -> std::time::Duration {
+   std::time::Duration::from_nanos( 
+      u64::try_from( d.to_nanoseconds() ).unwrap_or( 0 ) // saturate to zero, becaues std::time::Duraiton is unsigned
+    ) 
   }
 }
 

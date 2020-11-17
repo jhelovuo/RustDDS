@@ -140,7 +140,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::NO_KEY)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::NoKey)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -175,7 +175,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::NO_KEY)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::NoKey)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -216,7 +216,7 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::NO_KEY)
+      .create_topic("Aasii", "Huh?", &qos, TopicKind::NoKey)
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =

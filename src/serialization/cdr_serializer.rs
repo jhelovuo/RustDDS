@@ -232,6 +232,12 @@ where
     Ok(())
   }
 
+  fn serialize_u128(self, v: u128) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(16)?;
+    self.writer.write_u128::<BO>(v)?;
+    Ok(())
+  }
+
   fn serialize_i8(self, v: i8) -> Result<()> {
     self.writer.write_i8(v)?;
     Ok(())

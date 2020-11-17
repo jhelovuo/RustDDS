@@ -5,7 +5,7 @@
 //! ```
 //! use atosdds::dds::DomainParticipant;
 //! use atosdds::dds::data_types::TopicKind;
-//! use atosdds::dds::data_types::Entity;
+//! use atosdds::dds::traits::Entity;
 //! use atosdds::ros2::RosContext;
 //! use atosdds::ros2::RosParticipant;
 //! use atosdds::ros2::NodeOptions;
@@ -36,7 +36,7 @@
 //!     "some_topic_name",
 //!     "NodeInfo",
 //!     QosPolicies::qos_none(),
-//!     TopicKind::NO_KEY)
+//!     TopicKind::NoKey)
 //!   .unwrap();
 //!
 //! // Topic has to live longer that node or readers/writers

@@ -1,13 +1,11 @@
 use speedy::{Readable, Writable};
 
+/// Type for DDS Topic (Keyed or No key)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Readable, Writable)]
-pub struct TopicKind {
-  value: u32,
-}
-
-impl TopicKind {
-  pub const NO_KEY: TopicKind = TopicKind { value: 1 };
-  pub const WITH_KEY: TopicKind = TopicKind { value: 2 };
+#[repr(u32)]
+pub enum TopicKind {
+  NoKey = 1,
+  WithKey = 2,
 }
 
 #[cfg(test)]
@@ -17,13 +15,13 @@ mod tests {
   serialization_test!(type = TopicKind,
   {
       topic_kind_no_key,
-      TopicKind::NO_KEY,
+      TopicKind::NoKey,
       le = [0x01, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x01]
   },
   {
       topic_kind_with_key,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
       le = [0x02, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x02]
   });

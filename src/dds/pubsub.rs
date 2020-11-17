@@ -39,6 +39,7 @@ use crate::{
 use rand::Rng;
 
 use super::{
+  with_key::datareader::ReaderCommand,
   no_key::{wrappers::NoKeyWrapper, wrappers::SAWrapper},
   writer::WriterCommand,
 };
@@ -312,6 +313,9 @@ impl<'s> Subscriber {
   {
     // What is the bound?
     let (send, rec) = mio_channel::sync_channel::<()>(10);
+    let (status_sender, status_receiver) = mio_channel::sync_channel::<StatusChange>(10);
+    let (reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
 
     // TODO: use qos
     let _qos = match qos {
@@ -339,6 +343,17 @@ impl<'s> Subscriber {
       }
     };
 
+    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
+
+    let new_reader = Reader::new(
+      reader_guid,
+      send,
+      status_sender,
+      dp.get_dds_cache(),
+      topic.get_name().to_string(),
+      reader_command_receiver,
+    );
+
     let matching_datareader = WithKeyDataReader::<D, SA>::new(
       self,
       datareader_id,
@@ -346,21 +361,14 @@ impl<'s> Subscriber {
       rec,
       dp.get_dds_cache(),
       self.discovery_command.clone(),
+      status_receiver,
+      reader_command_sender,
     );
 
     let matching_datareader = match matching_datareader {
       Ok(dr) => dr,
       e => return e,
     };
-
-    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
-
-    let new_reader = Reader::new(
-      reader_guid,
-      send,
-      dp.get_dds_cache(),
-      topic.get_name().to_string(),
-    );
 
     match self.discovery_db.write() {
       Ok(mut db) => {
@@ -410,7 +418,7 @@ impl<'s> Subscriber {
     <D as Keyed>::K: Key,
     SA: DeserializerAdapter<D>,
   {
-    if topic.topic_kind != TopicKind::WITH_KEY {
+    if topic.topic_kind != TopicKind::WithKey {
       return Err(Error::PreconditionNotMet); // TopicKind mismatch
     }
     self.create_datareader_internal(entity_id, topic, qos)
@@ -433,7 +441,7 @@ impl<'s> Subscriber {
     D: DeserializeOwned,
     SA: DeserializerAdapter<D>,
   {
-    if topic.topic_kind != TopicKind::NO_KEY {
+    if topic.topic_kind != TopicKind::NoKey {
       return Err(Error::PreconditionNotMet); // TopicKind mismatch
     }
 

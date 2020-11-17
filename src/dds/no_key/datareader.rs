@@ -4,7 +4,6 @@ use serde::{de::DeserializeOwned};
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
-  serialization::CDRDeserializerAdapter,
   structure::{
     entity::{Entity, EntityAttributes},
   },
@@ -13,9 +12,8 @@ use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*, readcondi
 
 use crate::dds::with_key::datareader as datareader_with_key;
 use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
-
+use crate::serialization::CDRDeserializerAdapter;
 use crate::dds::no_key::datasample::DataSample;
-
 use super::{
   wrappers::{NoKeyWrapper, SAWrapper},
 };
@@ -38,7 +36,7 @@ where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  pub(crate) fn from_keyed(
+  pub fn from_keyed(
     keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<DA>>,
   ) -> DataReader<'a, D, DA> {
     DataReader {
@@ -150,7 +148,9 @@ where
     )
   }
 
-  pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
+  pub fn get_requested_deadline_missed_status(
+    &mut self,
+  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
     self.keyed_datareader.get_requested_deadline_missed_status()
   }
 }

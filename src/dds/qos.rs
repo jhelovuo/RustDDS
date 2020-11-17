@@ -1,4 +1,11 @@
-use crate::dds::values::result::*;
+use crate::{
+  structure::inline_qos::KeyHash,
+  dds::values::result::*,
+  messages::submessages::submessage_elements::{
+    parameter_list::ParameterList, RepresentationIdentifier,
+  },
+  structure::{parameter_id::ParameterId, inline_qos::StatusInfo},
+};
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
 pub trait HasQoSPolicy {
@@ -196,6 +203,7 @@ impl QosPolicies {
 }
 
 // put these into a submodule to avoid repeating the word "policy" or "qospolicy"
+/// Contains all available QoSPolicies
 pub mod policy {
   use crate::structure::{parameter_id::ParameterId, duration::Duration};
   use serde::{Serialize, Deserialize};
@@ -367,6 +375,45 @@ pub mod policy {
   // ReaderDataLifeCycle
 
   // DurabilityService
+}
+
+// Utility for parsing RTPS inlineQoS parameters
+pub struct InlineQos {}
+
+impl InlineQos {
+  pub fn status_info(
+    params: &ParameterList,
+    rep_id: RepresentationIdentifier,
+  ) -> std::result::Result<StatusInfo, crate::serialization::error::Error> {
+    let status_info = params
+      .parameters
+      .iter()
+      .find(|p| p.parameter_id == ParameterId::PID_STATUS_INFO)
+      .clone();
+    let status_info = match status_info {
+      Some(p) => StatusInfo::from_cdr_bytes(&p.value, rep_id)?,
+      None => StatusInfo::empty(),
+    };
+
+    Ok(status_info)
+  }
+
+  pub fn key_hash(
+    params: &ParameterList,
+    rep_id: RepresentationIdentifier,
+  ) -> std::result::Result<KeyHash, crate::serialization::error::Error> {
+    let key_hash = params
+      .parameters
+      .iter()
+      .find(|p| p.parameter_id == ParameterId::PID_KEY_HASH)
+      .clone();
+    let key_hash = match key_hash {
+      Some(p) => KeyHash::from_cdr_bytes(&p.value, rep_id)?,
+      None => KeyHash::empty(),
+    };
+
+    Ok(key_hash)
+  }
 }
 
 // TODO: helper function to combine two QosPolicies: existing and modifications

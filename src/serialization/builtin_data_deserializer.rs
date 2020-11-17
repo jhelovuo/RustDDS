@@ -4,13 +4,16 @@ use serde::Deserialize;
 
 use chrono::Utc;
 
-use crate::structure::{
-  guid::GUID,
-  parameter_id::ParameterId,
-  locator::{LocatorList, Locator},
-  builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
-  duration::Duration,
-  endpoint::ReliabilityKind,
+use crate::{
+  dds::{qos::QosPolicyBuilder},
+  structure::{
+    guid::GUID,
+    parameter_id::ParameterId,
+    locator::{LocatorList, Locator},
+    builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
+    duration::Duration,
+    endpoint::ReliabilityKind,
+  },
 };
 
 use crate::messages::{
@@ -168,23 +171,84 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn generate_subscription_topic_data(&self) -> SubscriptionBuiltinTopicData {
-    SubscriptionBuiltinTopicData {
-      key: self.endpoint_guid,
-      participant_key: self.participant_guid,
-      topic_name: self.topic_name.clone(),
-      type_name: self.type_name.clone(),
-      durability: self.durability,
-      deadline: self.deadline,
-      latency_budget: self.latency_budget,
-      liveliness: self.liveliness,
-      reliability: self.reliability,
-      ownership: self.ownership,
-      destination_order: self.destination_order,
-      time_based_filter: self.time_based_filter,
-      presentation: self.presentation,
-      lifespan: self.lifespan,
-    }
+  pub fn generate_subscription_topic_data(&self) -> Result<SubscriptionBuiltinTopicData, Error> {
+    let qos = QosPolicyBuilder::new();
+
+    let qos = match self.durability {
+      Some(d) => qos.durability(d),
+      None => qos,
+    };
+
+    let qos = match self.deadline {
+      Some(dl) => qos.deadline(dl),
+      None => qos,
+    };
+
+    let qos = match self.latency_budget {
+      Some(lb) => qos.latency_budget(lb),
+      None => qos,
+    };
+
+    let qos = match self.liveliness {
+      Some(l) => qos.liveliness(l),
+      None => qos,
+    };
+
+    let qos = match self.reliability {
+      Some(r) => qos.reliability(r),
+      None => qos,
+    };
+
+    let qos = match self.ownership {
+      Some(o) => qos.ownership(o),
+      None => qos,
+    };
+
+    let qos = match self.destination_order {
+      Some(d) => qos.destination_order(d),
+      None => qos,
+    };
+
+    let qos = match self.time_based_filter {
+      Some(tbf) => qos.time_based_filter(tbf),
+      None => qos,
+    };
+
+    let qos = match self.presentation {
+      Some(p) => qos.presentation(p),
+      None => qos,
+    };
+
+    let qos = match self.lifespan {
+      Some(ls) => qos.lifespan(ls),
+      None => qos,
+    };
+
+    let qos = qos.build();
+
+    let key = match self.endpoint_guid {
+      Some(g) => g,
+      None => return Err(Error::Message("Failed to parse key.".to_string())),
+    };
+
+    let topic_name: &str = match self.topic_name.as_ref() {
+      Some(tn) => tn,
+      None => return Err(Error::Message("Failed to parse topic name.".to_string())),
+    };
+
+    let type_name: &str = match self.type_name.as_ref() {
+      Some(tn) => tn,
+      None => return Err(Error::Message("Failed to parse type name.".to_string())),
+    };
+
+    let mut sbtd = SubscriptionBuiltinTopicData::new(key, topic_name, type_name, &qos);
+
+    match self.participant_guid {
+      Some(g) => sbtd.set_participant_key(g),
+      None => (),
+    };
+
+    Ok(sbtd)
   }
 
   pub fn generate_publication_topic_data(&self) -> PublicationBuiltinTopicData {
@@ -225,14 +289,14 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn generate_discovered_reader_data(self) -> DiscoveredReaderData {
+  pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData, Error> {
     let reader_proxy = self.generate_reader_proxy();
-    let subscription_topic_data = self.generate_subscription_topic_data();
-    DiscoveredReaderData {
+    let subscription_topic_data = self.generate_subscription_topic_data()?;
+    Ok(DiscoveredReaderData {
       reader_proxy,
       subscription_topic_data,
       content_filter: self.content_filter_property,
-    }
+    })
   }
 
   pub fn generate_discovered_writer_data(self) -> DiscoveredWriterData {

@@ -73,9 +73,14 @@ pub fn spdp_publication_data_raw() -> Vec<u8> {
 }
 
 use crate::{
-  serialization::{
-    Message, cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, SubMessage,
-    SubmessageBody,
+  dds::{
+    qos::policy::{
+      Deadline, Durability, LatencyBudget, Liveliness, LivelinessKind, Reliability, Ownership,
+      DestinationOrder, TimeBasedFilter, Presentation, PresentationAccessScope, Lifespan, History,
+      ResourceLimits,
+    },
+    traits::serde_adapters::DeserializerAdapter,
+    qos::QosPolicyBuilder,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
@@ -88,25 +93,21 @@ use crate::{
     },
   },
   messages::submessages::submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader},
-  structure::{
-    locator::Locator,
-    guid::{EntityId, GUID},
-    duration::Duration,
-    sequence_number::SequenceNumber,
-  },
-  dds::{
-    qos::policy::{
-      Deadline, Durability, LatencyBudget, Liveliness, LivelinessKind, Reliability, Ownership,
-      DestinationOrder, TimeBasedFilter, Presentation, PresentationAccessScope, Lifespan, History,
-      ResourceLimits,
-    },
-    traits::serde_adapters::DeserializerAdapter,
-  },
   messages::{
     header::Header,
     submessages::submessage_elements::serialized_payload::{
       SerializedPayload, RepresentationIdentifier,
     },
+  },
+  serialization::{
+    Message, cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, SubMessage,
+    SubmessageBody,
+  },
+  structure::{
+    locator::Locator,
+    guid::{EntityId, GUID},
+    duration::Duration,
+    sequence_number::SequenceNumber,
   },
 };
 use speedy::{Endianness, Writable};
@@ -237,39 +238,38 @@ pub fn writer_proxy_data() -> Option<WriterProxy> {
 }
 
 pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData> {
-  let sub_topic_data = SubscriptionBuiltinTopicData {
-    key: Some(GUID::new()),
-    participant_key: Some(GUID::new()),
-    topic_name: Some("some topic name".to_string()),
-    type_name: Some("RandomData".to_string()),
-    durability: Some(Durability::TransientLocal),
-    deadline: Some(Deadline {
+  let qos = QosPolicyBuilder::new()
+    .durability(Durability::TransientLocal)
+    .deadline(Deadline {
       period: Duration::from(StdDuration::from_secs(60)),
-    }),
-    latency_budget: Some(LatencyBudget {
+    })
+    .latency_budget(LatencyBudget {
       duration: Duration::from(StdDuration::from_secs(2 * 60)),
-    }),
-    liveliness: Some(Liveliness {
+    })
+    .liveliness(Liveliness {
       kind: LivelinessKind::ManulByTopic,
       lease_duration: Duration::from(StdDuration::from_secs(3 * 60)),
-    }),
-    reliability: Some(Reliability::Reliable {
+    })
+    .reliability(Reliability::Reliable {
       max_blocking_time: Duration::from(StdDuration::from_secs(4 * 60)),
-    }),
-    ownership: Some(Ownership::Exclusive { strength: 234 }),
-    destination_order: Some(DestinationOrder::BySourceTimeStamp),
-    time_based_filter: Some(TimeBasedFilter {
+    })
+    .ownership(Ownership::Exclusive { strength: 234 })
+    .destination_order(DestinationOrder::BySourceTimeStamp)
+    .time_based_filter(TimeBasedFilter {
       minimum_separation: Duration::from(StdDuration::from_secs(5 * 60)),
-    }),
-    presentation: Some(Presentation {
+    })
+    .presentation(Presentation {
       access_scope: PresentationAccessScope::Topic,
       coherent_access: false,
       ordered_access: true,
-    }),
-    lifespan: Some(Lifespan {
+    })
+    .lifespan(Lifespan {
       duration: Duration::from(StdDuration::from_secs(6 * 60)),
-    }),
-  };
+    })
+    .build();
+
+  let sub_topic_data =
+    SubscriptionBuiltinTopicData::new(GUID::new(), "some topic name", "RandomData", &qos);
 
   Some(sub_topic_data)
 }

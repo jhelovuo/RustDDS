@@ -123,7 +123,7 @@ impl MessageReceiver {
     }
   }
 
-  fn get_reader(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
+  pub fn get_reader(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
     self
       .available_readers
       .iter_mut()
@@ -359,7 +359,10 @@ impl Default for MessageReceiverState {
 
 mod tests {
   use super::*;
-  use crate::{dds::writer::WriterCommand, messages::header::Header};
+  use crate::{
+    dds::values::result::StatusChange, dds::writer::WriterCommand, messages::header::Header,
+    dds::with_key::datareader::ReaderCommand,
+  };
   use crate::speedy::{Writable, Readable};
   use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
   use crate::serialization::cdr_serializer::to_bytes;
@@ -406,13 +409,24 @@ mod tests {
 
     new_guid.from_prefix(entity);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander, reader_command_receiver) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
+
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
-      TopicKind::NO_KEY,
+      TopicKind::NoKey,
       &TypeDesc::new("testi".to_string()),
     );
-    let new_reader = Reader::new(new_guid, send, dds_cache, "test".to_string());
+    let new_reader = Reader::new(
+      new_guid,
+      send,
+      status_sender,
+      dds_cache,
+      "test".to_string(),
+      reader_command_receiver,
+    );
 
     // Skip for now+
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);

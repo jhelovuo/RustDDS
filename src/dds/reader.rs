@@ -1,4 +1,8 @@
-use crate::structure::{cache_change::ChangeKind, entity::Entity};
+use crate::{
+  common::timed_event_handler::TimedEventHandler,
+  network::constant::TimerMessageType,
+  structure::{cache_change::ChangeKind, entity::Entity},
+};
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::messages::submessages::submessages::*;
 
@@ -11,14 +15,17 @@ use crate::structure::locator::LocatorList;
 use crate::structure::{duration::Duration, time::Timestamp};
 
 use std::{
+  collections::hash_map::DefaultHasher,
+  hash::Hasher,
   slice::Iter,
   sync::{Arc, RwLock},
 };
 use crate::structure::dds_cache::{DDSCache};
 //use std::time::Instant;
 
+use mio::Token;
 use mio_extras::channel as mio_channel;
-use log::{debug};
+use log::{debug, info, warn};
 use std::fmt;
 
 use std::collections::{HashSet, HashMap};
@@ -37,6 +44,14 @@ use crate::messages::protocol_id::ProtocolId;
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::vendor_id::VendorId;
 use speedy::{Writable, Endianness};
+use chrono::Duration as chronoDuration;
+
+use super::{
+  with_key::datareader::ReaderCommand,
+  values::result::{RequestedDeadlineMissedStatus, StatusChange},
+};
+
+use super::qos::InlineQos;
 
 const PROTOCOLVERSION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_3;
 const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
@@ -44,6 +59,7 @@ const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
 pub struct Reader {
   // Should the instant be sent?
   notification_sender: mio_channel::SyncSender<()>,
+  status_sender: mio_channel::SyncSender<StatusChange>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
   seqnum_instant_map: HashMap<SequenceNumber, Timestamp>,
@@ -60,18 +76,25 @@ pub struct Reader {
   received_hearbeat_count: i32,
 
   matched_writers: HashMap<GUID, RtpsWriterProxy>,
+
+  requested_deadline_missed_status: RequestedDeadlineMissedStatus,
+
+  timed_event_handler: Option<TimedEventHandler>,
+  pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
 } // placeholder
 
 impl Reader {
   pub fn new(
     guid: GUID,
     notification_sender: mio_channel::SyncSender<()>,
+    status_sender: mio_channel::SyncSender<StatusChange>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
-    //qos_policy: QosPolicies, add later to constructor
+    data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>, //qos_policy: QosPolicies, add later to constructor
   ) -> Reader {
     Reader {
       notification_sender,
+      status_sender,
       dds_cache,
       topic_name,
       qos_policy: QosPolicies::qos_none(),
@@ -85,6 +108,9 @@ impl Reader {
       sent_ack_nack_count: 0,
       received_hearbeat_count: 0,
       matched_writers: HashMap::new(),
+      requested_deadline_missed_status: RequestedDeadlineMissedStatus::new(),
+      timed_event_handler: None,
+      data_reader_command_receiver,
     }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
@@ -104,6 +130,139 @@ impl Reader {
       Some(cc) => Some(DDSData::new(cc.data_value.as_ref().unwrap().clone())),
       None => None,
     }
+  }
+
+  /// To know when token represents a reader we should look entity attribute kind
+  pub fn get_entity_token(&self) -> Token {
+    let id = self.as_entity().as_usize();
+    Token(id)
+  }
+
+  pub fn get_reader_command_entity_token(&self) -> Token {
+    let mut hasher = DefaultHasher::new();
+    let id = self.as_entity().as_usize() as u64;
+    hasher.write(&id.to_le_bytes());
+    let hashedID: u64 = hasher.finish();
+    Token(hashedID as usize)
+  }
+
+  pub fn add_timed_event_handler(&mut self, time_handler: TimedEventHandler) {
+    self.timed_event_handler = Some(time_handler);
+  }
+
+  pub fn set_requested_deadline_check_timer(&mut self) {
+    if self.qos_policy.deadline.is_some() {
+      //info!("set_requested_deadline_check_timer");
+      self.timed_event_handler.as_mut().unwrap().set_timeout(
+        &chronoDuration::from_std(self.qos_policy.deadline.unwrap().period.to_std()).unwrap(),
+        TimerMessageType::reader_deadline_missed_check,
+      )
+    } else {
+      info!("do not set set_requested_deadline_check_timer")
+    }
+  }
+
+  pub fn reset_requested_deadline_missed_status(&mut self) {
+    info!(
+      "reset_requested_deadline_missed_status on reader {:?}",
+      self.get_entity_id()
+    );
+    self.requested_deadline_missed_status.reset_change();
+  }
+
+  pub fn send_status_change(&self, change: StatusChange) {
+    match self.status_sender.try_send(change.clone()) {
+      Ok(()) => info!(
+        "Reader {:?} send status change: {:?}",
+        self.get_entity_id(),
+        change.clone()
+      ),
+      Err(mio_channel::TrySendError::Full(_)) => (panic!()),
+      Err(mio_channel::TrySendError::Disconnected(_)) => {
+        // If we get here, our DataReader has died. The Reader should now dispose itself.
+        // TODO: Implement Reader disposal.
+        panic!()
+      }
+      Err(mio_channel::TrySendError::Io(_)) => {
+        // TODO: What does this mean? Can we ever get here?
+        panic!()
+      }
+    }
+  }
+
+  // The deadline that the DataReader was expecting through its QosPolicy
+  // DEADLINE was not respected for a specific instance
+  // if statusChange is returned it should be send to DataReader
+  // this calculation should be repeated every self.qos_policy.deadline
+  fn calculate_if_requested_deadline_is_missed(&mut self) -> Vec<StatusChange> {
+    info!("calculate_if_requested_deadline_is_missed");
+    let mut changes: Vec<StatusChange> = vec![];
+    match self.qos_policy.deadline {
+      None => {
+        return changes;
+      }
+      Some(_d) => {
+        for (_g, writer_proxy) in self.matched_writers.iter_mut() {
+          //let last_instant = wP.changes.values().max_by(|x,y|x.cmp(y));
+          let last_instant = writer_proxy.changes.values().max_by(|x, y| x.cmp(y));
+          match last_instant {
+            Some(instant) => {
+              let insta_now = Timestamp::now();
+              let perioid = insta_now.duration_since(*instant);
+              // if time singe last received message is greater than deadline increase status and return notification.
+              if perioid > self.qos_policy.deadline.unwrap().period {
+                self.requested_deadline_missed_status.increase();
+                changes.push(StatusChange::RequestedDeadlineMissedStatus {
+                  status: self.requested_deadline_missed_status,
+                });
+              } else {
+                continue;
+              }
+              // no messages recieved ever so deadline must be missed.
+            }
+            None => {
+              self.requested_deadline_missed_status.increase();
+              changes.push(StatusChange::RequestedDeadlineMissedStatus {
+                status: self.requested_deadline_missed_status,
+              });
+            }
+          }
+        }
+      }
+    }
+    changes
+  }
+
+  /*
+  fn calculate_if_requested_deadline_is_missed_for_specific_writer(&mut self, writer_proxy: &RtpsWriterProxy) -> Option<StatusChange>{
+    let last_instant = writer_proxy.changes.values().max_by(|x,y|x.cmp(y));
+    match last_instant{
+      Some(instant) => {
+        let insta_now = Instant::now();
+        let perioid = insta_now.duration_since(*instant);
+        // if time singe last received message is greater than deadline increase status and return notification.
+        if perioid > self.qos_policy.deadline.unwrap().period.to_std(){
+          self.requested_deadline_missed_status.increase();
+          return Some( StatusChange::RequestedDeadlineMissedStatus{ status : self.requested_deadline_missed_status} );
+        }else{
+          return None;
+        }
+      // no messages recieved ever so deadline must be missed.
+      } None => {
+        self.requested_deadline_missed_status.increase();
+        return Some( StatusChange::RequestedDeadlineMissedStatus{ status : self.requested_deadline_missed_status} );
+      }
+    }
+  }
+  */
+
+  pub fn handle_requested_deadline_event(&mut self) {
+    info!("handle_requested_deadline_event");
+    let missed_deadlines = self.calculate_if_requested_deadline_is_missed();
+    for missed_deadline in missed_deadlines {
+      self.send_status_change(missed_deadline);
+    }
+    self.set_requested_deadline_check_timer();
   }
 
   // Used for test/debugging purposes
@@ -262,9 +421,10 @@ impl Reader {
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
     for instant in removed_instances.iter() {
-      cache
-        .from_topic_remove_change(&self.topic_name, instant)
-        .expect("WriterProxy told to remove an instant which was not present");
+      match cache.from_topic_remove_change(&self.topic_name, instant) {
+        Some(_) => (),
+        None => warn!("WriterProxy told to remove an instant which was not present"),
+      }
     }
     drop(cache);
 
@@ -381,19 +541,46 @@ impl Reader {
     writer_guid: GUID,
     no_writers: bool,
   ) {
-    let (change_kind, mut ddsdata) = match data.inline_qos {
-      Some(d) => (ChangeKind::NOT_ALIVE_DISPOSED, DDSData::new_disposed(d)),
-      None => match data.serialized_payload {
-        Some(pl) => (
-          if !no_writers {
-            ChangeKind::ALIVE
-          } else {
-            ChangeKind::NOT_ALIVE_UNREGISTERED
-          },
-          DDSData::new(pl),
-        ),
+    let representation_identifier = match &data.serialized_payload {
+      Some(sp) => sp.representation_identifier(),
+      None => RepresentationIdentifier::CDR_LE,
+    };
+
+    let status_info = match &data.inline_qos {
+      Some(iqos) => InlineQos::status_info(iqos, representation_identifier).ok(),
+      None => None,
+    };
+
+    let key_hash = match &data.inline_qos {
+      Some(iqos) => InlineQos::key_hash(iqos, representation_identifier).ok(),
+      None => None,
+    };
+
+    let change_kind = match status_info {
+      Some(si) => si.change_kind(),
+      None => {
+        if !no_writers {
+          ChangeKind::ALIVE
+        } else {
+          ChangeKind::NOT_ALIVE_UNREGISTERED
+        }
+      }
+    };
+
+    if change_kind != ChangeKind::ALIVE {
+      debug!(
+        "Changed writer {:?} status to {:?}",
+        writer_guid, change_kind
+      );
+    }
+
+    let mut ddsdata = if change_kind != ChangeKind::ALIVE {
+      DDSData::new_disposed(status_info, key_hash)
+    } else {
+      match data.serialized_payload {
+        Some(pl) => DDSData::new(pl),
         None => return,
-      },
+      }
     };
 
     ddsdata.set_reader_id(data.reader_id);
@@ -573,7 +760,10 @@ impl fmt::Debug for Reader {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::structure::guid::{GUID, EntityId};
+  use crate::{
+    dds::values::result::StatusChange,
+    structure::guid::{GUID, EntityId},
+  };
   use crate::messages::submessages::submessage_elements::serialized_payload::{SerializedPayload};
   use crate::structure::guid::GuidPrefix;
   use crate::structure::topic_kind::TopicKind;
@@ -585,13 +775,24 @@ mod tests {
     guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
     let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
-      TopicKind::NO_KEY,
+      TopicKind::NoKey,
       &TypeDesc::new("testi".to_string()),
     );
-    let mut reader = Reader::new(guid, send, dds_cache, "test".to_string());
+    let mut reader = Reader::new(
+      guid,
+      send,
+      status_sender,
+      dds_cache,
+      "test".to_string(),
+      reader_command_receiver,
+    );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -622,13 +823,24 @@ mod tests {
     let new_guid = GUID::new();
 
     let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
-      TopicKind::NO_KEY,
+      TopicKind::NoKey,
       &TypeDesc::new("testi".to_string()),
     );
-    let mut new_reader = Reader::new(new_guid, send, dds_cache.clone(), "test".to_string());
+    let mut new_reader = Reader::new(
+      new_guid,
+      send,
+      status_sender,
+      dds_cache.clone(),
+      "test".to_string(),
+      reader_command_receiver,
+    );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -669,13 +881,24 @@ mod tests {
     let new_guid = GUID::new();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
-      TopicKind::NO_KEY,
+      TopicKind::NoKey,
       &TypeDesc::new("testi".to_string()),
     );
-    let mut new_reader = Reader::new(new_guid, send, dds_cache, "test".to_string());
+    let mut new_reader = Reader::new(
+      new_guid,
+      send,
+      status_sender,
+      dds_cache,
+      "test".to_string(),
+      reader_command_receiver,
+    );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),
@@ -791,13 +1014,24 @@ mod tests {
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::new();
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
-      TopicKind::NO_KEY,
+      TopicKind::NoKey,
       &TypeDesc::new("testi".to_string()),
     );
-    let mut reader = Reader::new(new_guid, send, dds_cache, "test".to_string());
+    let mut reader = Reader::new(
+      new_guid,
+      send,
+      status_sender,
+      dds_cache,
+      "test".to_string(),
+      reader_command_receiver,
+    );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(vec![1; 12]),

@@ -1,8 +1,6 @@
 use atosdds::{
-  dds::DomainParticipant, 
-  dds::data_types::Entity,
-  ros2::NodeOptions, ros2::RosContext, ros2::RosNode, ros2::RosNodeBuilder,
-  serialization::CDRSerializerAdapter, ros2::IRosNodeControl,
+  dds::DomainParticipant, dds::traits::Entity, ros2::NodeOptions, ros2::RosContext, ros2::RosNode,
+  ros2::RosNodeBuilder, serialization::CDRSerializerAdapter, ros2::IRosNodeControl,
 };
 
 use log::{error, info};

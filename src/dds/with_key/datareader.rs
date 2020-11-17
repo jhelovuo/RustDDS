@@ -6,8 +6,8 @@ use itertools::Itertools;
 use io::Write;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
-use log::{error, warn};
-use mio::{Poll, Token, Ready, PollOpt, Evented};
+use log::{error, info, warn};
+use mio::{Evented, Poll, PollOpt, Ready, Token};
 
 use crate::{
   serialization::CDRDeserializerAdapter,
@@ -41,7 +41,35 @@ pub enum SelectByKey {
   Next,
 }
 
-/// DDS DataReader for keyed topics
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReaderCommand {
+  RESET_REQUESTED_DEADLINE_STATUS,
+}
+
+pub struct CurrentStatusChanges {
+  pub livelinessLost: Option<LivelinessLostStatus>,
+  pub offeredDeadlineMissed: Option<OfferedDeadlineMissedStatus>,
+  pub offeredIncompatibleQos: Option<OfferedIncompatibleQosStatus>,
+  pub requestedDeadlineMissed: Option<RequestedDeadlineMissedStatus>,
+  pub requestedIncompatibleQos: Option<RequestedIncompatibleQosStatus>,
+  pub publicationMatched: Option<PublicationMatchedStatus>,
+  pub subscriptionMatched: Option<SubscriptionMatchedStatus>,
+}
+
+impl CurrentStatusChanges {
+  pub fn new() -> CurrentStatusChanges {
+    CurrentStatusChanges {
+      livelinessLost: None,
+      offeredDeadlineMissed: None,
+      offeredIncompatibleQos: None,
+      requestedDeadlineMissed: None,
+      requestedIncompatibleQos: None,
+      publicationMatched: None,
+      subscriptionMatched: None,
+    }
+  }
+}
+
 pub struct DataReader<
   'a,
   D: Keyed + DeserializeOwned,
@@ -60,6 +88,9 @@ pub struct DataReader<
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+  status_receiver: mio_channel::Receiver<StatusChange>,
+  current_status: CurrentStatusChanges,
+  reader_command: mio_channel::SyncSender<ReaderCommand>,
 }
 
 impl<'a, D, DA> Drop for DataReader<'a, D, DA>
@@ -97,6 +128,8 @@ where
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    status_receiver: mio_channel::Receiver<StatusChange>,
+    reader_command: mio_channel::SyncSender<ReaderCommand>,
   ) -> Result<Self> {
     let dp = match subscriber.get_participant() {
       Some(dp) => dp,
@@ -125,6 +158,9 @@ where
       latest_instant: Timestamp::now(),
       deserializer_type: PhantomData,
       discovery_command,
+      status_receiver,
+      current_status: CurrentStatusChanges::new(),
+      reader_command,
     })
   }
 
@@ -403,6 +439,110 @@ where
     Ok(result)
   }
 
+  // status queries
+
+  fn reset_local_requested_deadline_status_change(&mut self) {
+    info!(
+      "reset_local_requested_deadline_status_change current {:?}",
+      self.current_status.requestedDeadlineMissed
+    );
+    match self.current_status.requestedDeadlineMissed {
+      Some(_s) => {
+        self
+          .current_status
+          .requestedDeadlineMissed
+          .as_mut()
+          .unwrap()
+          .reset_change();
+      }
+      None => {}
+    }
+  }
+
+  fn fetch_readers_current_status(&mut self) -> Result<()> {
+    //self.TEST_FUNCTION_get_requested_deadline_missed_status();
+    let mut received_requested_deadline_status_change: bool = false;
+    loop {
+      let received_status = self.status_receiver.try_recv();
+      match received_status {
+        Ok(s) => match s {
+          StatusChange::LivelinessLostStatus { status } => {
+            self.current_status.livelinessLost = Some(status);
+          }
+          StatusChange::OfferedDeadlineMissedStatus { status } => {
+            self.current_status.offeredDeadlineMissed = Some(status);
+          }
+          StatusChange::OfferedIncompatibleQosStatus { status } => {
+            self.current_status.offeredIncompatibleQos = Some(status);
+          }
+          StatusChange::RequestedDeadlineMissedStatus { status } => {
+            self.current_status.requestedDeadlineMissed = Some(status);
+            received_requested_deadline_status_change = true;
+          }
+          StatusChange::RequestedIncompatibleQosStatus { status } => {
+            self.current_status.requestedIncompatibleQos = Some(status);
+          }
+          StatusChange::PublicationMatchedStatus { status } => {
+            self.current_status.publicationMatched = Some(status);
+          }
+          StatusChange::SubscriptionMatchedStatus { status } => {
+            self.current_status.subscriptionMatched = Some(status);
+          }
+        },
+        Err(e) => {
+          match e {
+            std::sync::mpsc::TryRecvError::Empty => {
+              break;
+            }
+            std::sync::mpsc::TryRecvError::Disconnected => {
+              error!(
+                " Reader disconnected, could not fetch status change: {:?}",
+                e
+              );
+              // return disconnect status!!!
+              return Err(Error::OutOfResources);
+            }
+          }
+        }
+      }
+    }
+    // after looping set command to reset requested deadeline status if needed. Also reset local status.
+    match received_requested_deadline_status_change {
+      true => {
+        self
+          .current_status
+          .requestedDeadlineMissed
+          .unwrap()
+          .reset_change();
+        match self
+          .reader_command
+          .try_send(ReaderCommand::RESET_REQUESTED_DEADLINE_STATUS)
+        {
+          Ok(()) => {
+            return Ok(());
+          }
+          Err(e) => {
+            error!("Unable to send RESET_REQUESTED_DEADLINE_STATUS: {:?}", e);
+            return Err(Error::OutOfResources);
+          }
+        }
+      }
+      false => {
+        return Ok(());
+      }
+    }
+  }
+  /*
+  pub fn register_status_change_notificator(&self, poll: & Poll, token: Token, interest: Ready, opts: PollOpt) -> Result<()>{
+    todo!();
+    // let res = poll.register(&self.status_receiver, token, interest, opts);
+
+    //self.TEST_FUNCTION_get_requested_deadline_missed_status();
+    //info!("register datareader status reciever to poll with token {:?}", token );
+    //return res;
+  }
+  */
+
   // Helper functions
 
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
@@ -436,11 +576,94 @@ where
     }
   }
 
-  /// <b>Unimplemented. Do not use.</b>
-  pub fn get_requested_deadline_missed_status(&self) -> Result<RequestedDeadlineMissedStatus> {
-    todo!()
+  #[cfg(test)]
+  pub fn TEST_FUNCTION_set_status_change_receiver(
+    &mut self,
+    receiver: mio_channel::Receiver<StatusChange>,
+  ) {
+    self.status_receiver = receiver;
+  }
+
+  #[cfg(test)]
+  pub fn TEST_FUNCTION_get_requested_deadline_missed_status(
+    &mut self,
+  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
+    self.get_requested_deadline_missed_status()
+  }
+
+  #[cfg(test)]
+  pub fn TEST_FUNCTION_set_reader_commander(
+    &mut self,
+    sender: mio_channel::SyncSender<ReaderCommand>,
+  ) {
+    self.reader_command = sender;
+  }
+
+  pub fn get_requested_deadline_missed_status(
+    &mut self,
+  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
+    self.fetch_readers_current_status()?;
+    let value_before_reset = self.current_status.requestedDeadlineMissed.clone();
+    self.reset_local_requested_deadline_status_change();
+    return Ok(value_before_reset);
+  }
+} // impl
+
+/*
+impl<'a, D: 'static, SA> IDataReader<D, SA> for DataReader<'a, D, SA>
+where
+  D: DeserializeOwned + Keyed,
+  <D as Keyed>::K: Key,
+  SA: DeserializerAdapter<D>,
+{
+  fn read(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<&dyn IDataSample<D>>> {
+    let samples = self.read_as_obj(max_samples, read_condition);
+    match samples {
+      Ok(d) => Ok(d.into_iter().map(|p| p.as_idata_sample()).collect()),
+      Err(e) => Err(e),
+    }
+  }
+
+  fn take(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<Box<dyn IDataSample<D>>>> {
+    let samples = self.take_as_obj(max_samples, read_condition);
+    match samples {
+      Ok(d) => Ok(d.into_iter().map(|p| p.into_idata_sample()).collect()),
+      Err(e) => Err(e),
+    }
+  }
+
+  fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>> {
+    let mut ds =
+      <DataReader<D, SA> as IDataReader<D, SA>>::read(self, 1, ReadCondition::not_read())?;
+    let val = match ds.pop() {
+      Some(v) => Some(v.as_idata_sample()),
+      None => None,
+    };
+    Ok(val)
+  }
+
+  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>> {
+    let ds = self.take_next_sample()?;
+    Ok(ds.into_iter().map(|p| p.into_idata_sample()).find(|_| true))
+  }
+
+  fn get_requested_deadline_missed_status(&mut self) -> Result<Option<RequestedDeadlineMissedStatus>> {
+    self.fetch_readers_current_status()?;
+    let value_before_reset = self.current_status.requestedDeadlineMissed.clone();
+    self.reset_local_requested_deadline_status_change();
+    return Ok(value_before_reset);
+
   }
 }
+*/
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
@@ -515,7 +738,10 @@ mod tests {
   use crate::serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes};
   use byteorder::LittleEndian;
   use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-  use std::{thread, time};
+  use std::{
+    thread,
+    time::{self},
+  };
   use mio::{Events};
   #[test]
   fn dr_get_samples_from_ddschache() {
@@ -525,10 +751,13 @@ mod tests {
 
     let sub = dp.create_subscriber(&qos).unwrap();
     let topic = dp
-      .create_topic("dr", "drtest?", &qos, TopicKind::WITH_KEY)
+      .create_topic("dr", "drtest?", &qos, TopicKind::WithKey)
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander, reader_command_receiver) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let reader_id = EntityId::default();
     let datareader_id = EntityId::default();
@@ -537,8 +766,10 @@ mod tests {
     let mut new_reader = Reader::new(
       reader_guid,
       send,
+      status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
+      reader_command_receiver,
     );
 
     let mut matching_datareader = sub
@@ -643,10 +874,13 @@ mod tests {
 
     let sub = dp.create_subscriber(&qos).unwrap();
     let topic = dp
-      .create_topic("dr read", "read fn test?", &qos, TopicKind::WITH_KEY)
+      .create_topic("dr read", "read fn test?", &qos, TopicKind::WithKey)
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander, reader_command_receiver) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let default_id = EntityId::default();
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), default_id);
@@ -654,8 +888,10 @@ mod tests {
     let mut reader = Reader::new(
       reader_guid,
       send,
+      status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
+      reader_command_receiver,
     );
 
     let mut datareader = sub
@@ -863,10 +1099,13 @@ mod tests {
 
     let sub = dp.create_subscriber(&qos).unwrap();
     let topic = dp
-      .create_topic("wakeup", "Wake up!", &qos, TopicKind::WITH_KEY)
+      .create_topic("wakeup", "Wake up!", &qos, TopicKind::WithKey)
       .unwrap();
 
     let (send, rec) = mio_channel::sync_channel::<()>(10);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander, reader_command_receiver) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let default_id = EntityId::default();
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), default_id);
@@ -874,8 +1113,10 @@ mod tests {
     let mut reader = Reader::new(
       reader_guid,
       send,
+      status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
+      reader_command_receiver,
     );
 
     let mut datareader = sub

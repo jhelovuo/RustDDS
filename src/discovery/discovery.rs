@@ -91,7 +91,7 @@ impl Discovery {
   const SEND_TOPIC_INFO_PERIOD :std_Duration = std_Duration::from_secs(20);
   const CHECK_PARTICIPANT_MESSAGES :std_Duration = std_Duration::from_secs(1);
 
-  const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
+  pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
     presentation: None,
     deadline: None,
@@ -203,7 +203,7 @@ impl Discovery {
       "DCPSParticipant",
       "SPDPDiscoveredParticipantData",
       &Discovery::create_spdp_patricipant_qos(),
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -326,7 +326,7 @@ impl Discovery {
       "DCPSSubscription",
       "DiscoveredReaderData",
       &dcps_subscription_qos,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -423,7 +423,7 @@ impl Discovery {
       "DCPSPublication",
       "DiscoveredWriterData",
       &dcps_publication_qos,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -520,7 +520,7 @@ impl Discovery {
       "DCPSTopic",
       "DiscoveredTopicData",
       &dcps_topic_qos,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -637,7 +637,7 @@ impl Discovery {
       "DCPSParticipantMessage",
       "ParticipantMessageData",
       &Discovery::PARTICIPANT_MESSAGE_QOS,
-      TopicKind::WITH_KEY,
+      TopicKind::WithKey,
     ) {
       Ok(t) => t,
       Err(e) => {
@@ -1404,7 +1404,7 @@ mod tests {
         "Square",
         "ShapeType",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
 
@@ -1493,7 +1493,7 @@ mod tests {
         "Square",
         "ShapeType",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
 
@@ -1513,7 +1513,7 @@ mod tests {
       .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(&topic, None, None);
 
     let poll = Poll::new().unwrap();
-    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11002);
+    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 0);
     poll
       .register(
         udp_listener.mio_socket(),
@@ -1542,7 +1542,7 @@ mod tests {
       }
     }
 
-    let par_msg_data = spdp_participant_msg_mod(11002)
+    let par_msg_data = spdp_participant_msg_mod(udp_listener.port())
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .expect("Failed to write participant data.");
 

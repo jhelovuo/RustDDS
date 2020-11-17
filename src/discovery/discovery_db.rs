@@ -22,11 +22,14 @@ use crate::{
   },
 };
 
-use super::data_types::{
-  spdp_participant_data::SPDPDiscoveredParticipantData,
-  topic_data::{
-    DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
-    ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
+use super::{
+  discovery::Discovery,
+  data_types::{
+    spdp_participant_data::SPDPDiscoveredParticipantData,
+    topic_data::{
+      DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
+      ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
+    },
   },
 };
 
@@ -159,7 +162,7 @@ impl DiscoveryDB {
       self
         .local_topic_readers
         .iter()
-        .find(|(_, p)| match &p.subscription_topic_data.topic_name {
+        .find(|(_, p)| match &p.subscription_topic_data.topic_name() {
           Some(tn) => tn == topic_name,
           None => false,
         })
@@ -183,7 +186,7 @@ impl DiscoveryDB {
       self
         .external_topic_readers
         .iter()
-        .find(|p| match &p.subscription_topic_data.topic_name {
+        .find(|p| match &p.subscription_topic_data.topic_name() {
           Some(tn) => tn == topic_name,
           None => false,
         })
@@ -262,7 +265,7 @@ impl DiscoveryDB {
   }
 
   fn add_reader_to_local_writer(&mut self, data: &DiscoveredReaderData) {
-    let topic_name = match data.subscription_topic_data.topic_name.as_ref() {
+    let topic_name = match data.subscription_topic_data.topic_name().as_ref() {
       Some(tn) => tn,
       None => return,
     };
@@ -310,7 +313,7 @@ impl DiscoveryDB {
         .local_topic_readers
         .iter_mut()
         .filter(
-          |(_, p)| match p.subscription_topic_data.topic_name.as_ref() {
+          |(_, p)| match p.subscription_topic_data.topic_name().as_ref() {
             Some(tn) => *tn == *topic_name,
             None => false,
           },
@@ -360,19 +363,19 @@ impl DiscoveryDB {
   pub fn update_topic_data_drd(&mut self, drd: &DiscoveredReaderData) {
     let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
       key: None,
-      name: drd.subscription_topic_data.topic_name.clone(),
-      type_name: drd.subscription_topic_data.type_name.clone(),
-      durability: drd.subscription_topic_data.durability.clone(),
-      deadline: drd.subscription_topic_data.deadline.clone(),
-      latency_budget: drd.subscription_topic_data.latency_budget.clone(),
-      liveliness: drd.subscription_topic_data.liveliness.clone(),
-      reliability: drd.subscription_topic_data.reliability.clone(),
-      lifespan: drd.subscription_topic_data.lifespan.clone(),
-      destination_order: drd.subscription_topic_data.destination_order.clone(),
-      presentation: drd.subscription_topic_data.presentation.clone(),
+      name: drd.subscription_topic_data.topic_name().clone(),
+      type_name: drd.subscription_topic_data.type_name().clone(),
+      durability: drd.subscription_topic_data.durability().clone(),
+      deadline: drd.subscription_topic_data.deadline().clone(),
+      latency_budget: drd.subscription_topic_data.latency_budget().clone(),
+      liveliness: drd.subscription_topic_data.liveliness().clone(),
+      reliability: drd.subscription_topic_data.reliability().clone(),
+      lifespan: drd.subscription_topic_data.lifespan().clone(),
+      destination_order: drd.subscription_topic_data.destination_order().clone(),
+      presentation: drd.subscription_topic_data.presentation().clone(),
       history: None,
       resource_limits: None,
-      ownership: drd.subscription_topic_data.ownership.clone(),
+      ownership: drd.subscription_topic_data.ownership().clone(),
     });
 
     self.update_topic_data(&topic_data);
@@ -449,9 +452,9 @@ impl DiscoveryDB {
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
       guid,
-      GUID::GUID_UNKNOWN,
       &String::from("DCPSParticipant"),
       &String::from("SPDPDiscoveredParticipantData"),
+      &Discovery::PARTICIPANT_MESSAGE_QOS,
     );
     let drd = DiscoveredReaderData {
       reader_proxy,
@@ -477,22 +480,13 @@ impl DiscoveryDB {
       domain_participant.participant_id(),
     );
 
-    let subscription_data = SubscriptionBuiltinTopicData {
-      key: Some(reader_guid),
-      participant_key: Some(domain_participant.get_guid()),
-      topic_name: Some(String::from(topic.get_name())),
-      type_name: Some(String::from(topic.get_type().name())),
-      durability: topic.get_qos().durability,
-      deadline: topic.get_qos().deadline,
-      latency_budget: topic.get_qos().latency_budget,
-      liveliness: topic.get_qos().liveliness,
-      reliability: topic.get_qos().reliability,
-      ownership: topic.get_qos().ownership,
-      destination_order: topic.get_qos().destination_order,
-      time_based_filter: topic.get_qos().time_based_filter.clone(),
-      presentation: topic.get_qos().presentation,
-      lifespan: topic.get_qos().lifespan,
-    };
+    let mut subscription_data = SubscriptionBuiltinTopicData::new(
+      reader_guid,
+      topic.get_name(),
+      topic.get_type().name(),
+      topic.get_qos(),
+    );
+    subscription_data.set_participant_key(domain_participant.get_guid());
 
     // TODO: possibly change content filter to dynamic value
     let content_filter = None;
@@ -561,7 +555,7 @@ impl DiscoveryDB {
       .local_topic_readers
       .iter()
       .filter(|(_, p)| {
-        *match p.subscription_topic_data.topic_name.as_ref() {
+        *match p.subscription_topic_data.topic_name().as_ref() {
           Some(t) => t,
           None => return false,
         } == topic_name
@@ -603,6 +597,8 @@ mod tests {
   use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
   use std::time::Duration as StdDuration;
+  use crate::dds::values::result::StatusChange;
+  use crate::dds::with_key::datareader::ReaderCommand;
 
   #[test]
   fn discdb_participant_operations() {
@@ -643,7 +639,7 @@ mod tests {
         "Foobar",
         "RandomData",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
     let topic2 = domain_participant
@@ -651,7 +647,7 @@ mod tests {
         "Barfoo",
         "RandomData",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
 
@@ -690,8 +686,8 @@ mod tests {
     // creating data
     let reader1 = reader_proxy_data().unwrap();
     let mut reader1sub = subscription_builtin_topic_data().unwrap();
-    reader1sub.key = reader1.remote_reader_guid.clone();
-    reader1sub.topic_name = Some(topic.get_name().to_string().clone());
+    reader1sub.set_key(reader1.remote_reader_guid.unwrap());
+    reader1sub.set_topic_name(topic.get_name());
     let dreader1 = DiscoveredReaderData {
       reader_proxy: reader1.clone(),
       subscription_topic_data: reader1sub.clone(),
@@ -701,8 +697,8 @@ mod tests {
 
     let reader2 = reader_proxy_data().unwrap();
     let mut reader2sub = subscription_builtin_topic_data().unwrap();
-    reader2sub.key = reader2.remote_reader_guid.clone();
-    reader2sub.topic_name = Some(topic2.get_name().to_string().clone());
+    reader2sub.set_key(reader2.remote_reader_guid.unwrap());
+    reader2sub.set_topic_name(topic2.get_name());
     let dreader2 = DiscoveredReaderData {
       reader_proxy: reader2,
       subscription_topic_data: reader2sub,
@@ -730,17 +726,25 @@ mod tests {
         "some topic name",
         "Wazzup",
         &QosPolicies::qos_none(),
-        TopicKind::WITH_KEY,
+        TopicKind::WithKey,
       )
       .unwrap();
     let mut discoverydb = DiscoveryDB::new();
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (_reader_commander1, reader_command_receiver1) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
+    let (_reader_commander2, reader_command_receiver2) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
+
     let reader = Reader::new(
       GUID::new(),
       notification_sender.clone(),
+      status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
       topic.get_name().to_string(),
+      reader_command_receiver1,
     );
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);
@@ -754,8 +758,10 @@ mod tests {
     let reader = Reader::new(
       GUID::new(),
       notification_sender.clone(),
+      status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
       topic.get_name().to_string(),
+      reader_command_receiver2,
     );
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader);

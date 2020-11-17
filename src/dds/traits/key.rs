@@ -50,7 +50,7 @@ pub trait Key:
       digarr[i] = digest[i];
     }
 
-    u128::from_be_bytes(digarr)
+    u128::from_le_bytes(digarr)
   }
 }
 
@@ -71,9 +71,9 @@ impl<D: Keyed> Keyed for &D {
 impl Key for String {}
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-// Key type to identicy data instances in builtin topics
+/// Key type to identicy data instances in builtin topics
 pub struct BuiltInTopicKey {
-  // IDL PSM (2.3.3, pg 138) uses array of 3x long to implement this
+  /// IDL PSM (2.3.3, pg 138) uses array of 3x long to implement this
   value: [i32; 3],
 }
 
