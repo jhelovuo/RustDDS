@@ -9,8 +9,8 @@ use serde::Serialize;
 use log::{error, warn};
 
 use crate::{
-  serialization::CDRSerializerAdapter, discovery::discovery::DiscoveryCommand,
-  structure::time::Timestamp,
+  discovery::discovery::DiscoveryCommand, serialization::CDRSerializerAdapter,
+  dds::qos::policy::Liveliness, structure::time::Timestamp,
 };
 use crate::structure::entity::{Entity, EntityAttributes};
 use crate::structure::{
@@ -32,7 +32,6 @@ use crate::dds::traits::TopicDescription;
 use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
   policy::{Reliability},
-  policy::LivelinessKind,
 };
 use crate::dds::traits::serde_adapters::SerializerAdapter;
 use crate::dds::with_key::datasample::DataSample;
@@ -119,9 +118,9 @@ where
     };
 
     match topic.get_qos().liveliness {
-      Some(lv) => match lv.kind {
-        LivelinessKind::Automatic => (),
-        LivelinessKind::ManualByParticipant => {
+      Some(lv) => match lv {
+        Liveliness::Automatic { lease_duration: _ } => (),
+        Liveliness::ManualByParticipant { lease_duration: _ } => {
           match discovery_command.send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS) {
             Ok(_) => (),
             Err(e) => {
@@ -129,7 +128,7 @@ where
             }
           }
         }
-        LivelinessKind::ManulByTopic => (),
+        Liveliness::ManualByTopic { lease_duration: _ } => (),
       },
       None => (),
     };
@@ -154,9 +153,9 @@ where
 
   pub fn refresh_manual_liveliness(&self) {
     match self.get_qos().liveliness {
-      Some(lv) => match lv.kind {
-        LivelinessKind::Automatic => (),
-        LivelinessKind::ManualByParticipant => {
+      Some(lv) => match lv {
+        Liveliness::Automatic { lease_duration: _ } => (),
+        Liveliness::ManualByParticipant { lease_duration: _ } => {
           match self
             .discovery_command
             .send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS)
@@ -167,7 +166,7 @@ where
             }
           }
         }
-        LivelinessKind::ManulByTopic => (),
+        Liveliness::ManualByTopic { lease_duration: _ } => (),
       },
       None => (),
     };
@@ -285,10 +284,10 @@ where
 
     match self.get_qos().liveliness {
       Some(lv) => {
-        match lv.kind {
-          LivelinessKind::Automatic => (),
-          LivelinessKind::ManualByParticipant => (),
-          LivelinessKind::ManulByTopic => {
+        match lv {
+          Liveliness::Automatic { lease_duration: _ } => (),
+          Liveliness::ManualByParticipant { lease_duration: _ } => (),
+          Liveliness::ManualByTopic { lease_duration: _ } => {
             match self
               .discovery_command
               .send(DiscoveryCommand::ASSERT_TOPIC_LIVELINESS {

@@ -75,9 +75,8 @@ pub fn spdp_publication_data_raw() -> Vec<u8> {
 use crate::{
   dds::{
     qos::policy::{
-      Deadline, Durability, LatencyBudget, Liveliness, LivelinessKind, Reliability, Ownership,
-      DestinationOrder, TimeBasedFilter, Presentation, PresentationAccessScope, Lifespan, History,
-      ResourceLimits,
+      Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
+      TimeBasedFilter, Presentation, PresentationAccessScope, Lifespan, History, ResourceLimits,
     },
     traits::serde_adapters::DeserializerAdapter,
     qos::QosPolicyBuilder,
@@ -246,8 +245,7 @@ pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData>
     .latency_budget(LatencyBudget {
       duration: Duration::from(StdDuration::from_secs(2 * 60)),
     })
-    .liveliness(Liveliness {
-      kind: LivelinessKind::ManulByTopic,
+    .liveliness(Liveliness::ManualByTopic {
       lease_duration: Duration::from(StdDuration::from_secs(3 * 60)),
     })
     .reliability(Reliability::Reliable {
@@ -287,8 +285,7 @@ pub fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
     latency_budget: Some(LatencyBudget {
       duration: Duration::from(StdDuration::from_secs(2 * 30)),
     }),
-    liveliness: Some(Liveliness {
-      kind: LivelinessKind::ManulByTopic,
+    liveliness: Some(Liveliness::ManualByTopic {
       lease_duration: Duration::from(StdDuration::from_secs(3 * 30)),
     }),
     reliability: Some(Reliability::BestEffort),
@@ -322,8 +319,7 @@ pub fn topic_data() -> Option<TopicBuiltinTopicData> {
     latency_budget: Some(LatencyBudget {
       duration: Duration::from(StdDuration::from_secs(2 * 45)),
     }),
-    liveliness: Some(Liveliness {
-      kind: LivelinessKind::ManulByTopic,
+    liveliness: Some(Liveliness::ManualByTopic {
       lease_duration: Duration::from(StdDuration::from_secs(3 * 45)),
     }),
     reliability: Some(Reliability::BestEffort),

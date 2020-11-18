@@ -593,11 +593,33 @@ impl BuiltinDataDeserializer {
         }
       }
       ParameterId::PID_LIVELINESS => {
-        let liveliness: Result<Liveliness, Error> =
+        #[derive(Deserialize, Clone, Copy)]
+        #[repr(u32)]
+        enum LivelinessKind {
+          Automatic,
+          ManualByParticipant,
+          ManualbyTopic,
+        }
+        #[derive(Deserialize, Clone, Copy)]
+        struct LivelinessData {
+          pub kind: LivelinessKind,
+          pub lease_duration: Duration,
+        }
+        let liveliness: Result<LivelinessData, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match liveliness {
           Ok(liv) => {
-            self.liveliness = Some(liv);
+            self.liveliness = match liv.kind {
+              LivelinessKind::Automatic => Some(Liveliness::Automatic {
+                lease_duration: liv.lease_duration,
+              }),
+              LivelinessKind::ManualByParticipant => Some(Liveliness::ManualByParticipant {
+                lease_duration: liv.lease_duration,
+              }),
+              LivelinessKind::ManualbyTopic => Some(Liveliness::ManualByTopic {
+                lease_duration: liv.lease_duration,
+              }),
+            };
             buffer.drain(..4 + parameter_length);
             return self;
           }

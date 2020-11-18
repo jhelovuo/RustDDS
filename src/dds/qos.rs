@@ -164,6 +164,7 @@ impl QosPolicyBuilder {
   }
 }
 
+/// Describes single RTPS/DDS QoS policy
 #[derive(Clone, Debug)]
 pub struct QosPolicies {
   // pub(crate) beacuse as we want to have some builtin QoS Policies as constant.
@@ -272,12 +273,14 @@ pub mod policy {
     pub value: i32,
   }
   */
+
+  /// DDS 2.2.3.16 LIFESPAN
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub struct Lifespan {
     pub duration: Duration,
   }
 
-  // this is a policy
+  /// DDS 2.2.3.4 DURABILITY
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Durability {
     Volatile,
@@ -286,6 +289,7 @@ pub mod policy {
     Persistent,
   }
 
+  /// DDS 2.2.3.6 PRESENTATION
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub struct Presentation {
     pub access_scope: PresentationAccessScope,
@@ -301,35 +305,34 @@ pub mod policy {
     Group,
   }
 
+  /// DDS 2.2.3.7 DEADLINE
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub struct Deadline {
     pub period: Duration,
   }
 
+  /// DDS 2.2.3.8 LATENCY_BUDGET
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub struct LatencyBudget {
     pub duration: Duration,
   }
 
+  /// DDS 2.2.3.9 OWNERSHIP
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Ownership {
     Shared,
     Exclusive { strength: i32 }, // This also implements OwnershipStrength
   }
 
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-  pub struct Liveliness {
-    pub kind: LivelinessKind,
-    pub lease_duration: Duration,
+  /// DDS 2.2.3.11 LIVELINESS
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+  pub enum Liveliness {
+    Automatic { lease_duration: Duration },
+    ManualByParticipant { lease_duration: Duration },
+    ManualByTopic { lease_duration: Duration },
   }
 
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-  pub enum LivelinessKind {
-    Automatic,
-    ManualByParticipant,
-    ManulByTopic,
-  }
-
+  /// DDS 2.2.3.12 TIME_BASED_FILTER
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub struct TimeBasedFilter {
     pub minimum_separation: Duration,
@@ -341,24 +344,28 @@ pub mod policy {
   }
   */
 
+  /// DDS 2.2.3.14 RELIABILITY
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
   }
 
+  /// DDS 2.2.3.17 DESTINATION_ORDER
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum DestinationOrder {
     ByReceptionTimestamp,
     BySourceTimeStamp,
   }
 
+  /// DDS 2.2.3.18 HISTORY
   #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub enum History {
     KeepLast { depth: i32 },
     KeepAll,
   }
 
+  /// DDS 2.2.3.19 RESOURCE_LIMITS
   #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
   pub struct ResourceLimits {
     pub max_samples: i32,
@@ -367,7 +374,7 @@ pub mod policy {
   }
 
   #[derive(Serialize, Deserialize)]
-  pub struct QosData<D>
+  pub(crate) struct QosData<D>
   where
     D: Serialize,
   {

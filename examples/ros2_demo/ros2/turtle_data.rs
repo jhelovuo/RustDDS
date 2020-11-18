@@ -2,8 +2,8 @@ use rustdds::{
   dds::data_types::{DDSDuration, TopicKind},
   dds::qos::{
     QosPolicies, policy::Deadline, policy::DestinationOrder, policy::Durability, policy::History,
-    policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::LivelinessKind,
-    policy::Ownership, QosPolicyBuilder, policy::Reliability,
+    policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::Ownership,
+    QosPolicyBuilder, policy::Reliability,
   },
 };
 
@@ -21,8 +21,7 @@ impl TurtleCmdVelTopic {
       duration: DDSDuration::DURATION_ZERO,
     })
     .ownership(Ownership::Shared)
-    .liveliness(Liveliness {
-      kind: LivelinessKind::Automatic,
+    .liveliness(Liveliness::Automatic {
       lease_duration: DDSDuration::DURATION_INFINITE,
     })
     .reliability(Reliability::Reliable {

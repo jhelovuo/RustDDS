@@ -175,11 +175,11 @@ impl Writer {
 
     let heartbeat_period = match heartbeat_period {
       Some(hbp) => match qos_policies.liveliness {
-        Some(lv) => match lv.kind {
-          policy::LivelinessKind::Automatic => Some(hbp),
-          policy::LivelinessKind::ManualByParticipant => Some(hbp),
-          policy::LivelinessKind::ManulByTopic => {
-            let std_dur = Duration::from(lv.lease_duration);
+        Some(lv) => match lv {
+          policy::Liveliness::Automatic { lease_duration: _ } => Some(hbp),
+          policy::Liveliness::ManualByParticipant { lease_duration: _ } => Some(hbp),
+          policy::Liveliness::ManualByTopic { lease_duration } => {
+            let std_dur = Duration::from(lease_duration);
             Some(std_dur / 3)
           }
         },

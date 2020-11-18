@@ -1,12 +1,11 @@
 use crate::{
   dds::qos::{
     QosPolicies, policy::Deadline, policy::DestinationOrder, policy::Durability, policy::History,
-    policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::LivelinessKind,
-    policy::Ownership, policy::Reliability,
+    policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::Ownership,
+    policy::Reliability,
   },
   structure::duration::Duration,
 };
-
 
 pub struct ROSDiscoveryTopic {}
 
@@ -21,8 +20,7 @@ impl ROSDiscoveryTopic {
       duration: Duration::DURATION_ZERO,
     }),
     ownership: Some(Ownership::Shared),
-    liveliness: Some(Liveliness {
-      kind: LivelinessKind::Automatic,
+    liveliness: Some(Liveliness::Automatic {
       lease_duration: Duration::DURATION_INFINITE,
     }),
     time_based_filter: None,
@@ -102,8 +100,7 @@ impl RosOutTopic {
       duration: Duration::DURATION_ZERO,
     }),
     ownership: Some(Ownership::Shared),
-    liveliness: Some(Liveliness {
-      kind: LivelinessKind::Automatic,
+    liveliness: Some(Liveliness::Automatic {
       lease_duration: Duration::DURATION_INFINITE,
     }),
     time_based_filter: None,

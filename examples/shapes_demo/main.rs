@@ -17,7 +17,6 @@ use rustdds::{
   dds::qos::policy::Ownership,
   dds::qos::policy::Durability,
   dds::qos::policy::Liveliness,
-  dds::qos::policy::LivelinessKind,
   dds::qos::policy::DestinationOrder,
   dds::qos::policy::ResourceLimits,
   dds::qos::policy::Deadline,
@@ -74,8 +73,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
     .history(History::KeepLast { depth: 1 })
     .ownership(Ownership::Shared)
     .durability(Durability::Volatile)
-    .liveliness(Liveliness {
-      kind: LivelinessKind::Automatic,
+    .liveliness(Liveliness::Automatic {
       lease_duration: DDSDuration::DURATION_INFINITE,
     })
     .destination_order(DestinationOrder::ByReceptionTimestamp)

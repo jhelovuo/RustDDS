@@ -923,10 +923,44 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_liveliness<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    #[derive(Serialize, Clone, Copy)]
+    #[repr(u32)]
+    enum LivelinessKind {
+      Automatic,
+      ManualByParticipant,
+      ManualbyTopic,
+    }
+    #[derive(Serialize, Clone, Copy)]
+    struct LivelinessData {
+      pub kind: LivelinessKind,
+      pub lease_duration: Duration,
+    }
     match self.liveliness {
       Some(l) => {
-        s.serialize_field("liveliness", &QosData::new(ParameterId::PID_LIVELINESS, l))
-          .unwrap();
+        let data = match l {
+          Liveliness::Automatic { lease_duration } => QosData::new(
+            ParameterId::PID_LIVELINESS,
+            LivelinessData {
+              kind: LivelinessKind::Automatic,
+              lease_duration,
+            },
+          ),
+          Liveliness::ManualByParticipant { lease_duration } => QosData::new(
+            ParameterId::PID_LIVELINESS,
+            LivelinessData {
+              kind: LivelinessKind::ManualByParticipant,
+              lease_duration,
+            },
+          ),
+          Liveliness::ManualByTopic { lease_duration } => QosData::new(
+            ParameterId::PID_LIVELINESS,
+            LivelinessData {
+              kind: LivelinessKind::ManualbyTopic,
+              lease_duration,
+            },
+          ),
+        };
+        s.serialize_field("liveliness", &data).unwrap();
       }
       None => (),
     }

@@ -20,7 +20,7 @@ use crate::{
       QosPolicies,
       policy::{
         Reliability, History, Durability, Presentation, PresentationAccessScope, Deadline,
-        Ownership, Liveliness, LivelinessKind, TimeBasedFilter, DestinationOrder, ResourceLimits,
+        Ownership, Liveliness, TimeBasedFilter, DestinationOrder, ResourceLimits,
       },
     },
     readcondition::ReadCondition,
@@ -1044,17 +1044,17 @@ impl Discovery {
       .collect();
 
     let (automatic, manual): (Vec<&Liveliness>, Vec<&Liveliness>) =
-      writer_liveliness.iter().partition(|p| match p.kind {
-        LivelinessKind::Automatic => true,
-        LivelinessKind::ManualByParticipant => false,
-        LivelinessKind::ManulByTopic => false,
+      writer_liveliness.iter().partition(|p| match p {
+        Liveliness::Automatic { lease_duration: _ } => true,
+        Liveliness::ManualByParticipant { lease_duration: _ } => false,
+        Liveliness::ManualByTopic { lease_duration: _ } => false,
       });
 
     let (manual_by_participant, _manual_by_topic): (Vec<&Liveliness>, Vec<&Liveliness>) =
-      manual.iter().partition(|p| match p.kind {
-        LivelinessKind::Automatic => false,
-        LivelinessKind::ManualByParticipant => true,
-        LivelinessKind::ManulByTopic => false,
+      manual.iter().partition(|p| match p {
+        Liveliness::Automatic { lease_duration: _ } => false,
+        Liveliness::ManualByParticipant { lease_duration: _ } => true,
+        Liveliness::ManualByTopic { lease_duration: _ } => false,
       });
 
     let inow = Timestamp::now();
@@ -1063,13 +1063,20 @@ impl Discovery {
     {
       let current_duration =
         Duration::from(inow.duration_since(liveliness_state.last_auto_update) / 3);
-      let min_automatic = automatic.iter().map(|lv| lv.lease_duration).min();
+      let min_automatic = automatic
+        .iter()
+        .map(|lv| match lv {
+          Liveliness::Automatic { lease_duration }
+          | Liveliness::ManualByParticipant { lease_duration }
+          | Liveliness::ManualByTopic { lease_duration } => lease_duration,
+        })
+        .min();
       debug!(
         "Current auto duration {:?}. Min auto duration {:?}",
         current_duration, min_automatic
       );
       match min_automatic {
-        Some(mm) => {
+        Some(&mm) => {
           if current_duration > mm {
             let pp = ParticipantMessageData {
               guid: self.domain_participant.get_guid_prefix(),
@@ -1098,10 +1105,14 @@ impl Discovery {
         Duration::from(inow.duration_since(liveliness_state.last_manual_participant_update) / 3);
       let min_manual_participant = manual_by_participant
         .iter()
-        .map(|lv| lv.lease_duration)
+        .map(|lv| match lv {
+          Liveliness::Automatic { lease_duration }
+          | Liveliness::ManualByParticipant { lease_duration }
+          | Liveliness::ManualByTopic { lease_duration } => lease_duration,
+        })
         .min();
       match min_manual_participant {
-        Some(dur) => {
+        Some(&dur) => {
           if current_duration > dur {
             let pp = ParticipantMessageData {
               guid: self.domain_participant.get_guid_prefix(),
@@ -1253,8 +1264,7 @@ impl Discovery {
         period: Duration::DURATION_INFINITE,
       })
       .ownership(Ownership::Shared)
-      .liveliness(Liveliness {
-        kind: LivelinessKind::Automatic,
+      .liveliness(Liveliness::Automatic {
         lease_duration: Duration::DURATION_INFINITE,
       })
       .time_based_filter(TimeBasedFilter {
