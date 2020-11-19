@@ -82,9 +82,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
       max_samples: std::i32::MAX,
       max_samples_per_instance: std::i32::MAX,
     })
-    .deadline(Deadline {
-      period: DDSDuration::DURATION_INFINITE,
-    })
+    .deadline(Deadline(DDSDuration::DURATION_INFINITE))
     .latency_budget(LatencyBudget {
       duration: DDSDuration::DURATION_ZERO,
     })

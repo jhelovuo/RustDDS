@@ -1008,9 +1008,7 @@ mod tests {
     let somePolicies = QosPolicies {
       durability: None,
       presentation: None,
-      deadline: Some(Deadline {
-        period: DurationDDS::from_std(Duration::from_millis(500)),
-      }),
+      deadline: Some(Deadline(DurationDDS::from_millis(500))),
       latency_budget: None,
       ownership: None,
       liveliness: None,
@@ -1122,9 +1120,7 @@ mod tests {
       let somePolicies = QosPolicies {
         durability: None,
         presentation: None,
-        deadline: Some(Deadline {
-          period: DurationDDS::from_std(Duration::from_millis(50)),
-        }),
+        deadline: Some(Deadline(DurationDDS::from_millis(50))),
         latency_budget: None,
         ownership: None,
         liveliness: None,

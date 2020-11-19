@@ -1260,9 +1260,7 @@ impl Discovery {
         coherent_access: false,
         ordered_access: false,
       })
-      .deadline(Deadline {
-        period: Duration::DURATION_INFINITE,
-      })
+      .deadline(Deadline(Duration::DURATION_INFINITE))
       .ownership(Ownership::Shared)
       .liveliness(Liveliness::Automatic {
         lease_duration: Duration::DURATION_INFINITE,

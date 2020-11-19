@@ -239,9 +239,7 @@ pub fn writer_proxy_data() -> Option<WriterProxy> {
 pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData> {
   let qos = QosPolicyBuilder::new()
     .durability(Durability::TransientLocal)
-    .deadline(Deadline {
-      period: Duration::from(StdDuration::from_secs(60)),
-    })
+    .deadline(Deadline(Duration::from_secs(60)))
     .latency_budget(LatencyBudget {
       duration: Duration::from(StdDuration::from_secs(2 * 60)),
     })
@@ -279,9 +277,7 @@ pub fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
     topic_name: Some("rand topic namm".to_string()),
     type_name: Some("RandomData".to_string()),
     durability: Some(Durability::Volatile),
-    deadline: Some(Deadline {
-      period: Duration::from(StdDuration::from_secs(30)),
-    }),
+    deadline: Some(Deadline(Duration::from_secs(30))),
     latency_budget: Some(LatencyBudget {
       duration: Duration::from(StdDuration::from_secs(2 * 30)),
     }),
@@ -313,9 +309,7 @@ pub fn topic_data() -> Option<TopicBuiltinTopicData> {
     name: Some("SomeTopicName".to_string()),
     type_name: Some("RandomData".to_string()),
     durability: Some(Durability::Persistent),
-    deadline: Some(Deadline {
-      period: Duration::from(StdDuration::from_secs(45)),
-    }),
+    deadline: Some(Deadline(Duration::from_secs(45))),
     latency_budget: Some(LatencyBudget {
       duration: Duration::from(StdDuration::from_secs(2 * 45)),
     }),

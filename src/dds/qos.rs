@@ -297,7 +297,7 @@ pub mod policy {
     pub ordered_access: bool,
   }
 
-  // This is not an independent QoS Policy but a component of Presentation
+  /// Access scope that is part of DDS 2.2.3.6 PRESENTATION
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum PresentationAccessScope {
     Instance,
@@ -306,10 +306,8 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.7 DEADLINE
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-  pub struct Deadline {
-    pub period: Duration,
-  }
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+  pub struct Deadline(pub Duration);
 
   /// DDS 2.2.3.8 LATENCY_BUDGET
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

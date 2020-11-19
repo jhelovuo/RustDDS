@@ -16,10 +16,6 @@ use crate::dds::traits::serde_adapters::DeserializerAdapter;
 use serde::de::DeserializeOwned;
 */
 
-
-
-
-
 // Different properties that do not belong to the actual library but make testing easier.
 
 impl Default for SerializedPayload {
@@ -40,7 +36,6 @@ impl Default for Data {
   }
 }
 
-
 /*
 trait TestingTrait {
   fn TEST_FUNCTION_set_status_change_receiver(&mut self, receiver : mio_channel::Receiver<StatusChange>);
@@ -55,20 +50,18 @@ where
   <D as Keyed>::K: Key,
   SA: DeserializerAdapter<D>,
   {
- 
+
   fn TEST_FUNCTION_set_status_change_receiver(&mut self, receiver : mio_channel::Receiver<StatusChange>){
     self.status_receiver = receiver;
   }
-  
+
   fn TEST_FUNCTION_get_requested_deadline_missed_status(&mut self)-> Result<Option<RequestedDeadlineMissedStatus>>{
     self.get_requested_deadline_missed_status()
   }
-  
+
   fn TEST_FUNCTION_set_reader_commander(&mut self, sender : mio_channel::SyncSender<ReaderCommand> ){
     self.reader_command = sender;
   }
 
 }
 */
-
-

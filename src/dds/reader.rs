@@ -47,7 +47,7 @@ use speedy::{Writable, Endianness};
 use chrono::Duration as chronoDuration;
 
 use super::{
-  qos::QosPolicyBuilder,
+  qos::{QosPolicyBuilder},
   values::result::{RequestedDeadlineMissedStatus, StatusChange},
   with_key::datareader::ReaderCommand,
 };
@@ -152,14 +152,22 @@ impl Reader {
   }
 
   pub fn set_requested_deadline_check_timer(&mut self) {
-    if self.qos_policy.deadline.is_some() {
-      //info!("set_requested_deadline_check_timer");
-      self.timed_event_handler.as_mut().unwrap().set_timeout(
-        &chronoDuration::from_std(self.qos_policy.deadline.unwrap().period.to_std()).unwrap(),
-        TimerMessageType::reader_deadline_missed_check,
-      )
+    if let Some(deadline) = self.qos_policy.deadline {
+      debug!(
+        "set_requested_deadline_check_timer: {:?}",
+        deadline.0.to_std()
+      );
+      match chronoDuration::from_std(deadline.0.to_std()) {
+        Ok(cdur) => match self.timed_event_handler.as_mut() {
+          Some(teh) => teh.set_timeout(&cdur, TimerMessageType::reader_deadline_missed_check),
+          None => warn!("Unable to get timed_event_handler."),
+        },
+        Err(_) => {
+          warn!("Failed to get chrono duration from deadline {:?}", deadline);
+        }
+      }
     } else {
-      info!("do not set set_requested_deadline_check_timer")
+      debug!("do not set set_requested_deadline_check_timer")
     }
   }
 
@@ -178,7 +186,9 @@ impl Reader {
         self.get_entity_id(),
         change.clone()
       ),
-      Err(mio_channel::TrySendError::Full(_)) => (panic!()),
+      Err(mio_channel::TrySendError::Full(_)) => {
+        warn!("Reader cannot send new status changes, datareader is full.")
+      }
       Err(mio_channel::TrySendError::Disconnected(_)) => {
         // If we get here, our DataReader has died. The Reader should now dispose itself.
         // TODO: Implement Reader disposal.
@@ -196,13 +206,13 @@ impl Reader {
   // if statusChange is returned it should be send to DataReader
   // this calculation should be repeated every self.qos_policy.deadline
   fn calculate_if_requested_deadline_is_missed(&mut self) -> Vec<StatusChange> {
-    info!("calculate_if_requested_deadline_is_missed");
+    debug!("calculate_if_requested_deadline_is_missed");
     let mut changes: Vec<StatusChange> = vec![];
     match self.qos_policy.deadline {
       None => {
         return changes;
       }
-      Some(_d) => {
+      Some(deadline) => {
         for (_g, writer_proxy) in self.matched_writers.iter_mut() {
           //let last_instant = wP.changes.values().max_by(|x,y|x.cmp(y));
           let last_instant = writer_proxy.changes.values().max_by(|x, y| x.cmp(y));
@@ -211,7 +221,9 @@ impl Reader {
               let insta_now = Timestamp::now();
               let perioid = insta_now.duration_since(*instant);
               // if time singe last received message is greater than deadline increase status and return notification.
-              if perioid > self.qos_policy.deadline.unwrap().period {
+              debug!("Comparing deadlines: {:?} - {:?}", perioid, deadline);
+              if perioid > deadline.0 {
+                debug!("Deadline missed: {:?} - {:?}", perioid, deadline);
                 self.requested_deadline_missed_status.increase();
                 changes.push(StatusChange::RequestedDeadlineMissedStatus(
                   self.requested_deadline_missed_status,
@@ -258,7 +270,7 @@ impl Reader {
   */
 
   pub fn handle_requested_deadline_event(&mut self) {
-    info!("handle_requested_deadline_event");
+    debug!("handle_requested_deadline_event");
     let missed_deadlines = self.calculate_if_requested_deadline_is_missed();
     for missed_deadline in missed_deadlines {
       self.send_status_change(missed_deadline);

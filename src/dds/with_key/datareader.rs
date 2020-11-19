@@ -1004,7 +1004,7 @@ mod tests {
     assert_eq!(test_data, d1);
     assert!(result_vec2.is_ok());
     assert_eq!(result_vec2.unwrap().len(), 0);
-    
+
     //datareader.
 
     // Read and take tests with instant

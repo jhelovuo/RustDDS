@@ -13,9 +13,7 @@ impl ROSDiscoveryTopic {
   const QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
     presentation: None,
-    deadline: Some(Deadline {
-      period: Duration::DURATION_INFINITE,
-    }),
+    deadline: Some(Deadline(Duration::DURATION_INFINITE)),
     latency_budget: Some(LatencyBudget {
       duration: Duration::DURATION_ZERO,
     }),
@@ -93,9 +91,7 @@ impl RosOutTopic {
   const QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
     presentation: None,
-    deadline: Some(Deadline {
-      period: Duration::DURATION_INFINITE,
-    }),
+    deadline: Some(Deadline(Duration::DURATION_INFINITE)),
     latency_budget: Some(LatencyBudget {
       duration: Duration::DURATION_ZERO,
     }),

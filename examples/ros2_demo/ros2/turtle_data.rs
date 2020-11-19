@@ -14,9 +14,7 @@ pub struct TurtleCmdVelTopic {}
 impl TurtleCmdVelTopic {
   const QOS: QosPolicies = QosPolicyBuilder::new()
     .durability(Durability::Volatile)
-    .deadline(Deadline {
-      period: DDSDuration::DURATION_INFINITE,
-    })
+    .deadline(Deadline(DDSDuration::DURATION_INFINITE))
     .latency_budget(LatencyBudget {
       duration: DDSDuration::DURATION_ZERO,
     })

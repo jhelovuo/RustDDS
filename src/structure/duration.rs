@@ -42,9 +42,11 @@ impl Duration {
   }
 
   pub const fn from_millis(millis: i64) -> Duration {
+    let fraction = (((millis % 1000) << 32) / 1000) as u32; // correct formula?
+
     Duration {
       seconds: (millis / 1000) as i32,
-      fraction: ((millis % 1000) << 32 / 1000) as u32, // correct formula?
+      fraction,
     }
   }
 

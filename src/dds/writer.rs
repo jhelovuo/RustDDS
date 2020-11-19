@@ -376,7 +376,7 @@ impl Writer {
             match self.get_qos().deadline {
               Some(dl) => {
                 if let Some(instant) = instant {
-                  if Duration::from(dl.period) < Timestamp::now() - *instant {
+                  if dl.0 < Timestamp::now() - *instant {
                     self.offered_deadline_status.increase();
                     debug!(
                       "Trying to send status change {:?}",
@@ -730,7 +730,7 @@ impl Writer {
           match self.get_qos().deadline {
             Some(dl) => {
               if let Some(instant) = instant {
-                if Duration::from(dl.period) < Timestamp::now() - *instant {
+                if dl.0 < Timestamp::now() - *instant {
                   self.offered_deadline_status.increase();
                   debug!(
                     "Trying to send single status change {:?}",
