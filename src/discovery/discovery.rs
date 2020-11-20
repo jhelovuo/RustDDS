@@ -70,7 +70,7 @@ impl LivelinessState {
   }
 }
 
-pub struct Discovery {
+pub(crate) struct Discovery {
   poll: Poll,
   domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,

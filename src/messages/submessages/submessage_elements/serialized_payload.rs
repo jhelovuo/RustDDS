@@ -5,7 +5,6 @@ use byteorder::{ReadBytesExt, BigEndian};
 
 use num_enum::{TryFromPrimitive, IntoPrimitive};
 
-
 #[derive(Debug, PartialEq, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
 #[repr(u16)]
 pub enum RepresentationIdentifier {

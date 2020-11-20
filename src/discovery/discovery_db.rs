@@ -33,7 +33,7 @@ use super::{
   },
 };
 
-pub struct DiscoveryDB {
+pub(crate) struct DiscoveryDB {
   participant_proxies: HashMap<GUID, SPDPDiscoveredParticipantData>,
   // local writer proxies for topics (topic name acts as key)
   local_topic_writers: HashMap<GUID, DiscoveredWriterData>,

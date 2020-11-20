@@ -124,6 +124,7 @@ impl<'a> DataFrag {
   }
 }
 
+#[cfg(test)]
 impl Default for DataFrag {
   fn default() -> Self {
     DataFrag {

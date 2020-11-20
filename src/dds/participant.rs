@@ -70,7 +70,7 @@ impl DomainParticipant {
 
     let discovery = Discovery::new(
       dp.weak_clone(),
-      dp.discovery_db.clone(),
+      dp.discovery_db(),
       discovery_started_sender,
       discovery_updated_sender,
       discovery_command_receiver,
@@ -150,14 +150,22 @@ impl DomainParticipant {
     let dpc = self.clone();
     DomainParticipantWeak::new(dpc)
   }
-}
 
-impl Deref for DomainParticipant {
-  type Target = DomainParticipant_Disc;
-  fn deref(&self) -> &DomainParticipant_Disc {
-    &self.dpi
+  pub(crate) fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
+    return self.dpi.get_dds_cache();
+  }
+
+  pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
+    return self.dpi.discovery_db.clone();
   }
 }
+
+// impl Deref for DomainParticipant {
+//   type Target = DomainParticipant_Disc;
+//   fn deref(&self) -> &DomainParticipant_Disc {
+//     &self.dpi
+//   }
+// }
 
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
@@ -169,7 +177,7 @@ impl DomainParticipantWeak {
   pub fn new(dp: DomainParticipant) -> DomainParticipantWeak {
     DomainParticipantWeak {
       dpi: Arc::downgrade(&dp.dpi),
-      entity_attributes: dp.entity_attributes,
+      entity_attributes: dp.as_entity().clone(),
     }
   }
 
@@ -236,7 +244,7 @@ impl Entity for DomainParticipantWeak {
 }
 
 // This struct exists only to control and stop Discovery when DomainParticipant should be dropped
-pub struct DomainParticipant_Disc {
+pub(crate) struct DomainParticipant_Disc {
   dpi: Arc<DomainParticipant_Inner>,
   // Discovery control
   discovery_updated_sender: Option<mio_channel::SyncSender<DiscoveryNotificationType>>,
@@ -337,7 +345,7 @@ impl Drop for DomainParticipant_Disc {
 }
 
 // This is the actual working DomainParticipant.
-pub struct DomainParticipant_Inner {
+pub(crate) struct DomainParticipant_Inner {
   domain_id: u16,
   participant_id: u16,
 
@@ -689,6 +697,12 @@ impl DomainParticipant_Inner {
     db.get_all_topics().map(|p| p.clone()).collect()
   }
 } // impl
+
+impl Entity for DomainParticipant {
+  fn as_entity(&self) -> &EntityAttributes {
+    self.dpi.as_entity()
+  }
+}
 
 impl Entity for DomainParticipant_Inner {
   fn as_entity(&self) -> &EntityAttributes {

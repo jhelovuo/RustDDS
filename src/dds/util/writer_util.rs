@@ -4,7 +4,7 @@ use crate::{
   structure::sequence_number::SequenceNumber,
 };
 
-pub struct WriterUtil {}
+pub(crate) struct WriterUtil {}
 
 impl WriterUtil {
   pub fn increment_writer_sequence_number(writer: &mut Writer) {

@@ -40,7 +40,7 @@ impl<'a, C: Context> Readable<'a, C> for BitSetRef {
     }
 
     let mut bit_vec = BitVec::with_capacity(number_of_bits as usize);
-    
+
     for _ in 0..(number_of_bits / 32) + 1 {
       // read value should be directly correct
       let byte = reader.read_u32()?.reverse_bits();

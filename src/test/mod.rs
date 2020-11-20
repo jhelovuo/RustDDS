@@ -1,4 +1,5 @@
-pub mod random_data;
-pub mod shape_type;
-pub mod test_data;
-pub mod test_properties;
+pub(crate) mod datareader_util;
+pub(crate) mod random_data;
+pub(crate) mod shape_type;
+pub(crate) mod test_data;
+pub(crate) mod test_properties;

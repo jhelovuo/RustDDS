@@ -1,4 +1,4 @@
-pub fn spdp_participant_data_raw() -> Vec<u8> {
+pub(crate) fn spdp_participant_data_raw() -> Vec<u8> {
   const data: [u8; 204] = [
     // Offset 0x00000000 to 0x00000203
     0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00,
@@ -19,7 +19,7 @@ pub fn spdp_participant_data_raw() -> Vec<u8> {
   data.to_vec()
 }
 
-pub fn spdp_subscription_data_raw() -> Vec<u8> {
+pub(crate) fn spdp_subscription_data_raw() -> Vec<u8> {
   const DATA: [u8; 248] = [
     // Offset 0x00000000 to 0x00000247
     0x52, 0x54, 0x50, 0x53, 0x02, 0x04, 0x01, 0x03, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2,
@@ -42,7 +42,7 @@ pub fn spdp_subscription_data_raw() -> Vec<u8> {
   DATA.to_vec()
 }
 
-pub fn spdp_publication_data_raw() -> Vec<u8> {
+pub(crate) fn spdp_publication_data_raw() -> Vec<u8> {
   const DATA: [u8; 352] = [
     // Offset 0x00000000 to 0x00000351
     0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00,
@@ -116,28 +116,28 @@ use byteorder::LittleEndian;
 use enumflags2::BitFlags;
 use crate::messages::submessages::submessages::*;
 
-pub fn spdp_participant_msg() -> Message {
+pub(crate) fn spdp_participant_msg() -> Message {
   let data = spdp_participant_data_raw();
 
   let rtpsmsg = Message::read_from_buffer(&data).unwrap();
   rtpsmsg
 }
 
-pub fn spdp_subscription_msg() -> Message {
+pub(crate) fn spdp_subscription_msg() -> Message {
   let data = spdp_subscription_data_raw();
 
   let rtpsmsg = Message::read_from_buffer(&data).unwrap();
   rtpsmsg
 }
 
-pub fn spdp_publication_msg() -> Message {
+pub(crate) fn spdp_publication_msg() -> Message {
   let data = spdp_publication_data_raw();
 
   let rtpsmsg = Message::read_from_buffer(&data).unwrap();
   rtpsmsg
 }
 
-pub fn spdp_participant_msg_mod(port: u16) -> Message {
+pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
   let mut tdata: Message = spdp_participant_msg();
   let mut data;
   for submsg in tdata.submessages.iter_mut() {
@@ -175,7 +175,7 @@ pub fn spdp_participant_msg_mod(port: u16) -> Message {
   tdata
 }
 
-pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
+pub(crate) fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
   let data = spdp_participant_data_raw();
 
   let rtpsmsg = Message::read_from_buffer(&data).unwrap();
@@ -202,7 +202,7 @@ pub fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
   None
 }
 
-pub fn reader_proxy_data() -> Option<ReaderProxy> {
+pub(crate) fn reader_proxy_data() -> Option<ReaderProxy> {
   let reader_proxy = ReaderProxy {
     remote_reader_guid: Some(GUID::new()),
     expects_inline_qos: Some(false),
@@ -219,7 +219,7 @@ pub fn reader_proxy_data() -> Option<ReaderProxy> {
   Some(reader_proxy)
 }
 
-pub fn writer_proxy_data() -> Option<WriterProxy> {
+pub(crate) fn writer_proxy_data() -> Option<WriterProxy> {
   let writer_proxy = WriterProxy {
     remote_writer_guid: Some(GUID::new()),
     unicast_locator_list: vec![Locator::from(SocketAddr::new(
@@ -236,7 +236,7 @@ pub fn writer_proxy_data() -> Option<WriterProxy> {
   Some(writer_proxy)
 }
 
-pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData> {
+pub(crate) fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData> {
   let qos = QosPolicyBuilder::new()
     .durability(Durability::TransientLocal)
     .deadline(Deadline(Duration::from_secs(60)))
@@ -270,7 +270,7 @@ pub fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTopicData>
   Some(sub_topic_data)
 }
 
-pub fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
+pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
   let pub_topic_data = PublicationBuiltinTopicData {
     key: Some(GUID::new()),
     participant_key: Some(GUID::new()),
@@ -303,7 +303,7 @@ pub fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
   Some(pub_topic_data)
 }
 
-pub fn topic_data() -> Option<TopicBuiltinTopicData> {
+pub(crate) fn topic_data() -> Option<TopicBuiltinTopicData> {
   let topic_data = TopicBuiltinTopicData {
     key: Some(GUID::new()),
     name: Some("SomeTopicName".to_string()),
@@ -338,7 +338,7 @@ pub fn topic_data() -> Option<TopicBuiltinTopicData> {
   Some(topic_data)
 }
 
-pub fn content_filter_data() -> Option<ContentFilterProperty> {
+pub(crate) fn content_filter_data() -> Option<ContentFilterProperty> {
   let content_filter = ContentFilterProperty {
     contentFilteredTopicName: "tn".to_string(),
     relatedTopicName: "rtn".to_string(),
@@ -350,7 +350,7 @@ pub fn content_filter_data() -> Option<ContentFilterProperty> {
   Some(content_filter)
 }
 
-pub fn create_rtps_data_message<D: Serialize>(
+pub(crate) fn create_rtps_data_message<D: Serialize>(
   data: D,
   reader_id: EntityId,
   writer_id: EntityId,

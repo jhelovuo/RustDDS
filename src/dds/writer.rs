@@ -61,7 +61,7 @@ use super::{
 use policy::{History, Reliability};
 //use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 
-pub struct Writer {
+pub(crate) struct Writer {
   source_version: ProtocolVersion,
   source_vendor_id: VendorId,
   pub endianness: Endianness,
@@ -147,7 +147,7 @@ pub struct Writer {
   offered_deadline_status: OfferedDeadlineMissedStatus,
 }
 
-pub enum WriterCommand {
+pub(crate) enum WriterCommand {
   DDSData { data: DDSData },
   ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }

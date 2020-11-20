@@ -53,7 +53,7 @@ pub struct SPDPDiscoveredParticipantData {
 }
 
 impl SPDPDiscoveredParticipantData {
-  pub fn as_reader_proxy(
+  pub(crate) fn as_reader_proxy(
     &self,
     is_metatraffic: bool,
     entity_id: Option<EntityId>,
@@ -85,7 +85,7 @@ impl SPDPDiscoveredParticipantData {
     proxy
   }
 
-  pub fn as_writer_proxy(
+  pub(crate) fn as_writer_proxy(
     &self,
     is_metatraffic: bool,
     entity_id: Option<EntityId>,
@@ -146,7 +146,7 @@ impl SPDPDiscoveredParticipantData {
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR;
 
     SPDPDiscoveredParticipantData {
-      updated_time: Utc::now().timestamp_nanos() as u64,  
+      updated_time: Utc::now().timestamp_nanos() as u64,
       protocol_version: Some(ProtocolVersion::PROTOCOLVERSION_2_3),
       vendor_id: Some(VendorId::VENDOR_UNKNOWN),
       expects_inline_qos: Some(false),

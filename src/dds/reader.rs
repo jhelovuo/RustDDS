@@ -57,7 +57,7 @@ use super::qos::InlineQos;
 const PROTOCOLVERSION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_3;
 const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
 
-pub struct Reader {
+pub(crate) struct Reader {
   // Should the instant be sent?
   notification_sender: mio_channel::SyncSender<()>,
   status_sender: mio_channel::SyncSender<StatusChange>,
@@ -81,7 +81,7 @@ pub struct Reader {
   requested_deadline_missed_status: RequestedDeadlineMissedStatus,
 
   timed_event_handler: Option<TimedEventHandler>,
-  pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
+  pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
 } // placeholder
 
 impl Reader {

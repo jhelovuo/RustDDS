@@ -155,18 +155,14 @@ pub use topic::Topic;
 pub use pubsub::Subscriber;
 pub use pubsub::Publisher;
 
-/// DDS DataWriter for with_key topics.
 #[doc(inline)]
 pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
 
-/// DDS DataWriter for no_key topics.
 #[doc(inline)]
 pub use no_key::datawriter::DataWriter as No_Key_DataWriter;
 
-/// DDS DataReader for with_key topics.
 #[doc(inline)]
 pub use with_key::datareader::DataReader as With_Key_DataReader;
 
-/// DDS DataReader for no_key topics.
 #[doc(inline)]
 pub use no_key::datareader::DataReader as No_Key_DataReader;

@@ -21,11 +21,15 @@ impl<D> DataSample<D>
 where
   D: Keyed,
 {
-  pub fn new(sample_info: SampleInfo, value:std::result::Result<D, D::K>) -> Self {
-    DataSample{ sample_info , value }
+  pub fn new(sample_info: SampleInfo, value: std::result::Result<D, D::K>) -> Self {
+    DataSample { sample_info, value }
   }
 
-  pub fn new_deprecated(source_timestamp: Timestamp, payload: D, writer_guid: GUID) -> DataSample<D> {
+  pub fn new_deprecated(
+    source_timestamp: Timestamp,
+    payload: D,
+    writer_guid: GUID,
+  ) -> DataSample<D> {
     // begin dummy placeholder values
     let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;

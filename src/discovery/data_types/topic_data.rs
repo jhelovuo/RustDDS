@@ -266,7 +266,11 @@ pub struct DiscoveredReaderData {
 }
 
 impl DiscoveredReaderData {
-  pub fn new(reader: &Reader, dp: &DomainParticipant, topic: &Topic) -> DiscoveredReaderData {
+  pub(crate) fn new(
+    reader: &Reader,
+    dp: &DomainParticipant,
+    topic: &Topic,
+  ) -> DiscoveredReaderData {
     let reader_proxy = ReaderProxy::new(reader.get_guid());
     let mut subscription_topic_data = SubscriptionBuiltinTopicData::new(
       reader.get_guid(),
@@ -299,7 +303,7 @@ impl DiscoveredReaderData {
     }
   }
 
-  pub fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
+  pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
     self.reader_proxy.remote_reader_guid = Some(rtps_reader_proxy.remote_reader_guid.clone());
     self.reader_proxy.expects_inline_qos = Some(rtps_reader_proxy.expects_in_line_qos.clone());
     self.reader_proxy.unicast_locator_list = rtps_reader_proxy.unicast_locator_list.clone();

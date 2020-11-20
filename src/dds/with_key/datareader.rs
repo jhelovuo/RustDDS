@@ -43,11 +43,11 @@ pub enum SelectByKey {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ReaderCommand {
+pub(crate) enum ReaderCommand {
   RESET_REQUESTED_DEADLINE_STATUS,
 }
 
-pub struct CurrentStatusChanges {
+struct CurrentStatusChanges {
   pub livelinessLost: Option<LivelinessLostStatus>,
   pub offeredDeadlineMissed: Option<OfferedDeadlineMissedStatus>,
   pub offeredIncompatibleQos: Option<OfferedIncompatibleQosStatus>,
@@ -71,6 +71,7 @@ impl CurrentStatusChanges {
   }
 }
 
+/// DDS DataReader for with_key topics.
 pub struct DataReader<
   'a,
   D: Keyed + DeserializeOwned,
@@ -89,9 +90,9 @@ pub struct DataReader<
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  status_receiver: mio_channel::Receiver<StatusChange>,
+  pub(crate) status_receiver: mio_channel::Receiver<StatusChange>,
   current_status: CurrentStatusChanges,
-  reader_command: mio_channel::SyncSender<ReaderCommand>,
+  pub(crate) reader_command: mio_channel::SyncSender<ReaderCommand>,
 }
 
 impl<'a, D, DA> Drop for DataReader<'a, D, DA>
@@ -603,29 +604,6 @@ where
       // TODO check this..?
       ChangeKind::NOT_ALIVE_UNREGISTERED => InstanceState::NotAlive_NoWriters,
     }
-  }
-
-  #[cfg(test)]
-  pub fn TEST_FUNCTION_set_status_change_receiver(
-    &mut self,
-    receiver: mio_channel::Receiver<StatusChange>,
-  ) {
-    self.status_receiver = receiver;
-  }
-
-  #[cfg(test)]
-  pub fn TEST_FUNCTION_get_requested_deadline_missed_status(
-    &mut self,
-  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
-    self.get_requested_deadline_missed_status()
-  }
-
-  #[cfg(test)]
-  pub fn TEST_FUNCTION_set_reader_commander(
-    &mut self,
-    sender: mio_channel::SyncSender<ReaderCommand>,
-  ) {
-    self.reader_command = sender;
   }
 
   pub fn get_requested_deadline_missed_status(

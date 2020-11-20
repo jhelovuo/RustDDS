@@ -25,7 +25,7 @@ use super::reader::Reader;
 
 #[derive(Debug, PartialEq, Clone)]
 ///ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
-pub struct RtpsReaderProxy {
+pub(crate) struct RtpsReaderProxy {
   ///Identifies the remote matched RTPS Reader that is represented by the ReaderProxy
   pub remote_reader_guid: GUID,
   /// Identifies the group to which the matched Reader belongs

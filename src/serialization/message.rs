@@ -17,7 +17,7 @@ use enumflags2::BitFlags;
 //use time::{Timespec, get_time};
 
 #[derive(Debug)]
-pub struct Message {
+pub(crate) struct Message {
   pub header: Header,
   pub submessages: Vec<SubMessage>,
 }
@@ -242,7 +242,7 @@ impl<C: Context> Writable<C> for Message {
   }
 }
 
-pub struct MessageBuilder {
+pub(crate) struct MessageBuilder {
   header: Option<Header>,
   submessages: Vec<SubMessage>,
 }

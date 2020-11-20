@@ -889,10 +889,13 @@ mod tests {
   use std::thread;
   use std::time::Duration;
   use crate::{
-    dds::with_key::datareader::DataReader, dds::participant::DomainParticipant,
+    dds::participant::DomainParticipant,
+    dds::values::result::CountWithChange,
     dds::values::result::RequestedDeadlineMissedStatus,
-    serialization::cdr_deserializer::CDRDeserializerAdapter, dds::values::result::CountWithChange,
-    structure::duration::Duration as DurationDDS, test::random_data::RandomData,
+    dds::with_key::datareader::DataReader,
+    serialization::cdr_deserializer::CDRDeserializerAdapter,
+    structure::duration::Duration as DurationDDS,
+    test::{random_data::RandomData, datareader_util::DataReaderTestUtil},
   };
   use mio::{Ready, PollOpt};
   use crate::{
@@ -1140,8 +1143,8 @@ mod tests {
         )
         .unwrap();
 
-      datareader.TEST_FUNCTION_set_status_change_receiver(status_reciever_DataReader);
-      datareader.TEST_FUNCTION_set_reader_commander(reader_commander);
+      datareader.set_status_change_receiver(status_reciever_DataReader);
+      datareader.set_reader_commander(reader_commander);
       data_readers.push(datareader);
 
       new_reader.set_qos(&somePolicies).unwrap();
@@ -1156,7 +1159,7 @@ mod tests {
     let status = data_readers
       .get_mut(0)
       .unwrap()
-      .TEST_FUNCTION_get_requested_deadline_missed_status();
+      .get_requested_deadline_missed_status();
     info!("Received status change: {:?}", status);
     assert_eq!(
       status.unwrap(),
@@ -1169,7 +1172,7 @@ mod tests {
     let status2 = data_readers
       .get_mut(0)
       .unwrap()
-      .TEST_FUNCTION_get_requested_deadline_missed_status();
+      .get_requested_deadline_missed_status();
     info!("Received status change: {:?}", status2);
     assert_eq!(
       status2.unwrap(),
@@ -1181,7 +1184,7 @@ mod tests {
     let status3 = data_readers
       .get_mut(0)
       .unwrap()
-      .TEST_FUNCTION_get_requested_deadline_missed_status();
+      .get_requested_deadline_missed_status();
     info!("Received status change: {:?}", status3);
     assert_eq!(
       status3.unwrap(),
@@ -1195,7 +1198,7 @@ mod tests {
     let status4 = data_readers
       .get_mut(0)
       .unwrap()
-      .TEST_FUNCTION_get_requested_deadline_missed_status();
+      .get_requested_deadline_missed_status();
     info!("Received status change: {:?}", status4);
     assert_eq!(
       status4.unwrap(),

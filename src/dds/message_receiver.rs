@@ -25,7 +25,7 @@ use log::{debug, warn};
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
-pub struct MessageReceiver {
+pub(crate) struct MessageReceiver {
   pub available_readers: Vec<Reader>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
   acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckNack)>,

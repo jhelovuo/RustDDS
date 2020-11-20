@@ -16,7 +16,11 @@ pub struct DataSample<D> {
 
 impl<D> DataSample<D> {
   //TODO: At least rename this. This is not a proper constructor.
-  pub fn new_deprecated(source_timestamp: Timestamp, payload: D, writer_guid: GUID) -> DataSample<D> {
+  pub fn new_deprecated(
+    source_timestamp: Timestamp,
+    payload: D,
+    writer_guid: GUID,
+  ) -> DataSample<D> {
     // begin dummy placeholder values
     let sample_state = SampleState::NotRead;
     let view_state = ViewState::New;
