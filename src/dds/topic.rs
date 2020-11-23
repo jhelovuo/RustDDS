@@ -4,6 +4,7 @@ use crate::{
 
 pub use crate::structure::topic_kind::TopicKind;
 
+/// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class
 pub trait TopicDescription {
   fn get_participant(&self) -> Option<DomainParticipant>;
   fn get_type(&self) -> &TypeDesc; // This replaces get_type_name() from spec

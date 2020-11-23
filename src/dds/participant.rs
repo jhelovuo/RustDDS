@@ -47,6 +47,11 @@ unsafe impl Sync for DomainParticipant {}
 
 #[allow(clippy::new_without_default)]
 impl DomainParticipant {
+  /// # Examples
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// let domain_participant = DomainParticipant::new(0);
+  /// ```
   pub fn new(domain_id: u16) -> DomainParticipant {
     let (djh_sender, djh_receiver) = mio_channel::channel();
     let mut dpd = DomainParticipant_Disc::new(domain_id, djh_receiver);
@@ -99,6 +104,16 @@ impl DomainParticipant {
   /// # Arguments
   ///
   /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) for publisher and given to DataWriter as default.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos);
+  /// ```
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
     self.dpi.create_publisher(&self.weak_clone(), qos)
   }
@@ -108,6 +123,16 @@ impl DomainParticipant {
   /// # Arguments
   ///
   /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) for subscriber and given to DataReader as default.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos);
+  /// ```
   pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
     self.dpi.create_subscriber(&self.weak_clone(), qos)
   }
@@ -119,6 +144,18 @@ impl DomainParticipant {
   /// * `name` - Name of the topic.
   /// * `type_desc` - Name of the type this topic is supposed to deliver.
   /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) that are distributed to DataReaders and DataWriters.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// use rustdds::dds::data_types::TopicKind;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey);
+  /// ```
   pub fn create_topic(
     &self,
     name: &str,
@@ -131,17 +168,40 @@ impl DomainParticipant {
       .create_topic(&self.weak_clone(), name, type_desc, qos, topic_kind)
   }
 
-  /// Gets this DomainParticipants domain_id
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_id = domain_participant.domain_id();
+  /// ```
   pub fn domain_id(&self) -> u16 {
     self.dpi.domain_id()
   }
 
-  /// Gets the generated participant id for this DomainParticipant
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let participant_id = domain_participant.participant_id();
+  /// ```
   pub fn participant_id(&self) -> u16 {
     self.dpi.participant_id()
   }
 
   /// Gets all DiscoveredTopics from DDS network
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let discovered_topics = domain_participant.get_discovered_topics();
+  /// for dtopic in discovered_topics.iter() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
     self.dpi.get_discovered_topics()
   }

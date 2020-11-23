@@ -8,10 +8,10 @@ use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 use crate::serialization::cdr_serializer::to_bytes;
 
-// A payload data object may be "Keyed": It allows a Key to be extracted from it.
-// The key is used to distinguish between different Instances of the data.
-// A "Keyed" data has on associated type "K", which is the actual key type. K must
-// implement "Key".
+/// A payload data object may be "Keyed": It allows a Key to be extracted from it.
+/// The key is used to distinguish between different Instances of the data.
+/// A "Keyed" data has on associated type "K", which is the actual key type. K must
+/// implement "Key".
 pub trait Keyed {
   //type K: Key;  // This does not work yet is stable Rust, 2020-08-11
   // Instead, where D:Keyed we do anything with D::K, we must specify bound:
@@ -29,6 +29,7 @@ pub trait Keyed {
   }
 }
 
+/// Key trait for Keyed Topics
 pub trait Key:
   Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned
 {

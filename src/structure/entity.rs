@@ -20,6 +20,7 @@ impl EntityAttributes {
   }
 }
 
+/// RTPS entity (for usage, DomainParticipant, DataReader and DataWriter implement this)
 pub trait Entity {
   fn as_entity(&self) -> &EntityAttributes;
 
