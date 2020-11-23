@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{
   dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity},
 };
@@ -57,6 +59,25 @@ impl Topic {
   // TODO: implement
   pub(crate) fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> {
     unimplemented!()
+  }
+}
+
+impl PartialEq for Topic {
+  fn eq(&self, other: &Self) -> bool {
+    self.get_participant() == other.get_participant()
+      && self.get_type() == other.get_type()
+      && self.get_name() == other.get_name()
+      && self.get_qos() == other.get_qos()
+      && self.topic_kind == other.topic_kind
+  }
+}
+
+impl Debug for Topic {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!("{:?}", self.get_participant()))?;
+    f.write_fmt(format_args!("Topic name: {}", self.get_name()))?;
+    f.write_fmt(format_args!("Topic type: {:?}", self.get_type()))?;
+    f.write_fmt(format_args!("Topic QoS: {:?} ", self.get_qos()))
   }
 }
 

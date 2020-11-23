@@ -48,6 +48,7 @@ use super::data_types::topic_data::{
 };
 use byteorder::LittleEndian;
 
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum DiscoveryCommand {
   STOP_DISCOVERY,
   REMOVE_LOCAL_WRITER { guid: GUID },

@@ -1,10 +1,7 @@
 use mio_extras::channel as mio_channel;
 use log::error;
 
-use std::{
-  sync::{RwLock, Arc},
-  time::Duration,
-};
+use std::{fmt::Debug, sync::{RwLock, Arc}, time::Duration};
 
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -254,6 +251,23 @@ impl<'a> Publisher {
   /// Sets default DataWriter qos. Currenly default qos is not used.
   pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
     self.default_datawriter_qos = q.clone();
+  }
+}
+
+impl PartialEq for Publisher {
+  fn eq(&self, other: &Self) -> bool {
+    self.get_participant() == other.get_participant() &&
+    self.my_qos_policies == other.my_qos_policies &&
+    self.default_datawriter_qos == other.default_datawriter_qos
+    // TODO: publisher is DDSEntity?
+  }
+}
+
+impl Debug for Publisher {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!("{:?}", self.get_participant()))?;
+    f.write_fmt(format_args!("Publisher QoS: {:?}", self.my_qos_policies))?;
+    f.write_fmt(format_args!("Publishers default Writer QoS: {:?}", self.default_datawriter_qos))
   }
 }
 

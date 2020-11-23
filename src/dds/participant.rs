@@ -220,6 +220,14 @@ impl DomainParticipant {
   }
 }
 
+impl PartialEq for DomainParticipant {
+  fn eq(&self, other: &Self) -> bool {
+    self.get_guid() == other.get_guid()
+      && self.domain_id() == other.domain_id()
+      && self.participant_id() == other.participant_id()
+  }
+}
+
 // impl Deref for DomainParticipant {
 //   type Target = DomainParticipant_Disc;
 //   fn deref(&self) -> &DomainParticipant_Disc {

@@ -165,7 +165,7 @@ impl QosPolicyBuilder {
 }
 
 /// Describes single RTPS/DDS QoS policy
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QosPolicies {
   // pub(crate) beacuse as we want to have some builtin QoS Policies as constant.
   pub(crate) durability: Option<policy::Durability>,
@@ -357,14 +357,14 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.18 HISTORY
-  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
   pub enum History {
     KeepLast { depth: i32 },
     KeepAll,
   }
 
   /// DDS 2.2.3.19 RESOURCE_LIMITS
-  #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
   pub struct ResourceLimits {
     pub max_samples: i32,
     pub max_instances: i32,

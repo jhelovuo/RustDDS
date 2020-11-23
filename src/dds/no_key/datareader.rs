@@ -310,7 +310,7 @@ where
   /// Removes samples from `DataReader`.
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
   /// are still removed from the `Datareader`.
-  /// 
+  ///
   /// # Examples
   ///
   /// ```
@@ -350,7 +350,7 @@ where
   /// Yields only payload data, not SampleInfo metadata
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
   /// are still removed from the `Datareader`.
-  /// 
+  ///
   /// # Examples
   ///
   /// ```
@@ -390,7 +390,7 @@ where
   }
 
   /// Gets latest RequestedDeadlineMissed status
-  /// 
+  ///
   /// # Examples
   ///
   /// ```
