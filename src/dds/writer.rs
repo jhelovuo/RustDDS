@@ -190,7 +190,7 @@ impl Writer {
 
     Writer {
       source_version: ProtocolVersion::PROTOCOLVERSION_2_3,
-      source_vendor_id: VendorId::VENDOR_UNKNOWN,
+      source_vendor_id: VendorId::THIS_IMPLEMENTATION,
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
       push_mode: true,

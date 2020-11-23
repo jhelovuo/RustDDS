@@ -148,7 +148,7 @@ impl SPDPDiscoveredParticipantData {
     SPDPDiscoveredParticipantData {
       updated_time: Utc::now().timestamp_nanos() as u64,
       protocol_version: Some(ProtocolVersion::PROTOCOLVERSION_2_3),
-      vendor_id: Some(VendorId::VENDOR_UNKNOWN),
+      vendor_id: Some(VendorId::THIS_IMPLEMENTATION),
       expects_inline_qos: Some(false),
       participant_guid: Some(participant.get_guid()),
       metatraffic_unicast_locators,

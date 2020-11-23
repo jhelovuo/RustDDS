@@ -17,8 +17,8 @@ impl Header {
   pub fn new(guid: GuidPrefix) -> Header {
     Header {
       protocol_id: ProtocolId::PROTOCOL_RTPS,
-      protocol_version: ProtocolVersion::PROTOCOLVERSION,
-      vendor_id: VendorId::VENDOR_UNKNOWN,
+      protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
+      vendor_id: VendorId::THIS_IMPLEMENTATION,
       guid_prefix: guid,
     }
   }
@@ -29,7 +29,7 @@ impl Validity for Header {
     // Three validity rules from RTPS 2.3 spec section 8.3.6.3
     // (1) We cannot reach this point if the message has too few bytes to contain a full header.
     self.protocol_id == ProtocolId::PROTOCOL_RTPS // (2)
-    && self.protocol_version.major <= ProtocolVersion::PROTOCOLVERSION.major // (3)
+    && self.protocol_version.major <= ProtocolVersion::THIS_IMPLEMENTATION.major // (3)
   }
 }
 
@@ -44,7 +44,7 @@ mod tests {
     header.protocol_version = ProtocolVersion::PROTOCOLVERSION_1_0;
     assert!(header.valid());
 
-    header.protocol_version = ProtocolVersion::PROTOCOLVERSION;
+    header.protocol_version = ProtocolVersion::THIS_IMPLEMENTATION;
     assert!(header.valid());
 
     header.protocol_version.major += 1;

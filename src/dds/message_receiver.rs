@@ -56,7 +56,7 @@ impl MessageReceiver {
       acknack_sender,
       own_guid_prefix: participant_guid_prefix,
 
-      source_version: ProtocolVersion::PROTOCOLVERSION,
+      source_version: ProtocolVersion::THIS_IMPLEMENTATION,
       source_vendor_id: VendorId::VENDOR_UNKNOWN,
       source_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
       dest_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
@@ -78,7 +78,7 @@ impl MessageReceiver {
   }
 
   pub fn reset(&mut self) {
-    self.source_version = ProtocolVersion::PROTOCOLVERSION;
+    self.source_version = ProtocolVersion::THIS_IMPLEMENTATION;
     self.source_vendor_id = VendorId::VENDOR_UNKNOWN;
     self.source_guid_prefix = GuidPrefix::GUIDPREFIX_UNKNOWN;
     self.dest_guid_prefix = GuidPrefix::GUIDPREFIX_UNKNOWN;

@@ -54,8 +54,6 @@ use super::{
 
 use super::qos::InlineQos;
 
-const PROTOCOLVERSION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_3;
-const VENDORID: VendorId = VendorId::VENDOR_UNKNOWN;
 
 pub(crate) struct Reader {
   // Should the instant be sent?
@@ -635,8 +633,8 @@ impl Reader {
 
     let mut message = Message::new(Header {
       protocol_id: ProtocolId::default(),
-      protocol_version: PROTOCOLVERSION,
-      vendor_id: VENDORID,
+      protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
+      vendor_id: VendorId::THIS_IMPLEMENTATION,
       guid_prefix: self.entity_attributes.guid.guidPrefix,
     });
 
@@ -680,8 +678,8 @@ impl Reader {
     {
       let mut message = Message::new(Header {
         protocol_id: ProtocolId::default(),
-        protocol_version: PROTOCOLVERSION,
-        vendor_id: VENDORID,
+        protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
+        vendor_id: VendorId::THIS_IMPLEMENTATION,
         guid_prefix: self.entity_attributes.guid.guidPrefix,
       });
 

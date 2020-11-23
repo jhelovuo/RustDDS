@@ -11,7 +11,7 @@ pub struct ProtocolVersion {
 }
 
 impl ProtocolVersion {
-  pub const PROTOCOLVERSION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_4;
+  pub const THIS_IMPLEMENTATION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_4;
 
   pub const PROTOCOLVERSION_1_0: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
   pub const PROTOCOLVERSION_1_1: ProtocolVersion = ProtocolVersion { major: 1, minor: 1 };
@@ -24,7 +24,7 @@ impl ProtocolVersion {
 
 impl Default for ProtocolVersion {
   fn default() -> Self {
-    ProtocolVersion::PROTOCOLVERSION
+    ProtocolVersion::THIS_IMPLEMENTATION
   }
 }
 
@@ -52,7 +52,7 @@ mod tests {
   serialization_test!( type = ProtocolVersion,
   {
       protocol_version,
-      ProtocolVersion::PROTOCOLVERSION,
+      ProtocolVersion::THIS_IMPLEMENTATION,
       le = [0x02, 0x04],
       be = [0x02, 0x04]
   },

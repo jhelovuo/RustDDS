@@ -891,7 +891,7 @@ mod tests {
     let h = Header {
       protocol_id: ProtocolId::default(),
       protocol_version: ProtocolVersion { major: 2, minor: 3 },
-      vendor_id: VendorId::VENDOR_UNKNOWN,
+      vendor_id: VendorId::THIS_IMPLEMENTATION,
       guid_prefix: GUID::new().guidPrefix,
     };
     m.set_header(h);

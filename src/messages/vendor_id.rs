@@ -11,6 +11,14 @@ impl VendorId {
   pub const VENDOR_UNKNOWN: VendorId = VendorId {
     vendorId: [0x00; 2],
   };
+
+  /// assigned by OMG DDS SIG on 2020-11-21 
+  pub const ATOSTEK: VendorId = VendorId {
+    vendorId: [0x01, 0x12],  
+  };
+
+  pub const THIS_IMPLEMENTATION: VendorId = VendorId::ATOSTEK;
+
 }
 
 impl Default for VendorId {
