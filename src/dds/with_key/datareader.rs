@@ -72,6 +72,36 @@ impl CurrentStatusChanges {
 }
 
 /// DDS DataReader for with_key topics.
+///
+/// # Examples
+///
+/// ```
+/// use serde::{Serialize, Deserialize};
+/// use rustdds::dds::DomainParticipant;
+/// use rustdds::dds::qos::QosPolicyBuilder;
+/// use rustdds::dds::data_types::TopicKind;
+/// use rustdds::dds::traits::Keyed;
+/// use rustdds::dds::With_Key_DataReader as DataReader;
+/// use rustdds::serialization::CDRDeserializerAdapter;
+///
+/// let domain_participant = DomainParticipant::new(0);
+/// let qos = QosPolicyBuilder::new().build();
+/// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct SomeType { a: i32 }
+/// impl Keyed for SomeType {
+///   type K = i32;
+///
+///   fn get_key(&self) -> Self::K {
+///     self.a
+///   }
+/// }
+///
+/// // WithKey is important
+/// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+/// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
+/// ```
 pub struct DataReader<
   'a,
   D: Keyed + DeserializeOwned,
@@ -165,6 +195,51 @@ where
     })
   }
 
+  /// Reads amount of samples found with `max_samples` and `read_condition` parameters.
+  ///
+  /// # Arguments
+  ///
+  /// * `max_samples` - Limits maximum amount of samples read
+  /// * `read_condition` - Limits results by condition
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// use rustdds::dds::data_types::ReadCondition;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// if let Ok(datas) = data_reader.read(10, ReadCondition::not_read()) {
+  ///   for data in datas.iter() {
+  ///     // do something
+  ///   }
+  /// }
+  /// ```
   pub fn read(
     &mut self,
     max_samples: usize,
@@ -182,6 +257,51 @@ where
     Ok(result)
   }
 
+  /// Takes amount of sample found with `max_samples` and `read_condition` parameters.
+  ///
+  /// # Arguments
+  ///
+  /// * `max_samples` - Limits maximum amount of samples read
+  /// * `read_condition` - Limits results by condition
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// use rustdds::dds::data_types::ReadCondition;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// if let Ok(datas) = data_reader.take(10, ReadCondition::not_read()) {
+  ///   for data in datas.iter() {
+  ///     // do something
+  ///   }
+  /// }
+  /// ```
   pub fn take(
     &mut self,
     max_samples: usize,
@@ -200,11 +320,85 @@ where
     Ok(result)
   }
 
+  /// Reads next unread sample
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// while let Ok(Some(data)) = data_reader.read_next_sample() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 
+  /// Takes next unread sample
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// while let Ok(Some(data)) = data_reader.take_next_sample() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
@@ -215,6 +409,42 @@ where
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// for data in data_reader.iterator() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
     Ok(
@@ -227,6 +457,43 @@ where
 
   /// Produces an interator over the samples filtered b ygiven condition.
   /// Yields only payload data, not SampleInfo metadata
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::data_types::ReadCondition;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// for data in data_reader.conditional_iterator(ReadCondition::any()) {
+  ///   // do something
+  /// }
+  /// ```
   pub fn conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
@@ -245,6 +512,42 @@ where
   /// Removes samples from `DataReader`.
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
   /// are still removed from the `Datareader`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// for data in data_reader.into_iterator() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a read call
     Ok(
@@ -259,6 +562,43 @@ where
   /// Yields only payload data, not SampleInfo metadata
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
   /// are still removed from the `Datareader`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::data_types::ReadCondition;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// for data in data_reader.into_conditional_iterator(ReadCondition::not_read()) {
+  ///   // do something
+  /// }
+  /// ```
   pub fn into_conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
@@ -404,6 +744,45 @@ where
   ///
   /// This should cover DDS DataReader methods read_instance, read_next_instance,
   /// read_next_instance_w_condition.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::data_types::{ReadCondition,SelectByKey};
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// if let Ok(datas) = data_reader.read_instance(10, ReadCondition::any(), Some(3), SelectByKey::This) {
+  ///   for data in datas.iter() {
+  ///     // do something
+  ///   }
+  /// }
+  /// ```
   pub fn read_instance(
     &mut self,
     max_samples: usize,
@@ -438,6 +817,45 @@ where
   /// Similar to read_instance, but will return owned datasamples
   /// This should cover DDS DataReader methods take_instance, take_next_instance,
   /// take_next_instance_w_condition.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::data_types::{ReadCondition,SelectByKey};
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for data to arrive...
+  ///
+  /// if let Ok(datas) = data_reader.take_instance(10, ReadCondition::any(), Some(3), SelectByKey::Next) {
+  ///   for data in datas.iter() {
+  ///     // do something
+  ///   }
+  /// }
+  /// ```
   pub fn take_instance(
     &mut self,
     max_samples: usize,
@@ -606,6 +1024,45 @@ where
     }
   }
 
+  /// Gets RequestedDeadlineMissedStatus
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::qos::policy::Deadline;
+  /// use rustdds::dds::data_types::DDSDuration;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().deadline(Deadline(DDSDuration::from_millis(1))).build();
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// #
+  /// # #[derive(Serialize, Deserialize)]
+  /// # struct SomeType { a: i32 }
+  /// # impl Keyed for SomeType {
+  /// #   type K = i32;
+  /// #
+  /// #   fn get_key(&self) -> Self::K {
+  /// #     self.a
+  /// #   }
+  /// # }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  ///
+  /// // Wait for some deadline to be missed...
+  /// if let Ok(Some(rqdl)) = data_reader.get_requested_deadline_missed_status() {
+  ///   // do something
+  /// }
+  ///
+  /// ```
   pub fn get_requested_deadline_missed_status(
     &mut self,
   ) -> Result<Option<RequestedDeadlineMissedStatus>> {

@@ -401,7 +401,7 @@ impl Debug for Publisher {
 // -------------------------------------------------------------------
 
 /// DDS Subscriber
-/// 
+///
 /// # Examples
 ///
 /// ```
@@ -527,7 +527,7 @@ impl<'s> Subscriber {
     match dp.get_dds_cache().write() {
       Ok(mut rwlock) => rwlock.add_new_topic(
         &topic.get_name().to_string(),
-        topic.topic_kind,
+        topic.kind(),
         topic.get_type(),
       ),
       Err(e) => panic!(
@@ -552,7 +552,7 @@ impl<'s> Subscriber {
   /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
   /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
   /// * `qos` - Not in use
-  /// 
+  ///
   /// # Examples
   ///
   /// ```
@@ -567,9 +567,9 @@ impl<'s> Subscriber {
   /// # let domain_participant = DomainParticipant::new(0);
   /// # let qos = QosPolicyBuilder::new().build();
   /// #
-  /// 
+  ///
   /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  /// 
+  ///
   /// #[derive(Deserialize)]
   /// struct SomeType { a: i32 }
   /// impl Keyed for SomeType {
@@ -594,7 +594,7 @@ impl<'s> Subscriber {
     <D as Keyed>::K: Key,
     SA: DeserializerAdapter<D>,
   {
-    if topic.topic_kind != TopicKind::WithKey {
+    if topic.kind() != TopicKind::WithKey {
       return Err(Error::PreconditionNotMet); // TopicKind mismatch
     }
     self.create_datareader_internal(entity_id, topic, qos)
@@ -607,7 +607,7 @@ impl<'s> Subscriber {
   /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
   /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
   /// * `qos` - Not in use  
-  /// 
+  ///
   /// # Examples
   ///
   /// ```
@@ -621,9 +621,9 @@ impl<'s> Subscriber {
   /// # let domain_participant = DomainParticipant::new(0);
   /// # let qos = QosPolicyBuilder::new().build();
   /// #
-  /// 
+  ///
   /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  /// 
+  ///
   /// #[derive(Deserialize)]
   /// struct SomeType {}
   ///
@@ -640,7 +640,7 @@ impl<'s> Subscriber {
     D: DeserializeOwned,
     SA: DeserializerAdapter<D>,
   {
-    if topic.topic_kind != TopicKind::NoKey {
+    if topic.kind() != TopicKind::NoKey {
       return Err(Error::PreconditionNotMet); // TopicKind mismatch
     }
 
@@ -678,7 +678,7 @@ impl<'s> Subscriber {
   }
 
   /// Returns [DomainParticipant](struct.DomainParticipant.html) if it is sill alive.
-  /// 
+  ///
   /// # Example
   ///
   /// ```

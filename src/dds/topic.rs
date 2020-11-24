@@ -14,13 +14,26 @@ pub trait TopicDescription {
 }
 
 /// DDS Topic
+///
+/// # Examples
+///
+/// ```
+/// use rustdds::dds::DomainParticipant;
+/// use rustdds::dds::qos::QosPolicyBuilder;
+/// use rustdds::dds::Topic;
+/// use rustdds::dds::data_types::TopicKind;
+///
+/// let domain_participant = DomainParticipant::new(0);
+/// let qos = QosPolicyBuilder::new().build();
+/// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey);
+/// ```
 #[derive(Clone)]
 pub struct Topic {
   my_domainparticipant: DomainParticipantWeak,
   my_name: String,
   my_typedesc: TypeDesc,
   my_qos_policies: QosPolicies,
-  pub topic_kind: TopicKind, // WITH_KEY or NO_KEY
+  topic_kind: TopicKind, // WITH_KEY or NO_KEY
 }
 
 impl Topic {
@@ -52,6 +65,25 @@ impl Topic {
 
   fn get_name<'a>(&'a self) -> &'a str {
     &self.my_name
+  }
+
+  /// Gets Topics TopicKind
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Topic;
+  /// use rustdds::dds::data_types::TopicKind;
+  ///
+  /// # let domain_participant = DomainParticipant::new(0);
+  /// # let qos = QosPolicyBuilder::new().build();
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// assert_eq!(topic.kind(), TopicKind::WithKey);
+  /// ```
+  pub fn kind(&self) -> TopicKind {
+    self.topic_kind
   }
 
   // DDS spec 2.2.2.3.2 Topic Class

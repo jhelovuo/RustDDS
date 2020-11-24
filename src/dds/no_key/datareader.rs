@@ -25,10 +25,10 @@ use super::{
 /// # Examples
 ///
 /// ```
-/// # use serde::{Serialize, Deserialize};
-/// # use rustdds::dds::DomainParticipant;
-/// # use rustdds::dds::qos::QosPolicyBuilder;
-/// # use rustdds::dds::data_types::TopicKind;
+/// use serde::{Serialize, Deserialize};
+/// use rustdds::dds::DomainParticipant;
+/// use rustdds::dds::qos::QosPolicyBuilder;
+/// use rustdds::dds::data_types::TopicKind;
 /// use rustdds::dds::No_Key_DataReader as DataReader;
 /// use rustdds::serialization::CDRDeserializerAdapter;
 ///
@@ -36,8 +36,8 @@ use super::{
 /// let qos = QosPolicyBuilder::new().build();
 /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
 ///
-/// # #[derive(Serialize, Deserialize)]
-/// # struct SomeType {}
+/// #[derive(Serialize, Deserialize)]
+/// struct SomeType {}
 ///
 /// // NoKey is important
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
