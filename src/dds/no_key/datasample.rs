@@ -16,7 +16,7 @@ pub struct DataSample<D> {
 
 impl<D> DataSample<D> {
   //TODO: At least rename this. This is not a proper constructor.
-  pub fn new_deprecated(
+  pub(crate) fn new_deprecated(
     source_timestamp: Timestamp,
     payload: D,
     writer_guid: GUID,
@@ -46,7 +46,7 @@ impl<D> DataSample<D> {
     }
   }
 
-  pub fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> {
+  pub(crate) fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> {
     match keyed.value {
       Ok(kv) => Some(DataSample::<D> {
         sample_info: keyed.sample_info,
@@ -56,7 +56,9 @@ impl<D> DataSample<D> {
     }
   }
 
-  pub fn from_with_key_ref(keyed: WithKeyDataSample<&NoKeyWrapper<D>>) -> Option<DataSample<&D>> {
+  pub(crate) fn from_with_key_ref(
+    keyed: WithKeyDataSample<&NoKeyWrapper<D>>,
+  ) -> Option<DataSample<&D>> {
     match keyed.value {
       Ok(ref kv) => Some(DataSample::<&D> {
         sample_info: keyed.sample_info,

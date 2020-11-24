@@ -184,7 +184,7 @@ pub struct QosPolicies {
 
 impl QosPolicies {
   #[cfg(test)]
-  pub fn qos_none() -> QosPolicies {
+  pub const fn qos_none() -> QosPolicies {
     QosPolicies {
       durability: None,
       presentation: None,
@@ -201,51 +201,51 @@ impl QosPolicies {
     }
   }
 
-  pub fn builder() -> QosPolicyBuilder {
+  pub const fn builder() -> QosPolicyBuilder {
     QosPolicyBuilder::new()
   }
 
-  pub fn durability(&self) -> Option<policy::Durability> {
+  pub const fn durability(&self) -> Option<policy::Durability> {
     self.durability
   }
 
-  pub fn presentation(&self) -> Option<policy::Presentation> {
+  pub const fn presentation(&self) -> Option<policy::Presentation> {
     self.presentation
   }
 
-  pub fn latency_budget(&self) -> Option<policy::LatencyBudget> {
+  pub const fn latency_budget(&self) -> Option<policy::LatencyBudget> {
     self.latency_budget
   }
 
-  pub fn ownership(&self) -> Option<policy::Ownership> {
+  pub const  fn ownership(&self) -> Option<policy::Ownership> {
     self.ownership
   }
 
-  pub fn liveliness(&self) -> Option<policy::Liveliness> {
+  pub const fn liveliness(&self) -> Option<policy::Liveliness> {
     self.liveliness
   }
 
-  pub fn time_based_filter(&self) -> Option<policy::TimeBasedFilter> {
+  pub const fn time_based_filter(&self) -> Option<policy::TimeBasedFilter> {
     self.time_based_filter
   }
 
-  pub fn reliability(&self) -> Option<policy::Reliability> {
+  pub const fn reliability(&self) -> Option<policy::Reliability> {
     self.reliability
   }
 
-  pub fn destination_order(&self) -> Option<policy::DestinationOrder> {
+  pub const fn destination_order(&self) -> Option<policy::DestinationOrder> {
     self.destination_order
   }
 
-  pub fn history(&self) -> Option<policy::History> {
+  pub const fn history(&self) -> Option<policy::History> {
     self.history
   }
 
-  pub fn resource_limits(&self) -> Option<policy::ResourceLimits> {
+  pub const fn resource_limits(&self) -> Option<policy::ResourceLimits> {
     self.resource_limits
   }
 
-  pub fn lifespan(&self) -> Option<policy::Lifespan> {
+  pub const fn lifespan(&self) -> Option<policy::Lifespan> {
     self.lifespan
   }
 }

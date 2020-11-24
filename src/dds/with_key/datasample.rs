@@ -21,11 +21,11 @@ impl<D> DataSample<D>
 where
   D: Keyed,
 {
-  pub fn new(sample_info: SampleInfo, value: std::result::Result<D, D::K>) -> Self {
+  pub(crate) fn new(sample_info: SampleInfo, value: std::result::Result<D, D::K>) -> Self {
     DataSample { sample_info, value }
   }
 
-  pub fn new_deprecated(
+  pub(crate) fn new_deprecated(
     source_timestamp: Timestamp,
     payload: D,
     writer_guid: GUID,
@@ -55,7 +55,7 @@ where
     }
   }
 
-  pub fn new_disposed<K>(source_timestamp: Timestamp, key: D::K, writer_guid: GUID) -> DataSample<D>
+  pub(crate) fn new_disposed<K>(source_timestamp: Timestamp, key: D::K, writer_guid: GUID) -> DataSample<D>
   where
     <D as Keyed>::K: Key,
   {
