@@ -276,7 +276,7 @@ impl Discovery {
       }
     };
 
-    let mut dcps_participant_writer = match discovery_publisher
+    let dcps_participant_writer = match discovery_publisher
       .create_datawriter::<SPDPDiscoveredParticipantData, CDRSerializerAdapter<SPDPDiscoveredParticipantData,LittleEndian> >(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
         &dcps_participant_topic,

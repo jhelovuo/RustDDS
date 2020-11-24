@@ -41,6 +41,36 @@ use super::super::{
 };
 
 /// DDS DataWriter for keyed topics
+///
+/// # Examples
+///
+/// ```
+/// use serde::{Serialize, Deserialize};
+/// use rustdds::dds::DomainParticipant;
+/// use rustdds::dds::qos::QosPolicyBuilder;
+/// use rustdds::dds::data_types::TopicKind;
+/// use rustdds::dds::With_Key_DataWriter as DataWriter;
+/// use rustdds::dds::traits::Keyed;
+/// use rustdds::serialization::CDRSerializerAdapter;
+///
+/// let domain_participant = DomainParticipant::new(0);
+/// let qos = QosPolicyBuilder::new().build();
+/// let publisher = domain_participant.create_publisher(&qos).unwrap();
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct SomeType { a: i32 }
+/// impl Keyed for SomeType {
+///   type K = i32;
+///
+///   fn get_key(&self) -> Self::K {
+///     self.a
+///   }
+/// }
+///
+/// // WithKey is important
+/// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+/// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
+/// ```
 pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>>
 {
   my_publisher: &'a Publisher,
@@ -151,6 +181,39 @@ where
   // TODO: Maybe we could return references to the subscription data to avoid copying?
   // But then what if the result set changes while the application processes it?
 
+  /// Manually refreshes liveliness if QoS allows it
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// data_writer.refresh_manual_liveliness();
+  /// ```
   pub fn refresh_manual_liveliness(&self) {
     match self.get_qos().liveliness {
       Some(lv) => match lv {
@@ -172,6 +235,40 @@ where
     };
   }
 
+  /// Writes single data instance to a topic.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// let some_data = SomeType { a: 1 };
+  /// data_writer.write(some_data, None).unwrap();
+  /// ```
   pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
     let mut ddsdata = DDSData::from(&data, source_timestamp);
     // TODO key value should be unique always. This is not always unique.
@@ -202,6 +299,41 @@ where
     }
   }
 
+  /// Waits for all acknowledgements to finish
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// let some_data = SomeType { a: 1 };
+  /// data_writer.write(some_data, None).unwrap();
+  /// data_writer.wait_for_acknowledgments(std::time::Duration::from_millis(100));
+  /// ```
   pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     match &self.qos_policy.reliability {
       Some(rel) => match rel {
@@ -221,6 +353,43 @@ where
     return Err(Error::Unsupported);
   }
 
+  /// Gets mio Receiver for all status changes
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// // Some status has changed
+  ///
+  /// while let Ok(sc) = data_writer.get_status_listener().try_recv() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
     match self
       .cc_upload
@@ -234,11 +403,84 @@ where
   }
 
   /// Unimplemented. <b>Do not use</b>.
+  ///
+  /// # Examples
+  ///
+  /// ```no_run
+  // TODO: enable when functional
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// // Liveliness lost status has changed
+  ///
+  /// if let Ok(lls) = data_writer.get_liveliness_lost_status() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn get_liveliness_lost_status(&self) -> Result<LivelinessLostStatus> {
     todo!()
   }
 
   /// Should get latest offered deadline missed status. <b>Do not use yet</b> use `get_status_lister` instead for the moment.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// // Deadline missed status has changed
+  ///
+  /// if let Ok(odms) = data_writer.get_offered_deadline_missed_status() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn get_offered_deadline_missed_status(&self) -> Result<OfferedDeadlineMissedStatus> {
     let mut fstatus = OfferedDeadlineMissedStatus::new();
     while let Ok(status) = self.status_receiver.try_recv() {
@@ -262,23 +504,195 @@ where
   }
 
   /// Unimplemented. <b>Do not use</b>.
+  ///
+  /// # Examples
+  ///
+  /// ```no_run
+  // TODO: enable when functional
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// // Liveliness lost status has changed
+  ///
+  /// if let Ok(oiqs) = data_writer.get_offered_incompatible_qos_status() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn get_offered_incompatible_qos_status(&self) -> Result<OfferedIncompatibleQosStatus> {
     todo!()
   }
 
   /// Unimplemented. <b>Do not use</b>.
+  ///
+  /// # Examples
+  ///
+  /// ```no_run
+  // TODO: enable when functional
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// // Liveliness lost status has changed
+  ///
+  /// if let Ok(pms) = data_writer.get_publication_matched_status() {
+  ///   // do something
+  /// }
+  /// ```
   pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     todo!()
   }
 
+  /// Topic assigned to this DataWriter
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// assert_eq!(data_writer.get_topic(), &topic);
+  /// ```
   pub fn get_topic(&self) -> &Topic {
     &self.my_topic
   }
 
+  /// Publisher assigned to this DataWriter
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// assert_eq!(data_writer.get_publisher(), &publisher);
   pub fn get_publisher(&self) -> &Publisher {
     &self.my_publisher
   }
 
+  /// Manually asserts liveliness (use this instead of refresh) according to QoS
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// data_writer.assert_liveliness().unwrap();
+  /// ```
   pub fn assert_liveliness(&self) -> Result<()> {
     self.refresh_manual_liveliness();
 
@@ -311,6 +725,40 @@ where
   }
 
   /// Unimplemented. <b>Do not use</b>.
+  ///
+  /// # Examples
+  ///
+  /// ```no_run
+  // TODO: enable when available
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// for sub in data_writer.get_matched_subscriptions().iter() {
+  ///   // do something
+  /// }
   pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     todo!()
   }
@@ -321,11 +769,51 @@ where
   ///
   /// * `key` - Key of the instance
   /// * `source_timestamp` - DDS source timestamp (None uses now as time as specified in DDS spec)
-  pub fn dispose(
-    &mut self,
-    key: <D as Keyed>::K,
-    source_timestamp: Option<Timestamp>,
-  ) -> Result<()> {
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use serde::{Serialize, Deserialize};
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::dds::traits::Keyed;
+  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize, Deserialize)]
+  /// struct SomeType { a: i32, val: usize }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// // WithKey is important
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  ///
+  /// let some_data_1_1 = SomeType { a: 1, val: 3};
+  /// let some_data_1_2 = SomeType { a: 1, val: 4};
+  /// // different key
+  /// let some_data_2_1 = SomeType { a: 2, val: 5};
+  /// let some_data_2_2 = SomeType { a: 2, val: 6};
+  ///
+  /// data_writer.write(some_data_1_1, None).unwrap();
+  /// data_writer.write(some_data_1_2, None).unwrap();
+  /// data_writer.write(some_data_2_1, None).unwrap();
+  /// data_writer.write(some_data_2_2, None).unwrap();
+  ///
+  /// // disposes both some_data_1_1 and some_data_1_2. They are no longer offered by this writer to this topic.
+  /// data_writer.dispose(1, None).unwrap();
+  /// ```
+  pub fn dispose(&self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
     /*
 
     Removing this for now, as there is need to redesign the mechanism of transmitting dispose actions

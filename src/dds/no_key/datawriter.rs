@@ -34,10 +34,10 @@ use super::wrappers::{NoKeyWrapper, SAWrapper};
 /// # Examples
 ///
 /// ```
-/// # use serde::{Serialize, Deserialize};
-/// # use rustdds::dds::DomainParticipant;
-/// # use rustdds::dds::qos::QosPolicyBuilder;
-/// # use rustdds::dds::data_types::TopicKind;
+/// use serde::{Serialize, Deserialize};
+/// use rustdds::dds::DomainParticipant;
+/// use rustdds::dds::qos::QosPolicyBuilder;
+/// use rustdds::dds::data_types::TopicKind;
 /// use rustdds::dds::No_Key_DataWriter as DataWriter;
 /// use rustdds::serialization::CDRSerializerAdapter;
 ///
@@ -45,8 +45,8 @@ use super::wrappers::{NoKeyWrapper, SAWrapper};
 /// let qos = QosPolicyBuilder::new().build();
 /// let publisher = domain_participant.create_publisher(&qos).unwrap();
 ///
-/// # #[derive(Serialize, Deserialize)]
-/// # struct SomeType {}
+/// #[derive(Serialize, Deserialize)]
+/// struct SomeType {}
 ///
 /// // NoKey is important
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
