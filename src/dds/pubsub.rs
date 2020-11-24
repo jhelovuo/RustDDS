@@ -401,6 +401,19 @@ impl Debug for Publisher {
 // -------------------------------------------------------------------
 
 /// DDS Subscriber
+/// 
+/// # Examples
+///
+/// ```
+/// # use rustdds::dds::DomainParticipant;
+/// # use rustdds::dds::qos::QosPolicyBuilder;
+/// use rustdds::dds::Subscriber;
+///
+/// let domain_participant = DomainParticipant::new(0);
+/// let qos = QosPolicyBuilder::new().build();
+///
+/// let subscriber = domain_participant.create_subscriber(&qos);
+/// ```
 #[derive(Clone)]
 pub struct Subscriber {
   domain_participant: DomainParticipantWeak,
@@ -538,7 +551,38 @@ impl<'s> Subscriber {
   ///
   /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
   /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
-  /// * `qos` - Not in use  
+  /// * `qos` - Not in use
+  /// 
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Subscriber;
+  /// use serde::Deserialize;
+  /// use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::data_types::TopicKind;
+  /// use rustdds::dds::traits::Keyed;
+  /// #
+  /// # let domain_participant = DomainParticipant::new(0);
+  /// # let qos = QosPolicyBuilder::new().build();
+  /// #
+  /// 
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// 
+  /// #[derive(Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
+  /// ```
   pub fn create_datareader<D: 'static, SA>(
     &'s self,
     topic: &'s Topic,
@@ -563,6 +607,29 @@ impl<'s> Subscriber {
   /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
   /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
   /// * `qos` - Not in use  
+  /// 
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Subscriber;
+  /// use serde::Deserialize;
+  /// use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::data_types::TopicKind;
+  /// #
+  /// # let domain_participant = DomainParticipant::new(0);
+  /// # let qos = QosPolicyBuilder::new().build();
+  /// #
+  /// 
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// 
+  /// #[derive(Deserialize)]
+  /// struct SomeType {}
+  ///
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
+  /// ```
   pub fn create_datareader_no_key<D: 'static, SA>(
     &'s self,
     topic: &'s Topic,
@@ -611,6 +678,20 @@ impl<'s> Subscriber {
   }
 
   /// Returns [DomainParticipant](struct.DomainParticipant.html) if it is sill alive.
+  /// 
+  /// # Example
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Subscriber;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  ///
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// assert_eq!(domain_participant, subscriber.get_participant().unwrap());
+  /// ```
   pub fn get_participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }
