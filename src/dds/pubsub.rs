@@ -1,7 +1,11 @@
 use mio_extras::channel as mio_channel;
 use log::error;
 
-use std::{fmt::Debug, sync::{RwLock, Arc}, time::Duration};
+use std::{
+  fmt::Debug,
+  sync::{RwLock, Arc},
+  time::Duration,
+};
 
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -44,6 +48,19 @@ use super::{
 // -------------------------------------------------------------------
 
 /// DDS Publisher
+///
+/// # Examples
+///
+/// ```
+/// # use rustdds::dds::DomainParticipant;
+/// # use rustdds::dds::qos::QosPolicyBuilder;
+/// use rustdds::dds::Publisher;
+///
+/// let domain_participant = DomainParticipant::new(0);
+/// let qos = QosPolicyBuilder::new().build();
+///
+/// let publisher = domain_participant.create_publisher(&qos);
+/// ```
 #[derive(Clone)]
 pub struct Publisher {
   domain_participant: DomainParticipantWeak,
@@ -81,6 +98,36 @@ impl<'a> Publisher {
   /// * `entity_id` - Custom entity id if necessary for the user to define it
   /// * `topic` - Reference to DDS Topic this writer is created to
   /// * `qos` - Not currently in use
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Publisher;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// use rustdds::dds::traits::Keyed;
+  /// use rustdds::serialization::CDRSerializerAdapter;
+  /// use serde::Serialize;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  ///
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
+  /// ```
   pub fn create_datawriter<D, SA>(
     &'a self,
     entity_id: Option<EntityId>,
@@ -169,6 +216,28 @@ impl<'a> Publisher {
   /// * `entity_id` - Custom entity id if necessary for the user to define it
   /// * `topic` - Reference to DDS Topic this writer is created to
   /// * `qos` - Not currently in use
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Publisher;
+  /// # use rustdds::dds::data_types::TopicKind;
+  /// use rustdds::serialization::CDRSerializerAdapter;
+  /// use serde::Serialize;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  ///
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  ///
+  /// #[derive(Serialize)]
+  /// struct SomeType {}
+  ///
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
+  /// ```
   pub fn create_datawriter_no_key<D, SA>(
     &'a self,
     entity_id: Option<EntityId>,
@@ -237,6 +306,20 @@ impl<'a> Publisher {
 
   // What is the use case for this? (is it useful in Rust style of programming? Should it be public?)
   /// Gets [DomainParticipant](struct.DomainParticipant.html) if it has not disappeared from all scopes.
+  ///
+  /// # Example
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Publisher;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  ///
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  /// assert_eq!(domain_participant, publisher.get_participant().unwrap());
+  /// ```
   pub fn get_participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }
@@ -244,11 +327,43 @@ impl<'a> Publisher {
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
 
   /// Returns default DataWriter qos. Currently default qos is not used.
+  ///
+  /// # Example
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// use rustdds::dds::qos::{QosPolicyBuilder};
+  /// # use rustdds::dds::Publisher;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  ///
+  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
+  /// assert_eq!(qos, *publisher.get_default_datawriter_qos());
+  /// ```
   pub fn get_default_datawriter_qos(&self) -> &QosPolicies {
     &self.default_datawriter_qos
   }
 
   /// Sets default DataWriter qos. Currenly default qos is not used.
+  ///
+  /// # Example
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::{QosPolicyBuilder, policy::Durability};
+  /// # use rustdds::dds::Publisher;
+  ///
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  ///
+  /// let mut publisher = domain_participant.create_publisher(&qos).unwrap();
+  /// let qos2 = QosPolicyBuilder::new().durability(Durability::Transient).build();
+  /// publisher.set_default_datawriter_qos(&qos2);
+  ///
+  /// assert_ne!(qos, *publisher.get_default_datawriter_qos());
+  /// assert_eq!(qos2, *publisher.get_default_datawriter_qos());
+  /// ```
   pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
     self.default_datawriter_qos = q.clone();
   }
@@ -256,9 +371,9 @@ impl<'a> Publisher {
 
 impl PartialEq for Publisher {
   fn eq(&self, other: &Self) -> bool {
-    self.get_participant() == other.get_participant() &&
-    self.my_qos_policies == other.my_qos_policies &&
-    self.default_datawriter_qos == other.default_datawriter_qos
+    self.get_participant() == other.get_participant()
+      && self.my_qos_policies == other.my_qos_policies
+      && self.default_datawriter_qos == other.default_datawriter_qos
     // TODO: publisher is DDSEntity?
   }
 }
@@ -267,7 +382,10 @@ impl Debug for Publisher {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.write_fmt(format_args!("{:?}", self.get_participant()))?;
     f.write_fmt(format_args!("Publisher QoS: {:?}", self.my_qos_policies))?;
-    f.write_fmt(format_args!("Publishers default Writer QoS: {:?}", self.default_datawriter_qos))
+    f.write_fmt(format_args!(
+      "Publishers default Writer QoS: {:?}",
+      self.default_datawriter_qos
+    ))
   }
 }
 

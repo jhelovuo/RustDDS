@@ -69,6 +69,21 @@ impl<D: Keyed> Keyed for &D {
 }
 
 // TODO: might want to implement this for each primitive?
+impl Key for bool {}
+impl Key for char {}
+impl Key for i8 {}
+impl Key for i16 {}
+impl Key for i32 {}
+impl Key for i64 {}
+impl Key for i128 {}
+impl Key for isize {}
+impl Key for u8 {}
+impl Key for u16 {}
+impl Key for u32 {}
+impl Key for u64 {}
+impl Key for u128 {}
+impl Key for usize {}
+
 impl Key for String {}
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

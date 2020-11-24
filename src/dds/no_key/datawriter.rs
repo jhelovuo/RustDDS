@@ -348,7 +348,7 @@ where
   }
 
   /// Unimplemented. <b>Do not use</b>.
-  /// 
+  ///
   /// # Examples
   ///
   // TODO: enable run when implemented
@@ -374,7 +374,7 @@ where
   /// for sub in data_writer.get_matched_subscriptions().iter() {
   ///   // handle subscriptions
   /// }
-  /// ``` 
+  /// ```
   pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     self.keyed_datawriter.get_matched_subscriptions()
   }
@@ -403,7 +403,7 @@ where
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
   ///
   /// // Some status has changed
-  /// 
+  ///
   /// if let Ok(status) = data_writer.get_status_listener().try_recv() {
   ///   // handle status change
   /// }
