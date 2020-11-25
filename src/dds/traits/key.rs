@@ -8,10 +8,18 @@ use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 use crate::serialization::cdr_serializer::to_bytes;
 
-/// A payload data object may be "Keyed": It allows a Key to be extracted from it.
-/// The key is used to distinguish between different Instances of the data.
-/// A "Keyed" data has on associated type "K", which is the actual key type. K must
-/// implement "Key".
+/// A sample data type may be `Keyed` : It allows a Key to be extracted from the sample.
+/// In its simplest form, the key may be just a part of the sample data, but it can be anything
+/// computable from a sample by an application-defined function.
+///
+/// The key is used to distinguish between different Instances of the data in a DDS Topic.
+///
+/// A `Keyed` type has an associated type `K`, which is the actual key type. `K` must
+/// implement [`Key`]. Otherwise, `K` can be chosen to suit the application. It is advisable that `K`
+/// is something that can be cloned with reasonable effort.
+///
+/// [`Key`]: trait.Key.html
+
 pub trait Keyed {
   //type K: Key;  // This does not work yet is stable Rust, 2020-08-11
   // Instead, where D:Keyed we do anything with D::K, we must specify bound:
@@ -30,6 +38,19 @@ pub trait Keyed {
 }
 
 /// Key trait for Keyed Topics
+///
+/// It is a combination of traits from the standard library
+/// * [PartialEq](https://doc.rust-lang.org/std/cmp/trait.PartialEq.html)
+/// * [Eq](https://doc.rust-lang.org/std/cmp/trait.Eq.html)
+/// * [PartialOrd](https://doc.rust-lang.org/std/cmp/trait.PartialOrd.html)
+/// * [Ord](https://doc.rust-lang.org/std/cmp/trait.Ord.html)
+/// * [Hash](https://doc.rust-lang.org/std/hash/trait.Hash.html)
+/// * [Clone](https://doc.rust-lang.org/std/clone/trait.Clone.html)
+///
+/// and Serde traits
+/// * [Serialize](https://docs.serde.rs/serde/trait.Serialize.html) and
+/// * [DeserializeOwned](https://docs.serde.rs/serde/de/trait.DeserializeOwned.html) .
+
 pub trait Key:
   Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned
 {
@@ -61,6 +82,8 @@ impl Key for () {
   }
 }
 
+/// Key for a reference type `&D` is the same as for the value type `D`.
+/// This is required internally for the implementation of NoKey topics.
 impl<D: Keyed> Keyed for &D {
   type K = D::K;
   fn get_key(&self) -> Self::K {

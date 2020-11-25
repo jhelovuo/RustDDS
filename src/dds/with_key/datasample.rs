@@ -5,15 +5,20 @@ use crate::dds::sampleinfo::*;
 //use super::{interfaces::{IDataSample, IDataSampleConvert, IKeyedDataSample, IKeyedDataSampleConvert}, no_key::wrappers::NoKeyWrapper};
 
 /// DDS spec 2.2.2.5.4
+///
+/// Note that no_key::DataSample and with_key::DataSample are two different but similar structs.
+///
+/// We are making a bit unorthodox use of `Result`:
+/// It replaces the use of valid_data flag, because when valid_data = false, we should
+/// not provide any data value.
+/// Now 
+/// * `Ok(D)` means valid_data = true and there is a sample.
+/// * `Err(D::K)` means valid_data = false, no sample exists, but only a Key and instance_state has changed.
+
 #[derive(PartialEq, Debug)]
 pub struct DataSample<D: Keyed> {
   pub(crate) sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
 
-  /// This ia a bit unorthodox use of Result.
-  /// It replaces the use of valid_data flag, because when valid_data = false, we should
-  /// not provide any data value.
-  /// Now Ok(D) means valid_data = true and there is a sample.
-  /// Err(D::K) means there is valid_data = false, but only a Key and instance_state has changed.
   pub(crate) value: std::result::Result<D, D::K>,
 }
 

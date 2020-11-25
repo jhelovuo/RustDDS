@@ -7,17 +7,16 @@ use super::duration::Duration;
 
 /// Quoting RTPS 2.3 spec 9.3.2.1:
 ///
-/// The representation of the time is the one defined by the IETF Network Time
-/// Protocol (NTP) Standard (IETF RFC 1305). In this representation, time is
-/// expressed in seconds and fraction of seconds using the formula:
-/// time = seconds + (fraction / 2^(32))
-
-/// The time origin is represented by the reserved value TIME_ZERO and corresponds
-/// to the UNIX prime epoch 0h, 1 January 1970.
-
-/// End quote.
-
-/// Note: NTP does not use the Unix epoch (1970-01-01 00:00) but the beginning of
+/// > The representation of the time is the one defined by the IETF Network Time
+/// > Protocol (NTP) Standard (IETF RFC 1305). In this representation, time is
+/// > expressed in seconds and fraction of seconds using the formula:
+/// > time = seconds + (fraction / 2^(32))
+///
+/// > The time origin is represented by the reserved value TIME_ZERO and corresponds
+/// > to the UNIX prime epoch 0h, 1 January 1970.
+///
+///
+/// *Note* : NTP does not use the Unix epoch (1970-01-01 00:00) but the beginning of
 /// the 20th century epoch (1900-01-01 00:00) insted. So these timestamps are not the same
 /// as in NTP.
 

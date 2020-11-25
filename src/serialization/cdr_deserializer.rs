@@ -18,8 +18,10 @@ use crate::dds::traits::serde_adapters::DeserializerAdapter;
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
 /// This type adapts CDR_deserializer (which implements serde::Deserializer) to work as a
-/// DeserializerAdapter. CDR_deserializer cannot directly implement the trait itself, because
+/// [`DeserializerAdapter`]. CDR_deserializer cannot directly implement the trait itself, because
 /// CDR_deserializer has the type parameter BO open, and the adapter needs to be bi-endian.
+///
+/// [`DeserializerAdapter`]: ../dds/traits/serde_adapters/trait.DeserializerAdapter.html
 pub struct CDRDeserializerAdapter<D> {
   phantom: PhantomData<D>,
   // no-one home

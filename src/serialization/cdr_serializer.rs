@@ -57,6 +57,12 @@ where
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
+/// This type adapts CDR_serializer (which implements serde::Serializer) to work as a
+/// [`SerializerAdapter`]. CDR_serializer cannot directly implement the trait itself, because
+/// CDR_serializer has the type parameter BO open, and the adapter needs to be bi-endian.
+///
+/// [`SerializerAdapter`]: ../dds/traits/serde_adapters/trait.SerializerAdapter.html
+
 // A struct separate from CDR_serializer is needed, because the neme to_writer is already taken
 pub struct CDRSerializerAdapter<D, BO = LittleEndian>
 where

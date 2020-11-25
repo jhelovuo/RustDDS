@@ -2,7 +2,7 @@
 
 pub(crate) mod dds_entity;
 pub(crate) mod key;
-pub(crate) mod serde_adapters;
+pub mod serde_adapters;
 
 pub use dds_entity::DDSEntity;
 pub use crate::structure::entity::Entity;

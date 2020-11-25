@@ -2,11 +2,11 @@
 //!
 //! # DDS usage summary
 //!
-//! * Crate a `DomaniParticipant`. You have to choose a domain id. The default value is zero.
-//! * Create or find a `Topic` from the `DomainParticipant`. Topics have a name and a type.
-//! * Create a `Publisher` and/or `Subscriber` from the `DomainParticipant`.
-//! * To receive data, create a `DataReader` from `Subscriber` and `Topic`.
-//! * To send data, create a `DataWriter`from `Publisher` and `Topic`.
+//! * Create a [`DomainParticipant`]. You have to choose a domain id. The default value is zero.
+//! * Create or find a [`Topic`] from the [`DomainParticipant`]. Topics have a name and a type.
+//! * Create a [`Publisher`] and/or [`Subscriber`] from the [`DomainParticipant`].
+//! * To receive data, create a [`DataReader`] from `Subscriber` and `Topic`.
+//! * To send data, create a [`DataWriter`]from `Publisher` and `Topic`.
 //! * Data from `DataReader` can be read or taken. Taking removes the data samples from the DataReader,
 //!   whereas reading only marks them as read.
 //! * Topics are either WithKey or NoKey. WithKey topics are like map data structures, containing multiple
@@ -19,8 +19,20 @@
 //! * DDS takes care of serialization and deserialization.
 //! In order to do this, the payload data must be Serde serializable/deserializable.
 //! * If your data is to be communicated over a WithKey topic, the payload data type must
-//!   implement `Keyed` trait from this crate.
-//!
+//!   implement [`Keyed`] trait from this crate.
+//! * If you are using CDR serialization (DDS default), then use [`CDRSerializerAdapter`] and [`CDRDeserializerAdapter`]
+//!   when such adapters are required. If you need to use another serialization format, then you should find or write
+//!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
+//! 
+//! [`DomainParticipant`]: struct.DomainParticipant.html
+//! [`Topic`]: struct.Topic.html
+//! [`Publisher`]: struct.Publisher.html
+//! [`Subscriber`]: struct.Subscriber.html
+//! [`DataReader`]: struct.With_Key_DataReader.html
+//! [`DataWriter`]: struct.With_Key_DataWriter.html
+//! [`CDRSerializerAdapter`]: ../serialization/struct.CDRSerializerAdapter.html
+//! [`CDRDeserializerAdapter`]: ../serialization/struct.CDRDeserializerAdapter.html
+//! [`Keyed`]: traits/trait.Keyed.html
 //! # Examples
 //!
 //! ```
