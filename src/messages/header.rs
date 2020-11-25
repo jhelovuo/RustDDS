@@ -29,7 +29,8 @@ impl Validity for Header {
     // Three validity rules from RTPS 2.3 spec section 8.3.6.3
     // (1) We cannot reach this point if the message has too few bytes to contain a full header.
     self.protocol_id == ProtocolId::PROTOCOL_RTPS // (2)
-    && self.protocol_version.major <= ProtocolVersion::THIS_IMPLEMENTATION.major // (3)
+    && self.protocol_version.major <= ProtocolVersion::THIS_IMPLEMENTATION.major
+    // (3)
   }
 }
 
@@ -65,15 +66,15 @@ mod tests {
       Header::new(GuidPrefix::GUIDPREFIX_UNKNOWN),
       le = [0x52, 0x54, 0x50, 0x53, // protocol_id
             0x02, 0x04,             // protocol_verison
-            0x00, 0x00,             // vendor_id
+            0x01, 0x12,             // vendor_id
             0x00, 0x00, 0x00, 0x00, // guid_prefix
             0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00],
       be = [0x52, 0x54, 0x50, 0x53,
             0x02, 0x04,
-            0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00]
+            0x01, 0x12,
+            0x00, 0x00, 0x00, 0x00, 
+            0x00, 0x00, 0x00, 0x00, 
+            0x00, 0x00, 0x00, 0x00]
   });
 }

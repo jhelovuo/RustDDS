@@ -941,13 +941,10 @@ mod tests {
       .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
 
-    let mut data_writer: DataWriter<
-      '_,
-      RandomData,
-      CDRSerializerAdapter<RandomData, LittleEndian>,
-    > = publisher
-      .create_datawriter(None, &topic, None)
-      .expect("Failed to create datawriter");
+    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
+      publisher
+        .create_datawriter(None, &topic, None)
+        .expect("Failed to create datawriter");
 
     let data = RandomData {
       a: 4,

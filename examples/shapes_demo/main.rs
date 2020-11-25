@@ -114,7 +114,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
     .unwrap();
 
   let square_pub = domain_participant.create_publisher(&pub_qos).unwrap();
-  let mut square_writer = square_pub
+  let square_writer = square_pub
     .create_datawriter::<Square, CDRSerializerAdapter<Square, LittleEndian>>(
       None,
       &triangle_topic,

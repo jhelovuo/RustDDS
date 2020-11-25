@@ -1651,10 +1651,10 @@ mod tests {
 
     let handle = std::thread::spawn(move || {
       reader.handle_data_msg(data_msg, mr_state.clone());
-      thread::sleep(time::Duration::from_millis(2500));
+      thread::sleep(time::Duration::from_millis(100));
       info!("I'll send the second now..");
       reader.handle_data_msg(data_msg2, mr_state.clone());
-      thread::sleep(time::Duration::from_millis(2500));
+      thread::sleep(time::Duration::from_millis(100));
       info!("I'll send the third now..");
       reader.handle_data_msg(data_msg3, mr_state.clone());
     });

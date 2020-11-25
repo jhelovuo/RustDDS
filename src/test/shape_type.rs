@@ -1,4 +1,4 @@
-use crate::dds::traits::key::{Key, Keyed};
+use crate::dds::traits::key::{Keyed};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Debug, Clone, PartialEq, Deserialize)]
@@ -12,5 +12,3 @@ impl Keyed for ShapeType {
     self.a
   }
 }
-
-impl Key for i32 {}

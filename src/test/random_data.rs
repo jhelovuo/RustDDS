@@ -37,5 +37,3 @@ impl Keyed for RandomData {
     self.a
   }
 }
-
-impl Key for i64 {}
