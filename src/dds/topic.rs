@@ -1,4 +1,6 @@
 use std::fmt::Debug;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::{
   dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity},
@@ -9,8 +11,8 @@ pub use crate::structure::topic_kind::TopicKind;
 /// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class
 pub trait TopicDescription {
   fn get_participant(&self) -> Option<DomainParticipant>;
-  fn get_type(&self) -> &TypeDesc; // This replaces get_type_name() from spec
-  fn get_name(&self) -> &str;
+  fn get_type(&self) -> TypeDesc; // This replaces get_type_name() from spec
+  fn get_name(&self) -> String;
 }
 
 /// DDS Topic
@@ -29,16 +31,11 @@ pub trait TopicDescription {
 /// ```
 #[derive(Clone)]
 pub struct Topic {
-  my_domainparticipant: DomainParticipantWeak,
-  my_name: String,
-  my_typedesc: TypeDesc,
-  my_qos_policies: QosPolicies,
-  topic_kind: TopicKind, // WITH_KEY or NO_KEY
+  //TODO: Do we really need set_qos opertion?
+  inner: Rc<RefCell<InnerTopic>>,
 }
 
 impl Topic {
-  // visibility pub(crate), because only DomainParticipant should be able to
-  // create new Topic objects from an application point of view.
   pub(crate) fn new(
     my_domainparticipant: &DomainParticipantWeak,
     my_name: String,
@@ -46,27 +43,23 @@ impl Topic {
     my_qos_policies: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Topic {
-    Topic {
-      my_domainparticipant: my_domainparticipant.clone(),
-      my_name,
-      my_typedesc,
-      my_qos_policies: my_qos_policies.clone(),
-      topic_kind,
+    Topic { 
+      inner: Rc::new(RefCell::new( InnerTopic::new(my_domainparticipant,my_name, my_typedesc, my_qos_policies, topic_kind) ))
     }
   }
 
   fn get_participant(&self) -> Option<DomainParticipant> {
-    self.my_domainparticipant.clone().upgrade()
+    self.inner.borrow().get_participant().clone()
   }
 
-  fn get_type(&self) -> &TypeDesc {
-    &self.my_typedesc
+  // TODO: Confusing combination of borrows and owns
+  fn get_type(&self) -> TypeDesc {
+    self.inner.borrow().get_type().clone()
   }
 
-  fn get_name<'a>(&'a self) -> &'a str {
-    &self.my_name
+  fn get_name(&self) -> String {
+    self.inner.borrow().get_name().to_string()
   }
-
   /// Gets Topics TopicKind
   ///
   /// # Examples
@@ -83,7 +76,7 @@ impl Topic {
   /// assert_eq!(topic.kind(), TopicKind::WithKey);
   /// ```
   pub fn kind(&self) -> TopicKind {
-    self.topic_kind
+    self.inner.borrow().kind()
   }
 
   // DDS spec 2.2.2.3.2 Topic Class
@@ -92,24 +85,18 @@ impl Topic {
   pub(crate) fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> {
     unimplemented!()
   }
+
 }
 
 impl PartialEq for Topic {
   fn eq(&self, other: &Self) -> bool {
-    self.get_participant() == other.get_participant()
-      && self.get_type() == other.get_type()
-      && self.get_name() == other.get_name()
-      && self.get_qos() == other.get_qos()
-      && self.topic_kind == other.topic_kind
+    self.inner == other.inner
   }
 }
 
 impl Debug for Topic {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_fmt(format_args!("{:?}", self.get_participant()))?;
-    f.write_fmt(format_args!("Topic name: {}", self.get_name()))?;
-    f.write_fmt(format_args!("Topic type: {:?}", self.get_type()))?;
-    f.write_fmt(format_args!("Topic QoS: {:?} ", self.get_qos()))
+    self.inner.borrow().fmt(f)
   }
 }
 
@@ -121,12 +108,12 @@ impl TopicDescription for Topic {
   }
 
   /// Gets type description of this Topic
-  fn get_type(&self) -> &TypeDesc {
+  fn get_type(&self) -> TypeDesc {
     self.get_type()
   }
 
   /// Gets name of this topic
-  fn get_name(&self) -> &str {
+  fn get_name(&self) -> String {
     self.get_name()
   }
 }
@@ -134,13 +121,116 @@ impl TopicDescription for Topic {
 impl HasQoSPolicy for Topic {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     // TODO: check liveliness of qos_polic
-    self.my_qos_policies = policy.clone();
-    Ok(())
+    self.inner.borrow_mut().set_qos(policy)
   }
 
-  fn get_qos(&self) -> &QosPolicies {
-    &self.my_qos_policies
+  fn get_qos(&self) -> QosPolicies {
+    self.inner.borrow().get_qos()
   }
 }
 
 impl DDSEntity for Topic {}
+
+
+
+// -------------------------------- InnerTopic -----------------------------
+
+#[derive(Clone)]
+pub struct InnerTopic {
+  my_domainparticipant: DomainParticipantWeak,
+  my_name: String,
+  my_typedesc: TypeDesc,
+  my_qos_policies: QosPolicies,
+  topic_kind: TopicKind, // WITH_KEY or NO_KEY
+}
+
+impl InnerTopic {
+  // visibility pub(crate), because only DomainParticipant should be able to
+  // create new Topic objects from an application point of view.
+  fn new(
+    my_domainparticipant: &DomainParticipantWeak,
+    my_name: String,
+    my_typedesc: TypeDesc,
+    my_qos_policies: &QosPolicies,
+    topic_kind: TopicKind,
+  ) -> InnerTopic {
+    InnerTopic {
+      my_domainparticipant: my_domainparticipant.clone(),
+      my_name,
+      my_typedesc,
+      my_qos_policies: my_qos_policies.clone(),
+      topic_kind,
+    }
+  }
+
+  fn get_participant(&self) -> Option<DomainParticipant> {
+    self.my_domainparticipant.clone().upgrade()
+  }
+
+  fn get_type(&self) -> TypeDesc {
+    self.my_typedesc.clone()
+  }
+
+  fn get_name(&self) -> String {
+    self.my_name.to_string()
+  }
+
+  pub fn kind(&self) -> TopicKind {
+    self.topic_kind
+  }
+
+  pub(crate) fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> {
+    unimplemented!()
+  }
+}
+
+impl PartialEq for InnerTopic {
+  fn eq(&self, other: &Self) -> bool {
+    self.get_participant() == other.get_participant()
+      && self.get_type() == other.get_type()
+      && self.get_name() == other.get_name()
+      && self.get_qos() == other.get_qos()
+      && self.topic_kind == other.topic_kind
+  }
+}
+
+impl Debug for InnerTopic {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!("{:?}", self.get_participant()))?;
+    f.write_fmt(format_args!("Topic name: {}", self.get_name()))?;
+    f.write_fmt(format_args!("Topic type: {:?}", self.get_type()))?;
+    f.write_fmt(format_args!("Topic QoS: {:?} ", self.get_qos()))
+  }
+}
+
+/// Implements some default topic interfaces functions defined in DDS spec
+impl TopicDescription for InnerTopic {
+  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it is still alive.
+  fn get_participant(&self) -> Option<DomainParticipant> {
+    self.get_participant()
+  }
+
+  /// Gets type description of this Topic
+  fn get_type(&self) -> TypeDesc {
+    self.get_type()
+  }
+
+  /// Gets name of this topic
+  fn get_name(&self) -> String {
+    self.get_name()
+  }
+}
+
+impl HasQoSPolicy for InnerTopic {
+  fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
+    // TODO: check liveliness of qos_polic
+    self.my_qos_policies = policy.clone();
+    Ok(())
+  }
+
+  fn get_qos(&self) -> QosPolicies {
+    self.my_qos_policies.clone()
+  }
+}
+
+impl DDSEntity for InnerTopic {}

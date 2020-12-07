@@ -723,8 +723,8 @@ impl HasQoSPolicy for Reader {
     Ok(())
   }
 
-  fn get_qos(&self) -> &QosPolicies {
-    &self.qos_policy
+  fn get_qos(&self) -> QosPolicies {
+    self.qos_policy.clone()
   }
 }
 
@@ -794,7 +794,7 @@ mod tests {
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
       TopicKind::NoKey,
-      &TypeDesc::new("testi".to_string()),
+      TypeDesc::new("testi".to_string()),
     );
     let mut reader = Reader::new(
       guid,
@@ -842,7 +842,7 @@ mod tests {
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
       TopicKind::NoKey,
-      &TypeDesc::new("testi".to_string()),
+      TypeDesc::new("testi".to_string()),
     );
     let mut new_reader = Reader::new(
       new_guid,
@@ -900,7 +900,7 @@ mod tests {
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
       TopicKind::NoKey,
-      &TypeDesc::new("testi".to_string()),
+      TypeDesc::new("testi".to_string()),
     );
     let mut new_reader = Reader::new(
       new_guid,
@@ -1033,7 +1033,7 @@ mod tests {
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
       TopicKind::NoKey,
-      &TypeDesc::new("testi".to_string()),
+      TypeDesc::new("testi".to_string()),
     );
     let mut reader = Reader::new(
       new_guid,

@@ -42,13 +42,13 @@ impl TurtleSender {
         .name("turtle_sender")
         .namespace("/ros2_demo")
         .node_options(ros_node_options)
-        .ros_context(&ros_context)
+        .ros_context(ros_context)
         .build()
         .unwrap();
 
       let turtle_cmd_vel_writer = ros_node
         .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(
-          &turtle_cmd_vel_topic,
+          turtle_cmd_vel_topic,
           None,
         )
         .unwrap();

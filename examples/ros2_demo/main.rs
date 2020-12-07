@@ -62,7 +62,7 @@ fn main() {
 fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
   let domain_participant = DomainParticipant::new(0);
   let ros_context = RosContext::new(domain_participant.clone(), true).unwrap();
-  let mut ros_participant = RosParticipant::new(&ros_context).unwrap();
+  let mut ros_participant = RosParticipant::new(ros_context).unwrap();
 
   // node info channel
   let (nodeinfo_sender, nodeinfo_receiver) = mio_channel::channel();

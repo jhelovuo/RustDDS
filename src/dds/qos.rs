@@ -10,7 +10,7 @@ use crate::{
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
 /// Trait that is implemented by all necessary DDS Entities that are required to provide QosPolicies.
 pub trait HasQoSPolicy {
-  fn get_qos(&self) -> &QosPolicies;
+  fn get_qos(&self) -> QosPolicies;
   fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<()>;
 }
 

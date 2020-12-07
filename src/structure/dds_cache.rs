@@ -34,14 +34,14 @@ impl DDSCache {
     &mut self,
     topic_name: &String,
     topic_kind: TopicKind,
-    topic_data_type: &TypeDesc,
+    topic_data_type: TypeDesc,
   ) -> bool {
     if self.topic_caches.contains_key(topic_name) {
       return false;
     } else {
       self.topic_caches.insert(
         topic_name.to_string(),
-        TopicCache::new(topic_kind, topic_data_type.clone()),
+        TopicCache::new(topic_kind, topic_data_type),
       );
       return true;
     }
@@ -325,7 +325,7 @@ mod tests {
     cache.write().unwrap().add_new_topic(
       topic_name,
       TopicKind::WithKey,
-      &TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
+      TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
     );
     cache
       .write()

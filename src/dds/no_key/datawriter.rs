@@ -52,18 +52,18 @@ use super::wrappers::{NoKeyWrapper, SAWrapper};
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
 /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
 /// ```
-pub struct DataWriter<'a, D: Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
-  keyed_datawriter: datawriter_with_key::DataWriter<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
+pub struct DataWriter<D: Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
+  keyed_datawriter: datawriter_with_key::DataWriter<NoKeyWrapper<D>, SAWrapper<SA>>,
 }
 
-impl<'a, D, SA> DataWriter<'a, D, SA>
+impl<D, SA> DataWriter<D, SA>
 where
   D: Serialize,
   SA: SerializerAdapter<D>,
 {
   pub(crate) fn from_keyed(
-    keyed: datawriter_with_key::DataWriter<'a, NoKeyWrapper<D>, SAWrapper<SA>>,
-  ) -> DataWriter<'a, D, SA> {
+    keyed: datawriter_with_key::DataWriter<NoKeyWrapper<D>, SAWrapper<SA>>,
+  ) -> DataWriter<D, SA> {
     DataWriter {
       keyed_datawriter: keyed,
     }
@@ -413,23 +413,23 @@ where
   }
 }
 
-impl<D: Serialize, SA: SerializerAdapter<D>> Entity for DataWriter<'_, D, SA> {
+impl<D: Serialize, SA: SerializerAdapter<D>> Entity for DataWriter<D, SA> {
   fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
     self.keyed_datawriter.as_entity()
   }
 }
 
-impl<D: Serialize, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<'_, D, SA> {
+impl<D: Serialize, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<D, SA> {
   fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
     self.keyed_datawriter.set_qos(policy)
   }
 
-  fn get_qos(&self) -> &QosPolicies {
+  fn get_qos(&self) -> QosPolicies {
     self.keyed_datawriter.get_qos()
   }
 }
 
-impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<'_, D, SA> {}
+impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<D, SA> {}
 
 #[cfg(test)]
 mod tests {
@@ -451,9 +451,9 @@ mod tests {
       .create_topic("Aasii", "Huh?", &qos, TopicKind::NoKey)
       .expect("Failed to create topic");
 
-    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
+    let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter_no_key(None, &topic, None)
+        .create_datawriter_no_key(None, topic, None)
         .expect("Failed to create datawriter");
 
     let mut data = RandomData {
@@ -486,9 +486,9 @@ mod tests {
       .create_topic("Aasii", "Huh?", &qos, TopicKind::NoKey)
       .expect("Failed to create topic");
 
-    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
+    let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter_no_key(None, &topic, None)
+        .create_datawriter_no_key(None, topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

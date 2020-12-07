@@ -71,10 +71,10 @@ use super::super::{
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
 /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
 /// ```
-pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>>
+pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>>
 {
-  my_publisher: &'a Publisher,
-  my_topic: &'a Topic,
+  my_publisher: Publisher,
+  my_topic: Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   cc_upload: mio_channel::SyncSender<WriterCommand>,
@@ -85,7 +85,7 @@ pub struct DataWriter<'a, D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSe
   status_receiver: Receiver<StatusChange>,
 }
 
-impl<'a, D, SA> Drop for DataWriter<'a, D, SA>
+impl<D, SA> Drop for DataWriter<D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
@@ -105,21 +105,21 @@ where
   }
 }
 
-impl<'a, D, SA> DataWriter<'a, D, SA>
+impl<D, SA> DataWriter<D, SA>
 where
   D: Keyed + Serialize,
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   pub(crate) fn new(
-    publisher: &'a Publisher,
-    topic: &'a Topic,
+    publisher: Publisher,
+    topic: Topic,
     guid: Option<GUID>,
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: Arc<RwLock<DDSCache>>,
     status_receiver: Receiver<StatusChange>,
-  ) -> Result<DataWriter<'a, D, SA>> {
+  ) -> Result<DataWriter<D, SA>> {
     let entity_id = match guid {
       Some(g) => g.entityId.clone(),
       None => EntityId::ENTITYID_UNKNOWN,
@@ -162,16 +162,16 @@ where
       },
       None => (),
     };
-
+    let qos = topic.get_qos().clone();
     Ok(DataWriter {
       my_publisher: publisher,
       my_topic: topic,
-      qos_policy: topic.get_qos().clone(),
+      qos_policy: qos.clone(),
       entity_attributes,
       cc_upload,
       discovery_command,
       dds_cache,
-      datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
+      datasample_cache: DataSampleCache::new(qos),
       phantom: PhantomData,
       status_receiver,
     })
@@ -850,7 +850,7 @@ where
   }
 }
 
-impl<D, SA> Entity for DataWriter<'_, D, SA>
+impl<D, SA> Entity for DataWriter<D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
@@ -860,7 +860,7 @@ where
   }
 }
 
-impl<D, SA> HasQoSPolicy for DataWriter<'_, D, SA>
+impl<D, SA> HasQoSPolicy for DataWriter<D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
@@ -871,12 +871,12 @@ where
     Ok(())
   }
 
-  fn get_qos(&self) -> &QosPolicies {
-    &self.qos_policy
+  fn get_qos(&self) -> QosPolicies {
+    self.qos_policy.clone()
   }
 }
 
-impl<D, SA> DDSEntity for DataWriter<'_, D, SA>
+impl<D, SA> DDSEntity for DataWriter<D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
@@ -906,9 +906,9 @@ mod tests {
       .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
 
-    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
+    let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, &topic, None)
+        .create_datawriter(None, topic, None)
         .expect("Failed to create datawriter");
 
     let mut data = RandomData {
@@ -941,9 +941,9 @@ mod tests {
       .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
 
-    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
+    let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, &topic, None)
+        .create_datawriter(None, topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {
@@ -977,9 +977,9 @@ mod tests {
       .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
 
-    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
+    let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, &topic, None)
+        .create_datawriter(None, topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

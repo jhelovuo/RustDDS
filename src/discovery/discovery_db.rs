@@ -482,9 +482,9 @@ impl DiscoveryDB {
 
     let mut subscription_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
-      topic.get_name(),
-      topic.get_type().name(),
-      topic.get_qos(),
+      &topic.get_name(),
+      &topic.get_type().name(),
+      &topic.get_qos(),
     );
     subscription_data.set_participant_key(domain_participant.get_guid());
 
@@ -656,7 +656,7 @@ mod tests {
       .unwrap();
     let dw = publisher1
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None, &topic, None,
+        None, topic.clone(), None,
       )
       .unwrap();
 
@@ -671,7 +671,7 @@ mod tests {
       .unwrap();
     let dw2 = publisher2
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None, &topic, None,
+        None, topic.clone(), None,
       )
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
@@ -687,7 +687,7 @@ mod tests {
     let reader1 = reader_proxy_data().unwrap();
     let mut reader1sub = subscription_builtin_topic_data().unwrap();
     reader1sub.set_key(reader1.remote_reader_guid.unwrap());
-    reader1sub.set_topic_name(topic.get_name());
+    reader1sub.set_topic_name(&topic.get_name());
     let dreader1 = DiscoveredReaderData {
       reader_proxy: reader1.clone(),
       subscription_topic_data: reader1sub.clone(),
@@ -698,7 +698,7 @@ mod tests {
     let reader2 = reader_proxy_data().unwrap();
     let mut reader2sub = subscription_builtin_topic_data().unwrap();
     reader2sub.set_key(reader2.remote_reader_guid.unwrap());
-    reader2sub.set_topic_name(topic2.get_name());
+    reader2sub.set_topic_name(&topic2.get_name());
     let dreader2 = DiscoveredReaderData {
       reader_proxy: reader2,
       subscription_topic_data: reader2sub,

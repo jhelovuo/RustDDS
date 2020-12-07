@@ -1176,8 +1176,8 @@ impl Endpoint for Writer {
 }
 
 impl HasQoSPolicy for Writer {
-  fn get_qos(&self) -> &QosPolicies {
-    &self.qos_policies
+  fn get_qos(&self) -> QosPolicies {
+    self.qos_policies.clone()
   }
 
   fn set_qos(&mut self, new_qos: &QosPolicies) -> super::values::result::Result<()> {
@@ -1212,9 +1212,9 @@ mod tests {
     let topic = domain_participant
       .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
-    let data_writer: DataWriter<'_, RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
+    let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, &topic, None)
+        .create_datawriter(None, topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

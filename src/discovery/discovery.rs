@@ -220,7 +220,7 @@ impl Discovery {
 
     let mut dcps_participant_reader = match discovery_subscriber
       .create_datareader::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
-        &dcps_participant_topic,
+        dcps_participant_topic.clone(),
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         None,
       ) {
@@ -279,7 +279,7 @@ impl Discovery {
     let dcps_participant_writer = match discovery_publisher
       .create_datawriter::<SPDPDiscoveredParticipantData, CDRSerializerAdapter<SPDPDiscoveredParticipantData,LittleEndian> >(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
-        &dcps_participant_topic,
+        dcps_participant_topic,
         None,
       ) {
         Ok(w) => w,
@@ -338,7 +338,7 @@ impl Discovery {
 
     let mut dcps_subscription_reader = match discovery_subscriber
       .create_datareader::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
-        &dcps_subscription_topic,
+        dcps_subscription_topic.clone(),
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         None,
       ) {
@@ -375,7 +375,7 @@ impl Discovery {
     let mut dcps_subscription_writer = match discovery_publisher
       .create_datawriter::<DiscoveredReaderData,CDRSerializerAdapter<DiscoveredReaderData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
-        &dcps_subscription_topic,
+        dcps_subscription_topic,
         None,
       ) {
         Ok(w) => w,
@@ -432,7 +432,7 @@ impl Discovery {
 
     let mut dcps_publication_reader = match discovery_subscriber
       .create_datareader::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
-        &dcps_publication_topic,
+        dcps_publication_topic.clone(),
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         None,
       ) {
@@ -469,7 +469,7 @@ impl Discovery {
     let mut dcps_publication_writer = match discovery_publisher
       .create_datawriter::<DiscoveredWriterData, CDRSerializerAdapter<DiscoveredWriterData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
-        &dcps_publication_topic,
+        dcps_publication_topic,
         None,
       ) {
         Ok(w) => w,
@@ -547,7 +547,7 @@ impl Discovery {
 
     let mut dcps_reader = match discovery_subscriber
       .create_datareader::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
-        &dcps_topic,
+        dcps_topic.clone(),
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         None,
       ) {
@@ -584,7 +584,7 @@ impl Discovery {
     let mut dcps_writer = match discovery_publisher
       .create_datawriter::<DiscoveredTopicData, CDRSerializerAdapter<DiscoveredTopicData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
-        &dcps_topic,
+        dcps_topic,
         None,
       ) {
         Ok(w) => w,
@@ -639,7 +639,7 @@ impl Discovery {
 
     let mut dcps_participant_message_reader = match discovery_subscriber
       .create_datareader::<ParticipantMessageData, CDRDeserializerAdapter<ParticipantMessageData>>(
-        &participant_message_data_topic,
+        participant_message_data_topic.clone(),
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
         None,
       ) {
@@ -674,7 +674,7 @@ impl Discovery {
     let mut dcps_participant_message_writer = match discovery_publisher
       .create_datawriter::<ParticipantMessageData, CDRSerializerAdapter<ParticipantMessageData, LittleEndian>>(
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER),
-        &participant_message_data_topic,
+        participant_message_data_topic,
         None,
       ) {
       Ok(w) => w,
@@ -1388,7 +1388,7 @@ mod tests {
       .unwrap();
     let _writer = publisher
       .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
-        None, &topic, None,
+        None, topic.clone(), None,
       )
       .unwrap();
 
@@ -1396,7 +1396,7 @@ mod tests {
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
     let _reader = subscriber
-      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(&topic, None, None);
+      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11001);
@@ -1477,7 +1477,7 @@ mod tests {
       .unwrap();
     let _writer = publisher
       .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
-        None, &topic, None,
+        None, topic.clone(), None,
       )
       .unwrap();
 
@@ -1485,7 +1485,7 @@ mod tests {
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
     let _reader = subscriber
-      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(&topic, None, None);
+      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 0);

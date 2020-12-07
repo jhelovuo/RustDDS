@@ -102,13 +102,9 @@ impl CurrentStatusChanges {
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
 /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
 /// ```
-pub struct DataReader<
-  'a,
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> {
-  my_subscriber: &'a Subscriber,
-  my_topic: &'a Topic,
+pub struct DataReader< D: Keyed + DeserializeOwned,  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D> > {
+  my_subscriber: Subscriber,
+  my_topic: Topic,
   qos_policy: QosPolicies,
   entity_attributes: EntityAttributes,
   pub(crate) notification_receiver: mio_channel::Receiver<()>,
@@ -125,7 +121,7 @@ pub struct DataReader<
   pub(crate) reader_command: mio_channel::SyncSender<ReaderCommand>,
 }
 
-impl<'a, D, DA> Drop for DataReader<'a, D, DA>
+impl<D, DA> Drop for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -145,16 +141,16 @@ where
   }
 }
 
-impl<'a, D: 'static, DA> DataReader<'a, D, DA>
+impl<D: 'static, DA> DataReader<D, DA>
 where
   D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   pub(crate) fn new(
-    subscriber: &'a Subscriber,
+    subscriber: Subscriber,
     my_id: EntityId,
-    topic: &'a Topic,
+    topic: Topic,
     // Each notification sent to this channel must be try_recv'd
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
@@ -177,15 +173,15 @@ where
 
     Ok(Self {
       my_subscriber: subscriber,
-      my_topic: topic,
-      qos_policy: topic.get_qos().clone(),
+      qos_policy: topic.get_qos(),
       entity_attributes,
       notification_receiver,
       dds_cache,
-      datasample_cache: DataSampleCache::new(topic.get_qos().clone()),
+      datasample_cache: DataSampleCache::new(topic.get_qos()),
       // The reader is created before the datareader, hence initializing the
       // latest_instant to now should be fine. There should be no smaller instants
       // added by the reader.
+      my_topic: topic,
       latest_instant: Timestamp::now(),
       deserializer_type: PhantomData,
       discovery_command,
@@ -1073,65 +1069,10 @@ where
   }
 } // impl
 
-/*
-impl<'a, D: 'static, SA> IDataReader<D, SA> for DataReader<'a, D, SA>
-where
-  D: DeserializeOwned + Keyed,
-  <D as Keyed>::K: Key,
-  SA: DeserializerAdapter<D>,
-{
-  fn read(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<&dyn IDataSample<D>>> {
-    let samples = self.read_as_obj(max_samples, read_condition);
-    match samples {
-      Ok(d) => Ok(d.into_iter().map(|p| p.as_idata_sample()).collect()),
-      Err(e) => Err(e),
-    }
-  }
-
-  fn take(
-    &mut self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<Box<dyn IDataSample<D>>>> {
-    let samples = self.take_as_obj(max_samples, read_condition);
-    match samples {
-      Ok(d) => Ok(d.into_iter().map(|p| p.into_idata_sample()).collect()),
-      Err(e) => Err(e),
-    }
-  }
-
-  fn read_next_sample(&mut self) -> Result<Option<&dyn IDataSample<D>>> {
-    let mut ds =
-      <DataReader<D, SA> as IDataReader<D, SA>>::read(self, 1, ReadCondition::not_read())?;
-    let val = match ds.pop() {
-      Some(v) => Some(v.as_idata_sample()),
-      None => None,
-    };
-    Ok(val)
-  }
-
-  fn take_next_sample(&mut self) -> Result<Option<Box<dyn IDataSample<D>>>> {
-    let ds = self.take_next_sample()?;
-    Ok(ds.into_iter().map(|p| p.into_idata_sample()).find(|_| true))
-  }
-
-  fn get_requested_deadline_missed_status(&mut self) -> Result<Option<RequestedDeadlineMissedStatus>> {
-    self.fetch_readers_current_status()?;
-    let value_before_reset = self.current_status.requestedDeadlineMissed.clone();
-    self.reset_local_requested_deadline_status_change();
-    return Ok(value_before_reset);
-
-  }
-}
-*/
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D, DA> Evented for DataReader<'a, D, DA>
+impl<D, DA> Evented for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -1160,7 +1101,7 @@ where
   }
 }
 
-impl<D, DA> HasQoSPolicy for DataReader<'_, D, DA>
+impl<D, DA> HasQoSPolicy for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -1171,12 +1112,12 @@ where
     Ok(())
   }
 
-  fn get_qos(&self) -> &QosPolicies {
-    &self.qos_policy
+  fn get_qos(&self) -> QosPolicies {
+    self.qos_policy.clone()
   }
 }
 
-impl<'a, D, DA> Entity for DataReader<'a, D, DA>
+impl<D, DA> Entity for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -1238,7 +1179,7 @@ mod tests {
 
     let mut matching_datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        &topic,
+        topic,
         Some(datareader_id),
         None,
       )
@@ -1356,7 +1297,7 @@ mod tests {
 
     let mut datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        &topic,
+        topic,
         Some(default_id),
         None,
       )
@@ -1581,7 +1522,7 @@ mod tests {
 
     let mut datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        &topic,
+        topic,
         Some(default_id),
         None,
       )

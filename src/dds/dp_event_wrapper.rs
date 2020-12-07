@@ -873,7 +873,7 @@ impl DPEventWrapper {
               Some(tn) => tn.clone(),
               None => continue,
             };
-            ddsc.add_new_topic(topic_name, topic_kind, &TypeDesc::new(topic_data_type));
+            ddsc.add_new_topic(topic_name, topic_kind, TypeDesc::new(topic_data_type));
           }
         }
         _ => panic!("DDSCache is poisoned"),
@@ -1137,7 +1137,7 @@ mod tests {
 
       let mut datareader = sub
         .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-          &topic_1,
+          topic_1.clone(),
           Some(EntityId::ENTITYID_UNKNOWN),
           Some(somePolicies.clone()),
         )

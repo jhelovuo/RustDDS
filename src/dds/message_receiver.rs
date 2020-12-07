@@ -417,7 +417,7 @@ mod tests {
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
       TopicKind::NoKey,
-      &TypeDesc::new("testi".to_string()),
+      TypeDesc::new("testi".to_string()),
     );
     let new_reader = Reader::new(
       new_guid,

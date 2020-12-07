@@ -16,7 +16,7 @@ pub(crate) trait DataReaderTestUtil {
 }
 
 #[cfg(test)]
-impl<'a, D, DA> DataReaderTestUtil for DataReader<'a, D, DA>
+impl<D, DA> DataReaderTestUtil for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,

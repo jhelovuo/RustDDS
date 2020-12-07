@@ -42,13 +42,13 @@ impl TurtleListener {
         .name("turtle_listener")
         .namespace("/ros2_demo")
         .node_options(ros_node_options)
-        .ros_context(&ros_context)
+        .ros_context(ros_context)
         .build()
         .unwrap();
 
       let mut turtle_cmd_vel_reader = ros_node
         .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(
-          &turtle_cmd_vel_topic,
+          turtle_cmd_vel_topic,
           None,
         )
         .unwrap();

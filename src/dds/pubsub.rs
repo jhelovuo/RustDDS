@@ -5,6 +5,8 @@ use std::{
   fmt::Debug,
   sync::{RwLock, Arc},
   time::Duration,
+  rc::Rc,
+  cell::RefCell,
 };
 
 use serde::{Serialize, de::DeserializeOwned};
@@ -63,16 +65,10 @@ use super::{
 /// ```
 #[derive(Clone)]
 pub struct Publisher {
-  domain_participant: DomainParticipantWeak,
-  discovery_db: Arc<RwLock<DiscoveryDB>>,
-  my_qos_policies: QosPolicies,
-  default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
-  add_writer_sender: mio_channel::SyncSender<Writer>,
-  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+  inner: Rc<RefCell<InnerPublisher>>,
 }
 
-// public interface for Publisher
-impl<'a> Publisher {
+impl Publisher {
   pub(super) fn new(
     dp: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -82,12 +78,7 @@ impl<'a> Publisher {
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Publisher {
     Publisher {
-      domain_participant: dp,
-      discovery_db,
-      my_qos_policies: qos,
-      default_datawriter_qos: default_dw_qos,
-      add_writer_sender,
-      discovery_command,
+      inner: Rc::new(RefCell::new( InnerPublisher::new(dp,discovery_db,qos,default_dw_qos,add_writer_sender,discovery_command) ))
     }
   }
 
@@ -129,84 +120,17 @@ impl<'a> Publisher {
   /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
   /// ```
   pub fn create_datawriter<D, SA>(
-    &'a self,
+    &self,
     entity_id: Option<EntityId>,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataWriter<'a, D, SA>>
+  ) -> Result<WithKeyDataWriter<D, SA>>
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
     SA: SerializerAdapter<D>,
   {
-    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(100);
-    let (message_status_sender, message_status_receiver) = mio_channel::sync_channel(100);
-
-    // TODO: check compatible qos and use QOS
-    let _qos = match qos {
-      Some(q) => q.clone(),
-      None => topic.get_qos().clone(),
-    };
-
-    let entity_id = match entity_id {
-      Some(eid) => eid,
-      None => {
-        let mut rng = rand::thread_rng();
-        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x02);
-
-        eid
-      }
-    };
-
-    let dp = match self.get_participant() {
-      Some(dp) => dp,
-      None => {
-        error!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
-        return Err(Error::PreconditionNotMet);
-      }
-    };
-
-    let guid = GUID::new_with_prefix_and_id(dp.as_entity().guid.guidPrefix, entity_id);
-    let new_writer = Writer::new(
-      guid.clone(),
-      hccc_download,
-      dp.get_dds_cache(),
-      topic.get_name().to_string(),
-      topic.get_qos().clone(),
-      message_status_sender,
-    );
-
-    self
-      .add_writer_sender
-      .send(new_writer)
-      .expect("Adding new writer failed");
-
-    let matching_data_writer = WithKeyDataWriter::<D, SA>::new(
-      self,
-      &topic,
-      Some(guid),
-      dwcc_upload,
-      self.discovery_command.clone(),
-      dp.get_dds_cache(),
-      message_status_receiver,
-    );
-
-    let matching_data_writer = match matching_data_writer {
-      Ok(dw) => dw,
-      e => return e,
-    };
-
-    match self.discovery_db.write() {
-      Ok(mut db) => {
-        let dwd = DiscoveredWriterData::new(&matching_data_writer, &topic, &dp);
-
-        db.update_local_topic_writer(dwd);
-        db.update_topic_data_p(&topic);
-      }
-      _ => return Err(Error::OutOfResources),
-    };
-
-    Ok(matching_data_writer)
+    self.inner.borrow().create_datawriter(self, entity_id, topic, qos)
   }
 
   /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
@@ -239,36 +163,17 @@ impl<'a> Publisher {
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
   /// ```
   pub fn create_datawriter_no_key<D, SA>(
-    &'a self,
+    &self,
     entity_id: Option<EntityId>,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataWriter<'a, D, SA>>
+  ) -> Result<NoKeyDataWriter<D, SA>>
   where
     D: Serialize,
     SA: SerializerAdapter<D>,
   {
-    let entity_id = match entity_id {
-      Some(eid) => eid,
-      None => {
-        let mut rng = rand::thread_rng();
-        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x03);
-
-        eid
-      }
-    };
-    let d =
-      self.create_datawriter::<NoKeyWrapper<D>, SAWrapper<SA>>(Some(entity_id), topic, qos)?;
-    Ok(NoKeyDataWriter::<'a, D, SA>::from_keyed(d))
+    self.inner.borrow().create_datawriter_no_key(self, entity_id,topic,qos)
   }
-
-  fn add_writer(&self, writer: Writer) -> Result<()> {
-    match self.add_writer_sender.send(writer) {
-      Ok(_) => Ok(()),
-      _ => Err(Error::OutOfResources),
-    }
-  }
-
   // delete_datawriter should not be needed. The DataWriter object itself should be deleted to accomplish this.
 
   // lookup datawriter: maybe not necessary? App should remember datawriters it has created.
@@ -321,7 +226,7 @@ impl<'a> Publisher {
   /// assert_eq!(domain_participant, publisher.get_participant().unwrap());
   /// ```
   pub fn get_participant(&self) -> Option<DomainParticipant> {
-    self.domain_participant.clone().upgrade()
+    self.inner.borrow().domain_participant.clone().upgrade()
   }
 
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
@@ -341,8 +246,8 @@ impl<'a> Publisher {
   /// let publisher = domain_participant.create_publisher(&qos).unwrap();
   /// assert_eq!(qos, *publisher.get_default_datawriter_qos());
   /// ```
-  pub fn get_default_datawriter_qos(&self) -> &QosPolicies {
-    &self.default_datawriter_qos
+  pub fn get_default_datawriter_qos(&self) -> QosPolicies {
+    self.inner.borrow().default_datawriter_qos.clone()
   }
 
   /// Sets default DataWriter qos. Currenly default qos is not used.
@@ -365,11 +270,203 @@ impl<'a> Publisher {
   /// assert_eq!(qos2, *publisher.get_default_datawriter_qos());
   /// ```
   pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
+    self.inner.borrow_mut().default_datawriter_qos = q.clone();
+  }
+} // impl
+
+impl PartialEq for Publisher {
+  fn eq(&self, other: &Self) -> bool {
+    self.inner == other.inner  // use Eq implementation of Rc
+  }
+}
+
+impl Debug for Publisher {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    self.inner.borrow().fmt(f)
+  }
+}
+
+// "Inner" struct
+
+#[derive(Clone)]
+struct InnerPublisher {
+  domain_participant: DomainParticipantWeak,
+  discovery_db: Arc<RwLock<DiscoveryDB>>,
+  my_qos_policies: QosPolicies,
+  default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
+  add_writer_sender: mio_channel::SyncSender<Writer>,
+  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+}
+
+// public interface for Publisher
+impl InnerPublisher {
+  fn new(
+    dp: DomainParticipantWeak,
+    discovery_db: Arc<RwLock<DiscoveryDB>>,
+    qos: QosPolicies,
+    default_dw_qos: QosPolicies,
+    add_writer_sender: mio_channel::SyncSender<Writer>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+  ) -> InnerPublisher {
+    InnerPublisher {
+      domain_participant: dp,
+      discovery_db,
+      my_qos_policies: qos,
+      default_datawriter_qos: default_dw_qos,
+      add_writer_sender,
+      discovery_command,
+    }
+  }
+
+
+  pub fn create_datawriter<D, SA>(
+    &self,
+    outer: &Publisher,
+    entity_id: Option<EntityId>,
+    topic: Topic,
+    qos: Option<QosPolicies>,
+  ) -> Result<WithKeyDataWriter<D, SA>>
+  where
+    D: Keyed + Serialize,
+    <D as Keyed>::K: Key,
+    SA: SerializerAdapter<D>,
+  {
+    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(100);
+    let (message_status_sender, message_status_receiver) = mio_channel::sync_channel(100);
+
+    // TODO: check compatible qos and use QOS
+    let _qos = match qos {
+      Some(q) => q.clone(),
+      None => topic.get_qos().clone(),
+    };
+
+    let entity_id = match entity_id {
+      Some(eid) => eid,
+      None => {
+        let mut rng = rand::thread_rng();
+        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x02);
+
+        eid
+      }
+    };
+
+    let dp = match self.get_participant() {
+      Some(dp) => dp,
+      None => {
+        error!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
+        return Err(Error::PreconditionNotMet);
+      }
+    };
+
+    let guid = GUID::new_with_prefix_and_id(dp.as_entity().guid.guidPrefix, entity_id);
+    let new_writer = Writer::new(
+      guid.clone(),
+      hccc_download,
+      dp.get_dds_cache(),
+      topic.get_name().to_string(),
+      topic.get_qos().clone(),
+      message_status_sender,
+    );
+
+    self
+      .add_writer_sender
+      .send(new_writer)
+      .expect("Adding new writer failed");
+
+    let matching_data_writer = WithKeyDataWriter::<D, SA>::new(
+      outer.clone(),
+      topic.clone(),
+      Some(guid),
+      dwcc_upload,
+      self.discovery_command.clone(),
+      dp.get_dds_cache(),
+      message_status_receiver,
+    );
+
+    let matching_data_writer = match matching_data_writer {
+      Ok(dw) => dw,
+      e => return e,
+    };
+
+    match self.discovery_db.write() {
+      Ok(mut db) => {
+        let dwd = DiscoveredWriterData::new(&matching_data_writer, &topic, &dp);
+
+        db.update_local_topic_writer(dwd);
+        db.update_topic_data_p(&topic);
+      }
+      _ => return Err(Error::OutOfResources),
+    };
+
+    Ok(matching_data_writer)
+  }
+
+  pub fn create_datawriter_no_key<D, SA>(
+    &self,
+    outer: &Publisher,
+    entity_id: Option<EntityId>,
+    topic: Topic,
+    qos: Option<QosPolicies>,
+  ) -> Result<NoKeyDataWriter<D, SA>>
+  where
+    D: Serialize,
+    SA: SerializerAdapter<D>,
+  {
+    let entity_id = match entity_id {
+      Some(eid) => eid,
+      None => {
+        let mut rng = rand::thread_rng();
+        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x03);
+
+        eid
+      }
+    };
+    let d =
+      self.create_datawriter::<NoKeyWrapper<D>, SAWrapper<SA>>(outer, Some(entity_id), topic, qos)?;
+    Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
+  }
+
+  fn add_writer(&self, writer: Writer) -> Result<()> {
+    match self.add_writer_sender.send(writer) {
+      Ok(_) => Ok(()),
+      _ => Err(Error::OutOfResources),
+    }
+  }
+
+  pub fn suspend_publications(&self) -> Result<()> {
+    Ok(())
+  }
+
+  pub fn resume_publications(&self) -> Result<()> {
+    Ok(())
+  }
+
+  pub fn begin_coherent_changes(&self) -> Result<()> {
+    Ok(())
+  }
+
+  pub fn end_coherent_changes(&self) -> Result<()> {
+    Ok(())
+  }
+
+  pub(crate) fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
+    unimplemented!();
+  }
+
+  pub fn get_participant(&self) -> Option<DomainParticipant> {
+    self.domain_participant.clone().upgrade()
+  }
+
+  pub fn get_default_datawriter_qos(&self) -> &QosPolicies {
+    &self.default_datawriter_qos
+  }
+
+  pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
     self.default_datawriter_qos = q.clone();
   }
 }
 
-impl PartialEq for Publisher {
+impl PartialEq for InnerPublisher {
   fn eq(&self, other: &Self) -> bool {
     self.get_participant() == other.get_participant()
       && self.my_qos_policies == other.my_qos_policies
@@ -378,7 +475,7 @@ impl PartialEq for Publisher {
   }
 }
 
-impl Debug for Publisher {
+impl Debug for InnerPublisher {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.write_fmt(format_args!("{:?}", self.get_participant()))?;
     f.write_fmt(format_args!("Publisher QoS: {:?}", self.my_qos_policies))?;
@@ -416,15 +513,10 @@ impl Debug for Publisher {
 /// ```
 #[derive(Clone)]
 pub struct Subscriber {
-  domain_participant: DomainParticipantWeak,
-  discovery_db: Arc<RwLock<DiscoveryDB>>,
-  qos: QosPolicies,
-  sender_add_reader: mio_channel::SyncSender<Reader>,
-  sender_remove_reader: mio_channel::SyncSender<GUID>,
-  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+  inner: Rc<RefCell<InnerSubscriber>>,
 }
 
-impl<'s> Subscriber {
+impl Subscriber {
   pub(super) fn new(
     domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -434,6 +526,166 @@ impl<'s> Subscriber {
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Subscriber {
     Subscriber {
+      inner: Rc::new(RefCell::new(InnerSubscriber::new(domain_participant, discovery_db, qos, sender_add_reader, sender_remove_reader, discovery_command)))
+    }
+  }
+
+  /// Creates DDS DataReader for keyed Topics
+  ///
+  /// # Arguments
+  ///
+  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
+  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
+  /// * `qos` - Not in use
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Subscriber;
+  /// use serde::Deserialize;
+  /// use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::data_types::TopicKind;
+  /// use rustdds::dds::traits::Keyed;
+  /// #
+  /// # let domain_participant = DomainParticipant::new(0);
+  /// # let qos = QosPolicyBuilder::new().build();
+  /// #
+  ///
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  ///
+  /// #[derive(Deserialize)]
+  /// struct SomeType { a: i32 }
+  /// impl Keyed for SomeType {
+  ///   type K = i32;
+  ///
+  ///   fn get_key(&self) -> Self::K {
+  ///     self.a
+  ///   }
+  /// }
+  ///
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
+  /// ```
+  pub fn create_datareader<D: 'static, SA>(
+    &self,
+    topic: Topic,
+    entity_id: Option<EntityId>,
+    qos: Option<QosPolicies>,
+  ) -> Result<WithKeyDataReader<D, SA>>
+  where
+    D: DeserializeOwned + Keyed,
+    <D as Keyed>::K: Key,
+    SA: DeserializerAdapter<D>,
+  {
+    self.inner.borrow()
+      .create_datareader(self,topic,entity_id,qos)
+  }
+
+  /// Create DDS DataReader for non keyed Topics
+  ///
+  /// # Arguments
+  ///
+  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
+  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
+  /// * `qos` - Not in use  
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Subscriber;
+  /// use serde::Deserialize;
+  /// use rustdds::serialization::CDRDeserializerAdapter;
+  /// use rustdds::dds::data_types::TopicKind;
+  /// #
+  /// # let domain_participant = DomainParticipant::new(0);
+  /// # let qos = QosPolicyBuilder::new().build();
+  /// #
+  ///
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  ///
+  /// #[derive(Deserialize)]
+  /// struct SomeType {}
+  ///
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
+  /// ```
+  pub fn create_datareader_no_key<D: 'static, SA>(
+    &self,
+    topic: Topic,
+    entity_id: Option<EntityId>,
+    qos: Option<QosPolicies>,
+  ) -> Result<NoKeyDataReader<D, SA>>
+  where
+    D: DeserializeOwned,
+    SA: DeserializerAdapter<D>,
+  {
+    self.inner.borrow()
+      .create_datareader_no_key(self,topic,entity_id,qos)
+  }
+
+  // Retrieves a previously created DataReader belonging to the Subscriber.
+  // TODO: Is this even possible. Whould probably need to return reference and store references on creation
+  /*
+  pub(crate) fn lookup_datareader<D, SA>(
+    &self,
+    _topic_name: &str,
+  ) -> Option<WithKeyDataReader<D, SA>>
+  where
+    D: Keyed + DeserializeOwned,
+    SA: DeserializerAdapter<D>,
+  {
+    todo!()
+    // TO think: Is this really necessary? Because the caller would have to know
+    // types D and SA. Should we just trust whoever creates DataReaders to also remember them?
+  }
+  */
+
+  /// Returns [DomainParticipant](struct.DomainParticipant.html) if it is sill alive.
+  ///
+  /// # Example
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::dds::Subscriber;
+  /// #
+  /// let domain_participant = DomainParticipant::new(0);
+  /// let qos = QosPolicyBuilder::new().build();
+  ///
+  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+  /// assert_eq!(domain_participant, subscriber.get_participant().unwrap());
+  /// ```
+  pub fn get_participant(&self) -> Option<DomainParticipant> {
+    self.inner.borrow().get_participant()
+  }
+}
+
+
+
+#[derive(Clone)]
+pub struct InnerSubscriber {
+  domain_participant: DomainParticipantWeak,
+  discovery_db: Arc<RwLock<DiscoveryDB>>,
+  qos: QosPolicies,
+  sender_add_reader: mio_channel::SyncSender<Reader>,
+  sender_remove_reader: mio_channel::SyncSender<GUID>,
+  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+}
+
+impl InnerSubscriber {
+  pub(super) fn new(
+    domain_participant: DomainParticipantWeak,
+    discovery_db: Arc<RwLock<DiscoveryDB>>,
+    qos: QosPolicies,
+    sender_add_reader: mio_channel::SyncSender<Reader>,
+    sender_remove_reader: mio_channel::SyncSender<GUID>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+  ) -> InnerSubscriber {
+    InnerSubscriber {
       domain_participant,
       discovery_db,
       qos,
@@ -445,12 +697,13 @@ impl<'s> Subscriber {
 
   /*pub(super)*/
   fn create_datareader_internal<D: 'static, SA>(
-    &'s self,
+    &self,
+    outer: &Subscriber,
     entity_id: Option<EntityId>,
-    topic: &'s Topic,
+    topic: Topic,
     //topic_kind: Option<TopicKind>,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<'s, D, SA>>
+  ) -> Result<WithKeyDataReader<D, SA>>
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
@@ -500,9 +753,9 @@ impl<'s> Subscriber {
     );
 
     let matching_datareader = WithKeyDataReader::<D, SA>::new(
-      self,
+      outer.clone(),
       datareader_id,
-      &topic,
+      topic.clone(),
       rec,
       dp.get_dds_cache(),
       self.discovery_command.clone(),
@@ -545,50 +798,13 @@ impl<'s> Subscriber {
     Ok(matching_datareader)
   }
 
-  /// Creates DDS DataReader for keyed Topics
-  ///
-  /// # Arguments
-  ///
-  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
-  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
-  /// * `qos` - Not in use
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Subscriber;
-  /// use serde::Deserialize;
-  /// use rustdds::serialization::CDRDeserializerAdapter;
-  /// use rustdds::dds::data_types::TopicKind;
-  /// use rustdds::dds::traits::Keyed;
-  /// #
-  /// # let domain_participant = DomainParticipant::new(0);
-  /// # let qos = QosPolicyBuilder::new().build();
-  /// #
-  ///
-  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  ///
-  /// #[derive(Deserialize)]
-  /// struct SomeType { a: i32 }
-  /// impl Keyed for SomeType {
-  ///   type K = i32;
-  ///
-  ///   fn get_key(&self) -> Self::K {
-  ///     self.a
-  ///   }
-  /// }
-  ///
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
-  /// ```
   pub fn create_datareader<D: 'static, SA>(
-    &'s self,
-    topic: &'s Topic,
+    &self,
+    outer: &Subscriber,
+    topic: Topic,
     entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<'s, D, SA>>
+  ) -> Result<WithKeyDataReader<D, SA>>
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
@@ -597,45 +813,16 @@ impl<'s> Subscriber {
     if topic.kind() != TopicKind::WithKey {
       return Err(Error::PreconditionNotMet); // TopicKind mismatch
     }
-    self.create_datareader_internal(entity_id, topic, qos)
+    self.create_datareader_internal(outer, entity_id, topic, qos)
   }
 
-  /// Create DDS DataReader for non keyed Topics
-  ///
-  /// # Arguments
-  ///
-  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
-  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
-  /// * `qos` - Not in use  
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Subscriber;
-  /// use serde::Deserialize;
-  /// use rustdds::serialization::CDRDeserializerAdapter;
-  /// use rustdds::dds::data_types::TopicKind;
-  /// #
-  /// # let domain_participant = DomainParticipant::new(0);
-  /// # let qos = QosPolicyBuilder::new().build();
-  /// #
-  ///
-  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  ///
-  /// #[derive(Deserialize)]
-  /// struct SomeType {}
-  ///
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
-  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
-  /// ```
   pub fn create_datareader_no_key<D: 'static, SA>(
-    &'s self,
-    topic: &'s Topic,
+    &self,
+    outer: &Subscriber,
+    topic: Topic,
     entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataReader<'s, D, SA>>
+  ) -> Result<NoKeyDataReader<D, SA>>
   where
     D: DeserializeOwned,
     SA: DeserializerAdapter<D>,
@@ -654,44 +841,15 @@ impl<'s> Subscriber {
     };
 
     let d = self.create_datareader_internal::<NoKeyWrapper<D>, SAWrapper<SA>>(
+      outer,
       Some(entity_id),
       topic,
       qos,
     )?;
 
-    Ok(NoKeyDataReader::<'s, D, SA>::from_keyed(d))
+    Ok(NoKeyDataReader::<D, SA>::from_keyed(d))
   }
 
-  /// Retrieves a previously created DataReader belonging to the Subscriber.
-  // TODO: Is this even possible. Whould probably need to return reference and store references on creation
-  pub(crate) fn lookup_datareader<D, SA>(
-    &self,
-    _topic_name: &str,
-  ) -> Option<WithKeyDataReader<D, SA>>
-  where
-    D: Keyed + DeserializeOwned,
-    SA: DeserializerAdapter<D>,
-  {
-    todo!()
-    // TO think: Is this really necessary? Because the caller would have to know
-    // types D and SA. Sould we just trust whoever creates DataReaders to also remember them?
-  }
-
-  /// Returns [DomainParticipant](struct.DomainParticipant.html) if it is sill alive.
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Subscriber;
-  /// #
-  /// let domain_participant = DomainParticipant::new(0);
-  /// let qos = QosPolicyBuilder::new().build();
-  ///
-  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  /// assert_eq!(domain_participant, subscriber.get_participant().unwrap());
-  /// ```
   pub fn get_participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }

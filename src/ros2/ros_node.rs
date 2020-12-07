@@ -49,7 +49,7 @@ pub trait IRosNode {
 }
 
 /// Trait for necessary DDS interface functions
-pub trait IRosNodeControl<'a> {
+pub trait IRosNodeControl {
   /// Creates ROS2 topic and handles necessary conversions from DDS to ROS2
   ///
   /// # Arguments
@@ -73,11 +73,11 @@ pub trait IRosNodeControl<'a> {
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: DeserializerAdapter<D> + 'a>(
+  fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: DeserializerAdapter<D> >(
     &mut self,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<RosSubscriber<'a, D, DA>, Error>;
+  ) -> Result<RosSubscriber<D, DA>, Error>;
 
   /// Creates ROS2 Subscriber to [Keyed](../dds/traits/trait.Keyed.html) topic.
   ///
@@ -85,11 +85,11 @@ pub trait IRosNodeControl<'a> {
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  fn create_ros_subscriber<D, DA: DeserializerAdapter<D> + 'a>(
+  fn create_ros_subscriber<D, DA: DeserializerAdapter<D> >(
     &self,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<KeyedRosSubscriber<'a, D, DA>, Error>
+  ) -> Result<KeyedRosSubscriber<D, DA>, Error>
   where
     D: Keyed + DeserializeOwned + 'static,
     D::K: Key;
@@ -100,11 +100,11 @@ pub trait IRosNodeControl<'a> {
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  fn create_ros_nokey_publisher<D: Serialize + 'a, SA: SerializerAdapter<D> + 'a>(
+  fn create_ros_nokey_publisher<D: Serialize , SA: SerializerAdapter<D> >(
     &self,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<RosPublisher<'a, D, SA>, Error>;
+  ) -> Result<RosPublisher<D, SA>, Error>;
 
   /// Creates ROS2 Publisher to [Keyed](../dds/traits/trait.Keyed.html) topic.
   ///
@@ -112,28 +112,28 @@ pub trait IRosNodeControl<'a> {
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  fn create_ros_publisher<D, SA: SerializerAdapter<D> + 'a>(
+  fn create_ros_publisher<D, SA: SerializerAdapter<D>>(
     &self,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<KeyedRosPublisher<'a, D, SA>, Error>
+  ) -> Result<KeyedRosPublisher<D, SA>, Error>
   where
-    D: Keyed + Serialize + 'a,
+    D: Keyed + Serialize,
     D::K: Key;
 }
 
 /// [RosParticipant](struct.RosParticipant.html) sends and receives other participants information in ROS2 network
-pub struct RosParticipant<'a> {
+pub struct RosParticipant {
   nodes: HashMap<String, NodeInfo>,
   external_nodes: HashMap<Gid, Vec<NodeInfo>>,
-  node_reader: NoKeyDataReader<'a, ROSParticipantInfo, CDRDeserializerAdapter<ROSParticipantInfo>>,
+  node_reader: NoKeyDataReader<ROSParticipantInfo, CDRDeserializerAdapter<ROSParticipantInfo>>,
   node_writer:
-    NoKeyDataWriter<'a, ROSParticipantInfo, CDRSerializerAdapter<ROSParticipantInfo, LittleEndian>>,
-  ros_context: &'a RosContext,
+    NoKeyDataWriter<ROSParticipantInfo, CDRSerializerAdapter<ROSParticipantInfo, LittleEndian>>,
+  ros_context: RosContext,
 }
 
-impl<'a> RosParticipant<'a> {
-  pub fn new(ros_context: &'a RosContext) -> Result<RosParticipant<'a>, Error> {
+impl RosParticipant {
+  pub fn new(ros_context: RosContext) -> Result<RosParticipant, Error> {
     let dtopic = match ros_context.get_ros_discovery_topic() {
       Some(t) => t,
       None => {
@@ -144,11 +144,11 @@ impl<'a> RosParticipant<'a> {
 
     let node_reader = ros_context
       .get_ros_discovery_subscriber()
-      .create_datareader_no_key(dtopic, None, None)?;
+      .create_datareader_no_key(dtopic.clone(), None, None)?;
 
     let node_writer = ros_context
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(None, dtopic, None)?;
+      .create_datawriter_no_key(None, dtopic.clone(), None)?;
 
     Ok(RosParticipant {
       nodes: HashMap::new(),
@@ -328,16 +328,16 @@ impl NodeOptions {
 }
 
 /// Builder for [RosNodes](struct.RosNode.html)
-pub struct RosNodeBuilder<'a> {
+pub struct RosNodeBuilder {
   name: Option<String>,
   namespace: Option<String>,
   node_options: Option<NodeOptions>,
   // lifetime bound
-  ros_context: Option<&'a RosContext>,
+  ros_context: Option<RosContext>,
 }
 
-impl<'a> RosNodeBuilder<'a> {
-  pub fn new() -> RosNodeBuilder<'a> {
+impl RosNodeBuilder {
+  pub fn new() -> RosNodeBuilder {
     RosNodeBuilder {
       name: None,
       namespace: None,
@@ -347,30 +347,30 @@ impl<'a> RosNodeBuilder<'a> {
   }
 
   /// <b>Required</b>.
-  pub fn name(mut self, name: &str) -> RosNodeBuilder<'a> {
+  pub fn name(mut self, name: &str) -> RosNodeBuilder {
     self.name = Some(name.to_string());
     self
   }
 
   /// <b>Required</b>.
-  pub fn namespace(mut self, namespace: &str) -> RosNodeBuilder<'a> {
+  pub fn namespace(mut self, namespace: &str) -> RosNodeBuilder {
     self.namespace = Some(namespace.to_string());
     self
   }
 
   /// Optional. When building defaults to `domain_id = 0` and `enable_rosout = false`
-  pub fn node_options(mut self, node_options: NodeOptions) -> RosNodeBuilder<'a> {
+  pub fn node_options(mut self, node_options: NodeOptions) -> RosNodeBuilder {
     self.node_options = Some(node_options);
     self
   }
 
   /// <b>Required</b>.
-  pub fn ros_context(mut self, ros_context: &'a RosContext) -> RosNodeBuilder<'a> {
+  pub fn ros_context(mut self, ros_context: RosContext) -> RosNodeBuilder {
     self.ros_context = Some(ros_context);
     self
   }
 
-  pub fn build(self) -> Result<RosNode<'a>, Error> {
+  pub fn build(self) -> Result<RosNode, Error> {
     let name = match self.name {
       Some(n) => n,
       None => {
@@ -406,32 +406,32 @@ impl<'a> RosNodeBuilder<'a> {
 
 /// Node in ROS2 network. Holds necessary readers and writers for rosout and parameter events topics internally.
 /// Should be constructed using [builder](struct.RosNodeBuilder.html).
-pub struct RosNode<'a> {
+pub struct RosNode {
   // node info
   name: String,
   namespace: String,
   options: NodeOptions,
 
-  ros_context: &'a RosContext,
+  ros_context: RosContext,
 
   // dynamic
   readers: HashSet<GUID>,
   writers: HashSet<GUID>,
 
   // builtin writers and readers
-  rosout_writer: Option<NoKeyDataWriter<'a, Log, CDRSerializerAdapter<Log>>>,
-  rosout_reader: Option<NoKeyDataReader<'a, Log, CDRDeserializerAdapter<Log>>>,
+  rosout_writer: Option<NoKeyDataWriter<Log, CDRSerializerAdapter<Log>>>,
+  rosout_reader: Option<NoKeyDataReader<Log, CDRDeserializerAdapter<Log>>>,
   parameter_events_writer:
-    NoKeyDataWriter<'a, ParameterEvents, CDRSerializerAdapter<ParameterEvents>>,
+    NoKeyDataWriter<ParameterEvents, CDRSerializerAdapter<ParameterEvents>>,
 }
 
-impl<'a> RosNode<'a> {
+impl RosNode {
   pub(crate) fn new(
     name: &str,
     namespace: &str,
     options: NodeOptions,
-    ros_context: &'a RosContext,
-  ) -> Result<RosNode<'a>, Error> {
+    ros_context: RosContext,
+  ) -> Result<RosNode, Error> {
     let paramtopic = ros_context.get_parameter_events_topic();
     let rosout_topic = ros_context.get_rosout_topic();
 
@@ -439,7 +439,7 @@ impl<'a> RosNode<'a> {
       Some(
         ros_context
           .get_ros_discovery_publisher()
-          .create_datawriter_no_key(None, rosout_topic, None)?,
+          .create_datawriter_no_key(None, rosout_topic.clone(), None)?,
       )
     } else {
       None
@@ -447,7 +447,7 @@ impl<'a> RosNode<'a> {
 
     let parameter_events_writer = ros_context
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(None, paramtopic, None)?;
+      .create_datawriter_no_key(None, paramtopic.clone(), None)?;
 
     Ok(RosNode {
       name: String::from(name),
@@ -516,7 +516,7 @@ impl<'a> RosNode<'a> {
   }
 }
 
-impl IRosNode for RosNode<'_> {
+impl IRosNode for RosNode {
   fn get_name(&self) -> &str {
     &self.name
   }
@@ -540,7 +540,7 @@ impl IRosNode for RosNode<'_> {
   }
 }
 
-impl Evented for RosParticipant<'_> {
+impl Evented for RosParticipant {
   fn register(
     &self,
     poll: &mio::Poll,
@@ -566,7 +566,7 @@ impl Evented for RosParticipant<'_> {
   }
 }
 
-impl<'a> IRosNodeControl<'a> for RosNode<'a> {
+impl IRosNodeControl for RosNode {
   fn create_ros_topic(
     domain_participant: &DomainParticipant,
     name: &str,
@@ -580,22 +580,22 @@ impl<'a> IRosNodeControl<'a> for RosNode<'a> {
     Ok(topic)
   }
 
-  fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: DeserializerAdapter<D> + 'a>(
+  fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: DeserializerAdapter<D>>(
     &mut self,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<RosSubscriber<'a, D, DA>, Error> {
+  ) -> Result<RosSubscriber<D, DA>, Error> {
     self
       .ros_context
       .get_ros_discovery_subscriber()
       .create_datareader_no_key::<D, DA>(topic, None, qos)
   }
 
-  fn create_ros_subscriber<D, DA: DeserializerAdapter<D> + 'a>(
+  fn create_ros_subscriber<D, DA: DeserializerAdapter<D>>(
     &self,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<KeyedRosSubscriber<'a, D, DA>, Error>
+  ) -> Result<KeyedRosSubscriber<D, DA>, Error>
   where
     D: Keyed + DeserializeOwned + 'static,
     D::K: Key,
@@ -606,24 +606,24 @@ impl<'a> IRosNodeControl<'a> for RosNode<'a> {
       .create_datareader::<D, DA>(topic, None, qos)
   }
 
-  fn create_ros_nokey_publisher<D: Serialize + 'a, SA: SerializerAdapter<D> + 'a>(
+  fn create_ros_nokey_publisher<D: Serialize, SA: SerializerAdapter<D>>(
     &self,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<RosPublisher<'a, D, SA>, Error> {
+  ) -> Result<RosPublisher<D, SA>, Error> {
     self
       .ros_context
       .get_ros_discovery_publisher()
       .create_datawriter_no_key(None, topic, qos)
   }
 
-  fn create_ros_publisher<D, SA: SerializerAdapter<D> + 'a>(
+  fn create_ros_publisher<D, SA: SerializerAdapter<D>>(
     &self,
-    topic: &'a Topic,
+    topic: Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<KeyedRosPublisher<'a, D, SA>, Error>
+  ) -> Result<KeyedRosPublisher<D, SA>, Error>
   where
-    D: Keyed + Serialize + 'a,
+    D: Keyed + Serialize ,
     D::K: Key,
   {
     self

@@ -845,7 +845,7 @@ mod tests {
 
     let mut _data_writer = publisher
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None, &topic, None,
+        None, topic, None,
       )
       .expect("Failed to create datawriter");
   }
@@ -868,7 +868,7 @@ mod tests {
 
     let mut _data_writer = publisher
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None, &topic, None,
+        None, topic, None,
       )
       .expect("Failed to create datawriter");
 

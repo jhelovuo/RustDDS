@@ -276,7 +276,7 @@ impl DiscoveredReaderData {
       reader.get_guid(),
       &topic.get_name().to_string(),
       &topic.get_type().name().to_string(),
-      topic.get_qos(),
+      &topic.get_qos(),
     );
     subscription_topic_data.set_participant_key(dp.get_guid());
 
@@ -504,7 +504,7 @@ impl DiscoveredWriterData {
       &topic.get_type().name().to_string(),
     );
 
-    publication_topic_data.read_qos(topic.get_qos());
+    publication_topic_data.read_qos(&topic.get_qos());
 
     DiscoveredWriterData {
       last_updated: Instant::now(),

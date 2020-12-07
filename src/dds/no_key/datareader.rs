@@ -44,22 +44,21 @@ use super::{
 /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
 /// ```
 pub struct DataReader<
-  'a,
   D: DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > {
-  keyed_datareader: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<DA>>,
+  keyed_datareader: datareader_with_key::DataReader<NoKeyWrapper<D>, SAWrapper<DA>>,
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
-impl<'a, D: 'static, DA> DataReader<'a, D, DA>
+impl<D: 'static, DA> DataReader<D, DA>
 where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
   pub(crate) fn from_keyed(
-    keyed: datareader_with_key::DataReader<'a, NoKeyWrapper<D>, SAWrapper<DA>>,
-  ) -> DataReader<'a, D, DA> {
+    keyed: datareader_with_key::DataReader<NoKeyWrapper<D>, SAWrapper<DA>>,
+  ) -> DataReader<D, DA> {
     DataReader {
       keyed_datareader: keyed,
     }
@@ -425,7 +424,7 @@ where
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
 // poll DataReader(s).
-impl<'a, D, DA> Evented for DataReader<'a, D, DA>
+impl<D, DA> Evented for DataReader<D, DA>
 where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -456,7 +455,7 @@ where
   }
 }
 
-impl<D, DA> HasQoSPolicy for DataReader<'_, D, DA>
+impl<D, DA> HasQoSPolicy for DataReader<D, DA>
 where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -465,12 +464,12 @@ where
     self.keyed_datareader.set_qos(policy)
   }
 
-  fn get_qos(&self) -> &QosPolicies {
+  fn get_qos(&self) -> QosPolicies {
     self.keyed_datareader.get_qos()
   }
 }
 
-impl<'a, D, DA> Entity for DataReader<'a, D, DA>
+impl<D, DA> Entity for DataReader<D, DA>
 where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
