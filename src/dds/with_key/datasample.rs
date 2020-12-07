@@ -60,7 +60,11 @@ where
     }
   }
 
-  pub(crate) fn new_disposed<K>(source_timestamp: Timestamp, key: D::K, writer_guid: GUID) -> DataSample<D>
+  pub(crate) fn new_disposed<K>(
+    source_timestamp: Timestamp,
+    key: D::K,
+    writer_guid: GUID,
+  ) -> DataSample<D>
   where
     <D as Keyed>::K: Key,
   {
