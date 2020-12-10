@@ -34,94 +34,6 @@ use super::{
   builtin_topics::{ROSDiscoveryTopic, RosOutTopic},
 };
 
-/// Trait for RCL interface
-pub trait IRosNode {
-  /// Name of the node
-  fn get_name(&self) -> &str;
-  /// Namespace node belongs to
-  fn get_namespace(&self) -> &str;
-  /// Namespace + Name (use name and namespace functions when possible)
-  fn get_fully_qualified_name(&self) -> String;
-  /// Nodes options when node has been initialized
-  fn get_options(&self) -> &NodeOptions;
-  /// DomainParticipants domain_id
-  fn get_domain_id(&self) -> u16;
-}
-
-/// Trait for necessary DDS interface functions
-pub trait IRosNodeControl {
-  /// Creates ROS2 topic and handles necessary conversions from DDS to ROS2
-  ///
-  /// # Arguments
-  ///
-  /// * `domain_participant` - [DomainParticipant](../dds/struct.DomainParticipant.html)
-  /// * `name` - Name of the topic
-  /// * `type_name` - What type the topic holds in string form
-  /// * `qos` - Quality of Service parameters for the topic (not restricted only to ROS2)
-  /// * `topic_kind` - Does the topic have a key (multiple DDS instances)? NoKey or WithKey
-  fn create_ros_topic(
-    domain_participant: &DomainParticipant,
-    name: &str,
-    type_name: &str,
-    qos: QosPolicies,
-    topic_kind: TopicKind,
-  ) -> Result<Topic, Error>;
-
-  /// Creates ROS2 Subscriber to no key topic.
-  ///
-  /// # Arguments
-  ///
-  /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: DeserializerAdapter<D> >(
-    &mut self,
-    topic: Topic,
-    qos: Option<QosPolicies>,
-  ) -> Result<RosSubscriber<D, DA>, Error>;
-
-  /// Creates ROS2 Subscriber to [Keyed](../dds/traits/trait.Keyed.html) topic.
-  ///
-  /// # Arguments
-  ///
-  /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  fn create_ros_subscriber<D, DA: DeserializerAdapter<D> >(
-    &self,
-    topic: Topic,
-    qos: Option<QosPolicies>,
-  ) -> Result<KeyedRosSubscriber<D, DA>, Error>
-  where
-    D: Keyed + DeserializeOwned + 'static,
-    D::K: Key;
-
-  /// Creates ROS2 Publisher to no key topic.
-  ///
-  /// # Arguments
-  ///
-  /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  fn create_ros_nokey_publisher<D: Serialize , SA: SerializerAdapter<D> >(
-    &self,
-    topic: Topic,
-    qos: Option<QosPolicies>,
-  ) -> Result<RosPublisher<D, SA>, Error>;
-
-  /// Creates ROS2 Publisher to [Keyed](../dds/traits/trait.Keyed.html) topic.
-  ///
-  /// # Arguments
-  ///
-  /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  fn create_ros_publisher<D, SA: SerializerAdapter<D>>(
-    &self,
-    topic: Topic,
-    qos: Option<QosPolicies>,
-  ) -> Result<KeyedRosPublisher<D, SA>, Error>
-  where
-    D: Keyed + Serialize,
-    D::K: Key;
-}
-
 /// [RosParticipant](struct.RosParticipant.html) sends and receives other participants information in ROS2 network
 pub struct RosParticipant {
   nodes: HashMap<String, NodeInfo>,
@@ -513,8 +425,32 @@ impl RosNode {
     self.readers.clear();
     self.writers.clear();
   }
-}
 
+  pub fn get_name(&self) -> &str {
+    &self.name
+  }
+
+  pub fn get_namespace(&self) -> &str {
+    &self.namespace
+  }
+
+  pub fn get_fully_qualified_name(&self) -> String {
+    let mut nn = self.name.clone();
+    nn.push_str(&self.namespace);
+    nn
+  }
+
+  pub fn get_options(&self) -> &NodeOptions {
+    &self.options
+  }
+
+  pub fn get_domain_id(&self) -> u16 {
+    self.options.domain_id
+  }
+
+} // impl
+
+/*
 impl IRosNode for RosNode {
   fn get_name(&self) -> &str {
     &self.name
@@ -538,6 +474,7 @@ impl IRosNode for RosNode {
     self.options.domain_id
   }
 }
+*/
 
 impl Evented for RosParticipant {
   fn register(
@@ -566,8 +503,17 @@ impl Evented for RosParticipant {
 }
 
 
-impl IRosNodeControl for RosNode {
-  fn create_ros_topic(
+impl RosNode {
+  /// Creates ROS2 topic and handles necessary conversions from DDS to ROS2
+  ///
+  /// # Arguments
+  ///
+  /// * `domain_participant` - [DomainParticipant](../dds/struct.DomainParticipant.html)
+  /// * `name` - Name of the topic
+  /// * `type_name` - What type the topic holds in string form
+  /// * `qos` - Quality of Service parameters for the topic (not restricted only to ROS2)
+  /// * `topic_kind` - Does the topic have a key (multiple DDS instances)? NoKey or WithKey
+  pub fn create_ros_topic(
     domain_participant: &DomainParticipant,
     name: &str,
     type_name: &str,
@@ -585,7 +531,13 @@ impl IRosNodeControl for RosNode {
     Ok(topic)
   }
 
-  fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: DeserializerAdapter<D>>(
+  /// Creates ROS2 Subscriber to no key topic.
+  ///
+  /// # Arguments
+  ///
+  /// * `topic` - Reference to topic created with `create_ros_topic`.
+  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  pub fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: DeserializerAdapter<D>>(
     &mut self,
     topic: Topic,
     qos: Option<QosPolicies>,
@@ -596,7 +548,13 @@ impl IRosNodeControl for RosNode {
       .create_datareader_no_key::<D, DA>(topic, None, qos)
   }
 
-  fn create_ros_subscriber<D, DA: DeserializerAdapter<D>>(
+  /// Creates ROS2 Subscriber to [Keyed](../dds/traits/trait.Keyed.html) topic.
+  ///
+  /// # Arguments
+  ///
+  /// * `topic` - Reference to topic created with `create_ros_topic`.
+  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  pub fn create_ros_subscriber<D, DA: DeserializerAdapter<D>>(
     &self,
     topic: Topic,
     qos: Option<QosPolicies>,
@@ -611,7 +569,13 @@ impl IRosNodeControl for RosNode {
       .create_datareader::<D, DA>(topic, None, qos)
   }
 
-  fn create_ros_nokey_publisher<D: Serialize, SA: SerializerAdapter<D>>(
+  /// Creates ROS2 Publisher to no key topic.
+  ///
+  /// # Arguments
+  ///
+  /// * `topic` - Reference to topic created with `create_ros_topic`.
+  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  pub fn create_ros_nokey_publisher<D: Serialize, SA: SerializerAdapter<D>>(
     &self,
     topic: Topic,
     qos: Option<QosPolicies>,
@@ -622,7 +586,13 @@ impl IRosNodeControl for RosNode {
       .create_datawriter_no_key(None, topic, qos)
   }
 
-  fn create_ros_publisher<D, SA: SerializerAdapter<D>>(
+  /// Creates ROS2 Publisher to [Keyed](../dds/traits/trait.Keyed.html) topic.
+  ///
+  /// # Arguments
+  ///
+  /// * `topic` - Reference to topic created with `create_ros_topic`.
+  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  pub fn create_ros_publisher<D, SA: SerializerAdapter<D>>(
     &self,
     topic: Topic,
     qos: Option<QosPolicies>,
