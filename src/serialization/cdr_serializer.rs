@@ -295,7 +295,9 @@ where
   //octets. The string contents include a single terminating null character. The string
   //length includes the null character, so an empty string has a length of 1.
   fn serialize_str(self, v: &str) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(4)?;
+    /*use std::cmp::min;
+    println!("Serialized string {}", &v[ .. min(v.len(),30) ]); */
+    //self.calculate_padding_need_and_write_padding(4)?;
     let byte_count: u32 = v.as_bytes().len() as u32 + 1;
     self.serialize_u32(byte_count)?; // +1 for terminator
     self.writer.write(v.as_bytes())?;

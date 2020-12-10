@@ -223,8 +223,7 @@ impl RosParticipant {
   }
 }
 
-/// Is a helper for keeping lifetimes in check.
-/// In addition, [RosContext](struct.RosContext.html) holds DDS
+/// [RosContext](struct.RosContext.html) holds DDS
 /// Publisher and Subscriber for creating readers and writers.
 /// There has to be a [RosContext](struct.RosContext.html) for each
 /// thread and they cannot be shared between threads.
@@ -566,6 +565,7 @@ impl Evented for RosParticipant {
   }
 }
 
+
 impl IRosNodeControl for RosNode {
   fn create_ros_topic(
     domain_participant: &DomainParticipant,
@@ -574,8 +574,13 @@ impl IRosNodeControl for RosNode {
     qos: QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic, Error> {
-    let mut oname = "rt".to_owned();
-    oname.push_str(name);
+    // TODO:
+    // Implement according to the rules in
+    // https://design.ros2.org/articles/topic_and_service_names.html
+    let mut oname = "rt/".to_owned();
+    let name_stripped = name.strip_prefix("/").unwrap_or(name); // avoid double slash in name
+    oname.push_str(name_stripped);
+    println!("Crete topic, DDS name: {}",oname);
     let topic = domain_participant.create_topic(&oname, type_name, &qos, topic_kind)?;
     Ok(topic)
   }
