@@ -217,7 +217,7 @@ impl QosPolicies {
     self.latency_budget
   }
 
-  pub const  fn ownership(&self) -> Option<policy::Ownership> {
+  pub const fn ownership(&self) -> Option<policy::Ownership> {
     self.ownership
   }
 
