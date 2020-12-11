@@ -420,9 +420,9 @@ impl<D: Serialize, SA: SerializerAdapter<D>> Entity for DataWriter<D, SA> {
 }
 
 impl<D: Serialize, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<D, SA> {
-  fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-    self.keyed_datawriter.set_qos(policy)
-  }
+  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
+  //   self.keyed_datawriter.set_qos(policy)
+  // }
 
   fn get_qos(&self) -> QosPolicies {
     self.keyed_datawriter.get_qos()

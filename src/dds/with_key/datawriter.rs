@@ -865,11 +865,11 @@ where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
 {
-  fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-    // TODO: check liveliness of qos_policy
-    self.qos_policy = policy.clone();
-    Ok(())
-  }
+  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
+  //   // TODO: check liveliness of qos_policy
+  //   self.qos_policy = policy.clone();
+  //   Ok(())
+  // }
 
   fn get_qos(&self) -> QosPolicies {
     self.qos_policy.clone()

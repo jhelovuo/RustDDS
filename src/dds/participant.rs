@@ -272,7 +272,7 @@ impl DomainParticipantWeak {
   ) -> Result<Topic> {
     match self.dpi.upgrade() {
       Some(dpi) => dpi.create_topic(&self, name, type_desc, qos, topic_kind),
-      None => Err(Error::OutOfResources),
+      None => Err(Error::LockPoisoned),
     }
   }
 

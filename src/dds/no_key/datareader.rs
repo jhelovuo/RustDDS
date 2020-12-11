@@ -460,9 +460,9 @@ where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-    self.keyed_datareader.set_qos(policy)
-  }
+  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
+  //   self.keyed_datareader.set_qos(policy)
+  // }
 
   fn get_qos(&self) -> QosPolicies {
     self.keyed_datareader.get_qos()

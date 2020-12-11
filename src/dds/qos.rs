@@ -11,6 +11,10 @@ use crate::{
 /// Trait that is implemented by all necessary DDS Entities that are required to provide QosPolicies.
 pub trait HasQoSPolicy {
   fn get_qos(&self) -> QosPolicies;
+}
+
+/// Trait that is implemented by all necessary DDS Entities that are required to have a mutable QosPolicies.
+pub trait MutQosPolicy {
   fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<()>;
 }
 

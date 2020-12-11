@@ -1180,10 +1180,10 @@ impl HasQoSPolicy for Writer {
     self.qos_policies.clone()
   }
 
-  fn set_qos(&mut self, new_qos: &QosPolicies) -> super::values::result::Result<()> {
-    self.qos_policies = new_qos.clone();
-    Ok(())
-  }
+  // fn set_qos(&mut self, new_qos: &QosPolicies) -> super::values::result::Result<()> {
+  //   self.qos_policies = new_qos.clone();
+  //   Ok(())
+  // }
 }
 
 #[cfg(test)]

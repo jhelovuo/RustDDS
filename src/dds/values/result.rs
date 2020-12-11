@@ -19,6 +19,11 @@ pub enum Error {
   //Timeout,  // this is normal operation and should be encoded as Option<> or Result<>
   IllegalOperation,
   //NoData,  // this should be encoded as Option<SomeData>, not an error code
+
+  /// Synchronization with another thread failed because the other thread
+  /// has exited while holding a lock.
+  /// [https://doc.rust-lang.org/std/sync/struct.PoisonError.html]
+  LockPoisoned,  
 }
 
 /// Helper to contain same count actions across statuses

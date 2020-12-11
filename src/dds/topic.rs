@@ -1,6 +1,5 @@
 use std::fmt::Debug;
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc};
 
 use crate::{
   dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity},
@@ -31,8 +30,9 @@ pub trait TopicDescription {
 /// ```
 #[derive(Clone)]
 pub struct Topic {
-  //TODO: Do we really need set_qos opertion?
-  inner: Rc<RefCell<InnerTopic>>,
+  //TODO: Do we really need set_qos operation?
+  // Maybe not. Let's make Topic immutable.
+  inner: Arc<InnerTopic>,
 }
 
 impl Topic {
@@ -44,22 +44,23 @@ impl Topic {
     topic_kind: TopicKind,
   ) -> Topic {
     Topic { 
-      inner: Rc::new(RefCell::new( InnerTopic::new(my_domainparticipant,my_name, my_typedesc, my_qos_policies, topic_kind) ))
+      inner: Arc::new(InnerTopic::new(my_domainparticipant,my_name, my_typedesc, my_qos_policies, topic_kind) )
     }
   }
 
   fn get_participant(&self) -> Option<DomainParticipant> {
-    self.inner.borrow().get_participant().clone()
+    self.inner.get_participant().clone()
   }
 
   // TODO: Confusing combination of borrows and owns
   fn get_type(&self) -> TypeDesc {
-    self.inner.borrow().get_type().clone()
+    self.inner.get_type().clone()
   }
 
   fn get_name(&self) -> String {
-    self.inner.borrow().get_name().to_string()
+    self.inner.get_name().to_string()
   }
+
   /// Gets Topics TopicKind
   ///
   /// # Examples
@@ -76,7 +77,7 @@ impl Topic {
   /// assert_eq!(topic.kind(), TopicKind::WithKey);
   /// ```
   pub fn kind(&self) -> TopicKind {
-    self.inner.borrow().kind()
+    self.inner.kind()
   }
 
   // DDS spec 2.2.2.3.2 Topic Class
@@ -96,7 +97,7 @@ impl PartialEq for Topic {
 
 impl Debug for Topic {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    self.inner.borrow().fmt(f)
+    self.inner.fmt(f)
   }
 }
 
@@ -119,17 +120,12 @@ impl TopicDescription for Topic {
 }
 
 impl HasQoSPolicy for Topic {
-  fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-    // TODO: check liveliness of qos_polic
-    self.inner.borrow_mut().set_qos(policy)
-  }
-
   fn get_qos(&self) -> QosPolicies {
-    self.inner.borrow().get_qos()
+    self.inner.get_qos()
   }
 }
 
-impl DDSEntity for Topic {}
+//impl DDSEntity for Topic {}
 
 
 
@@ -222,11 +218,11 @@ impl TopicDescription for InnerTopic {
 }
 
 impl HasQoSPolicy for InnerTopic {
-  fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-    // TODO: check liveliness of qos_polic
-    self.my_qos_policies = policy.clone();
-    Ok(())
-  }
+  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
+  //   // TODO: check liveliness of qos_polic
+  //   self.my_qos_policies = policy.clone();
+  //   Ok(())
+  // }
 
   fn get_qos(&self) -> QosPolicies {
     self.my_qos_policies.clone()

@@ -35,7 +35,7 @@ use enumflags2::BitFlags;
 use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiverState;
 use crate::dds::qos::{QosPolicies, HasQoSPolicy};
-use crate::dds::values::result::Result as DDSResult;
+//use crate::dds::values::result::Result as DDSResult;
 use crate::network::udp_sender::UDPSender;
 
 use crate::serialization::message::Message;
@@ -717,11 +717,11 @@ impl Reader {
 } // impl
 
 impl HasQoSPolicy for Reader {
-  fn set_qos(&mut self, policy: &QosPolicies) -> DDSResult<()> {
-    // TODO: check liveliness of qos_policy
-    self.qos_policy = policy.clone();
-    Ok(())
-  }
+  // fn set_qos(&mut self, policy: &QosPolicies) -> DDSResult<()> {
+  //   // TODO: check liveliness of qos_policy
+  //   self.qos_policy = policy.clone();
+  //   Ok(())
+  // }
 
   fn get_qos(&self) -> QosPolicies {
     self.qos_policy.clone()
