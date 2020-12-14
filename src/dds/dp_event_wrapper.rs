@@ -1147,7 +1147,7 @@ mod tests {
       datareader.set_reader_commander(reader_commander);
       data_readers.push(datareader);
 
-      new_reader.set_qos(&somePolicies).unwrap();
+      //new_reader.set_qos(&somePolicies).unwrap();
       new_reader.matched_writer_add(GUID::new(), EntityId::ENTITYID_UNKNOWN, vec![], vec![]);
       reader_guids.push(new_reader.get_guid().clone());
       info!("\nSent reader number {}: {:?}\n", i, &new_reader);

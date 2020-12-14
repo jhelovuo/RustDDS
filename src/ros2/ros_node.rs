@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use byteorder::LittleEndian;
 use log::error;
 use mio::Evented;
 use serde::{Serialize, de::DeserializeOwned};
@@ -21,8 +20,6 @@ use crate::{
     traits::serde_adapters::SerializerAdapter,
     values::result::Error,
   },
-  serialization::cdr_deserializer::CDRDeserializerAdapter,
-  serialization::cdr_serializer::CDRSerializerAdapter,
   structure::{entity::Entity, guid::GUID},
 };
 
@@ -34,13 +31,17 @@ use super::{
   builtin_topics::{ROSDiscoveryTopic, RosOutTopic},
 };
 
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+
 /// [RosParticipant](struct.RosParticipant.html) sends and receives other participants information in ROS2 network
 pub struct RosParticipant {
   nodes: HashMap<String, NodeInfo>,
   external_nodes: HashMap<Gid, Vec<NodeInfo>>,
-  node_reader: NoKeyDataReader<ROSParticipantInfo, CDRDeserializerAdapter<ROSParticipantInfo>>,
-  node_writer:
-    NoKeyDataWriter<ROSParticipantInfo, CDRSerializerAdapter<ROSParticipantInfo, LittleEndian>>,
+  node_reader: NoKeyDataReader<ROSParticipantInfo>,
+  node_writer: NoKeyDataWriter<ROSParticipantInfo>,
   ros_context: RosContext,
 }
 
@@ -135,6 +136,37 @@ impl RosParticipant {
   }
 }
 
+impl Evented for RosParticipant {
+  fn register(
+    &self,
+    poll: &mio::Poll,
+    token: mio::Token,
+    interest: mio::Ready,
+    opts: mio::PollOpt,
+  ) -> std::io::Result<()> {
+    poll.register(&self.node_reader, token, interest, opts)
+  }
+
+  fn reregister(
+    &self,
+    poll: &mio::Poll,
+    token: mio::Token,
+    interest: mio::Ready,
+    opts: mio::PollOpt,
+  ) -> std::io::Result<()> {
+    poll.reregister(&self.node_reader, token, interest, opts)
+  }
+
+  fn deregister(&self, poll: &mio::Poll) -> std::io::Result<()> {
+    poll.deregister(&self.node_reader)
+  }
+}
+
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+
 /// [RosContext](struct.RosContext.html) holds DDS
 /// Publisher and Subscriber for creating readers and writers.
 /// There has to be a [RosContext](struct.RosContext.html) for each
@@ -219,6 +251,11 @@ impl RosContext {
   }
 }
 
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+
 /// Configuration of [RosNode](struct.RosNode.html)
 pub struct NodeOptions {
   domain_id: u16,
@@ -237,6 +274,11 @@ impl NodeOptions {
     }
   }
 }
+
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
 
 /// Builder for [RosNodes](struct.RosNode.html)
 pub struct RosNodeBuilder {
@@ -315,6 +357,11 @@ impl RosNodeBuilder {
   }
 }
 
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+
 /// Node in ROS2 network. Holds necessary readers and writers for rosout and parameter events topics internally.
 /// Should be constructed using [builder](struct.RosNodeBuilder.html).
 pub struct RosNode {
@@ -330,10 +377,9 @@ pub struct RosNode {
   writers: HashSet<GUID>,
 
   // builtin writers and readers
-  rosout_writer: Option<NoKeyDataWriter<Log, CDRSerializerAdapter<Log>>>,
-  rosout_reader: Option<NoKeyDataReader<Log, CDRDeserializerAdapter<Log>>>,
-  parameter_events_writer:
-    NoKeyDataWriter<ParameterEvents, CDRSerializerAdapter<ParameterEvents>>,
+  rosout_writer: Option<NoKeyDataWriter<Log>>,
+  rosout_reader: Option<NoKeyDataReader<Log>>,
+  parameter_events_writer: NoKeyDataWriter<ParameterEvents>,
 }
 
 impl RosNode {
@@ -449,58 +495,6 @@ impl RosNode {
   }
 
 } // impl
-
-/*
-impl IRosNode for RosNode {
-  fn get_name(&self) -> &str {
-    &self.name
-  }
-
-  fn get_namespace(&self) -> &str {
-    &self.namespace
-  }
-
-  fn get_fully_qualified_name(&self) -> String {
-    let mut nn = self.name.clone();
-    nn.push_str(&self.namespace);
-    nn
-  }
-
-  fn get_options(&self) -> &NodeOptions {
-    &self.options
-  }
-
-  fn get_domain_id(&self) -> u16 {
-    self.options.domain_id
-  }
-}
-*/
-
-impl Evented for RosParticipant {
-  fn register(
-    &self,
-    poll: &mio::Poll,
-    token: mio::Token,
-    interest: mio::Ready,
-    opts: mio::PollOpt,
-  ) -> std::io::Result<()> {
-    poll.register(&self.node_reader, token, interest, opts)
-  }
-
-  fn reregister(
-    &self,
-    poll: &mio::Poll,
-    token: mio::Token,
-    interest: mio::Ready,
-    opts: mio::PollOpt,
-  ) -> std::io::Result<()> {
-    poll.reregister(&self.node_reader, token, interest, opts)
-  }
-
-  fn deregister(&self, poll: &mio::Poll) -> std::io::Result<()> {
-    poll.deregister(&self.node_reader)
-  }
-}
 
 
 impl RosNode {
