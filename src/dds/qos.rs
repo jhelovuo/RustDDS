@@ -252,6 +252,23 @@ impl QosPolicies {
   pub const fn lifespan(&self) -> Option<policy::Lifespan> {
     self.lifespan
   }
+
+  pub fn modify_by(&self,other: &QosPolicies) -> QosPolicies {
+    QosPolicies {
+      durability: other.durability.or(self.durability),
+      presentation: other.presentation.or(self.presentation),
+      deadline: other.deadline.or(self.deadline),
+      latency_budget: other.latency_budget.or(self.latency_budget),
+      ownership: other.ownership.or(self.ownership),
+      liveliness: other.liveliness.or(self.liveliness),
+      time_based_filter: other.time_based_filter.or(self.time_based_filter),
+      reliability: other.reliability.or(self.reliability),
+      destination_order: other.destination_order.or(self.destination_order),
+      history: other.history.or(self.history),
+      resource_limits: other.resource_limits.or(self.resource_limits),
+      lifespan: other.lifespan.or(self.lifespan),      
+    }
+  }
 }
 
 // put these into a submodule to avoid repeating the word "policy" or "qospolicy"

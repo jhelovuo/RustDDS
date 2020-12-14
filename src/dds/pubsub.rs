@@ -5,8 +5,6 @@ use std::{
   fmt::Debug,
   sync::{RwLock, Arc},
   time::Duration,
-  rc::Rc,
-  cell::RefCell,
 };
 
 use serde::{Serialize, de::DeserializeOwned};
@@ -65,7 +63,7 @@ use super::{
 /// ```
 #[derive(Clone)]
 pub struct Publisher {
-  inner: Rc<RefCell<InnerPublisher>>,
+  inner: Arc<InnerPublisher>,
 }
 
 impl Publisher {
@@ -78,7 +76,7 @@ impl Publisher {
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Publisher {
     Publisher {
-      inner: Rc::new(RefCell::new( InnerPublisher::new(dp,discovery_db,qos,default_dw_qos,add_writer_sender,discovery_command) ))
+      inner: Arc::new(InnerPublisher::new(dp,discovery_db,qos,default_dw_qos,add_writer_sender,discovery_command) )
     }
   }
 
@@ -130,7 +128,7 @@ impl Publisher {
     <D as Keyed>::K: Key,
     SA: SerializerAdapter<D>,
   {
-    self.inner.borrow().create_datawriter(self, entity_id, topic, qos)
+    self.inner.create_datawriter(self, entity_id, topic, qos)
   }
 
   /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
@@ -172,7 +170,7 @@ impl Publisher {
     D: Serialize,
     SA: SerializerAdapter<D>,
   {
-    self.inner.borrow().create_datawriter_no_key(self, entity_id,topic,qos)
+    self.inner.create_datawriter_no_key(self, entity_id,topic,qos)
   }
   // delete_datawriter should not be needed. The DataWriter object itself should be deleted to accomplish this.
 
@@ -226,7 +224,7 @@ impl Publisher {
   /// assert_eq!(domain_participant, publisher.get_participant().unwrap());
   /// ```
   pub fn get_participant(&self) -> Option<DomainParticipant> {
-    self.inner.borrow().domain_participant.clone().upgrade()
+    self.inner.domain_participant.clone().upgrade()
   }
 
   // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
@@ -247,31 +245,31 @@ impl Publisher {
   /// assert_eq!(qos, *publisher.get_default_datawriter_qos());
   /// ```
   pub fn get_default_datawriter_qos(&self) -> QosPolicies {
-    self.inner.borrow().default_datawriter_qos.clone()
+    self.inner.default_datawriter_qos.clone()
   }
 
-  /// Sets default DataWriter qos. Currenly default qos is not used.
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::{QosPolicyBuilder, policy::Durability};
-  /// # use rustdds::dds::Publisher;
-  ///
-  /// let domain_participant = DomainParticipant::new(0);
-  /// let qos = QosPolicyBuilder::new().build();
-  ///
-  /// let mut publisher = domain_participant.create_publisher(&qos).unwrap();
-  /// let qos2 = QosPolicyBuilder::new().durability(Durability::Transient).build();
-  /// publisher.set_default_datawriter_qos(&qos2);
-  ///
-  /// assert_ne!(qos, *publisher.get_default_datawriter_qos());
-  /// assert_eq!(qos2, *publisher.get_default_datawriter_qos());
-  /// ```
-  pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
-    self.inner.borrow_mut().default_datawriter_qos = q.clone();
-  }
+  // / Sets default DataWriter qos. Currenly default qos is not used.
+  // /
+  // / # Example
+  // /
+  // / ```
+  // / # use rustdds::dds::DomainParticipant;
+  // / # use rustdds::dds::qos::{QosPolicyBuilder, policy::Durability};
+  // / # use rustdds::dds::Publisher;
+  // /
+  // / let domain_participant = DomainParticipant::new(0);
+  // / let qos = QosPolicyBuilder::new().build();
+  // /
+  // / let mut publisher = domain_participant.create_publisher(&qos).unwrap();
+  // / let qos2 = QosPolicyBuilder::new().durability(Durability::Transient).build();
+  // / publisher.set_default_datawriter_qos(&qos2);
+  // /
+  // / assert_ne!(qos, *publisher.get_default_datawriter_qos());
+  // / assert_eq!(qos2, *publisher.get_default_datawriter_qos());
+  // / ```
+  // pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
+  //   self.inner.borrow_mut().default_datawriter_qos = q.clone();
+  // }
 } // impl
 
 impl PartialEq for Publisher {
@@ -282,7 +280,7 @@ impl PartialEq for Publisher {
 
 impl Debug for Publisher {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    self.inner.borrow().fmt(f)
+    self.inner.fmt(f)
   }
 }
 
@@ -324,7 +322,7 @@ impl InnerPublisher {
     outer: &Publisher,
     entity_id: Option<EntityId>,
     topic: Topic,
-    qos: Option<QosPolicies>,
+    optional_qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
   where
     D: Keyed + Serialize,
@@ -334,10 +332,13 @@ impl InnerPublisher {
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(100);
     let (message_status_sender, message_status_receiver) = mio_channel::sync_channel(100);
 
-    // TODO: check compatible qos and use QOS
-    let _qos = match qos {
+    let writer_qos = match optional_qos {
       Some(q) => q.clone(),
-      None => topic.get_qos().clone(),
+      // DDS Spec 2.2.2.4.1.5 create_datawriter:
+      // If no QoS is specified, we should take the Publisher default
+      // QoS, modify it to match any QoS settings (that are set) in the
+      // Topic QoS and use that.
+      None => self.default_datawriter_qos.modify_by(&topic.get_qos()),
     };
 
     let entity_id = match entity_id {
@@ -354,7 +355,7 @@ impl InnerPublisher {
       Some(dp) => dp,
       None => {
         error!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
-        return Err(Error::PreconditionNotMet);
+        return Err(Error::LockPoisoned);
       }
     };
 
@@ -364,7 +365,7 @@ impl InnerPublisher {
       hccc_download,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
-      topic.get_qos().clone(),
+      writer_qos,
       message_status_sender,
     );
 
@@ -395,7 +396,7 @@ impl InnerPublisher {
         db.update_local_topic_writer(dwd);
         db.update_topic_data_p(&topic);
       }
-      _ => return Err(Error::OutOfResources),
+      _ => return Err(Error::LockPoisoned),
     };
 
     Ok(matching_data_writer)
@@ -513,7 +514,7 @@ impl Debug for InnerPublisher {
 /// ```
 #[derive(Clone)]
 pub struct Subscriber {
-  inner: Rc<RefCell<InnerSubscriber>>,
+  inner: Arc<InnerSubscriber>,
 }
 
 impl Subscriber {
@@ -526,7 +527,9 @@ impl Subscriber {
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Subscriber {
     Subscriber {
-      inner: Rc::new(RefCell::new(InnerSubscriber::new(domain_participant, discovery_db, qos, sender_add_reader, sender_remove_reader, discovery_command)))
+      inner: Arc::new(
+        InnerSubscriber::new(domain_participant, discovery_db, qos, 
+                sender_add_reader, sender_remove_reader, discovery_command))
     }
   }
 
@@ -579,7 +582,7 @@ impl Subscriber {
     <D as Keyed>::K: Key,
     SA: DeserializerAdapter<D>,
   {
-    self.inner.borrow()
+    self.inner
       .create_datareader(self,topic,entity_id,qos)
   }
 
@@ -623,7 +626,7 @@ impl Subscriber {
     D: DeserializeOwned,
     SA: DeserializerAdapter<D>,
   {
-    self.inner.borrow()
+    self.inner
       .create_datareader_no_key(self,topic,entity_id,qos)
   }
 
@@ -660,7 +663,7 @@ impl Subscriber {
   /// assert_eq!(domain_participant, subscriber.get_participant().unwrap());
   /// ```
   pub fn get_participant(&self) -> Option<DomainParticipant> {
-    self.inner.borrow().get_participant()
+    self.inner.get_participant()
   }
 }
 
@@ -701,8 +704,7 @@ impl InnerSubscriber {
     outer: &Subscriber,
     entity_id: Option<EntityId>,
     topic: Topic,
-    //topic_kind: Option<TopicKind>,
-    qos: Option<QosPolicies>,
+    optional_qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
     D: DeserializeOwned + Keyed,
@@ -715,8 +717,8 @@ impl InnerSubscriber {
     let (reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
 
-    // TODO: use qos
-    let _qos = match qos {
+
+    let qos = match optional_qos {
       Some(q) => q,
       None => topic.get_qos().clone(),
     };
@@ -756,6 +758,7 @@ impl InnerSubscriber {
       outer.clone(),
       datareader_id,
       topic.clone(),
+      qos,
       rec,
       dp.get_dds_cache(),
       self.discovery_command.clone(),

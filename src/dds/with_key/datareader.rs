@@ -151,6 +151,7 @@ where
     subscriber: Subscriber,
     my_id: EntityId,
     topic: Topic,
+    qos_policy: QosPolicies,
     // Each notification sent to this channel must be try_recv'd
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
@@ -173,7 +174,7 @@ where
 
     Ok(Self {
       my_subscriber: subscriber,
-      qos_policy: topic.get_qos(),
+      qos_policy,
       entity_attributes,
       notification_receiver,
       dds_cache,
