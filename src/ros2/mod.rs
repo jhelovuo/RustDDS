@@ -84,3 +84,18 @@ pub type KeyedRosSubscriber<D, DA> = crate::dds::with_key::datareader::DataReade
 pub type RosPublisher<D, SA> = crate::dds::no_key::datawriter::DataWriter<D, SA>;
 
 pub type KeyedRosPublisher<D, SA> = crate::dds::with_key::datawriter::DataWriter<D, SA>;
+
+
+// Short-hand notation for CDR serialization
+
+pub type RosSubscriber_CDR<D> = 
+  crate::dds::no_key::datareader::DataReader<D, crate::serialization::CDRDeserializerAdapter<D>>;
+
+pub type KeyedRosSubscriber_CDR<D> = 
+  crate::dds::with_key::datareader::DataReader<D, crate::serialization::CDRDeserializerAdapter<D>>;
+
+pub type RosPublisher_CDR<D> = 
+  crate::dds::no_key::datawriter::DataWriter<D, crate::serialization::CDRSerializerAdapter<D>>;
+
+pub type KeyedRosPublisher_CDR<D> = 
+  crate::dds::with_key::datawriter::DataWriter<D, crate::serialization::CDRSerializerAdapter<D>>;

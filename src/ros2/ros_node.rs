@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc,RwLock};
 
 use log::error;
 use mio::Evented;
@@ -37,64 +38,151 @@ use super::{
 // ----------------------------------------------------------------------------------------------------
 
 /// [RosParticipant](struct.RosParticipant.html) sends and receives other participants information in ROS2 network
+#[derive(Clone)]
 pub struct RosParticipant {
+  inner: Arc<RwLock<RosParticipantInner>>,
+}
+
+impl RosParticipant {
+  pub fn new() -> Result<RosParticipant, Error> {
+    Self::from_DomainParticipant(DomainParticipant::new(0))
+  }
+
+  pub fn from_DomainParticipant(domain_participant: DomainParticipant) 
+  -> Result<RosParticipant, Error> 
+  {
+    let i = RosParticipantInner::from_DomainParticipant(domain_participant)?;
+    Ok( RosParticipant {
+          inner: Arc::new( RwLock::new( i ) ),
+        } )
+  }
+  /// Create a new ROS2 node
+  pub fn new_RosNode(&self,name: &str, namespace: &str, options: NodeOptions) 
+      -> Result<RosNode, Error> {
+    RosNode::new(name,namespace,options,self.clone())
+  }
+
+  fn add_node_info(&mut self, node_info: NodeInfo) {
+    self.inner.write().unwrap().add_node_info(node_info)
+  }
+  fn get_parameter_events_topic(&self) -> Topic {
+    self.inner.read().unwrap().ros_parameter_events_topic.clone()
+  }
+
+  fn get_rosout_topic(&self) -> Topic {
+    self.inner.read().unwrap().ros_rosout_topic.clone()
+  }
+
+  fn get_ros_discovery_publisher(&self) -> Publisher {
+    self.inner.read().unwrap().ros_discovery_publisher.clone()
+  }
+
+  fn get_ros_discovery_subscriber(&self) -> Subscriber {
+    self.inner.read().unwrap().ros_discovery_subscriber.clone()
+  }
+
+  fn domain_participant(&self) -> DomainParticipant {
+    self.inner.read().unwrap().domain_participant.clone()
+  }
+
+  pub fn domain_id(&self) -> u16 {
+    self.inner.read().unwrap().domain_participant.domain_id()
+  }
+
+}
+
+struct RosParticipantInner {
   nodes: HashMap<String, NodeInfo>,
   external_nodes: HashMap<Gid, Vec<NodeInfo>>,
   node_reader: NoKeyDataReader<ROSParticipantInfo>,
   node_writer: NoKeyDataWriter<ROSParticipantInfo>,
-  ros_context: RosContext,
+
+  domain_participant: DomainParticipant,
+  ros_discovery_topic: Topic,
+  ros_discovery_publisher: Publisher,
+  ros_discovery_subscriber: Subscriber,
+
+  ros_parameter_events_topic: Topic,
+  ros_rosout_topic: Topic,
 }
 
-impl RosParticipant {
-  pub fn new(ros_context: RosContext) -> Result<RosParticipant, Error> {
-    let dtopic = match ros_context.get_ros_discovery_topic() {
-      Some(t) => t,
-      None => {
-        error!("RosContext has no discovery topic.");
-        return Err(Error::PreconditionNotMet);
-      }
-    };
+impl RosParticipantInner {
 
-    let node_reader = ros_context
-      .get_ros_discovery_subscriber()
-      .create_datareader_no_key(dtopic.clone(), None, None)?;
+  // "new"
+  pub fn from_DomainParticipant(domain_participant: DomainParticipant) 
+  -> Result<RosParticipantInner, Error> 
+  {
 
-    let node_writer = ros_context
-      .get_ros_discovery_publisher()
-      .create_datawriter_no_key(None, dtopic.clone(), None)?;
+    let ros_discovery_topic = domain_participant.create_topic(
+        ROSDiscoveryTopic::topic_name(),
+        ROSDiscoveryTopic::type_name(),
+        &ROSDiscoveryTopic::get_qos(),
+        TopicKind::NoKey,
+      )?;
 
-    Ok(RosParticipant {
+    let ros_discovery_publisher =
+      domain_participant.create_publisher(&ROSDiscoveryTopic::get_qos())?;
+    let ros_discovery_subscriber =
+      domain_participant.create_subscriber(&ROSDiscoveryTopic::get_qos())?;
+
+    let ros_parameter_events_topic = domain_participant.create_topic(
+      ParameterEventsTopic::topic_name(),
+      ParameterEventsTopic::type_name(),
+      &ParameterEventsTopic::get_qos(),
+      TopicKind::NoKey,
+    )?;
+
+    let ros_rosout_topic = domain_participant.create_topic(
+      RosOutTopic::topic_name(),
+      RosOutTopic::type_name(),
+      &RosOutTopic::get_qos(),
+      TopicKind::NoKey,
+    )?;
+
+    let node_reader = ros_discovery_subscriber
+      .create_datareader_no_key(ros_discovery_topic.clone(), None, None)?;
+
+    let node_writer = ros_discovery_publisher
+      .create_datawriter_no_key(None, ros_discovery_topic.clone(), None)?;
+
+    Ok(RosParticipantInner {
       nodes: HashMap::new(),
       external_nodes: HashMap::new(),
       node_reader,
       node_writer,
-      ros_context,
+
+      domain_participant,
+      ros_discovery_topic,
+      ros_discovery_publisher,
+      ros_discovery_subscriber,
+      ros_parameter_events_topic,
+      ros_rosout_topic,
     })
   }
 
   /// Gets our current participant info we have sent to ROS2 network
   pub fn get_ros_participant_info(&self) -> ROSParticipantInfo {
     ROSParticipantInfo::new(
-      Gid::from_guid(self.ros_context.domain_participant.get_guid()),
+      Gid::from_guid(self.domain_participant.get_guid()),
       self.nodes.iter().map(|(_, p)| p.clone()).collect(),
     )
   }
 
-  /// Adds new NodeInfo and updates our RosParticipantInfo to ROS2 network
-  pub fn add_node_info(&mut self, mut node_info: NodeInfo) {
+  // Adds new NodeInfo and updates our RosParticipantInfo to ROS2 network
+  fn add_node_info(&mut self, mut node_info: NodeInfo) {
     node_info.add_reader(Gid::from_guid(self.node_reader.get_guid()));
     node_info.add_writer(Gid::from_guid(self.node_writer.get_guid()));
 
     match self.nodes.insert(node_info.get_full_name(), node_info) {
       Some(_) => (),
-      None => self.write_info(),
+      None => self.broadcast_node_infos(),
     }
   }
 
   /// Removes NodeInfo and updates our RosParticipantInfo to ROS2 network
   pub fn remove_node_info(&mut self, node_info: &NodeInfo) {
     match self.nodes.remove(&node_info.get_full_name()) {
-      Some(_) => self.write_info(),
+      Some(_) => self.broadcast_node_infos(),
       None => (),
     }
   }
@@ -103,11 +191,11 @@ impl RosParticipant {
   pub fn clear(&mut self) {
     if !self.nodes.is_empty() {
       self.nodes.clear();
-      self.write_info()
+      self.broadcast_node_infos()
     }
   }
 
-  fn write_info(&self) {
+  fn broadcast_node_infos(&self) {
     match self
       .node_writer
       .write(self.get_ros_participant_info(), None)
@@ -134,120 +222,22 @@ impl RosParticipant {
     }
     pts
   }
+
 }
 
 impl Evented for RosParticipant {
-  fn register(
-    &self,
-    poll: &mio::Poll,
-    token: mio::Token,
-    interest: mio::Ready,
-    opts: mio::PollOpt,
-  ) -> std::io::Result<()> {
-    poll.register(&self.node_reader, token, interest, opts)
+  fn register(&self, poll: &mio::Poll, token: mio::Token, interest: mio::Ready, opts: mio::PollOpt, ) 
+  -> std::io::Result<()>  {
+    poll.register(&self.inner.read().unwrap().node_reader, token, interest, opts)
   }
 
-  fn reregister(
-    &self,
-    poll: &mio::Poll,
-    token: mio::Token,
-    interest: mio::Ready,
-    opts: mio::PollOpt,
-  ) -> std::io::Result<()> {
-    poll.reregister(&self.node_reader, token, interest, opts)
+  fn reregister(&self, poll: &mio::Poll, token: mio::Token, interest: mio::Ready, opts: mio::PollOpt, ) 
+    -> std::io::Result<()>  {
+    poll.reregister(&self.inner.read().unwrap().node_reader, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio::Poll) -> std::io::Result<()> {
-    poll.deregister(&self.node_reader)
-  }
-}
-
-// ----------------------------------------------------------------------------------------------------
-// ----------------------------------------------------------------------------------------------------
-// ----------------------------------------------------------------------------------------------------
-// ----------------------------------------------------------------------------------------------------
-
-/// [RosContext](struct.RosContext.html) holds DDS
-/// Publisher and Subscriber for creating readers and writers.
-/// There has to be a [RosContext](struct.RosContext.html) for each
-/// thread and they cannot be shared between threads.
-pub struct RosContext {
-  domain_participant: DomainParticipant,
-  ros_discovery_topic: Option<Topic>,
-  ros_discovery_publisher: Publisher,
-  ros_discovery_subscriber: Subscriber,
-  ros_parameter_events_topic: Topic,
-  ros_rosout_topic: Topic,
-}
-
-impl RosContext {
-  /// # Arguments
-  ///
-  /// * `domain_participant` - DDS [DomainParticipant](../dds/struct.DomainParticipant.html)
-  /// * `is_ros_participant_thread` - Information if this is the thread
-  /// where our [RosParticipant](struct.RosParticipant.html) has been defined.
-  pub fn new(
-    domain_participant: DomainParticipant,
-    is_ros_participant_thread: bool,
-  ) -> Result<RosContext, Error> {
-    let ros_discovery_topic = if is_ros_participant_thread {
-      Some(domain_participant.create_topic(
-        ROSDiscoveryTopic::topic_name(),
-        ROSDiscoveryTopic::type_name(),
-        &ROSDiscoveryTopic::get_qos(),
-        TopicKind::NoKey,
-      )?)
-    } else {
-      None
-    };
-
-    let ros_discovery_publisher =
-      domain_participant.create_publisher(&ROSDiscoveryTopic::get_qos())?;
-    let ros_discovery_subscriber =
-      domain_participant.create_subscriber(&ROSDiscoveryTopic::get_qos())?;
-
-    let ros_parameter_events_topic = domain_participant.create_topic(
-      ParameterEventsTopic::topic_name(),
-      ParameterEventsTopic::type_name(),
-      &ParameterEventsTopic::get_qos(),
-      TopicKind::NoKey,
-    )?;
-
-    let ros_rosout_topic = domain_participant.create_topic(
-      RosOutTopic::topic_name(),
-      RosOutTopic::type_name(),
-      &RosOutTopic::get_qos(),
-      TopicKind::NoKey,
-    )?;
-
-    Ok(RosContext {
-      domain_participant,
-      ros_discovery_topic,
-      ros_discovery_publisher,
-      ros_discovery_subscriber,
-      ros_parameter_events_topic,
-      ros_rosout_topic,
-    })
-  }
-
-  pub(crate) fn get_ros_discovery_topic(&self) -> Option<&Topic> {
-    self.ros_discovery_topic.as_ref()
-  }
-
-  pub(crate) fn get_ros_discovery_subscriber(&self) -> &Subscriber {
-    &self.ros_discovery_subscriber
-  }
-
-  pub(crate) fn get_ros_discovery_publisher(&self) -> &Publisher {
-    &self.ros_discovery_publisher
-  }
-
-  pub(crate) fn get_parameter_events_topic(&self) -> &Topic {
-    &self.ros_parameter_events_topic
-  }
-
-  pub(crate) fn get_rosout_topic(&self) -> &Topic {
-    &self.ros_rosout_topic
+    poll.deregister(&self.inner.read().unwrap().node_reader)
   }
 }
 
@@ -258,102 +248,17 @@ impl RosContext {
 
 /// Configuration of [RosNode](struct.RosNode.html)
 pub struct NodeOptions {
-  domain_id: u16,
   enable_rosout: bool,
 }
 
 impl NodeOptions {
   /// # Arguments
   ///
-  /// * `domain_id` - DomainParticipants domain_id
   /// * `enable_rosout` -  Wheter or not ros logging is enabled (rosout writer)
-  pub fn new(domain_id: u16, enable_rosout: bool) -> NodeOptions {
+  pub fn new(/*domain_id: u16, */enable_rosout: bool) -> NodeOptions {
     NodeOptions {
-      domain_id,
       enable_rosout,
     }
-  }
-}
-
-// ----------------------------------------------------------------------------------------------------
-// ----------------------------------------------------------------------------------------------------
-// ----------------------------------------------------------------------------------------------------
-// ----------------------------------------------------------------------------------------------------
-
-/// Builder for [RosNodes](struct.RosNode.html)
-pub struct RosNodeBuilder {
-  name: Option<String>,
-  namespace: Option<String>,
-  node_options: Option<NodeOptions>,
-  // lifetime bound
-  ros_context: Option<RosContext>,
-}
-
-impl RosNodeBuilder {
-  pub fn new() -> RosNodeBuilder {
-    RosNodeBuilder {
-      name: None,
-      namespace: None,
-      node_options: None,
-      ros_context: None,
-    }
-  }
-
-  /// <b>Required</b>.
-  pub fn name(mut self, name: &str) -> RosNodeBuilder {
-    self.name = Some(name.to_string());
-    self
-  }
-
-  /// <b>Required</b>.
-  pub fn namespace(mut self, namespace: &str) -> RosNodeBuilder {
-    self.namespace = Some(namespace.to_string());
-    self
-  }
-
-  /// Optional. When building defaults to `domain_id = 0` and `enable_rosout = false`
-  pub fn node_options(mut self, node_options: NodeOptions) -> RosNodeBuilder {
-    self.node_options = Some(node_options);
-    self
-  }
-
-  /// <b>Required</b>.
-  pub fn ros_context(mut self, ros_context: RosContext) -> RosNodeBuilder {
-    self.ros_context = Some(ros_context);
-    self
-  }
-
-  pub fn build(self) -> Result<RosNode, Error> {
-    let name = match self.name {
-      Some(n) => n,
-      None => {
-        error!("Node name needs to be defined.");
-        return Err(Error::PreconditionNotMet);
-      }
-    };
-
-    let namespace = match self.namespace {
-      Some(ns) => ns,
-      None => {
-        error!("Node namespace needs to be defined.");
-        return Err(Error::PreconditionNotMet);
-      }
-    };
-
-    let node_options = match self.node_options {
-      Some(no) => no,
-      None => NodeOptions::new(0, false),
-    };
-
-    let ros_context = match self.ros_context {
-      Some(ctx) => ctx,
-      None => {
-        error!("RosContext needs to be defined.");
-        return Err(Error::PreconditionNotMet);
-      }
-    };
-
-    RosNode::new(&name, &namespace, node_options, ros_context)
   }
 }
 
@@ -370,7 +275,7 @@ pub struct RosNode {
   namespace: String,
   options: NodeOptions,
 
-  ros_context: RosContext,
+  ros_participant: RosParticipant,
 
   // dynamic
   readers: HashSet<GUID>,
@@ -383,18 +288,18 @@ pub struct RosNode {
 }
 
 impl RosNode {
-  pub(crate) fn new(
+  fn new(
     name: &str,
     namespace: &str,
     options: NodeOptions,
-    ros_context: RosContext,
+    ros_participant: RosParticipant,
   ) -> Result<RosNode, Error> {
-    let paramtopic = ros_context.get_parameter_events_topic();
-    let rosout_topic = ros_context.get_rosout_topic();
+    let paramtopic = ros_participant.get_parameter_events_topic();
+    let rosout_topic = ros_participant.get_rosout_topic();
 
     let rosout_writer = if options.enable_rosout {
       Some(
-        ros_context
+        ros_participant
           .get_ros_discovery_publisher()
           .create_datawriter_no_key(None, rosout_topic.clone(), None)?,
       )
@@ -402,7 +307,7 @@ impl RosNode {
       None
     };
 
-    let parameter_events_writer = ros_context
+    let parameter_events_writer = ros_participant
       .get_ros_discovery_publisher()
       .create_datawriter_no_key(None, paramtopic.clone(), None)?;
 
@@ -410,7 +315,7 @@ impl RosNode {
       name: String::from(name),
       namespace: String::from(namespace),
       options,
-      ros_context,
+      ros_participant,
       readers: HashSet::new(),
       writers: HashSet::new(),
       rosout_writer,
@@ -419,57 +324,51 @@ impl RosNode {
     })
   }
 
-  /// Generates ROS2 node info from added readers and writers.
-  pub fn generate_node_info(&self) -> NodeInfo {
-    let mut reader_guid = vec![];
-    let mut writer_guid = vec![Gid::from_guid(self.parameter_events_writer.get_guid())];
+  // Generates ROS2 node info from added readers and writers.
+  fn generate_node_info(&self) -> NodeInfo {
+    let mut node_info = NodeInfo::new(self.name.to_owned(), self.namespace.to_owned());
 
-    match &self.rosout_writer {
-      Some(w) => writer_guid.push(Gid::from_guid(w.get_guid())),
-      None => (),
-    };
+    node_info.add_writer( Gid::from_guid(self.parameter_events_writer.get_guid()) );
+    if let Some(row) = &self.rosout_writer {
+      node_info.add_writer( Gid::from_guid(row.get_guid()) )
+    }
 
     for reader in self.readers.iter() {
-      reader_guid.push(Gid::from_guid(*reader));
+      node_info.add_reader( Gid::from_guid(*reader) )
     }
 
     for writer in self.writers.iter() {
-      writer_guid.push(Gid::from_guid(*writer));
-    }
-
-    let mut node_info = NodeInfo::new(self.name.to_owned(), self.namespace.to_owned());
-
-    for reader_gid in reader_guid.into_iter() {
-      node_info.add_reader(reader_gid);
-    }
-
-    for writer_gid in writer_guid.into_iter() {
-      node_info.add_writer(writer_gid);
+      node_info.add_writer( Gid::from_guid(*writer) );
     }
 
     node_info
   }
 
-  pub fn add_reader(&mut self, reader: GUID) {
+  fn add_reader(&mut self, reader: GUID) {
     self.readers.insert(reader);
+    self.ros_participant.add_node_info( self.generate_node_info() );
   }
 
   pub fn remove_reader(&mut self, reader: &GUID) {
     self.readers.remove(reader);
+    self.ros_participant.add_node_info( self.generate_node_info() );
   }
 
-  pub fn add_writer(&mut self, writer: GUID) {
+  fn add_writer(&mut self, writer: GUID) {
     self.writers.insert(writer);
+    self.ros_participant.add_node_info( self.generate_node_info() );
   }
 
   pub fn remove_writer(&mut self, writer: &GUID) {
     self.writers.remove(writer);
+    self.ros_participant.add_node_info( self.generate_node_info() );
   }
 
   /// Clears both all reader and writer guids from this node.
   pub fn clear_node(&mut self) {
     self.readers.clear();
     self.writers.clear();
+    self.ros_participant.add_node_info( self.generate_node_info() );
   }
 
   pub fn get_name(&self) -> &str {
@@ -491,13 +390,9 @@ impl RosNode {
   }
 
   pub fn get_domain_id(&self) -> u16 {
-    self.options.domain_id
+    self.ros_participant.domain_id()
   }
 
-} // impl
-
-
-impl RosNode {
   /// Creates ROS2 topic and handles necessary conversions from DDS to ROS2
   ///
   /// # Arguments
@@ -507,8 +402,7 @@ impl RosNode {
   /// * `type_name` - What type the topic holds in string form
   /// * `qos` - Quality of Service parameters for the topic (not restricted only to ROS2)
   /// * `topic_kind` - Does the topic have a key (multiple DDS instances)? NoKey or WithKey
-  pub fn create_ros_topic(
-    domain_participant: &DomainParticipant,
+  pub fn create_ros_topic(&self,
     name: &str,
     type_name: &str,
     qos: QosPolicies,
@@ -521,7 +415,8 @@ impl RosNode {
     let name_stripped = name.strip_prefix("/").unwrap_or(name); // avoid double slash in name
     oname.push_str(name_stripped);
     println!("Crete topic, DDS name: {}",oname);
-    let topic = domain_participant.create_topic(&oname, type_name, &qos, topic_kind)?;
+    let topic = self.ros_participant.domain_participant()
+      .create_topic(&oname, type_name, &qos, topic_kind)?;
     Ok(topic)
   }
 
@@ -536,10 +431,13 @@ impl RosNode {
     topic: Topic,
     qos: Option<QosPolicies>,
   ) -> Result<RosSubscriber<D, DA>, Error> {
-    self
-      .ros_context
-      .get_ros_discovery_subscriber()
-      .create_datareader_no_key::<D, DA>(topic, None, qos)
+    let sub =
+      self
+        .ros_participant
+        .get_ros_discovery_subscriber()
+        .create_datareader_no_key::<D, DA>(topic, None, qos)?;
+    self.add_reader( sub.get_guid() );
+    Ok( sub )
   }
 
   /// Creates ROS2 Subscriber to [Keyed](../dds/traits/trait.Keyed.html) topic.
@@ -549,7 +447,7 @@ impl RosNode {
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
   pub fn create_ros_subscriber<D, DA: DeserializerAdapter<D>>(
-    &self,
+    &mut self,
     topic: Topic,
     qos: Option<QosPolicies>,
   ) -> Result<KeyedRosSubscriber<D, DA>, Error>
@@ -557,10 +455,12 @@ impl RosNode {
     D: Keyed + DeserializeOwned + 'static,
     D::K: Key,
   {
-    self
-      .ros_context
+    let sub = self
+      .ros_participant
       .get_ros_discovery_subscriber()
-      .create_datareader::<D, DA>(topic, None, qos)
+      .create_datareader::<D, DA>(topic, None, qos)?;
+    self.add_reader( sub.get_guid() );
+    Ok( sub )     
   }
 
   /// Creates ROS2 Publisher to no key topic.
@@ -570,14 +470,16 @@ impl RosNode {
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
   pub fn create_ros_nokey_publisher<D: Serialize, SA: SerializerAdapter<D>>(
-    &self,
+    &mut self,
     topic: Topic,
     qos: Option<QosPolicies>,
   ) -> Result<RosPublisher<D, SA>, Error> {
-    self
-      .ros_context
+    let p = self
+      .ros_participant
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(None, topic, qos)
+      .create_datawriter_no_key(None, topic, qos)?;
+    self.add_writer( p.get_guid() );
+    Ok(p)
   }
 
   /// Creates ROS2 Publisher to [Keyed](../dds/traits/trait.Keyed.html) topic.
@@ -587,7 +489,7 @@ impl RosNode {
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
   pub fn create_ros_publisher<D, SA: SerializerAdapter<D>>(
-    &self,
+    &mut self,
     topic: Topic,
     qos: Option<QosPolicies>,
   ) -> Result<KeyedRosPublisher<D, SA>, Error>
@@ -595,9 +497,11 @@ impl RosNode {
     D: Keyed + Serialize ,
     D::K: Key,
   {
-    self
-      .ros_context
+    let p = self
+      .ros_participant
       .get_ros_discovery_publisher()
-      .create_datawriter(None, topic, qos)
+      .create_datawriter(None, topic, qos)?;
+    self.add_writer( p.get_guid() );
+    Ok(p)
   }
 }

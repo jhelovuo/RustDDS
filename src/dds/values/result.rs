@@ -26,6 +26,12 @@ pub enum Error {
   LockPoisoned,  
 }
 
+impl<T> From<std::sync::PoisonError<T>> for Error {
+  fn from(_e:std::sync::PoisonError<T>) -> Error {
+    Error::LockPoisoned
+  }
+}
+
 /// Helper to contain same count actions across statuses
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct CountWithChange {
