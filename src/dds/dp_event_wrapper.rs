@@ -418,7 +418,7 @@ impl DPEventWrapper {
             new_writer.get_timed_event_entity_token(),
             timed_action_receiver,
           );
-          self.writers.insert(new_writer.as_entity().guid, new_writer);
+          self.writers.insert(new_writer.get_guid(), new_writer);
         }
       }
       REMOVE_WRITER_TOKEN => {

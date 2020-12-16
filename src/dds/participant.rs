@@ -2,13 +2,13 @@ use mio::Token;
 use mio_extras::channel as mio_channel;
 use log::{debug, info, warn};
 
+//use std::io::{Write,stderr};
 use std::{
   thread,
   thread::JoinHandle,
   collections::HashMap,
   time::Duration,
-  sync::{Arc, RwLock, Weak},
-  ops::Deref,
+  sync::{Arc, RwLock, Mutex, Weak,},
   net::Ipv4Addr,
 };
 
@@ -38,10 +38,11 @@ use super::dp_event_wrapper::DomainInfo;
 #[derive(Clone)]
 // This is a smart pointer for DomainParticipant_Inner for easier manipulation.
 pub struct DomainParticipant {
-  dpi: Arc<DomainParticipant_Disc>,
+  dpi: Arc<Mutex<DomainParticipant_Disc>>,
 }
 
 // Send and Sync for actual ability to send between threads
+// TODO: We should not have these. They look dangerous.
 unsafe impl Send for DomainParticipant {}
 unsafe impl Sync for DomainParticipant {}
 
@@ -53,6 +54,7 @@ impl DomainParticipant {
   /// let domain_participant = DomainParticipant::new(0);
   /// ```
   pub fn new(domain_id: u16) -> DomainParticipant {
+    //writeln!(stderr(),"DomainParticipant constructor");
     let (djh_sender, djh_receiver) = mio_channel::channel();
     let mut dpd = DomainParticipant_Disc::new(domain_id, djh_receiver);
 
@@ -68,7 +70,7 @@ impl DomainParticipant {
       None => panic!("Unable to get Discovery Command Receiver."),
     };
 
-    let dp = DomainParticipant { dpi: Arc::new(dpd) };
+    let dp = DomainParticipant { dpi: Arc::new(Mutex::new(dpd) ) };
 
     let (discovery_started_sender, discovery_started_receiver) =
       std::sync::mpsc::channel::<Result<()>>();
@@ -83,19 +85,20 @@ impl DomainParticipant {
 
     let discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
     djh_sender.send(discovery_handle).unwrap_or(());
-
+    //writeln!(stderr(),"Waiting for discovery to start");
     // blocking until discovery answers
-    let discovery_started = discovery_started_receiver.recv_timeout(Duration::from_secs(60));
+    let discovery_started = 
+      discovery_started_receiver.recv_timeout(Duration::from_secs(10));
     match discovery_started {
       Ok(ds) => match ds {
-        Ok(_) => dp,
+        Ok(_) => { /*writeln!(stderr(),"Discovery started");*/ dp},
         Err(e) => {
           std::mem::drop(dp);
           // TODO: maybe return result on new?
           panic!("Failed to start discovery. {:?}", e);
         }
       },
-      Err(_) => panic!("Channel error"),
+      Err(e) => panic!("Discovery thread channel error: {:?}",e),
     }
   }
 
@@ -115,7 +118,8 @@ impl DomainParticipant {
   /// let publisher = domain_participant.create_publisher(&qos);
   /// ```
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
-    self.dpi.create_publisher(&self.weak_clone(), qos)
+    let w = self.weak_clone(); // this must be done first to avoid deadlock
+    self.dpi.lock().unwrap().create_publisher(&w, qos)
   }
 
   /// Creates DDS Subscriber
@@ -134,7 +138,9 @@ impl DomainParticipant {
   /// let subscriber = domain_participant.create_subscriber(&qos);
   /// ```
   pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
-    self.dpi.create_subscriber(&self.weak_clone(), qos)
+    //println!("DP(outer): create_subscriber");
+    let w = self.weak_clone(); // do this first, avoid deadlock
+    self.dpi.lock().unwrap().create_subscriber(&w, qos)
   }
 
   /// Create DDS Topic
@@ -163,9 +169,12 @@ impl DomainParticipant {
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic> {
+    //println!("Create topic outer");
+    let w = self.weak_clone();
     self
       .dpi
-      .create_topic(&self.weak_clone(), name, type_desc, qos, topic_kind)
+      .lock().unwrap()
+      .create_topic(&w, name, type_desc, qos, topic_kind)
   }
 
   /// # Examples
@@ -176,7 +185,7 @@ impl DomainParticipant {
   /// let domain_id = domain_participant.domain_id();
   /// ```
   pub fn domain_id(&self) -> u16 {
-    self.dpi.domain_id()
+    self.dpi.lock().unwrap().domain_id()
   }
 
   /// # Examples
@@ -187,7 +196,7 @@ impl DomainParticipant {
   /// let participant_id = domain_participant.participant_id();
   /// ```
   pub fn participant_id(&self) -> u16 {
-    self.dpi.participant_id()
+    self.dpi.lock().unwrap().participant_id()
   }
 
   /// Gets all DiscoveredTopics from DDS network
@@ -203,20 +212,19 @@ impl DomainParticipant {
   /// }
   /// ```
   pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self.dpi.get_discovered_topics()
+    self.dpi.lock().unwrap().get_discovered_topics()
   }
 
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
-    let dpc = self.clone();
-    DomainParticipantWeak::new(dpc)
+    DomainParticipantWeak::new(self.clone(), self.get_guid())
   }
 
   pub(crate) fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    return self.dpi.get_dds_cache();
+    return self.dpi.lock().unwrap().get_dds_cache();
   }
 
   pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
-    return self.dpi.discovery_db.clone();
+    return self.dpi.lock().unwrap().dpi.lock().unwrap().discovery_db.clone();
   }
 }
 
@@ -237,28 +245,29 @@ impl PartialEq for DomainParticipant {
 
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
-  dpi: Weak<DomainParticipant_Disc>,
-  entity_attributes: EntityAttributes,
+  dpi: Weak<Mutex<DomainParticipant_Disc>>,
+  //entity_attributes: EntityAttributes,
+  guid: GUID,
 }
 
 impl DomainParticipantWeak {
-  pub fn new(dp: DomainParticipant) -> DomainParticipantWeak {
+  pub fn new(dp: DomainParticipant, guid: GUID) -> DomainParticipantWeak {
     DomainParticipantWeak {
       dpi: Arc::downgrade(&dp.dpi),
-      entity_attributes: dp.as_entity().clone(),
+      guid,
     }
   }
 
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.create_publisher(&self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_publisher(&self, qos),
       None => Err(Error::OutOfResources),
     }
   }
 
   pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.create_subscriber(&self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_subscriber(&self, qos),
       None => Err(Error::OutOfResources),
     }
   }
@@ -271,28 +280,28 @@ impl DomainParticipantWeak {
     topic_kind: TopicKind,
   ) -> Result<Topic> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.create_topic(&self, name, type_desc, qos, topic_kind),
+      Some(dpi) => dpi.lock().unwrap().create_topic(&self, name, type_desc, qos, topic_kind),
       None => Err(Error::LockPoisoned),
     }
   }
 
   pub fn domain_id(&self) -> u16 {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.domain_id(),
+      Some(dpi) => dpi.lock().unwrap().domain_id(),
       None => panic!("Unable to get original domain participant."),
     }
   }
 
   pub fn participant_id(&self) -> u16 {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.participant_id(),
+      Some(dpi) => dpi.lock().unwrap().participant_id(),
       None => panic!("Unable to get original domain participant."),
     }
   }
 
   pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.get_discovered_topics(),
+      Some(dpi) => dpi.lock().unwrap().get_discovered_topics(),
       None => Vec::new(),
     }
   }
@@ -303,17 +312,23 @@ impl DomainParticipantWeak {
       None => None,
     }
   }
-}
+  
+} // end impl
+
 
 impl Entity for DomainParticipantWeak {
-  fn as_entity(&self) -> &EntityAttributes {
-    &self.entity_attributes
+  fn get_guid(&self) -> GUID {
+    self.guid
+    // match self.dpi.upgrade() {
+    //   Some(dpi) => dpi.lock().unwrap().get_guid(),
+    //   None => panic!("Unable to get original domain participant."),
+    // }
   }
 }
 
 // This struct exists only to control and stop Discovery when DomainParticipant should be dropped
 pub(crate) struct DomainParticipant_Disc {
-  dpi: Arc<DomainParticipant_Inner>,
+  dpi: Arc<Mutex<DomainParticipant_Inner>>,
   // Discovery control
   discovery_updated_sender: Option<mio_channel::SyncSender<DiscoveryNotificationType>>,
   discovery_command_receiver: Option<mio_channel::Receiver<DiscoveryCommand>>,
@@ -331,20 +346,16 @@ impl DomainParticipant_Disc {
 
     let dpi = DomainParticipant_Inner::new(domain_id, discovery_update_notification_receiver);
 
-    let dpi_arc = Arc::new(dpi);
-
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(10);
 
-    let dpd = DomainParticipant_Disc {
-      dpi: dpi_arc.clone(),
+    DomainParticipant_Disc {
+      dpi: Arc::new(Mutex::new(dpi)),
       discovery_updated_sender: Some(discovery_update_notification_sender),
       discovery_command_receiver: Some(discovery_command_receiver),
       discovery_command_channel: discovery_command_sender,
       discovery_join_handle,
-    };
-
-    dpd
+    }
   }
 
   pub fn create_publisher(
@@ -352,7 +363,9 @@ impl DomainParticipant_Disc {
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
   ) -> Result<Publisher> {
-    self.dpi.create_publisher(&dp, qos)
+    self.dpi.lock().unwrap().create_publisher(&dp, qos, 
+      self.discovery_command_channel.clone() 
+    )
   }
 
   pub fn create_subscriber<'a>(
@@ -360,7 +373,9 @@ impl DomainParticipant_Disc {
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
   ) -> Result<Subscriber> {
-    self.dpi.create_subscriber(&dp, qos)
+    self.dpi.lock().unwrap().create_subscriber(&dp, qos, 
+      self.discovery_command_channel.clone() 
+    )
   }
 
   pub fn create_topic(
@@ -371,24 +386,42 @@ impl DomainParticipant_Disc {
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic> {
-    self.dpi.create_topic(&dp, name, type_desc, qos, topic_kind)
+    //println!("Create topic disc");
+    self.dpi.lock().unwrap().create_topic(&dp, name, type_desc, qos, topic_kind)
   }
 
   pub fn domain_id(&self) -> u16 {
-    self.dpi.domain_id()
+    self.dpi.lock().unwrap().domain_id()
   }
 
   pub fn participant_id(&self) -> u16 {
-    self.dpi.participant_id()
+    self.dpi.lock().unwrap().participant_id()
   }
+
+  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+    self.dpi.lock().unwrap().get_discovered_topics()
+  }
+
+  pub(crate) fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
+    return self.dpi.lock().unwrap().get_dds_cache();
+  }
+
+  pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
+    return self.dpi.lock().unwrap().discovery_db.clone();
+  }
+
+  // pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<Writer> {
+  //   self.dpi.lock().unwrap().get_add_writer_sender()
+  // }
+
 }
 
-impl Deref for DomainParticipant_Disc {
-  type Target = DomainParticipant_Inner;
-  fn deref(&self) -> &Self::Target {
-    &self.dpi
-  }
-}
+// impl Deref for DomainParticipant_Disc {
+//   type Target = DomainParticipant_Inner;
+//   fn deref(&self) -> &Self::Target {
+//     &self.dpi.lock().unwrap()
+//   }
+// }
 
 impl Drop for DomainParticipant_Disc {
   fn drop(&mut self) {
@@ -650,21 +683,26 @@ impl DomainParticipant_Inner {
     &self,
     domain_participant: &DomainParticipantWeak,
     qos: &QosPolicies,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Result<Publisher> {
-    let (add_writer_sender, discovery_command) = match domain_participant.dpi.upgrade() {
-      Some(dpi) => (
-        dpi.get_add_writer_sender(),
-        dpi.discovery_command_channel.clone(),
-      ),
-      None => return Err(Error::OutOfResources),
-    };
+    // let (add_writer_sender, discovery_command) = 
+    //   match domain_participant.dpi.upgrade() {
+    //     Some(dpm) => { 
+    //       let dp_inner = dpm.lock().unwrap(); 
+    //       (
+    //         dp_inner.get_add_writer_sender(),
+    //         dp_inner.discovery_command_channel.clone(),
+    //       )
+    //     }
+    //     None => return Err(Error::OutOfResources),
+    //   };
 
     Ok(Publisher::new(
       domain_participant.clone(),
       self.discovery_db.clone(),
       qos.clone(),
       qos.clone(),
-      add_writer_sender,
+      self.add_writer_sender.clone(),
       discovery_command,
     ))
   }
@@ -673,11 +711,14 @@ impl DomainParticipant_Inner {
     &self,
     domain_participant: &DomainParticipantWeak,
     qos: &QosPolicies,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Result<Subscriber> {
-    let discovery_command = match domain_participant.dpi.upgrade() {
-      Some(dpi) => dpi.discovery_command_channel.clone(),
-      None => return Err(Error::OutOfResources),
-    };
+    //println!("DPI: create_subscriber");
+    // let discovery_command = match domain_participant.dpi.upgrade() {
+    //   Some(dpi) => dpi.lock().unwrap().discovery_command_channel.clone(),
+    //   None => return Err(Error::OutOfResources),
+    // };
+    //println!("DPI: create_subscriber done");
 
     Ok(Subscriber::new(
       domain_participant.clone(),
@@ -695,14 +736,14 @@ impl DomainParticipant_Inner {
   // with non-ASCII characters. On the other hand, string handling with &str is easier in Rust.
   pub fn create_topic(
     &self,
-    domain_participant: &DomainParticipantWeak,
+    domain_participant_weak: &DomainParticipantWeak,
     name: &str,
     type_desc: &str,
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic> {
     let topic = Topic::new(
-      domain_participant,
+      domain_participant_weak,
       name.to_string(),
       TypeDesc::new(type_desc.to_string()),
       &qos,
@@ -767,14 +808,20 @@ impl DomainParticipant_Inner {
 } // impl
 
 impl Entity for DomainParticipant {
-  fn as_entity(&self) -> &EntityAttributes {
-    self.dpi.as_entity()
+  fn get_guid(&self) -> GUID {
+    self.dpi.lock().unwrap().get_guid()
+  }
+}
+
+impl Entity for DomainParticipant_Disc {
+  fn get_guid(&self) -> GUID {
+    self.dpi.lock().unwrap().get_guid()
   }
 }
 
 impl Entity for DomainParticipant_Inner {
-  fn as_entity(&self) -> &EntityAttributes {
-    &self.entity_attributes
+  fn get_guid(&self) -> GUID {
+    self.entity_attributes.guid
   }
 }
 

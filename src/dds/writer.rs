@@ -228,14 +228,14 @@ impl Writer {
   /// To know when token represents a writer we should look entity attribute kind
   /// this entity token can be used in DataWriter -> Writer miochannel.
   pub fn get_entity_token(&self) -> Token {
-    let id = self.as_entity().as_usize();
+    let id = self.get_guid().as_usize();
     Token(id)
   }
 
   /// This token is used in timed event miochannel HearbeatHandler -> dpEventwrapper
   pub fn get_timed_event_entity_token(&self) -> Token {
     let mut hasher = DefaultHasher::new();
-    let id = self.as_entity().as_usize() as u64;
+    let id = self.get_guid().as_usize() as u64;
     hasher.write(&id.to_le_bytes());
     let hashedID: u64 = hasher.finish();
     Token(hashedID as usize)
@@ -1164,8 +1164,8 @@ impl Writer {
 }
 
 impl Entity for Writer {
-  fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
-    &self.entity_attributes
+  fn get_guid(&self) -> GUID {
+    self.entity_attributes.guid
   }
 }
 

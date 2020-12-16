@@ -15,22 +15,19 @@ impl EntityAttributes {
     EntityAttributes { guid: guid }
   }
 
-  pub fn as_usize(&self) -> usize {
-    self.guid.entityId.as_usize()
-  }
 }
 
 /// RTPS entity (for usage, DomainParticipant, DataReader and DataWriter implement this)
 pub trait Entity {
-  fn as_entity(&self) -> &EntityAttributes;
+  //fn as_entity(&self) -> &EntityAttributes;
+  // This seems quite redundant
 
-  fn get_guid(&self) -> GUID {
-    self.as_entity().guid
-  }
+  fn get_guid(&self) -> GUID;
+
   fn get_entity_id(&self) -> EntityId {
-    self.as_entity().guid.entityId
+    self.get_guid().entityId
   }
   fn get_guid_prefix(&self) -> GuidPrefix {
-    self.as_entity().guid.guidPrefix
+    self.get_guid().guidPrefix
   }
 }

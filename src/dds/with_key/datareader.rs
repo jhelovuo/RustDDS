@@ -13,7 +13,7 @@ use crate::{
   serialization::CDRDeserializerAdapter,
   discovery::discovery::DiscoveryCommand,
   structure::{
-    entity::{Entity, EntityAttributes},
+    entity::{Entity, EntityAttributes, },
     guid::{GUID, EntityId},
     time::Timestamp,
     dds_cache::DDSCache,
@@ -1123,8 +1123,8 @@ where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  fn as_entity(&self) -> &EntityAttributes {
-    &self.entity_attributes
+  fn get_guid(&self) -> GUID {
+    self.entity_attributes.guid
   }
 }
 

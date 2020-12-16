@@ -131,6 +131,8 @@ impl EntityId {
     let x3 = self.entityKey[2] as i64;
     let x4 = self.entityKind as i64;
 
+    // TODO: Explain the meaning of this formula.
+
     ((10_i64.pow(14) + x1 * 100000000000)
       + (10_i64.pow(10) + x2 * 10000000)
       + (10_i64.pow(6) + x3 * 1000)
@@ -251,6 +253,11 @@ impl GUID {
       entityId: entity_id,
     }
   }
+
+  pub fn as_usize(&self) -> usize {
+    self.entityId.as_usize()
+  }
+
 }
 
 impl Key for GUID {}

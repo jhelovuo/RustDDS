@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc,RwLock};
-
+use std::sync::{Arc,Mutex};
+//use std::io::{Write,stderr};
 use log::error;
 use mio::Evented;
 use serde::{Serialize, de::DeserializeOwned};
@@ -20,6 +20,7 @@ use crate::{
     traits::serde_adapters::DeserializerAdapter,
     traits::serde_adapters::SerializerAdapter,
     values::result::Error,
+    data_types::DiscoveredTopicData,
   },
   structure::{entity::Entity, guid::GUID},
 };
@@ -40,12 +41,13 @@ use super::{
 /// [RosParticipant](struct.RosParticipant.html) sends and receives other participants information in ROS2 network
 #[derive(Clone)]
 pub struct RosParticipant {
-  inner: Arc<RwLock<RosParticipantInner>>,
+  inner: Arc<Mutex<RosParticipantInner>>,
 }
 
 impl RosParticipant {
   pub fn new() -> Result<RosParticipant, Error> {
-    Self::from_DomainParticipant(DomainParticipant::new(0))
+    let dp = DomainParticipant::new(0);
+    Self::from_DomainParticipant(dp)
   }
 
   pub fn from_DomainParticipant(domain_participant: DomainParticipant) 
@@ -53,7 +55,7 @@ impl RosParticipant {
   {
     let i = RosParticipantInner::from_DomainParticipant(domain_participant)?;
     Ok( RosParticipant {
-          inner: Arc::new( RwLock::new( i ) ),
+          inner: Arc::new( Mutex::new( i ) ),
         } )
   }
   /// Create a new ROS2 node
@@ -61,32 +63,48 @@ impl RosParticipant {
       -> Result<RosNode, Error> {
     RosNode::new(name,namespace,options,self.clone())
   }
-
-  fn add_node_info(&mut self, node_info: NodeInfo) {
-    self.inner.write().unwrap().add_node_info(node_info)
+  pub fn handle_node_read(&mut self) -> Vec<ROSParticipantInfo> {
+    self.inner.lock().unwrap().handle_node_read()
   }
-  fn get_parameter_events_topic(&self) -> Topic {
-    self.inner.read().unwrap().ros_parameter_events_topic.clone()
-  }
-
-  fn get_rosout_topic(&self) -> Topic {
-    self.inner.read().unwrap().ros_rosout_topic.clone()
-  }
-
-  fn get_ros_discovery_publisher(&self) -> Publisher {
-    self.inner.read().unwrap().ros_discovery_publisher.clone()
-  }
-
-  fn get_ros_discovery_subscriber(&self) -> Subscriber {
-    self.inner.read().unwrap().ros_discovery_subscriber.clone()
-  }
-
-  fn domain_participant(&self) -> DomainParticipant {
-    self.inner.read().unwrap().domain_participant.clone()
+  /// Clears all nodes and updates our RosParticipantInfo to ROS2 network
+  pub fn clear(&mut self) {
+    self.inner.lock().unwrap().clear()
   }
 
   pub fn domain_id(&self) -> u16 {
-    self.inner.read().unwrap().domain_participant.domain_id()
+    self.inner.lock().unwrap().domain_participant.domain_id()
+  }
+
+  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+    self.domain_participant().get_discovered_topics()
+  }
+
+  pub fn add_node_info(&mut self, node_info: NodeInfo) {
+    self.inner.lock().unwrap().add_node_info(node_info)
+  }
+
+  pub fn remove_node_info(&mut self, node_info: &NodeInfo) {
+    self.inner.lock().unwrap().remove_node_info(node_info)
+  }
+
+  fn get_parameter_events_topic(&self) -> Topic {
+    self.inner.lock().unwrap().ros_parameter_events_topic.clone()
+  }
+
+  fn get_rosout_topic(&self) -> Topic {
+    self.inner.lock().unwrap().ros_rosout_topic.clone()
+  }
+
+  fn get_ros_discovery_publisher(&self) -> Publisher {
+    self.inner.lock().unwrap().ros_discovery_publisher.clone()
+  }
+
+  fn get_ros_discovery_subscriber(&self) -> Subscriber {
+    self.inner.lock().unwrap().ros_discovery_subscriber.clone()
+  }
+
+  fn domain_participant(&self) -> DomainParticipant {
+    self.inner.lock().unwrap().domain_participant.clone()
   }
 
 }
@@ -180,7 +198,7 @@ impl RosParticipantInner {
   }
 
   /// Removes NodeInfo and updates our RosParticipantInfo to ROS2 network
-  pub fn remove_node_info(&mut self, node_info: &NodeInfo) {
+  fn remove_node_info(&mut self, node_info: &NodeInfo) {
     match self.nodes.remove(&node_info.get_full_name()) {
       Some(_) => self.broadcast_node_infos(),
       None => (),
@@ -228,16 +246,16 @@ impl RosParticipantInner {
 impl Evented for RosParticipant {
   fn register(&self, poll: &mio::Poll, token: mio::Token, interest: mio::Ready, opts: mio::PollOpt, ) 
   -> std::io::Result<()>  {
-    poll.register(&self.inner.read().unwrap().node_reader, token, interest, opts)
+    poll.register(&self.inner.lock().unwrap().node_reader, token, interest, opts)
   }
 
   fn reregister(&self, poll: &mio::Poll, token: mio::Token, interest: mio::Ready, opts: mio::PollOpt, ) 
     -> std::io::Result<()>  {
-    poll.reregister(&self.inner.read().unwrap().node_reader, token, interest, opts)
+    poll.reregister(&self.inner.lock().unwrap().node_reader, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio::Poll) -> std::io::Result<()> {
-    poll.deregister(&self.inner.read().unwrap().node_reader)
+    poll.deregister(&self.inner.lock().unwrap().node_reader)
   }
 }
 

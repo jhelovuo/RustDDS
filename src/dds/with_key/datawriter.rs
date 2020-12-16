@@ -855,8 +855,8 @@ where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
 {
-  fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
-    &self.entity_attributes
+  fn get_guid(&self) -> GUID {
+    self.entity_attributes.guid
   }
 }
 

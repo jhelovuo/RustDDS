@@ -359,7 +359,7 @@ impl InnerPublisher {
       }
     };
 
-    let guid = GUID::new_with_prefix_and_id(dp.as_entity().guid.guidPrefix, entity_id);
+    let guid = GUID::new_with_prefix_and_id(dp.get_guid().guidPrefix, entity_id);
     let new_writer = Writer::new(
       guid.clone(),
       hccc_download,

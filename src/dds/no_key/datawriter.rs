@@ -17,6 +17,7 @@ use crate::dds::values::result::{
   Result, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibleQosStatus,
   PublicationMatchedStatus,
 };
+use crate::dds::data_types::*;
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::serde_adapters::SerializerAdapter;
 
@@ -414,8 +415,8 @@ where
 }
 
 impl<D: Serialize, SA: SerializerAdapter<D>> Entity for DataWriter<D, SA> {
-  fn as_entity(&self) -> &crate::structure::entity::EntityAttributes {
-    self.keyed_datawriter.as_entity()
+  fn get_guid(&self) -> GUID {
+    self.keyed_datawriter.get_guid()
   }
 }
 

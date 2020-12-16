@@ -5,10 +5,11 @@ use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
   structure::{
-    entity::{Entity, EntityAttributes},
+    entity::{Entity,/* EntityAttributes*/ },
   },
 };
-use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*, readcondition::*};
+use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*,
+                 readcondition::*, data_types::*, };
 
 use crate::dds::with_key::datareader as datareader_with_key;
 use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
@@ -474,7 +475,7 @@ where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  fn as_entity(&self) -> &EntityAttributes {
-    self.keyed_datareader.as_entity()
+  fn get_guid(&self) -> GUID {
+    self.keyed_datareader.get_guid()
   }
 }

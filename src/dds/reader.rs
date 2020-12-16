@@ -35,7 +35,6 @@ use enumflags2::BitFlags;
 use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiverState;
 use crate::dds::qos::{QosPolicies, HasQoSPolicy};
-//use crate::dds::values::result::Result as DDSResult;
 use crate::network::udp_sender::UDPSender;
 
 use crate::serialization::message::Message;
@@ -133,13 +132,13 @@ impl Reader {
 
   /// To know when token represents a reader we should look entity attribute kind
   pub fn get_entity_token(&self) -> Token {
-    let id = self.as_entity().as_usize();
+    let id = self.get_guid().as_usize();
     Token(id)
   }
 
   pub fn get_reader_command_entity_token(&self) -> Token {
     let mut hasher = DefaultHasher::new();
-    let id = self.as_entity().as_usize() as u64;
+    let id = self.get_guid().as_usize() as u64;
     hasher.write(&id.to_le_bytes());
     let hashedID: u64 = hasher.finish();
     Token(hashedID as usize)
@@ -729,8 +728,8 @@ impl HasQoSPolicy for Reader {
 }
 
 impl Entity for Reader {
-  fn as_entity(&self) -> &EntityAttributes {
-    &self.entity_attributes
+  fn get_guid(&self) -> GUID {
+    self.entity_attributes.guid
   }
 }
 

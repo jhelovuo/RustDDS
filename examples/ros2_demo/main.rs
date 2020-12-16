@@ -5,15 +5,14 @@ extern crate mio_extras;
 use std::{io::Write, time::Duration};
 
 use rustdds::{
-  dds::DomainParticipant,
-  ros2::{RosContext, RosParticipant},
+  ros2::RosParticipant,
 };
 use commands::ThreadControl;
 use log::{debug, error};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{channel as mio_channel};
 use structures::{MainController, DataUpdate, RosCommand};
-use termion::raw::IntoRawMode;
+use termion::raw::*;
 use log4rs;
 use turtle_listener::TurtleListener;
 use turtle_sender::TurtleSender;
@@ -38,6 +37,7 @@ fn main() {
 
   let stdout_org = std::io::stdout();
   let mut stdout = stdout_org.lock().into_raw_mode().unwrap();
+  //stdout.suspend_raw_mode(); // debug
   // clearing screen
   write!(
     stdout,
@@ -49,6 +49,7 @@ fn main() {
   stdout.flush().unwrap();
 
   let jhandle = std::thread::spawn(move || ros2_loop(command_receiver));
+  //writeln!(stdout,"loop spawned");
 
   let mut main_control = MainController::new(stdout, command_sender.clone());
   main_control.start();
@@ -60,28 +61,28 @@ fn main() {
 }
 
 fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
-  let domain_participant = DomainParticipant::new(0);
-  let ros_context = RosContext::new(domain_participant.clone(), true).unwrap();
-  let mut ros_participant = RosParticipant::new(ros_context).unwrap();
+  //writeln!(std::io::stderr(),"ros2 loop");
+  let mut ros_participant = RosParticipant::new().unwrap();
+  //writeln!(std::io::stderr(),"got participant");
 
   // node info channel
   let (nodeinfo_sender, nodeinfo_receiver) = mio_channel::channel();
 
-  let dpc = domain_participant.clone();
   let ni_sender = nodeinfo_sender.clone();
   // turtle listener
   let (tlisterner_sender, tlistener_receiver) = mio_channel::channel();
   let (tc_tl_sender, tc_ts_receiver) = mio_channel::channel();
+  let listener_rp = ros_participant.clone();
   std::thread::spawn(move || {
-    TurtleListener::run(dpc, tc_ts_receiver, tlisterner_sender, ni_sender)
+    TurtleListener::run(listener_rp, tc_ts_receiver, tlisterner_sender, ni_sender)
   });
 
-  let dpc = domain_participant.clone();
   // turtle writer
   let (tsender_sender, tsender_receiver) = mio_channel::channel();
   let (tc_ts_sender, tc_ts_receiver) = mio_channel::channel();
+  let sender_rp = ros_participant.clone();
   std::thread::spawn(move || {
-    TurtleSender::run(dpc, tc_ts_receiver, tsender_receiver, nodeinfo_sender)
+    TurtleSender::run(sender_rp, tc_ts_receiver, tsender_receiver, nodeinfo_sender)
   });
 
   {
@@ -190,7 +191,7 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
             None => (),
           }
         } else if event.token() == TOPIC_UPDATE_TIMER_TOKEN {
-          let list = domain_participant.get_discovered_topics();
+          let list = ros_participant.get_discovered_topics();
           match &nodes_updated_sender {
             Some(s) => s.send(DataUpdate::TopicList { list }).unwrap(),
             None => (),

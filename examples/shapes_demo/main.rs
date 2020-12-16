@@ -34,7 +34,7 @@ use std::{
   time::Duration as StdDuration,
 };
 use mio::{Poll, Token, Ready, PollOpt, Events};
-use mio_extras::{timer::Timer, channel as mio_channel};
+use mio_extras::{timer::Timer};
 use shapes::Square;
 use std::io::{Write, Read};
 use termion::raw::IntoRawMode;
@@ -48,10 +48,16 @@ fn main() {
   let domain_id = std::env::args().nth(1).unwrap_or(String::from("0"));
   let domain_id = domain_id.parse::<u16>().unwrap();
 
-  let (stop_channel_sender, stop_channel_receiver) = mio_channel::sync_channel(10);
-  let _jhandle = std::thread::spawn(move || event_loop(stop_channel_receiver, domain_id));
+  let running = Arc::new(AtomicBool::new(true));
+  let r = running.clone();
+  ctrlc::set_handler(move || {
+    r.store(false, Ordering::SeqCst);
+  })
+  .expect("Error setting Ctrl-C handler");
+  println!("Waiting for Ctrl-C...");
 
-  stop_control(stop_channel_sender);
+  let loop_thread = std::thread::spawn(move || event_loop(running, domain_id));
+  loop_thread.join().expect("The loop thread has panicked");
 }
 
 // milliseconds
@@ -62,12 +68,12 @@ const STOP_EVENT_LOOP_TOKEN: Token = Token(1000);
 const SQUARE_READER_TOKEN: Token = Token(1001);
 const KEYBOARD_CHECK_TOKEN: Token = Token(1002);
 
-fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
+fn event_loop(running_flag: Arc<AtomicBool>, domain_id: u16) {
   let poll = Poll::new().unwrap();
 
   // adjust domain_id or participant_id if necessary to interoperability
   let domain_participant = DomainParticipant::new(domain_id);
-
+  //println!("Have DP");
   let pub_qos = QosPolicies::builder()
     .reliability(Reliability::BestEffort)
     .history(History::KeepLast { depth: 1 })
@@ -96,17 +102,23 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
     })
     .build();
 
+  //println!("Create topics");
+
   // declare topics, subscriber, publisher, readers and writers
   let square_topic = domain_participant
     .create_topic("Square", "ShapeType", &pub_qos, TopicKind::WithKey)
     .unwrap();
+  //println!("Square");
   let triangle_topic = domain_participant
     .create_topic("Triangle", "ShapeType", &pub_qos, TopicKind::WithKey)
     .unwrap();
+  //println!("Triangle. Have topics. Create subscriber.");
 
   let square_sub = domain_participant
     .create_subscriber(&QosPolicies::builder().build())
     .unwrap();
+
+  //println!("Have subscriber");
 
   // reader needs to be mutable if you want to read/take something from it
   let mut square_reader = square_sub
@@ -122,15 +134,17 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
     )
     .unwrap();
 
+  //println!("Have reader and writer");
+
   // register readers and possible timers
-  poll
-    .register(
-      &stop_receiver,
-      STOP_EVENT_LOOP_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
+  // poll
+  //   .register(
+  //     &stop_receiver,
+  //     STOP_EVENT_LOOP_TOKEN,
+  //     Ready::readable(),
+  //     PollOpt::edge(),
+  //   )
+  //   .unwrap();
   poll
     .register(
       &square_reader,
@@ -139,6 +153,8 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
       PollOpt::edge(),
     )
     .unwrap();
+  
+  std::thread::sleep(std::time::Duration::from_millis(2000));
 
   let stdout_org = std::io::stdout();
   let mut areader = termion::async_stdin().bytes();
@@ -167,7 +183,11 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
 
   let mut row: u16 = 0;
   let mut square = Square::new(String::from("BLUE"), 0, 0, 30);
+
   loop {
+    // check for Ctrl-C
+    if  ! running_flag.load(Ordering::SeqCst) { return }
+
     {
       if row > 60 {
         let mut stdout = stdout_org.lock().into_raw_mode().unwrap();
@@ -181,7 +201,10 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
         .unwrap();
         stdout.flush().unwrap();
       }
-
+      // {
+      //   let mut stdout = stdout_org.lock().into_raw_mode().unwrap();
+      //   write!(stdout, "Polling...").unwrap(); stdout.flush().unwrap();
+      // }
       let mut events = Events::with_capacity(10);
       poll.poll(&mut events, None).unwrap();
 
@@ -203,7 +226,8 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
           let mut dispose_square = false;
 
           while let Some(c) = areader.next() {
-            write!(stdout, "{}", termion::cursor::Goto(1, row)).unwrap();
+            write!(stdout, "{}", termion::cursor::Goto(1, row))
+              .unwrap();
 
             let c = match c {
               Ok(c) => c,
@@ -212,24 +236,33 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
               }
             };
             match c {
-              113 => return,
-              65 => {
+              113 => { // "q"
+                print!("Exiting main loop");
+                stdout.flush().unwrap();
+                return
+              }
+              65 => { // cursor down
+                print!("Y-");
                 square.yadd(-1);
                 square_moved = true;
               }
-              66 => {
+              66 => { // cursor up
+                print!("Y+");
                 square.yadd(1);
                 square_moved = true;
               }
-              67 => {
+              67 => { // cursor right
+                print!("X+");
                 square.xadd(1);
                 square_moved = true;
               }
               68 => {
+                print!("X-");
                 square.xadd(-1);
                 square_moved = true;
               }
-              100 => {
+              100 => { // "d"
+                print!("dispose!");
                 dispose_square = true;
               }
               _ => {
@@ -237,6 +270,7 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
               }
             };
           }
+          stdout.flush().unwrap();
           if square_moved {
             match square_writer.write(square.clone(), None) {
               Ok(_) => (),
@@ -262,30 +296,11 @@ fn event_loop(stop_receiver: mio_channel::Receiver<()>, domain_id: u16) {
 fn fetch_squares(
   reader: &mut With_Key_DataReader<Square, CDRDeserializerAdapter<Square>>,
 ) -> Vec<Square> {
-  match reader.take(100, ReadCondition::any()) {
+  match reader.take(10, ReadCondition::any()) {
     Ok(ds) => ds.into_iter().filter_map(|p| p.into_value().ok()).collect(),
     Err(_) => {
       println!("Failed to read squares");
       vec![]
     }
   }
-}
-
-fn stop_control(stop_sender: mio_channel::SyncSender<()>) {
-  let running = Arc::new(AtomicBool::new(true));
-  let r = running.clone();
-
-  ctrlc::set_handler(move || {
-    r.store(false, Ordering::SeqCst);
-  })
-  .expect("Error setting Ctrl-C handler");
-
-  println!("Waiting for Ctrl-C...");
-  while running.load(Ordering::SeqCst) {}
-
-  match stop_sender.try_send(()) {
-    Ok(_) => (),
-    _ => println!("EventLoop is already finished."),
-  };
-  println!("Got it! Exiting...");
 }

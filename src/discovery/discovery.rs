@@ -147,6 +147,7 @@ impl Discovery {
   pub fn discovery_event_loop(discovery: Discovery) {
     let mut liveliness_state = LivelinessState::new();
 
+    //println!("Discovery start initialize");
     match discovery.poll.register(
       &discovery.discovery_command_receiver,
       DISCOVERY_COMMAND_TOKEN,
@@ -164,8 +165,9 @@ impl Discovery {
         return;
       }
     };
-
+    //println!("Command receiver registered");
     let discovery_subscriber_qos = Discovery::subscriber_qos();
+    //println!("Creating subscriber");
     let discovery_subscriber = match discovery
       .domain_participant
       .create_subscriber(&discovery_subscriber_qos)
@@ -181,6 +183,7 @@ impl Discovery {
         return;
       }
     };
+    //println!("Have subscriber");
 
     let discovery_publisher_qos = Discovery::subscriber_qos();
     let discovery_publisher = match discovery
@@ -198,6 +201,7 @@ impl Discovery {
         return;
       }
     };
+    //println!("Discovery pub + sub created");
 
     // Participant
     let dcps_participant_topic = match discovery.domain_participant.create_topic(
@@ -718,6 +722,7 @@ impl Discovery {
       _ => return,
     };
 
+    //println!("Entering discovery event loop");
     loop {
       let mut events = Events::with_capacity(1024);
       match discovery.poll.poll(&mut events, None) {
