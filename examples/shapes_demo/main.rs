@@ -56,6 +56,9 @@ fn main() {
   .expect("Error setting Ctrl-C handler");
   println!("Waiting for Ctrl-C...");
 
+  println!("Use cursor keys to control Triangle.");
+  println!("Set up another DDS publisher for Square topic.");
+
   let loop_thread = std::thread::spawn(move || event_loop(running, domain_id));
   loop_thread.join().expect("The loop thread has panicked");
 }
@@ -114,19 +117,19 @@ fn event_loop(running_flag: Arc<AtomicBool>, domain_id: u16) {
     .unwrap();
   //println!("Triangle. Have topics. Create subscriber.");
 
-  let square_sub = domain_participant
+  let shapes_sub = domain_participant
     .create_subscriber(&QosPolicies::builder().build())
     .unwrap();
 
   //println!("Have subscriber");
 
   // reader needs to be mutable if you want to read/take something from it
-  let mut square_reader = square_sub
+  let mut square_reader = shapes_sub
     .create_datareader::<Square, CDRDeserializerAdapter<Square>>(square_topic, None, None)
     .unwrap();
 
-  let square_pub = domain_participant.create_publisher(&pub_qos).unwrap();
-  let square_writer = square_pub
+  let shapes_pub = domain_participant.create_publisher(&pub_qos).unwrap();
+  let triangle_writer = shapes_pub
     .create_datawriter::<Square, CDRSerializerAdapter<Square, LittleEndian>>(
       None,
       triangle_topic,
@@ -272,7 +275,7 @@ fn event_loop(running_flag: Arc<AtomicBool>, domain_id: u16) {
           }
           stdout.flush().unwrap();
           if square_moved {
-            match square_writer.write(square.clone(), None) {
+            match triangle_writer.write(square.clone(), None) {
               Ok(_) => (),
               Err(e) => println!("Failed to write new square. {:?}", e),
             };
@@ -280,7 +283,7 @@ fn event_loop(running_flag: Arc<AtomicBool>, domain_id: u16) {
 
           if dispose_square {
             println!("Disposing square");
-            match square_writer.dispose(square.get_key(), None) {
+            match triangle_writer.dispose(square.get_key(), None) {
               Ok(_) => (),
               Err(e) => println!("Failed to dispose square. {:?}", e),
             }
