@@ -231,17 +231,11 @@ impl PartialEq for DomainParticipant {
   }
 }
 
-// impl Deref for DomainParticipant {
-//   type Target = DomainParticipant_Disc;
-//   fn deref(&self) -> &DomainParticipant_Disc {
-//     &self.dpi
-//   }
-// }
 
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
   dpi: Weak<Mutex<DomainParticipant_Disc>>,
-  //entity_attributes: EntityAttributes,
+  // This struct caches the GUID to avoid construction deadlocks
   guid: GUID,
 }
 
@@ -314,10 +308,6 @@ impl DomainParticipantWeak {
 impl Entity for DomainParticipantWeak {
   fn get_guid(&self) -> GUID {
     self.guid
-    // match self.dpi.upgrade() {
-    //   Some(dpi) => dpi.lock().unwrap().get_guid(),
-    //   None => panic!("Unable to get original domain participant."),
-    // }
   }
 }
 
@@ -405,18 +395,7 @@ impl DomainParticipant_Disc {
     return self.dpi.lock().unwrap().discovery_db.clone();
   }
 
-  // pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<Writer> {
-  //   self.dpi.lock().unwrap().get_add_writer_sender()
-  // }
-
 }
-
-// impl Deref for DomainParticipant_Disc {
-//   type Target = DomainParticipant_Inner;
-//   fn deref(&self) -> &Self::Target {
-//     &self.dpi.lock().unwrap()
-//   }
-// }
 
 impl Drop for DomainParticipant_Disc {
   fn drop(&mut self) {
@@ -656,19 +635,6 @@ impl DomainParticipant_Inner {
     self.sender_remove_reader.send(reader_guid).unwrap();
   }
 
-  /* removed due to architecture change.
-  pub fn add_datareader(&self, _datareader: DataReader, pos: usize) {
-    self.sender_add_datareader_vec[pos].send(()).unwrap();
-  }
-
-  pub fn remove_datareader(&self, guid: GUID, pos: usize) {
-    let datareader_guid = guid; // How to identify reader to be removed?
-    self.sender_remove_datareader_vec[pos]
-      .send(datareader_guid)
-      .unwrap();
-  }
-  */
-
   // Publisher and subscriber creation
   //
   // There are no delete function for publisher or subscriber. Deletion is performed by
@@ -680,18 +646,6 @@ impl DomainParticipant_Inner {
     qos: &QosPolicies,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Result<Publisher> {
-    // let (add_writer_sender, discovery_command) = 
-    //   match domain_participant.dpi.upgrade() {
-    //     Some(dpm) => { 
-    //       let dp_inner = dpm.lock().unwrap(); 
-    //       (
-    //         dp_inner.get_add_writer_sender(),
-    //         dp_inner.discovery_command_channel.clone(),
-    //       )
-    //     }
-    //     None => return Err(Error::OutOfResources),
-    //   };
-
     Ok(Publisher::new(
       domain_participant.clone(),
       self.discovery_db.clone(),
@@ -708,13 +662,6 @@ impl DomainParticipant_Inner {
     qos: &QosPolicies,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Result<Subscriber> {
-    //println!("DPI: create_subscriber");
-    // let discovery_command = match domain_participant.dpi.upgrade() {
-    //   Some(dpi) => dpi.lock().unwrap().discovery_command_channel.clone(),
-    //   None => return Err(Error::OutOfResources),
-    // };
-    //println!("DPI: create_subscriber done");
-
     Ok(Subscriber::new(
       domain_participant.clone(),
       self.discovery_db.clone(),
