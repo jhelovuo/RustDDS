@@ -41,11 +41,6 @@ pub struct DomainParticipant {
   dpi: Arc<Mutex<DomainParticipant_Disc>>,
 }
 
-// Send and Sync for actual ability to send between threads
-// TODO: We should not have these. They look dangerous.
-unsafe impl Send for DomainParticipant {}
-unsafe impl Sync for DomainParticipant {}
-
 #[allow(clippy::new_without_default)]
 impl DomainParticipant {
   /// # Examples
