@@ -74,7 +74,7 @@
 //! // Reader needs to be mutable if any operations are used.
 //! let mut reader = subscriber
 //!   .create_datareader_no_key::<SomeType, CDRDeserializerAdapter<SomeType>>(
-//!     &some_topic,
+//!     some_topic.clone(),
 //!     None,
 //!     None)
 //!   .unwrap();
@@ -83,7 +83,7 @@
 //! let writer = publisher
 //!   .create_datawriter_no_key::<SomeType, CDRSerializerAdapter<SomeType>>(
 //!     None,
-//!     &some_topic,
+//!     some_topic,
 //!     None)
 //!   .unwrap();
 //!

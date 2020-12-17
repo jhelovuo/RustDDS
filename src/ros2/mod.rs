@@ -6,66 +6,44 @@
 //! use rustdds::dds::DomainParticipant;
 //! use rustdds::dds::data_types::TopicKind;
 //! use rustdds::dds::traits::Entity;
-//! use rustdds::ros2::RosContext;
 //! use rustdds::ros2::RosParticipant;
 //! use rustdds::ros2::NodeOptions;
 //! use rustdds::ros2::RosNode;
-//! use rustdds::ros2::IRosNodeControl;
-//! use rustdds::ros2::RosNodeBuilder;
 //! use rustdds::ros2::builtin_datatypes::NodeInfo;
 //! use rustdds::dds::qos::QosPolicies;
 //! use rustdds::serialization::CDRSerializerAdapter;
 //!
 //!
-//! // DomainParticipant is always needed
-//! let domain_participant = DomainParticipant::new(0);
-//!
-//! // RosContext should be defined for each thread and second parameter set true if RosParticipant
-//! // is handled in this thread
-//! let ros_context = RosContext::new(domain_participant.clone(), true).unwrap();
 //!
 //! // RosParticipant is needed for defined RosNodes to be visible in ROS2 network.
-//! let mut ros_participant = RosParticipant::new(&ros_context).unwrap();
+//! let mut ros_participant = RosParticipant::new().unwrap();
 //!
-//! // Node options simply adjust configuration of the node (as in ROS Client library (RCL)).
-//! let ros_node_options = NodeOptions::new(domain_participant.domain_id(), false);
+//!
+//! // declaring ros node 
+//! let mut ros_node = ros_participant.new_RosNode(
+//!   "some_node_name",
+//!   "/some_namespace",
+//!   NodeOptions::new(false), // enable rosout?
+//!   ).unwrap();
 //!
 //! // Creating some topic for RosNode
-//! let some_topic = RosNode::create_ros_topic(
-//!     &domain_participant,
+//! let some_topic = ros_node.create_ros_topic(
 //!     "some_topic_name",
 //!     "NodeInfo",
 //!     QosPolicies::builder().build(),
 //!     TopicKind::NoKey)
 //!   .unwrap();
 //!
-//! // Topic has to live longer that node or readers/writers
-//! {
-//!   // declaring ros node using builder
-//!   let mut ros_node = RosNodeBuilder::new()
-//!     .name("some_node_name")
-//!     .namespace("/some_namespace")
-//!     .node_options(ros_node_options)
-//!     .ros_context(&ros_context)
-//!     .build()
-//!     .unwrap();
+//! // declaring some writer that use non keyed types
+//! let some_writer = ros_node
+//!   .create_ros_nokey_publisher::<NodeInfo, CDRSerializerAdapter<_>>(
+//!     some_topic, None)
+//!   .unwrap();
 //!
-//!   // declaring some writer that use non keyed types
-//!   let some_writer = ros_node
-//!     .create_ros_nokey_publisher::<NodeInfo, CDRSerializerAdapter<_>>(
-//!       &some_topic, None)
-//!     .unwrap();
+//! // Readers and RosParticipant implement mio Evented trait and thus function the same way as
+//! // std::sync::mpcs and can be handled the same way for reading the data
 //!
-//!   // RosNode needs to be updated manually about our writers and readers (lifetime magic)
-//!   ros_node.add_writer(some_writer.get_guid());
-//!
-//!   // Readers and RosParticipant implement mio Evented trait and thus function the same way as
-//!   // std::sync::mpcs and can be handled the same way for reading the data
-//!
-//!   // When you add or remove nodes remember to update RosParticipant so others in the ROS2
-//!   // network can find your nodes
-//!   ros_participant.add_node_info(ros_node.generate_node_info());
-//! }
+//! 
 //! ```
 
 /// Some builtin datatypes needed for ROS2 communication

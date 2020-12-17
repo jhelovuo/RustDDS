@@ -2,7 +2,7 @@
 
 The Data Distribution Service for real-time systems (DDS) is an Object Management Group (OMG) machine-to-machine connectivity framework that aims to enable scalable, real-time, dependable, high-performance and interoperable data exchanges using a publish–subscribe pattern. DDS addresses the needs of applications like air-traffic control, smart grid management, autonomous vehicles, robotics, transportation systems, power generation, medical devices, simulation and testing, aerospace and defense, and other applications that require real-time data exchange [[Wiki]][wiki-dds-url].
 
-This is a pure Rust implementation of DDS. We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions, so the API is not quite the same as with DDS specification.
+RustDDS is a pure Rust implementation of DDS. We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions, so the API is not quite the same as with DDS specification.
 
 # Current implementation status
 

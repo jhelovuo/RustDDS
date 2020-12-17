@@ -115,7 +115,7 @@ impl Publisher {
   /// }
   ///
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None);
   /// ```
   pub fn create_datawriter<D, SA>(
     &self,
@@ -158,7 +158,7 @@ impl Publisher {
   /// struct SomeType {}
   ///
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(None, topic, None);
   /// ```
   pub fn create_datawriter_no_key<D, SA>(
     &self,
@@ -242,7 +242,7 @@ impl Publisher {
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let publisher = domain_participant.create_publisher(&qos).unwrap();
-  /// assert_eq!(qos, *publisher.get_default_datawriter_qos());
+  /// assert_eq!(qos, publisher.get_default_datawriter_qos());
   /// ```
   pub fn get_default_datawriter_qos(&self) -> QosPolicies {
     self.inner.default_datawriter_qos.clone()
@@ -569,7 +569,7 @@ impl Subscriber {
   /// }
   ///
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
+  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None);
   /// ```
   pub fn create_datareader<D: 'static, SA>(
     &self,
@@ -614,7 +614,7 @@ impl Subscriber {
   /// struct SomeType {}
   ///
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
-  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
+  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None);
   /// ```
   pub fn create_datareader_no_key<D: 'static, SA>(
     &self,

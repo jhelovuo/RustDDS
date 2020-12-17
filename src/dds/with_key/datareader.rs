@@ -100,7 +100,7 @@ impl CurrentStatusChanges {
 ///
 /// // WithKey is important
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-/// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None);
+/// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None);
 /// ```
 pub struct DataReader< D: Keyed + DeserializeOwned,  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D> > {
   my_subscriber: Subscriber,
@@ -227,7 +227,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -289,7 +289,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -346,7 +346,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -388,7 +388,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -434,7 +434,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -483,7 +483,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -537,7 +537,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -588,7 +588,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -770,7 +770,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -843,7 +843,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -1052,7 +1052,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None).unwrap();
   ///
   /// // Wait for some deadline to be missed...
   /// if let Ok(Some(rqdl)) = data_reader.get_requested_deadline_missed_status() {

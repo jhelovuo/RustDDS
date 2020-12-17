@@ -69,7 +69,7 @@ use super::super::{
 ///
 /// // WithKey is important
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-/// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None);
+/// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None);
 /// ```
 pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>>
 {
@@ -210,7 +210,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// data_writer.refresh_manual_liveliness();
   /// ```
@@ -264,7 +264,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// let some_data = SomeType { a: 1 };
   /// data_writer.write(some_data, None).unwrap();
@@ -328,7 +328,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// let some_data = SomeType { a: 1 };
   /// data_writer.write(some_data, None).unwrap();
@@ -382,7 +382,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// // Some status has changed
   ///
@@ -432,7 +432,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// // Liveliness lost status has changed
   ///
@@ -473,7 +473,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// // Deadline missed status has changed
   ///
@@ -533,7 +533,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// // Liveliness lost status has changed
   ///
@@ -575,7 +575,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// // Liveliness lost status has changed
   ///
@@ -616,7 +616,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic.clone(), None).unwrap();
   ///
   /// assert_eq!(data_writer.get_topic(), &topic);
   /// ```
@@ -653,7 +653,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// assert_eq!(data_writer.get_publisher(), &publisher);
   pub fn get_publisher(&self) -> &Publisher {
@@ -689,7 +689,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// data_writer.assert_liveliness().unwrap();
   /// ```
@@ -754,7 +754,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// for sub in data_writer.get_matched_subscriptions().iter() {
   ///   // do something
@@ -797,7 +797,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, &topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None).unwrap();
   ///
   /// let some_data_1_1 = SomeType { a: 1, val: 3};
   /// let some_data_1_2 = SomeType { a: 1, val: 4};
