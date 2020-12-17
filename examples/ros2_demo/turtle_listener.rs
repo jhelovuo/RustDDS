@@ -9,7 +9,7 @@ use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  commands::{NodeInfoCommand, ThreadControl},
+  commands::ThreadControl,
   ros2::turtle_data::{TurtleCmdVelTopic, Twist},
 };
 
@@ -23,7 +23,6 @@ impl TurtleListener {
     ros_participant: RosParticipant,
     tc_receiver: mio_channel::Receiver<ThreadControl>,
     sender: mio_channel::Sender<Twist>,
-    ni_sender: mio_channel::Sender<NodeInfoCommand>,
   ) {
     println!("Turtle listener");
     let mut ros_node = ros_participant.new_RosNode(
@@ -47,12 +46,6 @@ impl TurtleListener {
         None,
       )
       .unwrap();
-
-    // ni_sender
-    //   .send(NodeInfoCommand::Add {
-    //     node_info: ros_node.generate_node_info(),
-    //   })
-    //   .unwrap();
 
     let poll = Poll::new().unwrap();
 
@@ -85,11 +78,6 @@ impl TurtleListener {
               ThreadControl::Stop => {
                 info!("Stopping TurtleListener");
                 ros_node.clear_node();
-                // ni_sender
-                //   .send(NodeInfoCommand::Remove {
-                //     node_info: ros_node.generate_node_info(),
-                //   })
-                //   .unwrap_or(());
                 return;
               }
             }

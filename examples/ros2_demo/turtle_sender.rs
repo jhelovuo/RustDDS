@@ -9,7 +9,7 @@ use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  commands::{NodeInfoCommand, ThreadControl},
+  commands::ThreadControl,
   ros2::turtle_data::{TurtleCmdVelTopic, Twist},
 };
 
@@ -23,16 +23,13 @@ impl TurtleSender {
     ros_participant: RosParticipant,
     thread_control: mio_channel::Receiver<ThreadControl>,
     receiver: mio_channel::Receiver<Twist>,
-    ni_sender: mio_channel::Sender<NodeInfoCommand>,
   ) {
-    //info!("TurtleSender run");
     let mut ros_node = ros_participant.new_RosNode(
                             "turtle_sender",  // name
                             "/ros2_demo",     // namespace
                             NodeOptions::new(false), // enable rosout
                             )
                         .unwrap();
-    //info!("TurtleSender node");
 
     let turtle_cmd_vel_topic = ros_node.create_ros_topic(
       &TurtleCmdVelTopic::topic_name(),
@@ -41,7 +38,6 @@ impl TurtleSender {
       TurtleCmdVelTopic::topic_kind(),
     )
     .unwrap();
-    //info!("TurtleSender topic");
 
     let turtle_cmd_vel_writer = ros_node
       .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(
@@ -49,15 +45,6 @@ impl TurtleSender {
         None,
       )
       .unwrap();
-    //info!("TurtleSender publisher");
-
-    //ros_node.add_writer(turtle_cmd_vel_writer.get_guid());
-
-    // ni_sender
-    //   .send(NodeInfoCommand::Add {
-    //     node_info: ros_node.generate_node_info(),
-    //   })
-    //   .unwrap();
 
     let poll = Poll::new().unwrap();
 
@@ -90,11 +77,6 @@ impl TurtleSender {
               ThreadControl::Stop => {
                 info!("Stopping TurtleSender");
                 ros_node.clear_node();
-                // ni_sender
-                //   .send(NodeInfoCommand::Remove {
-                //     node_info: ros_node.generate_node_info(),
-                //   })
-                //   .unwrap_or(());
                 return;
               }
             }
@@ -106,11 +88,6 @@ impl TurtleSender {
               Err(e) => {
                 error!("Failed to write to turtle writer. {:?}", e);
                 ros_node.clear_node();
-                // ni_sender
-                //   .send(NodeInfoCommand::Remove {
-                //     node_info: ros_node.generate_node_info(),
-                //   })
-                //   .unwrap_or(());
                 return;
               }
             }

@@ -28,7 +28,6 @@ const ROS2_COMMAND_TOKEN: Token = Token(1000);
 const ROS2_NODE_RECEIVED_TOKEN: Token = Token(1001);
 const TURTLE_CMD_VEL_RECEIVER_TOKEN: Token = Token(1002);
 const TOPIC_UPDATE_TIMER_TOKEN: Token = Token(1003);
-const NODE_INFO_TOKEN: Token = Token(1004);
 
 fn main() {
   log4rs::init_file("examples/ros2_demo/log4rs.yaml", Default::default()).unwrap();
@@ -37,7 +36,6 @@ fn main() {
 
   let stdout_org = std::io::stdout();
   let mut stdout = stdout_org.lock().into_raw_mode().unwrap();
-  //stdout.suspend_raw_mode(); // debug
   // clearing screen
   write!(
     stdout,
@@ -49,9 +47,8 @@ fn main() {
   stdout.flush().unwrap();
 
   let jhandle = std::thread::spawn(move || ros2_loop(command_receiver));
-  //writeln!(stdout,"loop spawned");
 
-  let mut main_control = MainController::new(stdout, command_sender.clone());
+  let mut main_control = MainController::new(stdout, command_sender);
   main_control.start();
 
   jhandle.join().unwrap();
@@ -61,20 +58,15 @@ fn main() {
 }
 
 fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
-  //writeln!(std::io::stderr(),"ros2 loop");
   let mut ros_participant = RosParticipant::new().unwrap();
-  //writeln!(std::io::stderr(),"got participant");
 
-  // node info channel
-  let (nodeinfo_sender, nodeinfo_receiver) = mio_channel::channel();
 
-  let ni_sender = nodeinfo_sender.clone();
   // turtle listener
   let (tlisterner_sender, tlistener_receiver) = mio_channel::channel();
   let (tc_tl_sender, tc_ts_receiver) = mio_channel::channel();
   let listener_rp = ros_participant.clone();
   std::thread::spawn(move || {
-    TurtleListener::run(listener_rp, tc_ts_receiver, tlisterner_sender, ni_sender)
+    TurtleListener::run(listener_rp, tc_ts_receiver, tlisterner_sender, )
   });
 
   // turtle writer
@@ -82,7 +74,7 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
   let (tc_ts_sender, tc_ts_receiver) = mio_channel::channel();
   let sender_rp = ros_participant.clone();
   std::thread::spawn(move || {
-    TurtleSender::run(sender_rp, tc_ts_receiver, tsender_receiver, nodeinfo_sender)
+    TurtleSender::run(sender_rp, tc_ts_receiver, tsender_receiver, )
   });
 
   {
@@ -121,15 +113,6 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
 
     poll
       .register(
-        &nodeinfo_receiver,
-        NODE_INFO_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
-
-    poll
-      .register(
         &tlistener_receiver,
         TURTLE_CMD_VEL_RECEIVER_TOKEN,
         Ready::readable(),
@@ -155,11 +138,13 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
                 ros_participant.clear();
                 break 'asdf;
               }
-              RosCommand::AddNodeListSender { sender } => nodes_updated_sender = Some(sender),
-              RosCommand::TurtleCmdVel { twist } => match tsender_sender.send(twist) {
-                Ok(_) => {debug!("main: send twist"); ()},
-                Err(e) => error!("Failed to send to turtle sender. {:?}", e),
-              },
+              RosCommand::AddNodeListSender { sender } => 
+                nodes_updated_sender = Some(sender),
+              RosCommand::TurtleCmdVel { twist } => 
+                match tsender_sender.send(twist) {
+                  Ok(_) => { /*debug!("main: send twist");*/ () },
+                  Err(e) => error!("Failed to send to turtle sender. {:?}", e),
+                },
             };
           }
         } else if event.token() == ROS2_NODE_RECEIVED_TOKEN {
@@ -197,17 +182,9 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
             None => (),
           };
           update_timer.set_timeout(Duration::from_secs(1), ());
-        } else if event.token() == NODE_INFO_TOKEN {
-          while let Ok(node_info_command) = nodeinfo_receiver.try_recv() {
-            match node_info_command {
-              commands::NodeInfoCommand::Add { node_info } => {
-                ros_participant.add_node_info(node_info);
-              }
-              commands::NodeInfoCommand::Remove { node_info } => {
-                ros_participant.remove_node_info(&node_info);
-              }
-            }
-          }
+        } 
+        else {
+          error!("Unknown poll token {:?}",event.token())
         }
       }
     }
