@@ -26,7 +26,7 @@ use crate::dds::{
 use crate::{
   discovery::{discovery::Discovery, discovery_db::DiscoveryDB},
   structure::{
-    entity::{Entity, EntityAttributes},
+    entity::{Entity},
     guid::GUID,
     dds_cache::DDSCache,
   },
@@ -424,7 +424,7 @@ pub(crate) struct DomainParticipant_Inner {
   domain_id: u16,
   participant_id: u16,
 
-  entity_attributes: EntityAttributes,
+  my_guid: GUID,
   reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 
   // Adding Readers
@@ -604,7 +604,7 @@ impl DomainParticipant_Inner {
     DomainParticipant_Inner {
       domain_id,
       participant_id,
-      entity_attributes: EntityAttributes { guid: new_guid },
+      my_guid: new_guid ,
       reader_binds: HashMap::new(),
       //ddscache: a_r_cache,
       // Adding readers
@@ -763,7 +763,7 @@ impl Entity for DomainParticipant_Disc {
 
 impl Entity for DomainParticipant_Inner {
   fn get_guid(&self) -> GUID {
-    self.entity_attributes.guid
+    self.my_guid
   }
 }
 

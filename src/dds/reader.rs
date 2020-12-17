@@ -8,7 +8,6 @@ use crate::messages::submessages::submessages::*;
 
 use crate::dds::ddsdata::DDSData;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
-use crate::structure::entity::EntityAttributes;
 use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::locator::LocatorList;
@@ -64,7 +63,7 @@ pub(crate) struct Reader {
   topic_name: String,
   qos_policy: QosPolicies,
 
-  entity_attributes: EntityAttributes,
+  my_guid: GUID,
   pub enpoint_attributes: EndpointAttributes,
 
   heartbeat_response_delay: StdDuration,
@@ -98,7 +97,7 @@ impl Reader {
       qos_policy: QosPolicyBuilder::new().build(),
 
       seqnum_instant_map: HashMap::new(),
-      entity_attributes: EntityAttributes { guid },
+      my_guid: guid ,
       enpoint_attributes: EndpointAttributes::default(),
 
       heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
@@ -634,7 +633,7 @@ impl Reader {
       protocol_id: ProtocolId::default(),
       protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
       vendor_id: VendorId::THIS_IMPLEMENTATION,
-      guid_prefix: self.entity_attributes.guid.guidPrefix,
+      guid_prefix: self.my_guid.guidPrefix,
     });
 
     let info_dst = InfoDestination {
@@ -679,7 +678,7 @@ impl Reader {
         protocol_id: ProtocolId::default(),
         protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
         vendor_id: VendorId::THIS_IMPLEMENTATION,
-        guid_prefix: self.entity_attributes.guid.guidPrefix,
+        guid_prefix: self.my_guid.guidPrefix,
       });
 
       let info_dst = InfoDestination {
@@ -729,7 +728,7 @@ impl HasQoSPolicy for Reader {
 
 impl Entity for Reader {
   fn get_guid(&self) -> GUID {
-    self.entity_attributes.guid
+    self.my_guid
   }
 }
 
@@ -758,7 +757,7 @@ impl fmt::Debug for Reader {
     f.debug_struct("Reader")
       .field("notification_sender, dds_cache", &"can't print".to_string())
       .field("topic_name", &self.topic_name)
-      .field("entity_attributes", &self.entity_attributes)
+      .field("my_guid", &self.my_guid)
       .field("enpoint_attributes", &self.enpoint_attributes)
       .field("heartbeat_response_delay", &self.heartbeat_response_delay)
       .field("sent_ack_nack_count", &self.sent_ack_nack_count)

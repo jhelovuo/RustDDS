@@ -13,7 +13,7 @@ use crate::{
   serialization::CDRDeserializerAdapter,
   discovery::discovery::DiscoveryCommand,
   structure::{
-    entity::{Entity, EntityAttributes, },
+    entity::{Entity, },
     guid::{GUID, EntityId},
     time::Timestamp,
     dds_cache::DDSCache,
@@ -106,7 +106,7 @@ pub struct DataReader< D: Keyed + DeserializeOwned,  DA: DeserializerAdapter<D> 
   my_subscriber: Subscriber,
   my_topic: Topic,
   qos_policy: QosPolicies,
-  entity_attributes: EntityAttributes,
+  my_guid: GUID,
   pub(crate) notification_receiver: mio_channel::Receiver<()>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
@@ -167,15 +167,12 @@ where
       }
     };
 
-    let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
-      dp.get_guid_prefix().clone(),
-      my_id,
-    ));
+    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix().clone(), my_id);
 
     Ok(Self {
       my_subscriber: subscriber,
       qos_policy,
-      entity_attributes,
+      my_guid,
       notification_receiver,
       dds_cache,
       datasample_cache: DataSampleCache::new(topic.get_qos()),
@@ -1124,7 +1121,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn get_guid(&self) -> GUID {
-    self.entity_attributes.guid
+    self.my_guid
   }
 }
 

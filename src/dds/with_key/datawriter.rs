@@ -12,7 +12,7 @@ use crate::{
   discovery::discovery::DiscoveryCommand, serialization::CDRSerializerAdapter,
   dds::qos::policy::Liveliness, structure::time::Timestamp,
 };
-use crate::structure::entity::{Entity, EntityAttributes};
+use crate::structure::entity::{Entity};
 use crate::structure::{
   dds_cache::DDSCache,
   guid::{GUID, EntityId},
@@ -76,7 +76,7 @@ pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerial
   my_publisher: Publisher,
   my_topic: Topic,
   qos_policy: QosPolicies,
-  entity_attributes: EntityAttributes,
+  my_guid: GUID,
   cc_upload: mio_channel::SyncSender<WriterCommand>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   dds_cache: Arc<RwLock<DDSCache>>,
@@ -133,10 +133,7 @@ where
       }
     };
 
-    let entity_attributes = EntityAttributes::new(GUID::new_with_prefix_and_id(
-      dp.get_guid_prefix().clone(),
-      entity_id,
-    ));
+    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix().clone(), entity_id );
 
     match dds_cache.write() {
       Ok(mut cache) => cache.add_new_topic(
@@ -167,7 +164,7 @@ where
       my_publisher: publisher,
       my_topic: topic,
       qos_policy: qos.clone(),
-      entity_attributes,
+      my_guid,
       cc_upload,
       discovery_command,
       dds_cache,
@@ -856,7 +853,7 @@ where
   SA: SerializerAdapter<D>,
 {
   fn get_guid(&self) -> GUID {
-    self.entity_attributes.guid
+    self.my_guid
   }
 }
 

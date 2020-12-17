@@ -5,7 +5,7 @@ use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
   structure::{
-    entity::{Entity,/* EntityAttributes*/ },
+    entity::Entity ,
   },
 };
 use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*,

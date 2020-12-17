@@ -44,7 +44,7 @@ use crate::dds::{ddsdata::DDSData, qos::HasQoSPolicy};
 use crate::{
   network::{constant::TimerMessageType, udp_sender::UDPSender},
   structure::{
-    entity::{Entity, EntityAttributes},
+    entity::Entity,
     endpoint::{EndpointAttributes, Endpoint},
     locator::LocatorKind,
     dds_cache::DDSCache,
@@ -110,7 +110,7 @@ pub(crate) struct Writer {
   ///sent by the Writer
   pub data_max_size_serialized: u64,
   endpoint_attributes: EndpointAttributes,
-  entity_attributes: EntityAttributes,
+  my_guid: GUID,
   writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
   ///RTPS Reader
@@ -161,8 +161,6 @@ impl Writer {
     qos_policies: QosPolicies,
     status_sender: SyncSender<StatusChange>,
   ) -> Writer {
-    let entity_attributes = EntityAttributes::new(guid);
-
     let heartbeat_period = match &qos_policies.reliability {
       Some(r) => match r {
         Reliability::BestEffort => None,
@@ -201,7 +199,7 @@ impl Writer {
       last_change_sequence_number: SequenceNumber::from(0),
       first_change_sequence_number: SequenceNumber::from(0),
       data_max_size_serialized: 999999999,
-      entity_attributes,
+      my_guid: guid,
       //enpoint_attributes: EndpointAttributes::default(),
       writer_command_receiver,
       readers: vec![
@@ -809,7 +807,7 @@ impl Writer {
       vendor_id: VendorId {
         vendorId: self.source_vendor_id.vendorId,
       },
-      guid_prefix: self.entity_attributes.guid.guidPrefix,
+      guid_prefix: self.my_guid.guidPrefix,
     };
     return head;
   }
@@ -947,7 +945,7 @@ impl Writer {
 
     let heartbeat = Heartbeat {
       reader_id: reader_id,
-      writer_id: self.entity_attributes.guid.entityId,
+      writer_id: self.my_guid.entityId,
       first_sn: first,
       last_sn: last,
       count: self.heartbeat_message_counter,
@@ -1165,7 +1163,7 @@ impl Writer {
 
 impl Entity for Writer {
   fn get_guid(&self) -> GUID {
-    self.entity_attributes.guid
+    self.my_guid
   }
 }
 
