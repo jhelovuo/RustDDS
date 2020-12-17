@@ -191,18 +191,14 @@ impl RosParticipantInner {
     node_info.add_reader(Gid::from_guid(self.node_reader.get_guid()));
     node_info.add_writer(Gid::from_guid(self.node_writer.get_guid()));
 
-    match self.nodes.insert(node_info.get_full_name(), node_info) {
-      Some(_) => (),
-      None => self.broadcast_node_infos(),
-    }
+    self.nodes.insert(node_info.get_full_name(), node_info);
+    self.broadcast_node_infos();
   }
 
   /// Removes NodeInfo and updates our RosParticipantInfo to ROS2 network
   fn remove_node_info(&mut self, node_info: &NodeInfo) {
-    match self.nodes.remove(&node_info.get_full_name()) {
-      Some(_) => self.broadcast_node_infos(),
-      None => (),
-    }
+    self.nodes.remove(&node_info.get_full_name());
+    self.broadcast_node_infos();
   }
 
   /// Clears all nodes and updates our RosParticipantInfo to ROS2 network
