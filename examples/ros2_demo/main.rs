@@ -157,7 +157,7 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
               }
               RosCommand::AddNodeListSender { sender } => nodes_updated_sender = Some(sender),
               RosCommand::TurtleCmdVel { twist } => match tsender_sender.send(twist) {
-                Ok(_) => (),
+                Ok(_) => {debug!("main: send twist"); ()},
                 Err(e) => error!("Failed to send to turtle sender. {:?}", e),
               },
             };

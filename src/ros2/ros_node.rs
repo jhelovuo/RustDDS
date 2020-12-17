@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc,Mutex};
 //use std::io::{Write,stderr};
-use log::error;
+use log::{error,info};
 use mio::Evented;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -432,9 +432,10 @@ impl RosNode {
     let mut oname = "rt/".to_owned();
     let name_stripped = name.strip_prefix("/").unwrap_or(name); // avoid double slash in name
     oname.push_str(name_stripped);
-    println!("Crete topic, DDS name: {}",oname);
+    info!("Creating topic, DDS name: {}",oname);
     let topic = self.ros_participant.domain_participant()
       .create_topic(&oname, type_name, &qos, topic_kind)?;
+    info!("Created topic");
     Ok(topic)
   }
 

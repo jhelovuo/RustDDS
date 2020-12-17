@@ -25,12 +25,14 @@ impl TurtleSender {
     receiver: mio_channel::Receiver<Twist>,
     ni_sender: mio_channel::Sender<NodeInfoCommand>,
   ) {
+    //info!("TurtleSender run");
     let mut ros_node = ros_participant.new_RosNode(
                             "turtle_sender",  // name
                             "/ros2_demo",     // namespace
                             NodeOptions::new(false), // enable rosout
                             )
                         .unwrap();
+    //info!("TurtleSender node");
 
     let turtle_cmd_vel_topic = ros_node.create_ros_topic(
       &TurtleCmdVelTopic::topic_name(),
@@ -39,6 +41,7 @@ impl TurtleSender {
       TurtleCmdVelTopic::topic_kind(),
     )
     .unwrap();
+    //info!("TurtleSender topic");
 
     let turtle_cmd_vel_writer = ros_node
       .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(
@@ -46,6 +49,7 @@ impl TurtleSender {
         None,
       )
       .unwrap();
+    //info!("TurtleSender publisher");
 
     //ros_node.add_writer(turtle_cmd_vel_writer.get_guid());
 
@@ -74,7 +78,7 @@ impl TurtleSender {
         PollOpt::edge(),
       )
       .unwrap();
-
+      info!("TurtleSender initialized");
     loop {
       let mut events = Events::with_capacity(10);
       poll.poll(&mut events, None).unwrap();
@@ -98,7 +102,7 @@ impl TurtleSender {
         } else if event.token() == TurtleSender::TURTLE_TWIST_TOKEN {
           while let Ok(twist) = receiver.try_recv() {
             match turtle_cmd_vel_writer.write(twist, None) {
-              Ok(_) => (),
+              Ok(_) => { /*info!("Wrote twist!");*/ ()},
               Err(e) => {
                 error!("Failed to write to turtle writer. {:?}", e);
                 ros_node.clear_node();
