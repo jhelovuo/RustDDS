@@ -18,7 +18,7 @@ use crate::{
     guid::{EntityId, GUID},
     duration::Duration,
     builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
-    entity::Entity,
+    entity::RTPSEntity,
   },
 };
 

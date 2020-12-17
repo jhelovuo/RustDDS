@@ -11,7 +11,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
   discovery::discovery::DiscoveryCommand,
-  structure::{guid::GUID, entity::Entity, guid::EntityId},
+  structure::{guid::GUID, entity::RTPSEntity, guid::EntityId},
 };
 
 use crate::dds::{

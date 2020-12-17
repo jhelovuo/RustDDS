@@ -4,24 +4,9 @@ use crate::structure::guid::{GUID, EntityId, GuidPrefix};
 /// objects that are visible to other RTPS Entities on the network. As such,
 /// RTPS Entity objects have a globally-unique identifier (GUID) and can be
 /// referenced inside RTPS messages.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct EntityAttributes {
-  /// Globally and uniquely identifies the RTPS Entity within the DDS domain.
-  pub guid: GUID,
-}
-
-impl EntityAttributes {
-  pub fn new(guid: GUID) -> EntityAttributes {
-    EntityAttributes { guid: guid }
-  }
-
-}
-
-/// RTPS entity (for usage, DomainParticipant, DataReader and DataWriter implement this)
-pub trait Entity {
-  //fn as_entity(&self) -> &EntityAttributes;
-  // This seems quite redundant
-
+/// (for usage, DomainParticipant, DataReader and DataWriter implement this)
+/// RTPS 2.3 specification section 8.2.4
+pub trait RTPSEntity {
   fn get_guid(&self) -> GUID;
 
   fn get_entity_id(&self) -> EntityId {

@@ -1,7 +1,7 @@
 use crate::{
   common::timed_event_handler::TimedEventHandler,
   network::constant::TimerMessageType,
-  structure::{cache_change::ChangeKind, entity::Entity},
+  structure::{cache_change::ChangeKind, entity::RTPSEntity},
 };
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::messages::submessages::submessages::*;
@@ -726,7 +726,7 @@ impl HasQoSPolicy for Reader {
   }
 }
 
-impl Entity for Reader {
+impl RTPSEntity for Reader {
   fn get_guid(&self) -> GUID {
     self.my_guid
   }

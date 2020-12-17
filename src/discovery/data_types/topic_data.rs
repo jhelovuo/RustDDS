@@ -30,7 +30,7 @@ use crate::{
     builtin_data_serializer::BuiltinDataSerializer,
     builtin_data_deserializer::BuiltinDataDeserializer,
   },
-  structure::{entity::Entity, guid::GUID, guid::GuidPrefix, locator::LocatorList},
+  structure::{entity::RTPSEntity, guid::GUID, guid::GuidPrefix, locator::LocatorList},
 };
 
 // Topic data contains all topic related (including reader and writer data structures for serialization and deserialization)

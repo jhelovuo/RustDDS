@@ -9,7 +9,7 @@ use crate::{
   serialization::CDRSerializerAdapter, dds::values::result::StatusChange,
   structure::time::Timestamp,
 };
-use crate::structure::entity::{Entity};
+use crate::structure::entity::{RTPSEntity};
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
@@ -414,7 +414,7 @@ where
   }
 }
 
-impl<D: Serialize, SA: SerializerAdapter<D>> Entity for DataWriter<D, SA> {
+impl<D: Serialize, SA: SerializerAdapter<D>> RTPSEntity for DataWriter<D, SA> {
   fn get_guid(&self) -> GUID {
     self.keyed_datawriter.get_guid()
   }

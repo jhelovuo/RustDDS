@@ -61,6 +61,7 @@ impl<C: Context> Writable<C> for GuidPrefix {
 }
 
 /// RTPS EntityId
+/// See RTPS spec section 8.2.4 , 8.3.5.1 and 9.3.1.2
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct EntityId {
   pub entityKey: [u8; 3],

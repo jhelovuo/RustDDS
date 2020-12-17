@@ -27,7 +27,7 @@ use crate::{
   },
   dds::values::result::Error,
   serialization::CDRDeserializerAdapter,
-  structure::entity::Entity,
+  structure::entity::RTPSEntity,
   structure::guid::GUID,
   dds::qos::QosPolicyBuilder,
 };
@@ -1321,7 +1321,7 @@ mod tests {
       },
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
-    structure::{entity::Entity, locator::Locator},
+    structure::{entity::RTPSEntity, locator::Locator},
     serialization::{cdr_serializer::to_bytes, cdr_deserializer::CDRDeserializerAdapter},
     messages::submessages::submessages::{InterpreterSubmessage, EntitySubmessage},
     messages::{

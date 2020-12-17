@@ -1,7 +1,7 @@
 use std::{collections::HashSet, io};
 
 use crate::{
-  structure::entity::Entity,
+  structure::entity::RTPSEntity,
   dds::{
     data_types::{DDSTimestamp, GUID},
     writer::Writer as RtpsWriter,

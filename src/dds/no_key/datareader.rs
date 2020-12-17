@@ -5,7 +5,7 @@ use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
   structure::{
-    entity::Entity ,
+    entity::RTPSEntity ,
   },
 };
 use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*,
@@ -470,7 +470,7 @@ where
   }
 }
 
-impl<D, DA> Entity for DataReader<D, DA>
+impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,

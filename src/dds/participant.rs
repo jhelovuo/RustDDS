@@ -2,7 +2,6 @@ use mio::Token;
 use mio_extras::channel as mio_channel;
 use log::{debug, info, warn};
 
-//use std::io::{Write,stderr};
 use std::{
   thread,
   thread::JoinHandle,
@@ -26,7 +25,7 @@ use crate::dds::{
 use crate::{
   discovery::{discovery::Discovery, discovery_db::DiscoveryDB},
   structure::{
-    entity::{Entity},
+    entity::{RTPSEntity},
     guid::GUID,
     dds_cache::DDSCache,
   },
@@ -305,7 +304,7 @@ impl DomainParticipantWeak {
 } // end impl
 
 
-impl Entity for DomainParticipantWeak {
+impl RTPSEntity for DomainParticipantWeak {
   fn get_guid(&self) -> GUID {
     self.guid
   }
@@ -749,19 +748,19 @@ impl DomainParticipant_Inner {
   }
 } // impl
 
-impl Entity for DomainParticipant {
+impl RTPSEntity for DomainParticipant {
   fn get_guid(&self) -> GUID {
     self.dpi.lock().unwrap().get_guid()
   }
 }
 
-impl Entity for DomainParticipant_Disc {
+impl RTPSEntity for DomainParticipant_Disc {
   fn get_guid(&self) -> GUID {
     self.dpi.lock().unwrap().get_guid()
   }
 }
 
-impl Entity for DomainParticipant_Inner {
+impl RTPSEntity for DomainParticipant_Inner {
   fn get_guid(&self) -> GUID {
     self.my_guid
   }

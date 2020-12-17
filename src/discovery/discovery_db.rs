@@ -13,7 +13,7 @@ use crate::{
   structure::guid::GuidPrefix,
 };
 
-use crate::structure::{guid::GUID, duration::Duration, entity::Entity};
+use crate::structure::{guid::GUID, duration::Duration, entity::RTPSEntity};
 
 use crate::{
   dds::{

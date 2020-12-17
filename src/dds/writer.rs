@@ -44,7 +44,7 @@ use crate::dds::{ddsdata::DDSData, qos::HasQoSPolicy};
 use crate::{
   network::{constant::TimerMessageType, udp_sender::UDPSender},
   structure::{
-    entity::Entity,
+    entity::RTPSEntity,
     endpoint::{EndpointAttributes, Endpoint},
     locator::LocatorKind,
     dds_cache::DDSCache,
@@ -1161,7 +1161,7 @@ impl Writer {
   }
 }
 
-impl Entity for Writer {
+impl RTPSEntity for Writer {
   fn get_guid(&self) -> GUID {
     self.my_guid
   }

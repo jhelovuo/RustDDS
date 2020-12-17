@@ -13,7 +13,7 @@ use crate::{
   serialization::CDRDeserializerAdapter,
   discovery::discovery::DiscoveryCommand,
   structure::{
-    entity::{Entity, },
+    entity::{RTPSEntity, },
     guid::{GUID, EntityId},
     time::Timestamp,
     dds_cache::DDSCache,
@@ -1115,7 +1115,7 @@ where
   }
 }
 
-impl<D, DA> Entity for DataReader<D, DA>
+impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,

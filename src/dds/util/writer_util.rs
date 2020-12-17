@@ -1,6 +1,6 @@
 use crate::{
   dds::ddsdata::DDSData, dds::qos::HasQoSPolicy, dds::qos::policy::History, dds::writer::Writer,
-  structure::cache_change::CacheChange, structure::entity::Entity,
+  structure::cache_change::CacheChange, structure::entity::RTPSEntity,
   structure::sequence_number::SequenceNumber,
 };
 

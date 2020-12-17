@@ -5,7 +5,7 @@
 //! ```
 //! use rustdds::dds::DomainParticipant;
 //! use rustdds::dds::data_types::TopicKind;
-//! use rustdds::dds::traits::Entity;
+//! use rustdds::dds::traits::RTPSEntity;
 //! use rustdds::ros2::RosParticipant;
 //! use rustdds::ros2::NodeOptions;
 //! use rustdds::ros2::RosNode;

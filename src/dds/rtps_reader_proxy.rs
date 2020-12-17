@@ -6,7 +6,7 @@ use crate::{
   network::util::get_local_multicast_locators,
   network::util::get_local_unicast_socket_address,
   structure::{
-    entity::Entity,
+    entity::RTPSEntity,
     guid::{EntityId, GUID},
     locator::{Locator, LocatorList},
     sequence_number::{SequenceNumber},

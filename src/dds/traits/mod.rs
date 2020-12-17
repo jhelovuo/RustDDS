@@ -5,7 +5,7 @@ pub(crate) mod key;
 pub mod serde_adapters;
 
 pub use dds_entity::DDSEntity;
-pub use crate::structure::entity::Entity;
+pub use crate::structure::entity::RTPSEntity;
 
 pub use key::{Key, Keyed};
 

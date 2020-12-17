@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc,Mutex};
-//use std::io::{Write,stderr};
 use log::{error,info};
 use mio::Evented;
 use serde::{Serialize, de::DeserializeOwned};
@@ -22,7 +21,7 @@ use crate::{
     values::result::Error,
     data_types::DiscoveredTopicData,
   },
-  structure::{entity::Entity, guid::GUID},
+  structure::{entity::RTPSEntity, guid::GUID},
 };
 
 use super::{

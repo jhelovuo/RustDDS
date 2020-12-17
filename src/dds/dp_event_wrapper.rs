@@ -16,7 +16,7 @@ use crate::{
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId};
-use crate::structure::entity::Entity;
+use crate::structure::entity::RTPSEntity;
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
   discovery::discovery_db::DiscoveryDB,
@@ -901,7 +901,7 @@ mod tests {
   use crate::{
     dds::with_key::datareader::ReaderCommand,
     dds::{qos::policy::Deadline, values::result::StatusChange},
-    structure::entity::Entity,
+    structure::entity::RTPSEntity,
     dds::qos::QosPolicies,
   };
   use crate::structure::dds_cache::DDSCache;

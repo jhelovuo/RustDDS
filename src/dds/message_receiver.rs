@@ -3,7 +3,7 @@ use crate::messages::vendor_id::VendorId;
 use crate::messages::submessages::submessages::EntitySubmessage;
 use crate::messages::submessages::submessages::*;
 use crate::structure::guid::{GuidPrefix, GUID};
-use crate::structure::entity::Entity;
+use crate::structure::entity::RTPSEntity;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::structure::time::Timestamp;
 use crate::serialization::Message;

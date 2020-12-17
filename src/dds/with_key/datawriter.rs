@@ -12,7 +12,7 @@ use crate::{
   discovery::discovery::DiscoveryCommand, serialization::CDRSerializerAdapter,
   dds::qos::policy::Liveliness, structure::time::Timestamp,
 };
-use crate::structure::entity::{Entity};
+use crate::structure::entity::{RTPSEntity};
 use crate::structure::{
   dds_cache::DDSCache,
   guid::{GUID, EntityId},
@@ -847,7 +847,7 @@ where
   }
 }
 
-impl<D, SA> Entity for DataWriter<D, SA>
+impl<D, SA> RTPSEntity for DataWriter<D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
