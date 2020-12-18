@@ -20,6 +20,7 @@ use crate::{
     cache_change::{CacheChange, ChangeKind},
   },
 };
+use crate::log_and_err_precondition_not_met;
 use crate::dds::{
   traits::{key::*, TopicDescription},
   traits::serde_adapters::*,
@@ -32,6 +33,7 @@ use crate::dds::{
   topic::Topic,
   readcondition::*,
 };
+
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
@@ -161,10 +163,8 @@ where
   ) -> Result<Self> {
     let dp = match subscriber.get_participant() {
       Some(dp) => dp,
-      None => {
-        error!("Cannot create new DataReader, DomainParticipant doesn't exist.");
-        return Err(Error::PreconditionNotMet);
-      }
+      None => return 
+        log_and_err_precondition_not_met!("Cannot create new DataReader, DomainParticipant doesn't exist.") ,
     };
 
     let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix().clone(), my_id);

@@ -415,15 +415,30 @@ impl RosNode {
   /// * `type_name` - What type the topic holds in string form
   /// * `qos` - Quality of Service parameters for the topic (not restricted only to ROS2)
   /// * `topic_kind` - Does the topic have a key (multiple DDS instances)? NoKey or WithKey
+  ///
+  ///  
+  ///   [summary of all rules for topic and service names in ROS 2](https://design.ros2.org/articles/topic_and_service_names.html)
+  ///   (as of Dec 2020)
+  ///
+  /// * must not be empty
+  /// * may contain alphanumeric characters ([0-9|a-z|A-Z]), underscores (_), or forward slashes (/)
+  /// * may use balanced curly braces ({}) for substitutions
+  /// * may start with a tilde (~), the private namespace substitution character
+  /// * must not start with a numeric character ([0-9])
+  /// * must not end with a forward slash (/)
+  /// * must not contain any number of repeated forward slashes (/)
+  /// * must not contain any number of repeated underscores (_)
+  /// * must separate a tilde (~) from the rest of the name with a forward slash (/), i.e. ~/foo not ~foo
+  /// * must have balanced curly braces ({}) when used, i.e. {sub}/foo but not {sub/foo nor /foo}
   pub fn create_ros_topic(&self,
     name: &str,
     type_name: &str,
     qos: QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic, Error> {
-    // TODO:
-    // Implement according to the rules in
-    // https://design.ros2.org/articles/topic_and_service_names.html
+    if name.len() == 0 { return Error::bad_parameter("Topic name must not be empty.") }
+    // TODO: Implement the rest of the rules.
+
     let mut oname = "rt/".to_owned();
     let name_stripped = name.strip_prefix("/").unwrap_or(name); // avoid double slash in name
     oname.push_str(name_stripped);

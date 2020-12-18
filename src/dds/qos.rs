@@ -489,8 +489,6 @@ impl InlineQos {
   }
 }
 
-// TODO: helper function to combine two QosPolicies: existing and modifications
-// Described in 2.2.2.1.1.1 set_qos (abstract)
 
 // TODO: helper function to check is a QosPolices object is inconsistent (by itself)
 

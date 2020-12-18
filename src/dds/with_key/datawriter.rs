@@ -21,6 +21,7 @@ use crate::structure::{
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
+use crate::log_and_err_precondition_not_met;
 use crate::dds::values::result::{
   Result, Error, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibleQosStatus,
   PublicationMatchedStatus,
@@ -127,10 +128,8 @@ where
 
     let dp = match publisher.get_participant() {
       Some(dp) => dp,
-      None => {
-        error!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
-        return Err(Error::PreconditionNotMet);
-      }
+      None => return 
+        log_and_err_precondition_not_met!("Cannot create new DataWriter, DomainParticipant doesn't exist.") ,
     };
 
     let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix().clone(), entity_id );

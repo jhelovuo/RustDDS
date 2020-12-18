@@ -116,16 +116,14 @@ impl Discovery {
     discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
   ) -> Discovery {
-    let poll = match mio::Poll::new() {
-      Ok(p) => p,
-      Err(e) => {
-        error!("Failed to start discovery poll. {:?}", e);
+    let poll = mio::Poll::new()
+      .unwrap_or_else(|e| {
+        error!("Failed to allocate discovery poll. {:?}", e);
         discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
+          .send(Err(Error::OutOfResources))
           .unwrap_or(());
-        panic!("");
-      }
-    };
+        panic!("Failed to allocate discovery poll. {:?}", e);
+      });
 
     Discovery {
       poll,
@@ -145,571 +143,260 @@ impl Discovery {
   }
 
   pub fn discovery_event_loop(discovery: Discovery) {
+
+    macro_rules! try_construct {
+      ($constructor:expr, $msg:literal) => (
+        match $constructor {
+          Ok(r) => r,
+          Err(e) => {
+            error!($msg, e);
+            discovery.discovery_started_sender.send(Err(Error::OutOfResources))
+              .unwrap_or(()); // We are trying to quit. If send fails, just ignore it.
+            return
+          }
+        }
+      )
+    }
+
     let mut liveliness_state = LivelinessState::new();
 
-    //println!("Discovery start initialize");
-    match discovery.poll.register(
-      &discovery.discovery_command_receiver,
-      DISCOVERY_COMMAND_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Failed to register Discovery STOP. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
-    //println!("Command receiver registered");
+    try_construct!( discovery.poll.register(
+        &discovery.discovery_command_receiver,
+        DISCOVERY_COMMAND_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      ),
+      "Failed to register Discovery STOP. {:?}");
+
     let discovery_subscriber_qos = Discovery::subscriber_qos();
-    //println!("Creating subscriber");
-    let discovery_subscriber = match discovery
-      .domain_participant
-      .create_subscriber(&discovery_subscriber_qos)
-    {
-      Ok(s) => s,
-      Err(e) => {
-        error!("Unable to create Discovery Subscriber. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
-    //println!("Have subscriber");
+
+    let discovery_subscriber = try_construct!(
+      discovery.domain_participant.create_subscriber(&discovery_subscriber_qos),
+      "Unable to create Discovery Subscriber. {:?}"
+    );
 
     let discovery_publisher_qos = Discovery::subscriber_qos();
-    let discovery_publisher = match discovery
-      .domain_participant
-      .create_publisher(&discovery_publisher_qos)
-    {
-      Ok(p) => p,
-      Err(e) => {
-        error!("Unable to create Discovery Publisher. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
-    //println!("Discovery pub + sub created");
+    let discovery_publisher = try_construct!(
+      discovery.domain_participant.create_publisher(&discovery_publisher_qos) ,
+      "Unable to create Discovery Publisher. {:?}");
 
     // Participant
-    let dcps_participant_topic = match discovery.domain_participant.create_topic(
-      "DCPSParticipant",
-      "SPDPDiscoveredParticipantData",
-      &Discovery::create_spdp_patricipant_qos(),
-      TopicKind::WithKey,
-    ) {
-      Ok(t) => t,
-      Err(e) => {
-        error!("Unable to create DCPSParticipant topic. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
-
-    let mut dcps_participant_reader = match discovery_subscriber
+    let dcps_participant_topic = try_construct!(
+      discovery.domain_participant.create_topic(
+        "DCPSParticipant",
+        "SPDPDiscoveredParticipantData",
+        &Discovery::create_spdp_patricipant_qos(),
+        TopicKind::WithKey,
+      ),
+      "Unable to create DCPSParticipant topic. {:?}");
+  
+    let mut dcps_participant_reader = try_construct!( discovery_subscriber
       .create_datareader::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
         dcps_participant_topic.clone(),
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
         None,
-      ) {
-        Ok(r) => r,
-        Err(e) => {
-          error!("Unable to create DataReader for DCPSParticipant. {:?}", e);
-           // were trying to quit, if send fails just ignore
-           discovery
-            .discovery_started_sender
-            .send(Err(Error::PreconditionNotMet))
-            .unwrap_or(());
-          return;
-        }
-      };
+      ) ,"Unable to create DataReader for DCPSParticipant. {:?}");
 
     // register participant reader
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &dcps_participant_reader,
       DISCOVERY_PARTICIPANT_DATA_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Failed to register participant reader to poll. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Failed to register participant reader to poll. {:?}");
 
     // create lease duration check timer
     let mut participant_cleanup_timer: Timer<()> = Timer::default();
     participant_cleanup_timer.set_timeout(Discovery::PARTICIPANT_CLEANUP_PERIOD, ());
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &participant_cleanup_timer,
       DISCOVERY_PARTICIPANT_CLEANUP_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to create participant cleanup timer. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to create participant cleanup timer. {:?}");
 
-    let dcps_participant_writer = match discovery_publisher
+    let dcps_participant_writer = try_construct!( discovery_publisher
       .create_datawriter::<SPDPDiscoveredParticipantData, CDRSerializerAdapter<SPDPDiscoveredParticipantData,LittleEndian> >(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
         dcps_participant_topic,
         None,
-      ) {
-        Ok(w) => w,
-        Err(e) => {
-          error!("Unable to create DataWriter for DCPSParticipant. {:?}", e);
-          // were trying to quit, if send fails just ignore
-          discovery
-            .discovery_started_sender
-            .send(Err(Error::PreconditionNotMet))
-            .unwrap_or(());
-          return;
-        }
-      };
+      ) ,"Unable to create DataWriter for DCPSParticipant. {:?}");
 
     // creating timer for sending out own participant data
     let mut participant_send_info_timer: Timer<()> = Timer::default();
     participant_send_info_timer.set_timeout(Discovery::SEND_PARTICIPANT_INFO_PERIOD, ());
 
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &participant_send_info_timer,
       DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register participant info sender. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register participant info sender. {:?}");
 
     // Subcription
     let dcps_subscription_qos = Discovery::subscriber_qos();
-    let dcps_subscription_topic = match discovery.domain_participant.create_topic(
+    let dcps_subscription_topic = try_construct!( discovery.domain_participant.create_topic(
       "DCPSSubscription",
       "DiscoveredReaderData",
       &dcps_subscription_qos,
       TopicKind::WithKey,
-    ) {
-      Ok(t) => t,
-      Err(e) => {
-        error!("Unable to create DCPSSubscription topic. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to create DCPSSubscription topic. {:?}");
 
-    let mut dcps_subscription_reader = match discovery_subscriber
+    let mut dcps_subscription_reader = try_construct!( discovery_subscriber
       .create_datareader::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
         dcps_subscription_topic.clone(),
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
         None,
-      ) {
-      Ok(r) => r,
-      Err(e) => {
-        error!("Unable to create DataReader for DCPSSubscription. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+      ) ,"Unable to create DataReader for DCPSSubscription. {:?}");
 
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &dcps_subscription_reader,
       DISCOVERY_READER_DATA_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register subscription reader. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register subscription reader. {:?}");
 
-    let mut dcps_subscription_writer = match discovery_publisher
+    let mut dcps_subscription_writer = try_construct!( discovery_publisher
       .create_datawriter::<DiscoveredReaderData,CDRSerializerAdapter<DiscoveredReaderData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
         dcps_subscription_topic,
         None,
-      ) {
-        Ok(w) => w,
-        Err(e) => {
-          error!("Unable to create DataWriter for DCPSSubscription. {:?}", e);
-          // were trying to quit, if send fails just ignore
-          discovery
-            .discovery_started_sender
-            .send(Err(Error::PreconditionNotMet))
-            .unwrap_or(());
-          return;
-        }
-      };
+      ) ,"Unable to create DataWriter for DCPSSubscription. {:?}");
 
     let mut readers_send_info_timer: Timer<()> = Timer::default();
     readers_send_info_timer.set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &readers_send_info_timer,
       DISCOVERY_SEND_READERS_INFO_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register readers info sender. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register readers info sender. {:?}");
 
     // Publication
     let dcps_publication_qos = Discovery::subscriber_qos();
-    let dcps_publication_topic = match discovery.domain_participant.create_topic(
+    let dcps_publication_topic = try_construct!( discovery.domain_participant.create_topic(
       "DCPSPublication",
       "DiscoveredWriterData",
       &dcps_publication_qos,
       TopicKind::WithKey,
-    ) {
-      Ok(t) => t,
-      Err(e) => {
-        error!("Unable to create DCPSPublication topic. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to create DCPSPublication topic. {:?}");
 
-    let mut dcps_publication_reader = match discovery_subscriber
+    let mut dcps_publication_reader = try_construct!( discovery_subscriber
       .create_datareader::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         dcps_publication_topic.clone(),
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
         None,
-      ) {
-      Ok(r) => r,
-      Err(e) => {
-        error!("Unable to create DataReader for DCPSPublication. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+      ) ,"Unable to create DataReader for DCPSPublication. {:?}");
 
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &dcps_publication_reader,
       DISCOVERY_WRITER_DATA_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to regiser writers info sender. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to regiser writers info sender. {:?}");
 
-    let mut dcps_publication_writer = match discovery_publisher
+    let mut dcps_publication_writer = try_construct!( discovery_publisher
       .create_datawriter::<DiscoveredWriterData, CDRSerializerAdapter<DiscoveredWriterData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
         dcps_publication_topic,
         None,
-      ) {
-        Ok(w) => w,
-        Err(e) => {
-          error!("Unable to create DataWriter for DCPSPublication. {:?}", e);
-          // were trying to quit, if send fails just ignore
-          discovery
-            .discovery_started_sender
-            .send(Err(Error::PreconditionNotMet))
-            .unwrap_or(());
-          return;
-        }
-      };
+      ) ,"Unable to create DataWriter for DCPSPublication. {:?}");
 
     let mut writers_send_info_timer: Timer<()> = Timer::default();
     writers_send_info_timer.set_timeout(Discovery::SEND_WRITERS_INFO_PERIOD, ());
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &writers_send_info_timer,
       DISCOVERY_SEND_WRITERS_INFO_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register readers info sender. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register readers info sender. {:?}");
 
     // Topic
     let dcps_topic_qos = QosPolicyBuilder::new().build();
-    let dcps_topic = match discovery.domain_participant.create_topic(
+    let dcps_topic = try_construct!( discovery.domain_participant.create_topic(
       "DCPSTopic",
       "DiscoveredTopicData",
       &dcps_topic_qos,
       TopicKind::WithKey,
-    ) {
-      Ok(t) => t,
-      Err(e) => {
-        error!("Unable to create DCPSTopic topic. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to create DCPSTopic topic. {:?}");
 
     // create lease duration check timer
     let mut topic_cleanup_timer: Timer<()> = Timer::default();
     topic_cleanup_timer.set_timeout(Discovery::TOPIC_CLEANUP_PERIOD, ());
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &topic_cleanup_timer,
       DISCOVERY_TOPIC_CLEANUP_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register topic cleanup timer. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register topic cleanup timer. {:?}");
 
-    let mut dcps_reader = match discovery_subscriber
+    let mut dcps_reader = try_construct!( discovery_subscriber
       .create_datareader::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         dcps_topic.clone(),
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
         None,
-      ) {
-      Ok(r) => r,
-      Err(e) => {
-        error!("Unable to create DataReader for DCPSTopic. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+      ) ,"Unable to create DataReader for DCPSTopic. {:?}");
 
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &dcps_reader,
       DISCOVERY_TOPIC_DATA_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register topic reader. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register topic reader. {:?}");
 
-    let mut dcps_writer = match discovery_publisher
+    let mut dcps_writer = try_construct!( discovery_publisher
       .create_datawriter::<DiscoveredTopicData, CDRSerializerAdapter<DiscoveredTopicData,LittleEndian>>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
         dcps_topic,
         None,
-      ) {
-        Ok(w) => w,
-        Err(e) => {
-          error!("Unable to create DataWriter for DCPSTopic. {:?}", e);
-          // were trying to quit, if send fails just ignore
-          discovery
-            .discovery_started_sender
-            .send(Err(Error::PreconditionNotMet))
-            .unwrap_or(());
-          return;
-        }
-      };
+      ) ,"Unable to create DataWriter for DCPSTopic. {:?}");
 
     let mut topic_info_send_timer: Timer<()> = Timer::default();
     topic_info_send_timer.set_timeout(Discovery::SEND_TOPIC_INFO_PERIOD, ());
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &topic_info_send_timer,
       DISCOVERY_SEND_TOPIC_INFO_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register topic info sender. {:?}", e);
-        // were trying to quit, if send fails just ignore
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register topic info sender. {:?}");
 
     // Participant Message Data 8.4.13
-    let participant_message_data_topic = match discovery.domain_participant.create_topic(
+    let participant_message_data_topic = try_construct!( discovery.domain_participant.create_topic(
       "DCPSParticipantMessage",
       "ParticipantMessageData",
       &Discovery::PARTICIPANT_MESSAGE_QOS,
       TopicKind::WithKey,
-    ) {
-      Ok(t) => t,
-      Err(e) => {
-        error!("Unable to create DCPSParticipantMessage topic. {:?}", e);
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to create DCPSParticipantMessage topic. {:?}");
 
-    let mut dcps_participant_message_reader = match discovery_subscriber
+    let mut dcps_participant_message_reader = try_construct!( discovery_subscriber
       .create_datareader::<ParticipantMessageData, CDRDeserializerAdapter<ParticipantMessageData>>(
         participant_message_data_topic.clone(),
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
         None,
-      ) {
-      Ok(r) => r,
-      Err(e) => {
-        error!("Unable to create DCPSParticipantMessage reader. {:?}", e);
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+      ) ,"Unable to create DCPSParticipantMessage reader. {:?}");
 
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &dcps_participant_message_reader,
       DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register DCPSParticipantMessage reader. {:?}", e);
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register DCPSParticipantMessage reader. {:?}");
 
-    let mut dcps_participant_message_writer = match discovery_publisher
+    let mut dcps_participant_message_writer = try_construct!( discovery_publisher
       .create_datawriter::<ParticipantMessageData, CDRSerializerAdapter<ParticipantMessageData, LittleEndian>>(
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER),
         participant_message_data_topic,
         None,
-      ) {
-      Ok(w) => w,
-      Err(e) => {
-        error!("Unable to create DCPSParticipantMessage writer. {:?}", e);
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+      ) ,"Unable to create DCPSParticipantMessage writer. {:?}");
 
     let mut dcps_participant_message_timer = mio_extras::timer::Timer::default();
     dcps_participant_message_timer.set_timeout(Discovery::CHECK_PARTICIPANT_MESSAGES, ());
-    match discovery.poll.register(
+    try_construct!( discovery.poll.register(
       &dcps_participant_message_timer,
       DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
-    ) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Unable to register DCPSParticipantMessage timer. {:?}", e);
-        discovery
-          .discovery_started_sender
-          .send(Err(Error::PreconditionNotMet))
-          .unwrap_or(());
-        return;
-      }
-    };
+    ) ,"Unable to register DCPSParticipantMessage timer. {:?}");
 
     discovery.initialize_participant(&discovery.domain_participant);
 

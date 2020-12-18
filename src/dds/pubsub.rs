@@ -14,6 +14,7 @@ use crate::{
   structure::{guid::GUID, entity::RTPSEntity, guid::EntityId},
 };
 
+use crate::log_and_err_precondition_not_met;
 use crate::dds::{
   values::result::*,
   participant::*,
@@ -736,12 +737,10 @@ impl InnerSubscriber {
     let datareader_id = entity_id;
 
     let dp = match self.get_participant() {
-      Some(dp) => dp,
-      None => {
-        error!("DomainParticipant doesn't exist anymore.");
-        return Err(Error::PreconditionNotMet);
-      }
-    };
+        Some(dp) => dp,
+        None => return 
+          log_and_err_precondition_not_met!("DomainParticipant doesn't exist anymore.") ,
+      };
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
 
@@ -814,7 +813,7 @@ impl InnerSubscriber {
     SA: DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::WithKey {
-      return Err(Error::PreconditionNotMet); // TopicKind mismatch
+      return Error::precondition_not_met("Topic is NO_KEY, but attempted to create WITH_KEY Datareader") 
     }
     self.create_datareader_internal(outer, entity_id, topic, qos)
   }
@@ -831,7 +830,7 @@ impl InnerSubscriber {
     SA: DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::NoKey {
-      return Err(Error::PreconditionNotMet); // TopicKind mismatch
+      return Error::precondition_not_met("Topic is WITH_KEY, but attempted to create NO_KEY Datareader")
     }
 
     let entity_id = match entity_id {
