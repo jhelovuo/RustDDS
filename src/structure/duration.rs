@@ -117,13 +117,6 @@ impl Div<i64> for Duration {
   }
 }
 
-/*
-impl From<Duration> for std::time::Duration {
-  fn from(duration: Duration) -> Self {
-    std::time::Duration::new(duration.seconds as u64, duration.fraction)
-  }
-}
-*/
 
 #[derive(Serialize, Deserialize)]
 pub struct DurationData {
