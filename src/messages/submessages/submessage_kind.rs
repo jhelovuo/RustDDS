@@ -8,6 +8,12 @@ pub struct SubmessageKind {
   value: u8,
 }
 
+impl From<SubmessageKind> for u8 {
+  fn from(s:SubmessageKind) -> u8 {
+    s.value
+  }
+}
+
 impl SubmessageKind {
   pub const PAD: SubmessageKind = SubmessageKind { value: 0x01 };
   pub const ACKNACK: SubmessageKind = SubmessageKind { value: 0x06 };

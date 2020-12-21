@@ -11,7 +11,8 @@ use crate::{
   serialization::submessage::{SubMessage, SubmessageBody},
   structure::{sequence_number::SequenceNumber, guid::GuidPrefix},
 };
-use log::warn;
+#[allow(unused_imports)]
+use log::{error,warn,debug,trace};
 use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
 //use time::{Timespec, get_time};
@@ -202,7 +203,16 @@ impl<'a> Message {
           continue; // nothing to do here
         }
         unknown_kind => {
-          warn!("Received unknown submessage kind {:?}", unknown_kind);
+          let kind = u8::from(unknown_kind);
+          if kind >= 0x80 {
+            // Kinds 0x80 - 0xFF are vendor-specific.
+            trace!("Received vendor-specific submessage kind {:?}", unknown_kind);
+            trace!("Submessage was {:?}", &sub_buffer);
+          } else {
+            // Kind is 0x00 - 0x7F, is should be in the standard.
+            error!("Received unknown submessage kind {:?}", unknown_kind);
+            debug!("Submessage was {:?}", &sub_buffer);
+          }
           continue;
         }
       }; // match
