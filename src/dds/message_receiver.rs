@@ -187,7 +187,8 @@ impl MessageReceiver {
       Ok(m) => m,
       Err(speedy_err) => {
         warn!("RTPS deserialize error {:?}", speedy_err);
-        return;
+        debug!("Data was {:?}",&msg_bytes);
+        return
       }
     };
 

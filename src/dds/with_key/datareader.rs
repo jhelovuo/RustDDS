@@ -6,7 +6,7 @@ use itertools::Itertools;
 use io::Write;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
-use log::{error, info, warn};
+use log::{error, debug, info, warn};
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 
 use crate::{
@@ -689,6 +689,7 @@ where
                 // cannot use .or_else() because need to "continue" the for-loop
                 Err(e) => {
                   error!("Failed to deserialize bytes \n{}", e);
+                  debug!("Bytes were {:?}",&serialized_payload.value);
                   // TODO: Wrap this in a debug conditional. We cannot go writing
                   // to the file system unless requested by user!
                   File::create("error_bin.bin")

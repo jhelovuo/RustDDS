@@ -1,4 +1,6 @@
-use log::{debug, error, info};
+#[allow(unused_imports)]
+use log::{debug, error, info,trace};
+
 use mio::{Ready, Poll, PollOpt, Events};
 use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
@@ -764,7 +766,7 @@ impl Discovery {
           | Liveliness::ManualByTopic { lease_duration } => lease_duration,
         })
         .min();
-      debug!(
+      trace!(
         "Current auto duration {:?}. Min auto duration {:?}",
         current_duration, min_automatic
       );

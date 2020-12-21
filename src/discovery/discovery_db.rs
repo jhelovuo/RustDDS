@@ -6,7 +6,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use log::warn;
+use log::{warn,debug};
 
 use crate::{
   dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators, structure::guid::EntityId,
@@ -338,7 +338,7 @@ impl DiscoveryDB {
 
   pub fn update_subscription(&mut self, data: &DiscoveredReaderData) {
     self.add_reader_to_local_writer(data);
-
+    debug!("External reader: {:?}",data);
     self.external_topic_readers.push(data.clone());
     self.external_topic_readers = self
       .external_topic_readers
@@ -350,7 +350,7 @@ impl DiscoveryDB {
 
   pub fn update_publication(&mut self, data: &DiscoveredWriterData) {
     self.add_writer_to_local_reader(data);
-
+    debug!("External writer: {:?}",data);
     self.external_topic_writers.push(data.clone());
     self.external_topic_writers = self
       .external_topic_writers
@@ -424,6 +424,7 @@ impl DiscoveryDB {
   }
 
   pub fn update_topic_data(&mut self, data: &DiscoveredTopicData) -> bool {
+    debug!("Update topic data: {:?}",&data);
     let topic_name = match &data.topic_data.name {
       Some(n) => n,
       None => {
