@@ -32,6 +32,7 @@ impl UDPListener {
 
     let socket = UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
     //setsockopt(socket.as_raw_fd(), ReuseAddr, &true).expect("Unable set ReuseAddr option on socket");
+    debug!("UDPListener::new with address {:?}", socket.local_addr());
 
     UDPListener {
       socket: socket,
@@ -69,6 +70,7 @@ impl UDPListener {
         return None;
       }
     };
+    debug!("UDPListener::try_bind with address {:?}", socket.local_addr());
 
     Some(UDPListener { socket, token })
   }

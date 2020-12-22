@@ -621,12 +621,14 @@ impl Discovery {
                 needs_new_cache_change: true,
               });
               db.update_topic_data_drd(&val);
+              debug!("Discovered Reader {:?}", &val);
             }
             Err(guid) => {
               db.remove_topic_reader(*guid);
               self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
                 needs_new_cache_change: false,
               });
+              debug!("Dispose Reader {:?}", guid);
             }
           }
         }
@@ -648,10 +650,12 @@ impl Discovery {
               db.update_publication(&val);
               self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
               db.update_topic_data_dwd(&val);
+              debug!("Discovered Writer {:?}", &val);
             }
             Err(guid) => {
               db.remove_topic_writer(*guid);
               self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
+              debug!("Disposed Writer {:?}", guid);
             }
           }
         }
@@ -777,7 +781,6 @@ impl Discovery {
               guid: self.domain_participant.get_guid_prefix(),
               kind:
                 ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE,
-              length: 0,
               data: Vec::new(),
             };
             match writer.write(pp, None) {
@@ -813,7 +816,6 @@ impl Discovery {
               guid: self.domain_participant.get_guid_prefix(),
               kind:
                 ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
-              length: 0,
               data: Vec::new(),
             };
             match writer.write(pp, None) {

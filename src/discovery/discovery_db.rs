@@ -6,7 +6,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use log::{warn,debug};
+use log::{warn,debug,trace};
 
 use crate::{
   dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators, structure::guid::EntityId,
@@ -424,7 +424,7 @@ impl DiscoveryDB {
   }
 
   pub fn update_topic_data(&mut self, data: &DiscoveredTopicData) -> bool {
-    debug!("Update topic data: {:?}",&data);
+    trace!("Update topic data: {:?}",&data);
     let topic_name = match &data.topic_data.name {
       Some(n) => n,
       None => {

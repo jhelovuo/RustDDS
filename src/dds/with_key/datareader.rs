@@ -688,7 +688,7 @@ where
                 Ok(p) => p,
                 // cannot use .or_else() because need to "continue" the for-loop
                 Err(e) => {
-                  error!("Failed to deserialize bytes \n{}", e);
+                  error!("Failed to deserialize bytes: {}, Topic = {}", e, self.my_topic.get_name() );
                   debug!("Bytes were {:?}",&serialized_payload.value);
                   // TODO: Wrap this in a debug conditional. We cannot go writing
                   // to the file system unless requested by user!
