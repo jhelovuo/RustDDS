@@ -573,7 +573,9 @@ impl Discovery {
       PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>,
     >,
   ) -> Option<SPDPDiscoveredParticipantData> {
-    let participant_data = match reader.take_next_sample() {
+    let s = reader.take_next_sample();
+    debug!("handle_participant_reader {:?}",&s);
+    let participant_data = match s {
       Ok(d) => match d {
         Some(d) => match d.value() {
           Ok(aaaaa) => (aaaaa).clone(),

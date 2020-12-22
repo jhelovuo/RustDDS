@@ -24,7 +24,7 @@ use crate::structure::dds_cache::{DDSCache};
 
 use mio::Token;
 use mio_extras::channel as mio_channel;
-use log::{debug, info, warn};
+use log::{debug, info, warn, trace};
 use std::fmt;
 
 use std::collections::{HashSet, HashMap};
@@ -346,6 +346,7 @@ impl Reader {
 
   // handles regular data message and updates history cache
   pub fn handle_data_msg(&mut self, data: Data, mr_state: MessageReceiverState) {
+    trace!("handle_data_msg entry");
     let duration = match mr_state.timestamp {
       Some(ts) => Timestamp::now().duration_since(ts),
       None => Duration::DURATION_ZERO,
@@ -372,12 +373,14 @@ impl Reader {
     let statefull = self.matched_writers.contains_key(&writer_guid);
 
     let mut no_writers = false;
-
+    trace!("handle_data_msg from {:?} no_writers={:?} seq={:?}", 
+        &writer_guid, no_writers, seq_num,);
     if statefull {
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
         if writer_proxy.contains_change(seq_num) {
           // change already present
-          return;
+          trace!("handle_data_msg already have this seq={:?}", seq_num);
+          return
         }
         // Add the change and get the instant
         writer_proxy.received_changes_add(seq_num, instant);

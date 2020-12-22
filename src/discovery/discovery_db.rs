@@ -68,6 +68,7 @@ impl DiscoveryDB {
 
     match data.participant_guid {
       Some(guid) => {
+        debug!("update_participant: {:?}",&data);
         self.participant_proxies.insert(guid, data);
         true
       }

@@ -315,6 +315,7 @@ impl Writer {
 
     //TODO WHEN FINAL FLAG NEEDS TO BE SET?
     //TODO WHEN LIVELINESS FLAG NEEDS TO BE SET?
+    trace!("heartbeat tick in topic {:?} have {} readers", self.topic_name(), self.readers.len());
     let message_header: Header = self.create_message_header();
     let endianness = self.endianness;
 
@@ -436,10 +437,13 @@ impl Writer {
   /// after heartbeat is handled timer should be set running again.
   fn set_heartbeat_timer(&mut self) {
     match self.heartbeat_period {
-      Some(period) => self.timed_event_handler.as_mut().unwrap().set_timeout(
-        &chronoDuration::from(period),
-        TimerMessageType::writer_heartbeat,
-      ),
+      Some(period) => {
+        self.timed_event_handler.as_mut().unwrap().set_timeout(
+          &chronoDuration::from(period),
+          TimerMessageType::writer_heartbeat,
+        );
+        trace!("set heartbeat timer to {:?} in topic {:?}",period, self.topic_name());
+      }
       None => (),
     }
   }

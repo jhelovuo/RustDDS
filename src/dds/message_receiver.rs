@@ -21,7 +21,7 @@ use crate::{
 };
 
 use mio_extras::channel as mio_channel;
-use log::{debug, warn};
+use log::{debug, warn, trace};
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
@@ -216,11 +216,21 @@ impl MessageReceiver {
       EntitySubmessage::Data(data, _) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
         if data.reader_id == EntityId::ENTITYID_UNKNOWN {
+          trace!("send_submessage DATA from unknown. writer_id = {:?}", &data.writer_id);
           for reader in self
             .available_readers
             .iter_mut()
-            .filter(|p| p.contains_writer(data.writer_id))
+            .filter(|r| r.contains_writer(data.writer_id) 
+                        // exception: discovery prococol reader must read from unkonwn discovery protocol writers
+                        // TODO: This logic here is uglyish. Can we just inject a presupposed writer (proxy)
+                        // to the built-in reader as it is created?
+                        || (data.writer_id == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
+                            &&
+                            r.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
+                            )
+                      )
           {
+            trace!("send_submessage DATA from unknown handling in {:?}",&reader);
             reader.handle_data_msg(data.clone(), mr_state.clone());
           }
         } else {
