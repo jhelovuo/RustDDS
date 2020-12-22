@@ -1,4 +1,5 @@
-use log::{debug, warn};
+#[allow(unused_imports)]
+use log::{debug, warn, trace};
 
 use crate::{
   network::constant::get_user_traffic_multicast_port,
@@ -238,10 +239,10 @@ impl RtpsReaderProxy {
   }
 
   pub fn add_requested_changes(&mut self, base: SequenceNumber, sequence_numbers: BitSetRef) {
-    debug!("Sequence number set {:?}", sequence_numbers);
+    trace!("Sequence number set {:?}", sequence_numbers);
     for number in sequence_numbers.iter() {
       let num = SequenceNumber::from(number as i64) + base;
-      debug!("Number {:?}", num);
+      trace!("Number {:?}", num);
       self.requested_changes.insert(num);
     }
   }

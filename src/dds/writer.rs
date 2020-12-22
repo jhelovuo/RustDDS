@@ -1,6 +1,6 @@
 use chrono::Duration as chronoDuration;
 use enumflags2::BitFlags;
-use log::{debug, error, warn};
+use log::{debug, error, warn, trace};
 use speedy::{Writable, Endianness};
 //use time::Timespec;
 //use time::get_time;
@@ -978,7 +978,7 @@ impl Writer {
 
   /// AckNack Is negative if reader_sn_state contains some sequenceNumbers in reader_sn_state set
   fn test_if_ack_nack_contains_not_recieved_sequence_numbers(ack_nack: &AckNack) -> bool {
-    debug!("Testing ACKNACK set {:?}", ack_nack.reader_sn_state);
+    trace!("Testing ACKNACK set {:?}", ack_nack.reader_sn_state);
     if !&ack_nack.reader_sn_state.set.is_empty() {
       return true;
     }
