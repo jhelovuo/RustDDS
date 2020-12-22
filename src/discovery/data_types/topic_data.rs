@@ -671,7 +671,7 @@ pub struct ParticipantMessageData {
   pub guid: GuidPrefix,
   pub kind: ParticipantMessageDataKind,
   // normally this should be empty
-  pub length: u32,
+  //pub length: u32, // encoding the length is implicit in the CDR encoding of Vec
   pub data: Vec<u8>,
 }
 
