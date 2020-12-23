@@ -1,34 +1,64 @@
-use speedy::{Writable, Writer, Context};
+use speedy::{Writable, Readable, Writer, Context};
 use std::io;
 use std::io::Read;
-use byteorder::{ReadBytesExt, BigEndian};
+use byteorder::{ReadBytesExt};
 
-use num_enum::{TryFromPrimitive, IntoPrimitive};
 
-#[derive(Debug, PartialEq, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
-#[repr(u16)]
-pub enum RepresentationIdentifier {
-  // Numeric values are from RTPS spec v2.3 Section 10.5 , Table 10.3
-  CDR_BE = 0,
-  CDR_LE = 1,
-  PL_CDR_BE = 2,
-  PL_CDR_LE = 3,
-  CDR2_BE = 0x0010,
-  CDR2_LE = 0x0011,
-  PL_CDR2_BE = 0x0012,
-  PL_CDR2_LE = 0x0013,
-  D_CDR_BE = 0x0014,
-  D_CDR_LE = 0x0015,
-  XML = 0x0004,
-
-  INVALID = 0xffff,
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
+pub struct RepresentationIdentifier {
+  pub bytes: [u8;2],
 }
 
 impl RepresentationIdentifier {
-  pub fn try_from_u16(ri_raw: u16) -> Result<RepresentationIdentifier, u16> {
-    RepresentationIdentifier::try_from_primitive(ri_raw).map_err(|e| e.number)
+  // Numeric values are from RTPS spec v2.3 Section 10.5 , Table 10.3
+  pub const CDR_BE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x00]};
+  pub const CDR_LE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x01]};
+
+  pub const PL_CDR_BE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x02]};
+  pub const PL_CDR_LE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x03]};
+
+  pub const CDR2_BE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x10]};
+  pub const CDR2_LE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x11]};
+
+  pub const PL_CDR2_BE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x12]};
+  pub const PL_CDR2_LE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x13]};
+
+  pub const D_CDR_BE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x14]};
+  pub const D_CDR_LE: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x15]};
+
+  pub const XML: RepresentationIdentifier 
+    = RepresentationIdentifier { bytes: [0x00, 0x04]};
+
+  pub fn from_bytes(bytes: &[u8]) -> io::Result<RepresentationIdentifier> {
+    let mut reader = io::Cursor::new(bytes);
+    Ok( RepresentationIdentifier { 
+      bytes: [reader.read_u8()?, reader.read_u8()?] 
+    })
+  }
+
+  pub fn to_bytes(&self) -> &[u8] {
+    &self.bytes
   }
 }
+/*
+impl<'a, C: Context> Readable<'a, C> for RepresentationIdentifier {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+    let mut r = RepresentationIdentifier { bytes: [0,0]};
+    reader.read_bytes(r.bytes)?;
+    r
+  }
+}
+*/
 
 /// A SerializedPayload submessage element contains the serialized representation of
 /// either value of an application-defined data-object or
@@ -42,7 +72,7 @@ impl RepresentationIdentifier {
 /// to zero. The receiver shall ignore the value of the representation_options."
 #[derive(Debug, PartialEq, Clone)]
 pub struct SerializedPayload {
-  pub representation_identifier: u16, // This is u16, not RepresentationIdentifier, because we need to be able to deserialize whatever is on the wire
+  pub representation_identifier: RepresentationIdentifier, 
   pub representation_options: [u8; 2], // Not used. Send as zero, ignore on receive.
   pub value: Vec<u8>,
 }
@@ -50,7 +80,7 @@ pub struct SerializedPayload {
 impl SerializedPayload {
   pub fn new(rep_id: RepresentationIdentifier, payload: Vec<u8>) -> SerializedPayload {
     SerializedPayload {
-      representation_identifier: rep_id as u16,
+      representation_identifier: rep_id,
       representation_options: [0, 0],
       value: payload,
     }
@@ -59,7 +89,9 @@ impl SerializedPayload {
   // Implement deserialization here, because Speedy just makes it difficult.
   pub fn from_bytes(bytes: &[u8]) -> io::Result<SerializedPayload> {
     let mut reader = io::Cursor::new(bytes);
-    let representation_identifier = reader.read_u16::<BigEndian>()?;
+    let representation_identifier = RepresentationIdentifier { 
+      bytes: [reader.read_u8()?, reader.read_u8()?] 
+    };
     let representation_options = [reader.read_u8()?, reader.read_u8()?];
     let mut value = Vec::with_capacity(bytes.len() - 4); // still length == 0
     reader.read_to_end(&mut value)?;
@@ -72,21 +104,17 @@ impl SerializedPayload {
   }
 
   pub fn representation_identifier(&self) -> RepresentationIdentifier {
-    match RepresentationIdentifier::try_from_u16(self.representation_identifier) {
-      Ok(r) => r,
-      _ => RepresentationIdentifier::CDR_LE,
-    }
+    self.representation_identifier
   }
 }
 
 impl<C: Context> Writable<C> for SerializedPayload {
   fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
-    let primitive: u16 = self.representation_identifier.into();
-    let bigEndianRepresentation = primitive.to_be_bytes();
-    writer.write_u8(bigEndianRepresentation[0])?;
-    writer.write_u8(bigEndianRepresentation[1])?;
+    writer.write_u8(self.representation_identifier.bytes[0])?;
+    writer.write_u8(self.representation_identifier.bytes[1])?;
     writer.write_u8(self.representation_options[0])?;
     writer.write_u8(self.representation_options[1])?;
+    // TODO: This looks like a slowish way to copy bytes.
     for element in &*self.value {
       writer.write_u8(*element)?;
     }

@@ -1,9 +1,8 @@
-use std::{fs::File, io};
+use std::{io};
 use std::sync::{Arc, RwLock};
 use std::marker::PhantomData;
 
 use itertools::Itertools;
-use io::Write;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 use log::{error, debug, info, warn};
@@ -33,9 +32,6 @@ use crate::dds::{
   topic::Topic,
   readcondition::*,
 };
-
-
-use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
 /// Parameter for reading [Readers](../struct.With_Key_DataReader.html) data with key or with next from current key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -663,50 +659,33 @@ where
         }
         ChangeKind::ALIVE => {
           match payload_opt {
+            None => error!("Got CacheChange kind=ALIVE , but no serialized payload!"),
             Some(serialized_payload) => {
               // what is our data serialization format (representation identifier) ?
-              let rep_id = match RepresentationIdentifier::try_from_u16(
-                serialized_payload.representation_identifier,
-              ) {
-                Ok(r) => r,
-                // cannot use .or_else() because need to "continue" the for-loop
-                Err(other_rep_id) => {
-                  if let Some(ri) = DA::supported_encodings()
-                    .iter()
-                    .find(|r| **r as u16 == other_rep_id)
-                  {
-                    *ri // no worries, our DeserializerAdapter recognizes this representation
-                  } else {
-                    warn!("Datareader: Unknown representation id {:?}.", other_rep_id);
-                    continue; // skip this sample, as we cannot decode it
+              if let Some(recognized_rep_id) = 
+                  DA::supported_encodings().iter()
+                    .find(|r| **r == serialized_payload.representation_identifier)
+              {
+                match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
+                  Ok(payload) => {
+                    self
+                    .datasample_cache
+                    .add_sample(Ok(payload), *writer_guid, *instant, None)
+                  }
+                  Err(e) => {
+                    error!("Failed to deserialize bytes: {}, Topic = {}, Type = {:?}", 
+                            e, self.my_topic.get_name(), self.my_topic.get_type() );
+                    debug!("Bytes were {:?}",&serialized_payload.value);
+                    continue // skip this sample
                   }
                 }
-              };
-
-              // deserialize
-              let payload = match DA::from_bytes(&serialized_payload.value, rep_id) {
-                Ok(p) => p,
-                // cannot use .or_else() because need to "continue" the for-loop
-                Err(e) => {
-                  error!("Failed to deserialize bytes: {}, Topic = {}", e, self.my_topic.get_name() );
-                  debug!("Bytes were {:?}",&serialized_payload.value);
-                  // TODO: Wrap this in a debug conditional. We cannot go writing
-                  // to the file system unless requested by user!
-                  File::create("error_bin.bin")
-                    .unwrap()
-                    .write_all(&serialized_payload.value)
-                    .unwrap();
-                  continue;
-                }
-              };
-              // insert to local cache
-              self
-                .datasample_cache
-                .add_sample(Ok(payload), *writer_guid, *instant, None)
-              /* TODO: How to get source timestamps other then None ?? */
+              } else {
+                  warn!("Unknown representation id {:?}.", serialized_payload.representation_identifier);
+                  debug!("Serialized payload was {:?}", &serialized_payload);
+                  continue // skip this sample, as we cannot decode it                
+              }
             }
-            None => warn!("Got CacheChange kind=ALIVE , but no serialized payload!"),
-          }
+          } // match payload_opt
         }
       }
     }

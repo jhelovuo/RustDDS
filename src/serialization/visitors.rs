@@ -2,14 +2,10 @@ use serde::{
   de::{Visitor, Error},
 };
 use super::{
-  builtin_data_deserializer::BuiltinDataDeserializer, cdr_deserializer::CDRDeserializerAdapter,
+  builtin_data_deserializer::BuiltinDataDeserializer, 
 };
 
 use crate::{messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier};
-
-use crate::dds::traits::serde_adapters::DeserializerAdapter;
-
-use std::convert::TryFrom;
 
 impl<'de> Visitor<'de> for BuiltinDataDeserializer {
   type Value = BuiltinDataDeserializer;
@@ -21,18 +17,9 @@ impl<'de> Visitor<'de> for BuiltinDataDeserializer {
   where
     E: Error,
   {
-    let rep: RepresentationIdentifier =
-      match CDRDeserializerAdapter::<u16>::from_bytes(&v[..2], RepresentationIdentifier::CDR_LE) {
-        Ok(v) => match RepresentationIdentifier::try_from(v) {
-          Ok(v) => v,
-          _ => return Err(E::missing_field("representation identifier")),
-        },
-        Err(_) => return Err(E::missing_field("representation identifier")),
-      };
-
-    match rep {
-      RepresentationIdentifier::PL_CDR_LE => Ok(self.parse_data_little_endian(&v[2..])),
-      RepresentationIdentifier::PL_CDR_BE => Ok(self.parse_data_big_endian(&v[2..])),
+    match RepresentationIdentifier::from_bytes(&v[..2]) {
+      Ok(RepresentationIdentifier::PL_CDR_LE) => Ok(self.parse_data_little_endian(&v[2..])),
+      Ok(RepresentationIdentifier::PL_CDR_BE) => Ok(self.parse_data_big_endian(&v[2..])),
       _ => Err(E::missing_field("representation identifier")),
     }
   }

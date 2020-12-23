@@ -7,6 +7,7 @@ use crate::structure::sequence_number::SequenceNumber;
 use speedy::{Readable, Writable, Context, Writer, Error};
 use enumflags2::BitFlags;
 use std::io;
+//use log::debug;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -65,8 +66,15 @@ impl Data {
     let expect_qos = flags.contains(DATA_Flags::InlineQos);
     let expect_data = flags.contains(DATA_Flags::Data) || flags.contains(DATA_Flags::Key);
 
-    let rtps_v23_data_header_size: u16 = 16;
+    // size of DATA-specific header above is
+    // extraFlags (2) + octetsToInlineQos (2) + readerId (4) + writerId (4) + writerSN (8)
+    // = 20 bytes
+    // of which 16 bytes is after octetsToInlineQos field.
+    let rtps_v23_data_header_size: u16 = 16; 
+    // There may be some extra data between writerSN and inlineQos, if the header is extended in
+    // future versions. But as of RTPS v2.3 , extra_octets should be always zero.
     let extra_octets = octets_to_inline_qos - rtps_v23_data_header_size;
+    // Nevertheless, skip over that extra data, if we are told such exists.
     cursor.set_position(cursor.position() + extra_octets as u64);
 
     let parameter_list = if expect_qos {
@@ -79,9 +87,11 @@ impl Data {
     };
 
     let payload = if expect_data {
-      Some(SerializedPayload::from_bytes(
-        &buffer[cursor.position() as usize..],
-      )?)
+      let p = SerializedPayload::from_bytes(&buffer[cursor.position() as usize..] )?;
+      // if p.representation_identifier != RepresentationIdentifier::CDR_LE {
+      //   debug!("deserialize_data: Not CDR_LE input={:?}",buffer);
+      // }
+      Some(p)
     } else {
       None
     };

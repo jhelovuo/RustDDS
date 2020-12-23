@@ -48,9 +48,7 @@ where
       }
       RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
       repr_id => Err(Error::Message(format!(
-        "Unknown representaiton identifier {}.",
-        u16::from(repr_id)
-      ))),
+        "Unknown representaiton identifier {:?}.", repr_id ))),
     }
   }
 }

@@ -8,8 +8,6 @@ use crate::{
 };
 
 use crate::dds::traits::serde_adapters::DeserializerAdapter;
-use super::{cdr_serializer::to_bytes};
-use byteorder::LittleEndian;
 
 pub struct PlCdrDeserializerAdapter<D> {
   phantom: PhantomData<D>,
@@ -40,9 +38,7 @@ where
       RepresentationIdentifier::PL_CDR_BE | RepresentationIdentifier::CDR_BE => {
         PlCdrDeserializer::from_big_endian_bytes::<D>(input_bytes)
       }
-      repr_id => Err(Error::Message(format!(
-        "Unknown representation identifier {}",
-        u16::from(repr_id)
+      repr_id => Err(Error::Message(format!("Unknown representation identifier {:?}",repr_id
       ))),
     }
   }
@@ -79,8 +75,8 @@ impl<'de> PlCdrDeserializer<'de> {
   {
     match self.endianness {
       RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
-        let rep: Result<Vec<u8>> = to_bytes::<u16, LittleEndian>(&u16::from(self.endianness));
-        visitor.visit_bytes(&[&rep.unwrap(), self.input].concat())
+        //let rep: Result<Vec<u8>> = to_bytes::<u16, LittleEndian>(&u16::from(self.endianness));
+        visitor.visit_bytes(&[self.endianness.to_bytes(), self.input].concat())
       }
       e => Err(Error::Message(format!("Unsupported endianness {:?}", e))),
     }

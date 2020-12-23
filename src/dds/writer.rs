@@ -903,10 +903,11 @@ impl Writer {
       inline_qos,
       serialized_payload: change.data_value,
     };
-
+    
+    // TODO: please explain this logic here:
     if self.get_entity_id().get_kind() == 0xC2 {
       match data_message.serialized_payload.as_mut() {
-        Some(sp) => sp.representation_identifier = u16::from(RepresentationIdentifier::PL_CDR_LE),
+        Some(sp) => sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE,
         None => (),
       }
     }
