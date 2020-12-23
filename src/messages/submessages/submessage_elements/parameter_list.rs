@@ -48,18 +48,17 @@ impl<'a, C: Context> Readable<'a, C> for ParameterList {
     // loop ends in failure to read something or catching sentinel
     loop {
       let parameter_id = ParameterId::read_from(reader)?;
+      let length = u16::read_from(reader)?;
+
       if parameter_id == ParameterId::PID_SENTINEL {
+        // This is paramter list end marker.
         return Ok(parameters);
       }
 
-      let length = u16::read_from(reader)?;
-
-      let parameter = Parameter {
+      parameters.parameters.push(Parameter {
         parameter_id,
         value: reader.read_vec(length as usize)?,
-      };
-
-      parameters.parameters.push(parameter);
+      })
     }
   }
 }
