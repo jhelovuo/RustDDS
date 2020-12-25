@@ -321,11 +321,8 @@ impl DPEventWrapper {
     match listener {
       Some(l) => datas = l.get_messages(),
       None => {
-        print!(
-          "Cannot handle upd traffic! No listener with token {:?}",
-          &event.token()
-        );
-        return;
+        error!("handle_udp_traffic - internal error! No listener with token {:?}", &event.token() );
+        return
       }
     };
     for data in datas.into_iter() {

@@ -21,9 +21,15 @@ use crate::{
 };
 
 use mio_extras::channel as mio_channel;
-use log::{debug, warn, trace};
+use log::{debug, warn, trace, info};
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
+
+/// MessageReceiver is the submessage sequence interpreter described in 
+/// RTPS spec v2.3 Section 8.3.4 "The RTPS Message Receiver".
+/// It calls the message/submessage deserializers to parse the sequence of submessages.
+/// Then it processes the instructions in the Interpreter SUbmessages and forwards data in
+/// Enity Submessages to the appropriate Entities. (See RTPS spec Section 8.3.7)
 
 pub(crate) struct MessageReceiver {
   pub available_readers: Vec<Reader>,
@@ -181,6 +187,21 @@ impl MessageReceiver {
   pub fn handle_user_msg(&mut self, msg_bytes: Vec<u8>) {
     self.reset();
     self.dest_guid_prefix = self.own_guid_prefix;
+
+    // Check for RTPS ping message. At least RTI implementation sends these.
+    // What should we do with them? The spec does not say.
+    if msg_bytes.len() < RTPS_MESSAGE_HEADER_SIZE {
+      if msg_bytes.len() >= 16 && msg_bytes[0..4] == b"RTPS"[..] && msg_bytes[9..16] == b"DDSPING"[..] {
+        // TODO: Add some sensible ping message handling here. 
+        info!("Received RTPS PING. Do not know how to respond.");
+        debug!("Data was {:?}",&msg_bytes);
+        return
+      } else {
+        warn!("Message is shorter than header. Cannot deserialize.");
+        debug!("Data was {:?}",&msg_bytes);
+        return
+      }
+    }
 
     // call Speedy reader
     let rtps_message = match Message::read_from_buffer(&msg_bytes) {
