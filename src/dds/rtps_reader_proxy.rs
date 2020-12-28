@@ -71,11 +71,6 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
-
-      /*acked_changes: HashSet::new(),
-      requested_changes: HashSet::new(),
-      unsent_changes: HashSet::new(),
-      largest_acked_change: None, */
     }
   }
 
@@ -95,11 +90,6 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
-
-      // acked_changes: HashSet::new(),
-      // requested_changes: HashSet::new(),
-      // unsent_changes: HashSet::new(),
-      // largest_acked_change: None,
     }
   }
 
@@ -134,10 +124,6 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
-      // acked_changes: HashSet::new(),
-      // requested_changes: HashSet::new(),
-      // unsent_changes: HashSet::new(),
-      // largest_acked_change: None,
     })
   }
 
@@ -161,16 +147,11 @@ impl RtpsReaderProxy {
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
       unicast_locator_list: unicastLocators,
       multicast_locator_list: LocatorList::new(),
-      //changes_for_reader : writer.history_cache.clone(),
       expects_in_line_qos: false,
 
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
-      // acked_changes: HashSet::new(),
-      // requested_changes: HashSet::new(),
-      // unsent_changes: HashSet::new(),
-      // largest_acked_change: None,
     }
   }
 
@@ -272,11 +253,11 @@ impl RtpsReaderProxy {
     self.unsent_changes.insert(sequence_number);
   }
 
-  pub fn remove_unsend_change(&mut self, sequence_number: SequenceNumber) {
+  pub fn remove_unsent_cache_change(&mut self, sequence_number: SequenceNumber) {
     self.unsent_changes.remove(&sequence_number);
   }
 
-  // pub fn remove_unsend_changes(&mut self, sequence_numbers: &HashSet<SequenceNumber>) {
+  // pub fn remove_unsent_cache_changes(&mut self, sequence_numbers: &HashSet<SequenceNumber>) {
   //   let new_us_changes = self
   //     .unsent_changes()
   //     .difference(sequence_numbers)

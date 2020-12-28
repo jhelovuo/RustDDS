@@ -92,5 +92,5 @@ pub enum DiscoveryNotificationType {
   ReadersInfoUpdated,
   WritersInfoUpdated { needs_new_cache_change: bool },
   TopicsInfoUpdated,
-  AssertTopicLiveliness { writer_guid: GUID },
+  AssertTopicLiveliness { writer_guid: GUID , manual_assertion: bool, },
 }

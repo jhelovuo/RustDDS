@@ -56,7 +56,7 @@ pub enum DiscoveryCommand {
   REMOVE_LOCAL_WRITER { guid: GUID },
   REMOVE_LOCAL_READER { guid: GUID },
   REFRESH_LAST_MANUAL_LIVELINESS,
-  ASSERT_TOPIC_LIVELINESS { writer_guid: GUID },
+  ASSERT_TOPIC_LIVELINESS { writer_guid: GUID , manual_assertion: bool, },
 }
 
 pub struct LivelinessState {
@@ -482,9 +482,9 @@ impl Discovery {
               DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS => {
                 liveliness_state.last_manual_participant_update = Timestamp::now();
               }
-              DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid } => {
+              DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid  , manual_assertion } => {
                 discovery.send_discovery_notification(
-                  DiscoveryNotificationType::AssertTopicLiveliness { writer_guid },
+                  DiscoveryNotificationType::AssertTopicLiveliness { writer_guid , manual_assertion },
                 );
               }
             };
@@ -972,7 +972,7 @@ impl Discovery {
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
       .history(History::KeepAll)
-      .resource_limits(ResourceLimits {
+      .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
         max_instances: std::i32::MAX,
         max_samples: std::i32::MAX,
         max_samples_per_instance: std::i32::MAX,
@@ -1001,6 +1001,13 @@ impl Discovery {
     }
   }
 }
+
+
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+
 
 #[cfg(test)]
 mod tests {

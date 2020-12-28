@@ -225,15 +225,8 @@ impl DPEventWrapper {
               DiscoveryNotificationType::WritersInfoUpdated { needs_new_cache_change } => 
                 ev_wrapper.update_writers(needs_new_cache_change),
               DiscoveryNotificationType::TopicsInfoUpdated => ev_wrapper.update_topics(),
-              DiscoveryNotificationType::AssertTopicLiveliness { writer_guid } => {
-                let writer = ev_wrapper.writers.get_mut(&writer_guid);
-                match writer {
-                  Some(w) => {
-                    // Only need set heartbeat tick earlier
-                    w.handle_heartbeat_tick();
-                  }
-                  None => (),
-                };
+              DiscoveryNotificationType::AssertTopicLiveliness { writer_guid , manual_assertion } => {
+                ev_wrapper.writers.get_mut(&writer_guid).map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
               }
             }
           }
@@ -425,35 +418,22 @@ impl DPEventWrapper {
     let reciever = self
       .writer_timed_event_reciever
       .get(&event.token())
-      .expect("Did not found heartbeat reciever ");
-    let mut message_queue: Vec<TimerMessageType> = vec![];
-    while let Ok(res) = reciever.try_recv() {
-      message_queue.push(res);
-    }
+      .expect("Did not find a heartbeat receiver");
+    //let mut message_queue: Vec<TimerMessageType> = vec![];
+    while let Ok(timer_message) = reciever.try_recv() {
+      match timer_message {
+        TimerMessageType::writer_heartbeat => { self.writers.iter_mut()
+          .find(|p| p.1.get_timed_event_entity_token() == event.token())
+          .map( |(_guid, writer)| writer.handle_heartbeat_tick(false));
+          // false = This is automatic heartbeat by timer, not manual by application call.  
+        }
+          
+        TimerMessageType::writer_cache_cleaning => { self.writers.iter_mut()
+          .find(|p| p.1.get_timed_event_entity_token() == event.token())
+          .map( |(_guid, writer)| writer.handle_cache_cleaning()); 
+        }
 
-    for timer_message in message_queue {
-      if timer_message == TimerMessageType::writer_heartbeat {
-        let found_writer_with_heartbeat = self
-          .writers
-          .iter_mut()
-          .find(|p| p.1.get_timed_event_entity_token() == event.token());
-        match found_writer_with_heartbeat {
-          Some((_guid, w)) => {
-            w.handle_heartbeat_tick();
-          }
-          None => {}
-        }
-      } else if timer_message == TimerMessageType::writer_cache_cleaning {
-        let found_writer_to_clean_some_cache = self
-          .writers
-          .iter_mut()
-          .find(|p| p.1.get_timed_event_entity_token() == event.token());
-        match found_writer_to_clean_some_cache {
-          Some((_guid, w)) => {
-            w.handle_cache_cleaning();
-          }
-          None => {}
-        }
+        other_msg => error!("handle_writer_timed_event - unexpected message {:?}", other_msg)
       }
     }
   }
@@ -463,6 +443,8 @@ impl DPEventWrapper {
       .reader_timed_event_receiver
       .get(&event.token())
       .expect("Did not found reader timed event reciever!");
+    // TODO: Rewrite this function to match the structure in handle_writer_timed_event above.
+    // TODO: Why do we have separate message channels for reader and writer, if they have contain the same data type?
     let mut message_queue: Vec<TimerMessageType> = vec![];
     while let Ok(res) = reciever.try_recv() {
       message_queue.push(res);

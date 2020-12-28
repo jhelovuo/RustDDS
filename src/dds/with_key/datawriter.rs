@@ -210,6 +210,8 @@ where
   ///
   /// data_writer.refresh_manual_liveliness();
   /// ```
+
+  // TODO: What is this function? To what part of DDS spec does it correspond to?
   pub fn refresh_manual_liveliness(&self) {
     match self.get_qos().liveliness {
       Some(lv) => match lv {
@@ -689,34 +691,22 @@ where
   ///
   /// data_writer.assert_liveliness().unwrap();
   /// ```
+
+  //TODO: This cannot really fail, so could change type to () (alternatively, make send error visible)
   pub fn assert_liveliness(&self) -> Result<()> {
     self.refresh_manual_liveliness();
 
     match self.get_qos().liveliness {
-      Some(lv) => {
-        match lv {
-          Liveliness::Automatic { lease_duration: _ } => (),
-          Liveliness::ManualByParticipant { lease_duration: _ } => (),
-          Liveliness::ManualByTopic { lease_duration: _ } => {
-            match self
-              .discovery_command
-              .send(DiscoveryCommand::ASSERT_TOPIC_LIVELINESS {
-                writer_guid: self.get_guid(),
-              }) {
-              Ok(_) => (),
-              Err(e) => {
-                error!(
-                  "Failed to send DiscoveryCommand - AssertLiveliness. {:?}",
-                  e
-                );
-              }
-            }
-          }
-        };
-      }
-      None => (),
-    };
-
+      Some(Liveliness::ManualByTopic { lease_duration: _ }) => {
+        self.discovery_command
+          .send(DiscoveryCommand::ASSERT_TOPIC_LIVELINESS {
+            writer_guid: self.get_guid(),
+            manual_assertion: true, // by definition of this function
+            })
+          .unwrap_or_else( |e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e))
+        }
+      _other => (),
+    }
     Ok(())
   }
 

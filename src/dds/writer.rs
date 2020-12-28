@@ -3,6 +3,7 @@ use enumflags2::BitFlags;
 
 #[allow(unused_imports)]
 use log::{debug, error, warn, trace};
+
 use speedy::{Writable, Endianness};
 //use time::Timespec;
 //use time::get_time;
@@ -416,21 +417,18 @@ impl Writer {
   // --------------------------------------------------------------
   
   /// This is called periodically.
-  pub fn handle_heartbeat_tick(&mut self) {
+  pub fn handle_heartbeat_tick(&mut self, is_manual_assertion: bool ) {
     // TODO Set some guidprefix if needed at all.
     // Not sure if DST submessage and TS submessage are needed when sending heartbeat.
 
-    //TODO WHEN FINAL FLAG NEEDS TO BE SET?
-    // Answer: Reliable Stateless Writer will set the final flag.
+    // Reliable Stateless Writer will set the final flag.
     // Reliable Stateful Writer (that tracks Readers by ReaderProxy) will not set the final flag.
+    let final_flag = false;
+    let liveliness_flag = is_manual_assertion; // RTPS spec "8.3.7.5 Heartbeat"
 
-    //TODO WHEN LIVELINESS FLAG NEEDS TO BE SET?
     trace!("heartbeat tick in topic {:?} have {} readers", self.topic_name(), self.readers.len());
-    // let message_header: Header = self.create_message_header();
-    // let endianness = self.endianness;
 
-    // let mut seqnums: HashMap<GUID, HashSet<SequenceNumber>> = HashMap::new();
-    // let mut requested_seqnums: HashMap<GUID, HashSet<SequenceNumber>> = HashMap::new();
+
 
     for reader in self.readers.iter() {
       // Do we have some changes this reader has not ACKed yet?
@@ -440,122 +438,14 @@ impl Writer {
         let hb_message = MessageBuilder::new()
           .dst_submessage(self.endianness, reader_guid.guidPrefix)
           .ts_msg(self.endianness, false)
-          .heartbeat_msg(self, reader_guid, false, false)
+          .heartbeat_msg(self, reader_guid, final_flag, liveliness_flag)
           .add_header_and_build(self.create_message_header());
         self.send_unicast_message_to_reader(&hb_message, reader);
         self.send_multicast_message_to_reader(&hb_message, reader);
       }
     }
 
-    //   let mut rtps_messages = Vec::new();
-    //   let reader_guid = reader.remote_reader_guid;
-    //   seqnums.insert(reader.remote_reader_guid, HashSet::new());
-    //   requested_seqnums.insert(reader.remote_reader_guid, HashSet::new());
-
-    //   let unacked_changes = reader.unacked_changes(
-    //     self.first_change_sequence_number,
-    //     self.last_change_sequence_number,
-    //   );
-
-    //   //let requested_changes = reader.requested_changes();
-
-    //   let &mut unsent_changes = reader.unsent_changes;
-
-    //   let mut all_changes = HashSet::new();
-    //   all_changes.extend(unacked_changes);
-    //   all_changes.extend(requested_changes);
-    //   all_changes.extend(unsent_changes);
-
-    //   for &seqnum in itertools::sorted(all_changes.iter()) {
-    //     match Writer::create_heartbeat_message_wdata(
-    //       message_header.clone(),
-    //       endianness,
-    //       seqnum,
-    //       &self,
-    //       reader_guid,
-    //     ) {
-    //       Ok(m) => {
-    //         // adding sequence number of change we're gonna send
-    //         match seqnums.get_mut(&reader_guid) {
-    //           Some(v) => {
-    //             v.insert(seqnum);
-    //           }
-    //           None => (),
-    //         };
-    //         // adding the generated message
-    //         rtps_messages.push(m)
-    //       }
-    //       _ => (),
-    //     };
-    //   }
-
-    //   // updating deadline for added sequence numbers
-    //   match seqnums.get(&reader_guid) {
-    //     Some(sqs) => {
-    //       for &seqnum in sqs.iter() {
-    //         // checking previous sequence number for deadline
-    //         let instant = self.sequence_number_to_instant(seqnum - SequenceNumber::from(1));
-
-    //         match self.get_qos().deadline {
-    //           Some(dl) => {
-    //             if let Some(instant) = instant {
-    //               if dl.0 < Timestamp::now() - *instant {
-    //                 self.offered_deadline_status.increase();
-    //                 debug!(
-    //                   "Trying to send status change {:?}",
-    //                   self.offered_deadline_status
-    //                 );
-    //                 match self
-    //                   .status_sender
-    //                   .try_send(StatusChange::OfferedDeadlineMissedStatus(
-    //                     self.offered_deadline_status,
-    //                   )) {
-    //                   Ok(_) => (),
-    //                   Err(e) => error!("Failed to send new message status. {:?}", e),
-    //                 };
-    //               }
-    //             }
-    //           }
-    //           None => (),
-    //         }
-    //       }
-    //     }
-    //     None => (),
-    //   }
-
-    //   match requested_seqnums.get_mut(&reader_guid) {
-    //     Some(v) => match seqnums.get(&reader_guid) {
-    //       Some(sqs) => v.extend(sqs.intersection(requested_changes)),
-    //       None => (),
-    //     },
-    //     None => (),
-    //   };
-
-    //   // finally sending the messages
-    //   for rtps_message in rtps_messages.iter() {
-    //     self.send_unicast_message_to_reader(rtps_message, reader);
-    //     self.send_multicast_message_to_reader(rtps_message, reader);
-    //   }
-    // }
-
-    // for (guid, seqnum_vec) in seqnums {
-    //   self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(seqnum_vec, &Some(guid));
-    // }
-
-    // for (guid, seqnum_vec) in requested_seqnums {
-    //   match self
-    //     .readers
-    //     .iter_mut()
-    //     .find(|p| p.remote_reader_guid == guid)
-    //   {
-    //     Some(r) => seqnum_vec
-    //       .iter()
-    //       .for_each(|&seq| r.remove_requested_change(seq)),
-    //     None => (),
-    //   };
-    // }
-
-    self.set_heartbeat_timer();
+    self.set_heartbeat_timer(); // keep the heart beating
   }
 
   /// after heartbeat is handled timer should be set running again.
@@ -572,22 +462,19 @@ impl Writer {
     }
   }
 
+  /// When receiving an ACKNACK Message indicating a Reader is missing some data samples, the Writer must
+  /// respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
+  /// sending a HEARTBEAT message when the sample is no longer available
+  pub fn handle_ack_nack(&mut self, guid_prefix: GuidPrefix, an: AckNack) {
+    if !self.is_reliable() {
+      warn!("Writer {:x?} is best effort! It should not handle acknack messages!", self.get_entity_id());
+      return
+    }
 
-  /// This needs to be called when dataWriter does dispose.
-  /// This does not remove anything from datacahce but changes the status of writer to disposed.
-  /* this is not called anywhere
-  pub fn handle_not_alive_disposed_cache_change(&mut self, data: DDSData) {
-    let instant = self.key_to_instant.get(&data.value_key_hash);
-
-    if instant.is_some() {
-      self
-        .dds_cache
-        .write()
-        .unwrap()
-        .from_topic_set_change_to_not_alive_disposed(&self.my_topic_name, &instant.unwrap());
+    if let Some(reader_proxy) = self.matched_reader_lookup(guid_prefix, an.reader_id) {
+      reader_proxy.handle_ack_nack(&an)
     }
   }
-  */
 
   /// Removes permanently cacheChanges from DDSCache.
   /// CacheChanges can be safely removed only if they are acked by all readers. (Reliable)
@@ -685,33 +572,33 @@ impl Writer {
     self.heartbeat_message_counter = self.heartbeat_message_counter + 1;
   }
 
-  pub fn can_send_some(&self) -> bool {
-    // When writer is reliable all changes has to be acnowledged by remote reader before sending new messages.
-    if self.is_reliable() {
-      let last_change_is_acked: bool =
-        self.change_with_sequence_number_is_acked_by_all(self.last_change_sequence_number);
+  // pub fn can_send_some(&self) -> bool {
+  //   // When writer is reliable all changes has to be acnowledged by remote reader before sending new messages.
+  //   if self.is_reliable() {
+  //     let last_change_is_acked: bool =
+  //       self.change_with_sequence_number_is_acked_by_all(self.last_change_sequence_number);
 
-      if last_change_is_acked {
-        for reader_proxy in &self.readers {
-          if reader_proxy.can_send() {
-            return true;
-          }
-        }
-        return false;
-      }
-    }
-    //Note that for a Best-Effort Writer, W::pushMode == true, as there are no acknowledgements. Therefore, the
-    //Writer always pushes out data as it becomes available.
-    else {
-      for reader_proxy in &self.readers {
-        if reader_proxy.can_send() {
-          return true;
-        }
-      }
-      return false;
-    }
-    return false;
-  }
+  //     if last_change_is_acked {
+  //       for reader_proxy in &self.readers {
+  //         if reader_proxy.can_send() {
+  //           return true;
+  //         }
+  //       }
+  //       return false;
+  //     }
+  //   }
+  //   //Note that for a Best-Effort Writer, W::pushMode == true, as there are no acknowledgements. Therefore, the
+  //   //Writer always pushes out data as it becomes available.
+  //   else {
+  //     for reader_proxy in &self.readers {
+  //       if reader_proxy.can_send() {
+  //         return true;
+  //       }
+  //     }
+  //     return false;
+  //   }
+  //   return false;
+  // }
 
   // pub fn sequence_is_sent_to_all_readers(&self, sequence_number: SequenceNumber) -> bool {
   //   for reader_proxy in &self.readers {
@@ -864,7 +751,7 @@ impl Writer {
 
   //   if let Some(rem_seq) = rem_sequece_number {
   //     if let Some(reader) = self.get_some_reader_with_unsent_messages_mut() {
-  //       reader.remove_unsend_change(rem_seq);
+  //       reader.remove_unsent_cache_change(rem_seq);
   //     }
 
   //     self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
@@ -1093,34 +980,7 @@ impl Writer {
     return false;
   }
 
-  ///When receiving an ACKNACK Message indicating a Reader is missing some data samples, the Writer must
-  ///respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
-  ///sending a HEARTBEAT message when the sample is no longer available
-  pub fn handle_ack_nack(&mut self, guid_prefix: GuidPrefix, an: AckNack) {
-    if !self.is_reliable() {
-      warn!("Writer {:x?} is best effort! It should not handle acknack messages!", self.get_entity_id());
-      return
-    }
 
-    // let first_change_sq = self.first_change_sequence_number;
-    // let last_change_sq = self.last_change_sequence_number;
-
-    if let Some(reader_proxy) = self.matched_reader_lookup(guid_prefix, an.reader_id) {
-      reader_proxy.handle_ack_nack(&an)
-      // reader_proxy.add_acked_changes(
-      //   first_change_sq,
-      //   last_change_sq,
-      //   an.reader_sn_state.base,
-      //   &an.reader_sn_state.set,
-      // );
-      // if Writer::test_if_ack_nack_contains_not_recieved_sequence_numbers(&an) {
-      //   // if ack nac says reader has NOT recieved data then add data to requested changes
-      //   reader_proxy.add_requested_changes(an.reader_sn_state.base, an.reader_sn_state.set);
-      // } else {
-      //   reader_proxy.acked_changes_set(an.reader_sn_state.base);
-      // }
-    }
-  }
 
   pub fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
     if self.readers.iter().any(|x| {
@@ -1201,7 +1061,7 @@ impl Writer {
   //     Some(guid) => {
   //       match self.matched_reader_lookup(guid.guidPrefix, guid.entityId) {
   //         Some(rtps_reader_proxy) => {
-  //           rtps_reader_proxy.remove_unsend_changes(&sequence_numbers);
+  //           rtps_reader_proxy.remove_unsent_cache_changes(&sequence_numbers);
   //         }
   //         None => (),
   //       };
@@ -1230,7 +1090,7 @@ impl Writer {
             remote_reader_guid.unwrap().entityId,
           )
           .unwrap();
-        readerProxy.remove_unsend_change(sq)
+        readerProxy.remove_unsent_cache_change(sq)
       }
     }
   }
