@@ -44,22 +44,14 @@ impl CacheChange {
     kind: ChangeKind,
     writer_guid: GUID,
     sequence_number: SequenceNumber,
-    data_value: Option<DDSData>,
+    data_value: Option<DDSData>,  //TODO: Why is this an Option? It seems that all callers pass Some.
   ) -> CacheChange {
     let (key, data_value) = match data_value {
       Some(d) => (d.value_key_hash, d.value()),
       None => (0, None),
     };
 
-    CacheChange {
-      kind,
-      writer_guid,
-      sequence_number,
-      data_value,
-      key,
-      //inline_qos: ParameterList::new(),
-      //rtps_chage_for_reader : RTPSChangeForReader::new(),
-    }
+    CacheChange { kind, writer_guid, sequence_number, data_value, key }
   }
 }
 

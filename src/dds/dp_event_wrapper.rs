@@ -27,6 +27,7 @@ use crate::dds::with_key::datareader::ReaderCommand;
 use super::{
   qos::policy::Reliability, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy,
   typedesc::TypeDesc,
+  //writer::WriterCommand,
 };
 
 pub struct DomainInfo {
@@ -221,9 +222,8 @@ impl DPEventWrapper {
           while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
             match dnt {
               DiscoveryNotificationType::ReadersInfoUpdated => ev_wrapper.update_readers(),
-              DiscoveryNotificationType::WritersInfoUpdated {
-                needs_new_cache_change,
-              } => ev_wrapper.update_writers(needs_new_cache_change),
+              DiscoveryNotificationType::WritersInfoUpdated { needs_new_cache_change } => 
+                ev_wrapper.update_writers(needs_new_cache_change),
               DiscoveryNotificationType::TopicsInfoUpdated => ev_wrapper.update_topics(),
               DiscoveryNotificationType::AssertTopicLiveliness { writer_guid } => {
                 let writer = ev_wrapper.writers.get_mut(&writer_guid);
@@ -241,7 +241,7 @@ impl DPEventWrapper {
           ev_wrapper.message_receiver.send_preemptive_acknacks();
           acknack_timer.set_timeout(Duration::from_secs(5), ());
         } else {
-          info!("Unknown event");
+          error!("Unknown event {:?}", event);
         }
       }
     }
@@ -276,35 +276,17 @@ impl DPEventWrapper {
 
   /// Writer timed events can be Heartbeats or cache cleaning actions.
   pub fn is_writer_timed_event_action(&self, event: &Event) -> bool {
-    if self
-      .writer_timed_event_reciever
-      .contains_key(&event.token())
-    {
-      return true;
-    }
-    return false;
+    self.writer_timed_event_reciever.contains_key(&event.token())
   }
 
   pub fn is_reader_timed_event_action(&self, event: &Event) -> bool {
-    if self
-      .reader_timed_event_receiver
-      .contains_key(&event.token())
-    {
-      return true;
-    } else {
-      return false;
-    }
+    self.reader_timed_event_receiver.contains_key(&event.token())
   }
 
   pub fn is_reader_command_action(&self, event: &Event) -> bool {
-    if self
+    self
       .reader_command_receiver_identification
       .contains_key(&event.token())
-    {
-      return true;
-    } else {
-      return false;
-    }
   }
 
   pub fn is_writer_acknack_action(event: &Event) -> bool {
@@ -392,7 +374,7 @@ impl DPEventWrapper {
       ADD_WRITER_TOKEN => {
         while let Ok(mut new_writer) = self.add_writer_receiver.receiver.try_recv() {
           &self.poll.register(
-            new_writer.cache_change_receiver(),
+            &new_writer.writer_command_receiver,
             new_writer.get_entity_token(),
             Ready::readable(),
             PollOpt::edge(),
@@ -422,34 +404,17 @@ impl DPEventWrapper {
         while let Ok(writer_guid) = &self.remove_writer_receiver.receiver.try_recv() {
           let writer = self.writers.remove(writer_guid);
           if let Some(w) = writer {
-            &self.poll.deregister(w.cache_change_receiver());
+            &self.poll.deregister(&w.writer_command_receiver);
           };
         }
       }
-      t => {
-        let found_writer = self
+
+      writer_token => {
+        self
           .writers
           .iter_mut()
-          .find(|p| p.1.get_entity_token() == t);
-
-        match found_writer {
-          Some((_guid, w)) => {
-            while let Ok(cc) = w.cache_change_receiver().try_recv() {
-              match cc {
-                super::writer::WriterCommand::DDSData { data } => {
-                  w.insert_to_history_cache(data);
-                  w.send_all_unsend_messages();
-                }
-                super::writer::WriterCommand::ResetOfferedDeadlineMissedStatus {
-                  writer_guid: _,
-                } => {
-                  w.reset_offered_deadline_missed_status();
-                }
-              }
-            }
-          }
-          None => {}
-        }
+          .find(|p| p.1.get_entity_token() == writer_token)
+          .map( |(_guid, writer)| writer.process_writer_command() );
       }
     }
   }
@@ -579,7 +544,7 @@ impl DPEventWrapper {
   pub fn update_writers(&mut self, needs_new_cache_change: bool) {
     match self.discovery_db.read() {
       Ok(db) => {
-        for (_, writer) in self.writers.iter_mut() {
+        for (_writer_guid, writer) in self.writers.iter_mut() {
           if writer.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
             DPEventWrapper::update_spdp_participant_readers(
               writer,
@@ -589,7 +554,7 @@ impl DPEventWrapper {
 
             if needs_new_cache_change {
               for proxy in writer.readers.iter_mut() {
-                proxy.unsend_changes_set(writer.last_change_sequence_number);
+                proxy.notify_new_cache_change(writer.last_change_sequence_number);
               }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
@@ -601,7 +566,7 @@ impl DPEventWrapper {
             );
             if needs_new_cache_change {
               for proxy in writer.readers.iter_mut() {
-                proxy.unsend_changes_set(writer.last_change_sequence_number);
+                proxy.notify_new_cache_change(writer.last_change_sequence_number);
               }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER {
@@ -613,7 +578,7 @@ impl DPEventWrapper {
             );
             if needs_new_cache_change {
               for proxy in writer.readers.iter_mut() {
-                proxy.unsend_changes_set(writer.last_change_sequence_number);
+                proxy.notify_new_cache_change(writer.last_change_sequence_number);
               }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER {
@@ -629,7 +594,7 @@ impl DPEventWrapper {
             );
             if needs_new_cache_change {
               for proxy in writer.readers.iter_mut() {
-                proxy.unsend_changes_set(writer.last_change_sequence_number);
+                proxy.notify_new_cache_change(writer.last_change_sequence_number);
               }
             }
           } else {
@@ -648,7 +613,7 @@ impl DPEventWrapper {
             {
               // reset data sending
               for reader in writer.readers.iter_mut() {
-                reader.unsend_changes_set(writer.last_change_sequence_number);
+                reader.notify_new_cache_change(writer.last_change_sequence_number);
               }
             }
           }
@@ -760,12 +725,11 @@ impl DPEventWrapper {
   }
 
   fn add_reader_to_writer(writer: &mut Writer, mut proxy: RtpsReaderProxy) {
-    let reader = writer
-      .readers
-      .iter_mut()
-      .find(|r| r.remote_reader_guid == proxy.remote_reader_guid);
+    let reader = writer.readers
+                  .iter_mut()
+                  .find(|r| r.remote_reader_guid == proxy.remote_reader_guid);
 
-    proxy.unsend_changes_set(writer.last_change_sequence_number);
+    proxy.notify_new_cache_change(writer.last_change_sequence_number);
 
     match reader {
       Some(r) => {

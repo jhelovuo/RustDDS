@@ -12,6 +12,11 @@ pub struct SequenceNumber(i64);
 
 impl SequenceNumber {
   pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber = SequenceNumber((std::u32::MAX as i64) << 32);
+
+  // Zero interface may be still in unstable Rust
+  pub const fn zero() -> SequenceNumber {
+    SequenceNumber(0)
+  }
 }
 
 impl SequenceNumber {

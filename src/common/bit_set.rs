@@ -4,7 +4,7 @@ use log::debug;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::ops::{Deref, DerefMut};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BitSetRef(BitSet);
 
 impl BitSetRef {

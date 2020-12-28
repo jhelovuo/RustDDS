@@ -9,7 +9,7 @@ use crate::{
   messages::header::Header,
   messages::submessages::submessages::*,
   serialization::submessage::{SubMessage, SubmessageBody},
-  structure::{sequence_number::SequenceNumber, guid::GuidPrefix},
+  structure::{sequence_number::SequenceNumber, guid::GuidPrefix,cache_change::CacheChange},
 };
 #[allow(unused_imports)]
 use log::{error,warn,debug,trace};
@@ -253,22 +253,22 @@ impl<C: Context> Writable<C> for Message {
 }
 
 pub(crate) struct MessageBuilder {
-  header: Option<Header>,
+  //header: Option<Header>,
   submessages: Vec<SubMessage>,
 }
 
 impl MessageBuilder {
   pub fn new() -> MessageBuilder {
     MessageBuilder {
-      header: None,
+      //header: None,
       submessages: Vec::new(),
     }
   }
 
-  pub fn header(mut self, message_header: Header) -> MessageBuilder {
-    self.header = Some(message_header);
-    self
-  }
+  // pub fn header(mut self, message_header: Header) -> MessageBuilder {
+  //   self.header = Some(message_header);
+  //   self
+  // }
 
   pub fn dst_submessage(
     mut self,
@@ -324,23 +324,12 @@ impl MessageBuilder {
 
   pub fn data_msg(
     mut self,
-    seqnum: SequenceNumber,
+    cache_change: CacheChange,
     writer: &RtpsWriter,
     reader_guid: GUID,
   ) -> MessageBuilder {
-    let instant = match writer.sequence_number_to_instant(seqnum) {
-      Some(i) => i,
-      None => return self,
-    };
-
-    let cache_change = match writer.find_cache_change(instant) {
-      Some(cc) => cc,
-      None => return self,
-    };
-
-    let data_msg = writer.get_DATA_msg_from_cache_change(cache_change, reader_guid.entityId);
-
-    self.submessages.push(data_msg);
+    self.submessages
+      .push(writer.get_DATA_msg_from_cache_change(cache_change, reader_guid.entityId));
     self
   }
 
@@ -379,16 +368,11 @@ impl MessageBuilder {
     self
   }
 
-  pub fn build(self) -> Result<Message, String> {
-    let header = match self.header {
-      Some(h) => h,
-      None => return Err(String::from("Failed to build message. Missing header.")),
-    };
-
-    Ok(Message {
+  pub fn add_header_and_build(self, header:Header) -> Message {
+    Message {
       header,
       submessages: self.submessages,
-    })
+    }
   }
 }
 

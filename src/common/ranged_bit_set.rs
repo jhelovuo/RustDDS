@@ -2,7 +2,7 @@ use crate::common::bit_set::BitSetRef;
 use num_traits::{CheckedAdd, CheckedSub, FromPrimitive, NumCast, ToPrimitive};
 use speedy::{Readable, Writable};
 
-#[derive(Debug, PartialEq, Readable, Writable)]
+#[derive(Debug, PartialEq, Readable, Writable, Clone)]
 pub struct RangedBitSet<B>
 where
   B: CheckedAdd + CheckedSub + ToPrimitive + FromPrimitive,
