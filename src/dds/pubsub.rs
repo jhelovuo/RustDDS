@@ -321,7 +321,7 @@ impl InnerPublisher {
   pub fn create_datawriter<D, SA>(
     &self,
     outer: &Publisher,
-    entity_id: Option<EntityId>,
+    entity_id_opt: Option<EntityId>,
     topic: Topic,
     optional_qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
@@ -342,16 +342,7 @@ impl InnerPublisher {
       None => self.default_datawriter_qos.modify_by(&topic.get_qos()),
     };
 
-    let entity_id = match entity_id {
-      Some(eid) => eid,
-      None => {
-        let mut rng = rand::thread_rng();
-        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x02);
-
-        eid
-      }
-    };
-
+    let entity_id = unwrap_or_random_EntityId(entity_id_opt, 0x02);
     let dp = match self.get_participant() {
       Some(dp) => dp,
       None => {
@@ -376,19 +367,14 @@ impl InnerPublisher {
       .expect("Adding new writer failed");
 
     let matching_data_writer = WithKeyDataWriter::<D, SA>::new(
-      outer.clone(),
-      topic.clone(),
-      Some(guid),
-      dwcc_upload,
-      self.discovery_command.clone(),
-      dp.get_dds_cache(),
-      message_status_receiver,
-    );
-
-    let matching_data_writer = match matching_data_writer {
-      Ok(dw) => dw,
-      e => return e,
-    };
+          outer.clone(),
+          topic.clone(),
+          Some(guid),
+          dwcc_upload,
+          self.discovery_command.clone(),
+          dp.get_dds_cache(),
+          message_status_receiver,
+        )?;
 
     match self.discovery_db.write() {
       Ok(mut db) => {
@@ -406,7 +392,7 @@ impl InnerPublisher {
   pub fn create_datawriter_no_key<D, SA>(
     &self,
     outer: &Publisher,
-    entity_id: Option<EntityId>,
+    entity_id_opt: Option<EntityId>,
     topic: Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
@@ -414,15 +400,7 @@ impl InnerPublisher {
     D: Serialize,
     SA: SerializerAdapter<D>,
   {
-    let entity_id = match entity_id {
-      Some(eid) => eid,
-      None => {
-        let mut rng = rand::thread_rng();
-        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x03);
-
-        eid
-      }
-    };
+    let entity_id = unwrap_or_random_EntityId(entity_id_opt, 0x03);
     let d =
       self.create_datawriter::<NoKeyWrapper<D>, SAWrapper<SA>>(outer, Some(entity_id), topic, qos)?;
     Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
@@ -703,7 +681,7 @@ impl InnerSubscriber {
   fn create_datareader_internal<D: 'static, SA>(
     &self,
     outer: &Subscriber,
-    entity_id: Option<EntityId>,
+    entity_id_opt: Option<EntityId>,
     topic: Topic,
     optional_qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
@@ -723,15 +701,7 @@ impl InnerSubscriber {
       Some(q) => q,
       None => topic.get_qos().clone(),
     };
-
-    let entity_id = match entity_id {
-      Some(eid) => eid,
-      None => {
-        let mut rng = rand::thread_rng();
-        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x07);
-        eid
-      }
-    };
+    let entity_id = unwrap_or_random_EntityId(entity_id_opt, 0x07);
 
     let reader_id = entity_id;
     let datareader_id = entity_id;
@@ -822,7 +792,7 @@ impl InnerSubscriber {
     &self,
     outer: &Subscriber,
     topic: Topic,
-    entity_id: Option<EntityId>,
+    entity_id_opt: Option<EntityId>,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>
   where
@@ -833,14 +803,7 @@ impl InnerSubscriber {
       return Error::precondition_not_met("Topic is WITH_KEY, but attempted to create NO_KEY Datareader")
     }
 
-    let entity_id = match entity_id {
-      Some(eid) => eid,
-      None => {
-        let mut rng = rand::thread_rng();
-        let eid = EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], 0x04);
-        eid
-      }
-    };
+    let entity_id = unwrap_or_random_EntityId(entity_id_opt, 0x04);
 
     let d = self.create_datareader_internal::<NoKeyWrapper<D>, SAWrapper<SA>>(
       outer,
@@ -855,6 +818,14 @@ impl InnerSubscriber {
   pub fn get_participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }
+}
+
+fn unwrap_or_random_EntityId(entity_id_opt: Option<EntityId>, customEntityKind: u8) -> EntityId {
+    entity_id_opt // use the given EntityId or generate new random one
+      .unwrap_or_else( || {
+            let mut rng = rand::thread_rng();
+            EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], customEntityKind)
+          } )
 }
 
 // -------------------------------------------------------------------
