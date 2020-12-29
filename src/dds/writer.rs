@@ -38,7 +38,7 @@ use crate::structure::guid::{GuidPrefix, EntityId, GUID};
 use crate::structure::sequence_number::{SequenceNumber};
 use crate::{
   messages::submessages::submessages::{
-    Heartbeat, SubmessageHeader, SubmessageKind, InterpreterSubmessage, AckNack, InfoDestination,
+    SubmessageHeader, SubmessageKind, InterpreterSubmessage, AckNack, InfoDestination,
   },
   structure::cache_change::{CacheChange, ChangeKind},
   serialization::{SubMessage, Message, SubmessageBody},
@@ -313,6 +313,8 @@ impl Writer {
           //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the DATA with ACKNACK.
           let timestamp = self.insert_to_history_cache(data);
 
+          self.increase_heartbeat_counter();
+
           // send out (data and) heartbeat to each reader
           for reader in self.readers.iter() {
             let reader_guid = reader.remote_reader_guid;
@@ -328,6 +330,7 @@ impl Writer {
                   // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
                 } else { partial_message }
               } else { partial_message };
+
             let data_hb_message = data_hb_message_builder
               .heartbeat_msg(self, reader_guid, false, false)
               .add_header_and_build(self.create_message_header());
@@ -428,7 +431,9 @@ impl Writer {
 
     trace!("heartbeat tick in topic {:?} have {} readers", self.topic_name(), self.readers.len());
 
-
+    self.increase_heartbeat_counter(); 
+    // TODO: This produces same heartbeat count for all messages sent, but
+    // then again, they represent the same writer status.
 
     for reader in self.readers.iter() {
       // Do we have some changes this reader has not ACKed yet?
@@ -471,7 +476,7 @@ impl Writer {
       return
     }
     // Update the ReaderProxy
-    if let Some(reader_proxy) = self.matched_reader_lookup(reader_guid_prefix, an.reader_id) {
+    if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
         reader_proxy.handle_ack_nack(&an);
     }
 
@@ -666,13 +671,13 @@ impl Writer {
   //   return readers_remaining;
   // }
 
-  fn get_some_reader_with_unsent_messages(&self) -> Option<&RtpsReaderProxy> {
-    self.readers.iter().find(|p| p.can_send())
-  }
+  // fn get_some_reader_with_unsent_messages(&self) -> Option<&RtpsReaderProxy> {
+  //   self.readers.iter().find(|p| p.can_send())
+  // }
 
-  fn get_some_reader_with_unsent_messages_mut(&mut self) -> Option<&mut RtpsReaderProxy> {
-    self.readers.iter_mut().find(|p| p.can_send())
-  }
+  // fn get_some_reader_with_unsent_messages_mut(&mut self) -> Option<&mut RtpsReaderProxy> {
+  //   self.readers.iter_mut().find(|p| p.can_send())
+  // }
 
   // fn generate_message(&self, reader_proxy: &RtpsReaderProxy) -> Option<Message> {
   //   if reader_proxy.can_send() {
@@ -894,27 +899,14 @@ impl Writer {
     }
   }
 
+
+  // Called by message.rs to construct DATA Submessage.
+  // TODO: This code should really moved there to break the dependency in the wrong direction.
   pub fn get_DATA_msg_from_cache_change(
     &self,
     change: CacheChange,
     reader_entity_id: EntityId,
   ) -> SubMessage {
-    // let mut representationIdentifierBytes: [u8; 2] = [0, 0];
-    // if self.endianness == Endianness::LittleEndian {
-    //   representationIdentifierBytes = [0x00, 0x01];
-    // } else if self.endianness == Endianness::BigEndian {
-    //   representationIdentifierBytes = [0x00, 0x00];
-    // }
-
-    // TODO: might want check representation identifier again
-    //data_message.serialized_payload.representation_identifier =
-    //  SerializedPayload::representation_identifier_from(representationIdentifierBytes[1] as u16);
-
-    //The current version of the protocol (2.3) does not use the representation_options: The sender shall set the representation_options to zero.
-    //data_message.serialized_payload.representation_options = 0u16;
-    //data_message.serialized_payload.value = change.data_value.unwrap().value.clone();
-    //data_message.reader_id = reader_entity_id;
-    //data_message.writer_sn = change.sequence_number;
 
     let inline_qos = match change.kind {
       ChangeKind::ALIVE => None,
@@ -973,56 +965,56 @@ impl Writer {
     }
   }
 
-  pub fn get_heartbeat_msg(
-    &self,
-    reader_id: EntityId,
-    set_final_flag: bool,
-    set_liveliness_flag: bool,
-  ) -> Option<SubMessage> {
-    let first = self.first_change_sequence_number;
-    let last = self.last_change_sequence_number;
+  // pub fn get_heartbeat_msg(
+  //   &self,
+  //   reader_id: EntityId,
+  //   set_final_flag: bool,
+  //   set_liveliness_flag: bool,
+  // ) -> Option<SubMessage> {
+  //   let first = self.first_change_sequence_number;
+  //   let last = self.last_change_sequence_number;
 
-    let heartbeat = Heartbeat {
-      reader_id: reader_id,
-      writer_id: self.my_guid.entityId,
-      first_sn: first,
-      last_sn: last,
-      count: self.heartbeat_message_counter,
-    };
+  //   let heartbeat = Heartbeat {
+  //     reader_id: reader_id,
+  //     writer_id: self.my_guid.entityId,
+  //     first_sn: first,
+  //     last_sn: last,
+  //     count: self.heartbeat_message_counter,
+  //   };
 
-    let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(self.endianness);
+  //   let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(self.endianness);
 
-    if set_final_flag {
-      flags.insert(HEARTBEAT_Flags::Final)
-    }
-    if set_liveliness_flag {
-      flags.insert(HEARTBEAT_Flags::Liveliness)
-    }
+  //   if set_final_flag {
+  //     flags.insert(HEARTBEAT_Flags::Final)
+  //   }
+  //   if set_liveliness_flag {
+  //     flags.insert(HEARTBEAT_Flags::Liveliness)
+  //   }
 
-    heartbeat.create_submessage(flags)
-  }
+  //   heartbeat.create_submessage(flags)
+  // }
 
-  pub fn write_user_msg(&self, change: CacheChange, reader_entity_id: EntityId) -> Message {
-    let mut message: Vec<u8> = vec![];
+  // pub fn write_user_msg(&self, change: CacheChange, reader_entity_id: EntityId) -> Message {
+  //   let mut message: Vec<u8> = vec![];
 
-    let mut RTPSMessage: Message = Message::new(self.create_message_header());
-    RTPSMessage.add_submessage(self.get_TS_submessage(false));
-    let data = self.get_DATA_msg_from_cache_change(change.clone(), reader_entity_id);
-    RTPSMessage.add_submessage(data);
-    //RTPSMessage.add_submessage(self.get_heartbeat_msg());
-    message.append(&mut RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap());
+  //   let mut RTPSMessage: Message = Message::new(self.create_message_header());
+  //   RTPSMessage.add_submessage(self.get_TS_submessage(false));
+  //   let data = self.get_DATA_msg_from_cache_change(change.clone(), reader_entity_id);
+  //   RTPSMessage.add_submessage(data);
+  //   //RTPSMessage.add_submessage(self.get_heartbeat_msg());
+  //   message.append(&mut RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap());
 
-    return RTPSMessage;
-  }
+  //   return RTPSMessage;
+  // }
 
   /// AckNack Is negative if reader_sn_state contains some sequenceNumbers in reader_sn_state set
-  fn test_if_ack_nack_contains_not_recieved_sequence_numbers(ack_nack: &AckNack) -> bool {
-    trace!("Testing ACKNACK set {:?}", ack_nack.reader_sn_state);
-    if !&ack_nack.reader_sn_state.set.is_empty() {
-      return true;
-    }
-    return false;
-  }
+  // fn test_if_ack_nack_contains_not_recieved_sequence_numbers(ack_nack: &AckNack) -> bool {
+  //   trace!("Testing ACKNACK set {:?}", ack_nack.reader_sn_state);
+  //   if !&ack_nack.reader_sn_state.set.is_empty() {
+  //     return true;
+  //   }
+  //   return false;
+  // }
 
 
 
@@ -1044,7 +1036,7 @@ impl Writer {
   ///This operation finds the ReaderProxy with GUID_t a_reader_guid from the set
   /// get guid Prefix from RTPS message main header
   /// get reader guid from AckNack submessage readerEntityId
-  pub fn matched_reader_lookup(
+  fn lookup_readerproxy_mut(
     &mut self,
     guid_prefix: GuidPrefix,
     reader_entity_id: EntityId,
@@ -1058,17 +1050,17 @@ impl Writer {
       .find(|x| x.remote_reader_guid == search_guid)
   }
 
-  pub fn reader_lookup(
-    &self,
-    guid_prefix: GuidPrefix,
-    reader_entity_id: EntityId,
-  ) -> Option<&RtpsReaderProxy> {
-    let search_guid: GUID = GUID::new_with_prefix_and_id(guid_prefix, reader_entity_id);
-    self
-      .readers
-      .iter()
-      .find(|x| x.remote_reader_guid == search_guid)
-  }
+  // pub fn reader_lookup(
+  //   &self,
+  //   guid_prefix: GuidPrefix,
+  //   reader_entity_id: EntityId,
+  // ) -> Option<&RtpsReaderProxy> {
+  //   let search_guid: GUID = GUID::new_with_prefix_and_id(guid_prefix, reader_entity_id);
+  //   self
+  //     .readers
+  //     .iter()
+  //     .find(|x| x.remote_reader_guid == search_guid)
+  // }
 
   ///This operation takes a CacheChange a_change as a parameter and determines whether all the ReaderProxy
   ///have acknowledged the CacheChange. The operation will return true if all ReaderProxy have acknowledged the
@@ -1112,27 +1104,27 @@ impl Writer {
   //   }
   // }
 
-  pub fn increase_heartbeat_counter_and_remove_unsend(
-    &mut self,
-    message: &Option<Message>,
-    remote_reader_guid: &Option<GUID>,
-  ) {
-    if message.is_some() {
-      let sequence_numbers = message
-        .as_ref()
-        .unwrap()
-        .get_data_sub_message_sequence_numbers();
-      for sq in sequence_numbers {
-        let readerProxy = self
-          .matched_reader_lookup(
-            remote_reader_guid.unwrap().guidPrefix,
-            remote_reader_guid.unwrap().entityId,
-          )
-          .unwrap();
-        readerProxy.remove_unsent_cache_change(sq)
-      }
-    }
-  }
+  // pub fn increase_heartbeat_counter_and_remove_unsend(
+  //   &mut self,
+  //   message: &Option<Message>,
+  //   remote_reader_guid: &Option<GUID>,
+  // ) {
+  //   if message.is_some() {
+  //     let sequence_numbers = message
+  //       .as_ref()
+  //       .unwrap()
+  //       .get_data_sub_message_sequence_numbers();
+  //     for sq in sequence_numbers {
+  //       let readerProxy = self
+  //         .matched_reader_lookup(
+  //           remote_reader_guid.unwrap().guidPrefix,
+  //           remote_reader_guid.unwrap().entityId,
+  //         )
+  //         .unwrap();
+  //       readerProxy.remove_unsent_cache_change(sq)
+  //     }
+  //   }
+  // }
 
   // pub fn writer_set_unsent_changes(&mut self) {
   //   for reader in &mut self.readers {
@@ -1180,6 +1172,10 @@ impl HasQoSPolicy for Writer {
     self.qos_policies.clone()
   }
 }
+
+// -------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
