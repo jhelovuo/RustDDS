@@ -1,7 +1,15 @@
-use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
+use crate::{
+  serialization::SubMessage, serialization::SubmessageBody, structure::guid::EntityId,
+  messages::submessages::submessages::SubmessageHeader,
+};
+use enumflags2::BitFlags;
+use log::error;
 use speedy::{Readable, Writable};
 
+use super::{
+  submessage::EntitySubmessage, submessage_flag::GAP_Flags, submessage_kind::SubmessageKind,
+};
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers
 /// is no longer relevant. The set may be a contiguous range of
@@ -26,6 +34,27 @@ pub struct Gap {
   /// Identifies an additional list of sequence numbers that are
   /// irrelevant.
   pub gap_list: SequenceNumberSet,
+}
+
+impl Gap {
+  pub fn create_submessage(self, flags: BitFlags<GAP_Flags>) -> Option<SubMessage> {
+    let submessage_len = match self.write_to_vec() {
+      Ok(bytes) => bytes.len() as u16,
+      Err(e) => {
+        error!("Reader couldn't write GAP to bytes: {}", e);
+        return None
+      }
+    };
+
+    Some(SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::GAP,
+        flags: flags.bits(),
+        content_length: submessage_len,
+      },
+      body: SubmessageBody::Entity(EntitySubmessage::Gap(self, flags)),
+    })
+  }
 }
 
 #[cfg(test)]

@@ -9,7 +9,8 @@ use crate::{
   messages::header::Header,
   messages::submessages::submessages::*,
   serialization::submessage::{SubMessage, SubmessageBody},
-  structure::{sequence_number::SequenceNumber, guid::GuidPrefix,cache_change::CacheChange},
+  structure::{sequence_number::SequenceNumber, sequence_number::SequenceNumberSet, 
+    guid::GuidPrefix,cache_change::CacheChange},
 };
 #[allow(unused_imports)]
 use log::{error,warn,debug,trace};
@@ -253,22 +254,16 @@ impl<C: Context> Writable<C> for Message {
 }
 
 pub(crate) struct MessageBuilder {
-  //header: Option<Header>,
   submessages: Vec<SubMessage>,
 }
 
 impl MessageBuilder {
   pub fn new() -> MessageBuilder {
     MessageBuilder {
-      //header: None,
       submessages: Vec::new(),
     }
   }
 
-  // pub fn header(mut self, message_header: Header) -> MessageBuilder {
-  //   self.header = Some(message_header);
-  //   self
-  // }
 
   pub fn dst_submessage(
     mut self,
@@ -331,6 +326,30 @@ impl MessageBuilder {
     self.submessages
       .push(writer.get_DATA_msg_from_cache_change(cache_change, reader_guid.entityId));
     self
+  }
+
+  pub fn gap_msg(mut self, irrelevant_sns: &mut dyn Iterator<Item = SequenceNumber>, writer: &RtpsWriter, reader_guid: GUID) 
+      -> MessageBuilder 
+  {
+    match irrelevant_sns.next() {
+      Some(gap_start) => {
+        let mut gap_list = SequenceNumberSet::new(gap_start);
+        // TODO:This construction does not check for exceeding max bit set size
+        for sn in irrelevant_sns { gap_list.insert(sn); } 
+
+        let gap = Gap {
+              reader_id: reader_guid.entityId ,
+              writer_id: writer.get_entity_id(),
+              gap_start,
+              gap_list 
+          };
+        let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer.endianness);
+        gap.create_submessage(gap_flags)
+          .map( |s| self.submessages.push(s) );
+        self       
+      }
+      None => { error!("gap_msg called with empty SN set. Skipping GAP submessage"); self }
+    }
   }
 
   pub fn heartbeat_msg(

@@ -465,16 +465,60 @@ impl Writer {
   /// When receiving an ACKNACK Message indicating a Reader is missing some data samples, the Writer must
   /// respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
   /// sending a HEARTBEAT message when the sample is no longer available
-  pub fn handle_ack_nack(&mut self, guid_prefix: GuidPrefix, an: AckNack) {
+  pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, an: AckNack) {
     if !self.is_reliable() {
       warn!("Writer {:x?} is best effort! It should not handle acknack messages!", self.get_entity_id());
       return
     }
-
-    if let Some(reader_proxy) = self.matched_reader_lookup(guid_prefix, an.reader_id) {
-      reader_proxy.handle_ack_nack(&an)
+    // Update the ReaderProxy
+    if let Some(reader_proxy) = self.matched_reader_lookup(reader_guid_prefix, an.reader_id) {
+        reader_proxy.handle_ack_nack(&an);
     }
-  }
+
+    // Send out missing data
+    // TODO: We should implement this in a timed action, because RTPS spec says to wait for
+    // nack_response_delay before sending out data, and the default delay is not zero.   
+    if let Some(reader_proxy) = self
+      .matched_reader_remove(GUID::new_with_prefix_and_id(reader_guid_prefix, an.reader_id)) {
+        let reader_guid = reader_proxy.remote_reader_guid;
+        let mut partial_message = MessageBuilder::new()
+          .dst_submessage(self.endianness, reader_guid.guidPrefix)
+          .ts_msg(self.endianness, false);
+        let mut no_longer_relevant = Vec::new();
+        for &unsent_sn in reader_proxy.unsent_changes.iter() {
+          match self.sequence_number_to_instant(unsent_sn) {
+            Some(timestamp) => {
+              if let Some(cache_change) = self.dds_cache.read().unwrap()
+                  .from_topic_get_change(&self.my_topic_name, &timestamp) {
+                // TODO: We should not just append DATA submessages blindly. 
+                // We should check that message size limit is not exceeded.
+                partial_message = partial_message.data_msg(cache_change.clone(), &self, reader_guid ); 
+                // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
+              } else {
+                no_longer_relevant.push(unsent_sn);
+              }
+            }
+            None => 
+              error!("handle ack_nack writer {:?} seq.number {:?} missing from instant map", 
+                      self.my_guid, unsent_sn),
+          }
+        }
+        // Add GAP submessage, if some chache changes could not be found.
+        if no_longer_relevant.len() > 0 {
+          partial_message = partial_message.gap_msg(&mut no_longer_relevant.into_iter(), &self, reader_guid);
+        }
+        let data_gap_msg = partial_message
+          .add_header_and_build(self.create_message_header());
+        // TODO: Do we really need to send multicast also?
+        // At least we should have one call to send the messages out.
+        self.send_unicast_message_to_reader(&data_gap_msg, &reader_proxy);
+        self.send_multicast_message_to_reader(&data_gap_msg, &reader_proxy);
+
+        // insert reader back
+        self.matched_reader_add(reader_proxy);
+      }
+      
+  } // fn
 
   /// Removes permanently cacheChanges from DDSCache.
   /// CacheChanges can be safely removed only if they are acked by all readers. (Reliable)
@@ -992,14 +1036,9 @@ impl Writer {
     &self.readers.push(reader_proxy);
   }
 
-  pub fn matched_reader_remove(&mut self, reader_proxy: RtpsReaderProxy) {
-    let pos = &self.readers.iter().position(|x| {
-      x.remote_group_entity_id == reader_proxy.remote_group_entity_id
-        && x.remote_reader_guid == reader_proxy.remote_reader_guid
-    });
-    if pos.is_some() {
-      &self.readers.remove(pos.unwrap());
-    }
+  pub fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
+    let pos = self.readers.iter().position(|x| x.remote_reader_guid == guid );
+    pos.map( |p| self.readers.remove(p) )
   }
 
   ///This operation finds the ReaderProxy with GUID_t a_reader_guid from the set
@@ -1101,8 +1140,8 @@ impl Writer {
   //   }
   // }
 
-  pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<&Timestamp> {
-    self.sequence_number_to_instant.get(&seqnumber)
+  pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<Timestamp> {
+    self.sequence_number_to_instant.get(&seqnumber).copied()
   }
 
   pub fn find_cache_change(&self, instant: &Timestamp) -> Option<CacheChange> {
