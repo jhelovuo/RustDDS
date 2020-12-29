@@ -5,19 +5,15 @@ use enumflags2::BitFlags;
 use log::{debug, error, warn, trace};
 
 use speedy::{Writable, Endianness};
-//use time::Timespec;
-//use time::get_time;
 use mio_extras::channel::{self as mio_channel, SyncSender};
 use mio::Token;
 use std::{
-  //time::{Instant, Duration},
   sync::{RwLock, Arc},
   collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
   cmp::max,
 };
 use std::hash::Hasher;
 
-//use crate::messages::submessages::info_destination::InfoDestination;
 use crate::{
   serialization::MessageBuilder,
   messages::submessages::{
@@ -62,7 +58,6 @@ use super::{
   values::result::StatusChange,
 };
 use policy::{History, Reliability};
-//use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 
 pub(crate) struct Writer {
   source_version: ProtocolVersion,
@@ -246,11 +241,6 @@ impl Writer {
     self.qos_policies.reliability.is_some()
   }
 
-  // pub fn cache_change_receiver(&self) -> &mio_channel::Receiver<WriterCommand> {
-  //   &self.writer_command_receiver
-  // }
-
-
   // --------------------------------------------------------------
   // --------------------------------------------------------------
   // --------------------------------------------------------------
@@ -398,24 +388,7 @@ impl Writer {
     timestamp
   }
 
-
-  // fn create_heartbeat_message_wdata(
-  //   message_header: Header,
-  //   endianness: Endianness,
-  //   seqnum: SequenceNumber,
-  //   writer: &Writer,
-  //   reader_guid: GUID,
-  // ) -> Result<Message, String> {
-  //   MessageBuilder::new()
-  //     .dst_submessage(endianness, reader_guid.guidPrefix)
-  //     .ts_msg(endianness, false)
-  //     .data_msg(seqnum, writer, reader_guid)
-  //     .heartbeat_msg(writer, reader_guid, false, false)
-  //     .add_header_and_build(message_header)
-  // }
-
-
-  // --------------------------------------------------------------
+   // --------------------------------------------------------------
   // --------------------------------------------------------------
   // --------------------------------------------------------------
   
@@ -613,202 +586,10 @@ impl Writer {
     }
   }
 
-  // fn increase_last_change_sequence_number(&mut self) {
-  //   self.last_change_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
-  // }
-
-  fn increase_heartbeat_counter(&mut self) {
+   fn increase_heartbeat_counter(&mut self) {
     self.heartbeat_message_counter = self.heartbeat_message_counter + 1;
   }
 
-  // pub fn can_send_some(&self) -> bool {
-  //   // When writer is reliable all changes has to be acnowledged by remote reader before sending new messages.
-  //   if self.is_reliable() {
-  //     let last_change_is_acked: bool =
-  //       self.change_with_sequence_number_is_acked_by_all(self.last_change_sequence_number);
-
-  //     if last_change_is_acked {
-  //       for reader_proxy in &self.readers {
-  //         if reader_proxy.can_send() {
-  //           return true;
-  //         }
-  //       }
-  //       return false;
-  //     }
-  //   }
-  //   //Note that for a Best-Effort Writer, W::pushMode == true, as there are no acknowledgements. Therefore, the
-  //   //Writer always pushes out data as it becomes available.
-  //   else {
-  //     for reader_proxy in &self.readers {
-  //       if reader_proxy.can_send() {
-  //         return true;
-  //       }
-  //     }
-  //     return false;
-  //   }
-  //   return false;
-  // }
-
-  // pub fn sequence_is_sent_to_all_readers(&self, sequence_number: SequenceNumber) -> bool {
-  //   for reader_proxy in &self.readers {
-  //     if reader_proxy.unsent_changes().contains(&sequence_number) {
-  //       return false;
-  //     }
-  //   }
-  //   return true;
-  // }
-
-  // pub fn sequence_needs_to_be_send_to(
-  //   &self,
-  //   sequence_number: SequenceNumber,
-  // ) -> Vec<&RtpsReaderProxy> {
-  //   let mut readers_remaining: Vec<&RtpsReaderProxy> = vec![];
-  //   for reader_proxy in &self.readers {
-  //     if reader_proxy.unsent_changes().contains(&sequence_number) {
-  //       readers_remaining.push(&reader_proxy);
-  //     }
-  //   }
-  //   return readers_remaining;
-  // }
-
-  // fn get_some_reader_with_unsent_messages(&self) -> Option<&RtpsReaderProxy> {
-  //   self.readers.iter().find(|p| p.can_send())
-  // }
-
-  // fn get_some_reader_with_unsent_messages_mut(&mut self) -> Option<&mut RtpsReaderProxy> {
-  //   self.readers.iter_mut().find(|p| p.can_send())
-  // }
-
-  // fn generate_message(&self, reader_proxy: &RtpsReaderProxy) -> Option<Message> {
-  //   if reader_proxy.can_send() {
-  //     let sequenceNumber = match reader_proxy.next_unsent_change() {
-  //       Some(s) => s,
-  //       None => {
-  //         warn!("Failed to get next unsent change sequence number.");
-  //         return None;
-  //       }
-  //     };
-
-  //     let instant = match self.sequence_number_to_instant.get(&sequenceNumber) {
-  //       Some(i) => i,
-  //       None => {
-  //         warn!("Failed to get instant from sequence number.");
-  //         return None;
-  //       }
-  //     };
-
-  //     let cache = match self.dds_cache.read() {
-  //       Ok(c) => c,
-  //       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
-  //     };
-
-  //     let change = match cache.from_topic_get_change(&self.my_topic_name, &instant) {
-  //       Some(c) => c,
-  //       None => {
-  //         warn!("Failed to get cache change from topic.");
-  //         return None;
-  //       }
-  //     };
-
-  //     let reader_entity_id = reader_proxy.remote_reader_guid.entityId;
-  //     let message = self.write_user_msg(change.clone(), reader_entity_id);
-
-  //     return Some(message);
-  //   }
-  //   None
-  // }
-
-  // fn get_next_reader_next_unsend_message(&self) -> Option<(Message, GUID)> {
-  //   self.readers.iter().find(|p| p.can_send()).map(|p| {
-  //     let sequenceNumber = p.next_unsent_change();
-  //     let instant = self
-  //       .sequence_number_to_instant
-  //       .get(&sequenceNumber.unwrap());
-  //     let cache = self.dds_cache.read().unwrap();
-  //     let change = cache.from_topic_get_change(&self.my_topic_name, &instant.unwrap());
-  //     let reader_entity_id = p.remote_reader_guid.entityId.clone();
-  //     let remote_reader_guid = p.remote_reader_guid.clone();
-  //     let message = self.write_user_msg(change.unwrap().clone(), reader_entity_id);
-  //     return (message, remote_reader_guid);
-  //   })
-  // }
-
-  // fn get_next_reader_next_requested_message(&mut self) -> (Option<Message>, Option<GUID>) {
-  //   for reader_proxy in &mut self.readers {
-  //     if reader_proxy.can_send() {
-  //       let sequenceNumber = reader_proxy.next_requested_change();
-  //       let instant = self.sequence_number_to_instant.get(sequenceNumber.unwrap());
-  //       let cache = self.dds_cache.read().unwrap();
-  //       let change = cache.from_topic_get_change(&self.my_topic_name, &instant.unwrap());
-  //       let message: Message;
-  //       let reader_entity_id = reader_proxy.remote_reader_guid.entityId.clone();
-  //       let remote_reader_guid = reader_proxy.remote_reader_guid.clone();
-  //       {
-  //         message = self.write_user_msg(change.unwrap().clone(), reader_entity_id);
-  //       }
-  //       return (Some(message), Some(remote_reader_guid));
-  //     }
-  //   }
-  //   return (None, None);
-  // }
-
-  // fn send_next_unsend_message(&mut self) {
-  //   let remote_reader_guid;
-  //   let rem_sequece_number;
-  //   let mut message_sequence_numbers = HashSet::new();
-
-  //   if let Some(reader) = self.get_some_reader_with_unsent_messages() {
-  //     rem_sequece_number = reader.next_unsent_change();
-
-  //     remote_reader_guid = reader.remote_reader_guid;
-  //     let message = self.generate_message(reader);
-  //     if let Some(message) = message {
-  //       message_sequence_numbers = message.get_data_sub_message_sequence_numbers();
-
-  //       self.send_unicast_message_to_reader(&message, reader);
-  //       self.send_multicast_message_to_reader(&message, reader);
-
-  //       if let Some(seqnum) = rem_sequece_number {
-  //         let instant = self.sequence_number_to_instant(seqnum - SequenceNumber::from(1));
-  //         match self.get_qos().deadline {
-  //           Some(dl) => {
-  //             if let Some(instant) = instant {
-  //               if dl.0 < Timestamp::now() - *instant {
-  //                 self.offered_deadline_status.increase();
-  //                 debug!(
-  //                   "Trying to send single status change {:?}",
-  //                   self.offered_deadline_status
-  //                 );
-  //                 match self
-  //                   .status_sender
-  //                   .try_send(StatusChange::OfferedDeadlineMissedStatus(
-  //                     self.offered_deadline_status,
-  //                   )) {
-  //                   Ok(_) => (),
-  //                   Err(e) => error!("Failed to send new message status. {:?}", e),
-  //                 };
-  //               }
-  //             }
-  //           }
-  //           None => (),
-  //         }
-  //       }
-  //     }
-  //   } else {
-  //     return;
-  //   }
-
-  //   if let Some(rem_seq) = rem_sequece_number {
-  //     if let Some(reader) = self.get_some_reader_with_unsent_messages_mut() {
-  //       reader.remove_unsent_cache_change(rem_seq);
-  //     }
-
-  //     self.increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
-  //       message_sequence_numbers,
-  //       &Some(remote_reader_guid),
-  //     );
-  //   }
-  // }
 
   fn send_unicast_message_to_reader(&self, message: &Message, reader: &RtpsReaderProxy) {
     if let Ok(data) = message.write_to_vec_with_ctx(self.endianness) {
@@ -831,16 +612,6 @@ impl Writer {
       }
     }
   }
-
-  // pub fn send_all_unsend_messages(&mut self) {
-  //   if self.can_send_some() {
-  //     while let Some(_) = self.get_some_reader_with_unsent_messages() {
-  //       self.send_next_unsend_message();
-  //     }
-  //   } else {
-  //     // TODO: maybe add debug print when necessary
-  //   }
-  // }
 
   fn create_message_header(&self) -> Header {
     Header {
@@ -965,59 +736,6 @@ impl Writer {
     }
   }
 
-  // pub fn get_heartbeat_msg(
-  //   &self,
-  //   reader_id: EntityId,
-  //   set_final_flag: bool,
-  //   set_liveliness_flag: bool,
-  // ) -> Option<SubMessage> {
-  //   let first = self.first_change_sequence_number;
-  //   let last = self.last_change_sequence_number;
-
-  //   let heartbeat = Heartbeat {
-  //     reader_id: reader_id,
-  //     writer_id: self.my_guid.entityId,
-  //     first_sn: first,
-  //     last_sn: last,
-  //     count: self.heartbeat_message_counter,
-  //   };
-
-  //   let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(self.endianness);
-
-  //   if set_final_flag {
-  //     flags.insert(HEARTBEAT_Flags::Final)
-  //   }
-  //   if set_liveliness_flag {
-  //     flags.insert(HEARTBEAT_Flags::Liveliness)
-  //   }
-
-  //   heartbeat.create_submessage(flags)
-  // }
-
-  // pub fn write_user_msg(&self, change: CacheChange, reader_entity_id: EntityId) -> Message {
-  //   let mut message: Vec<u8> = vec![];
-
-  //   let mut RTPSMessage: Message = Message::new(self.create_message_header());
-  //   RTPSMessage.add_submessage(self.get_TS_submessage(false));
-  //   let data = self.get_DATA_msg_from_cache_change(change.clone(), reader_entity_id);
-  //   RTPSMessage.add_submessage(data);
-  //   //RTPSMessage.add_submessage(self.get_heartbeat_msg());
-  //   message.append(&mut RTPSMessage.write_to_vec_with_ctx(self.endianness).unwrap());
-
-  //   return RTPSMessage;
-  // }
-
-  /// AckNack Is negative if reader_sn_state contains some sequenceNumbers in reader_sn_state set
-  // fn test_if_ack_nack_contains_not_recieved_sequence_numbers(ack_nack: &AckNack) -> bool {
-  //   trace!("Testing ACKNACK set {:?}", ack_nack.reader_sn_state);
-  //   if !&ack_nack.reader_sn_state.set.is_empty() {
-  //     return true;
-  //   }
-  //   return false;
-  // }
-
-
-
   pub fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
     if self.readers.iter().any(|x| {
       x.remote_group_entity_id == reader_proxy.remote_group_entity_id
@@ -1050,30 +768,6 @@ impl Writer {
       .find(|x| x.remote_reader_guid == search_guid)
   }
 
-  // pub fn reader_lookup(
-  //   &self,
-  //   guid_prefix: GuidPrefix,
-  //   reader_entity_id: EntityId,
-  // ) -> Option<&RtpsReaderProxy> {
-  //   let search_guid: GUID = GUID::new_with_prefix_and_id(guid_prefix, reader_entity_id);
-  //   self
-  //     .readers
-  //     .iter()
-  //     .find(|x| x.remote_reader_guid == search_guid)
-  // }
-
-  ///This operation takes a CacheChange a_change as a parameter and determines whether all the ReaderProxy
-  ///have acknowledged the CacheChange. The operation will return true if all ReaderProxy have acknowledged the
-  ///corresponding CacheChange and false otherwise.
-  // pub fn is_acked_by_all(&self, cache_change: &CacheChange) -> bool {
-  //   for _proxy in &self.readers {
-  //     if _proxy.sequence_is_ackcache_change.sequence_numberber) == false {
-  //       return false;
-  //     }
-  //   }
-  //   return true;
-  // }
-
   pub fn change_with_sequence_number_is_acked_by_all(
     &self,
     sequence_number: SequenceNumber,
@@ -1081,56 +775,6 @@ impl Writer {
     self.readers.iter().all( |rp| rp.sequence_is_acked(sequence_number) )
   }
 
-  // pub fn increase_heartbeat_counter_and_remove_unsend_sequence_numbers(
-  //   &mut self,
-  //   sequence_numbers: HashSet<SequenceNumber>,
-  //   remote_reader_guid: &Option<GUID>,
-  // ) {
-  //   let sequenceNumbersCount: usize = { sequence_numbers.len() };
-
-  //   match remote_reader_guid {
-  //     Some(guid) => {
-  //       match self.matched_reader_lookup(guid.guidPrefix, guid.entityId) {
-  //         Some(rtps_reader_proxy) => {
-  //           rtps_reader_proxy.remove_unsent_cache_changes(&sequence_numbers);
-  //         }
-  //         None => (),
-  //       };
-  //       for _ in 0..sequenceNumbersCount + 1 {
-  //         self.increase_heartbeat_counter();
-  //       }
-  //     }
-  //     None => (),
-  //   }
-  // }
-
-  // pub fn increase_heartbeat_counter_and_remove_unsend(
-  //   &mut self,
-  //   message: &Option<Message>,
-  //   remote_reader_guid: &Option<GUID>,
-  // ) {
-  //   if message.is_some() {
-  //     let sequence_numbers = message
-  //       .as_ref()
-  //       .unwrap()
-  //       .get_data_sub_message_sequence_numbers();
-  //     for sq in sequence_numbers {
-  //       let readerProxy = self
-  //         .matched_reader_lookup(
-  //           remote_reader_guid.unwrap().guidPrefix,
-  //           remote_reader_guid.unwrap().entityId,
-  //         )
-  //         .unwrap();
-  //       readerProxy.remove_unsent_cache_change(sq)
-  //     }
-  //   }
-  // }
-
-  // pub fn writer_set_unsent_changes(&mut self) {
-  //   for reader in &mut self.readers {
-  //     reader.unsend_changes_set(self.last_change_sequence_number);
-  //   }
-  // }
 
   pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<Timestamp> {
     self.sequence_number_to_instant.get(&seqnumber).copied()
