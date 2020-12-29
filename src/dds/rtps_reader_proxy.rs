@@ -24,7 +24,7 @@ use std::{
 use super::reader::Reader;
 
 #[derive(Debug, PartialEq, Clone)]
-///ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
+/// ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
 pub(crate) struct RtpsReaderProxy {
   ///Identifies the remote matched RTPS Reader that is represented by the ReaderProxy
   pub remote_reader_guid: GUID,
@@ -34,26 +34,15 @@ pub(crate) struct RtpsReaderProxy {
   pub unicast_locator_list: LocatorList,
   /// List of multicast locators (transport, address, port combinations) that can be used to send messages to the matched RTPS Reader. The list may be empty
   pub multicast_locator_list: LocatorList,
-  /// List of CacheChange changes as they relate to the matched RTPS Reader.
-  //changes_for_reader :  Arc<HistoryCache>,
 
   /// Specifies whether the remote matched RTPS Reader expects in-line QoS to be sent along with any data.
   pub expects_in_line_qos: bool,
   /// Specifies whether the remote Reader is responsive to the Writer
   pub is_active: bool,
 
-  // keeps list of changes where response has been received
-  //acked_changes: HashSet<SequenceNumber>,
-
   // Reader has positively acked all SequenceNumbers _before_ this.
   // This is directly the same as readerSNState.base in ACKNACK submessage.
   pub all_acked_before : SequenceNumber,
-
-  // this list keeps sequence numbers from reader negative acknack messages
-  //requested_changes: HashSet<SequenceNumber>,
-
-  // this keeps sequence number of reader recieved (acknack recieved) messages
-  //largest_acked_change: Option<SequenceNumber>,
 
   // List of SequenceNumbers to be sent to Reader. Both unset eand requested by ACKNACK.
   pub unsent_changes: BTreeSet<SequenceNumber>,
@@ -66,7 +55,6 @@ impl RtpsReaderProxy {
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
       unicast_locator_list: LocatorList::new(),
       multicast_locator_list: LocatorList::new(),
-      //changes_for_reader : writer.history_cache.clone(),
       expects_in_line_qos: false,
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
@@ -100,14 +88,13 @@ impl RtpsReaderProxy {
       Some(v) => v,
       None => {
         warn!("Failed to convert DiscoveredReaderData to RtpsReaderProxy. No GUID");
-        return None;
+        return None
       }
     };
 
-    let expects_inline_qos = match &discovered_reader_data.reader_proxy.expects_inline_qos {
-      Some(v) => v.clone(),
-      None => false,
-    };
+    let expects_inline_qos = 
+          discovered_reader_data.reader_proxy.expects_inline_qos
+            .unwrap_or(false);
 
     Some(RtpsReaderProxy {
       remote_reader_guid: remote_reader_guid.clone(),
@@ -156,89 +143,9 @@ impl RtpsReaderProxy {
   }
 
 
-
   pub fn can_send(&self) -> bool {
     ! self.unsent_changes.is_empty()
   }
-
-  // fn can_send_unsend(&self) -> bool {
-  //   if self.unsent_changes().len() > 0 {
-  //     return true;
-  //   }
-  //   return false;
-  // }
-
-  // fn can_send_requested(&self) -> bool {
-  //   if self.requested_changes().len() > 0 {
-  //     return true;
-  //   }
-  //   return false;
-  // }
-
-  /// returns list of sequence numbers that are requested by reader with acknack
-  // pub fn requested_changes(&self) -> &HashSet<SequenceNumber> {
-  //   return &self.requested_changes;
-  // }
-
-  // pub fn unsent_changes(&self) -> &HashSet<SequenceNumber> {
-  //   return &self.unsent_changes;
-  // }
-
-  // pub fn next_requested_change(&self) -> Option<&SequenceNumber> {
-  //   let mut min_value = SequenceNumber::from(std::i64::MAX);
-  //   let mut min: Option<&SequenceNumber> = None;
-  //   for request in self.requested_changes() {
-  //     if request < &min_value {
-  //       min = Some(request);
-  //       min_value = *request;
-  //     }
-  //   }
-  //   return min;
-  // }
-
-  // pub fn next_unsent_change(&self) -> Option<SequenceNumber> {
-  //   let mut min_value = SequenceNumber::from(std::i64::MAX);
-  //   let mut min: Option<SequenceNumber> = None;
-  //   for &request in self.unsent_changes() {
-  //     if request < min_value {
-  //       min = Some(request);
-  //       min_value = request;
-  //     }
-  //   }
-  //   return min;
-  // }
-
-  // pub fn add_acked_changes(
-  //   &mut self,
-  //   first_sn: SequenceNumber,
-  //   last_sn: SequenceNumber,
-  //   base: SequenceNumber,
-  //   sequence_numbers: &BitSetRef,
-  // ) {
-  //   let mut acks = HashSet::new();
-  //   for sn in i64::from(first_sn)..i64::from(last_sn) {
-  //     acks.insert(SequenceNumber::from(sn));
-  //   }
-
-  //   let mut acked = HashSet::new();
-  //   for number in sequence_numbers.iter() {
-  //     let num = SequenceNumber::from(number as i64) + base;
-  //     acked.insert(num);
-  //   }
-
-  //   let new_acks = acks.difference(&acked).map(|s| *s).collect();
-
-  //   self.acked_changes = new_acks;
-  // }
-
-  // pub fn add_requested_changes(&mut self, base: SequenceNumber, sequence_numbers: BitSetRef) {
-  //   trace!("Sequence number set {:?}", sequence_numbers);
-  //   for number in sequence_numbers.iter() {
-  //     let num = SequenceNumber::from(number as i64) + base;
-  //     trace!("Number {:?}", num);
-  //     self.requested_changes.insert(num);
-  //   }
-  // }
 
   pub fn handle_ack_nack(&mut self, acknack: &AckNack) {
     self.all_acked_before = acknack.reader_sn_state.base;
@@ -262,45 +169,10 @@ impl RtpsReaderProxy {
     self.unsent_changes.remove(&sequence_number);
   }
 
-  // pub fn remove_unsent_cache_changes(&mut self, sequence_numbers: &HashSet<SequenceNumber>) {
-  //   let new_us_changes = self
-  //     .unsent_changes()
-  //     .difference(sequence_numbers)
-  //     .map(|s| *s)
-  //     .collect();
-  //   self.unsent_changes = new_us_changes;
-  // }
-
-  // pub fn remove_requested_change(&mut self, sequence_number: SequenceNumber) {
-  //   self.requested_changes.remove(&sequence_number);
-  // }
-
-  // ///This operation changes the ChangeForReader status of a set of changes for the reader represented by
-  // ///ReaderProxy ‘the_reader_proxy.’ The set of changes with sequence number smaller than or equal to the value
-  // ///‘committed_seq_num’ have their status changed to ACKNOWLEDGED
-  // // pub fn acked_changes_set(&mut self, sequence_number: SequenceNumber) {
-  // //   self.largest_acked_change = Some(sequence_number);
-  // // }
-
   pub fn sequence_is_acked(&self, sequence_number: SequenceNumber) -> bool {
     sequence_number < self.all_acked_before
   }
 
-  // pub fn unacked_changes(
-  //   &self,
-  //   smallest_change: SequenceNumber,
-  //   largest_change: SequenceNumber,
-  // ) -> HashSet<SequenceNumber> {
-  //   let mut changes = HashSet::new();
-  //   for seq in i64::from(smallest_change)..i64::from(largest_change) {
-  //     changes.insert(SequenceNumber::from(seq));
-  //   }
-
-  //   changes
-  //     .difference(&self.acked_changes)
-  //     .map(|s| *s)
-  //     .collect()
-  // }
 
   pub fn content_is_equal(&self, other: &RtpsReaderProxy) -> bool {
     self.remote_reader_guid == other.remote_reader_guid
@@ -312,28 +184,28 @@ impl RtpsReaderProxy {
   }
 }
 
-pub enum ChangeForReaderStatusKind {
-  UNSENT,
-  NACKNOWLEDGED,
-  REQUESTED,
-  ACKNOWLEDGED,
-  UNDERWAY,
-}
+// pub enum ChangeForReaderStatusKind {
+//   UNSENT,
+//   NACKNOWLEDGED,
+//   REQUESTED,
+//   ACKNOWLEDGED,
+//   UNDERWAY,
+// }
 
-///The RTPS ChangeForReader is an association class that maintains information of a CacheChange in the RTPS
-///Writer HistoryCache as it pertains to the RTPS Reader represented by the ReaderProxy
-pub struct RTPSChangeForReader {
-  ///Indicates the status of a CacheChange relative to the RTPS Reader represented by the ReaderProxy.
-  pub kind: ChangeForReaderStatusKind,
-  ///Indicates whether the change is relevant to the RTPS Reader represented by the ReaderProxy.
-  pub is_relevant: bool,
-}
+// ///The RTPS ChangeForReader is an association class that maintains information of a CacheChange in the RTPS
+// ///Writer HistoryCache as it pertains to the RTPS Reader represented by the ReaderProxy
+// pub struct RTPSChangeForReader {
+//   ///Indicates the status of a CacheChange relative to the RTPS Reader represented by the ReaderProxy.
+//   pub kind: ChangeForReaderStatusKind,
+//   ///Indicates whether the change is relevant to the RTPS Reader represented by the ReaderProxy.
+//   pub is_relevant: bool,
+// }
 
-impl RTPSChangeForReader {
-  pub fn new() -> RTPSChangeForReader {
-    RTPSChangeForReader {
-      kind: ChangeForReaderStatusKind::UNSENT,
-      is_relevant: true,
-    }
-  }
-}
+// impl RTPSChangeForReader {
+//   pub fn new() -> RTPSChangeForReader {
+//     RTPSChangeForReader {
+//       kind: ChangeForReaderStatusKind::UNSENT,
+//       is_relevant: true,
+//     }
+//   }
+// }
