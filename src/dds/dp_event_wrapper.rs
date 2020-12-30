@@ -596,7 +596,10 @@ impl DPEventWrapper {
                     db.find_participant_proxy(remote_part_guid.guidPrefix)
                       .map(|pp| ( pp.default_unicast_locators.clone(), 
                                   pp.default_multicast_locators.clone() ) )
-                      .unwrap_or( (LocatorList::new(), LocatorList::new()) );
+                      .unwrap_or( {
+                          warn!("No remote participant known for {:?}",drd);
+                          (LocatorList::new(), LocatorList::new()) 
+                        } );
                   // create new reader proxy
                   RtpsReaderProxy::from_discovered_reader_data(drd, 
                     locator_lists.0 , locator_lists.1)

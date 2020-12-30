@@ -6,7 +6,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use log::{warn,debug,trace};
+use log::{warn,debug,trace,info};
 
 use crate::{
   dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators, 
@@ -78,6 +78,7 @@ impl DiscoveryDB {
   }
 
   pub fn remove_participant(&mut self, guid: GUID) {
+    info!("removing participant {:?}",guid);
     self.participant_proxies.remove(&guid);
 
     self.remove_topic_reader_with_prefix(guid.guidPrefix);
@@ -159,10 +160,14 @@ impl DiscoveryDB {
 
       let min_update = durations.get(g);
 
-      match min_update {
+      let retain = match min_update {
         Some(&dur) => lease_duration > dur,
         None => lease_duration > Duration::DURATION_INFINITE,
+      };
+      if ! retain {
+        debug!("participant cleanup - deleting prticipant proxy {:?}",g);
       }
+      retain
     });
   }
 
@@ -278,11 +283,23 @@ impl DiscoveryDB {
       Some(tn) => tn,
       None => return,
     };
+    // find out default LocatorsLists from Participant proxy
+    let drd = data;
+    let remote_part_guid = 
+      drd.reader_proxy.remote_reader_guid
+        .expect("ReaderProxy has no GUID");
+    let locator_lists = 
+      self.find_participant_proxy(remote_part_guid.guidPrefix)
+        .map(|pp| ( pp.default_unicast_locators.clone(), 
+                    pp.default_multicast_locators.clone() ) )
+        .unwrap_or( {
+            warn!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
+              ,drd, remote_part_guid, self.participant_proxies.keys() );
+            (LocatorList::new(), LocatorList::new()) 
+          } );
 
     let reader_proxy = RtpsReaderProxy::from_discovered_reader_data(data, 
-      // put in empty default locator lists. Defaults from PArticiapnt proxy
-      // should be added when adding RtpsReaderProxy to Writer
-      LocatorList::new(), LocatorList::new() );
+                          locator_lists.0 , locator_lists.1 );
 
     match reader_proxy {
       Some(rp) => self

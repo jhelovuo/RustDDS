@@ -312,32 +312,7 @@ impl Writer {
 
           self.increase_heartbeat_counter();
 
-          // send out (data and) heartbeat to each reader
-          // for reader in self.readers.iter() {
-          //   let reader_guid = reader.remote_reader_guid;
-          //   let partial_message = MessageBuilder::new()
-          //     .dst_submessage(self.endianness, reader_guid.guidPrefix)
-          //     .ts_msg(self.endianness, false);
-          //   let data_hb_message_builder = 
-          //     if self.push_mode {
-          //       if let Some(cache_change) = 
-          //           self.dds_cache.read().unwrap()
-          //             .from_topic_get_change(&self.my_topic_name, &timestamp) { 
-          //         partial_message.data_msg(cache_change.clone(), &self, reader_guid ) 
-          //         // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
-          //       } else { partial_message }
-          //     } else { partial_message };
-
-          //   let data_hb_message = data_hb_message_builder
-          //     .heartbeat_msg(self, reader_guid, false, false)
-          //     .add_header_and_build(self.create_message_header());
-          //   // TODO: Do we really need to send multicast also?
-          //   // At least we should have one call to send the messages out.
-          //   self.send_unicast_message_to_reader(&data_hb_message, reader);
-          //   self.send_multicast_message_to_reader(&data_hb_message, reader);
-          // }
           let partial_message = MessageBuilder::new()
-            //.dst_submessage(self.endianness, reader_guid.guidPrefix)
             .ts_msg(self.endianness, false);
           let data_hb_message_builder = 
             if self.push_mode {
