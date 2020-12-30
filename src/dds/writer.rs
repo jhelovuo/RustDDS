@@ -1,15 +1,16 @@
+
 use chrono::Duration as chronoDuration;
 use enumflags2::BitFlags;
 
 #[allow(unused_imports)]
-use log::{debug, error, warn, trace};
+use log::{debug, error, warn, info, trace};
 
 use speedy::{Writable, Endianness};
 use mio_extras::channel::{self as mio_channel, SyncSender};
 use mio::Token;
 use std::{
   sync::{RwLock, Arc},
-  collections::{HashSet, HashMap, BTreeMap, hash_map::DefaultHasher},
+  collections::{HashSet, HashMap, BTreeMap, BTreeSet, hash_map::DefaultHasher},
   cmp::max,
 };
 use std::hash::Hasher;
@@ -46,7 +47,7 @@ use crate::{
   structure::{
     entity::RTPSEntity,
     endpoint::{EndpointAttributes, Endpoint},
-    locator::LocatorKind,
+    locator::LocatorKind,locator::Locator,
     dds_cache::DDSCache,
   },
   common::timed_event_handler::{TimedEventHandler},
@@ -58,6 +59,12 @@ use super::{
   values::result::StatusChange,
 };
 use policy::{History, Reliability};
+
+#[derive(PartialEq,Eq,Clone,Copy)]
+pub enum DeliveryMode {
+  Unicast,
+  Multicast,
+}
 
 pub(crate) struct Writer {
   source_version: ProtocolVersion,
@@ -306,29 +313,48 @@ impl Writer {
           self.increase_heartbeat_counter();
 
           // send out (data and) heartbeat to each reader
-          for reader in self.readers.iter() {
-            let reader_guid = reader.remote_reader_guid;
-            let partial_message = MessageBuilder::new()
-              .dst_submessage(self.endianness, reader_guid.guidPrefix)
-              .ts_msg(self.endianness, false);
-            let data_hb_message_builder = 
-              if self.push_mode {
-                if let Some(cache_change) = 
-                    self.dds_cache.read().unwrap()
-                      .from_topic_get_change(&self.my_topic_name, &timestamp) { 
-                  partial_message.data_msg(cache_change.clone(), &self, reader_guid ) 
-                  // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
-                } else { partial_message }
-              } else { partial_message };
+          // for reader in self.readers.iter() {
+          //   let reader_guid = reader.remote_reader_guid;
+          //   let partial_message = MessageBuilder::new()
+          //     .dst_submessage(self.endianness, reader_guid.guidPrefix)
+          //     .ts_msg(self.endianness, false);
+          //   let data_hb_message_builder = 
+          //     if self.push_mode {
+          //       if let Some(cache_change) = 
+          //           self.dds_cache.read().unwrap()
+          //             .from_topic_get_change(&self.my_topic_name, &timestamp) { 
+          //         partial_message.data_msg(cache_change.clone(), &self, reader_guid ) 
+          //         // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
+          //       } else { partial_message }
+          //     } else { partial_message };
 
-            let data_hb_message = data_hb_message_builder
-              .heartbeat_msg(self, reader_guid, false, false)
-              .add_header_and_build(self.create_message_header());
-            // TODO: Do we really need to send multicast also?
-            // At least we should have one call to send the messages out.
-            self.send_unicast_message_to_reader(&data_hb_message, reader);
-            self.send_multicast_message_to_reader(&data_hb_message, reader);
-          }
+          //   let data_hb_message = data_hb_message_builder
+          //     .heartbeat_msg(self, reader_guid, false, false)
+          //     .add_header_and_build(self.create_message_header());
+          //   // TODO: Do we really need to send multicast also?
+          //   // At least we should have one call to send the messages out.
+          //   self.send_unicast_message_to_reader(&data_hb_message, reader);
+          //   self.send_multicast_message_to_reader(&data_hb_message, reader);
+          // }
+          let partial_message = MessageBuilder::new()
+            //.dst_submessage(self.endianness, reader_guid.guidPrefix)
+            .ts_msg(self.endianness, false);
+          let data_hb_message_builder = 
+            if self.push_mode {
+              if let Some(cache_change) = 
+                  self.dds_cache.read().unwrap()
+                    .from_topic_get_change(&self.my_topic_name, &timestamp) { 
+                partial_message.data_msg(cache_change.clone(), &self, EntityId::ENTITYID_UNKNOWN ) 
+                // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
+              } else { partial_message }
+            } else { partial_message };
+          let final_flag = false;
+          let liveliness_flag = false;
+          let data_hb_message = data_hb_message_builder
+               .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
+               .add_header_and_build(self.create_message_header());
+          self.send_message_to_readers(DeliveryMode::Multicast, 
+            &data_hb_message, &mut self.readers.iter() );
         }
 
         WriterCommand::ResetOfferedDeadlineMissedStatus { writer_guid: _, } => {
@@ -416,7 +442,7 @@ impl Writer {
         let hb_message = MessageBuilder::new()
           .dst_submessage(self.endianness, reader_guid.guidPrefix)
           .ts_msg(self.endianness, false)
-          .heartbeat_msg(self, reader_guid, final_flag, liveliness_flag)
+          .heartbeat_msg(self, reader_guid.entityId, final_flag, liveliness_flag)
           .add_header_and_build(self.create_message_header());
         self.send_unicast_message_to_reader(&hb_message, reader);
         self.send_multicast_message_to_reader(&hb_message, reader);
@@ -449,13 +475,28 @@ impl Writer {
       return
     }
     // Update the ReaderProxy
+    let last_seq = self.last_change_sequence_number; // to avoid borrow problems
     if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
         reader_proxy.handle_ack_nack(&an);
+
+        // if we cannot send more data, we are done.
+        // This is to prevent empty "missing data" messages from being sent.
+        if reader_proxy.all_acked_before > last_seq {
+          // Sanity Check: if the reader asked for something we did not even advertise yet.
+          // TODO: This checks the stored unset_changes, not presentely received ACKNACK.
+          if let Some(&high) = reader_proxy.unsent_changes.range(..).next_back()  {
+            if high > last_seq { 
+              info!("ReaderProxy {:?} asked for {:?} but I have only up to {:?}", 
+                reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq);
+            }
+          }
+          return 
+        }
     }
 
     // Send out missing data
     // TODO: We should implement this in a timed action, because RTPS spec says to wait for
-    // nack_response_delay before sending out data, and the default delay is not zero.   
+    // nack_response_delay before sending out data, and the default delay is not zero.  
     if let Some(reader_proxy) = self
       .matched_reader_remove(GUID::new_with_prefix_and_id(reader_guid_prefix, an.reader_id)) {
         let reader_guid = reader_proxy.remote_reader_guid;
@@ -470,7 +511,8 @@ impl Writer {
                   .from_topic_get_change(&self.my_topic_name, &timestamp) {
                 // TODO: We should not just append DATA submessages blindly. 
                 // We should check that message size limit is not exceeded.
-                partial_message = partial_message.data_msg(cache_change.clone(), &self, reader_guid ); 
+                partial_message = partial_message.data_msg(cache_change.clone(), 
+                    &self, reader_guid.entityId ); 
                 // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
               } else {
                 no_longer_relevant.push(unsent_sn);
@@ -613,9 +655,50 @@ impl Writer {
     }
   }
 
-  // fn send_message_to_readers_prefer_unicast(&self, message: &Message, 
-  //       readers: &mut dyn Iterator<Item = &RtpsReaderProxy>) {
-  // }
+ 
+
+  fn send_message_to_readers(&self, preferred_mode: DeliveryMode, message: &Message, 
+        readers: &mut dyn Iterator<Item = &RtpsReaderProxy>) {
+    // TODO: This is a stupid transmit algorithm. We should compute a preferred
+    // unicast and multicast locators for each reader only on every reader update, and
+    // not find it dynamically on every message.
+    let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
+    let mut already_sent_to = BTreeSet::new();
+
+    macro_rules! send_unless_sent_and_mark {
+      ($loc:expr) => {
+        if already_sent_to.contains($loc) {
+          trace!("Already sent to {:?}", $loc);
+        } else {
+          self.udp_sender.send_to_locator(&buffer, $loc);
+          already_sent_to.insert($loc.clone());
+        }
+      }
+    }
+
+    for reader in readers {
+      match ( preferred_mode, 
+              reader.unicast_locator_list.iter().find(|l| Locator::isUDP(l) ), 
+              reader.multicast_locator_list.iter().find(|l| Locator::isUDP(l) ) ) {
+        (DeliveryMode::Multicast, _ , Some(mc_locator)) => {
+          send_unless_sent_and_mark!(mc_locator)
+        }
+        (DeliveryMode::Unicast, Some(uc_locator) , _ ) => {
+          send_unless_sent_and_mark!(uc_locator)
+        }        
+        (_delivery_mode, _ , Some(mc_locator)) => {
+          send_unless_sent_and_mark!(mc_locator)
+        }
+        (_delivery_mode, Some(uc_locator), _ ) => {
+          send_unless_sent_and_mark!(uc_locator)
+        }
+        (_delivery_mode, None, None ) => {
+          error!("send_message_to_readers: No locators for {:?}",reader);
+        }
+      } // match
+    }
+
+  }
 
   fn create_message_header(&self) -> Header {
     Header {

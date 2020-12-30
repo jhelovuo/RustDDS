@@ -1,9 +1,11 @@
-use log::debug;
+#[allow(unused_imports)]
+use log::{debug,warn,error};
+
 use mio::net::UdpSocket;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::io;
-use crate::structure::locator::{LocatorKind, LocatorList};
+use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 
 #[derive(Debug)]
 pub struct UDPSender {
@@ -43,16 +45,35 @@ impl UDPSender {
     }
   }
 
-  pub fn send_to_locator_list(&self, buffer: &[u8], locators: &LocatorList) {
-    for l in locators {
-      if l.kind == LocatorKind::LOCATOR_KIND_UDPv4 || l.kind == LocatorKind::LOCATOR_KIND_UDPv6 {
-        let a = SocketAddr::from(l.to_socket_address());
-        match self.socket.send_to(buffer, &a) {
-          Ok(_) => (),
-          _ => debug!("Unable to send to {}", a),
-        };
-      }
+  pub fn send_to_locator_list(&self, buffer: &[u8], ll: &LocatorList) {
+    for loc in ll.iter() {
+      self.send_to_locator(buffer,loc)
     }
+  }
+
+  pub fn send_to_locator(&self, buffer: &[u8], l: &Locator) {
+      match l.kind {
+        LocatorKind::LOCATOR_KIND_UDPv4 |
+        LocatorKind::LOCATOR_KIND_UDPv6 => {
+          let a = SocketAddr::from(l.to_socket_address());
+          match self.socket.send_to(buffer, &a) {
+            Ok(bytes_sent) =>
+              if bytes_sent == buffer.len() { () // ok
+              } else {
+                error!("send_to_locator_list - send_to tried {} bytes, sent only {}",
+                    buffer.len(), bytes_sent);
+              }
+            Err(e) => {
+              warn!("send_to_locator_list - send_to {} : {:?}", a, e);
+            }
+          }
+        }
+        LocatorKind::LOCATOR_KIND_INVALID |
+        LocatorKind::LOCATOR_KIND_RESERVED =>
+          error!("send_to_locator_list: Cannot send to {:?}",l.kind),
+        _unknown_kind  =>
+          error!("send_to_locator_list: Unknown LocatorKind: {:?}",l.kind),
+      }
   }
 
   pub fn send_multicast(self, buffer: &[u8], address: Ipv4Addr, port: u16) -> io::Result<usize> {

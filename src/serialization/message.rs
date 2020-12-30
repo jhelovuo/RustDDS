@@ -3,12 +3,12 @@ use std::{collections::HashSet, io};
 use crate::{
   structure::entity::RTPSEntity,
   dds::{
-    data_types::{DDSTimestamp, GUID},
+    data_types::{DDSTimestamp, GUID, EntityId},
     writer::Writer as RtpsWriter,
   },
   messages::header::Header,
   messages::submessages::submessages::*,
-  serialization::submessage::{SubMessage, SubmessageBody},
+  serialization::submessage::{SubMessage, SubmessageBody, },
   structure::{sequence_number::SequenceNumber, sequence_number::SequenceNumberSet, 
     guid::GuidPrefix,cache_change::CacheChange},
 };
@@ -321,10 +321,10 @@ impl MessageBuilder {
     mut self,
     cache_change: CacheChange,
     writer: &RtpsWriter,
-    reader_guid: GUID,
+    reader_entityid: EntityId,
   ) -> MessageBuilder {
     self.submessages
-      .push(writer.get_DATA_msg_from_cache_change(cache_change, reader_guid.entityId));
+      .push(writer.get_DATA_msg_from_cache_change(cache_change, reader_entityid));
     self
   }
 
@@ -355,7 +355,7 @@ impl MessageBuilder {
   pub fn heartbeat_msg(
     mut self,
     writer: &RtpsWriter,
-    reader_guid: GUID,
+    reader_entityid: EntityId,
     set_final_flag: bool,
     set_liveliness_flag: bool,
   ) -> MessageBuilder {
@@ -363,7 +363,7 @@ impl MessageBuilder {
     let last = writer.last_change_sequence_number;
 
     let heartbeat = Heartbeat {
-      reader_id: reader_guid.entityId,
+      reader_id: reader_entityid,
       writer_id: writer.get_entity_id(),
       first_sn: first,
       last_sn: last,
