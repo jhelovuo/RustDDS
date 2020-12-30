@@ -104,7 +104,7 @@ use crate::{
   },
   structure::{
     locator::Locator,
-    guid::{EntityId, GUID},
+    guid::{EntityId, GUID, EntityKind},
     duration::Duration,
     sequence_number::SequenceNumber,
   },
@@ -204,7 +204,7 @@ pub(crate) fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
 
 pub(crate) fn reader_proxy_data() -> Option<ReaderProxy> {
   let reader_proxy = ReaderProxy {
-    remote_reader_guid: Some(GUID::new()),
+    remote_reader_guid: Some(GUID::dummy_test_guid(EntiTyKind::READER_NO_KEY_USER_DEFINED)),
     expects_inline_qos: Some(false),
     unicast_locator_list: vec![Locator::from(SocketAddr::new(
       "0.0.0.0".parse().unwrap(),
@@ -221,7 +221,7 @@ pub(crate) fn reader_proxy_data() -> Option<ReaderProxy> {
 
 pub(crate) fn writer_proxy_data() -> Option<WriterProxy> {
   let writer_proxy = WriterProxy {
-    remote_writer_guid: Some(GUID::new()),
+    remote_writer_guid: Some(GUID::dummy_test_guid(EntiTyKind::WRITER_NO_KEY_USER_DEFINED)),
     unicast_locator_list: vec![Locator::from(SocketAddr::new(
       "0.0.0.0".parse().unwrap(),
       12345,
@@ -265,15 +265,15 @@ pub(crate) fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTop
     .build();
 
   let sub_topic_data =
-    SubscriptionBuiltinTopicData::new(GUID::new(), "some topic name", "RandomData", &qos);
+    SubscriptionBuiltinTopicData::new(GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED), "some topic name", "RandomData", &qos);
 
   Some(sub_topic_data)
 }
 
 pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
   let pub_topic_data = PublicationBuiltinTopicData {
-    key: Some(GUID::new()),
-    participant_key: Some(GUID::new()),
+    key: Some(GUID::dummy_test_guid(EntityKind::WRITER_WITH_KEY_BUILT_IN)),
+    participant_key: Some(GUID::dummy_test_guid(EntityKind::PARTICIPANT_BUILT_IN)),
     topic_name: Some("rand topic namm".to_string()),
     type_name: Some("RandomData".to_string()),
     durability: Some(Durability::Volatile),
@@ -305,7 +305,7 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
 
 pub(crate) fn topic_data() -> Option<TopicBuiltinTopicData> {
   let topic_data = TopicBuiltinTopicData {
-    key: Some(GUID::new()),
+    key: Some(GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN)),
     name: Some("SomeTopicName".to_string()),
     type_name: Some("RandomData".to_string()),
     durability: Some(Durability::Persistent),
@@ -358,7 +358,7 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
   let tdata = to_bytes::<D, LittleEndian>(&data).unwrap();
 
   let mut rtps_message = Message::default();
-  let prefix = GUID::new();
+  let prefix = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
   let rtps_message_header = Header::new(prefix.guidPrefix);
   rtps_message.set_header(rtps_message_header);
 

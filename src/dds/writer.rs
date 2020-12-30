@@ -30,7 +30,7 @@ use crate::structure::time::Timestamp;
 use crate::structure::duration::Duration;
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::{header::Header, vendor_id::VendorId, protocol_id::ProtocolId};
-use crate::structure::guid::{GuidPrefix, EntityId, GUID};
+use crate::structure::guid::{GuidPrefix, EntityId, EntityKind, GUID};
 use crate::structure::sequence_number::{SequenceNumber};
 use crate::{
   messages::submessages::submessages::{
@@ -613,6 +613,10 @@ impl Writer {
     }
   }
 
+  // fn send_message_to_readers_prefer_unicast(&self, message: &Message, 
+  //       readers: &mut dyn Iterator<Item = &RtpsReaderProxy>) {
+  // }
+
   fn create_message_header(&self) -> Header {
     Header {
       protocol_id: ProtocolId::default(),
@@ -703,7 +707,7 @@ impl Writer {
     };
     
     // TODO: please explain this logic here:
-    if self.get_entity_id().get_kind() == 0xC2 {
+    if self.get_entity_id().get_kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
       match data_message.serialized_payload.as_mut() {
         Some(sp) => sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE,
         None => (),

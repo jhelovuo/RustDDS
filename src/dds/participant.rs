@@ -559,7 +559,7 @@ impl DomainParticipant_Inner {
     let (add_writer_sender, add_writer_receiver) = mio_channel::sync_channel::<Writer>(10);
     let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
 
-    let new_guid = GUID::new();
+    let new_guid = GUID::new_particiapnt_guid();
     let domain_info = DomainInfo {
       domain_participant_guid: new_guid,
       domain_id,

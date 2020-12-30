@@ -783,7 +783,7 @@ mod tests {
 
   #[test]
   fn rtpsreader_notification() {
-    let mut guid = GUID::new();
+    let mut guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     guid.entityId = EntityId::createCustomEntityID([1, 2, 3], 111);
 
     let (send, rec) = mio_channel::sync_channel::<()>(100);
@@ -890,7 +890,7 @@ mod tests {
 
   #[test]
   fn rtpsreader_handle_heartbeat() {
-    let new_guid = GUID::new();
+    let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
 
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
@@ -1024,7 +1024,7 @@ mod tests {
 
   #[test]
   fn rtpsreader_handle_gap() {
-    let new_guid = GUID::new();
+    let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
     let (_reader_command_sender, reader_command_receiver) =

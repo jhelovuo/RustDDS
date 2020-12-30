@@ -8,7 +8,7 @@ use crate::{
   network::util::get_local_unicast_socket_address,
   structure::{
     entity::RTPSEntity,
-    guid::{EntityId, GUID},
+    guid::{EntityId, GUID, EntityKind},
     locator::{Locator, LocatorList},
     sequence_number::{SequenceNumber},
   },
@@ -81,8 +81,18 @@ impl RtpsReaderProxy {
     }
   }
 
+  fn discovered_or_default(drd: &LocatorList, default: &LocatorList) -> LocatorList {
+    if drd.is_empty() {
+      default.clone()
+    } else {
+      drd.clone()
+    }
+  }
+
   pub fn from_discovered_reader_data(
-    discovered_reader_data: &DiscoveredReaderData,
+    discovered_reader_data: &DiscoveredReaderData, 
+    default_unicast_locators: LocatorList,
+    default_multicast_locators: LocatorList,
   ) -> Option<RtpsReaderProxy> {
     let remote_reader_guid = match &discovered_reader_data.reader_proxy.remote_reader_guid {
       Some(v) => v,
@@ -96,17 +106,18 @@ impl RtpsReaderProxy {
           discovered_reader_data.reader_proxy.expects_inline_qos
             .unwrap_or(false);
 
+    let unicast_locator_list = Self::discovered_or_default(
+        &discovered_reader_data.reader_proxy.unicast_locator_list, 
+        &default_unicast_locators);
+    let multicast_locator_list = Self::discovered_or_default(
+        &discovered_reader_data.reader_proxy.multicast_locator_list, 
+        &default_multicast_locators);
+
     Some(RtpsReaderProxy {
       remote_reader_guid: remote_reader_guid.clone(),
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN, //TODO
-      unicast_locator_list: discovered_reader_data
-        .reader_proxy
-        .unicast_locator_list
-        .clone(),
-      multicast_locator_list: discovered_reader_data
-        .reader_proxy
-        .multicast_locator_list
-        .clone(),
+      unicast_locator_list,
+      multicast_locator_list,
       expects_in_line_qos: expects_inline_qos,
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
@@ -130,7 +141,7 @@ impl RtpsReaderProxy {
     ));
     unicastLocators.push(locator);
     RtpsReaderProxy {
-      remote_reader_guid: GUID::new(),
+      remote_reader_guid: GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_USER_DEFINED),
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
       unicast_locator_list: unicastLocators,
       multicast_locator_list: LocatorList::new(),

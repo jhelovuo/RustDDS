@@ -16,7 +16,7 @@ impl Gid {
     let mut data: [u8; 24] = [0; 24];
     data[..12].clone_from_slice(&guid.guidPrefix.entityKey);
     data[12..15].clone_from_slice(&guid.entityId.entityKey);
-    data[15..16].clone_from_slice(&[guid.entityId.entityKind]);
+    data[15..16].clone_from_slice(&[u8::from(guid.entityId.entityKind)]);
     Gid { data }
   }
 }

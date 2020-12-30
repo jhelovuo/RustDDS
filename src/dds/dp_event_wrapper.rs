@@ -15,8 +15,9 @@ use crate::{
 };
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
-use crate::structure::guid::{GuidPrefix, GUID, EntityId};
+use crate::structure::guid::{GuidPrefix, GUID, EntityId, EntityKind};
 use crate::structure::entity::RTPSEntity;
+use crate::structure::locator::LocatorList;
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
   discovery::discovery_db::DiscoveryDB,
@@ -256,10 +257,10 @@ impl DPEventWrapper {
   pub fn is_writer_action(event: &Event) -> bool {
     if EntityId::from_usize(event.token().0).is_some() {
       let maybeWriterKind: EntityId = EntityId::from_usize(event.token().0).unwrap();
-      if maybeWriterKind.get_kind() == 0xC2
-        || maybeWriterKind.get_kind() == 0x02
-        || maybeWriterKind.get_kind() == 0xC3
-        || maybeWriterKind.get_kind() == 0x03
+      if maybeWriterKind.get_kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN
+        || maybeWriterKind.get_kind() == EntityKind::WRITER_WITH_KEY_USER_DEFINED
+        || maybeWriterKind.get_kind() == EntityKind::WRITER_NO_KEY_BUILT_IN
+        || maybeWriterKind.get_kind() == EntityKind::WRITER_NO_KEY_USER_DEFINED
       {
         return true;
       }
@@ -586,7 +587,21 @@ impl DPEventWrapper {
                 Some(tn) => *writer.topic_name() == *tn,
                 None => false,
               })
-              .filter_map(|p| RtpsReaderProxy::from_discovered_reader_data(p))
+              .filter_map(|drd| {
+                  // find out default LocatorsLists from Participant proxy
+                  let remote_part_guid = 
+                    drd.reader_proxy.remote_reader_guid
+                      .expect("ReaderProxy has no GUID");
+                  let locator_lists = 
+                    db.find_participant_proxy(remote_part_guid.guidPrefix)
+                      .map(|pp| ( pp.default_unicast_locators.clone(), 
+                                  pp.default_multicast_locators.clone() ) )
+                      .unwrap_or( (LocatorList::new(), LocatorList::new()) );
+                  // create new reader proxy
+                  RtpsReaderProxy::from_discovered_reader_data(drd, 
+                    locator_lists.0 , locator_lists.1)
+                }
+              )
               .collect();
 
             if let Some(Reliability::Reliable {

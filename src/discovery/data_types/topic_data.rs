@@ -30,7 +30,8 @@ use crate::{
     builtin_data_serializer::BuiltinDataSerializer,
     builtin_data_deserializer::BuiltinDataDeserializer,
   },
-  structure::{entity::RTPSEntity, guid::GUID, guid::GuidPrefix, locator::LocatorList},
+  structure::{entity::RTPSEntity, guid::GUID, guid::GuidPrefix, guid::EntityKind,
+  locator::LocatorList},
 };
 
 // Topic data contains all topic related (including reader and writer data structures for serialization and deserialization)
@@ -288,7 +289,7 @@ impl DiscoveredReaderData {
   }
 
   pub fn default(topic_name: &String, type_name: &String) -> DiscoveredReaderData {
-    let rguid = GUID::new();
+    let rguid = GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_BUILT_IN);
     let reader_proxy = ReaderProxy::new(rguid);
     let subscription_topic_data = SubscriptionBuiltinTopicData::new(
       rguid,

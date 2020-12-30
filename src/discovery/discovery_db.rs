@@ -9,11 +9,12 @@ use itertools::Itertools;
 use log::{warn,debug,trace};
 
 use crate::{
-  dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators, structure::guid::EntityId,
+  dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators, 
   structure::guid::GuidPrefix,
 };
 
-use crate::structure::{guid::GUID, duration::Duration, entity::RTPSEntity};
+use crate::structure::{guid::GUID, guid::EntityId,
+  duration::Duration, entity::RTPSEntity, locator::LocatorList};
 
 use crate::{
   dds::{
@@ -82,6 +83,13 @@ impl DiscoveryDB {
     self.remove_topic_reader_with_prefix(guid.guidPrefix);
 
     self.remove_topic_writer_with_prefix(guid.guidPrefix);
+  }
+
+  pub fn find_participant_proxy(&self, guid_prefix: GuidPrefix) 
+    -> Option<&SPDPDiscoveredParticipantData> 
+  {
+    self.participant_proxies
+      .get( &GUID::new_with_prefix_and_id(guid_prefix, EntityId::ENTITYID_PARTICIPANT))
   }
 
   fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {
@@ -271,7 +279,10 @@ impl DiscoveryDB {
       None => return,
     };
 
-    let reader_proxy = RtpsReaderProxy::from_discovered_reader_data(data);
+    let reader_proxy = RtpsReaderProxy::from_discovered_reader_data(data, 
+      // put in empty default locator lists. Defaults from PArticiapnt proxy
+      // should be added when adding RtpsReaderProxy to Writer
+      LocatorList::new(), LocatorList::new() );
 
     match reader_proxy {
       Some(rp) => self
@@ -741,7 +752,7 @@ mod tests {
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let reader = Reader::new(
-      GUID::new(),
+      GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
       notification_sender.clone(),
       status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
@@ -758,7 +769,7 @@ mod tests {
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
     let reader = Reader::new(
-      GUID::new(),
+      GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
       notification_sender.clone(),
       status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),

@@ -16,13 +16,13 @@ impl GuidPrefix {
     entityKey: [0x00; 12],
   };
 
-  pub fn new(prefix: Vec<u8>) -> GuidPrefix {
+  pub fn new(prefix: &[u8]) -> GuidPrefix {
     let mut pr: [u8; 12] = [0; 12];
-    for (ix, &data) in prefix.iter().enumerate() {
+    for (ix, data) in prefix.iter().enumerate() {
       if ix >= 12 {
         break;
       }
-      pr[ix] = data
+      pr[ix] = *data
     }
     GuidPrefix { entityKey: pr }
   }
@@ -60,68 +60,106 @@ impl<C: Context> Writable<C> for GuidPrefix {
   }
 }
 
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+pub struct EntityKind(u8);
+
+impl EntityKind {
+  // constants from RTPS spec Table 9.1
+  pub const UNKNOWN_USER_DEFINED : EntityKind = EntityKind(0x00);
+  //pub const PARTICIPANT_USER_DEFINED : EntityKind = EntityKind(0x01);
+  // User-defined participants do not exist by definition.
+  pub const WRITER_WITH_KEY_USER_DEFINED : EntityKind = EntityKind(0x02);
+  pub const WRITER_NO_KEY_USER_DEFINED : EntityKind = EntityKind(0x03);
+  pub const READER_NO_KEY_USER_DEFINED : EntityKind = EntityKind(0x04);
+  pub const READER_WITH_KEY_USER_DEFINED : EntityKind = EntityKind(0x07);
+  pub const WRITER_GROUP_USER_DEFINED : EntityKind = EntityKind(0x08);
+  pub const READER_GROUP_USER_DEFINED : EntityKind = EntityKind(0x09);
+
+  pub const UNKNOWN_BUILT_IN : EntityKind = EntityKind(0xC0);
+  pub const PARTICIPANT_BUILT_IN : EntityKind = EntityKind(0xC1);
+  pub const WRITER_WITH_KEY_BUILT_IN : EntityKind = EntityKind(0xC2);
+  pub const WRITER_NO_KEY_BUILT_IN : EntityKind = EntityKind(0xC3);
+  pub const READER_NO_KEY_BUILT_IN : EntityKind = EntityKind(0xC4);
+  pub const READER_WITH_KEY_BUILT_IN : EntityKind = EntityKind(0xC7);
+  pub const WRITER_GROUP_BUILT_IN : EntityKind = EntityKind(0xC8);
+  pub const READER_GROUP_BUILT_IN : EntityKind = EntityKind(0xC9);
+}
+
+impl From<u8> for EntityKind {
+  fn from(b: u8) -> EntityKind {
+    EntityKind(b)
+  }
+}
+
+impl From<EntityKind> for u8 {
+  fn from(ek: EntityKind) -> u8 {
+    ek.0
+  }
+}
+
 /// RTPS EntityId
 /// See RTPS spec section 8.2.4 , 8.3.5.1 and 9.3.1.2
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct EntityId {
   pub entityKey: [u8; 3],
-  pub entityKind: u8,
+  pub entityKind: EntityKind,
 }
 
 impl EntityId {
   pub const ENTITYID_UNKNOWN: EntityId = EntityId {
     entityKey: [0x00; 3],
-    entityKind: 0x00,
+    entityKind: EntityKind::UNKNOWN_USER_DEFINED,
   };
   pub const ENTITYID_PARTICIPANT: EntityId = EntityId {
     entityKey: [0x00, 0x00, 0x01],
-    entityKind: 0xC1,
+    entityKind: EntityKind::PARTICIPANT_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_TOPIC_WRITER: EntityId = EntityId {
     entityKey: [0x00, 0x00, 0x02],
-    entityKind: 0xC2,
+    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_TOPIC_READER: EntityId = EntityId {
     entityKey: [0x00, 0x00, 0x02],
-    entityKind: 0xC7,
+    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER: EntityId = EntityId {
     entityKey: [0x00, 0x00, 0x03],
-    entityKind: 0xC2,
+    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER: EntityId = EntityId {
     entityKey: [0x00, 0x00, 0x03],
-    entityKind: 0xC7,
+    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER: EntityId = EntityId {
     entityKey: [0x00, 0x00, 0x04],
-    entityKind: 0xC2,
+    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER: EntityId = EntityId {
     entityKey: [0x00, 0x00, 0x04],
-    entityKind: 0xC7,
+    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER: EntityId = EntityId {
     entityKey: [0x00, 0x01, 0x00],
-    entityKind: 0xC2,
+    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER: EntityId = EntityId {
     entityKey: [0x00, 0x01, 0x00],
-    entityKind: 0xC7,
+    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER: EntityId = EntityId {
     entityKey: [0x00, 0x02, 0x00],
-    entityKind: 0xC2,
+    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: EntityId = EntityId {
     entityKey: [0x00, 0x02, 0x00],
-    entityKind: 0xC7,
+    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
+
 
   pub fn createCustomEntityID(customEntityKey: [u8; 3], customEntityKind: u8) -> EntityId {
     EntityId {
       entityKey: customEntityKey,
-      entityKind: customEntityKind,
+      entityKind: EntityKind(customEntityKind),
     }
   }
 
@@ -130,7 +168,7 @@ impl EntityId {
     let x1 = self.entityKey[0] as i64;
     let x2 = self.entityKey[1] as i64;
     let x3 = self.entityKey[2] as i64;
-    let x4 = self.entityKind as i64;
+    let x4 = self.entityKind.0 as i64;
 
     // TODO: Explain the meaning of this formula.
 
@@ -161,16 +199,16 @@ impl EntityId {
       .unwrap();
     let e: EntityId = EntityId {
       entityKey: [firstByte, secondBute, thirdByte],
-      entityKind: kind,
+      entityKind: EntityKind(kind),
     };
     return Some(e);
   }
 
-  pub fn get_kind(self) -> u8 {
-    return self.entityKind;
+  pub fn get_kind(self) -> EntityKind {
+    self.entityKind
   }
 
-  pub fn set_kind(&mut self, entityKind: u8) {
+  pub fn set_kind(&mut self, entityKind: EntityKind) {
     self.entityKind = entityKind;
   }
 }
@@ -185,7 +223,7 @@ impl<'a, C: Context> Readable<'a, C> for EntityId {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let entityKey = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
-    let entityKind = reader.read_u8()?;
+    let entityKind = EntityKind(reader.read_u8()?);
     Ok(EntityId {
       entityKey,
       entityKind,
@@ -199,7 +237,7 @@ impl<C: Context> Writable<C> for EntityId {
     for elem in &self.entityKey {
       writer.write_u8(*elem)?
     }
-    writer.write_u8(self.entityKind)
+    writer.write_u8(self.entityKind.0)
   }
 }
 
@@ -231,11 +269,21 @@ impl GUID {
   };
 
   /// Generates new GUID for Participant when `guidPrefix` is random
-  pub fn new() -> GUID {
+  pub fn new_particiapnt_guid() -> GUID {
     let guid = Uuid::new_v4();
     GUID {
-      guidPrefix: GuidPrefix::new(guid.as_bytes().to_vec()),
+      guidPrefix: GuidPrefix::new(guid.as_bytes()),
       entityId: EntityId::ENTITYID_PARTICIPANT,
+    }
+  }
+
+  pub fn dummy_test_guid(entity_kind: EntityKind) -> GUID {
+    GUID {
+      guidPrefix: GuidPrefix::new(b"FakeTestGUID"),
+      entityId: EntityId {
+        entityKey: [1,2,3] ,
+        entityKind: entity_kind,
+      },
     }
   }
 
