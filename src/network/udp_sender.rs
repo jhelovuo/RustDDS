@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use log::{debug,warn,error};
+use log::{debug,warn,error,trace};
 
 use mio::net::UdpSocket;
 
@@ -60,19 +60,20 @@ impl UDPSender {
             Ok(bytes_sent) =>
               if bytes_sent == buffer.len() { () // ok
               } else {
-                error!("send_to_locator_list - send_to tried {} bytes, sent only {}",
+                error!("send_to_locator - send_to tried {} bytes, sent only {}",
                     buffer.len(), bytes_sent);
               }
             Err(e) => {
-              warn!("send_to_locator_list - send_to {} : {:?}", a, e);
+              warn!("send_to_locator - send_to {} : {:?}", a, e);
             }
           }
         }
         LocatorKind::LOCATOR_KIND_INVALID |
         LocatorKind::LOCATOR_KIND_RESERVED =>
-          error!("send_to_locator_list: Cannot send to {:?}",l.kind),
+          error!("send_to_locator: Cannot send to {:?}",l.kind),
         _unknown_kind  =>
-          error!("send_to_locator_list: Unknown LocatorKind: {:?}",l.kind),
+          // This is normal, as implementations can define their own kinds.
+          trace!("send_to_locator: Unknown LocatorKind: {:?}",l.kind),
       }
   }
 

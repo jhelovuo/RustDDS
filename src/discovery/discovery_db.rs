@@ -1,12 +1,12 @@
 use std::{
-  collections::{hash_map::Iter as HashIter, HashMap},
+  collections::{/*hash_map::Iter as HashIter,*/ btree_map::Iter as BTreeIter, HashMap, BTreeMap},
   iter::Map,
   slice::Iter,
   time::Instant,
 };
 
 use itertools::Itertools;
-use log::{warn,debug,trace,info};
+use log::{error,warn,debug,trace,info};
 
 use crate::{
   dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators, 
@@ -34,8 +34,14 @@ use super::{
   },
 };
 
+// If remote participant does not specifiy lease duration, how long silence
+// until we pronounce it dead.
+const DEFAULT_PARTICIPANT_LEASE_DURATION : Duration = Duration::from_secs(60);
+
+
 pub(crate) struct DiscoveryDB {
-  participant_proxies: HashMap<GUID, SPDPDiscoveredParticipantData>,
+  participant_proxies: BTreeMap<GUID, SPDPDiscoveredParticipantData>,
+  participant_last_life_signs: HashMap<GUID, Instant>,
   // local writer proxies for topics (topic name acts as key)
   local_topic_writers: HashMap<GUID, DiscoveredWriterData>,
   // local reader proxies for topics (topic name acts as key)
@@ -53,7 +59,8 @@ pub(crate) struct DiscoveryDB {
 impl DiscoveryDB {
   pub fn new() -> DiscoveryDB {
     DiscoveryDB {
-      participant_proxies: HashMap::new(),
+      participant_proxies: BTreeMap::new(),
+      participant_last_life_signs: HashMap::new(),
       local_topic_writers: HashMap::new(),
       local_topic_readers: HashMap::new(),
       external_topic_readers: Vec::new(),
@@ -65,12 +72,17 @@ impl DiscoveryDB {
   }
 
   pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) -> bool {
-    let data = data.clone();
-
     match data.participant_guid {
       Some(guid) => {
         debug!("update_participant: {:?}",&data);
-        self.participant_proxies.insert(guid, data);
+        // sanity check
+        if guid.entityId != EntityId::ENTITYID_PARTICIPANT {
+          error!("Discovered participant GUID entity_id is not for participant: {:?}",guid);
+          // Maybe we should discard the participant here?
+        }
+        // actual work here:
+        self.participant_proxies.insert(guid, data.clone());
+        self.participant_last_life_signs.insert(guid, Instant::now() );
         true
       }
       _ => false,
@@ -80,6 +92,7 @@ impl DiscoveryDB {
   pub fn remove_participant(&mut self, guid: GUID) {
     info!("removing participant {:?}",guid);
     self.participant_proxies.remove(&guid);
+    self.participant_last_life_signs.remove(&guid);
 
     self.remove_topic_reader_with_prefix(guid.guidPrefix);
 
@@ -136,39 +149,32 @@ impl DiscoveryDB {
   pub fn participant_cleanup(&mut self) {
     let inow = Instant::now();
 
-    let grouped = self
-      .external_topic_writers
-      .iter()
-      .filter(|p| p.writer_proxy.remote_writer_guid.is_some())
-      .map(|p| {
-        (
-          p.writer_proxy.remote_writer_guid.unwrap(),
-          inow.duration_since(p.last_updated),
-        )
-      })
-      .map(|(g, d)| (g, Duration::from_std(d)))
-      .group_by(|(p, _)| p.clone());
+    let mut to_remove = Vec::new();
 
-    let durations: HashMap<GUID, Duration> =
-      grouped.into_iter().filter_map(|(_, p)| p.min()).collect();
+    // TODO: We are not cleaning up liast_life_signs table, but that should not be a problem,
+    // except for a slight memory leak.
+    for (&guid,sp) in self.participant_proxies.iter() {
+      let lease_duration = sp.lease_duration
+            .unwrap_or( DEFAULT_PARTICIPANT_LEASE_DURATION );
 
-    self.participant_proxies.retain(|g, sp| {
-      let lease_duration = match sp.lease_duration {
-        Some(ld) => ld,
-        None => Duration::DURATION_INFINITE,
-      };
-
-      let min_update = durations.get(g);
-
-      let retain = match min_update {
-        Some(&dur) => lease_duration > dur,
-        None => lease_duration > Duration::DURATION_INFINITE,
-      };
-      if ! retain {
-        debug!("participant cleanup - deleting prticipant proxy {:?}",g);
-      }
-      retain
-    });
+      match self.participant_last_life_signs.get(&guid) {
+        Some(&last_life) =>
+          // keep, if duration not exeeded
+          if Duration::from_std(inow.duration_since(last_life)) <= lease_duration {
+            () // this is a keeper
+          } else {
+            debug!("participant cleanup - deleting participant proxy {:?}",guid);
+            to_remove.push(guid);    
+          },
+        None => {
+          error!("Participant {:?} not in last_life_signs table?", guid);
+        }
+      } // match
+    } // for
+    for guid in to_remove {
+      self.participant_proxies.remove(&guid).expect("Removing fail 1");
+      self.participant_last_life_signs.remove(&guid).expect("Removing fail 2");
+    }
   }
 
   fn topic_has_writers_or_readers(&self, topic_name: &String) -> bool {
@@ -240,7 +246,7 @@ impl DiscoveryDB {
   pub fn get_participants<'a>(
     &'a self,
   ) -> Map<
-    HashIter<'a, GUID, SPDPDiscoveredParticipantData>,
+    BTreeIter<'a, GUID, SPDPDiscoveredParticipantData>,
     fn((&GUID, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData,
   > {
     type cvfun<'a> =
@@ -285,16 +291,18 @@ impl DiscoveryDB {
     };
     // find out default LocatorsLists from Participant proxy
     let drd = data;
-    let remote_part_guid = 
+    let remote_reader_guid = 
       drd.reader_proxy.remote_reader_guid
         .expect("ReaderProxy has no GUID");
     let locator_lists = 
-      self.find_participant_proxy(remote_part_guid.guidPrefix)
-        .map(|pp| ( pp.default_unicast_locators.clone(), 
-                    pp.default_multicast_locators.clone() ) )
-        .unwrap_or( {
+      self.find_participant_proxy(remote_reader_guid.guidPrefix)
+        .map(|pp| {
+          debug!("Added default locators to Reader {:?}", remote_reader_guid);
+          ( pp.default_unicast_locators.clone(), 
+            pp.default_multicast_locators.clone() ) } )
+        .unwrap_or_else( || {
             warn!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
-              ,drd, remote_part_guid, self.participant_proxies.keys() );
+              ,drd, remote_reader_guid.guidPrefix, self.participant_proxies.keys() );
             (LocatorList::new(), LocatorList::new()) 
           } );
 

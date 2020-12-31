@@ -589,14 +589,16 @@ impl DPEventWrapper {
               })
               .filter_map(|drd| {
                   // find out default LocatorsLists from Participant proxy
-                  let remote_part_guid = 
+                  let remote_reader_guid = 
                     drd.reader_proxy.remote_reader_guid
                       .expect("ReaderProxy has no GUID");
                   let locator_lists = 
-                    db.find_participant_proxy(remote_part_guid.guidPrefix)
-                      .map(|pp| ( pp.default_unicast_locators.clone(), 
-                                  pp.default_multicast_locators.clone() ) )
-                      .unwrap_or( {
+                    db.find_participant_proxy(remote_reader_guid.guidPrefix)
+                      .map(|pp| {
+                            debug!("Added default locators to Reader {:?}", remote_reader_guid);
+                            ( pp.default_unicast_locators.clone(), 
+                              pp.default_multicast_locators.clone() ) } )
+                      .unwrap_or_else( || {
                           warn!("No remote participant known for {:?}",drd);
                           (LocatorList::new(), LocatorList::new()) 
                         } );

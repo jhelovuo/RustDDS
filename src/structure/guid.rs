@@ -183,7 +183,7 @@ impl EntityId {
     let numberAsString = number.to_string();
     let finalIndex = numberAsString.len();
     if finalIndex != 15 {
-      return None;
+      return None
     }
     let kind = numberAsString[finalIndex - 3..finalIndex]
       .parse::<u8>()
@@ -201,7 +201,7 @@ impl EntityId {
       entityKey: [firstByte, secondBute, thirdByte],
       entityKind: EntityKind(kind),
     };
-    return Some(e);
+    Some(e)
   }
 
   pub fn get_kind(self) -> EntityKind {
