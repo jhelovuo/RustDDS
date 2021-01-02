@@ -37,6 +37,20 @@ impl From<FragmentNumber> for u32 {
   }
 }
 
+// to make this fit into NumberSet<N>
+impl From<i64> for FragmentNumber {
+  fn from(value: i64) -> Self {
+    FragmentNumber(value as u32)
+  }
+}
+
+// to make this fit into NumberSet<N>
+impl From<FragmentNumber> for i64 {
+  fn from(fragment_number: FragmentNumber) -> Self {
+    fragment_number.0 as i64
+  }
+}
+
 checked_impl!(CheckedAdd, checked_add, FragmentNumber);
 checked_impl!(CheckedSub, checked_sub, FragmentNumber);
 checked_impl!(CheckedMul, checked_mul, FragmentNumber);
@@ -48,13 +62,13 @@ mod tests {
 
   #[test]
   fn fragment_number_starts_by_default_from_one() {
-    assert_eq!(FragmentNumber::from(1), FragmentNumber::default());
+    assert_eq!(FragmentNumber::from(1u32), FragmentNumber::default());
   }
 
   serialization_test!( type = FragmentNumber,
   {
       fragment_number_zero,
-      FragmentNumber::from(0),
+      FragmentNumber::from(0u32),
       le = [0x00, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x00]
   },
@@ -66,7 +80,7 @@ mod tests {
   },
   {
       fragment_number_non_zero,
-      FragmentNumber::from(0xDEADBEEF),
+      FragmentNumber::from(0xDEADBEEFu32),
       le = [0xEF, 0xBE, 0xAD, 0xDE],
       be = [0xDE, 0xAD, 0xBE, 0xEF]
   });

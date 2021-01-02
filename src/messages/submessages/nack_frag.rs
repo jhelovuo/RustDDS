@@ -1,6 +1,6 @@
-use crate::messages::fragment_number_set::FragmentNumberSet;
+//use crate::messages::fragment_number_set::FragmentNumberSet;
 use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::SequenceNumber;
+use crate::structure::sequence_number::*;
 use speedy::{Readable, Writable};
 
 /// The NackFrag Submessage is used to communicate the state of a Reader to a
@@ -48,7 +48,7 @@ mod tests {
           reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
           writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
           writer_sn: SequenceNumber::from(42),
-          fragment_number_state: FragmentNumberSet::new(FragmentNumber::from(1000)),
+          fragment_number_state: FragmentNumberSet::new_empty(FragmentNumber::from(1000u32)),
           count: 6,
       },
       le = [0x00, 0x00, 0x03, 0xC7,

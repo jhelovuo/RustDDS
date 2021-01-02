@@ -19,8 +19,8 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-extern crate bit_set;
-extern crate bit_vec;
+// extern crate bit_set;
+// extern crate bit_vec;
 extern crate bytes;
 extern crate num_derive;
 extern crate num_traits;

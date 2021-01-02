@@ -1,5 +1,9 @@
+use num_traits::NumOps;
+use std::fmt::Debug;
+use std::hash::Hash;
+use crate::messages::fragment_number::FragmentNumber;
 use std::collections::BTreeSet;
-use std::cmp::min;
+use std::cmp::{min,Ord,PartialOrd};
 use num_derive::{FromPrimitive, NumOps, ToPrimitive};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::{convert::From};
@@ -93,9 +97,16 @@ impl Default for SequenceNumber {
 
 // ---------------------------------------------------------------
  
+pub type SequenceNumberSet = NumberSet<SequenceNumber>;
+pub type FragmentNumberSet = NumberSet<FragmentNumber>;
+
+// ---------------------------------------------------------------
+ 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct SequenceNumberSet {
-  bitmap_base: SequenceNumber,
+pub struct NumberSet<N>
+  where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64>
+{
+  bitmap_base: N,
   num_bits: u32,
   bitmap: Vec<u32>, // .len() == (numBits+31)/32
   // bitmap bits are numbered from MSB to LSB. Bit 0 (MSB of bitmap[0])
@@ -106,21 +117,25 @@ pub struct SequenceNumberSet {
 
 // Not that empty sets also have a valid "base".
 
-impl SequenceNumberSet {
+impl<N> NumberSet<N>
+where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64>  + Ord + PartialOrd,
+      i64: From<N>
+
+{
   // Construct an empy set from given base number
-  pub fn new(bitmap_base:SequenceNumber, num_bits:u32) -> SequenceNumberSet {
+  pub fn new(bitmap_base:N, num_bits:u32) -> NumberSet<N> {
     let word_count = (num_bits + 31) / 32;
-    SequenceNumberSet {
+    NumberSet::<N> {
       bitmap_base,
       num_bits,
       bitmap: vec![0; word_count as usize],
     }
   }
 
-  pub fn base(&self) -> SequenceNumber { self.bitmap_base }
+  pub fn base(&self) -> N { self.bitmap_base }
  
-  pub fn new_empty(bitmap_base:SequenceNumber,) -> SequenceNumberSet {
-    SequenceNumberSet::new(bitmap_base, 0)
+  pub fn new_empty(bitmap_base:N,) -> NumberSet<N> {
+    NumberSet::<N>::new(bitmap_base, 0)
   }
 
   pub fn is_empty(&self) -> bool {
@@ -128,10 +143,10 @@ impl SequenceNumberSet {
       self.iter().next().is_none()
   }
 
-  pub fn insert(&mut self, sn:SequenceNumber)  {
+  pub fn insert(&mut self, sn:N)  {
     if sn < self.bitmap_base 
         || self.num_bits == 0
-        || sn >= self.bitmap_base + SequenceNumber::from(self.num_bits as i64) {
+        || sn >= self.bitmap_base + N::from(self.num_bits as i64) {
       error!("out of bounds .insert({:?}) to {:?}",sn, self);
     } else {
       let bit_pos = i64::from( sn - self.bitmap_base ) as u32;
@@ -145,8 +160,8 @@ impl SequenceNumberSet {
     }
   }
 
-  pub fn from_base_and_set(base: SequenceNumber, set: &BTreeSet<SequenceNumber>)
-    -> SequenceNumberSet 
+  pub fn from_base_and_set(base: N, set: &BTreeSet<N>)
+    -> NumberSet<N> 
   {
     match (set.iter().next(), set.iter().next_back()) {
       (Some(&start),Some(&end)) => {
@@ -160,38 +175,41 @@ impl SequenceNumberSet {
             start,end);  
         }
         // work:
-        let num_bits =  i64::from(end - start + SequenceNumber::from(1));
-        let mut sns = SequenceNumberSet::new(
-                        std::cmp::min(base,start),
-                        std::cmp::min(256,num_bits as u32));
+        let num_bits =  i64::from(end - start + N::from(1));
+        let mut sns = NumberSet::<N>::new(
+                        min(base,start),
+                        min(256,num_bits as u32));
         for &s in set.iter() {
           sns.insert(s) 
         }
         sns
       }
-      (_,_) => SequenceNumberSet::new_empty(base),
+      (_,_) => NumberSet::<N>::new_empty(base),
     }   
   }
 
-  pub fn iter(&self) -> SequenceNumberSetIter {
-    SequenceNumberSetIter {
+  pub fn iter(&self) -> NumberSetIter<N> {
+    NumberSetIter::<N> {
       seq: self,
       at_bit: 0,
     }
   }
 }
 
-impl<'a, C: Context> Readable<'a, C> for SequenceNumberSet {
+impl<'a, C: Context, N> Readable<'a, C> for NumberSet<N> 
+  where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd + Readable<'a, C>,
+        i64: From<N>
+{
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let bitmap_base : SequenceNumber = reader.read_value()?;
+    let bitmap_base : N = reader.read_value()?;
     let num_bits : u32 = reader.read_value()?;
     let word_count = (num_bits + 31) / 32;
     let mut bitmap : Vec<u32> = Vec::with_capacity( word_count as usize);
     for _ in 0..word_count {
       bitmap.push( reader.read_value()? );
     }
-    Ok( SequenceNumberSet { bitmap_base, num_bits, bitmap })
+    Ok( NumberSet::<N> { bitmap_base, num_bits, bitmap })
   }
 
   #[inline]
@@ -200,7 +218,9 @@ impl<'a, C: Context> Readable<'a, C> for SequenceNumberSet {
   }
 }
 
-impl<C: Context> Writable<C> for SequenceNumberSet {
+impl<C: Context, N > Writable<C> for NumberSet<N> 
+  where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd + Writable<C>
+{
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_value(&self.bitmap_base)?;
@@ -219,13 +239,17 @@ impl<C: Context> Writable<C> for SequenceNumberSet {
   }
 }
 
-pub struct SequenceNumberSetIter<'a> {
-  seq: &'a SequenceNumberSet,
+pub struct NumberSetIter<'a,N>
+  where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd
+{
+  seq: &'a NumberSet<N>,
   at_bit: u32,
 }
 
-impl<'a> Iterator for SequenceNumberSetIter<'_> {
-  type Item = SequenceNumber;
+impl<'a,N> Iterator for NumberSetIter<'_,N>
+  where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd
+{
+  type Item = N;
 
   fn next(&mut self) -> Option<Self::Item> {
     //TODO: This probably could made faster with the std function
@@ -239,7 +263,7 @@ impl<'a> Iterator for SequenceNumberSetIter<'_> {
         != 0;
       self.at_bit += 1;
       if have_one { 
-        return Some(SequenceNumber::from((self.at_bit - 1) as i64) 
+        return Some(N::from((self.at_bit - 1) as i64) 
                       + self.seq.bitmap_base)  
       } 
     }
@@ -290,8 +314,7 @@ mod tests {
   {
       sequence_number_set_manual,
       (|| {
-          let mut set = SequenceNumberSet::new(SequenceNumber::from(1), 
-                                                SequenceNumber::new(25));
+          let mut set = SequenceNumberSet::new(SequenceNumber::from(1),25);
           for sn in 1..11 {
             set.insert(SequenceNumber::from(sn));
           }
@@ -300,15 +323,40 @@ mod tests {
       le = [0x00, 0x00, 0x00, 0x00,
             0x01, 0x00, 0x00, 0x00,
             0x19, 0x00, 0x00, 0x00,
-            0x7f, 0x00, 0xc0, 0xff
+            0x7f, 0x00, 0xc0, 0xff],
+      be = [0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x01,
+            0x00, 0x00, 0x00, 0x19,
+            0xff, 0xc0, 0x00, 0x7f]
+  });
 
 
-      0x00, 0x00, 0x00, 0x00,
-            0xE8, 0x03, 0x00, 0x00,
+  serialization_test!( type = FragmentNumberSet,
+  {
+      fragment_number_set_empty,
+      FragmentNumberSet::new_empty(FragmentNumber::from(42u32) ),
+      le = [0x2A, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00],
+      be = [0x00, 0x00, 0x00, 0x2A,
+            0x00, 0x00, 0x00, 0x00]
+  },
+  {
+      fragment_number_set_manual,
+      (|| {
+          let mut set = FragmentNumberSet::new(FragmentNumber::from(1000u32), 14);
+          set.insert(FragmentNumber::from(1001u32));
+          set.insert(FragmentNumber::from(1003u32));
+          set.insert(FragmentNumber::from(1004u32));
+          set.insert(FragmentNumber::from(1006u32));
+          set.insert(FragmentNumber::from(1008u32));
+          set.insert(FragmentNumber::from(1010u32));
+          set.insert(FragmentNumber::from(1013u32));
+          set
+      })(),
+      le = [0xE8, 0x03, 0x00, 0x00,
             0x0E, 0x00, 0x00, 0x00,
             0x00, 0x00, 0xA4, 0x5A],
-      be = [0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x03, 0xE8,
+      be = [0x00, 0x00, 0x03, 0xE8,
             0x00, 0x00, 0x00, 0x0E,
             0x5A, 0xA4, 0x00, 0x00]
   });
