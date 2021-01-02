@@ -249,6 +249,16 @@ impl Writer {
     self.qos_policies.reliability.is_some()
   }
 
+  // TODO:
+  // please explain why this is needed and why does it make sense.
+  // Used by dp_event_wrapper.
+  pub fn notify_new_data_to_all_readers(&mut self) {
+    for reader_proxy in self.readers.iter_mut() {
+      reader_proxy.notify_new_cache_change(
+        max(self.last_change_sequence_number, SequenceNumber::default()));
+    }
+  }
+
   // --------------------------------------------------------------
   // --------------------------------------------------------------
   // --------------------------------------------------------------
@@ -341,8 +351,8 @@ impl Writer {
   }
 
   fn insert_to_history_cache(&mut self, data: DDSData) -> Timestamp {
-   // first increasing last SequenceNumber
-   let new_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
+    // first increasing last SequenceNumber
+    let new_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
     self.last_change_sequence_number = new_sequence_number;
 
     // setting first change sequence number according to our qos (not offering more than our QOS says)
@@ -358,6 +368,8 @@ impl Writer {
           max( self.last_change_sequence_number - SequenceNumber::from((depth - 1) as i64)
              , SequenceNumber::from(1) ),
       };
+    assert!(self.first_change_sequence_number > SequenceNumber::zero() );
+    assert!(self.last_change_sequence_number > SequenceNumber::zero() );
 
     // create new CacheChange from DDSData
     let new_cache_change = CacheChange::new(
@@ -446,8 +458,10 @@ impl Writer {
   /// respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
   /// sending a HEARTBEAT message when the sample is no longer available
   pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, an: AckNack) {
+    // sanity check
     if !self.is_reliable() {
-      warn!("Writer {:x?} is best effort! It should not handle acknack messages!", self.get_entity_id());
+      warn!("Writer {:x?} is best effort! It should not handle acknack messages!", 
+              self.get_entity_id());
       return
     }
     // Update the ReaderProxy
@@ -695,7 +709,7 @@ impl Writer {
     }
   }
 
-  // TODO: Is this copy-pase code from serialization/message.rs
+  // TODO: Is this copy-paste code from serialization/message.rs
   pub fn get_TS_submessage(&self, invalidiateFlagSet: bool) -> SubMessage {
     let timestamp = InfoTimestamp {
       timestamp: Timestamp::now(),
@@ -720,7 +734,7 @@ impl Writer {
     }
   }
 
-  // TODO: Is this copy-pase code from serialization/message.rs
+  // TODO: Is this copy-paste code from serialization/message.rs
   pub fn get_DST_submessage(endianness: Endianness, guid_prefix: GuidPrefix) -> SubMessage {
     let flags = BitFlags::<INFODESTINATION_Flags>::from_endianness(endianness);
     let submessageHeader = SubmessageHeader {

@@ -1,8 +1,8 @@
+use std::cmp::max;
+
 use log::{debug, error, info, warn};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
-extern crate chrono;
-//use chrono::Duration;
 use std::{collections::HashMap, sync::RwLockReadGuard, time::Duration};
 use std::{
   sync::{Arc, RwLock},
@@ -17,6 +17,7 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId, EntityKind};
 use crate::structure::entity::RTPSEntity;
+use crate::structure::sequence_number::SequenceNumber;
 use crate::structure::locator::LocatorList;
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
@@ -525,6 +526,7 @@ impl DPEventWrapper {
   }
 
   pub fn update_writers(&mut self, needs_new_cache_change: bool) {
+
     match self.discovery_db.read() {
       Ok(db) => {
         for (_writer_guid, writer) in self.writers.iter_mut() {
@@ -536,9 +538,10 @@ impl DPEventWrapper {
             );
 
             if needs_new_cache_change {
-              for proxy in writer.readers.iter_mut() {
-                proxy.notify_new_cache_change(writer.last_change_sequence_number);
-              }
+              writer.notify_new_data_to_all_readers()
+              // for proxy in writer.readers.iter_mut() {
+              //   proxy.notify_new_cache_change(writer.last_change_sequence_number);
+              // }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
             DPEventWrapper::update_pubsub_readers(
@@ -548,9 +551,10 @@ impl DPEventWrapper {
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
             );
             if needs_new_cache_change {
-              for proxy in writer.readers.iter_mut() {
-                proxy.notify_new_cache_change(writer.last_change_sequence_number);
-              }
+              writer.notify_new_data_to_all_readers()
+              // for proxy in writer.readers.iter_mut() {
+              //   proxy.notify_new_cache_change(writer.last_change_sequence_number);
+              // }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER {
             DPEventWrapper::update_pubsub_readers(
@@ -560,9 +564,10 @@ impl DPEventWrapper {
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR,
             );
             if needs_new_cache_change {
-              for proxy in writer.readers.iter_mut() {
-                proxy.notify_new_cache_change(writer.last_change_sequence_number);
-              }
+              writer.notify_new_data_to_all_readers()
+              // for proxy in writer.readers.iter_mut() {
+              //   proxy.notify_new_cache_change(writer.last_change_sequence_number);
+              // }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER {
             // TODO:
@@ -576,9 +581,10 @@ impl DPEventWrapper {
               BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER,
             );
             if needs_new_cache_change {
-              for proxy in writer.readers.iter_mut() {
-                proxy.notify_new_cache_change(writer.last_change_sequence_number);
-              }
+              writer.notify_new_data_to_all_readers()
+              // for proxy in writer.readers.iter_mut() {
+              //   proxy.notify_new_cache_change(writer.last_change_sequence_number);
+              // }
             }
           } else {
             writer.readers = db
@@ -609,14 +615,14 @@ impl DPEventWrapper {
               )
               .collect();
 
-            if let Some(Reliability::Reliable {
-              max_blocking_time: _,
-            }) = writer.get_qos().reliability
+            if let Some(Reliability::Reliable { max_blocking_time: _, }) 
+                  = writer.get_qos().reliability
             {
               // reset data sending
-              for reader in writer.readers.iter_mut() {
-                reader.notify_new_cache_change(writer.last_change_sequence_number);
-              }
+              writer.notify_new_data_to_all_readers()
+              // for reader in writer.readers.iter_mut() {
+              //   reader.notify_new_cache_change(writer.last_change_sequence_number);
+              // }
             }
           }
         }
@@ -731,7 +737,9 @@ impl DPEventWrapper {
                   .iter_mut()
                   .find(|r| r.remote_reader_guid == proxy.remote_reader_guid);
 
-    proxy.notify_new_cache_change(writer.last_change_sequence_number);
+    proxy.notify_new_cache_change(
+      max(writer.last_change_sequence_number, SequenceNumber::default() )
+    );
 
     match reader {
       Some(r) => {

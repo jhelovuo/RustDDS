@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use log::{debug, warn, trace};
+use log::{debug, warn, trace, error};
 
 use crate::{
   network::constant::get_user_traffic_multicast_port,
@@ -172,6 +172,9 @@ impl RtpsReaderProxy {
 
   /// this should be called everytime a new CacheChange is set to RTPS writer HistoryCache
   pub fn notify_new_cache_change(&mut self, sequence_number: SequenceNumber) {
+    if sequence_number == SequenceNumber::from(0) {
+      error!("new cache change with {:?}! bad! my GUID = {:?}",sequence_number, self.remote_reader_guid);
+    }
     self.unsent_changes.insert(sequence_number);
   }
 

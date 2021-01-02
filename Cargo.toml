@@ -17,7 +17,6 @@ bytes = "0.5.4"
 mio = "^0.6.23"
 mio-extras = "2.0.6"
 tokio-util = { version = "0.3.1", features = ["codec"] }
-# bit-set = "0.5.2"
 bit-vec = "0.6.2"
 speedy = "0.6.0"
 log = "0.4.11"
