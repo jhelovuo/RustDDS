@@ -78,7 +78,7 @@ mod tests {
       AckNack {
           reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
           writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-          reader_sn_state: SequenceNumberSet::new(SequenceNumber::from(0)),
+          reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(0)),
           count: 1,
       },
       le = [0x00, 0x00, 0x03, 0xC7,

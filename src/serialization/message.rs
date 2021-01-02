@@ -1,4 +1,5 @@
-use std::{collections::HashSet, io};
+use std::collections::{BTreeSet,HashSet,};
+use std::io;
 
 use crate::{
   structure::entity::RTPSEntity,
@@ -328,28 +329,27 @@ impl MessageBuilder {
     self
   }
 
-  pub fn gap_msg(mut self, irrelevant_sns: &mut dyn Iterator<Item = SequenceNumber>, writer: &RtpsWriter, reader_guid: GUID) 
+  // TODO: We should optimize this entire thing to allow long contiguous irrelevant set to be
+  // represented as start_sn + 
+  pub fn gap_msg(mut self, irrelevant_sns: BTreeSet<SequenceNumber>, writer: &RtpsWriter, reader_guid: GUID) 
       -> MessageBuilder 
   {
-    match irrelevant_sns.next() {
-      Some(gap_start) => {
-        let mut gap_list = SequenceNumberSet::new(gap_start);
-        // TODO:This construction does not check for exceeding max bit set size
-        for sn in irrelevant_sns { gap_list.insert(sn); } 
-
+    match (irrelevant_sns.iter().next(), irrelevant_sns.iter().next_back()) {
+      (Some(&base),Some(&_top)) => {
+        let gap_list = SequenceNumberSet::from_base_and_set(base, &irrelevant_sns);
         let gap = Gap {
               reader_id: reader_guid.entityId ,
               writer_id: writer.get_entity_id(),
-              gap_start,
+              gap_start: base,
               gap_list 
           };
         let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer.endianness);
         gap.create_submessage(gap_flags)
-          .map( |s| self.submessages.push(s) );
-        self       
+          .map( |s| self.submessages.push(s) );      
       }
-      None => { error!("gap_msg called with empty SN set. Skipping GAP submessage"); self }
+      (_,_) =>  error!("gap_msg called with empty SN set. Skipping GAP submessage"),
     }
+    self 
   }
 
   pub fn heartbeat_msg(

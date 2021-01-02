@@ -11,6 +11,7 @@ use mio::Token;
 use std::{
   sync::{RwLock, Arc},
   collections::{HashSet, HashMap, BTreeMap, BTreeSet, hash_map::DefaultHasher},
+  iter::FromIterator,
   cmp::max,
 };
 use std::hash::Hasher;
@@ -478,6 +479,11 @@ impl Writer {
         let mut partial_message = MessageBuilder::new()
           .dst_submessage(self.endianness, reader_guid.guidPrefix)
           .ts_msg(self.endianness, false);
+        debug!("Repair data send due to ACKNACK = {:?}\nACKNACK SN Set: {:?}\nReaderProxy Unsent changes: {:?}",
+                an, 
+                an.reader_sn_state.iter().collect::<Vec<SequenceNumber>>(),
+                reader_proxy.unsent_changes);
+
         let mut no_longer_relevant = Vec::new();
         for &unsent_sn in reader_proxy.unsent_changes.iter() {
           match self.sequence_number_to_instant(unsent_sn) {
@@ -500,7 +506,7 @@ impl Writer {
         }
         // Add GAP submessage, if some chache changes could not be found.
         if no_longer_relevant.len() > 0 {
-          partial_message = partial_message.gap_msg(&mut no_longer_relevant.into_iter(), &self, reader_guid);
+          partial_message = partial_message.gap_msg(BTreeSet::from_iter(no_longer_relevant), &self, reader_guid);
         }
         let data_gap_msg = partial_message
           .add_header_and_build(self.create_message_header());

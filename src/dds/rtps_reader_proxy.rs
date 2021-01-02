@@ -159,14 +159,13 @@ impl RtpsReaderProxy {
   }
 
   pub fn handle_ack_nack(&mut self, acknack: &AckNack) {
-    self.all_acked_before = acknack.reader_sn_state.base;
+    self.all_acked_before = acknack.reader_sn_state.base();
     // clean up unsent_changes: 
     // The handy split_off function "Returns everything after the given key, including the key."
     self.unsent_changes = self.unsent_changes.split_off(&self.all_acked_before);
 
     // Insert the requested changes.
-    // TODO: We should have a borrowing iterator to RangedBitSet so we would not need cloning here.
-    for nack_sn in acknack.reader_sn_state.clone().into_iter() {
+    for nack_sn in acknack.reader_sn_state.iter() {
       self.unsent_changes.insert(nack_sn);
     }
   }
@@ -176,9 +175,9 @@ impl RtpsReaderProxy {
     self.unsent_changes.insert(sequence_number);
   }
 
-  pub fn remove_unsent_cache_change(&mut self, sequence_number: SequenceNumber) {
-    self.unsent_changes.remove(&sequence_number);
-  }
+  // pub fn remove_unsent_cache_change(&mut self, sequence_number: SequenceNumber) {
+  //   self.unsent_changes.remove(&sequence_number);
+  // }
 
   pub fn sequence_is_acked(&self, sequence_number: SequenceNumber) -> bool {
     sequence_number < self.all_acked_before

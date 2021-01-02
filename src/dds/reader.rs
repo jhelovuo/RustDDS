@@ -16,6 +16,8 @@ use crate::structure::{duration::Duration, time::Timestamp};
 use std::{
   collections::hash_map::DefaultHasher,
   hash::Hasher,
+  collections::BTreeSet,
+  iter::FromIterator,
   slice::Iter,
   sync::{Arc, RwLock},
 };
@@ -444,24 +446,27 @@ impl Reader {
       Some(wp) => wp,
       None => return false, // Matching writer not found
     };
-    // See if ack_nack is needed.
+
+    // See if ACKNACK is needed.
+    // TODO: too convoluted and inefficient block
     if writer_proxy.changes_are_missing(heartbeat.first_sn, heartbeat.last_sn) || !final_flag_set {
       let missing_seqnums =
         writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
-      let seqnum_base = missing_seqnums.iter().min();
-      let mut seqnum_set = match seqnum_base {
-        Some(&base) => SequenceNumberSet::new(base),
-        None => SequenceNumberSet::new(heartbeat.last_sn),
-      };
+      let seqnum_base_and_top =
+        match (missing_seqnums.iter().min(), missing_seqnums.iter().max()) {
+          (Some(&base),Some(&top)) => (base,top),
+          (_,_) => (heartbeat.last_sn, heartbeat.last_sn), // this should not happen because of "if" above
+        };
 
-      for seqnum in missing_seqnums {
-        seqnum_set.insert(seqnum);
-      }
+      let reader_sn_state = SequenceNumberSet::from_base_and_set(
+        seqnum_base_and_top.0 , &BTreeSet::from_iter(missing_seqnums) 
+        //TODO: should not be needed
+        );
 
       let response_ack_nack = AckNack {
         reader_id: self.get_entity_id(),
         writer_id: heartbeat.writer_id,
-        reader_sn_state: seqnum_set,
+        reader_sn_state,
         count: self.sent_ack_nack_count,
       };
 
@@ -473,7 +478,7 @@ impl Reader {
       return true;
     }
     false
-  }
+  } // fn 
 
   pub fn handle_gap_msg(&mut self, gap: Gap, mr_state: MessageReceiverState) {
     // ATM all things related to groups is ignored. TODO?
@@ -488,26 +493,35 @@ impl Reader {
 
     // Sequencenumber set in the gap is invalid: (section 8.3.5.5)
     // Set checked to be not empty. Unwraps won't panic
-    if gap.gap_list.set.len() != 0 {
-      if i64::from(gap.gap_start) < 1i64
-        || (gap.gap_list.set.iter().max().unwrap() - gap.gap_list.set.iter().min().unwrap()) >= 256
-      {
-        return;
-      }
-    } else {
-      return;
-    };
+
+    // TODO: Implement SequenceNumberSet rules validation (section 8.3.5.5)
+    // Already in the SequenceNumber module.
+
+    // TODO: Implement GAP rules validation (Section 8.3.7.4.3) here.
+
+    // if gap.gap_list
+
+    // if gap.gap_list.set.len() != 0 {
+    //   if i64::from(gap.gap_start) < 1i64
+    //     || (gap.gap_list.set.iter().max().unwrap() - gap.gap_list.set.iter().min().unwrap()) >= 256
+    //   {
+    //     return;
+    //   }
+    // } else {
+    //   return;
+    // };
     // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups:
     let mut irrelevant_changes_set = HashSet::new();
 
     //   1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
-    for seq_num_i64 in i64::from(gap.gap_start)..i64::from(gap.gap_list.base) {
+    for seq_num_i64 in i64::from(gap.gap_start)..i64::from(gap.gap_list.base()) {
+      //TODO: Can we do iteration range directly on SequenceNumber type?
       irrelevant_changes_set.insert(SequenceNumber::from(seq_num_i64));
     }
     //   2. All the sequence numbers that appear explicitly listed in the gapList.
-    for seq_num in &mut gap.gap_list.set.into_iter() {
-      irrelevant_changes_set.insert(SequenceNumber::from(seq_num as i64));
+    for seq_num in gap.gap_list.iter() {
+      irrelevant_changes_set.insert(seq_num);
     }
 
     // Remove from writerProxy and DDSHistoryCache
@@ -691,7 +705,7 @@ impl Reader {
       let acknack = AckNack {
         reader_id: self.get_entity_id(),
         writer_id: writer_proxy.remote_writer_guid.entityId,
-        reader_sn_state: SequenceNumberSet::new(SequenceNumber::from(1)),
+        reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(1)),
         count: self.sent_ack_nack_count,
       };
 
@@ -1078,9 +1092,9 @@ mod tests {
     }
 
     // make sequence numbers 1-3 and 5 7 irrelevant
-    let mut gap_list = SequenceNumberSet::new(SequenceNumber::from(4));
-    gap_list.insert(SequenceNumber::from(5 + 4)); // TODO! Why do you need to add base!?
-    gap_list.insert(SequenceNumber::from(7 + 4));
+    let mut gap_list = SequenceNumberSet::new(SequenceNumber::from(4),SequenceNumber::from(7));
+    gap_list.insert(SequenceNumber::from(5)); 
+    gap_list.insert(SequenceNumber::from(7));
 
     let gap = Gap {
       reader_id: reader.get_entity_id(),

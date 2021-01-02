@@ -68,7 +68,7 @@ mod tests {
           reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
           writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
           gap_start: SequenceNumber::from(42),
-          gap_list: SequenceNumberSet::new(SequenceNumber::from(7))
+          gap_list: SequenceNumberSet::new_empty(SequenceNumber::from(7))
       },
       le = [0x00, 0x00, 0x03, 0xC7,
             0x00, 0x00, 0x03, 0xC2,
