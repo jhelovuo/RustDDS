@@ -48,7 +48,7 @@ use crate::{
   structure::{
     entity::RTPSEntity,
     endpoint::{EndpointAttributes, Endpoint},
-    locator::LocatorKind,locator::Locator,
+    locator::Locator,
     dds_cache::DDSCache,
   },
   common::timed_event_handler::{TimedEventHandler},
@@ -408,9 +408,6 @@ impl Writer {
   
   /// This is called periodically.
   pub fn handle_heartbeat_tick(&mut self, is_manual_assertion: bool ) {
-    // TODO Set some guidprefix if needed at all.
-    // Not sure if DST submessage and TS submessage are needed when sending heartbeat.
-
     // Reliable Stateless Writer will set the final flag.
     // Reliable Stateful Writer (that tracks Readers by ReaderProxy) will not set the final flag.
     let final_flag = false;
@@ -422,19 +419,14 @@ impl Writer {
     // TODO: This produces same heartbeat count for all messages sent, but
     // then again, they represent the same writer status.
 
-    for reader in self.readers.iter() {
-      // Do we have some changes this reader has not ACKed yet?
-      if self.last_change_sequence_number >= reader.all_acked_before {
-        // Yes, send heartbeat messages
-        let reader_guid = reader.remote_reader_guid;
-        let hb_message = MessageBuilder::new()
-          .dst_submessage(self.endianness, reader_guid.guidPrefix)
-          .ts_msg(self.endianness, false)
-          .heartbeat_msg(self, reader_guid.entityId, final_flag, liveliness_flag)
-          .add_header_and_build(self.create_message_header());
-        self.send_unicast_message_to_reader(&hb_message, reader);
-        self.send_multicast_message_to_reader(&hb_message, reader);
-      }
+    if self.readers.iter().all(|rp| self.last_change_sequence_number < rp.all_acked_before ) {
+      trace!("heartbeat tick: all readers have all available data.");
+    } else {
+      let hb_message = MessageBuilder::new()
+        .ts_msg(self.endianness, false)
+        .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
+        .add_header_and_build(self.create_message_header());      
+      self.send_message_to_readers(DeliveryMode::Multicast, &hb_message, &mut self.readers.iter())
     }
 
     self.set_heartbeat_timer(); // keep the heart beating
@@ -526,9 +518,9 @@ impl Writer {
           .add_header_and_build(self.create_message_header());
         // TODO: Do we really need to send multicast also?
         // At least we should have one call to send the messages out.
-        self.send_unicast_message_to_reader(&data_gap_msg, &reader_proxy);
-        self.send_multicast_message_to_reader(&data_gap_msg, &reader_proxy);
-
+        self.send_message_to_readers(DeliveryMode::Unicast, &data_gap_msg,
+                  &mut std::iter::once(&reader_proxy));
+ 
         // insert reader back
         self.matched_reader_add(reader_proxy);
       }
@@ -626,31 +618,6 @@ impl Writer {
    fn increase_heartbeat_counter(&mut self) {
     self.heartbeat_message_counter = self.heartbeat_message_counter + 1;
   }
-
-
-  fn send_unicast_message_to_reader(&self, message: &Message, reader: &RtpsReaderProxy) {
-    if let Ok(data) = message.write_to_vec_with_ctx(self.endianness) {
-      self
-        .udp_sender
-        .send_to_locator_list(&data, &reader.unicast_locator_list)
-    }
-  }
-
-  fn send_multicast_message_to_reader(&self, message: &Message, reader: &RtpsReaderProxy) {
-    let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
-    for multiaddress in &reader.multicast_locator_list {
-      if multiaddress.kind == LocatorKind::LOCATOR_KIND_UDPv4 {
-        self
-          .udp_sender
-          .send_ipv4_multicast(&buffer, multiaddress.to_socket_address())
-          .expect("Unable to send multicast message.");
-      } else if multiaddress.kind == LocatorKind::LOCATOR_KIND_UDPv6 {
-        todo!();
-      }
-    }
-  }
-
- 
 
   fn send_message_to_readers(&self, preferred_mode: DeliveryMode, message: &Message, 
         readers: &mut dyn Iterator<Item = &RtpsReaderProxy>) {
