@@ -146,6 +146,8 @@ impl DiscoveryDB {
       });
   }
 
+
+  // Delete participant proxies, if we have not heard of them within lease_duration
   pub fn participant_cleanup(&mut self) {
     let inow = Instant::now();
 

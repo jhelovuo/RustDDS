@@ -1,6 +1,7 @@
 use mio::Token;
 use mio_extras::channel as mio_channel;
-use log::{debug, info, warn};
+#[allow(unused_imports)]
+use log::{error, debug, info, warn, trace};
 
 use std::{
   thread,
@@ -11,6 +12,7 @@ use std::{
   net::Ipv4Addr,
 };
 
+use crate::log_and_err_internal;
 use crate::{
   discovery::data_types::topic_data::DiscoveredTopicData,
   discovery::discovery::DiscoveryCommand,
@@ -47,21 +49,21 @@ impl DomainParticipant {
   /// # use rustdds::dds::DomainParticipant;
   /// let domain_participant = DomainParticipant::new(0);
   /// ```
-  pub fn new(domain_id: u16) -> DomainParticipant {
-    //writeln!(stderr(),"DomainParticipant constructor");
+  pub fn new(domain_id: u16) -> Result<DomainParticipant> {
+    trace!("DomainParticipant construct start");
     let (djh_sender, djh_receiver) = mio_channel::channel();
     let mut dpd = DomainParticipant_Disc::new(domain_id, djh_receiver);
 
     let discovery_updated_sender = match dpd.discovery_updated_sender.take() {
       Some(dus) => dus,
       // this error should never happen
-      None => panic!("Unable to receive Discovery Updated Sender."),
+      None => return log_and_err_internal!("Unable to receive Discovery Updated Sender."),
     };
 
     let discovery_command_receiver = match dpd.discovery_command_receiver.take() {
       Some(dsr) => dsr,
       // this error should never happen
-      None => panic!("Unable to get Discovery Command Receiver."),
+      None => return log_and_err_internal!("Unable to get Discovery Command Receiver."),
     };
 
     let dp = DomainParticipant { dpi: Arc::new(Mutex::new(dpd) ) };
@@ -79,20 +81,18 @@ impl DomainParticipant {
 
     let discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
     djh_sender.send(discovery_handle).unwrap_or(());
-    //writeln!(stderr(),"Waiting for discovery to start");
-    // blocking until discovery answers
-    let discovery_started = 
-      discovery_started_receiver.recv_timeout(Duration::from_secs(10));
-    match discovery_started {
-      Ok(ds) => match ds {
-        Ok(_) => { /*writeln!(stderr(),"Discovery started");*/ dp},
-        Err(e) => {
-          std::mem::drop(dp);
-          // TODO: maybe return result on new?
-          panic!("Failed to start discovery. {:?}", e);
-        }
+
+    debug!("Waiting for discovery to start"); // blocking until discovery answers   
+    match discovery_started_receiver.recv_timeout(Duration::from_secs(10)) {
+      Ok(Ok( () )) => { // normal case
+        info!("Discovery started. Participant constructed."); 
+        Ok(dp) 
       },
-      Err(e) => panic!("Discovery thread channel error: {:?}",e),
+      Ok(Err(e)) => {
+        std::mem::drop(dp);
+        log_and_err_internal!("Failed to start discovery thread: {:?}", e)
+      }
+      Err(e) => log_and_err_internal!("Discovery thread channel error: {:?}",e),
     }
   }
 

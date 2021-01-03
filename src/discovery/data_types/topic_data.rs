@@ -34,7 +34,8 @@ use crate::{
   locator::LocatorList},
 };
 
-// Topic data contains all topic related (including reader and writer data structures for serialization and deserialization)
+// Topic data contains all topic related 
+// (including reader and writer data structures for serialization and deserialization)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReaderProxy {
   pub remote_reader_guid: Option<GUID>,
@@ -85,6 +86,10 @@ impl Serialize for ReaderProxy {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
+
+// =======================================================================
+// =======================================================================
+// =======================================================================
 
 /// DDS SubscriptionBuiltinTopicData
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -259,6 +264,10 @@ impl Serialize for SubscriptionBuiltinTopicData {
   }
 }
 
+// =======================================================================
+// =======================================================================
+// =======================================================================
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
@@ -347,6 +356,11 @@ impl Serialize for DiscoveredReaderData {
   }
 }
 
+// =======================================================================
+// =======================================================================
+// =======================================================================
+
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WriterProxy {
   pub remote_writer_guid: Option<GUID>,
@@ -390,6 +404,10 @@ impl Serialize for WriterProxy {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
+
+// =======================================================================
+// =======================================================================
+// =======================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PublicationBuiltinTopicData {
@@ -469,6 +487,10 @@ impl Serialize for PublicationBuiltinTopicData {
   }
 }
 
+// =======================================================================
+// =======================================================================
+// =======================================================================
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredWriterData {
   // last_updated is not serialized
@@ -542,6 +564,10 @@ impl Serialize for DiscoveredWriterData {
   }
 }
 
+// =======================================================================
+// =======================================================================
+// =======================================================================
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct TopicBuiltinTopicData {
   pub key: Option<GUID>,
@@ -580,6 +606,10 @@ impl Serialize for TopicBuiltinTopicData {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
+
+// =======================================================================
+// =======================================================================
+// =======================================================================
 
 /// DDS Spec defined DiscoveredTopicData with extra updated time attribute.
 /// Practically this is gotten from [DomainParticipant](../participant/struct.DomainParticipant.html) during runtime
@@ -647,6 +677,10 @@ impl Keyed for DiscoveredTopicData {
   }
 }
 
+// =======================================================================
+// =======================================================================
+// =======================================================================
+
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct ParticipantMessageDataKind {
   value: [u8; 4],
@@ -667,6 +701,10 @@ impl ParticipantMessageDataKind {
     };
 }
 
+// =======================================================================
+// =======================================================================
+// =======================================================================
+
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ParticipantMessageData {
   pub guid: GuidPrefix,
@@ -685,6 +723,10 @@ impl Keyed for ParticipantMessageData {
 }
 
 impl Key for (GuidPrefix, ParticipantMessageDataKind) {}
+
+// =======================================================================
+// =======================================================================
+// =======================================================================
 
 #[cfg(test)]
 mod tests {

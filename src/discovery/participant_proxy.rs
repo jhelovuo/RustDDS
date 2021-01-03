@@ -78,6 +78,6 @@ pub struct ParticipantProxyAttributes {
   pub manual_liveliness_count: i32,
 }
 
-pub trait ParticipantProxy {
-  fn as_participant_proxy(&self) -> &ParticipantProxyAttributes;
-}
+// pub trait ParticipantProxy {
+//   fn as_participant_proxy(&self) -> &ParticipantProxyAttributes;
+// }

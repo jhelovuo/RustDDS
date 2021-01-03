@@ -1,5 +1,8 @@
 use std::result;
 
+#[allow(unused_imports)]
+use log::{debug, info, warn, trace, error};
+
 /// This is a specialized Result, similar to std::io::Result
 pub type Result<T> = result::Result<T, Error>;
 
@@ -39,7 +42,11 @@ pub enum Error {
   /// Synchronization with another thread failed because the [other thread
   /// has exited while holding a lock.](https://doc.rust-lang.org/std/sync/struct.PoisonError.html)
   /// Does not exist in the DDS spec.
-  LockPoisoned,  
+  LockPoisoned,
+
+  /// Something that should not go wrong went wrong anyway.
+  /// This is usually a bug in RustDDS
+  Internal { reason: String },
 }
 
 
@@ -53,7 +60,7 @@ impl Error {
   { 
     Err( Error::PreconditionNotMet{ precondition: precondition.to_string() }) 
   }
-
+  
 }
 
 #[doc(hidden)]
@@ -62,6 +69,16 @@ macro_rules! log_and_err_precondition_not_met {
   ($err_msg:literal) => (
       { error!($err_msg);
         Error::precondition_not_met($err_msg)
+      }
+    )
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! log_and_err_internal {
+  ($($arg:tt)*) => (
+      { error!($($arg)*);
+        Err( Error::Internal{ reason: format!($($arg)*) } )
       }
     )
 }

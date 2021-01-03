@@ -45,8 +45,7 @@ pub struct RosParticipant {
 
 impl RosParticipant {
   pub fn new() -> Result<RosParticipant, Error> {
-    let dp = DomainParticipant::new(0);
-    Self::from_DomainParticipant(dp)
+    Self::from_DomainParticipant(DomainParticipant::new(0)?)
   }
 
   pub fn from_DomainParticipant(domain_participant: DomainParticipant) 
