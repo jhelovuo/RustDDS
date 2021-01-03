@@ -245,9 +245,7 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn get_participants<'a>(
-    &'a self,
-  ) -> Map<
+  pub fn get_participants<'a>(&'a self) -> Map<
     BTreeIter<'a, GUID, SPDPDiscoveredParticipantData>,
     fn((&GUID, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData,
   > {
@@ -303,8 +301,10 @@ impl DiscoveryDB {
           ( pp.default_unicast_locators.clone(), 
             pp.default_multicast_locators.clone() ) } )
         .unwrap_or_else( || {
-            warn!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
-              ,drd, remote_reader_guid.guidPrefix, self.participant_proxies.keys() );
+            if remote_reader_guid.guidPrefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
+              warn!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
+                ,drd, remote_reader_guid.guidPrefix, self.participant_proxies.keys() );
+            }
             (LocatorList::new(), LocatorList::new()) 
           } );
 
@@ -484,9 +484,8 @@ impl DiscoveryDB {
 
   pub fn initialize_participant_reader_proxy(&mut self, port: u16) {
     let guid = GUID::new_with_prefix_and_id(
-      GuidPrefix::GUIDPREFIX_UNKNOWN,
-      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
-    );
+      GuidPrefix::GUIDPREFIX_UNKNOWN, EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER);
+
     let mut reader_proxy = ReaderProxy::new(guid);
     reader_proxy.multicast_locator_list = get_local_multicast_locators(port);
 

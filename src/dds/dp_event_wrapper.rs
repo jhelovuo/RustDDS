@@ -1,6 +1,6 @@
 use std::cmp::max;
 
-use log::{debug, error, info, warn};
+use log::{debug, error, info, warn, trace};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
 use std::{collections::HashMap, sync::RwLockReadGuard, time::Duration};
@@ -44,7 +44,7 @@ pub struct DPEventWrapper {
   ddscache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   udp_listeners: HashMap<Token, UDPListener>,
-  message_receiver: MessageReceiver,
+  message_receiver: MessageReceiver, // This contains our Readers
 
   // Adding readers
   add_reader_receiver: TokenReceiverPair<Reader>,
@@ -317,7 +317,7 @@ impl DPEventWrapper {
   pub fn handle_reader_action(&mut self, event: &Event) {
     match event.token() {
       ADD_READER_TOKEN => {
-        info!("add reader(s)");
+        trace!("add reader(s)");
         while let Ok(mut new_reader) = self.add_reader_receiver.receiver.try_recv() {
           let (timed_action_sender, timed_action_receiver) =
             mio_channel::sync_channel::<TimerMessageType>(10);
@@ -352,6 +352,7 @@ impl DPEventWrapper {
             new_reader.get_guid(),
           );
           new_reader.set_requested_deadline_check_timer();
+          trace!("Add reader: {:?}", new_reader);
           self.message_receiver.add_reader(new_reader);
         }
       }

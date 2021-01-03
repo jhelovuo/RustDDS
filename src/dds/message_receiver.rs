@@ -107,15 +107,11 @@ impl MessageReceiver {
   }
 
   pub fn add_reader(&mut self, new_reader: Reader) {
-    match self
-      .available_readers
-      .iter()
+    match self.available_readers.iter()
       .find(|&r| r.get_guid() == new_reader.get_guid())
     {
-      None => {
-        self.available_readers.push(new_reader);
-      }
-      Some(_) => {}
+      None => self.available_readers.push(new_reader), // normal case
+      Some(g) => warn!("Already have Reader {:?} - not adding.",g),
     }
   }
 

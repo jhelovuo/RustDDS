@@ -82,9 +82,6 @@ pub(crate) struct Discovery {
   discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
 }
 
-unsafe impl Sync for Discovery {}
-unsafe impl Send for Discovery {}
-
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(2);
   const TOPIC_CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(10); // timer for cleaning up inactive topics

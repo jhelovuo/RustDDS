@@ -151,10 +151,8 @@ impl Reader {
 
   pub fn set_requested_deadline_check_timer(&mut self) {
     if let Some(deadline) = self.qos_policy.deadline {
-      debug!(
-        "set_requested_deadline_check_timer: {:?}",
-        deadline.0.to_std()
-      );
+      debug!("GUID={:?} set_requested_deadline_check_timer: {:?}", 
+        self.my_guid, deadline.0.to_std() );
       match chronoDuration::from_std(deadline.0.to_std()) {
         Ok(cdur) => match self.timed_event_handler.as_mut() {
           Some(teh) => teh.set_timeout(&cdur, TimerMessageType::reader_deadline_missed_check),
@@ -165,7 +163,8 @@ impl Reader {
         }
       }
     } else {
-      debug!("do not set set_requested_deadline_check_timer")
+      trace!("GUID={:?} - no deaadline policy - do not set set_requested_deadline_check_timer",
+        self.my_guid);
     }
   }
 
