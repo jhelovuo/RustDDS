@@ -1,3 +1,4 @@
+use std;
 use std::result;
 
 #[allow(unused_imports)]
@@ -47,6 +48,7 @@ pub enum Error {
   /// Something that should not go wrong went wrong anyway.
   /// This is usually a bug in RustDDS
   Internal { reason: String },
+  Io { inner: std::io::Error },
 }
 
 
@@ -83,12 +85,17 @@ macro_rules! log_and_err_internal {
     )
 }
 
+impl From<std::io::Error> for Error {
+  fn from(e:std::io::Error) -> Error {
+    Error::Io { inner: e }
+  }
+}
+
 impl<T> From<std::sync::PoisonError<T>> for Error {
   fn from(_e:std::sync::PoisonError<T>) -> Error {
     Error::LockPoisoned
   }
 }
-
 /// Helper to contain same count actions across statuses
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct CountWithChange {

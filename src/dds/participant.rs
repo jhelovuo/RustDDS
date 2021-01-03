@@ -52,7 +52,7 @@ impl DomainParticipant {
   pub fn new(domain_id: u16) -> Result<DomainParticipant> {
     trace!("DomainParticipant construct start");
     let (djh_sender, djh_receiver) = mio_channel::channel();
-    let mut dpd = DomainParticipant_Disc::new(domain_id, djh_receiver);
+    let mut dpd = DomainParticipant_Disc::new(domain_id, djh_receiver)?;
 
     let discovery_updated_sender = match dpd.discovery_updated_sender.take() {
       Some(dus) => dus,
@@ -79,7 +79,10 @@ impl DomainParticipant {
       discovery_command_receiver,
     );
 
-    let discovery_handle = thread::spawn(move || Discovery::discovery_event_loop(discovery));
+    let discovery_handle = 
+          thread::Builder::new()
+            .name("RustDDS discovery thread".to_string())
+            .spawn(move || Discovery::discovery_event_loop(discovery))?;
     djh_sender.send(discovery_handle).unwrap_or(());
 
     debug!("Waiting for discovery to start"); // blocking until discovery answers   
@@ -324,22 +327,22 @@ impl DomainParticipant_Disc {
   pub fn new(
     domain_id: u16,
     discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
-  ) -> DomainParticipant_Disc {
+  ) -> Result<DomainParticipant_Disc> {
     let (discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::sync_channel::<DiscoveryNotificationType>(100);
 
-    let dpi = DomainParticipant_Inner::new(domain_id, discovery_update_notification_receiver);
+    let dpi = DomainParticipant_Inner::new(domain_id, discovery_update_notification_receiver)?;
 
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(10);
 
-    DomainParticipant_Disc {
+    Ok(DomainParticipant_Disc {
       dpi: Arc::new(Mutex::new(dpi)),
       discovery_updated_sender: Some(discovery_update_notification_sender),
       discovery_command_receiver: Some(discovery_command_receiver),
       discovery_command_channel: discovery_command_sender,
       discovery_join_handle,
-    }
+    })
   }
 
   pub fn create_publisher(
@@ -470,10 +473,10 @@ impl DomainParticipant_Inner {
   fn new(
     domain_id: u16,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-  ) -> DomainParticipant_Inner {
+  ) -> Result<DomainParticipant_Inner> {
     let mut listeners = HashMap::new();
 
-    // Creating UPD listeners for participantId 0 (change this if necessary)
+    // Creating UDP listeners for participantId 0 (change this if necessary)
     let discovery_multicast_listener = UDPListener::try_bind(
       DISCOVERY_SENDER_TOKEN,
       "0.0.0.0",
@@ -511,14 +514,9 @@ impl DomainParticipant_Inner {
 
     info!("ParticipantId {} selected.", participant_id);
 
-    // let discovery_listener = UDPListener::new(
-    //   DISCOVERY_SENDER_TOKEN,
-    //   "0.0.0.0",
-    //   get_spdp_well_known_unicast_port(domain_id, participant_id),
-    // );
     let discovery_listener = match discovery_listener {
       Some(dl) => dl,
-      None => panic!("Could not find free ParticipantId"),
+      None => return log_and_err_internal!("Could not find free ParticipantId"),
     };
 
     let user_traffic_multicast_listener = UDPListener::try_bind(
@@ -533,11 +531,11 @@ impl DomainParticipant_Inner {
           listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, ls);
         }
         _ => {
-          info!("Cannot join multicast, possibly another instance running on this machine.");
+          error!("Cannot join multicast, possibly another instance running on this machine.");
         }
       },
       None => {
-        info!("Cannot join multicast, possibly another instance running on this machine.");
+        error!("Cannot join multicast, possibly another instance running on this machine.");
       }
     };
 
@@ -598,9 +596,11 @@ impl DomainParticipant_Inner {
       discovery_update_notification_receiver,
     );
     // Launch the background thread for DomainParticipant
-    let ev_loop_handle = thread::spawn(move || ev_wrapper.event_loop());
+    let ev_loop_handle = thread::Builder::new()
+          .name("RustDDS Participant event loop".to_string())
+          .spawn(move || ev_wrapper.event_loop())?;
 
-    DomainParticipant_Inner {
+    Ok(DomainParticipant_Inner {
       domain_id,
       participant_id,
       my_guid: new_guid ,
@@ -617,8 +617,8 @@ impl DomainParticipant_Inner {
       add_writer_sender,
       remove_writer_sender,
       dds_cache: Arc::new(RwLock::new(DDSCache::new())),
-      discovery_db: discovery_db,
-    }
+      discovery_db,
+    })
   }
 
   pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
