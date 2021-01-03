@@ -1,4 +1,4 @@
-use std::cmp::max;
+//use std::cmp::max;
 
 use log::{debug, error, info, warn, trace};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
@@ -17,7 +17,7 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId, EntityKind};
 use crate::structure::entity::RTPSEntity;
-use crate::structure::sequence_number::SequenceNumber;
+//use crate::structure::sequence_number::SequenceNumber;
 use crate::structure::locator::LocatorList;
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
@@ -29,7 +29,6 @@ use crate::dds::with_key::datareader::ReaderCommand;
 use super::{
   qos::policy::Reliability, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy,
   typedesc::TypeDesc,
-  //writer::WriterCommand,
 };
 
 pub struct DomainInfo {
@@ -540,9 +539,6 @@ impl DPEventWrapper {
 
             if needs_new_cache_change {
               writer.notify_new_data_to_all_readers()
-              // for proxy in writer.readers.iter_mut() {
-              //   proxy.notify_new_cache_change(writer.last_change_sequence_number);
-              // }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
             DPEventWrapper::update_pubsub_readers(
@@ -553,9 +549,6 @@ impl DPEventWrapper {
             );
             if needs_new_cache_change {
               writer.notify_new_data_to_all_readers()
-              // for proxy in writer.readers.iter_mut() {
-              //   proxy.notify_new_cache_change(writer.last_change_sequence_number);
-              // }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER {
             DPEventWrapper::update_pubsub_readers(
@@ -566,9 +559,6 @@ impl DPEventWrapper {
             );
             if needs_new_cache_change {
               writer.notify_new_data_to_all_readers()
-              // for proxy in writer.readers.iter_mut() {
-              //   proxy.notify_new_cache_change(writer.last_change_sequence_number);
-              // }
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER {
             // TODO:
@@ -583,9 +573,6 @@ impl DPEventWrapper {
             );
             if needs_new_cache_change {
               writer.notify_new_data_to_all_readers()
-              // for proxy in writer.readers.iter_mut() {
-              //   proxy.notify_new_cache_change(writer.last_change_sequence_number);
-              // }
             }
           } else {
             writer.readers = db
@@ -621,9 +608,6 @@ impl DPEventWrapper {
             {
               // reset data sending
               writer.notify_new_data_to_all_readers()
-              // for reader in writer.readers.iter_mut() {
-              //   reader.notify_new_cache_change(writer.last_change_sequence_number);
-              // }
             }
           }
         }
@@ -733,14 +717,20 @@ impl DPEventWrapper {
     }
   }
 
-  fn add_reader_to_writer(writer: &mut Writer, mut proxy: RtpsReaderProxy) {
+  fn add_reader_to_writer(writer: &mut Writer, proxy: RtpsReaderProxy) {
     let reader = writer.readers
                   .iter_mut()
                   .find(|r| r.remote_reader_guid == proxy.remote_reader_guid);
 
-    proxy.notify_new_cache_change(
+
+    // TODO: Isn't this bad? It could cause ghost seuquence numbers, if
+    // nothing is sent yet.
+    /*proxy.notify_new_cache_change(
       max(writer.last_change_sequence_number, SequenceNumber::default() )
-    );
+    );*/
+
+    // TODO: We should initialize reader proxy so that it does not try to send
+    // all data from beginning of time, but sends a reasonable GAP message first.
 
     match reader {
       Some(r) => {

@@ -968,7 +968,7 @@ impl Discovery {
         max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
-      .history(History::KeepAll)
+      .history(History::KeepLast { depth: 1 }) // there should be no need fo historical data here
       .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
         max_instances: std::i32::MAX,
         max_samples: std::i32::MAX,

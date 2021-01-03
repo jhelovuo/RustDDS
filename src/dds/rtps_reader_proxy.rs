@@ -44,7 +44,7 @@ pub(crate) struct RtpsReaderProxy {
   // This is directly the same as readerSNState.base in ACKNACK submessage.
   pub all_acked_before : SequenceNumber,
 
-  // List of SequenceNumbers to be sent to Reader. Both unset eand requested by ACKNACK.
+  // List of SequenceNumbers to be sent to Reader. Both unsent and requested by ACKNACK.
   pub unsent_changes: BTreeSet<SequenceNumber>,
 }
 

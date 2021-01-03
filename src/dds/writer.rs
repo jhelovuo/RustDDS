@@ -253,10 +253,10 @@ impl Writer {
   // please explain why this is needed and why does it make sense.
   // Used by dp_event_wrapper.
   pub fn notify_new_data_to_all_readers(&mut self) {
-    for reader_proxy in self.readers.iter_mut() {
-      reader_proxy.notify_new_cache_change(
-        max(self.last_change_sequence_number, SequenceNumber::default()));
-    }
+    // removed, because it causes ghost sequence numbers. 
+    // for reader_proxy in self.readers.iter_mut() {
+    //   reader_proxy.notify_new_cache_change(self.last_change_sequence_number);
+    // }
   }
 
   // --------------------------------------------------------------
@@ -461,17 +461,31 @@ impl Writer {
     if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
         reader_proxy.handle_ack_nack(&an);
 
+        // Sanity Check: if the reader asked for something we did not even advertise yet.
+        // TODO: This checks the stored unset_changes, not presentely received ACKNACK.
+        if let Some(&high) = reader_proxy.unsent_changes.range(..).next_back()  {
+          if high > last_seq { 
+            error!("ReaderProxy {:?} thinks we need to send {:?} but I have only up to {:?}", 
+              reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq);
+          }
+        }
+        if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) { // more sanity
+          warn!("ACKNACK from {:?} acks up to before {:?} but I have only up to {:?}",
+            reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq);
+        }
+        // TODO: The following check is rather expensive. Maybe should turn it off
+        // in release build?
+        if let Some( max_req_sn ) = an.reader_sn_state.iter().max() { // sanity check
+          if max_req_sn > last_seq {
+            warn!("ACKNACK from {:?} requests {:?} but I have only up to {:?}",
+              reader_proxy.remote_reader_guid, 
+              an.reader_sn_state.iter().collect::<Vec<SequenceNumber>>(), last_seq);
+          }
+        }
+
         // if we cannot send more data, we are done.
         // This is to prevent empty "missing data" messages from being sent.
         if reader_proxy.all_acked_before > last_seq {
-          // Sanity Check: if the reader asked for something we did not even advertise yet.
-          // TODO: This checks the stored unset_changes, not presentely received ACKNACK.
-          if let Some(&high) = reader_proxy.unsent_changes.range(..).next_back()  {
-            if high > last_seq { 
-              info!("ReaderProxy {:?} asked for {:?} but I have only up to {:?}", 
-                reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq);
-            }
-          }
           return 
         }
     }
@@ -790,7 +804,9 @@ impl Writer {
       x.remote_group_entity_id == reader_proxy.remote_group_entity_id
         && x.remote_reader_guid == reader_proxy.remote_reader_guid
     }) {
-      panic!("Reader proxy with same group entityid and remotereader guid added already");
+      error!("Reader proxy with same group entityid {:?} and remotereader GUID {:?} added already",
+        reader_proxy.remote_group_entity_id, reader_proxy.remote_reader_guid);
+      return
     };
     &self.readers.push(reader_proxy);
   }
