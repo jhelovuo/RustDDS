@@ -8,7 +8,6 @@ pub mod guid;
 pub mod inline_qos;
 pub mod locator;
 pub mod parameter_id;
-pub mod participant;
 pub mod sequence_number;
 pub mod time;
 pub mod topic_kind;
