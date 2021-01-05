@@ -84,10 +84,10 @@ mod tests {
         PollOpt::edge(),
       )
       .expect("timer channel registeration failed!!");
-    hbh.set_timeout(&Duration::seconds(1), TimerMessageType::writer_heartbeat);
+    hbh.set_timeout(&Duration::seconds(1), TimerMessageType::WriterHeartbeat);
     hbh2.set_timeout(
       &Duration::milliseconds(10),
-      TimerMessageType::writer_heartbeat,
+      TimerMessageType::WriterHeartbeat,
     );
 
     thread::sleep(std::time::Duration::from_secs(2));

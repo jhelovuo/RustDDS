@@ -1,4 +1,3 @@
-
 use chrono::Duration as chronoDuration;
 use enumflags2::BitFlags;
 
@@ -40,6 +39,7 @@ use crate::{
   },
   structure::cache_change::{CacheChange, ChangeKind},
   serialization::{SubMessage, Message, SubmessageBody},
+  dds::dp_event_loop::NACK_RESPONSE_DELAY,
 };
 
 use crate::dds::{ddsdata::DDSData, qos::HasQoSPolicy};
@@ -275,8 +275,21 @@ impl Writer {
   // --------------------------------------------------------------
   // --------------------------------------------------------------
 
+  pub fn handle_timed_event(&mut self, timer_message:TimerMessageType) {
+    match timer_message {
+      TimerMessageType::WriterHeartbeat => 
+        self.handle_heartbeat_tick(false), // false = This is automatic heartbeat by timer, not manual by application call.
+      TimerMessageType::WriterCacheCleaning =>
+        self.handle_cache_cleaning(),
+      TimerMessageType::WriterSendRepairData{ to_reader: r } =>
+        self.handle_repair_data_send(r),
+      other_msg => 
+        error!("handle_timed_event - unexpected message: {:?}", other_msg),
+    }
+  }
+
   /// This is called by dp_wrapper everytime cacheCleaning message is received.
-  pub fn handle_cache_cleaning(&mut self) {
+  fn handle_cache_cleaning(&mut self) {
     let mut removedChanges = vec![];
     match self.qos_policies.history {
       None => {
@@ -301,7 +314,7 @@ impl Writer {
   fn set_cache_cleaning_timer(&mut self) {
     self.timed_event_handler.as_mut().unwrap().set_timeout(
       &chronoDuration::from(self.cahce_cleaning_perioid),
-      TimerMessageType::writer_cache_cleaning,
+      TimerMessageType::WriterCacheCleaning,
     )
   }
 
@@ -438,7 +451,7 @@ impl Writer {
       Some(period) => {
         self.timed_event_handler.as_mut().unwrap().set_timeout(
           &chronoDuration::from(period),
-          TimerMessageType::writer_heartbeat,
+          TimerMessageType::WriterHeartbeat,
         );
         trace!("set heartbeat timer to {:?} in topic {:?}",period, self.topic_name());
       }
@@ -460,7 +473,7 @@ impl Writer {
     let last_seq = self.last_change_sequence_number; // to avoid borrow problems
     if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
         reader_proxy.handle_ack_nack(&an);
-
+        let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow 
         // Sanity Check: if the reader asked for something we did not even advertise yet.
         // TODO: This checks the stored unset_changes, not presentely received ACKNACK.
         if let Some(&high) = reader_proxy.unsent_changes.range(..).next_back()  {
@@ -484,61 +497,83 @@ impl Writer {
         }
 
         // if we cannot send more data, we are done.
-        // This is to prevent empty "missing data" messages from being sent.
+        // This is to prevent empty "repair data" messages from being sent.
         if reader_proxy.all_acked_before > last_seq {
           return 
+        } else {
+          // prime timer to send repair data
+          reader_proxy.repair_mode = true; // hold sending normal DATA
+          self.timed_event_handler.as_mut().unwrap().set_timeout(
+            &chronoDuration::from_std(NACK_RESPONSE_DELAY).unwrap(),
+            TimerMessageType::WriterSendRepairData{ to_reader: reader_guid },
+          );
         }
     }
+  }
 
-    // Send out missing data
-    // TODO: We should implement this in a timed action, because RTPS spec says to wait for
-    // nack_response_delay before sending out data, and the default delay is not zero.  
-    if let Some(reader_proxy) = self
-      .matched_reader_remove(GUID::new_with_prefix_and_id(reader_guid_prefix, an.reader_id)) {
-        let reader_guid = reader_proxy.remote_reader_guid;
-        let mut partial_message = MessageBuilder::new()
-          .dst_submessage(self.endianness, reader_guid.guidPrefix)
-          .ts_msg(self.endianness, false);
-        debug!("Repair data send due to ACKNACK = {:?}\nACKNACK SN Set: {:?}\nReaderProxy Unsent changes: {:?}",
-                an, 
-                an.reader_sn_state.iter().collect::<Vec<SequenceNumber>>(),
-                reader_proxy.unsent_changes);
+  // Send out missing data
+  fn handle_repair_data_send(&mut self, to_reader: GUID) {
+    if let Some(mut reader_proxy) = self.matched_reader_remove(to_reader) {
+      let reader_guid = reader_proxy.remote_reader_guid;
+      let mut partial_message = MessageBuilder::new()
+        .dst_submessage(self.endianness, reader_guid.guidPrefix)
+        .ts_msg(self.endianness, false); //TODO: This timestamp should probably not be
+        // the current (retransmit) time, but the initial sample production timestamp,
+        // i.e. should be read from DDSCache (and implemented there)
+      debug!("Repair data send due to ACKNACK. ReaderProxy Unsent changes: {:?}",
+              reader_proxy.unsent_changes);
 
-        let mut no_longer_relevant = Vec::new();
-        for &unsent_sn in reader_proxy.unsent_changes.iter() {
-          match self.sequence_number_to_instant(unsent_sn) {
-            Some(timestamp) => {
-              if let Some(cache_change) = self.dds_cache.read().unwrap()
-                  .from_topic_get_change(&self.my_topic_name, &timestamp) {
-                // TODO: We should not just append DATA submessages blindly. 
-                // We should check that message size limit is not exceeded.
-                partial_message = partial_message.data_msg(cache_change.clone(), 
-                    &self, reader_guid.entityId ); 
-                // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
-              } else {
-                no_longer_relevant.push(unsent_sn);
-              }
+      let mut no_longer_relevant = Vec::new();
+      let mut found_data = false;
+      if let Some(&unsent_sn) = reader_proxy.unsent_changes.iter().next() {
+        match self.sequence_number_to_instant(unsent_sn) {
+          Some(timestamp) => {
+            if let Some(cache_change) = self.dds_cache.read().unwrap()
+                .from_topic_get_change(&self.my_topic_name, &timestamp) {
+              // TODO: We should not just append DATA submessages blindly. 
+              // We should check that message size limit is not exceeded.
+              partial_message = partial_message.data_msg(cache_change.clone(), 
+                  &self, reader_guid.entityId ); 
+              // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
+            } else {
+              no_longer_relevant.push(unsent_sn);
             }
-            None => 
-              error!("handle ack_nack writer {:?} seq.number {:?} missing from instant map", 
-                      self.my_guid, unsent_sn),
           }
-        }
-        // Add GAP submessage, if some chache changes could not be found.
-        if no_longer_relevant.len() > 0 {
-          partial_message = partial_message.gap_msg(BTreeSet::from_iter(no_longer_relevant), &self, reader_guid);
-        }
-        let data_gap_msg = partial_message
-          .add_header_and_build(self.create_message_header());
-        // TODO: Do we really need to send multicast also?
-        // At least we should have one call to send the messages out.
-        self.send_message_to_readers(DeliveryMode::Unicast, &data_gap_msg,
-                  &mut std::iter::once(&reader_proxy));
- 
-        // insert reader back
-        self.matched_reader_add(reader_proxy);
+          None => {
+            error!("handle ack_nack writer {:?} seq.number {:?} missing from instant map", 
+                    self.my_guid, unsent_sn);
+            no_longer_relevant.push(unsent_sn);
+          }  
+        } // match
+        reader_proxy.unsent_changes.remove(&unsent_sn);
+        found_data = true;
       }
-      
+      // Add GAP submessage, if some chache changes could not be found.
+      if ! no_longer_relevant.is_empty() {
+        partial_message = partial_message.gap_msg(BTreeSet::from_iter(no_longer_relevant), &self, reader_guid);
+      }
+      let data_gap_msg = partial_message
+        .add_header_and_build(self.create_message_header());
+
+      self.send_message_to_readers(DeliveryMode::Unicast, &data_gap_msg,
+                &mut std::iter::once(&reader_proxy));
+
+      if found_data { // prime repair timer again, if data was found
+        // Try to send repait messages at 5x rate compared to usual deadline rate
+        let delay_to_next_message = 
+          self.qos_policies.deadline().map( |dl| dl.0 )
+            .unwrap_or(Duration::from_millis(100)) / 5;
+        self.timed_event_handler.as_mut().unwrap().set_timeout(
+          &chronoDuration::from(delay_to_next_message),
+          TimerMessageType::WriterSendRepairData{ to_reader: reader_proxy.remote_reader_guid },
+        );        
+      } else {
+        reader_proxy.repair_mode = false; // resume normal data sending
+      }
+
+      // insert reader back
+      self.matched_reader_add(reader_proxy);      
+    }   
   } // fn
 
   /// Removes permanently cacheChanges from DDSCache.

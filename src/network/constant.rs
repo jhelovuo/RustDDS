@@ -82,9 +82,10 @@ pub fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TimerMessageType {
-  writer_heartbeat,
-  writer_cache_cleaning,
-  reader_deadline_missed_check,
+  WriterHeartbeat,
+  WriterCacheCleaning,
+  WriterSendRepairData { to_reader: GUID },
+  ReaderDeadlineMissedCheck,
 }
 
 #[derive(Debug)]

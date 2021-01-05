@@ -217,6 +217,10 @@ impl QosPolicies {
     self.presentation
   }
 
+  pub const fn deadline(&self) -> Option<policy::Deadline> {
+    self.deadline
+  }
+
   pub const fn latency_budget(&self) -> Option<policy::LatencyBudget> {
     self.latency_budget
   }

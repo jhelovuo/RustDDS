@@ -26,7 +26,7 @@ use crate::structure::dds_cache::{DDSCache};
 
 use mio::Token;
 use mio_extras::channel as mio_channel;
-use log::{debug, info, warn, trace};
+use log::{debug, info, warn, trace, error};
 use std::fmt;
 
 use std::collections::{HashSet, HashMap};
@@ -155,7 +155,7 @@ impl Reader {
         self.my_guid, deadline.0.to_std() );
       match chronoDuration::from_std(deadline.0.to_std()) {
         Ok(cdur) => match self.timed_event_handler.as_mut() {
-          Some(teh) => teh.set_timeout(&cdur, TimerMessageType::reader_deadline_missed_check),
+          Some(teh) => teh.set_timeout(&cdur, TimerMessageType::ReaderDeadlineMissedCheck),
           None => warn!("Unable to get timed_event_handler."),
         },
         Err(_) => {
@@ -266,10 +266,18 @@ impl Reader {
   }
   */
 
-  pub fn handle_requested_deadline_event(&mut self) {
+  pub fn handle_timed_event(&mut self, timer_message: TimerMessageType) {
+    match timer_message {
+      TimerMessageType::ReaderDeadlineMissedCheck => 
+        self.handle_requested_deadline_event(),
+      other_message => 
+        error!("handle_timed_event - I do not know how to handle {:?}", other_message),
+    }
+  }
+
+  fn handle_requested_deadline_event(&mut self) {
     debug!("handle_requested_deadline_event");
-    let missed_deadlines = self.calculate_if_requested_deadline_is_missed();
-    for missed_deadline in missed_deadlines {
+    for missed_deadline in self.calculate_if_requested_deadline_is_missed() {
       self.send_status_change(missed_deadline);
     }
     self.set_requested_deadline_check_timer();
@@ -710,12 +718,12 @@ impl Reader {
 
       match info_dst.create_submessage(infodst_flags) {
         Some(m) => message.add_submessage(m),
-        None => continue,
+        None => continue, //TODO: is this correct??
       };
 
       match acknack.create_submessage(flags) {
         Some(m) => message.add_submessage(m),
-        None => continue,
+        None => continue, //TODO: ??
       };
 
       let bytes = message

@@ -46,6 +46,10 @@ pub(crate) struct RtpsReaderProxy {
 
   // List of SequenceNumbers to be sent to Reader. Both unsent and requested by ACKNACK.
   pub unsent_changes: BTreeSet<SequenceNumber>,
+
+  // true = send repair data messages due to NACKs, buffer messages by DataWriter
+  // false = send data messages directly from DataWriter
+  pub repair_mode : bool,
 }
 
 impl RtpsReaderProxy {
@@ -59,6 +63,7 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
+      repair_mode: false,
     }
   }
 
@@ -78,6 +83,7 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
+      repair_mode: false,
     }
   }
 
@@ -122,6 +128,7 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
+      repair_mode: false,
     })
   }
 
@@ -150,6 +157,7 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
+      repair_mode: false,
     }
   }
 

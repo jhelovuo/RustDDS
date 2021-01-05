@@ -37,6 +37,12 @@ pub struct DomainInfo {
   pub participant_id: u16,
 }
 
+pub const PREEMPTIVE_ACKNACK_PERIOD: Duration = Duration::from_secs(5);
+
+// RTPS spec Section 8.4.7.1.1  "Default Timing-Related Values"
+pub const NACK_RESPONSE_DELAY: Duration = Duration::from_millis(200); 
+pub const NACK_SUPPRESSION_DURATION: Duration = Duration::from_millis(0); 
+ 
 pub struct DPEventLoop {
   domain_info: DomainInfo,
   poll: Poll,
@@ -182,7 +188,7 @@ impl DPEventLoop {
   pub fn event_loop(self) {
     let mut events = Events::with_capacity(8);  // too small capacity just delays events to next poll
     let mut acknack_timer = mio_extras::timer::Timer::default();
-    acknack_timer.set_timeout(Duration::from_secs(5), ());
+    acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
     self.poll
       .register(&acknack_timer, DPEV_ACKNACK_TIMER_TOKEN, Ready::readable(), PollOpt::edge() )
       .unwrap();
@@ -225,7 +231,7 @@ impl DPEventLoop {
           }
         } else if event.token() == DPEV_ACKNACK_TIMER_TOKEN {
           ev_wrapper.message_receiver.send_preemptive_acknacks();
-          acknack_timer.set_timeout(Duration::from_secs(5), ());
+          acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
         } else {
           error!("Unknown event {:?}", event);
         }
@@ -407,62 +413,27 @@ impl DPEventLoop {
   /// Writer timed events can be heatrbeats or cache cleaning events.
   /// events are distinguished by TimerMessageType which is send via mio channel. Channel token in
   pub fn handle_writer_timed_event(&mut self, event: &Event) {
-    let reciever = self
-      .writer_timed_event_reciever
-      .get(&event.token())
+    let reciever = self.writer_timed_event_reciever.get(&event.token())
       .expect("Did not find a heartbeat receiver");
-    //let mut message_queue: Vec<TimerMessageType> = vec![];
     while let Ok(timer_message) = reciever.try_recv() {
-      match timer_message {
-        TimerMessageType::writer_heartbeat => { self.writers.iter_mut()
-          .find(|p| p.1.get_timed_event_entity_token() == event.token())
-          .map( |(_guid, writer)| writer.handle_heartbeat_tick(false));
-          // false = This is automatic heartbeat by timer, not manual by application call.  
-        }
-          
-        TimerMessageType::writer_cache_cleaning => { self.writers.iter_mut()
-          .find(|p| p.1.get_timed_event_entity_token() == event.token())
-          .map( |(_guid, writer)| writer.handle_cache_cleaning()); 
-        }
-
-        other_msg => error!("handle_writer_timed_event - unexpected message {:?}", other_msg)
-      }
+      self.writers.iter_mut()
+          .find(|(_guid,writer)| writer.get_timed_event_entity_token() == event.token())
+          .map( |(_guid, writer)| writer.handle_timed_event(timer_message));
     }
   }
 
   pub fn handle_reader_timed_event(&mut self, event: &Event) {
-    let reciever = self
-      .reader_timed_event_receiver
-      .get(&event.token())
+    let reciever = self.reader_timed_event_receiver.get(&event.token())
       .expect("Did not found reader timed event reciever!");
-    // TODO: Rewrite this function to match the structure in handle_writer_timed_event above.
     // TODO: Why do we have separate message channels for reader and writer, if they have contain the same data type?
-    let mut message_queue: Vec<TimerMessageType> = vec![];
-    while let Ok(res) = reciever.try_recv() {
-      message_queue.push(res);
-    }
 
-    for timer_message in message_queue {
-      match timer_message {
-        TimerMessageType::reader_deadline_missed_check => {
-          let maybe_found_reader_with_stuff_to_do = self
-            .message_receiver
-            .available_readers
-            .iter_mut()
-            .find(|reader| reader.get_entity_token() == event.token());
-
-          match maybe_found_reader_with_stuff_to_do {
-            Some(r) => {
-              r.handle_requested_deadline_event();
-            }
-            None => {
-              error!("Reader was not found with entity token");
-            }
-          }
+    while let Ok(timer_message) = reciever.try_recv() {
+      match self.message_receiver.available_readers.iter_mut()
+          .find(|reader| reader.get_entity_token() == event.token()) {
+        Some(reader) => {
+          reader.handle_timed_event(timer_message);
         }
-        _ => {
-          todo!();
-        }
+        None => error!("Reader was not found with entity token {:?}",  event.token()),
       }
     }
   }
