@@ -738,7 +738,7 @@ impl DPEventWrapper {
           *r = proxy
         }
       }
-      None => writer.readers.push(proxy),
+      None => writer.readers.push(proxy), // TODO: This should be a method call
     };
   }
 

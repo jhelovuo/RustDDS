@@ -120,7 +120,7 @@ pub(crate) struct Writer {
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
   ///RTPS Reader
-  pub readers: Vec<RtpsReaderProxy>,
+  pub readers: Vec<RtpsReaderProxy>, // TODO: Convert to BTreeMap for faster finds.
   message: Option<Message>,
   udp_sender: UDPSender,
   // This writer can read/write to only one of this DDSCache topic caches identified with my_topic_name
@@ -799,7 +799,7 @@ impl Writer {
     }
   }
 
-  pub fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
+  fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
     if self.readers.iter().any(|x| {
       x.remote_group_entity_id == reader_proxy.remote_group_entity_id
         && x.remote_reader_guid == reader_proxy.remote_reader_guid
@@ -811,7 +811,7 @@ impl Writer {
     &self.readers.push(reader_proxy);
   }
 
-  pub fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
+  fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
     let pos = self.readers.iter().position(|x| x.remote_reader_guid == guid );
     pos.map( |p| self.readers.remove(p) )
   }

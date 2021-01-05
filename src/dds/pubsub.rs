@@ -17,6 +17,7 @@ use crate::{
 use crate::log_and_err_precondition_not_met;
 use crate::dds::{
   values::result::*,
+  data_types::EntityKind,
   participant::*,
   topic::*,
   qos::*,
@@ -33,12 +34,13 @@ use crate::dds::{
 use crate::{
   discovery::{
     discovery_db::DiscoveryDB,
-    data_types::topic_data::{DiscoveredWriterData},
+    data_types::topic_data::DiscoveredWriterData,
   },
   structure::topic_kind::TopicKind,
 };
 
 use rand::Rng;
+use crate::log_and_err_internal;
 
 use super::{
   with_key::datareader::ReaderCommand,
@@ -138,7 +140,7 @@ impl Publisher {
   ///
   /// * `entity_id` - Custom entity id if necessary for the user to define it
   /// * `topic` - Reference to DDS Topic this writer is created to
-  /// * `qos` - Not currently in use
+  /// * `qos` - QoS policies for this DataWriter
   ///
   /// # Examples
   ///
@@ -333,23 +335,18 @@ impl InnerPublisher {
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(100);
     let (message_status_sender, message_status_receiver) = mio_channel::sync_channel(100);
 
-    let writer_qos = match optional_qos {
-      Some(q) => q.clone(),
-      // DDS Spec 2.2.2.4.1.5 create_datawriter:
-      // If no QoS is specified, we should take the Publisher default
-      // QoS, modify it to match any QoS settings (that are set) in the
-      // Topic QoS and use that.
-      None => self.default_datawriter_qos.modify_by(&topic.get_qos()),
-    };
+   
+    // DDS Spec 2.2.2.4.1.5 create_datawriter:
+    // If no QoS is specified, we should take the Publisher default
+    // QoS, modify it to match any QoS settings (that are set) in the
+    // Topic QoS and use that.
+    let writer_qos = optional_qos.unwrap_or_else(
+        || self.default_datawriter_qos.modify_by(&topic.get_qos()) );
 
-    let entity_id = unwrap_or_random_EntityId(entity_id_opt, 0x02);
-    let dp = match self.get_participant() {
-      Some(dp) => dp,
-      None => {
-        error!("Cannot create new DataWriter, DomainParticipant doesn't exist.");
-        return Err(Error::LockPoisoned);
-      }
-    };
+    let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
+    let dp = self.get_participant()
+              .ok_or("upgrade fail")
+              .or_else (|e| log_and_err_internal!("Where is my DomainParticipant? {}",e))?;
 
     let guid = GUID::new_with_prefix_and_id(dp.get_guid().guidPrefix, entity_id);
     let new_writer = Writer::new(
@@ -361,10 +358,8 @@ impl InnerPublisher {
       message_status_sender,
     );
 
-    self
-      .add_writer_sender
-      .send(new_writer)
-      .expect("Adding new writer failed");
+    self.add_writer_sender.send(new_writer)
+      .or_else(|e| log_and_err_internal!("Adding new writer failed: {}",e))?;
 
     let matching_data_writer = WithKeyDataWriter::<D, SA>::new(
           outer.clone(),
@@ -376,15 +371,11 @@ impl InnerPublisher {
           message_status_receiver,
         )?;
 
-    match self.discovery_db.write() {
-      Ok(mut db) => {
-        let dwd = DiscoveredWriterData::new(&matching_data_writer, &topic, &dp);
-
-        db.update_local_topic_writer(dwd);
-        db.update_topic_data_p(&topic);
-      }
-      _ => return Err(Error::LockPoisoned),
-    };
+    // notify Discovery DB
+    let mut db = self.discovery_db.write()?;
+    let dwd = DiscoveredWriterData::new(&matching_data_writer, &topic, &dp);
+    db.update_local_topic_writer(dwd);
+    db.update_topic_data_p(&topic);
 
     Ok(matching_data_writer)
   }
@@ -400,7 +391,7 @@ impl InnerPublisher {
     D: Serialize,
     SA: SerializerAdapter<D>,
   {
-    let entity_id = unwrap_or_random_EntityId(entity_id_opt, 0x03);
+    let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
     let d =
       self.create_datawriter::<NoKeyWrapper<D>, SAWrapper<SA>>(outer, Some(entity_id), topic, qos)?;
     Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
@@ -697,11 +688,9 @@ impl InnerSubscriber {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
 
-    let qos = match optional_qos {
-      Some(q) => q,
-      None => topic.get_qos().clone(),
-    };
-    let entity_id = unwrap_or_random_EntityId(entity_id_opt, 0x07);
+    let qos = optional_qos.unwrap_or_else(|| topic.get_qos().clone());
+
+    let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
 
     let reader_id = entity_id;
     let datareader_id = entity_id;
@@ -733,40 +722,31 @@ impl InnerSubscriber {
       self.discovery_command.clone(),
       status_receiver,
       reader_command_sender,
-    );
+    )?;
 
-    let matching_datareader = match matching_datareader {
-      Ok(dr) => dr,
-      e => return e,
-    };
-
-    match self.discovery_db.write() {
-      Ok(mut db) => {
-        db.update_local_topic_reader(&dp, &topic, &new_reader);
-        db.update_topic_data_p(&topic);
-      }
-      _ => return Err(Error::OutOfResources),
-    };
+    {
+      let mut db = self.discovery_db.write()
+                .or_else(|e| log_and_err_internal!("Cannot lock discovery_db. {}",e))?;
+      db.update_local_topic_reader(&dp, &topic, &new_reader);
+      db.update_topic_data_p(&topic);
+    }
 
     // Create new topic to DDScache if one isn't present
     match dp.get_dds_cache().write() {
-      Ok(mut rwlock) => rwlock.add_new_topic(
-        &topic.get_name().to_string(),
-        topic.kind(),
-        topic.get_type(),
-      ),
-      Err(e) => panic!(
-        "The DDSCache of domain participant {:?} is poisoned. Error: {}",
-        dp.get_guid(),
-        e
-      ),
-    };
+      Ok(mut dds_cache) => {
+        dds_cache.add_new_topic(
+            &topic.get_name().to_string(),
+            topic.kind(),
+            topic.get_type(),
+          );                   
+      }
+      Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}",e),
+    }
 
     // Return the DataReader Reader pairs to where they are used
-    self
-      .sender_add_reader
-      .try_send(new_reader)
-      .expect("Could not send new Reader");
+    self.sender_add_reader.try_send(new_reader)
+        .or_else( |e| log_and_err_internal!("Cannot add DataReader. Error: {}",e))?;
+
     Ok(matching_datareader)
   }
 
@@ -803,7 +783,7 @@ impl InnerSubscriber {
       return Error::precondition_not_met("Topic is WITH_KEY, but attempted to create NO_KEY Datareader")
     }
 
-    let entity_id = unwrap_or_random_EntityId(entity_id_opt, 0x04);
+    let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
 
     let d = self.create_datareader_internal::<NoKeyWrapper<D>, SAWrapper<SA>>(
       outer,
@@ -820,11 +800,11 @@ impl InnerSubscriber {
   }
 }
 
-fn unwrap_or_random_EntityId(entity_id_opt: Option<EntityId>, customEntityKind: u8) -> EntityId {
+fn unwrap_or_random_EntityId(entity_id_opt: Option<EntityId>, entityKind: EntityKind) -> EntityId {
     entity_id_opt // use the given EntityId or generate new random one
       .unwrap_or_else( || {
             let mut rng = rand::thread_rng();
-            EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], customEntityKind)
+            EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], entityKind)
           } )
 }
 
