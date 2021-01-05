@@ -147,7 +147,7 @@ where
       Some(lv) => match lv {
         Liveliness::Automatic { lease_duration: _ } => (),
         Liveliness::ManualByParticipant { lease_duration: _ } => {
-          match discovery_command.send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS) {
+          match discovery_command.send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS) {
             Ok(_) => (),
             Err(e) => {
               error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
@@ -219,7 +219,7 @@ where
         Liveliness::ManualByParticipant { lease_duration: _ } => {
           match self
             .discovery_command
-            .send(DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS)
+            .send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
           {
             Ok(_) => (),
             Err(e) => {

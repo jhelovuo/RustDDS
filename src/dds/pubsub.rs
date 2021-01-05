@@ -9,6 +9,8 @@ use std::{
 
 use serde::{Serialize, de::DeserializeOwned};
 
+use byteorder::{LittleEndian};
+
 use crate::{
   discovery::discovery::DiscoveryCommand,
   structure::{guid::GUID, entity::RTPSEntity, guid::EntityId},
@@ -37,6 +39,8 @@ use crate::{
     data_types::topic_data::DiscoveredWriterData,
   },
   structure::topic_kind::TopicKind,
+  serialization::cdr_serializer::{CDRSerializerAdapter},
+  serialization::cdr_deserializer::{CDRDeserializerAdapter},
 };
 
 use rand::Rng;
@@ -134,6 +138,17 @@ impl Publisher {
     self.inner.create_datawriter(self, entity_id, topic, qos)
   }
 
+  /// Shorthand for crate_datawriter with Commaon Data Representation Little Endian
+  pub fn create_datawriter_CDR<D>(&self, entity_id: Option<EntityId>, 
+      topic: Topic, qos: Option<QosPolicies>) 
+    -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D,LittleEndian>>>
+  where
+    D: Keyed + Serialize,
+    <D as Keyed>::K: Key,
+  {
+    self.create_datawriter::<D,CDRSerializerAdapter<D,LittleEndian>>(entity_id,topic,qos)
+  }
+
   /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
   ///
   /// # Arguments
@@ -175,6 +190,16 @@ impl Publisher {
   {
     self.inner.create_datawriter_no_key(self, entity_id,topic,qos)
   }
+
+  pub fn create_datawriter_no_key_CDR<D>(&self, entity_id: Option<EntityId>, 
+      topic: Topic, qos: Option<QosPolicies>) 
+    -> Result<NoKeyDataWriter<D,CDRSerializerAdapter<D,LittleEndian> >>
+  where
+    D: Serialize,
+  {
+    self.create_datawriter_no_key::<D,CDRSerializerAdapter<D,LittleEndian>>(entity_id,topic,qos)
+  }
+
   // delete_datawriter should not be needed. The DataWriter object itself should be deleted to accomplish this.
 
   // lookup datawriter: maybe not necessary? App should remember datawriters it has created.
@@ -556,6 +581,19 @@ impl Subscriber {
       .create_datareader(self,topic,entity_id,qos)
   }
 
+  pub fn create_datareader_CDR<D: 'static>(
+    &self,
+    topic: Topic,
+    entity_id: Option<EntityId>,
+    qos: Option<QosPolicies>,
+  ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  where
+    D: DeserializeOwned + Keyed,
+    <D as Keyed>::K: Key,
+  {
+    self.create_datareader::<D,CDRDeserializerAdapter<D>>(topic,entity_id,qos)
+  }
+
   /// Create DDS DataReader for non keyed Topics
   ///
   /// # Arguments
@@ -586,8 +624,7 @@ impl Subscriber {
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
   /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None);
   /// ```
-  pub fn create_datareader_no_key<D: 'static, SA>(
-    &self,
+  pub fn create_datareader_no_key<D: 'static, SA>(&self,
     topic: Topic,
     entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
@@ -599,6 +636,18 @@ impl Subscriber {
     self.inner
       .create_datareader_no_key(self,topic,entity_id,qos)
   }
+
+  pub fn create_datareader_no_key_CDR<D: 'static>(&self,
+    topic: Topic,
+    entity_id: Option<EntityId>,
+    qos: Option<QosPolicies>,
+  ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  where
+    D: DeserializeOwned,
+  {
+    self.create_datareader_no_key::<D,CDRDeserializerAdapter<D>>(topic,entity_id,qos)
+  }
+
 
   // Retrieves a previously created DataReader belonging to the Subscriber.
   // TODO: Is this even possible. Whould probably need to return reference and store references on creation

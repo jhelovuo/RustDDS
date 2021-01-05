@@ -55,7 +55,7 @@ pub enum DiscoveryCommand {
   STOP_DISCOVERY,
   REMOVE_LOCAL_WRITER { guid: GUID },
   REMOVE_LOCAL_READER { guid: GUID },
-  REFRESH_LAST_MANUAL_LIVELINESS,
+  MANUAL_ASSERT_LIVELINESS,
   ASSERT_TOPIC_LIVELINESS { writer_guid: GUID , manual_assertion: bool, },
 }
 
@@ -215,7 +215,7 @@ impl Discovery {
     ) ,"Unable to create participant cleanup timer. {:?}");
 
     let dcps_participant_writer = try_construct!( discovery_publisher
-      .create_datawriter::<SPDPDiscoveredParticipantData, CDRSerializerAdapter<SPDPDiscoveredParticipantData,LittleEndian> >(
+      .create_datawriter_CDR::<SPDPDiscoveredParticipantData>(
         Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
         dcps_participant_topic,
         None,
@@ -256,7 +256,7 @@ impl Discovery {
     ) ,"Unable to register subscription reader. {:?}");
 
     let mut dcps_subscription_writer = try_construct!( discovery_publisher
-      .create_datawriter::<DiscoveredReaderData,CDRSerializerAdapter<DiscoveredReaderData,LittleEndian>>(
+      .create_datawriter_CDR::<DiscoveredReaderData>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
         dcps_subscription_topic,
         None,
@@ -295,7 +295,7 @@ impl Discovery {
     ) ,"Unable to regiser writers info sender. {:?}");
 
     let mut dcps_publication_writer = try_construct!( discovery_publisher
-      .create_datawriter::<DiscoveredWriterData, CDRSerializerAdapter<DiscoveredWriterData,LittleEndian>>(
+      .create_datawriter_CDR::<DiscoveredWriterData>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
         dcps_publication_topic,
         None,
@@ -344,7 +344,7 @@ impl Discovery {
     ) ,"Unable to register topic reader. {:?}");
 
     let mut dcps_writer = try_construct!( discovery_publisher
-      .create_datawriter::<DiscoveredTopicData, CDRSerializerAdapter<DiscoveredTopicData,LittleEndian>>(
+      .create_datawriter_CDR::<DiscoveredTopicData>(
         Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
         dcps_topic,
         None,
@@ -368,7 +368,7 @@ impl Discovery {
     ) ,"Unable to create DCPSParticipantMessage topic. {:?}");
 
     let mut dcps_participant_message_reader = try_construct!( discovery_subscriber
-      .create_datareader::<ParticipantMessageData, CDRDeserializerAdapter<ParticipantMessageData>>(
+      .create_datareader_CDR::<ParticipantMessageData>(
         participant_message_data_topic.clone(),
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
         None,
@@ -382,7 +382,7 @@ impl Discovery {
     ) ,"Unable to register DCPSParticipantMessage reader. {:?}");
 
     let mut dcps_participant_message_writer = try_construct!( discovery_publisher
-      .create_datawriter::<ParticipantMessageData, CDRSerializerAdapter<ParticipantMessageData, LittleEndian>>(
+      .create_datawriter_CDR::<ParticipantMessageData>(
         Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER),
         participant_message_data_topic,
         None,
@@ -476,7 +476,7 @@ impl Discovery {
                   Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
                 };
               }
-              DiscoveryCommand::REFRESH_LAST_MANUAL_LIVELINESS => {
+              DiscoveryCommand::MANUAL_ASSERT_LIVELINESS => {
                 liveliness_state.last_manual_participant_update = Timestamp::now();
               }
               DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid  , manual_assertion } => {
@@ -721,9 +721,7 @@ impl Discovery {
 
   pub fn write_participant_message(
     &self,
-    writer: &mut DataWriter<
-      ParticipantMessageData,
-      CDRSerializerAdapter<ParticipantMessageData, LittleEndian>,
+    writer: &mut DataWriter< ParticipantMessageData, CDRSerializerAdapter<ParticipantMessageData, LittleEndian>,
     >,
     liveliness_state: &mut LivelinessState,
   ) {

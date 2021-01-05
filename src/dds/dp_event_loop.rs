@@ -180,31 +180,23 @@ impl DPEventLoop {
   }
 
   pub fn event_loop(self) {
+    let mut events = Events::with_capacity(8);  // too small capacity just delays events to next poll
     let mut acknack_timer = mio_extras::timer::Timer::default();
     acknack_timer.set_timeout(Duration::from_secs(5), ());
-    self
-      .poll
-      .register(
-        &acknack_timer,
-        DPEV_ACKNACK_TIMER_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
+    self.poll
+      .register(&acknack_timer, DPEV_ACKNACK_TIMER_TOKEN, Ready::readable(), PollOpt::edge() )
       .unwrap();
 
     // TODO: Use the dp to access stuff we need, e.g. historycache
     let mut ev_wrapper = self;
     loop {
-      let mut events = Events::with_capacity(1024);
-      ev_wrapper
-        .poll
-        .poll(&mut events, None)
+      ev_wrapper.poll.poll(&mut events, None)
         .expect("Failed in waiting of poll.");
 
-      for event in events.into_iter() {
+      for event in events.iter() {
         if event.token() == STOP_POLL_TOKEN {
           info!("Stopping ev_wrapper");
-          return;
+          return
         } else if DPEventLoop::is_udp_traffic(&event) {
           ev_wrapper.handle_udp_traffic(&event);
         } else if DPEventLoop::is_reader_action(&event) {
@@ -379,15 +371,13 @@ impl DPEventLoop {
           let time_handler: TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
           new_writer.add_timed_event_handler(time_handler);
 
-          self
-            .poll
-            .register(
+          self.poll.register(
               &timed_action_receiver,
               new_writer.get_timed_event_entity_token(),
               Ready::readable(),
               PollOpt::edge(),
             )
-            .expect("Writer heartbeat timer channel registeration failed!!");
+            .expect("Writer heartbeat timer channel registration failed!!");
           self.writer_timed_event_reciever.insert(
             new_writer.get_timed_event_entity_token(),
             timed_action_receiver,
