@@ -37,7 +37,7 @@ pub struct DomainInfo {
   pub participant_id: u16,
 }
 
-pub struct DPEventWrapper {
+pub struct DPEventLoop {
   domain_info: DomainInfo,
   poll: Poll,
   ddscache: Arc<RwLock<DDSCache>>,
@@ -66,7 +66,7 @@ pub struct DPEventWrapper {
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
 }
 
-impl DPEventWrapper {
+impl DPEventLoop {
   // This pub(crate) , because it should be constructed only by DomainParticipant.
   pub(crate) fn new(
     domain_info: DomainInfo,
@@ -80,7 +80,7 @@ impl DPEventWrapper {
     remove_writer_receiver: TokenReceiverPair<GUID>,
     stop_poll_receiver: mio_channel::Receiver<()>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-  ) -> DPEventWrapper {
+  ) -> DPEventLoop {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_reciever) =
       mio_channel::sync_channel::<(GuidPrefix, AckNack)>(100);
@@ -158,7 +158,7 @@ impl DPEventWrapper {
       )
       .expect("Failed to register reader update notification.");
 
-    DPEventWrapper {
+    DPEventLoop {
       domain_info,
       poll,
       ddscache,
@@ -205,21 +205,21 @@ impl DPEventWrapper {
         if event.token() == STOP_POLL_TOKEN {
           info!("Stopping ev_wrapper");
           return;
-        } else if DPEventWrapper::is_udp_traffic(&event) {
+        } else if DPEventLoop::is_udp_traffic(&event) {
           ev_wrapper.handle_udp_traffic(&event);
-        } else if DPEventWrapper::is_reader_action(&event) {
+        } else if DPEventLoop::is_reader_action(&event) {
           ev_wrapper.handle_reader_action(&event);
         } else if ev_wrapper.is_reader_timed_event_action(&event) {
           ev_wrapper.handle_reader_timed_event(&event);
         } else if ev_wrapper.is_reader_command_action(&event) {
           ev_wrapper.handle_reader_command_event(&event);
-        } else if DPEventWrapper::is_writer_action(&event) {
+        } else if DPEventLoop::is_writer_action(&event) {
           ev_wrapper.handle_writer_action(&event);
         } else if ev_wrapper.is_writer_timed_event_action(&event) {
           ev_wrapper.handle_writer_timed_event(&event);
-        } else if DPEventWrapper::is_writer_acknack_action(&event) {
+        } else if DPEventLoop::is_writer_acknack_action(&event) {
           ev_wrapper.handle_writer_acknack_action(&event);
-        } else if DPEventWrapper::is_discovery_update_notification(&event) {
+        } else if DPEventLoop::is_discovery_update_notification(&event) {
           while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
             match dnt {
               DiscoveryNotificationType::ReadersInfoUpdated => ev_wrapper.update_readers(),
@@ -531,7 +531,7 @@ impl DPEventWrapper {
       Ok(db) => {
         for (_writer_guid, writer) in self.writers.iter_mut() {
           if writer.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
-            DPEventWrapper::update_spdp_participant_readers(
+            DPEventLoop::update_spdp_participant_readers(
               writer,
               &db,
               self.domain_info.domain_id,
@@ -541,7 +541,7 @@ impl DPEventWrapper {
               writer.notify_new_data_to_all_readers()
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
-            DPEventWrapper::update_pubsub_readers(
+            DPEventLoop::update_pubsub_readers(
               writer,
               &db,
               EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
@@ -551,7 +551,7 @@ impl DPEventWrapper {
               writer.notify_new_data_to_all_readers()
             }
           } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER {
-            DPEventWrapper::update_pubsub_readers(
+            DPEventLoop::update_pubsub_readers(
               writer,
               &db,
               EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
@@ -565,7 +565,7 @@ impl DPEventWrapper {
           } else if writer.get_entity_id()
             == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
           {
-            DPEventWrapper::update_pubsub_readers(
+            DPEventLoop::update_pubsub_readers(
               writer,
               &db,
               EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
@@ -647,7 +647,7 @@ impl DPEventWrapper {
 
     // updating all data
     for reader in all_readers.map(|(_, p)| p).into_iter() {
-      DPEventWrapper::add_reader_to_writer(writer, reader);
+      DPEventLoop::add_reader_to_writer(writer, reader);
     }
 
     // adding multicast reader
@@ -660,7 +660,7 @@ impl DPEventWrapper {
     multicast_reader.multicast_locator_list =
       get_local_multicast_locators(get_spdp_well_known_multicast_port(domain_id));
 
-    DPEventWrapper::add_reader_to_writer(writer, multicast_reader);
+    DPEventLoop::add_reader_to_writer(writer, multicast_reader);
     debug!("SPDP Participant readers updated.");
   }
 
@@ -687,7 +687,7 @@ impl DPEventWrapper {
 
     // updating all data
     for reader in all_readers.map(|(_, p)| p).into_iter() {
-      DPEventWrapper::add_reader_to_writer(writer, reader);
+      DPEventLoop::add_reader_to_writer(writer, reader);
     }
   }
 
@@ -774,7 +774,7 @@ impl DPEventWrapper {
           }
         }
         EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
-          DPEventWrapper::update_pubsub_writers(
+          DPEventLoop::update_pubsub_writers(
             reader,
             &db,
             EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
@@ -782,7 +782,7 @@ impl DPEventWrapper {
           );
         }
         EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER => {
-          DPEventWrapper::update_pubsub_writers(
+          DPEventLoop::update_pubsub_writers(
             reader,
             &db,
             EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
@@ -790,7 +790,7 @@ impl DPEventWrapper {
           );
         }
         EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
-          DPEventWrapper::update_pubsub_writers(
+          DPEventLoop::update_pubsub_writers(
             reader,
             &db,
             EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
@@ -896,7 +896,7 @@ mod tests {
       participant_id: 0,
     };
 
-    let dp_event_wrapper = DPEventWrapper::new(
+    let dp_event_loop = DPEventLoop::new(
       domain_info,
       HashMap::new(),
       ddshc,
@@ -923,7 +923,7 @@ mod tests {
     );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
-    dp_event_wrapper
+    dp_event_loop
       .poll
       .register(
         &receiver_stop,
@@ -933,7 +933,7 @@ mod tests {
       )
       .expect("Failed to register receivers.");
 
-    let child = thread::spawn(move || DPEventWrapper::event_loop(dp_event_wrapper));
+    let child = thread::spawn(move || DPEventLoop::event_loop(dp_event_loop));
 
     let n = 3;
 
@@ -1022,7 +1022,7 @@ mod tests {
       participant_id: 0,
     };
 
-    let dp_event_wrapper = DPEventWrapper::new(
+    let dp_event_loop = DPEventLoop::new(
       domain_info,
       HashMap::new(),
       ddshc,
@@ -1049,7 +1049,7 @@ mod tests {
     );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
-    dp_event_wrapper
+    dp_event_loop
       .poll
       .register(
         &receiver_stop,
@@ -1059,7 +1059,7 @@ mod tests {
       )
       .expect("Failed to register receivers.");
 
-    let child = thread::spawn(move || DPEventWrapper::event_loop(dp_event_wrapper));
+    let child = thread::spawn(move || DPEventLoop::event_loop(dp_event_loop));
 
     //TODO IF THIS IS SET TO 1 TEST SUCCEEDS
     let n = 1;

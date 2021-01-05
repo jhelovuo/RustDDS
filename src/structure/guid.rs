@@ -357,7 +357,7 @@ mod tests {
     let entity5 = EntityId::from_usize(e5.as_usize()).unwrap();
     assert_eq!(e5, entity5);
 
-    let e6 = EntityId::createCustomEntityID([12u8, 255u8, 0u8], 254u8);
+    let e6 = EntityId::createCustomEntityID([12u8, 255u8, 0u8], EntityKind(254u8) );
     let entity6 = EntityId::from_usize(e6.as_usize()).unwrap();
     assert_eq!(e6, entity6);
   }

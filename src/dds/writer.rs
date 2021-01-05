@@ -251,7 +251,7 @@ impl Writer {
 
   // TODO:
   // please explain why this is needed and why does it make sense.
-  // Used by dp_event_wrapper.
+  // Used by dp_event_loop.
   pub fn notify_new_data_to_all_readers(&mut self) {
     // removed, because it causes ghost sequence numbers. 
     // for reader_proxy in self.readers.iter_mut() {
@@ -906,10 +906,10 @@ mod tests {
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
 
-    let publisher = domain_participant
+    let publisher = domain_participant.unwrap()
       .create_publisher(&qos)
       .expect("Failed to create publisher");
-    let topic = domain_participant
+    let topic = domain_participant.unwrap()
       .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =

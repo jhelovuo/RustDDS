@@ -109,7 +109,7 @@
 
 mod datasample_cache;
 pub(crate) mod ddsdata;
-mod dp_event_wrapper;
+mod dp_event_loop;
 mod message_receiver;
 mod sampleinfo;
 

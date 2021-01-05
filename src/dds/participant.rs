@@ -20,7 +20,7 @@ use crate::{
 };
 
 use crate::dds::{
-  dp_event_wrapper::DPEventWrapper, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*,
+  dp_event_loop::DPEventLoop, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*,
   qos::*, values::result::*,
 };
 
@@ -33,7 +33,7 @@ use crate::{
   },
 };
 
-use super::dp_event_wrapper::DomainInfo;
+use super::dp_event_loop::DomainInfo;
 
 /// DDS DomainParticipant generally only one per domain per machine should be active
 #[derive(Clone)]
@@ -217,11 +217,11 @@ impl DomainParticipant {
   }
 
   pub(crate) fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    return self.dpi.lock().unwrap().get_dds_cache();
+    self.dpi.lock().unwrap().get_dds_cache()
   }
 
   pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
-    return self.dpi.lock().unwrap().dpi.lock().unwrap().discovery_db.clone();
+    self.dpi.lock().unwrap().dpi.lock().unwrap().discovery_db.clone()
   }
 }
 
@@ -437,7 +437,7 @@ pub(crate) struct DomainParticipant_Inner {
   sender_add_datareader_vec: Vec<mio_channel::SyncSender<()>>,
   sender_remove_datareader_vec: Vec<mio_channel::SyncSender<GUID>>,
 
-  // dp_event_wrapper control
+  // dp_event_loop control
   stop_poll_sender: mio_channel::Sender<()>,
   ev_loop_handle: Option<JoinHandle<()>>,
 
@@ -570,7 +570,7 @@ impl DomainParticipant_Inner {
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
-    let ev_wrapper = DPEventWrapper::new(
+    let ev_wrapper = DPEventLoop::new(
       domain_info,
       listeners,
       a_r_cache.clone(),
@@ -622,7 +622,7 @@ impl DomainParticipant_Inner {
   }
 
   pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    return self.dds_cache.clone();
+    self.dds_cache.clone()
   }
 
   pub fn add_reader(&self, reader: Reader) {
