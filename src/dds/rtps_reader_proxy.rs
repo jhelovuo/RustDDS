@@ -166,7 +166,7 @@ impl RtpsReaderProxy {
     ! self.unsent_changes.is_empty()
   }
 
-  pub fn handle_ack_nack(&mut self, acknack: &AckNack) {
+  pub fn handle_ack_nack(&mut self, acknack: &AckNack, last_available:SequenceNumber) {
     self.all_acked_before = acknack.reader_sn_state.base();
     // clean up unsent_changes: 
     // The handy split_off function "Returns everything after the given key, including the key."
@@ -175,6 +175,13 @@ impl RtpsReaderProxy {
     // Insert the requested changes.
     for nack_sn in acknack.reader_sn_state.iter() {
       self.unsent_changes.insert(nack_sn);
+    }
+    // sanity check
+    if let Some(&high) = self.unsent_changes.iter().next_back()  {
+      if high > last_available { 
+        warn!("ReaderProxy {:?} asks for {:?} but I have only up to {:?}. ACKNACK = {:?}", 
+          self.remote_reader_guid, self.unsent_changes, last_available, acknack);
+      }
     }
   }
 
@@ -190,10 +197,13 @@ impl RtpsReaderProxy {
   //   self.unsent_changes.remove(&sequence_number);
   // }
 
-  pub fn sequence_is_acked(&self, sequence_number: SequenceNumber) -> bool {
-    sequence_number < self.all_acked_before
-  }
+  // pub fn sequence_is_acked(&self, sequence_number: SequenceNumber) -> bool {
+  //   sequence_number < self.all_acked_before
+  // }
 
+  pub fn acked_up_to_before(&self) -> SequenceNumber {
+    self.all_acked_before
+  }
 
   pub fn content_is_equal(&self, other: &RtpsReaderProxy) -> bool {
     self.remote_reader_guid == other.remote_reader_guid

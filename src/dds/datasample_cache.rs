@@ -21,13 +21,6 @@ use std::ops::Bound::*;
 // between e.g. RTPS Reader and the application-facing DataReader. It keeps track of what each
 // DataReader has "read" or "taken".
 
-/*
-pub struct DataSampleCache<D: Keyed> {
-  qos: QosPolicies,
-  pub datasamples: BTreeMap<D::K, Vec<DataSample<D>>>,
-  distinct_keys: HashSet<D::K>,
-}
-*/
 
 // helper function
 // somewhat like result.as_ref() , but one-sided only
@@ -40,7 +33,7 @@ pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(
   }
 }
 
-// Data samples are here ordered and indexed by Timetamp, which must be a unque key.
+// Data samples are here ordered and indexed by Timestamp, which must be a unique key.
 // RTPS Timestamp has sub-nanosecond resolution, so it could be unique, provided that the source
 // clock ticks frequently enough.
 pub struct DataSampleCache<D: Keyed> {

@@ -46,6 +46,18 @@ impl From<i64> for SequenceNumber {
   }
 }
 
+impl From<i32> for SequenceNumber {
+  fn from(value: i32) -> Self {
+    SequenceNumber(value as i64)
+  }
+}
+
+impl From<usize> for SequenceNumber {
+  fn from(value: usize) -> Self {
+    SequenceNumber(value as i64)
+  }
+}
+
 impl From<SequenceNumber> for i64 {
   fn from(sequence_number: SequenceNumber) -> Self {
     sequence_number.0

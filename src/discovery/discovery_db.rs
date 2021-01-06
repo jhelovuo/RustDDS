@@ -577,9 +577,7 @@ impl DiscoveryDB {
   }
 
   pub fn get_all_topics<'a>(&'a self) -> impl Iterator<Item = &'a DiscoveredTopicData> {
-    self
-      .topics
-      .iter()
+    self.topics.iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
       .map(|(_, v)| v)
   }

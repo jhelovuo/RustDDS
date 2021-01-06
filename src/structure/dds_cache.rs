@@ -1,9 +1,13 @@
+use log::{error};
+
 use std::{
   collections::{BTreeMap, HashMap, btree_map::Range},
+  cmp::max,
 };
+
 use crate::dds::{
   typedesc::TypeDesc,
-  qos::{QosPolicies, QosPolicyBuilder},
+  qos::{QosPolicies, QosPolicyBuilder, policy::ResourceLimits },
 };
 use crate::structure::time::Timestamp;
 
@@ -13,11 +17,11 @@ use super::{
 };
 use std::ops::Bound::{Included, Excluded};
 
-///DDSCache contains all cacheCahanges that are produced by participant or recieved by participant.
-///Each topic that is been published or been subscribed are contained in separate TopicCaches.
-///One TopicCache cotains only DDSCacheChanges of one serialized IDL datatype.
-///-> all cachechanges in same TopicCache can be serialized/deserialized same way.
-///Topic/TopicCache is identified by its name, which must be unique in the whole Domain.
+/// DDSCache contains all cacheCahanges that are produced by participant or recieved by participant.
+/// Each topic that is been published or been subscribed are contained in separate TopicCaches.
+/// One TopicCache cotains only DDSCacheChanges of one serialized IDL datatype.
+/// -> all cachechanges in same TopicCache can be serialized/deserialized same way.
+/// Topic/TopicCache is identified by its name, which must be unique in the whole Domain.
 #[derive(Debug)]
 pub struct DDSCache {
   topic_caches: HashMap<String, TopicCache>,
@@ -37,13 +41,13 @@ impl DDSCache {
     topic_data_type: TypeDesc,
   ) -> bool {
     if self.topic_caches.contains_key(topic_name) {
-      return false;
+      false
     } else {
       self.topic_caches.insert(
         topic_name.to_string(),
         TopicCache::new(topic_kind, topic_data_type),
       );
-      return true;
+      true
     }
   }
 
@@ -55,29 +59,24 @@ impl DDSCache {
 
   pub fn get_topic_qos_mut(&mut self, topic_name: &String) -> Option<&mut QosPolicies> {
     if self.topic_caches.contains_key(topic_name) {
-      return Some(&mut self.topic_caches.get_mut(topic_name).unwrap().topic_qos);
+      Some(&mut self.topic_caches.get_mut(topic_name).unwrap().topic_qos)
     } else {
-      return None;
+      None
     }
   }
 
   pub fn get_topic_qos(&self, topic_name: &String) -> Option<&QosPolicies> {
     if self.topic_caches.contains_key(topic_name) {
-      return Some(&self.topic_caches.get(topic_name).unwrap().topic_qos);
+      Some(&self.topic_caches.get(topic_name).unwrap().topic_qos)
     } else {
-      return None;
+      None
     }
   }
 
-  pub fn from_topic_get_change(
-    &self,
-    topic_name: &String,
-    instant: &Timestamp,
-  ) -> Option<&CacheChange> {
-    match self.topic_caches.get(topic_name) {
-      Some(tc) => tc.get_change(instant),
-      None => None,
-    }
+  pub fn from_topic_get_change(&self, topic_name: &String, instant: &Timestamp) 
+    -> Option<&CacheChange> 
+  {
+    self.topic_caches.get(topic_name).map( |tc| tc.get_change(instant) ).flatten()
   }
 
   /// Sets cacheChange to not alive disposed. So its waiting to be permanently removed.
@@ -93,7 +92,7 @@ impl DDSCache {
         .unwrap()
         .set_change_to_not_alive_disposed(instant);
     } else {
-      panic!("Topic: '{:?}' is not in DDSCache", topic_name);
+      error!("Topic: '{:?}' is not in DDSCache", topic_name);
     }
   }
 
@@ -103,16 +102,26 @@ impl DDSCache {
     topic_name: &String,
     instant: &Timestamp,
   ) -> Option<CacheChange> {
-    if self.topic_caches.contains_key(topic_name) {
-      return self
-        .topic_caches
-        .get_mut(topic_name)
-        .unwrap()
-        .remove_change(instant);
-    } else {
-      panic!("Topic: '{:?}' is not in DDSCache", topic_name);
+    match self.topic_caches.get_mut(topic_name) {
+      Some(tc) => tc.remove_change(instant),
+      None => {
+        error!("Topic: '{:?}' is not in DDSCache", topic_name); 
+        None  
+      }
     }
   }
+
+  /// Removes cacheChange permanently
+  pub fn from_topic_remove_before(&mut self, topic_name: &String, instant: Timestamp) 
+  {
+    match self.topic_caches.get_mut(topic_name) {
+      Some(tc) => tc.remove_changes_before(instant),
+      None => {
+        error!("Topic: '{:?}' is not in DDSCache", topic_name); 
+      }
+    }
+  }
+
 
   pub fn from_topic_get_all_changes(&self, topic_name: &str) -> Vec<(&Timestamp, &CacheChange)> {
     match self.topic_caches.get(topic_name) {
@@ -151,7 +160,7 @@ impl DDSCache {
         .unwrap()
         .add_change(instant, cache_change);
     } else {
-      panic!("Topic: '{:?}' is not added to DDSCache", topic_name);
+      error!("Topic: '{:?}' is not added to DDSCache", topic_name);
     }
   }
 }
@@ -173,6 +182,7 @@ impl TopicCache {
       history_cache: DDSHistoryCache::new(),
     }
   }
+
   pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
     self.history_cache.get_change(instant)
   }
@@ -197,7 +207,30 @@ impl TopicCache {
 
   ///Removes and returns value if it was found
   pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
-    return self.history_cache.remove_change(instant);
+    self.history_cache.remove_change(instant)
+  }
+
+  pub fn remove_changes_before(&mut self, instant: Timestamp) {
+    // Look up some Topic-specific resource limit
+    // and remove earliest samples until we are within limit.
+    // This prevents cache from groving indefinetly.
+    let max_keep_samples = self.topic_qos.resource_limits()
+        .unwrap_or( ResourceLimits {
+                    max_samples: 1024,
+                    max_instances: 1024,
+                    max_samples_per_instance: 64,
+                  })
+        .max_samples;
+    // TODO: We cannot currently keep track of instance counts, because TopicCache or
+    // DDSCache below do not know about instances.
+    let remove_count = self.history_cache.changes.len() as i32 - max_keep_samples as i32;
+    let split_key = 
+          *self.history_cache.changes.keys()
+            .take(max(0,remove_count) as usize + 1)
+            .last()
+            .map( |lim| max(lim,&instant) )
+            .unwrap_or(&instant);
+    self.history_cache.remove_changes_before(split_key)
   }
 
   pub fn set_change_to_not_alive_disposed(&mut self, instant: &Timestamp) {
@@ -210,7 +243,7 @@ impl TopicCache {
 // This is contained in a TopicCache
 #[derive(Debug)]
 pub struct DDSHistoryCache {
-  changes: BTreeMap<Timestamp, CacheChange>,
+  pub(crate) changes: BTreeMap<Timestamp, CacheChange>,
 }
 
 impl DDSHistoryCache {
@@ -226,7 +259,7 @@ impl DDSHistoryCache {
       // all is good. timestamp was not inserted before.
     } else {
       // If this happens cahce changes were created at exactly same instant.
-      panic!("DDSHistoryCache already contained element with key !!!");
+      error!("DDSHistoryCache already contained element with key {:?} !!!", instant);
     }
   }
 
@@ -260,7 +293,7 @@ impl DDSHistoryCache {
     {
       changes.push((i, c));
     }
-    return changes;
+    changes
   }
 
   pub fn change_change_kind(&mut self, instant: &Timestamp, change_kind: ChangeKind) {
@@ -275,24 +308,20 @@ impl DDSHistoryCache {
     }
   }
 
-  /*
-  /// returns element with LARGEST timestamp
-  pub fn get_latest_change(&self) -> Option<&CacheChange>{
-    if  self.changes.last_entry().is_none(){
-      return None;
-    }
-    else{
-      let key_to_change = self.changes.last_entry().unwrap().key();
-      return self.changes.get(key_to_change);
-    }
-  }
-  */
 
   /// Removes and returns value if it was found
   pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
     self.changes.remove(instant)
   }
+
+  pub fn remove_changes_before(&mut self, instant: Timestamp) {
+    self.changes = self.changes.split_off(&instant);
+  }
 }
+
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

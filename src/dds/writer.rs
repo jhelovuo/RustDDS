@@ -290,24 +290,23 @@ impl Writer {
 
   /// This is called by dp_wrapper everytime cacheCleaning message is received.
   fn handle_cache_cleaning(&mut self) {
-    let mut removedChanges = vec![];
+    let resource_limit = 32; // TODO: This limit should be obtained
+    // from Topic and Writer QoS. There should be some reasonable default limit
+    // in case some suppied QoS setting does not specify a larger value.
+    // In any case, there has to be some limit to avoid memory leak.
+
     match self.qos_policies.history {
       None => {
-        removedChanges = self.remove_all_acked_changes_but_keep_depth(0);
+        self.remove_all_acked_changes_but_keep_depth(1);
       }
       Some(History::KeepAll) => {
-        // TODO need to find a way to check if resource limit.
-        // writer can only know the amount its own samples.
-        //todo!("TODO keep all resource limit ???");
+        self.remove_all_acked_changes_but_keep_depth(resource_limit);
       }
       Some(History::KeepLast { depth: d }) => {
-        removedChanges = self.remove_all_acked_changes_but_keep_depth(d);
+        self.remove_all_acked_changes_but_keep_depth(d as usize);
       }
     }
-    // This is needdd to be removed also if cahceChange is removed from DDSCache.
-    for sq in removedChanges {
-      self.sequence_number_to_instant.remove(&sq);
-    }
+
     self.set_cache_cleaning_timer();
   }
 
@@ -472,16 +471,19 @@ impl Writer {
     // Update the ReaderProxy
     let last_seq = self.last_change_sequence_number; // to avoid borrow problems
     if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
-        reader_proxy.handle_ack_nack(&an);
+
+        reader_proxy.handle_ack_nack(&an, last_seq);
+
         let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow 
         // Sanity Check: if the reader asked for something we did not even advertise yet.
         // TODO: This checks the stored unset_changes, not presentely received ACKNACK.
-        if let Some(&high) = reader_proxy.unsent_changes.range(..).next_back()  {
+        if let Some(&high) = reader_proxy.unsent_changes.iter().next_back()  {
           if high > last_seq { 
-            error!("ReaderProxy {:?} thinks we need to send {:?} but I have only up to {:?}", 
+            warn!("ReaderProxy {:?} thinks we need to send {:?} but I have only up to {:?}", 
               reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq);
           }
         }
+        // Sanity Check
         if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) { // more sanity
           warn!("ACKNACK from {:?} acks up to before {:?} but I have only up to {:?}",
             reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq);
@@ -581,90 +583,32 @@ impl Writer {
   /// Depth is QoS policy History depth.
   /// Returns SequenceNumbers of removed CacheChanges
   /// This is called repeadedly by handle_cache_cleaning action.
-  fn remove_all_acked_changes_but_keep_depth(&mut self, depth: i32) -> Vec<SequenceNumber> {
-    let amount_need_to_remove;
-    let mut removed_change_sequence_numbers = vec![];
-    let acked_by_all_readers = {
-      //let mut acked_by_all: Vec<(&Timestamp, &SequenceNumber)> = vec![];
-      let mut acked_by_all: BTreeMap<&Timestamp, &SequenceNumber> = BTreeMap::new();
-      for (sq, i) in self.sequence_number_to_instant.iter() {
-        if self.change_with_sequence_number_is_acked_by_all(*sq) {
-          acked_by_all.insert(i, sq);
-        }
-      }
-      acked_by_all
-    };
-    if acked_by_all_readers.len() as i32 <= depth {
-      return removed_change_sequence_numbers;
+  fn remove_all_acked_changes_but_keep_depth(&mut self, depth: usize)  {
+    // All readers have acked up to this point (SequenceNumber)
+    let acked_by_all_readers = self.readers.iter()
+          .map(|r| r.acked_up_to_before())
+          .min()
+          .unwrap_or(SequenceNumber::zero());
+    // If all readers have acked all up to before 5, and depth is 5, we need
+    // to keep samples 0..4, i.e. from acked_up_to_before - depth .
+    let first_keeper = 
+      max( acked_by_all_readers - SequenceNumber::from(depth) , 
+            self.first_change_sequence_number );
+
+    // We notify the DDSCache that it can release older samples
+    // as far as this Writeris concenrned.
+    if let Some(&keep_instant) = self.sequence_number_to_instant.get(&first_keeper) {
+      self.dds_cache.write().unwrap()
+        .from_topic_remove_before(&self.my_topic_name, keep_instant);
     } else {
-      amount_need_to_remove = acked_by_all_readers.len() as i32 - depth;
+      warn!("{:?} missing from instant map",first_keeper);
     }
-    {
-      let mut index: i32 = 0;
-      for (i, _sq) in acked_by_all_readers {
-        if index >= amount_need_to_remove {
-          break;
-        }
-        let removed = self
-          .dds_cache
-          .write()
-          .unwrap()
-          .from_topic_remove_change(&self.my_topic_name, i);
-        if removed.is_some() {
-          removed_change_sequence_numbers.push(removed.unwrap().sequence_number);
-        } else {
-          warn!(
-            "Remove from {:?} failed. No results with {:?}",
-            &self.my_topic_name, i
-          );
-          debug!("{:?}", self.dds_cache);
-        }
-        index = index + 1;
-      }
-    }
-    return removed_change_sequence_numbers;
+    self.first_change_sequence_number = first_keeper;
+    self.sequence_number_to_instant = 
+      self.sequence_number_to_instant.split_off(&first_keeper);
   }
 
-  fn remove_from_history_cache(&mut self, instant: &Timestamp) {
-    let removed_change = self
-      .dds_cache
-      .write()
-      .unwrap()
-      .from_topic_remove_change(&self.my_topic_name, instant);
-    debug!("removed change from DDShistoryCache {:?}", removed_change);
-    if removed_change.is_some() {
-      self
-        .disposed_sequence_numbers
-        .insert(removed_change.unwrap().sequence_number);
-    } else {
-      todo!();
-    }
-  }
-
-  fn remove_from_history_cache_with_sequence_number(&mut self, sequence_number: &SequenceNumber) {
-    let instant = self.sequence_number_to_instant.get(sequence_number);
-    if instant.is_some() {
-      let removed_change = self
-        .dds_cache
-        .write()
-        .unwrap()
-        .from_topic_remove_change(&self.my_topic_name, instant.unwrap());
-      if removed_change.is_none() {
-        todo!(
-          "Cache change with seqnum {:?} and instant {:?} cold not be revod from DDSCache",
-          sequence_number,
-          instant
-        )
-      }
-    } else {
-      todo!(
-        "sequence number: {:?} cannot be tranformed to instant ",
-        sequence_number
-      );
-    }
-  }
-
-   fn increase_heartbeat_counter(&mut self) {
+  fn increase_heartbeat_counter(&mut self) {
     self.heartbeat_message_counter = self.heartbeat_message_counter + 1;
   }
 
@@ -867,14 +811,6 @@ impl Writer {
       .iter_mut()
       .find(|x| x.remote_reader_guid == search_guid)
   }
-
-  pub fn change_with_sequence_number_is_acked_by_all(
-    &self,
-    sequence_number: SequenceNumber,
-  ) -> bool {
-    self.readers.iter().all( |rp| rp.sequence_is_acked(sequence_number) )
-  }
-
 
   pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<Timestamp> {
     self.sequence_number_to_instant.get(&seqnumber).copied()
