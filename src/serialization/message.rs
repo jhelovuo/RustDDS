@@ -9,15 +9,25 @@ use crate::{
   },
   messages::header::Header,
   messages::submessages::submessages::*,
+  messages::submessages::{
+    submessage::EntitySubmessage,
+    submessages::SubmessageKind, 
+    submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
+    submessage_elements::serialized_payload::RepresentationIdentifier,
+  },
+  messages::{ protocol_version::ProtocolVersion, vendor_id::VendorId, protocol_id::ProtocolId},
   serialization::submessage::{SubMessage, SubmessageBody, },
-  structure::{sequence_number::SequenceNumber, sequence_number::SequenceNumberSet, 
-    guid::GuidPrefix,cache_change::CacheChange},
+  structure::{ sequence_number::SequenceNumber, sequence_number::SequenceNumberSet, 
+    guid::{GuidPrefix,EntityKind,},
+    cache_change::{CacheChange,ChangeKind},
+    parameter_id::ParameterId, 
+  },
+  structure::time::Timestamp,
 };
 #[allow(unused_imports)]
 use log::{error,warn,debug,trace};
 use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
-//use time::{Timespec, get_time};
 
 #[derive(Debug)]
 pub(crate) struct Message {
@@ -46,10 +56,6 @@ impl<'a> Message {
   pub fn submessages(self) -> Vec<SubMessage> {
     self.submessages
   }
-
-  //fn submessages_borrow(&self) -> &Vec<SubMessage> {
-  //  &self.submessages
-  //}
 
   pub fn set_header(&mut self, header: Header) {
     self.header = header;
@@ -189,10 +195,10 @@ impl<'a> Message {
         }
         SubmessageKind::INFO_TS => {
           let f = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
-          mk_i_subm(InterpreterSubmessage::InfoTimestamp(
-            InfoTimestamp::read_from_buffer_with_ctx(e, sub_content_buffer)?,
-            f,
-          ))
+          let tso = 
+                if f.contains(INFOTIMESTAMP_Flags::Invalidate) { None }
+                else { Some ( Timestamp::read_from_buffer_with_ctx(e, sub_content_buffer)?) };
+          mk_i_subm(InterpreterSubmessage::InfoTimestamp(InfoTimestamp{timestamp: tso}, f ))
         }
         SubmessageKind::INFO_REPLY => {
           let f = BitFlags::<INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
@@ -290,28 +296,32 @@ impl MessageBuilder {
     self
   }
 
-  pub fn ts_msg(mut self, endianness: Endianness, invalidate_flagset: bool) -> MessageBuilder {
-    let timestamp = InfoTimestamp {
-      timestamp: DDSTimestamp::now(),
-    };
-    let mes = &mut timestamp.write_to_vec_with_ctx(endianness).unwrap();
+  /// Argument Some(timestamp) means that a timestamp is sent.
+  /// Argument None means "invalidate", i.e. the previously sent InfoTimestamp submessage
+  /// no longer applies.
+  pub fn ts_msg(mut self, endianness: Endianness, timestamp: Option<DDSTimestamp>) -> MessageBuilder {
 
-    let flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(endianness)
-      | (if invalidate_flagset {
-        INFOTIMESTAMP_Flags::Invalidate.into()
-      } else {
-        BitFlags::<INFOTIMESTAMP_Flags>::empty()
-      });
+    let mut flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(endianness);
+    if timestamp.is_none() {
+      flags |= INFOTIMESTAMP_Flags::Invalidate;
+    }
+
+    let content_length = match timestamp {
+      Some(_) => 8 , // Timestamp is serialized as 2 x 32b words
+      None => 0, // Not serialized at all
+    };
 
     let submessageHeader = SubmessageHeader {
       kind: SubmessageKind::INFO_TS,
       flags: flags.bits(),
-      content_length: mes.len() as u16, // This conversion should be safe, as timestamp length cannot exceed u16
+      content_length, 
     };
 
     let submsg = SubMessage {
       header: submessageHeader,
-      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(timestamp, flags)),
+      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(
+        InfoTimestamp {timestamp}, 
+        flags)),
     };
 
     self.submessages.push(submsg);
@@ -321,11 +331,66 @@ impl MessageBuilder {
   pub fn data_msg(
     mut self,
     cache_change: CacheChange,
-    writer: &RtpsWriter,
-    reader_entityid: EntityId,
+    reader_entity_id: EntityId,
+    writer_entity_id: EntityId,
+    endianness: Endianness,
   ) -> MessageBuilder {
+    let inline_qos = match cache_change.kind {
+      ChangeKind::ALIVE => None,
+      _ => {
+        let mut param_list = ParameterList::new();
+        let key_hash = Parameter {
+          parameter_id: ParameterId::PID_KEY_HASH,
+          value: cache_change.key.to_le_bytes().to_vec(),
+        };
+        param_list.parameters.push(key_hash);
+        let status_info = Parameter::create_pid_status_info_parameter(true, true, false);
+        param_list.parameters.push(status_info);
+        Some(param_list)
+      }
+    };
+
+    let mut data_message = Data {
+      reader_id: reader_entity_id,
+      writer_id: writer_entity_id, 
+      writer_sn: cache_change.sequence_number,
+      inline_qos,
+      serialized_payload: cache_change.data_value,
+    };
+    
+    // TODO: please explain this logic here:
+    if writer_entity_id.get_kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
+      match data_message.serialized_payload.as_mut() {
+        Some(sp) => sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE,
+        None => (),
+      }
+    }
+
+    let flags: BitFlags<DATA_Flags> = 
+      BitFlags::<DATA_Flags>::from_endianness(endianness)
+      | ( if cache_change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
+            // No data, we send key instead
+            BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
+          } else {  // normal case
+            BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data)
+          }
+        );
+    // TODO: This is stupid. There should be an easier way to get the submessage length
+    // than serializing it!
+    let size = data_message
+      .write_to_vec_with_ctx(endianness)
+      .unwrap()
+      .len() as u16;
+
     self.submessages
-      .push(writer.get_DATA_msg_from_cache_change(cache_change, reader_entityid));
+      .push( SubMessage {
+                header: SubmessageHeader {
+                  kind: SubmessageKind::DATA,
+                  flags: flags.bits(),
+                  content_length: size,
+                },
+                body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, flags)),
+              } );   
     self
   }
 
@@ -387,9 +452,14 @@ impl MessageBuilder {
     self
   }
 
-  pub fn add_header_and_build(self, header:Header) -> Message {
+  pub fn add_header_and_build(self, guid_prefix:GuidPrefix) -> Message {
     Message {
-      header,
+      header: Header {
+        protocol_id: ProtocolId::default(),
+        protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
+        vendor_id: VendorId::THIS_IMPLEMENTATION,
+        guid_prefix,
+      },
       submessages: self.submessages,
     }
   }

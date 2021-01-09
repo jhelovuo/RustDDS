@@ -1,5 +1,5 @@
 use chrono::Duration as chronoDuration;
-use enumflags2::BitFlags;
+
 
 #[allow(unused_imports)]
 use log::{debug, error, warn, info, trace};
@@ -17,28 +17,19 @@ use std::hash::Hasher;
 
 use crate::{
   serialization::MessageBuilder,
-  messages::submessages::{
-    submessage::EntitySubmessage,
-    info_timestamp::InfoTimestamp,
-    submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
-    submessage_elements::serialized_payload::RepresentationIdentifier,
-    submessage_flag::*,
-  },
-  structure::parameter_id::ParameterId,
 };
-use crate::messages::submessages::data::Data;
+
 use crate::structure::time::Timestamp;
 use crate::structure::duration::Duration;
-use crate::messages::protocol_version::ProtocolVersion;
-use crate::messages::{header::Header, vendor_id::VendorId, protocol_id::ProtocolId};
-use crate::structure::guid::{GuidPrefix, EntityId, EntityKind, GUID};
+
+use crate::structure::guid::{GuidPrefix, EntityId, GUID};
 use crate::structure::sequence_number::{SequenceNumber};
 use crate::{
   messages::submessages::submessages::{
-    SubmessageHeader, SubmessageKind, InterpreterSubmessage, AckNack, InfoDestination,
+    AckNack,
   },
-  structure::cache_change::{CacheChange, ChangeKind},
-  serialization::{SubMessage, Message, SubmessageBody},
+  structure::cache_change::{CacheChange},
+  serialization::{Message},
   dds::dp_event_loop::NACK_RESPONSE_DELAY,
 };
 
@@ -68,8 +59,6 @@ pub enum DeliveryMode {
 }
 
 pub(crate) struct Writer {
-  source_version: ProtocolVersion,
-  source_vendor_id: VendorId,
   pub endianness: Endianness,
   pub heartbeat_message_counter: i32,
   /// Configures the mode in which the
@@ -198,8 +187,6 @@ impl Writer {
     };
 
     Writer {
-      source_version: ProtocolVersion::PROTOCOLVERSION_2_3,
-      source_vendor_id: VendorId::THIS_IMPLEMENTATION,
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
       push_mode: true,
@@ -336,13 +323,16 @@ impl Writer {
           self.increase_heartbeat_counter();
 
           let partial_message = MessageBuilder::new()
-            .ts_msg(self.endianness, false);
+            .ts_msg(self.endianness, Some(Timestamp::now()) );
           let data_hb_message_builder = 
             if self.push_mode {
               if let Some(cache_change) = 
                   self.dds_cache.read().unwrap()
                     .from_topic_get_change(&self.my_topic_name, &timestamp) { 
-                partial_message.data_msg(cache_change.clone(), &self, EntityId::ENTITYID_UNKNOWN ) 
+                partial_message.data_msg( cache_change.clone(), // TODO: We should not clone, too much copying
+                                          EntityId::ENTITYID_UNKNOWN, // reader
+                                          self.my_guid.entityId, // writer
+                                          self.endianness ) 
                 // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
               } else { partial_message }
             } else { partial_message };
@@ -350,7 +340,7 @@ impl Writer {
           let liveliness_flag = false;
           let data_hb_message = data_hb_message_builder
                .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
-               .add_header_and_build(self.create_message_header());
+               .add_header_and_build(self.my_guid.guidPrefix);
           self.send_message_to_readers(DeliveryMode::Multicast, 
             &data_hb_message, &mut self.readers.iter() );
         }
@@ -435,9 +425,9 @@ impl Writer {
       trace!("heartbeat tick: all readers have all available data.");
     } else {
       let hb_message = MessageBuilder::new()
-        .ts_msg(self.endianness, false)
+        .ts_msg(self.endianness, Some(Timestamp::now()) )
         .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
-        .add_header_and_build(self.create_message_header());      
+        .add_header_and_build(self.my_guid.guidPrefix);      
       self.send_message_to_readers(DeliveryMode::Multicast, &hb_message, &mut self.readers.iter())
     }
 
@@ -519,9 +509,10 @@ impl Writer {
       let reader_guid = reader_proxy.remote_reader_guid;
       let mut partial_message = MessageBuilder::new()
         .dst_submessage(self.endianness, reader_guid.guidPrefix)
-        .ts_msg(self.endianness, false); //TODO: This timestamp should probably not be
+        .ts_msg(self.endianness, Some(Timestamp::now())); 
+        // TODO: This timestamp should probably not be
         // the current (retransmit) time, but the initial sample production timestamp,
-        // i.e. should be read from DDSCache (and implemented there)
+        // i.e. should be read from DDSCache (and be implemented there)
       debug!("Repair data send due to ACKNACK. ReaderProxy Unsent changes: {:?}",
               reader_proxy.unsent_changes);
 
@@ -532,10 +523,11 @@ impl Writer {
           Some(timestamp) => {
             if let Some(cache_change) = self.dds_cache.read().unwrap()
                 .from_topic_get_change(&self.my_topic_name, &timestamp) {
-              // TODO: We should not just append DATA submessages blindly. 
-              // We should check that message size limit is not exceeded.
-              partial_message = partial_message.data_msg(cache_change.clone(), 
-                  &self, reader_guid.entityId ); 
+              partial_message = partial_message
+                  .data_msg(cache_change.clone(), // TODO: We should not clone, too much copying
+                            reader_guid.entityId, // reader
+                            self.my_guid.entityId, // writer
+                            self.endianness); 
               // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
             } else {
               no_longer_relevant.push(unsent_sn);
@@ -555,7 +547,7 @@ impl Writer {
         partial_message = partial_message.gap_msg(BTreeSet::from_iter(no_longer_relevant), &self, reader_guid);
       }
       let data_gap_msg = partial_message
-        .add_header_and_build(self.create_message_header());
+        .add_header_and_build(self.my_guid.guidPrefix);
 
       self.send_message_to_readers(DeliveryMode::Unicast, &data_gap_msg,
                 &mut std::iter::once(&reader_proxy));
@@ -654,129 +646,7 @@ impl Writer {
     }
 
   }
-
-  fn create_message_header(&self) -> Header {
-    Header {
-      protocol_id: ProtocolId::default(),
-      protocol_version: ProtocolVersion {
-        major: self.source_version.major,
-        minor: self.source_version.minor,
-      },
-      vendor_id: VendorId {
-        vendorId: self.source_vendor_id.vendorId,
-      },
-      guid_prefix: self.my_guid.guidPrefix,
-    }
-  }
-
-  // TODO: Is this copy-paste code from serialization/message.rs
-  pub fn get_TS_submessage(&self, invalidiateFlagSet: bool) -> SubMessage {
-    let timestamp = InfoTimestamp {
-      timestamp: Timestamp::now(),
-    };
-    let mes = &mut timestamp.write_to_vec_with_ctx(self.endianness).unwrap();
-
-    let flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(self.endianness)
-      | (if invalidiateFlagSet {
-        INFOTIMESTAMP_Flags::Invalidate.into()
-      } else {
-        BitFlags::<INFOTIMESTAMP_Flags>::empty()
-      });
-
-    let submessageHeader = SubmessageHeader {
-      kind: SubmessageKind::INFO_TS,
-      flags: flags.bits(),
-      content_length: mes.len() as u16, // This conversion should be safe, as timestamp length cannot exceed u16
-    };
-    SubMessage {
-      header: submessageHeader,
-      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(timestamp, flags)),
-    }
-  }
-
-  // TODO: Is this copy-paste code from serialization/message.rs
-  pub fn get_DST_submessage(endianness: Endianness, guid_prefix: GuidPrefix) -> SubMessage {
-    let flags = BitFlags::<INFODESTINATION_Flags>::from_endianness(endianness);
-    let submessageHeader = SubmessageHeader {
-      kind: SubmessageKind::INFO_DST,
-      flags: flags.bits(),
-      content_length: 12u16,
-      //InfoDST length is always 12 because message contains only GuidPrefix
-    };
-    SubMessage {
-      header: submessageHeader,
-      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(
-        InfoDestination { guid_prefix },
-        flags,
-      )),
-    }
-  }
-
-
-  // Called by message.rs to construct DATA Submessage.
-  // TODO: This code should really moved there to break the dependency in the wrong direction.
-  pub fn get_DATA_msg_from_cache_change(
-    &self,
-    change: CacheChange,
-    reader_entity_id: EntityId,
-  ) -> SubMessage {
-
-    let inline_qos = match change.kind {
-      ChangeKind::ALIVE => None,
-      _ => {
-        let mut param_list = ParameterList::new();
-        let key_hash = Parameter {
-          parameter_id: ParameterId::PID_KEY_HASH,
-          value: change.key.to_le_bytes().to_vec(),
-        };
-        param_list.parameters.push(key_hash);
-        let status_info = Parameter::create_pid_status_info_parameter(true, true, false);
-        param_list.parameters.push(status_info);
-        Some(param_list)
-      }
-    };
-
-    let mut data_message = Data {
-      reader_id: reader_entity_id,
-      writer_id: self.get_entity_id(), // TODO! Is this the correct EntityId here?
-      writer_sn: change.sequence_number,
-      inline_qos,
-      serialized_payload: change.data_value,
-    };
-    
-    // TODO: please explain this logic here:
-    if self.get_entity_id().get_kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-      match data_message.serialized_payload.as_mut() {
-        Some(sp) => sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE,
-        None => (),
-      }
-    }
-
-    let flags: BitFlags<DATA_Flags> = BitFlags::<DATA_Flags>::from_endianness(self.endianness)
-      | (
-        if change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
-          // No data, we send key instead
-          BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
-        } else {
-          BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data)
-        }
-        // normal case
-      );
-
-    let size = data_message
-      .write_to_vec_with_ctx(self.endianness)
-      .unwrap()
-      .len() as u16;
-
-    SubMessage {
-      header: SubmessageHeader {
-        kind: SubmessageKind::DATA,
-        flags: flags.bits(),
-        content_length: size,
-      },
-      body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, flags)),
-    }
-  }
+ 
 
   fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
     if self.readers.iter().any(|x| {

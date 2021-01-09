@@ -320,10 +320,9 @@ impl MessageReceiver {
   // no return value, just change state of self.
   {
     match interp_subm {
-      InterpreterSubmessage::InfoTimestamp(ts_struct, flags) => {
-        if flags.contains(INFOTIMESTAMP_Flags::Invalidate) {
-          self.timestamp = Some(ts_struct.timestamp);
-        }
+      InterpreterSubmessage::InfoTimestamp(ts_struct, _flags) => {
+        // flags value was used already when parsing timestamp into an Option
+        self.timestamp = ts_struct.timestamp;
       }
       InterpreterSubmessage::InfoSource(info_src, _flags) => {
         self.source_guid_prefix = info_src.guid_prefix;
