@@ -6,9 +6,9 @@ use log::{debug, error};
 use mio::net::UdpSocket;
 use std::net::UdpSocket as StdUdpSocket;
 
-//use std::os::unix::io::AsRawFd;
-//use nix::sys::socket::setsockopt;
-//use nix::sys::socket::sockopt::ReuseAddr;
+use std::os::unix::io::AsRawFd;
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::sockopt::ReuseAddr;
 
 // 64 kB buffer size
 const BUFFER_SIZE: usize = 64 * 1024;
@@ -31,7 +31,9 @@ impl UDPListener {
       .expect("Failed to set std socket to non blocking.");
 
     let socket = UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
-    //setsockopt(socket.as_raw_fd(), ReuseAddr, &true).expect("Unable set ReuseAddr option on socket");
+    // We set ReuseAddr so that other DomainParticipants on this host can
+    // bind to the same multicast address and port.
+    setsockopt(socket.as_raw_fd(), ReuseAddr, &true).expect("Unable set ReuseAddr option on socket");
     debug!("UDPListener::new with address {:?}", socket.local_addr());
 
     UDPListener {
