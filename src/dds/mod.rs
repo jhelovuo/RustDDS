@@ -136,6 +136,8 @@ pub(crate) mod writer;
 /// DDS Quality of Service
 pub mod qos;
 
+pub mod statusevents;
+
 /// Datatypes needed for overall operability with this crate
 pub mod data_types {
   pub use crate::discovery::data_types::topic_data::{
