@@ -99,19 +99,7 @@ impl RtpsReaderProxy {
     discovered_reader_data: &DiscoveredReaderData, 
     default_unicast_locators: LocatorList,
     default_multicast_locators: LocatorList,
-  ) -> Option<RtpsReaderProxy> {
-    let remote_reader_guid = match &discovered_reader_data.reader_proxy.remote_reader_guid {
-      Some(v) => v,
-      None => {
-        warn!("Failed to convert DiscoveredReaderData to RtpsReaderProxy. No GUID");
-        return None
-      }
-    };
-
-    let expects_inline_qos = 
-          discovered_reader_data.reader_proxy.expects_inline_qos
-            .unwrap_or(false);
-
+  ) -> RtpsReaderProxy {
     let unicast_locator_list = Self::discovered_or_default(
         &discovered_reader_data.reader_proxy.unicast_locator_list, 
         &default_unicast_locators);
@@ -119,17 +107,17 @@ impl RtpsReaderProxy {
         &discovered_reader_data.reader_proxy.multicast_locator_list, 
         &default_multicast_locators);
 
-    Some(RtpsReaderProxy {
-      remote_reader_guid: remote_reader_guid.clone(),
+    RtpsReaderProxy {
+      remote_reader_guid: discovered_reader_data.reader_proxy.remote_reader_guid.clone(),
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN, //TODO
       unicast_locator_list,
       multicast_locator_list,
-      expects_in_line_qos: expects_inline_qos,
+      expects_in_line_qos: discovered_reader_data.reader_proxy.expects_inline_qos,
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
-    })
+    }
   }
 
   pub fn update(&mut self, updated: &RtpsReaderProxy) {

@@ -431,14 +431,14 @@ impl Discovery {
                 let readers = db.get_all_local_topic_readers();
                 for reader in readers {
                   dcps_subscription_writer
-                    .dispose(reader.reader_proxy.remote_reader_guid.unwrap(), None)
+                    .dispose(reader.reader_proxy.remote_reader_guid, None)
                     .unwrap_or(());
                 }
 
                 let writers = db.get_all_local_topic_writers();
                 for writer in writers {
                   dcps_publication_writer
-                    .dispose(writer.writer_proxy.remote_writer_guid.unwrap(), None)
+                    .dispose(writer.writer_proxy.remote_writer_guid, None)
                     .unwrap_or(());
                 }
 
@@ -881,16 +881,12 @@ impl Discovery {
     for data in datas
       // filtering out discoveries own readers
       .filter(|p| {
-        let guid = match &p.reader_proxy.remote_reader_guid {
-          Some(g) => g,
-          None => return false,
-        };
-        let eid = &guid.entityId;
-        *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
-          && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
-          && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
-          && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
-          && *eid != EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
+        let eid = p.reader_proxy.remote_reader_guid.entityId;
+        eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
+          && eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
+          && eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
+          && eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
+          && eid != EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
       })
     {
       match writer.write(data.clone(), None) {
@@ -910,17 +906,13 @@ impl Discovery {
     let db = self.discovery_db_read();
     let datas = db.get_all_local_topic_writers();
     for data in datas.filter(|p| {
-      let guid = match &p.writer_proxy.remote_writer_guid {
-        Some(g) => g,
-        None => return false,
-      };
-      let eid = &guid.entityId;
+      let eid = p.writer_proxy.remote_writer_guid.entityId;
 
-      *eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
-        && *eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
-        && *eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER
-        && *eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER
-        && *eid != EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
+      eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
+        && eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
+        && eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER
+        && eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER
+        && eid != EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
     }) {
       match writer.write(data.clone(), None) {
         Ok(_) => (),
@@ -1072,7 +1064,7 @@ mod tests {
 
   #[test]
   fn discovery_reader_data_test() {
-    let participant = DomainParticipant::new(0);
+    let participant = DomainParticipant::new(0).expect("participant creation");
 
     let topic = participant
       .create_topic(

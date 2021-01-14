@@ -49,6 +49,7 @@ pub enum Error {
   /// This is usually a bug in RustDDS
   Internal { reason: String },
   Io { inner: std::io::Error },
+  Serialization { reason: String },
 }
 
 

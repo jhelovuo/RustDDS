@@ -1,6 +1,7 @@
 use std;
 use std::fmt::{self, Display};
 use serde::{de, ser};
+use crate::dds::values::result::Error as DDSError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -68,6 +69,12 @@ impl Display for Error {
 impl From<std::io::Error> for Error {
   fn from(ioerr: std::io::Error) -> Error {
     Error::IOError(ioerr)
+  }
+}
+
+impl From<Error> for DDSError {
+  fn from(ser_error: Error) -> DDSError {
+    DDSError::Serialization{ reason: format!("{:?}",ser_error) }
   }
 }
 

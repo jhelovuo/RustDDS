@@ -542,11 +542,9 @@ impl DPEventLoop {
                 Some(tn) => *writer.topic_name() == *tn,
                 None => false,
               })
-              .filter_map(|drd| {
+              .map(|drd| {
                   // find out default LocatorsLists from Participant proxy
-                  let remote_reader_guid = 
-                    drd.reader_proxy.remote_reader_guid
-                      .expect("ReaderProxy has no GUID");
+                  let remote_reader_guid = drd.reader_proxy.remote_reader_guid;
                   let locator_lists = 
                     db.find_participant_proxy(remote_reader_guid.guidPrefix)
                       .map(|pp| {
@@ -766,7 +764,7 @@ impl DPEventLoop {
               Some(tn) => topic_name == *tn,
               None => false,
             })
-            .filter_map(|p| RtpsWriterProxy::from_discovered_writer_data(p))
+            .map(|p| RtpsWriterProxy::from_discovered_writer_data(p))
             .collect();
 
           reader.retain_matched_writers(proxies.iter());

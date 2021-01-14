@@ -109,41 +109,25 @@ impl DiscoveryDB {
   fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {
     self
       .external_topic_readers
-      .retain(|d| match d.reader_proxy.remote_reader_guid {
-        Some(g) => g.guidPrefix != guid_prefix,
-        // removing non existent guids
-        None => false,
-      });
+      .retain(|d| d.reader_proxy.remote_reader_guid.guidPrefix != guid_prefix);
   }
 
   pub fn remove_topic_reader(&mut self, guid: GUID) {
     self
       .external_topic_readers
-      .retain(|d| match d.reader_proxy.remote_reader_guid {
-        Some(g) => g != guid,
-        // removing non existent guids
-        None => false,
-      });
+      .retain(|d| d.reader_proxy.remote_reader_guid != guid);
   }
 
   fn remove_topic_writer_with_prefix(&mut self, guid_prefix: GuidPrefix) {
     self
       .external_topic_writers
-      .retain(|d| match d.writer_proxy.remote_writer_guid {
-        Some(g) => g.guidPrefix != guid_prefix,
-        // removing non existent guids
-        None => false,
-      });
+      .retain(|d| d.writer_proxy.remote_writer_guid.guidPrefix != guid_prefix);
   }
 
   pub fn remove_topic_writer(&mut self, guid: GUID) {
     self
       .external_topic_writers
-      .retain(|d| match d.writer_proxy.remote_writer_guid {
-        Some(g) => g != guid,
-        // removing non existent guids
-        None => false,
-      });
+      .retain(|d| d.writer_proxy.remote_writer_guid != guid);
   }
 
 
@@ -262,12 +246,7 @@ impl DiscoveryDB {
   }
 
   pub fn update_local_topic_writer(&mut self, writer: DiscoveredWriterData) {
-    let writer_guid = match writer.writer_proxy.remote_writer_guid {
-      Some(g) => g,
-      None => return,
-    };
-
-    self.local_topic_writers.insert(writer_guid, writer);
+    self.local_topic_writers.insert(writer.writer_proxy.remote_writer_guid, writer);
     self.writers_updated = true;
   }
 
@@ -291,9 +270,7 @@ impl DiscoveryDB {
     };
     // find out default LocatorsLists from Participant proxy
     let drd = data;
-    let remote_reader_guid = 
-      drd.reader_proxy.remote_reader_guid
-        .expect("ReaderProxy has no GUID");
+    let remote_reader_guid = drd.reader_proxy.remote_reader_guid;
     let locator_lists = 
       self.find_participant_proxy(remote_reader_guid.guidPrefix)
         .map(|pp| {
@@ -310,33 +287,29 @@ impl DiscoveryDB {
 
     let reader_proxy = RtpsReaderProxy::from_discovered_reader_data(data, 
                           locator_lists.0 , locator_lists.1 );
+    self
+      .local_topic_writers
+      .iter_mut()
+      .filter(
+        |(_, p)| match p.publication_topic_data.topic_name.as_ref() {
+          Some(tn) => *tn == *topic_name,
+          None => false,
+        },
+      )
+      .for_each(|(_, p)| {
+        p.writer_proxy
+          .unicast_locator_list
+          .append(&mut reader_proxy.unicast_locator_list.clone());
+        p.writer_proxy.unicast_locator_list = p
+          .writer_proxy
+          .unicast_locator_list
+          .clone()
+          .into_iter()
+          .unique()
+          .collect();
 
-    match reader_proxy {
-      Some(rp) => self
-        .local_topic_writers
-        .iter_mut()
-        .filter(
-          |(_, p)| match p.publication_topic_data.topic_name.as_ref() {
-            Some(tn) => *tn == *topic_name,
-            None => false,
-          },
-        )
-        .for_each(|(_, p)| {
-          p.writer_proxy
-            .unicast_locator_list
-            .append(&mut rp.unicast_locator_list.clone());
-          p.writer_proxy.unicast_locator_list = p
-            .writer_proxy
-            .unicast_locator_list
-            .clone()
-            .into_iter()
-            .unique()
-            .collect();
-
-          // TODO: multicast locators
-        }),
-      None => return,
-    }
+        // TODO: multicast locators
+      });
   }
 
   fn add_writer_to_local_reader(&mut self, data: &DiscoveredWriterData) {
@@ -347,32 +320,29 @@ impl DiscoveryDB {
 
     let writer_proxy = RtpsWriterProxy::from_discovered_writer_data(data);
 
-    match writer_proxy {
-      Some(wp) => self
-        .local_topic_readers
-        .iter_mut()
-        .filter(
-          |(_, p)| match p.subscription_topic_data.topic_name().as_ref() {
-            Some(tn) => *tn == *topic_name,
-            None => false,
-          },
-        )
-        .for_each(|(_, p)| {
-          p.reader_proxy
-            .unicast_locator_list
-            .append(&mut wp.unicast_locator_list.clone());
-          p.reader_proxy.unicast_locator_list = p
-            .reader_proxy
-            .unicast_locator_list
-            .clone()
-            .into_iter()
-            .unique()
-            .collect();
+    self
+      .local_topic_readers
+      .iter_mut()
+      .filter(
+        |(_, p)| match p.subscription_topic_data.topic_name().as_ref() {
+          Some(tn) => *tn == *topic_name,
+          None => false,
+        },
+      )
+      .for_each(|(_, p)| {
+        p.reader_proxy
+          .unicast_locator_list
+          .append(&mut writer_proxy.unicast_locator_list.clone());
+        p.reader_proxy.unicast_locator_list = p
+          .reader_proxy
+          .unicast_locator_list
+          .clone()
+          .into_iter()
+          .unique()
+          .collect();
 
-          // TODO: multicast locators
-        }),
-      None => return,
-    }
+        // TODO: multicast locators
+      })
   }
 
   pub fn update_subscription(&mut self, data: &DiscoveredReaderData) {
@@ -606,10 +576,7 @@ impl DiscoveryDB {
     self
       .external_topic_writers
       .iter_mut()
-      .filter(|p| match p.writer_proxy.remote_writer_guid {
-        Some(g) => g.guidPrefix == data.guid,
-        None => false,
-      })
+      .filter(|p| p.writer_proxy.remote_writer_guid.guidPrefix == data.guid)
       .for_each(|p| p.last_updated = i);
   }
 }

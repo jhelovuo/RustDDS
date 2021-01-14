@@ -4,6 +4,8 @@ use serde::Deserialize;
 
 use chrono::Utc;
 
+use log::warn;
+
 use crate::{
   dds::{qos::QosPolicyBuilder},
   structure::{
@@ -153,22 +155,36 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn generate_reader_proxy(&self) -> ReaderProxy {
-    ReaderProxy {
-      remote_reader_guid: self.endpoint_guid,
-      expects_inline_qos: self.expects_inline_qos,
+  pub fn generate_reader_proxy(&self) -> Option<ReaderProxy> {
+    let remote_reader_guid = match self.endpoint_guid {
+      Some(g) => g,
+      None => {
+        warn!("Discovery received ReaderProxy data without GUID: {:?}",self);
+        return None
+      }
+    };
+    Some( ReaderProxy {
+      remote_reader_guid,
+      expects_inline_qos: self.expects_inline_qos?,
       unicast_locator_list: self.unicast_locator_list.clone(),
       multicast_locator_list: self.multicast_locator_list.clone(),
-    }
+    } )
   }
 
-  pub fn generate_writer_proxy(&self) -> WriterProxy {
-    WriterProxy {
-      remote_writer_guid: self.endpoint_guid,
+  pub fn generate_writer_proxy(&self) -> Option<WriterProxy> {
+    let remote_writer_guid = match self.endpoint_guid {
+      Some(g) => g,
+      None => {
+        warn!("Discovery received WriterProxy data without GUID: {:?}",self);
+        return None
+      }
+    };
+    Some( WriterProxy {
+      remote_writer_guid,
       unicast_locator_list: self.unicast_locator_list.clone(),
       multicast_locator_list: self.multicast_locator_list.clone(),
       data_max_size_serialized: self.data_max_size_serialized,
-    }
+    } )
   }
 
   pub fn generate_subscription_topic_data(&self) -> Result<SubscriptionBuiltinTopicData, Error> {
@@ -290,7 +306,8 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData, Error> {
-    let reader_proxy = self.generate_reader_proxy();
+    let reader_proxy = self.generate_reader_proxy()
+          .ok_or(Error::Message("Proxy deserilization".to_string() ))?;
     let subscription_topic_data = self.generate_subscription_topic_data()?;
     Ok(DiscoveredReaderData {
       reader_proxy,
@@ -299,14 +316,15 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn generate_discovered_writer_data(self) -> DiscoveredWriterData {
-    let writer_proxy = self.generate_writer_proxy();
+  pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData, Error> {
+    let writer_proxy = self.generate_writer_proxy()
+          .ok_or(Error::Message("Proxy deserilization".to_string() ))?;
     let publication_topic_data = self.generate_publication_topic_data();
-    DiscoveredWriterData {
+    Ok( DiscoveredWriterData {
       last_updated: Instant::now(),
       writer_proxy,
       publication_topic_data,
-    }
+    })
   }
 
   pub fn parse_data_little_endian(self, buffer: &[u8]) -> BuiltinDataDeserializer {

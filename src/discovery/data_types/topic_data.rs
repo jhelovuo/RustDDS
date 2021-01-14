@@ -1,6 +1,7 @@
+
 use std::time::Instant;
 
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de};
 
 use chrono::Utc;
 
@@ -38,8 +39,8 @@ use crate::{
 // (including reader and writer data structures for serialization and deserialization)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReaderProxy {
-  pub remote_reader_guid: Option<GUID>,
-  pub expects_inline_qos: Option<bool>,
+  pub remote_reader_guid: GUID,
+  pub expects_inline_qos: bool,
   pub unicast_locator_list: LocatorList,
   pub multicast_locator_list: LocatorList,
 }
@@ -47,8 +48,8 @@ pub struct ReaderProxy {
 impl ReaderProxy {
   pub fn new(guid: GUID) -> ReaderProxy {
     ReaderProxy {
-      remote_reader_guid: Some(guid),
-      expects_inline_qos: Some(false),
+      remote_reader_guid: guid,
+      expects_inline_qos: false,
       unicast_locator_list: Vec::new(),
       multicast_locator_list: Vec::new(),
     }
@@ -58,8 +59,8 @@ impl ReaderProxy {
 impl From<RtpsReaderProxy> for ReaderProxy {
   fn from(rtps_reader_proxy: RtpsReaderProxy) -> Self {
     ReaderProxy {
-      remote_reader_guid: Some(rtps_reader_proxy.remote_reader_guid),
-      expects_inline_qos: Some(rtps_reader_proxy.expects_in_line_qos),
+      remote_reader_guid: rtps_reader_proxy.remote_reader_guid,
+      expects_inline_qos: rtps_reader_proxy.expects_in_line_qos,
       unicast_locator_list: rtps_reader_proxy.unicast_locator_list,
       multicast_locator_list: rtps_reader_proxy.multicast_locator_list,
     }
@@ -73,7 +74,7 @@ impl<'de> Deserialize<'de> for ReaderProxy {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    Ok(res.generate_reader_proxy())
+    res.generate_reader_proxy().ok_or(de::Error::custom("proxy desrialization"))
   }
 }
 
@@ -314,8 +315,8 @@ impl DiscoveredReaderData {
   }
 
   pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
-    self.reader_proxy.remote_reader_guid = Some(rtps_reader_proxy.remote_reader_guid.clone());
-    self.reader_proxy.expects_inline_qos = Some(rtps_reader_proxy.expects_in_line_qos.clone());
+    self.reader_proxy.remote_reader_guid = rtps_reader_proxy.remote_reader_guid.clone();
+    self.reader_proxy.expects_inline_qos = rtps_reader_proxy.expects_in_line_qos.clone();
     self.reader_proxy.unicast_locator_list = rtps_reader_proxy.unicast_locator_list.clone();
     self.reader_proxy.multicast_locator_list = rtps_reader_proxy.multicast_locator_list.clone();
   }
@@ -363,7 +364,7 @@ impl Serialize for DiscoveredReaderData {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WriterProxy {
-  pub remote_writer_guid: Option<GUID>,
+  pub remote_writer_guid: GUID,
   pub unicast_locator_list: LocatorList,
   pub multicast_locator_list: LocatorList,
   pub data_max_size_serialized: Option<u32>,
@@ -376,7 +377,7 @@ impl WriterProxy {
     unicast_locator_list: LocatorList,
   ) -> WriterProxy {
     WriterProxy {
-      remote_writer_guid: Some(guid),
+      remote_writer_guid: guid,
       unicast_locator_list,
       multicast_locator_list,
       data_max_size_serialized: None,
@@ -391,7 +392,7 @@ impl<'de> Deserialize<'de> for WriterProxy {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    Ok(res.generate_writer_proxy())
+    res.generate_writer_proxy().ok_or(de::Error::custom("WriterProxy deserialization"))
   }
 }
 
@@ -537,7 +538,7 @@ impl DiscoveredWriterData {
   }
 
   pub fn update(&mut self, rtps_writer_proxy: &RtpsWriterProxy) {
-    self.writer_proxy.remote_writer_guid = Some(rtps_writer_proxy.remote_writer_guid.clone());
+    self.writer_proxy.remote_writer_guid = rtps_writer_proxy.remote_writer_guid.clone();
     self.writer_proxy.unicast_locator_list = rtps_writer_proxy.unicast_locator_list.clone();
     self.writer_proxy.multicast_locator_list = rtps_writer_proxy.multicast_locator_list.clone();
   }
@@ -550,7 +551,8 @@ impl<'de> Deserialize<'de> for DiscoveredWriterData {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    Ok(res.generate_discovered_writer_data())
+    res.generate_discovered_writer_data()
+      .map_err(|e| de::Error::custom(e))
   }
 }
 

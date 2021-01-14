@@ -1,5 +1,3 @@
-use log::warn;
-
 use crate::structure::locator::LocatorList;
 use crate::structure::guid::{EntityId, GUID};
 use crate::{
@@ -148,17 +146,9 @@ impl RtpsWriterProxy {
 
   pub fn from_discovered_writer_data(
     discovered_writer_data: &DiscoveredWriterData,
-  ) -> Option<RtpsWriterProxy> {
-    let remote_writer_guid = match &discovered_writer_data.writer_proxy.remote_writer_guid {
-      Some(v) => v,
-      None => {
-        warn!("Failed to convert DiscoveredWriterData to RtpsWriterProxy. No GUID.");
-        return None;
-      }
-    };
-
-    Some(RtpsWriterProxy {
-      remote_writer_guid: remote_writer_guid.clone(),
+  ) -> RtpsWriterProxy {
+    RtpsWriterProxy {
+      remote_writer_guid: discovered_writer_data.writer_proxy.remote_writer_guid.clone(),
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
       unicast_locator_list: discovered_writer_data
         .writer_proxy
@@ -171,6 +161,6 @@ impl RtpsWriterProxy {
       changes: HashMap::new(),
       received_heartbeat_count: 0,
       sent_ack_nack_count: 0,
-    })
+    }
   }
 }
