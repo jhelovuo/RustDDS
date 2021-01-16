@@ -1,8 +1,8 @@
 use std::{
-  collections::{/*hash_map::Iter as HashIter,*/ btree_map::Iter as BTreeIter, HashMap, BTreeMap},
+  collections::{btree_map::Iter as BTreeIter, HashMap, BTreeMap},
   iter::Map,
-  slice::Iter,
   time::Instant,
+  ops::{Bound::Included,RangeBounds,},
 };
 
 use itertools::Itertools;
@@ -47,8 +47,9 @@ pub(crate) struct DiscoveryDB {
   // local reader proxies for topics (topic name acts as key)
   local_topic_readers: HashMap<GUID, DiscoveredReaderData>,
 
-  external_topic_readers: Vec<DiscoveredReaderData>,
-  external_topic_writers: Vec<DiscoveredWriterData>,
+  // remote readers and writers (via discovery)
+  external_topic_readers: BTreeMap<GUID,DiscoveredReaderData>,
+  external_topic_writers: BTreeMap<GUID,DiscoveredWriterData>,
 
   topics: HashMap<String, DiscoveredTopicData>,
 
@@ -63,8 +64,8 @@ impl DiscoveryDB {
       participant_last_life_signs: HashMap::new(),
       local_topic_writers: HashMap::new(),
       local_topic_readers: HashMap::new(),
-      external_topic_readers: Vec::new(),
-      external_topic_writers: Vec::new(),
+      external_topic_readers: BTreeMap::new(),
+      external_topic_writers: BTreeMap::new(),
       topics: HashMap::new(),
       readers_updated: false,
       writers_updated: false,
@@ -107,27 +108,35 @@ impl DiscoveryDB {
   }
 
   fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {
-    self
-      .external_topic_readers
-      .retain(|d| d.reader_proxy.remote_reader_guid.guidPrefix != guid_prefix);
+    // TODO: Implement this using .drain_filter() in BTreeMap once it lands in stable.
+    let to_remove :Vec<GUID> = 
+          self.external_topic_readers
+            .range(Self::guid_prefix_to_range(guid_prefix))
+            .map(|(g,_)| g.clone() )
+            .collect();
+    for guid in to_remove {
+      self.external_topic_readers.remove(&guid);
+    }
   }
 
   pub fn remove_topic_reader(&mut self, guid: GUID) {
-    self
-      .external_topic_readers
-      .retain(|d| d.reader_proxy.remote_reader_guid != guid);
+    self.external_topic_readers.remove(&guid);
   }
 
   fn remove_topic_writer_with_prefix(&mut self, guid_prefix: GuidPrefix) {
-    self
-      .external_topic_writers
-      .retain(|d| d.writer_proxy.remote_writer_guid.guidPrefix != guid_prefix);
+    // TODO: Implement this using .drain_filter() in BTreeMap once it lands in stable.
+    let to_remove :Vec<GUID> = 
+          self.external_topic_writers
+            .range(Self::guid_prefix_to_range(guid_prefix))
+            .map(|(g,_)| g.clone() )
+            .collect();
+    for guid in to_remove {
+      self.external_topic_writers.remove(&guid);
+    }
   }
 
   pub fn remove_topic_writer(&mut self, guid: GUID) {
-    self
-      .external_topic_writers
-      .retain(|d| d.writer_proxy.remote_writer_guid != guid);
+    self.external_topic_writers.remove(&guid);
   }
 
 
@@ -164,6 +173,8 @@ impl DiscoveryDB {
   }
 
   fn topic_has_writers_or_readers(&self, topic_name: &String) -> bool {
+    // TODO: This entire function has silly implementation.
+    // We should really have a separate map from Topic to Readers & Writers
     if let Some(_) =
       self
         .local_topic_readers
@@ -191,7 +202,7 @@ impl DiscoveryDB {
     if let Some(_) =
       self
         .external_topic_readers
-        .iter()
+        .values()
         .find(|p| match &p.subscription_topic_data.topic_name() {
           Some(tn) => tn == topic_name,
           None => false,
@@ -203,7 +214,7 @@ impl DiscoveryDB {
     if let Some(_) =
       self
         .external_topic_writers
-        .iter()
+        .values()
         .find(|p| match &p.publication_topic_data.topic_name {
           Some(tn) => tn == topic_name,
           None => false,
@@ -255,12 +266,12 @@ impl DiscoveryDB {
     self.writers_updated = true;
   }
 
-  pub fn get_external_reader_proxies<'a>(&'a self) -> Iter<'a, DiscoveredReaderData> {
-    self.external_topic_readers.iter()
+  pub fn get_external_reader_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredReaderData> + 'a {
+    self.external_topic_readers.values()
   }
 
-  pub fn get_external_writer_proxies<'a>(&'a self) -> Iter<'a, DiscoveredWriterData> {
-    self.external_topic_writers.iter()
+  pub fn get_external_writer_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredWriterData> + 'a {
+    self.external_topic_writers.values()
   }
 
   fn add_reader_to_local_writer(&mut self, data: &DiscoveredReaderData) {
@@ -348,25 +359,13 @@ impl DiscoveryDB {
   pub fn update_subscription(&mut self, data: &DiscoveredReaderData) {
     self.add_reader_to_local_writer(data);
     debug!("External reader: {:?}",data);
-    self.external_topic_readers.push(data.clone());
-    self.external_topic_readers = self
-      .external_topic_readers
-      .clone()
-      .into_iter()
-      .unique()
-      .collect();
+    self.external_topic_readers.insert(data.reader_proxy.remote_reader_guid,data.clone());
   }
 
   pub fn update_publication(&mut self, data: &DiscoveredWriterData) {
     self.add_writer_to_local_reader(data);
     debug!("External writer: {:?}",data);
-    self.external_topic_writers.push(data.clone());
-    self.external_topic_writers = self
-      .external_topic_writers
-      .clone()
-      .into_iter()
-      .unique()
-      .collect();
+    self.external_topic_writers.insert(data.writer_proxy.remote_writer_guid, data.clone());
   }
 
   pub fn update_topic_data_drd(&mut self, drd: &DiscoveredReaderData) {
@@ -571,13 +570,23 @@ impl DiscoveryDB {
       .collect()
   }
 
+  // generic helper
+  fn guid_prefix_to_range( prefix:GuidPrefix ) -> impl RangeBounds<GUID> {
+    ( Included(GUID::new(prefix,EntityId::MIN)),
+      Included(GUID::new(prefix,EntityId::MAX)) )
+  }
+
   pub fn update_lease_duration(&mut self, data: ParticipantMessageData) {
-    let i = Instant::now();
+    let now = Instant::now();
+    let prefix = data.guid;
     self
       .external_topic_writers
-      .iter_mut()
-      .filter(|p| p.writer_proxy.remote_writer_guid.guidPrefix == data.guid)
-      .for_each(|p| p.last_updated = i);
+      .range_mut(Self::guid_prefix_to_range(prefix))
+      .for_each(|(_guid,p)| p.last_updated = now);
+
+      // .iter_mut()
+      // .filter(|p| p.writer_proxy.remote_writer_guid.guidPrefix == data.guid)
+      // .for_each(|p| p.last_updated = now);
   }
 }
 

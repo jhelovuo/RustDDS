@@ -165,7 +165,7 @@ impl BuiltinDataDeserializer {
     };
     Some( ReaderProxy {
       remote_reader_guid,
-      expects_inline_qos: self.expects_inline_qos?,
+      expects_inline_qos: self.expects_inline_qos.unwrap_or(false),  
       unicast_locator_list: self.unicast_locator_list.clone(),
       multicast_locator_list: self.multicast_locator_list.clone(),
     } )
@@ -307,7 +307,7 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData, Error> {
     let reader_proxy = self.generate_reader_proxy()
-          .ok_or(Error::Message("Proxy deserilization".to_string() ))?;
+          .ok_or(Error::Message("ReaderProxy deserialization".to_string() ))?;
     let subscription_topic_data = self.generate_subscription_topic_data()?;
     Ok(DiscoveredReaderData {
       reader_proxy,
@@ -318,7 +318,7 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData, Error> {
     let writer_proxy = self.generate_writer_proxy()
-          .ok_or(Error::Message("Proxy deserilization".to_string() ))?;
+          .ok_or(Error::Message("WriterProxy deserialization".to_string() ))?;
     let publication_topic_data = self.generate_publication_topic_data();
     Ok( DiscoveredWriterData {
       last_updated: Instant::now(),

@@ -37,6 +37,8 @@ use crate::{
 
 // Topic data contains all topic related 
 // (including reader and writer data structures for serialization and deserialization)
+
+/// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReaderProxy {
   pub remote_reader_guid: GUID,
@@ -93,6 +95,7 @@ impl Serialize for ReaderProxy {
 // =======================================================================
 
 /// DDS SubscriptionBuiltinTopicData
+/// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubscriptionBuiltinTopicData {
   key: Option<GUID>,
@@ -269,6 +272,7 @@ impl Serialize for SubscriptionBuiltinTopicData {
 // =======================================================================
 // =======================================================================
 
+/// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
@@ -361,7 +365,7 @@ impl Serialize for DiscoveredReaderData {
 // =======================================================================
 // =======================================================================
 
-
+/// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WriterProxy {
   pub remote_writer_guid: GUID,
@@ -410,6 +414,7 @@ impl Serialize for WriterProxy {
 // =======================================================================
 // =======================================================================
 
+/// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PublicationBuiltinTopicData {
   pub key: Option<GUID>,
@@ -492,6 +497,8 @@ impl Serialize for PublicationBuiltinTopicData {
 // =======================================================================
 // =======================================================================
 
+
+/// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredWriterData {
   // last_updated is not serialized
@@ -570,6 +577,7 @@ impl Serialize for DiscoveredWriterData {
 // =======================================================================
 // =======================================================================
 
+/// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, PartialEq, Clone)]
 pub struct TopicBuiltinTopicData {
   pub key: Option<GUID>,
@@ -615,6 +623,7 @@ impl Serialize for TopicBuiltinTopicData {
 
 /// DDS Spec defined DiscoveredTopicData with extra updated time attribute.
 /// Practically this is gotten from [DomainParticipant](../participant/struct.DomainParticipant.html) during runtime
+/// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, PartialEq, Clone)]
 pub struct DiscoveredTopicData {
   pub updated_time: u64,

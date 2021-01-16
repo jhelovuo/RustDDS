@@ -83,6 +83,10 @@ impl EntityKind {
   pub const READER_WITH_KEY_BUILT_IN : EntityKind = EntityKind(0xC7);
   pub const WRITER_GROUP_BUILT_IN : EntityKind = EntityKind(0xC8);
   pub const READER_GROUP_BUILT_IN : EntityKind = EntityKind(0xC9);
+
+  pub const MIN : EntityKind = EntityKind(0x00);
+  pub const MAX : EntityKind = EntityKind(0xFF);
+
 }
 
 impl From<u8> for EntityKind {
@@ -153,6 +157,16 @@ impl EntityId {
   pub const ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: EntityId = EntityId {
     entityKey: [0x00, 0x02, 0x00],
     entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+
+
+  pub const MIN: EntityId = EntityId {
+    entityKey: [0x00; 3],
+    entityKind: EntityKind::MIN,
+  };
+  pub const MAX: EntityId = EntityId {
+    entityKey: [0xFF, 0xFF, 0xFF],
+    entityKind: EntityKind::MAX,
   };
 
 
@@ -255,7 +269,10 @@ impl<C: Context> Writable<C> for EntityId {
   Deserialize,
 )]
 pub struct GUID {
-  pub guidPrefix: GuidPrefix,
+  // Note: It is important to have guidPrefix first, so that derive'd Ord trait
+  // will produce ordering, where GUIDs with same GuidPrefix are grouped
+  // together.
+  pub guidPrefix: GuidPrefix, 
   pub entityId: EntityId,
 }
 
@@ -264,6 +281,11 @@ impl GUID {
     guidPrefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
     entityId: EntityId::ENTITYID_UNKNOWN,
   };
+
+  // basic constructor from components
+  pub fn new(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
+    GUID::new_with_prefix_and_id(prefix,entity_id)
+  }
 
   /// Generates new GUID for Participant when `guidPrefix` is random
   pub fn new_particiapnt_guid() -> GUID {
