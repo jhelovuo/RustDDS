@@ -2,21 +2,19 @@ use std::{
   time::{Duration},
 };
 
-use mio_extras::channel::Receiver;
+
 use serde::Serialize;
 
 use crate::{
-  serialization::CDRSerializerAdapter, dds::values::result::StatusChange,
+  serialization::CDRSerializerAdapter, 
   structure::time::Timestamp,
 };
 use crate::structure::entity::{RTPSEntity};
 
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
-use crate::dds::values::result::{
-  Result, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibleQosStatus,
-  PublicationMatchedStatus,
-};
+use crate::dds::values::result::Result;
+
 use crate::dds::data_types::*;
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::serde_adapters::SerializerAdapter;
@@ -131,7 +129,7 @@ where
   pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
     self.keyed_datawriter.wait_for_acknowledgments(max_wait)
   }
-
+  /*
   // status queries
   /// Unimplemented. <b>Do not use</b>.
   ///
@@ -260,7 +258,7 @@ where
   pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     self.keyed_datawriter.get_publication_matched_status()
   }
-
+  */
   /// Topic this DataWriter is connected to.
   ///
   /// # Examples
@@ -379,7 +377,7 @@ where
   pub fn get_matched_subscriptions(&self) -> Vec<SubscriptionBuiltinTopicData> {
     self.keyed_datawriter.get_matched_subscriptions()
   }
-
+  /*
   /// Gets mio receiver for all implemented Status changes
   ///  
   /// # Examples
@@ -409,9 +407,9 @@ where
   ///   // handle status change
   /// }
   /// ```
-  pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
+  pub fn get_status_listener(&self) -> &Receiver<DataWriterStatus> {
     self.keyed_datawriter.get_status_listener()
-  }
+  } */
 }
 
 impl<D: Serialize, SA: SerializerAdapter<D>> RTPSEntity for DataWriter<D, SA> {

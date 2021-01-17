@@ -7,6 +7,7 @@ use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::messages::submessages::submessages::*;
 
 use crate::dds::ddsdata::DDSData;
+use crate::dds::statusevents::*;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
 use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
@@ -35,7 +36,7 @@ use enumflags2::BitFlags;
 
 use crate::structure::cache_change::CacheChange;
 use crate::dds::message_receiver::MessageReceiverState;
-use crate::dds::qos::{QosPolicies, HasQoSPolicy};
+use crate::dds::qos::{QosPolicies, HasQoSPolicy, policy};
 use crate::network::udp_sender::UDPSender;
 
 use crate::serialization::message::Message;
@@ -48,7 +49,6 @@ use chrono::Duration as chronoDuration;
 
 use super::{
   qos::{QosPolicyBuilder},
-  values::result::{RequestedDeadlineMissedStatus, StatusChange},
   with_key::datareader::ReaderCommand,
 };
 
@@ -58,7 +58,7 @@ use super::qos::InlineQos;
 pub(crate) struct Reader {
   // Should the instant be sent?
   notification_sender: mio_channel::SyncSender<()>,
-  status_sender: mio_channel::SyncSender<StatusChange>,
+  status_sender: mio_channel::SyncSender<DataReaderStatus>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
   seqnum_instant_map: HashMap<SequenceNumber, Timestamp>,
@@ -76,7 +76,7 @@ pub(crate) struct Reader {
 
   matched_writers: HashMap<GUID, RtpsWriterProxy>,
 
-  requested_deadline_missed_status: RequestedDeadlineMissedStatus,
+  requested_deadline_missed_count: i32,
 
   timed_event_handler: Option<TimedEventHandler>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
@@ -86,7 +86,7 @@ impl Reader {
   pub fn new(
     guid: GUID,
     notification_sender: mio_channel::SyncSender<()>,
-    status_sender: mio_channel::SyncSender<StatusChange>,
+    status_sender: mio_channel::SyncSender<DataReaderStatus>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
     data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>, //qos_policy: QosPolicies, add later to constructor
@@ -107,7 +107,7 @@ impl Reader {
       sent_ack_nack_count: 0,
       received_hearbeat_count: 0,
       matched_writers: HashMap::new(),
-      requested_deadline_missed_status: RequestedDeadlineMissedStatus::new(),
+      requested_deadline_missed_count: 0,
       timed_event_handler: None,
       data_reader_command_receiver,
     }
@@ -167,16 +167,16 @@ impl Reader {
         self.my_guid);
     }
   }
-
+  /*
   pub fn reset_requested_deadline_missed_status(&mut self) {
     info!(
       "reset_requested_deadline_missed_status on reader {:?}",
       self.get_entity_id()
     );
-    self.requested_deadline_missed_status.reset_change();
+    self.requested_deadline_missed_count.reset_change();
   }
-
-  pub fn send_status_change(&self, change: StatusChange) {
+  */
+  pub fn send_status_change(&self, change: DataReaderStatus) {
     match self.status_sender.try_send(change.clone()) {
       Ok(()) => info!(
         "Reader {:?} send status change: {:?}",
@@ -202,46 +202,45 @@ impl Reader {
   // DEADLINE was not respected for a specific instance
   // if statusChange is returned it should be send to DataReader
   // this calculation should be repeated every self.qos_policy.deadline
-  fn calculate_if_requested_deadline_is_missed(&mut self) -> Vec<StatusChange> {
+  fn calculate_if_requested_deadline_is_missed(&mut self) -> Vec<DataReaderStatus> {
     debug!("calculate_if_requested_deadline_is_missed");
-    let mut changes: Vec<StatusChange> = vec![];
+    
     match self.qos_policy.deadline {
-      None => {
-        return changes;
-      }
-      Some(deadline) => {
+      None => vec![],
+      
+      Some(policy::Deadline(deadline_duration)) => {
+        let mut changes: Vec<DataReaderStatus> = vec![];
+        let now = Timestamp::now();
         for (_g, writer_proxy) in self.matched_writers.iter_mut() {
-          //let last_instant = wP.changes.values().max_by(|x,y|x.cmp(y));
-          let last_instant = writer_proxy.changes.values().max_by(|x, y| x.cmp(y));
-          match last_instant {
-            Some(instant) => {
-              let insta_now = Timestamp::now();
-              let perioid = insta_now.duration_since(*instant);
+          match writer_proxy.last_change_timestamp() {
+            Some(last_change) => {
+              let since_last = now.duration_since(last_change);
               // if time singe last received message is greater than deadline increase status and return notification.
-              debug!("Comparing deadlines: {:?} - {:?}", perioid, deadline);
-              if perioid > deadline.0 {
-                debug!("Deadline missed: {:?} - {:?}", perioid, deadline);
-                self.requested_deadline_missed_status.increase();
-                changes.push(StatusChange::RequestedDeadlineMissedStatus(
-                  self.requested_deadline_missed_status,
-                ));
-              } else {
-                continue;
-              }
-              // no messages recieved ever so deadline must be missed.
+              trace!("Comparing deadlines: {:?} - {:?}", since_last, deadline_duration);
+              if since_last > deadline_duration{
+                debug!("Deadline missed: {:?} - {:?}", since_last, deadline_duration);
+                self.requested_deadline_missed_count += 1;
+                changes.push( DataReaderStatus::RequestedDeadlineMissed {
+                                count: CountWithChange::start_from(self.requested_deadline_missed_count,1)
+                              } 
+                );
+              }      
             }
             None => {
-              self.requested_deadline_missed_status.increase();
-              changes.push(StatusChange::RequestedDeadlineMissedStatus(
-                self.requested_deadline_missed_status,
-              ));
-            }
+              // no messages recieved ever so deadline must be missed.
+              // TODO: But what if the Reader or WriterProxy was just created?
+              self.requested_deadline_missed_count += 1;
+              changes.push( DataReaderStatus::RequestedDeadlineMissed {
+                                count: CountWithChange::start_from(self.requested_deadline_missed_count,1)
+                            } 
+              );
+            } 
           }
-        }
-      }
-    }
-    changes
-  }
+        } // for
+        changes
+      } // Some
+    } // match
+  } // fn
 
   /*
   fn calculate_if_requested_deadline_is_missed_for_specific_writer(&mut self, writer_proxy: &RtpsWriterProxy) -> Option<StatusChange>{
@@ -696,7 +695,7 @@ impl Reader {
     for (_, writer_proxy) in self
       .matched_writers
       .iter()
-      .filter(|(_, p)| p.changes.is_empty())
+      .filter(|(_, p)| p.no_changes() )
     {
       let mut message = Message::new(Header {
         protocol_id: ProtocolId::default(),

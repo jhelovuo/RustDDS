@@ -26,7 +26,9 @@ pub struct RtpsWriterProxy {
 
   /// List of sequence_numbers received from the matched RTPS Writer
   // TODO: When should they be removed from here?
-  pub changes: HashMap<SequenceNumber, Timestamp>,
+  // TODO: Change this to BTreeMap so it is easier to get last timesamp.
+  // Or keep separately track of latest timestamp.
+  changes: HashMap<SequenceNumber, Timestamp>,
 
   pub received_heartbeat_count: i32,
 
@@ -55,6 +57,15 @@ impl RtpsWriterProxy {
     self.unicast_locator_list = other.unicast_locator_list;
     self.multicast_locator_list = other.multicast_locator_list;
     self.remote_group_entity_id = other.remote_group_entity_id;
+  }
+
+  // TODO: This is quite inefficient
+  pub fn last_change_timestamp(&self) -> Option<Timestamp> {
+    self.changes.values().max().copied()
+  }
+
+  pub fn no_changes(&self) -> bool {
+    self.changes.is_empty()
   }
 
   pub fn get_missing_sequence_numbers(

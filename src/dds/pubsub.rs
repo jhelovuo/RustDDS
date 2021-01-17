@@ -32,6 +32,7 @@ use crate::dds::{
   traits::key::{Keyed, Key},
   traits::serde_adapters::*,
 };
+use crate::dds::statusevents::*;
 
 use crate::{
   discovery::{
@@ -732,7 +733,7 @@ impl InnerSubscriber {
   {
     // What is the bound?
     let (send, rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, status_receiver) = mio_channel::sync_channel::<StatusChange>(10);
+    let (status_sender, status_receiver) = mio_channel::sync_channel::<DataReaderStatus>(10);
     let (reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
 

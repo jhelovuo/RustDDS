@@ -9,28 +9,44 @@
 
 use crate::dds::qos::QosPolicyId;
 
-pub enum TopicStatus {
-	InconsistentTopic { count: CountAndChange },
+#[derive(Debug, Clone)]
+pub enum DomainParticipantStatus {
+	PublisherStatus(PublisherStatus),
+	SubscriberStatus(SubscriberStatus),
+	TopicStatus(TopicStatus),
 }
 
+#[derive(Debug, Clone)]
+pub enum SubscriberStatus {
+	DataOnReaders,
+	DataReaderStatus(DataReaderStatus),
+}
 
+pub type PublisherStatus = DataWriterStatus;
+
+#[derive(Debug, Clone)]
+pub enum TopicStatus {
+	InconsistentTopic { count: CountWithChange },
+}
+
+#[derive(Debug, Clone)]
 pub enum DataReaderStatus {
 	SampleRejected { 
-		count: CountAndChange,
+		count: CountWithChange,
 		last_reason: SampleRejectedStatusKind,
 		//last_instance_key:  
 	},
 	LivelinessChanged { 
-		alive_total: CountAndChange,
-		not_alive_total: CountAndChange,
+		alive_total: CountWithChange,
+		not_alive_total: CountWithChange,
 		//last_publication_key:  
 	},
 	RequestedDeadlineMissed { 
-		count: CountAndChange,
+		count: CountWithChange,
 		//last_instance_key:  
 	},
 	RequestedIncompatibleQos { 
-		count: CountAndChange,
+		count: CountWithChange,
 		last_policy_id: QosPolicyId,
 		policies: Vec<QosPolicyCount>,
 	},
@@ -38,43 +54,69 @@ pub enum DataReaderStatus {
 	// because the normal data waiting mechanism already uses the same mio::poll structure,
 	// so repeating the functionality here would bring little additional value.
 	SampleLost  { 
-		count: CountAndChange 
+		count: CountWithChange 
 	},
 	SubscriptionMatched { 
-		total: CountAndChange,
-		current: CountAndChange,
+		total: CountWithChange,
+		current: CountWithChange,
 		//last_publication_key:  
 	},
 }
 
-
+#[derive(Debug, Clone)]
 pub enum DataWriterStatus {
 	LivelinessLost { 
-		count: CountAndChange 
+		count: CountWithChange 
 	},
 	OfferedDeadlineMissed { 
-		count: CountAndChange,
+		count: CountWithChange,
 		//last_instance_key:  
 	},
 	OfferedIncompatibleQos { 
-		count: CountAndChange,
+		count: CountWithChange,
 		last_policy_id: QosPolicyId,
 		policies: Vec<QosPolicyCount>,  
 	},
 	PublicationMatched { 
-		total: CountAndChange,
-		current: CountAndChange,
+		total: CountWithChange,
+		current: CountWithChange,
 		//last_subscription_key:  
 	},
 }
 
-
-// helper for counts
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CountAndChange {
+/// Helper to contain same count actions across statuses
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct CountWithChange {
 	// 2.3. Platform Specific Model defines these as "long", which appears to be 32-bit signed.
-	pub count: i32, 
-	pub change: i32, 
+  count: i32,
+  count_change: i32,
+}
+
+impl CountWithChange {
+  pub(crate) fn new(count: i32, count_change: i32) -> CountWithChange {
+    CountWithChange { count, count_change }
+  }
+
+  // ??
+  // same as "new" ?
+  pub fn start_from(count: i32, count_change: i32) -> CountWithChange {
+    CountWithChange { count, count_change }
+  }
+
+  pub fn count(&self) -> i32 {
+    self.count
+  }
+
+  pub fn count_change(&self) -> i32 {
+    self.count_change
+  }
+
+  // does this make sense?
+  // pub fn increase(&mut self) {
+  //   self.count += 1;
+  //   self.count_change += 1;
+  // }
+
 }
 
 // sample rejection reasons

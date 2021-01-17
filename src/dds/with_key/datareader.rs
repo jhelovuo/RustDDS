@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
+#[allow(unused_imports)]
 use log::{error, debug, info, warn};
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 
@@ -26,12 +27,12 @@ use crate::dds::{
   values::result::*,
   qos::*,
   with_key::datasample::*,
-  sampleinfo::*,
   datasample_cache::DataSampleCache,
   pubsub::Subscriber,
   topic::Topic,
   readcondition::*,
 };
+use crate::dds::statusevents::*;
 
 /// Parameter for reading [Readers](../struct.With_Key_DataReader.html) data with key or with next from current key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +45,7 @@ pub enum SelectByKey {
 pub(crate) enum ReaderCommand {
   RESET_REQUESTED_DEADLINE_STATUS,
 }
-
+/*
 struct CurrentStatusChanges {
   pub livelinessLost: Option<LivelinessLostStatus>,
   pub offeredDeadlineMissed: Option<OfferedDeadlineMissedStatus>,
@@ -68,7 +69,7 @@ impl CurrentStatusChanges {
     }
   }
 }
-
+*/
 /// DDS DataReader for with_key topics.
 ///
 /// # Examples
@@ -114,8 +115,8 @@ pub struct DataReader< D: Keyed + DeserializeOwned,  DA: DeserializerAdapter<D> 
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  pub(crate) status_receiver: mio_channel::Receiver<StatusChange>,
-  current_status: CurrentStatusChanges,
+  pub(crate) status_receiver: mio_channel::Receiver<DataReaderStatus>,
+  //current_status: CurrentStatusChanges,
   pub(crate) reader_command: mio_channel::SyncSender<ReaderCommand>,
 }
 
@@ -154,7 +155,7 @@ where
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_receiver: mio_channel::Receiver<StatusChange>,
+    status_receiver: mio_channel::Receiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
   ) -> Result<Self> {
     let dp = match subscriber.get_participant() {
@@ -180,7 +181,7 @@ where
       deserializer_type: PhantomData,
       discovery_command,
       status_receiver,
-      current_status: CurrentStatusChanges::new(),
+      //current_status: CurrentStatusChanges::new(),
       reader_command,
     })
   }
@@ -862,7 +863,7 @@ where
   }
 
   // status queries
-
+  /*
   fn reset_local_requested_deadline_status_change(&mut self) {
     info!(
       "reset_local_requested_deadline_status_change current {:?}",
@@ -954,6 +955,7 @@ where
       }
     }
   }
+  */
   /*
   pub fn register_status_change_notificator(&self, poll: & Poll, token: Token, interest: Ready, opts: PollOpt) -> Result<()>{
     todo!();
@@ -966,7 +968,7 @@ where
   */
 
   // Helper functions
-
+  /*
   fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
     if !rcondition
       .sample_state_mask()
@@ -997,7 +999,8 @@ where
       ChangeKind::NOT_ALIVE_UNREGISTERED => InstanceState::NotAlive_NoWriters,
     }
   }
-
+  */ 
+  /*
   /// Gets RequestedDeadlineMissedStatus
   ///
   /// # Examples
@@ -1037,6 +1040,7 @@ where
   /// }
   ///
   /// ```
+  
   pub fn get_requested_deadline_missed_status(
     &mut self,
   ) -> Result<Option<RequestedDeadlineMissedStatus>> {
@@ -1044,7 +1048,7 @@ where
     let value_before_reset = self.current_status.requestedDeadlineMissed.clone();
     self.reset_local_requested_deadline_status_change();
     return Ok(value_before_reset);
-  }
+  } */
 } // impl
 
 

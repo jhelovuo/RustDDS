@@ -388,7 +388,7 @@ where
         .map(|ds| ds.value),
     )
   }
-
+  /*
   /// Gets latest RequestedDeadlineMissed status
   ///
   /// # Examples
@@ -421,6 +421,7 @@ where
   ) -> Result<Option<RequestedDeadlineMissedStatus>> {
     self.keyed_datareader.get_requested_deadline_missed_status()
   }
+  */
 }
 
 // This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously

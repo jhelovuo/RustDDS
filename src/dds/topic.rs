@@ -2,10 +2,11 @@ use std::fmt::Debug;
 use std::sync::{Arc};
 
 use crate::{
-  dds::{participant::*, typedesc::*, qos::*, values::result::*, traits::dds_entity::DDSEntity},
+  dds::{participant::*, typedesc::*, qos::*, traits::dds_entity::DDSEntity},
 };
 
 pub use crate::structure::topic_kind::TopicKind;
+
 
 /// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class
 pub trait TopicDescription {
@@ -79,14 +80,14 @@ impl Topic {
   pub fn kind(&self) -> TopicKind {
     self.inner.kind()
   }
-
+  /*
   // DDS spec 2.2.2.3.2 Topic Class
   // specifies only method get_inconsistent_topic_status
   // TODO: implement
   pub(crate) fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> {
     unimplemented!()
   }
-
+  */
 }
 
 impl PartialEq for Topic {
@@ -174,10 +175,10 @@ impl InnerTopic {
   pub fn kind(&self) -> TopicKind {
     self.topic_kind
   }
-
-  pub(crate) fn get_inconsistent_topic_status() -> Result<InconsistentTopicStatus> {
+  /*
+  pub(crate) fn get_inconsistent_topic_status() -> Result<TopicStatus> {
     unimplemented!()
-  }
+  } */
 }
 
 impl PartialEq for InnerTopic {

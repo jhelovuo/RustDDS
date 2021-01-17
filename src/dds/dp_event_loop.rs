@@ -17,7 +17,6 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId, EntityKind};
 use crate::structure::entity::RTPSEntity;
-//use crate::structure::sequence_number::SequenceNumber;
 use crate::structure::locator::LocatorList;
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
@@ -25,7 +24,7 @@ use crate::{
   structure::{dds_cache::DDSCache, topic_kind::TopicKind},
   messages::submessages::submessages::AckNack,
 };
-use crate::dds::with_key::datareader::ReaderCommand;
+
 use super::{
   qos::policy::Reliability, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy,
   typedesc::TypeDesc,
@@ -209,9 +208,9 @@ impl DPEventLoop {
           ev_wrapper.handle_reader_action(&event);
         } else if ev_wrapper.is_reader_timed_event_action(&event) {
           ev_wrapper.handle_reader_timed_event(&event);
-        } else if ev_wrapper.is_reader_command_action(&event) {
+        } else if /*ev_wrapper.is_reader_command_action(&event) {
           ev_wrapper.handle_reader_command_event(&event);
-        } else if DPEventLoop::is_writer_action(&event) {
+        } else if */ DPEventLoop::is_writer_action(&event) {
           ev_wrapper.handle_writer_action(&event);
         } else if ev_wrapper.is_writer_timed_event_action(&event) {
           ev_wrapper.handle_writer_timed_event(&event);
@@ -274,13 +273,13 @@ impl DPEventLoop {
   pub fn is_reader_timed_event_action(&self, event: &Event) -> bool {
     self.reader_timed_event_receiver.contains_key(&event.token())
   }
-
+  /*
   pub fn is_reader_command_action(&self, event: &Event) -> bool {
     self
       .reader_command_receiver_identification
       .contains_key(&event.token())
   }
-
+  */
   pub fn is_writer_acknack_action(event: &Event) -> bool {
     event.token() == ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN
   }
@@ -437,8 +436,10 @@ impl DPEventLoop {
       }
     }
   }
-
+  /*
   pub fn handle_reader_command_event(&mut self, event: &Event) {
+    unimplemented!(); // there is no known use case for this for now
+    /*
     let reader_guid = self
       .reader_command_receiver_identification
       .get(&event.token())
@@ -462,8 +463,8 @@ impl DPEventLoop {
           reader.reset_requested_deadline_missed_status();
         }
       }
-    }
-  }
+    } */
+  }*/
 
   pub fn handle_writer_acknack_action(&mut self, _event: &Event) {
     while let Ok((acknack_sender_prefix, acknack_message)) = self.ack_nack_reciever.try_recv() {

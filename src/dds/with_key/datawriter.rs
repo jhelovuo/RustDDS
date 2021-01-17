@@ -22,10 +22,8 @@ use crate::structure::{
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
 use crate::log_and_err_precondition_not_met;
-use crate::dds::values::result::{
-  Result, Error, LivelinessLostStatus, OfferedDeadlineMissedStatus, OfferedIncompatibleQosStatus,
-  PublicationMatchedStatus,
-};
+use crate::dds::values::result::{ Result, Error, };
+use crate::dds::statusevents::*;
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::key::*;
 use crate::dds::traits::TopicDescription;
@@ -37,9 +35,7 @@ use crate::dds::qos::{
 use crate::dds::traits::serde_adapters::SerializerAdapter;
 use crate::dds::with_key::datasample::DataSample;
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
-use super::super::{
-  datasample_cache::DataSampleCache, values::result::StatusChange, writer::WriterCommand,
-};
+use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand, };
 
 /// DDS DataWriter for keyed topics
 ///
@@ -83,7 +79,7 @@ pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerial
   dds_cache: Arc<RwLock<DDSCache>>,
   datasample_cache: DataSampleCache<D>,
   phantom: PhantomData<SA>,
-  status_receiver: Receiver<StatusChange>,
+  status_receiver: Receiver<DataWriterStatus>,
 }
 
 impl<D, SA> Drop for DataWriter<D, SA>
@@ -119,7 +115,7 @@ where
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: Arc<RwLock<DDSCache>>,
-    status_receiver: Receiver<StatusChange>,
+    status_receiver: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
     let entity_id = match guid {
       Some(g) => g.entityId.clone(),
@@ -350,7 +346,7 @@ where
     // TODO: wait for actual acknowledgements to writers writes
     return Err(Error::Unsupported);
   }
-
+  /*
   /// Gets mio Receiver for all status changes
   ///
   /// # Examples
@@ -584,6 +580,8 @@ where
   pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     todo!()
   }
+  
+  */
 
   /// Topic assigned to this DataWriter
   ///

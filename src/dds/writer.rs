@@ -47,8 +47,7 @@ use crate::{
 use super::{
   qos::{policy, QosPolicies},
   rtps_reader_proxy::RtpsReaderProxy,
-  values::result::OfferedDeadlineMissedStatus,
-  values::result::StatusChange,
+  statusevents::*,
 };
 use policy::{History, Reliability};
 
@@ -143,13 +142,13 @@ pub(crate) struct Writer {
   qos_policies: QosPolicies,
 
   // Used for sending status info about messages sent
-  status_sender: SyncSender<StatusChange>,
-  offered_deadline_status: OfferedDeadlineMissedStatus,
+  status_sender: SyncSender<DataWriterStatus>,
+  //offered_deadline_status: OfferedDeadlineMissedStatus,
 }
 
 pub(crate) enum WriterCommand {
   DDSData { data: DDSData },
-  ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
+  //ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }
 
 impl Writer {
@@ -159,7 +158,7 @@ impl Writer {
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
     qos_policies: QosPolicies,
-    status_sender: SyncSender<StatusChange>,
+    status_sender: SyncSender<DataWriterStatus>,
   ) -> Writer {
     let heartbeat_period = match &qos_policies.reliability {
       Some(r) => match r {
@@ -212,7 +211,7 @@ impl Writer {
       timed_event_handler: None,
       qos_policies,
       status_sender,
-      offered_deadline_status: OfferedDeadlineMissedStatus::new(),
+      //offered_deadline_status: OfferedDeadlineMissedStatus::new(),
     }
   }
 
@@ -345,9 +344,9 @@ impl Writer {
             &data_hb_message, &mut self.readers.iter() );
         }
 
-        WriterCommand::ResetOfferedDeadlineMissedStatus { writer_guid: _, } => {
-          self.reset_offered_deadline_missed_status();
-        }
+        // WriterCommand::ResetOfferedDeadlineMissedStatus { writer_guid: _, } => {
+        //   self.reset_offered_deadline_missed_status();
+        // }
       }
     }
   }
@@ -700,9 +699,9 @@ impl Writer {
     &self.my_topic_name
   }
 
-  pub fn reset_offered_deadline_missed_status(&mut self) {
-    self.offered_deadline_status.reset_change();
-  }
+  // pub fn reset_offered_deadline_missed_status(&mut self) {
+  //   self.offered_deadline_status.reset_change();
+  // }
 }
 
 impl RTPSEntity for Writer {
