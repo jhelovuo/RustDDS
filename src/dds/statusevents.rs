@@ -1,13 +1,51 @@
 //
 // Describe the commnucation status changes as events.
 //
-// These implement a mechanism equivalnet to what is described in
+// These implement a mechanism equivalent to what is described in
 // Section 2.2.4 Listeners, Conditions, and Wait-sets
 //
 // Communcation statues are detailed in Figure 2.13 and tables in Section 2.2.4.1
 // in DDS Specification v1.4
 
 use crate::dds::qos::QosPolicyId;
+use mio::{Evented};
+use mio_extras::channel as mio_channel;
+
+
+/// This trait corresponds to set_listener() of the Entity class in DDS spec. 
+/// Types implementing this trait can be registered to a poll and
+/// polled for status events. 
+pub trait StatusEvented<E> {
+	fn as_status_evented(&mut self) -> &dyn Evented;
+	fn try_recv_status(&self) -> Option<E>;
+}
+
+// Helper object for various DDS Entities
+pub(crate) struct StatusReceiver<E> {
+	channel_receiver: mio_channel::Receiver<E>,
+	enabled: bool, // if not enabled, we should forward status to parent Entity
+}
+
+impl<E> StatusReceiver<E> {
+	pub fn new(channel_receiver: mio_channel::Receiver<E>) -> StatusReceiver<E> {
+		StatusReceiver::<E> {	channel_receiver, enabled: false }
+	}
+}
+
+impl<E> StatusEvented<E> for StatusReceiver<E> {
+	fn as_status_evented(&mut self) -> &dyn Evented {
+		self.enabled = true;
+		&self.channel_receiver
+	}
+
+	fn try_recv_status(&self) -> Option<E> {
+		if self.enabled {
+			self.channel_receiver.try_recv().ok()
+		} else {
+			None
+		}
+	}
+}
 
 #[derive(Debug, Clone)]
 pub enum DomainParticipantStatus {
@@ -31,20 +69,24 @@ pub enum TopicStatus {
 
 #[derive(Debug, Clone)]
 pub enum DataReaderStatus {
+	/// Sample was rejected, because resource limits would have been exeeded.
 	SampleRejected { 
 		count: CountWithChange,
 		last_reason: SampleRejectedStatusKind,
 		//last_instance_key:  
 	},
+	/// Remote Writer has become active or inactive.
 	LivelinessChanged { 
 		alive_total: CountWithChange,
 		not_alive_total: CountWithChange,
 		//last_publication_key:  
 	},
+	/// Deadline requested by this DataReader was missed.
 	RequestedDeadlineMissed { 
 		count: CountWithChange,
 		//last_instance_key:  
 	},
+	/// This DataReader has requested a QoS policy that is incompatibel with what is offered.
 	RequestedIncompatibleQos { 
 		count: CountWithChange,
 		last_policy_id: QosPolicyId,
@@ -53,9 +95,16 @@ pub enum DataReaderStatus {
 	// DataAvailable is not implemented, as it seems to bring little additional value, 
 	// because the normal data waiting mechanism already uses the same mio::poll structure,
 	// so repeating the functionality here would bring little additional value.
+
+	/// A sample has been lost (never received).
+	/// (Whtever this means?)
 	SampleLost  { 
 		count: CountWithChange 
 	},
+
+	/// The DataReader has found a DataWriter that matches the Topic and has
+	/// compatible QoS, or has ceased to be matched with a DataWriter that was
+	/// previously considered to be matched.
 	SubscriptionMatched { 
 		total: CountWithChange,
 		current: CountWithChange,

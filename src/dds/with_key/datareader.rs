@@ -106,7 +106,8 @@ pub struct DataReader< D: Keyed + DeserializeOwned,  DA: DeserializerAdapter<D> 
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
-  pub(crate) notification_receiver: mio_channel::Receiver<()>,
+  pub(crate) // so that no_key version can access this
+  notification_receiver: mio_channel::Receiver<()>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
 
@@ -115,9 +116,8 @@ pub struct DataReader< D: Keyed + DeserializeOwned,  DA: DeserializerAdapter<D> 
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  pub(crate) status_receiver: mio_channel::Receiver<DataReaderStatus>,
-  //current_status: CurrentStatusChanges,
-  pub(crate) reader_command: mio_channel::SyncSender<ReaderCommand>,
+  status_receiver: StatusReceiver<DataReaderStatus>,
+  reader_command: mio_channel::SyncSender<ReaderCommand>,
 }
 
 impl<D, DA> Drop for DataReader<D, DA>
@@ -155,7 +155,7 @@ where
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_receiver: mio_channel::Receiver<DataReaderStatus>,
+    status_channel_rec: mio_channel::Receiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
   ) -> Result<Self> {
     let dp = match subscriber.get_participant() {
@@ -180,7 +180,7 @@ where
       latest_instant: Timestamp::now(),
       deserializer_type: PhantomData,
       discovery_command,
-      status_receiver,
+      status_receiver: StatusReceiver::new(status_channel_rec) ,
       //current_status: CurrentStatusChanges::new(),
       reader_command,
     })
@@ -1081,6 +1081,20 @@ where
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
     self.notification_receiver.deregister(poll)
   }
+}
+
+impl <D,DA> StatusEvented<DataReaderStatus> for DataReader<D,DA>
+where
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
+  fn as_status_evented(&mut self) -> &dyn Evented {
+    self.status_receiver.as_status_evented()
+  }
+
+  fn try_recv_status(&self) -> Option<DataReaderStatus> {
+    self.status_receiver.try_recv_status()
+  }  
 }
 
 impl<D, DA> HasQoSPolicy for DataReader<D, DA>

@@ -11,7 +11,7 @@ use crate::dds::statusevents::*;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
 use crate::structure::guid::{GUID, EntityId};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
-use crate::structure::locator::LocatorList;
+#[cfg(test)] use crate::structure::locator::LocatorList;
 use crate::structure::{duration::Duration, time::Timestamp};
 
 use std::{
@@ -311,6 +311,10 @@ impl Reader {
       Some(op) => op.update_contents(proxy),
       None => {
         self.matched_writers.insert(proxy.remote_writer_guid, proxy);
+        self.send_status_change(DataReaderStatus::SubscriptionMatched{
+            total: CountWithChange::new(0,0), // TODO: keep count
+            current: CountWithChange::new(self.matched_writers.len() as i32, 1 ),
+        })
       }
     };
   }
@@ -323,7 +327,8 @@ impl Reader {
       .is_some()
   }
 
-  pub fn matched_writer_add(
+  #[cfg(test)]
+  pub(crate) fn matched_writer_add(
     &mut self,
     remote_writer_guid: GUID,
     remote_group_entity_id: EntityId,
@@ -338,16 +343,16 @@ impl Reader {
     );
     self.add_writer_proxy(proxy);
   }
-
+  // TODO: This is stupid removeal algorithm. Why we cannot just remove by GUID?
   pub fn retain_matched_writers(&mut self, retvals: Iter<RtpsWriterProxy>) {
     let rt: Vec<GUID> = retvals.map(|p| p.remote_writer_guid).collect();
     self.matched_writers.retain(|guid, _| rt.contains(guid));
   }
-
+  /* not used?
   pub fn matched_writer_remove(&mut self, remote_writer_guid: GUID) -> Option<RtpsWriterProxy> {
     self.matched_writers.remove(&remote_writer_guid)
   }
-
+  */
   fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
     self.matched_writers.get_mut(&remote_writer_guid)
   }
