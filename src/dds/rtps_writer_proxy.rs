@@ -155,9 +155,9 @@ impl RtpsWriterProxy {
     instants
   }
 
-  pub fn from_discovered_writer_data(
-    discovered_writer_data: &DiscoveredWriterData,
-  ) -> RtpsWriterProxy {
+  pub fn from_discovered_writer_data(discovered_writer_data: &DiscoveredWriterData) 
+    -> RtpsWriterProxy 
+  {
     RtpsWriterProxy {
       remote_writer_guid: discovered_writer_data.writer_proxy.remote_writer_guid.clone(),
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,

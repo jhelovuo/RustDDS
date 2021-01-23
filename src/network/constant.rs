@@ -1,3 +1,6 @@
+use crate::dds::data_types::GuidPrefix;
+use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
+use crate::dds::rtps_reader_proxy::RtpsReaderProxy;
 use mio::Token;
 use mio_extras::channel as mio_channel;
 
@@ -89,9 +92,16 @@ pub enum TimerMessageType {
 }
 
 #[derive(Debug)]
-pub enum DiscoveryNotificationType {
-  ReadersInfoUpdated,
-  WritersInfoUpdated { needs_new_cache_change: bool },
+pub(crate) enum DiscoveryNotificationType {
+  ReaderUpdated { 
+    rtps_reader_proxy: RtpsReaderProxy , 
+    needs_new_cache_change: bool 
+  },
+  ReaderLost { reader_guid: GUID }, 
+  WriterUpdated { rtps_writer_proxy: RtpsWriterProxy  },
+  WriterLost { writer_guid: GUID },
+  ParticipantUpdated { guid_prefix: GuidPrefix },
+  ParticipantLost { guid_prefix : GuidPrefix },
   TopicsInfoUpdated,
   AssertTopicLiveliness { writer_guid: GUID , manual_assertion: bool, },
 }

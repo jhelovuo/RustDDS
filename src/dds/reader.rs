@@ -310,6 +310,8 @@ impl Reader {
     match old_proxy {
       Some(op) => op.update_contents(proxy),
       None => {
+        // TODO: check that QoS parameters match. if not, do not add and send
+        // status notification about failed match
         self.matched_writers.insert(proxy.remote_writer_guid, proxy);
         self.send_status_change(DataReaderStatus::SubscriptionMatched{
             total: CountWithChange::new(0,0), // TODO: keep count

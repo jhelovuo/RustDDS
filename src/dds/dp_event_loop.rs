@@ -218,13 +218,28 @@ impl DPEventLoop {
           ev_wrapper.handle_writer_acknack_action(&event);
         } else if DPEventLoop::is_discovery_update_notification(&event) {
           while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
+            use DiscoveryNotificationType::*;
             match dnt {
-              DiscoveryNotificationType::ReadersInfoUpdated => ev_wrapper.update_readers(),
-              DiscoveryNotificationType::WritersInfoUpdated { needs_new_cache_change } => 
-                ev_wrapper.update_writers(needs_new_cache_change),
-              DiscoveryNotificationType::TopicsInfoUpdated => ev_wrapper.update_topics(),
-              DiscoveryNotificationType::AssertTopicLiveliness { writer_guid , manual_assertion } => {
-                ev_wrapper.writers.get_mut(&writer_guid).map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
+              WriterUpdated{ rtps_writer_proxy } => 
+                ev_wrapper.update_readers(rtps_writer_proxy),
+
+              WriterLost{writer_guid} => unimplemented!(),
+
+              ReaderUpdated{ rtps_reader_proxy, needs_new_cache_change } => 
+                ev_wrapper.update_writers(rtps_reader_proxy, needs_new_cache_change),
+
+              ReaderLost{ reader_guid } => unimplemented!(),
+
+              ParticipantUpdated{ guid_prefix } => 
+                unimplemented!(),
+                
+              ParticipantLost{ guid_prefix } => unimplemented!(),
+
+
+              TopicsInfoUpdated => ev_wrapper.update_topics(),
+              AssertTopicLiveliness{ writer_guid , manual_assertion } => {
+                ev_wrapper.writers.get_mut(&writer_guid)
+                  .map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
               }
             }
           }
@@ -487,7 +502,7 @@ impl DPEventLoop {
     }
   }
 
-  pub fn update_writers(&mut self, needs_new_cache_change: bool) {
+  fn update_writers(&mut self, rtps_reader_proxy: RtpsReaderProxy , needs_new_cache_change: bool) {
 
     match self.discovery_db.read() {
       Ok(db) => {
@@ -586,18 +601,12 @@ impl DPEventLoop {
     // generating readers from all found participants
     let all_readers = db
       .get_participants()
-      .filter_map(|p| match p.participant_guid {
-        Some(g) => Some((g, p)),
-        None => None,
-      })
-      .filter(|(_, sp)| match sp.available_builtin_endpoints {
-        Some(ep) => ep.contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR),
-        None => false,
-      })
-      .filter(|(g, _)| g.guidPrefix != guid_prefix)
-      .map(|(g, p)| {
+      .filter(|sp| sp.available_builtin_endpoints
+          .contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR))
+      .filter(|p| p.participant_guid.guidPrefix != guid_prefix)
+      .map(|p| {
         (
-          g,
+          p.participant_guid,
           p.as_reader_proxy(
             true,
             Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
@@ -634,16 +643,10 @@ impl DPEventLoop {
     // getting all possible readers
     let all_readers = db
       .get_participants()
-      .filter_map(|p| match p.participant_guid {
-        Some(g) => Some((g, p)),
-        None => None,
-      })
-      .filter(|(_, sp)| match sp.available_builtin_endpoints {
-        Some(ep) => ep.contains(expected_endpoint),
-        None => false,
-      })
-      .filter(|(g, _)| g.guidPrefix != guid_prefix)
-      .map(|(g, p)| (g, p.as_reader_proxy(true, Some(entity_id))));
+      .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint)
+                  && p.participant_guid.guidPrefix != guid_prefix 
+      )
+      .map(|p| (p.participant_guid, p.as_reader_proxy(true, Some(entity_id))));
 
     // updating all data
     for reader in all_readers.map(|(_, p)| p).into_iter() {
@@ -661,16 +664,10 @@ impl DPEventLoop {
 
     let all_writers = db
       .get_participants()
-      .filter_map(|p| match p.participant_guid {
-        Some(g) => Some((g, p)),
-        None => None,
-      })
-      .filter(|(_, sp)| match sp.available_builtin_endpoints {
-        Some(ep) => ep.contains(expected_endpoint),
-        None => false,
-      })
-      .filter(|(g, _)| g.guidPrefix != guid_prefix)
-      .map(|(g, p)| (g, p.as_writer_proxy(true, Some(entity_id))));
+      .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint)
+                  && p.participant_guid.guidPrefix != guid_prefix 
+      )
+      .map(|p| (p.participant_guid, p.as_writer_proxy(true, Some(entity_id))));
 
     for writer in all_writers.map(|(_, p)| p).into_iter() {
       reader.add_writer_proxy(writer);
@@ -702,7 +699,7 @@ impl DPEventLoop {
     };
   }
 
-  pub fn update_readers(&mut self) {
+  pub fn update_readers(&mut self, rtps_writer_proxy: RtpsWriterProxy) {
     let db = match self.discovery_db.read() {
       Ok(db) => db,
       Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
@@ -713,13 +710,10 @@ impl DPEventLoop {
         EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER => {
           let proxies: Vec<RtpsWriterProxy> = db
             .get_participants()
-            .filter(|sp| match sp.available_builtin_endpoints {
-              Some(ep) => {
-                ep.contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER)
-              }
-              None => false,
-            })
-            .filter(|p| p.participant_guid.unwrap().guidPrefix != reader.get_guid_prefix())
+            .filter(|p| 
+                p.available_builtin_endpoints
+                  .contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER)
+                && p.participant_guid.guidPrefix != reader.get_guid_prefix() )
             .map(|p| {
               p.as_writer_proxy(
                 true,

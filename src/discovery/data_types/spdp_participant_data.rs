@@ -1,4 +1,6 @@
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::Error};
+
+use chrono;
 
 use crate::{
   dds::{
@@ -36,18 +38,18 @@ use chrono::Utc;
 
 #[derive(Debug, Clone)]
 pub struct SPDPDiscoveredParticipantData {
-  pub updated_time: u64,
-  pub protocol_version: Option<ProtocolVersion>,
-  pub vendor_id: Option<VendorId>,
-  pub expects_inline_qos: Option<bool>,
-  pub participant_guid: Option<GUID>,
+  pub updated_time: chrono::DateTime<Utc>, 
+  pub protocol_version: ProtocolVersion,
+  pub vendor_id: VendorId,
+  pub expects_inline_qos: bool,
+  pub participant_guid: GUID,
   pub metatraffic_unicast_locators: LocatorList,
   pub metatraffic_multicast_locators: LocatorList,
   pub default_unicast_locators: LocatorList,
   pub default_multicast_locators: LocatorList,
-  pub available_builtin_endpoints: Option<BuiltinEndpointSet>,
+  pub available_builtin_endpoints: BuiltinEndpointSet,
   pub lease_duration: Option<Duration>,
-  pub manual_liveliness_count: Option<i32>,
+  pub manual_liveliness_count: i32,
   pub builtin_enpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<String>,
 }
@@ -59,7 +61,7 @@ impl SPDPDiscoveredParticipantData {
     entity_id: Option<EntityId>,
   ) -> RtpsReaderProxy {
     let remote_reader_guid = GUID::new_with_prefix_and_id(
-      self.participant_guid.unwrap().guidPrefix,
+      self.participant_guid.guidPrefix,
       match entity_id {
         Some(id) => id,
         None => EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
@@ -67,10 +69,7 @@ impl SPDPDiscoveredParticipantData {
     );
 
     let mut proxy = RtpsReaderProxy::new(remote_reader_guid);
-    proxy.expects_in_line_qos = match self.expects_inline_qos {
-      Some(v) => v,
-      None => false,
-    };
+    proxy.expects_in_line_qos = self.expects_inline_qos;
 
     if !is_metatraffic {
       // TODO: possible multicast addresses
@@ -91,7 +90,7 @@ impl SPDPDiscoveredParticipantData {
     entity_id: Option<EntityId>,
   ) -> RtpsWriterProxy {
     let remote_writer_guid = GUID::new_with_prefix_and_id(
-      self.participant_guid.unwrap().guidPrefix,
+      self.participant_guid.guidPrefix,
       match entity_id {
         Some(id) => id,
         None => EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
@@ -146,18 +145,18 @@ impl SPDPDiscoveredParticipantData {
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR;
 
     SPDPDiscoveredParticipantData {
-      updated_time: Utc::now().timestamp_nanos() as u64,
-      protocol_version: Some(ProtocolVersion::PROTOCOLVERSION_2_3),
-      vendor_id: Some(VendorId::THIS_IMPLEMENTATION),
-      expects_inline_qos: Some(false),
-      participant_guid: Some(participant.get_guid()),
+      updated_time: Utc::now(),
+      protocol_version: ProtocolVersion::PROTOCOLVERSION_2_3,
+      vendor_id: VendorId::THIS_IMPLEMENTATION,
+      expects_inline_qos: false,
+      participant_guid: participant.get_guid(),
       metatraffic_unicast_locators,
       metatraffic_multicast_locators,
       default_unicast_locators,
       default_multicast_locators,
-      available_builtin_endpoints: Some(BuiltinEndpointSet::from_u32(builtin_endpoints)),
+      available_builtin_endpoints: BuiltinEndpointSet::from_u32(builtin_endpoints),
       lease_duration: Some(Duration::from(lease_duration)),
-      manual_liveliness_count: None,
+      manual_liveliness_count: 0,
       builtin_enpoint_qos: None,
       entity_name: None,
     }
@@ -167,26 +166,23 @@ impl SPDPDiscoveredParticipantData {
 impl Keyed for SPDPDiscoveredParticipantData {
   type K = GUID; // placeholder
   fn get_key(&self) -> Self::K {
-    match self.participant_guid {
-      Some(g) => g,
-      None => GUID::GUID_UNKNOWN,
-    }
+    self.participant_guid 
   }
 }
 
 impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
   {
     let visitor = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(visitor)?;
-    Ok(res.generate_spdp_participant_data())
+    res.generate_spdp_participant_data().map_err(|e| D::Error::custom(format!("{:?}",e) ))
   }
 }
 
 impl Serialize for SPDPDiscoveredParticipantData {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
   {

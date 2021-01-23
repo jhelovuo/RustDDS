@@ -72,22 +72,17 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) -> bool {
-    match data.participant_guid {
-      Some(guid) => {
-        debug!("update_participant: {:?}",&data);
-        // sanity check
-        if guid.entityId != EntityId::ENTITYID_PARTICIPANT {
-          error!("Discovered participant GUID entity_id is not for participant: {:?}",guid);
-          // Maybe we should discard the participant here?
-        }
-        // actual work here:
-        self.participant_proxies.insert(guid, data.clone());
-        self.participant_last_life_signs.insert(guid, Instant::now() );
-        true
+  pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) {
+      debug!("update_participant: {:?}",&data);
+      let guid = data.participant_guid;
+      // sanity check
+      if guid.entityId != EntityId::ENTITYID_PARTICIPANT {
+        error!("Discovered participant GUID entity_id is not for participant: {:?}",guid);
+        return // Maybe we should discard the participant here?
       }
-      _ => false,
-    }
+      // actual work here:
+      self.participant_proxies.insert(guid, data.clone());
+      self.participant_last_life_signs.insert(guid, Instant::now() );
   }
 
   pub fn remove_participant(&mut self, guid: GUID) {
@@ -275,6 +270,7 @@ impl DiscoveryDB {
   }
 
   fn add_reader_to_local_writer(&mut self, data: &DiscoveredReaderData) {
+    /*
     let topic_name = match data.subscription_topic_data.topic_name().as_ref() {
       Some(tn) => tn,
       None => return,
@@ -298,6 +294,10 @@ impl DiscoveryDB {
 
     let reader_proxy = RtpsReaderProxy::from_discovered_reader_data(data, 
                           locator_lists.0 , locator_lists.1 );
+
+    // This seems to add locators of the discovered remote Reader to the
+    // locator list of the local Writer, but that does not make any sense at
+    // all. Reader locators should not be confised with Writer locators.
     self
       .local_topic_writers
       .iter_mut()
@@ -320,9 +320,14 @@ impl DiscoveryDB {
           .collect();
 
         // TODO: multicast locators
-      });
+      }); */
   }
 
+  /* this function seems to do nothing useful, as the data is not used! 
+
+  moreover, the algorithm is horribly wrong, because discovered writer 
+  locators are added as reader locators */
+  /*
   fn add_writer_to_local_reader(&mut self, data: &DiscoveredWriterData) {
     let topic_name = match data.publication_topic_data.topic_name.as_ref() {
       Some(tn) => tn,
@@ -354,18 +359,47 @@ impl DiscoveryDB {
 
         // TODO: multicast locators
       })
+  } */
+  
+  pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> Option<RtpsReaderProxy> {
+    let guid = data.reader_proxy.remote_reader_guid;
+    // we could return None to indicate that we already knew all about this reader
+    // To do that, we should check that the reader is the same as what we have in the DB already.
+    match self.external_topic_readers.get(&guid) {
+      Some(drd) if drd == data  => None, // already have this
+      _ => {
+        self.external_topic_readers.insert( guid, data.clone() );
+        // fill in the default locators, in case DRD did not provide any
+        let default_locator_lists = 
+          self.find_participant_proxy(guid.guidPrefix)
+            .map(|pp| {
+              debug!("Added default locators to Reader {:?}", guid);
+              ( pp.default_unicast_locators.clone(), 
+                pp.default_multicast_locators.clone() ) } )
+            .unwrap_or_else( || {
+                if guid.guidPrefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
+                  warn!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
+                    ,data, guid.guidPrefix, self.participant_proxies.keys() );
+                }
+                (LocatorList::new(), LocatorList::new()) 
+              } );
+        debug!("External reader: {:?}",data);
+        Some( RtpsReaderProxy::from_discovered_reader_data(data, 
+                default_locator_lists.0 , default_locator_lists.1 ) ) 
+      }
+    }
   }
 
-  pub fn update_subscription(&mut self, data: &DiscoveredReaderData) {
-    self.add_reader_to_local_writer(data);
-    debug!("External reader: {:?}",data);
-    self.external_topic_readers.insert(data.reader_proxy.remote_reader_guid,data.clone());
-  }
-
-  pub fn update_publication(&mut self, data: &DiscoveredWriterData) {
-    self.add_writer_to_local_reader(data);
-    debug!("External writer: {:?}",data);
-    self.external_topic_writers.insert(data.writer_proxy.remote_writer_guid, data.clone());
+  pub fn update_publication(&mut self, data: &DiscoveredWriterData) -> Option<RtpsWriterProxy> {
+    match self.external_topic_writers.get(&data.writer_proxy.remote_writer_guid) {
+      Some(dwd) if dwd == data => None , // already up to date
+      _ => {
+        self.external_topic_writers.insert(data.writer_proxy.remote_writer_guid, data.clone());
+        debug!("External writer: {:?}",data);
+        Some( RtpsWriterProxy::from_discovered_writer_data(data) )
+      }
+    }
+    
   }
 
   pub fn update_topic_data_drd(&mut self, drd: &DiscoveredReaderData) {
@@ -552,6 +586,7 @@ impl DiscoveryDB {
   }
 
   // TODO: return iterator somehow?
+  #[cfg(test)] // used only for testing
   pub fn get_local_topic_readers<'a, T: TopicDescription>(
     &'a self,
     topic: &'a T,

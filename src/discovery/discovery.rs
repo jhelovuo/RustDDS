@@ -420,189 +420,191 @@ impl Discovery {
       }
 
       for event in events.into_iter() {
-        if event.token() == DISCOVERY_COMMAND_TOKEN {
-          while let Ok(command) = discovery.discovery_command_receiver.try_recv() {
-            match command {
-              DiscoveryCommand::STOP_DISCOVERY => {
-                info!("Stopping Discovery");
-
-                // disposing readers
-                let db = discovery.discovery_db_read();
-                let readers = db.get_all_local_topic_readers();
-                for reader in readers {
-                  dcps_subscription_writer
-                    .dispose(reader.reader_proxy.remote_reader_guid, None)
-                    .unwrap_or(());
-                }
-
-                let writers = db.get_all_local_topic_writers();
-                for writer in writers {
-                  dcps_publication_writer
-                    .dispose(writer.writer_proxy.remote_writer_guid, None)
-                    .unwrap_or(());
-                }
-
-                // finally disposing the participant we have
-                let guid = discovery.domain_participant.get_guid();
-                dcps_participant_writer.dispose(guid, None).unwrap_or(());
-
-                return;
-              }
-              DiscoveryCommand::REMOVE_LOCAL_WRITER { guid } => {
-                if guid == dcps_publication_writer.get_guid() {
-                  continue;
-                }
-
-                dcps_publication_writer.dispose(guid, None).unwrap_or(());
-
-                match discovery.discovery_db.write() {
-                  Ok(mut db) => {
-                    db.remove_local_topic_writer(guid);
+        match event.token() {
+          DISCOVERY_COMMAND_TOKEN => {
+            while let Ok(command) = discovery.discovery_command_receiver.try_recv() {
+              match command {
+                DiscoveryCommand::STOP_DISCOVERY => {
+                  info!("Stopping Discovery");
+                  // disposing readers
+                  let db = discovery.discovery_db_read();
+                  for reader in db.get_all_local_topic_readers() {
+                    dcps_subscription_writer
+                      .dispose(reader.reader_proxy.remote_reader_guid, None)
+                      .unwrap_or(());
                   }
-                  Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-                };
-              }
-              DiscoveryCommand::REMOVE_LOCAL_READER { guid } => {
-                if guid == dcps_subscription_writer.get_guid() {
-                  continue;
-                }
 
-                dcps_subscription_writer.dispose(guid, None).unwrap_or(());
-
-                match discovery.discovery_db.write() {
-                  Ok(mut db) => {
-                    db.remove_local_topic_reader(guid);
+                  for writer in db.get_all_local_topic_writers() {
+                    dcps_publication_writer
+                      .dispose(writer.writer_proxy.remote_writer_guid, None)
+                      .unwrap_or(());
                   }
-                  Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-                };
-              }
-              DiscoveryCommand::MANUAL_ASSERT_LIVELINESS => {
-                liveliness_state.last_manual_participant_update = Timestamp::now();
-              }
-              DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid  , manual_assertion } => {
-                discovery.send_discovery_notification(
-                  DiscoveryNotificationType::AssertTopicLiveliness { writer_guid , manual_assertion },
-                );
+                  // finally disposing the participant we have
+                  dcps_participant_writer.dispose(discovery.domain_participant.get_guid(), None)
+                    .unwrap_or(());
+                  return  // terminate event loop
+                }
+                DiscoveryCommand::REMOVE_LOCAL_WRITER { guid } => {
+                  if guid == dcps_publication_writer.get_guid() {
+                    continue
+                  }
+                  dcps_publication_writer.dispose(guid, None).unwrap_or(());
+
+                  match discovery.discovery_db.write() {
+                    Ok(mut db) => db.remove_local_topic_writer(guid),
+                    Err(e) => { error!("DiscoveryDB is poisoned. {:?}", e); return }
+                  }
+                }
+                DiscoveryCommand::REMOVE_LOCAL_READER { guid } => {
+                  if guid == dcps_subscription_writer.get_guid() {
+                    continue
+                  }
+
+                  dcps_subscription_writer.dispose(guid, None).unwrap_or(());
+
+                  match discovery.discovery_db.write() {
+                    Ok(mut db) => db.remove_local_topic_reader(guid),
+                    Err(e) => { error!("DiscoveryDB is poisoned. {:?}", e); return } 
+                  }
+                }
+                DiscoveryCommand::MANUAL_ASSERT_LIVELINESS => {
+                  liveliness_state.last_manual_participant_update = Timestamp::now();
+                }
+                DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid  , manual_assertion } => {
+                  discovery.send_discovery_notification(
+                    DiscoveryNotificationType::AssertTopicLiveliness { writer_guid , manual_assertion },
+                  );
+                }
+              };
+            }
+          }
+
+          DISCOVERY_PARTICIPANT_DATA_TOKEN => 
+            discovery.handle_participant_reader(&mut dcps_participant_reader),
+
+          DISCOVERY_PARTICIPANT_CLEANUP_TOKEN => {
+            discovery.participant_cleanup();
+            // setting next cleanup timeout
+            participant_cleanup_timer.set_timeout(Discovery::PARTICIPANT_CLEANUP_PERIOD, ());
+          }
+
+          DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN => {
+            // setting 3 times the duration so lease doesn't break if we fail once for some reason
+            let lease_duration = Discovery::SEND_PARTICIPANT_INFO_PERIOD
+              + Discovery::SEND_PARTICIPANT_INFO_PERIOD
+              + Discovery::SEND_PARTICIPANT_INFO_PERIOD;
+            let strong_dp = match discovery.domain_participant.clone().upgrade() {
+              Some(dp) => dp,
+              None => {
+                error!("DomainParticipant doesn't exist anymore, exiting Discovery.");
+                return
               }
             };
+            let data = SPDPDiscoveredParticipantData::from_participant(
+              &strong_dp,
+              Duration::from(lease_duration),
+            );
+
+            dcps_participant_writer.write(data, None).unwrap_or(());
+            // reschedule timer
+            participant_send_info_timer.set_timeout(Discovery::SEND_PARTICIPANT_INFO_PERIOD, ());
           }
-        } else if event.token() == DISCOVERY_PARTICIPANT_DATA_TOKEN {
-          let data = discovery.handle_participant_reader(&mut dcps_participant_reader);
-          match data {
-            Some(dat) => {
-              discovery.update_spdp_participant_writer(dat);
+          DISCOVERY_READER_DATA_TOKEN => {
+            discovery.handle_subscription_reader(&mut dcps_subscription_reader);
+          }
+          DISCOVERY_SEND_READERS_INFO_TOKEN => {
+            if discovery.read_readers_info() {
+              discovery.write_readers_info(&mut dcps_subscription_writer);
             }
-            None => (),
+
+            readers_send_info_timer.set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
           }
-        } else if event.token() == DISCOVERY_PARTICIPANT_CLEANUP_TOKEN {
-          discovery.participant_cleanup();
-          // setting next cleanup timeout
-          participant_cleanup_timer.set_timeout(Discovery::PARTICIPANT_CLEANUP_PERIOD, ());
-        } else if event.token() == DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN {
-          // setting 3 times the duration so lease doesn't break if we fail once for some reason
-          let lease_duration = Discovery::SEND_PARTICIPANT_INFO_PERIOD
-            + Discovery::SEND_PARTICIPANT_INFO_PERIOD
-            + Discovery::SEND_PARTICIPANT_INFO_PERIOD;
-          let strong_dp = match discovery.domain_participant.clone().upgrade() {
-            Some(dp) => dp,
-            None => {
-              error!("DomainParticipant doesn't exist anymore, exiting Discovery.");
-              return;
+          DISCOVERY_WRITER_DATA_TOKEN => {
+            discovery.handle_publication_reader(&mut dcps_publication_reader);
+          }
+          DISCOVERY_SEND_WRITERS_INFO_TOKEN => {
+            if discovery.read_writers_info() {
+              discovery.write_writers_info(&mut dcps_publication_writer);
             }
-          };
-          let data = SPDPDiscoveredParticipantData::from_participant(
-            &strong_dp,
-            Duration::from(lease_duration),
-          );
 
-          dcps_participant_writer.write(data, None).unwrap_or(());
-          // reschedule timer
-          participant_send_info_timer.set_timeout(Discovery::SEND_PARTICIPANT_INFO_PERIOD, ());
-        } else if event.token() == DISCOVERY_READER_DATA_TOKEN {
-          discovery.handle_subscription_reader(&mut dcps_subscription_reader);
-        } else if event.token() == DISCOVERY_SEND_READERS_INFO_TOKEN {
-          if discovery.read_readers_info() {
-            discovery.write_readers_info(&mut dcps_subscription_writer);
+            writers_send_info_timer.set_timeout(Discovery::SEND_WRITERS_INFO_PERIOD, ());
           }
-
-          readers_send_info_timer.set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
-        } else if event.token() == DISCOVERY_WRITER_DATA_TOKEN {
-          discovery.handle_publication_reader(&mut dcps_publication_reader);
-        } else if event.token() == DISCOVERY_SEND_WRITERS_INFO_TOKEN {
-          if discovery.read_writers_info() {
-            discovery.write_writers_info(&mut dcps_publication_writer);
+          DISCOVERY_TOPIC_DATA_TOKEN => {
+            discovery.handle_topic_reader(&mut dcps_reader);
           }
+          DISCOVERY_TOPIC_CLEANUP_TOKEN => {
+            discovery.topic_cleanup();
 
-          writers_send_info_timer.set_timeout(Discovery::SEND_WRITERS_INFO_PERIOD, ());
-        } else if event.token() == DISCOVERY_TOPIC_DATA_TOKEN {
-          discovery.handle_topic_reader(&mut dcps_reader);
-        } else if event.token() == DISCOVERY_TOPIC_CLEANUP_TOKEN {
-          discovery.topic_cleanup();
-
-          topic_cleanup_timer.set_timeout(Discovery::TOPIC_CLEANUP_PERIOD, ());
-        } else if event.token() == DISCOVERY_SEND_TOPIC_INFO_TOKEN {
-          discovery.write_topic_info(&mut dcps_writer);
-          topic_info_send_timer.set_timeout(Discovery::SEND_TOPIC_INFO_PERIOD, ());
-        } else if event.token() == DISCOVERY_PARTICIPANT_MESSAGE_TOKEN {
-          discovery.handle_participant_message_reader(&mut dcps_participant_message_reader);
-        } else if event.token() == DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN {
-          discovery
-            .write_participant_message(&mut dcps_participant_message_writer, &mut liveliness_state);
-          dcps_participant_message_timer.set_timeout(Discovery::CHECK_PARTICIPANT_MESSAGES, ());
-        }
-      }
-    }
-  }
+            topic_cleanup_timer.set_timeout(Discovery::TOPIC_CLEANUP_PERIOD, ());
+          }
+          DISCOVERY_SEND_TOPIC_INFO_TOKEN => {
+            discovery.write_topic_info(&mut dcps_writer);
+            topic_info_send_timer.set_timeout(Discovery::SEND_TOPIC_INFO_PERIOD, ());
+          }
+          DISCOVERY_PARTICIPANT_MESSAGE_TOKEN => {
+            discovery.handle_participant_message_reader(&mut dcps_participant_message_reader);
+          }
+          DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN => {
+            discovery
+              .write_participant_message(&mut dcps_participant_message_writer, &mut liveliness_state);
+            dcps_participant_message_timer.set_timeout(Discovery::CHECK_PARTICIPANT_MESSAGES, ());
+          }
+          other_token => {
+            error!("discovery event loop got token: {:?}", other_token);
+          }
+        } // match
+      } // for 
+    } // loop
+  } // fn
 
   pub fn initialize_participant(&self, dp: &DomainParticipantWeak) {
     let mut db = self.discovery_db_write();
     let port = get_spdp_well_known_multicast_port(dp.domain_id());
     db.initialize_participant_reader_proxy(port);
-    self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
-      needs_new_cache_change: true,
+    // TODO: Which Reader? all of them?
+    self.send_discovery_notification(
+      DiscoveryNotificationType::ParticipantUpdated {
+        guid_prefix: dp.get_guid().guidPrefix
+        // rtps_reader_proxy: ,
+        // needs_new_cache_change: true,
     });
   }
 
-  pub fn handle_participant_reader(
-    &self,
-    reader: &mut DataReader<
-      SPDPDiscoveredParticipantData,
-      PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>,
-    >,
-  ) -> Option<SPDPDiscoveredParticipantData> {
-    let s = reader.take_next_sample();
-    debug!("handle_participant_reader {:?}",&s);
-    let participant_data = match s {
-      Ok(d) => match d {
-        Some(d) => match d.value() {
-          Ok(aaaaa) => (aaaaa).clone(),
-          Err(key) => {
-            // we should dispose participant here
-            self.discovery_db_write().remove_participant(*key);
-            self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
-              needs_new_cache_change: false,
-            });
-            self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
-            return None;
-          }
-        },
-        None => return None,
-      },
-      _ => return None,
-    };
-
-    let mut db = self.discovery_db_write();
-    let updated = db.update_participant(&participant_data);
-    if updated {
-      self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
-        needs_new_cache_change: false,
-      });
-      self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
-
-      return Some(participant_data);
-    }
-
-    None
+  pub fn handle_participant_reader(&self,
+    reader: &mut DataReader<SPDPDiscoveredParticipantData,
+      PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>) 
+  {
+    loop {
+      let s = reader.take_next_sample();
+      debug!("handle_participant_reader {:?}",&s);
+      match s {
+        Ok(Some(d)) => match d.value {
+            Ok(participant_data) => {
+              let mut db = self.discovery_db_write();
+              db.update_participant(&participant_data);
+              self.send_discovery_notification(
+                DiscoveryNotificationType::ParticipantUpdated { 
+                  guid_prefix: participant_data.participant_guid.guidPrefix 
+                } );              
+              self.discovery_db_write().update_participant(&participant_data);
+              //TODO: Which reader? all of them?
+              // self.send_discovery_notification(
+              //   DiscoveryNotificationType::ReaderUpdated {
+              //     rtps_reader_proxy: ,
+              //     needs_new_cache_change: true,
+              // });
+            },
+            // Err means that DomainParticipant was disposed
+            Err(guid) => {
+              self.discovery_db_write().remove_participant(guid);
+              self.send_discovery_notification(
+                DiscoveryNotificationType::ParticipantLost { guid_prefix: guid.guidPrefix });
+            }
+          },
+        Ok(None) => return, // no more data
+        Err(e) => error!("{:?}",e),
+      }
+    } // loop
   }
 
   pub fn handle_subscription_reader(
@@ -615,19 +617,23 @@ impl Discovery {
         for data in d.into_iter() {
           match data.value() {
             Ok(val) => {
-              db.update_subscription(&val);
-              self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
-                needs_new_cache_change: true,
-              });
+              if let Some(rtps_reader_proxy) = db.update_subscription(&val) {
+                self.send_discovery_notification(
+                  DiscoveryNotificationType::ReaderUpdated {
+                    rtps_reader_proxy, 
+                    needs_new_cache_change: true,
+                  });  
+              }
               db.update_topic_data_drd(&val);
               debug!("Discovered Reader {:?}", &val);
             }
             Err(guid) => {
-              db.remove_topic_reader(*guid);
-              self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
-                needs_new_cache_change: false,
-              });
               debug!("Dispose Reader {:?}", guid);
+              db.remove_topic_reader(*guid);
+              self.send_discovery_notification(
+                  DiscoveryNotificationType::ReaderLost {
+                    reader_guid: *guid,
+                });
             }
           }
         }
@@ -646,15 +652,19 @@ impl Discovery {
         for data in d.into_iter() {
           match data.value() {
             Ok(val) => {
-              db.update_publication(&val);
-              self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
+              if let Some(rtps_writer_proxy) =  db.update_publication(&val) {
+                self.send_discovery_notification(
+                    DiscoveryNotificationType::WriterUpdated{ rtps_writer_proxy }
+                  );
+              }
               db.update_topic_data_dwd(&val);
               debug!("Discovered Writer {:?}", &val);
             }
-            Err(guid) => {
-              db.remove_topic_writer(*guid);
-              self.send_discovery_notification(DiscoveryNotificationType::ReadersInfoUpdated);
-              debug!("Disposed Writer {:?}", guid);
+            Err(writer_guid) => {
+              db.remove_topic_writer(*writer_guid);
+              self.send_discovery_notification(
+                DiscoveryNotificationType::WriterLost { writer_guid: *writer_guid });
+              debug!("Disposed Writer {:?}", writer_guid);
             }
           }
         }
@@ -719,6 +729,7 @@ impl Discovery {
     }
   }
 
+  // TODO: Explain what happens here and by what logic
   pub fn write_participant_message(
     &self,
     writer: &mut DataWriter< ParticipantMessageData, CDRSerializerAdapter<ParticipantMessageData, LittleEndian>,
@@ -835,18 +846,6 @@ impl Discovery {
 
   pub fn topic_cleanup(&self) {
     self.discovery_db_write().topic_cleanup();
-  }
-
-  pub fn update_spdp_participant_writer(&self, data: SPDPDiscoveredParticipantData) -> bool {
-    if !self.discovery_db_write().update_participant(&data) {
-      return false;
-    }
-
-    self.send_discovery_notification(DiscoveryNotificationType::WritersInfoUpdated {
-      needs_new_cache_change: true,
-    });
-
-    true
   }
 
   pub fn read_readers_info(&self) -> bool {

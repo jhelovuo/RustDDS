@@ -4,9 +4,10 @@ use serde::Deserialize;
 
 use chrono::Utc;
 
-use log::warn;
+use log::{warn,error};
 
 use crate::{
+  log_and_err_discovery,
   dds::{qos::QosPolicyBuilder},
   structure::{
     guid::GUID,
@@ -136,23 +137,28 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn generate_spdp_participant_data(&self) -> SPDPDiscoveredParticipantData {
-    SPDPDiscoveredParticipantData {
-      updated_time: Utc::now().timestamp_nanos() as u64,
-      protocol_version: self.protocol_version,
-      vendor_id: self.vendor_id,
-      expects_inline_qos: self.expects_inline_qos,
-      participant_guid: self.participant_guid,
+  pub fn generate_spdp_participant_data(&self) -> Result<SPDPDiscoveredParticipantData,Error> {
+    Ok(SPDPDiscoveredParticipantData {
+      updated_time: Utc::now(),
+      protocol_version: self.protocol_version
+        .ok_or(log_and_err_discovery!("protocol_version missing"))?,
+      vendor_id: self.vendor_id
+        .ok_or(log_and_err_discovery!("vendor_id missing"))?,
+      expects_inline_qos: self.expects_inline_qos.unwrap_or(false),
+      participant_guid: self.participant_guid
+        .ok_or(log_and_err_discovery!("participant_guid missing"))?,
       metatraffic_unicast_locators: self.metatraffic_unicast_locators.clone(),
       metatraffic_multicast_locators: self.metatraffic_multicast_locators.clone(),
       default_unicast_locators: self.default_unicast_locators.clone(),
       default_multicast_locators: self.default_multicast_locators.clone(),
-      available_builtin_endpoints: self.available_builtin_endpoints.clone(),
+      available_builtin_endpoints: self.available_builtin_endpoints.clone()
+        .ok_or(log_and_err_discovery!("available_builtin_endpoints missing"))?,
       lease_duration: self.lease_duration,
-      manual_liveliness_count: self.manual_liveliness_count,
+      manual_liveliness_count: self.manual_liveliness_count
+        .unwrap_or(0),
       builtin_enpoint_qos: self.builtin_enpoint_qos,
       entity_name: self.entity_name.clone(),
-    }
+    })
   }
 
   pub fn generate_reader_proxy(&self) -> Option<ReaderProxy> {
@@ -187,7 +193,7 @@ impl BuiltinDataDeserializer {
     } )
   }
 
-  pub fn generate_subscription_topic_data(&self) -> Result<SubscriptionBuiltinTopicData, Error> {
+  pub fn generate_subscription_topic_data(&self) -> Result<SubscriptionBuiltinTopicData,Error> {
     let qos = QosPolicyBuilder::new();
 
     let qos = match self.durability {
@@ -305,7 +311,7 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData, Error> {
+  pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData,Error> {
     let reader_proxy = self.generate_reader_proxy()
           .ok_or(Error::Message("ReaderProxy deserialization".to_string() ))?;
     let subscription_topic_data = self.generate_subscription_topic_data()?;
@@ -316,7 +322,7 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData, Error> {
+  pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData,Error> {
     let writer_proxy = self.generate_writer_proxy()
           .ok_or(Error::Message("WriterProxy deserialization".to_string() ))?;
     let publication_topic_data = self.generate_publication_topic_data();

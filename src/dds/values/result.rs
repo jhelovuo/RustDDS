@@ -50,6 +50,7 @@ pub enum Error {
   Internal { reason: String },
   Io { inner: std::io::Error },
   Serialization { reason: String },
+  Discovery {reason: String},
 }
 
 
@@ -82,6 +83,16 @@ macro_rules! log_and_err_internal {
   ($($arg:tt)*) => (
       { error!($($arg)*);
         Err( Error::Internal{ reason: format!($($arg)*) } )
+      }
+    )
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! log_and_err_discovery {
+  ($($arg:tt)*) => (
+      { error!($($arg)*);
+        Error::Message(format!($($arg)*) ) 
       }
     )
 }
