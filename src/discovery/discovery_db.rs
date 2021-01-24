@@ -5,7 +5,7 @@ use std::{
   ops::{Bound::Included,RangeBounds,},
 };
 
-use itertools::Itertools;
+
 use log::{error,warn,debug,trace,info};
 
 use crate::{
@@ -100,6 +100,10 @@ impl DiscoveryDB {
   {
     self.participant_proxies
       .get( &GUID::new_with_prefix_and_id(guid_prefix, EntityId::ENTITYID_PARTICIPANT))
+  }
+
+  pub fn find_remote_reader(&self, guid:GUID) -> Option<&DiscoveredReaderData>{
+    self.external_topic_readers.get(&guid)
   }
 
   fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {

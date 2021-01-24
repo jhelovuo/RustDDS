@@ -75,6 +75,7 @@ pub(crate) struct Reader {
   received_hearbeat_count: i32,
 
   matched_writers: HashMap<GUID, RtpsWriterProxy>,
+  writer_match_count_total: i32, // total count, never decreases
 
   requested_deadline_missed_count: i32,
 
@@ -107,6 +108,7 @@ impl Reader {
       sent_ack_nack_count: 0,
       received_hearbeat_count: 0,
       matched_writers: HashMap::new(),
+      writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
       timed_event_handler: None,
       data_reader_command_receiver,
@@ -313,8 +315,9 @@ impl Reader {
         // TODO: check that QoS parameters match. if not, do not add and send
         // status notification about failed match
         self.matched_writers.insert(proxy.remote_writer_guid, proxy);
+        self.writer_match_count_total += 1;
         self.send_status_change(DataReaderStatus::SubscriptionMatched{
-            total: CountWithChange::new(0,0), // TODO: keep count
+            total: CountWithChange::new(self.writer_match_count_total, 1 ), 
             current: CountWithChange::new(self.matched_writers.len() as i32, 1 ),
         })
       }

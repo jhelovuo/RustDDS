@@ -100,8 +100,8 @@ impl Serialize for ReaderProxy {
 pub struct SubscriptionBuiltinTopicData {
   key: Option<GUID>,
   participant_key: Option<GUID>,
-  topic_name: Option<String>,
-  type_name: Option<String>,
+  topic_name: Option<String>,   // TODO: It makes no sense to have this as an Option
+  type_name: Option<String>,    // TODO: It makes no sense to have this as an Option
   durability: Option<Durability>,
   deadline: Option<Deadline>,
   latency_budget: Option<LatencyBudget>,

@@ -1,5 +1,6 @@
 //use std::cmp::max;
 
+use crate::discovery::discovery::Discovery;
 use log::{debug, error, info, warn, trace};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
@@ -451,35 +452,6 @@ impl DPEventLoop {
       }
     }
   }
-  /*
-  pub fn handle_reader_command_event(&mut self, event: &Event) {
-    unimplemented!(); // there is no known use case for this for now
-    /*
-    let reader_guid = self
-      .reader_command_receiver_identification
-      .get(&event.token())
-      .expect(&"Did not found reader command reciever!");
-    let reader = self
-      .message_receiver
-      .get_reader(reader_guid.entityId)
-      .expect(&format!(
-        "Message received id not contain reade with entityID: {:?}",
-        reader_guid.entityId
-      ));
-
-    let mut message_queue: Vec<ReaderCommand> = vec![];
-    while let Ok(res) = reader.data_reader_command_receiver.try_recv() {
-      message_queue.push(res);
-    }
-
-    for command in message_queue {
-      match command {
-        ReaderCommand::RESET_REQUESTED_DEADLINE_STATUS => {
-          reader.reset_requested_deadline_missed_status();
-        }
-      }
-    } */
-  }*/
 
   pub fn handle_writer_acknack_action(&mut self, _event: &Event) {
     while let Ok((acknack_sender_prefix, acknack_message)) = self.ack_nack_reciever.try_recv() {
@@ -552,38 +524,16 @@ impl DPEventLoop {
               writer.notify_new_data_to_all_readers()
             }
           } else {
-            writer.readers = db
-              .get_external_reader_proxies()
-              .filter(|p| match p.subscription_topic_data.topic_name().as_ref() {
-                Some(tn) => *writer.topic_name() == *tn,
-                None => false,
-              })
-              .map(|drd| {
-                  // find out default LocatorsLists from Participant proxy
-                  let remote_reader_guid = drd.reader_proxy.remote_reader_guid;
-                  let locator_lists = 
-                    db.find_participant_proxy(remote_reader_guid.guidPrefix)
-                      .map(|pp| {
-                            debug!("Added default locators to Reader {:?}", remote_reader_guid);
-                            ( pp.default_unicast_locators.clone(), 
-                              pp.default_multicast_locators.clone() ) } )
-                      .unwrap_or_else( || {
-                          warn!("No remote participant known for {:?}",drd);
-                          (LocatorList::new(), LocatorList::new()) 
-                        } );
-                  // create new reader proxy
-                  RtpsReaderProxy::from_discovered_reader_data(drd, 
-                    locator_lists.0 , locator_lists.1)
+            let reader_clone = rtps_reader_proxy.clone();
+            db.find_remote_reader(rtps_reader_proxy.remote_reader_guid)
+              .map(|rp| {
+                  if *rp.subscription_topic_data.topic_name() 
+                        == Some(writer.topic_name().to_string()) {
+                    writer.update_reader_proxy(reader_clone, 
+                      rp.subscription_topic_data.generate_qos());
+                  }
                 }
-              )
-              .collect();
-
-            if let Some(Reliability::Reliable { max_blocking_time: _, }) 
-                  = writer.get_qos().reliability
-            {
-              // reset data sending
-              writer.notify_new_data_to_all_readers()
-            }
+              );
           }
         }
       }
@@ -616,7 +566,7 @@ impl DPEventLoop {
 
     // updating all data
     for reader in all_readers.map(|(_, p)| p).into_iter() {
-      DPEventLoop::add_reader_to_writer(writer, reader);
+      writer.update_reader_proxy(reader, Discovery::subscriber_qos())
     }
 
     // adding multicast reader
@@ -629,7 +579,7 @@ impl DPEventLoop {
     multicast_reader.multicast_locator_list =
       get_local_multicast_locators(get_spdp_well_known_multicast_port(domain_id));
 
-    DPEventLoop::add_reader_to_writer(writer, multicast_reader);
+    writer.update_reader_proxy(multicast_reader, Discovery::subscriber_qos());
     debug!("SPDP Participant readers updated.");
   }
 
@@ -639,19 +589,10 @@ impl DPEventLoop {
     entity_id: EntityId,
     expected_endpoint: u32,
   ) {
-    let guid_prefix = writer.get_guid_prefix();
-    // getting all possible readers
-    let all_readers = db
-      .get_participants()
-      .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint)
-                  && p.participant_guid.guidPrefix != guid_prefix 
-      )
-      .map(|p| (p.participant_guid, p.as_reader_proxy(true, Some(entity_id))));
-
-    // updating all data
-    for reader in all_readers.map(|(_, p)| p).into_iter() {
-      DPEventLoop::add_reader_to_writer(writer, reader);
-    }
+    db.find_participant_proxy(writer.get_guid_prefix())
+      .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint))
+      .map( |p| writer.update_reader_proxy( p.as_reader_proxy(true, Some(entity_id)) , 
+                                            Discovery::subscriber_qos() ));
   }
 
   fn update_pubsub_writers(
@@ -660,43 +601,9 @@ impl DPEventLoop {
     entity_id: EntityId,
     expected_endpoint: u32,
   ) {
-    let guid_prefix = reader.get_guid_prefix();
-
-    let all_writers = db
-      .get_participants()
-      .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint)
-                  && p.participant_guid.guidPrefix != guid_prefix 
-      )
-      .map(|p| (p.participant_guid, p.as_writer_proxy(true, Some(entity_id))));
-
-    for writer in all_writers.map(|(_, p)| p).into_iter() {
-      reader.add_writer_proxy(writer);
-    }
-  }
-
-  fn add_reader_to_writer(writer: &mut Writer, proxy: RtpsReaderProxy) {
-    let reader = writer.readers
-                  .iter_mut()
-                  .find(|r| r.remote_reader_guid == proxy.remote_reader_guid);
-
-
-    // TODO: Isn't this bad? It could cause ghost seuquence numbers, if
-    // nothing is sent yet.
-    /*proxy.notify_new_cache_change(
-      max(writer.last_change_sequence_number, SequenceNumber::default() )
-    );*/
-
-    // TODO: We should initialize reader proxy so that it does not try to send
-    // all data from beginning of time, but sends a reasonable GAP message first.
-
-    match reader {
-      Some(r) => {
-        if !r.content_is_equal(&proxy) {
-          *r = proxy
-        }
-      }
-      None => writer.readers.push(proxy), // TODO: This should be a method call
-    };
+    db.find_participant_proxy(reader.get_guid_prefix())
+      .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint))
+      .map(|p| reader.add_writer_proxy( p.as_writer_proxy(true, Some(entity_id))));
   }
 
   pub fn update_readers(&mut self, rtps_writer_proxy: RtpsWriterProxy) {

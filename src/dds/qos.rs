@@ -273,6 +273,15 @@ impl QosPolicies {
       lifespan: other.lifespan.or(self.lifespan),      
     }
   }
+
+  // Check if policy self commplies to other.
+  // yes => None
+  // no => Some(policyId) , where policyId is (any) one of the policies
+  // causing incompliance 
+  pub fn complies_to_fail(&self, other: &QosPolicies) -> Option<QosPolicyId> {
+    // TODO: Implement this
+    None
+  }
 }
 
 // put these into a submodule to avoid repeating the word "policy" or "qospolicy"

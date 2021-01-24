@@ -108,7 +108,9 @@ pub(crate) struct Writer {
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
   ///RTPS Reader
-  pub readers: Vec<RtpsReaderProxy>, // TODO: Convert to BTreeMap for faster finds.
+  readers: BTreeMap<GUID,RtpsReaderProxy>, // TODO: Convert to BTreeMap for faster finds.
+  matched_readers_count_total: i32, // all matches, never decremented
+  requested_incompatible_qos_count: i32, // how many times a Reader requested incompatible QoS
   message: Option<Message>,
   udp_sender: UDPSender,
   // This writer can read/write to only one of this DDSCache topic caches identified with my_topic_name
@@ -199,7 +201,9 @@ impl Writer {
       my_guid: guid,
       //enpoint_attributes: EndpointAttributes::default(),
       writer_command_receiver,
-      readers: vec![],
+      readers: BTreeMap::new(),
+      matched_readers_count_total: 0,
+      requested_incompatible_qos_count: 0,
       message: None,
       endpoint_attributes: EndpointAttributes::default(),
       udp_sender: UDPSender::new_with_random_port(),
@@ -341,7 +345,7 @@ impl Writer {
                .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
                .add_header_and_build(self.my_guid.guidPrefix);
           self.send_message_to_readers(DeliveryMode::Multicast, 
-            &data_hb_message, &mut self.readers.iter() );
+            &data_hb_message, &mut self.readers.values() );
         }
 
         // WriterCommand::ResetOfferedDeadlineMissedStatus { writer_guid: _, } => {
@@ -397,7 +401,7 @@ impl Writer {
     self.key_to_instant.insert(data_key, timestamp);
 
     // Notify reader proxies that there is a new sample
-    for reader in &mut self.readers {
+    for reader in &mut self.readers.values_mut() {
       reader.notify_new_cache_change(new_sequence_number)
     }
     timestamp
@@ -420,14 +424,15 @@ impl Writer {
     // TODO: This produces same heartbeat count for all messages sent, but
     // then again, they represent the same writer status.
 
-    if self.readers.iter().all(|rp| self.last_change_sequence_number < rp.all_acked_before ) {
+    if self.readers.values().all(|rp| self.last_change_sequence_number < rp.all_acked_before ) {
       trace!("heartbeat tick: all readers have all available data.");
     } else {
       let hb_message = MessageBuilder::new()
         .ts_msg(self.endianness, Some(Timestamp::now()) )
         .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
         .add_header_and_build(self.my_guid.guidPrefix);      
-      self.send_message_to_readers(DeliveryMode::Multicast, &hb_message, &mut self.readers.iter())
+      self.send_message_to_readers(DeliveryMode::Multicast, &hb_message, 
+                                    &mut self.readers.values())
     }
 
     self.set_heartbeat_timer(); // keep the heart beating
@@ -576,7 +581,7 @@ impl Writer {
   /// This is called repeadedly by handle_cache_cleaning action.
   fn remove_all_acked_changes_but_keep_depth(&mut self, depth: usize)  {
     // All readers have acked up to this point (SequenceNumber)
-    let acked_by_all_readers = self.readers.iter()
+    let acked_by_all_readers = self.readers.values()
           .map(|r| r.acked_up_to_before())
           .min()
           .unwrap_or(SequenceNumber::zero());
@@ -646,22 +651,50 @@ impl Writer {
 
   }
  
+  // returns if the reader was new
+  pub fn update_reader_proxy(&mut self, reader_proxy: RtpsReaderProxy, requested_qos:QosPolicies) {
+    if self.readers.get( &reader_proxy.remote_reader_guid ).is_none() {
+      self.readers.insert( reader_proxy.remote_reader_guid , reader_proxy );
+    } else {
+      match  self.qos_policies.complies_to_fail(&requested_qos) {
+        // matched QoS
+        None => {
+          self.readers.insert( reader_proxy.remote_reader_guid , reader_proxy );
+          self.matched_readers_count_total += 1;
+          self.status_sender.try_send(DataWriterStatus::PublicationMatched { 
+                total: CountWithChange::new(self.matched_readers_count_total , 1 ),
+                current: CountWithChange::new(self.readers.len() as i32 , 1)
+              })
+            .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
+          // send out hearbeat, so that new reader can catch up
+          if self.qos_policies.reliability.is_some() {
+            self.notify_new_data_to_all_readers()
+          }
+        }
+        Some(bad_policy_id) => {
+          // QoS not compliant :(
+          self.requested_incompatible_qos_count += 1;
+          self.status_sender.try_send(DataWriterStatus::OfferedIncompatibleQos { 
+                count: CountWithChange::new(self.requested_incompatible_qos_count , 1 ),
+                last_policy_id: bad_policy_id,
+                policies: Vec::new(), // TODO: implement this
+              })
+            .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
+        }
+      } // match
+    } // if 
+  }
 
+  // internal helper. Same as above, but duplicaes are an error.
   fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
-    if self.readers.iter().any(|x| {
-      x.remote_group_entity_id == reader_proxy.remote_group_entity_id
-        && x.remote_reader_guid == reader_proxy.remote_reader_guid
-    }) {
-      error!("Reader proxy with same group entityid {:?} and remotereader GUID {:?} added already",
-        reader_proxy.remote_group_entity_id, reader_proxy.remote_reader_guid);
-      return
-    };
-    &self.readers.push(reader_proxy);
+    let guid = reader_proxy.remote_reader_guid;
+    if self.readers.insert(reader_proxy.remote_reader_guid, reader_proxy).is_some() {
+      error!("Reader proxy with same GUID {:?} added already", guid);
+    }
   }
 
   fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
-    let pos = self.readers.iter().position(|x| x.remote_reader_guid == guid );
-    pos.map( |p| self.readers.remove(p) )
+    self.readers.remove(&guid)
   }
 
   ///This operation finds the ReaderProxy with GUID_t a_reader_guid from the set
@@ -675,10 +708,7 @@ impl Writer {
     // TODO: This lookup is done very frequently. It should be done by some
     // map instead of iterating through a Vec.
       let search_guid: GUID = GUID::new_with_prefix_and_id(guid_prefix, reader_entity_id);
-    self
-      .readers
-      .iter_mut()
-      .find(|x| x.remote_reader_guid == search_guid)
+    self.readers.get_mut(&search_guid)
   }
 
   pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<Timestamp> {
