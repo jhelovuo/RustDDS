@@ -1,5 +1,9 @@
-#[allow(unused_imports)]
-use log::{debug, error, info,trace};
+
+use crate::discovery::data_types::topic_data::ReaderProxy;
+use crate::network::util::get_local_multicast_locators;
+use crate::dds::data_types::SubscriptionBuiltinTopicData;
+use crate::dds::rtps_reader_proxy::RtpsReaderProxy;
+#[allow(unused_imports)] use log::{debug, error, info,trace};
 
 use mio::{Ready, Poll, PollOpt, Events};
 use mio_extras::timer::Timer;
@@ -28,9 +32,8 @@ use crate::{
     readcondition::ReadCondition,
   },
   dds::values::result::Error,
-  serialization::CDRDeserializerAdapter,
   structure::entity::RTPSEntity,
-  structure::guid::GUID,
+  structure::guid::{ GUID, GuidPrefix, },
   dds::qos::QosPolicyBuilder,
 };
 
@@ -559,15 +562,42 @@ impl Discovery {
 
   pub fn initialize_participant(&self, dp: &DomainParticipantWeak) {
     let port = get_spdp_well_known_multicast_port(dp.domain_id());
-    self.discovery_db_write()
-      .initialize_participant_reader_proxy(port);
     // TODO: Which Reader? all of them?
     // Or what is the meaning of this? Maybe increase SequenceNumbers to be sent?
     self.send_discovery_notification(
       DiscoveryNotificationType::ParticipantUpdated {
         guid_prefix: dp.get_guid().guidPrefix
     });
+    // insert reader proxy as multicast address, so discovery notifications are sent somewhere
+    self.initialize_participant_reader_proxy(port);
   }
+
+  pub fn initialize_participant_reader_proxy(&self, port: u16) {
+    let guid = GUID::new_with_prefix_and_id(
+      GuidPrefix::GUIDPREFIX_UNKNOWN, EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER);
+
+    let mut reader_proxy = ReaderProxy::new(guid);
+    reader_proxy.multicast_locator_list = get_local_multicast_locators(port);
+
+    let sub_topic_data = SubscriptionBuiltinTopicData::new(
+      guid,
+      &String::from("DCPSParticipant"),
+      &String::from("SPDPDiscoveredParticipantData"),
+      &Discovery::PARTICIPANT_MESSAGE_QOS,
+    );
+    let drd = DiscoveredReaderData {
+      reader_proxy,
+      subscription_topic_data: sub_topic_data,
+      content_filter: None,
+    };
+
+    self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated
+      { rtps_reader_proxy:  RtpsReaderProxy::from_discovered_reader_data(&drd,vec![], vec![]),
+        discovered_reader_data: drd,
+        needs_new_cache_change: true,
+      });
+  }
+
 
   pub fn handle_participant_reader(&self,
     reader: &mut DataReader<SPDPDiscoveredParticipantData,
@@ -588,7 +618,7 @@ impl Discovery {
             },
             // Err means that DomainParticipant was disposed
             Err(guid) => {
-              self.discovery_db_write().remove_participant(guid);
+              self.discovery_db_write().remove_participant(guid.guidPrefix);
               self.send_discovery_notification(
                 DiscoveryNotificationType::ParticipantLost { guid_prefix: guid.guidPrefix });
             }
@@ -609,10 +639,11 @@ impl Discovery {
         for data in d.into_iter() {
           match data.value() {
             Ok(val) => {
-              if let Some(rtps_reader_proxy) = db.update_subscription(&val) {
+              if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(&val) {
                 self.send_discovery_notification(
                   DiscoveryNotificationType::ReaderUpdated {
-                    rtps_reader_proxy, 
+                    discovered_reader_data: drd, 
+                    rtps_reader_proxy,
                     needs_new_cache_change: true,
                   });  
               }
@@ -644,9 +675,9 @@ impl Discovery {
         for data in d.into_iter() {
           match data.value() {
             Ok(val) => {
-              if let Some(rtps_writer_proxy) =  db.update_publication(&val) {
+              if let Some(discovered_writer_data) =  db.update_publication(&val) {
                 self.send_discovery_notification(
-                    DiscoveryNotificationType::WriterUpdated{ rtps_writer_proxy }
+                    DiscoveryNotificationType::WriterUpdated{ discovered_writer_data }
                   );
               }
               db.update_topic_data_dwd(&val);

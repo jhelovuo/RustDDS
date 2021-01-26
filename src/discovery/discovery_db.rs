@@ -9,7 +9,7 @@ use std::{
 use log::{error,warn,debug,trace,info};
 
 use crate::{
-  dds::qos::HasQoSPolicy, network::util::get_local_multicast_locators, 
+  dds::qos::HasQoSPolicy, 
   structure::guid::GuidPrefix,
 };
 
@@ -19,12 +19,11 @@ use crate::structure::{guid::GUID, guid::EntityId,
 use crate::{
   dds::{
     rtps_reader_proxy::RtpsReaderProxy, reader::Reader, participant::DomainParticipant,
-    topic::Topic, rtps_writer_proxy::RtpsWriterProxy, traits::TopicDescription,
+    topic::Topic, traits::TopicDescription,
   },
 };
 
 use super::{
-  discovery::Discovery,
   data_types::{
     spdp_participant_data::SPDPDiscoveredParticipantData,
     topic_data::{
@@ -40,8 +39,8 @@ const DEFAULT_PARTICIPANT_LEASE_DURATION : Duration = Duration::from_secs(60);
 
 
 pub(crate) struct DiscoveryDB {
-  participant_proxies: BTreeMap<GUID, SPDPDiscoveredParticipantData>,
-  participant_last_life_signs: HashMap<GUID, Instant>,
+  participant_proxies: BTreeMap<GuidPrefix, SPDPDiscoveredParticipantData>,
+  participant_last_life_signs: HashMap<GuidPrefix, Instant>,
   // local writer proxies for topics (topic name acts as key)
   local_topic_writers: HashMap<GUID, DiscoveredWriterData>,
   // local reader proxies for topics (topic name acts as key)
@@ -81,25 +80,24 @@ impl DiscoveryDB {
         return // Maybe we should discard the participant here?
       }
       // actual work here:
-      self.participant_proxies.insert(guid, data.clone());
-      self.participant_last_life_signs.insert(guid, Instant::now() );
+      self.participant_proxies.insert(guid.guidPrefix, data.clone());
+      self.participant_last_life_signs.insert(guid.guidPrefix, Instant::now() );
   }
 
-  pub fn remove_participant(&mut self, guid: GUID) {
-    info!("removing participant {:?}",guid);
-    self.participant_proxies.remove(&guid);
-    self.participant_last_life_signs.remove(&guid);
+  pub fn remove_participant(&mut self, guid_prefix: GuidPrefix) {
+    info!("removing participant {:?}",guid_prefix);
+    self.participant_proxies.remove(&guid_prefix);
+    self.participant_last_life_signs.remove(&guid_prefix);
 
-    self.remove_topic_reader_with_prefix(guid.guidPrefix);
+    self.remove_topic_reader_with_prefix(guid_prefix);
 
-    self.remove_topic_writer_with_prefix(guid.guidPrefix);
+    self.remove_topic_writer_with_prefix(guid_prefix);
   }
 
   pub fn find_participant_proxy(&self, guid_prefix: GuidPrefix) 
     -> Option<&SPDPDiscoveredParticipantData> 
   {
-    self.participant_proxies
-      .get( &GUID::new_with_prefix_and_id(guid_prefix, EntityId::ENTITYID_PARTICIPANT))
+    self.participant_proxies.get( &guid_prefix )
   }
 
   pub fn find_remote_reader(&self, guid:GUID) -> Option<&DiscoveredReaderData>{
@@ -227,14 +225,15 @@ impl DiscoveryDB {
     }
   }
 
+  // Please explain how this works.
   pub fn get_participants<'a>(&'a self) -> Map<
-    BTreeIter<'a, GUID, SPDPDiscoveredParticipantData>,
-    fn((&GUID, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData,
+    BTreeIter<'a, GuidPrefix, SPDPDiscoveredParticipantData>,
+    fn((&GuidPrefix, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData,
   > {
     type cvfun<'a> =
-      fn((&GUID, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData;
+      fn((&GuidPrefix, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData;
     fn conver<'a>(
-      (_, data): (&GUID, &'a SPDPDiscoveredParticipantData),
+      (_, data): (&GuidPrefix, &'a SPDPDiscoveredParticipantData),
     ) -> &'a SPDPDiscoveredParticipantData {
       data
     }
@@ -261,7 +260,7 @@ impl DiscoveryDB {
     self.external_topic_writers.values()
   }
 
-  fn add_reader_to_local_writer(&mut self, data: &DiscoveredReaderData) {
+  //fn add_reader_to_local_writer(&mut self, data: &DiscoveredReaderData) {
     /*
     let topic_name = match data.subscription_topic_data.topic_name().as_ref() {
       Some(tn) => tn,
@@ -313,7 +312,7 @@ impl DiscoveryDB {
 
         // TODO: multicast locators
       }); */
-  }
+  //}
 
   /* this function seems to do nothing useful, as the data is not used! 
 
@@ -353,7 +352,7 @@ impl DiscoveryDB {
       })
   } */
   
-  pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> Option<RtpsReaderProxy> {
+  pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> Option<(DiscoveredReaderData, RtpsReaderProxy)> {
     let guid = data.reader_proxy.remote_reader_guid;
     // we could return None to indicate that we already knew all about this reader
     // To do that, we should check that the reader is the same as what we have in the DB already.
@@ -376,19 +375,20 @@ impl DiscoveryDB {
                 (LocatorList::new(), LocatorList::new()) 
               } );
         debug!("External reader: {:?}",data);
-        Some( RtpsReaderProxy::from_discovered_reader_data(data, 
-                default_locator_lists.0 , default_locator_lists.1 ) ) 
+        Some( ( data.clone(), 
+                RtpsReaderProxy::from_discovered_reader_data(data, 
+                  default_locator_lists.0 , default_locator_lists.1 )))
       }
     }
   }
 
-  pub fn update_publication(&mut self, data: &DiscoveredWriterData) -> Option<RtpsWriterProxy> {
+  pub fn update_publication(&mut self, data: &DiscoveredWriterData) -> Option<DiscoveredWriterData> {
     match self.external_topic_writers.get(&data.writer_proxy.remote_writer_guid) {
       Some(dwd) if dwd == data => None , // already up to date
       _ => {
         self.external_topic_writers.insert(data.writer_proxy.remote_writer_guid, data.clone());
         debug!("External writer: {:?}",data);
-        Some( RtpsWriterProxy::from_discovered_writer_data(data) )
+        Some(data.clone() )
       }
     }
     
@@ -471,28 +471,7 @@ impl DiscoveryDB {
     true
   }
 
-  pub fn initialize_participant_reader_proxy(&mut self, port: u16) {
-    let guid = GUID::new_with_prefix_and_id(
-      GuidPrefix::GUIDPREFIX_UNKNOWN, EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER);
-
-    let mut reader_proxy = ReaderProxy::new(guid);
-    reader_proxy.multicast_locator_list = get_local_multicast_locators(port);
-
-    let sub_topic_data = SubscriptionBuiltinTopicData::new(
-      guid,
-      &String::from("DCPSParticipant"),
-      &String::from("SPDPDiscoveredParticipantData"),
-      &Discovery::PARTICIPANT_MESSAGE_QOS,
-    );
-    let drd = DiscoveredReaderData {
-      reader_proxy,
-      subscription_topic_data: sub_topic_data,
-      content_filter: None,
-    };
-
-    self.add_reader_to_local_writer(&drd);
-  }
-
+  
   // local topic readers
   pub fn update_local_topic_reader(
     &mut self,

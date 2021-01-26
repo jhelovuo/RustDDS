@@ -19,7 +19,6 @@ use std::{
   hash::Hasher,
   collections::BTreeSet,
   iter::FromIterator,
-  slice::Iter,
   sync::{Arc, RwLock},
 };
 use crate::structure::dds_cache::{DDSCache};
@@ -306,13 +305,14 @@ impl Reader {
     return vec![*start, *end];
   }
 
+  
   // updates or adds a new writer proxy, doesn't touch changes
-  pub fn add_writer_proxy(&mut self, proxy: RtpsWriterProxy) {
+  pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy) {
     let old_proxy = self.matched_writer_lookup(proxy.remote_writer_guid);
     match old_proxy {
       Some(op) => op.update_contents(proxy),
       None => {
-        // TODO: check that QoS parameters match. if not, do not add and send
+        // TODO: check that QoS parameters match. if not, do not add, and send
         // status notification about failed match
         self.matched_writers.insert(proxy.remote_writer_guid, proxy);
         self.writer_match_count_total += 1;
@@ -322,6 +322,10 @@ impl Reader {
         })
       }
     };
+  }
+
+  pub fn remove_writer_proxy(&mut self, writer_guid:GUID) {
+    self.matched_writers.remove(&writer_guid);
   }
 
   pub fn contains_writer(&self, entity_id: EntityId) -> bool {
@@ -346,13 +350,15 @@ impl Reader {
       multicast_locator_list,
       remote_group_entity_id,
     );
-    self.add_writer_proxy(proxy);
+    self.update_writer_proxy(proxy);
   }
+
+
   // TODO: This is stupid removeal algorithm. Why we cannot just remove by GUID?
-  pub fn retain_matched_writers(&mut self, retvals: Iter<RtpsWriterProxy>) {
-    let rt: Vec<GUID> = retvals.map(|p| p.remote_writer_guid).collect();
-    self.matched_writers.retain(|guid, _| rt.contains(guid));
-  }
+  // pub fn retain_matched_writers(&mut self, retvals: Iter<RtpsWriterProxy>) {
+  //   let rt: Vec<GUID> = retvals.map(|p| p.remote_writer_guid).collect();
+  //   self.matched_writers.retain(|guid, _| rt.contains(guid));
+  // }
   /* not used?
   pub fn matched_writer_remove(&mut self, remote_writer_guid: GUID) -> Option<RtpsWriterProxy> {
     self.matched_writers.remove(&remote_writer_guid)

@@ -693,7 +693,7 @@ impl Writer {
     }
   }
 
-  fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
+  pub fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
     self.readers.remove(&guid)
   }
 

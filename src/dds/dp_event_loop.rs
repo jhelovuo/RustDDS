@@ -1,5 +1,7 @@
 //use std::cmp::max;
 
+use crate::discovery::data_types::topic_data::DiscoveredWriterData;
+use crate::discovery::data_types::topic_data::DiscoveredReaderData;
 use crate::discovery::discovery::Discovery;
 use log::{debug, error, info, warn, trace};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
@@ -221,13 +223,13 @@ impl DPEventLoop {
           while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
             use DiscoveryNotificationType::*;
             match dnt {
-              WriterUpdated{ rtps_writer_proxy } => 
-                ev_wrapper.remote_writer_discovered(rtps_writer_proxy),
+              WriterUpdated{ discovered_writer_data } => 
+                ev_wrapper.remote_writer_discovered(discovered_writer_data),
 
               WriterLost{writer_guid} => ev_wrapper.remote_writer_lost(writer_guid) ,
 
-              ReaderUpdated{ rtps_reader_proxy, needs_new_cache_change } => 
-                ev_wrapper.remote_reader_discovered(rtps_reader_proxy, needs_new_cache_change),
+              ReaderUpdated{ discovered_reader_data, rtps_reader_proxy, needs_new_cache_change } => 
+                ev_wrapper.remote_reader_discovered(discovered_reader_data, rtps_reader_proxy, needs_new_cache_change),
 
               ReaderLost{ reader_guid } => ev_wrapper.remote_reader_lost(reader_guid) ,
 
@@ -546,9 +548,8 @@ impl DPEventLoop {
               })
               .collect();
 
-            reader.retain_matched_writers(proxies.iter());
             for proxy in proxies.into_iter() {
-              reader.add_writer_proxy(proxy);
+              reader.update_writer_proxy(proxy);
             }
           }
           EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
@@ -584,31 +585,25 @@ impl DPEventLoop {
     }
   }
 
-  fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
-    // TODO
+  fn remote_participant_lost(&mut self, _participant_guid_prefix: GuidPrefix ) {
+    // Discovery has already removed Particiapnt from Discovery DB
+    // Maybe there is nothing left to do?
   }
 
-  fn remote_reader_discovered(&mut self, rtps_reader_proxy: RtpsReaderProxy , needs_new_cache_change: bool) {
-    match self.discovery_db.read() {
-      Ok(db) => {
-        for (_writer_guid, writer) in self.writers.iter_mut() {
-          let reader_clone = rtps_reader_proxy.clone();
-          db.find_remote_reader(rtps_reader_proxy.remote_reader_guid)
-            .map(|rp| {
-                if rp.subscription_topic_data.topic_name() == writer.topic_name() {
-                  writer.update_reader_proxy(reader_clone, 
-                    rp.subscription_topic_data.generate_qos());
-                }
-              }
-            );
-        }
+  fn remote_reader_discovered(&mut self, drd: DiscoveredReaderData, 
+      rtps_reader_proxy: RtpsReaderProxy , needs_new_cache_change: bool) {
+    for (_writer_guid, writer) in self.writers.iter_mut() {
+      if drd.subscription_topic_data.topic_name() == writer.topic_name() {
+        writer.update_reader_proxy(rtps_reader_proxy.clone(), 
+          drd.subscription_topic_data.generate_qos());
       }
-      _ => panic!("DiscoveryDB is poisoned."),
     }
   }
 
   fn remote_reader_lost(&mut self, reader_guid:GUID) {
-    //TODO
+    for (_writer_guid, writer) in self.writers.iter_mut() {
+      writer.matched_reader_remove(reader_guid);
+    }
   }
 
 
@@ -673,32 +668,21 @@ impl DPEventLoop {
   ) {
     db.find_participant_proxy(reader.get_guid_prefix())
       .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint))
-      .map(|p| reader.add_writer_proxy( p.as_writer_proxy(true, Some(entity_id))));
+      .map(|p| reader.update_writer_proxy( p.as_writer_proxy(true, Some(entity_id))));
   }
 
-  pub fn remote_writer_discovered(&mut self, rtps_writer_proxy: RtpsWriterProxy) {
-    let db = match self.discovery_db.read() {
-      Ok(db) => db,
-      Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-    };
-
+  pub fn remote_writer_discovered(&mut self, dwd: DiscoveredWriterData) {
     for reader in self.message_receiver.available_readers.iter_mut() {
-      let topic_name = reader.topic_name().clone();
-      let proxies: Vec<RtpsWriterProxy> = db
-        .get_external_writer_proxies()
-        .filter(|p| p.publication_topic_data.topic_name == topic_name)
-        .map(|p| RtpsWriterProxy::from_discovered_writer_data(p))
-        .collect();
-
-      reader.retain_matched_writers(proxies.iter());
-      for proxy in proxies.into_iter() {
-        reader.add_writer_proxy(proxy);
+      if &dwd.publication_topic_data.topic_name == reader.topic_name() {
+        reader.update_writer_proxy( RtpsWriterProxy::from_discovered_writer_data(&dwd) );
       }
-    } // for
-  } // fn 
+    } 
+  }  
 
   pub fn remote_writer_lost(&mut self, writer_guid: GUID) {
-    // TODO
+    for reader in self.message_receiver.available_readers.iter_mut() {
+      reader.remove_writer_proxy( writer_guid );
+    }
   }
 
   pub fn update_topics(&mut self) {
