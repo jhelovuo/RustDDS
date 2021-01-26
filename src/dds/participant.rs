@@ -686,7 +686,7 @@ impl DomainParticipant_Inner {
     let topic = Topic::new(
       domain_participant_weak,
       name.to_string(),
-      TypeDesc::new(type_desc.to_string()),
+      TypeDesc::new(type_desc),
       &qos,
       topic_kind,
     );

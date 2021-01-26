@@ -178,48 +178,36 @@ impl DiscoveryDB {
       self
         .local_topic_readers
         .iter()
-        .find(|(_, p)| match &p.subscription_topic_data.topic_name() {
-          Some(tn) => tn == topic_name,
-          None => false,
-        })
+        .find(|(_, p)| p.subscription_topic_data.topic_name() == topic_name)
     {
-      return true;
+      return true
     }
 
     if let Some(_) =
       self
         .local_topic_writers
         .iter()
-        .find(|(_, p)| match &p.publication_topic_data.topic_name {
-          Some(tn) => tn == topic_name,
-          None => false,
-        })
+        .find(|(_, p)| &p.publication_topic_data.topic_name == topic_name)
     {
-      return true;
+      return true
     }
 
     if let Some(_) =
       self
         .external_topic_readers
         .values()
-        .find(|p| match &p.subscription_topic_data.topic_name() {
-          Some(tn) => tn == topic_name,
-          None => false,
-        })
+        .find(|p| p.subscription_topic_data.topic_name() == topic_name)
     {
-      return true;
+      return true
     }
 
     if let Some(_) =
       self
         .external_topic_writers
         .values()
-        .find(|p| match &p.publication_topic_data.topic_name {
-          Some(tn) => tn == topic_name,
-          None => false,
-        })
+        .find(|p| &p.publication_topic_data.topic_name == topic_name)
     {
-      return true;
+      return true
     }
 
     false
@@ -451,8 +439,8 @@ impl DiscoveryDB {
   pub fn update_topic_data_p(&mut self, topic: &Topic) {
     let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
       key: None,
-      name: Some(String::from(topic.get_name())),
-      type_name: Some(String::from(topic.get_type().name())),
+      name: String::from(topic.get_name()),
+      type_name: String::from(topic.get_type().name()),
       durability: topic.get_qos().durability.clone(),
       deadline: topic.get_qos().deadline.clone(),
       latency_budget: topic.get_qos().latency_budget.clone(),
@@ -471,18 +459,12 @@ impl DiscoveryDB {
 
   pub fn update_topic_data(&mut self, data: &DiscoveredTopicData) -> bool {
     trace!("Update topic data: {:?}",&data);
-    let topic_name = match &data.topic_data.name {
-      Some(n) => n,
-      None => {
-        warn!("Received DiscoveredTopicData doesn't have a name.");
-        return false;
-      }
-    };
+    let topic_name = data.topic_data.name.clone();
 
-    match self.topics.get_mut(topic_name) {
+    match self.topics.get_mut(&data.topic_data.name) {
       Some(t) => *t = data.clone(),
       None => {
-        self.topics.insert(topic_name.clone(), data.clone());
+        self.topics.insert(topic_name, data.clone());
       }
     };
 

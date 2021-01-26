@@ -50,7 +50,7 @@ pub struct SPDPDiscoveredParticipantData {
   pub available_builtin_endpoints: BuiltinEndpointSet,
   pub lease_duration: Option<Duration>,
   pub manual_liveliness_count: i32,
-  pub builtin_enpoint_qos: Option<BuiltinEndpointQos>,
+  pub builtin_endpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<String>,
 }
 
@@ -157,7 +157,7 @@ impl SPDPDiscoveredParticipantData {
       available_builtin_endpoints: BuiltinEndpointSet::from_u32(builtin_endpoints),
       lease_duration: Some(Duration::from(lease_duration)),
       manual_liveliness_count: 0,
-      builtin_enpoint_qos: None,
+      builtin_endpoint_qos: None,
       entity_name: None,
     }
   }

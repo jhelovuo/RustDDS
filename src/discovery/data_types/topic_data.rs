@@ -100,8 +100,8 @@ impl Serialize for ReaderProxy {
 pub struct SubscriptionBuiltinTopicData {
   key: Option<GUID>,
   participant_key: Option<GUID>,
-  topic_name: Option<String>,   // TODO: It makes no sense to have this as an Option
-  type_name: Option<String>,    // TODO: It makes no sense to have this as an Option
+  topic_name: String,   
+  type_name: String,    
   durability: Option<Durability>,
   deadline: Option<Deadline>,
   latency_budget: Option<LatencyBudget>,
@@ -129,8 +129,8 @@ impl SubscriptionBuiltinTopicData {
     let mut sbtd = SubscriptionBuiltinTopicData {
       key: Some(key),
       participant_key: None,
-      topic_name: Some(topic_name.to_string()),
-      type_name: Some(type_name.to_string()),
+      topic_name: topic_name.to_string(),
+      type_name: type_name.to_string(),
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -163,20 +163,20 @@ impl SubscriptionBuiltinTopicData {
     self.participant_key = Some(participant_key);
   }
 
-  pub fn topic_name(&self) -> &Option<String> {
+  pub fn topic_name(&self) -> &String{
     &self.topic_name
   }
 
   pub fn set_topic_name(&mut self, topic_name: &str) {
-    self.topic_name = Some(String::from(topic_name));
+    self.topic_name = String::from(topic_name);
   }
 
-  pub fn type_name(&self) -> &Option<String> {
+  pub fn type_name(&self) -> &String {
     &self.type_name
   }
 
   pub fn set_type_name(&mut self, type_name: &str) {
-    self.type_name = Some(String::from(type_name));
+    self.type_name = String::from(type_name);
   }
 
   pub fn durability(&self) -> &Option<Durability> {
@@ -419,8 +419,8 @@ impl Serialize for WriterProxy {
 pub struct PublicationBuiltinTopicData {
   pub key: Option<GUID>,
   pub participant_key: Option<GUID>,
-  pub topic_name: Option<String>,
-  pub type_name: Option<String>,
+  pub topic_name: String,
+  pub type_name: String,
   pub durability: Option<Durability>,
   pub deadline: Option<Deadline>,
   pub latency_budget: Option<LatencyBudget>,
@@ -443,8 +443,8 @@ impl PublicationBuiltinTopicData {
     PublicationBuiltinTopicData {
       key: Some(guid),
       participant_key: Some(participant_guid),
-      topic_name: Some(topic_name.clone()),
-      type_name: Some(type_name.clone()),
+      topic_name: topic_name.clone(),
+      type_name: type_name.clone(),
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -479,7 +479,7 @@ impl<'de> Deserialize<'de> for PublicationBuiltinTopicData {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    Ok(res.generate_publication_topic_data())
+    res.generate_publication_topic_data().map_err(|e| de::Error::custom(e))
   }
 }
 
@@ -581,8 +581,8 @@ impl Serialize for DiscoveredWriterData {
 #[derive(Debug, PartialEq, Clone)]
 pub struct TopicBuiltinTopicData {
   pub key: Option<GUID>,
-  pub name: Option<String>,
-  pub type_name: Option<String>,
+  pub name: String,
+  pub type_name: String,
   pub durability: Option<Durability>,
   pub deadline: Option<Deadline>,
   pub latency_budget: Option<LatencyBudget>,
@@ -603,7 +603,7 @@ impl<'de> Deserialize<'de> for TopicBuiltinTopicData {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    Ok(res.generate_topic_data())
+    res.generate_topic_data().map_err(|e| de::Error::custom(e))
   }
 }
 
@@ -638,18 +638,12 @@ impl DiscoveredTopicData {
     }
   }
 
-  pub fn get_topic_name(&self) -> String {
-    match &self.topic_data.name {
-      Some(n) => n.clone(),
-      None => String::from(""),
-    }
+  pub fn get_topic_name(&self) -> &String {
+    &self.topic_data.name
   }
 
-  pub fn get_type_name(&self) -> String {
-    match &self.topic_data.type_name {
-      Some(t) => t.clone(),
-      None => String::from(""),
-    }
+  pub fn get_type_name(&self) -> &String {
+    &self.topic_data.type_name
   }
 }
 
@@ -660,7 +654,7 @@ impl<'de> Deserialize<'de> for DiscoveredTopicData {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    let topic_data = res.generate_topic_data();
+    let topic_data = res.generate_topic_data().map_err(|e| de::Error::custom(e))?;
 
     Ok(DiscoveredTopicData::new(topic_data))
   }

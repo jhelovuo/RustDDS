@@ -14,7 +14,7 @@ use std::{
 
 use crate::{
   dds::{
-    with_key::datareader::DataReader,
+    with_key::datareader::DataReader, with_key::datareader::DataReader_CDR,
     with_key::datawriter::DataWriter,
     topic::*,
     participant::{DomainParticipantWeak},
@@ -558,15 +558,14 @@ impl Discovery {
   } // fn
 
   pub fn initialize_participant(&self, dp: &DomainParticipantWeak) {
-    let mut db = self.discovery_db_write();
     let port = get_spdp_well_known_multicast_port(dp.domain_id());
-    db.initialize_participant_reader_proxy(port);
+    self.discovery_db_write()
+      .initialize_participant_reader_proxy(port);
     // TODO: Which Reader? all of them?
+    // Or what is the meaning of this? Maybe increase SequenceNumbers to be sent?
     self.send_discovery_notification(
       DiscoveryNotificationType::ParticipantUpdated {
         guid_prefix: dp.get_guid().guidPrefix
-        // rtps_reader_proxy: ,
-        // needs_new_cache_change: true,
     });
   }
 
@@ -580,19 +579,12 @@ impl Discovery {
       match s {
         Ok(Some(d)) => match d.value {
             Ok(participant_data) => {
-              let mut db = self.discovery_db_write();
-              db.update_participant(&participant_data);
+              self.discovery_db_write()
+                .update_participant(&participant_data);
               self.send_discovery_notification(
                 DiscoveryNotificationType::ParticipantUpdated { 
                   guid_prefix: participant_data.participant_guid.guidPrefix 
                 } );              
-              self.discovery_db_write().update_participant(&participant_data);
-              //TODO: Which reader? all of them?
-              // self.send_discovery_notification(
-              //   DiscoveryNotificationType::ReaderUpdated {
-              //     rtps_reader_proxy: ,
-              //     needs_new_cache_change: true,
-              // });
             },
             // Err means that DomainParticipant was disposed
             Err(guid) => {
@@ -702,10 +694,10 @@ impl Discovery {
     });
   }
 
-  pub fn handle_participant_message_reader(
-    &self,
-    reader: &mut DataReader<ParticipantMessageData, CDRDeserializerAdapter<ParticipantMessageData>>,
-  ) {
+  // These messages are for updating participant liveliness
+  // The protocol distinguises between automatic (by DDS library) 
+  // and manual (by by application, via DDS API call) liveness
+  pub fn handle_participant_message_reader( &self, reader: &mut DataReader_CDR<ParticipantMessageData> ) {
     let participant_messages: Option<Vec<ParticipantMessageData>> =
       match reader.take(100, ReadCondition::any()) {
         Ok(msgs) => Some(

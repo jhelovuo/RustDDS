@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-  dds::{message_receiver::MessageReceiver, reader::Reader, writer::Writer, qos::HasQoSPolicy},
+  dds::{message_receiver::MessageReceiver, reader::Reader, writer::Writer},
   network::util::get_local_multicast_locators,
   structure::builtin_endpoint::BuiltinEndpointSet,
 };
@@ -18,7 +18,7 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId, EntityKind};
 use crate::structure::entity::RTPSEntity;
-use crate::structure::locator::LocatorList;
+
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
   discovery::discovery_db::DiscoveryDB,
@@ -27,7 +27,7 @@ use crate::{
 };
 
 use super::{
-  qos::policy::Reliability, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy,
+  rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy,
   typedesc::TypeDesc,
 };
 
@@ -222,19 +222,18 @@ impl DPEventLoop {
             use DiscoveryNotificationType::*;
             match dnt {
               WriterUpdated{ rtps_writer_proxy } => 
-                ev_wrapper.update_readers(rtps_writer_proxy),
+                ev_wrapper.remote_writer_discovered(rtps_writer_proxy),
 
-              WriterLost{writer_guid} => unimplemented!(),
+              WriterLost{writer_guid} => ev_wrapper.remote_writer_lost(writer_guid) ,
 
               ReaderUpdated{ rtps_reader_proxy, needs_new_cache_change } => 
-                ev_wrapper.update_writers(rtps_reader_proxy, needs_new_cache_change),
+                ev_wrapper.remote_reader_discovered(rtps_reader_proxy, needs_new_cache_change),
 
-              ReaderLost{ reader_guid } => unimplemented!(),
+              ReaderLost{ reader_guid } => ev_wrapper.remote_reader_lost(reader_guid) ,
 
-              ParticipantUpdated{ guid_prefix } => 
-                unimplemented!(),
+              ParticipantUpdated{ guid_prefix } => ev_wrapper.update_participant(guid_prefix),
                 
-              ParticipantLost{ guid_prefix } => unimplemented!(),
+              ParticipantLost{ guid_prefix } => ev_wrapper.remote_participant_lost(guid_prefix),
 
 
               TopicsInfoUpdated => ev_wrapper.update_topics(),
@@ -474,72 +473,144 @@ impl DPEventLoop {
     }
   }
 
-  fn update_writers(&mut self, rtps_reader_proxy: RtpsReaderProxy , needs_new_cache_change: bool) {
-
-    match self.discovery_db.read() {
-      Ok(db) => {
-        for (_writer_guid, writer) in self.writers.iter_mut() {
-          if writer.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
-            DPEventLoop::update_spdp_participant_readers(
-              writer,
-              &db,
-              self.domain_info.domain_id,
-            );
-
-            if needs_new_cache_change {
-              writer.notify_new_data_to_all_readers()
-            }
-          } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER {
-            DPEventLoop::update_pubsub_readers(
-              writer,
-              &db,
+  fn update_participant(&mut self, participant_guid_prefix: GuidPrefix ) {
+    if participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix {
+      // Our own participant was updated (initialized.)
+      // What should we do now?
+    } else {
+      let db = self.discovery_db.read().unwrap();
+      // new Remote Participant discovered
+      let discovered_participant = 
+        match db.find_participant_proxy(participant_guid_prefix) {
+          Some(dpd) => dpd,
+          None => {
+            error!("Participant was updated, but DB does not have it. Strange."); 
+            return
+          }
+        };
+      // now update our local Discovery Writers about the new Particpant
+      for (_writer_guid, writer) in self.writers.iter_mut() {
+        match writer.get_entity_id() {
+          EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER => {
+            DPEventLoop::update_spdp_participant_readers(writer, &db,
+              self.domain_info.domain_id );
+          }
+          EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER => {
+            DPEventLoop::update_pubsub_readers( writer, &db,
               EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
             );
-            if needs_new_cache_change {
-              writer.notify_new_data_to_all_readers()
-            }
-          } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER {
+          }
+          EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER => {
             DPEventLoop::update_pubsub_readers(
               writer,
               &db,
               EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR,
             );
-            if needs_new_cache_change {
-              writer.notify_new_data_to_all_readers()
-            }
-          } else if writer.get_entity_id() == EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER {
+          }
+          EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER => {
             // TODO:
-          } else if writer.get_entity_id()
-            == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
-          {
+          }
+          EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER => {
             DPEventLoop::update_pubsub_readers(
               writer,
               &db,
               EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
               BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER,
             );
-            if needs_new_cache_change {
-              writer.notify_new_data_to_all_readers()
-            }
-          } else {
-            let reader_clone = rtps_reader_proxy.clone();
-            db.find_remote_reader(rtps_reader_proxy.remote_reader_guid)
-              .map(|rp| {
-                  if *rp.subscription_topic_data.topic_name() 
-                        == Some(writer.topic_name().to_string()) {
-                    writer.update_reader_proxy(reader_clone, 
-                      rp.subscription_topic_data.generate_qos());
-                  }
-                }
-              );
           }
+          _other => {
+            // nothing. it is not built-in writer.
+          }
+        } // match
+
+        writer.notify_new_data_to_all_readers()
+      } // for
+      // update local Readers
+
+      for reader in self.message_receiver.available_readers.iter_mut() {
+        match reader.get_entity_id() {
+          EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER => {
+            let proxies: Vec<RtpsWriterProxy> = db
+              .get_participants()
+              .filter(|p| 
+                  p.available_builtin_endpoints
+                    .contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER)
+                  && p.participant_guid.guidPrefix != reader.get_guid_prefix() )
+              .map(|p| {
+                p.as_writer_proxy(
+                  true,
+                  Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
+                )
+              })
+              .collect();
+
+            reader.retain_matched_writers(proxies.iter());
+            for proxy in proxies.into_iter() {
+              reader.add_writer_proxy(proxy);
+            }
+          }
+          EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
+            DPEventLoop::update_pubsub_writers(
+              reader,
+              &db,
+              EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
+              BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER,
+            );
+          }
+          EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER => {
+            DPEventLoop::update_pubsub_writers(
+              reader,
+              &db,
+              EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+              BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
+            );
+          }
+          EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
+            DPEventLoop::update_pubsub_writers(
+              reader,
+              &db,
+              EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+              BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER,
+            );
+          }
+          _other => { // nothing
+          }
+        } // match
+      } // for
+
+      // updates done
+    }
+  }
+
+  fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
+    // TODO
+  }
+
+  fn remote_reader_discovered(&mut self, rtps_reader_proxy: RtpsReaderProxy , needs_new_cache_change: bool) {
+    match self.discovery_db.read() {
+      Ok(db) => {
+        for (_writer_guid, writer) in self.writers.iter_mut() {
+          let reader_clone = rtps_reader_proxy.clone();
+          db.find_remote_reader(rtps_reader_proxy.remote_reader_guid)
+            .map(|rp| {
+                if rp.subscription_topic_data.topic_name() == writer.topic_name() {
+                  writer.update_reader_proxy(reader_clone, 
+                    rp.subscription_topic_data.generate_qos());
+                }
+              }
+            );
         }
       }
       _ => panic!("DiscoveryDB is poisoned."),
     }
   }
+
+  fn remote_reader_lost(&mut self, reader_guid:GUID) {
+    //TODO
+  }
+
 
   fn update_spdp_participant_readers(
     writer: &mut Writer,
@@ -563,7 +634,6 @@ impl DPEventLoop {
           ),
         )
       });
-
     // updating all data
     for reader in all_readers.map(|(_, p)| p).into_iter() {
       writer.update_reader_proxy(reader, Discovery::subscriber_qos())
@@ -606,76 +676,29 @@ impl DPEventLoop {
       .map(|p| reader.add_writer_proxy( p.as_writer_proxy(true, Some(entity_id))));
   }
 
-  pub fn update_readers(&mut self, rtps_writer_proxy: RtpsWriterProxy) {
+  pub fn remote_writer_discovered(&mut self, rtps_writer_proxy: RtpsWriterProxy) {
     let db = match self.discovery_db.read() {
       Ok(db) => db,
       Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
     };
 
     for reader in self.message_receiver.available_readers.iter_mut() {
-      match reader.get_entity_id() {
-        EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER => {
-          let proxies: Vec<RtpsWriterProxy> = db
-            .get_participants()
-            .filter(|p| 
-                p.available_builtin_endpoints
-                  .contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER)
-                && p.participant_guid.guidPrefix != reader.get_guid_prefix() )
-            .map(|p| {
-              p.as_writer_proxy(
-                true,
-                Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
-              )
-            })
-            .collect();
+      let topic_name = reader.topic_name().clone();
+      let proxies: Vec<RtpsWriterProxy> = db
+        .get_external_writer_proxies()
+        .filter(|p| p.publication_topic_data.topic_name == topic_name)
+        .map(|p| RtpsWriterProxy::from_discovered_writer_data(p))
+        .collect();
 
-          reader.retain_matched_writers(proxies.iter());
-          for proxy in proxies.into_iter() {
-            reader.add_writer_proxy(proxy);
-          }
-        }
-        EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
-          DPEventLoop::update_pubsub_writers(
-            reader,
-            &db,
-            EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
-            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER,
-          );
-        }
-        EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER => {
-          DPEventLoop::update_pubsub_writers(
-            reader,
-            &db,
-            EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
-          );
-        }
-        EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
-          DPEventLoop::update_pubsub_writers(
-            reader,
-            &db,
-            EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-            BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER,
-          );
-        }
-        _ => {
-          let topic_name = reader.topic_name().clone();
-          let proxies: Vec<RtpsWriterProxy> = db
-            .get_external_writer_proxies()
-            .filter(|p| match p.publication_topic_data.topic_name.as_ref() {
-              Some(tn) => topic_name == *tn,
-              None => false,
-            })
-            .map(|p| RtpsWriterProxy::from_discovered_writer_data(p))
-            .collect();
-
-          reader.retain_matched_writers(proxies.iter());
-          for proxy in proxies.into_iter() {
-            reader.add_writer_proxy(proxy);
-          }
-        }
+      reader.retain_matched_writers(proxies.iter());
+      for proxy in proxies.into_iter() {
+        reader.add_writer_proxy(proxy);
       }
-    }
+    } // for
+  } // fn 
+
+  pub fn remote_writer_lost(&mut self, writer_guid: GUID) {
+    // TODO
   }
 
   pub fn update_topics(&mut self) {
@@ -683,20 +706,13 @@ impl DPEventLoop {
       Ok(db) => match self.ddscache.write() {
         Ok(mut ddsc) => {
           for topic in db.get_all_topics() {
-            let topic_name = match &topic.topic_data.name {
-              Some(td) => td,
-              None => continue,
-            };
             // TODO: how do you know when topic is keyed and is not
             let topic_kind = match &topic.topic_data.key {
               Some(_) => TopicKind::WithKey,
               None => TopicKind::NoKey,
             };
-            let topic_data_type = match &topic.topic_data.type_name {
-              Some(tn) => tn.clone(),
-              None => continue,
-            };
-            ddsc.add_new_topic(topic_name, topic_kind, TypeDesc::new(topic_data_type));
+            ddsc.add_new_topic(&topic.topic_data.name, topic_kind,
+               TypeDesc::new(&topic.topic_data.type_name));
           }
         }
         _ => panic!("DDSCache is poisoned"),

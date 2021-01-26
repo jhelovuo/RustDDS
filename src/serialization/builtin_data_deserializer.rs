@@ -62,7 +62,7 @@ pub struct BuiltinDataDeserializer {
   pub available_builtin_endpoints: Option<BuiltinEndpointSet>,
   pub lease_duration: Option<Duration>,
   pub manual_liveliness_count: Option<i32>,
-  pub builtin_enpoint_qos: Option<BuiltinEndpointQos>,
+  pub builtin_endpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<String>,
   pub sentinel: Option<u32>,
 
@@ -108,7 +108,7 @@ impl BuiltinDataDeserializer {
       available_builtin_endpoints: None,
       lease_duration: None,
       manual_liveliness_count: None,
-      builtin_enpoint_qos: None,
+      builtin_endpoint_qos: None,
       entity_name: None,
       sentinel: None,
 
@@ -156,7 +156,7 @@ impl BuiltinDataDeserializer {
       lease_duration: self.lease_duration,
       manual_liveliness_count: self.manual_liveliness_count
         .unwrap_or(0),
-      builtin_enpoint_qos: self.builtin_enpoint_qos,
+      builtin_endpoint_qos: self.builtin_endpoint_qos,
       entity_name: self.entity_name.clone(),
     })
   }
@@ -273,12 +273,14 @@ impl BuiltinDataDeserializer {
     Ok(sbtd)
   }
 
-  pub fn generate_publication_topic_data(&self) -> PublicationBuiltinTopicData {
-    PublicationBuiltinTopicData {
+  pub fn generate_publication_topic_data(&self) ->  Result<PublicationBuiltinTopicData,Error> {
+    Ok(PublicationBuiltinTopicData {
       key: self.endpoint_guid,
       participant_key: self.participant_guid,
-      topic_name: self.topic_name.clone(),
-      type_name: self.type_name.clone(),
+      topic_name: self.topic_name.clone()
+        .ok_or(Error::Message("Failed to parse topic name.".to_string()))?,
+      type_name: self.type_name.clone()
+        .ok_or(Error::Message("Failed to parse topic type.".to_string()))?,
       durability: self.durability,
       deadline: self.deadline,
       latency_budget: self.latency_budget,
@@ -289,14 +291,16 @@ impl BuiltinDataDeserializer {
       ownership: self.ownership,
       destination_order: self.destination_order,
       presentation: self.presentation,
-    }
+    })
   }
 
-  pub fn generate_topic_data(self) -> TopicBuiltinTopicData {
-    TopicBuiltinTopicData {
+  pub fn generate_topic_data(self) -> Result<TopicBuiltinTopicData,Error> {
+    Ok(TopicBuiltinTopicData {
       key: self.endpoint_guid,
-      name: self.topic_name,
-      type_name: self.type_name,
+      name: self.topic_name
+        .ok_or(Error::Message("Failed to parse topic name.".to_string()))?,
+      type_name: self.type_name
+        .ok_or(Error::Message("Failed to parse topic type.".to_string()))?,
       durability: self.durability,
       deadline: self.deadline,
       latency_budget: self.latency_budget,
@@ -308,7 +312,7 @@ impl BuiltinDataDeserializer {
       history: self.history,
       resource_limits: self.resource_limits,
       ownership: self.ownership,
-    }
+    })
   }
 
   pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData,Error> {
@@ -325,7 +329,7 @@ impl BuiltinDataDeserializer {
   pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData,Error> {
     let writer_proxy = self.generate_writer_proxy()
           .ok_or(Error::Message("WriterProxy deserialization".to_string() ))?;
-    let publication_topic_data = self.generate_publication_topic_data();
+    let publication_topic_data = self.generate_publication_topic_data()?;
     Ok( DiscoveredWriterData {
       last_updated: Instant::now(),
       writer_proxy,
@@ -501,7 +505,7 @@ impl BuiltinDataDeserializer {
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         match qos {
           Ok(q) => {
-            self.builtin_enpoint_qos = Some(q);
+            self.builtin_endpoint_qos = Some(q);
             buffer.drain(..4 + parameter_length);
             return self;
           }

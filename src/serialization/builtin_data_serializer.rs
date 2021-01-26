@@ -118,7 +118,7 @@ pub struct BuiltinDataSerializer<'a> {
   pub available_builtin_endpoints: Option<BuiltinEndpointSet>,
   pub lease_duration: Option<Duration>,
   pub manual_liveliness_count: Option<i32>,
-  pub builtin_enpoint_qos: Option<BuiltinEndpointQos>,
+  pub builtin_endpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<&'a String>,
 
   pub endpoint_guid: Option<GUID>,
@@ -195,9 +195,9 @@ impl<'a> BuiltinDataSerializer<'a> {
       Some(v) => Some(v),
       None => self.manual_liveliness_count,
     };
-    self.builtin_enpoint_qos = match other.builtin_enpoint_qos {
+    self.builtin_endpoint_qos = match other.builtin_endpoint_qos {
       Some(v) => Some(v),
-      None => self.builtin_enpoint_qos,
+      None => self.builtin_endpoint_qos,
     };
     self.entity_name = match other.entity_name {
       Some(v) => Some(v),
@@ -298,7 +298,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       available_builtin_endpoints: Some(participant_data.available_builtin_endpoints),
       lease_duration: participant_data.lease_duration,
       manual_liveliness_count: Some(participant_data.manual_liveliness_count),
-      builtin_enpoint_qos: participant_data.builtin_enpoint_qos,
+      builtin_endpoint_qos: participant_data.builtin_endpoint_qos,
       entity_name: participant_data.entity_name.as_ref(),
       endpoint_guid: None,
       unicast_locator_list: None,
@@ -335,7 +335,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       available_builtin_endpoints: None,
       lease_duration: None,
       manual_liveliness_count: None,
-      builtin_enpoint_qos: None,
+      builtin_endpoint_qos: None,
       entity_name: None,
       endpoint_guid: Some(reader_proxy.remote_reader_guid),
       unicast_locator_list: Some(&reader_proxy.unicast_locator_list),
@@ -372,7 +372,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       available_builtin_endpoints: None,
       lease_duration: None,
       manual_liveliness_count: None,
-      builtin_enpoint_qos: None,
+      builtin_endpoint_qos: None,
       entity_name: None,
       endpoint_guid: Some(writer_proxy.remote_writer_guid),
       unicast_locator_list: Some(&writer_proxy.unicast_locator_list),
@@ -411,14 +411,14 @@ impl<'a> BuiltinDataSerializer<'a> {
       available_builtin_endpoints: None,
       lease_duration: None,
       manual_liveliness_count: None,
-      builtin_enpoint_qos: None,
+      builtin_endpoint_qos: None,
       entity_name: None,
       endpoint_guid: subscription_topic_data.key().clone(),
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
-      topic_name: subscription_topic_data.topic_name().as_ref(),
-      type_name: subscription_topic_data.type_name().as_ref(),
+      topic_name: Some(subscription_topic_data.topic_name()),
+      type_name: Some(subscription_topic_data.type_name()),
       durability: subscription_topic_data.durability().clone(),
       deadline: subscription_topic_data.deadline().clone(),
       latency_budget: subscription_topic_data.latency_budget().clone(),
@@ -450,14 +450,14 @@ impl<'a> BuiltinDataSerializer<'a> {
       available_builtin_endpoints: None,
       lease_duration: None,
       manual_liveliness_count: None,
-      builtin_enpoint_qos: None,
+      builtin_endpoint_qos: None,
       entity_name: None,
       endpoint_guid: publication_topic_data.key,
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
-      topic_name: publication_topic_data.topic_name.as_ref(),
-      type_name: publication_topic_data.type_name.as_ref(),
+      topic_name: Some(&publication_topic_data.topic_name),
+      type_name: Some(&publication_topic_data.type_name),
       durability: publication_topic_data.durability,
       deadline: publication_topic_data.deadline,
       latency_budget: publication_topic_data.latency_budget,
@@ -487,14 +487,14 @@ impl<'a> BuiltinDataSerializer<'a> {
       available_builtin_endpoints: None,
       lease_duration: None,
       manual_liveliness_count: None,
-      builtin_enpoint_qos: None,
+      builtin_endpoint_qos: None,
       entity_name: None,
       endpoint_guid: topic_data.key,
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
-      topic_name: topic_data.name.as_ref(),
-      type_name: topic_data.type_name.as_ref(),
+      topic_name: Some(&topic_data.name),
+      type_name: Some(&topic_data.type_name),
       durability: topic_data.durability,
       deadline: topic_data.deadline,
       latency_budget: topic_data.latency_budget,
@@ -606,7 +606,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     count = count + self.available_builtin_endpoints.is_some() as usize;
     count = count + self.lease_duration.is_some() as usize;
     count = count + self.manual_liveliness_count.is_some() as usize;
-    count = count + self.builtin_enpoint_qos.is_some() as usize;
+    count = count + self.builtin_endpoint_qos.is_some() as usize;
     count = count + self.entity_name.is_some() as usize;
 
     count = count + self.endpoint_guid.is_some() as usize;
@@ -791,7 +791,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_builtin_endpoint_qos<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.builtin_enpoint_qos {
+    match self.builtin_endpoint_qos {
       Some(qos) => {
         s.serialize_field("builtin_endpoint_qos", &BuiltinEndpointQosData::from(qos))
           .unwrap();

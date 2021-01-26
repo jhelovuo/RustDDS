@@ -34,6 +34,9 @@ use crate::dds::{
 };
 use crate::dds::statusevents::*;
 
+/// Simplified type for CDR encoding
+pub type DataReader_CDR<D> = DataReader<D,CDRDeserializerAdapter<D>>;
+
 /// Parameter for reading [Readers](../struct.With_Key_DataReader.html) data with key or with next from current key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectByKey {
