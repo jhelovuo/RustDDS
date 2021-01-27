@@ -693,8 +693,21 @@ impl Writer {
     }
   }
 
-  pub fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
+  fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
     self.readers.remove(&guid)
+  }
+
+  pub fn reader_lost(&mut self, guid: GUID)
+  {
+    if self.readers.contains_key(&guid) {
+      self.matched_reader_remove(guid);
+      //self.matched_readers_count_total -= 1; // this never decreases
+      self.status_sender.try_send(DataWriterStatus::PublicationMatched { 
+                total: CountWithChange::new(self.matched_readers_count_total , 0 ),
+                current: CountWithChange::new(self.readers.len() as i32 , -1)
+              })
+            .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
+    }
   }
 
   ///This operation finds the ReaderProxy with GUID_t a_reader_guid from the set

@@ -177,7 +177,8 @@ impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
   {
     let visitor = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(visitor)?;
-    res.generate_spdp_participant_data().map_err(|e| D::Error::custom(format!("{:?}",e) ))
+    res.generate_spdp_participant_data().map_err(|e| 
+      D::Error::custom(format!("SPDPDiscoveredParticipantData::deserialize - {:?} - data was {:?}",e, &res) ))
   }
 }
 

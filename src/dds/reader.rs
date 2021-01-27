@@ -325,7 +325,15 @@ impl Reader {
   }
 
   pub fn remove_writer_proxy(&mut self, writer_guid:GUID) {
-    self.matched_writers.remove(&writer_guid);
+    if self.matched_writers.contains_key(&writer_guid) {
+      self.matched_writers.remove(&writer_guid);
+      self.send_status_change(DataReaderStatus::SubscriptionMatched { 
+                total: CountWithChange::new(self.writer_match_count_total , 0 ),
+                current: CountWithChange::new(self.matched_writers.len() as i32 , -1)
+              });
+    }
+
+    
   }
 
   pub fn contains_writer(&self, entity_id: EntityId) -> bool {

@@ -2,7 +2,9 @@
 
 use crate::discovery::data_types::topic_data::DiscoveredWriterData;
 use crate::discovery::data_types::topic_data::DiscoveredReaderData;
+use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
 use crate::discovery::discovery::Discovery;
+
 use log::{debug, error, info, warn, trace};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
@@ -479,6 +481,7 @@ impl DPEventLoop {
     if participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix {
       // Our own participant was updated (initialized.)
       // What should we do now?
+      debug!("Own participant initialized");
     } else {
       let db = self.discovery_db.read().unwrap();
       // new Remote Participant discovered
@@ -498,15 +501,20 @@ impl DPEventLoop {
               self.domain_info.domain_id );
           }
           EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER => {
-            DPEventLoop::update_pubsub_readers( writer, &db,
+            DPEventLoop::update_discovery_writer( writer, discovered_participant,
               EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
             );
+            // DPEventLoop::update_pubsub_readers( writer, &db,
+            //   EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+            //   BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
+            // );
           }
           EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER => {
-            DPEventLoop::update_pubsub_readers(
-              writer,
-              &db,
+            // DPEventLoop::update_pubsub_readers(
+            //   writer,
+            //   &db,
+            DPEventLoop::update_discovery_writer( writer, discovered_participant,
               EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR,
             );
@@ -515,9 +523,10 @@ impl DPEventLoop {
             // TODO:
           }
           EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER => {
-            DPEventLoop::update_pubsub_readers(
-              writer,
-              &db,
+            // DPEventLoop::update_pubsub_readers(
+            //   writer,
+            //   &db,
+            DPEventLoop::update_discovery_writer( writer, discovered_participant,
               EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
               BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER,
             );
@@ -553,25 +562,28 @@ impl DPEventLoop {
             }
           }
           EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
-            DPEventLoop::update_pubsub_writers(
-              reader,
-              &db,
+            // DPEventLoop::update_pubsub_writers(
+            //   reader,
+            //   &db,
+            DPEventLoop::update_discovery_reader( reader, discovered_participant,
               EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER,
             );
           }
           EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER => {
-            DPEventLoop::update_pubsub_writers(
-              reader,
-              &db,
+            // DPEventLoop::update_pubsub_writers(
+            //   reader,
+            //   &db,
+            DPEventLoop::update_discovery_reader( reader, discovered_participant,
               EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
             );
           }
           EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
-            DPEventLoop::update_pubsub_writers(
-              reader,
-              &db,
+            // DPEventLoop::update_pubsub_writers(
+            //   reader,
+            //   &db,
+            DPEventLoop::update_discovery_reader( reader, discovered_participant,
               EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
               BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER,
             );
@@ -585,9 +597,11 @@ impl DPEventLoop {
     }
   }
 
-  fn remote_participant_lost(&mut self, _participant_guid_prefix: GuidPrefix ) {
+  fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
     // Discovery has already removed Particiapnt from Discovery DB
-    // Maybe there is nothing left to do?
+
+    // TODO: We need to notify all local readers and writers to
+    // remove proxies with this GuidPrefix.
   }
 
   fn remote_reader_discovered(&mut self, drd: DiscoveredReaderData, 
@@ -602,7 +616,7 @@ impl DPEventLoop {
 
   fn remote_reader_lost(&mut self, reader_guid:GUID) {
     for (_writer_guid, writer) in self.writers.iter_mut() {
-      writer.matched_reader_remove(reader_guid);
+      writer.reader_lost(reader_guid);
     }
   }
 
@@ -648,6 +662,25 @@ impl DPEventLoop {
     debug!("SPDP Participant readers updated.");
   }
 
+  fn update_discovery_writer(writer: &mut Writer, dpd: &SPDPDiscoveredParticipantData,
+    entity_id: EntityId, expected_endpoint: u32 ) 
+  {
+    if dpd.available_builtin_endpoints.contains(expected_endpoint) {
+      writer.update_reader_proxy( dpd.as_reader_proxy(true, Some(entity_id)) , 
+                                  Discovery::subscriber_qos() );
+      debug!("update_discovery writer - endpoint {:?} - {:?}", expected_endpoint, dpd.participant_guid);
+    }
+  }
+
+  fn update_discovery_reader(reader: &mut Reader, dpd: &SPDPDiscoveredParticipantData,
+    entity_id: EntityId, expected_endpoint: u32 ) 
+  {
+    if dpd.available_builtin_endpoints.contains(expected_endpoint) {
+      reader.update_writer_proxy( dpd.as_writer_proxy(true, Some(entity_id)));
+      debug!("update_discovery reader - endpoint {:?} - {:?}", expected_endpoint, dpd.participant_guid);
+    }
+  }
+/*
   fn update_pubsub_readers(
     writer: &mut Writer,
     db: &RwLockReadGuard<DiscoveryDB>,
@@ -670,7 +703,7 @@ impl DPEventLoop {
       .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint))
       .map(|p| reader.update_writer_proxy( p.as_writer_proxy(true, Some(entity_id))));
   }
-
+*/
   pub fn remote_writer_discovered(&mut self, dwd: DiscoveredWriterData) {
     for reader in self.message_receiver.available_readers.iter_mut() {
       if &dwd.publication_topic_data.topic_name == reader.topic_name() {

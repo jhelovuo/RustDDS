@@ -605,10 +605,10 @@ impl Discovery {
   {
     loop {
       let s = reader.take_next_sample();
-      debug!("handle_participant_reader {:?}",&s);
       match s {
         Ok(Some(d)) => match d.value {
             Ok(participant_data) => {
+              debug!("handle_participant_reader discovered {:?}", &participant_data);
               self.discovery_db_write()
                 .update_participant(&participant_data);
               self.send_discovery_notification(

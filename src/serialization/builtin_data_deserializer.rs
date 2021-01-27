@@ -141,18 +141,18 @@ impl BuiltinDataDeserializer {
     Ok(SPDPDiscoveredParticipantData {
       updated_time: Utc::now(),
       protocol_version: self.protocol_version
-        .ok_or(log_and_err_discovery!("protocol_version missing"))?,
+        .ok_or_else(| | log_and_err_discovery!("protocol_version missing"))?,
       vendor_id: self.vendor_id
-        .ok_or(log_and_err_discovery!("vendor_id missing"))?,
+        .ok_or_else(| | log_and_err_discovery!("vendor_id missing"))?,
       expects_inline_qos: self.expects_inline_qos.unwrap_or(false),
       participant_guid: self.participant_guid
-        .ok_or(log_and_err_discovery!("participant_guid missing"))?,
+        .ok_or_else(| | log_and_err_discovery!("participant_guid missing"))?,
       metatraffic_unicast_locators: self.metatraffic_unicast_locators.clone(),
       metatraffic_multicast_locators: self.metatraffic_multicast_locators.clone(),
       default_unicast_locators: self.default_unicast_locators.clone(),
       default_multicast_locators: self.default_multicast_locators.clone(),
       available_builtin_endpoints: self.available_builtin_endpoints.clone()
-        .ok_or(log_and_err_discovery!("available_builtin_endpoints missing"))?,
+        .ok_or_else(| | log_and_err_discovery!("available_builtin_endpoints missing"))?,
       lease_duration: self.lease_duration,
       manual_liveliness_count: self.manual_liveliness_count
         .unwrap_or(0),

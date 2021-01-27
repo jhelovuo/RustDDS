@@ -1,3 +1,4 @@
+/*
 use serde::{Serialize, Deserialize};
 
 use crate::structure::{guid::*, locator::LocatorList};
@@ -5,6 +6,7 @@ use crate::structure::{guid::*, locator::LocatorList};
 use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
 
 /// Defines ParticipantProxyAttributes
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ParticipantProxyAttributes {
   /// Identifies the DDS domainId of the associated DDS DomainParticipant
@@ -77,7 +79,7 @@ pub struct ParticipantProxyAttributes {
   /// SPDPdiscoveredParticipantDatais sent.
   pub manual_liveliness_count: i32,
 }
-
+*/
 // pub trait ParticipantProxy {
 //   fn as_participant_proxy(&self) -> &ParticipantProxyAttributes;
 // }
