@@ -1,6 +1,6 @@
 [package]
 name = "rustdds"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", "Oiva Moisio <oiva.moisio@atostek.com>", "Miska Melkinen <miska.melkinen@atostek.com>", "Lauri Eneh <lauri.eneh@atostek.com>"]
 description = "Rust DDS implementation with RTPS"
 readme = "README.md"
@@ -20,7 +20,7 @@ tokio-util = { version = "0.3.1", features = ["codec"] }
 bit-vec = "0.6.2"
 speedy = "0.6.0"
 log = "0.4.11"
-nix = "0.18"
+# nix = "0.18"
 num-traits = "0.2"
 num-derive = "0.3"
 serde = { version = "1.0", features = ["derive"] }
@@ -36,6 +36,7 @@ get_if_addrs = "0.5.3"
 paste = "1"
 itertools = "0.9.0"
 md5 = "0.7.0"
+socket2 = { version = "0.3", features = ["reuseport"] } 
 
 [[example]]
 name = "shapes_demo"

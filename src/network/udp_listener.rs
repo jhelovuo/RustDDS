@@ -4,13 +4,14 @@ use std::io;
 use mio::Token;
 use log::{debug, error};
 use mio::net::UdpSocket;
-use std::net::UdpSocket as StdUdpSocket;
+//use std::net::UdpSocket as StdUdpSocket;
 
-use std::os::unix::io::AsRawFd;
-use nix::sys::socket::setsockopt;
-use nix::sys::socket::sockopt::ReuseAddr;
+use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
 
 // 64 kB buffer size
+// TODO: This is horribly inefficient. We allocate 64 kB for even
+// the smallest UDP packets. However, it this is not easy to scale down, because it is
+// not easy to know the size of incoming UDP packets other than actually receiving them.
 const BUFFER_SIZE: usize = 64 * 1024;
 
 /// Listens to messages coming to specified host port combination.
@@ -21,27 +22,40 @@ pub struct UDPListener {
   token: Token,
 }
 
+// TODO: Remove panics from this function. Convert return value to Result.
 impl UDPListener {
+
+  // TODO: Why is is this function even necessary? Doesn't try_bind() do just the same?
   pub fn new(token: Token, host: &str, port: u16) -> UDPListener {
+    let raw_socket = Socket::new(Domain::ipv4(), Type::dgram(), Some(Protocol::udp()) ).unwrap();
+
+    // We set ReuseAddr so that other DomainParticipants on this host can
+    // bind to the same multicast address and port.
+    // To have an effect on bind, this must be done before bind call, so must be done
+    // below Rust std::net::UdpSocket level.
+    raw_socket.set_reuse_address(true) 
+      .map_err(|e| error!("Unable set SO_REUSEADDR option on socket {:?}", e))
+      .unwrap();
+
     let address = SocketAddr::new(host.parse().unwrap(), port);
-    let err_msg = format!("Unable to bind address {}", address.to_string());
-    let std_socket = StdUdpSocket::bind(address).expect(&err_msg);
+    let err_msg = format!("new - Unable to bind address {}", address.to_string());
+
+    raw_socket.bind( &SockAddr::from(address) )
+      .expect(&err_msg);
+
+    let std_socket = raw_socket.into_udp_socket();
     std_socket
       .set_nonblocking(true)
       .expect("Failed to set std socket to non blocking.");
 
-    let socket = UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
-    // We set ReuseAddr so that other DomainParticipants on this host can
-    // bind to the same multicast address and port.
-    setsockopt(socket.as_raw_fd(), ReuseAddr, &true).expect("Unable set ReuseAddr option on socket");
-    debug!("UDPListener::new with address {:?}", socket.local_addr());
+    let mio_socket = UdpSocket::from_socket(std_socket)
+                      .expect("Unable to create mio socket");
+    debug!("UDPListener::new with address {:?}", mio_socket.local_addr());
 
-    UDPListener {
-      socket: socket,
-      token: token,
-    }
+    UDPListener { socket: mio_socket, token }
   }
 
+  // TODO: convert return value from Option to Result
   pub fn try_bind(token: Token, host: &str, port: u16) -> Option<UDPListener> {
     let host = match host.parse() {
       Ok(h) => h,
@@ -49,19 +63,30 @@ impl UDPListener {
     };
 
     let address = SocketAddr::new(host, port);
-    let err_msg = format!("Unable to bind address {}", address.to_string());
-    let std_socket = match StdUdpSocket::bind(address) {
-      Ok(sock) => sock,
-      Err(_) => {
-        error!("{}", &err_msg);
-        return None;
+    let raw_socket = Socket::new(Domain::ipv4(), Type::dgram(), Some(Protocol::udp()) ).unwrap();
+
+    // We set ReuseAddr so that other DomainParticipants on this host can
+    // bind to the same multicast address and port.
+    // To have an effect on bind, this must be done before bind call, so must be done
+    // below Rust std::net::UdpSocket level.
+    raw_socket.set_reuse_address(true) 
+      .map_err(|e| error!("Unable set SO_REUSEADDR option on socket {:?}", e))
+      .unwrap();
+
+    match raw_socket.bind( &SockAddr::from(address) ) {
+      Err(e) => {
+        error!("try bind - cannot bind socket: {:?}",e);
+        return None
       }
-    };
+      _ => (), // Ok
+    }
+    let std_socket = raw_socket.into_udp_socket();
+
     match std_socket.set_nonblocking(true) {
       Ok(_) => (),
       Err(e) => {
         error!("Failed to set std socket to non blocking. {:?}", e);
-        return None;
+        return None
       }
     };
 
@@ -69,7 +94,7 @@ impl UDPListener {
       Ok(s) => s,
       Err(e) => {
         error!("Failed to create mio socket. {:?}", e);
-        return None;
+        return None
       }
     };
     debug!("UDPListener::try_bind with address {:?}", socket.local_addr());
