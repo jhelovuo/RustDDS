@@ -117,6 +117,10 @@ impl UDPListener {
     }
   }
 
+  /* Do not do this. We must read & return all the messages that the socket has, because
+    we use edge-triggered polling. If we returned just one, we would not react to the following
+    arrived ones, until new messages are received by the kernel.
+
   /// Returns all messages that have come from listen_addresses.
   /// Converts/prunes individual results to Vec
   pub fn get_message(&self) -> Vec<u8> {
@@ -135,7 +139,7 @@ impl UDPListener {
     };
     message
   }
-
+  */
   pub fn get_messages(&self) -> Vec<Vec<u8>> {
     let mut datas = vec![];
     let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];

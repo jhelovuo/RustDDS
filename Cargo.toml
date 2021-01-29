@@ -13,7 +13,6 @@ categories = ["network-programming", "science::robotics"]
 # the science-robotics category is because of ROS2
 
 [dependencies]
-bytes = "0.5.4"
 mio = "^0.6.23"
 mio-extras = "2.0.6"
 tokio-util = { version = "0.3.1", features = ["codec"] }
@@ -37,6 +36,7 @@ paste = "1"
 itertools = "0.9.0"
 md5 = "0.7.0"
 socket2 = { version = "0.3", features = ["reuseport"] } 
+bytes = "1"
 
 [[example]]
 name = "shapes_demo"
