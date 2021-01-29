@@ -309,8 +309,8 @@ impl DPEventLoop {
 
   pub fn handle_udp_traffic(&mut self, event: &Event) {
     let udp_messages =
-      match self.udp_listeners.get(&event.token()) {
-        Some(l) => l.get_messages(),
+      match self.udp_listeners.get_mut(&event.token()) {
+        Some( l) => l.get_messages(),
         None => {
           error!("handle_udp_traffic - internal error! No listener with token {:?}", &event.token() );
           return

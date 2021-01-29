@@ -2,17 +2,16 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::io;
 
 use mio::Token;
-use log::{debug, error};
 use mio::net::UdpSocket;
-//use std::net::UdpSocket as StdUdpSocket;
+
+use log::{debug, error, trace};
 
 use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
 
-// 64 kB buffer size
-// TODO: This is horribly inefficient. We allocate 64 kB for even
-// the smallest UDP packets. However, it this is not easy to scale down, because it is
-// not easy to know the size of incoming UDP packets other than actually receiving them.
-const BUFFER_SIZE: usize = 64 * 1024;
+use bytes::{Bytes,BytesMut};
+
+const MAX_MESSAGE_SIZE : usize = 64 * 1024; // This is max we can get from UDP.
+const MESSAGE_BUFFER_ALLOCATION_CHUNK : usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
 
 /// Listens to messages coming to specified host port combination.
 /// Only messages from added listen addressed are read when get_all_messages is called.
@@ -20,6 +19,7 @@ const BUFFER_SIZE: usize = 64 * 1024;
 pub struct UDPListener {
   socket: UdpSocket,
   token: Token,
+  receive_buffer: BytesMut,
 }
 
 // TODO: Remove panics from this function. Convert return value to Result.
@@ -52,7 +52,9 @@ impl UDPListener {
                       .expect("Unable to create mio socket");
     debug!("UDPListener::new with address {:?}", mio_socket.local_addr());
 
-    UDPListener { socket: mio_socket, token }
+    UDPListener { socket: mio_socket, token,
+      receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
+    }
   }
 
   // TODO: convert return value from Option to Result
@@ -99,7 +101,9 @@ impl UDPListener {
     };
     debug!("UDPListener::try_bind with address {:?}", socket.local_addr());
 
-    Some(UDPListener { socket, token })
+    Some(UDPListener { socket, token ,
+      receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK)
+    })
   }
 
   pub fn get_token(&self) -> Token {
@@ -117,16 +121,13 @@ impl UDPListener {
     }
   }
 
-  /* Do not do this. We must read & return all the messages that the socket has, because
-    we use edge-triggered polling. If we returned just one, we would not react to the following
-    arrived ones, until new messages are received by the kernel.
-
-  /// Returns all messages that have come from listen_addresses.
-  /// Converts/prunes individual results to Vec
+  // TODO: remove this. It is used only for tests.
+  // We cannot read a single packet only, because we use edge-triggered polls.
+  #[cfg(test)]
   pub fn get_message(&self) -> Vec<u8> {
+
     let mut message: Vec<u8> = vec![];
-    let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    //self.mio_socket().recv_from(buf)
+    let mut buf: [u8; MAX_MESSAGE_SIZE] = [0; MAX_MESSAGE_SIZE];
     match self.socket.recv(&mut buf) {
       Ok(nbytes) => {
         message = buf[..nbytes].to_vec();
@@ -139,16 +140,42 @@ impl UDPListener {
     };
     message
   }
-  */
-  pub fn get_messages(&self) -> Vec<Vec<u8>> {
-    let mut datas = vec![];
-    let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 
-    while let Ok(nbytes) = self.socket.recv(&mut buf) {
-      datas.push(buf[..nbytes].to_vec());
+  fn ensure_receive_buffer_capacity(&mut self) {
+    if self.receive_buffer.capacity() < MAX_MESSAGE_SIZE {
+      self.receive_buffer = BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK);
+      debug!("ensure_receive_buffer_capacity - reallocated receive_buffer");
     }
+    unsafe {
+      // This is safe, because we just checked that there is enough capacity.
+      // We do not read undefined data, because next the recv call in get_messages() 
+      // will overwrite this space and truncate the rest away.
+      self.receive_buffer.set_len(MAX_MESSAGE_SIZE)
+    }
+    trace!("ensure_receive_buffer_capacity - {} bytes left",self.receive_buffer.capacity());
+  }
 
-    datas
+  /// Get all messages waiting in the socket.
+  pub fn get_messages(&mut self) -> Vec<Bytes> {
+    // This code may seem slighlty non-sensical, if you do not know
+    // how BytesMut works.
+    let mut messages = Vec::with_capacity(4); // just a guess, should cover most cases
+    self.ensure_receive_buffer_capacity();
+    while let Ok(nbytes) = self.socket.recv(&mut self.receive_buffer) {
+      self.receive_buffer.truncate(nbytes);
+      // Now append some extra data to align the buffer end, so the next piece will
+      // be aligned also. This assumes that the initial buffer was aligned to begin with.
+      while self.receive_buffer.len() % 4 != 0 {
+        self.receive_buffer.extend_from_slice(&[0xCC]); // add some funny padding bytes
+        // Funny value encourages fast crash in case these bytes are ever accessed,
+        // as they should not.
+      }
+      let mut message = self.receive_buffer.split_to(self.receive_buffer.len());
+      self.ensure_receive_buffer_capacity();
+      message.truncate(nbytes); // discard (hide) padding
+      messages.push( Bytes::from(message) ); // freeze and push
+    }
+    messages
   }
 
   pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
