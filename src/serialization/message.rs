@@ -26,8 +26,11 @@ use crate::{
 };
 #[allow(unused_imports)]
 use log::{error,warn,debug,trace};
+
 use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
+use bytes::Bytes;
+
 
 #[derive(Debug)]
 pub(crate) struct Message {
@@ -75,15 +78,15 @@ impl<'a> Message {
   // we need to run-time decide which endianness we input. Speedy requires the
   // top level to fix that. And there seems to be no reasonable way to change endianness.
   // TODO: The error type should be something better
-  pub fn read_from_buffer(buffer: &'a [u8]) -> io::Result<Message> {
+  pub fn read_from_buffer(buffer: Bytes) -> io::Result<Message> {
     // The Header deserializes the same
     let rtps_header =
-      Header::read_from_buffer(buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+      Header::read_from_buffer(&buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     let mut message = Message::new(rtps_header);
-    let mut submessages_left = &buffer[20..]; // header is 20 bytes
+    let mut submessages_left : Bytes = buffer.slice(20..); // header is 20 bytes
                                               // submessage loop
     while submessages_left.len() > 0 {
-      let sub_header = SubmessageHeader::read_from_buffer(submessages_left)
+      let sub_header = SubmessageHeader::read_from_buffer(&submessages_left)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
       // Try to figure out how large this submessage is.
       let sub_header_length = 4; // 4 bytes
@@ -108,10 +111,13 @@ impl<'a> Message {
 
       // we have to use temporary variable new_submessages_left to avoid creating another
       // submessages_left
-      let (sub_buffer, new_submessages_left) =
-        submessages_left.split_at(sub_header_length + sub_content_length);
-      submessages_left = new_submessages_left;
-      let (_sub_header, sub_content_buffer) = sub_buffer.split_at(sub_header_length);
+      // let (sub_buffer, new_submessages_left) =
+      //   submessages_left.split_at(sub_header_length + sub_content_length);
+      // submessages_left = new_submessages_left;
+      // split fisrt buters to new buffer
+      let mut sub_buffer = submessages_left.split_to( sub_header_length + sub_content_length );
+      // split tail part (content) to new buffer
+      let sub_content_buffer = sub_buffer.split_off(sub_header_length);
 
       let e = endianness_flag(sub_header.flags);
       let mk_e_subm = move |s: EntitySubmessage| {
@@ -149,7 +155,7 @@ impl<'a> Message {
         SubmessageKind::GAP => {
           let f = BitFlags::<GAP_Flags>::from_bits_truncate(sub_header.flags);
           mk_e_subm(EntitySubmessage::Gap(
-            Gap::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            Gap::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
         }
@@ -157,7 +163,7 @@ impl<'a> Message {
         SubmessageKind::ACKNACK => {
           let f = BitFlags::<ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
           mk_e_subm(EntitySubmessage::AckNack(
-            AckNack::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            AckNack::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
         }
@@ -165,7 +171,7 @@ impl<'a> Message {
         SubmessageKind::NACK_FRAG => {
           let f = BitFlags::<NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
           mk_e_subm(EntitySubmessage::NackFrag(
-            NackFrag::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            NackFrag::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
         }
@@ -173,7 +179,7 @@ impl<'a> Message {
         SubmessageKind::HEARTBEAT => {
           let f = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
           mk_e_subm(EntitySubmessage::Heartbeat(
-            Heartbeat::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            Heartbeat::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
         }
@@ -182,14 +188,14 @@ impl<'a> Message {
         SubmessageKind::INFO_DST => {
           let f = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
           mk_i_subm(InterpreterSubmessage::InfoDestination(
-            InfoDestination::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            InfoDestination::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
         }
         SubmessageKind::INFO_SRC => {
           let f = BitFlags::<INFOSOURCE_Flags>::from_bits_truncate(sub_header.flags);
           mk_i_subm(InterpreterSubmessage::InfoSource(
-            InfoSource::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            InfoSource::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
         }
@@ -197,13 +203,13 @@ impl<'a> Message {
           let f = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
           let tso = 
                 if f.contains(INFOTIMESTAMP_Flags::Invalidate) { None }
-                else { Some ( Timestamp::read_from_buffer_with_ctx(e, sub_content_buffer)?) };
+                else { Some ( Timestamp::read_from_buffer_with_ctx(e, &sub_content_buffer)?) };
           mk_i_subm(InterpreterSubmessage::InfoTimestamp(InfoTimestamp{timestamp: tso}, f ))
         }
         SubmessageKind::INFO_REPLY => {
           let f = BitFlags::<INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
           mk_i_subm(InterpreterSubmessage::InfoReply(
-            InfoReply::read_from_buffer_with_ctx(e, sub_content_buffer)?,
+            InfoReply::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
         }

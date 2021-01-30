@@ -201,11 +201,12 @@ impl MessageReceiver {
     }
 
     // call Speedy reader
-    let rtps_message = match Message::read_from_buffer(&msg_bytes) {
+    // Bytes .clone() is cheap, so no worries
+    let rtps_message = match Message::read_from_buffer(msg_bytes.clone()) {
       Ok(m) => m,
       Err(speedy_err) => {
         warn!("RTPS deserialize error {:?}", speedy_err);
-        debug!("Data was {:?}",&msg_bytes);
+        debug!("Data was {:?}",msg_bytes);
         return
       }
     };

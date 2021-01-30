@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::messages::submessages::submessages::*;
@@ -47,8 +48,8 @@ impl Data {
   /// DATA submessage cannot be speedy Readable because deserializing this requires info from submessage header.
   /// Required iformation is  expect_qos and expect_payload whish are told on submessage headerflags.
 
-  pub fn deserialize_data(buffer: &[u8], flags: BitFlags<DATA_Flags>) -> io::Result<Data> {
-    let mut cursor = io::Cursor::new(buffer);
+  pub fn deserialize_data(buffer: Bytes, flags: BitFlags<DATA_Flags>) -> io::Result<Data> {
+    let mut cursor = io::Cursor::new(&buffer);
     let endianness = endianness_flag(flags.bits());
     let map_speedy_err = |p: Error| io::Error::new(io::ErrorKind::Other, p);
 
@@ -87,10 +88,8 @@ impl Data {
     };
 
     let payload = if expect_data {
-      let p = SerializedPayload::from_bytes(&buffer[cursor.position() as usize..] )?;
-      // if p.representation_identifier != RepresentationIdentifier::CDR_LE {
-      //   debug!("deserialize_data: Not CDR_LE input={:?}",buffer);
-      // }
+      let p = SerializedPayload::from_bytes(buffer.clone()
+                                            .split_off(cursor.position() as usize))?;
       Some(p)
     } else {
       None

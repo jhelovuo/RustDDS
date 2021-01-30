@@ -1,4 +1,5 @@
 use serde::{Serialize /*, Deserialize*/};
+use bytes::Bytes;
 
 use crate::{
   dds::traits::key::Keyed,
@@ -111,10 +112,6 @@ impl DDSData {
   where
     D: Keyed + Serialize,
   {
-    //let mut cdr = CDR_serializer::<LittleEndian>::new();
-    //let mut serializer = erased_serde::Serializer::erase(&mut cdr);
-    //let value = data.serialize(&mut cdr);
-    // let value = to_little_endian_binary::<D>(&data);
     let value = match to_bytes::<D, LittleEndian>(data) {
       Ok(v) => v,
       // TODO: handle error
@@ -143,10 +140,10 @@ impl DDSData {
     self.value.clone()
   }
 
-  pub fn data(&self) -> Vec<u8> {
+  pub fn data(&self) -> Bytes {
     match &self.value {
-      Some(val) => (*val).value.clone(),
-      None => Vec::new(),
+      Some(val) => val.value.clone(), // cloning Bytes is cheap
+      None => Bytes::new(),
     }
   }
 }

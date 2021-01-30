@@ -1,3 +1,4 @@
+
 use crate::messages::fragment_number::FragmentNumber;
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
@@ -9,6 +10,7 @@ use crate::messages::submessages::submessages::*;
 use log::debug;
 use speedy::{Context, Writer, Readable, Writable, Error};
 use enumflags2::BitFlags;
+use bytes::Bytes;
 
 use std::io;
 
@@ -60,8 +62,8 @@ pub struct DataFrag {
 }
 
 impl<'a> DataFrag {
-  pub fn deserialize(buffer: &'a [u8], flags: BitFlags<DATAFRAG_Flags>) -> io::Result<DataFrag> {
-    let mut cursor = io::Cursor::new(buffer);
+  pub fn deserialize(buffer: Bytes, flags: BitFlags<DATAFRAG_Flags>) -> io::Result<DataFrag> {
+    let mut cursor = io::Cursor::new(&buffer);
     let endianness = endianness_flag(flags.bits());
     let map_speedy_err = |p: Error| io::Error::new(io::ErrorKind::Other, p);
 
@@ -108,7 +110,8 @@ impl<'a> DataFrag {
     };
 
     // Payload should be always present, be it data or key fragments.
-    let serialized_payload = SerializedPayload::from_bytes(&buffer[cursor.position() as usize..])?;
+    let serialized_payload = 
+      SerializedPayload::from_bytes(buffer.clone().split_off(cursor.position() as usize))?;
 
     Ok(DataFrag {
       reader_id,

@@ -1,8 +1,8 @@
+use bytes::Bytes;
 use speedy::{Writable, Readable, Writer, Context};
 use std::io;
-use std::io::Read;
 use byteorder::{ReadBytesExt};
-
+use log::{warn};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
 pub struct RepresentationIdentifier {
@@ -74,7 +74,7 @@ impl<'a, C: Context> Readable<'a, C> for RepresentationIdentifier {
 pub struct SerializedPayload {
   pub representation_identifier: RepresentationIdentifier, 
   pub representation_options: [u8; 2], // Not used. Send as zero, ignore on receive.
-  pub value: Vec<u8>,
+  pub value: Bytes,
 }
 
 impl SerializedPayload {
@@ -82,19 +82,24 @@ impl SerializedPayload {
     SerializedPayload {
       representation_identifier: rep_id,
       representation_options: [0, 0],
-      value: payload,
+      value: Bytes::from(payload),
     }
   }
 
   // Implement deserialization here, because Speedy just makes it difficult.
-  pub fn from_bytes(bytes: &[u8]) -> io::Result<SerializedPayload> {
-    let mut reader = io::Cursor::new(bytes);
+  pub fn from_bytes(bytes: Bytes) -> io::Result<SerializedPayload> {
+    let mut reader = io::Cursor::new(&bytes);
     let representation_identifier = RepresentationIdentifier { 
       bytes: [reader.read_u8()?, reader.read_u8()?] 
     };
     let representation_options = [reader.read_u8()?, reader.read_u8()?];
-    let mut value = Vec::with_capacity(bytes.len() - 4); // still length == 0
-    reader.read_to_end(&mut value)?;
+    let value = 
+      if bytes.len() >= 4 {
+        bytes.clone().split_off(4) // split_off 4 bytes at beginning: rep_id & rep_optins
+      } else {
+        warn!("DATA submessage was smaller than submessage header: {:?}",bytes);
+        return Err( io::Error::new(io::ErrorKind::Other, "Too short DATA submessage."))
+      };
 
     Ok(SerializedPayload {
       representation_identifier,
