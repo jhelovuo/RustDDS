@@ -864,7 +864,13 @@ impl Discovery {
   }
 
   pub fn participant_cleanup(&self) {
-    self.discovery_db_write().participant_cleanup();
+    let removed_guid_prefixes = 
+      self.discovery_db_write().participant_cleanup();
+    for guid_prefix in removed_guid_prefixes {
+      debug!("participant cleanup - timeout for {:?}", guid_prefix);
+      self.send_discovery_notification(
+                DiscoveryNotificationType::ParticipantLost { guid_prefix });
+    }
   }
 
   pub fn topic_cleanup(&self) {

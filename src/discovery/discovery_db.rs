@@ -137,7 +137,7 @@ impl DiscoveryDB {
 
 
   // Delete participant proxies, if we have not heard of them within lease_duration
-  pub fn participant_cleanup(&mut self) {
+  pub fn participant_cleanup(&mut self) -> Vec<GuidPrefix> {
     let inow = Instant::now();
 
     let mut to_remove = Vec::new();
@@ -162,10 +162,12 @@ impl DiscoveryDB {
         }
       } // match
     } // for
-    for guid in to_remove {
-      self.participant_proxies.remove(&guid).expect("Removing fail 1");
-      self.participant_last_life_signs.remove(&guid).expect("Removing fail 2");
+    for guid in &to_remove {
+      self.participant_proxies.remove(guid).expect("Removing fail 1");
+      self.participant_last_life_signs.remove(guid).expect("Removing fail 2");
     }
+
+    to_remove
   }
 
   fn topic_has_writers_or_readers(&self, topic_name: &String) -> bool {
