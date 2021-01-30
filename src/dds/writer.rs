@@ -697,6 +697,7 @@ impl Writer {
     self.readers.remove(&guid)
   }
 
+
   pub fn reader_lost(&mut self, guid: GUID)
   {
     if self.readers.contains_key(&guid) {
@@ -709,6 +710,19 @@ impl Writer {
             .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
     }
   }
+
+  // Entire remote participant was lost.
+  // Remove all remote writers belonging to it.
+  pub fn participant_lost(&mut self, guid_prefix: GuidPrefix) {
+    let lost_writers : Vec<GUID> = 
+      self.readers.range( guid_prefix.range() )
+        .map(|(g,_)| *g)
+        .collect();
+    for writer in lost_writers {
+      self.reader_lost(writer)
+    }
+  }
+
 
   ///This operation finds the ReaderProxy with GUID_t a_reader_guid from the set
   /// get guid Prefix from RTPS message main header

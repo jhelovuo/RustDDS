@@ -600,9 +600,16 @@ impl DPEventLoop {
 
   fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
     // Discovery has already removed Particiapnt from Discovery DB
+    // Now we have to remove any ReaderProxies and WriterProxies belonging
+    // to that particiapnt, so that we do not send messages to them anymore.
 
-    // TODO: We need to notify all local readers and writers to
-    // remove proxies with this GuidPrefix.
+    for (_writer_guid, writer) in self.writers.iter_mut() {
+      writer.participant_lost(participant_guid_prefix)
+    }
+
+    for reader in self.message_receiver.available_readers.iter_mut() {
+      reader.participant_lost(participant_guid_prefix)
+    }
   }
 
   fn remote_reader_discovered(&mut self, drd: DiscoveredReaderData, 

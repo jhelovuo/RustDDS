@@ -2,6 +2,8 @@ use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use std::hash::Hash;
+use std::ops::RangeBounds;
+
 use super::parameter_id::ParameterId;
 use crate::dds::traits::key::Key;
 
@@ -26,6 +28,13 @@ impl GuidPrefix {
     }
     GuidPrefix { entityKey: pr }
   }
+
+  pub fn range(&self) -> impl RangeBounds<GUID> {
+    GUID::new(*self,EntityId::MIN)
+    ..=
+    GUID::new(*self,EntityId::MAX)
+  }
+
 }
 
 impl Default for GuidPrefix {

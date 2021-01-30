@@ -2,7 +2,6 @@ use std::{
   collections::{btree_map::Iter as BTreeIter, HashMap, BTreeMap},
   iter::Map,
   time::Instant,
-  ops::{Bound::Included,RangeBounds,},
 };
 
 
@@ -108,7 +107,7 @@ impl DiscoveryDB {
     // TODO: Implement this using .drain_filter() in BTreeMap once it lands in stable.
     let to_remove :Vec<GUID> = 
           self.external_topic_readers
-            .range(Self::guid_prefix_to_range(guid_prefix))
+            .range( guid_prefix.range() )
             .map(|(g,_)| g.clone() )
             .collect();
     for guid in to_remove {
@@ -124,7 +123,7 @@ impl DiscoveryDB {
     // TODO: Implement this using .drain_filter() in BTreeMap once it lands in stable.
     let to_remove :Vec<GUID> = 
           self.external_topic_writers
-            .range(Self::guid_prefix_to_range(guid_prefix))
+            .range( guid_prefix.range() )
             .map(|(g,_)| g.clone() )
             .collect();
     for guid in to_remove {
@@ -260,97 +259,6 @@ impl DiscoveryDB {
     self.external_topic_writers.values()
   }
 
-  //fn add_reader_to_local_writer(&mut self, data: &DiscoveredReaderData) {
-    /*
-    let topic_name = match data.subscription_topic_data.topic_name().as_ref() {
-      Some(tn) => tn,
-      None => return,
-    };
-    // find out default LocatorsLists from Participant proxy
-    let drd = data;
-    let remote_reader_guid = drd.reader_proxy.remote_reader_guid;
-    let locator_lists = 
-      self.find_participant_proxy(remote_reader_guid.guidPrefix)
-        .map(|pp| {
-          debug!("Added default locators to Reader {:?}", remote_reader_guid);
-          ( pp.default_unicast_locators.clone(), 
-            pp.default_multicast_locators.clone() ) } )
-        .unwrap_or_else( || {
-            if remote_reader_guid.guidPrefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
-              warn!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
-                ,drd, remote_reader_guid.guidPrefix, self.participant_proxies.keys() );
-            }
-            (LocatorList::new(), LocatorList::new()) 
-          } );
-
-    let reader_proxy = RtpsReaderProxy::from_discovered_reader_data(data, 
-                          locator_lists.0 , locator_lists.1 );
-
-    // This seems to add locators of the discovered remote Reader to the
-    // locator list of the local Writer, but that does not make any sense at
-    // all. Reader locators should not be confised with Writer locators.
-    self
-      .local_topic_writers
-      .iter_mut()
-      .filter(
-        |(_, p)| match p.publication_topic_data.topic_name.as_ref() {
-          Some(tn) => *tn == *topic_name,
-          None => false,
-        },
-      )
-      .for_each(|(_, p)| {
-        p.writer_proxy
-          .unicast_locator_list
-          .append(&mut reader_proxy.unicast_locator_list.clone());
-        p.writer_proxy.unicast_locator_list = p
-          .writer_proxy
-          .unicast_locator_list
-          .clone()
-          .into_iter()
-          .unique()
-          .collect();
-
-        // TODO: multicast locators
-      }); */
-  //}
-
-  /* this function seems to do nothing useful, as the data is not used! 
-
-  moreover, the algorithm is horribly wrong, because discovered writer 
-  locators are added as reader locators */
-  /*
-  fn add_writer_to_local_reader(&mut self, data: &DiscoveredWriterData) {
-    let topic_name = match data.publication_topic_data.topic_name.as_ref() {
-      Some(tn) => tn,
-      None => return,
-    };
-
-    let writer_proxy = RtpsWriterProxy::from_discovered_writer_data(data);
-
-    self
-      .local_topic_readers
-      .iter_mut()
-      .filter(
-        |(_, p)| match p.subscription_topic_data.topic_name().as_ref() {
-          Some(tn) => *tn == *topic_name,
-          None => false,
-        },
-      )
-      .for_each(|(_, p)| {
-        p.reader_proxy
-          .unicast_locator_list
-          .append(&mut writer_proxy.unicast_locator_list.clone());
-        p.reader_proxy.unicast_locator_list = p
-          .reader_proxy
-          .unicast_locator_list
-          .clone()
-          .into_iter()
-          .unique()
-          .collect();
-
-        // TODO: multicast locators
-      })
-  } */
   
   pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> Option<(DiscoveredReaderData, RtpsReaderProxy)> {
     let guid = data.reader_proxy.remote_reader_guid;
@@ -570,23 +478,13 @@ impl DiscoveryDB {
       .collect()
   }
 
-  // generic helper
-  fn guid_prefix_to_range( prefix:GuidPrefix ) -> impl RangeBounds<GUID> {
-    ( Included(GUID::new(prefix,EntityId::MIN)),
-      Included(GUID::new(prefix,EntityId::MAX)) )
-  }
-
   pub fn update_lease_duration(&mut self, data: ParticipantMessageData) {
     let now = Instant::now();
     let prefix = data.guid;
     self
       .external_topic_writers
-      .range_mut(Self::guid_prefix_to_range(prefix))
+      .range_mut( prefix.range() )
       .for_each(|(_guid,p)| p.last_updated = now);
-
-      // .iter_mut()
-      // .filter(|p| p.writer_proxy.remote_writer_guid.guidPrefix == data.guid)
-      // .for_each(|p| p.last_updated = now);
   }
 }
 

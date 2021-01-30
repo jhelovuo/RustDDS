@@ -9,7 +9,7 @@ use crate::messages::submessages::submessages::*;
 use crate::dds::ddsdata::DDSData;
 use crate::dds::statusevents::*;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
-use crate::structure::guid::{GUID, EntityId};
+use crate::structure::guid::{GUID, EntityId, GuidPrefix};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 #[cfg(test)] use crate::structure::locator::LocatorList;
 use crate::structure::{duration::Duration, time::Timestamp};
@@ -29,7 +29,7 @@ use mio_extras::channel as mio_channel;
 use log::{debug, info, warn, trace, error};
 use std::fmt;
 
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashSet, BTreeMap, HashMap, };
 use std::time::Duration as StdDuration;
 use enumflags2::BitFlags;
 
@@ -73,7 +73,7 @@ pub(crate) struct Reader {
   sent_ack_nack_count: i32,
   received_hearbeat_count: i32,
 
-  matched_writers: HashMap<GUID, RtpsWriterProxy>,
+  matched_writers: BTreeMap<GUID, RtpsWriterProxy>,
   writer_match_count_total: i32, // total count, never decreases
 
   requested_deadline_missed_count: i32,
@@ -106,7 +106,7 @@ impl Reader {
       heartbeat_supression_duration: StdDuration::new(0, 0),
       sent_ack_nack_count: 0,
       received_hearbeat_count: 0,
-      matched_writers: HashMap::new(),
+      matched_writers: BTreeMap::new(),
       writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
       timed_event_handler: None,
@@ -334,6 +334,18 @@ impl Reader {
     }
 
     
+  }
+
+  // Entire remote participant was lost.
+  // Remove all remote readers belonging to it.
+  pub fn participant_lost(&mut self, guid_prefix: GuidPrefix) {
+    let lost_readers : Vec<GUID> = 
+      self.matched_writers.range( guid_prefix.range() )
+        .map(|(g,_)| *g)
+        .collect();
+    for reader in lost_readers {
+      self.remove_writer_proxy(reader)
+    }
   }
 
   pub fn contains_writer(&self, entity_id: EntityId) -> bool {
