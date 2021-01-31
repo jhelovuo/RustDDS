@@ -759,6 +759,7 @@ impl InnerSubscriber {
       status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
+      qos.clone(),
       reader_command_receiver,
     );
 

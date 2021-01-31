@@ -506,15 +506,8 @@ impl DPEventLoop {
               EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
             );
-            // DPEventLoop::update_pubsub_readers( writer, &db,
-            //   EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-            //   BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
-            // );
           }
           EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER => {
-            // DPEventLoop::update_pubsub_readers(
-            //   writer,
-            //   &db,
             DPEventLoop::update_discovery_writer( writer, discovered_participant,
               EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR,
@@ -524,9 +517,6 @@ impl DPEventLoop {
             // TODO:
           }
           EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER => {
-            // DPEventLoop::update_pubsub_readers(
-            //   writer,
-            //   &db,
             DPEventLoop::update_discovery_writer( writer, discovered_participant,
               EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
               BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER,
@@ -559,7 +549,7 @@ impl DPEventLoop {
               .collect();
 
             for proxy in proxies.into_iter() {
-              reader.update_writer_proxy(proxy);
+              reader.update_writer_proxy(proxy, Discovery::publisher_qos() ); // TODO: qos?
             }
           }
           EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
@@ -684,38 +674,21 @@ impl DPEventLoop {
     entity_id: EntityId, expected_endpoint: u32 ) 
   {
     if dpd.available_builtin_endpoints.contains(expected_endpoint) {
-      reader.update_writer_proxy( dpd.as_writer_proxy(true, Some(entity_id)));
+      reader.update_writer_proxy( 
+        dpd.as_writer_proxy(true, Some(entity_id)),
+        Discovery::publisher_qos()
+       );
       debug!("update_discovery reader - endpoint {:?} - {:?}", expected_endpoint, dpd.participant_guid);
     }
   }
-/*
-  fn update_pubsub_readers(
-    writer: &mut Writer,
-    db: &RwLockReadGuard<DiscoveryDB>,
-    entity_id: EntityId,
-    expected_endpoint: u32,
-  ) {
-    db.find_participant_proxy(writer.get_guid_prefix())
-      .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint))
-      .map( |p| writer.update_reader_proxy( p.as_reader_proxy(true, Some(entity_id)) , 
-                                            Discovery::subscriber_qos() ));
-  }
 
-  fn update_pubsub_writers(
-    reader: &mut Reader,
-    db: &RwLockReadGuard<DiscoveryDB>,
-    entity_id: EntityId,
-    expected_endpoint: u32,
-  ) {
-    db.find_participant_proxy(reader.get_guid_prefix())
-      .filter(|p| p.available_builtin_endpoints.contains(expected_endpoint))
-      .map(|p| reader.update_writer_proxy( p.as_writer_proxy(true, Some(entity_id))));
-  }
-*/
   pub fn remote_writer_discovered(&mut self, dwd: DiscoveredWriterData) {
     for reader in self.message_receiver.available_readers.iter_mut() {
       if &dwd.publication_topic_data.topic_name == reader.topic_name() {
-        reader.update_writer_proxy( RtpsWriterProxy::from_discovered_writer_data(&dwd) );
+        reader.update_writer_proxy( 
+          RtpsWriterProxy::from_discovered_writer_data(&dwd),
+          dwd.publication_topic_data.qos(), 
+        );
       }
     } 
   }  

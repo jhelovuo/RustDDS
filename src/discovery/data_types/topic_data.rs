@@ -470,6 +470,23 @@ impl PublicationBuiltinTopicData {
     self.destination_order = qos.destination_order;
     self.presentation = qos.presentation;
   }
+
+  pub fn qos(&self) -> QosPolicies {
+    QosPolicies {
+      durability: self.durability,
+      presentation: self.presentation,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      ownership: self.ownership,
+      liveliness: self.liveliness,
+      time_based_filter: self.time_based_filter,
+      reliability: self.reliability,
+      destination_order: self.destination_order,
+      history: None, // TODO: ???
+      resource_limits: None, // TODO: ???
+      lifespan: self.lifespan,
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for PublicationBuiltinTopicData {

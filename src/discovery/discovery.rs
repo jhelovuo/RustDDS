@@ -26,7 +26,7 @@ use crate::{
       QosPolicies,
       policy::{
         Reliability, History, Durability, Presentation, PresentationAccessScope, Deadline,
-        Ownership, Liveliness, TimeBasedFilter, DestinationOrder, ResourceLimits,
+        Ownership, Liveliness, TimeBasedFilter, DestinationOrder,
       },
     },
     readcondition::ReadCondition,
@@ -987,13 +987,44 @@ impl Discovery {
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
       .history(History::KeepLast { depth: 1 }) // there should be no need fo historical data here
-      .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
-        max_instances: std::i32::MAX,
-        max_samples: std::i32::MAX,
-        max_samples_per_instance: std::i32::MAX,
-      })
+      // .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
+      //   max_instances: std::i32::MAX,
+      //   max_samples: std::i32::MAX,
+      //   max_samples_per_instance: std::i32::MAX,
+      // })
       .build()
   }
+
+  // TODO: Check if this definition is correct (spec?)
+  pub fn publisher_qos() -> QosPolicies {
+    QosPolicyBuilder::new()
+      .durability(Durability::TransientLocal)
+      .presentation(Presentation {
+        access_scope: PresentationAccessScope::Topic,
+        coherent_access: false,
+        ordered_access: false,
+      })
+      .deadline(Deadline(Duration::DURATION_INFINITE))
+      .ownership(Ownership::Shared)
+      .liveliness(Liveliness::Automatic {
+        lease_duration: Duration::DURATION_INFINITE,
+      })
+      .time_based_filter(TimeBasedFilter {
+        minimum_separation: Duration::DURATION_ZERO,
+      })
+      .reliability(Reliability::Reliable {
+        max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
+      })
+      .destination_order(DestinationOrder::ByReceptionTimestamp)
+      .history(History::KeepLast { depth: 1 }) // there should be no need fo historical data here
+      // .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
+      //   max_instances: std::i32::MAX,
+      //   max_samples: std::i32::MAX,
+      //   max_samples_per_instance: std::i32::MAX,
+      // })
+      .build()
+  }
+
 
   fn discovery_db_read(&self) -> RwLockReadGuard<DiscoveryDB> {
     match self.discovery_db.read() {

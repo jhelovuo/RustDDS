@@ -651,19 +651,17 @@ impl Writer {
 
   }
  
-  // returns if the reader was new
   pub fn update_reader_proxy(&mut self, reader_proxy: RtpsReaderProxy, requested_qos:QosPolicies) {
-    if self.readers.get( &reader_proxy.remote_reader_guid ).is_none() {
-      self.readers.insert( reader_proxy.remote_reader_guid , reader_proxy );
-    } else {
-      match  self.qos_policies.complies_to_fail(&requested_qos) {
-        // matched QoS
-        None => {
-          self.readers.insert( reader_proxy.remote_reader_guid , reader_proxy );
-          self.matched_readers_count_total += 1;
+    match  self.qos_policies.compliance_failure_wrt(&requested_qos) {
+      // matched QoS
+      None => {
+        let change =
+          self.matched_reader_update( reader_proxy );
+        if change > 0 {
+          self.matched_readers_count_total += change;
           self.status_sender.try_send(DataWriterStatus::PublicationMatched { 
-                total: CountWithChange::new(self.matched_readers_count_total , 1 ),
-                current: CountWithChange::new(self.readers.len() as i32 , 1)
+                total: CountWithChange::new(self.matched_readers_count_total , change ),
+                current: CountWithChange::new(self.readers.len() as i32 , change)
               })
             .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
           // send out hearbeat, so that new reader can catch up
@@ -671,21 +669,44 @@ impl Writer {
             self.notify_new_data_to_all_readers()
           }
         }
-        Some(bad_policy_id) => {
-          // QoS not compliant :(
-          self.requested_incompatible_qos_count += 1;
-          self.status_sender.try_send(DataWriterStatus::OfferedIncompatibleQos { 
-                count: CountWithChange::new(self.requested_incompatible_qos_count , 1 ),
-                last_policy_id: bad_policy_id,
-                policies: Vec::new(), // TODO: implement this
-              })
-            .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
-        }
-      } // match
-    } // if 
+      }
+      Some(bad_policy_id) => {
+        // QoS not compliant :(
+        self.requested_incompatible_qos_count += 1;
+        self.status_sender.try_send(DataWriterStatus::OfferedIncompatibleQos { 
+              count: CountWithChange::new(self.requested_incompatible_qos_count , 1 ),
+              last_policy_id: bad_policy_id,
+              policies: Vec::new(), // TODO: implement this
+            })
+          .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
+      }
+    } // match
   }
 
-  // internal helper. Same as above, but duplicaes are an error.
+  // Update the given reader. Preserve data we are tracking.
+  // return 0 if the reader already existed
+  // return 1 if it was new
+  fn matched_reader_update(&mut self, reader_proxy: RtpsReaderProxy) -> i32 {
+    let (to_insert, count_change) =
+      match self.readers.remove( &reader_proxy.remote_reader_guid ) {
+        None => ( reader_proxy , 1 ) ,
+        Some(existing_reader) => {
+          ( RtpsReaderProxy {
+              is_active: existing_reader.is_active,
+              all_acked_before: existing_reader.all_acked_before,
+              unsent_changes: existing_reader.unsent_changes,
+              repair_mode: existing_reader.repair_mode,
+              .. reader_proxy
+            }
+          , 0 )
+        }
+
+      };
+    self.readers.insert(to_insert.remote_reader_guid, to_insert);
+    count_change
+  }
+
+  // internal helper. Same as above, but duplicates are an error.
   fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
     let guid = reader_proxy.remote_reader_guid;
     if self.readers.insert(reader_proxy.remote_reader_guid, reader_proxy).is_some() {

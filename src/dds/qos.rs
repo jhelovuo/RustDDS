@@ -1,3 +1,5 @@
+use log::{trace,};
+
 use crate::{
   structure::inline_qos::KeyHash,
   dds::values::result::*,
@@ -275,11 +277,104 @@ impl QosPolicies {
   }
 
   // Check if policy self commplies to other.
-  // yes => None
+  //
+  // "self" is the "offered" (publisher) QoS
+  // "other" is the "requested" (subscriber) QoS
+  // yes => None (no failure, i.e. are compatible)
   // no => Some(policyId) , where policyId is (any) one of the policies
   // causing incompliance 
-  pub fn complies_to_fail(&self, other: &QosPolicies) -> Option<QosPolicyId> {
-    // TODO: Implement this
+  // Compliance (comaptibility) is defined in the table in DDS spec v1.4
+  // Section "2.2.3 Supported QoS"
+  // This is not symmetric.
+  pub fn compliance_failure_wrt(&self, other: &QosPolicies) -> Option<QosPolicyId> {
+    trace!("QoS compatibility check - offered: {:?} - requested {:?}", self, other);
+    let result = self.compliance_failure_wrt_impl(other);
+    trace!("Result: {:?}",result);
+    result
+  }
+
+
+  pub fn compliance_failure_wrt_impl (&self, other: &QosPolicies) -> Option<QosPolicyId> {
+    // TODO: Check for cases where policy is requested, but not offered (None)
+
+    // check Durability: Offered must be better than or equal to Requested.
+    if let (Some(off),Some(req)) = (self.durability, other.durability) {
+      if off < req {
+        return Some(QosPolicyId::Durability)
+      }
+    }
+
+    // check Presentation: 
+    // * If coherent_access is requsted, it must be offered also. AND
+    // * Same for ordered_access. AND
+    // * Offered access scope is broader than requested.
+    if let (Some(off),Some(req)) = (self.presentation, other.presentation) {
+      if   (req.coherent_access && ! off.coherent_access)
+        || (req.ordered_access && ! off.ordered_access)
+        || (req.access_scope > off.access_scope) {
+        return Some(QosPolicyId::Presentation)
+      }
+    }
+
+
+    // check Deadline: offered period <= requested period
+    if let (Some(off),Some(req)) = (self.deadline, other.deadline) {
+      if off.0 > req.0 {
+        return Some(QosPolicyId::Deadline)
+      }
+    }
+
+
+    // check Latency Budget:
+    // offered duration <= requested duration
+    if let (Some(off),Some(req)) = (self.latency_budget, other.latency_budget) {
+      if off.duration > req.duration {
+        return Some(QosPolicyId::LatencyBudget)
+      }
+    }
+
+    // check Ownership:
+    // offered kind == requested kind
+    if let (Some(off),Some(req)) = (self.ownership, other.ownership) {
+      if off != req {
+        return Some(QosPolicyId::Ownership)
+      }
+    }
+
+    // check Liveliness
+    // offered kind >= requested kind
+    // Definition: AUTOMATIC < MANUAL_BY_PARTICIPANT < MANUAL_BY_TOPIC
+    // AND offered lease_duration <= requested lease_duration
+    //
+    // See Ord implementation on Liveliness.
+    if let (Some(off),Some(req)) = (self.liveliness, other.liveliness) {
+      if off < req {
+        return Some(QosPolicyId::Liveliness)
+      }
+    }
+
+    // check Reliability
+    // offered kind >= requested kind
+    // kind ranking: BEST_EFFORT < RELIABLE
+    match (self.reliability, other.reliability) {
+      (Some(off),Some(req)) => 
+        if off < req { return Some(QosPolicyId::Reliability) },
+      (None, Some(policy::Reliability::Reliable{..})) =>
+        // request is reliable, but no offer at all. This is bad.
+        return Some(QosPolicyId::Reliability),
+      _ => (), // otherwise, we shoudl be good to go
+    }
+
+    // check Destination Order
+    // offered kind >= requested kind
+    // kind ranking: BY_RECEPTION_TIMESTAMP < BY_SOURCE_TIMESTAMP
+    if let (Some(off),Some(req)) = (self.destination_order, other.destination_order) {
+      if off < req {
+        return Some(QosPolicyId::DestinationOrder)
+      }
+    }
+
+    // default value. no incompatibility detected.
     None
   }
 }
@@ -289,6 +384,7 @@ impl QosPolicies {
 pub mod policy {
   use crate::structure::{parameter_id::ParameterId, duration::Duration};
   use serde::{Serialize, Deserialize};
+  use std::cmp::Ordering;
 
   /*
   pub struct UserData {
@@ -315,7 +411,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.4 DURABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
   pub enum Durability {
     Volatile,
     TransientLocal,
@@ -332,7 +428,7 @@ pub mod policy {
   }
 
   /// Access scope that is part of DDS 2.2.3.6 PRESENTATION
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
   pub enum PresentationAccessScope {
     Instance,
     Topic,
@@ -357,12 +453,50 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.11 LIVELINESS
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Liveliness {
     Automatic { lease_duration: Duration },
     ManualByParticipant { lease_duration: Duration },
     ManualByTopic { lease_duration: Duration },
   }
+
+  impl Liveliness {
+    fn kind_num(&self) -> i32 {
+      use Liveliness::*;
+      match self {
+        Automatic {..} => 0,
+        ManualByParticipant {..} => 1,
+        ManualByTopic {..} => 2,
+      }
+    }
+
+    pub fn duration(&self) -> Duration {
+      use Liveliness::*;
+      match self {
+        Automatic {lease_duration} => *lease_duration,
+        ManualByParticipant {lease_duration} => *lease_duration,
+        ManualByTopic {lease_duration} => *lease_duration,
+      }      
+    }
+
+  }
+
+  impl Ord for Liveliness {
+    fn cmp(&self, other: &Self) -> Ordering {
+      // Manual liveliness is greater than automatic, but
+      // duration compares in reverse
+     other.kind_num().cmp( &other.kind_num())
+        .then_with( || self.duration().cmp(&other.duration())
+          .reverse() )
+    }
+  }
+
+  impl PartialOrd for Liveliness {
+      fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+          Some(self.cmp(other))
+      }
+  }
+
 
   /// DDS 2.2.3.12 TIME_BASED_FILTER
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -377,14 +511,14 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.14 RELIABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
   }
 
   /// DDS 2.2.3.17 DESTINATION_ORDER
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
   pub enum DestinationOrder {
     ByReceptionTimestamp,
     BySourceTimeStamp,

@@ -3,6 +3,8 @@ use std::{
   sync::{Arc, RwLock},
   time::Duration,
 };
+
+use mio::Evented;
 use mio_extras::channel::{self as mio_channel, Receiver};
 
 use serde::Serialize;
@@ -79,7 +81,7 @@ pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerial
   dds_cache: Arc<RwLock<DDSCache>>,
   datasample_cache: DataSampleCache<D>,
   phantom: PhantomData<SA>,
-  status_receiver: Receiver<DataWriterStatus>,
+  status_receiver: StatusReceiver<DataWriterStatus>,
 }
 
 impl<D, SA> Drop for DataWriter<D, SA>
@@ -115,7 +117,7 @@ where
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: Arc<RwLock<DDSCache>>,
-    status_receiver: Receiver<DataWriterStatus>,
+    status_receiver_rec: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
     let entity_id = match guid {
       Some(g) => g.entityId.clone(),
@@ -165,7 +167,7 @@ where
       dds_cache,
       datasample_cache: DataSampleCache::new(qos),
       phantom: PhantomData,
-      status_receiver,
+      status_receiver: StatusReceiver::new(status_receiver_rec),
     })
   }
 
@@ -832,6 +834,20 @@ where
       }
     }
   }
+}
+
+impl <D,SA> StatusEvented<DataWriterStatus> for DataWriter<D,SA>
+where
+  D: Keyed + Serialize,
+  SA: SerializerAdapter<D>,
+{
+  fn as_status_evented(&mut self) -> &dyn Evented {
+    self.status_receiver.as_status_evented()
+  }
+
+  fn try_recv_status(&self) -> Option<DataWriterStatus> {
+    self.status_receiver.try_recv_status()
+  }  
 }
 
 impl<D, SA> RTPSEntity for DataWriter<D, SA>

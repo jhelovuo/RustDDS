@@ -47,7 +47,6 @@ use speedy::{Writable, Endianness};
 use chrono::Duration as chronoDuration;
 
 use super::{
-  qos::{QosPolicyBuilder},
   with_key::datareader::ReaderCommand,
 };
 
@@ -77,6 +76,7 @@ pub(crate) struct Reader {
   writer_match_count_total: i32, // total count, never decreases
 
   requested_deadline_missed_count: i32,
+  offered_incompatible_qos_count: i32,
 
   timed_event_handler: Option<TimedEventHandler>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
@@ -89,6 +89,7 @@ impl Reader {
     status_sender: mio_channel::SyncSender<DataReaderStatus>,
     dds_cache: Arc<RwLock<DDSCache>>,
     topic_name: String,
+    qos_policy: QosPolicies,
     data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>, //qos_policy: QosPolicies, add later to constructor
   ) -> Reader {
     Reader {
@@ -96,7 +97,7 @@ impl Reader {
       status_sender,
       dds_cache,
       topic_name,
-      qos_policy: QosPolicyBuilder::new().build(),
+      qos_policy,
 
       seqnum_instant_map: HashMap::new(),
       my_guid: guid ,
@@ -109,6 +110,7 @@ impl Reader {
       matched_writers: BTreeMap::new(),
       writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
+      offered_incompatible_qos_count: 0,
       timed_event_handler: None,
       data_reader_command_receiver,
     }
@@ -168,15 +170,7 @@ impl Reader {
         self.my_guid);
     }
   }
-  /*
-  pub fn reset_requested_deadline_missed_status(&mut self) {
-    info!(
-      "reset_requested_deadline_missed_status on reader {:?}",
-      self.get_entity_id()
-    );
-    self.requested_deadline_missed_count.reset_change();
-  }
-  */
+
   pub fn send_status_change(&self, change: DataReaderStatus) {
     match self.status_sender.try_send(change.clone()) {
       Ok(()) => info!(
@@ -243,29 +237,6 @@ impl Reader {
     } // match
   } // fn
 
-  /*
-  fn calculate_if_requested_deadline_is_missed_for_specific_writer(&mut self, writer_proxy: &RtpsWriterProxy) -> Option<StatusChange>{
-    let last_instant = writer_proxy.changes.values().max_by(|x,y|x.cmp(y));
-    match last_instant{
-      Some(instant) => {
-        let insta_now = Instant::now();
-        let perioid = insta_now.duration_since(*instant);
-        // if time singe last received message is greater than deadline increase status and return notification.
-        if perioid > self.qos_policy.deadline.unwrap().period.to_std(){
-          self.requested_deadline_missed_status.increase();
-          return Some( StatusChange::RequestedDeadlineMissedStatus{ status : self.requested_deadline_missed_status} );
-        }else{
-          return None;
-        }
-      // no messages recieved ever so deadline must be missed.
-      } None => {
-        self.requested_deadline_missed_status.increase();
-        return Some( StatusChange::RequestedDeadlineMissedStatus{ status : self.requested_deadline_missed_status} );
-      }
-    }
-  }
-  */
-
   pub fn handle_timed_event(&mut self, timer_message: TimerMessageType) {
     match timer_message {
       TimerMessageType::ReaderDeadlineMissedCheck => 
@@ -305,23 +276,46 @@ impl Reader {
     return vec![*start, *end];
   }
 
-  
+ 
   // updates or adds a new writer proxy, doesn't touch changes
-  pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy) {
-    let old_proxy = self.matched_writer_lookup(proxy.remote_writer_guid);
-    match old_proxy {
-      Some(op) => op.update_contents(proxy),
-      None => {
-        // TODO: check that QoS parameters match. if not, do not add, and send
-        // status notification about failed match
-        self.matched_writers.insert(proxy.remote_writer_guid, proxy);
-        self.writer_match_count_total += 1;
-        self.send_status_change(DataReaderStatus::SubscriptionMatched{
-            total: CountWithChange::new(self.writer_match_count_total, 1 ), 
-            current: CountWithChange::new(self.matched_writers.len() as i32, 1 ),
-        })
+  pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy, offered_qos: QosPolicies) {
+    match offered_qos.compliance_failure_wrt( &self.qos_policy ) {
+      None => { // success, update or insert
+        let count_change =
+          self.matched_writer_update(proxy);
+        if count_change > 0 {
+          self.writer_match_count_total += count_change;
+          self.send_status_change(DataReaderStatus::SubscriptionMatched{
+              total: CountWithChange::new(self.writer_match_count_total, count_change ), 
+              current: CountWithChange::new(self.matched_writers.len() as i32, count_change ),
+          })
+        }
+
       }
-    };
+      Some(bad_policy_id) => { // no QoS match
+        self.offered_incompatible_qos_count += 1;
+        self.send_status_change(DataReaderStatus::RequestedIncompatibleQos {
+          count: CountWithChange::new(self.offered_incompatible_qos_count, 1),
+          last_policy_id: bad_policy_id,
+          policies: Vec::new(), // TODO. implementation missing
+        })
+
+      }
+    }
+  }
+
+  // return value counts how many new proxies were added
+  fn matched_writer_update(&mut self, proxy: RtpsWriterProxy) -> i32 {
+    match self.matched_writer_lookup(proxy.remote_writer_guid) {
+      Some(op) => {
+        op.update_contents(proxy); 
+        0
+      }
+      None => {
+        self.matched_writers.insert(proxy.remote_writer_guid, proxy); 
+        1 
+      }
+    }
   }
 
   pub fn remove_writer_proxy(&mut self, writer_guid:GUID) {
@@ -332,8 +326,6 @@ impl Reader {
                 current: CountWithChange::new(self.matched_writers.len() as i32 , -1)
               });
     }
-
-    
   }
 
   // Entire remote participant was lost.
@@ -370,20 +362,9 @@ impl Reader {
       multicast_locator_list,
       remote_group_entity_id,
     );
-    self.update_writer_proxy(proxy);
+    self.update_writer_proxy(proxy, QosPolicies::qos_none() );
   }
 
-
-  // TODO: This is stupid removeal algorithm. Why we cannot just remove by GUID?
-  // pub fn retain_matched_writers(&mut self, retvals: Iter<RtpsWriterProxy>) {
-  //   let rt: Vec<GUID> = retvals.map(|p| p.remote_writer_guid).collect();
-  //   self.matched_writers.retain(|guid, _| rt.contains(guid));
-  // }
-  /* not used?
-  pub fn matched_writer_remove(&mut self, remote_writer_guid: GUID) -> Option<RtpsWriterProxy> {
-    self.matched_writers.remove(&remote_writer_guid)
-  }
-  */
   fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
     self.matched_writers.get_mut(&remote_writer_guid)
   }
