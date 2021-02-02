@@ -511,10 +511,30 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.14 RELIABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
+  }
+
+  impl Ord for Reliability {
+    // If both are reliable, then smaller blocking time is greater
+    fn cmp(&self, other: &Self) -> Ordering {
+      use Reliability::*;
+      match (self,other) {
+        (BestEffort, BestEffort) => Ordering::Equal,
+        (BestEffort, Reliable {..}) => Ordering::Less,
+        (Reliable{..}, BestEffort) => Ordering::Greater,
+        (Reliable{ max_blocking_time: my_time}, Reliable {max_blocking_time: other_time} ) =>
+          my_time.cmp(other_time).reverse(),
+      }
+    }
+  }
+
+  impl PartialOrd for Reliability {
+      fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+          Some(self.cmp(other))
+      }
   }
 
   /// DDS 2.2.3.17 DESTINATION_ORDER

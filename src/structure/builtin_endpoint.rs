@@ -55,6 +55,10 @@ pub struct BuiltinEndpointQos {
 
 impl BuiltinEndpointQos {
   pub const BEST_EFFORT_PARTICIPANT_MESSAGE_DATA_READER: u32 = 0x00000001;
+
+  pub fn is_best_effort(&self) -> bool {
+    self.value == BuiltinEndpointQos::BEST_EFFORT_PARTICIPANT_MESSAGE_DATA_READER
+  }
 }
 
 #[derive(Serialize, Deserialize)]

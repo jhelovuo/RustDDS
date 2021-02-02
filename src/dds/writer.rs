@@ -652,6 +652,7 @@ impl Writer {
   }
  
   pub fn update_reader_proxy(&mut self, reader_proxy: RtpsReaderProxy, requested_qos:QosPolicies) {
+    debug!("update_reader_proxy topic={:?}",self.my_topic_name);
     match  self.qos_policies.compliance_failure_wrt(&requested_qos) {
       // matched QoS
       None => {
@@ -665,13 +666,16 @@ impl Writer {
               })
             .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
           // send out hearbeat, so that new reader can catch up
-          if self.qos_policies.reliability.is_some() {
-            self.notify_new_data_to_all_readers()
+          match self.qos_policies.reliability {
+            Some(Reliability::Reliable{..}) =>
+              self.notify_new_data_to_all_readers(),
+            _ => (),
           }
         }
       }
       Some(bad_policy_id) => {
         // QoS not compliant :(
+        debug!("update_reader_proxy - QoS mismatch {:?}", bad_policy_id);
         self.requested_incompatible_qos_count += 1;
         self.status_sender.try_send(DataWriterStatus::OfferedIncompatibleQos { 
               count: CountWithChange::new(self.requested_incompatible_qos_count , 1 ),

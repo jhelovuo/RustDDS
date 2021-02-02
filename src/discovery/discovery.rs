@@ -137,12 +137,6 @@ impl Discovery {
     }
   }
 
-  fn create_spdp_patricipant_qos() -> QosPolicies {
-    QosPolicyBuilder::new()
-      .reliability(Reliability::BestEffort)
-      .history(History::KeepLast { depth: 1 })
-      .build()
-  }
 
   pub fn discovery_event_loop(discovery: Discovery) {
 
@@ -177,7 +171,7 @@ impl Discovery {
       "Unable to create Discovery Subscriber. {:?}"
     );
 
-    let discovery_publisher_qos = Discovery::subscriber_qos();
+    let discovery_publisher_qos = Discovery::publisher_qos();
     let discovery_publisher = try_construct!(
       discovery.domain_participant.create_publisher(&discovery_publisher_qos) ,
       "Unable to create Discovery Publisher. {:?}");
@@ -583,7 +577,7 @@ impl Discovery {
       guid,
       &String::from("DCPSParticipant"),
       &String::from("SPDPDiscoveredParticipantData"),
-      &Discovery::PARTICIPANT_MESSAGE_QOS,
+      &Discovery::create_spdp_patricipant_qos(),
     );
     let drd = DiscoveredReaderData {
       reader_proxy,
@@ -639,7 +633,10 @@ impl Discovery {
         for data in d.into_iter() {
           match data.value() {
             Ok(val) => {
+              debug!("Discovered Reader {:?}", &val);
               if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(&val) {
+                debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
+                  &drd, &rtps_reader_proxy);
                 self.send_discovery_notification(
                   DiscoveryNotificationType::ReaderUpdated {
                     discovered_reader_data: drd, 
@@ -648,7 +645,6 @@ impl Discovery {
                   });  
               }
               db.update_topic_data_drd(&val);
-              debug!("Discovered Reader {:?}", &val);
             }
             Err(guid) => {
               debug!("Dispose Reader {:?}", guid);
@@ -1022,6 +1018,13 @@ impl Discovery {
       //   max_samples: std::i32::MAX,
       //   max_samples_per_instance: std::i32::MAX,
       // })
+      .build()
+  }
+
+  pub fn create_spdp_patricipant_qos() -> QosPolicies {
+    QosPolicyBuilder::new()
+      .reliability(Reliability::BestEffort)
+      .history(History::KeepLast { depth: 1 })
       .build()
   }
 

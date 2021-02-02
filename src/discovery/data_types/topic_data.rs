@@ -24,7 +24,6 @@ use crate::{
   dds::qos::QosPolicies,
   dds::traits::{key::Key, TopicDescription},
   discovery::content_filter_property::ContentFilterProperty,
-  dds::qos::QosPolicyBuilder,
   network::constant::get_user_traffic_unicast_port,
   network::util::get_local_unicast_socket_address,
   serialization::{
@@ -233,15 +232,20 @@ impl SubscriptionBuiltinTopicData {
   }
 
   pub fn generate_qos(&self) -> QosPolicies {
-    let qos = QosPolicyBuilder::new();
-
-    let qos = match self.durability {
-      Some(d) => qos.durability(d),
-      None => qos,
-    };
-
-    // TODO: fill all fields, continue
-    qos.build()
+    QosPolicies {
+      durability: self.durability,
+      presentation: self.presentation,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      ownership: self.ownership,
+      liveliness: self.liveliness,
+      time_based_filter: self.time_based_filter,
+      reliability: self.reliability,
+      destination_order: self.destination_order,
+      history: None, // TODO: Check that this really does not exist in source
+      resource_limits: None, // TODO: Check that this really does not exist in source
+      lifespan: self.lifespan, 
+    }
   }
 }
 

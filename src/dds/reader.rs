@@ -279,6 +279,7 @@ impl Reader {
  
   // updates or adds a new writer proxy, doesn't touch changes
   pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy, offered_qos: QosPolicies) {
+    debug!("update_writer_proxy topic={:?}",self.topic_name);
     match offered_qos.compliance_failure_wrt( &self.qos_policy ) {
       None => { // success, update or insert
         let count_change =
@@ -290,7 +291,6 @@ impl Reader {
               current: CountWithChange::new(self.matched_writers.len() as i32, count_change ),
           })
         }
-
       }
       Some(bad_policy_id) => { // no QoS match
         self.offered_incompatible_qos_count += 1;
@@ -298,8 +298,8 @@ impl Reader {
           count: CountWithChange::new(self.offered_incompatible_qos_count, 1),
           last_policy_id: bad_policy_id,
           policies: Vec::new(), // TODO. implementation missing
-        })
-
+        });
+        debug!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
       }
     }
   }

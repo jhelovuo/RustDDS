@@ -16,7 +16,8 @@ use std::{
 use crate::{
   dds::{message_receiver::MessageReceiver, reader::Reader, writer::Writer},
   network::util::get_local_multicast_locators,
-  structure::builtin_endpoint::BuiltinEndpointSet,
+  structure::builtin_endpoint::{BuiltinEndpointSet, },
+  dds::qos::policy,
 };
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
@@ -479,6 +480,7 @@ impl DPEventLoop {
   }
 
   fn update_participant(&mut self, participant_guid_prefix: GuidPrefix ) {
+    info!("update_participant - begin for {:?}", participant_guid_prefix);
     if participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix {
       // Our own participant was updated (initialized.)
       // What should we do now?
@@ -549,7 +551,7 @@ impl DPEventLoop {
               .collect();
 
             for proxy in proxies.into_iter() {
-              reader.update_writer_proxy(proxy, Discovery::publisher_qos() ); // TODO: qos?
+              reader.update_writer_proxy(proxy, Discovery::create_spdp_patricipant_qos() ); 
             }
           }
           EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
@@ -586,6 +588,7 @@ impl DPEventLoop {
 
       // updates done
     }
+    info!("update_participant - finished for {:?}", participant_guid_prefix);
   }
 
   fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
@@ -643,7 +646,7 @@ impl DPEventLoop {
       });
     // updating all data
     for reader in all_readers.map(|(_, p)| p).into_iter() {
-      writer.update_reader_proxy(reader, Discovery::subscriber_qos())
+      writer.update_reader_proxy(reader, Discovery::create_spdp_patricipant_qos(), )
     }
 
     // adding multicast reader
@@ -656,16 +659,29 @@ impl DPEventLoop {
     multicast_reader.multicast_locator_list =
       get_local_multicast_locators(get_spdp_well_known_multicast_port(domain_id));
 
-    writer.update_reader_proxy(multicast_reader, Discovery::subscriber_qos());
+    writer.update_reader_proxy(multicast_reader, Discovery::create_spdp_patricipant_qos());
     debug!("SPDP Participant readers updated.");
   }
 
   fn update_discovery_writer(writer: &mut Writer, dpd: &SPDPDiscoveredParticipantData,
     entity_id: EntityId, expected_endpoint: u32 ) 
   {
+    debug!("update_discovery_writer - {:?}", writer.topic_name() );
+    let mut qos = Discovery::subscriber_qos();
+    if entity_id == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER 
+        && dpd.builtin_endpoint_qos
+            .map( |beq| beq.is_best_effort() )
+            .unwrap_or(false)
+    {
+        // special case by RTPS 2.3 spec Section 
+        // "8.4.13.3 BuiltinParticipantMessageWriter and 
+        // BuiltinParticipantMessageReader QoS"
+        qos.reliability = Some(policy::Reliability::BestEffort);
+    };
+
     if dpd.available_builtin_endpoints.contains(expected_endpoint) {
       writer.update_reader_proxy( dpd.as_reader_proxy(true, Some(entity_id)) , 
-                                  Discovery::subscriber_qos() );
+                                  qos );
       debug!("update_discovery writer - endpoint {:?} - {:?}", expected_endpoint, dpd.participant_guid);
     }
   }
@@ -673,6 +689,7 @@ impl DPEventLoop {
   fn update_discovery_reader(reader: &mut Reader, dpd: &SPDPDiscoveredParticipantData,
     entity_id: EntityId, expected_endpoint: u32 ) 
   {
+    debug!("update_discovery_reader - {:?}", reader.topic_name() );
     if dpd.available_builtin_endpoints.contains(expected_endpoint) {
       reader.update_writer_proxy( 
         dpd.as_writer_proxy(true, Some(entity_id)),
