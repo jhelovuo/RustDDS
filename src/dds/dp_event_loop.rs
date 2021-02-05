@@ -8,7 +8,7 @@ use crate::discovery::discovery::Discovery;
 use log::{debug, error, info, warn, trace};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
-use std::{collections::HashMap, sync::RwLockReadGuard, time::Duration};
+use std::{collections::HashMap, time::Duration};
 use std::{
   sync::{Arc, RwLock},
 };
@@ -496,42 +496,67 @@ impl DPEventLoop {
             return
           }
         };
-      // now update our local Discovery Writers about the new Particpant
-      for (_writer_guid, writer) in self.writers.iter_mut() {
-        match writer.get_entity_id() {
-          EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER => {
-            DPEventLoop::update_spdp_participant_readers(writer, &db,
-              self.domain_info.domain_id );
-          }
-          EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER => {
-            DPEventLoop::update_discovery_writer( writer, discovered_participant,
-              EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-              BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
-            );
-          }
-          EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER => {
-            DPEventLoop::update_discovery_writer( writer, discovered_participant,
-              EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-              BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR,
-            );
-          }
-          EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER => {
-            // TODO:
-          }
-          EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER => {
-            DPEventLoop::update_discovery_writer( writer, discovered_participant,
-              EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-              BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER,
-            );
-          }
-          _other => {
-            // nothing. it is not built-in writer.
-          }
-        } // match
 
-        writer.notify_new_data_to_all_readers()
-      } // for
-      // update local Readers
+      let my_prefix = self.domain_info.domain_participant_guid.guidPrefix;
+
+      for (writer_eid, reader_eid, endpoint) in 
+      & [ ( EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
+            EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR )
+
+        , ( EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
+            EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR )
+
+        , ( EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+            EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR ) 
+
+        , ( EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
+            EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR )
+
+        , ( EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+            EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+            BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER)
+        ] {
+          if let Some(writer) = self.writers.get_mut( &GUID::new(my_prefix, *writer_eid)) {
+            debug!("update_discovery_writer - {:?}", writer.topic_name() );
+            let mut qos = Discovery::subscriber_qos();
+            // special case by RTPS 2.3 spec Section 
+            // "8.4.13.3 BuiltinParticipantMessageWriter and 
+            // BuiltinParticipantMessageReader QoS"
+            if *reader_eid == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER 
+                && discovered_participant.builtin_endpoint_qos
+                    .map( |beq| beq.is_best_effort() )
+                    .unwrap_or(false) {                
+                qos.reliability = Some(policy::Reliability::BestEffort);
+            };
+
+            if discovered_participant.available_builtin_endpoints.contains(*endpoint) {
+              let mut reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
+
+              if *writer_eid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
+                // Simple Particiapnt Discovery Protocol (SPDP) writer is special,
+                // different from SEDP writers
+                qos = Discovery::create_spdp_patricipant_qos(); // different QoS
+                // adding a multicast reader
+                reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
+                  GuidPrefix::GUIDPREFIX_UNKNOWN,
+                  EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER);
+
+                reader_proxy.multicast_locator_list =
+                  get_local_multicast_locators(get_spdp_well_known_multicast_port(self.domain_info.domain_id));
+              }
+              // common processing for SPDP and SEDP
+              writer.update_reader_proxy( reader_proxy , qos );
+              debug!("update_discovery writer - endpoint {:?} - {:?}", 
+                endpoint, discovered_participant.participant_guid);
+            }
+
+            writer.notify_new_data_to_all_readers() 
+          }
+      }
 
       for reader in self.message_receiver.available_readers.iter_mut() {
         match reader.get_entity_id() {
@@ -555,27 +580,18 @@ impl DPEventLoop {
             }
           }
           EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
-            // DPEventLoop::update_pubsub_writers(
-            //   reader,
-            //   &db,
             DPEventLoop::update_discovery_reader( reader, discovered_participant,
               EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER,
             );
           }
           EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER => {
-            // DPEventLoop::update_pubsub_writers(
-            //   reader,
-            //   &db,
             DPEventLoop::update_discovery_reader( reader, discovered_participant,
               EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
               BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
             );
           }
           EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
-            // DPEventLoop::update_pubsub_writers(
-            //   reader,
-            //   &db,
             DPEventLoop::update_discovery_reader( reader, discovered_participant,
               EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
               BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER,
@@ -618,71 +634,6 @@ impl DPEventLoop {
   fn remote_reader_lost(&mut self, reader_guid:GUID) {
     for (_writer_guid, writer) in self.writers.iter_mut() {
       writer.reader_lost(reader_guid);
-    }
-  }
-
-
-  fn update_spdp_participant_readers(
-    writer: &mut Writer,
-    db: &RwLockReadGuard<DiscoveryDB>,
-    domain_id: u16,
-  ) {
-    let guid_prefix = writer.get_guid_prefix();
-
-    // generating readers from all found participants
-    let all_readers = db
-      .get_participants()
-      .filter(|sp| sp.available_builtin_endpoints
-          .contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR))
-      .filter(|p| p.participant_guid.guidPrefix != guid_prefix)
-      .map(|p| {
-        (
-          p.participant_guid,
-          p.as_reader_proxy(
-            true,
-            Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
-          ),
-        )
-      });
-    // updating all data
-    for reader in all_readers.map(|(_, p)| p).into_iter() {
-      writer.update_reader_proxy(reader, Discovery::create_spdp_patricipant_qos(), )
-    }
-
-    // adding multicast reader
-    let multicast_guid = GUID::new_with_prefix_and_id(
-      GuidPrefix::GUIDPREFIX_UNKNOWN,
-      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
-    );
-
-    let mut multicast_reader = RtpsReaderProxy::new(multicast_guid);
-    multicast_reader.multicast_locator_list =
-      get_local_multicast_locators(get_spdp_well_known_multicast_port(domain_id));
-
-    writer.update_reader_proxy(multicast_reader, Discovery::create_spdp_patricipant_qos());
-    debug!("SPDP Participant readers updated.");
-  }
-
-  fn update_discovery_writer(writer: &mut Writer, dpd: &SPDPDiscoveredParticipantData,
-    entity_id: EntityId, expected_endpoint: u32 ) 
-  {
-    debug!("update_discovery_writer - {:?}", writer.topic_name() );
-    let mut qos = Discovery::subscriber_qos();
-    if entity_id == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER 
-        && dpd.builtin_endpoint_qos
-            .map( |beq| beq.is_best_effort() )
-            .unwrap_or(false)
-    {
-        // special case by RTPS 2.3 spec Section 
-        // "8.4.13.3 BuiltinParticipantMessageWriter and 
-        // BuiltinParticipantMessageReader QoS"
-        qos.reliability = Some(policy::Reliability::BestEffort);
-    };
-
-    if dpd.available_builtin_endpoints.contains(expected_endpoint) {
-      writer.update_reader_proxy( dpd.as_reader_proxy(true, Some(entity_id)) , 
-                                  qos );
-      debug!("update_discovery writer - endpoint {:?} - {:?}", expected_endpoint, dpd.participant_guid);
     }
   }
 

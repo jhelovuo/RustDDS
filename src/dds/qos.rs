@@ -518,15 +518,18 @@ pub mod policy {
   }
 
   impl Ord for Reliability {
-    // If both are reliable, then smaller blocking time is greater
+    // max_blocking_time is not compared.
+    // TODO: This is kind of bad, because now Eq and Ord are inconsistent:
+    // If we have A and B both Reliability::Reliable, but with different
+    // max_blocking_time, then Ord will say they are Ordering::Equal,
+    // but Eq will say they are not equal.
     fn cmp(&self, other: &Self) -> Ordering {
       use Reliability::*;
       match (self,other) {
         (BestEffort, BestEffort) => Ordering::Equal,
         (BestEffort, Reliable {..}) => Ordering::Less,
         (Reliable{..}, BestEffort) => Ordering::Greater,
-        (Reliable{ max_blocking_time: my_time}, Reliable {max_blocking_time: other_time} ) =>
-          my_time.cmp(other_time).reverse(),
+        (Reliable{..}, Reliable {..} ) => Ordering::Equal, 
       }
     }
   }
