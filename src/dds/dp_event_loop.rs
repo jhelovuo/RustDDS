@@ -231,8 +231,8 @@ impl DPEventLoop {
 
               WriterLost{writer_guid} => ev_wrapper.remote_writer_lost(writer_guid) ,
 
-              ReaderUpdated{ discovered_reader_data, rtps_reader_proxy, needs_new_cache_change } => 
-                ev_wrapper.remote_reader_discovered(discovered_reader_data, rtps_reader_proxy, needs_new_cache_change),
+              ReaderUpdated{ discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change } => 
+                ev_wrapper.remote_reader_discovered(discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change),
 
               ReaderLost{ reader_guid } => ev_wrapper.remote_reader_lost(reader_guid) ,
 
@@ -606,7 +606,7 @@ impl DPEventLoop {
   }
 
   fn remote_reader_discovered(&mut self, drd: DiscoveredReaderData, 
-      rtps_reader_proxy: RtpsReaderProxy , needs_new_cache_change: bool) {
+      rtps_reader_proxy: RtpsReaderProxy , _needs_new_cache_change: bool) {
     for (_writer_guid, writer) in self.writers.iter_mut() {
       if drd.subscription_topic_data.topic_name() == writer.topic_name() {
         writer.update_reader_proxy(rtps_reader_proxy.clone(), 

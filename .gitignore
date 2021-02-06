@@ -5,3 +5,4 @@ src/.vscode/launch.json
 *.code-workspace
 *.bin
 /log/
+.vscode/launch.json
