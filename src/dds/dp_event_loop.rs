@@ -448,7 +448,7 @@ impl DPEventLoop {
     // TODO: Why do we have separate message channels for reader and writer, if they have contain the same data type?
 
     while let Ok(timer_message) = reciever.try_recv() {
-      match self.message_receiver.available_readers.iter_mut()
+      match self.message_receiver.available_readers.values_mut()
           .find(|reader| reader.get_entity_token() == event.token()) {
         Some(reader) => {
           reader.handle_timed_event(timer_message);
@@ -520,103 +520,98 @@ impl DPEventLoop {
             EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
             BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER)
         ] {
-          if let Some(writer) = self.writers.get_mut( &GUID::new(my_prefix, *writer_eid)) {
-            debug!("update_discovery_writer - {:?}", writer.topic_name() );
-            let mut qos = Discovery::subscriber_qos();
-            // special case by RTPS 2.3 spec Section 
-            // "8.4.13.3 BuiltinParticipantMessageWriter and 
-            // BuiltinParticipantMessageReader QoS"
-            if *reader_eid == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER 
-                && discovered_participant.builtin_endpoint_qos
-                    .map( |beq| beq.is_best_effort() )
-                    .unwrap_or(false) {                
-                qos.reliability = Some(policy::Reliability::BestEffort);
-            };
+        if let Some(writer) = self.writers.get_mut( &GUID::new(my_prefix, *writer_eid)) {
+          debug!("update_discovery_writer - {:?}", writer.topic_name() );
+          let mut qos = Discovery::subscriber_qos();
+          // special case by RTPS 2.3 spec Section 
+          // "8.4.13.3 BuiltinParticipantMessageWriter and 
+          // BuiltinParticipantMessageReader QoS"
+          if *reader_eid == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER 
+              && discovered_participant.builtin_endpoint_qos
+                  .map( |beq| beq.is_best_effort() )
+                  .unwrap_or(false) {                
+              qos.reliability = Some(policy::Reliability::BestEffort);
+          };
 
-            if discovered_participant.available_builtin_endpoints.contains(*endpoint) {
-              let mut reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
+          if discovered_participant.available_builtin_endpoints.contains(*endpoint) {
+            let mut reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
 
-              if *writer_eid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
-                // Simple Particiapnt Discovery Protocol (SPDP) writer is special,
-                // different from SEDP writers
-                qos = Discovery::create_spdp_patricipant_qos(); // different QoS
-                // adding a multicast reader
-                reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
-                  GuidPrefix::GUIDPREFIX_UNKNOWN,
-                  EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER);
+            if *writer_eid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
+              // Simple Particiapnt Discovery Protocol (SPDP) writer is special,
+              // different from SEDP writers
+              qos = Discovery::create_spdp_patricipant_qos(); // different QoS
+              // adding a multicast reader
+              reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
+                GuidPrefix::GUIDPREFIX_UNKNOWN,
+                EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER);
 
-                reader_proxy.multicast_locator_list =
-                  get_local_multicast_locators(get_spdp_well_known_multicast_port(self.domain_info.domain_id));
-              }
-              // common processing for SPDP and SEDP
-              writer.update_reader_proxy( reader_proxy , qos );
-              debug!("update_discovery writer - endpoint {:?} - {:?}", 
-                endpoint, discovered_participant.participant_guid);
+              reader_proxy.multicast_locator_list =
+                get_local_multicast_locators(get_spdp_well_known_multicast_port(self.domain_info.domain_id));
             }
-
-            writer.notify_new_data_to_all_readers() 
+            // common processing for SPDP and SEDP
+            writer.update_reader_proxy( reader_proxy , qos );
+            debug!("update_discovery writer - endpoint {:?} - {:?}", 
+              endpoint, discovered_participant.participant_guid);
           }
+
+          writer.notify_new_data_to_all_readers() 
+        }
       }
+      // update local readers.
+      // list to be looped over is the same as above, but now
+      // EntityIds are for announcers
+      for (writer_eid, reader_eid, endpoint) in 
+      & [ ( EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
+            EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER )
 
-      for reader in self.message_receiver.available_readers.iter_mut() {
-        match reader.get_entity_id() {
-          EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER => {
-            let proxies: Vec<RtpsWriterProxy> = db
-              .get_participants()
-              .filter(|p| 
-                  p.available_builtin_endpoints
-                    .contains(BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER)
-                  && p.participant_guid.guidPrefix != reader.get_guid_prefix() )
-              .map(|p| {
-                p.as_writer_proxy(
-                  true,
-                  Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
-                )
-              })
-              .collect();
+        , ( EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
+            EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER )
 
-            for proxy in proxies.into_iter() {
-              reader.update_writer_proxy(proxy, Discovery::create_spdp_patricipant_qos() ); 
-            }
+        , ( EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+            EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER ) 
+
+        , ( EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
+            EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
+            BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER )
+
+        , ( EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+            EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+            BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER)
+        ] 
+      {
+        if let Some(reader) = self.message_receiver.available_readers
+            .get_mut( reader_eid ) {
+          debug!("try update_discovery_reader - {:?}", reader.topic_name() );
+          let qos = 
+            if *reader_eid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER 
+              { Discovery::create_spdp_patricipant_qos() } 
+            else { Discovery::publisher_qos() };
+          let wp = discovered_participant.as_writer_proxy(true, Some(*writer_eid));
+
+          if discovered_participant.available_builtin_endpoints.contains(*endpoint) {
+            reader.update_writer_proxy( wp , qos );
+            debug!("update_discovery_reader - endpoint {:?} - {:?}", 
+              *endpoint, discovered_participant.participant_guid);
           }
-          EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
-            DPEventLoop::update_discovery_reader( reader, discovered_participant,
-              EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
-              BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER,
-            );
-          }
-          EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER => {
-            DPEventLoop::update_discovery_reader( reader, discovered_participant,
-              EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-              BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
-            );
-          }
-          EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
-            DPEventLoop::update_discovery_reader( reader, discovered_participant,
-              EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-              BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER,
-            );
-          }
-          _other => { // nothing
-          }
-        } // match
+        }
       } // for
-
-      // updates done
-    }
+    } // if
     info!("update_participant - finished for {:?}", participant_guid_prefix);
-  }
+  } // fn 
 
   fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
     // Discovery has already removed Particiapnt from Discovery DB
     // Now we have to remove any ReaderProxies and WriterProxies belonging
     // to that particiapnt, so that we do not send messages to them anymore.
 
-    for (_writer_guid, writer) in self.writers.iter_mut() {
+    for writer in self.writers.values_mut() {
       writer.participant_lost(participant_guid_prefix)
     }
 
-    for reader in self.message_receiver.available_readers.iter_mut() {
+    for reader in self.message_receiver.available_readers.values_mut() {
       reader.participant_lost(participant_guid_prefix)
     }
   }
@@ -651,7 +646,7 @@ impl DPEventLoop {
   }
 
   pub fn remote_writer_discovered(&mut self, dwd: DiscoveredWriterData) {
-    for reader in self.message_receiver.available_readers.iter_mut() {
+    for reader in self.message_receiver.available_readers.values_mut() {
       if &dwd.publication_topic_data.topic_name == reader.topic_name() {
         reader.update_writer_proxy( 
           RtpsWriterProxy::from_discovered_writer_data(&dwd),
@@ -662,7 +657,7 @@ impl DPEventLoop {
   }  
 
   pub fn remote_writer_lost(&mut self, writer_guid: GUID) {
-    for reader in self.message_receiver.available_readers.iter_mut() {
+    for reader in self.message_receiver.available_readers.values_mut() {
       reader.remove_writer_proxy( writer_guid );
     }
   }

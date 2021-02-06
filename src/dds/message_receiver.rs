@@ -10,19 +10,19 @@ use crate::serialization::Message;
 use crate::serialization::submessage::SubmessageBody;
 
 use crate::dds::reader::Reader;
-use crate::dds::ddsdata::DDSData;
 use crate::structure::guid::EntityId;
-use crate::{
-  messages::submessages::submessages::AckNack,
-  structure::{
-    cache_change::CacheChange,
-    sequence_number::{SequenceNumber},
-  },
-};
+use crate::messages::submessages::submessages::AckNack;
+
+#[cfg(test)] use crate::dds::ddsdata::DDSData;
+#[cfg(test)] use crate::structure::cache_change::CacheChange;
+#[cfg(test)] use crate::structure::sequence_number::{SequenceNumber};
 
 use mio_extras::channel as mio_channel;
 use log::{debug, warn, trace, info};
 use bytes::Bytes;
+
+use std::collections::{BTreeMap, btree_map::Entry};
+
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
@@ -33,7 +33,7 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 /// Enity Submessages to the appropriate Entities. (See RTPS spec Section 8.3.7)
 
 pub(crate) struct MessageReceiver {
-  pub available_readers: Vec<Reader>,
+  pub available_readers: BTreeMap<EntityId,Reader>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
   acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckNack)>,
 
@@ -59,7 +59,7 @@ impl MessageReceiver {
     let locator_kind = LocatorKind::LOCATOR_KIND_UDPv4;
 
     MessageReceiver {
-      available_readers: Vec::new(),
+      available_readers: BTreeMap::new(),
       acknack_sender,
       own_guid_prefix: participant_guid_prefix,
 
@@ -108,70 +108,48 @@ impl MessageReceiver {
   }
 
   pub fn add_reader(&mut self, new_reader: Reader) {
-    match self.available_readers.iter()
-      .find(|&r| r.get_guid() == new_reader.get_guid())
-    {
-      None => self.available_readers.push(new_reader), // normal case
-      Some(g) => warn!("Already have Reader {:?} - not adding.",g),
+    let eid = new_reader.get_guid().entityId;
+    match self.available_readers.entry( eid ) {
+      Entry::Occupied( _ ) => warn!("Already have Reader {:?} - not adding.",eid) ,
+      e => { e.or_insert(new_reader); }
     }
   }
 
   pub fn remove_reader(&mut self, old_reader_guid: GUID) {
-    if let Some(pos) = self
-      .available_readers
-      .iter()
-      .position(|r| r.get_guid() == old_reader_guid)
-    {
-      self.available_readers.remove(pos);
-    }
+    self.available_readers.remove( &old_reader_guid.entityId );
   }
 
-  pub fn get_reader(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
-    self
-      .available_readers
-      .iter_mut()
-      .find(|r| r.get_entity_id() == reader_id)
+  pub fn get_reader_mut(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
+    self.available_readers.get_mut( &reader_id )
   }
 
-  // TODO use for test and debugging only
-  fn get_reader_and_history_cache_change(
-    &self,
-    reader_id: EntityId,
+  // use for test and debugging only
+  #[cfg(test)]
+  fn get_reader_and_history_cache_change(&self, reader_id: EntityId, 
     sequence_number: SequenceNumber,
   ) -> Option<DDSData> {
-    let reader = self
-      .available_readers
-      .iter()
-      .find(|&r| r.get_entity_id() == reader_id)
-      .unwrap();
-    let a: Option<DDSData> = reader.get_history_cache_change_data(sequence_number);
-    Some(a.unwrap())
+    Some (self.available_readers.get( &reader_id ).unwrap()
+      .get_history_cache_change_data(sequence_number)
+      .unwrap() )
   }
 
-  // TODO use for test and debugging only
+  // use for test and debugging only
+  #[cfg(test)]
   fn get_reader_and_history_cache_change_object(
     &self,
     reader_id: EntityId,
     sequence_number: SequenceNumber,
   ) -> CacheChange {
-    let reader = self
-      .available_readers
-      .iter()
-      .find(|&r| r.get_entity_id() == reader_id)
-      .unwrap();
-    reader.get_history_cache_change(sequence_number).unwrap()
+    self.available_readers.get( &reader_id ).unwrap()
+      .get_history_cache_change(sequence_number)
+      .unwrap()
   }
 
-  fn get_reader_history_cache_start_and_end_seq_num(
-    &self,
-    reader_id: EntityId,
-  ) -> Vec<SequenceNumber> {
-    let reader = self
-      .available_readers
-      .iter()
-      .find(|&r| r.get_entity_id() == reader_id)
-      .unwrap();
-    reader.get_history_cache_sequence_start_and_end_numbers()
+  #[cfg(test)]
+  fn get_reader_history_cache_start_and_end_seq_num( &self, reader_id: EntityId ) 
+      -> Vec<SequenceNumber> {
+    self.available_readers.get( &reader_id ).unwrap()
+      .get_history_cache_sequence_start_and_end_numbers()
   }
 
   pub fn handle_discovery_msg(&mut self, msg: Bytes) {
@@ -238,7 +216,7 @@ impl MessageReceiver {
           trace!("send_submessage DATA from unknown. writer_id = {:?}", &data.writer_id);
           for reader in self
             .available_readers
-            .iter_mut()
+            .values_mut()
             .filter(|r| r.contains_writer(data.writer_id) 
                         // exception: discovery prococol reader must read from unkonwn discovery protocol writers
                         // TODO: This logic here is uglyish. Can we just inject a presupposed writer (proxy)
@@ -253,7 +231,7 @@ impl MessageReceiver {
             reader.handle_data_msg(data.clone(), mr_state.clone());
           }
         } else {
-          if let Some(target_reader) = self.get_reader(data.reader_id) {
+          if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
             target_reader.handle_data_msg(data, mr_state);
           }
         }
@@ -263,7 +241,7 @@ impl MessageReceiver {
         if heartbeat.reader_id == EntityId::ENTITYID_UNKNOWN {
           for reader in self
             .available_readers
-            .iter_mut()
+            .values_mut()
             .filter(|p| p.contains_writer(heartbeat.writer_id))
           {
             reader.handle_heartbeat_msg(
@@ -273,7 +251,7 @@ impl MessageReceiver {
             );
           }
         } else {
-          if let Some(target_reader) = self.get_reader(heartbeat.reader_id) {
+          if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
             target_reader.handle_heartbeat_msg(
               heartbeat,
               flags.contains(HEARTBEAT_Flags::Final),
@@ -283,7 +261,7 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::Gap(gap, _flags) => {
-        if let Some(target_reader) = self.get_reader(gap.reader_id) {
+        if let Some(target_reader) = self.get_reader_mut(gap.reader_id) {
           target_reader.handle_gap_msg(gap, mr_state);
         }
       }
@@ -294,7 +272,7 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::DataFrag(datafrag, _) => {
-        if let Some(target_reader) = self.get_reader(datafrag.reader_id) {
+        if let Some(target_reader) = self.get_reader_mut(datafrag.reader_id) {
           target_reader.handle_datafrag_msg(datafrag, mr_state);
         }
       }
@@ -303,13 +281,13 @@ impl MessageReceiver {
         if heartbeatfrag.reader_id == EntityId::ENTITYID_UNKNOWN {
           for reader in self
             .available_readers
-            .iter_mut()
+            .values_mut()
             .filter(|p| p.contains_writer(heartbeatfrag.writer_id))
           {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
         } else {
-          if let Some(target_reader) = self.get_reader(heartbeatfrag.reader_id) {
+          if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
             target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
           }
         }
@@ -357,7 +335,7 @@ impl MessageReceiver {
 
   // sends 0 seqnum acknacks for those writer that haven't had any action
   pub fn send_preemptive_acknacks(&mut self) {
-    for reader in self.available_readers.iter_mut() {
+    for reader in self.available_readers.values_mut() {
       reader.send_preemptive_acknacks()
     }
   }
@@ -387,7 +365,8 @@ impl Default for MessageReceiverState {
 #[cfg(test)]
 
 mod tests {
-  use super::*;
+  use crate::structure::sequence_number::SequenceNumber;
+use super::*;
   use crate::{
     dds::values::result::StatusChange, dds::writer::WriterCommand, messages::header::Header,
     dds::with_key::datareader::ReaderCommand,
