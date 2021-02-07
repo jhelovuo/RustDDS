@@ -99,7 +99,7 @@ pub(crate) enum DiscoveryNotificationType {
   ReaderUpdated { 
     rtps_reader_proxy: RtpsReaderProxy,
     discovered_reader_data: DiscoveredReaderData , 
-    needs_new_cache_change: bool 
+    _needs_new_cache_change: bool 
   },
   ReaderLost { reader_guid: GUID }, 
   WriterUpdated { discovered_writer_data: DiscoveredWriterData  },

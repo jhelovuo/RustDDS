@@ -588,7 +588,7 @@ impl Discovery {
     self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated
       { rtps_reader_proxy:  RtpsReaderProxy::from_discovered_reader_data(&drd,vec![], vec![]),
         discovered_reader_data: drd,
-        needs_new_cache_change: true,
+        _needs_new_cache_change: true,
       });
   }
 
@@ -641,7 +641,7 @@ impl Discovery {
                   DiscoveryNotificationType::ReaderUpdated {
                     discovered_reader_data: drd, 
                     rtps_reader_proxy,
-                    needs_new_cache_change: true,
+                    _needs_new_cache_change: true,
                   });  
               }
               db.update_topic_data_drd(&val);
