@@ -127,7 +127,6 @@ impl Publisher {
   /// ```
   pub fn create_datawriter<D, SA>(
     &self,
-    entity_id: Option<EntityId>,
     topic: Topic,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
@@ -136,19 +135,46 @@ impl Publisher {
     <D as Keyed>::K: Key,
     SA: SerializerAdapter<D>,
   {
-    self.inner.create_datawriter(self, entity_id, topic, qos)
+    self.inner.create_datawriter(self, None, topic, qos)
   }
 
   /// Shorthand for crate_datawriter with Commaon Data Representation Little Endian
-  pub fn create_datawriter_CDR<D>(&self, entity_id: Option<EntityId>, 
+  pub fn create_datawriter_CDR<D>(&self, topic: Topic, qos: Option<QosPolicies>) 
+    -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D,LittleEndian>>>
+  where
+    D: Keyed + Serialize,
+    <D as Keyed>::K: Key,
+  {
+    self.create_datawriter::<D,CDRSerializerAdapter<D,LittleEndian>>(topic,qos)
+  }
+
+  // versions with callee-specified EntityId. These are for Discovery use only.
+
+  pub(crate) fn create_datawriter_with_entityid<D, SA>(
+    &self,
+    entity_id: EntityId,
+    topic: Topic,
+    qos: Option<QosPolicies>,
+  ) -> Result<WithKeyDataWriter<D, SA>>
+  where
+    D: Keyed + Serialize,
+    <D as Keyed>::K: Key,
+    SA: SerializerAdapter<D>,
+  {
+    self.inner.create_datawriter(self, Some(entity_id), topic, qos)
+  }
+  
+  pub(crate) fn create_datawriter_CDR_with_entityid<D>(&self, entity_id: EntityId, 
       topic: Topic, qos: Option<QosPolicies>) 
     -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D,LittleEndian>>>
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
   {
-    self.create_datawriter::<D,CDRSerializerAdapter<D,LittleEndian>>(entity_id,topic,qos)
+    self.create_datawriter_with_entityid
+      ::<D,CDRSerializerAdapter<D,LittleEndian>>(entity_id,topic,qos)
   }
+
 
   /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
   ///
@@ -181,7 +207,6 @@ impl Publisher {
   /// ```
   pub fn create_datawriter_no_key<D, SA>(
     &self,
-    entity_id: Option<EntityId>,
     topic: Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
@@ -189,17 +214,42 @@ impl Publisher {
     D: Serialize,
     SA: SerializerAdapter<D>,
   {
-    self.inner.create_datawriter_no_key(self, entity_id,topic,qos)
+    self.inner.create_datawriter_no_key(self, None,topic,qos)
   }
 
-  pub fn create_datawriter_no_key_CDR<D>(&self, entity_id: Option<EntityId>, 
+  pub fn create_datawriter_no_key_CDR<D>(&self, topic: Topic, qos: Option<QosPolicies>) 
+    -> Result<NoKeyDataWriter<D,CDRSerializerAdapter<D,LittleEndian> >>
+  where
+    D: Serialize,
+  {
+    self.create_datawriter_no_key::<D,CDRSerializerAdapter<D,LittleEndian>>(topic,qos)
+  }
+
+  // versions with callee-specified EntityId. These are for Discovery use only.
+
+  pub(crate) fn create_datawriter_no_key_with_entityid<D, SA>(
+    &self,
+    entity_id: EntityId,
+    topic: Topic,
+    qos: Option<QosPolicies>,
+  ) -> Result<NoKeyDataWriter<D, SA>>
+  where
+    D: Serialize,
+    SA: SerializerAdapter<D>,
+  {
+    self.inner.create_datawriter_no_key(self, Some(entity_id),topic,qos)
+  }
+
+  pub(crate) fn create_datawriter_no_key_CDR_with_entityid<D>(&self, entity_id: EntityId, 
       topic: Topic, qos: Option<QosPolicies>) 
     -> Result<NoKeyDataWriter<D,CDRSerializerAdapter<D,LittleEndian> >>
   where
     D: Serialize,
   {
-    self.create_datawriter_no_key::<D,CDRSerializerAdapter<D,LittleEndian>>(entity_id,topic,qos)
+    self.create_datawriter_no_key_with_entityid
+      ::<D,CDRSerializerAdapter<D,LittleEndian>>(entity_id,topic,qos)
   }
+
 
   // delete_datawriter should not be needed. The DataWriter object itself should be deleted to accomplish this.
 
@@ -570,7 +620,6 @@ impl Subscriber {
   pub fn create_datareader<D: 'static, SA>(
     &self,
     topic: Topic,
-    entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
@@ -579,21 +628,52 @@ impl Subscriber {
     SA: DeserializerAdapter<D>,
   {
     self.inner
-      .create_datareader(self,topic,entity_id,qos)
+      .create_datareader(self,topic,None,qos)
   }
 
   pub fn create_datareader_CDR<D: 'static>(
     &self,
     topic: Topic,
-    entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
   {
-    self.create_datareader::<D,CDRDeserializerAdapter<D>>(topic,entity_id,qos)
+    self.create_datareader::<D,CDRDeserializerAdapter<D>>(topic,qos)
   }
+
+  // versions with callee-specified EntityId. These are for Discovery use only.
+
+  pub(crate) fn create_datareader_with_entityid<D: 'static, SA>(
+    &self,
+    topic: Topic,
+    entity_id: EntityId,
+    qos: Option<QosPolicies>,
+  ) -> Result<WithKeyDataReader<D, SA>>
+  where
+    D: DeserializeOwned + Keyed,
+    <D as Keyed>::K: Key,
+    SA: DeserializerAdapter<D>,
+  {
+    self.inner
+      .create_datareader(self,topic,Some(entity_id),qos)
+  }
+
+  pub(crate) fn create_datareader_CDR_with_entityid<D: 'static>(
+    &self,
+    topic: Topic,
+    entity_id: EntityId,
+    qos: Option<QosPolicies>,
+  ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  where
+    D: DeserializeOwned + Keyed,
+    <D as Keyed>::K: Key,
+  {
+    self.create_datareader_with_entityid
+      ::<D,CDRDeserializerAdapter<D>>(topic,entity_id,qos)
+  }
+
 
   /// Create DDS DataReader for non keyed Topics
   ///

@@ -4,6 +4,8 @@ use uuid::Uuid;
 use std::hash::Hash;
 use std::ops::RangeBounds;
 
+extern crate static_assertions as sa;
+
 use super::parameter_id::ParameterId;
 use crate::dds::traits::key::Key;
 
@@ -117,6 +119,11 @@ pub struct EntityId {
   pub entityKey: [u8; 3],
   pub entityKind: EntityKind,
 }
+
+// We are going to pack 32 bits of payload into an usize, or ultimately
+// into a mio::Token, so we need it to be large enough.
+sa::const_assert!( std::mem::size_of::<usize>() >= std::mem::size_of::<u32>() );
+
 
 impl EntityId {
   pub const ENTITYID_UNKNOWN: EntityId = EntityId {

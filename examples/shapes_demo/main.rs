@@ -75,7 +75,8 @@ fn event_loop(running_flag: Arc<AtomicBool>, domain_id: u16) {
   let poll = Poll::new().unwrap();
 
   // adjust domain_id or participant_id if necessary to interoperability
-  let domain_participant = DomainParticipant::new(domain_id);
+  let domain_participant = DomainParticipant::new(domain_id)
+      .expect("DomapnParticiapnt create failed");
   //println!("Have DP");
   let pub_qos = QosPolicies::builder()
     .reliability(Reliability::BestEffort)
@@ -125,13 +126,12 @@ fn event_loop(running_flag: Arc<AtomicBool>, domain_id: u16) {
 
   // reader needs to be mutable if you want to read/take something from it
   let mut square_reader = shapes_sub
-    .create_datareader::<Square, CDRDeserializerAdapter<Square>>(square_topic, None, None)
+    .create_datareader::<Square, CDRDeserializerAdapter<Square>>(square_topic, None)
     .unwrap();
 
   let shapes_pub = domain_participant.create_publisher(&pub_qos).unwrap();
   let triangle_writer = shapes_pub
     .create_datawriter::<Square, CDRSerializerAdapter<Square, LittleEndian>>(
-      None,
       triangle_topic,
       None,
     )

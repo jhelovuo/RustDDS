@@ -187,9 +187,9 @@ impl Discovery {
       "Unable to create DCPSParticipant topic. {:?}");
   
     let mut dcps_participant_reader = try_construct!( discovery_subscriber
-      .create_datareader::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
+      .create_datareader_with_entityid::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
         dcps_participant_topic.clone(),
-        Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER),
+        EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
         None,
       ) ,"Unable to create DataReader for DCPSParticipant. {:?}");
 
@@ -212,8 +212,8 @@ impl Discovery {
     ) ,"Unable to create participant cleanup timer. {:?}");
 
     let dcps_participant_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR::<SPDPDiscoveredParticipantData>(
-        Some(EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER),
+      .create_datawriter_CDR_with_entityid::<SPDPDiscoveredParticipantData>(
+        EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
         dcps_participant_topic,
         None,
       ) ,"Unable to create DataWriter for DCPSParticipant. {:?}");
@@ -239,9 +239,9 @@ impl Discovery {
     ) ,"Unable to create DCPSSubscription topic. {:?}");
 
     let mut dcps_subscription_reader = try_construct!( discovery_subscriber
-      .create_datareader::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
+      .create_datareader_with_entityid::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
         dcps_subscription_topic.clone(),
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER),
+        EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
         None,
       ) ,"Unable to create DataReader for DCPSSubscription. {:?}");
 
@@ -253,8 +253,8 @@ impl Discovery {
     ) ,"Unable to register subscription reader. {:?}");
 
     let mut dcps_subscription_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR::<DiscoveredReaderData>(
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER),
+      .create_datawriter_CDR_with_entityid::<DiscoveredReaderData>(
+        EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
         dcps_subscription_topic,
         None,
       ) ,"Unable to create DataWriter for DCPSSubscription. {:?}");
@@ -278,9 +278,9 @@ impl Discovery {
     ) ,"Unable to create DCPSPublication topic. {:?}");
 
     let mut dcps_publication_reader = try_construct!( discovery_subscriber
-      .create_datareader::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
+      .create_datareader_with_entityid::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         dcps_publication_topic.clone(),
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER),
+        EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
         None,
       ) ,"Unable to create DataReader for DCPSPublication. {:?}");
 
@@ -292,8 +292,8 @@ impl Discovery {
     ) ,"Unable to regiser writers info sender. {:?}");
 
     let mut dcps_publication_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR::<DiscoveredWriterData>(
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER),
+      .create_datawriter_CDR_with_entityid::<DiscoveredWriterData>(
+        EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
         dcps_publication_topic,
         None,
       ) ,"Unable to create DataWriter for DCPSPublication. {:?}");
@@ -327,9 +327,9 @@ impl Discovery {
     ) ,"Unable to register topic cleanup timer. {:?}");
 
     let mut dcps_reader = try_construct!( discovery_subscriber
-      .create_datareader::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
+      .create_datareader_with_entityid::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         dcps_topic.clone(),
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER),
+        EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
         None,
       ) ,"Unable to create DataReader for DCPSTopic. {:?}");
 
@@ -341,8 +341,8 @@ impl Discovery {
     ) ,"Unable to register topic reader. {:?}");
 
     let mut dcps_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR::<DiscoveredTopicData>(
-        Some(EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER),
+      .create_datawriter_CDR_with_entityid::<DiscoveredTopicData>(
+        EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
         dcps_topic,
         None,
       ) ,"Unable to create DataWriter for DCPSTopic. {:?}");
@@ -365,9 +365,9 @@ impl Discovery {
     ) ,"Unable to create DCPSParticipantMessage topic. {:?}");
 
     let mut dcps_participant_message_reader = try_construct!( discovery_subscriber
-      .create_datareader_CDR::<ParticipantMessageData>(
+      .create_datareader_CDR_with_entityid::<ParticipantMessageData>(
         participant_message_data_topic.clone(),
-        Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER),
+        EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
         None,
       ) ,"Unable to create DCPSParticipantMessage reader. {:?}");
 
@@ -379,8 +379,8 @@ impl Discovery {
     ) ,"Unable to register DCPSParticipantMessage reader. {:?}");
 
     let mut dcps_participant_message_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR::<ParticipantMessageData>(
-        Some(EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER),
+      .create_datawriter_CDR_with_entityid::<ParticipantMessageData>(
+        EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
         participant_message_data_topic,
         None,
       ) ,"Unable to create DCPSParticipantMessage writer. {:?}");
@@ -1141,7 +1141,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
+      .create_datawriter_with_entityid::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
         None, topic.clone(), None,
       )
       .unwrap();
@@ -1150,7 +1150,7 @@ mod tests {
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
     let _reader = subscriber
-      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None, None);
+      .create_datareader_with_entityid::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11001);
@@ -1230,7 +1230,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
+      .create_datawriter_with_entityid::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
         None, topic.clone(), None,
       )
       .unwrap();
@@ -1239,7 +1239,7 @@ mod tests {
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
     let _reader = subscriber
-      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None, None);
+      .create_datareader_with_entityid::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 0);

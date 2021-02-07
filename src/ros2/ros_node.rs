@@ -159,7 +159,7 @@ impl RosParticipantInner {
       .create_datareader_no_key(ros_discovery_topic.clone(), None, None)?;
 
     let node_writer = ros_discovery_publisher
-      .create_datawriter_no_key(None, ros_discovery_topic.clone(), None)?;
+      .create_datawriter_no_key(ros_discovery_topic.clone(), None)?;
 
     Ok(RosParticipantInner {
       nodes: HashMap::new(),
@@ -313,7 +313,7 @@ impl RosNode {
       Some(
         ros_participant
           .get_ros_discovery_publisher()
-          .create_datawriter_no_key(None, rosout_topic.clone(), None)?,
+          .create_datawriter_no_key(rosout_topic.clone(), None)?,
       )
     } else {
       None
@@ -321,7 +321,7 @@ impl RosNode {
 
     let parameter_events_writer = ros_participant
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(None, paramtopic.clone(), None)?;
+      .create_datawriter_no_key(paramtopic.clone(), None)?;
 
     Ok(RosNode {
       name: String::from(name),
@@ -486,7 +486,7 @@ impl RosNode {
     let sub = self
       .ros_participant
       .get_ros_discovery_subscriber()
-      .create_datareader::<D, DA>(topic, None, qos)?;
+      .create_datareader::<D, DA>(topic, qos)?;
     self.add_reader( sub.get_guid() );
     Ok( sub )     
   }
@@ -505,7 +505,7 @@ impl RosNode {
     let p = self
       .ros_participant
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(None, topic, qos)?;
+      .create_datawriter_no_key(topic, qos)?;
     self.add_writer( p.get_guid() );
     Ok(p)
   }
@@ -528,7 +528,7 @@ impl RosNode {
     let p = self
       .ros_participant
       .get_ros_discovery_publisher()
-      .create_datawriter(None, topic, qos)?;
+      .create_datawriter(topic, qos)?;
     self.add_writer( p.get_guid() );
     Ok(p)
   }
