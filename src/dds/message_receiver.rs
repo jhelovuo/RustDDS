@@ -115,8 +115,8 @@ impl MessageReceiver {
     }
   }
 
-  pub fn remove_reader(&mut self, old_reader_guid: GUID) {
-    self.available_readers.remove( &old_reader_guid.entityId );
+  pub fn remove_reader(&mut self, old_reader_guid: GUID) -> Option<Reader> {
+    self.available_readers.remove( &old_reader_guid.entityId )
   }
 
   pub fn get_reader_mut(&mut self, reader_id: EntityId) -> Option<&mut Reader> {

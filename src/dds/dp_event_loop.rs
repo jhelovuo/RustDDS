@@ -252,7 +252,7 @@ impl DPEventLoop {
           ev_wrapper.message_receiver.send_preemptive_acknacks();
           acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
         } else {
-          error!("Unknown event {:?}", event);
+          error!("Unknown event.token {:?} = 0x{:x?}", event.token(), event.token().0 );
         }
       }
     }
@@ -375,7 +375,21 @@ impl DPEventLoop {
       }
       REMOVE_READER_TOKEN => {
         while let Ok(old_reader_guid) = self.remove_reader_receiver.receiver.try_recv() {
-          self.message_receiver.remove_reader(old_reader_guid);
+          if let Some(old_reader) = self.message_receiver.remove_reader(old_reader_guid) {
+            if let Some(receiver) = 
+              self.reader_timed_event_receiver.remove(&old_reader.get_entity_token()) {
+                self.poll.deregister(&receiver)
+                  .unwrap_or_else(|e| error!("reader_timed_event_receiver deregister: {:?}",e));
+            } else {
+              warn!("Reader had no reader_timed_event_receiver? {:?}", old_reader_guid);
+            }
+            self.poll.deregister( &old_reader.data_reader_command_receiver )
+              .unwrap_or_else(|e| error!("Cannot deregister data_reader_command_receiver: {:?}",e));
+            self.reader_command_receiver_identification
+              .remove(&old_reader.get_reader_command_entity_token()); 
+          } else {
+            warn!("Tried to remove nonexistent Reader {:?}",old_reader_guid);
+          }
         }
       }
       _ => {}
