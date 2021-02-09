@@ -15,8 +15,6 @@ use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
 use crate::structure::{duration::Duration, time::Timestamp};
 
 use std::{
-  collections::hash_map::DefaultHasher,
-  hash::Hasher,
   collections::BTreeSet,
   iter::FromIterator,
   sync::{Arc, RwLock},
@@ -136,16 +134,11 @@ impl Reader {
 
   /// To know when token represents a reader we should look entity attribute kind
   pub fn get_entity_token(&self) -> Token {
-    let id = self.get_guid().as_usize();
-    Token(id)
+    self.get_guid().entityId.as_token()
   }
 
   pub fn get_reader_command_entity_token(&self) -> Token {
-    let mut hasher = DefaultHasher::new();
-    let id = self.get_guid().as_usize() as u64;
-    hasher.write(&id.to_le_bytes());
-    let hashedID: u64 = hasher.finish();
-    Token(hashedID as usize)
+    self.get_guid().entityId.as_alt_token()
   }
 
   pub fn add_timed_event_handler(&mut self, time_handler: TimedEventHandler) {

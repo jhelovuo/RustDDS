@@ -7,54 +7,56 @@ use crate::dds::data_types::GuidPrefix;
 use mio::Token;
 use mio_extras::channel as mio_channel;
 
-use crate::structure::guid::GUID;
+use crate::structure::guid::{GUID,EntityKind};
 
-pub const STOP_POLL_TOKEN: Token = Token(0);
+const PTB : usize = EntityKind::POLL_TOKEN_BASE;
 
-pub const DISCOVERY_SENDER_TOKEN: Token = Token(1);
-pub const USER_TRAFFIC_SENDER_TOKEN: Token = Token(2);
+pub const STOP_POLL_TOKEN: Token = Token(0 + PTB);
 
-pub const DATA_SEND_TOKEN: Token = Token(5);
+pub const DISCOVERY_SENDER_TOKEN: Token = Token(1 + PTB);
+pub const USER_TRAFFIC_SENDER_TOKEN: Token = Token(2 + PTB);
 
-pub const DISCOVERY_LISTENER_TOKEN: Token = Token(6);
-pub const DISCOVERY_MUL_LISTENER_TOKEN: Token = Token(7);
-pub const USER_TRAFFIC_LISTENER_TOKEN: Token = Token(8);
-pub const USER_TRAFFIC_MUL_LISTENER_TOKEN: Token = Token(9);
+pub const DATA_SEND_TOKEN: Token = Token(5 + PTB);
 
-pub const ADD_READER_TOKEN: Token = Token(10);
-pub const REMOVE_READER_TOKEN: Token = Token(11);
+pub const DISCOVERY_LISTENER_TOKEN: Token = Token(6 + PTB);
+pub const DISCOVERY_MUL_LISTENER_TOKEN: Token = Token(7 + PTB);
+pub const USER_TRAFFIC_LISTENER_TOKEN: Token = Token(8 + PTB);
+pub const USER_TRAFFIC_MUL_LISTENER_TOKEN: Token = Token(9 + PTB);
 
-pub const READER_CHANGE_TOKEN: Token = Token(12);
-pub const DATAREADER_CHANGE_TOKEN: Token = Token(13);
+pub const ADD_READER_TOKEN: Token = Token(10 + PTB);
+pub const REMOVE_READER_TOKEN: Token = Token(11 + PTB);
 
-pub const ADD_DATAREADER_TOKEN: Token = Token(14);
-pub const REMOVE_DATAREADER_TOKEN: Token = Token(15);
+pub const READER_CHANGE_TOKEN: Token = Token(12 + PTB);
+pub const DATAREADER_CHANGE_TOKEN: Token = Token(13 + PTB);
 
-pub const ADD_WRITER_TOKEN: Token = Token(16);
-pub const REMOVE_WRITER_TOKEN: Token = Token(17);
+pub const ADD_DATAREADER_TOKEN: Token = Token(14 + PTB);
+pub const REMOVE_DATAREADER_TOKEN: Token = Token(15 + PTB);
 
-pub const ADD_DATAWRITER_TOKEN: Token = Token(18);
-pub const REMOVE_DATAWRITER_TOKEN: Token = Token(19);
+pub const ADD_WRITER_TOKEN: Token = Token(16 + PTB);
+pub const REMOVE_WRITER_TOKEN: Token = Token(17 + PTB);
 
-pub const ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN: Token = Token(20);
+pub const ADD_DATAWRITER_TOKEN: Token = Token(18 + PTB);
+pub const REMOVE_DATAWRITER_TOKEN: Token = Token(19 + PTB);
 
-pub const DISCOVERY_UPDATE_NOTIFICATION_TOKEN: Token = Token(21);
-pub const DISCOVERY_COMMAND_TOKEN: Token = Token(22);
+pub const ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN: Token = Token(20 + PTB);
 
-pub const DISCOVERY_PARTICIPANT_DATA_TOKEN: Token = Token(30);
-pub const DISCOVERY_PARTICIPANT_CLEANUP_TOKEN: Token = Token(31);
-pub const DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN: Token = Token(32);
-pub const DISCOVERY_READER_DATA_TOKEN: Token = Token(33);
-pub const DISCOVERY_SEND_READERS_INFO_TOKEN: Token = Token(34);
-pub const DISCOVERY_WRITER_DATA_TOKEN: Token = Token(35);
-pub const DISCOVERY_SEND_WRITERS_INFO_TOKEN: Token = Token(36);
-pub const DISCOVERY_TOPIC_DATA_TOKEN: Token = Token(37);
-pub const DISCOVERY_TOPIC_CLEANUP_TOKEN: Token = Token(38);
-pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(39);
-pub const DISCOVERY_PARTICIPANT_MESSAGE_TOKEN: Token = Token(40);
-pub const DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(41);
+pub const DISCOVERY_UPDATE_NOTIFICATION_TOKEN: Token = Token(21 + PTB);
+pub const DISCOVERY_COMMAND_TOKEN: Token = Token(22 + PTB);
 
-pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(50);
+pub const DISCOVERY_PARTICIPANT_DATA_TOKEN: Token = Token(30 + PTB);
+pub const DISCOVERY_PARTICIPANT_CLEANUP_TOKEN: Token = Token(31 + PTB);
+pub const DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN: Token = Token(32 + PTB);
+pub const DISCOVERY_READER_DATA_TOKEN: Token = Token(33 + PTB);
+pub const DISCOVERY_SEND_READERS_INFO_TOKEN: Token = Token(34 + PTB);
+pub const DISCOVERY_WRITER_DATA_TOKEN: Token = Token(35 + PTB);
+pub const DISCOVERY_SEND_WRITERS_INFO_TOKEN: Token = Token(36 + PTB);
+pub const DISCOVERY_TOPIC_DATA_TOKEN: Token = Token(37 + PTB);
+pub const DISCOVERY_TOPIC_CLEANUP_TOKEN: Token = Token(38 + PTB);
+pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(39 + PTB);
+pub const DISCOVERY_PARTICIPANT_MESSAGE_TOKEN: Token = Token(40 + PTB);
+pub const DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(41 + PTB);
+
+pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(50 + PTB);
 
 pub struct TokenReceiverPair<T> {
   pub token: Token,

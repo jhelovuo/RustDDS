@@ -21,7 +21,7 @@ use crate::{
 };
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
-use crate::structure::guid::{GuidPrefix, GUID, EntityId, EntityKind};
+use crate::structure::guid::{GuidPrefix, GUID, EntityId, EntityKind, TokenDecode};
 use crate::structure::entity::RTPSEntity;
 
 use crate::{
@@ -72,7 +72,7 @@ pub struct DPEventLoop {
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
   ack_nack_reciever: mio_channel::Receiver<(GuidPrefix, AckNack)>,
 
-  writers: HashMap<GUID, Writer>,
+  writers: HashMap<EntityId, Writer>,
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
 }
@@ -243,7 +243,7 @@ impl DPEventLoop {
 
               TopicsInfoUpdated => ev_wrapper.update_topics(),
               AssertTopicLiveliness{ writer_guid , manual_assertion } => {
-                ev_wrapper.writers.get_mut(&writer_guid)
+                ev_wrapper.writers.get_mut(&writer_guid.entityId)
                   .map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
               }
             }
@@ -272,17 +272,17 @@ impl DPEventLoop {
   /// Writer action can be add writer remove writer or some not predefined token.
   /// if not predefined token -> EntityIdToken can be calculated and if entityKind is 0xC2 then it is writer action.
   pub fn is_writer_action(event: &Event) -> bool {
-    if EntityId::from_usize(event.token().0).is_some() {
-      let maybeWriterKind: EntityId = EntityId::from_usize(event.token().0).unwrap();
-      if maybeWriterKind.get_kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN
-        || maybeWriterKind.get_kind() == EntityKind::WRITER_WITH_KEY_USER_DEFINED
-        || maybeWriterKind.get_kind() == EntityKind::WRITER_NO_KEY_BUILT_IN
-        || maybeWriterKind.get_kind() == EntityKind::WRITER_NO_KEY_USER_DEFINED
-      {
-        return true;
-      }
+    let token = event.token();
+    match EntityId::from_token( token ) {
+      TokenDecode::Entity( ek ) =>
+           ek.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN
+        || ek.kind() == EntityKind::WRITER_WITH_KEY_USER_DEFINED
+        || ek.kind() == EntityKind::WRITER_NO_KEY_BUILT_IN
+        || ek.kind() == EntityKind::WRITER_NO_KEY_USER_DEFINED,
+      TokenDecode::FixedToken( token ) =>
+       token == ADD_WRITER_TOKEN || token == REMOVE_WRITER_TOKEN,
+      TokenDecode::AltEntity( _ ) => false,
     }
-    event.token() == ADD_WRITER_TOKEN || event.token() == REMOVE_WRITER_TOKEN
   }
 
   /// Writer timed events can be Heartbeats or cache cleaning actions.
@@ -408,24 +408,28 @@ impl DPEventLoop {
             new_writer.get_timed_event_entity_token(),
             timed_action_receiver,
           );
-          self.writers.insert(new_writer.get_guid(), new_writer);
+          self.writers.insert(new_writer.get_guid().entityId, new_writer);
         }
       }
       REMOVE_WRITER_TOKEN => {
         while let Ok(writer_guid) = &self.remove_writer_receiver.receiver.try_recv() {
-          let writer = self.writers.remove(writer_guid);
+          let writer = self.writers.remove(&writer_guid.entityId);
           if let Some(w) = writer {
             &self.poll.deregister(&w.writer_command_receiver);
           };
+          // TODO: should we deregister also timed_action_receiver ?
         }
       }
 
       writer_token => {
-        self
-          .writers
-          .iter_mut()
-          .find(|p| p.1.get_entity_token() == writer_token)
-          .map( |(_guid, writer)| writer.process_writer_command() );
+        match EntityId::from_token(writer_token) {
+          TokenDecode::Entity( eid ) => {
+            self.writers.get_mut( &eid )
+              .map( |writer| writer.process_writer_command() );
+          }
+          other =>
+            error!("Expected writer_token, got {:?}",other),       
+        }
       }
     }
   }
@@ -465,7 +469,7 @@ impl DPEventLoop {
         self.domain_info.domain_participant_guid.guidPrefix,
         target_writer_entity_id,
       );
-      if let Some(found_writer) = self.writers.get_mut(&writer_guid) {
+      if let Some(found_writer) = self.writers.get_mut(&writer_guid.entityId) {
         if found_writer.is_reliable() {
           found_writer.handle_ack_nack(acknack_sender_prefix, acknack_message)
         }
@@ -497,8 +501,6 @@ impl DPEventLoop {
           }
         };
 
-      let my_prefix = self.domain_info.domain_participant_guid.guidPrefix;
-
       for (writer_eid, reader_eid, endpoint) in 
       & [ ( EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
             EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
@@ -520,7 +522,7 @@ impl DPEventLoop {
             EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
             BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER)
         ] {
-        if let Some(writer) = self.writers.get_mut( &GUID::new(my_prefix, *writer_eid)) {
+        if let Some(writer) = self.writers.get_mut( writer_eid ) {
           debug!("update_discovery_writer - {:?}", writer.topic_name() );
           let mut qos = Discovery::subscriber_qos();
           // special case by RTPS 2.3 spec Section 

@@ -4,6 +4,9 @@ use uuid::Uuid;
 use std::hash::Hash;
 use std::ops::RangeBounds;
 
+use mio::Token;
+use log::warn;
+
 extern crate static_assertions as sa;
 
 use super::parameter_id::ParameterId;
@@ -98,6 +101,27 @@ impl EntityKind {
   pub const MIN : EntityKind = EntityKind(0x00);
   pub const MAX : EntityKind = EntityKind(0xFF);
 
+  // We will encode polling tokens as EntityId, containing an EntityKind
+  // The upper nibble of EntityKind will distinguish between different
+  // poll tokens:
+  // 0 = user-defined entity
+  // 1 
+  // 2 = user-defined alt token (timers etc)
+  // 3 
+  // 4 = fixed poll tokens (not entity-specific)
+  pub const POLL_TOKEN_BASE : usize = 0x40;
+  // 5 = fixed poll tokens continued
+  // 6 = fixed poll tokens continued
+  // 7 = fixed poll tokens continued
+  // 8
+  // 9
+  // A
+  // B
+  // C = built-in entity
+  // D
+  // E = built-in alt token
+  // F
+
 }
 
 impl From<u8> for EntityKind {
@@ -123,6 +147,13 @@ pub struct EntityId {
 // We are going to pack 32 bits of payload into an usize, or ultimately
 // into a mio::Token, so we need it to be large enough.
 sa::const_assert!( std::mem::size_of::<usize>() >= std::mem::size_of::<u32>() );
+
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
+pub enum TokenDecode {
+  Entity( EntityId ),
+  AltEntity( EntityId ),
+  FixedToken( Token )
+}
 
 
 impl EntityId {
@@ -190,48 +221,71 @@ impl EntityId {
     EntityId { entityKey, entityKind }
   }
 
-  pub fn as_usize(self) -> usize {
-    // Usize is generated like beacause there needs to be a way to tell entity kind from usize number
-    let x1 = self.entityKey[0] as i64;
-    let x2 = self.entityKey[1] as i64;
-    let x3 = self.entityKey[2] as i64;
-    let x4 = self.entityKind.0 as i64;
+  fn as_usize(self) -> usize {
+    // Usize is generated like beacause there needs to be
+    // a way to tell entity kind from usize number
+    let u1 = self.entityKey[0] as u32;
+    let u2 = self.entityKey[1] as u32;
+    let u3 = self.entityKey[2] as u32;
+    let u4 = self.entityKind.0 as u32;
 
-    // TODO: Explain the meaning of this formula.
-
-    ((10_i64.pow(14) + x1 * 100000000000)
-      + (10_i64.pow(10) + x2 * 10000000)
-      + (10_i64.pow(6) + x3 * 1000)
-      + x4 as i64) as usize
+    // This is essentially big-endian encoding
+    // The type coercion will always succeed, because we have
+    // above a static assert that usize is at least 32-bit
+    ((u1 << 24) | (u2 << 16) | (u3 << 8) | u4) as usize
   }
 
   /// Use this only with usize generated with EntityID::as_usize function.!!!
-  pub fn from_usize(number: usize) -> Option<EntityId> {
-    let numberAsString = number.to_string();
-    let finalIndex = numberAsString.len();
-    if finalIndex != 15 {
-      return None
+  fn from_usize(number: usize) -> EntityId {
+    let u4 = (number & 0xFF) as u8;
+    let u3 = ((number >> 8) & 0xFF) as u8;
+    let u2 = ((number >> 16) & 0xFF) as u8;
+    let u1 = ((number >> 24) & 0xFF) as u8;
+
+    let result =
+      EntityId {
+        entityKey: [u1 , u2 , u3 ],
+        entityKind: EntityKind::from( u4 )
+      };
+
+    // check sanity, as the result sohould be
+    let kind_kind = u4 & (0xC0 | 0x10);
+    if kind_kind == 0xC0 || kind_kind == 0x00 {
+      // this is ok, all normal
+    } else {
+      warn!("EntityId::from_usize tried to decode 0x{:x?}",number)
     }
-    let kind = numberAsString[finalIndex - 3..finalIndex]
-      .parse::<u8>()
-      .unwrap();
-    let thirdByte = numberAsString[finalIndex - 6..finalIndex - 3]
-      .parse::<u8>()
-      .unwrap();
-    let secondBute = numberAsString[finalIndex - 10..finalIndex - 7]
-      .parse::<u8>()
-      .unwrap();
-    let firstByte = numberAsString[finalIndex - 14..finalIndex - 11]
-      .parse::<u8>()
-      .unwrap();
-    let e: EntityId = EntityId {
-      entityKey: [firstByte, secondBute, thirdByte],
-      entityKind: EntityKind(kind),
-    };
-    Some(e)
+
+    result
   }
 
-  pub fn get_kind(self) -> EntityKind {
+  pub fn as_token(self) -> Token {
+    let u = self.as_usize();
+    assert_eq!( u & !0x20 , u ); // check bit 5 is zero 
+    Token( u )
+  }
+
+  pub fn as_alt_token(self) -> Token {
+    Token( self.as_usize() | 0x20 ) // set bit 5
+  }
+
+  pub fn from_token(t : Token) -> TokenDecode {
+    match (t.0 & 0xF0) as u8 {
+      0x00 | 0xC0 => 
+        TokenDecode::Entity( EntityId::from_usize( t.0 ) ) ,
+      0x20 | 0xE0 => 
+        TokenDecode::AltEntity( EntityId::from_usize( t.0 & !0x20 )) ,
+      0x40 | 0x50 | 0x60 | 0x70 =>
+        TokenDecode::FixedToken( t ) ,
+      _other => {
+        warn!("EntityId::from_token tried to decode 0x{:x?}",t.0);
+        TokenDecode::FixedToken( t )
+      }
+    }
+  }
+
+
+  pub fn kind(self) -> EntityKind {
     self.entityKind
   }
 

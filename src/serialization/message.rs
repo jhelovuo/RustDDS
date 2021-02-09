@@ -365,7 +365,7 @@ impl MessageBuilder {
     };
     
     // TODO: please explain this logic here:
-    if writer_entity_id.get_kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
+    if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
       match data_message.serialized_payload.as_mut() {
         Some(sp) => sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE,
         None => (),
