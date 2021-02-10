@@ -402,8 +402,7 @@ impl DomainParticipant_Disc {
 impl Drop for DomainParticipant_Disc {
   fn drop(&mut self) {
     debug!("Sending Discovery Stop signal.");
-    match self
-      .discovery_command_channel
+    match self.discovery_command_channel
       .send(DiscoveryCommand::STOP_DISCOVERY)
     {
       Ok(_) => (),
@@ -439,7 +438,8 @@ pub(crate) struct DomainParticipant_Inner {
 
   // dp_event_loop control
   stop_poll_sender: mio_channel::Sender<()>,
-  ev_loop_handle: Option<JoinHandle<()>>,
+  ev_loop_handle: Option<JoinHandle<()>>, // this is Option, because it needs to be extracted
+  // out of the struct (take) in order to .join() on the handle. 
 
   // Writers
   add_writer_sender: mio_channel::SyncSender<Writer>,
@@ -457,14 +457,19 @@ impl Drop for DomainParticipant_Inner {
       _ => return (),
     };
 
-    debug!("Waiting for EvLoop join");
-    // handle should always exist
-    // ignoring errors on join
-    match self.ev_loop_handle.take().unwrap().join() {
-      Ok(s) => s,
-      _ => (),
-    };
-    debug!("Joined EvLoop");
+    debug!("Waiting for dp_event_loop join");
+
+    match self.ev_loop_handle.take() {
+      Some(join_handle) => {
+        join_handle.join()
+          .unwrap_or_else(|e| warn!("Failed to join dp_event_loop: {:?}",e));
+      }
+      None => {
+        error!("Someone managed to steal dp_event_loop join handle from DomainParticipant_Inner.");
+      }
+    }
+
+    debug!("Joined dp_event_loop");
   }
 }
 

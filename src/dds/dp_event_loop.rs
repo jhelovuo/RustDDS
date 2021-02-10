@@ -214,9 +214,9 @@ impl DPEventLoop {
           ev_wrapper.handle_reader_action(&event);
         } else if ev_wrapper.is_reader_timed_event_action(&event) {
           ev_wrapper.handle_reader_timed_event(&event);
-        } else if /*ev_wrapper.is_reader_command_action(&event) {
+        } else if ev_wrapper.is_reader_command_action(&event) {
           ev_wrapper.handle_reader_command_event(&event);
-        } else if */ DPEventLoop::is_writer_action(&event) {
+        } else if  DPEventLoop::is_writer_action(&event) {
           ev_wrapper.handle_writer_action(&event);
         } else if ev_wrapper.is_writer_timed_event_action(&event) {
           ev_wrapper.handle_writer_timed_event(&event);
@@ -293,13 +293,12 @@ impl DPEventLoop {
   pub fn is_reader_timed_event_action(&self, event: &Event) -> bool {
     self.reader_timed_event_receiver.contains_key(&event.token())
   }
-  /*
+  
   pub fn is_reader_command_action(&self, event: &Event) -> bool {
-    self
-      .reader_command_receiver_identification
+    self.reader_command_receiver_identification
       .contains_key(&event.token())
   }
-  */
+  
   pub fn is_writer_acknack_action(event: &Event) -> bool {
     event.token() == ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN
   }
@@ -474,6 +473,14 @@ impl DPEventLoop {
         None => error!("Reader was not found with entity token {:?}",  event.token()),
       }
     }
+  }
+
+  fn handle_reader_command_event(&mut self, event: &Event) {
+    let reader_guid = self.reader_command_receiver_identification.get(&event.token())
+      .expect(&format!("Did not find reader by Token {:?}",event.token() ));
+    let reader = self.message_receiver.get_reader_mut( reader_guid.entityId )
+      .expect(&format!("Local reader {:?} missing!", reader_guid));
+    reader.process_command()
   }
 
   pub fn handle_writer_acknack_action(&mut self, _event: &Event) {

@@ -239,6 +239,29 @@ impl Reader {
     }
   }
 
+  pub fn process_command(&mut self) {
+    trace!("process_command {:?}", self.my_guid );
+    loop {
+      use std::sync::mpsc::TryRecvError;
+      match self.data_reader_command_receiver.try_recv() {
+        Ok(ReaderCommand::RESET_REQUESTED_DEADLINE_STATUS) => {
+          warn!("RESET_REQUESTED_DEADLINE_STATUS not implemented!");
+          //TODO: This should be implemented.
+        }
+
+        // Disconnected is normal when terminating
+        Err(TryRecvError::Disconnected) => { 
+          trace!("DataReader disconnected");
+          break
+        }
+        Err(TryRecvError::Empty) => {
+          warn!("There was no command. Spurious command event??");
+          break
+        }
+      }
+    }
+  }
+
   fn handle_requested_deadline_event(&mut self) {
     debug!("handle_requested_deadline_event");
     for missed_deadline in self.calculate_if_requested_deadline_is_missed() {
