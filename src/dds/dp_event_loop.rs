@@ -21,7 +21,7 @@ use crate::{
 };
 use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
-use crate::structure::guid::{GuidPrefix, GUID, EntityId, EntityKind, TokenDecode};
+use crate::structure::guid::{GuidPrefix, GUID, EntityId, TokenDecode};
 use crate::structure::entity::RTPSEntity;
 
 use crate::{
@@ -205,109 +205,94 @@ impl DPEventLoop {
         .expect("Failed in waiting of poll.");
 
       for event in events.iter() {
-        if event.token() == STOP_POLL_TOKEN {
-          info!("Stopping ev_wrapper");
-          return
-        } else if DPEventLoop::is_udp_traffic(&event) {
-          ev_wrapper.handle_udp_traffic(&event);
-        } else if DPEventLoop::is_reader_action(&event) {
-          ev_wrapper.handle_reader_action(&event);
-        } else if ev_wrapper.is_reader_timed_event_action(&event) {
-          ev_wrapper.handle_reader_timed_event(&event);
-        } else if ev_wrapper.is_reader_command_action(&event) {
-          ev_wrapper.handle_reader_command_event(&event);
-        } else if  DPEventLoop::is_writer_action(&event) {
-          ev_wrapper.handle_writer_action(&event);
-        } else if ev_wrapper.is_writer_timed_event_action(&event) {
-          ev_wrapper.handle_writer_timed_event(&event);
-        } else if DPEventLoop::is_writer_acknack_action(&event) {
-          ev_wrapper.handle_writer_acknack_action(&event);
-        } else if DPEventLoop::is_discovery_update_notification(&event) {
-          while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
-            use DiscoveryNotificationType::*;
-            match dnt {
-              WriterUpdated{ discovered_writer_data } => 
-                ev_wrapper.remote_writer_discovered(discovered_writer_data),
-
-              WriterLost{writer_guid} => ev_wrapper.remote_writer_lost(writer_guid) ,
-
-              ReaderUpdated{ discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change } => 
-                ev_wrapper.remote_reader_discovered(discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change),
-
-              ReaderLost{ reader_guid } => ev_wrapper.remote_reader_lost(reader_guid) ,
-
-              ParticipantUpdated{ guid_prefix } => ev_wrapper.update_participant(guid_prefix),
-                
-              ParticipantLost{ guid_prefix } => ev_wrapper.remote_participant_lost(guid_prefix),
-
-
-              TopicsInfoUpdated => ev_wrapper.update_topics(),
-              AssertTopicLiveliness{ writer_guid , manual_assertion } => {
-                ev_wrapper.writers.get_mut(&writer_guid.entityId)
-                  .map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
+        match EntityId::from_token( event.token() ) {
+          TokenDecode::FixedToken(fixed_token) =>
+            match fixed_token {
+              STOP_POLL_TOKEN => {
+                info!("Stopping dp_event_loop");
+                return
               }
+              DISCOVERY_LISTENER_TOKEN |
+              DISCOVERY_MUL_LISTENER_TOKEN |
+              USER_TRAFFIC_LISTENER_TOKEN |
+              USER_TRAFFIC_MUL_LISTENER_TOKEN => {
+                ev_wrapper.handle_udp_traffic(&event);
+              }
+              ADD_READER_TOKEN | REMOVE_READER_TOKEN => {
+                ev_wrapper.handle_reader_action(&event);
+              }
+              ADD_WRITER_TOKEN | REMOVE_WRITER_TOKEN => {
+                ev_wrapper.handle_writer_action(&event); 
+                // TODO: This is also called by Entity token
+              }
+              ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN => {
+                ev_wrapper.handle_writer_acknack_action(&event);
+              }
+              DISCOVERY_UPDATE_NOTIFICATION_TOKEN => {
+                while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
+                  use DiscoveryNotificationType::*;
+                  match dnt {
+                    WriterUpdated{ discovered_writer_data } => 
+                      ev_wrapper.remote_writer_discovered(discovered_writer_data),
+
+                    WriterLost{writer_guid} => ev_wrapper.remote_writer_lost(writer_guid) ,
+
+                    ReaderUpdated{ discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change } => 
+                      ev_wrapper.remote_reader_discovered(discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change),
+
+                    ReaderLost{ reader_guid } => ev_wrapper.remote_reader_lost(reader_guid) ,
+
+                    ParticipantUpdated{ guid_prefix } => ev_wrapper.update_participant(guid_prefix),
+                      
+                    ParticipantLost{ guid_prefix } => ev_wrapper.remote_participant_lost(guid_prefix),
+
+                    TopicsInfoUpdated => ev_wrapper.update_topics(),
+                    AssertTopicLiveliness{ writer_guid , manual_assertion } => {
+                      ev_wrapper.writers.get_mut(&writer_guid.entityId)
+                        .map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
+                    }
+                  }
+                }              
+              }
+              DPEV_ACKNACK_TIMER_TOKEN => {
+                ev_wrapper.message_receiver.send_preemptive_acknacks();
+                acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
+              }
+
+              fixed_unknown => {
+                error!("Unknown event.token {:?} = 0x{:x?} , decoded as {:?}", 
+                  event.token(), event.token().0, fixed_unknown );
+              }
+            },
+
+          // Reader: Timed action
+          // Writer: Command (e.g. new data)
+          TokenDecode::Entity( eid ) => 
+            if eid.kind().is_reader() { 
+              ev_wrapper.handle_reader_timed_event(&event); 
+            } else if eid.kind().is_writer() {
+              ev_wrapper.handle_writer_action(&event); // TODO: same as in fixed tokens
             }
-          }
-        } else if event.token() == DPEV_ACKNACK_TIMER_TOKEN {
-          ev_wrapper.message_receiver.send_preemptive_acknacks();
-          acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
-        } else {
-          error!("Unknown event.token {:?} = 0x{:x?}", event.token(), event.token().0 );
+            else { error!("Entity Event for unknown EntityKind {:?}",eid); },
+            
+          // Reader: Command
+          // Writer: Timed action
+          // TODO: Timed action and command are inconsistently assigned to
+          // reader and writer. Works ok, but confusing to code readers.
+          TokenDecode::AltEntity( eid ) =>
+            if eid.kind().is_reader() { 
+              ev_wrapper.handle_reader_command_event(&event);
+            } else if eid.kind().is_writer() {
+              ev_wrapper.handle_writer_timed_event(&event);
+            }
+            else { error!("AltEntity Event for unknown EntityKind {:?}",eid); },
         }
-      }
-    }
-  }
+      }      
 
-  pub fn is_udp_traffic(event: &Event) -> bool {
-    event.token() == DISCOVERY_LISTENER_TOKEN
-      || event.token() == DISCOVERY_MUL_LISTENER_TOKEN
-      || event.token() == USER_TRAFFIC_LISTENER_TOKEN
-      || event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
-  }
+    } // loop
+  } // fn
 
-  pub fn is_reader_action(event: &Event) -> bool {
-    event.token() == ADD_READER_TOKEN || event.token() == REMOVE_READER_TOKEN
-  }
-
-  /// Writer action can be add writer remove writer or some not predefined token.
-  /// if not predefined token -> EntityIdToken can be calculated and if entityKind is 0xC2 then it is writer action.
-  pub fn is_writer_action(event: &Event) -> bool {
-    let token = event.token();
-    match EntityId::from_token( token ) {
-      TokenDecode::Entity( ek ) =>
-           ek.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN
-        || ek.kind() == EntityKind::WRITER_WITH_KEY_USER_DEFINED
-        || ek.kind() == EntityKind::WRITER_NO_KEY_BUILT_IN
-        || ek.kind() == EntityKind::WRITER_NO_KEY_USER_DEFINED,
-      TokenDecode::FixedToken( token ) =>
-       token == ADD_WRITER_TOKEN || token == REMOVE_WRITER_TOKEN,
-      TokenDecode::AltEntity( _ ) => false,
-    }
-  }
-
-  /// Writer timed events can be Heartbeats or cache cleaning actions.
-  pub fn is_writer_timed_event_action(&self, event: &Event) -> bool {
-    self.writer_timed_event_reciever.contains_key(&event.token())
-  }
-
-  pub fn is_reader_timed_event_action(&self, event: &Event) -> bool {
-    self.reader_timed_event_receiver.contains_key(&event.token())
-  }
-  
-  pub fn is_reader_command_action(&self, event: &Event) -> bool {
-    self.reader_command_receiver_identification
-      .contains_key(&event.token())
-  }
-  
-  pub fn is_writer_acknack_action(event: &Event) -> bool {
-    event.token() == ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN
-  }
-
-  pub fn is_discovery_update_notification(event: &Event) -> bool {
-    event.token() == DISCOVERY_UPDATE_NOTIFICATION_TOKEN
-  }
-
-  pub fn handle_udp_traffic(&mut self, event: &Event) {
+  fn handle_udp_traffic(&mut self, event: &Event) {
     let udp_messages =
       match self.udp_listeners.get_mut(&event.token()) {
         Some(l) => l.get_messages(),
@@ -330,7 +315,7 @@ impl DPEventLoop {
     }
   }
 
-  pub fn handle_reader_action(&mut self, event: &Event) {
+  fn handle_reader_action(&mut self, event: &Event) {
     match event.token() {
       ADD_READER_TOKEN => {
         trace!("add reader(s)");
@@ -395,7 +380,7 @@ impl DPEventLoop {
     }
   }
 
-  pub fn handle_writer_action(&mut self, event: &Event) {
+  fn handle_writer_action(&mut self, event: &Event) {
     match event.token() {
       ADD_WRITER_TOKEN => {
         while let Ok(mut new_writer) = self.add_writer_receiver.receiver.try_recv() {
@@ -449,7 +434,7 @@ impl DPEventLoop {
 
   /// Writer timed events can be heatrbeats or cache cleaning events.
   /// events are distinguished by TimerMessageType which is send via mio channel. Channel token in
-  pub fn handle_writer_timed_event(&mut self, event: &Event) {
+  fn handle_writer_timed_event(&mut self, event: &Event) {
     let reciever = self.writer_timed_event_reciever.get(&event.token())
       .expect("Did not find a heartbeat receiver");
     while let Ok(timer_message) = reciever.try_recv() {
@@ -459,7 +444,7 @@ impl DPEventLoop {
     }
   }
 
-  pub fn handle_reader_timed_event(&mut self, event: &Event) {
+  fn handle_reader_timed_event(&mut self, event: &Event) {
     let reciever = self.reader_timed_event_receiver.get(&event.token())
       .expect("Did not found reader timed event reciever!");
     // TODO: Why do we have separate message channels for reader and writer, if they have contain the same data type?
@@ -483,7 +468,7 @@ impl DPEventLoop {
     reader.process_command()
   }
 
-  pub fn handle_writer_acknack_action(&mut self, _event: &Event) {
+  fn handle_writer_acknack_action(&mut self, _event: &Event) {
     while let Ok((acknack_sender_prefix, acknack_message)) = self.ack_nack_reciever.try_recv() {
       let target_writer_entity_id = { acknack_message.writer_id };
       let writer_guid = GUID::new_with_prefix_and_id(
@@ -668,7 +653,7 @@ impl DPEventLoop {
     }
   }
 
-  pub fn remote_writer_discovered(&mut self, dwd: DiscoveredWriterData) {
+  fn remote_writer_discovered(&mut self, dwd: DiscoveredWriterData) {
     for reader in self.message_receiver.available_readers.values_mut() {
       if &dwd.publication_topic_data.topic_name == reader.topic_name() {
         reader.update_writer_proxy( 
@@ -679,13 +664,13 @@ impl DPEventLoop {
     } 
   }  
 
-  pub fn remote_writer_lost(&mut self, writer_guid: GUID) {
+  fn remote_writer_lost(&mut self, writer_guid: GUID) {
     for reader in self.message_receiver.available_readers.values_mut() {
       reader.remove_writer_proxy( writer_guid );
     }
   }
 
-  pub fn update_topics(&mut self) {
+  fn update_topics(&mut self) {
     match self.discovery_db.read() {
       Ok(db) => match self.ddscache.write() {
         Ok(mut ddsc) => {

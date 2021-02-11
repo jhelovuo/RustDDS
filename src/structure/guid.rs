@@ -122,6 +122,16 @@ impl EntityKind {
   // E = built-in alt token
   // F
 
+  pub fn is_reader(&self) -> bool {
+    let e = self.0 & 0x0F;
+    e == 0x04 || e == 0x07 || e == 0x09
+  }
+
+  pub fn is_writer(&self) -> bool {
+    let e = self.0 & 0x0F;
+    e == 0x02 || e == 0x03 || e == 0x08
+  }
+
 }
 
 impl From<u8> for EntityKind {
