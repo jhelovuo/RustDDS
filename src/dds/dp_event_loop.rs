@@ -60,8 +60,6 @@ pub struct DPEventLoop {
   add_reader_receiver: TokenReceiverPair<Reader>,
   remove_reader_receiver: TokenReceiverPair<GUID>,
   reader_timed_event_receiver: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
-  // For each reader a token is added with reades guid it then can be accessed from message receiver
-  reader_command_receiver_identification: HashMap<Token, GUID>,
 
   // Writers
   add_writer_receiver: TokenReceiverPair<Writer>,
@@ -179,7 +177,6 @@ impl DPEventLoop {
       add_reader_receiver,
       remove_reader_receiver,
       reader_timed_event_receiver: HashMap::new(),
-      reader_command_receiver_identification: HashMap::new(),
       add_writer_receiver,
       remove_writer_receiver,
       writer_timed_event_reciever: HashMap::new(),
@@ -194,11 +191,11 @@ impl DPEventLoop {
     let mut events = Events::with_capacity(8);  // too small capacity just delays events to next poll
     let mut acknack_timer = mio_extras::timer::Timer::default();
     acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
+
     self.poll
       .register(&acknack_timer, DPEV_ACKNACK_TIMER_TOKEN, Ready::readable(), PollOpt::edge() )
       .unwrap();
 
-    // TODO: Use the dp to access stuff we need, e.g. historycache
     let mut ev_wrapper = self;
     loop {
       ev_wrapper.poll.poll(&mut events, None)
@@ -223,7 +220,6 @@ impl DPEventLoop {
               }
               ADD_WRITER_TOKEN | REMOVE_WRITER_TOKEN => {
                 ev_wrapper.handle_writer_action(&event); 
-                // TODO: This is also called by Entity token
               }
               ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN => {
                 ev_wrapper.handle_writer_acknack_action(&event);
@@ -267,12 +263,17 @@ impl DPEventLoop {
 
           // Commands/actions
           TokenDecode::Entity( eid ) => 
-            if eid.kind().is_reader() { 
-              ev_wrapper.handle_reader_command_event(&event);
+            if eid.kind().is_reader() {
+              ev_wrapper.message_receiver.get_reader_mut( eid )
+                .map( |reader| reader.process_command() )
+                .unwrap_or_else(|| error!("Event for unknown reader {:?}",eid));
             } else if eid.kind().is_writer() {
-              ev_wrapper.handle_writer_action(&event); // TODO: same as in fixed tokens
-            }
-            else { error!("Entity Event for unknown EntityKind {:?}",eid); },
+              ev_wrapper.writers.get_mut( &eid )
+                .map( |writer| writer.process_writer_command() )
+                .unwrap_or_else(|| error!("Event for unknown writer {:?}",eid));
+            } else { 
+              error!("Entity Event for unknown EntityKind {:?}",eid); 
+            },
             
           // Timed Actions
           TokenDecode::AltEntity( eid ) =>
@@ -283,7 +284,7 @@ impl DPEventLoop {
             }
             else { error!("AltEntity Event for unknown EntityKind {:?}",eid); },
         }
-      }      
+      } // for    
 
     } // loop
   } // fn
@@ -343,11 +344,7 @@ impl DPEventLoop {
               PollOpt::edge(),
             )
             .expect("Reader command channel registration failed!!!");
-          self.reader_command_receiver_identification.insert(
-            new_reader.get_entity_token(),
-            new_reader.get_guid(),
-          );
-          
+
           new_reader.set_requested_deadline_check_timer();
           trace!("Add reader: {:?}", new_reader);
           self.message_receiver.add_reader(new_reader);
@@ -365,8 +362,6 @@ impl DPEventLoop {
             }
             self.poll.deregister( &old_reader.data_reader_command_receiver )
               .unwrap_or_else(|e| error!("Cannot deregister data_reader_command_receiver: {:?}",e));
-            self.reader_command_receiver_identification
-              .remove(&old_reader.get_entity_token()); 
           } else {
             warn!("Tried to remove nonexistent Reader {:?}",old_reader_guid);
           }
@@ -408,23 +403,20 @@ impl DPEventLoop {
       REMOVE_WRITER_TOKEN => {
         while let Ok(writer_guid) = &self.remove_writer_receiver.receiver.try_recv() {
           let writer = self.writers.remove(&writer_guid.entityId);
+          
           if let Some(w) = writer {
-            &self.poll.deregister(&w.writer_command_receiver);
-          };
-          // TODO: should we deregister also timed_action_receiver ?
-        }
-      }
+            self.poll.deregister(&w.writer_command_receiver)
+              .unwrap_or_else( |e| error!("Deregister fail {:?}",e));
 
-      writer_token => {
-        match EntityId::from_token(writer_token) {
-          TokenDecode::Entity( eid ) => {
-            self.writers.get_mut( &eid )
-              .map( |writer| writer.process_writer_command() );
+            if let Some(rec) = 
+                self.writer_timed_event_reciever.remove( &w.get_timed_event_entity_token() ) {
+              self.poll.deregister(&rec)
+                .unwrap_or_else( |e| error!("Deregister fail {:?}",e));
+            }
           }
-          other =>
-            error!("Expected writer_token, got {:?}",other),       
         }
       }
+      other => error!("Expected writer action token, got {:?}",other),
     }
   }
 
@@ -454,14 +446,6 @@ impl DPEventLoop {
         None => error!("Reader was not found with entity token {:?}",  event.token()),
       }
     }
-  }
-
-  fn handle_reader_command_event(&mut self, event: &Event) {
-    let reader_guid = self.reader_command_receiver_identification.get(&event.token())
-      .expect(&format!("Did not find reader by Token {:?}",event.token() ));
-    let reader = self.message_receiver.get_reader_mut( reader_guid.entityId )
-      .expect(&format!("Local reader {:?} missing!", reader_guid));
-    reader.process_command()
   }
 
   fn handle_writer_acknack_action(&mut self, _event: &Event) {
