@@ -265,23 +265,19 @@ impl DPEventLoop {
               }
             },
 
-          // Reader: Timed action
-          // Writer: Command (e.g. new data)
+          // Commands/actions
           TokenDecode::Entity( eid ) => 
             if eid.kind().is_reader() { 
-              ev_wrapper.handle_reader_timed_event(&event); 
+              ev_wrapper.handle_reader_command_event(&event);
             } else if eid.kind().is_writer() {
               ev_wrapper.handle_writer_action(&event); // TODO: same as in fixed tokens
             }
             else { error!("Entity Event for unknown EntityKind {:?}",eid); },
             
-          // Reader: Command
-          // Writer: Timed action
-          // TODO: Timed action and command are inconsistently assigned to
-          // reader and writer. Works ok, but confusing to code readers.
+          // Timed Actions
           TokenDecode::AltEntity( eid ) =>
             if eid.kind().is_reader() { 
-              ev_wrapper.handle_reader_command_event(&event);
+              ev_wrapper.handle_reader_timed_event(&event); 
             } else if eid.kind().is_writer() {
               ev_wrapper.handle_writer_timed_event(&event);
             }
@@ -324,34 +320,34 @@ impl DPEventLoop {
             mio_channel::sync_channel::<TimerMessageType>(10);
           let time_handler: TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
           new_reader.add_timed_event_handler(time_handler);
-
+          // Timed action polling
           self
             .poll
             .register(
               &timed_action_receiver,
-              new_reader.get_entity_token(),
+              new_reader.get_reader_alt_entity_token(),
               Ready::readable(),
               PollOpt::edge(),
             )
             .expect("Reader timer channel registeration failed!");
           self
             .reader_timed_event_receiver
-            .insert(new_reader.get_entity_token(), timed_action_receiver);
-
+            .insert(new_reader.get_reader_alt_entity_token(), timed_action_receiver);
+          // Non-timed action polling
           self
             .poll
             .register(
               &new_reader.data_reader_command_receiver,
-              new_reader.get_reader_command_entity_token(),
+              new_reader.get_entity_token(),
               Ready::readable(),
               PollOpt::edge(),
             )
             .expect("Reader command channel registration failed!!!");
-
           self.reader_command_receiver_identification.insert(
-            new_reader.get_reader_command_entity_token(),
+            new_reader.get_entity_token(),
             new_reader.get_guid(),
           );
+          
           new_reader.set_requested_deadline_check_timer();
           trace!("Add reader: {:?}", new_reader);
           self.message_receiver.add_reader(new_reader);
@@ -361,7 +357,7 @@ impl DPEventLoop {
         while let Ok(old_reader_guid) = self.remove_reader_receiver.receiver.try_recv() {
           if let Some(old_reader) = self.message_receiver.remove_reader(old_reader_guid) {
             if let Some(receiver) = 
-              self.reader_timed_event_receiver.remove(&old_reader.get_entity_token()) {
+              self.reader_timed_event_receiver.remove(&old_reader.get_reader_alt_entity_token()) {
                 self.poll.deregister(&receiver)
                   .unwrap_or_else(|e| error!("reader_timed_event_receiver deregister: {:?}",e));
             } else {
@@ -370,7 +366,7 @@ impl DPEventLoop {
             self.poll.deregister( &old_reader.data_reader_command_receiver )
               .unwrap_or_else(|e| error!("Cannot deregister data_reader_command_receiver: {:?}",e));
             self.reader_command_receiver_identification
-              .remove(&old_reader.get_reader_command_entity_token()); 
+              .remove(&old_reader.get_entity_token()); 
           } else {
             warn!("Tried to remove nonexistent Reader {:?}",old_reader_guid);
           }

@@ -137,7 +137,7 @@ impl Reader {
     self.get_guid().entityId.as_token()
   }
 
-  pub fn get_reader_command_entity_token(&self) -> Token {
+  pub fn get_reader_alt_entity_token(&self) -> Token {
     self.get_guid().entityId.as_alt_token()
   }
 
