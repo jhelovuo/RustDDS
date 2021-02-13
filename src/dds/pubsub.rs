@@ -408,8 +408,10 @@ impl InnerPublisher {
     <D as Keyed>::K: Key,
     SA: SerializerAdapter<D>,
   {
-    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(100);
-    let (message_status_sender, message_status_receiver) = mio_channel::sync_channel(100);
+    // Data samples from DataWriter to HistoryCache
+    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(4);
+    // Status repoerts back from Writer to DataWriter
+    let (status_sender, status_receiver) = mio_channel::sync_channel(4);
 
    
     // DDS Spec 2.2.2.4.1.5 create_datawriter:
@@ -431,30 +433,31 @@ impl InnerPublisher {
       dp.get_dds_cache(),
       topic.get_name().to_string(),
       writer_qos,
-      message_status_sender,
+      status_sender,
     );
 
     self.add_writer_sender.send(new_writer)
       .or_else(|e| log_and_err_internal!("Adding new writer failed: {}",e))?;
 
-    let matching_data_writer = WithKeyDataWriter::<D, SA>::new(
+    let data_writer = WithKeyDataWriter::<D, SA>::new(
           outer.clone(),
           topic.clone(),
           Some(guid),
           dwcc_upload,
           self.discovery_command.clone(),
           dp.get_dds_cache(),
-          message_status_receiver,
+          status_receiver,
         )?;
 
     // notify Discovery DB
     let mut db = self.discovery_db.write()?;
-    let dwd = DiscoveredWriterData::new(&matching_data_writer, &topic, &dp);
+    let dwd = DiscoveredWriterData::new(&data_writer, &topic, &dp);
     db.update_local_topic_writer(dwd);
     db.update_topic_data_p(&topic);
 
-    Ok(matching_data_writer)
+    Ok(data_writer)
   }
+
 
   pub fn create_datawriter_no_key<D, SA>(
     &self,
@@ -811,11 +814,13 @@ impl InnerSubscriber {
     <D as Keyed>::K: Key,
     SA: DeserializerAdapter<D>,
   {
-    // What is the bound?
-    let (send, rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, status_receiver) = mio_channel::sync_channel::<DataReaderStatus>(10);
+    // incoming data notification channel from Reader to DataReader
+    let (send, rec) = mio_channel::sync_channel::<()>(4);
+    // status change channel from Reader to DataReader
+    let (status_sender, status_receiver) = mio_channel::sync_channel::<DataReaderStatus>(4);
+    // reader command channel from Datareader to Reader
     let (reader_command_sender, reader_command_receiver) =
-      mio_channel::sync_channel::<ReaderCommand>(10);
+      mio_channel::sync_channel::<ReaderCommand>(4);
 
 
     let qos = optional_qos.unwrap_or_else(|| topic.get_qos().clone());
@@ -843,7 +848,7 @@ impl InnerSubscriber {
       reader_command_receiver,
     );
 
-    let matching_datareader = WithKeyDataReader::<D, SA>::new(
+    let datareader = WithKeyDataReader::<D, SA>::new(
       outer.clone(),
       datareader_id,
       topic.clone(),
@@ -878,7 +883,7 @@ impl InnerSubscriber {
     self.sender_add_reader.try_send(new_reader)
         .or_else( |e| log_and_err_internal!("Cannot add DataReader. Error: {}",e))?;
 
-    Ok(matching_datareader)
+    Ok(datareader)
   }
 
   pub fn create_datareader<D: 'static, SA>(

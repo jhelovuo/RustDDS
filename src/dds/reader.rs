@@ -165,23 +165,22 @@ impl Reader {
   }
 
   pub fn send_status_change(&self, change: DataReaderStatus) {
-    match self.status_sender.try_send(change.clone()) {
-      Ok(()) => info!(
-        "Reader {:?} send status change: {:?}",
-        self.get_entity_id(),
-        change.clone()
-      ),
+    match self.status_sender.try_send(change) {
+      Ok(()) => (), // expected result
       Err(mio_channel::TrySendError::Full(_)) => {
-        warn!("Reader cannot send new status changes, datareader is full.")
+        trace!("Reader cannot send new status changes, datareader is full.");
+        // It is perfectly normal to fail due to full channel, because
+        // no-one is required to be listening to these.
       }
       Err(mio_channel::TrySendError::Disconnected(_)) => {
         // If we get here, our DataReader has died. The Reader should now dispose itself.
+        // Or possibly it has lost the receiver object, which is sort of sloppy,
+        // but does not necessarily mean the end of the world.
         // TODO: Implement Reader disposal.
-        panic!()
+        info!("send_status_change - cannot send status, DataReader Disconnected.")
       }
-      Err(mio_channel::TrySendError::Io(_)) => {
-        // TODO: What does this mean? Can we ever get here?
-        panic!()
+      Err(mio_channel::TrySendError::Io(e)) => {
+        error!("send_status_change - cannot send status: {:?}",e);
       }
     }
   }
@@ -286,6 +285,7 @@ impl Reader {
   }
 
   // TODO Used for test/debugging purposes
+  #[cfg(test)]
   pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
     let start = self.seqnum_instant_map.iter().min().unwrap().0;
     let end = self.seqnum_instant_map.iter().max().unwrap().0;

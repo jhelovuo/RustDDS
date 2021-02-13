@@ -5,7 +5,7 @@ use chrono::Duration as chronoDuration;
 use log::{debug, error, warn, info, trace};
 
 use speedy::{Writable, Endianness};
-use mio_extras::channel::{self as mio_channel, SyncSender};
+use mio_extras::channel::{self as mio_channel, SyncSender, TrySendError};
 use mio::Token;
 use std::{
   sync::{RwLock, Arc},
@@ -645,6 +645,21 @@ impl Writer {
 
   }
  
+  // Send status to DataWriter or however is listening
+  fn send_status(&self, status: DataWriterStatus) {
+    self.status_sender.try_send(status)
+      .unwrap_or_else( |e| match e {
+        TrySendError::Full(_) => (), // This is normal in case there is no receiver
+        TrySendError::Disconnected(_) => {
+          debug!("send_status - status receiver is disconnected");
+        }
+        TrySendError::Io(e) => {
+          warn!("send_status - io error {:?}",e);
+        } 
+      })
+
+  }
+
   pub fn update_reader_proxy(&mut self, reader_proxy: RtpsReaderProxy, requested_qos:QosPolicies) {
     debug!("update_reader_proxy topic={:?}",self.my_topic_name);
     match  self.qos_policies.compliance_failure_wrt(&requested_qos) {
@@ -654,11 +669,10 @@ impl Writer {
           self.matched_reader_update( reader_proxy );
         if change > 0 {
           self.matched_readers_count_total += change;
-          self.status_sender.try_send(DataWriterStatus::PublicationMatched { 
+          self.send_status(DataWriterStatus::PublicationMatched { 
                 total: CountWithChange::new(self.matched_readers_count_total , change ),
                 current: CountWithChange::new(self.readers.len() as i32 , change)
-              })
-            .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
+              });
           // send out hearbeat, so that new reader can catch up
           match self.qos_policies.reliability {
             Some(Reliability::Reliable{..}) =>
@@ -671,12 +685,11 @@ impl Writer {
         // QoS not compliant :(
         debug!("update_reader_proxy - QoS mismatch {:?}", bad_policy_id);
         self.requested_incompatible_qos_count += 1;
-        self.status_sender.try_send(DataWriterStatus::OfferedIncompatibleQos { 
+        self.send_status(DataWriterStatus::OfferedIncompatibleQos { 
               count: CountWithChange::new(self.requested_incompatible_qos_count , 1 ),
               last_policy_id: bad_policy_id,
               policies: Vec::new(), // TODO: implement this
-            })
-          .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
+            });
       }
     } // match
   }
@@ -722,11 +735,10 @@ impl Writer {
     if self.readers.contains_key(&guid) {
       self.matched_reader_remove(guid);
       //self.matched_readers_count_total -= 1; // this never decreases
-      self.status_sender.try_send(DataWriterStatus::PublicationMatched { 
+      self.send_status(DataWriterStatus::PublicationMatched { 
                 total: CountWithChange::new(self.matched_readers_count_total , 0 ),
                 current: CountWithChange::new(self.readers.len() as i32 , -1)
-              })
-            .unwrap_or_else(|send_err| error!("status send error: {:?}", send_err));
+              });
     }
   }
 
