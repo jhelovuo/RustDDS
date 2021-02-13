@@ -213,7 +213,14 @@ impl DPEventLoop {
               DISCOVERY_MUL_LISTENER_TOKEN |
               USER_TRAFFIC_LISTENER_TOKEN |
               USER_TRAFFIC_MUL_LISTENER_TOKEN => {
-                ev_wrapper.handle_udp_traffic(&event);
+                let udp_messages = ev_wrapper.udp_listeners.get_mut(&event.token())
+                  .map_or_else(
+                      | | { error!("No listener with token {:?}", &event.token() ); vec![] }, 
+                      |l| l.get_messages()
+                    );
+                for packet in udp_messages.into_iter() {
+                  ev_wrapper.message_receiver.handle_received_packet(packet)
+                }
               }
               ADD_READER_TOKEN | REMOVE_READER_TOKEN => {
                 ev_wrapper.handle_reader_action(&event);
@@ -288,29 +295,6 @@ impl DPEventLoop {
 
     } // loop
   } // fn
-
-  fn handle_udp_traffic(&mut self, event: &Event) {
-    let udp_messages =
-      match self.udp_listeners.get_mut(&event.token()) {
-        Some(l) => l.get_messages(),
-        None => {
-          error!("handle_udp_traffic - internal error! No listener with token {:?}", &event.token() );
-          return
-        }
-      };
-    for data in udp_messages.into_iter() {
-      if event.token() == DISCOVERY_LISTENER_TOKEN || event.token() == DISCOVERY_MUL_LISTENER_TOKEN
-      {
-        self.message_receiver.handle_discovery_msg(data);
-      } else if event.token() == USER_TRAFFIC_LISTENER_TOKEN
-        || event.token() == USER_TRAFFIC_MUL_LISTENER_TOKEN
-      {
-        self.message_receiver.handle_user_msg(data);
-      } else {
-        error!("handle_udp_traffic - what is this Token {:?}", event.token())
-      }
-    }
-  }
 
   fn handle_reader_action(&mut self, event: &Event) {
     match event.token() {
