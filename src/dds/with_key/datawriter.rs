@@ -692,7 +692,8 @@ where
   /// data_writer.assert_liveliness().unwrap();
   /// ```
 
-  //TODO: This cannot really fail, so could change type to () (alternatively, make send error visible)
+  // TODO: This cannot really fail, so could change type to () (alternatively, make send error visible)
+  // TODO: Better make send failure visible, so application can see if Discovery has failed.
   pub fn assert_liveliness(&self) -> Result<()> {
     self.refresh_manual_liveliness();
 

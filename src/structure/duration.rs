@@ -41,6 +41,13 @@ impl Duration {
     }
   }
 
+  pub fn from_frac_seconds(secs: f64) -> Duration {
+    Duration {
+      seconds: secs.trunc() as i32,
+      fraction: (secs.fract().abs() * 32.0_f64.exp2()) as u32,
+    }
+  }
+
   pub const fn from_millis(millis: i64) -> Duration {
     let fraction = (((millis % 1000) << 32) / 1000) as u32; // correct formula?
 
