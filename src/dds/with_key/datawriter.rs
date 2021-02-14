@@ -897,7 +897,7 @@ mod tests {
 
   #[test]
   fn dw_write_test() {
-    let domain_participant = DomainParticipant::new(0);
+    let domain_participant = DomainParticipant::new(0).expect("Publisher creation failed!");
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     let publisher = domain_participant
@@ -909,7 +909,7 @@ mod tests {
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, topic, None)
+        .create_datawriter(topic, None)
         .expect("Failed to create datawriter");
 
     let mut data = RandomData {
@@ -933,7 +933,7 @@ mod tests {
 
   #[test]
   fn dw_dispose_test() {
-    let domain_participant = DomainParticipant::new(0);
+    let domain_participant = DomainParticipant::new(0).expect("Publisher creation failed!");
     let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(&qos)
@@ -944,7 +944,7 @@ mod tests {
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, topic, None)
+        .create_datawriter(topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {
@@ -969,7 +969,7 @@ mod tests {
 
   #[test]
   fn dw_wait_for_ack_test() {
-    let domain_participant = DomainParticipant::new(0);
+    let domain_participant = DomainParticipant::new(0).expect("Participant creation failed!");
     let qos = QosPolicies::qos_none();
     let publisher = domain_participant
       .create_publisher(&qos)
@@ -980,7 +980,7 @@ mod tests {
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, topic, None)
+        .create_datawriter(topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {
