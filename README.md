@@ -10,14 +10,14 @@ This is still work-in-progress. The most immediate goal is to have enough functi
 
 # Data serialization and keying
 
-Some existing DDS implementation use code generation to implement DataReader and DataWriter calsses for each payload type.
+Some existing DDS implementations use code generation to implement DataReader and DataWriter classes for each payload type.
 
 We do not rely on code generation, but Rust generic programming instead: There is a generic DataReader and DataWriter, parameterized with the payload type D and a serializer adapter type SA. The [Serde][serde-url] library is used for payload data serialization/deserialization.
 
 The payload type D is required to implement `serde::Serialize` when used with a DataWriter, and 
 `serde::DeserializeOwned` when used with a DataReader. Many existing Rust types and libraries already support Serde, so they are good to go as-is.
 
-In DDS, a WITH_KEY topic contains multiple differerent instances, that are distingushed by a key. The key must be somehow embedded into the data samples. In our implementation, if the payload type D is communicated in a WITH_KEY topic, then D is additionally required to implement trait `Keyed`.
+In DDS, a WITH_KEY topic contains multiple different instances, that are distinguished by a key. The key must be somehow embedded into the data samples. In our implementation, if the payload type D is communicated in a WITH_KEY topic, then D is additionally required to implement trait `Keyed`.
 
 The trait `Keyed` requires one method: `get_key(&self) -> Self::K` , which is used to extract a key of an associated type `K` from `D`. They key type `K` must implement trait `Key`, which is a combination of pre-existing traits `Eq + 
 PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned` and no additional methods.
@@ -28,7 +28,7 @@ A serializer adapter type SA (wrapper for a Serde data format) is provided for O
 
 ## Rationale
 
-The [DDS][omg-dds-spec-url] 1.4 specification specifies an object model and a set of APIs for those objects that constitude the DDS specification. The design of these APIs in, e.g., naming conventions and memory management semantics, does not quite fit the Rust world. We have tried to create a design where important DDS ideas are preserved and implemented, but in a manner suitable to Rust. These design compromises should be apprent only on the application-facing API of DDS. The network side is still aiming to be fully interoperable with existing DDS implementations.
+The [DDS][omg-dds-spec-url] 1.4 specification specifies an object model and a set of APIs for those objects that constitute the DDS specification. The design of these APIs in, e.g., naming conventions and memory management semantics, does not quite fit the Rust world. We have tried to create a design where important DDS ideas are preserved and implemented, but in a manner suitable to Rust. These design compromises should be apparent only on the application-facing API of DDS. The network side is still aiming to be fully interoperable with existing DDS implementations.
 
 ## Class Hierarchy
 
@@ -40,17 +40,17 @@ We have tried to follow Rust naming conventions.
 
 ## Data listeners and WaitSets
 
-DDS provides two alternative methods for waiting arriving data, namely WaitSets and Listeners. We have chosen to replace these by using the non-blocking IO API from [mio][metal-io-url] crate. The DDS DataReader objects can be directly used with the mio `Poll` interface. It should be possible to implement oter APIs, such as an async API on top of that.
+DDS provides two alternative methods for waiting arriving data, namely WaitSets and Listeners. We have chosen to replace these by using the non-blocking IO API from [mio][metal-io-url] crate. The DDS DataReader objects can be directly used with the mio `Poll` interface. It should be possible to implement other APIs, such as an async API on top of that.
 
 ## Instance Handles
 
 DDS uses "instance handles", which behave like pointers to objects managed by the DDS implementation. This does not seem to mix well with Rust memory handling, so we have chosen to not implement those.
 
-An instance handle can be used to refer to refer to data values (samples) with a specific key. We have written the API to use directly the key insted, as that seems semantically equivalent.
+An instance handle can be used to refer to refer to data values (samples) with a specific key. We have written the API to use directly the key instead, as that seems semantically equivalent.
 
 ## Return codes
 
-The list of standard method return codes specifed by DDS (section 2.2.1.1) is modified, in particaular:
+The list of standard method return codes specified by DDS (section 2.2.1.1) is modified, in particular:
 
 * The `OK` code is not used to indicate successful operation. Success or failure is indicated using the standard `Result` type.
 * The `TIMEOUT` code is not used. Timeouts should be indicated as `Result::Err` or `Option::None`.
@@ -75,7 +75,7 @@ We have decided to not implement all 12 of these. Instead, we implement smaller 
 * `take` : Moves data from the DataReader.
 * `read_instance`, `take_instance`: Access samples belonging to a single key.
 
-All of the methods above require a ReadCondition to specifiy which samples to access, but it is very easy to specify "any" codition, i.e. access unconditionally.
+All of the methods above require a ReadCondition to specify which samples to access, but it is very easy to specify "any" condition, i.e. access unconditionally.
 
 There are also methods  `read_next_sample`, `take_next_sample` , but these are essentially simplification wrappers for read/take.
 
@@ -84,7 +84,7 @@ In addition to these, we also provide a Rust Iterator interface for reading data
 ## Memory management
 
 The DDS specification specifies manual memory management in the sense that many object types are created with a 
-`create_` method call and destoryed with a matching `delete_` method call. We have opted to rely on Rust memory management wherever possible, including handling of payload data.
+`create_` method call and destroyed with a matching `delete_` method call. We have opted to rely on Rust memory management wherever possible, including handling of payload data.
 
 
 # Based on rtps-rs
