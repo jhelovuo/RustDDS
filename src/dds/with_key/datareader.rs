@@ -1193,7 +1193,7 @@ mod tests {
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED), /* TODO: Check correctness */
+      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
@@ -1303,7 +1303,7 @@ mod tests {
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED), /* TODO: Check correctness */
+      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
@@ -1527,7 +1527,7 @@ mod tests {
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED), /* TODO: Check correctness */
+      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;

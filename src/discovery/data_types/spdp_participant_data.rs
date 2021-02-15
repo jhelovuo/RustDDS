@@ -212,7 +212,7 @@ mod tests {
   fn pdata_deserialize_serialize() {
     let data = spdp_participant_data_raw();
 
-    let rtpsmsg = Message::read_from_buffer(&data).unwrap();
+    let rtpsmsg = Message::read_from_buffer(data).unwrap();
     let submsgs = rtpsmsg.submessages();
 
     for submsg in submsgs.iter() {

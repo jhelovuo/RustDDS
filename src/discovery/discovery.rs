@@ -1084,7 +1084,8 @@ mod tests {
   use crate::serialization::submessage::*;
 
   use std::{net::SocketAddr};
-  use mio::Token;
+  use bytes::Bytes;
+    use mio::Token;
   use speedy::{Writable, Endianness};
   use byteorder::LittleEndian;
 
@@ -1141,8 +1142,8 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter_with_entityid::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
-        None, topic.clone(), None,
+      .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
+        topic.clone(), None,
       )
       .unwrap();
 
@@ -1150,7 +1151,7 @@ mod tests {
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
     let _reader = subscriber
-      .create_datareader_with_entityid::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None, None);
+      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11001);
@@ -1190,7 +1191,7 @@ mod tests {
               )));
             drd.reader_proxy.multicast_locator_list.clear();
 
-            data = to_bytes::<DiscoveredReaderData, byteorder::LittleEndian>(&drd).unwrap();
+            data = Bytes::from(to_bytes::<DiscoveredReaderData, byteorder::LittleEndian>(&drd).unwrap());
             d.serialized_payload.as_mut().unwrap().value = data.clone();
           }
           _ => continue,
@@ -1215,7 +1216,7 @@ mod tests {
 
   #[test]
   fn discovery_writer_data_test() {
-    let participant = DomainParticipant::new(0);
+    let participant = DomainParticipant::new(0).expect("Failed to create participant");
 
     let topic = participant
       .create_topic(
@@ -1230,8 +1231,8 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter_with_entityid::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
-        None, topic.clone(), None,
+      .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
+        topic.clone(), None,
       )
       .unwrap();
 
@@ -1239,7 +1240,7 @@ mod tests {
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
     let _reader = subscriber
-      .create_datareader_with_entityid::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None, None);
+      .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 0);
@@ -1298,8 +1299,8 @@ mod tests {
 
     let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
       key: None,
-      name: Some(String::from("Square")),
-      type_name: Some(String::from("ShapeType")),
+      name: String::from("Square"),
+      type_name: String::from("ShapeType"),
       durability: None,
       deadline: None,
       latency_budget: None,

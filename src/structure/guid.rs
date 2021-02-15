@@ -440,27 +440,27 @@ mod tests {
     let e = EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER;
     let _t = Token(e.as_usize());
     info!("{:?}", e.as_usize());
-    let entity = EntityId::from_usize(e.as_usize()).unwrap();
+    let entity = EntityId::from_usize(e.as_usize());
     assert_eq!(e, entity);
 
     let e2 = EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER;
-    let entity2 = EntityId::from_usize(e2.as_usize()).unwrap();
+    let entity2 = EntityId::from_usize(e2.as_usize());
     assert_eq!(e2, entity2);
 
     let e3 = EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER;
-    let entity3 = EntityId::from_usize(e3.as_usize()).unwrap();
+    let entity3 = EntityId::from_usize(e3.as_usize());
     assert_eq!(e3, entity3);
 
     let e4 = EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER;
-    let entity4 = EntityId::from_usize(e4.as_usize()).unwrap();
+    let entity4 = EntityId::from_usize(e4.as_usize());
     assert_eq!(e4, entity4);
 
     let e5 = EntityId::ENTITYID_UNKNOWN;
-    let entity5 = EntityId::from_usize(e5.as_usize()).unwrap();
+    let entity5 = EntityId::from_usize(e5.as_usize());
     assert_eq!(e5, entity5);
 
     let e6 = EntityId::createCustomEntityID([12u8, 255u8, 0u8], EntityKind(254u8) );
-    let entity6 = EntityId::from_usize(e6.as_usize()).unwrap();
+    let entity6 = EntityId::from_usize(e6.as_usize());
     assert_eq!(e6, entity6);
   }
 

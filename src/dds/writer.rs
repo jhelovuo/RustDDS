@@ -830,19 +830,19 @@ mod tests {
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {
-    let domain_participant = DomainParticipant::new(0);
+    let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
 
-    let publisher = domain_participant.unwrap()
+    let publisher = domain_participant
       .create_publisher(&qos)
       .expect("Failed to create publisher");
-    let topic = domain_participant.unwrap()
+    let topic = domain_participant
       .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
       .expect("Failed to create topic");
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(None, topic, None)
+        .create_datawriter(topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

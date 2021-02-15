@@ -666,17 +666,18 @@ mod tests {
   use std::time::Duration;
   use crate::{
     dds::participant::DomainParticipant,
-    dds::values::result::CountWithChange,
-    dds::values::result::RequestedDeadlineMissedStatus,
+    // dds::values::result::CountWithChange,
+    // dds::values::result::RequestedDeadlineMissedStatus,
     dds::with_key::datareader::DataReader,
+    dds::statusevents::DataReaderStatus,
     serialization::cdr_deserializer::CDRDeserializerAdapter,
     structure::duration::Duration as DurationDDS,
-    test::{random_data::RandomData, datareader_util::DataReaderTestUtil},
+    test::random_data::RandomData,
   };
   use mio::{Ready, PollOpt};
   use crate::{
     dds::with_key::datareader::ReaderCommand,
-    dds::{qos::policy::Deadline, values::result::StatusChange},
+    dds::qos::policy::Deadline,
     structure::entity::RTPSEntity,
     dds::qos::QosPolicies,
   };
@@ -701,7 +702,7 @@ mod tests {
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
 
     let domain_info = DomainInfo {
-      domain_participant_guid: GUID::new(),
+      domain_participant_guid: GUID::default(),
       domain_id: 0,
       participant_id: 0,
     };
@@ -749,11 +750,11 @@ mod tests {
 
     let mut reader_guids = Vec::new();
     for i in 0..n {
-      let new_guid = GUID::new();
+      let new_guid = GUID::default();
 
       let (send, _rec) = mio_channel::sync_channel::<()>(100);
       let (status_sender, _status_reciever) =
-        mio_extras::channel::sync_channel::<StatusChange>(100);
+        mio_extras::channel::sync_channel::<DataReaderStatus>(100);
       let (_reader_commander, reader_command_receiver) =
         mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
@@ -763,6 +764,7 @@ mod tests {
         status_sender,
         Arc::new(RwLock::new(DDSCache::new())),
         "test".to_string(),
+        QosPolicies::qos_none(),
         reader_command_receiver,
       );
 
@@ -781,210 +783,215 @@ mod tests {
     sender_stop.send(0).unwrap();
     child.join().unwrap();
   }
+  
 
-  #[test]
-  fn dpew_test_reader_commands() {
-    let somePolicies = QosPolicies {
-      durability: None,
-      presentation: None,
-      deadline: Some(Deadline(DurationDDS::from_millis(500))),
-      latency_budget: None,
-      ownership: None,
-      liveliness: None,
-      time_based_filter: None,
-      reliability: None,
-      destination_order: None,
-      history: None,
-      resource_limits: None,
-      lifespan: None,
-    };
-    let dp = DomainParticipant::new(0);
-    let sub = dp.create_subscriber(&somePolicies).unwrap();
+  // TODO: Rewrite / remove this test - all asserts in it use
+  // DataReader::get_requested_deadline_missed_status which is
+  // currently commented out
 
-    let topic_1 = dp
-      .create_topic("TOPIC_1", "jotain", &somePolicies, TopicKind::WithKey)
-      .unwrap();
-    let _topic_2 = dp
-      .create_topic("TOPIC_2", "jotain", &somePolicies, TopicKind::WithKey)
-      .unwrap();
-    let _topic_3 = dp
-      .create_topic("TOPIC_3", "jotain", &somePolicies, TopicKind::WithKey)
-      .unwrap();
+  // #[test]
+  // fn dpew_test_reader_commands() {
+  //   let somePolicies = QosPolicies {
+  //     durability: None,
+  //     presentation: None,
+  //     deadline: Some(Deadline(DurationDDS::from_millis(500))),
+  //     latency_budget: None,
+  //     ownership: None,
+  //     liveliness: None,
+  //     time_based_filter: None,
+  //     reliability: None,
+  //     destination_order: None,
+  //     history: None,
+  //     resource_limits: None,
+  //     lifespan: None,
+  //   };
+  //   let dp = DomainParticipant::new(0).expect("Failed to create participant");
+  //   let sub = dp.create_subscriber(&somePolicies).unwrap();
 
-    // Adding readers
-    let (sender_add_reader, receiver_add) = mio_channel::channel::<Reader>();
-    let (_sender_remove_reader, receiver_remove) = mio_channel::channel::<GUID>();
+  //   let topic_1 = dp
+  //     .create_topic("TOPIC_1", "jotain", &somePolicies, TopicKind::WithKey)
+  //     .unwrap();
+  //   let _topic_2 = dp
+  //     .create_topic("TOPIC_2", "jotain", &somePolicies, TopicKind::WithKey)
+  //     .unwrap();
+  //   let _topic_3 = dp
+  //     .create_topic("TOPIC_3", "jotain", &somePolicies, TopicKind::WithKey)
+  //     .unwrap();
 
-    let (_add_writer_sender, add_writer_receiver) = mio_channel::channel();
-    let (_remove_writer_sender, remove_writer_receiver) = mio_channel::channel();
+  //   // Adding readers
+  //   let (sender_add_reader, receiver_add) = mio_channel::channel::<Reader>();
+  //   let (_sender_remove_reader, receiver_remove) = mio_channel::channel::<GUID>();
 
-    let (_stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
+  //   let (_add_writer_sender, add_writer_receiver) = mio_channel::channel();
+  //   let (_remove_writer_sender, remove_writer_receiver) = mio_channel::channel();
 
-    let (_discovery_update_notification_sender, discovery_update_notification_receiver) =
-      mio_channel::channel();
+  //   let (_stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
 
-    let ddshc = Arc::new(RwLock::new(DDSCache::new()));
-    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
+  //   let (_discovery_update_notification_sender, discovery_update_notification_receiver) =
+  //     mio_channel::channel();
 
-    let domain_info = DomainInfo {
-      domain_participant_guid: GUID::new(),
-      domain_id: 0,
-      participant_id: 0,
-    };
+  //   let ddshc = Arc::new(RwLock::new(DDSCache::new()));
+  //   let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
 
-    let dp_event_loop = DPEventLoop::new(
-      domain_info,
-      HashMap::new(),
-      ddshc,
-      discovery_db,
-      GuidPrefix::default(),
-      TokenReceiverPair {
-        token: ADD_READER_TOKEN,
-        receiver: receiver_add,
-      },
-      TokenReceiverPair {
-        token: REMOVE_READER_TOKEN,
-        receiver: receiver_remove,
-      },
-      TokenReceiverPair {
-        token: ADD_WRITER_TOKEN,
-        receiver: add_writer_receiver,
-      },
-      TokenReceiverPair {
-        token: REMOVE_WRITER_TOKEN,
-        receiver: remove_writer_receiver,
-      },
-      stop_poll_receiver,
-      discovery_update_notification_receiver,
-    );
+  //   let domain_info = DomainInfo {
+  //     domain_participant_guid: GUID::default(),
+  //     domain_id: 0,
+  //     participant_id: 0,
+  //   };
 
-    let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
-    dp_event_loop
-      .poll
-      .register(
-        &receiver_stop,
-        STOP_POLL_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .expect("Failed to register receivers.");
+  //   let dp_event_loop = DPEventLoop::new(
+  //     domain_info,
+  //     HashMap::new(),
+  //     ddshc,
+  //     discovery_db,
+  //     GuidPrefix::default(),
+  //     TokenReceiverPair {
+  //       token: ADD_READER_TOKEN,
+  //       receiver: receiver_add,
+  //     },
+  //     TokenReceiverPair {
+  //       token: REMOVE_READER_TOKEN,
+  //       receiver: receiver_remove,
+  //     },
+  //     TokenReceiverPair {
+  //       token: ADD_WRITER_TOKEN,
+  //       receiver: add_writer_receiver,
+  //     },
+  //     TokenReceiverPair {
+  //       token: REMOVE_WRITER_TOKEN,
+  //       receiver: remove_writer_receiver,
+  //     },
+  //     stop_poll_receiver,
+  //     discovery_update_notification_receiver,
+  //   );
 
-    let child = thread::spawn(move || DPEventLoop::event_loop(dp_event_loop));
+  //   let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
+  //   dp_event_loop
+  //     .poll
+  //     .register(
+  //       &receiver_stop,
+  //       STOP_POLL_TOKEN,
+  //       Ready::readable(),
+  //       PollOpt::edge(),
+  //     )
+  //     .expect("Failed to register receivers.");
 
-    //TODO IF THIS IS SET TO 1 TEST SUCCEEDS
-    let n = 1;
+  //   let child = thread::spawn(move || DPEventLoop::event_loop(dp_event_loop));
 
-    let mut reader_guids = Vec::new();
-    let mut data_readers: Vec<DataReader<RandomData, CDRDeserializerAdapter<RandomData>>> = vec![];
-    let _topics: Vec<Topic> = vec![];
-    for i in 0..n {
-      //topics.push(topic);
-      let new_guid = GUID::new();
+  //   //TODO IF THIS IS SET TO 1 TEST SUCCEEDS
+  //   let n = 1;
 
-      let (send, _rec) = mio_channel::sync_channel::<()>(100);
-      let (status_sender, status_reciever_DataReader) =
-        mio_extras::channel::sync_channel::<StatusChange>(1000);
-      let (reader_commander, reader_command_receiver) =
-        mio_extras::channel::sync_channel::<ReaderCommand>(1000);
+  //   let mut reader_guids = Vec::new();
+  //   let mut data_readers: Vec<DataReader<RandomData, CDRDeserializerAdapter<RandomData>>> = vec![];
+  //   let _topics: Vec<Topic> = vec![];
+  //   for i in 0..n {
+  //     //topics.push(topic);
+  //     let new_guid = GUID::default();
 
-      let mut new_reader = Reader::new(
-        new_guid,
-        send,
-        status_sender,
-        Arc::new(RwLock::new(DDSCache::new())),
-        "test".to_string(),
-        reader_command_receiver,
-      );
+  //     let (send, _rec) = mio_channel::sync_channel::<()>(100);
+  //     let (status_sender, status_reciever_DataReader) =
+  //       mio_extras::channel::sync_channel::<DataReaderStatus>(1000);
+  //     let (reader_commander, reader_command_receiver) =
+  //       mio_extras::channel::sync_channel::<ReaderCommand>(1000);
 
-      let somePolicies = QosPolicies {
-        durability: None,
-        presentation: None,
-        deadline: Some(Deadline(DurationDDS::from_millis(50))),
-        latency_budget: None,
-        ownership: None,
-        liveliness: None,
-        time_based_filter: None,
-        reliability: None,
-        destination_order: None,
-        history: None,
-        resource_limits: None,
-        lifespan: None,
-      };
+  //     let mut new_reader = Reader::new(
+  //       new_guid,
+  //       send,
+  //       status_sender,
+  //       Arc::new(RwLock::new(DDSCache::new())),
+  //       "test".to_string(),
+  //       QosPolicies::qos_none(),
+  //       reader_command_receiver,
+  //     );
 
-      let mut datareader = sub
-        .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-          topic_1.clone(),
-          Some(EntityId::ENTITYID_UNKNOWN),
-          Some(somePolicies.clone()),
-        )
-        .unwrap();
+  //     let somePolicies = QosPolicies {
+  //       durability: None,
+  //       presentation: None,
+  //       deadline: Some(Deadline(DurationDDS::from_millis(50))),
+  //       latency_budget: None,
+  //       ownership: None,
+  //       liveliness: None,
+  //       time_based_filter: None,
+  //       reliability: None,
+  //       destination_order: None,
+  //       history: None,
+  //       resource_limits: None,
+  //       lifespan: None,
+  //     };
 
-      datareader.set_status_change_receiver(status_reciever_DataReader);
-      datareader.set_reader_commander(reader_commander);
-      data_readers.push(datareader);
+  //     let mut datareader = sub
+  //       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
+  //         topic_1.clone(),
+  //         Some(somePolicies.clone()),
+  //       )
+  //       .unwrap();
 
-      //new_reader.set_qos(&somePolicies).unwrap();
-      new_reader.matched_writer_add(GUID::new(), EntityId::ENTITYID_UNKNOWN, vec![], vec![]);
-      reader_guids.push(new_reader.get_guid().clone());
-      info!("\nSent reader number {}: {:?}\n", i, &new_reader);
-      sender_add_reader.send(new_reader).unwrap();
-      std::thread::sleep(Duration::from_millis(100));
-    }
-    thread::sleep(Duration::from_millis(100));
+  //     datareader.set_status_change_receiver(status_reciever_DataReader);
+  //     datareader.set_reader_commander(reader_commander);
+  //     data_readers.push(datareader);
 
-    let status = data_readers
-      .get_mut(0)
-      .unwrap()
-      .get_requested_deadline_missed_status();
-    info!("Received status change: {:?}", status);
-    assert_eq!(
-      status.unwrap(),
-      Some(RequestedDeadlineMissedStatus::from_count(
-        CountWithChange::start_from(3, 3)
-      )),
-    );
-    thread::sleep(Duration::from_millis(150));
+  //     //new_reader.set_qos(&somePolicies).unwrap();
+  //     new_reader.matched_writer_add(GUID::default(), EntityId::ENTITYID_UNKNOWN, vec![], vec![]);
+  //     reader_guids.push(new_reader.get_guid().clone());
+  //     info!("\nSent reader number {}: {:?}\n", i, &new_reader);
+  //     sender_add_reader.send(new_reader).unwrap();
+  //     std::thread::sleep(Duration::from_millis(100));
+  //   }
+  //   thread::sleep(Duration::from_millis(100));
 
-    let status2 = data_readers
-      .get_mut(0)
-      .unwrap()
-      .get_requested_deadline_missed_status();
-    info!("Received status change: {:?}", status2);
-    assert_eq!(
-      status2.unwrap(),
-      Some(RequestedDeadlineMissedStatus::from_count(
-        CountWithChange::start_from(6, 3)
-      ))
-    );
+  //   let status = data_readers
+  //     .get_mut(0)
+  //     .unwrap()
+  //     .get_requested_deadline_missed_status();
+  //   info!("Received status change: {:?}", status);
+  //   assert_eq!(
+  //     status.unwrap(),
+  //     Some(RequestedDeadlineMissedStatus::from_count(
+  //       CountWithChange::start_from(3, 3)
+  //     )),
+  //   );
+  //   thread::sleep(Duration::from_millis(150));
 
-    let status3 = data_readers
-      .get_mut(0)
-      .unwrap()
-      .get_requested_deadline_missed_status();
-    info!("Received status change: {:?}", status3);
-    assert_eq!(
-      status3.unwrap(),
-      Some(RequestedDeadlineMissedStatus::from_count(
-        CountWithChange::start_from(6, 0)
-      ))
-    );
+  //   let status2 = data_readers
+  //     .get_mut(0)
+  //     .unwrap()
+  //     .get_requested_deadline_missed_status();
+  //   info!("Received status change: {:?}", status2);
+  //   assert_eq!(
+  //     status2.unwrap(),
+  //     Some(RequestedDeadlineMissedStatus::from_count(
+  //       CountWithChange::start_from(6, 3)
+  //     ))
+  //   );
 
-    thread::sleep(Duration::from_millis(50));
+  //   let status3 = data_readers
+  //     .get_mut(0)
+  //     .unwrap()
+  //     .get_requested_deadline_missed_status();
+  //   info!("Received status change: {:?}", status3);
+  //   assert_eq!(
+  //     status3.unwrap(),
+  //     Some(RequestedDeadlineMissedStatus::from_count(
+  //       CountWithChange::start_from(6, 0)
+  //     ))
+  //   );
 
-    let status4 = data_readers
-      .get_mut(0)
-      .unwrap()
-      .get_requested_deadline_missed_status();
-    info!("Received status change: {:?}", status4);
-    assert_eq!(
-      status4.unwrap(),
-      Some(RequestedDeadlineMissedStatus::from_count(
-        CountWithChange::start_from(7, 1)
-      ))
-    );
+  //   thread::sleep(Duration::from_millis(50));
 
-    info!("\nLopetustoken lähtee\n");
-    sender_stop.send(0).unwrap();
-    child.join().unwrap();
-  }
+  //   let status4 = data_readers
+  //     .get_mut(0)
+  //     .unwrap()
+  //     .get_requested_deadline_missed_status();
+  //   info!("Received status change: {:?}", status4);
+  //   assert_eq!(
+  //     status4.unwrap(),
+  //     Some(RequestedDeadlineMissedStatus::from_count(
+  //       CountWithChange::start_from(7, 1)
+  //     ))
+  //   );
+
+  //   info!("\nLopetustoken lähtee\n");
+  //   sender_stop.send(0).unwrap();
+  //   child.join().unwrap();
+  // }
 }
