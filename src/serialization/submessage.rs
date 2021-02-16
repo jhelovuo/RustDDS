@@ -30,7 +30,8 @@ impl<C: Context> Writable<C> for SubMessage {
 
 #[cfg(test)]
 mod tests {
-  use enumflags2::BitFlags;
+  use bytes::Bytes;
+    use enumflags2::BitFlags;
   use log::info;
   use super::SubMessage;
   use speedy::{Readable, Writable};
@@ -40,17 +41,17 @@ mod tests {
   #[test]
   fn submessage_data_submessage_deserialization() {
     // this is wireshark captured shapesdemo dataSubmessage
-    let serializedDataSubMessage: Vec<u8> = vec![
+    let serializedDataSubMessage = Bytes::from_static(&[
       0x15, 0x05, 0x2c, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x01,
       0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x04, 0x00,
       0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x69, 0x00, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x1e,
       0x00, 0x00, 0x00,
-    ];
+    ]);
 
     let header = SubmessageHeader::read_from_buffer(&serializedDataSubMessage[0..4])
       .expect("could not create submessage header");
     let flags = BitFlags::<DATA_Flags>::from_bits_truncate(header.flags);
-    let suba = Data::deserialize_data(&serializedDataSubMessage[4..], flags)
+    let suba = Data::deserialize_data(serializedDataSubMessage.slice(4..), flags)
       .expect("DATA deserialization failed.");
     let sub = SubMessage {
       header,

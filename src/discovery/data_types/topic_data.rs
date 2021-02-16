@@ -764,7 +764,8 @@ mod tests {
     cdr_serializer::{to_bytes},
   };
   use byteorder::LittleEndian;
-  use log::info;
+  use bytes::Bytes;
+    use log::info;
   use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
 
   use crate::{
@@ -830,7 +831,7 @@ mod tests {
   fn td_discovered_reader_data_ser_deser() {
     let mut reader_proxy = reader_proxy_data().unwrap();
     let sub_topic_data = subscription_builtin_topic_data().unwrap();
-    reader_proxy.remote_reader_guid = sub_topic_data.key.clone();
+    reader_proxy.remote_reader_guid = sub_topic_data.key.clone().unwrap();
     let content_filter = content_filter_data().unwrap();
 
     let drd = DiscoveredReaderData {
@@ -846,7 +847,7 @@ mod tests {
     let sdata2 = to_bytes::<DiscoveredReaderData, LittleEndian>(&drd2).unwrap();
     assert_eq!(sdata, sdata2);
 
-    let raw_data = [
+    let raw_data = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x00, 0x00, 0x39, 0xbc, 0xd6, 0xb1, 0x4f, 0xa2, 0x49,
       0x72, 0x81, 0x7d, 0xd4, 0x54, 0x09, 0x01, 0x08, 0x00, 0xa8, 0x3b, 0x56, 0x5f, 0xfa, 0xa6,
       0xa9, 0x75, 0x15, 0x05, 0xdc, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x04, 0xc7, 0x00,
@@ -865,9 +866,9 @@ mod tests {
       0x00, 0x00, 0x00, 0x53, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, 0x00, 0x07, 0x00, 0x0c, 0x00,
       0x07, 0x00, 0x00, 0x00, 0x53, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, 0x00, 0x01, 0x00, 0x00,
       0x00,
-    ];
+    ]);
 
-    let msg = Message::read_from_buffer(&raw_data).unwrap();
+    let msg = Message::read_from_buffer(raw_data).unwrap();
     info!("{:?}", msg);
   }
 
@@ -875,7 +876,7 @@ mod tests {
   fn td_discovered_writer_data_ser_deser() {
     let mut writer_proxy = writer_proxy_data().unwrap();
     let pub_topic_data = publication_builtin_topic_data().unwrap();
-    writer_proxy.remote_writer_guid = pub_topic_data.key.clone();
+    writer_proxy.remote_writer_guid = pub_topic_data.key.clone().unwrap();
 
     let dwd = DiscoveredWriterData {
       last_updated: Instant::now(),

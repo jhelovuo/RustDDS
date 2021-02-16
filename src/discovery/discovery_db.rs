@@ -460,7 +460,7 @@ impl DiscoveryDB {
       .map(|(_, v)| v)
   }
 
-  // TODO: return iterator somehow?
+  // // TODO: return iterator somehow?
   #[cfg(test)] // used only for testing
   pub fn get_local_topic_readers<'a, T: TopicDescription>(
     &'a self,
@@ -471,10 +471,7 @@ impl DiscoveryDB {
       .local_topic_readers
       .iter()
       .filter(|(_, p)| {
-        *match p.subscription_topic_data.topic_name().as_ref() {
-          Some(t) => t,
-          None => return false,
-        } == topic_name
+        *p.subscription_topic_data.topic_name() == topic_name
       })
       .map(|(_, p)| p)
       .collect()
@@ -510,7 +507,7 @@ mod tests {
   use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
   use std::time::Duration as StdDuration;
-  use crate::dds::values::result::StatusChange;
+  use crate::dds::statusevents::DataReaderStatus;
   use crate::dds::with_key::datareader::ReaderCommand;
 
   #[test]
@@ -546,7 +543,7 @@ mod tests {
   fn discdb_subscription_operations() {
     let mut discovery_db = DiscoveryDB::new();
 
-    let domain_participant = DomainParticipant::new(0);
+    let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant
       .create_topic(
         "Foobar",
@@ -569,13 +566,13 @@ mod tests {
       .unwrap();
     let dw = publisher1
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None, topic.clone(), None,
+        topic.clone(), None,
       )
       .unwrap();
 
     let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
 
-    let _writer_key = writer_data.writer_proxy.remote_writer_guid.unwrap().clone();
+    let _writer_key = writer_data.writer_proxy.remote_writer_guid.clone();
     discovery_db.update_local_topic_writer(writer_data);
     assert_eq!(discovery_db.local_topic_writers.len(), 1);
 
@@ -584,14 +581,13 @@ mod tests {
       .unwrap();
     let dw2 = publisher2
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None, topic.clone(), None,
+       topic.clone(), None,
       )
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
     let _writer2_key = writer_data2
       .writer_proxy
       .remote_writer_guid
-      .unwrap()
       .clone();
     discovery_db.update_local_topic_writer(writer_data2);
     assert_eq!(discovery_db.local_topic_writers.len(), 2);
@@ -599,7 +595,7 @@ mod tests {
     // creating data
     let reader1 = reader_proxy_data().unwrap();
     let mut reader1sub = subscription_builtin_topic_data().unwrap();
-    reader1sub.set_key(reader1.remote_reader_guid.unwrap());
+    reader1sub.set_key(reader1.remote_reader_guid);
     reader1sub.set_topic_name(&topic.get_name());
     let dreader1 = DiscoveredReaderData {
       reader_proxy: reader1.clone(),
@@ -610,7 +606,7 @@ mod tests {
 
     let reader2 = reader_proxy_data().unwrap();
     let mut reader2sub = subscription_builtin_topic_data().unwrap();
-    reader2sub.set_key(reader2.remote_reader_guid.unwrap());
+    reader2sub.set_key(reader2.remote_reader_guid);
     reader2sub.set_topic_name(&topic2.get_name());
     let dreader2 = DiscoveredReaderData {
       reader_proxy: reader2,
@@ -633,7 +629,7 @@ mod tests {
 
   #[test]
   fn discdb_local_topic_reader() {
-    let dp = DomainParticipant::new(0);
+    let dp = DomainParticipant::new(0).expect("Failed to create participant");
     let topic = dp
       .create_topic(
         "some topic name",
@@ -645,7 +641,7 @@ mod tests {
     let mut discoverydb = DiscoveryDB::new();
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander1, reader_command_receiver1) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
     let (_reader_commander2, reader_command_receiver2) =
@@ -657,6 +653,7 @@ mod tests {
       status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
       topic.get_name().to_string(),
+      QosPolicies::qos_none(),
       reader_command_receiver1,
     );
 
@@ -669,11 +666,15 @@ mod tests {
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
     let reader = Reader::new(
-      GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
+      GUID::new_with_prefix_and_id(GuidPrefix::new(b"Another fake"), EntityId {
+        entityKey: [1, 2, 3],
+        entityKind: EntityKind::READER_NO_KEY_USER_DEFINED
+      }), // GUID needs to be different in order to be added
       notification_sender.clone(),
       status_sender.clone(),
       Arc::new(RwLock::new(DDSCache::new())),
       topic.get_name().to_string(),
+      QosPolicies::qos_none(),
       reader_command_receiver2,
     );
 

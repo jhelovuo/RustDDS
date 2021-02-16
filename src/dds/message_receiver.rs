@@ -368,9 +368,10 @@ mod tests {
   use crate::structure::sequence_number::SequenceNumber;
 use super::*;
   use crate::{
-    dds::values::result::StatusChange, dds::writer::WriterCommand, messages::header::Header,
+    dds::writer::WriterCommand, messages::header::Header,
     dds::with_key::datareader::ReaderCommand,
   };
+  use crate::dds::statusevents::DataReaderStatus;
   use crate::speedy::{Writable, Readable};
   use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
   use crate::serialization::cdr_serializer::to_bytes;
@@ -383,6 +384,7 @@ use super::*;
   use std::sync::{RwLock, Arc};
 
   use crate::structure::topic_kind::TopicKind;
+  use crate::structure::guid::EntityKind;
   use crate::dds::{qos::QosPolicies, typedesc::TypeDesc};
 
   #[test]
@@ -391,7 +393,7 @@ use super::*;
     // Data message should contain Shapetype values.
     // caprured with wireshark from shapes demo.
     // Udp packet with INFO_DST, INFO_TS, DATA, HEARTBEAT
-    let udp_bits1: Vec<u8> = vec![
+    let udp_bits1 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
       0x00, 0x01, 0x00, 0x00, 0x00, 0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d,
       0x31, 0xa2, 0x28, 0x20, 0x02, 0x08, 0x09, 0x01, 0x08, 0x00, 0x1a, 0x15, 0xf3, 0x5e, 0x00,
@@ -401,10 +403,10 @@ use super::*;
       0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x07, 0x01, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00,
       0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00,
-    ];
+    ]);
 
     // this guid prefix is set here because exaple message target is this.
-    let guiPrefix = GuidPrefix::new(vec![
+    let guiPrefix = GuidPrefix::new(&[
       0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
     ]);
 
@@ -412,12 +414,12 @@ use super::*;
       mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
     let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
 
-    let entity = EntityId::createCustomEntityID([0, 0, 0], 7);
+    let entity = EntityId::createCustomEntityID([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
 
     new_guid.from_prefix(entity);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
@@ -425,7 +427,7 @@ use super::*;
     dds_cache.write().unwrap().add_new_topic(
       &"test".to_string(),
       TopicKind::NoKey,
-      TypeDesc::new("testi".to_string()),
+      TypeDesc::new("testi"),
     );
     let new_reader = Reader::new(
       new_guid,
@@ -433,6 +435,7 @@ use super::*;
       status_sender,
       dds_cache,
       "test".to_string(),
+      QosPolicies::qos_none(), // TODO: Check intended qos
       reader_command_receiver,
     );
 
@@ -440,7 +443,7 @@ use super::*;
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);
     message_receiver.add_reader(new_reader);
 
-    message_receiver.handle_user_msg(udp_bits1.clone());
+    message_receiver.handle_received_packet(udp_bits1.clone());
 
     assert_eq!(message_receiver.submessage_count, 4);
 
@@ -475,7 +478,7 @@ use super::*;
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<WriterCommand>();
     let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
     let mut _writerObject = Writer::new(
-      GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], 2)),
+      GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
       hccc_download,
       Arc::new(RwLock::new(DDSCache::new())),
       String::from("topicName1"),
@@ -492,7 +495,7 @@ use super::*;
   #[test]
   fn mr_test_submsg_count() {
     // Udp packet with INFO_DST, INFO_TS, DATA, HEARTBEAT
-    let udp_bits1: Vec<u8> = vec![
+    let udp_bits1 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
       0x00, 0x01, 0x00, 0x00, 0x00, 0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d,
       0x31, 0xa2, 0x28, 0x20, 0x02, 0x08, 0x09, 0x01, 0x08, 0x00, 0x18, 0x15, 0xf3, 0x5e, 0x00,
@@ -502,31 +505,31 @@ use super::*;
       0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x07, 0x01, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00,
       0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x43, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
-    ];
+    ]);
     // Udp packet with INFO_DST, ACKNACK
-    let udp_bits2: Vec<u8> = vec![
+    let udp_bits2 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
       0x00, 0x01, 0x00, 0x00, 0x00, 0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d,
       0x31, 0xa2, 0x28, 0x20, 0x02, 0x08, 0x06, 0x03, 0x18, 0x00, 0x00, 0x00, 0x04, 0xc7, 0x00,
       0x00, 0x04, 0xc2, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x03, 0x00, 0x00, 0x00,
-    ];
+    ]);
 
-    let guid_new = GUID::new();
+    let guid_new = GUID::default();
     let (acknack_sender, _acknack_reciever) =
       mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
     let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
 
-    message_receiver.handle_user_msg(udp_bits1);
+    message_receiver.handle_received_packet(udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);
 
-    message_receiver.handle_user_msg(udp_bits2);
+    message_receiver.handle_received_packet(udp_bits2);
     assert_eq!(message_receiver.submessage_count, 2);
   }
 
   #[test]
   fn mr_test_header() {
-    let guid_new = GUID::new();
+    let guid_new = GUID::default();
     let header = Header::new(guid_new.guidPrefix);
 
     let bytes = header.write_to_vec().unwrap();

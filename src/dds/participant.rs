@@ -781,7 +781,7 @@ impl std::fmt::Debug for DomainParticipant {
 
 #[cfg(test)]
 mod tests {
-  use std::{net::SocketAddr};
+  use std::{collections::BTreeSet, net::SocketAddr};
   use enumflags2::BitFlags;
   use log::info;
   use crate::{dds::topic::TopicKind, speedy::Writable};
@@ -797,7 +797,6 @@ mod tests {
     messages::submessages::submessages::{
       EntitySubmessage, AckNack, SubmessageHeader, SubmessageKind,
     },
-    common::bit_set::BitSetRef,
     serialization::{SubMessage, Message, submessage::*},
     messages::{
       protocol_version::ProtocolVersion, header::Header, vendor_id::VendorId,
@@ -825,7 +824,7 @@ mod tests {
   }
   #[test]
   fn dp_writer_hearbeat_test() {
-    let domain_participant = DomainParticipant::new(0);
+    let domain_participant = DomainParticipant::new(0).expect("Participant creation failed!");
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     let publisher = domain_participant
@@ -838,7 +837,7 @@ mod tests {
 
     let mut _data_writer = publisher
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None, topic, None,
+        topic, None,
       )
       .expect("Failed to create datawriter");
   }
@@ -846,7 +845,7 @@ mod tests {
   #[test]
   fn dp_recieve_acknack_message_test() {
     // TODO SEND ACKNACK
-    let domain_participant = DomainParticipant::new(0);
+    let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
 
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
@@ -861,7 +860,7 @@ mod tests {
 
     let mut _data_writer = publisher
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        None, topic, None,
+        topic, None,
       )
       .expect("Failed to create datawriter");
 
@@ -869,13 +868,11 @@ mod tests {
     let _sender = UDPSender::new(1234);
     let mut m: Message = Message::default();
 
+
     let a: AckNack = AckNack {
       reader_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
       writer_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
-      reader_sn_state: SequenceNumberSet {
-        base: SequenceNumber::default(),
-        set: BitSetRef::new(),
-      },
+      reader_sn_state: SequenceNumberSet::from_base_and_set(SequenceNumber::default(), &BTreeSet::new()),
       count: 1,
     };
     let flags = BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::BigEndian);
@@ -893,7 +890,7 @@ mod tests {
       protocol_id: ProtocolId::default(),
       protocol_version: ProtocolVersion { major: 2, minor: 3 },
       vendor_id: VendorId::THIS_IMPLEMENTATION,
-      guid_prefix: GUID::new().guidPrefix,
+      guid_prefix: GUID::default().guidPrefix,
     };
     m.set_header(h);
     m.add_submessage(SubMessage::from(s));

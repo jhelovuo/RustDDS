@@ -1,4 +1,4 @@
-pub(crate) fn spdp_participant_data_raw() -> Vec<u8> {
+pub(crate) fn spdp_participant_data_raw() -> Bytes {
   const data: [u8; 204] = [
     // Offset 0x00000000 to 0x00000203
     0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00,
@@ -16,10 +16,10 @@ pub(crate) fn spdp_participant_data_raw() -> Vec<u8> {
     0x69, 0x63, 0x69, 0x70, 0x61, 0x6e, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00,
   ];
 
-  data.to_vec()
+  Bytes::from_static(&data)
 }
 
-pub(crate) fn spdp_subscription_data_raw() -> Vec<u8> {
+pub(crate) fn spdp_subscription_data_raw() -> Bytes {
   const DATA: [u8; 248] = [
     // Offset 0x00000000 to 0x00000247
     0x52, 0x54, 0x50, 0x53, 0x02, 0x04, 0x01, 0x03, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2,
@@ -39,10 +39,10 @@ pub(crate) fn spdp_subscription_data_raw() -> Vec<u8> {
     0xa6, 0x96, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0xac, 0x11, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00,
   ];
-  DATA.to_vec()
+  Bytes::from_static(&DATA)
 }
 
-pub(crate) fn spdp_publication_data_raw() -> Vec<u8> {
+pub(crate) fn spdp_publication_data_raw() -> Bytes {
   const DATA: [u8; 352] = [
     // Offset 0x00000000 to 0x00000351
     0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00,
@@ -69,7 +69,7 @@ pub(crate) fn spdp_publication_data_raw() -> Vec<u8> {
     0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
   ];
 
-  DATA.to_vec()
+  Bytes::from_static(&DATA)
 }
 
 use crate::{
@@ -109,6 +109,7 @@ use crate::{
     sequence_number::SequenceNumber,
   },
 };
+use bytes::Bytes;
 use speedy::{Endianness, Writable};
 use std::{net::SocketAddr, time::Duration as StdDuration};
 use serde::Serialize;
@@ -119,21 +120,21 @@ use crate::messages::submessages::submessages::*;
 pub(crate) fn spdp_participant_msg() -> Message {
   let data = spdp_participant_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer(&data).unwrap();
+  let rtpsmsg = Message::read_from_buffer(data).unwrap();
   rtpsmsg
 }
 
 pub(crate) fn spdp_subscription_msg() -> Message {
   let data = spdp_subscription_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer(&data).unwrap();
+  let rtpsmsg = Message::read_from_buffer(data).unwrap();
   rtpsmsg
 }
 
 pub(crate) fn spdp_publication_msg() -> Message {
   let data = spdp_publication_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer(&data).unwrap();
+  let rtpsmsg = Message::read_from_buffer(data).unwrap();
   rtpsmsg
 }
 
@@ -159,8 +160,8 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
 
           let datalen = d.serialized_payload.as_ref().unwrap().value.len() as u16;
           data =
-            to_bytes::<SPDPDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
-              .unwrap();
+            Bytes::from(to_bytes::<SPDPDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
+              .unwrap());
           d.serialized_payload.as_mut().unwrap().value = data.clone();
           submsglen =
             submsglen + d.serialized_payload.as_ref().unwrap().value.len() as u16 - datalen;
@@ -178,7 +179,7 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
 pub(crate) fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
   let data = spdp_participant_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer(&data).unwrap();
+  let rtpsmsg = Message::read_from_buffer(data).unwrap();
   let submsgs = rtpsmsg.submessages();
 
   for submsg in submsgs.iter() {
@@ -204,8 +205,8 @@ pub(crate) fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
 
 pub(crate) fn reader_proxy_data() -> Option<ReaderProxy> {
   let reader_proxy = ReaderProxy {
-    remote_reader_guid: Some(GUID::dummy_test_guid(EntiTyKind::READER_NO_KEY_USER_DEFINED)),
-    expects_inline_qos: Some(false),
+    remote_reader_guid: GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
+    expects_inline_qos: false,
     unicast_locator_list: vec![Locator::from(SocketAddr::new(
       "0.0.0.0".parse().unwrap(),
       12345,
@@ -221,7 +222,7 @@ pub(crate) fn reader_proxy_data() -> Option<ReaderProxy> {
 
 pub(crate) fn writer_proxy_data() -> Option<WriterProxy> {
   let writer_proxy = WriterProxy {
-    remote_writer_guid: Some(GUID::dummy_test_guid(EntiTyKind::WRITER_NO_KEY_USER_DEFINED)),
+    remote_writer_guid: GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED),
     unicast_locator_list: vec![Locator::from(SocketAddr::new(
       "0.0.0.0".parse().unwrap(),
       12345,
@@ -274,8 +275,8 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
   let pub_topic_data = PublicationBuiltinTopicData {
     key: Some(GUID::dummy_test_guid(EntityKind::WRITER_WITH_KEY_BUILT_IN)),
     participant_key: Some(GUID::dummy_test_guid(EntityKind::PARTICIPANT_BUILT_IN)),
-    topic_name: Some("rand topic namm".to_string()),
-    type_name: Some("RandomData".to_string()),
+    topic_name: "rand topic namm".to_string(),
+    type_name: "RandomData".to_string(),
     durability: Some(Durability::Volatile),
     deadline: Some(Deadline(Duration::from_secs(30))),
     latency_budget: Some(LatencyBudget {
@@ -306,8 +307,8 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
 pub(crate) fn topic_data() -> Option<TopicBuiltinTopicData> {
   let topic_data = TopicBuiltinTopicData {
     key: Some(GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN)),
-    name: Some("SomeTopicName".to_string()),
-    type_name: Some("RandomData".to_string()),
+    name: "SomeTopicName".to_string(),
+    type_name: "RandomData".to_string(),
     durability: Some(Durability::Persistent),
     deadline: Some(Deadline(Duration::from_secs(45))),
     latency_budget: Some(LatencyBudget {
@@ -355,7 +356,7 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
   reader_id: EntityId,
   writer_id: EntityId,
 ) -> Message {
-  let tdata = to_bytes::<D, LittleEndian>(&data).unwrap();
+  let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
 
   let mut rtps_message = Message::default();
   let prefix = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
@@ -363,7 +364,7 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
   rtps_message.set_header(rtps_message_header);
 
   let serialized_payload = SerializedPayload {
-    representation_identifier: u16::from(RepresentationIdentifier::PL_CDR_LE),
+    representation_identifier: RepresentationIdentifier::PL_CDR_LE,
     representation_options: [0; 2],
     value: tdata.clone(),
   };

@@ -1132,16 +1132,19 @@ mod tests {
   use crate::dds::{participant::DomainParticipant, topic::TopicKind};
   use crate::test::random_data::*;
   use crate::dds::traits::key::Keyed;
+  use bytes::Bytes;
   use mio_extras::channel as mio_channel;
   use log::info;
   use crate::dds::reader::Reader;
   use crate::messages::submessages::data::Data;
   use crate::dds::message_receiver::*;
-  use crate::structure::guid::GuidPrefix;
+  use crate::structure::guid::{GuidPrefix, EntityKind};
   use crate::structure::sequence_number::SequenceNumber;
   use crate::serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes};
   use byteorder::LittleEndian;
-  use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+  use crate::messages::submessages::submessage_elements::serialized_payload::{
+    SerializedPayload, RepresentationIdentifier,
+  };
   use std::{
     thread,
     time::{self},
@@ -1149,7 +1152,7 @@ mod tests {
   use mio::{Events};
   #[test]
   fn dr_get_samples_from_ddschache() {
-    let dp = DomainParticipant::new(0);
+    let dp = DomainParticipant::new(0).expect("Participant creation failed");
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll);
 
@@ -1159,7 +1162,8 @@ mod tests {
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (status_sender, _status_reciever) =
+      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
@@ -1173,15 +1177,12 @@ mod tests {
       status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
+      QosPolicies::qos_none(),
       reader_command_receiver,
     );
 
     let mut matching_datareader = sub
-      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        topic,
-        Some(datareader_id),
-        None,
-      )
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)
       .unwrap();
 
     let random_data = RandomData {
@@ -1191,8 +1192,8 @@ mod tests {
     let data_key = random_data.get_key();
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(vec![1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], 1),
+      guidPrefix: GuidPrefix::new(&[1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
@@ -1205,14 +1206,14 @@ mod tests {
     );
 
     let mut data = Data::default();
-    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
     data.writer_id = writer_guid.entityId;
     data.writer_sn = SequenceNumber::from(0);
 
     data.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&random_data).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data).unwrap()), /* TODO: Can RandomData be transformed to bytes directly? */
     });
     new_reader.handle_data_msg(data, mr_state.clone());
 
@@ -1230,14 +1231,14 @@ mod tests {
       b: "somedata number 2".to_string(),
     };
     let mut data2 = Data::default();
-    data2.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data2.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
     data2.writer_id = writer_guid.entityId;
     data2.writer_sn = SequenceNumber::from(1);
 
     data2.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap()),
     });
 
     let random_data3 = RandomData {
@@ -1245,14 +1246,14 @@ mod tests {
       b: "third somedata".to_string(),
     };
     let mut data3 = Data::default();
-    data3.reader_id = EntityId::createCustomEntityID([1, 2, 3], 111);
+    data3.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
     data3.writer_id = writer_guid.entityId;
     data3.writer_sn = SequenceNumber::from(2);
 
     data3.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap()),
     });
 
     new_reader.handle_data_msg(data2, mr_state.clone());
@@ -1267,7 +1268,7 @@ mod tests {
 
   #[test]
   fn dr_read_and_take() {
-    let dp = DomainParticipant::new(0);
+    let dp = DomainParticipant::new(0).expect("Particpant creation failed!");
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing
@@ -1278,7 +1279,8 @@ mod tests {
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (status_sender, _status_reciever) =
+      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
@@ -1291,20 +1293,17 @@ mod tests {
       status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
+      QosPolicies::qos_none(),
       reader_command_receiver,
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        topic,
-        Some(default_id),
-        None,
-      )
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)
       .unwrap();
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(vec![1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], 1),
+      guidPrefix: GuidPrefix::new(&[1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
@@ -1332,9 +1331,9 @@ mod tests {
     data_msg.writer_sn = SequenceNumber::from(0);
 
     data_msg.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&test_data).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data).unwrap()),
     });
 
     let mut data_msg2 = Data::default();
@@ -1343,9 +1342,9 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(1);
 
     data_msg2.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
     });
     reader.handle_data_msg(data_msg, mr_state.clone());
     reader.handle_data_msg(data_msg2, mr_state.clone());
@@ -1380,7 +1379,7 @@ mod tests {
     assert!(result_vec2.is_ok());
     assert_eq!(result_vec2.unwrap().len(), 0);
 
-    //datareader.
+    // datareader.
 
     // Read and take tests with instant
 
@@ -1413,9 +1412,9 @@ mod tests {
     data_msg.writer_sn = SequenceNumber::from(2);
 
     data_msg.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
     });
     let mut data_msg2 = Data::default();
     data_msg2.reader_id = reader.get_entity_id();
@@ -1423,9 +1422,9 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(3);
 
     data_msg2.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
     });
     let mut data_msg3 = Data::default();
     data_msg3.reader_id = reader.get_entity_id();
@@ -1433,9 +1432,9 @@ mod tests {
     data_msg3.writer_sn = SequenceNumber::from(4);
 
     data_msg3.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
     });
     let mut data_msg4 = Data::default();
     data_msg4.reader_id = reader.get_entity_id();
@@ -1443,9 +1442,9 @@ mod tests {
     data_msg4.writer_sn = SequenceNumber::from(5);
 
     data_msg4.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
     });
     reader.handle_data_msg(data_msg, mr_state.clone());
     reader.handle_data_msg(data_msg2, mr_state.clone());
@@ -1492,7 +1491,7 @@ mod tests {
 
   #[test]
   fn dr_wake_up() {
-    let dp = DomainParticipant::new(0);
+    let dp = DomainParticipant::new(0).expect("Publisher creation failed!");
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing
@@ -1503,7 +1502,8 @@ mod tests {
       .unwrap();
 
     let (send, rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<StatusChange>(100);
+    let (status_sender, _status_reciever) =
+      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
@@ -1516,21 +1516,18 @@ mod tests {
       status_sender,
       dp.get_dds_cache(),
       topic.get_name().to_string(),
+      QosPolicies::qos_none(),
       reader_command_receiver,
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(
-        topic,
-        Some(default_id),
-        None,
-      )
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)
       .unwrap();
     datareader.notification_receiver = rec;
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(vec![1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], 1),
+      guidPrefix: GuidPrefix::new(&[1; 12]),
+      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guidPrefix;
@@ -1562,9 +1559,9 @@ mod tests {
     data_msg.writer_sn = SequenceNumber::from(0);
 
     data_msg.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data1).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, byteorder::LittleEndian>(&test_data1).unwrap()),
     });
 
     let mut data_msg2 = Data::default();
@@ -1573,9 +1570,9 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(1);
 
     data_msg2.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data2).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, byteorder::LittleEndian>(&test_data2).unwrap()),
     });
 
     let mut data_msg3 = Data::default();
@@ -1584,9 +1581,9 @@ mod tests {
     data_msg3.writer_sn = SequenceNumber::from(2);
 
     data_msg3.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE as u16,
+      representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
-      value: to_bytes::<RandomData, byteorder::LittleEndian>(&test_data3).unwrap(),
+      value: Bytes::from(to_bytes::<RandomData, byteorder::LittleEndian>(&test_data3).unwrap()),
     });
 
     let handle = std::thread::spawn(move || {
