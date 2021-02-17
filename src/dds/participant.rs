@@ -224,13 +224,7 @@ impl DomainParticipant {
   /// domain_participant.assert_liveliness();
   /// ```
   pub fn assert_liveliness(self) -> Result<()>{
-    // No point in checking for the LIVELINESS QoS of MANUAL_BY_PARTICIPANT,
-    // the discovery command mutates a field which is only read
-    // by writers with that particular QoS.
-    self.dpi.lock().unwrap()
-        .discovery_command_channel.send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
-        .unwrap_or_else( |e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e));
-        Ok(())
+    self.dpi.lock().unwrap().assert_liveliness()
   }
 
 
@@ -419,6 +413,14 @@ impl DomainParticipant_Disc {
     return self.dpi.lock().unwrap().discovery_db.clone();
   }
 
+  pub(crate) fn assert_liveliness(&self) -> Result<()> {
+    // No point in checking for the LIVELINESS QoS of MANUAL_BY_PARTICIPANT,
+    // the discovery command mutates a field which is only read
+    // by writers with that particular QoS.
+    self.discovery_command_channel.send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
+        .unwrap_or_else( |e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e));
+    Ok(())
+  }
 }
 
 impl Drop for DomainParticipant_Disc {
