@@ -12,12 +12,14 @@ use mio::{Evented, Poll, PollOpt, Ready, Token};
 use crate::{
   serialization::CDRDeserializerAdapter,
   discovery::discovery::DiscoveryCommand,
+  discovery::data_types::topic_data::PublicationBuiltinTopicData,
   structure::{
     entity::{RTPSEntity, },
     guid::{GUID, EntityId},
     time::Timestamp,
     dds_cache::DDSCache,
     cache_change::{CacheChange, ChangeKind},
+    duration::Duration,
   },
 };
 use crate::log_and_err_precondition_not_met;
@@ -1052,6 +1054,26 @@ where
     self.reset_local_requested_deadline_status_change();
     return Ok(value_before_reset);
   } */
+
+  /// Return values:
+  /// true - got all historical data
+  /// false - timeout before all historical data was received
+  pub fn wait_for_historical_data(&self, _max_wait: Duration) -> bool {
+    todo!()
+  }
+
+  // Spec calls for two separate functions:
+  // get_matched_publications returns a list of handles
+  // get_matched_publication_data returns PublicationBuiltinTopicData for a handle
+  // But we do not believe in handle-oriented programming, so just return
+  // the actual data right away. Since the handles are quite opaque, about the
+  // only thing that could be done with the handles would be counting how many
+  // we got. 
+
+  pub fn get_matched_publications(&self) -> impl Iterator<Item=PublicationBuiltinTopicData> {
+    vec![].into_iter()
+  }
+
 } // impl
 
 
