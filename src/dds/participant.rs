@@ -212,6 +212,22 @@ impl DomainParticipant {
     self.dpi.lock().unwrap().get_discovered_topics()
   }
 
+  /// Manually asserts liveliness, affecting all writers with 
+  /// LIVELINESS QoS of MANUAL_BY_PARTICIPANT created by 
+  /// this particular participant.
+  ///
+  /// # Example
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
+  /// domain_participant.assert_liveliness();
+  /// ```
+  pub fn assert_liveliness(self) -> Result<()>{
+    self.dpi.lock().unwrap().assert_liveliness()
+  }
+
+
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
     DomainParticipantWeak::new(self.clone(), self.get_guid())
   }
@@ -397,6 +413,14 @@ impl DomainParticipant_Disc {
     return self.dpi.lock().unwrap().discovery_db.clone();
   }
 
+  pub(crate) fn assert_liveliness(&self) -> Result<()> {
+    // No point in checking for the LIVELINESS QoS of MANUAL_BY_PARTICIPANT,
+    // the discovery command mutates a field which is only read
+    // by writers with that particular QoS.
+    self.discovery_command_channel.send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
+        .unwrap_or_else( |e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e));
+    Ok(())
+  }
 }
 
 impl Drop for DomainParticipant_Disc {
@@ -712,10 +736,6 @@ impl DomainParticipant_Inner {
 
   // delete_contained_entities is not needed. Data structures shoud be designed so that lifetime of all
   // created objects is within the lifetime of DomainParticipant. Then such deletion is implicit.
-
-  pub fn assert_liveliness(self) {
-    unimplemented!()
-  }
 
   // The following methods are not for application use.
 
