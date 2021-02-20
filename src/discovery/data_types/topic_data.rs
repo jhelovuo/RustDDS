@@ -565,7 +565,7 @@ impl DiscoveredWriterData {
     }
   }
 
-  pub fn update(&mut self, rtps_writer_proxy: &RtpsWriterProxy) {
+  pub(crate) fn update(&mut self, rtps_writer_proxy: &RtpsWriterProxy) {
     self.writer_proxy.remote_writer_guid = rtps_writer_proxy.remote_writer_guid.clone();
     self.writer_proxy.unicast_locator_list = rtps_writer_proxy.unicast_locator_list.clone();
     self.writer_proxy.multicast_locator_list = rtps_writer_proxy.multicast_locator_list.clone();

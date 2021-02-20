@@ -4,7 +4,7 @@ use std::{
   time::Duration,
 };
 
-use mio::Evented;
+use mio::{Poll, Events, Token, Ready, PollOpt, Evented};
 use mio_extras::channel::{self as mio_channel, Receiver};
 
 use serde::Serialize;
@@ -24,6 +24,8 @@ use crate::structure::{
 use crate::dds::pubsub::Publisher;
 use crate::dds::topic::Topic;
 use crate::log_and_err_precondition_not_met;
+use crate::log_and_err_internal;
+
 use crate::dds::values::result::{ Result, Error, };
 use crate::dds::statusevents::*;
 use crate::dds::traits::dds_entity::DDSEntity;
@@ -295,7 +297,20 @@ where
     }
   }
 
-  /// Waits for all acknowledgements to finish
+  /// This operation blocks the calling thread until either all data written by the 
+  /// reliable DataWriter entities is acknowledged by all
+  /// matched reliable DataReader entities, or else the duration specified by the 
+  /// `max_wait` parameter elapses, whichever happens first.
+  ///
+  /// See DDS Spec 1.4 Section 2.2.2.4.1.12 wait_for_acknowledgments.
+  ///
+  /// If this DataWriter is not set to Realiable, or there are no matched DataReaders
+  /// with Realibale QoS, the call succeeds imediately.
+  ///
+  /// Return values
+  /// * `Ok(true)` - all acknowledged 
+  /// * `Ok(false)`- timed out waiting for acknowledgments
+  /// * `Err(_)` - something went wrong 
   ///
   /// # Examples
   ///
@@ -330,23 +345,30 @@ where
   /// data_writer.write(some_data, None).unwrap();
   /// data_writer.wait_for_acknowledgments(std::time::Duration::from_millis(100));
   /// ```
-  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
+  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<bool> {
     match &self.qos_policy.reliability {
-      Some(rel) => match rel {
-        Reliability::BestEffort => return Ok(()),
-        Reliability::Reliable {
-          max_blocking_time: _,
-        } =>
-        // TODO: implement actual waiting for acks
-        {
-          ()
+      None => Ok(true),
+      Some(Reliability::BestEffort) => Ok(true),
+      Some(Reliability::Reliable { .. }) => {
+        let (acked_sender,acked_receiver) = mio_channel::sync_channel::<()>(1);
+        let poll = Poll::new()?;
+        poll.register(&acked_receiver, Token(0), Ready::readable(), PollOpt::edge() )?;
+        self.cc_upload.try_send(
+          WriterCommand::WaitForAcknowledgments { all_acked: acked_sender })?;
+        let mut events = Events::with_capacity(1);
+        poll.poll(&mut events, Some(max_wait) )?;
+        if let Some( _event ) = events.iter().next() {
+          let _ = acked_receiver.try_recv()
+            .or_else(|_e| log_and_err_internal!(
+              "wait_for_acknowledgments - Spurious poll event?"));
+          // got reply
+          Ok(true)
+        } else {
+          // no token, so presumably timed out
+          Ok(false)
         }
-      },
-      None => return Ok(()),
-    };
-
-    // TODO: wait for actual acknowledgements to writers writes
-    return Err(Error::Unsupported);
+      }
+    } // match
   }
   /*
   /// Gets mio Receiver for all status changes

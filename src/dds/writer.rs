@@ -145,12 +145,22 @@ pub(crate) struct Writer {
   // Used for sending status info about messages sent
   status_sender: SyncSender<DataWriterStatus>,
   //offered_deadline_status: OfferedDeadlineMissedStatus,
+
+  ack_waiter: Option<AckWaiter>,
 }
 
 pub(crate) enum WriterCommand {
   DDSData { data: DDSData },
+  WaitForAcknowledgments { all_acked : mio_channel::SyncSender<()> },
   //ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }
+
+struct AckWaiter {
+  wait_until: SequenceNumber,
+  complete_channel: SyncSender<()>,
+  readers_pending:  BTreeSet<GUID>,
+}
+
 
 impl Writer {
   pub fn new(
@@ -215,6 +225,7 @@ impl Writer {
       qos_policies,
       status_sender,
       //offered_deadline_status: OfferedDeadlineMissedStatus::new(),
+      ack_waiter: None,
     }
   }
 
@@ -345,6 +356,27 @@ impl Writer {
         // WriterCommand::ResetOfferedDeadlineMissedStatus { writer_guid: _, } => {
         //   self.reset_offered_deadline_missed_status();
         // }
+        WriterCommand::WaitForAcknowledgments{ all_acked } => {
+          let wait_until = self.last_change_sequence_number;
+          let readers_pending: BTreeSet<_> = self.readers.iter()
+              .filter_map( |(guid,rp)| {
+                  if let Some(_) = rp.qos().reliability() {
+                    if rp.all_acked_before <= wait_until { Some(*guid) } else { None } // already acked
+                  } else { None } // not reliable reader
+                } )
+              .collect();
+          if readers_pending.is_empty() {
+            // all acked already
+            let _ = all_acked.try_send(()); // may fail, if receiver has timeouted
+            self.ack_waiter = None;
+          } else {
+            self.ack_waiter = Some(AckWaiter {
+              wait_until, 
+              complete_channel: all_acked,
+              readers_pending,
+            });
+          }
+        }
       }
     }
   }
@@ -458,6 +490,11 @@ impl Writer {
     }
     // Update the ReaderProxy
     let last_seq = self.last_change_sequence_number; // to avoid borrow problems
+
+    self.update_ack_waiters( 
+      GUID::new(reader_guid_prefix, an.reader_id) , 
+      Some(an.reader_sn_state.base()));
+
     if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
 
         reader_proxy.handle_ack_nack(&an, last_seq);
@@ -499,6 +536,27 @@ impl Writer {
           );
         }
     }
+  }
+
+  fn update_ack_waiters(&mut self, guid:GUID, acked_before:Option<SequenceNumber>) {
+    let mut completed = false;
+    match &mut self.ack_waiter {
+      Some(aw) => match acked_before { 
+        None => { aw.readers_pending.remove(&guid); }
+        Some(acked_before) => {
+          if aw.wait_until < acked_before { 
+            aw.readers_pending.remove(&guid);
+          }
+          if aw.readers_pending.is_empty() {
+            // it is normal for the send to fail, because receiver may have timeouted
+            let _ = aw.complete_channel.try_send( () );
+            completed = true;
+          }
+        }
+      }
+      None => (),
+    }
+    if completed { self.ack_waiter = None; }
   }
 
   // Send out missing data
@@ -740,6 +798,8 @@ impl Writer {
                 current: CountWithChange::new(self.readers.len() as i32 , -1)
               });
     }
+    // also remember to remove reader from ack_waiter
+    self.update_ack_waiters(guid,None)
   }
 
   // Entire remote participant was lost.

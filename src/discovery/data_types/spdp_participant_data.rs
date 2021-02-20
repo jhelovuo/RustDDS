@@ -11,6 +11,7 @@ use crate::{
   },
   network::util::get_local_multicast_locators,
   network::util::get_local_unicast_socket_address,
+  dds::qos::QosPolicies,
 };
 
 use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
@@ -68,7 +69,9 @@ impl SPDPDiscoveredParticipantData {
       },
     );
 
-    let mut proxy = RtpsReaderProxy::new(remote_reader_guid);
+    let mut proxy = RtpsReaderProxy::new( remote_reader_guid,
+        QosPolicies::qos_none() // TODO: What is the correct QoS value here?
+      );
     proxy.expects_in_line_qos = self.expects_inline_qos;
 
     if !is_metatraffic {

@@ -126,7 +126,7 @@ where
   ///
   /// data_writer.wait_for_acknowledgments(Duration::from_millis(100));
   /// ```
-  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
+  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<bool> {
     self.keyed_datawriter.wait_for_acknowledgments(max_wait)
   }
   /*

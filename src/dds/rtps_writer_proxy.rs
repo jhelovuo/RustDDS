@@ -9,7 +9,7 @@ use std::collections::HashMap;
 //use std::time::Instant;
 
 #[derive(Debug)]
-pub struct RtpsWriterProxy {
+pub(crate) struct RtpsWriterProxy {
   /// Identifies the remote matched Writer
   pub remote_writer_guid: GUID,
 

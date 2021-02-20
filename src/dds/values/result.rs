@@ -4,6 +4,8 @@ use std::result;
 #[allow(unused_imports)]
 use log::{debug, info, warn, trace, error};
 
+use mio_extras::channel::{TrySendError};
+
 /// This is a specialized Result, similar to std::io::Result
 pub type Result<T> = result::Result<T, Error>;
 
@@ -104,7 +106,16 @@ impl From<std::io::Error> for Error {
 }
 
 impl<T> From<std::sync::PoisonError<T>> for Error {
-  fn from(_e:std::sync::PoisonError<T>) -> Error {
+  fn from(_e : std::sync::PoisonError<T>) -> Error {
     Error::LockPoisoned
   }
 }
+
+impl<T> From<TrySendError<T>> for Error 
+where TrySendError<T> : std::error::Error 
+{
+  fn from(e : TrySendError<T>) -> Error {
+    Error::Internal{reason: format!("Cannot send to internal mio channel: {:?}",e) }
+  }
+}
+

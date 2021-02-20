@@ -12,6 +12,7 @@ use crate::{
     locator::{Locator, LocatorList},
     sequence_number::{SequenceNumber},
   },
+  dds::qos::{QosPolicies, HasQoSPolicy},
   messages::submessages::submessages::{AckNack},
   discovery::data_types::topic_data::DiscoveredReaderData,
 };
@@ -50,10 +51,11 @@ pub(crate) struct RtpsReaderProxy {
   // true = send repair data messages due to NACKs, buffer messages by DataWriter
   // false = send data messages directly from DataWriter
   pub repair_mode : bool,
+  pub qos : QosPolicies,
 }
 
 impl RtpsReaderProxy {
-  pub fn new(remote_reader_guid: GUID) -> RtpsReaderProxy {
+  pub fn new(remote_reader_guid: GUID, qos: QosPolicies) -> RtpsReaderProxy {
     RtpsReaderProxy {
       remote_reader_guid,
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
@@ -64,7 +66,12 @@ impl RtpsReaderProxy {
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
+      qos,
     }
+  }
+
+  pub fn qos(&self) -> &QosPolicies {
+    &self.qos
   }
 
   pub fn from_reader(reader: &Reader, domain_id: u16, participant_id: u16) -> RtpsReaderProxy {
@@ -84,6 +91,7 @@ impl RtpsReaderProxy {
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
+      qos: reader.get_qos().clone(),
     }
   }
 
@@ -117,6 +125,7 @@ impl RtpsReaderProxy {
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
+      qos: discovered_reader_data.subscription_topic_data.generate_qos(),
     }
   }
 
@@ -146,6 +155,7 @@ impl RtpsReaderProxy {
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
+      qos: QosPolicies::qos_none(),
     }
   }
 

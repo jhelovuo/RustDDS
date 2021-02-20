@@ -189,7 +189,7 @@ pub struct QosPolicies {
 }
 
 impl QosPolicies {
-  #[cfg(test)]
+  // #[cfg(test)]
   pub const fn qos_none() -> QosPolicies {
     QosPolicies {
       durability: None,
