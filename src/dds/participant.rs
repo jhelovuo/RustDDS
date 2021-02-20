@@ -418,8 +418,10 @@ impl DomainParticipant_Disc {
     // the discovery command mutates a field which is only read
     // by writers with that particular QoS.
     self.discovery_command_channel.send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
-        .unwrap_or_else( |e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e));
-    Ok(())
+        .or_else( |e| {
+          log_and_err_internal!(
+            "assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
+        })
   }
 }
 
