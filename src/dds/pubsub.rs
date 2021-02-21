@@ -64,7 +64,7 @@ use super::{
 /// # use rustdds::dds::qos::QosPolicyBuilder;
 /// use rustdds::dds::Publisher;
 ///
-/// let domain_participant = DomainParticipant::new(0);
+/// let domain_participant = DomainParticipant::new(0).unwrap();
 /// let qos = QosPolicyBuilder::new().build();
 ///
 /// let publisher = domain_participant.create_publisher(&qos);
@@ -107,7 +107,7 @@ impl Publisher {
   /// use rustdds::serialization::CDRSerializerAdapter;
   /// use serde::Serialize;
   ///
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let publisher = domain_participant.create_publisher(&qos).unwrap();
@@ -123,7 +123,7 @@ impl Publisher {
   /// }
   ///
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(None, topic, None);
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None);
   /// ```
   pub fn create_datawriter<D, SA>(
     &self,
@@ -194,7 +194,7 @@ impl Publisher {
   /// use rustdds::serialization::CDRSerializerAdapter;
   /// use serde::Serialize;
   ///
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let publisher = domain_participant.create_publisher(&qos).unwrap();
@@ -203,7 +203,7 @@ impl Publisher {
   /// struct SomeType {}
   ///
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(None, topic, None);
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None);
   /// ```
   pub fn create_datawriter_no_key<D, SA>(
     &self,
@@ -296,7 +296,7 @@ impl Publisher {
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::Publisher;
   ///
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let publisher = domain_participant.create_publisher(&qos).unwrap();
@@ -317,7 +317,7 @@ impl Publisher {
   /// use rustdds::dds::qos::{QosPolicyBuilder};
   /// # use rustdds::dds::Publisher;
   ///
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let publisher = domain_participant.create_publisher(&qos).unwrap();
@@ -336,7 +336,7 @@ impl Publisher {
   // / # use rustdds::dds::qos::{QosPolicyBuilder, policy::Durability};
   // / # use rustdds::dds::Publisher;
   // /
-  // / let domain_participant = DomainParticipant::new(0);
+  // / let domain_participant = DomainParticipant::new(0).unwrap();
   // / let qos = QosPolicyBuilder::new().build();
   // /
   // / let mut publisher = domain_participant.create_publisher(&qos).unwrap();
@@ -556,7 +556,7 @@ impl Debug for InnerPublisher {
 /// # use rustdds::dds::qos::QosPolicyBuilder;
 /// use rustdds::dds::Subscriber;
 ///
-/// let domain_participant = DomainParticipant::new(0);
+/// let domain_participant = DomainParticipant::new(0).unwrap();
 /// let qos = QosPolicyBuilder::new().build();
 ///
 /// let subscriber = domain_participant.create_subscriber(&qos);
@@ -601,7 +601,7 @@ impl Subscriber {
   /// use rustdds::dds::data_types::TopicKind;
   /// use rustdds::dds::traits::Keyed;
   /// #
-  /// # let domain_participant = DomainParticipant::new(0);
+  /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
   /// #
   ///
@@ -618,7 +618,7 @@ impl Subscriber {
   /// }
   ///
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None);
+  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
   /// ```
   pub fn create_datareader<D: 'static, SA>(
     &self,
@@ -696,7 +696,7 @@ impl Subscriber {
   /// use rustdds::serialization::CDRDeserializerAdapter;
   /// use rustdds::dds::data_types::TopicKind;
   /// #
-  /// # let domain_participant = DomainParticipant::new(0);
+  /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
   /// #
   ///
@@ -706,11 +706,10 @@ impl Subscriber {
   /// struct SomeType {}
   ///
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
-  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None, None);
+  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
   /// ```
   pub fn create_datareader_no_key<D: 'static, SA>(&self,
     topic: Topic,
-    entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>
   where
@@ -718,18 +717,41 @@ impl Subscriber {
     SA: DeserializerAdapter<D>,
   {
     self.inner
-      .create_datareader_no_key(self,topic,entity_id,qos)
+      .create_datareader_no_key(self,topic,None,qos)
   }
 
   pub fn create_datareader_no_key_CDR<D: 'static>(&self,
     topic: Topic,
-    entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
     D: DeserializeOwned,
   {
-    self.create_datareader_no_key::<D,CDRDeserializerAdapter<D>>(topic,entity_id,qos)
+    self.create_datareader_no_key::<D,CDRDeserializerAdapter<D>>(topic,qos)
+  }
+
+  pub(crate) fn create_datareader_no_key_with_entityid<D: 'static, SA>(&self,
+    topic: Topic,
+    entity_id: EntityId,
+    qos: Option<QosPolicies>,
+  ) -> Result<NoKeyDataReader<D, SA>>
+  where
+    D: DeserializeOwned,
+    SA: DeserializerAdapter<D>,
+  {
+    self.inner
+      .create_datareader_no_key(self,topic,Some(entity_id),qos)
+  }
+
+  pub(crate) fn create_datareader_no_key_CDR_with_entityid<D: 'static>(&self,
+    topic: Topic,
+    entity_id: EntityId,
+    qos: Option<QosPolicies>,
+  ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  where
+    D: DeserializeOwned,
+  {
+    self.create_datareader_no_key_with_entityid::<D,CDRDeserializerAdapter<D>>(topic,entity_id,qos)
   }
 
 
@@ -759,7 +781,7 @@ impl Subscriber {
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::Subscriber;
   /// #
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();

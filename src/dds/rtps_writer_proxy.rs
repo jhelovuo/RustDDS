@@ -33,6 +33,8 @@ pub(crate) struct RtpsWriterProxy {
   pub received_heartbeat_count: i32,
 
   pub sent_ack_nack_count: i32,
+  
+  //pub qos : QosPolicies,
 }
 
 impl RtpsWriterProxy {

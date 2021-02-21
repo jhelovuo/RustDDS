@@ -156,7 +156,7 @@ impl RosParticipantInner {
     )?;
 
     let node_reader = ros_discovery_subscriber
-      .create_datareader_no_key(ros_discovery_topic.clone(), None, None)?;
+      .create_datareader_no_key(ros_discovery_topic.clone(), None)?;
 
     let node_writer = ros_discovery_publisher
       .create_datawriter_no_key(ros_discovery_topic.clone(), None)?;
@@ -463,7 +463,7 @@ impl RosNode {
       self
         .ros_participant
         .get_ros_discovery_subscriber()
-        .create_datareader_no_key::<D, DA>(topic, None, qos)?;
+        .create_datareader_no_key::<D, DA>(topic, qos)?;
     self.add_reader( sub.get_guid() );
     Ok( sub )
   }

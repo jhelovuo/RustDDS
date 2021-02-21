@@ -25,9 +25,11 @@ pub trait TopicDescription {
 /// use rustdds::dds::Topic;
 /// use rustdds::dds::data_types::TopicKind;
 ///
-/// let domain_participant = DomainParticipant::new(0);
+/// let domain_participant = DomainParticipant::new(0).unwrap();
 /// let qos = QosPolicyBuilder::new().build();
-/// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey);
+/// let topic = domain_participant
+///       .create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey)
+///       .unwrap();
 /// ```
 #[derive(Clone)]
 pub struct Topic {
@@ -72,9 +74,11 @@ impl Topic {
   /// # use rustdds::dds::Topic;
   /// use rustdds::dds::data_types::TopicKind;
   ///
-  /// # let domain_participant = DomainParticipant::new(0);
+  /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let topic = domain_participant
+  ///     .create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey)
+  ///     .unwrap();
   /// assert_eq!(topic.kind(), TopicKind::WithKey);
   /// ```
   pub fn kind(&self) -> TopicKind {

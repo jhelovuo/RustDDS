@@ -47,7 +47,7 @@ impl DomainParticipant {
   /// # Examples
   /// ```
   /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
   pub fn new(domain_id: u16) -> Result<DomainParticipant> {
     trace!("DomainParticipant construct start");
@@ -110,7 +110,7 @@ impl DomainParticipant {
   /// ```
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   /// let publisher = domain_participant.create_publisher(&qos);
   /// ```
@@ -130,7 +130,7 @@ impl DomainParticipant {
   /// ```
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   /// let subscriber = domain_participant.create_subscriber(&qos);
   /// ```
@@ -155,7 +155,7 @@ impl DomainParticipant {
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// use rustdds::dds::data_types::TopicKind;
   ///
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey);
   /// ```
@@ -178,7 +178,7 @@ impl DomainParticipant {
   ///
   /// ```
   /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let domain_id = domain_participant.domain_id();
   /// ```
   pub fn domain_id(&self) -> u16 {
@@ -189,7 +189,7 @@ impl DomainParticipant {
   ///
   /// ```
   /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let participant_id = domain_participant.participant_id();
   /// ```
   pub fn participant_id(&self) -> u16 {
@@ -202,7 +202,7 @@ impl DomainParticipant {
   ///
   /// ```
   /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0);
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let discovered_topics = domain_participant.get_discovered_topics();
   /// for dtopic in discovered_topics.iter() {
   ///   // do something

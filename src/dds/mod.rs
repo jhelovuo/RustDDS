@@ -46,7 +46,7 @@
 //! use serde::{Serialize, Deserialize};
 //!
 //! // DomainParticipant is always necessary
-//! let domain_participant = DomainParticipant::new(0);
+//! let domain_participant = DomainParticipant::new(0).unwrap();
 //!
 //! let qos = QosPolicyBuilder::new()
 //!   .reliability(Reliability::Reliable { max_blocking_time: DDSDuration::DURATION_ZERO })
@@ -75,14 +75,12 @@
 //! let mut reader = subscriber
 //!   .create_datareader_no_key::<SomeType, CDRDeserializerAdapter<SomeType>>(
 //!     some_topic.clone(),
-//!     None,
 //!     None)
 //!   .unwrap();
 //!
 //! // Creating DataWriter required type and serializer adapter (which is recommended to be CDR).
 //! let writer = publisher
 //!   .create_datawriter_no_key::<SomeType, CDRSerializerAdapter<SomeType>>(
-//!     None,
 //!     some_topic,
 //!     None)
 //!   .unwrap();
