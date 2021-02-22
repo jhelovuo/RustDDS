@@ -2,20 +2,9 @@ use num_derive::{FromPrimitive, NumOps, ToPrimitive};
 use speedy::{Readable, Writable};
 use std::convert::From;
 
-#[derive(
-  Copy,
-  Clone,
-  Debug,
-  Hash,
-  PartialOrd,
-  PartialEq,
-  Ord,
-  Eq,
-  Readable,
-  Writable,
-  NumOps,
-  FromPrimitive,
-  ToPrimitive,
+#[derive(Copy,Clone,Debug, Hash, PartialOrd, PartialEq, Ord, Eq, 
+  Readable, Writable, 
+  NumOps, FromPrimitive, ToPrimitive,
 )]
 pub struct FragmentNumber(u32);
 

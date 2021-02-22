@@ -226,7 +226,7 @@ impl<'a, C: Context, N> Readable<'a, C> for NumberSet<N>
 
   #[inline]
   fn minimum_bytes_needed() -> usize {
-    size_of::<SequenceNumber>() + size_of::<u32>()
+    size_of::<N>() + size_of::<u32>()
   }
 }
 
@@ -335,11 +335,16 @@ mod tests {
       le = [0x00, 0x00, 0x00, 0x00,
             0x01, 0x00, 0x00, 0x00,
             0x19, 0x00, 0x00, 0x00,
-            0x7f, 0x00, 0xc0, 0xff],
+            0x00, 0x00, 0xc0, 0xff],
+      // The last word here has 11 bits set from MSB end, and then 25-11 = 14 zeroes.
+      // The last 32-25 = 7 bits are undefined. Our implementation sets them to zero,
+      // but others may set to ones.
+      // 0xffc0_00YZ, where  YZ & 0x80 = 0x00, but otherwise undefined
+      // So e.g. 0x7f is valid least siginifanct byte, as is 0x00, or 0x0f.
       be = [0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x01,
             0x00, 0x00, 0x00, 0x19,
-            0xff, 0xc0, 0x00, 0x7f]
+            0xff, 0xc0, 0x00, 0x00]
   });
 
 

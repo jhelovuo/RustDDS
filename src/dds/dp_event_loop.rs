@@ -665,24 +665,16 @@ mod tests {
   use std::thread;
   use std::time::Duration;
   use crate::{
-    dds::participant::DomainParticipant,
-    // dds::values::result::CountWithChange,
-    // dds::values::result::RequestedDeadlineMissedStatus,
-    dds::with_key::datareader::DataReader,
     dds::statusevents::DataReaderStatus,
-    serialization::cdr_deserializer::CDRDeserializerAdapter,
-    structure::duration::Duration as DurationDDS,
-    test::random_data::RandomData,
   };
   use mio::{Ready, PollOpt};
   use crate::{
     dds::with_key::datareader::ReaderCommand,
-    dds::qos::policy::Deadline,
     structure::entity::RTPSEntity,
     dds::qos::QosPolicies,
   };
   use crate::structure::dds_cache::DDSCache;
-  use crate::dds::topic::Topic;
+  
 
   #[test]
   fn dpew_add_and_remove_readers() {

@@ -1190,7 +1190,6 @@ mod tests {
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let reader_id = EntityId::default();
-    let datareader_id = EntityId::default();
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
 
     let mut new_reader = Reader::new(
