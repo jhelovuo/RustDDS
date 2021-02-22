@@ -843,19 +843,13 @@ where
       None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::now(), key, self.get_guid()),
     };
 
-    match self
-      .cc_upload
-      .try_send(WriterCommand::DDSData { data: ddsdata })
-    {
-      Ok(_) => {
-        self.refresh_manual_liveliness();
-        Ok(())
-      }
-      Err(huh) => {
-        warn!("Error: {:?}", huh);
-        Err(Error::OutOfResources)
-      }
-    }
+    self.cc_upload
+      .send(WriterCommand::DDSData { data: ddsdata })
+      .or_else(|huh| 
+        log_and_err_internal!("Cannot send dispose command: {:?}", huh))?;
+
+    self.refresh_manual_liveliness();
+    Ok(())
   }
 }
 
