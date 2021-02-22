@@ -1007,8 +1007,8 @@ mod tests {
     data_writer.write(data, None).expect("Unable to write data");
 
     let res = data_writer
-      .wait_for_acknowledgments(Duration::from_secs(5))
+      .wait_for_acknowledgments(Duration::from_secs(2))
       .unwrap();
-    assert_eq!(res, ());
+    assert_eq!(res, true); // we should get "true" immediately, because we have no Reliable QoS 
   }
 }
