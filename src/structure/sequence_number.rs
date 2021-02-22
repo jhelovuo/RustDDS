@@ -1,7 +1,7 @@
 use num_traits::NumOps;
 use std::fmt::Debug;
 use std::hash::Hash;
-use crate::messages::fragment_number::FragmentNumber;
+//use crate::messages::fragment_number::FragmentNumber;
 use std::collections::BTreeSet;
 use std::cmp::{min,Ord,PartialOrd};
 use num_derive::{FromPrimitive, NumOps, ToPrimitive};
@@ -64,11 +64,13 @@ impl From<SequenceNumber> for i64 {
   }
 }
 
-checked_impl!(CheckedAdd, checked_add, SequenceNumber);
-checked_impl!(CheckedSub, checked_sub, SequenceNumber);
-checked_impl!(CheckedMul, checked_mul, SequenceNumber);
-checked_impl!(CheckedDiv, checked_div, SequenceNumber);
-
+mod sequence_number_checked {
+  use super::*;
+  checked_impl!(CheckedAdd, checked_add, SequenceNumber);
+  checked_impl!(CheckedSub, checked_sub, SequenceNumber);
+  checked_impl!(CheckedMul, checked_mul, SequenceNumber);
+  checked_impl!(CheckedDiv, checked_div, SequenceNumber);
+}
 // SequenceNumber serialization:
 //
 // RTPS Spec v2.3 Section 9.4.2.5:
@@ -107,6 +109,55 @@ impl Default for SequenceNumber {
   }
 }
 
+// ---------------------------------------------------------------
+// ---------------------------------------------------------------
+
+
+#[derive(Copy,Clone,Debug, Hash, PartialOrd, PartialEq, Ord, Eq, 
+  Readable, Writable, 
+  NumOps, FromPrimitive, ToPrimitive,
+)]
+pub struct FragmentNumber(u32);
+
+impl Default for FragmentNumber {
+  fn default() -> FragmentNumber {
+    FragmentNumber(1)
+  }
+}
+
+impl From<u32> for FragmentNumber {
+  fn from(value: u32) -> Self {
+    FragmentNumber(value)
+  }
+}
+
+impl From<FragmentNumber> for u32 {
+  fn from(fragment_number: FragmentNumber) -> Self {
+    fragment_number.0
+  }
+}
+
+// to make this fit into NumberSet<N>
+impl From<i64> for FragmentNumber {
+  fn from(value: i64) -> Self {
+    FragmentNumber(value as u32)
+  }
+}
+
+// to make this fit into NumberSet<N>
+impl From<FragmentNumber> for i64 {
+  fn from(fragment_number: FragmentNumber) -> Self {
+    fragment_number.0 as i64
+  }
+}
+
+mod fragment_number_checked {
+  use super::*;
+  checked_impl!(CheckedAdd, checked_add, FragmentNumber);
+  checked_impl!(CheckedSub, checked_sub, FragmentNumber);
+  checked_impl!(CheckedMul, checked_mul, FragmentNumber);
+  checked_impl!(CheckedDiv, checked_div, FragmentNumber);
+}
 // ---------------------------------------------------------------
  
 pub type SequenceNumberSet = NumberSet<SequenceNumber>;
@@ -292,6 +343,30 @@ mod tests {
     assert_eq!(SequenceNumber::from(1), SequenceNumber::default());
   }
 
+  #[test]
+  fn fragment_number_starts_by_default_from_one() {
+    assert_eq!(FragmentNumber::from(1u32), FragmentNumber::default());
+  }
+
+  serialization_test!( type = FragmentNumber,
+  {
+      fragment_number_zero,
+      FragmentNumber::from(0u32),
+      le = [0x00, 0x00, 0x00, 0x00],
+      be = [0x00, 0x00, 0x00, 0x00]
+  },
+  {
+      fragment_number_default,
+      FragmentNumber::default(),
+      le = [0x01, 0x00, 0x00, 0x00],
+      be = [0x00, 0x00, 0x00, 0x01]
+  },
+  {
+      fragment_number_non_zero,
+      FragmentNumber::from(0xDEADBEEFu32),
+      le = [0xEF, 0xBE, 0xAD, 0xDE],
+      be = [0xDE, 0xAD, 0xBE, 0xEF]
+  });
   serialization_test!( type = SequenceNumber,
   {
       sequence_number_default,
@@ -338,7 +413,7 @@ mod tests {
             0x00, 0x00, 0xc0, 0xff],
       // The last word here has 11 bits set from MSB end, and then 25-11 = 14 zeroes.
       // The last 32-25 = 7 bits are undefined. Our implementation sets them to zero,
-      // but others may set to ones.
+      // but others may set to ones. 
       // 0xffc0_00YZ, where  YZ & 0x80 = 0x00, but otherwise undefined
       // So e.g. 0x7f is valid least siginifanct byte, as is 0x00, or 0x0f.
       be = [0x00, 0x00, 0x00, 0x00,

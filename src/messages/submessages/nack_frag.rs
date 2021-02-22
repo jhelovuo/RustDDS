@@ -1,4 +1,3 @@
-//use crate::messages::fragment_number_set::FragmentNumberSet;
 use crate::structure::guid::EntityId;
 use crate::structure::sequence_number::*;
 use speedy::{Readable, Writable};
@@ -39,7 +38,7 @@ pub struct NackFrag {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::messages::fragment_number::FragmentNumber;
+  use crate::structure::sequence_number::FragmentNumber;
 
   serialization_test!( type = NackFrag,
   {

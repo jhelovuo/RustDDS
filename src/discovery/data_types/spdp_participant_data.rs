@@ -250,7 +250,6 @@ mod tests {
             eprintln!("again deserialized = {:?}", &participant_data_2);
             let _sdata_2 =
               to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data_2)
-                //to_little_endian_binary::<SPDPDiscoveredParticipantData>(&participant_data_2)
                 .unwrap();
             // now the order of bytes should be the same
             assert_eq!(&participant_data_2, &participant_data);
