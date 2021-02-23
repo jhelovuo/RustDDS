@@ -37,7 +37,7 @@ use crate::dds::qos::{
   policy::{Reliability},
 };
 use crate::dds::traits::serde_adapters::SerializerAdapter;
-use crate::dds::with_key::datasample::DataSample;
+
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
 use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand, };
 
@@ -828,12 +828,6 @@ where
     // If sample with same values is given then hash is same for both samples.
     // TODO FIX THIS
     ddsdata.value_key_hash = key.into_hash_key();
-
-    // What does this block of code do? What is the purpose of _data_sample?
-    let _data_sample: DataSample<D> = match source_timestamp {
-      Some(t) => DataSample::<D>::new_disposed::<<D as Keyed>::K>(t, key, self.get_guid()),
-      None => DataSample::new_disposed::<<D as Keyed>::K>(Timestamp::now(), key, self.get_guid()),
-    };
 
     self.cc_upload
       .send(WriterCommand::DDSData { data: ddsdata })

@@ -1,5 +1,5 @@
-use crate::{dds::traits::key::*, structure::guid::GUID};
-use crate::structure::time::Timestamp;
+use crate::{dds::traits::key::*, };
+
 use crate::dds::sampleinfo::*;
 
 //use super::{interfaces::{IDataSample, IDataSampleConvert, IKeyedDataSample, IKeyedDataSampleConvert}, no_key::wrappers::NoKeyWrapper};
@@ -29,39 +29,6 @@ where
   pub(crate) fn new(sample_info: SampleInfo, value: std::result::Result<D, D::K>) -> Self {
     DataSample { sample_info, value }
   }
-
-  pub(crate) fn new_disposed<K>(
-    source_timestamp: Timestamp,
-    key: D::K,
-    writer_guid: GUID,
-  ) -> DataSample<D>
-  where
-    <D as Keyed>::K: Key,
-  {
-    // begin dummy placeholder values
-    let sample_state = SampleState::NotRead;
-    let view_state = ViewState::New;
-    let instance_state = InstanceState::NotAlive_Disposed;
-    let sample_rank = 0;
-    let generation_rank = 0;
-    let absolute_generation_rank = 0;
-    // end dummy placeholder values
-
-    DataSample {
-      sample_info: SampleInfo {
-        sample_state,
-        view_state,
-        instance_state,
-        generation_counts: NotAliveGenerationCounts::zero(),
-        sample_rank,
-        generation_rank,
-        absolute_generation_rank,
-        source_timestamp: Some(source_timestamp),
-        publication_handle: writer_guid,
-      },
-      value: Err(key),
-    }
-  } // fn
 
   // convenience shorthand to get the key directly, without digging out the "value"
   pub fn get_key(&self) -> D::K
