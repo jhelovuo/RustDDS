@@ -274,14 +274,6 @@ where
     // TODO FIX THIS
     ddsdata.value_key_hash = data.get_key().into_hash_key();
 
-    let _data_sample = match source_timestamp {
-      // TODO: fix this to use something else than new_deprecated.
-      // We cannot generate DataSample at the writer side, because most of the
-      // SampleInfo fields cannot be known.
-      Some(t) => DataSample::new_deprecated(t, data, self.get_guid()),
-      None => DataSample::new_deprecated(Timestamp::now(), data, self.get_guid()),
-    };
-
     match self
       .cc_upload
       .try_send(WriterCommand::DDSData { data: ddsdata })

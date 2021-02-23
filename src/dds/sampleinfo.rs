@@ -132,19 +132,6 @@ pub struct SampleInfo {
 
 #[allow(clippy::new_without_default)]
 impl SampleInfo {
-  pub fn new_deprecated() -> Self {
-    Self {
-      sample_state: SampleState::NotRead,
-      view_state: ViewState::New,
-      instance_state: InstanceState::Alive,
-      generation_counts: NotAliveGenerationCounts::zero(),
-      sample_rank: 0,
-      generation_rank: 0,
-      absolute_generation_rank: 0,
-      source_timestamp: None,
-      publication_handle: GUID::GUID_UNKNOWN,
-    }
-  }
 
   /* These accessor methods should not be needed, as the SampleInfo structure is likely
      not about to change too much, as it is specified by the DDS spec.
