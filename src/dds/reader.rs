@@ -639,7 +639,7 @@ impl Reader {
       );
     }
 
-    let mut ddsdata = if change_kind != ChangeKind::ALIVE {
+    let ddsdata = if change_kind != ChangeKind::ALIVE {
       DDSData::new_disposed(status_info, key_hash)
     } else {
       match data.serialized_payload {
@@ -648,8 +648,8 @@ impl Reader {
       }
     };
 
-    ddsdata.set_reader_id(data.reader_id);
-    ddsdata.set_writer_id(data.writer_id);
+    // ddsdata.set_reader_id(data.reader_id);
+    // ddsdata.set_writer_id(data.writer_id);
     let cache_change = CacheChange::new(change_kind, writer_guid, data.writer_sn, Some(ddsdata));
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
