@@ -1,123 +1,62 @@
-use serde::{Serialize};
+
+
+use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+use crate::structure::cache_change::ChangeKind;
+
+#[cfg(test)]
 use bytes::Bytes;
 
-use crate::{
-  dds::traits::key::Keyed,
-  structure::{
-    inline_qos::{KeyHash, StatusInfo},
-  },
-};
-use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::serialization::cdr_serializer::{to_bytes};
-use byteorder::{LittleEndian};
-
-use crate::structure::time::Timestamp;
-use crate::structure::cache_change::ChangeKind;
 
 // DDSData represets a serialized data sample with metadata
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct DDSData {
-  source_timestamp: Timestamp,
-  pub change_kind: ChangeKind,
-  value: Option<SerializedPayload>,
-  // needed to identify what instance type (unique key) this change is for 9.6.3.8
-  pub value_key_hash: u128,
+
+// Contents of a DATA or severlal DATAFRAG submessage. This is either a
+// new sample, or key, or a key hash. The latter two are used to indicate dispose or unregister.
+pub enum DDSData {
+  Data { serialized_payload: SerializedPayload } ,
+  // StatusInfo is an enumeration giving reason why there is no data
+  DisposeByKey { change_kind: ChangeKind, key: SerializedPayload, },
+  DisposeByKeyHash { change_kind: ChangeKind, key_hash: u128, }, 
+  // TODO: Key hash should be a named type. Preferebly contents should
+  // be held as [u8;8] rather then u128 to avoid endianness issues.
 }
 
 impl DDSData {
-  pub fn new(payload: SerializedPayload) -> DDSData {
-    DDSData {
-      source_timestamp: Timestamp::now(),
-      change_kind: ChangeKind::ALIVE,
-      value: Some(payload),
-      value_key_hash: 0,
+  pub fn new(serialized_payload: SerializedPayload) -> DDSData {
+    DDSData::Data { serialized_payload }
+  }
+  pub fn new_disposed_by_key(change_kind: ChangeKind, key: SerializedPayload) -> DDSData {
+    DDSData::DisposeByKey { change_kind, key }
+  }
+
+  pub fn new_disposed_by_key_hash(change_kind: ChangeKind, key_hash: u128) -> DDSData {
+    DDSData::DisposeByKeyHash { change_kind, key_hash }
+  }
+
+  pub fn change_kind(&self) -> ChangeKind {
+    match self {
+      DDSData::Data {..} => ChangeKind::ALIVE,
+      DDSData::DisposeByKey { change_kind, ..} => *change_kind,
+      DDSData::DisposeByKeyHash { change_kind, .. } => *change_kind,
     }
   }
 
-  pub fn new_disposed(status_info: Option<StatusInfo>, key_hash: Option<KeyHash>) -> DDSData {
-    let change_kind = match status_info {
-      Some(i) => i.change_kind(),
-      // no change kind/status info means that the sample is still alive
-      None => ChangeKind::ALIVE,
-    };
-
-    let value_key_hash = match key_hash {
-      Some(v) => v,
-      None => KeyHash::empty(),
-    };
-
-    DDSData {
-      source_timestamp: Timestamp::now(),
-      change_kind,
-      value: None,
-      value_key_hash: value_key_hash.value(),
+  pub fn serialized_payload(&self) -> Option<&SerializedPayload> {
+    match &self {
+      DDSData::Data { serialized_payload } => Some( serialized_payload ),
+      DDSData::DisposeByKey { key , ..} => Some( key ),
+      DDSData::DisposeByKeyHash {..} => None,
     }
   }
 
-  // TODO: Rename this method, as it gets confued with the std library "From" trait method.
-  pub fn from<D>(data: &D, source_timestamp: Option<Timestamp>) -> DDSData
-  where
-    D: Keyed + Serialize,
-  {
-    let value = DDSData::serialize_data(data);
-
-    let ts: Timestamp = match source_timestamp {
-      Some(t) => t,
-      None => Timestamp::now(),
-    };
-
-    let serialized_payload = SerializedPayload::new(RepresentationIdentifier::CDR_LE, value);
-
-    DDSData {
-      source_timestamp: ts,
-      change_kind: ChangeKind::ALIVE,
-      value: Some(serialized_payload),
-      value_key_hash: 0,
+  #[cfg(test)]
+  pub fn data(&self) -> Option<Bytes> {
+    match &self {
+      DDSData::Data { serialized_payload } => Some( serialized_payload.value ),
+      DDSData::DisposeByKey { key , ..} => Some( key.value ),
+      DDSData::DisposeByKeyHash {..} => None,
     }
   }
-
-  pub fn from_dispose<D>(_key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> DDSData
-  where
-    D: Keyed,
-  {
-    let ts: Timestamp = match source_timestamp {
-      Some(t) => t,
-      None => Timestamp::now(),
-    };
-
-    // TODO: Serialize key
-
-    DDSData {
-      source_timestamp: ts,
-      change_kind: ChangeKind::NOT_ALIVE_DISPOSED,
-      value: None, // TODO: Here we should place the serialized _key_, so that RTPS writer can send the
-      // the DATA message indicating dispose
-      value_key_hash: 0,
-    }
-  }
-
-  fn serialize_data<D>(data: &D) -> Vec<u8>
-  where
-    D: Keyed + Serialize,
-  {
-    let value = match to_bytes::<D, LittleEndian>(data) {
-      Ok(v) => v,
-      // TODO: handle error
-      _ => Vec::new(),
-    };
-    value
-  }
-
-  pub fn value(&self) -> Option<SerializedPayload> {
-    self.value.clone()
-  }
-
-  pub fn data(&self) -> Bytes {
-    match &self.value {
-      Some(val) => val.value.clone(), // cloning Bytes is cheap
-      None => Bytes::new(),
-    }
-  }
+  
 }

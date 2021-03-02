@@ -6,6 +6,7 @@ use crate::{
   dds::{
     data_types::{DDSTimestamp, GUID, EntityId},
     writer::Writer as RtpsWriter,
+    ddsdata::DDSData,
   },
   messages::header::Header,
   messages::submessages::submessages::*,
@@ -19,7 +20,7 @@ use crate::{
   serialization::submessage::{SubMessage, SubmessageBody, },
   structure::{ sequence_number::SequenceNumber, sequence_number::SequenceNumberSet, 
     guid::{GuidPrefix,EntityKind,},
-    cache_change::{CacheChange,ChangeKind},
+    cache_change::{CacheChange},
     parameter_id::ParameterId, 
   },
   structure::time::Timestamp,
@@ -341,27 +342,29 @@ impl MessageBuilder {
     writer_entity_id: EntityId,
     endianness: Endianness,
   ) -> MessageBuilder {
-    let inline_qos = match cache_change.kind {
-      ChangeKind::ALIVE => None,
-      _ => {
+    let inline_qos = match cache_change.data_value {
+      DDSData::Data {..} => None,
+      DDSData::DisposeByKey {..} => None,
+      DDSData::DisposeByKeyHash{ key_hash, .. } => {
         let mut param_list = ParameterList::new();
-        let key_hash = Parameter {
+        let key_hash_param = Parameter {
           parameter_id: ParameterId::PID_KEY_HASH,
-          value: cache_change.key.to_le_bytes().to_vec(),
+          value: key_hash.to_le_bytes().to_vec(),
         };
-        param_list.parameters.push(key_hash);
+        param_list.parameters.push(key_hash_param);
         let status_info = Parameter::create_pid_status_info_parameter(true, true, false);
         param_list.parameters.push(status_info);
         Some(param_list)
       }
     };
 
+
     let mut data_message = Data {
       reader_id: reader_entity_id,
       writer_id: writer_entity_id, 
       writer_sn: cache_change.sequence_number,
       inline_qos,
-      serialized_payload: cache_change.data_value,
+      serialized_payload: cache_change.data_value.serialized_payload().cloned(), // contents is Bytes
     };
     
     // TODO: please explain this logic here:
@@ -374,13 +377,12 @@ impl MessageBuilder {
 
     let flags: BitFlags<DATA_Flags> = 
       BitFlags::<DATA_Flags>::from_endianness(endianness)
-      | ( if cache_change.kind == ChangeKind::NOT_ALIVE_DISPOSED {
-            // No data, we send key instead
-            BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
-          } else {  // normal case
-            BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data)
+      | ( match cache_change.data_value {
+           DDSData::Data {..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data),
+           DDSData::DisposeByKey{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key),
+           DDSData::DisposeByKeyHash{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos),
           }
-        );
+        ); 
     // TODO: This is stupid. There should be an easier way to get the submessage length
     // than serializing it!
     let size = data_message

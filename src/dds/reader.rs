@@ -41,6 +41,8 @@ use crate::messages::header::Header;
 use crate::messages::protocol_id::ProtocolId;
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::vendor_id::VendorId;
+use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
+
 use speedy::{Writable, Endianness};
 use chrono::Duration as chronoDuration;
 
@@ -117,6 +119,7 @@ impl Reader {
   // and user messages
 
   // TODO Used for test/debugging purposes
+  #[cfg(test)]
   pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
     let dds_cache = self.dds_cache.read().unwrap();
     let cc = dds_cache.from_topic_get_change(
@@ -127,7 +130,7 @@ impl Reader {
     debug!("history cache !!!! {:?}", cc);
 
     match cc {
-      Some(cc) => Some(DDSData::new(cc.data_value.as_ref().unwrap().clone())),
+      Some(cc) => cc.data_value.clone(), //  Some(DDSData::new(cc.data_value.as_ref().unwrap().clone())),
       None => None,
     }
   }
@@ -386,7 +389,9 @@ impl Reader {
   }
 
   // handles regular data message and updates history cache
-  pub fn handle_data_msg(&mut self, data: Data, mr_state: MessageReceiverState) {
+  pub fn handle_data_msg(&mut self, data: Data, 
+      data_flags:BitFlags<DATA_Flags>, mr_state: MessageReceiverState ) 
+  {
     trace!("handle_data_msg entry");
     let duration = match mr_state.timestamp {
       Some(ts) => Timestamp::now().duration_since(ts),
@@ -430,7 +435,7 @@ impl Reader {
       }
     }
 
-    self.make_cache_change(data, instant, writer_guid, no_writers);
+    self.make_cache_change(data, data_flags, instant, writer_guid, no_writers);
     // Add to own track-keeping datastructure
     self.seqnum_instant_map.insert(seq_num, instant);
 
@@ -598,59 +603,88 @@ impl Reader {
     todo!()
   }
 
-  // update history cache
+  // This is used to determine exact change kind in case we do not get a data payload in DATA submessage
+  fn deduce_change_kind(inline_qos: Option<ParameterList>, no_writers:bool , ri:RepresentationIdentifier ) 
+    -> ChangeKind
+  {
+
+    match inline_qos
+        .as_ref().map( |iqos| InlineQos::status_info(iqos, ri).ok())
+        .flatten() {
+      Some(si) => 
+        si.change_kind(), // get from inline QoS
+        // TODO: What if si.change_kind() gives ALIVE ??
+      None => { 
+        if no_writers { ChangeKind::NOT_ALIVE_UNREGISTERED } 
+        else { ChangeKind::NOT_ALIVE_DISPOSED } // TODO: Is this reasonable default?
+      }
+    }
+  }
+
+  // Convert DATA submessage into a CacheChange and update history cache
   fn make_cache_change(
     &mut self,
     data: Data,
+    data_flags: BitFlags<DATA_Flags>,
     instant: Timestamp,
     writer_guid: GUID,
     no_writers: bool,
   ) {
-    let representation_identifier = match &data.serialized_payload {
-      Some(sp) => sp.representation_identifier(),
-      None => RepresentationIdentifier::CDR_LE,
-    };
+    let representation_identifier = 
+      if data_flags.contains(DATA_Flags::Endianness) { RepresentationIdentifier::CDR_LE } 
+      else { RepresentationIdentifier::CDR_BE };
 
-    let status_info = match &data.inline_qos {
-      Some(iqos) => InlineQos::status_info(iqos, representation_identifier).ok(),
-      None => None,
-    };
-
-    let key_hash = match &data.inline_qos {
-      Some(iqos) => InlineQos::key_hash(iqos, representation_identifier).ok(),
-      None => None,
-    };
-
-    let change_kind = match status_info {
-      Some(si) => si.change_kind(),
-      None => {
-        if !no_writers {
-          ChangeKind::ALIVE
-        } else {
-          ChangeKind::NOT_ALIVE_UNREGISTERED
+    let ddsdata = 
+      match (data.serialized_payload , 
+          data_flags.contains(DATA_Flags::Data) , data_flags.contains(DATA_Flags::Key)) {
+        (Some(sp), true, false ) => { // data
+          DDSData::new(sp)
         }
-      }
-    };
 
-    if change_kind != ChangeKind::ALIVE {
-      debug!(
-        "Changed writer {:?} status to {:?}",
-        writer_guid, change_kind
-      );
-    }
+        (Some(sp), false, true  ) => { // key
+          DDSData::new_disposed_by_key(Self::deduce_change_kind(data.inline_qos, no_writers, representation_identifier), sp)
+        }
 
-    let ddsdata = if change_kind != ChangeKind::ALIVE {
-      DDSData::new_disposed(status_info, key_hash)
-    } else {
-      match data.serialized_payload {
-        Some(pl) => DDSData::new(pl),
-        None => return,
-      }
-    };
+        (None, false, false ) => { // no data, no key. Maybe there is inline QoS?
+          // At least we should find key hash, or we do not know WTF the writer is talking about
+          let key_hash = 
+            match data.inline_qos
+                .as_ref()
+                .map( |iqos| InlineQos::key_hash(iqos, representation_identifier).ok() )
+                .flatten() {
+              Some(h) => h,
+              None => {
+                info!("Writer {:?} sent us DATA that has no payload and no key_hash inline QoS - discarding {:?}",
+                  &writer_guid, &data.inline_qos );
+                return
+              }
+            };
+          // now, let's try to determine wat is the dispose reason
+          let change_kind = 
+            Self::deduce_change_kind(data.inline_qos, no_writers, representation_identifier);
+          DDSData::new_disposed_by_key_hash(change_kind, key_hash.value() )
+        }
 
-    // ddsdata.set_reader_id(data.reader_id);
-    // ddsdata.set_writer_id(data.writer_id);
-    let cache_change = CacheChange::new(change_kind, writer_guid, data.writer_sn, Some(ddsdata));
+        (Some(_), true , true  ) => { // payload cannot be both key and data.
+          // RTPS Spec 9.4.5.3.1 Flags in the Submessage Header says
+          // "D=1 and K=1 is an invalid combination in this version of the protocol."
+          info!("Writer {:?} sent us DATA that claims to be both data and key - discarding.",
+            writer_guid);
+          return
+        }
+
+        (Some(_), false, false ) => { // data but no data? - this should not be possible
+          error!("make_cache_change - Flags says no data or key, but got payload!");
+          return
+        }
+        (None, true, _ ) | (None, _ , true ) => {
+          error!("make_cache_change - Where is my SerializedPayload?");
+          return
+        }
+
+      };
+
+    let cache_change = CacheChange::new(writer_guid, data.writer_sn, ddsdata);
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
@@ -877,7 +911,7 @@ mod tests {
     data.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
     data.writer_id = writer_guid.entityId;
 
-    reader.handle_data_msg(data, mr_state);
+    reader.handle_data_msg(data, BitFlags::<DATA_Flags>::empty(), mr_state);
 
     assert!(rec.try_recv().is_ok());
   }
@@ -925,7 +959,7 @@ mod tests {
     let mut d = Data::default();
     d.writer_id = writer_guid.entityId;
     let d_seqnum = d.writer_sn;
-    new_reader.handle_data_msg(d.clone(), mr_state);
+    new_reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), mr_state);
 
     assert!(rec.try_recv().is_ok());
 
@@ -936,7 +970,7 @@ mod tests {
     );
 
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
-    let cc_built_here = CacheChange::new(ChangeKind::ALIVE, writer_guid, d_seqnum, Some(ddsdata));
+    let cc_built_here = CacheChange::new( writer_guid, d_seqnum, ddsdata );
 
     assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
   }
@@ -1006,10 +1040,9 @@ mod tests {
 
     // After ack_nack, will receive the following change
     let change = CacheChange::new(
-      ChangeKind::ALIVE,
       new_reader.get_guid(),
       SequenceNumber::from(1),
-      Some(d.clone()),
+      d.clone(),
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
@@ -1039,10 +1072,9 @@ mod tests {
 
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(
-      ChangeKind::ALIVE,
       new_reader.get_guid(),
       SequenceNumber::from(2),
-      Some(d.clone()),
+      d.clone(),
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
@@ -1052,10 +1084,9 @@ mod tests {
     changes.push(change);
 
     let change = CacheChange::new(
-      ChangeKind::ALIVE,
       new_reader.get_guid(),
       SequenceNumber::from(3),
-      Some(d),
+      d,
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
       &new_reader.topic_name,
@@ -1123,7 +1154,7 @@ mod tests {
 
     for i in 0..n {
       d.writer_sn = SequenceNumber::from(i);
-      reader.handle_data_msg(d.clone(), mr_state.clone());
+      reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), mr_state.clone());
       changes.push(
         reader
           .get_history_cache_change(d.writer_sn)

@@ -19,6 +19,7 @@ use crate::structure::{
   dds_cache::DDSCache,
   guid::{GUID, EntityId},
   topic_kind::TopicKind,
+  cache_change::ChangeKind,
 };
 
 use crate::dds::pubsub::Publisher;
@@ -37,6 +38,8 @@ use crate::dds::qos::{
   policy::{Reliability},
 };
 use crate::dds::traits::serde_adapters::SerializerAdapter;
+
+use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
 use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand, };
@@ -268,15 +271,15 @@ where
   /// data_writer.write(some_data, None).unwrap();
   /// ```
   pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
-    let mut ddsdata = DDSData::from(&data, source_timestamp);
-    // TODO key value should be unique always. This is not always unique.
-    // If sample with same values is given then hash is same for both samples.
-    // TODO FIX THIS
-    ddsdata.value_key_hash = data.get_key().into_hash_key();
 
-    match self
-      .cc_upload
-      .try_send(WriterCommand::DDSData { data: ddsdata })
+    let mut send_buffer = Vec::with_capacity(128); // some value out of hat, Vec will grow if this is not enough
+
+    SA::to_writer( &mut send_buffer, &data )?; // serialize
+
+    let ddsdata = DDSData::new( SerializedPayload::new( SA::output_encoding() , send_buffer) );
+
+    match self.cc_upload
+      .try_send(WriterCommand::DDSData { data: ddsdata , source_timestamp })
     {
       Ok(_) => {
         self.refresh_manual_liveliness();
@@ -815,22 +818,18 @@ where
   /// data_writer.dispose(1, None).unwrap();
   /// ```
   pub fn dispose(&self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
-    /*
+    let mut send_buffer = Vec::with_capacity(128); // some value out of hat, Vec will grow if this is not enough
 
-    Removing this for now, as there is need to redesign the mechanism of transmitting dispose actions
-    to RTPS Writer. Then the RTPS writer needs to execute the dispose. That is done by sending a DATA
-    submessage with the serialized key instead of data, and sending inline QoS parameter
-    StatusInfo_t (see RTPS spec 9.6.3.4) to indicate "disposed"
-    */
+    //TODO: This is not paramtereized
+    // Also the key serialization should have different formats 
+    CDRSerializerAdapter::< <D as Keyed>::K >::to_writer( &mut send_buffer, &key  )?; // serialize
 
-    let mut ddsdata = DDSData::from_dispose::<D>(key.clone(), source_timestamp);
-    // TODO key value should be unique always. This is not always unique.
-    // If sample with same values is given then hash is same for both samples.
-    // TODO FIX THIS
-    ddsdata.value_key_hash = key.into_hash_key();
+    let ddsdata = DDSData::new_disposed_by_key( 
+      ChangeKind::NOT_ALIVE_DISPOSED,
+      SerializedPayload::new( SA::output_encoding() , send_buffer) );
 
     self.cc_upload
-      .send(WriterCommand::DDSData { data: ddsdata })
+      .send(WriterCommand::DDSData { data: ddsdata , source_timestamp })
       .or_else(|huh| 
         log_and_err_internal!("Cannot send dispose command: {:?}", huh))?;
 

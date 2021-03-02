@@ -18,8 +18,9 @@ use crate::{
     guid::{GUID, EntityId},
     time::Timestamp,
     dds_cache::DDSCache,
-    cache_change::{CacheChange, ChangeKind},
+    cache_change::{CacheChange},
     duration::Duration,
+
   },
 };
 use crate::log_and_err_precondition_not_met;
@@ -30,6 +31,7 @@ use crate::dds::{
   qos::*,
   with_key::datasample::*,
   datasample_cache::DataSampleCache,
+  ddsdata::DDSData,
   pubsub::Subscriber,
   topic::Topic,
   readcondition::*,
@@ -639,21 +641,30 @@ where
       None => return,
     };
 
-    for (
-      instant,
-      CacheChange {
-        kind,
-        writer_guid,
-        sequence_number: _,
-        data_value: payload_opt,
-        key: key_hash,
-      },
-    ) in cache_changes
+    for ( instant,
+          CacheChange { writer_guid, sequence_number: _, data_value }
+        ) in cache_changes
     {
-      match kind {
-        ChangeKind::NOT_ALIVE_UNREGISTERED => (), // presumably causes no local cache update?
+      match data_value {
+        DDSData::DisposeByKey { key: serialized_key , .. } => {
+          // TODO: Should be parameterizable by DeserializerAdapter
+          match CDRDeserializerAdapter::<D::K>::from_bytes(
+            &serialized_key.value, 
+            serialized_key.representation_identifier) 
+          {
+            Ok(key) => self
+              .datasample_cache
+              .add_sample(Err(key), *writer_guid, *instant, None),
+            Err(e) => {
+              warn!("Failed to deserialize key {}, Topic = {}, Type = {:?}", 
+                      e, self.my_topic.get_name(), self.my_topic.get_type() );
+              debug!("Bytes were {:?}",&serialized_key.value);
+              continue // skip this sample
+            }
+          }
+        }
 
-        ChangeKind::NOT_ALIVE_DISPOSED => {
+        DDSData::DisposeByKeyHash { key_hash , .. } => {
           /* TODO: Instance to be disposed could be specified by serialized payload also, not only key_hash? */
           match self.datasample_cache.get_key_by_hash(*key_hash) {
             Some(key) => self
@@ -663,35 +674,30 @@ where
             None => warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash),
           }
         }
-        ChangeKind::ALIVE => {
-          match payload_opt {
-            None => error!("Got CacheChange kind=ALIVE , but no serialized payload!"),
-            Some(serialized_payload) => {
-              // what is our data serialization format (representation identifier) ?
-              if let Some(recognized_rep_id) = 
-                  DA::supported_encodings().iter()
-                    .find(|r| **r == serialized_payload.representation_identifier)
-              {
-                match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
-                  Ok(payload) => {
-                    self
-                    .datasample_cache
-                    .add_sample(Ok(payload), *writer_guid, *instant, None)
-                  }
-                  Err(e) => {
-                    error!("Failed to deserialize bytes: {}, Topic = {}, Type = {:?}", 
-                            e, self.my_topic.get_name(), self.my_topic.get_type() );
-                    debug!("Bytes were {:?}",&serialized_payload.value);
-                    continue // skip this sample
-                  }
-                }
-              } else {
-                  warn!("Unknown representation id {:?}.", serialized_payload.representation_identifier);
-                  debug!("Serialized payload was {:?}", &serialized_payload);
-                  continue // skip this sample, as we cannot decode it                
+        DDSData::Data { serialized_payload } => {
+          // what is our data serialization format (representation identifier) ?
+          if let Some(recognized_rep_id) = 
+              DA::supported_encodings().iter()
+                .find(|r| **r == serialized_payload.representation_identifier)
+          {
+            match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
+              Ok(payload) => {
+                self
+                .datasample_cache
+                .add_sample(Ok(payload), *writer_guid, *instant, None)
+              }
+              Err(e) => {
+                error!("Failed to deserialize bytes: {}, Topic = {}, Type = {:?}", 
+                        e, self.my_topic.get_name(), self.my_topic.get_type() );
+                debug!("Bytes were {:?}",&serialized_payload.value);
+                continue // skip this sample
               }
             }
-          } // match payload_opt
+          } else {
+              warn!("Unknown representation id {:?}.", serialized_payload.representation_identifier);
+              debug!("Serialized payload was {:?}", &serialized_payload);
+              continue // skip this sample, as we cannot decode it                
+          }
         }
       }
     }

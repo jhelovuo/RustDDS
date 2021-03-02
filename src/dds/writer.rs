@@ -9,7 +9,7 @@ use mio_extras::channel::{self as mio_channel, SyncSender, TrySendError};
 use mio::Token;
 use std::{
   sync::{RwLock, Arc},
-  collections::{HashSet, HashMap, BTreeMap, BTreeSet},
+  collections::{HashSet, BTreeMap, BTreeSet},
   iter::FromIterator,
   cmp::max,
 };
@@ -123,7 +123,7 @@ pub(crate) struct Writer {
 
   /// Maps this writers local sequence numbers to DDSHistodyCache instants.
   /// Useful when datawriter dispose is recieved.
-  key_to_instant: HashMap<u128, Timestamp>,
+  //key_to_instant: HashMap<u128, Timestamp>,  // unused?
 
   /// Set of disposed samples.
   /// Useful when reader requires some sample with acknack.
@@ -150,7 +150,7 @@ pub(crate) struct Writer {
 }
 
 pub(crate) enum WriterCommand {
-  DDSData { data: DDSData },
+  DDSData { data: DDSData , source_timestamp : Option<Timestamp>, },
   WaitForAcknowledgments { all_acked : mio_channel::SyncSender<()> },
   //ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }
@@ -219,7 +219,7 @@ impl Writer {
       dds_cache,
       my_topic_name: topic_name,
       sequence_number_to_instant: BTreeMap::new(),
-      key_to_instant: HashMap::new(),
+      //key_to_instant: HashMap::new(),
       disposed_sequence_numbers: HashSet::new(),
       timed_event_handler: None,
       qos_policies,
@@ -320,7 +320,7 @@ impl Writer {
   pub fn process_writer_command(&mut self) {
     while let Ok(cc) = self.writer_command_receiver.try_recv() {
       match cc {
-        WriterCommand::DDSData { data } => {
+        WriterCommand::DDSData { data, source_timestamp } => {
           // We have a new sample here. Things to do:
           // 1. Insert it to history cache and get it sequence numbered
           // 2. Send out data. 
@@ -330,8 +330,15 @@ impl Writer {
 
           self.increase_heartbeat_counter();
 
-          let partial_message = MessageBuilder::new()
-            .ts_msg(self.endianness, Some(Timestamp::now()) );
+          let partial_message = MessageBuilder::new();
+          // If DataWriter sent us a source timestamp, then add that.
+          let partial_message = 
+            if let Some(src_ts) = source_timestamp {
+              partial_message.ts_msg(self.endianness, Some(src_ts) )
+            } else {
+              partial_message
+            };
+          // the beef: DATA submessage
           let data_hb_message_builder = 
             if self.push_mode {
               if let Some(cache_change) = 
@@ -404,12 +411,11 @@ impl Writer {
 
     // create new CacheChange from DDSData
     let new_cache_change = CacheChange::new(
-      data.change_kind,
       self.get_guid(),
       self.last_change_sequence_number,
-      Some(data),
+      data,
     );
-    let data_key = new_cache_change.key;
+    //let data_key = new_cache_change.key;
 
     // inserting to DDSCache
     let timestamp = Timestamp::now();
@@ -424,7 +430,7 @@ impl Writer {
         .insert(new_sequence_number, timestamp);
 
     // update key to timestamp mapping   
-    self.key_to_instant.insert(data_key, timestamp);
+    //self.key_to_instant.insert(data_key, timestamp);
 
     // Notify reader proxies that there is a new sample
     for reader in &mut self.readers.values_mut() {

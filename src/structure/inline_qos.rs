@@ -20,11 +20,30 @@ pub enum StatusInfoEnum {
   Filtered = 0b0100,
 }
 
-/// StatusInfo is a 4 octet array -> 9.6.3.9 StatusInfo_t
+/// StatusInfo is a 4 octet array
+/// RTPS spec v2.3, Section 9.6.3.9 StatusInfo_t
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct StatusInfo {
   em: [u8; 3],
-  si: BitFlags<StatusInfoEnum>,
+  si: BitFlags<StatusInfoEnum>, // This is now a bit set of StatusInfoEnum
+  // Interpretation:
+  // empty set => Sample is ALIVE and must be present in the message
+  // not Unregistered and not Disposed => ALIVE (but may be asbent)
+  // Disposed => DataWriter disposed instance. NOT_ALIVE
+  // Unregistered => DataWriter unregistered message. Note that DataWriter is not required 
+  //  notify about any unregister operations. This does not make the instance NOT_ALIVE, but infoms
+  //  that the DataWriter is not going to update that instance anymore.
+  // Filtered => DataWriter wrote a sample, but it was filtered away by the current QoS settings and
+  // thus data is not present.
+  //
+  // There may be several flags set at the same time.
+  // 
+  // Disposed & Unregistered:
+  // 
+  // Meanings of some combinations are uknown:
+  // Disposed & Filtered : ???
+  // Unregistered & Filtered: ???
+  // Disposed & Unregistered & Filtered: ???
 }
 
 impl StatusInfo {

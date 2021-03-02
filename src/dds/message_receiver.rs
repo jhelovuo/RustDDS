@@ -210,7 +210,7 @@ impl MessageReceiver {
 
     let mr_state = self.give_message_receiver_info();
     match submessage {
-      EntitySubmessage::Data(data, _) => {
+      EntitySubmessage::Data(data, data_flags) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
         if data.reader_id == EntityId::ENTITYID_UNKNOWN {
           trace!("send_submessage DATA from unknown. writer_id = {:?}", &data.writer_id);
@@ -228,11 +228,11 @@ impl MessageReceiver {
                       )
           {
             trace!("send_submessage DATA from unknown handling in {:?}",&reader);
-            reader.handle_data_msg(data.clone(), mr_state.clone());
+            reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
         } else {
           if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
-            target_reader.handle_data_msg(data, mr_state);
+            target_reader.handle_data_msg(data, data_flags, mr_state);
           }
         }
       }

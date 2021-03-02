@@ -13,7 +13,7 @@ use crate::structure::time::Timestamp;
 
 use super::{
   topic_kind::TopicKind,
-  cache_change::{ChangeKind, CacheChange},
+  cache_change::{CacheChange},
 };
 use std::ops::Bound::{Included, Excluded};
 
@@ -79,22 +79,6 @@ impl DDSCache {
     self.topic_caches.get(topic_name).map( |tc| tc.get_change(instant) ).flatten()
   }
 
-  /// Sets cacheChange to not alive disposed. So its waiting to be permanently removed.
-  pub fn from_topic_set_change_to_not_alive_disposed(
-    &mut self,
-    topic_name: &String,
-    instant: &Timestamp,
-  ) {
-    if self.topic_caches.contains_key(topic_name) {
-      self
-        .topic_caches
-        .get_mut(topic_name)
-        .unwrap()
-        .set_change_to_not_alive_disposed(instant);
-    } else {
-      error!("Topic: '{:?}' is not in DDSCache", topic_name);
-    }
-  }
 
   /// Removes cacheChange permanently
   pub fn from_topic_remove_change(
@@ -233,11 +217,6 @@ impl TopicCache {
     self.history_cache.remove_changes_before(split_key)
   }
 
-  pub fn set_change_to_not_alive_disposed(&mut self, instant: &Timestamp) {
-    self
-      .history_cache
-      .change_change_kind(instant, ChangeKind::NOT_ALIVE_DISPOSED);
-  }
 }
 
 // This is contained in a TopicCache
@@ -296,18 +275,6 @@ impl DDSHistoryCache {
     changes
   }
 
-  pub fn change_change_kind(&mut self, instant: &Timestamp, change_kind: ChangeKind) {
-    let change = self.changes.get_mut(instant);
-    if change.is_some() {
-      change.unwrap().kind = change_kind;
-    } else {
-      panic!(
-        "CacheChange with instance: {:?} was not found on DDSHistoryCache!",
-        instant
-      );
-    }
-  }
-
 
   /// Removes and returns value if it was found
   pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
@@ -338,7 +305,6 @@ mod tests {
     structure::{
       cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber,
     },
-    structure::cache_change::ChangeKind,
   };
 
   #[test]
@@ -346,10 +312,9 @@ mod tests {
     let cache = Arc::new(RwLock::new(DDSCache::new()));
     let topic_name = &String::from("ImJustATopic");
     let change1 = CacheChange::new(
-      ChangeKind::ALIVE,
       GUID::GUID_UNKNOWN,
       SequenceNumber::from(1),
-      Some(DDSData::new(SerializedPayload::default())),
+      DDSData::new(SerializedPayload::default()),
     );
     cache.write().unwrap().add_new_topic(
       topic_name,
@@ -366,10 +331,9 @@ mod tests {
     thread::spawn(move || {
       let topic_name = &String::from("ImJustATopic");
       let cahange2 = CacheChange::new(
-        ChangeKind::ALIVE,
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(1),
-        Some(DDSData::new(SerializedPayload::default())),
+        DDSData::new(SerializedPayload::default()),
       );
       pointerToCache1.write().unwrap().to_topic_add_change(
         topic_name,
@@ -377,10 +341,9 @@ mod tests {
         cahange2,
       );
       let cahange3 = CacheChange::new(
-        ChangeKind::ALIVE,
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(2),
-        Some(DDSData::new(SerializedPayload::default())),
+        DDSData::new(SerializedPayload::default()),
       );
       pointerToCache1.write().unwrap().to_topic_add_change(
         topic_name,

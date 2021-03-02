@@ -621,6 +621,9 @@ pub mod policy {
 }
 
 // Utility for parsing RTPS inlineQoS parameters
+// TODO: This does not need to be a struct, since is has no contents.
+// Maybe someone has had an overdose of object-orientation?
+// Two standalone functions should suffice.
 pub(crate) struct InlineQos {}
 
 impl InlineQos {
