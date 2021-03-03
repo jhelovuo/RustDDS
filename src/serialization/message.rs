@@ -342,9 +342,28 @@ impl MessageBuilder {
     writer_entity_id: EntityId,
     endianness: Endianness,
   ) -> MessageBuilder {
+    use std::convert::TryFrom;
     let inline_qos = match cache_change.data_value {
       DDSData::Data {..} => None,
-      DDSData::DisposeByKey {..} => None,
+      DDSData::DisposeByKey { ref key, .. } => {
+        let mut param_list = ParameterList::new();
+        let mut digest_bytes : Vec<u8> = 
+          if key.value.len() > 16 {
+            md5::compute(&key.value).to_vec()
+          } else {
+            key.value.to_vec()
+          };
+        digest_bytes.resize(16,0x00); // append zeroes to 16 bytes
+        let key_hash = u128::from_le_bytes(<[u8;16]>::try_from(digest_bytes).unwrap());
+        param_list.parameters.push(
+          Parameter {
+            parameter_id: ParameterId::PID_KEY_HASH,
+            value: key_hash.to_le_bytes().to_vec(),
+          });
+        param_list.parameters.push( 
+          Parameter::create_pid_status_info_parameter(true, true, false) );
+        Some( param_list )
+      },
       DDSData::DisposeByKeyHash{ key_hash, .. } => {
         let mut param_list = ParameterList::new();
         let key_hash_param = Parameter {
@@ -364,7 +383,11 @@ impl MessageBuilder {
       writer_id: writer_entity_id, 
       writer_sn: cache_change.sequence_number,
       inline_qos,
-      serialized_payload: cache_change.data_value.serialized_payload().cloned(), // contents is Bytes
+      serialized_payload: 
+        match  cache_change.data_value {
+         DDSData::Data{ ref serialized_payload } => Some(serialized_payload.clone()), // contents is Bytes
+         _ => None,
+        }
     };
     
     // TODO: please explain this logic here:
@@ -379,8 +402,9 @@ impl MessageBuilder {
       BitFlags::<DATA_Flags>::from_endianness(endianness)
       | ( match cache_change.data_value {
            DDSData::Data {..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data),
-           DDSData::DisposeByKey{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key),
-           DDSData::DisposeByKeyHash{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos),
+           //DDSData::DisposeByKey{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key),
+           //DDSData::DisposeByKeyHash{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos),
+           _ => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos),
           }
         ); 
     // TODO: This is stupid. There should be an easier way to get the submessage length
