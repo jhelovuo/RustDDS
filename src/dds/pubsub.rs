@@ -49,7 +49,7 @@ use crate::log_and_err_internal;
 
 use super::{
   with_key::datareader::ReaderCommand,
-  no_key::{wrappers::NoKeyWrapper, wrappers::SAWrapper},
+  no_key::wrappers::{DAWrapper,SAWrapper, NoKeyWrapper}, 
   writer::WriterCommand,
 };
 
@@ -133,7 +133,7 @@ impl Publisher {
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
-    SA: SerializerAdapter<D>,
+    SA: with_key::SerializerAdapter<D>,
   {
     self.inner.create_datawriter(self, None, topic, qos)
   }
@@ -159,7 +159,7 @@ impl Publisher {
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
-    SA: SerializerAdapter<D>,
+    SA: with_key::SerializerAdapter<D>,
   {
     self.inner.create_datawriter(self, Some(entity_id), topic, qos)
   }
@@ -212,7 +212,7 @@ impl Publisher {
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
     D: Serialize,
-    SA: SerializerAdapter<D>,
+    SA: no_key::SerializerAdapter<D>,
   {
     self.inner.create_datawriter_no_key(self, None,topic,qos)
   }
@@ -235,7 +235,7 @@ impl Publisher {
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
     D: Serialize,
-    SA: SerializerAdapter<D>,
+    SA: no_key::SerializerAdapter<D>,
   {
     self.inner.create_datawriter_no_key(self, Some(entity_id),topic,qos)
   }
@@ -406,7 +406,7 @@ impl InnerPublisher {
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
-    SA: SerializerAdapter<D>,
+    SA: with_key::SerializerAdapter<D>,
   {
     // Data samples from DataWriter to HistoryCache
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(4);
@@ -468,7 +468,7 @@ impl InnerPublisher {
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
     D: Serialize,
-    SA: SerializerAdapter<D>,
+    SA: no_key::SerializerAdapter<D>,
   {
     let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
     let d =
@@ -628,7 +628,7 @@ impl Subscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: DeserializerAdapter<D>,
+    SA: with_key::DeserializerAdapter<D>,
   {
     self.inner
       .create_datareader(self,topic,None,qos)
@@ -657,7 +657,7 @@ impl Subscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: DeserializerAdapter<D>,
+    SA: with_key::DeserializerAdapter<D>,
   {
     self.inner
       .create_datareader(self,topic,Some(entity_id),qos)
@@ -714,7 +714,7 @@ impl Subscriber {
   ) -> Result<NoKeyDataReader<D, SA>>
   where
     D: DeserializeOwned,
-    SA: DeserializerAdapter<D>,
+    SA: no_key::DeserializerAdapter<D>,
   {
     self.inner
       .create_datareader_no_key(self,topic,None,qos)
@@ -737,7 +737,7 @@ impl Subscriber {
   ) -> Result<NoKeyDataReader<D, SA>>
   where
     D: DeserializeOwned,
-    SA: DeserializerAdapter<D>,
+    SA: no_key::DeserializerAdapter<D>,
   {
     self.inner
       .create_datareader_no_key(self,topic,Some(entity_id),qos)
@@ -834,7 +834,7 @@ impl InnerSubscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: DeserializerAdapter<D>,
+    SA: with_key::DeserializerAdapter<D>,
   {
     // incoming data notification channel from Reader to DataReader
     let (send, rec) = mio_channel::sync_channel::<()>(4);
@@ -918,7 +918,7 @@ impl InnerSubscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: DeserializerAdapter<D>,
+    SA: with_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::WithKey {
       return Error::precondition_not_met("Topic is NO_KEY, but attempted to create WITH_KEY Datareader") 
@@ -935,7 +935,7 @@ impl InnerSubscriber {
   ) -> Result<NoKeyDataReader<D, SA>>
   where
     D: DeserializeOwned,
-    SA: DeserializerAdapter<D>,
+    SA: no_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::NoKey {
       return Error::precondition_not_met("Topic is WITH_KEY, but attempted to create NO_KEY Datareader")
@@ -943,7 +943,7 @@ impl InnerSubscriber {
 
     let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
 
-    let d = self.create_datareader_internal::<NoKeyWrapper<D>, SAWrapper<SA>>(
+    let d = self.create_datareader_internal::<NoKeyWrapper<D>, DAWrapper<SA>>(
       outer,
       Some(entity_id),
       topic,

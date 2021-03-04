@@ -26,7 +26,7 @@ use crate::{
 use crate::log_and_err_precondition_not_met;
 use crate::dds::{
   traits::{key::*, TopicDescription},
-  traits::serde_adapters::*,
+  traits::serde_adapters::with_key::*,
   values::result::*,
   qos::*,
   with_key::datasample::*,
@@ -37,6 +37,9 @@ use crate::dds::{
   readcondition::*,
 };
 use crate::dds::statusevents::*;
+
+
+
 
 /// Simplified type for CDR encoding
 pub type DataReader_CDR<D> = DataReader<D,CDRDeserializerAdapter<D>>;
@@ -108,7 +111,11 @@ impl CurrentStatusChanges {
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
 /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
 /// ```
-pub struct DataReader< D: Keyed + DeserializeOwned,  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D> > {
+pub struct DataReader
+  < D: Keyed + DeserializeOwned,
+    DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D> 
+  > 
+{
   my_subscriber: Subscriber,
   my_topic: Topic,
   qos_policy: QosPolicies,
@@ -648,7 +655,7 @@ where
       match data_value {
         DDSData::DisposeByKey { key: serialized_key , .. } => {
           // TODO: Should be parameterizable by DeserializerAdapter
-          match CDRDeserializerAdapter::<D::K>::from_bytes(
+          match CDRDeserializerAdapter::<D>::key_from_bytes(
             &serialized_key.value, 
             serialized_key.representation_identifier) 
           {

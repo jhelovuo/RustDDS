@@ -86,6 +86,15 @@ impl SerializedPayload {
     }
   }
 
+  pub fn new_from_Bytes(rep_id: RepresentationIdentifier, payload: Bytes) -> SerializedPayload {
+    SerializedPayload {
+      representation_identifier: rep_id,
+      representation_options: [0, 0],
+      value: payload,
+    }
+  }
+
+
   // Implement deserialization here, because Speedy just makes it difficult.
   pub fn from_bytes(bytes: Bytes) -> io::Result<SerializedPayload> {
     let mut reader = io::Cursor::new(&bytes);

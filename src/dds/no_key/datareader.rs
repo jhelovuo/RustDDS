@@ -8,15 +8,18 @@ use crate::{
     entity::RTPSEntity ,
   },
 };
-use crate::dds::{traits::serde_adapters::*, values::result::*, qos::*,
-                 readcondition::*, data_types::*, };
+use crate::dds::{
+  traits::serde_adapters::no_key::*, 
+  values::result::*, qos::*,
+  readcondition::*, data_types::*, 
+};
 
 use crate::dds::with_key::datareader as datareader_with_key;
 use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
 use crate::serialization::CDRDeserializerAdapter;
 use crate::dds::no_key::datasample::DataSample;
 use super::{
-  wrappers::{NoKeyWrapper, SAWrapper},
+  wrappers::{NoKeyWrapper, DAWrapper},
 };
 
 // ----------------------------------------------------
@@ -48,7 +51,7 @@ pub struct DataReader<
   D: DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > {
-  keyed_datareader: datareader_with_key::DataReader<NoKeyWrapper<D>, SAWrapper<DA>>,
+  keyed_datareader: datareader_with_key::DataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
 }
 
 // TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
@@ -58,7 +61,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   pub(crate) fn from_keyed(
-    keyed: datareader_with_key::DataReader<NoKeyWrapper<D>, SAWrapper<DA>>,
+    keyed: datareader_with_key::DataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
   ) -> DataReader<D, DA> {
     DataReader {
       keyed_datareader: keyed,

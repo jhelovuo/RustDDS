@@ -16,8 +16,7 @@ use crate::{
     topic::{Topic, TopicKind},
     traits::key::Key,
     traits::key::Keyed,
-    traits::serde_adapters::DeserializerAdapter,
-    traits::serde_adapters::SerializerAdapter,
+    traits::serde_adapters::*,
     values::result::Error,
     data_types::DiscoveredTopicData,
   },
@@ -454,7 +453,7 @@ impl RosNode {
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  pub fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: DeserializerAdapter<D>>(
+  pub fn create_ros_nokey_subscriber<D: DeserializeOwned + 'static, DA: no_key::DeserializerAdapter<D>>(
     &mut self,
     topic: Topic,
     qos: Option<QosPolicies>,
@@ -474,7 +473,7 @@ impl RosNode {
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  pub fn create_ros_subscriber<D, DA: DeserializerAdapter<D>>(
+  pub fn create_ros_subscriber<D, DA: with_key::DeserializerAdapter<D>>(
     &mut self,
     topic: Topic,
     qos: Option<QosPolicies>,
@@ -497,7 +496,7 @@ impl RosNode {
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  pub fn create_ros_nokey_publisher<D: Serialize, SA: SerializerAdapter<D>>(
+  pub fn create_ros_nokey_publisher<D: Serialize, SA: no_key::SerializerAdapter<D>>(
     &mut self,
     topic: Topic,
     qos: Option<QosPolicies>,
@@ -516,7 +515,7 @@ impl RosNode {
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  pub fn create_ros_publisher<D, SA: SerializerAdapter<D>>(
+  pub fn create_ros_publisher<D, SA: with_key::SerializerAdapter<D>>(
     &mut self,
     topic: Topic,
     qos: Option<QosPolicies>,

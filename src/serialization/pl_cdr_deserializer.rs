@@ -1,3 +1,4 @@
+
 use serde::{Deserializer, de::DeserializeOwned};
 use std::marker::PhantomData;
 
@@ -6,8 +7,8 @@ use crate::{
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   serialization::error::Result,
 };
-
-use crate::dds::traits::serde_adapters::DeserializerAdapter;
+use crate::dds::traits::Keyed;
+use crate::dds::traits::serde_adapters::*;
 
 pub struct PlCdrDeserializerAdapter<D> {
   phantom: PhantomData<D>,
@@ -22,7 +23,7 @@ const repr_ids: [RepresentationIdentifier; 4] = [
   RepresentationIdentifier::PL_CDR_LE,
 ];
 
-impl<D> DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>
+impl<D> no_key::DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>
 where
   D: DeserializeOwned,
 {
@@ -37,6 +38,25 @@ where
       }
       RepresentationIdentifier::PL_CDR_BE | RepresentationIdentifier::CDR_BE => {
         PlCdrDeserializer::from_big_endian_bytes::<D>(input_bytes)
+      }
+      repr_id => Err(Error::Message(format!("Unknown representation identifier {:?}",repr_id
+      ))),
+    }
+  }
+}
+
+impl<D> with_key::DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>
+where
+  D: Keyed + DeserializeOwned,
+  <D as Keyed>::K: DeserializeOwned, // why is this not inferred from D:Keyed ?
+{
+  fn key_from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D::K> {
+    match encoding {
+      RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::CDR_LE => {
+        PlCdrDeserializer::from_little_endian_bytes::<D::K>(input_bytes)
+      }
+      RepresentationIdentifier::PL_CDR_BE | RepresentationIdentifier::CDR_BE => {
+        PlCdrDeserializer::from_big_endian_bytes::<D::K>(input_bytes)
       }
       repr_id => Err(Error::Message(format!("Unknown representation identifier {:?}",repr_id
       ))),

@@ -17,7 +17,8 @@ use crate::dds::values::result::Result;
 
 use crate::dds::data_types::*;
 use crate::dds::traits::dds_entity::DDSEntity;
-use crate::dds::traits::serde_adapters::SerializerAdapter;
+
+use crate::dds::traits::serde_adapters::no_key::SerializerAdapter;
 
 use crate::dds::qos::{HasQoSPolicy, QosPolicies};
 

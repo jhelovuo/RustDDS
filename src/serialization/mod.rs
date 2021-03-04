@@ -16,4 +16,4 @@ pub(crate) use submessage::*;
 // public exports
 pub use cdr_serializer::{CDRSerializerAdapter};
 pub use cdr_deserializer::{CDRDeserializerAdapter};
-pub use crate::dds::traits::serde_adapters::{SerializerAdapter, DeserializerAdapter};
+pub use crate::dds::traits::serde_adapters::{with_key, no_key};

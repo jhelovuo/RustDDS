@@ -37,8 +37,10 @@ use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
   policy::{Reliability},
 };
-use crate::dds::traits::serde_adapters::SerializerAdapter;
-
+use crate::dds::traits::serde_adapters::with_key::SerializerAdapter;
+//use crate::dds::traits::serde_adapters::no_key::SerializerAdapter 
+//  as no_key_SerializerAdapter; // needs to be visible only, no direct use
+ 
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
@@ -272,11 +274,9 @@ where
   /// ```
   pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
 
-    let mut send_buffer = Vec::with_capacity(128); // some value out of hat, Vec will grow if this is not enough
+    let send_buffer = SA::to_Bytes( &data )?; // serialize
 
-    SA::to_writer( &mut send_buffer, &data )?; // serialize
-
-    let ddsdata = DDSData::new( SerializedPayload::new( SA::output_encoding() , send_buffer) );
+    let ddsdata = DDSData::new( SerializedPayload::new_from_Bytes( SA::output_encoding() , send_buffer) );
 
     match self.cc_upload
       .try_send(WriterCommand::DDSData { data: ddsdata , source_timestamp })
@@ -818,16 +818,12 @@ where
   /// data_writer.dispose(1, None).unwrap();
   /// ```
   pub fn dispose(&self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
-    let mut send_buffer = Vec::with_capacity(128); // some value out of hat, Vec will grow if this is not enough
-
-    //TODO: This is not paramtereized
-    // Also the key serialization should have different formats 
-    CDRSerializerAdapter::< <D as Keyed>::K >::to_writer( &mut send_buffer, &key  )?; // serialize
+    let send_buffer = CDRSerializerAdapter::<D>::key_to_Bytes( &key  )?; // serialize
 
     let ddsdata = DDSData::new_disposed_by_key( 
       ChangeKind::NOT_ALIVE_DISPOSED,
-      SerializedPayload::new( SA::output_encoding() , send_buffer) );
-
+      SerializedPayload::new_from_Bytes( SA::output_encoding() , send_buffer) 
+    );
     self.cc_upload
       .send(WriterCommand::DDSData { data: ddsdata , source_timestamp })
       .or_else(|huh| 

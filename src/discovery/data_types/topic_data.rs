@@ -12,7 +12,7 @@ use crate::{
       TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
     traits::key::Keyed,
-    traits::serde_adapters::SerializerAdapter,
+    traits::serde_adapters::with_key::SerializerAdapter,  // these are WITH_KEY data
     rtps_reader_proxy::RtpsReaderProxy,
     reader::Reader,
     participant::DomainParticipant,

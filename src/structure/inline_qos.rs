@@ -6,9 +6,10 @@ use super::cache_change::ChangeKind;
 use crate::{
   messages::submessages::submessage_elements::RepresentationIdentifier,
   serialization::{
-    CDRDeserializerAdapter, DeserializerAdapter,
+    CDRDeserializerAdapter, 
     cdr_serializer::{to_bytes},
   },
+  dds::traits::serde_adapters::no_key::*,
 };
 use serde::{Serialize, Deserialize};
 

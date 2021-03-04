@@ -1,19 +1,18 @@
-use byteorder::{ByteOrder, LittleEndian, BigEndian, ReadBytesExt};
 use std::marker::PhantomData;
-//use serde::Deserialize;
-//use serde::Deserializer;
+
+use byteorder::{ByteOrder, LittleEndian, BigEndian, ReadBytesExt};
 use serde::{
   de::{
     self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess,
     Visitor, DeserializeOwned,
   },
 };
-
 use paste::paste;
 
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;
-use crate::dds::traits::serde_adapters::DeserializerAdapter;
+use crate::dds::traits::serde_adapters::*;
+use crate::dds::traits::key::{Keyed};
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
@@ -33,7 +32,8 @@ const repr_ids: [RepresentationIdentifier; 3] = [
   RepresentationIdentifier::PL_CDR_LE,
 ];
 
-impl<D> DeserializerAdapter<D> for CDRDeserializerAdapter<D>
+
+impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
 where
   D: DeserializeOwned,
 {
@@ -52,6 +52,25 @@ where
     }
   }
 }
+
+impl<D> with_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
+where
+  D: Keyed + DeserializeOwned,
+  <D as Keyed>::K: DeserializeOwned, // Key should do this already?
+{
+  fn key_from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D::K> {
+    match encoding {
+      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
+        deserialize_from_little_endian(input_bytes)
+      }
+      RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
+      repr_id => Err(Error::Message(format!(
+        "Unknown representaiton identifier {:?}.", repr_id ))),
+    }
+  }
+}
+
+
 
 /// CDR deserializer.
 /// Input is from &[u8], since we expect to have the data in contiguous memory buffers.
@@ -128,11 +147,6 @@ where
 {
   let mut deserializer = CDR_deserializer::<LittleEndian>::new(s);
   T::deserialize(&mut deserializer)
-  // if deserializer.input.is_empty() {
-  //   Ok(t)
-  // } else {
-  //   Err(Error::TrailingCharacters(deserializer.input.to_vec()))
-  // }
 }
 
 pub fn deserialize_from_big_endian<'a, T>(s: &'a [u8]) -> Result<T>
@@ -141,11 +155,6 @@ where
 {
   let mut deserializer = CDR_deserializer::<BigEndian>::new(s);
   T::deserialize(&mut deserializer)
-  // if deserializer.input.is_empty() {
-  //   Ok(t)
-  // } else {
-  //   Err(Error::TrailingCharacters(deserializer.input.to_vec()))
-  // }
 }
 
 /// macro for writing primitive number deserializers. Rust does not allow declaring a macro

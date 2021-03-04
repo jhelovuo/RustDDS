@@ -24,7 +24,9 @@ use crate::messages::{
   submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
 };
 
-use crate::serialization::error::Error;
+use crate::serialization::{
+  error::Error,
+};
 
 use crate::{
   dds::{
@@ -32,7 +34,7 @@ use crate::{
       Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
       TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
     },
-    traits::serde_adapters::DeserializerAdapter,
+    traits::serde_adapters::no_key::*,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,

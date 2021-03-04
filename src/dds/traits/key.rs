@@ -56,6 +56,8 @@ pub trait Key:
 {
   // no methods required
   fn into_hash_key(&self) -> u128 {
+    // TODO: The endianness here seems wrong (or correct by accident)
+    // See RTPS Spec v2.3 Section 9.6.3.8 KeyHash
     let cdr_bytes = match to_bytes::<Self, LittleEndian>(&self) {
       Ok(b) => b,
       _ => Vec::new(),
