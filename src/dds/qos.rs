@@ -1,8 +1,8 @@
 use log::{trace,};
 
 use crate::{
-  structure::inline_qos::KeyHash,
   dds::values::result::*,
+  dds::traits::key::*,
   messages::submessages::submessage_elements::{
     parameter_list::ParameterList, RepresentationIdentifier,
   },
@@ -623,7 +623,7 @@ pub mod policy {
 // Utility for parsing RTPS inlineQoS parameters
 // TODO: This does not need to be a struct, since is has no contents.
 // Maybe someone has had an overdose of object-orientation?
-// Two standalone functions should suffice.
+// Two standalone functions should suffice. 
 pub(crate) struct InlineQos {}
 
 impl InlineQos {
@@ -646,19 +646,17 @@ impl InlineQos {
 
   pub fn key_hash(
     params: &ParameterList,
-    rep_id: RepresentationIdentifier,
-  ) -> std::result::Result<KeyHash, crate::serialization::error::Error> {
+  ) -> std::result::Result<Option<KeyHash>, crate::serialization::error::Error> {
     let key_hash = params
       .parameters
       .iter()
       .find(|p| p.parameter_id == ParameterId::PID_KEY_HASH)
       .clone();
-    let key_hash = match key_hash {
-      Some(p) => KeyHash::from_cdr_bytes(&p.value, rep_id)?,
-      None => KeyHash::empty(),
-    };
-
-    Ok(key_hash)
+    Ok(
+      match key_hash {
+        Some(p) => Some(KeyHash::from_cdr_bytes(p.value.clone())?) ,
+        None => None,
+      })
   }
 }
 

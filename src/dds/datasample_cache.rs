@@ -3,7 +3,7 @@
 use crate::structure::{time::Timestamp, guid::GUID};
 
 use crate::{
-  dds::traits::key::{Key, Keyed},
+  dds::traits::key::{Key, Keyed, KeyHash},
 };
 
 use crate::dds::with_key::datasample::DataSample;
@@ -40,7 +40,7 @@ pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
   datasamples: BTreeMap<Timestamp, SampleWithMetaData<D>>, // ordered storage for deserialized samples
   pub(crate) instance_map: BTreeMap<D::K, InstanceMetaData>, // ordered storage for instances
-  hash_to_key_map: BTreeMap<u128, D::K>,
+  hash_to_key_map: BTreeMap<KeyHash, D::K>,
 }
 
 pub(crate) struct InstanceMetaData {
@@ -526,7 +526,7 @@ where
   }
   */
 
-  pub fn get_key_by_hash(&self, key_hash: u128) -> Option<D::K> {
+  pub fn get_key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
     self.hash_to_key_map.get(&key_hash).map(|key| key.clone())
   }
 

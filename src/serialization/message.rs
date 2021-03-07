@@ -368,7 +368,7 @@ impl MessageBuilder {
         let mut param_list = ParameterList::new();
         let key_hash_param = Parameter {
           parameter_id: ParameterId::PID_KEY_HASH,
-          value: key_hash.to_le_bytes().to_vec(),
+          value: key_hash.to_vec(),
         };
         param_list.parameters.push(key_hash_param);
         let status_info = Parameter::create_pid_status_info_parameter(true, true, false);

@@ -1,5 +1,5 @@
-use std::io::Cursor;
-use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+
+use byteorder::{ByteOrder, };
 use enumflags2::BitFlags;
 
 use super::cache_change::ChangeKind;
@@ -83,45 +83,6 @@ impl StatusInfo {
     representation_id: RepresentationIdentifier,
   ) -> Result<StatusInfo, crate::serialization::error::Error> {
     CDRDeserializerAdapter::from_bytes(bytes, representation_id)
-  }
-}
-
-/// RTPS KeyHash -> 9.6.3.8 KeyHash
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Hash)]
-pub struct KeyHash {
-  key: u128,
-}
-
-impl KeyHash {
-  pub fn empty() -> KeyHash {
-    KeyHash { key: 0 }
-  }
-
-  pub fn value(&self) -> u128 {
-    self.key
-  }
-
-  pub fn into_cdr_bytes<BO: ByteOrder>(
-    &self,
-  ) -> Result<Vec<u8>, crate::serialization::error::Error> {
-    to_bytes::<KeyHash, BO>(&self)
-  }
-
-  pub fn from_cdr_bytes(
-    bytes: &Vec<u8>,
-    representation_id: RepresentationIdentifier,
-  ) -> Result<KeyHash, crate::serialization::error::Error> {
-    let mut rdr = Cursor::new(bytes);
-    let key = match representation_id {
-      RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => rdr
-        .read_u128::<BigEndian>()
-        .map_err(|e| crate::serialization::error::Error::IOError(e))?,
-      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => rdr
-        .read_u128::<LittleEndian>()
-        .map_err(|e| crate::serialization::error::Error::IOError(e))?,
-      _ => 0,
-    };
-    Ok(KeyHash { key })
   }
 }
 

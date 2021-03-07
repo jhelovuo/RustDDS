@@ -1,5 +1,5 @@
 
-
+use crate::dds::traits::key::KeyHash;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::structure::cache_change::ChangeKind;
 
@@ -17,7 +17,7 @@ pub enum DDSData {
   Data { serialized_payload: SerializedPayload } ,
   // StatusInfo is an enumeration giving reason why there is no data
   DisposeByKey { change_kind: ChangeKind, key: SerializedPayload, },
-  DisposeByKeyHash { change_kind: ChangeKind, key_hash: u128, }, 
+  DisposeByKeyHash { change_kind: ChangeKind, key_hash: KeyHash, }, 
   // TODO: Key hash should be a named type. Preferebly contents should
   // be held as [u8;8] rather then u128 to avoid endianness issues.
 }
@@ -30,7 +30,7 @@ impl DDSData {
     DDSData::DisposeByKey { change_kind, key }
   }
 
-  pub fn new_disposed_by_key_hash(change_kind: ChangeKind, key_hash: u128) -> DDSData {
+  pub fn new_disposed_by_key_hash(change_kind: ChangeKind, key_hash: KeyHash) -> DDSData {
     DDSData::DisposeByKeyHash { change_kind, key_hash }
   }
 

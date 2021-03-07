@@ -650,8 +650,8 @@ impl Reader {
           let key_hash = 
             match data.inline_qos
                 .as_ref()
-                .map( |iqos| InlineQos::key_hash(iqos, representation_identifier).ok() )
-                .flatten() {
+                .map( |iqos| InlineQos::key_hash(iqos).ok() )
+                .flatten().flatten() {
               Some(h) => h,
               None => {
                 info!("Writer {:?} sent us DATA that has no payload and no key_hash inline QoS - discarding {:?}",
@@ -662,7 +662,7 @@ impl Reader {
           // now, let's try to determine wat is the dispose reason
           let change_kind = 
             Self::deduce_change_kind(data.inline_qos, no_writers, representation_identifier);
-          DDSData::new_disposed_by_key_hash(change_kind, key_hash.value() )
+          DDSData::new_disposed_by_key_hash(change_kind, key_hash )
         }
 
         (Some(_), true , true  ) => { // payload cannot be both key and data.

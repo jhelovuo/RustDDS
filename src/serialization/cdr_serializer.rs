@@ -179,7 +179,7 @@ where
   T: Serialize,
   BO: ByteOrder,
 {
-  let mut buffer: Vec<u8> = Vec::with_capacity(32); // just some value out of hat.
+  let mut buffer: Vec<u8> = Vec::with_capacity(std::mem::size_of_val(value) * 2); 
   to_writer::<T, BO, &mut Vec<u8>>(&mut buffer, &value)?;
   Ok(buffer)
 }

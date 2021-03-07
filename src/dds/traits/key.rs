@@ -1,12 +1,16 @@
 // This module defines traits to specifiy a key as defined in DDS specification.
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
 use std::collections::hash_map::DefaultHasher;
+use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
-use byteorder::{LittleEndian};
+use byteorder::{BigEndian};
 use rand::Rng;
+use log::error;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 use crate::serialization::cdr_serializer::to_bytes;
+//use crate::serialization::error::Result;
+use crate::serialization::error::Error;
 
 /// A sample data type may be `Keyed` : It allows a Key to be extracted from the sample.
 /// In its simplest form, the key may be just a part of the sample data, but it can be anything
@@ -27,6 +31,8 @@ pub trait Keyed {
   type K;
 
   fn get_key(&self) -> Self::K;
+
+  // provided method (TODO: what for?)
   fn get_hash(&self) -> u64
   where
     Self::K: Key,
@@ -36,6 +42,35 @@ pub trait Keyed {
     hasher.finish()
   }
 }
+
+// See RTPS spec Section 8.7.10 Key Hash
+// and Section 9.6.3.8 KeyHash
+#[derive(Eq,PartialEq,Ord,PartialOrd,Debug, Clone, Copy)]
+pub struct KeyHash([u8;16]);
+
+impl KeyHash {
+  pub fn zero() -> KeyHash {
+    KeyHash([0;16])
+  }
+
+  pub fn to_vec(self) -> Vec<u8> {
+    Vec::from(self.0)
+  }
+
+  pub fn into_cdr_bytes( &self ) -> Result<Vec<u8>, Error> {
+    Ok( self.to_vec() )
+  }
+
+  pub fn from_cdr_bytes(bytes: Vec<u8>) -> Result<KeyHash, Error> {
+    let a =
+      <[u8;16]>::try_from( bytes )
+        .map_err( |_e|  Error::Eof )?;
+    Ok(KeyHash(a))
+  }
+
+}
+
+
 
 /// Key trait for Keyed Topics
 ///
@@ -54,33 +89,66 @@ pub trait Keyed {
 pub trait Key:
   Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned
 {
+  
   // no methods required
-  fn into_hash_key(&self) -> u128 {
-    // TODO: The endianness here seems wrong (or correct by accident)
-    // See RTPS Spec v2.3 Section 9.6.3.8 KeyHash
-    let cdr_bytes = match to_bytes::<Self, LittleEndian>(&self) {
-      Ok(b) => b,
-      _ => Vec::new(),
-    };
 
-    let digest = if cdr_bytes.len() > 16 {
-      md5::compute(&cdr_bytes).to_vec()
-    } else {
-      cdr_bytes
-    };
+  /// This function tries to determine if the maximum size of the sequential CDR encapsulation of 
+  /// all the key fields is less than or equal to 128 bits.
+  /// In case this function gets it wrong, it can be overridden.
+  fn may_exceed_128_bits() -> bool {
+    false //TODO: this is just a placeholder
 
-    let mut digarr: [u8; 16] = [0; 16];
-    for i in 0..digest.len() {
-      digarr[i] = digest[i];
-    }
-
-    u128::from_le_bytes(digarr)
+    // Implementation plan:
+    // We should be able to derive this value (true/false) at compile time. A derive macro looks
+    // lke the best tool to do it. Problem is types that are defined in pre-existing libraries.
+    // Need to think about this a bit further.
   }
+
+  // provided method:
+  fn into_hash_key(&self) -> KeyHash {
+    // See RTPS Spec v2.3 Section 9.6.3.8 KeyHash
+
+    /* The KeyHash_t is computed from the Data as follows using one of two algorithms depending on whether 
+        the Data type is such that the maximum size of the sequential CDR encapsulation of 
+        all the key fields is less than or equal to 128 bits (the size of the KeyHash_t).
+        
+        • If the maximum size of the sequential CDR representation of all the key fields is less 
+        than or equal to 128 bits, then the KeyHash_t shall be computed as the CDR Big-Endian 
+        representation of all the Key fields in sequence. Any unfilled bits in the KeyHash_t 
+        shall be set to zero.
+        • Otherwise the KeyHash_t shall be computed as a 128-bit MD5 Digest (IETF RFC 1321) 
+        applied to the CDR Big- Endian representation of all the Key fields in sequence.
+
+        Note that the choice of the algorithm to use depends on the data-type, 
+        not on any particular data value.
+    */
+
+    let mut cdr_bytes = to_bytes::<Self, BigEndian>(&self)
+      .unwrap_or_else(|e| {
+        error!("Hashing key {:?} failed!", e);
+        // This would cause a lot of hash collisions, but wht else we could do
+        // if the key cannot be serialized? Are there any realistic conditions
+        // this could even ocur?
+        vec![0;16]
+      });
+
+    KeyHash( 
+      if Self::may_exceed_128_bits() {
+        // use MD5 hash to get the hash. The MD5 hash is always exactly
+        // 16 bytes, so just deref it to [u8;16]
+        *md5::compute(&cdr_bytes)
+      } else {
+        cdr_bytes.resize(16, 0x00); // pad with zeros to get 16 bytes
+        <[u8;16]>::try_from(cdr_bytes).unwrap() // this succeeds, because of the resize above
+      }
+    )
+
+  } 
 }
 
 impl Key for () {
-  fn into_hash_key(&self) -> u128 {
-    0
+  fn into_hash_key(&self) -> KeyHash {
+    KeyHash::zero() 
   }
 }
 
