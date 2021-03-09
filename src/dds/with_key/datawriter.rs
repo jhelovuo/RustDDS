@@ -818,7 +818,8 @@ where
   /// data_writer.dispose(1, None).unwrap();
   /// ```
   pub fn dispose(&self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
-    let send_buffer = CDRSerializerAdapter::<D>::key_to_Bytes( &key  )?; // serialize
+
+    let send_buffer = SA::key_to_Bytes( &key  )?; // serialize key
 
     let ddsdata = DDSData::new_disposed_by_key( 
       ChangeKind::NOT_ALIVE_DISPOSED,

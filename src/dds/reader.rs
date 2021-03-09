@@ -659,7 +659,7 @@ impl Reader {
                 return
               }
             };
-          // now, let's try to determine wat is the dispose reason
+          // now, let's try to determine what is the dispose reason
           let change_kind = 
             Self::deduce_change_kind(data.inline_qos, no_writers, representation_identifier);
           DDSData::new_disposed_by_key_hash(change_kind, key_hash )

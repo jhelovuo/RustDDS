@@ -43,7 +43,7 @@ use crate::{
         SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData, WriterProxy,
         PublicationBuiltinTopicData, DiscoveredWriterData, TopicBuiltinTopicData,
       },
-      spdp_participant_data::SPDPDiscoveredParticipantData,
+      spdp_participant_data::{SPDPDiscoveredParticipantData, SPDPDiscoveredParticipantData_Key},
     },
   },
 };
@@ -162,6 +162,14 @@ impl BuiltinDataDeserializer {
       entity_name: self.entity_name.clone(),
     })
   }
+
+  pub fn generate_spdp_participant_data_key(&self) -> Result<SPDPDiscoveredParticipantData_Key,Error> {
+    Ok(SPDPDiscoveredParticipantData_Key(
+      self.participant_guid
+        .ok_or_else(| | log_and_err_discovery!("participant_guid missing"))?,
+    ))
+  }
+
 
   pub fn generate_reader_proxy(&self) -> Option<ReaderProxy> {
     let remote_reader_guid = match self.endpoint_guid {

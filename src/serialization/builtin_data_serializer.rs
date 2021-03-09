@@ -17,6 +17,7 @@ use crate::{
         PublicationBuiltinTopicData, DiscoveredWriterData, TopicBuiltinTopicData,
       },
       spdp_participant_data::SPDPDiscoveredParticipantData,
+      spdp_participant_data::SPDPDiscoveredParticipantData_Key,
     },
   },
   messages::{
@@ -103,6 +104,41 @@ struct EntityName {
   parameter_id: ParameterId,
   parameter_length: u16,
   entity_name: String,
+}
+
+
+pub struct BuiltinDataSerializer_Key {
+  pub participant_guid: GUID,
+}
+
+impl BuiltinDataSerializer_Key {
+
+  pub fn from_data(participant_data: SPDPDiscoveredParticipantData_Key) -> BuiltinDataSerializer_Key {
+    BuiltinDataSerializer_Key { participant_guid: participant_data.0 }
+  }
+
+  pub fn serialize<S: Serializer>(self, serializer: S, add_sentinel: bool) -> Result<S::Ok, S::Error> {
+    let mut s = serializer
+      .serialize_struct("SPDPParticipantData_Key", 1)
+      .unwrap();
+
+    self.add_participant_guid::<S>(&mut s);
+
+    if add_sentinel {
+      s.serialize_field("sentinel", &(1 as u32)).unwrap();
+    }
+
+    s.end()
+  }
+
+  fn add_participant_guid<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    s.serialize_field(
+      "participant_guid",
+      &GUIDData::from(self.participant_guid, ParameterId::PID_PARTICIPANT_GUID),
+    )
+    .unwrap();
+  }
+
 }
 
 pub struct BuiltinDataSerializer<'a> {

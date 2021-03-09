@@ -4,7 +4,7 @@ use chrono;
 
 use crate::{
   dds::{
-    traits::{key::Keyed},
+    traits::{key::Keyed, Key},
     rtps_reader_proxy::RtpsReaderProxy,
     participant::DomainParticipant,
     rtps_writer_proxy::RtpsWriterProxy,
@@ -28,6 +28,7 @@ use crate::{
 use crate::{
   serialization::{
     builtin_data_serializer::BuiltinDataSerializer,
+    builtin_data_serializer::BuiltinDataSerializer_Key,
     builtin_data_deserializer::BuiltinDataDeserializer,
   },
   network::constant::*,
@@ -36,6 +37,13 @@ use crate::{
 //use std::{time::Duration as StdDuration};
 
 use chrono::Utc;
+
+// separate type is needed to serialize correctly
+#[derive(Eq,PartialEq,Ord,PartialOrd,Debug, Clone, Copy, Hash)]
+pub struct SPDPDiscoveredParticipantData_Key(pub GUID);
+
+impl Key for SPDPDiscoveredParticipantData_Key {}
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SPDPDiscoveredParticipantData {
@@ -166,12 +174,6 @@ impl SPDPDiscoveredParticipantData {
   }
 }
 
-impl Keyed for SPDPDiscoveredParticipantData {
-  type K = GUID; // placeholder
-  fn get_key(&self) -> Self::K {
-    self.participant_guid 
-  }
-}
 
 impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
   fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -194,6 +196,38 @@ impl Serialize for SPDPDiscoveredParticipantData {
     builtin_data_serializer.serialize::<S>(serializer, true)
   }
 }
+
+
+
+impl Keyed for SPDPDiscoveredParticipantData {
+  type K = SPDPDiscoveredParticipantData_Key; 
+  fn get_key(&self) -> Self::K {
+    SPDPDiscoveredParticipantData_Key( self.participant_guid ) 
+  }
+}
+
+impl Serialize for SPDPDiscoveredParticipantData_Key {
+  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer_Key::from_data(*self);
+    builtin_data_serializer.serialize::<S>(serializer, true)
+  } 
+}
+
+impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData_Key {
+  fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let visitor = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_any(visitor)?;
+    res.generate_spdp_participant_data_key().map_err(|e| 
+      D::Error::custom(format!("SPDPDiscoveredParticipantData_Key::deserialize - {:?} - data was {:?}",e, &res) ))
+  }
+}
+
 
 #[cfg(test)]
 mod tests {

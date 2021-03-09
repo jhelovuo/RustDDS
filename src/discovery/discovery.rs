@@ -38,7 +38,8 @@ use crate::{
 };
 
 use crate::discovery::{
-  data_types::spdp_participant_data::SPDPDiscoveredParticipantData,
+  data_types::spdp_participant_data
+    ::{SPDPDiscoveredParticipantData, SPDPDiscoveredParticipantData_Key},
   data_types::topic_data::{DiscoveredWriterData, DiscoveredReaderData},
   discovery_db::DiscoveryDB,
 };
@@ -437,7 +438,9 @@ impl Discovery {
                       .unwrap_or(());
                   }
                   // finally disposing the participant we have
-                  dcps_participant_writer.dispose(discovery.domain_participant.get_guid(), None)
+                  dcps_participant_writer.dispose(
+                    SPDPDiscoveredParticipantData_Key(discovery.domain_participant.get_guid()), 
+                    None)
                     .unwrap_or(());
                   return  // terminate event loop
                 }
@@ -612,9 +615,9 @@ impl Discovery {
             },
             // Err means that DomainParticipant was disposed
             Err(guid) => {
-              self.discovery_db_write().remove_participant(guid.guidPrefix);
+              self.discovery_db_write().remove_participant(guid.0.guidPrefix);
               self.send_discovery_notification(
-                DiscoveryNotificationType::ParticipantLost { guid_prefix: guid.guidPrefix });
+                DiscoveryNotificationType::ParticipantLost { guid_prefix: guid.0.guidPrefix });
             }
           },
         Ok(None) => return, // no more data

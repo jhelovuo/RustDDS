@@ -319,7 +319,7 @@ impl DomainParticipantWeak {
       None => None,
     }
   }
-  
+ 
 } // end impl
 
 
