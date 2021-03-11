@@ -1,3 +1,7 @@
+// use crate::discovery::data_types::topic_data::PublicationBuiltinTopicData_Key;
+// use crate::discovery::data_types::topic_data::SubscriptionBuiltinTopicData_Key;
+use crate::discovery::data_types::topic_data::DiscoveredReaderData_Key;
+use crate::discovery::data_types::topic_data::DiscoveredWriterData_Key;
 use crate::{
   structure::{
     locator::{LocatorList, LocatorData},
@@ -449,7 +453,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: None,
       builtin_endpoint_qos: None,
       entity_name: None,
-      endpoint_guid: subscription_topic_data.key().clone(),
+      endpoint_guid: Some(subscription_topic_data.key().clone()),
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
@@ -488,7 +492,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: None,
       builtin_endpoint_qos: None,
       entity_name: None,
-      endpoint_guid: publication_topic_data.key,
+      endpoint_guid: Some(publication_topic_data.key),
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
@@ -504,6 +508,43 @@ impl<'a> BuiltinDataSerializer<'a> {
       time_based_filter: publication_topic_data.time_based_filter,
       presentation: publication_topic_data.presentation,
       lifespan: publication_topic_data.lifespan,
+      history: None,
+      resource_limits: None,
+      content_filter_property: None,
+    }
+  }
+
+  pub fn from_endpoint_guid(guid: &'a GUID) -> BuiltinDataSerializer<'a> {
+    BuiltinDataSerializer {
+      protocol_version: None,
+      vendor_id: None,
+      expects_inline_qos: None,
+      participant_guid: None,
+      metatraffic_unicast_locators: None,
+      metatraffic_multicast_locators: None,
+      default_unicast_locators: None,
+      default_multicast_locators: None,
+      available_builtin_endpoints: None,
+      lease_duration: None,
+      manual_liveliness_count: None,
+      builtin_endpoint_qos: None,
+      entity_name: None,
+      endpoint_guid: Some(*guid),
+      unicast_locator_list: None,
+      multicast_locator_list: None,
+      data_max_size_serialized: None,
+      topic_name: None,
+      type_name: None,
+      durability: None,
+      deadline: None,
+      latency_budget: None,
+      liveliness: None,
+      reliability: None,
+      ownership: None,
+      destination_order: None,
+      time_based_filter: None,
+      presentation: None,
+      lifespan: None,
       history: None,
       resource_limits: None,
       content_filter_property: None,
@@ -570,6 +611,21 @@ impl<'a> BuiltinDataSerializer<'a> {
     bds_merged
   }
 
+  // -----------------------
+
+  pub fn from_discovered_reader_data_key(
+    discovered_reader_data: &'a DiscoveredReaderData_Key,
+  ) -> BuiltinDataSerializer<'a> {
+    BuiltinDataSerializer::from_endpoint_guid(&discovered_reader_data.0)
+  }
+
+  pub fn from_discovered_writer_data_key(
+    discovered_writer_data: &'a DiscoveredWriterData_Key,
+  ) -> BuiltinDataSerializer<'a> {
+    BuiltinDataSerializer::from_endpoint_guid(&discovered_writer_data.0)
+  }
+
+
   pub fn serialize<S: Serializer>(
     self,
     serializer: S,
@@ -622,6 +678,26 @@ impl<'a> BuiltinDataSerializer<'a> {
 
     s.end()
   }
+
+  pub fn serialize_key<S: Serializer>(
+    self,
+    serializer: S,
+    add_sentinel: bool,
+  ) -> Result<S::Ok, S::Error> {
+    let mut s = serializer
+      .serialize_struct("SPDPParticipantData", self.fields_amount())
+      .unwrap();
+
+    self.add_participant_guid::<S>(&mut s);
+    self.add_endpoint_guid::<S>(&mut s);
+
+    if add_sentinel {
+      s.serialize_field("sentinel", &(1 as u32)).unwrap();
+    }
+
+    s.end()
+  }
+
 
   fn fields_amount(&self) -> usize {
     let mut count: usize = 0;

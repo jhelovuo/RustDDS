@@ -1,4 +1,6 @@
 
+use crate::discovery::data_types::topic_data::DiscoveredReaderData_Key;
+use crate::discovery::data_types::topic_data::DiscoveredWriterData_Key;
 use crate::discovery::data_types::topic_data::ReaderProxy;
 use crate::network::util::get_local_multicast_locators;
 use crate::dds::data_types::SubscriptionBuiltinTopicData;
@@ -428,13 +430,13 @@ impl Discovery {
                   let db = discovery.discovery_db_read();
                   for reader in db.get_all_local_topic_readers() {
                     dcps_subscription_writer
-                      .dispose(reader.reader_proxy.remote_reader_guid, None)
+                      .dispose(DiscoveredReaderData_Key(reader.reader_proxy.remote_reader_guid), None)
                       .unwrap_or(());
                   }
 
                   for writer in db.get_all_local_topic_writers() {
                     dcps_publication_writer
-                      .dispose(writer.writer_proxy.remote_writer_guid, None)
+                      .dispose(DiscoveredWriterData_Key(writer.writer_proxy.remote_writer_guid), None)
                       .unwrap_or(());
                   }
                   // finally disposing the participant we have
@@ -448,7 +450,8 @@ impl Discovery {
                   if guid == dcps_publication_writer.get_guid() {
                     continue
                   }
-                  dcps_publication_writer.dispose(guid, None).unwrap_or(());
+                  dcps_publication_writer.dispose(DiscoveredWriterData_Key(guid), None)
+                    .unwrap_or(());
 
                   match discovery.discovery_db.write() {
                     Ok(mut db) => db.remove_local_topic_writer(guid),
@@ -460,7 +463,7 @@ impl Discovery {
                     continue
                   }
 
-                  dcps_subscription_writer.dispose(guid, None).unwrap_or(());
+                  dcps_subscription_writer.dispose(DiscoveredReaderData_Key(guid), None).unwrap_or(());
 
                   match discovery.discovery_db.write() {
                     Ok(mut db) => db.remove_local_topic_reader(guid),
@@ -649,12 +652,12 @@ impl Discovery {
               }
               db.update_topic_data_drd(&val);
             }
-            Err(guid) => {
-              debug!("Dispose Reader {:?}", guid);
-              db.remove_topic_reader(*guid);
+            Err(reader_key) => {
+              debug!("Dispose Reader {:?}", reader_key);
+              db.remove_topic_reader(reader_key.0);
               self.send_discovery_notification(
                   DiscoveryNotificationType::ReaderLost {
-                    reader_guid: *guid,
+                    reader_guid: reader_key.0,
                 });
             }
           }
@@ -682,11 +685,11 @@ impl Discovery {
               db.update_topic_data_dwd(&val);
               debug!("Discovered Writer {:?}", &val);
             }
-            Err(writer_guid) => {
-              db.remove_topic_writer(*writer_guid);
+            Err(writer_key) => {
+              db.remove_topic_writer(writer_key.0);
               self.send_discovery_notification(
-                DiscoveryNotificationType::WriterLost { writer_guid: *writer_guid });
-              debug!("Disposed Writer {:?}", writer_guid);
+                DiscoveryNotificationType::WriterLost { writer_guid: writer_key.0 });
+              debug!("Disposed Writer {:?}", writer_key);
             }
           }
         }

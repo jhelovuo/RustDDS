@@ -42,6 +42,7 @@ use crate::{
       topic_data::{
         SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData, WriterProxy,
         PublicationBuiltinTopicData, DiscoveredWriterData, TopicBuiltinTopicData,
+        DiscoveredReaderData_Key, DiscoveredWriterData_Key,
       },
       spdp_participant_data::{SPDPDiscoveredParticipantData, SPDPDiscoveredParticipantData_Key},
     },
@@ -284,8 +285,11 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn generate_publication_topic_data(&self) ->  Result<PublicationBuiltinTopicData,Error> {
+    let key = self.endpoint_guid
+      .ok_or_else( || Error::Message("generate_publication_topic_data: No GUID".to_string()) )?;
+
     Ok(PublicationBuiltinTopicData {
-      key: self.endpoint_guid,
+      key,
       participant_key: self.participant_guid,
       topic_name: self.topic_name.clone()
         .ok_or(Error::Message("Failed to parse topic name.".to_string()))?,
@@ -346,6 +350,19 @@ impl BuiltinDataDeserializer {
       publication_topic_data,
     })
   }
+
+  pub fn generate_discovered_reader_data_key(self) -> Result<DiscoveredReaderData_Key,Error> {
+    let subscription_topic_data = self.generate_subscription_topic_data()?;
+    // let endpoint_guid = subscription_topic_data.key()
+    //   .ok_or_else( || Error::Message("generate_discovered_reader_data_key - no key".to_string()) )?;
+    Ok(DiscoveredReaderData_Key( subscription_topic_data.key() ) )
+  }
+
+  pub fn generate_discovered_writer_data_key(self) -> Result<DiscoveredWriterData_Key,Error> {
+    let publication_topic_data = self.generate_publication_topic_data()?;
+    Ok( DiscoveredWriterData_Key( publication_topic_data.key ) )
+  }
+
 
   pub fn parse_data_little_endian(self, buffer: &[u8]) -> BuiltinDataDeserializer {
     self.parse_data(buffer, RepresentationIdentifier::CDR_LE)

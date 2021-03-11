@@ -97,7 +97,7 @@ impl Serialize for ReaderProxy {
 /// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubscriptionBuiltinTopicData {
-  key: Option<GUID>,
+  key: GUID,
   participant_key: Option<GUID>,
   topic_name: String,   
   type_name: String,    
@@ -126,7 +126,7 @@ impl SubscriptionBuiltinTopicData {
     qos: &QosPolicies,
   ) -> SubscriptionBuiltinTopicData {
     let mut sbtd = SubscriptionBuiltinTopicData {
-      key: Some(key),
+      key,
       participant_key: None,
       topic_name: topic_name.to_string(),
       type_name: type_name.to_string(),
@@ -146,12 +146,12 @@ impl SubscriptionBuiltinTopicData {
     sbtd
   }
 
-  pub fn key(&self) -> &Option<GUID> {
-    &self.key
+  pub fn key(&self) -> GUID {
+    self.key
   }
 
   pub fn set_key(&mut self, key: GUID) {
-    self.key = Some(key);
+    self.key = key;
   }
 
   pub fn participant_key(&self) -> &Option<GUID> {
@@ -271,6 +271,20 @@ impl Serialize for SubscriptionBuiltinTopicData {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
+// ------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SubscriptionBuiltinTopicData_Key(pub GUID);
+
+impl Serialize for SubscriptionBuiltinTopicData_Key {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_endpoint_guid(&self.0);
+    builtin_data_serializer.serialize_key::<S>(serializer, false)
+  }
+}
 
 // =======================================================================
 // =======================================================================
@@ -330,13 +344,17 @@ impl DiscoveredReaderData {
   }
 }
 
+// separate type is needed to serialize correctly
+#[derive(Eq,PartialEq,Ord,PartialOrd,Debug, Clone, Copy, Hash)]
+pub struct DiscoveredReaderData_Key(pub GUID);
+
+impl Key for DiscoveredReaderData_Key {}
+
+
 impl Keyed for DiscoveredReaderData {
-  type K = GUID;
+  type K = DiscoveredReaderData_Key;
   fn get_key(&self) -> Self::K {
-    match self.subscription_topic_data.key {
-      Some(k) => k,
-      None => GUID::default(),
-    }
+    DiscoveredReaderData_Key( self.subscription_topic_data.key )
   }
 }
 
@@ -353,8 +371,6 @@ impl<'de> Deserialize<'de> for DiscoveredReaderData {
   }
 }
 
-//impl DeserializeOwned for DiscoveredReaderData { /*marker trait only */ }
-
 impl Serialize for DiscoveredReaderData {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
@@ -364,6 +380,32 @@ impl Serialize for DiscoveredReaderData {
     builtin_data_serializer.serialize::<S>(serializer, true)
   }
 }
+
+// -------
+
+impl<'de> Deserialize<'de> for DiscoveredReaderData_Key {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let custom_ds = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_any(custom_ds)?;
+    res
+      .generate_discovered_reader_data_key()
+      .map_err(serde::de::Error::custom)
+  }
+}
+
+impl Serialize for DiscoveredReaderData_Key {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_reader_data_key(&self);
+    builtin_data_serializer.serialize_key::<S>(serializer, true)
+  }
+}
+
 
 // =======================================================================
 // =======================================================================
@@ -421,7 +463,7 @@ impl Serialize for WriterProxy {
 /// Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PublicationBuiltinTopicData {
-  pub key: Option<GUID>,
+  pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
   pub topic_name: String,
   pub type_name: String,
@@ -445,7 +487,7 @@ impl PublicationBuiltinTopicData {
     type_name: &String,
   ) -> PublicationBuiltinTopicData {
     PublicationBuiltinTopicData {
-      key: Some(guid),
+      key: guid,
       participant_key: Some(participant_guid),
       topic_name: topic_name.clone(),
       type_name: type_name.clone(),
@@ -514,6 +556,22 @@ impl Serialize for PublicationBuiltinTopicData {
   }
 }
 
+// ------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PublicationBuiltinTopicData_Key(pub GUID);
+
+impl Serialize for PublicationBuiltinTopicData_Key {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_endpoint_guid(&self.0);
+    builtin_data_serializer.serialize::<S>(serializer, false)
+  }
+}
+
+
 // =======================================================================
 // =======================================================================
 // =======================================================================
@@ -528,14 +586,17 @@ pub struct DiscoveredWriterData {
   pub publication_topic_data: PublicationBuiltinTopicData,
 }
 
+// separate type is needed to serialize correctly
+#[derive(Eq,PartialEq,Ord,PartialOrd,Debug, Clone, Copy, Hash)]
+pub struct DiscoveredWriterData_Key(pub GUID); // wrapper to enable custom PL CDR (de)serialization
+
+impl Key for DiscoveredWriterData_Key {}
+
 impl Keyed for DiscoveredWriterData {
-  type K = GUID;
+  type K = DiscoveredWriterData_Key;
 
   fn get_key(&self) -> Self::K {
-    match self.publication_topic_data.key {
-      Some(k) => k,
-      None => GUID::GUID_UNKNOWN,
-    }
+    DiscoveredWriterData_Key( self.publication_topic_data.key )
   }
 }
 
@@ -593,6 +654,29 @@ impl Serialize for DiscoveredWriterData {
     builtin_data_serializer.serialize::<S>(serializer, true)
   }
 }
+
+impl<'de> Deserialize<'de> for DiscoveredWriterData_Key {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let custom_ds = BuiltinDataDeserializer::new();
+    let res = deserializer.deserialize_any(custom_ds)?;
+    res.generate_discovered_writer_data_key()
+      .map_err(|e| de::Error::custom(e))
+  }
+}
+
+impl Serialize for DiscoveredWriterData_Key {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_writer_data_key(&self);
+    builtin_data_serializer.serialize_key::<S>(serializer, true)
+  }
+}
+
 
 // =======================================================================
 // =======================================================================
