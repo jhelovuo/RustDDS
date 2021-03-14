@@ -344,11 +344,12 @@ impl Writer {
               if let Some(cache_change) = 
                   self.dds_cache.read().unwrap()
                     .from_topic_get_change(&self.my_topic_name, &timestamp) { 
-                partial_message.data_msg( cache_change.clone(), // TODO: We should not clone, too much copying
-                                          EntityId::ENTITYID_UNKNOWN, // reader
-                                          self.my_guid.entityId, // writer
-                                          self.endianness ) 
-                // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
+                partial_message
+                  .data_msg(cache_change.clone(), 
+                            // Now that payload contains Bytes, it is relatively cheap to clone
+                            EntityId::ENTITYID_UNKNOWN, // reader
+                            self.my_guid.entityId, // writer
+                            self.endianness ) 
               } else { partial_message }
             } else { partial_message };
           let final_flag = false;
