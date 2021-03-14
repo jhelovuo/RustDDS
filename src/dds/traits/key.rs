@@ -133,7 +133,11 @@ pub trait Key:
       });
 
     KeyHash( 
-      if Self::may_exceed_128_bits() {
+      // TODO: Here we just detect at run-time that the cdr_bytes is too long
+      // fit into 16-byte hash field as-is. This should be done statically, and the
+      // writer and reader (acreoss implementations of RTPS) must agree on this
+      // based on key type alone, not any particular contents.
+      if Self::may_exceed_128_bits() || cdr_bytes.len() > 16 {
         // use MD5 hash to get the hash. The MD5 hash is always exactly
         // 16 bytes, so just deref it to [u8;16]
         *md5::compute(&cdr_bytes)
