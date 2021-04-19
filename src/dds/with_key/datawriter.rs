@@ -32,6 +32,7 @@ use crate::dds::statusevents::*;
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::key::*;
 use crate::dds::traits::TopicDescription;
+use crate::dds::helpers::*;
 
 use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
@@ -277,9 +278,15 @@ where
     let send_buffer = SA::to_Bytes( &data )?; // serialize
 
     let ddsdata = DDSData::new( SerializedPayload::new_from_Bytes( SA::output_encoding() , send_buffer) );
+    let writer_command = WriterCommand::DDSData { data: ddsdata , source_timestamp };
 
-    match self.cc_upload
-      .try_send(WriterCommand::DDSData { data: ddsdata , source_timestamp })
+    let timeout =
+      match self.get_qos().reliability() {
+        Some(Reliability::Reliable { max_blocking_time }) => Some(max_blocking_time),
+        _ => None,
+      };
+
+    match try_send_timeout(&self.cc_upload, writer_command, timeout)
     {
       Ok(_) => {
         self.refresh_manual_liveliness();

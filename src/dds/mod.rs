@@ -110,6 +110,7 @@ pub(crate) mod ddsdata;
 mod dp_event_loop;
 mod message_receiver;
 mod sampleinfo;
+mod helpers;
 
 /// Participating in NoKey topics.
 pub mod no_key;

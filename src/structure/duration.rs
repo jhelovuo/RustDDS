@@ -49,10 +49,19 @@ impl Duration {
   }
 
   pub const fn from_millis(millis: i64) -> Duration {
-    let fraction = (((millis % 1000) << 32) / 1000) as u32; // correct formula?
+    let fraction = (((millis % 1000) << 32) / 1000) as u32; 
 
     Duration {
       seconds: (millis / 1000) as i32,
+      fraction,
+    }
+  }
+
+  pub const fn from_nanos(nanos: i64) -> Duration {
+    let fraction = (((nanos % 1000_000_000) << 32) / 1000_000_000) as u32; 
+
+    Duration {
+      seconds: (nanos / 1000_000_000) as i32,
       fraction,
     }
   }
