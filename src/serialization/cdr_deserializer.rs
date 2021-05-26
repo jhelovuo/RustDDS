@@ -187,7 +187,7 @@ where
   where
     V: Visitor<'de>,
   {
-    unimplemented!()
+    Err(Error::Message("cdr_desrializer: Cannot deserialize \"any\" type. ".to_string()))
   }
 
   //15.3.1.5 Boolean
