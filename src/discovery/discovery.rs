@@ -418,7 +418,7 @@ impl Discovery {
           return;
         }
       }
-
+      //debug!("Loop alive");
       for event in events.into_iter() {
         match event.token() {
           DISCOVERY_COMMAND_TOKEN => {
@@ -482,8 +482,10 @@ impl Discovery {
             }
           }
 
-          DISCOVERY_PARTICIPANT_DATA_TOKEN => 
-            discovery.handle_participant_reader(&mut dcps_participant_reader),
+          DISCOVERY_PARTICIPANT_DATA_TOKEN => {
+            debug!("triggered participant reader");
+            discovery.handle_participant_reader(&mut dcps_participant_reader)
+          }
 
           DISCOVERY_PARTICIPANT_CLEANUP_TOKEN => {
             discovery.participant_cleanup();
@@ -623,7 +625,10 @@ impl Discovery {
                 DiscoveryNotificationType::ParticipantLost { guid_prefix: guid.0.guidPrefix });
             }
           },
-        Ok(None) => return, // no more data
+        Ok(None) => {
+          debug!("handle_participant_reader: out of data");
+          return
+        } // no more data
         Err(e) => error!("{:?}",e),
       }
     } // loop
@@ -963,7 +968,7 @@ impl Discovery {
     for data in datas {
       match writer.write(data.clone(), None) {
         Ok(_) => (),
-        _ => error!("Unable to write new topic info."),
+        Err(e) => error!("Unable to write new topic info: {:?}",e),
       }
     }
   }

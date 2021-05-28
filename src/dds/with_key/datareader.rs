@@ -313,12 +313,13 @@ where
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
     self.fill_local_datasample_cache();
-
     let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    debug!("take selected count = {}", selected.len() );
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.take_by_keys(&selected);
-
+    debug!("take taken count = {}", result.len() );
+    
     // clearing receiver buffer
     while let Ok(_) = self.notification_receiver.try_recv() {}
 

@@ -36,6 +36,9 @@ use super::{
 // until we pronounce it dead.
 const DEFAULT_PARTICIPANT_LEASE_DURATION : Duration = Duration::from_secs(60);
 
+// How much longer to wait than lease duration before pronouncing lost.
+const PARTICIPANT_LEASE_DURATION_TOLREANCE : Duration = Duration::from_secs(0);
+
 
 pub(crate) struct DiscoveryDB {
   participant_proxies: BTreeMap<GuidPrefix, SPDPDiscoveredParticipantData>,
@@ -141,22 +144,24 @@ impl DiscoveryDB {
     let inow = Instant::now();
 
     let mut to_remove = Vec::new();
-
     // TODO: We are not cleaning up liast_life_signs table, but that should not be a problem,
     // except for a slight memory leak.
     for (&guid,sp) in self.participant_proxies.iter() {
       let lease_duration = sp.lease_duration
             .unwrap_or( DEFAULT_PARTICIPANT_LEASE_DURATION );
-
+      //let lease_duration = lease_duration + lease_duration; // double it
       match self.participant_last_life_signs.get(&guid) {
-        Some(&last_life) =>
+        Some(&last_life) => {
           // keep, if duration not exeeded
-          if Duration::from_std(inow.duration_since(last_life)) <= lease_duration {
+          let elapsed = Duration::from_std(inow.duration_since(last_life));
+          if elapsed <= lease_duration {
             () // this is a keeper
           } else {
-            debug!("participant cleanup - deleting participant proxy {:?}",guid);
+            debug!("participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} elapsed = {:?}",
+                  guid, lease_duration, elapsed);
             to_remove.push(guid);    
-          },
+          }
+        }
         None => {
           error!("Participant {:?} not in last_life_signs table?", guid);
         }

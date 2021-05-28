@@ -133,6 +133,13 @@ impl Div<i64> for Duration {
   }
 }
 
+impl std::ops::Add for Duration {
+  type Output = Self;
+  fn add(self, other:Self) -> Self {
+    Duration::from_ticks( self.to_ticks() + other.to_ticks() )
+  }
+}
+
 
 #[derive(Serialize, Deserialize)]
 pub struct DurationData {
