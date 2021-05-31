@@ -422,11 +422,19 @@ impl Reader {
     trace!("handle_data_msg from {:?} no_writers={:?} seq={:?}", 
         &writer_guid, no_writers, seq_num,);
     if statefull {
+      let my_entityid = self.my_guid.entityId; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
         if writer_proxy.contains_change(seq_num) {
           // change already present
           trace!("handle_data_msg already have this seq={:?}", seq_num);
-          return
+          if my_entityid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER {
+            debug!("Accepting duplicate message to participant reader.");
+            // This is an attmpted workaround to eProsima not
+            // incrementing sequence numbers. (eProsime shapes demo 2.1.0 from 2021)
+          } else {
+            // already have this sequence number , so drop the submessage
+            return 
+          }
         }
         // Add the change and get the instant
         writer_proxy.received_changes_add(seq_num, instant);
