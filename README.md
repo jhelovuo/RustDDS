@@ -2,11 +2,12 @@
 
 The Data Distribution Service for real-time systems (DDS) is an Object Management Group (OMG) machine-to-machine connectivity framework that aims to enable scalable, real-time, dependable, high-performance and interoperable data exchanges using a publish–subscribe pattern. DDS addresses the needs of applications like air-traffic control, smart grid management, autonomous vehicles, robotics, transportation systems, power generation, medical devices, simulation and testing, aerospace and defense, and other applications that require real-time data exchange [[Wiki]][wiki-dds-url].
 
-RustDDS is a pure Rust implementation of DDS. We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions, so the API is not quite the same as with DDS specification.
+[RustDDS][rustdds-url] is a pure Rust implementation of DDS, developed by 
+[Atostek][atostek-url]. We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions, so the API is not quite the same as with DDS specification.
 
 # Current implementation status
 
-This is still work-in-progress. The most immediate goal is to have enough functionality to be able to communicate with [ROS2][ros2-url] software.
+This is still work-in-progress. Currently, the implementation is complete enough to do some data exchange with [ROS2][ros2-url] software.
 
 # Data serialization and keying
 
@@ -99,3 +100,5 @@ The RTPS implementation used here is derived from [rtps-rs][klapeyron-rtps-rs-ur
 [metal-io-url]: https://docs.rs/mio/0.6.22/mio/
 [serde-url]: https://serde.rs/
 [serde-data-format-url]: https://serde.rs/data-format.html
+[rustdds-url]: https://atostek.com/en/products/rustdds/
+[atostek-url]: https://atostek.com/en/
