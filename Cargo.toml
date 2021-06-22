@@ -2,12 +2,12 @@
 name = "rustdds"
 version = "0.4.2"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", "Oiva Moisio <oiva.moisio@atostek.com>", "Miska Melkinen <miska.melkinen@atostek.com>", "Lauri Eneh <lauri.eneh@atostek.com>"]
-description = "Rust DDS implementation with RTPS"
+description = "Native Rust DDS implementation with RTPS"
 readme = "README.md"
 keywords = ["network","protocol","dds","rtps"]
 license = "Apache-2.0"
 edition = "2018"
-homepage = "https://github.com/jhelovuo/RustDDS"  # placeholder home page
+homepage = "https://atostek.com/en/products/rustdds/"  
 repository = "https://github.com/jhelovuo/RustDDS"
 categories = ["network-programming", "science::robotics"] 
 # the science-robotics category is because of ROS2
