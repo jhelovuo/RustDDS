@@ -181,6 +181,11 @@ impl DomainParticipant {
       .create_topic(&w, name, type_desc, qos, topic_kind)
   }
 
+  pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
+    let w = self.weak_clone();
+    self.dpi.lock().unwrap().find_topic(&w, name, timeout)
+  }
+
   /// # Examples
   ///
   /// ```
@@ -308,6 +313,13 @@ impl DomainParticipantWeak {
     }
   }
 
+  pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
+    match self.dpi.upgrade() {
+      Some(dpi) => dpi.lock().unwrap().find_topic(&self, name, timeout),
+      None => Err(Error::LockPoisoned),
+    }
+  }
+
   pub fn domain_id(&self) -> u16 {
     match self.dpi.upgrade() {
       Some(dpi) => dpi.lock().unwrap().domain_id(),
@@ -414,6 +426,15 @@ impl DomainParticipant_Disc {
       .lock()
       .unwrap()
       .create_topic(&dp, name, type_desc, qos, topic_kind)
+  }
+
+  pub fn find_topic(
+    &self,
+    dp: &DomainParticipantWeak,
+    name: &str,
+    timeout: Duration,
+  ) -> Result<Option<Topic>> {
+    self.dpi.lock().unwrap().find_topic(&dp, name, timeout)
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -748,7 +769,12 @@ impl DomainParticipant_Inner {
 
   // Do not implement contentfilteredtopics or multitopics (yet)
 
-  pub fn find_topic(self, _name: &str, _timeout: Duration) -> Result<Topic> {
+  pub fn find_topic(
+    &self,
+    _domain_participant_weak: &DomainParticipantWeak,
+    _name: &str,
+    _timeout: Duration,
+  ) -> Result<Option<Topic>> {
     unimplemented!()
   }
 
