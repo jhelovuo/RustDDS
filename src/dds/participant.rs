@@ -771,13 +771,48 @@ impl DomainParticipant_Inner {
 
   pub fn find_topic(
     &self,
-    _domain_participant_weak: &DomainParticipantWeak,
-    _name: &str,
-    _timeout: Duration,
+    domain_participant_weak: &DomainParticipantWeak,
+    name: &str,
+    timeout: Duration,
   ) -> Result<Option<Topic>> {
-    unimplemented!()
+    match self.find_topic_in_discovery_db(domain_participant_weak, name)? {
+      Some(topic) => return Ok(Some(topic)),
+      None => (),
+    }
+
+    std::thread::sleep(timeout);
+
+    self.find_topic_in_discovery_db(domain_participant_weak, name)
   }
 
+  fn find_topic_in_discovery_db(
+    &self,
+    domain_participant_weak: &DomainParticipantWeak,
+    name: &str,
+  ) -> Result<Option<Topic>> {
+    let db = match self.discovery_db.read() {
+      Ok(db) => db,
+      Err(_) => return Err(Error::LockPoisoned),
+    };
+
+    let maybe_discovered_topic = db.get_all_topics().find(|&d| d.get_topic_name() == name);
+    match maybe_discovered_topic {
+      Some(d) => {
+        // build a Topic from DiscoveredTopicData
+        let qos = d.topic_data.get_qos();
+        let topic_kind = match d.topic_data.key {
+          Some(_) => TopicKind::WithKey,
+          None => TopicKind::NoKey,
+        };
+        let name = d.get_topic_name().clone();
+        let type_desc = d.topic_data.type_name.clone();
+        let topic =
+          self.create_topic(domain_participant_weak, &name, &type_desc, &qos, topic_kind)?;
+        Ok(Some(topic))
+      }
+      None => Ok(None),
+    }
+  }
   // get_builtin_subscriber (why would we need this?)
 
   // ignore_* operations. TODO: Do we needa any of those?
