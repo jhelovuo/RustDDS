@@ -705,6 +705,25 @@ pub struct TopicBuiltinTopicData {
   pub ownership: Option<Ownership>,
 }
 
+impl HasQoSPolicy for TopicBuiltinTopicData {
+  fn get_qos(&self) -> QosPolicies {
+    QosPolicies {
+      durability: self.durability,
+      presentation: self.presentation,
+      deadline: self.deadline,
+      latency_budget: self.latency_budget,
+      ownership: self.ownership,
+      liveliness: self.liveliness,
+      time_based_filter: None,
+      reliability: self.reliability,
+      destination_order: self.destination_order,
+      history: self.history,
+      resource_limits: self.resource_limits,
+      lifespan: self.lifespan,
+    }
+  }
+}
+
 impl<'de> Deserialize<'de> for TopicBuiltinTopicData {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
