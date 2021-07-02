@@ -7,7 +7,46 @@ The Data Distribution Service for real-time systems (DDS) is an Object Managemen
 
 # Current implementation status
 
-This is still work-in-progress. Currently, the implementation is complete enough to do some data exchange with [ROS2][ros2-url] software.
+This is still work-in-progress. Currently, the implementation is complete enough to do data exchange with [ROS2][ros2-url] software.
+
+## Features Status
+
+* Discovery ✅
+* Reliability QoS: Reliable and Best Effort ✅
+* History QoS ✅
+* RTPS over UDP ✅
+* Broadcast UDP ✅
+* Non-blocking I/O  ✅
+* Topics kinds: with_key and no_key ✅
+* Zero-copy receive path ✅
+* Zero-copy transmit path
+* Topic creation ✅
+* Topic finding
+* Partition QoS
+* Time-based filter QoS
+* Ownership QoS
+* Presentation QoS: Coherent/atomic sample sets and ordering
+* Deadline and Latency budget QoS
+* Sample fragmentation (large object exchange)
+* `wait_for_acknowledgments`
+* Listener (or equivalent) for DomainPrticiapnts
+* Listerer (or equivalent) for Topics
+* Alternative API using Rust `async` tasks
+* Shared-memory transport for local connections
+
+## Interoperability
+
+Using "Shapes" demo programs available. Data exchange worked in both directions:
+
+* RTI Connext
+* eProsima FastRTPS
+* OpenDDS
+* Twin Oaks Computing
+
+# Usage
+
+Please see the examples included within the crate and also [Interoperability test][https://github.com/jhelovuo/dds-rtp] .
+
 
 # Data serialization and keying
 
