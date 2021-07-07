@@ -1,3 +1,5 @@
+use crate::dds::data_types::EntityId;
+
 use crate::messages::submessages::ack_nack::AckNack;
 use crate::messages::submessages::data::Data;
 use crate::messages::submessages::data_frag::DataFrag;
@@ -69,3 +71,21 @@ impl<C: Context> Writable<C> for InterpreterSubmessage {
     }
   }
 }
+
+
+#[derive(Debug)]
+pub enum AckSubmessage {
+  // use _Variant for less confusing naming
+  AckNack_Variant(AckNack),
+  NackFrag_Variant(NackFrag),
+}
+
+impl AckSubmessage {
+  pub fn writer_id(&self) -> EntityId {
+    match self {
+      AckSubmessage::AckNack_Variant(a) => a.writer_id,
+      AckSubmessage::NackFrag_Variant(a) => a.writer_id,
+    }
+  }
+}
+

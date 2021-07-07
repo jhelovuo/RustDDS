@@ -26,9 +26,11 @@ use crate::structure::duration::Duration;
 use crate::structure::guid::{GuidPrefix, EntityId, GUID};
 use crate::structure::sequence_number::{SequenceNumber};
 use crate::{
-  messages::submessages::submessages::{
-    AckNack,
-  },
+  // messages::submessages::submessages::{
+  //   AckNack,
+  // },
+  messages::submessages::submessages::AckSubmessage,
+
   structure::cache_change::{CacheChange},
   serialization::{Message},
   dds::dp_event_loop::NACK_RESPONSE_DELAY,
@@ -517,32 +519,33 @@ impl Writer {
   /// When receiving an ACKNACK Message indicating a Reader is missing some data samples, the Writer must
   /// respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
   /// sending a HEARTBEAT message when the sample is no longer available
-  pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, an: AckNack) {
-    // sanity check
-    if !self.is_reliable() {
-      warn!("Writer {:x?} is best effort! It should not handle acknack messages!", 
-              self.get_entity_id());
-      return
-    }
-    // Update the ReaderProxy
-    let last_seq = self.last_change_sequence_number; // to avoid borrow problems
+  pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, ack_submessage: AckSubmessage) {
+    match ack_submessage {
+      AckSubmessage::AckNack_Variant(ref an) => {
+      // sanity check
+      if !self.is_reliable() {
+        warn!("Writer {:x?} is best effort! It should not handle acknack messages!", 
+                self.get_entity_id());
+        return
+      }
+      // Update the ReaderProxy
+      let last_seq = self.last_change_sequence_number; // to avoid borrow problems
 
-    // sanity check requested sequence numbers
-    match an.reader_sn_state.iter().next().map( i64::from ) {
-      None => (), // ok
-      Some(0) => 
-        warn!("Request for SN zero! : {:?}",an),
-      Some(_) => (), // ok
-    }
+      // sanity check requested sequence numbers
+      match an.reader_sn_state.iter().next().map( i64::from ) {
+        None => (), // ok
+        Some(0) => 
+          warn!("Request for SN zero! : {:?}",an),
+        Some(_) => (), // ok
+      }
     let my_topic = self.my_topic_name.clone(); // for debugging
 
-    self.update_ack_waiters( 
-      GUID::new(reader_guid_prefix, an.reader_id) , 
-      Some(an.reader_sn_state.base()));
+      self.update_ack_waiters( 
+        GUID::new(reader_guid_prefix, an.reader_id) , 
+        Some(an.reader_sn_state.base()));
 
-    if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
-
-        reader_proxy.handle_ack_nack(&an, last_seq);
+      if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
+        reader_proxy.handle_ack_nack(&ack_submessage, last_seq);
 
         let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow 
         // Sanity Check: if the reader asked for something we did not even advertise yet.
@@ -578,8 +581,14 @@ impl Writer {
             TimerMessageType::WriterSendRepairData{ to_reader: reader_guid },
           );
         }
+      }
+    }
+    AckSubmessage::NackFrag_Variant(nackfrag) => {
+      // TODO
+      error!("NACKFRAG Not implemented")
     }
   }
+}
 
   fn update_ack_waiters(&mut self, guid:GUID, acked_before:Option<SequenceNumber>) {
     let mut completed = false;

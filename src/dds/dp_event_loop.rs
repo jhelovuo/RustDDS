@@ -31,7 +31,7 @@ use crate::{
   common::timed_event_handler::{TimedEventHandler},
   discovery::discovery_db::DiscoveryDB,
   structure::{dds_cache::DDSCache, topic_kind::TopicKind},
-  messages::submessages::submessages::AckNack,
+  messages::submessages::submessages::AckSubmessage,
 };
 
 use super::{
@@ -71,7 +71,7 @@ pub struct DPEventLoop {
 
   stop_poll_receiver: mio_channel::Receiver<()>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
-  ack_nack_reciever: mio_channel::Receiver<(GuidPrefix, AckNack)>,
+  ack_nack_reciever: mio_channel::Receiver<(GuidPrefix, AckSubmessage)>,
 
   writers: HashMap<EntityId, Writer>,
   udp_sender: Rc<UDPSender>,
@@ -96,7 +96,7 @@ impl DPEventLoop {
   ) -> DPEventLoop {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_reciever) =
-      mio_channel::sync_channel::<(GuidPrefix, AckNack)>(100);
+      mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(100);
     let mut udp_listeners = udp_listeners;
     for (token, listener) in &mut udp_listeners {
       poll
@@ -457,18 +457,18 @@ impl DPEventLoop {
   }
 
   fn handle_writer_acknack_action(&mut self, _event: &Event) {
-    while let Ok((acknack_sender_prefix, acknack_message)) = self.ack_nack_reciever.try_recv() {
+    while let Ok((acknack_sender_prefix, acknack_submessage)) = self.ack_nack_reciever.try_recv() {
       let writer_guid = GUID::new_with_prefix_and_id(
         self.domain_info.domain_participant_guid.guidPrefix,
-        acknack_message.writer_id,
+        acknack_submessage.writer_id(),
       );
       if let Some(found_writer) = self.writers.get_mut(&writer_guid.entityId) {
         if found_writer.is_reliable() {
-          found_writer.handle_ack_nack(acknack_sender_prefix, acknack_message)
+          found_writer.handle_ack_nack(acknack_sender_prefix, acknack_submessage)
         }
       } else {
         warn!(
-          "Couldn't handle acknack! did not find local rtps writer with GUID: {:x?}",
+          "Couldn't handle acknack/nackfrag! Did not find local RTPS writer with GUID: {:x?}",
           writer_guid
         );
         continue;

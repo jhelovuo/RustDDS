@@ -11,14 +11,15 @@ use crate::serialization::submessage::SubmessageBody;
 
 use crate::dds::reader::Reader;
 use crate::structure::guid::EntityId;
-use crate::messages::submessages::submessages::AckNack;
+//use crate::messages::submessages::submessages::AckNack;
+use crate::messages::submessages::submessages::AckSubmessage;
 
 #[cfg(test)] use crate::dds::ddsdata::DDSData;
 #[cfg(test)] use crate::structure::cache_change::CacheChange;
 #[cfg(test)] use crate::structure::sequence_number::{SequenceNumber};
 
 use mio_extras::channel as mio_channel;
-use log::{debug, warn, trace, info};
+use log::{error, debug, warn, trace, info};
 use bytes::Bytes;
 
 use std::collections::{BTreeMap, btree_map::Entry};
@@ -35,7 +36,7 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 pub(crate) struct MessageReceiver {
   pub available_readers: BTreeMap<EntityId,Reader>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
-  acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckNack)>,
+  acknack_to_eventloop: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
 
   own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
@@ -53,14 +54,14 @@ pub(crate) struct MessageReceiver {
 impl MessageReceiver {
   pub fn new(
     participant_guid_prefix: GuidPrefix,
-    acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckNack)>,
+    acknack_to_eventloop: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
   ) -> MessageReceiver {
     // could be passed in as a parameter
     let locator_kind = LocatorKind::LOCATOR_KIND_UDPv4;
 
     MessageReceiver {
       available_readers: BTreeMap::new(),
-      acknack_sender,
+      acknack_to_eventloop,
       own_guid_prefix: participant_guid_prefix,
 
       source_version: ProtocolVersion::THIS_IMPLEMENTATION,
@@ -272,14 +273,27 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::AckNack(acknack, _) => {
-        match self.acknack_sender.send((self.source_guid_prefix, acknack)) {
+        match self.acknack_to_eventloop
+            .send((self.source_guid_prefix, AckSubmessage::AckNack_Variant(acknack))) {
           Ok(_) => (),
           Err(e) => warn!("Failed to send AckNack. {:?}", e),
         }
       }
       EntitySubmessage::DataFrag(datafrag, _) => {
-        if let Some(target_reader) = self.get_reader_mut(datafrag.reader_id) {
-          target_reader.handle_datafrag_msg(datafrag, mr_state);
+        if datafrag.reader_id == EntityId::ENTITYID_UNKNOWN {
+          trace!("send_submessage DATAFRAG for unknown. writer_id = {:?}", &datafrag.writer_id);
+          for reader in self
+            .available_readers
+            .values_mut()
+            .filter(|r| r.contains_writer(datafrag.writer_id) )
+          {
+            trace!("send_submessage DATAFRAG for unknown handling in {:?}",&reader);
+            reader.handle_datafrag_msg(datafrag.clone(), mr_state.clone());
+          }
+        } else {
+          if let Some(target_reader) = self.get_reader_mut(datafrag.reader_id) {
+            target_reader.handle_datafrag_msg(datafrag, mr_state);
+          }
         }
       }
       EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
@@ -298,7 +312,10 @@ impl MessageReceiver {
           }
         }
       }
-      EntitySubmessage::NackFrag(_, _) => {}
+      EntitySubmessage::NackFrag(nackfrag, _flags) => {
+        // TODO
+        error!("NackFrag handling is not implemented")
+      }
     }
   }
 
@@ -423,9 +440,9 @@ use super::*;
       0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
     ]);
 
-    let (acknack_sender, _acknack_reciever) =
+    let (acknack_to_eventloop, _acknack_reciever) =
       mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
-    let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
+    let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_to_eventloop);
 
     let entity = EntityId::createCustomEntityID([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
@@ -530,9 +547,9 @@ use super::*;
     ]);
 
     let guid_new = GUID::default();
-    let (acknack_sender, _acknack_reciever) =
+    let (acknack_to_eventloop, _acknack_reciever) =
       mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
-    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
+    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_to_eventloop);
 
     message_receiver.handle_received_packet(udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);

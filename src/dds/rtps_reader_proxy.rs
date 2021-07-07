@@ -12,7 +12,7 @@ use crate::{
     sequence_number::{SequenceNumber},
   },
   dds::qos::{QosPolicies,},
-  messages::submessages::submessages::{AckNack},
+  messages::submessages::{submessage::AckSubmessage},
   discovery::data_types::topic_data::DiscoveredReaderData,
 };
 
@@ -163,21 +163,30 @@ impl RtpsReaderProxy {
     ! self.unsent_changes.is_empty()
   }
 
-  pub fn handle_ack_nack(&mut self, acknack: &AckNack, last_available:SequenceNumber) {
-    self.all_acked_before = acknack.reader_sn_state.base();
-    // clean up unsent_changes: 
-    // The handy split_off function "Returns everything after the given key, including the key."
-    self.unsent_changes = self.unsent_changes.split_off(&self.all_acked_before);
+  pub fn handle_ack_nack(&mut self, ack_submessage: &AckSubmessage, last_available:SequenceNumber) {
+    match ack_submessage {
+      AckSubmessage::AckNack_Variant(acknack) => {
+        self.all_acked_before = acknack.reader_sn_state.base();
+        // clean up unsent_changes: 
+        // The handy split_off function "Returns everything after the given key, including the key."
+        self.unsent_changes = self.unsent_changes.split_off(&self.all_acked_before);
 
-    // Insert the requested changes.
-    for nack_sn in acknack.reader_sn_state.iter() {
-      self.unsent_changes.insert(nack_sn);
-    }
-    // sanity check
-    if let Some(&high) = self.unsent_changes.iter().next_back()  {
-      if high > last_available { 
-        warn!("ReaderProxy {:?} asks for {:?} but I have only up to {:?}. ACKNACK = {:?}", 
-          self.remote_reader_guid, self.unsent_changes, last_available, acknack);
+        // Insert the requested changes.
+        for nack_sn in acknack.reader_sn_state.iter() {
+          self.unsent_changes.insert(nack_sn);
+        }
+        // sanity check
+        if let Some(&high) = self.unsent_changes.iter().next_back()  {
+          if high > last_available { 
+            warn!("ReaderProxy {:?} asks for {:?} but I have only up to {:?}. ACKNACK = {:?}", 
+              self.remote_reader_guid, self.unsent_changes, last_available, acknack);
+          }
+        }
+      }
+
+      AckSubmessage::NackFrag_Variant(nack_frag) => {
+        // TODO
+        error!("NACKFRAG not implemented")
       }
     }
   }
