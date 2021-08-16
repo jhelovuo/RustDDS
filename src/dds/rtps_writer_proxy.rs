@@ -8,7 +8,7 @@ use crate::{
 use std::collections::HashMap;
 //use std::time::Instant;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub(crate) struct RtpsWriterProxy {
   /// Identifies the remote matched Writer
   pub remote_writer_guid: GUID,

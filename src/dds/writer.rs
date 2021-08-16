@@ -731,7 +731,7 @@ impl Writer {
       // matched QoS
       None => {
         let change =
-          self.matched_reader_update( reader_proxy );
+          self.matched_reader_update( reader_proxy.clone() );
         if change > 0 {
           self.matched_readers_count_total += change;
           self.send_status(DataWriterStatus::PublicationMatched { 
@@ -744,6 +744,9 @@ impl Writer {
               self.notify_new_data_to_all_readers(),
             _ => (),
           }
+          info!("Matched new remote reader on topic={:?} reader= {:?}", 
+                self.topic_name(), &reader_proxy);
+
         }
       }
       Some(bad_policy_id) => {
@@ -791,7 +794,11 @@ impl Writer {
   }
 
   fn matched_reader_remove(&mut self, guid: GUID,) -> Option<RtpsReaderProxy> {
-    self.readers.remove(&guid)
+    let removed = self.readers.remove(&guid);
+    if removed.is_some() {
+      info!("Removed reader proxy. topic={:?} reader={:?}", self.topic_name(), removed );
+    }
+    removed
   }
 
 

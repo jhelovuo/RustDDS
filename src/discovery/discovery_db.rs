@@ -81,6 +81,9 @@ impl DiscoveryDB {
         error!("Discovered participant GUID entity_id is not for participant: {:?}",guid);
         return // Maybe we should discard the participant here?
       }
+      if self.participant_proxies.get( &guid.guidPrefix ).is_none() {
+        info!("New remote participant: {:?}", &data);
+      }
       // actual work here:
       self.participant_proxies.insert(guid.guidPrefix, data.clone());
       self.participant_last_life_signs.insert(guid.guidPrefix, Instant::now() );

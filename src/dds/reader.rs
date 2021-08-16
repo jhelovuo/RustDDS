@@ -302,13 +302,15 @@ impl Reader {
     match offered_qos.compliance_failure_wrt( &self.qos_policy ) {
       None => { // success, update or insert
         let count_change =
-          self.matched_writer_update(proxy);
+          self.matched_writer_update(proxy.clone()); // need clone here to log depending on this
         if count_change > 0 {
           self.writer_match_count_total += count_change;
           self.send_status_change(DataReaderStatus::SubscriptionMatched{
               total: CountWithChange::new(self.writer_match_count_total, count_change ), 
               current: CountWithChange::new(self.matched_writers.len() as i32, count_change ),
-          })
+          });
+          info!("Matched new remote writer on topic={:?} writer= {:?}", 
+                self.topic_name, &proxy);
         }
       }
       Some(bad_policy_id) => { // no QoS match
