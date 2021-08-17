@@ -4,7 +4,7 @@ use std::io;
 use mio::Token;
 use mio::net::UdpSocket;
 
-use log::{debug, error, trace};
+use log::{debug, error, trace, info};
 
 use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
 
@@ -20,28 +20,51 @@ pub struct UDPListener {
   socket: UdpSocket,
   token: Token,
   receive_buffer: BytesMut,
+  multicast_group: Option<Ipv4Addr>,
+}
+
+impl Drop for UDPListener {
+  fn drop(&mut self) {
+    match self.multicast_group {
+      Some(mcg) => 
+        self
+          .socket
+          .leave_multicast_v4(&mcg, &Ipv4Addr::UNSPECIFIED)
+          .unwrap_or_else(|e| { error!("leave_multicast_group: {:?}",e); } )
+          ,
+      None => (),
+    }
+  }
 }
 
 // TODO: Remove panics from this function. Convert return value to Result.
 impl UDPListener {
 
   // TODO: Why is is this function even necessary? Doesn't try_bind() do just the same?
-  pub fn new(token: Token, host: &str, port: u16) -> UDPListener {
-    let raw_socket = Socket::new(Domain::ipv4(), Type::dgram(), Some(Protocol::udp()) ).unwrap();
+
+  fn new_listening_socket(host: &str, port: u16, reuse_addr: bool) -> io::Result<UdpSocket> {
+    let raw_socket = Socket::new(Domain::ipv4(), Type::dgram(), Some(Protocol::udp()) )?;
 
     // We set ReuseAddr so that other DomainParticipants on this host can
     // bind to the same multicast address and port.
     // To have an effect on bind, this must be done before bind call, so must be done
     // below Rust std::net::UdpSocket level.
-    raw_socket.set_reuse_address(true) 
-      .map_err(|e| error!("Unable set SO_REUSEADDR option on socket {:?}", e))
-      .unwrap();
+    if reuse_addr {
+      raw_socket.set_reuse_address(true)?;
+    }
 
-    let address = SocketAddr::new(host.parse().unwrap(), port);
-    let err_msg = format!("new - Unable to bind address {}", address.to_string());
+    let address = SocketAddr::new(
+      host.parse()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, 
+      port);
 
-    raw_socket.bind( &SockAddr::from(address) )
-      .expect(&err_msg);
+    match raw_socket.bind( &SockAddr::from(address) ) {
+      Err(e) => {
+        error!("new_socket - cannot bind socket: {:?}",e);
+        return Err(e)
+      }
+      Ok(_) => (), 
+    }
 
     let std_socket = raw_socket.into_udp_socket();
     std_socket
@@ -50,61 +73,43 @@ impl UDPListener {
 
     let mio_socket = UdpSocket::from_socket(std_socket)
                       .expect("Unable to create mio socket");
-    debug!("UDPListener::new with address {:?}", mio_socket.local_addr());
+    info!("UDPListener: new socket with address {:?}", mio_socket.local_addr());
 
-    UDPListener { socket: mio_socket, token,
-      receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
-    }
+    Ok(mio_socket)
   }
 
-  // TODO: convert return value from Option to Result
-  pub fn try_bind(token: Token, host: &str, port: u16) -> Option<UDPListener> {
-    let host = match host.parse() {
-      Ok(h) => h,
-      _ => return None,
-    };
 
-    let address = SocketAddr::new(host, port);
-    let raw_socket = Socket::new(Domain::ipv4(), Type::dgram(), Some(Protocol::udp()) ).unwrap();
+  pub fn new_unicast(token: Token, host: &str, port: u16) -> io::Result<UDPListener> {
 
-    // We set ReuseAddr so that other DomainParticipants on this host can
-    // bind to the same multicast address and port.
-    // To have an effect on bind, this must be done before bind call, so must be done
-    // below Rust std::net::UdpSocket level.
-    raw_socket.set_reuse_address(true) 
-      .map_err(|e| error!("Unable set SO_REUSEADDR option on socket {:?}", e))
-      .unwrap();
+    let mio_socket = Self::new_listening_socket(host,port,false)?;
 
-    match raw_socket.bind( &SockAddr::from(address) ) {
-      Err(e) => {
-        error!("try bind - cannot bind socket: {:?}",e);
-        return None
-      }
-      _ => (), // Ok
-    }
-    let std_socket = raw_socket.into_udp_socket();
-
-    match std_socket.set_nonblocking(true) {
-      Ok(_) => (),
-      Err(e) => {
-        error!("Failed to set std socket to non blocking. {:?}", e);
-        return None
-      }
-    };
-
-    let socket = match UdpSocket::from_socket(std_socket) {
-      Ok(s) => s,
-      Err(e) => {
-        error!("Failed to create mio socket. {:?}", e);
-        return None
-      }
-    };
-    debug!("UDPListener::try_bind with address {:?}", socket.local_addr());
-
-    Some(UDPListener { socket, token ,
-      receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK)
+    Ok(UDPListener { 
+      socket: mio_socket, 
+      token,
+      receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
+      multicast_group: None,
     })
   }
+
+  pub fn new_multicast(token: Token, host: &str, port: u16, multicast_group: Ipv4Addr) 
+    -> io::Result<UDPListener> 
+  {
+    if ! multicast_group.is_multicast() {
+          return io::Result::Err(io::Error::new(io::ErrorKind::Other,"Not a multicast address"))
+    } 
+
+    let mio_socket = Self::new_listening_socket(host, port, true)?;
+
+    mio_socket.join_multicast_v4(&multicast_group, &Ipv4Addr::UNSPECIFIED)?;
+
+    Ok(UDPListener { 
+      socket: mio_socket, 
+      token,
+      receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
+      multicast_group: Some(multicast_group),
+    })
+  }
+
 
   pub fn get_token(&self) -> Token {
     self.token

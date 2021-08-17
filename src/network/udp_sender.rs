@@ -27,7 +27,10 @@ impl UDPSender {
   pub fn new(sender_port: u16) -> UDPSender {
     let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
     let socket: UdpSocket = UdpSocket::bind(&saddr).unwrap();
-
+    // We set multicasting loop on so that we can hear other DomainParticipant
+    // instances running on the same host.
+    socket.set_multicast_loop_v4(true)
+      .unwrap_or_else(|e| { error!("Cannot set multicast loop on: {:?}",e); } );
     UDPSender { socket: socket }
   }
 

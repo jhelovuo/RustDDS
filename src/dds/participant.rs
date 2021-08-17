@@ -507,37 +507,29 @@ impl DomainParticipant_Inner {
   ) -> Result<DomainParticipant_Inner> {
     let mut listeners = HashMap::new();
 
-    // Creating UDP listeners for participantId 0 (change this if necessary)
-    let discovery_multicast_listener = UDPListener::try_bind(
-      DISCOVERY_SENDER_TOKEN,
-      "0.0.0.0",
-      get_spdp_well_known_multicast_port(domain_id),
-    );
+    match UDPListener::new_multicast(
+        DISCOVERY_SENDER_TOKEN,
+        "0.0.0.0",
+        get_spdp_well_known_multicast_port(domain_id),
+        Ipv4Addr::new(239, 255, 0, 1) ) 
+    {
+      Ok(l) => { listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, l); }
+      Err(e) =>
+        warn!("Cannot get multicast discovery listener: {:?}",e),
+    }
 
-    match discovery_multicast_listener {
-      Some(ls) => match ls.join_multicast(&Ipv4Addr::new(239, 255, 0, 1)) {
-        Ok(_) => {
-          listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, ls);
-        }
-        _ => {
-          warn!("Cannot join multicast, possibly another instance running on this machine.");
-        }
-      },
-      None => {
-        warn!("Cannot join multicast, possibly another instance running on this machine.");
-      }
-    };
 
     let mut participant_id = 0;
 
     let mut discovery_listener = None;
 
-    while discovery_listener.is_none() {
-      discovery_listener = UDPListener::try_bind(
-        DISCOVERY_SENDER_TOKEN,
-        "0.0.0.0",
-        get_spdp_well_known_unicast_port(domain_id, participant_id),
-      );
+    // Magic value 120 below is from RTPS spec Section "9.6.1.3 Default Port Numbers"
+    while discovery_listener.is_none() && participant_id < 120 {
+      discovery_listener = UDPListener::new_unicast(
+          DISCOVERY_SENDER_TOKEN,
+          "0.0.0.0",
+          get_spdp_well_known_unicast_port(domain_id, participant_id),
+        ).ok();
       if discovery_listener.is_none() {
         participant_id += 1;
       }
@@ -545,39 +537,36 @@ impl DomainParticipant_Inner {
 
     info!("ParticipantId {} selected.", participant_id);
 
+    // here discovery_listener is redefinde (shadowed)
     let discovery_listener = match discovery_listener {
       Some(dl) => dl,
       None => return log_and_err_internal!("Could not find free ParticipantId"),
     };
-
-    let user_traffic_multicast_listener = UDPListener::try_bind(
-      USER_TRAFFIC_SENDER_TOKEN,
-      "0.0.0.0",
-      get_user_traffic_multicast_port(domain_id),
-    );
-
-    match user_traffic_multicast_listener {
-      Some(ls) => match ls.join_multicast(&Ipv4Addr::new(239, 255, 0, 1)) {
-        Ok(_) => {
-          listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, ls);
-        }
-        _ => {
-          error!("Cannot join multicast, possibly another instance running on this machine.");
-        }
-      },
-      None => {
-        error!("Cannot join multicast, possibly another instance running on this machine.");
-      }
-    };
-
-    let user_traffic_listener = UDPListener::new(
-      USER_TRAFFIC_SENDER_TOKEN,
-      "0.0.0.0",
-      get_user_traffic_unicast_port(domain_id, participant_id),
-    );
-
     listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
 
+    // Now the user traffic listeners
+
+    match UDPListener::new_multicast(
+        USER_TRAFFIC_SENDER_TOKEN,
+      "0.0.0.0",
+      get_user_traffic_multicast_port(domain_id),
+      Ipv4Addr::new(239, 255, 0, 1) )
+    {
+      Ok(l) => { listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l); }
+      Err(e) =>
+        warn!("Cannot get multicast discovery listener: {:?}",e),
+    }
+
+
+    let user_traffic_listener = UDPListener::new_unicast(
+            USER_TRAFFIC_SENDER_TOKEN,
+            "0.0.0.0",
+            get_user_traffic_unicast_port(domain_id, participant_id),
+          );
+    let user_traffic_listener = match user_traffic_listener {
+          Ok(l) => l,
+          Err(e) => return log_and_err_internal!("Could not open user traffic listener: {:?}",e),
+        };
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     // Adding readers
