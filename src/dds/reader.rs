@@ -529,7 +529,7 @@ impl Reader {
       // needs to be constructed. p. 48
 
       self.send_acknack(response_ack_nack, mr_state);
-      return true;
+      return true
     }
     false
   } // fn 
