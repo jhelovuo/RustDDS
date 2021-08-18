@@ -498,6 +498,14 @@ impl Writer {
     // Update the ReaderProxy
     let last_seq = self.last_change_sequence_number; // to avoid borrow problems
 
+    // sanity check requested sequence numbers
+    match an.reader_sn_state.iter().next().map( i64::from ) {
+      None => (), // ok
+      Some(0) => 
+        warn!("Request for SN zero! : {:?}",an),
+      Some(_) => (), // ok
+    }
+
     self.update_ack_waiters( 
       GUID::new(reader_guid_prefix, an.reader_id) , 
       Some(an.reader_sn_state.base()));
@@ -517,14 +525,14 @@ impl Writer {
         }
         // Sanity Check
         if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) { // more sanity
-          warn!("ACKNACK from {:?} acks up to before {:?} but I have only up to {:?}",
+          warn!("ACKNACK from {:?} acks up to before {:?} but I have only up to {:?}",
             reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq);
         }
         // TODO: The following check is rather expensive. Maybe should turn it off
         // in release build?
         if let Some( max_req_sn ) = an.reader_sn_state.iter().max() { // sanity check
           if max_req_sn > last_seq {
-            warn!("ACKNACK from {:?} requests {:?} but I have only up to {:?}",
+            warn!("ACKNACK from {:?} requests {:?} but I have only up to {:?}",
               reader_proxy.remote_reader_guid, 
               an.reader_sn_state.iter().collect::<Vec<SequenceNumber>>(), last_seq);
           }
@@ -788,8 +796,10 @@ impl Writer {
   // internal helper. Same as above, but duplicates are an error.
   fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
     let guid = reader_proxy.remote_reader_guid;
-    if self.readers.insert(reader_proxy.remote_reader_guid, reader_proxy).is_some() {
+    if self.readers.insert(reader_proxy.remote_reader_guid, reader_proxy.clone()).is_some() {
       error!("Reader proxy with same GUID {:?} added already", guid);
+    } else {
+      info!("Added reader proxy. topic={:?} reader={:?}", self.topic_name(), reader_proxy );
     }
   }
 
@@ -805,6 +815,7 @@ impl Writer {
   pub fn reader_lost(&mut self, guid: GUID)
   {
     if self.readers.contains_key(&guid) {
+      info!("reader_lost topic={:?} reader={:?}", self.topic_name(), &guid );
       self.matched_reader_remove(guid);
       //self.matched_readers_count_total -= 1; // this never decreases
       self.send_status(DataWriterStatus::PublicationMatched { 

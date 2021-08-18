@@ -575,6 +575,7 @@ impl DPEventLoop {
   } // fn 
 
   fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
+    info!("remote_participant_lost guidPrefix={:?}", &participant_guid_prefix );
     // Discovery has already removed Particiapnt from Discovery DB
     // Now we have to remove any ReaderProxies and WriterProxies belonging
     // to that particiapnt, so that we do not send messages to them anymore.

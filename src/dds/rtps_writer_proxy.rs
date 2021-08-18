@@ -5,7 +5,7 @@ use crate::{
   structure::sequence_number::{SequenceNumber},
   structure::time::Timestamp,
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 //use std::time::Instant;
 
 #[derive(Debug,Clone)]
@@ -26,9 +26,8 @@ pub(crate) struct RtpsWriterProxy {
 
   /// List of sequence_numbers received from the matched RTPS Writer
   // TODO: When should they be removed from here?
-  // TODO: Change this to BTreeMap so it is easier to get last timesamp.
   // Or keep separately track of latest timestamp.
-  changes: HashMap<SequenceNumber, Timestamp>,
+  changes: BTreeMap<SequenceNumber, Timestamp>,
 
   pub received_heartbeat_count: i32,
 
@@ -49,7 +48,7 @@ impl RtpsWriterProxy {
       unicast_locator_list,
       multicast_locator_list,
       remote_group_entity_id,
-      changes: HashMap::new(),
+      changes: BTreeMap::new(),
       received_heartbeat_count: 0,
       sent_ack_nack_count: 0,
     }
@@ -75,18 +74,10 @@ impl RtpsWriterProxy {
     hb_first_sn: SequenceNumber,
     hb_last_sn: SequenceNumber,
   ) -> Vec<SequenceNumber> {
-    // taking all available seqnums in range
-    let seqnums: Vec<SequenceNumber> = self
-      .changes
-      .iter()
-      .map(|(&sq, _)| sq)
-      .filter(|&sq| sq >= hb_first_sn && sq <= hb_last_sn)
-      .collect();
+    let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
 
-    let mut missing_seqnums = Vec::new();
-    for sq in i64::from(hb_first_sn)..(i64::from(hb_last_sn) + 1) {
-      let msq = SequenceNumber::from(sq);
-      if !seqnums.contains(&msq) {
+    for msq in SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)  {
+      if !self.changes.contains_key(&msq) {
         missing_seqnums.push(msq)
       }
     }
@@ -102,14 +93,19 @@ impl RtpsWriterProxy {
     if hb_last_sn == SequenceNumber::from(0) {
       return false;
     }
-    let range_length = i64::from(hb_last_sn.sub(hb_first_sn)) as usize + 1;
-    let seq_count = self
-      .changes
-      .iter()
-      .filter(|(&sq, _)| sq >= hb_first_sn && sq <= hb_last_sn)
-      .count();
+    for s in SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)  {
+      if !self.changes.contains_key(&s) { return true }
+    }
+    false
+      
+    // let range_length = i64::from(hb_last_sn.sub(hb_first_sn)) as usize + 1;
+    // let seq_count = self
+    //   .changes
+    //   .iter()
+    //   .filter(|(&sq, _)| sq >= hb_first_sn && sq <= hb_last_sn)
+    //   .count();
 
-    seq_count < range_length
+    // seq_count < range_length
   }
 
   pub fn contains_change(&self, seqnum: SequenceNumber) -> bool {
@@ -121,17 +117,13 @@ impl RtpsWriterProxy {
   }
 
   pub fn available_changes_max(&self) -> Option<SequenceNumber> {
-    match self.changes.iter().max() {
-      Some((sn, _)) => Some(*sn),
-      None => None,
-    }
+    // TODO: replace this when BTreeMap function last_key_value() is in stable release
+    self.changes.keys().next_back().copied()
   }
 
-  pub fn available_changes_min(&self) -> Option<&SequenceNumber> {
-    if let Some((seqnum, _)) = self.changes.iter().min() {
-      return Some(seqnum);
-    }
-    None
+  pub fn available_changes_min(&self) -> Option<SequenceNumber> {
+    self.changes.keys().next().copied()
+    // TODO: replace this when BTreeMap function first_key_value() is in stable release
   }
 
   pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Timestamp> {
@@ -171,7 +163,7 @@ impl RtpsWriterProxy {
         .writer_proxy
         .multicast_locator_list
         .clone(),
-      changes: HashMap::new(),
+      changes: BTreeMap::new(),
       received_heartbeat_count: 0,
       sent_ack_nack_count: 0,
     }

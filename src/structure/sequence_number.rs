@@ -38,6 +38,11 @@ impl SequenceNumber {
       SequenceNumber::from(0)
     }
   }
+
+  pub fn range_inclusive(begin:Self, end:Self) -> SequenceNumberRange
+  {
+    SequenceNumberRange::new(begin,end)
+  }
 }
 
 impl From<i64> for SequenceNumber {
@@ -61,6 +66,30 @@ impl From<usize> for SequenceNumber {
 impl From<SequenceNumber> for i64 {
   fn from(sequence_number: SequenceNumber) -> Self {
     sequence_number.0
+  }
+}
+
+pub struct SequenceNumberRange {
+  begin: SequenceNumber,
+  end: SequenceNumber,
+}
+
+impl SequenceNumberRange {
+  pub fn new(begin:SequenceNumber, end:SequenceNumber) -> SequenceNumberRange {
+    SequenceNumberRange { begin, end }
+  }
+}
+
+impl Iterator for SequenceNumberRange {
+  type Item = SequenceNumber;
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.begin > self.end {
+      None
+    } else {
+      let b = self.begin;
+      self.begin = b + SequenceNumber::new(1);
+      Some(b)
+    }
   }
 }
 
