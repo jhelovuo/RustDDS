@@ -27,7 +27,7 @@ use mio_extras::channel as mio_channel;
 use log::{debug, info, warn, trace, error};
 use std::fmt;
 
-use std::collections::{HashSet, BTreeMap, HashMap, };
+use std::collections::{HashSet, BTreeMap, };
 use std::time::Duration as StdDuration;
 use enumflags2::BitFlags;
 
@@ -59,7 +59,7 @@ pub(crate) struct Reader {
   status_sender: mio_channel::SyncSender<DataReaderStatus>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
-  seqnum_instant_map: HashMap<SequenceNumber, Timestamp>,
+  seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
   topic_name: String,
   qos_policy: QosPolicies,
 
@@ -99,7 +99,7 @@ impl Reader {
       topic_name,
       qos_policy,
 
-      seqnum_instant_map: HashMap::new(),
+      seqnum_instant_map: BTreeMap::new(),
       my_guid: guid ,
       enpoint_attributes: EndpointAttributes::default(),
 
@@ -452,6 +452,8 @@ impl Reader {
     self.notify_cache_change();
   }
 
+  // Returns if responding with ACKNACK?
+  // TODO: Return value seems to go unused in callers.
   pub fn handle_heartbeat_msg(
     &mut self,
     heartbeat: Heartbeat,
@@ -463,7 +465,7 @@ impl Reader {
 
     // Added in order to test stateless actions. TODO
     if !self.matched_writers.contains_key(&writer_guid) {
-      return false;
+      return false
     }
 
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
@@ -475,7 +477,8 @@ impl Reader {
     mr_state.unicast_reply_locator_list = writer_proxy.unicast_locator_list.clone();
 
     if heartbeat.count <= writer_proxy.received_heartbeat_count {
-      return false;
+      // This heartbeat was already seen an processed.
+      return false
     }
     writer_proxy.received_heartbeat_count = heartbeat.count;
 
@@ -483,40 +486,48 @@ impl Reader {
     let removed_instances = writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
     // Remove instances from DDSHistoryCache
-    let mut cache = match self.dds_cache.write() {
-      Ok(rwlock) => rwlock,
-      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-      Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
-    };
-    for instant in removed_instances.iter() {
-      match cache.from_topic_remove_change(&self.topic_name, instant) {
-        Some(_) => (),
-        None => warn!("WriterProxy told to remove an instant which was not present"),
+    {
+      // Create local scope so that dds_cache write lock is dropped ASAP
+      let mut cache = match self.dds_cache.write() {
+        Ok(rwlock) => rwlock,
+        // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
+        Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
+      };
+      for instant in removed_instances.iter() {
+        match cache.from_topic_remove_change(&self.topic_name, instant) {
+          Some(_) => (),
+          None => warn!("WriterProxy told to remove an instant which was not present"),
+        }
       }
     }
-    drop(cache);
 
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
       Some(wp) => wp,
       None => return false, // Matching writer not found
     };
 
-    // See if ACKNACK is needed.
-    // TODO: too convoluted and inefficient block
-    if writer_proxy.changes_are_missing(heartbeat.first_sn, heartbeat.last_sn) || !final_flag_set {
-      let missing_seqnums =
+    // See if ACKNACK is needed, and generate one.
+    let missing_seqnums =
         writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
-      let seqnum_base_and_top =
-        match (missing_seqnums.iter().min(), missing_seqnums.iter().max()) {
-          (Some(&base),Some(&top)) => (base,top),
-          (_,_) => (heartbeat.last_sn, heartbeat.last_sn), // this should not happen because of "if" above
+    
+    if ! missing_seqnums.is_empty() || ! final_flag_set {
+      // report of what we have.
+      // We claim to have received all SNs before "base" and produce a set of missing 
+      // sequence numbers that are >= base.
+      let reader_sn_state =
+        match missing_seqnums.iter().next()  {
+          Some(&first_missing) =>
+            SequenceNumberSet
+              ::from_base_and_set(first_missing, &BTreeSet::from_iter(missing_seqnums)),
+
+          // Nothing missing. Report that we have all we have.
+          None => 
+            match self.seqnum_instant_map.keys().next_back() {
+              None => SequenceNumberSet::new_empty(SequenceNumber::default()), // nothing received
+              // report highest received.
+              Some(high_sn) => SequenceNumberSet::new_empty(*high_sn + SequenceNumber::new(1)),
+            }         
         };
-
-      let reader_sn_state = SequenceNumberSet::from_base_and_set(
-        seqnum_base_and_top.0 , &BTreeSet::from_iter(missing_seqnums) 
-        //TODO: should not be needed
-        );
-
       let response_ack_nack = AckNack {
         reader_id: self.get_entity_id(),
         writer_id: heartbeat.writer_id,
@@ -531,6 +542,7 @@ impl Reader {
       self.send_acknack(response_ack_nack, mr_state);
       return true
     }
+    
     false
   } // fn 
 
