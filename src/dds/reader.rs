@@ -510,6 +510,13 @@ impl Reader {
     let missing_seqnums =
         writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
     
+    // Interpretation of final flag in RTPS spec 
+    // 8.4.2.3.1Readers must respond eventually after receiving a HEARTBEAT with final flag not set
+    // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must respond 
+    // with an ACKNACK Message. The ACKNACK Message may acknowledge having received all 
+    // the data samples or may indicate that some data samples are missing.
+    // The response may be delayed to avoid message storms.
+
     if ! missing_seqnums.is_empty() || ! final_flag_set {
       // report of what we have.
       // We claim to have received all SNs before "base" and produce a set of missing 
