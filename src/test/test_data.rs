@@ -78,7 +78,7 @@ use crate::{
       Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
       TimeBasedFilter, Presentation, PresentationAccessScope, Lifespan, History, ResourceLimits,
     },
-    traits::serde_adapters::DeserializerAdapter,
+    traits::serde_adapters::no_key::DeserializerAdapter,
     qos::QosPolicyBuilder,
   },
   discovery::{
@@ -273,7 +273,7 @@ pub(crate) fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTop
 
 pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopicData> {
   let pub_topic_data = PublicationBuiltinTopicData {
-    key: Some(GUID::dummy_test_guid(EntityKind::WRITER_WITH_KEY_BUILT_IN)),
+    key: GUID::dummy_test_guid(EntityKind::WRITER_WITH_KEY_BUILT_IN),
     participant_key: Some(GUID::dummy_test_guid(EntityKind::PARTICIPANT_BUILT_IN)),
     topic_name: "rand topic namm".to_string(),
     type_name: "RandomData".to_string(),

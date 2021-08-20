@@ -243,7 +243,7 @@ mod tests {
     messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
     test::test_data::*,
   };
-  use crate::dds::traits::serde_adapters::DeserializerAdapter;
+  use crate::dds::traits::serde_adapters::no_key::DeserializerAdapter;
 
   #[test]
   fn pdata_deserialize_serialize() {

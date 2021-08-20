@@ -13,6 +13,7 @@ use crate::{
 };
 use serde::{Serialize, Deserialize};
 
+
 #[derive(Debug, BitFlags, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum StatusInfoEnum {
@@ -88,7 +89,10 @@ impl StatusInfo {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use byteorder::LittleEndian;
+use byteorder::BigEndian;
+use crate::dds::traits::key::KeyHash;
+use super::*;
 
   #[test]
   fn inline_qos_status_info() {
@@ -136,7 +140,7 @@ mod tests {
   #[test]
   fn inline_qos_key_hash() {
     // Little endian
-    let hbytes = KeyHash { key: 1 }.into_cdr_bytes::<LittleEndian>().unwrap();
+    let hbytes = KeyHash::from_cdr_bytes(vec![1]).unwrap().into_cdr_bytes().unwrap();
 
     let bytes: Vec<u8> = vec![
       0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -144,17 +148,17 @@ mod tests {
     ];
     assert_eq!(hbytes, bytes);
 
-    let key_hash = KeyHash::from_cdr_bytes(&bytes, RepresentationIdentifier::CDR_LE).unwrap();
-    assert_eq!(KeyHash { key: 1 }, key_hash);
+    let key_hash = KeyHash::from_cdr_bytes(bytes,).unwrap();
+    assert_eq!(KeyHash::from_cdr_bytes(vec![1]).unwrap(), key_hash);
 
     // Big endian
-    let hbytes = KeyHash { key: 1 }.into_cdr_bytes::<BigEndian>().unwrap();
+    let hbytes = KeyHash::from_cdr_bytes(vec![1]).unwrap().into_cdr_bytes().unwrap();
     let bytes: Vec<u8> = vec![
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x01,
     ];
     assert_eq!(hbytes, bytes);
-    let key_hash = KeyHash::from_cdr_bytes(&bytes, RepresentationIdentifier::CDR_BE).unwrap();
-    assert_eq!(KeyHash { key: 1 }, key_hash);
+    let key_hash = KeyHash::from_cdr_bytes(bytes,).unwrap();
+    assert_eq!(KeyHash::from_cdr_bytes(vec![1]).unwrap(), key_hash);
   }
 }

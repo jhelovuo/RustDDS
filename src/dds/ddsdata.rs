@@ -53,8 +53,8 @@ impl DDSData {
   #[cfg(test)]
   pub fn data(&self) -> Option<Bytes> {
     match &self {
-      DDSData::Data { serialized_payload } => Some( serialized_payload.value ),
-      DDSData::DisposeByKey { key , ..} => Some( key.value ),
+      DDSData::Data { serialized_payload } => Some( serialized_payload.value.clone() ),
+      DDSData::DisposeByKey { key , ..} => Some( key.value.clone() ),
       DDSData::DisposeByKeyHash {..} => None,
     }
   }

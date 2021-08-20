@@ -1186,6 +1186,8 @@ mod tests {
     time::{self},
   };
   use mio::{Events};
+  use crate::messages::submessages::submessage_flag::*;
+
   #[test]
   fn dr_get_samples_from_ddschache() {
     let dp = DomainParticipant::new(0).expect("Participant creation failed");
@@ -1244,13 +1246,14 @@ mod tests {
     data.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
     data.writer_id = writer_guid.entityId;
     data.writer_sn = SequenceNumber::from(0);
+    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
 
     data.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data).unwrap()), /* TODO: Can RandomData be transformed to bytes directly? */
     });
-    new_reader.handle_data_msg(data, mr_state.clone());
+    new_reader.handle_data_msg(data, data_flags, mr_state.clone());
 
     matching_datareader.fill_local_datasample_cache();
     let deserialized_random_data = matching_datareader.read(1, ReadCondition::any()).unwrap()[0]
@@ -1291,8 +1294,8 @@ mod tests {
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap()),
     });
 
-    new_reader.handle_data_msg(data2, mr_state.clone());
-    new_reader.handle_data_msg(data3, mr_state);
+    new_reader.handle_data_msg(data2, data_flags, mr_state.clone());
+    new_reader.handle_data_msg(data3, data_flags, mr_state);
 
     matching_datareader.fill_local_datasample_cache();
     let random_data_vec = matching_datareader
@@ -1364,6 +1367,7 @@ mod tests {
     data_msg.reader_id = reader.get_entity_id();
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(0);
+    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
 
     data_msg.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
@@ -1381,8 +1385,8 @@ mod tests {
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
     });
-    reader.handle_data_msg(data_msg, mr_state.clone());
-    reader.handle_data_msg(data_msg2, mr_state.clone());
+    reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
+    reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
 
     // Read the same sample two times.
     {
@@ -1481,10 +1485,10 @@ mod tests {
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
     });
-    reader.handle_data_msg(data_msg, mr_state.clone());
-    reader.handle_data_msg(data_msg2, mr_state.clone());
-    reader.handle_data_msg(data_msg3, mr_state.clone());
-    reader.handle_data_msg(data_msg4, mr_state.clone());
+    reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
+    reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
+    reader.handle_data_msg(data_msg3, data_flags, mr_state.clone());
+    reader.handle_data_msg(data_msg4, data_flags, mr_state.clone());
 
     info!("calling read with key 1 and this");
     let results =
@@ -1592,7 +1596,8 @@ mod tests {
     data_msg.reader_id = reader.get_entity_id();
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(0);
-
+    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
+    
     data_msg.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
@@ -1622,13 +1627,13 @@ mod tests {
     });
 
     let handle = std::thread::spawn(move || {
-      reader.handle_data_msg(data_msg, mr_state.clone());
+      reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
       thread::sleep(time::Duration::from_millis(100));
       info!("I'll send the second now..");
-      reader.handle_data_msg(data_msg2, mr_state.clone());
+      reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
       thread::sleep(time::Duration::from_millis(100));
       info!("I'll send the third now..");
-      reader.handle_data_msg(data_msg3, mr_state.clone());
+      reader.handle_data_msg(data_msg3, data_flags, mr_state.clone());
     });
 
     let poll = Poll::new().unwrap();

@@ -227,7 +227,7 @@ mod tests {
 
   #[test]
   fn udpl_single_address() {
-    let listener = UDPListener::new(Token(0), "127.0.0.1", 10001);
+    let listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 10001).unwrap();
     let sender = UDPSender::new_with_random_port();
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
@@ -243,7 +243,7 @@ mod tests {
 
   #[test]
   fn udpl_multicast_address() {
-    let listener = UDPListener::new(Token(0), "0.0.0.0", 10002);
+    let listener = UDPListener::new_multicast(Token(0), "0.0.0.0", 10002,Ipv4Addr::new(239, 255, 0, 1)).unwrap();
     let sender = UDPSender::new_with_random_port();
 
     //setsockopt(sender.socket.as_raw_fd(), IpMulticastLoop, &true)
@@ -251,9 +251,6 @@ mod tests {
 
     let data: Vec<u8> = vec![2, 4, 6];
 
-    listener
-      .join_multicast(&Ipv4Addr::new(239, 255, 0, 1))
-      .expect("Failed to join multicast.");
 
     sender
       .send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002)

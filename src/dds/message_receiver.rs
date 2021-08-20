@@ -468,7 +468,7 @@ use super::*;
       size: i32,
     }
 
-    let deserializedShapeType: ShapeType = deserialize_from_little_endian(&a.data()).unwrap();
+    let deserializedShapeType: ShapeType = deserialize_from_little_endian(&a.data().unwrap()).unwrap();
     info!("deserialized shapeType: {:?}", deserializedShapeType);
     assert_eq!(deserializedShapeType.color, "RED");
 

@@ -1090,7 +1090,7 @@ mod tests {
   };
   use crate::{
     discovery::data_types::topic_data::TopicBuiltinTopicData,
-    dds::{participant::DomainParticipant, traits::serde_adapters::DeserializerAdapter},
+    dds::{participant::DomainParticipant, traits::serde_adapters::no_key::DeserializerAdapter},
   };
   use crate::serialization::submessage::*;
 
@@ -1103,7 +1103,7 @@ mod tests {
   #[test]
   fn discovery_participant_data_test() {
     let poll = Poll::new().unwrap();
-    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11000);
+    let mut udp_listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 11000).unwrap();
     poll
       .register(
         udp_listener.mio_socket(),
@@ -1165,7 +1165,7 @@ mod tests {
       .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None);
 
     let poll = Poll::new().unwrap();
-    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 11001);
+    let mut udp_listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 11001).unwrap();
     poll
       .register(
         udp_listener.mio_socket(),
@@ -1254,7 +1254,7 @@ mod tests {
       .create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None);
 
     let poll = Poll::new().unwrap();
-    let mut udp_listener = UDPListener::new(Token(0), "127.0.0.1", 0);
+    let mut udp_listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 0).unwrap();
     poll
       .register(
         udp_listener.mio_socket(),

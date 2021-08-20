@@ -130,7 +130,7 @@ impl Reader {
     debug!("history cache !!!! {:?}", cc);
 
     match cc {
-      Some(cc) => cc.data_value.clone(), //  Some(DDSData::new(cc.data_value.as_ref().unwrap().clone())),
+      Some(cc) => Some(cc.data_value.clone()) , //  Some(DDSData::new(cc.data_value.as_ref().unwrap().clone())),
       None => None,
     }
   }

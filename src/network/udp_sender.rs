@@ -110,7 +110,7 @@ mod tests {
 
   #[test]
   fn udps_single_send() {
-    let listener = UDPListener::new(Token(0), "127.0.0.1", 10201);
+    let listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 10201).unwrap();
     let sender = UDPSender::new(11201);
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
@@ -126,8 +126,8 @@ mod tests {
 
   #[test]
   fn udps_multi_send() {
-    let listener_1 = UDPListener::new(Token(0), "127.0.0.1", 10301);
-    let listener_2 = UDPListener::new(Token(1), "127.0.0.1", 10302);
+    let listener_1 = UDPListener::new_unicast(Token(0), "127.0.0.1", 10301).unwrap();
+    let listener_2 = UDPListener::new_unicast(Token(1), "127.0.0.1", 10302).unwrap();
     let sender = UDPSender::new(11301);
 
     let data: Vec<u8> = vec![5, 4, 3, 2, 1, 0];
