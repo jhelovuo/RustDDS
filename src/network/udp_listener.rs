@@ -53,6 +53,12 @@ impl UDPListener {
       raw_socket.set_reuse_address(true)?;
     }
 
+    // MacOS erquires this also
+    if reuse_addr {
+      raw_socket.set_reuse_port(true)?; 
+    }
+
+
     let address = SocketAddr::new(
       host.parse()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, 
