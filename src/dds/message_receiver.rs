@@ -193,14 +193,14 @@ impl MessageReceiver {
 
     for submessage in rtps_message.submessages {
       match submessage.body {
-        SubmessageBody::Interpreter(i) => self.handle_parsed_interpreter_submessage(i),
-        SubmessageBody::Entity(e) => self.send_submessage(e),
+        SubmessageBody::Interpreter(i) => self.handle_interpreter_submessage(i),
+        SubmessageBody::Entity(e) => self.handle_entity_submessage(e),
       }
       self.submessage_count += 1;
     } // submessage loop
   }
 
-  fn send_submessage(&mut self, submessage: EntitySubmessage) {
+  fn handle_entity_submessage(&mut self, submessage: EntitySubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix {
       debug!("Messages are not for this participant?");
       debug!("dest_guid_prefix: {:?}", self.dest_guid_prefix);
@@ -213,7 +213,7 @@ impl MessageReceiver {
       EntitySubmessage::Data(data, data_flags) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
         if data.reader_id == EntityId::ENTITYID_UNKNOWN {
-          trace!("send_submessage DATA from unknown. writer_id = {:?}", &data.writer_id);
+          trace!("handle_entity_submessage DATA from unknown. writer_id = {:?}", &data.writer_id);
           for reader in self
             .available_readers
             .values_mut()
@@ -227,7 +227,7 @@ impl MessageReceiver {
                             )
                       )
           {
-            trace!("send_submessage DATA from unknown handling in {:?}",&reader);
+            trace!("handle_entity_submessage DATA from unknown handling in {:?}",&reader);
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
         } else {
@@ -296,7 +296,7 @@ impl MessageReceiver {
     }
   }
 
-  fn handle_parsed_interpreter_submessage(&mut self, interp_subm: InterpreterSubmessage)
+  fn handle_interpreter_submessage(&mut self, interp_subm: InterpreterSubmessage)
   // no return value, just change state of self.
   {
     match interp_subm {

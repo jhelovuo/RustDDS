@@ -586,7 +586,7 @@ impl DomainParticipant_Inner {
 
     let a_r_cache = Arc::new(RwLock::new(DDSCache::new()));
 
-    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
+    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(new_guid)));
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
@@ -620,6 +620,8 @@ impl DomainParticipant_Inner {
           .name("RustDDS Participant event loop".to_string())
           .spawn(move || ev_wrapper.event_loop())?;
 
+    info!("New DomainParticipant_Inner: domain_id={:?} participant_id={:?} GUID={:?}",
+      domain_id, participant_id, new_guid);
     Ok(DomainParticipant_Inner {
       domain_id,
       participant_id,

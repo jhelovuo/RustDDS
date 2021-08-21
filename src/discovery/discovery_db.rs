@@ -4,7 +4,7 @@ use std::{
   time::Instant,
 };
 
-
+#[allow(unused_imports)]
 use log::{error,warn,debug,trace,info};
 
 use crate::{
@@ -41,6 +41,7 @@ const PARTICIPANT_LEASE_DURATION_TOLREANCE : Duration = Duration::from_secs(0);
 
 
 pub(crate) struct DiscoveryDB {
+  my_guid: GUID,
   participant_proxies: BTreeMap<GuidPrefix, SPDPDiscoveredParticipantData>,
   participant_last_life_signs: HashMap<GuidPrefix, Instant>,
   // local writer proxies for topics (topic name acts as key)
@@ -59,8 +60,9 @@ pub(crate) struct DiscoveryDB {
 }
 
 impl DiscoveryDB {
-  pub fn new() -> DiscoveryDB {
+  pub fn new(my_guid:GUID) -> DiscoveryDB {
     DiscoveryDB {
+      my_guid,
       participant_proxies: BTreeMap::new(),
       participant_last_life_signs: HashMap::new(),
       local_topic_writers: HashMap::new(),
@@ -81,6 +83,11 @@ impl DiscoveryDB {
         error!("Discovered participant GUID entity_id is not for participant: {:?}",guid);
         return // Maybe we should discard the participant here?
       }
+      if guid == self.my_guid {
+        debug!("DiscoveryDB discovered self. Skipping.");
+        return
+      }
+
       if self.participant_proxies.get( &guid.guidPrefix ).is_none() {
         info!("New remote participant: {:?}", &data);
       }
@@ -287,7 +294,8 @@ impl DiscoveryDB {
                 pp.default_multicast_locators.clone() ) } )
             .unwrap_or_else( || {
                 if guid.guidPrefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
-                  warn!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
+                  // This is normal, since we might not know about the participant yet.
+                  debug!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
                     ,data, guid.guidPrefix, self.participant_proxies.keys() );
                 }
                 (LocatorList::new(), LocatorList::new()) 
@@ -520,7 +528,7 @@ mod tests {
 
   #[test]
   fn discdb_participant_operations() {
-    let mut discoverydb = DiscoveryDB::new();
+    let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
     let mut data = spdp_participant_data().unwrap();
     data.lease_duration = Some(Duration::from(StdDuration::from_secs(1)));
 
@@ -539,7 +547,7 @@ mod tests {
 
   #[test]
   fn discdb_writer_proxies() {
-    let _discoverydb = DiscoveryDB::new();
+    let _discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
     let topic_name = String::from("some_topic");
     let type_name = String::from("RandomData");
     let _dreader = DiscoveredReaderData::default(&topic_name, &type_name);
@@ -549,7 +557,7 @@ mod tests {
 
   #[test]
   fn discdb_subscription_operations() {
-    let mut discovery_db = DiscoveryDB::new();
+    let mut discovery_db = DiscoveryDB::new(GUID::new_particiapnt_guid());
 
     let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant
@@ -646,7 +654,7 @@ mod tests {
         TopicKind::WithKey,
       )
       .unwrap();
-    let mut discoverydb = DiscoveryDB::new();
+    let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
     let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
