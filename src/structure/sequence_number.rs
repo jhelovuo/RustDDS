@@ -262,10 +262,14 @@ where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64>  + O
           error!("from_base_and_set : need base <= set start: base={:?} and set {:?}",
             base, set); 
         }
-        if i64::from(end - start) > 256 {
-          error!("from_base_and_set : max size (256) exceeded, start = {:?} end = {:?}",
-            start,end);  
-        }
+        let end = 
+          if i64::from(end - start) > 256 {
+            let truncated_end = start + N::from(256);
+            error!("from_base_and_set : max size (256) exceeded, start = {:?} end = {:?}. Truncating end to {:?}",
+              start, end, truncated_end );
+            truncated_end
+          } else { end }; // sanity ok.
+        // TODO: Sanity check that (end - base) <= 256
         // work:
         let num_bits =  i64::from(end - start + N::from(1));
         let mut sns = NumberSet::<N>::new(
@@ -428,6 +432,28 @@ mod tests {
             0x00, 0x00, 0x00, 0x00]
   },
   {
+    sequence_number_set_one,
+    (|| {
+          let mut set = SequenceNumberSet::new(SequenceNumber::from(1),1);
+          set.insert(SequenceNumber::from(1));
+          set
+      })(),
+      le = [0x00, 0x00, 0x00, 0x00, // bitmapBase high
+            0x01, 0x00, 0x00, 0x00, // bitmapBase low
+            0x01, 0x00, 0x00, 0x00, // bitmap bit count
+            0x00, 0x00, 0x00, 0x80], // bitmap word 0
+      // The last word here has 11 bits set from MSB end, and then 25-11 = 14 zeroes.
+      // The last 32-25 = 7 bits are undefined. Our implementation sets them to zero,
+      // but others may set to ones. 
+      // 0xffc0_00YZ, where  YZ & 0x80 = 0x00, but otherwise undefined
+      // So e.g. 0x7f is valid least siginifanct byte, as is 0x00, or 0x0f.
+      be = [0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x01,
+            0x00, 0x00, 0x00, 0x01,
+            0x80, 0x00, 0x00, 0x00]
+
+  },
+  {
       sequence_number_set_manual,
       (|| {
           let mut set = SequenceNumberSet::new(SequenceNumber::from(1),25);
@@ -449,6 +475,28 @@ mod tests {
             0x00, 0x00, 0x00, 0x01,
             0x00, 0x00, 0x00, 0x19,
             0xff, 0xc0, 0x00, 0x00]
+  },
+  {
+      sequence_number_set_multiword,
+      (|| {
+          // send sequence numbers 10,11,12,..,52. (43 ones) Set goes up to 64.
+          let mut set = SequenceNumberSet::new(SequenceNumber::from(10),64);
+          for sn in 10..=52 {
+            set.insert(SequenceNumber::from(sn));
+          }
+          set
+      })(),
+      le = [0x00, 0x00, 0x00, 0x00,
+            0x0A, 0x00, 0x00, 0x00, // base = 10
+            0x40, 0x00, 0x00, 0x00, // 0x40 = 64 bits in map => 2 words
+            0xff, 0xff, 0xff, 0xff, // bits 10..41 are all ones
+            0x00, 0x00, 0xe0, 0xff, // bits 42..51 (10 pcs) are ones, rest zero
+            ],
+      be = [0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x0A,
+            0x00, 0x00, 0x00, 0x40,
+            0xff, 0xff, 0xff, 0xff,
+            0xff, 0xe0, 0x00, 0x00]
   });
 
 

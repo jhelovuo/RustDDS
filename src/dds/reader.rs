@@ -467,6 +467,11 @@ impl Reader {
     if !self.matched_writers.contains_key(&writer_guid) {
       return false
     }
+    // sanity check
+    if heartbeat.first_sn < SequenceNumber::default() {
+      warn!("Writer {:?} advertised SequenceNumbers from {:?} to {:?}!",
+          writer_guid, heartbeat.first_sn, heartbeat.last_sn);
+    }
 
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
       Some(wp) => wp,
@@ -523,9 +528,16 @@ impl Reader {
       // sequence numbers that are >= base.
       let reader_sn_state =
         match missing_seqnums.iter().next()  {
-          Some(&first_missing) =>
+          Some(&first_missing) => {
+              // Here we assume missing_seqnums are returned in order.
+              // Limit the set to maximum that can be sent in acknack submessage..
             SequenceNumberSet
-              ::from_base_and_set(first_missing, &BTreeSet::from_iter(missing_seqnums)),
+              ::from_base_and_set(first_missing, 
+                &BTreeSet::from_iter(missing_seqnums.iter()
+                                      .map(|s| *s)
+                                      .take_while( |sn| sn < &(first_missing + SequenceNumber::from(256)) ))
+                )
+            }
 
           // Nothing missing. Report that we have all we have.
           None => 
