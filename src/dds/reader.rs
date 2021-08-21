@@ -27,7 +27,7 @@ use mio_extras::channel as mio_channel;
 use log::{debug, info, warn, trace, error};
 use std::fmt;
 
-use std::collections::{HashSet, BTreeMap, };
+use std::collections::{BTreeMap};
 use std::time::Duration as StdDuration;
 use enumflags2::BitFlags;
 
@@ -498,7 +498,7 @@ impl Reader {
         // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
         Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
       };
-      for instant in removed_instances.iter() {
+      for instant in removed_instances.values() {
         match cache.from_topic_remove_change(&self.topic_name, instant) {
           Some(_) => (),
           None => warn!("WriterProxy told to remove an instant which was not present"),
@@ -595,34 +595,31 @@ impl Reader {
     // } else {
     //   return;
     // };
+
+
+
     // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups:
-    let mut irrelevant_changes_set = HashSet::new();
-
     //   1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
-    for seq_num_i64 in i64::from(gap.gap_start)..i64::from(gap.gap_list.base()) {
-      //TODO: Can we do iteration range directly on SequenceNumber type?
-      irrelevant_changes_set.insert(SequenceNumber::from(seq_num_i64));
-    }
+    let mut removed_changes : BTreeSet<Timestamp> = 
+      writer_proxy.irrelevant_changes_range(gap.gap_start, gap.gap_list.base())
+        .values()
+        .map(|s|*s)
+        .collect();
+
     //   2. All the sequence numbers that appear explicitly listed in the gapList.
     for seq_num in gap.gap_list.iter() {
-      irrelevant_changes_set.insert(seq_num);
+      writer_proxy.set_irrelevant_change(seq_num)
+        .map( |t| removed_changes.insert(t) );
     }
 
-    // Remove from writerProxy and DDSHistoryCache
-    let mut removed_instances = Vec::new();
-    for seq_num in &irrelevant_changes_set {
-      match writer_proxy.set_irrelevant_change(*seq_num) {
-        Some(i) => removed_instances.push(i),
-        None => (),
-      };
-    }
+    // Remove from DDSHistoryCache
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
-    for instant in &removed_instances {
+    for instant in &removed_changes {
       cache.from_topic_remove_change(&self.topic_name, instant);
     }
 

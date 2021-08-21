@@ -25,9 +25,8 @@ pub(crate) struct RtpsWriterProxy {
   pub remote_group_entity_id: EntityId,
 
   /// List of sequence_numbers received from the matched RTPS Writer
-  // TODO: When should they be removed from here?
-  // Or keep separately track of latest timestamp.
   changes: BTreeMap<SequenceNumber, Timestamp>,
+  // The changes map is cleaned on heartbeat messages. The changes no longer available are dropped.
 
   pub received_heartbeat_count: i32,
 
@@ -97,15 +96,6 @@ impl RtpsWriterProxy {
       if !self.changes.contains_key(&s) { return true }
     }
     false
-      
-    // let range_length = i64::from(hb_last_sn.sub(hb_first_sn)) as usize + 1;
-    // let seq_count = self
-    //   .changes
-    //   .iter()
-    //   .filter(|(&sq, _)| sq >= hb_first_sn && sq <= hb_last_sn)
-    //   .count();
-
-    // seq_count < range_length
   }
 
   pub fn contains_change(&self, seqnum: SequenceNumber) -> bool {
@@ -130,23 +120,25 @@ impl RtpsWriterProxy {
     self.changes.remove(&seq_num)
   }
 
-  pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) -> Vec<Timestamp> {
-    let mut remove = Vec::new();
-    for (&seqnum, _) in self.changes.iter() {
-      if seqnum < smallest_seqnum {
-        remove.push(seqnum);
-      }
-    }
+  pub fn irrelevant_changes_range(&mut self, 
+    remove_from: SequenceNumber, 
+    remove_until_before: SequenceNumber ) -> BTreeMap<SequenceNumber, Timestamp> 
+  {
+    let mut removed_and_after = self.changes.split_off(&remove_from);
+    let mut after = removed_and_after.split_off(&remove_until_before);
+    let removed = removed_and_after;
+    self.changes.append(&mut after);
+    removed
+  }
 
-    let mut instants = Vec::new();
-    for &rm in remove.iter() {
-      match self.changes.remove(&rm) {
-        Some(i) => instants.push(i),
-        None => (),
-      };
-    }
-
-    instants
+  // smallest_seqnum is the lowest key to be retained
+  pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) 
+    -> BTreeMap<SequenceNumber, Timestamp> 
+  {
+    // split_off() Splits the collection into two at the given key. 
+    // Returns everything after the given key, including the key.
+    let remaining_changes = self.changes.split_off(&smallest_seqnum);
+    std::mem::replace(&mut self.changes, remaining_changes) // returns the irrelevant changes
   }
 
   pub fn from_discovered_writer_data(discovered_writer_data: &DiscoveredWriterData) 
