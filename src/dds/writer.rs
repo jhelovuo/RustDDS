@@ -204,8 +204,8 @@ impl Writer {
       cahce_cleaning_perioid: Duration::from_secs(2 * 60),
       nack_respose_delay: Duration::from_millis(200),
       nack_suppression_duration: Duration::from_millis(0),
-      last_change_sequence_number: SequenceNumber::from(0),
-      first_change_sequence_number: SequenceNumber::from(0),
+      first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
+      last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
       data_max_size_serialized: 999999999,
       my_guid: guid,
       //enpoint_attributes: EndpointAttributes::default(),
@@ -525,8 +525,8 @@ impl Writer {
         }
         // Sanity Check
         if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) { // more sanity
-          warn!("ACKNACK from {:?} acks up to before {:?} but I have only up to {:?}",
-            reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq);
+          warn!("ACKNACK from {:?} acks up to before {:?}, missing set = {:?} but I have only up to {:?}",
+            reader_proxy.remote_reader_guid, an.reader_sn_state.base(), reader_proxy.unsent_changes, last_seq);
         }
         // TODO: The following check is rather expensive. Maybe should turn it off
         // in release build?

@@ -77,7 +77,7 @@ impl RtpsWriterProxy {
     let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
 
     for msq in SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)  {
-      if !self.changes.contains_key(&msq) {
+      if !self.changes.contains_key(&msq) && msq >= SequenceNumber::default() {
         missing_seqnums.push(msq)
       }
     }
@@ -90,8 +90,8 @@ impl RtpsWriterProxy {
     hb_first_sn: SequenceNumber,
     hb_last_sn: SequenceNumber,
   ) -> bool {
-    if hb_last_sn == SequenceNumber::from(0) {
-      return false;
+    if hb_last_sn < hb_first_sn { // This means writer has nothing to send
+      return false
     }
     for s in SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)  {
       if !self.changes.contains_key(&s) { return true }
