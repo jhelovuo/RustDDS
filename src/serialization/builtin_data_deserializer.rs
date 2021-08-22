@@ -352,15 +352,17 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn generate_discovered_reader_data_key(self) -> Result<DiscoveredReaderData_Key,Error> {
-    let subscription_topic_data = self.generate_subscription_topic_data()?;
-    // let endpoint_guid = subscription_topic_data.key()
-    //   .ok_or_else( || Error::Message("generate_discovered_reader_data_key - no key".to_string()) )?;
-    Ok(DiscoveredReaderData_Key( subscription_topic_data.key() ) )
+    Ok(DiscoveredReaderData_Key(
+      self.endpoint_guid
+        .ok_or_else(| | log_and_err_discovery!("generate_discovered_reader_data_key endpoint_guid missing"))?,
+    ))
   }
 
   pub fn generate_discovered_writer_data_key(self) -> Result<DiscoveredWriterData_Key,Error> {
-    let publication_topic_data = self.generate_publication_topic_data()?;
-    Ok( DiscoveredWriterData_Key( publication_topic_data.key ) )
+    Ok(DiscoveredWriterData_Key(
+      self.endpoint_guid
+        .ok_or_else(| | log_and_err_discovery!("generate_discovered_writer_data_key endpoint_guid missing"))?,
+    ))
   }
 
 

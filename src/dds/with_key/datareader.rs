@@ -656,7 +656,7 @@ where
       match data_value {
         DDSData::DisposeByKey { key: serialized_key , .. } => {
           // TODO: Should be parameterizable by DeserializerAdapter
-          match CDRDeserializerAdapter::<D>::key_from_bytes(
+          match DA::key_from_bytes(
             &serialized_key.value, 
             serialized_key.representation_identifier) 
           {
@@ -1597,7 +1597,7 @@ mod tests {
     data_msg.writer_id = writer_guid.entityId;
     data_msg.writer_sn = SequenceNumber::from(0);
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
-    
+
     data_msg.serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
