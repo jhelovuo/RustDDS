@@ -409,8 +409,9 @@ impl InnerPublisher {
     SA: with_key::SerializerAdapter<D>,
   {
     // Data samples from DataWriter to HistoryCache
-    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(4);
-    // Status repoerts back from Writer to DataWriter
+    let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(16);
+
+    // Status reports back from Writer to DataWriter. 
     let (status_sender, status_receiver) = mio_channel::sync_channel(4);
 
    

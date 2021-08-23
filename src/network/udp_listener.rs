@@ -53,11 +53,10 @@ impl UDPListener {
       raw_socket.set_reuse_address(true)?;
     }
 
-    // MacOS erquires this also
+    // MacOS requires this also
     if reuse_addr {
       raw_socket.set_reuse_port(true)?; 
     }
-
 
     let address = SocketAddr::new(
       host.parse()
@@ -66,7 +65,7 @@ impl UDPListener {
 
     match raw_socket.bind( &SockAddr::from(address) ) {
       Err(e) => {
-        error!("new_socket - cannot bind socket: {:?}",e);
+        info!("new_socket - cannot bind socket: {:?}",e);
         return Err(e)
       }
       Ok(_) => (), 

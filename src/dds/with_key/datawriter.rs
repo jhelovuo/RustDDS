@@ -293,7 +293,8 @@ where
         Ok(())
       }
       Err(e) => {
-        warn!("Failed to write new data. {:?}", e);
+        warn!("Failed to write new data. topic={:?}  reason={:?}  timeout={:?}", 
+             self.my_topic.get_name(), e, timeout, );
         Err(Error::OutOfResources)
       }
     }
