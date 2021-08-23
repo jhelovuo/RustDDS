@@ -863,7 +863,7 @@ mod tests {
       neljaLyhytta: [i16; 4],
       totuusarvoja: Vec<bool>,
       kolmeTavua: Vec<u8>,
-    };
+    }
 
     let value = InterestingMessage {
       unboundedString: "Tassa on aika pitka teksti".to_string(),

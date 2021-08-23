@@ -692,7 +692,7 @@ mod tests {
       mio_channel::channel();
 
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
-    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
+    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(GUID::new_particiapnt_guid())));
 
     let domain_info = DomainInfo {
       domain_participant_guid: GUID::default(),
