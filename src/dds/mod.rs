@@ -109,6 +109,7 @@ mod datasample_cache;
 pub(crate) mod ddsdata;
 mod dp_event_loop;
 mod message_receiver;
+mod fragment_assembler;
 mod sampleinfo;
 mod helpers;
 
@@ -126,7 +127,6 @@ pub(crate) mod rtps_writer_proxy;
 pub(crate) mod topic;
 pub mod traits;
 pub(crate) mod typedesc;
-//pub(crate) mod util;
 pub(crate) mod values;
 pub(crate) mod writer;
 

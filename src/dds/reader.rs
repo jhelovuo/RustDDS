@@ -7,6 +7,7 @@ use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::messages::submessages::submessages::*;
 
 use crate::dds::ddsdata::DDSData;
+use crate::dds::fragment_assembler::FragmentAssembler;
 use crate::dds::statusevents::*;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
 use crate::structure::guid::{GUID, EntityId, GuidPrefix};
@@ -96,7 +97,9 @@ pub(crate) struct Reader {
 
   timed_event_handler: Option<TimedEventHandler>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
-} // placeholder
+
+  fragment_assembler: FragmentAssembler,
+} 
 
 impl Reader {
   pub fn new(
@@ -113,22 +116,24 @@ impl Reader {
         topic_name: i.topic_name,
         qos_policy: i.qos_policy,
 
-        #[cfg(test)]
-        seqnum_instant_map: BTreeMap::new(),
-        my_guid: i.guid ,
-        enpoint_attributes: EndpointAttributes::default(),
 
-        heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
-        heartbeat_supression_duration: StdDuration::new(0, 0),
-        sent_ack_nack_count: 0,
-        received_hearbeat_count: 0,
-        matched_writers: BTreeMap::new(),
-        writer_match_count_total: 0,
-        requested_deadline_missed_count: 0,
-        offered_incompatible_qos_count: 0,
-        timed_event_handler: None,
-        data_reader_command_receiver: i.data_reader_command_receiver,
-      }
+      #[cfg(test)]
+      seqnum_instant_map: BTreeMap::new(),
+      my_guid: i.guid ,
+      enpoint_attributes: EndpointAttributes::default(),
+
+      heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
+      heartbeat_supression_duration: StdDuration::new(0, 0),
+      sent_ack_nack_count: 0,
+      received_hearbeat_count: 0,
+      matched_writers: BTreeMap::new(),
+      writer_match_count_total: 0,
+      requested_deadline_missed_count: 0,
+      offered_incompatible_qos_count: 0,
+      timed_event_handler: None,
+      data_reader_command_receiver: i.data_reader_command_receiver,
+      fragment_assembler: FragmentAssembler::new(),
+    }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
   // and user messages
@@ -469,6 +474,37 @@ impl Reader {
     self.notify_cache_change();
   }
 
+  pub fn handle_datafrag_msg(&mut self, datafrag: DataFrag, datafrag_flags: BitFlags<DATAFRAG_Flags>,
+     mr_state: MessageReceiverState) 
+  {
+    let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
+    let seq_num = datafrag.writer_sn;
+
+    // check if this submessage is expired already
+    match (mr_state.timestamp, self.get_qos().lifespan) {
+      (Some(timestamp), Some(lifespan)) => {
+        let elapsed = Timestamp::now().duration_since(timestamp);
+        if lifespan.duration < elapsed {
+          info!("DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
+              seq_num, writer_guid, lifespan.duration, elapsed);
+          return
+        }
+      }
+      _ => (), // ok, continue
+    }
+
+    let (completedata_opt, nack_frag_opt) = 
+        self.fragment_assembler.new_datafrag(writer_guid, datafrag, datafrag_flags);
+
+    if let Some(data) = completedata_opt {
+      // process completed data message
+    }
+    if let Some(nack) = nack_frag_opt {
+      // send nack_frag reply
+    }
+    
+  }
+
   // Returns if responding with ACKNACK?
   // TODO: Return value seems to go unused in callers.
   pub fn handle_heartbeat_msg(
@@ -674,11 +710,6 @@ impl Reader {
     // self.notify_cache_change();
   }
 
-  pub fn handle_datafrag_msg(&mut self, _datafrag: DataFrag, _mr_State: MessageReceiverState) {
-    todo!() // comines frags to data which is handled normally. page 51-53
-            // let data: Data = something..?
-            // self.handle_data_msg(data, mr_state);
-  }
 
   pub fn handle_heartbeatfrag_msg(
     &mut self,

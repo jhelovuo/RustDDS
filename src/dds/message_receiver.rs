@@ -279,7 +279,7 @@ impl MessageReceiver {
           Err(e) => warn!("Failed to send AckNack. {:?}", e),
         }
       }
-      EntitySubmessage::DataFrag(datafrag, _) => {
+      EntitySubmessage::DataFrag(datafrag, datafrag_flags) => {
         if datafrag.reader_id == EntityId::ENTITYID_UNKNOWN {
           trace!("send_submessage DATAFRAG for unknown. writer_id = {:?}", &datafrag.writer_id);
           for reader in self
@@ -288,11 +288,12 @@ impl MessageReceiver {
             .filter(|r| r.contains_writer(datafrag.writer_id) )
           {
             trace!("send_submessage DATAFRAG for unknown handling in {:?}",&reader);
-            reader.handle_datafrag_msg(datafrag.clone(), mr_state.clone());
+            reader.handle_datafrag_msg(datafrag.clone(), datafrag_flags, mr_state.clone());
           }
         } else {
+          // normal case here
           if let Some(target_reader) = self.get_reader_mut(datafrag.reader_id) {
-            target_reader.handle_datafrag_msg(datafrag, mr_state);
+            target_reader.handle_datafrag_msg(datafrag, datafrag_flags, mr_state);
           }
         }
       }
