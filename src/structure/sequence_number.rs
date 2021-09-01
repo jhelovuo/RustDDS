@@ -288,6 +288,7 @@ where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64>  + O
     NumberSetIter::<N> {
       seq: self,
       at_bit: 0,
+      rev_at_bit: self.num_bits,
     }
   }
 }
@@ -340,6 +341,7 @@ pub struct NumberSetIter<'a,N>
 {
   seq: &'a NumberSet<N>,
   at_bit: u32,
+  rev_at_bit: u32,
 }
 
 impl<'a,N> Iterator for NumberSetIter<'_,N>
@@ -351,7 +353,7 @@ impl<'a,N> Iterator for NumberSetIter<'_,N>
     //TODO: This probably could made faster with the std function
     // .leading_zeroes() in type u32 to do several iterations of the loop in
     // one step, given that we have clz as a machine instruction or short sequence.
-    while self.at_bit < self.seq.num_bits {
+    while self.at_bit < self.rev_at_bit {
       // bit indexing formula from RTPS spec v2.3 Section 9.4.2.6
       let have_one = 
         self.seq.bitmap[(self.at_bit / 32) as usize] 
@@ -361,6 +363,25 @@ impl<'a,N> Iterator for NumberSetIter<'_,N>
       if have_one { 
         return Some(N::from((self.at_bit - 1) as i64) 
                       + self.seq.bitmap_base)  
+      } 
+    }
+    None
+  }
+}
+impl<'a,N> DoubleEndedIterator for NumberSetIter<'_,N>
+  where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd
+{
+  fn next_back(&mut self) -> Option<Self::Item> {
+    while self.at_bit < self.rev_at_bit {
+      // bit indexing formula from RTPS spec v2.3 Section 9.4.2.6
+      self.rev_at_bit -= 1;
+      let have_one = 
+        self.seq.bitmap[(self.rev_at_bit / 32) as usize] 
+          & (1 << (31 - self.rev_at_bit % 32))
+        != 0;
+      if have_one { 
+        return Some( N::from(self.rev_at_bit as i64) 
+                      + self.seq.bitmap_base )  
       } 
     }
     None

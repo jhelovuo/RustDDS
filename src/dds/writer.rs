@@ -525,12 +525,10 @@ impl Writer {
         }
         // Sanity Check
         if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) { // more sanity
-          warn!("ACKNACK from {:?} acks up to before {:?}, missing set = {:?} but I have only up to {:?}",
-            reader_proxy.remote_reader_guid, an.reader_sn_state.base(), reader_proxy.unsent_changes, last_seq);
+          warn!("ACKNACK from {:?} acks {:?}, but I have only up to {:?} count={:?}",
+            reader_proxy.remote_reader_guid, an.reader_sn_state, last_seq, an.count);
         }
-        // TODO: The following check is rather expensive. Maybe should turn it off
-        // in release build?
-        if let Some( max_req_sn ) = an.reader_sn_state.iter().max() { // sanity check
+        if let Some( max_req_sn ) = an.reader_sn_state.iter().next_back() { // sanity check
           if max_req_sn > last_seq {
             warn!("ACKNACK from {:?} requests {:?} but I have only up to {:?}",
               reader_proxy.remote_reader_guid, 
