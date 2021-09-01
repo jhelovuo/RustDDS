@@ -59,6 +59,7 @@ pub(crate) struct Reader {
   status_sender: mio_channel::SyncSender<DataReaderStatus>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
+  #[cfg(test)]
   seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
   topic_name: String,
   qos_policy: QosPolicies,
@@ -99,6 +100,7 @@ impl Reader {
       topic_name,
       qos_policy,
 
+      #[cfg(test)]
       seqnum_instant_map: BTreeMap::new(),
       my_guid: guid ,
       enpoint_attributes: EndpointAttributes::default(),
@@ -273,6 +275,7 @@ impl Reader {
   }
 
   // Used for test/debugging purposes
+  #[cfg(test)]
   pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
     debug!("{:?}", sequence_number);
     let dds_cache = self.dds_cache.read().unwrap();
@@ -447,6 +450,7 @@ impl Reader {
 
     self.make_cache_change(data, data_flags, instant, writer_guid, no_writers);
     // Add to own track-keeping datastructure
+    #[cfg(test)]
     self.seqnum_instant_map.insert(seq_num, instant);
 
     self.notify_cache_change();
@@ -550,12 +554,7 @@ impl Reader {
             }
 
           // Nothing missing. Report that we have all we have.
-          None => 
-            match self.seqnum_instant_map.keys().next_back() {
-              None => SequenceNumberSet::new_empty(SequenceNumber::default()), // nothing received
-              // report highest received.
-              Some(high_sn) => SequenceNumberSet::new_empty(*high_sn + SequenceNumber::new(1)),
-            }         
+          None => SequenceNumberSet::new_empty(writer_proxy.all_ackable_before()),           
         };
 
 
