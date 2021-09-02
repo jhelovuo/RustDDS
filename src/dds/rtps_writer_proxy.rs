@@ -1,3 +1,5 @@
+use core::ops::Bound::Excluded;
+use core::ops::Bound::Unbounded;
 use crate::structure::locator::LocatorList;
 use crate::structure::guid::{EntityId, GUID};
 use crate::{
@@ -31,6 +33,11 @@ pub(crate) struct RtpsWriterProxy {
   pub received_heartbeat_count: i32,
 
   pub sent_ack_nack_count: i32,
+
+  ack_base : SequenceNumber, // We can ACK everything before this number.
+  // ack_base can be increased from N-1 to N, ifwe receive SequenceNumber N-1
+  // heartbeat(first,last) => ack_base can be increased to first
+  // gap is treated like receiving message
   
   //pub qos : QosPolicies,
 }
@@ -50,7 +57,12 @@ impl RtpsWriterProxy {
       changes: BTreeMap::new(),
       received_heartbeat_count: 0,
       sent_ack_nack_count: 0,
+      ack_base: SequenceNumber::default(),
     }
+  }
+
+  pub fn all_ackable_before(&self) -> SequenceNumber {
+    self.ack_base
   }
 
   pub fn update_contents(&mut self, other: RtpsWriterProxy) {
@@ -104,6 +116,16 @@ impl RtpsWriterProxy {
 
   pub fn received_changes_add(&mut self, seq_num: SequenceNumber, instant: Timestamp) {
     self.changes.insert(seq_num, instant);
+
+    // We get to advance ack_base if it was equal to seq_num
+    // If ack_base < seq_num, we are still missing seq_num-1 or others below
+    // If ack_base > seq_num, this is either a duplicate or ack_base was wrong.
+    if seq_num == self.ack_base {
+      let mut s = seq_num;
+      for (&sn,_) in self.changes.range((Excluded(&seq_num), Unbounded)) {
+        // TODO: Implement this.
+      }
+    }
   }
 
   pub fn available_changes_max(&self) -> Option<SequenceNumber> {
@@ -118,6 +140,7 @@ impl RtpsWriterProxy {
 
   pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Timestamp> {
     self.changes.remove(&seq_num)
+    // TODO: Update ack_base
   }
 
   pub fn irrelevant_changes_range(&mut self, 
@@ -128,6 +151,7 @@ impl RtpsWriterProxy {
     let mut after = removed_and_after.split_off(&remove_until_before);
     let removed = removed_and_after;
     self.changes.append(&mut after);
+    // TODO: Update ack_base
     removed
   }
 
@@ -139,6 +163,7 @@ impl RtpsWriterProxy {
     // Returns everything after the given key, including the key.
     let remaining_changes = self.changes.split_off(&smallest_seqnum);
     std::mem::replace(&mut self.changes, remaining_changes) // returns the irrelevant changes
+    // TODO: Update ack_base
   }
 
   pub fn from_discovered_writer_data(discovered_writer_data: &DiscoveredWriterData) 
@@ -158,6 +183,7 @@ impl RtpsWriterProxy {
       changes: BTreeMap::new(),
       received_heartbeat_count: 0,
       sent_ack_nack_count: 0,
+      ack_base: SequenceNumber::default(),
     }
   }
 }

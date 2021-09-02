@@ -59,6 +59,7 @@ pub(crate) struct Reader {
   status_sender: mio_channel::SyncSender<DataReaderStatus>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
+  #[cfg(test)]
   seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
   topic_name: String,
   qos_policy: QosPolicies,
@@ -99,6 +100,7 @@ impl Reader {
       topic_name,
       qos_policy,
 
+      #[cfg(test)]
       seqnum_instant_map: BTreeMap::new(),
       my_guid: guid ,
       enpoint_attributes: EndpointAttributes::default(),
@@ -273,6 +275,7 @@ impl Reader {
   }
 
   // Used for test/debugging purposes
+  #[cfg(test)]
   pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
     debug!("{:?}", sequence_number);
     let dds_cache = self.dds_cache.read().unwrap();
@@ -447,6 +450,7 @@ impl Reader {
 
     self.make_cache_change(data, data_flags, instant, writer_guid, no_writers);
     // Add to own track-keeping datastructure
+    #[cfg(test)]
     self.seqnum_instant_map.insert(seq_num, instant);
 
     self.notify_cache_change();
@@ -465,6 +469,7 @@ impl Reader {
 
     // Added in order to test stateless actions. TODO
     if !self.matched_writers.contains_key(&writer_guid) {
+      info!("HEARTBEAT for {:?}, but no writer proxy available. topic={:?}", writer_guid, self.topic_name);
       return false
     }
     // sanity check
@@ -475,7 +480,10 @@ impl Reader {
 
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
       Some(wp) => wp,
-      None => return false, // Matching writer not found
+      None => {
+        error!("Writer proxy disappeared 1!");
+        return false
+      } // Matching writer not found
     };
 
     let mut mr_state = mr_state;
@@ -506,9 +514,14 @@ impl Reader {
       }
     }
 
+    // this is duplicate code from above, but needed, because we need another mutable borrow.
+    // TODO: Maybe could be written in some sensible way.
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
       Some(wp) => wp,
-      None => return false, // Matching writer not found
+      None => {
+        error!("Writer proxy disappeared 2!");
+        return false
+      } // Matching writer not found
     };
 
     // See if ACKNACK is needed, and generate one.
@@ -516,7 +529,8 @@ impl Reader {
         writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
     
     // Interpretation of final flag in RTPS spec 
-    // 8.4.2.3.1Readers must respond eventually after receiving a HEARTBEAT with final flag not set
+    // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with final flag not set
+    // 
     // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must respond 
     // with an ACKNACK Message. The ACKNACK Message may acknowledge having received all 
     // the data samples or may indicate that some data samples are missing.
@@ -540,13 +554,10 @@ impl Reader {
             }
 
           // Nothing missing. Report that we have all we have.
-          None => 
-            match self.seqnum_instant_map.keys().next_back() {
-              None => SequenceNumberSet::new_empty(SequenceNumber::default()), // nothing received
-              // report highest received.
-              Some(high_sn) => SequenceNumberSet::new_empty(*high_sn + SequenceNumber::new(1)),
-            }         
+          None => SequenceNumberSet::new_empty(writer_proxy.all_ackable_before()),           
         };
+
+
       let response_ack_nack = AckNack {
         reader_id: self.get_entity_id(),
         writer_id: heartbeat.writer_id,
@@ -555,9 +566,17 @@ impl Reader {
       };
 
       self.sent_ack_nack_count += 1;
+
+      // Sanity check
+      if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn + SequenceNumber::new(1) {
+        error!("OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}",
+          &heartbeat, &response_ack_nack
+          );
+      }
+
+
       // The acknack can be sent now or later. The rest of the RTPS message
       // needs to be constructed. p. 48
-
       self.send_acknack(response_ack_nack, mr_state);
       return true
     }
