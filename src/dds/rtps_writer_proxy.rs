@@ -8,7 +8,7 @@ use crate::{
   structure::time::Timestamp,
 };
 use std::collections::BTreeMap;
-//use std::time::Instant;
+use std::cmp::max;
 
 #[derive(Debug,Clone)]
 pub(crate) struct RtpsWriterProxy {
@@ -120,11 +120,19 @@ impl RtpsWriterProxy {
     // We get to advance ack_base if it was equal to seq_num
     // If ack_base < seq_num, we are still missing seq_num-1 or others below
     // If ack_base > seq_num, this is either a duplicate or ack_base was wrong.
+    // Remember, ack_base is the SN one past the last received/irrelevant SN.
     if seq_num == self.ack_base {
       let mut s = seq_num;
       for (&sn,_) in self.changes.range((Excluded(&seq_num), Unbounded)) {
-        // TODO: Implement this.
-      }
+        if sn == s + SequenceNumber::new(1) {
+          // got consecutive number from previous
+          s = s + SequenceNumber::new(1) // and continue looping
+        } else {
+          break // not consecutive
+        }
+      } // end for
+      // Now we have received everything up to and including s. Ack base is one up from that.
+      self.ack_base = s + SequenceNumber::new(1)
     }
   }
 
@@ -151,7 +159,11 @@ impl RtpsWriterProxy {
     let mut after = removed_and_after.split_off(&remove_until_before);
     let removed = removed_and_after;
     self.changes.append(&mut after);
-    // TODO: Update ack_base
+
+    if self.ack_base >= remove_from {
+      self.ack_base = max( remove_until_before , self.ack_base)
+    }
+
     removed
   }
 
@@ -162,8 +174,11 @@ impl RtpsWriterProxy {
     // split_off() Splits the collection into two at the given key. 
     // Returns everything after the given key, including the key.
     let remaining_changes = self.changes.split_off(&smallest_seqnum);
-    std::mem::replace(&mut self.changes, remaining_changes) // returns the irrelevant changes
-    // TODO: Update ack_base
+    let irrelevant = std::mem::replace(&mut self.changes, remaining_changes); 
+
+    self.ack_base = max( smallest_seqnum , self.ack_base);
+
+    irrelevant
   }
 
   pub fn from_discovered_writer_data(discovered_writer_data: &DiscoveredWriterData) 

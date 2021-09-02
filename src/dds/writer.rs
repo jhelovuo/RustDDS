@@ -527,8 +527,8 @@ impl Writer {
         }
         // Sanity Check
         if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) { // more sanity
-          warn!("ACKNACK from {:?} acks {:?}, but I have only up to {:?} count={:?}",
-            reader_proxy.remote_reader_guid, an.reader_sn_state, last_seq, an.count);
+          warn!("ACKNACK from {:?} acks {:?}, but I have only up to {:?} count={:?} topic={:?}",
+            reader_proxy.remote_reader_guid, an.reader_sn_state, last_seq, an.count, my_topic);
         }
         if let Some( max_req_sn ) = an.reader_sn_state.iter().next_back() { // sanity check
           if max_req_sn > last_seq {
