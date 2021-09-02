@@ -6,8 +6,8 @@ use std::convert::From;
 
 const timeout_epsilon : Duration = Duration::from_nanos( 1000 );
 
-// Always give background thread 0.1 ms to react
-const timeout_fallback : Duration = Duration::from_nanos( 100_000 );
+// Always give background thread 1 ms to react
+const timeout_fallback : Duration = Duration::from_nanos( 1_000_000 );
 
 pub fn try_send_timeout<T>(sender: &SyncSender<T>, t: T, timeout_opt:Option<Duration>) 
   -> Result<(), TrySendError<T>> 

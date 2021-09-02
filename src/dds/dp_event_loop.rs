@@ -434,10 +434,9 @@ impl DPEventLoop {
 
   fn handle_writer_acknack_action(&mut self, _event: &Event) {
     while let Ok((acknack_sender_prefix, acknack_message)) = self.ack_nack_reciever.try_recv() {
-      let target_writer_entity_id = { acknack_message.writer_id };
       let writer_guid = GUID::new_with_prefix_and_id(
         self.domain_info.domain_participant_guid.guidPrefix,
-        target_writer_entity_id,
+        acknack_message.writer_id,
       );
       if let Some(found_writer) = self.writers.get_mut(&writer_guid.entityId) {
         if found_writer.is_reliable() {

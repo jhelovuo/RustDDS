@@ -335,6 +335,7 @@ impl<C: Context, N > Writable<C> for NumberSet<N>
   }
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NumberSetIter<'a,N>
   where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd
 {

@@ -5,10 +5,10 @@ use std::{
 };
 
 use mio::{Poll, Events, Token, Ready, PollOpt, Evented};
-use mio_extras::channel::{self as mio_channel, Receiver};
+use mio_extras::channel::{self as mio_channel, Receiver, SendError,};
 
 use serde::Serialize;
-use log::{error, warn};
+use log::{info, error, warn};
 
 use crate::{
   discovery::discovery::DiscoveryCommand, serialization::CDRSerializerAdapter,
@@ -104,10 +104,13 @@ where
         guid: self.get_guid(),
       }) {
       Ok(_) => {}
-      Err(e) => error!(
-        "Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand. {:?}",
-        e
-      ),
+
+      // This is fairly normal at shutdown, as the other end is down already.
+      Err(SendError::Disconnected(_cmd)) => info!(
+        "Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand: Disconnected." ),
+      // other errors must be taken more seriously
+      Err(e) => 
+        error!("Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand. {:?}",e ),
     }
   }
 }
@@ -293,7 +296,7 @@ where
         Ok(())
       }
       Err(e) => {
-        warn!("Failed to write new data. topic={:?}  reason={:?}  timeout={:?}", 
+        warn!("Failed to write new data: topic={:?}  reason={:?}  timeout={:?}", 
              self.my_topic.get_name(), e, timeout, );
         Err(Error::OutOfResources)
       }

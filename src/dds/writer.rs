@@ -463,7 +463,8 @@ impl Writer {
       let hb_message = MessageBuilder::new()
         .ts_msg(self.endianness, Some(Timestamp::now()) )
         .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
-        .add_header_and_build(self.my_guid.guidPrefix);      
+        .add_header_and_build(self.my_guid.guidPrefix);
+      debug!("Writer {:?} topic={:} HEARTBEAT {:?}", self.get_guid().entityId, self.topic_name(), hb_message );
       self.send_message_to_readers(DeliveryMode::Multicast, &hb_message, 
                                     &mut self.readers.values())
     }
@@ -505,6 +506,7 @@ impl Writer {
         warn!("Request for SN zero! : {:?}",an),
       Some(_) => (), // ok
     }
+    let my_topic = self.my_topic_name.clone(); // for debugging
 
     self.update_ack_waiters( 
       GUID::new(reader_guid_prefix, an.reader_id) , 
@@ -525,8 +527,12 @@ impl Writer {
         }
         // Sanity Check
         if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) { // more sanity
-          warn!("ACKNACK from {:?} acks up to before {:?}, missing set = {:?} but I have only up to {:?}",
-            reader_proxy.remote_reader_guid, an.reader_sn_state.base(), reader_proxy.unsent_changes, last_seq);
+          warn!("ACKNACK from {:?} acks up to before {:?}, missing set = {:?} but I have only up to {:?}. topic={:?} count={:?}",
+            reader_proxy.remote_reader_guid, an.reader_sn_state.base(), an.reader_sn_state,
+            last_seq,
+            my_topic,
+            an.count,
+          );
         }
         // TODO: The following check is rather expensive. Maybe should turn it off
         // in release build?
