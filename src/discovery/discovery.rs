@@ -593,11 +593,13 @@ impl Discovery {
       content_filter: None,
     };
 
+    info!("Creating DCPSParticipant reader.");
     self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated
       { rtps_reader_proxy:  RtpsReaderProxy::from_discovered_reader_data(&drd,vec![], vec![]),
         discovered_reader_data: drd,
         _needs_new_cache_change: true,
       });
+    info!("Created DCPSParticipant reader.");
   }
 
 

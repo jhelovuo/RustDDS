@@ -83,13 +83,23 @@ impl DiscoveryDB {
         error!("Discovered participant GUID entity_id is not for participant: {:?}",guid);
         return // Maybe we should discard the participant here?
       }
-      if guid == self.my_guid {
-        debug!("DiscoveryDB discovered self. Skipping.");
-        return
-      }
+
+      // We allow discovery to discover self, since our discovery readers
+      // will receive our own announcements via broadcast. If we do not recognize
+      // our own participant, there is confusion about unknown writers on the
+      // discovery topics.
+      //
+      // if guid == self.my_guid {
+      //   debug!("DiscoveryDB discovered self. Skipping.");
+      //   return
+      // }
 
       if self.participant_proxies.get( &guid.guidPrefix ).is_none() {
         info!("New remote participant: {:?}", &data);
+        if guid == self.my_guid {
+          info!("Remote participant {:?} is myself, but some reflection is good.",
+            guid);
+        }
       }
       // actual work here:
       self.participant_proxies.insert(guid.guidPrefix, data.clone());

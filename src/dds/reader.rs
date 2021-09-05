@@ -469,7 +469,8 @@ impl Reader {
 
     // Added in order to test stateless actions. TODO
     if !self.matched_writers.contains_key(&writer_guid) {
-      info!("HEARTBEAT for {:?}, but no writer proxy available. topic={:?}", writer_guid, self.topic_name);
+      info!("HEARTBEAT for {:?}, but no writer proxy available. topic={:?} reader={:?}", 
+        writer_guid, self.topic_name, self.my_guid);
       return false
     }
     // sanity check

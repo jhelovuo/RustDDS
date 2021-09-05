@@ -2,9 +2,10 @@
 use log::{debug,warn,error,trace};
 
 use mio::net::UdpSocket;
+use std::net::{SocketAddr};
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::io;
+#[cfg(test)] use std::net::{IpAddr, Ipv4Addr};
+#[cfg(test)] use std::io;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 
 #[derive(Debug)]
@@ -80,6 +81,7 @@ impl UDPSender {
       }
   }
 
+  #[cfg(test)]
   pub fn send_multicast(self, buffer: &[u8], address: Ipv4Addr, port: u16) -> io::Result<usize> {
     if address.is_multicast() {
       let address = SocketAddr::new(IpAddr::V4(address), port);
@@ -91,15 +93,15 @@ impl UDPSender {
     ))
   }
 
-  pub fn send_ipv4_multicast(&self, buffer: &[u8], address: SocketAddr) -> io::Result<usize> {
-    if address.ip().is_multicast() {
-      return self.socket.send_to(buffer, &address);
-    }
-    io::Result::Err(io::Error::new(
-      io::ErrorKind::Other,
-      "Not a multicast address",
-    ))
-  }
+  // pub fn send_ipv4_multicast(&self, buffer: &[u8], address: SocketAddr) -> io::Result<usize> {
+  //   if address.ip().is_multicast() {
+  //     return self.socket.send_to(buffer, &address);
+  //   }
+  //   io::Result::Err(io::Error::new(
+  //     io::ErrorKind::Other,
+  //     "Not a multicast address",
+  //   ))
+  // }
 }
 
 #[cfg(test)]
