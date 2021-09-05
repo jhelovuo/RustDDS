@@ -18,7 +18,7 @@ use super::{
 /// the sequence numbers it has received and which ones it is still
 /// missing. This Submessage can be used to do both positive
 /// and negative acknowledgments
-#[derive(Debug, PartialEq, Readable, Writable)]
+#[derive(Debug, PartialEq, Clone, Readable, Writable)]
 pub struct AckNack {
   /// Identifies the Reader entity that acknowledges receipt of certain
   /// sequence numbers and/or requests to receive certain sequence numbers.

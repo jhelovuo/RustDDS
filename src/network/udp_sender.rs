@@ -40,6 +40,7 @@ impl UDPSender {
     UDPSender { socket: socket }
   }
 
+  #[cfg(test)]
   pub fn send_to_all(&self, buffer: &[u8], addresses: &Vec<SocketAddr>) {
     for address in addresses.iter() {
       match self.socket.send_to(buffer, address) {

@@ -16,7 +16,7 @@ use enumflags2::BitFlags;
 
 //TODO: These messages are structured a bit oddly. Why is flags separate from the submessage proper?
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum EntitySubmessage {
   AckNack(AckNack, BitFlags<ACKNACK_Flags>),
   Data(Data, BitFlags<DATA_Flags>),
@@ -44,7 +44,7 @@ impl<C: Context> Writable<C> for EntitySubmessage {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum InterpreterSubmessage {
   InfoSource(InfoSource, BitFlags<INFOSOURCE_Flags>),
   InfoDestination(InfoDestination, BitFlags<INFODESTINATION_Flags>),

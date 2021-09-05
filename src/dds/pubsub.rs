@@ -435,6 +435,7 @@ impl InnerPublisher {
       topic.get_name().to_string(),
       writer_qos,
       status_sender,
+      dp.clone_broadcast_loopback_sender(),
     );
 
     self.add_writer_sender.send(new_writer)

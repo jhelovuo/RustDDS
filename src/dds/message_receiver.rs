@@ -160,9 +160,6 @@ impl MessageReceiver {
   // }
 
   pub fn handle_received_packet(&mut self, msg_bytes: Bytes) {
-    self.reset();
-    self.dest_guid_prefix = self.own_guid_prefix;
-
     // Check for RTPS ping message. At least RTI implementation sends these.
     // What should we do with them? The spec does not say.
     if msg_bytes.len() < RTPS_MESSAGE_HEADER_SIZE {
@@ -188,6 +185,16 @@ impl MessageReceiver {
         return
       }
     };
+
+    // And process message
+    self.handle_parsed_message(rtps_message)
+  }
+
+  // This is also called directly from dp_event_loop in case of loopback messages.
+  pub fn handle_parsed_message(&mut self, rtps_message:Message)
+  {
+    self.reset();
+    self.dest_guid_prefix = self.own_guid_prefix;
 
     self.source_guid_prefix = rtps_message.header.guid_prefix;
 
@@ -477,6 +484,7 @@ use super::*;
     let _serializedPayload = to_bytes::<ShapeType, LittleEndian>(&deserializedShapeType);
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<WriterCommand>();
     let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
+    let (bl_sender, _bl_receiver) = mio_channel::sync_channel(8);
     let mut _writerObject = Writer::new(
       GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
       hccc_download,
@@ -484,6 +492,7 @@ use super::*;
       String::from("topicName1"),
       QosPolicies::qos_none(),
       status_sender,
+      bl_sender,
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entityId,

@@ -8,7 +8,7 @@ use speedy::{Readable, Writable};
 /// communication at the fragment level.
 ///
 /// Once all fragments are available, a regular Heartbeat message is used.
-#[derive(Debug, PartialEq, Readable, Writable, Clone)]
+#[derive(Debug, PartialEq, Clone, Readable, Writable)]
 pub struct HeartbeatFrag {
   /// Identifies the Reader Entity that is being informed of the availability
   /// of fragments. Can be set to ENTITYID_UNKNOWN to indicate all readers for
