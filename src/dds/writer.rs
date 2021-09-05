@@ -114,9 +114,6 @@ pub(crate) struct Writer {
 
   udp_sender: UDPSender,
 
-  // broadcast messages are looped back to local (in same Participant) Readers via this pipe
-  broadcast_loopback_sender: mio_channel::SyncSender<Message>,
-
   // This writer can read/write to only one of this DDSCache topic caches identified with my_topic_name
   dds_cache: Arc<RwLock<DDSCache>>,
   /// Writer can only read/write to this topic DDSHistoryCache.
@@ -176,7 +173,6 @@ impl Writer {
     topic_name: String,
     qos_policies: QosPolicies,
     status_sender: SyncSender<DataWriterStatus>,
-    broadcast_loopback_sender: SyncSender<Message>,
   ) -> Writer {
     let heartbeat_period = match &qos_policies.reliability {
       Some(r) => match r {
@@ -220,10 +216,8 @@ impl Writer {
       readers: BTreeMap::new(),
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
-      //message: None,
       endpoint_attributes: EndpointAttributes::default(),
       udp_sender: UDPSender::new_with_random_port(),
-      broadcast_loopback_sender,
       dds_cache,
       my_topic_name: topic_name,
       sequence_number_to_instant: BTreeMap::new(),
@@ -725,22 +719,12 @@ impl Writer {
               reader.multicast_locator_list.iter().find(|l| Locator::isUDP(l) ) ) {
         (DeliveryMode::Multicast, _ , Some(mc_locator)) => {
           send_unless_sent_and_mark!(mc_locator);
-          // TODO: cloning entire message does not seem too efficient.
-          // Especially as it may be going nowhere.
-          self.broadcast_loopback_sender.try_send(message.clone()).
-            unwrap_or_else(|e| warn!("Could not send broadcast message to loopback channel: {:?}",e));
-          info!("Sent loopback");
         }
         (DeliveryMode::Unicast, Some(uc_locator) , _ ) => {
           send_unless_sent_and_mark!(uc_locator)
         }        
         (_delivery_mode, _ , Some(mc_locator)) => {
           send_unless_sent_and_mark!(mc_locator);
-          // TODO: cloning entire message does not seem too efficient.
-          // Especially as it may be going nowhere.
-          self.broadcast_loopback_sender.try_send(message.clone()).
-            unwrap_or_else(|e| warn!("Could not send broadcast message to loopback channel: {:?}",e));
-          info!("Sent loopback");
         }
         (_delivery_mode, Some(uc_locator), _ ) => {
           send_unless_sent_and_mark!(uc_locator)

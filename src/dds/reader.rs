@@ -58,6 +58,9 @@ pub(crate) struct Reader {
   notification_sender: mio_channel::SyncSender<()>,
   status_sender: mio_channel::SyncSender<DataReaderStatus>,
 
+  is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
+  // Currently we support only stateful behaviour.
+
   dds_cache: Arc<RwLock<DDSCache>>,
   #[cfg(test)]
   seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
@@ -96,6 +99,8 @@ impl Reader {
     Reader {
       notification_sender,
       status_sender,
+
+      is_stateful: true,
       dds_cache,
       topic_name,
       qos_policy,
@@ -397,7 +402,7 @@ impl Reader {
   pub fn handle_data_msg(&mut self, data: Data, 
       data_flags:BitFlags<DATA_Flags>, mr_state: MessageReceiverState ) 
   {
-    trace!("handle_data_msg entry");
+    //trace!("handle_data_msg entry");
     let duration = match mr_state.timestamp {
       Some(ts) => Timestamp::now().duration_since(ts),
       None => Duration::DURATION_ZERO,
@@ -418,34 +423,34 @@ impl Reader {
 
     let instant = Timestamp::now();
 
-    // Really should be checked from qosPolicy?
-    // Added in order to test stateless actions.
-    // TODO
-    let statefull = self.matched_writers.contains_key(&writer_guid);
-
     let mut no_writers = false;
-    trace!("handle_data_msg from {:?} no_writers={:?} seq={:?}", 
-        &writer_guid, no_writers, seq_num,);
-    if statefull {
+    trace!("handle_data_msg from {:?} to {:?} no_writers={:?} seq={:?} topic={:?} stateful={:?}", 
+        &writer_guid, data.reader_id, no_writers, seq_num, self.topic_name, self.is_stateful,);
+    if self.is_stateful {
       let my_entityid = self.my_guid.entityId; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
         if writer_proxy.contains_change(seq_num) {
           // change already present
-          trace!("handle_data_msg already have this seq={:?}", seq_num);
+          debug!("handle_data_msg already have this seq={:?}", seq_num);
           if my_entityid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER {
             debug!("Accepting duplicate message to participant reader.");
-            // This is an attmpted workaround to eProsima not
+            // This is an attmpted workaround to eProsima FastRTPS not
             // incrementing sequence numbers. (eProsime shapes demo 2.1.0 from 2021)
           } else {
-            // already have this sequence number , so drop the submessage
             return 
           }
         }
         // Add the change and get the instant
         writer_proxy.received_changes_add(seq_num, instant);
       } else {
+        // no writer proxy found
+        info!("handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
+          my_entityid, writer_guid, self.topic_name, );
         no_writers = true;
       }
+    } else {
+      // stateless reader
+      todo!()
     }
 
     self.make_cache_change(data, data_flags, instant, writer_guid, no_writers);
@@ -467,9 +472,14 @@ impl Reader {
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
-    // Added in order to test stateless actions. TODO
+    if ! self.is_stateful {
+      debug!("HEARTBEAT from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}", 
+        writer_guid,self.topic_name, self.my_guid);
+        return false
+    }
+
     if !self.matched_writers.contains_key(&writer_guid) {
-      info!("HEARTBEAT for {:?}, but no writer proxy available. topic={:?} reader={:?}", 
+      info!("HEARTBEAT from {:?}, but no writer proxy available. topic={:?} reader={:?}", 
         writer_guid, self.topic_name, self.my_guid);
       return false
     }
@@ -589,11 +599,20 @@ impl Reader {
     // ATM all things related to groups is ignored. TODO?
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
-    // Added in order to test stateless actions. TODO
+
+    if ! self.is_stateful {
+      debug!("GAP from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}", 
+        writer_guid,self.topic_name, self.my_guid);
+        return
+    }
 
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
       Some(wp) => wp,
-      None => return, // Matching writer not found
+      None => {
+        info!("GAP from {:?}, but no writer proxy available. topic={:?} reader={:?}", 
+        writer_guid, self.topic_name, self.my_guid);
+        return
+      } // Matching writer not found
     };
 
     // Sequencenumber set in the gap is invalid: (section 8.3.5.5)

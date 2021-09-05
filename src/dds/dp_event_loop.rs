@@ -1,10 +1,4 @@
-//use std::cmp::max;
 
-use crate::serialization::Message;
-use crate::discovery::data_types::topic_data::DiscoveredWriterData;
-use crate::discovery::data_types::topic_data::DiscoveredReaderData;
-use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
-use crate::discovery::discovery::Discovery;
 
 use log::{debug, error, info, warn, trace};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
@@ -24,6 +18,10 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId, TokenDecode};
 use crate::structure::entity::RTPSEntity;
+use crate::discovery::data_types::topic_data::DiscoveredWriterData;
+use crate::discovery::data_types::topic_data::DiscoveredReaderData;
+use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
+use crate::discovery::discovery::Discovery;
 
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
@@ -75,9 +73,6 @@ pub struct DPEventLoop {
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
 
-  // We use this to loop back sent broadcasts to local readers also
-  // Payload is RTPS Messages, so this skips serialization/deserialization steps
-  broadcast_loopback_receiver: mio_channel::Receiver<Message>,
 }
 
 impl DPEventLoop {
@@ -94,7 +89,6 @@ impl DPEventLoop {
     remove_writer_receiver: TokenReceiverPair<GUID>,
     stop_poll_receiver: mio_channel::Receiver<()>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-    broadcast_loopback_receiver: mio_channel::Receiver<Message>,
   ) -> DPEventLoop {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_reciever) =
@@ -173,14 +167,6 @@ impl DPEventLoop {
       )
       .expect("Failed to register reader update notification.");
 
-    poll
-      .register(
-        &broadcast_loopback_receiver,
-        BROADCAST_LOOPBACK_RECEIVER_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .expect("Failed to register broadcast loopback.");
 
     DPEventLoop {
       domain_info,
@@ -199,7 +185,6 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_reciever: acknack_reciever,
       discovery_update_notification_receiver,
-      broadcast_loopback_receiver,
     }
   }
 
@@ -248,13 +233,6 @@ impl DPEventLoop {
                 ev_wrapper.handle_writer_acknack_action(&event);
               }
               DISCOVERY_UPDATE_NOTIFICATION_TOKEN => {
-                // debug code
-                if let Ok(message) = ev_wrapper.broadcast_loopback_receiver.try_recv() {
-                  info!("Loopback receive - debug");
-                  ev_wrapper.message_receiver.handle_parsed_message(message)
-                }
-                // end debug
-
                 while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
                   use DiscoveryNotificationType::*;
                   match dnt {
@@ -283,13 +261,6 @@ impl DPEventLoop {
               DPEV_ACKNACK_TIMER_TOKEN => {
                 ev_wrapper.message_receiver.send_preemptive_acknacks();
                 acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
-              }
-              BROADCAST_LOOPBACK_RECEIVER_TOKEN => {
-                info!("Loopback receive poll");
-                while let Ok(message) = ev_wrapper.broadcast_loopback_receiver.try_recv() {
-                  info!("Loopback receive");
-                  ev_wrapper.message_receiver.handle_parsed_message(message)
-                }
               }
 
               fixed_unknown => {
@@ -483,11 +454,10 @@ impl DPEventLoop {
   }
 
   fn update_participant(&mut self, participant_guid_prefix: GuidPrefix ) {
-    info!("update_participant - begin for {:?}", participant_guid_prefix);
+    debug!("update_participant - begin for {:?}", participant_guid_prefix);
+
     if participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix {
-      // Our own participant was updated (initialized.)
-      // What should we do now?
-      debug!("Own participant initialized");
+      info!("Own participant update");
     } else {
       let db = self.discovery_db.read().unwrap();
       // new Remote Participant discovered
@@ -600,7 +570,7 @@ impl DPEventLoop {
         }
       } // for
     } // if
-    info!("update_participant - finished for {:?}", participant_guid_prefix);
+    debug!("update_participant - finished for {:?}", participant_guid_prefix);
   } // fn 
 
   fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
@@ -720,8 +690,6 @@ mod tests {
     let (_discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::channel();
 
-    let (_broadcast_loopback_sender, broadcast_loopback_receiver) = mio_channel::sync_channel(8);
-
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(GUID::new_particiapnt_guid())));
 
@@ -755,7 +723,6 @@ mod tests {
       },
       stop_poll_receiver,
       discovery_update_notification_receiver,
-      broadcast_loopback_receiver,
     );
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();

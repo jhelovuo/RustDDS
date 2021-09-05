@@ -191,11 +191,10 @@ impl MessageReceiver {
   }
 
   // This is also called directly from dp_event_loop in case of loopback messages.
-  pub fn handle_parsed_message(&mut self, rtps_message:Message)
+  pub fn handle_parsed_message(&mut self, rtps_message: Message)
   {
     self.reset();
     self.dest_guid_prefix = self.own_guid_prefix;
-
     self.source_guid_prefix = rtps_message.header.guid_prefix;
 
     for submessage in rtps_message.submessages {
@@ -208,11 +207,11 @@ impl MessageReceiver {
   }
 
   fn handle_entity_submessage(&mut self, submessage: EntitySubmessage) {
-    if self.dest_guid_prefix != self.own_guid_prefix {
-      debug!("Messages are not for this participant?");
-      debug!("dest_guid_prefix: {:?}", self.dest_guid_prefix);
-      debug!("participant guid: {:?}", self.own_guid_prefix);
-      return; // Wrong target received
+    if self.dest_guid_prefix != self.own_guid_prefix 
+        && self.dest_guid_prefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
+      debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
+        self.dest_guid_prefix, self.own_guid_prefix);
+      return 
     }
 
     let mr_state = self.give_message_receiver_info();
@@ -234,7 +233,7 @@ impl MessageReceiver {
                             )
                       )
           {
-            trace!("handle_entity_submessage DATA from unknown handling in {:?}",&reader);
+            debug!("handle_entity_submessage DATA from unknown handling in {:?}",&reader);
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
         } else {
@@ -484,7 +483,7 @@ use super::*;
     let _serializedPayload = to_bytes::<ShapeType, LittleEndian>(&deserializedShapeType);
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<WriterCommand>();
     let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
-    let (bl_sender, _bl_receiver) = mio_channel::sync_channel(8);
+
     let mut _writerObject = Writer::new(
       GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
       hccc_download,
@@ -492,7 +491,6 @@ use super::*;
       String::from("topicName1"),
       QosPolicies::qos_none(),
       status_sender,
-      bl_sender,
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entityId,

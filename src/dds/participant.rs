@@ -23,7 +23,6 @@ use crate::dds::{
   dp_event_loop::DPEventLoop, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*, qos::*,
   values::result::*,
 };
-use crate::serialization::Message;
 
 use crate::{
   discovery::{discovery::Discovery, discovery_db::DiscoveryDB},
@@ -260,11 +259,6 @@ impl DomainParticipant {
       .clone()
   }
 
-  pub(crate) fn clone_broadcast_loopback_sender(&self) -> mio_channel::SyncSender<Message> {
-    self.dpi.lock().unwrap()
-      .clone_broadcast_loopback_sender()
-  }
-
 }
 
 impl PartialEq for DomainParticipant {
@@ -476,10 +470,6 @@ impl DomainParticipant_Disc {
       })
   }
 
-  pub(crate) fn clone_broadcast_loopback_sender(&self) -> mio_channel::SyncSender<Message> {
-    self.dpi.lock().unwrap().clone_broadcast_loopback_sender()
-  }
-
 }
 
 impl Drop for DomainParticipant_Disc {
@@ -532,7 +522,6 @@ pub(crate) struct DomainParticipant_Inner {
   dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
 
-  broadcast_loopback_sender: mio_channel::SyncSender<Message>,
 }
 
 impl Drop for DomainParticipant_Inner {
@@ -652,9 +641,6 @@ impl DomainParticipant_Inner {
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
-    let (broadcast_loopback_sender, broadcast_loopback_receiver) =
-      mio_channel::sync_channel(128); // value out of hat
-
     let ev_wrapper = DPEventLoop::new(
       domain_info,
       listeners,
@@ -679,7 +665,6 @@ impl DomainParticipant_Inner {
       },
       stop_poll_receiver,
       discovery_update_notification_receiver,
-      broadcast_loopback_receiver,
     );
     // Launch the background thread for DomainParticipant
     let ev_loop_handle = thread::Builder::new()
@@ -706,12 +691,7 @@ impl DomainParticipant_Inner {
       remove_writer_sender,
       dds_cache: Arc::new(RwLock::new(DDSCache::new())),
       discovery_db,
-      broadcast_loopback_sender,
     })
-  }
-
-  pub(crate) fn clone_broadcast_loopback_sender(&self) -> mio_channel::SyncSender<Message> {
-    self.broadcast_loopback_sender.clone()
   }
 
   pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
