@@ -339,6 +339,13 @@ impl MessageReceiver {
     }
   }
 
+  pub fn notify_data_to_readers(&self, readers: Vec<EntityId>) {
+    for eid in readers {
+      self.available_readers.get(&eid)
+        .map( |r| r.notify_cache_change() );
+    }
+  }
+
   // sends 0 seqnum acknacks for those writer that haven't had any action
   pub fn send_preemptive_acknacks(&mut self) {
     for reader in self.available_readers.values_mut() {

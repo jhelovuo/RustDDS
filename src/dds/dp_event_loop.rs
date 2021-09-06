@@ -276,9 +276,17 @@ impl DPEventLoop {
                 .map( |reader| reader.process_command() )
                 .unwrap_or_else(|| error!("Event for unknown reader {:?}",eid));
             } else if eid.kind().is_writer() {
-              ev_wrapper.writers.get_mut( &eid )
-                .map( |writer| writer.process_writer_command() )
-                .unwrap_or_else(|| error!("Event for unknown writer {:?}",eid));
+              let local_readers =
+                match ev_wrapper.writers.get_mut( &eid ) {
+                  None => { error!("Event for unknown writer {:?}",eid); vec![] },
+                  Some(writer) => {
+                    // Writer will record data to DDSCache and send it out.
+                    writer.process_writer_command();
+                    writer.get_local_readers()
+                  }
+                };
+              // Notify local (same participant) readers that new data is available in the cache.
+              ev_wrapper.message_receiver.notify_data_to_readers(local_readers);
             } else { 
               error!("Entity Event for unknown EntityKind {:?}",eid); 
             },

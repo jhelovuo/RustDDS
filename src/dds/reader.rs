@@ -772,7 +772,7 @@ impl Reader {
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)
   // likely use of mio channel
-  fn notify_cache_change(&self) {
+  pub fn notify_cache_change(&self) {
     match self.notification_sender.try_send(()) {
       Ok(()) => (),
       Err(mio_channel::TrySendError::Full(_)) => (), // This is harmless. There is a notification in already.

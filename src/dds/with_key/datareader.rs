@@ -639,8 +639,7 @@ where
 
     let cache_changes: Vec<(&Timestamp, &CacheChange)> = cache_changes
       .into_iter()
-      .sorted_by(|(a, _), (b, _)| Ord::cmp(a, b))
-      .filter(|(_, cc)| cc.writer_guid.guidPrefix != self.get_guid_prefix())
+      .sorted_by(|(a, _), (b, _)| Ord::cmp(a, b)) // why not sorted already?
       .collect();
 
     match cache_changes.last() {

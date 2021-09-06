@@ -1,3 +1,4 @@
+use std::ops::Bound::Included;
 use chrono::Duration as chronoDuration;
 
 
@@ -244,6 +245,22 @@ impl Writer {
 
   pub fn is_reliable(&self) -> bool {
     self.qos_policies.reliability.is_some()
+  }
+
+  pub fn get_local_readers(&self) -> Vec<EntityId> {
+    let min = GUID::new_with_prefix_and_id(self.my_guid.guidPrefix, EntityId::MIN);
+    let max = GUID::new_with_prefix_and_id(self.my_guid.guidPrefix, EntityId::MAX);
+
+    self.readers.range((Included(min), Included(max)))
+      .filter_map( 
+          |(guid,_)| 
+            if guid.guidPrefix == self.my_guid.guidPrefix {
+              Some(guid.entityId)
+            } else {
+              None
+            }
+          )
+      .collect()
   }
 
   // TODO:

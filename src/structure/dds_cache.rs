@@ -1,4 +1,7 @@
-use log::{error};
+use crate::dds::data_types::GUID;
+use std::collections::BTreeSet;
+use crate::structure::sequence_number::SequenceNumber;
+use log::{error, trace};
 
 use std::{
   collections::{BTreeMap, HashMap, btree_map::Range},
@@ -223,22 +226,53 @@ impl TopicCache {
 #[derive(Debug)]
 pub struct DDSHistoryCache {
   pub(crate) changes: BTreeMap<Timestamp, CacheChange>,
+  sequence_numbers: BTreeMap<GUID,BTreeSet<SequenceNumber>>,
 }
 
 impl DDSHistoryCache {
   pub fn new() -> DDSHistoryCache {
     DDSHistoryCache {
       changes: BTreeMap::new(),
+      sequence_numbers: BTreeMap::new(),
     }
   }
 
+  fn have_sn(&self, cc: &CacheChange) -> bool {
+    match self.sequence_numbers.get(&cc.writer_guid) {
+      None => false,
+      Some(sn_set) => sn_set.contains(&cc.sequence_number),
+    }
+  }
+
+  fn insert_sn(&mut self, cc: &CacheChange) {
+    self.sequence_numbers.entry(cc.writer_guid)
+      .or_insert_with(|| {let mut s = BTreeSet::new(); s.insert(cc.sequence_number); s } )
+      .insert(cc.sequence_number);
+  }
+
+  fn remove_sn(&mut self, cc: &CacheChange) {
+    self.sequence_numbers.entry(cc.writer_guid)
+      .and_modify(|s| {s.remove(&cc.sequence_number);} );
+
+    //TODO: If this makes a SN set empty, remove it from BTreeMap.
+  }
+
   pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
-    let result = self.changes.insert(*instant, cache_change);
-    if result.is_none() {
-      // all is good. timestamp was not inserted before.
+    if self.have_sn(&cache_change) {
+      trace!("Received duplicate {:?} from {:?}, discarding.",
+        cache_change.sequence_number, cache_change.writer_guid);
+      // nothing else
     } else {
-      // If this happens cahce changes were created at exactly same instant.
-      error!("DDSHistoryCache already contained element with key {:?} !!!", instant);
+      self.insert_sn(&cache_change);
+      let result = self.changes.insert(*instant, cache_change);
+      match result {
+        None => (), // all is good. timestamp was not inserted before.
+        Some(old_cc) => {
+          // If this happens cahce changes were created at exactly same instant.
+          error!("DDSHistoryCache already contained element with key {:?} !!!", instant);
+          self.remove_sn(&old_cc)
+        }
+      }
     }
   }
 
@@ -275,14 +309,18 @@ impl DDSHistoryCache {
     changes
   }
 
-
   /// Removes and returns value if it was found
   pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
     self.changes.remove(instant)
+      .map( |cc| { self.remove_sn(&cc); cc })
   }
 
   pub fn remove_changes_before(&mut self, instant: Timestamp) {
-    self.changes = self.changes.split_off(&instant);
+    let to_retain = self.changes.split_off(&instant);
+    let to_remove = std::mem::replace(&mut self.changes, to_retain); 
+    for r in to_remove.values() {
+      self.remove_sn(r);
+    } 
   }
 }
 
