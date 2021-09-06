@@ -33,7 +33,7 @@ use enumflags2::BitFlags;
 use bytes::Bytes;
 
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub(crate) struct Message {
   pub header: Header,
   pub submessages: Vec<SubMessage>,

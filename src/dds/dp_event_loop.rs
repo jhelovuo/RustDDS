@@ -1,8 +1,4 @@
-//use std::cmp::max;
 
-use crate::discovery::data_types::topic_data::DiscoveredWriterData;
-use crate::discovery::data_types::topic_data::DiscoveredReaderData;
-use crate::discovery::discovery::Discovery;
 
 use log::{debug, error, info, warn, trace};
 use mio::{Poll, Event, Events, Token, Ready, PollOpt};
@@ -22,6 +18,10 @@ use crate::network::udp_listener::UDPListener;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId, TokenDecode};
 use crate::structure::entity::RTPSEntity;
+use crate::discovery::data_types::topic_data::DiscoveredWriterData;
+use crate::discovery::data_types::topic_data::DiscoveredReaderData;
+use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
+use crate::discovery::discovery::Discovery;
 
 use crate::{
   common::timed_event_handler::{TimedEventHandler},
@@ -72,6 +72,7 @@ pub struct DPEventLoop {
   writers: HashMap<EntityId, Writer>,
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+
 }
 
 impl DPEventLoop {
@@ -165,6 +166,7 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Failed to register reader update notification.");
+
 
     DPEventLoop {
       domain_info,
@@ -452,11 +454,10 @@ impl DPEventLoop {
   }
 
   fn update_participant(&mut self, participant_guid_prefix: GuidPrefix ) {
-    info!("update_participant - begin for {:?}", participant_guid_prefix);
+    debug!("update_participant - begin for {:?}", participant_guid_prefix);
+
     if participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix {
-      // Our own participant was updated (initialized.)
-      // What should we do now?
-      debug!("Own participant initialized");
+      info!("Own participant update");
     } else {
       let db = self.discovery_db.read().unwrap();
       // new Remote Participant discovered
@@ -569,7 +570,7 @@ impl DPEventLoop {
         }
       } // for
     } // if
-    info!("update_participant - finished for {:?}", participant_guid_prefix);
+    debug!("update_participant - finished for {:?}", participant_guid_prefix);
   } // fn 
 
   fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {

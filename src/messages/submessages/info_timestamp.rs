@@ -2,7 +2,7 @@ use crate::structure::time::Timestamp;
 
 /// This message modifies the logical source of the Submessages
 /// that follow.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 // We cannot use the Speedy-derived Writable/Readable impls, because
 // The content is either serialized or not, depending on flags.
 pub struct InfoTimestamp {

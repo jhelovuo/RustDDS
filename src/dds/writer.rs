@@ -110,8 +110,10 @@ pub(crate) struct Writer {
   readers: BTreeMap<GUID,RtpsReaderProxy>, // TODO: Convert to BTreeMap for faster finds.
   matched_readers_count_total: i32, // all matches, never decremented
   requested_incompatible_qos_count: i32, // how many times a Reader requested incompatible QoS
-  message: Option<Message>,
+  //message: Option<Message>,
+
   udp_sender: UDPSender,
+
   // This writer can read/write to only one of this DDSCache topic caches identified with my_topic_name
   dds_cache: Arc<RwLock<DDSCache>>,
   /// Writer can only read/write to this topic DDSHistoryCache.
@@ -147,6 +149,7 @@ pub(crate) struct Writer {
   //offered_deadline_status: OfferedDeadlineMissedStatus,
 
   ack_waiter: Option<AckWaiter>,
+
 }
 
 pub(crate) enum WriterCommand {
@@ -213,7 +216,6 @@ impl Writer {
       readers: BTreeMap::new(),
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
-      message: None,
       endpoint_attributes: EndpointAttributes::default(),
       udp_sender: UDPSender::new_with_random_port(),
       dds_cache,
@@ -676,7 +678,7 @@ impl Writer {
             self.first_change_sequence_number );
 
     // We notify the DDSCache that it can release older samples
-    // as far as this Writeris concenrned.
+    // as far as this Writer is concenrned.
     if let Some(&keep_instant) = self.sequence_number_to_instant.get(&first_keeper) {
       self.dds_cache.write().unwrap()
         .from_topic_remove_before(&self.my_topic_name, keep_instant);
@@ -716,13 +718,13 @@ impl Writer {
               reader.unicast_locator_list.iter().find(|l| Locator::isUDP(l) ), 
               reader.multicast_locator_list.iter().find(|l| Locator::isUDP(l) ) ) {
         (DeliveryMode::Multicast, _ , Some(mc_locator)) => {
-          send_unless_sent_and_mark!(mc_locator)
+          send_unless_sent_and_mark!(mc_locator);
         }
         (DeliveryMode::Unicast, Some(uc_locator) , _ ) => {
           send_unless_sent_and_mark!(uc_locator)
         }        
         (_delivery_mode, _ , Some(mc_locator)) => {
-          send_unless_sent_and_mark!(mc_locator)
+          send_unless_sent_and_mark!(mc_locator);
         }
         (_delivery_mode, Some(uc_locator), _ ) => {
           send_unless_sent_and_mark!(uc_locator)

@@ -17,7 +17,7 @@ use std::io;
 /// serializedData to be fragmented and sent as multiple DataFrag Submessages.
 /// The fragments contained in the DataFrag Submessages are then re-assembled by
 /// the RTPS Reader.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DataFrag {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.

@@ -6,7 +6,7 @@ use crate::structure::guid::GuidPrefix;
 
 /// This message modifies the logical source of the Submessages
 /// that follow.
-#[derive(Debug, PartialEq, Readable, Writable)]
+#[derive(Debug, PartialEq, Clone, Readable, Writable)]
 pub struct InfoSource {
   /// Indicates the protocol used to encapsulate subsequent Submessages
   pub protocol_version: ProtocolVersion,

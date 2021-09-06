@@ -258,6 +258,7 @@ impl DomainParticipant {
       .discovery_db
       .clone()
   }
+
 }
 
 impl PartialEq for DomainParticipant {
@@ -468,6 +469,7 @@ impl DomainParticipant_Disc {
         log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
       })
   }
+
 }
 
 impl Drop for DomainParticipant_Disc {
@@ -519,6 +521,7 @@ pub(crate) struct DomainParticipant_Inner {
 
   dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
+
 }
 
 impl Drop for DomainParticipant_Inner {

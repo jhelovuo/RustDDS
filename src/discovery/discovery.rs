@@ -1,4 +1,9 @@
 
+use std::time::Instant;
+use crate::network::util::get_local_unicast_socket_address;
+use crate::discovery::data_types::topic_data::WriterProxy;
+use crate::discovery::data_types::topic_data::PublicationBuiltinTopicData;
+
 use crate::discovery::data_types::topic_data::DiscoveredReaderData_Key;
 use crate::discovery::data_types::topic_data::DiscoveredWriterData_Key;
 use crate::discovery::data_types::topic_data::ReaderProxy;
@@ -563,26 +568,24 @@ impl Discovery {
   } // fn
 
   pub fn initialize_participant(&self, dp: &DomainParticipantWeak) {
-    let port = get_spdp_well_known_multicast_port(dp.domain_id());
+    let mc_port = get_spdp_well_known_multicast_port( dp.domain_id() );
+    let uc_port = get_spdp_well_known_unicast_port( dp.domain_id(), dp.participant_id() );
     // TODO: Which Reader? all of them?
     // Or what is the meaning of this? Maybe increase SequenceNumbers to be sent?
     self.send_discovery_notification(
       DiscoveryNotificationType::ParticipantUpdated {
         guid_prefix: dp.get_guid().guidPrefix
     });
-    // insert reader proxy as multicast address, so discovery notifications are sent somewhere
-    self.initialize_participant_reader_proxy(port);
-  }
 
-  pub fn initialize_participant_reader_proxy(&self, port: u16) {
-    let guid = GUID::new_with_prefix_and_id(
+    // insert reader proxy as multicast address, so discovery notifications are sent somewhere
+    let reader_guid = GUID::new_with_prefix_and_id(
       GuidPrefix::GUIDPREFIX_UNKNOWN, EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER);
 
-    let mut reader_proxy = ReaderProxy::new(guid);
-    reader_proxy.multicast_locator_list = get_local_multicast_locators(port);
+    let mut reader_proxy = ReaderProxy::new(reader_guid);
+    reader_proxy.multicast_locator_list = get_local_multicast_locators(mc_port);
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
-      guid,
+      reader_guid,
       &String::from("DCPSParticipant"),
       &String::from("SPDPDiscoveredParticipantData"),
       &Discovery::create_spdp_patricipant_qos(),
@@ -593,11 +596,42 @@ impl Discovery {
       content_filter: None,
     };
 
+    let writer_guid = 
+      GUID::new_with_prefix_and_id(
+        dp.get_guid().guidPrefix, 
+        EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER );
+
+    let writer_proxy = WriterProxy::new(writer_guid, 
+      get_local_unicast_socket_address(uc_port), 
+      get_local_multicast_locators(mc_port));
+
+    let pub_topic_data = PublicationBuiltinTopicData::new(
+      writer_guid,
+      dp.get_guid(),
+      &String::from("DCPSParticipant"),
+      &String::from("SPDPDiscoveredParticipantData"),
+    );
+    let dwd = DiscoveredWriterData {
+      last_updated: Instant::now(),
+      writer_proxy,
+      publication_topic_data: pub_topic_data,
+    };
+
+
+    // The puropse of this piece seems to be to create an artificial ReaderProxy
+    // with GUID 00:00:...:00 to DCPSParticipant , so that it understands
+    // to send its data somewhere.
+    info!("Creating DCPSParticipant reader.");
     self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated
       { rtps_reader_proxy:  RtpsReaderProxy::from_discovered_reader_data(&drd,vec![], vec![]),
         discovered_reader_data: drd,
         _needs_new_cache_change: true,
       });
+    info!("Creating DCPSParticipant writer proxy for self.");
+    self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated
+      { discovered_writer_data: dwd,
+      });
+
   }
 
 
@@ -607,6 +641,7 @@ impl Discovery {
   {
     loop {
       let s = reader.take_next_sample();
+      debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(d)) => match d.value {
             Ok(participant_data) => {

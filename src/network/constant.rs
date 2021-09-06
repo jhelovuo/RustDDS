@@ -9,6 +9,11 @@ use mio_extras::channel as mio_channel;
 
 use crate::structure::guid::{GUID,EntityKind};
 
+// Thease are the fixed poll tokens.
+// These are decoded using bitmaps, so the number of fixed tokens
+// is limited to 64 (0..63)
+// See GUID module for decoder details.
+
 const PTB : usize = EntityKind::POLL_TOKEN_BASE;
 
 pub const STOP_POLL_TOKEN: Token = Token(0 + PTB);
@@ -55,6 +60,7 @@ pub const DISCOVERY_TOPIC_CLEANUP_TOKEN: Token = Token(38 + PTB);
 pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(39 + PTB);
 pub const DISCOVERY_PARTICIPANT_MESSAGE_TOKEN: Token = Token(40 + PTB);
 pub const DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(41 + PTB);
+
 
 pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(50 + PTB);
 
