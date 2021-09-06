@@ -2,7 +2,6 @@
 
 use crate::discovery::data_types::topic_data::DiscoveredWriterData;
 use crate::discovery::data_types::topic_data::DiscoveredReaderData;
-use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
 use crate::discovery::discovery::Discovery;
 
 use log::{debug, error, info, warn, trace};
@@ -601,19 +600,6 @@ impl DPEventLoop {
   fn remote_reader_lost(&mut self, reader_guid:GUID) {
     for (_writer_guid, writer) in self.writers.iter_mut() {
       writer.reader_lost(reader_guid);
-    }
-  }
-
-  fn update_discovery_reader(reader: &mut Reader, dpd: &SPDPDiscoveredParticipantData,
-    entity_id: EntityId, expected_endpoint: u32 ) 
-  {
-    debug!("update_discovery_reader - {:?}", reader.topic_name() );
-    if dpd.available_builtin_endpoints.contains(expected_endpoint) {
-      reader.update_writer_proxy( 
-        dpd.as_writer_proxy(true, Some(entity_id)),
-        Discovery::publisher_qos()
-       );
-      debug!("update_discovery reader - endpoint {:?} - {:?}", expected_endpoint, dpd.participant_guid);
     }
   }
 

@@ -1,4 +1,4 @@
-//use log::debug;
+use log::debug;
 
 use crate::structure::{time::Timestamp, guid::GUID};
 
@@ -527,7 +527,14 @@ where
   */
 
   pub fn get_key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
-    self.hash_to_key_map.get(&key_hash).map(|key| key.clone())
+    match self.hash_to_key_map.get(&key_hash) {
+      Some(k) => Some(k.clone()),
+      None => {
+        debug!("get_key_by_hash: requested KeyHash {:?}, but not found. I have {:?}", 
+          key_hash, self.hash_to_key_map.keys() );
+        None
+      }
+    }
   }
 
   pub fn get_next_key(&self, key: &D::K) -> Option<D::K> {
