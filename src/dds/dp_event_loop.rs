@@ -20,7 +20,7 @@ use crate::structure::guid::{GuidPrefix, GUID, EntityId, TokenDecode};
 use crate::structure::entity::RTPSEntity;
 use crate::discovery::data_types::topic_data::DiscoveredWriterData;
 use crate::discovery::data_types::topic_data::DiscoveredReaderData;
-use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
+//use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
 use crate::discovery::discovery::Discovery;
 
 use crate::{
