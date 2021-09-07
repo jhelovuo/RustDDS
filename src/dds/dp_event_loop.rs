@@ -466,7 +466,10 @@ impl DPEventLoop {
 
     if participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix {
       info!("Own participant update");
-    } else {
+    } 
+
+
+    {
       let db = self.discovery_db.read().unwrap();
       // new Remote Participant discovered
       let discovered_participant = 

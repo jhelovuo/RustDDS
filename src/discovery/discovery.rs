@@ -402,7 +402,7 @@ impl Discovery {
       PollOpt::edge(),
     ) ,"Unable to register DCPSParticipantMessage timer. {:?}");
 
-    discovery.initialize_participant(&discovery.domain_participant);
+    discovery.initialize_participant(discovery.domain_participant.clone());
 
     discovery.write_writers_info(&mut dcps_publication_writer);
     discovery.write_readers_info(&mut dcps_subscription_writer);
@@ -567,11 +567,27 @@ impl Discovery {
     } // loop
   } // fn
 
-  pub fn initialize_participant(&self, dp: &DomainParticipantWeak) {
+  pub fn initialize_participant(&self, dp_weak: DomainParticipantWeak) {
+    let dp = match dp_weak.upgrade() {
+      Some(dp) => dp,
+      None => {
+        error!("Cannot get actual DomainParticipant in initialize_participant! Giving up.");
+        return
+      }
+    };
+
     let mc_port = get_spdp_well_known_multicast_port( dp.domain_id() );
     let uc_port = get_spdp_well_known_unicast_port( dp.domain_id(), dp.participant_id() );
-    // TODO: Which Reader? all of them?
-    // Or what is the meaning of this? Maybe increase SequenceNumbers to be sent?
+
+    // Initialize our own particiapnt data into the Discovery DB.
+    // That causes ReaderProxies and WriterProxies to be constructed and
+    // and we also get our own local readers and writers connected, both
+    // built-in and user-defined.
+
+    let participant_data = 
+      SPDPDiscoveredParticipantData::from_participant(&dp, Duration::DURATION_INFINITE);
+    self.discovery_db_write()
+      .update_participant(&participant_data);
     self.send_discovery_notification(
       DiscoveryNotificationType::ParticipantUpdated {
         guid_prefix: dp.get_guid().guidPrefix
@@ -618,10 +634,10 @@ impl Discovery {
     };
 
 
-    // The puropse of this piece seems to be to create an artificial ReaderProxy
-    // with GUID 00:00:...:00 to DCPSParticipant , so that it understands
-    // to send its data somewhere.
-    info!("Creating DCPSParticipant reader.");
+    // The puropse of this piece seems to be to create a ReaderProxy
+    // with GUID 00:00:...:00 to DCPSParticipant , so that it will
+    // send its data somewhere. Without readers it will not send at all.
+    info!("Creating DCPSParticipant reader proxy.");
     self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated
       { rtps_reader_proxy:  RtpsReaderProxy::from_discovered_reader_data(&drd,vec![], vec![]),
         discovered_reader_data: drd,

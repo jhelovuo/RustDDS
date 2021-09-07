@@ -424,7 +424,7 @@ impl Reader {
     let instant = Timestamp::now();
 
     let mut no_writers = false;
-    trace!("handle_data_msg from {:?} to {:?} no_writers={:?} seq={:?} topic={:?} stateful={:?}", 
+    trace!("handle_data_msg from {:?} to {:?} no_writers={:?} seq={:?} topic={:?} stateful={:?}", 
         &writer_guid, data.reader_id, no_writers, seq_num, self.topic_name, self.is_stateful,);
     if self.is_stateful {
       let my_entityid = self.my_guid.entityId; // to please borrow checker
