@@ -11,7 +11,7 @@ pub fn get_local_multicast_locators(port: u16) -> LocatorList {
 }
 
 pub fn get_local_unicast_socket_address(port: u16) -> LocatorList {
-  let local_ips: Result<Vec<IpAddr>, Error> = get_if_addrs::get_if_addrs().map(|p| {
+  let local_ips: Result<Vec<IpAddr>, Error> = if_addrs::get_if_addrs().map(|p| {
     p.iter()
       .filter(|ip| !ip.is_loopback())
       .map(|ip| ip.ip())

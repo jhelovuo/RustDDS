@@ -368,12 +368,12 @@ impl DPEventLoop {
     match event.token() {
       ADD_WRITER_TOKEN => {
         while let Ok(mut new_writer) = self.add_writer_receiver.receiver.try_recv() {
-          &self.poll.register(
+          self.poll.register(
             &new_writer.writer_command_receiver,
             new_writer.get_entity_token(),
             Ready::readable(),
             PollOpt::edge(),
-          );
+          ).expect("Writer command channel registration failed!!");
           let (timed_action_sender, timed_action_receiver) =
             mio_channel::sync_channel::<TimerMessageType>(10);
           let time_handler: TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
