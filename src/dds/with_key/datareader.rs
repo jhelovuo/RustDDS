@@ -2,7 +2,7 @@ use std::{io};
 use std::sync::{Arc, RwLock};
 use std::marker::PhantomData;
 
-use itertools::Itertools;
+//use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
@@ -637,21 +637,12 @@ where
       &Timestamp::now(),
     );
 
-    let cache_changes: Vec<(&Timestamp, &CacheChange)> = cache_changes
-      .into_iter()
-      .sorted_by(|(a, _), (b, _)| Ord::cmp(a, b)) // why not sorted already?
-      .collect();
-
-    match cache_changes.last() {
-      Some((last_instant, _)) => self.latest_instant = **last_instant,
-      // No new changes available
-      None => return,
-    };
-
     for ( instant,
           CacheChange { writer_guid, sequence_number: _, data_value }
         ) in cache_changes
     {
+      self.latest_instant = instant; // update our time pointer
+
       match data_value {
         DDSData::DisposeByKey { key: serialized_key , .. } => {
           // TODO: Should be parameterizable by DeserializerAdapter
@@ -661,7 +652,7 @@ where
           {
             Ok(key) => self
               .datasample_cache
-              .add_sample(Err(key), *writer_guid, *instant, None),
+              .add_sample(Err(key), *writer_guid, instant, None),
             Err(e) => {
               warn!("Failed to deserialize key {}, Topic = {}, Type = {:?}", 
                       e, self.my_topic.get_name(), self.my_topic.get_type() );
@@ -676,7 +667,7 @@ where
           match self.datasample_cache.get_key_by_hash(*key_hash) {
             Some(key) => self
               .datasample_cache
-              .add_sample(Err(key), *writer_guid, *instant, None),
+              .add_sample(Err(key), *writer_guid, instant, None),
             /* TODO: How to get source timestamps other then None ?? */
             None => warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash),
           }
@@ -691,7 +682,7 @@ where
               Ok(payload) => {
                 self
                 .datasample_cache
-                .add_sample(Ok(payload), *writer_guid, *instant, None)
+                .add_sample(Ok(payload), *writer_guid, instant, None)
               }
               Err(e) => {
                 error!("Failed to deserialize bytes: {}, Topic = {}, Type = {:?}", 

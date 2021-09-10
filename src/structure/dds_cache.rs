@@ -4,7 +4,7 @@ use crate::structure::sequence_number::SequenceNumber;
 use log::{error, trace};
 
 use std::{
-  collections::{BTreeMap, HashMap, btree_map::Range},
+  collections::{BTreeMap, HashMap, /*btree_map::Range*/ },
   cmp::max,
 };
 
@@ -42,16 +42,11 @@ impl DDSCache {
     topic_name: &String,
     topic_kind: TopicKind,
     topic_data_type: TypeDesc,
-  ) -> bool {
-    if self.topic_caches.contains_key(topic_name) {
-      false
-    } else {
-      self.topic_caches.insert(
+  ) {
+    self.topic_caches.insert(
         topic_name.to_string(),
         TopicCache::new(topic_kind, topic_data_type),
       );
-      true
-    }
   }
 
   pub fn remove_topic(&mut self, topic_name: &String) {
@@ -60,26 +55,12 @@ impl DDSCache {
     }
   }
 
-  pub fn get_topic_qos_mut(&mut self, topic_name: &String) -> Option<&mut QosPolicies> {
-    if self.topic_caches.contains_key(topic_name) {
-      Some(&mut self.topic_caches.get_mut(topic_name).unwrap().topic_qos)
-    } else {
-      None
-    }
-  }
-
-  pub fn get_topic_qos(&self, topic_name: &String) -> Option<&QosPolicies> {
-    if self.topic_caches.contains_key(topic_name) {
-      Some(&self.topic_caches.get(topic_name).unwrap().topic_qos)
-    } else {
-      None
-    }
-  }
-
   pub fn from_topic_get_change(&self, topic_name: &String, instant: &Timestamp) 
     -> Option<&CacheChange> 
   {
-    self.topic_caches.get(topic_name).map( |tc| tc.get_change(instant) ).flatten()
+    self.topic_caches.get(topic_name)
+      .map( |tc| tc.get_change(instant) )
+      .flatten()
   }
 
 
@@ -110,27 +91,15 @@ impl DDSCache {
   }
 
 
-  pub fn from_topic_get_all_changes(&self, topic_name: &str) -> Vec<(&Timestamp, &CacheChange)> {
-    match self.topic_caches.get(topic_name) {
-      Some(r) => r.get_all_changes(),
-      None => vec![],
-    }
-  }
-
   pub fn from_topic_get_changes_in_range(
     &self,
     topic_name: &String,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
-  ) -> Vec<(&Timestamp, &CacheChange)> {
-    if self.topic_caches.contains_key(topic_name) {
-      return self
-        .topic_caches
-        .get(topic_name)
-        .unwrap()
-        .get_changes_in_range(start_instant, end_instant);
-    } else {
-      return vec![];
+  ) -> Box<dyn Iterator<Item=(Timestamp, &CacheChange)> + '_> {
+    match self.topic_caches.get(topic_name) {
+      Some(tc) => Box::new(tc.get_changes_in_range(start_instant, end_instant).into_iter()),
+      None => Box::new(vec![].into_iter()),
     }
   }
 
@@ -140,14 +109,11 @@ impl DDSCache {
     instant: &Timestamp,
     cache_change: CacheChange,
   ) {
-    if self.topic_caches.contains_key(topic_name) {
-      return self
-        .topic_caches
-        .get_mut(topic_name)
-        .unwrap()
-        .add_change(instant, cache_change);
-    } else {
-      error!("Topic: '{:?}' is not added to DDSCache", topic_name);
+    match self.topic_caches.get_mut(topic_name) {
+      Some(tc) => tc.add_change(instant, cache_change),
+      None => {
+        error!("Topic: '{:?}' is not in DDSCache", topic_name); 
+      }
     }
   }
 }
@@ -178,18 +144,14 @@ impl TopicCache {
     self.history_cache.add_change(instant, cache_change)
   }
 
-  pub fn get_all_changes(&self) -> Vec<(&Timestamp, &CacheChange)> {
-    self.history_cache.get_all_changes()
-  }
-
   pub fn get_changes_in_range(
     &self,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
-  ) -> Vec<(&Timestamp, &CacheChange)> {
+  ) -> Box<dyn Iterator<Item=(Timestamp, &CacheChange)> + '_> {
     self
       .history_cache
-      .get_range_of_changes_vec(start_instant, end_instant)
+      .get_range_of_changes(start_instant, end_instant)
   }
 
   ///Removes and returns value if it was found
@@ -276,10 +238,6 @@ impl DDSHistoryCache {
     }
   }
 
-  pub fn get_all_changes(&self) -> Vec<(&Timestamp, &CacheChange)> {
-    self.changes.iter().collect()
-  }
-
   pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
     self.changes.get(instant)
   }
@@ -288,25 +246,12 @@ impl DDSHistoryCache {
     &self,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
-  ) -> Range<Timestamp, CacheChange> {
-    self
-      .changes
-      .range((Included(start_instant), Included(end_instant)))
-  }
-
-  pub fn get_range_of_changes_vec(
-    &self,
-    start_instant: &Timestamp,
-    end_instant: &Timestamp,
-  ) -> Vec<(&Timestamp, &CacheChange)> {
-    let mut changes: Vec<(&Timestamp, &CacheChange)> = vec![];
-    for (i, c) in self
-      .changes
-      .range((Excluded(start_instant), Included(end_instant)))
-    {
-      changes.push((i, c));
-    }
-    changes
+  ) -> Box<dyn Iterator<Item=(Timestamp, &CacheChange)> + '_> {
+    Box::new(
+      self
+        .changes
+        .range((Excluded(start_instant), Included(end_instant)))
+        .map(|(i,c)| (*i,c)))
   }
 
   /// Removes and returns value if it was found
@@ -332,7 +277,6 @@ impl DDSHistoryCache {
 mod tests {
   use std::sync::{Arc, RwLock};
   use std::{thread};
-  use log::info;
 
   use super::DDSCache;
   use crate::{
@@ -405,16 +349,16 @@ mod tests {
           &(DDSTimestamp::now() - DDSDuration::from_secs(23)),
           &DDSTimestamp::now()
         )
-        .len(),
+        .count(),
       3
     );
-    info!(
-      "{:?}",
-      cache.read().unwrap().from_topic_get_changes_in_range(
-        topic_name,
-        &(DDSTimestamp::now() - DDSDuration::from_secs(23)),
-        &DDSTimestamp::now()
-      )
-    );
+    // info!(
+    //   "{:?}",
+    //   cache.read().unwrap().from_topic_get_changes_in_range(
+    //     topic_name,
+    //     &(DDSTimestamp::now() - DDSDuration::from_secs(23)),
+    //     &DDSTimestamp::now()
+    //   )
+    // );
   }
 }
