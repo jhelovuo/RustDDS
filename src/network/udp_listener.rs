@@ -43,7 +43,7 @@ impl UDPListener {
   // TODO: Why is is this function even necessary? Doesn't try_bind() do just the same?
 
   fn new_listening_socket(host: &str, port: u16, reuse_addr: bool) -> io::Result<UdpSocket> {
-    let raw_socket = Socket::new(Domain::ipv4(), Type::dgram(), Some(Protocol::udp()) )?;
+    let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP) )?;
 
     // We set ReuseAddr so that other DomainParticipants on this host can
     // bind to the same multicast address and port.
@@ -54,8 +54,11 @@ impl UDPListener {
     }
 
     // MacOS requires this also
-    if reuse_addr {
-      raw_socket.set_reuse_port(true)?; 
+    #[cfg(not(any(target_os = "solaris", target_os = "illumos", windows)))]
+    {
+      if reuse_addr {
+        raw_socket.set_reuse_port(true)?;
+      }
     }
 
     let address = SocketAddr::new(
@@ -71,7 +74,7 @@ impl UDPListener {
       Ok(_) => (), 
     }
 
-    let std_socket = raw_socket.into_udp_socket();
+    let std_socket = std::net::UdpSocket::from( raw_socket );
     std_socket
       .set_nonblocking(true)
       .expect("Failed to set std socket to non blocking.");
