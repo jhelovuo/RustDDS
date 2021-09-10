@@ -85,6 +85,9 @@ impl KeyHash {
 /// and Serde traits
 /// * [Serialize](https://docs.serde.rs/serde/trait.Serialize.html) and
 /// * [DeserializeOwned](https://docs.serde.rs/serde/de/trait.DeserializeOwned.html) .
+///
+/// Note: When implementing Key, DeserializeOwned cannot and need not be derived, as it is a type alias.
+/// Derive (or implement) the Deserialize trait instead. 
 
 pub trait Key:
   Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned
