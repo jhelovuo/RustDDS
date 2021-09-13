@@ -128,10 +128,7 @@ impl<C: Context> Writable<C> for SerializedPayload {
     writer.write_u8(self.representation_identifier.bytes[1])?;
     writer.write_u8(self.representation_options[0])?;
     writer.write_u8(self.representation_options[1])?;
-    // TODO: This looks like a slowish way to copy bytes.
-    for element in &*self.value {
-      writer.write_u8(*element)?;
-    }
+    writer.write_bytes(&self.value)?;
     Ok(())
   }
 }

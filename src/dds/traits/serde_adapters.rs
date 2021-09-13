@@ -15,10 +15,23 @@ pub mod no_key {
 	where
 	  D: DeserializeOwned,
 	{
-		// Which data encodings can this deserializer read?
+		/// Which data representations can the DeserializerAdapter read?
+		/// See RTPS specification Section 10 and Table 10.3
 	  fn supported_encodings() -> &'static [RepresentationIdentifier]; 
 
 	  fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D>;
+
+	  /// This method has a default implementation, but the default will make a copy of
+	  /// all the input data in memory and then call from_bytes() .
+	  // In order to avoid the copy, implement also this method.
+	  fn from_vec_bytes<'de>(input_vec_bytes: &'de [Bytes], encoding: RepresentationIdentifier) -> Result<D> {
+	  	let total_len = input_vec_bytes.iter().map( |s| s.len()).sum();
+	  	let mut total_payload = Vec::with_capacity(total_len);
+	  	for iv in input_vec_bytes {
+	  		total_payload.extend(iv)
+	  	}
+	  	Self::from_bytes(&total_payload, encoding)
+	  }
 	}
 
 	pub trait SerializerAdapter<D>

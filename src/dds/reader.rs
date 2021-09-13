@@ -416,8 +416,10 @@ impl Reader {
       data_flags:BitFlags<DATA_Flags>, mr_state: MessageReceiverState ) 
   {
     //trace!("handle_data_msg entry");
+    let instant = Timestamp::now();
+
     let duration = match mr_state.timestamp {
-      Some(ts) => Timestamp::now().duration_since(ts),
+      Some(ts) => instant.duration_since(ts),
       None => Duration::DURATION_ZERO,
     };
 
@@ -434,7 +436,6 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let seq_num = data.writer_sn;
 
-    let instant = Timestamp::now();
 
     let mut no_writers = false;
     trace!("handle_data_msg from {:?} to {:?} no_writers={:?} seq={:?} topic={:?} stateful={:?}", 
@@ -493,14 +494,11 @@ impl Reader {
       _ => (), // ok, continue
     }
 
-    let (completedata_opt, nack_frag_opt) = 
+    let completedata_opt = 
         self.fragment_assembler.new_datafrag(writer_guid, datafrag, datafrag_flags);
 
-    if let Some(data) = completedata_opt {
-      // process completed data message
-    }
-    if let Some(nack) = nack_frag_opt {
-      // send nack_frag reply
+    if let Some((data,data_flags)) = completedata_opt {
+      //process_data
     }
     
   }
