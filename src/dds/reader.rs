@@ -411,15 +411,16 @@ impl Reader {
     self.matched_writers.get_mut(&remote_writer_guid)
   }
 
+
   // handles regular data message and updates history cache
   pub fn handle_data_msg(&mut self, data: Data, 
       data_flags:BitFlags<DATA_Flags>, mr_state: MessageReceiverState ) 
   {
     //trace!("handle_data_msg entry");
-    let instant = Timestamp::now();
+    let receive_timestamp = Timestamp::now();
 
     let duration = match mr_state.timestamp {
-      Some(ts) => instant.duration_since(ts),
+      Some(ts) => receive_timestamp.duration_since(ts),
       None => Duration::DURATION_ZERO,
     };
 
@@ -434,18 +435,59 @@ impl Reader {
     }
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
-    let seq_num = data.writer_sn;
+    let writer_seq_num = data.writer_sn; // for borrow checker
 
+    match Self::data_to_ddsdata(data,data_flags) {
+      Ok(ddsdata) => {
+        self.process_received_data(ddsdata, receive_timestamp, writer_guid, writer_seq_num)    
+      }
+      Err(e) => debug!("Parsing DATA to DDSData failed: {}",e),
+    }
 
+    
+  }
+
+  pub fn handle_datafrag_msg(&mut self, datafrag: DataFrag, datafrag_flags: BitFlags<DATAFRAG_Flags>,
+     mr_state: MessageReceiverState) 
+  {
+    let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
+    let seq_num = datafrag.writer_sn;
+    let receive_timestamp = Timestamp::now();
+
+    // check if this submessage is expired already
+    match (mr_state.timestamp, self.get_qos().lifespan) {
+      (Some(source_timestamp), Some(lifespan)) => {
+        let elapsed = receive_timestamp.duration_since(source_timestamp);
+        if lifespan.duration < elapsed {
+          info!("DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
+              seq_num, writer_guid, lifespan.duration, elapsed);
+          return
+        }
+      }
+      _ => (), // ok, continue
+    }
+    let writer_seq_num = datafrag.writer_sn; // for borrow checker
+    let complete_data_opt = 
+        self.fragment_assembler.new_datafrag(writer_guid, datafrag, datafrag_flags);
+
+    if let Some(complete_data) = complete_data_opt {
+      //process_data
+      self.process_received_data(complete_data, receive_timestamp, writer_guid, writer_seq_num );
+    }
+
+  }
+
+  // common parts of processing DATA or a completed DATAFRAG (when all frags are received)
+  fn process_received_data(&mut self, ddsdata:DDSData, receive_timestamp: Timestamp, writer_guid:GUID, writer_sn: SequenceNumber) {
     let mut no_writers = false;
-    trace!("handle_data_msg from {:?} to {:?} no_writers={:?} seq={:?} topic={:?} stateful={:?}", 
-        &writer_guid, data.reader_id, no_writers, seq_num, self.topic_name, self.is_stateful,);
+    trace!("handle_data_msg from {:?}  no_writers={:?} seq={:?} topic={:?} stateful={:?}", 
+        &writer_guid,  no_writers, writer_sn, self.topic_name, self.is_stateful,);
     if self.is_stateful {
       let my_entityid = self.my_guid.entityId; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
-        if writer_proxy.contains_change(seq_num) {
+        if writer_proxy.contains_change(writer_sn) {
           // change already present
-          debug!("handle_data_msg already have this seq={:?}", seq_num);
+          debug!("handle_data_msg already have this seq={:?}", writer_sn);
           if my_entityid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER {
             debug!("Accepting duplicate message to participant reader.");
             // This is an attmpted workaround to eProsima FastRTPS not
@@ -455,7 +497,7 @@ impl Reader {
           }
         }
         // Add the change and get the instant
-        writer_proxy.received_changes_add(seq_num, instant);
+        writer_proxy.received_changes_add(writer_sn, receive_timestamp);
       } else {
         // no writer proxy found
         info!("handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
@@ -467,41 +509,69 @@ impl Reader {
       todo!()
     }
 
-    self.make_cache_change(data, data_flags, instant, writer_guid, no_writers);
+    self.make_cache_change(ddsdata, receive_timestamp, writer_guid, writer_sn);
+
     // Add to own track-keeping datastructure
     #[cfg(test)]
-    self.seqnum_instant_map.insert(seq_num, instant);
+    self.seqnum_instant_map.insert(writer_sn, receive_timestamp);
 
     self.notify_cache_change();
   }
 
-  pub fn handle_datafrag_msg(&mut self, datafrag: DataFrag, datafrag_flags: BitFlags<DATAFRAG_Flags>,
-     mr_state: MessageReceiverState) 
-  {
-    let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
-    let seq_num = datafrag.writer_sn;
+  fn data_to_ddsdata(data:Data, data_flags:BitFlags<DATA_Flags>) -> Result<DDSData,String> {
+    let representation_identifier = 
+      if data_flags.contains(DATA_Flags::Endianness) { RepresentationIdentifier::CDR_LE } 
+      else { RepresentationIdentifier::CDR_BE };
 
-    // check if this submessage is expired already
-    match (mr_state.timestamp, self.get_qos().lifespan) {
-      (Some(timestamp), Some(lifespan)) => {
-        let elapsed = Timestamp::now().duration_since(timestamp);
-        if lifespan.duration < elapsed {
-          info!("DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
-              seq_num, writer_guid, lifespan.duration, elapsed);
-          return
-        }
+    match (data.serialized_payload , 
+        data_flags.contains(DATA_Flags::Data) , data_flags.contains(DATA_Flags::Key)) {
+      (Some(sp), true, false ) => { // data
+        Ok(DDSData::new(sp))
       }
-      _ => (), // ok, continue
-    }
 
-    let completedata_opt = 
-        self.fragment_assembler.new_datafrag(writer_guid, datafrag, datafrag_flags);
+      (Some(sp), false, true  ) => { // key
+        Ok(DDSData::new_disposed_by_key(
+            Self::deduce_change_kind(data.inline_qos, false, representation_identifier), 
+            sp))
+      }
 
-    if let Some((data,data_flags)) = completedata_opt {
-      //process_data
+      (None, false, false ) => { // no data, no key. Maybe there is inline QoS?
+        // At least we should find key hash, or we do not know WTF the writer is talking about
+        let key_hash = 
+          match data.inline_qos
+              .as_ref()
+              .map( |iqos| InlineQos::key_hash(iqos).ok() )
+              .flatten().flatten() {
+            Some(h) => Ok(h),
+            None => {
+              warn!("Received DATA that has no payload and no key_hash inline QoS - discarding");
+              Err("DATA with no contents".to_string())
+            }
+          }?;
+        // now, let's try to determine what is the dispose reason
+        let change_kind = 
+          Self::deduce_change_kind(data.inline_qos, false, representation_identifier);
+        Ok(DDSData::new_disposed_by_key_hash(change_kind, key_hash ))
+      }
+
+      (Some(_), true , true  ) => { // payload cannot be both key and data.
+        // RTPS Spec 9.4.5.3.1 Flags in the Submessage Header says
+        // "D=1 and K=1 is an invalid combination in this version of the protocol."
+        warn!("Got DATA that claims to be both data and key - discarding.");
+        Err("Ambiguous data/key received.".to_string())
+      }
+
+      (Some(_), false, false ) => { // data but no data? - this should not be possible
+        warn!("make_cache_change - Flags says no data or key, but got payload!");
+        Err("DATA message has mystery contents".to_string())
+      }
+      (None, true, _ ) | (None, _ , true ) => {
+        warn!("make_cache_change - Where is my SerializedPayload?");
+        Err("DATA message contents missing".to_string())
+      }
     }
-    
   }
+
 
   // Returns if responding with ACKNACK?
   // TODO: Return value seems to go unused in callers.
@@ -738,73 +808,19 @@ impl Reader {
   // Convert DATA submessage into a CacheChange and update history cache
   fn make_cache_change(
     &mut self,
-    data: Data,
-    data_flags: BitFlags<DATA_Flags>,
-    instant: Timestamp,
+    data: DDSData,
+    receive_timestamp: Timestamp,
     writer_guid: GUID,
-    no_writers: bool,
+    writer_sn: SequenceNumber,
   ) {
-    let representation_identifier = 
-      if data_flags.contains(DATA_Flags::Endianness) { RepresentationIdentifier::CDR_LE } 
-      else { RepresentationIdentifier::CDR_BE };
 
-    let ddsdata = 
-      match (data.serialized_payload , 
-          data_flags.contains(DATA_Flags::Data) , data_flags.contains(DATA_Flags::Key)) {
-        (Some(sp), true, false ) => { // data
-          DDSData::new(sp)
-        }
-
-        (Some(sp), false, true  ) => { // key
-          DDSData::new_disposed_by_key(Self::deduce_change_kind(data.inline_qos, no_writers, representation_identifier), sp)
-        }
-
-        (None, false, false ) => { // no data, no key. Maybe there is inline QoS?
-          // At least we should find key hash, or we do not know WTF the writer is talking about
-          let key_hash = 
-            match data.inline_qos
-                .as_ref()
-                .map( |iqos| InlineQos::key_hash(iqos).ok() )
-                .flatten().flatten() {
-              Some(h) => h,
-              None => {
-                info!("Writer {:?} sent us DATA that has no payload and no key_hash inline QoS - discarding {:?}",
-                  &writer_guid, &data.inline_qos );
-                return
-              }
-            };
-          // now, let's try to determine what is the dispose reason
-          let change_kind = 
-            Self::deduce_change_kind(data.inline_qos, no_writers, representation_identifier);
-          DDSData::new_disposed_by_key_hash(change_kind, key_hash )
-        }
-
-        (Some(_), true , true  ) => { // payload cannot be both key and data.
-          // RTPS Spec 9.4.5.3.1 Flags in the Submessage Header says
-          // "D=1 and K=1 is an invalid combination in this version of the protocol."
-          info!("Writer {:?} sent us DATA that claims to be both data and key - discarding.",
-            writer_guid);
-          return
-        }
-
-        (Some(_), false, false ) => { // data but no data? - this should not be possible
-          error!("make_cache_change - Flags says no data or key, but got payload!");
-          return
-        }
-        (None, true, _ ) | (None, _ , true ) => {
-          error!("make_cache_change - Where is my SerializedPayload?");
-          return
-        }
-
-      };
-
-    let cache_change = CacheChange::new(writer_guid, data.writer_sn, ddsdata);
+    let cache_change = CacheChange::new(writer_guid, writer_sn, data);
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
-    cache.to_topic_add_change(&self.topic_name, &instant, cache_change);
+    cache.to_topic_add_change(&self.topic_name, &receive_timestamp, cache_change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)

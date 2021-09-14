@@ -50,6 +50,7 @@ pub enum Error {
   /// Something that should not go wrong went wrong anyway.
   /// This is usually a bug in RustDDS
   Internal { reason: String },
+
   Io { inner: std::io::Error },
   Serialization { reason: String },
   Discovery {reason: String},
