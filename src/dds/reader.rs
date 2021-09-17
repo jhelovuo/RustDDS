@@ -7,7 +7,6 @@ use crate::structure::endpoint::{Endpoint, EndpointAttributes};
 use crate::messages::submessages::submessages::*;
 
 use crate::dds::ddsdata::DDSData;
-use crate::dds::fragment_assembler::FragmentAssembler;
 use crate::dds::statusevents::*;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
 use crate::structure::guid::{GUID, EntityId, GuidPrefix};
@@ -98,7 +97,6 @@ pub(crate) struct Reader {
   timed_event_handler: Option<TimedEventHandler>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
 
-  fragment_assembler: FragmentAssembler,
 } 
 
 impl Reader {
@@ -132,7 +130,6 @@ impl Reader {
       offered_incompatible_qos_count: 0,
       timed_event_handler: None,
       data_reader_command_receiver: i.data_reader_command_receiver,
-      fragment_assembler: FragmentAssembler::new(),
     }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
@@ -322,8 +319,9 @@ impl Reader {
     debug!("update_writer_proxy topic={:?}",self.topic_name);
     match offered_qos.compliance_failure_wrt( &self.qos_policy ) {
       None => { // success, update or insert
+        let writer_id = proxy.remote_writer_guid;
         let count_change =
-          self.matched_writer_update(proxy.clone()); // need clone here to log depending on this
+          self.matched_writer_update(proxy); 
         if count_change > 0 {
           self.writer_match_count_total += count_change;
           self.send_status_change(DataReaderStatus::SubscriptionMatched{
@@ -331,7 +329,7 @@ impl Reader {
               current: CountWithChange::new(self.matched_writers.len() as i32, count_change ),
           });
           info!("Matched new remote writer on topic={:?} writer= {:?}", 
-                self.topic_name, &proxy);
+                self.topic_name, writer_id);
         }
       }
       Some(bad_policy_id) => { // no QoS match
@@ -467,14 +465,15 @@ impl Reader {
       _ => (), // ok, continue
     }
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
-    let complete_data_opt = 
-        self.fragment_assembler.new_datafrag(writer_guid, datafrag, datafrag_flags);
-
-    if let Some(complete_data) = complete_data_opt {
-      //process_data
-      self.process_received_data(complete_data, receive_timestamp, writer_guid, writer_seq_num );
+    if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
+      if let Some(complete_ddsdata) = writer_proxy.handle_datafrag(datafrag, datafrag_flags) {
+        self.process_received_data(complete_ddsdata, receive_timestamp, writer_guid, writer_seq_num );  
+      } else {
+        // not yet complete, nothing more to do
+      }
+    } else {
+      info!("Reader got DATAFRAG, but I have no writer proxy")
     }
-
   }
 
   // common parts of processing DATA or a completed DATAFRAG (when all frags are received)

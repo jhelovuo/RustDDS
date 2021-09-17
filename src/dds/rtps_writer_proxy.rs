@@ -7,10 +7,16 @@ use crate::{
   structure::sequence_number::{SequenceNumber},
   structure::time::Timestamp,
 };
+use crate::dds::fragment_assembler::FragmentAssembler;
+use crate::messages::submessages::submessages::DataFrag;
+use crate::messages::submessages::submessages::DATAFRAG_Flags;
+use crate::dds::ddsdata::DDSData;
+
 use std::collections::BTreeMap;
+use enumflags2::BitFlags;
 use std::cmp::max;
 
-#[derive(Debug,Clone)]
+#[derive(Debug)] // these are not cloneable, because contined data may be large
 pub(crate) struct RtpsWriterProxy {
   /// Identifies the remote matched Writer
   pub remote_writer_guid: GUID,
@@ -40,6 +46,7 @@ pub(crate) struct RtpsWriterProxy {
   // gap is treated like receiving message
   
   //pub qos : QosPolicies,
+  fragment_assembler: Option<FragmentAssembler>,
 }
 
 impl RtpsWriterProxy {
@@ -58,6 +65,7 @@ impl RtpsWriterProxy {
       received_heartbeat_count: 0,
       sent_ack_nack_count: 0,
       ack_base: SequenceNumber::default(),
+      fragment_assembler: None,
     }
   }
 
@@ -199,6 +207,25 @@ impl RtpsWriterProxy {
       received_heartbeat_count: 0,
       sent_ack_nack_count: 0,
       ack_base: SequenceNumber::default(),
+      fragment_assembler: None,
     }
-  }
-}
+  } // fn
+
+
+
+  pub fn handle_datafrag(&mut self, datafrag:DataFrag, flags: BitFlags<DATAFRAG_Flags>) 
+    -> Option<DDSData> 
+  {
+    match self.fragment_assembler {
+      Some(ref mut fa) => fa.new_datafrag(datafrag, flags),
+      None => {
+        let mut fa = FragmentAssembler::new(datafrag.fragment_size);
+        //TODO: Test that the fragment size is not zero
+        let ret = fa.new_datafrag(datafrag, flags);
+        self.fragment_assembler = Some(fa);
+        ret
+      }
+    }
+  } // fn
+
+} // impl
