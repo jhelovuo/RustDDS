@@ -13,6 +13,7 @@ use std::{
   collections::{HashSet, BTreeMap, BTreeSet},
   iter::FromIterator,
   cmp::max,
+  io,
 };
 
 use crate::{
@@ -174,7 +175,7 @@ impl Writer {
     topic_name: String,
     qos_policies: QosPolicies,
     status_sender: SyncSender<DataWriterStatus>,
-  ) -> Writer {
+  ) -> io::Result<Writer> {
     let heartbeat_period = match &qos_policies.reliability {
       Some(r) => match r {
         Reliability::BestEffort => None,
@@ -200,7 +201,9 @@ impl Writer {
       None => None,
     };
 
-    Writer {
+    let udp_sender = UDPSender::new_with_random_port()?;
+
+    Ok(Writer {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
       push_mode: true,
@@ -210,7 +213,7 @@ impl Writer {
       nack_suppression_duration: Duration::from_millis(0),
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
-      data_max_size_serialized: 999999999,
+      data_max_size_serialized: 999999999, // TODO: this is not reasonable
       my_guid: guid,
       //enpoint_attributes: EndpointAttributes::default(),
       writer_command_receiver,
@@ -218,7 +221,7 @@ impl Writer {
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
       endpoint_attributes: EndpointAttributes::default(),
-      udp_sender: UDPSender::new_with_random_port(),
+      udp_sender,
       dds_cache,
       my_topic_name: topic_name,
       sequence_number_to_instant: BTreeMap::new(),
@@ -229,7 +232,7 @@ impl Writer {
       status_sender,
       //offered_deadline_status: OfferedDeadlineMissedStatus::new(),
       ack_waiter: None,
-    }
+    })
   }
 
   /// To know when token represents a writer we should look entity attribute kind

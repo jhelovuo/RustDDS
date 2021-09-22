@@ -429,16 +429,16 @@ impl InnerPublisher {
 
     let guid = GUID::new_with_prefix_and_id(dp.get_guid().guidPrefix, entity_id);
     let new_writer = Writer::new(
-      guid.clone(),
-      hccc_download,
-      dp.get_dds_cache(),
-      topic.get_name().to_string(),
-      writer_qos,
-      status_sender,
-    );
+        guid.clone(),
+        hccc_download,
+        dp.get_dds_cache(),
+        topic.get_name().to_string(),
+        writer_qos,
+        status_sender, )
+      .or_else(|e| log_and_err_internal!("Creating a new writer failed: {}",e))?; 
 
     self.add_writer_sender.send(new_writer)
-      .or_else(|e| log_and_err_internal!("Adding new writer failed: {}",e))?;
+      .or_else(|e| log_and_err_internal!("Adding a new writer failed: {}",e))?;
 
     let data_writer = WithKeyDataWriter::<D, SA>::new(
           outer.clone(),
@@ -869,7 +869,7 @@ impl InnerSubscriber {
       topic.get_name().to_string(),
       qos.clone(),
       reader_command_receiver,
-    );
+    )?;
 
     let datareader = WithKeyDataReader::<D, SA>::new(
       outer.clone(),

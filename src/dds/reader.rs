@@ -18,6 +18,7 @@ use std::{
   collections::BTreeSet,
   iter::FromIterator,
   sync::{Arc, RwLock},
+  io,
 };
 use crate::structure::dds_cache::{DDSCache};
 //use std::time::Instant;
@@ -57,6 +58,7 @@ pub(crate) struct Reader {
   // Should the instant be sent?
   notification_sender: mio_channel::SyncSender<()>,
   status_sender: mio_channel::SyncSender<DataReaderStatus>,
+  udp_sender: UDPSender,
 
   is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
   // Currently we support only stateful behaviour.
@@ -95,32 +97,34 @@ impl Reader {
     topic_name: String,
     qos_policy: QosPolicies,
     data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>, //qos_policy: QosPolicies, add later to constructor
-  ) -> Reader {
-    Reader {
-      notification_sender,
-      status_sender,
+  ) -> io::Result<Reader> {
+    let udp_sender = UDPSender::new_with_random_port()?;
+    Ok( 
+      Reader {
+        notification_sender,
+        status_sender,
+        udp_sender,
+        is_stateful: true,
+        dds_cache,
+        topic_name,
+        qos_policy,
 
-      is_stateful: true,
-      dds_cache,
-      topic_name,
-      qos_policy,
+        #[cfg(test)]
+        seqnum_instant_map: BTreeMap::new(),
+        my_guid: guid ,
+        enpoint_attributes: EndpointAttributes::default(),
 
-      #[cfg(test)]
-      seqnum_instant_map: BTreeMap::new(),
-      my_guid: guid ,
-      enpoint_attributes: EndpointAttributes::default(),
-
-      heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
-      heartbeat_supression_duration: StdDuration::new(0, 0),
-      sent_ack_nack_count: 0,
-      received_hearbeat_count: 0,
-      matched_writers: BTreeMap::new(),
-      writer_match_count_total: 0,
-      requested_deadline_missed_count: 0,
-      offered_incompatible_qos_count: 0,
-      timed_event_handler: None,
-      data_reader_command_receiver,
-    }
+        heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
+        heartbeat_supression_duration: StdDuration::new(0, 0),
+        sent_ack_nack_count: 0,
+        received_hearbeat_count: 0,
+        matched_writers: BTreeMap::new(),
+        writer_match_count_total: 0,
+        requested_deadline_missed_count: 0,
+        offered_incompatible_qos_count: 0,
+        timed_event_handler: None,
+        data_reader_command_receiver,
+      })
   }
   // TODO: check if it's necessary to implement different handlers for discovery
   // and user messages
@@ -787,8 +791,6 @@ impl Reader {
   }
 
   fn send_acknack(&self, acknack: AckNack, mr_state: MessageReceiverState) {
-    // Should it be saved as an attribute?
-    let sender = UDPSender::new_with_random_port();
     // TODO: How to determine which flags should be one? Both on atm
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
       | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
@@ -822,12 +824,11 @@ impl Reader {
     let bytes = message
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .unwrap();
-    sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
+    self.udp_sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
   }
 
+  // TODO: This is much duplicate code from send_acknack.
   pub fn send_preemptive_acknacks(&mut self) {
-    let sender = UDPSender::new_with_random_port();
-
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
       | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
 
@@ -872,7 +873,7 @@ impl Reader {
       let bytes = message
         .write_to_vec_with_ctx(Endianness::LittleEndian)
         .unwrap();
-      sender.send_to_locator_list(&bytes, &writer_proxy.unicast_locator_list);
+      self.udp_sender.send_to_locator_list(&bytes, &writer_proxy.unicast_locator_list);
     }
   }
 
