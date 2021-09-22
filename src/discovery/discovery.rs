@@ -510,7 +510,7 @@ impl Discovery {
                 return
               }
             };
-            let data = SPDPDiscoveredParticipantData::from_participant(
+            let data = SPDPDiscoveredParticipantData::from_local_participant(
               &strong_dp,
               Duration::from(lease_duration),
             );
@@ -585,7 +585,7 @@ impl Discovery {
     // built-in and user-defined.
 
     let participant_data = 
-      SPDPDiscoveredParticipantData::from_participant(&dp, Duration::DURATION_INFINITE);
+      SPDPDiscoveredParticipantData::from_local_participant(&dp, Duration::DURATION_INFINITE);
     self.discovery_db_write()
       .update_participant(&participant_data);
     self.send_discovery_notification(

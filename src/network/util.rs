@@ -1,7 +1,8 @@
 use std::{
-  net::{SocketAddr, IpAddr},
-  io::Error,
+  net::{SocketAddr, },
 };
+
+#[allow(unused_imports)] use log::{debug, error, info,trace};
 
 use crate::structure::locator::{LocatorList, Locator};
 
@@ -11,25 +12,16 @@ pub fn get_local_multicast_locators(port: u16) -> LocatorList {
 }
 
 pub fn get_local_unicast_socket_address(port: u16) -> LocatorList {
-  let local_ips: Result<Vec<IpAddr>, Error> = if_addrs::get_if_addrs().map(|p| {
-    p.iter()
-      .filter(|ip| !ip.is_loopback())
-      .map(|ip| ip.ip())
-      .collect()
-  });
-
-  match local_ips {
-    Ok(ips) => {
-      let loc = ips
-        .into_iter()
-        .map(|p| SocketAddr::new(p, port))
-        .map(|p| Locator::from(p))
-        .next();
-      match loc {
-        Some(l) => vec![l],
-        None => vec![],
-      }
+  match if_addrs::get_if_addrs() {
+    Ok(ifaces) => {
+      ifaces.iter()
+        .filter(|ip| ! ip.is_loopback())
+        .map(|ip| Locator::from(SocketAddr::new(ip.ip(), port)))
+        .collect()
     }
-    _ => vec![],
+    Err(e) => {
+      error!("Cannot get local network interfaces: get_if_addrs() : {:?}",e);
+      vec![]
+    }
   }
 }

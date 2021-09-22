@@ -126,7 +126,7 @@ impl SPDPDiscoveredParticipantData {
     proxy
   }
 
-  pub fn from_participant(
+  pub fn from_local_participant(
     participant: &DomainParticipant,
     lease_duration: Duration,
   ) -> SPDPDiscoveredParticipantData {
