@@ -723,12 +723,14 @@ impl Writer {
     let mut already_sent_to = BTreeSet::new();
 
     macro_rules! send_unless_sent_and_mark {
-      ($loc:expr) => {
-        if already_sent_to.contains($loc) {
-          trace!("Already sent to {:?}", $loc);
-        } else {
-          self.udp_sender.send_to_locator(&buffer, $loc);
-          already_sent_to.insert($loc.clone());
+      ($locs:expr) => {
+        for loc in $locs.iter() {
+          if already_sent_to.contains(loc) {
+            trace!("Already sent to {:?}", loc);
+          } else {
+            self.udp_sender.send_to_locator(&buffer, loc);
+            already_sent_to.insert(loc.clone());
+          }
         }
       }
     }
@@ -737,20 +739,20 @@ impl Writer {
       match ( preferred_mode, 
               reader.unicast_locator_list.iter().find(|l| Locator::isUDP(l) ), 
               reader.multicast_locator_list.iter().find(|l| Locator::isUDP(l) ) ) {
-        (DeliveryMode::Multicast, _ , Some(mc_locator)) => {
-          send_unless_sent_and_mark!(mc_locator);
+        (DeliveryMode::Multicast, _ , Some(_mc_locator)) => {
+          send_unless_sent_and_mark!(reader.multicast_locator_list);
         }
-        (DeliveryMode::Unicast, Some(uc_locator) , _ ) => {
-          send_unless_sent_and_mark!(uc_locator)
+        (DeliveryMode::Unicast, Some(_uc_locator) , _ ) => {
+          send_unless_sent_and_mark!(reader.unicast_locator_list)
         }        
-        (_delivery_mode, _ , Some(mc_locator)) => {
-          send_unless_sent_and_mark!(mc_locator);
+        (_delivery_mode, _ , Some(_mc_locator)) => {
+          send_unless_sent_and_mark!(reader.multicast_locator_list);
         }
-        (_delivery_mode, Some(uc_locator), _ ) => {
-          send_unless_sent_and_mark!(uc_locator)
+        (_delivery_mode, Some(_uc_locator), _ ) => {
+          send_unless_sent_and_mark!(reader.unicast_locator_list)
         }
         (_delivery_mode, None, None ) => {
-          error!("send_message_to_readers: No locators for {:?}",reader);
+          warn!("send_message_to_readers: No locators for {:?}",reader);
         }
       } // match
     }

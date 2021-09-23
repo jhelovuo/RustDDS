@@ -30,19 +30,21 @@ impl UDPSender {
     let mut multicast_sockets = Vec::with_capacity(1);
     for multicast_if_ipaddr in get_local_multicast_ip_addrs()? {
       let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP) )?;
-      raw_socket.bind( &SockAddr::from(
-        SocketAddr::new("0.0.0.0".parse().unwrap(), 0)) )?;
       // beef: specify otput interface
+      info!("UDPSender: Multicast sender on interface {:?}",multicast_if_ipaddr);
       match multicast_if_ipaddr {
-        IpAddr::V4(a) => raw_socket.set_multicast_if_v4(&a)? ,    
+        IpAddr::V4(a) => {
+          raw_socket.set_multicast_if_v4(&a)?;
+          raw_socket.bind( &SockAddr::from(SocketAddr::new(multicast_if_ipaddr, 0)) )?;
+        }   
         IpAddr::V6(_a) => error!("UDPSender::new() not implemented for IpV6") , // TODO
       }
-
+      
       let mc_socket = std::net::UdpSocket::from( raw_socket );
       mc_socket.set_multicast_loop_v4(true)
         .unwrap_or_else(|e| { error!("Cannot set multicast loop on: {:?}",e); } );
       multicast_sockets.push( UdpSocket::from_socket(mc_socket)? );
-    }
+    } // end for
 
     let sender = UDPSender { unicast_socket, multicast_sockets, };
     info!("UDPSender::new() --> {:?}", sender);

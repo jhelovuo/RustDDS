@@ -1,4 +1,4 @@
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, IpAddr,};
 use std::io;
 
 use mio::Token;
@@ -9,6 +9,8 @@ use log::{debug, error, trace, info};
 use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
 
 use bytes::{Bytes,BytesMut};
+
+use crate::network::util::get_local_multicast_ip_addrs;
 
 const MAX_MESSAGE_SIZE : usize = 64 * 1024; // This is max we can get from UDP.
 const MESSAGE_BUFFER_ALLOCATION_CHUNK : usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
@@ -108,7 +110,14 @@ impl UDPListener {
 
     let mio_socket = Self::new_listening_socket(host, port, true)?;
 
-    mio_socket.join_multicast_v4(&multicast_group, &Ipv4Addr::UNSPECIFIED)?;
+    for multicast_if_ipaddr in get_local_multicast_ip_addrs()? {
+      match multicast_if_ipaddr {
+        IpAddr::V4(a) => {
+          mio_socket.join_multicast_v4(&multicast_group, &a)?;
+        }   
+        IpAddr::V6(_a) => error!("UDPListener::new_multicast() not implemented for IpV6") , // TODO
+      }
+    }
 
     Ok(UDPListener { 
       socket: mio_socket, 
