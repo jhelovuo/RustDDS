@@ -462,11 +462,9 @@ impl DPEventLoop {
   }
 
   fn update_participant(&mut self, participant_guid_prefix: GuidPrefix ) {
-    debug!("update_participant - begin for {:?}", participant_guid_prefix);
-
-    if participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix {
-      info!("Own participant update");
-    } 
+    info!("update_participant {:?} myself={}", 
+      participant_guid_prefix, 
+      participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix);
 
 
     {
