@@ -177,7 +177,7 @@ impl DiscoveryDB {
           if elapsed <= lease_duration {
             () // this is a keeper
           } else {
-            debug!("participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} elapsed = {:?}",
+            info!("participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} elapsed = {:?}",
                   guid, lease_duration, elapsed);
             to_remove.push(guid);    
           }

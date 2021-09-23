@@ -524,7 +524,7 @@ impl Reader {
       for instant in removed_instances.values() {
         match cache.from_topic_remove_change(&self.topic_name, instant) {
           Some(_) => (),
-          None => warn!("WriterProxy told to remove an instant which was not present"),
+          None => debug!("WriterProxy told to remove an instant which was not present"), // This may be normal?
         }
       }
     }

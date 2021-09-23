@@ -140,6 +140,13 @@ impl std::ops::Add for Duration {
   }
 }
 
+impl std::ops::Mul<Duration> for f64 {
+  type Output=Duration;
+  fn mul(self, rhs:Duration) -> Duration {
+    Duration::from_ticks( (self * (rhs.to_ticks() as f64)) as i64 )
+  }
+}
+
 
 #[derive(Serialize, Deserialize)]
 pub struct DurationData {

@@ -499,10 +499,6 @@ impl Discovery {
           }
 
           DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN => {
-            // setting 3 times the duration so lease doesn't break if we fail once for some reason
-            let lease_duration = Discovery::SEND_PARTICIPANT_INFO_PERIOD
-              + Discovery::SEND_PARTICIPANT_INFO_PERIOD
-              + Discovery::SEND_PARTICIPANT_INFO_PERIOD;
             let strong_dp = match discovery.domain_participant.clone().upgrade() {
               Some(dp) => dp,
               None => {
@@ -510,9 +506,11 @@ impl Discovery {
                 return
               }
             };
+
+            // setting 5 times the duration so lease doesn't break if update fails once or twice
             let data = SPDPDiscoveredParticipantData::from_local_participant(
               &strong_dp,
-              Duration::from(lease_duration),
+              5.0 *  Duration::from(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
             );
 
             dcps_participant_writer.write(data, None).unwrap_or(());
