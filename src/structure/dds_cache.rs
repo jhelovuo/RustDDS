@@ -73,7 +73,7 @@ impl DDSCache {
     match self.topic_caches.get_mut(topic_name) {
       Some(tc) => tc.remove_change(instant),
       None => {
-        error!("Topic: '{:?}' is not in DDSCache", topic_name); 
+        error!("from_topic_remove_change: Topic {:?} is not in DDSCache", topic_name); 
         None  
       }
     }
@@ -85,7 +85,7 @@ impl DDSCache {
     match self.topic_caches.get_mut(topic_name) {
       Some(tc) => tc.remove_changes_before(instant),
       None => {
-        error!("Topic: '{:?}' is not in DDSCache", topic_name); 
+        error!("from_topic_remove_before: topic: {:?} is not in DDSCache", topic_name); 
       }
     }
   }
@@ -112,7 +112,7 @@ impl DDSCache {
     match self.topic_caches.get_mut(topic_name) {
       Some(tc) => tc.add_change(instant, cache_change),
       None => {
-        error!("Topic: '{:?}' is not in DDSCache", topic_name); 
+        error!("to_topic_add_change: Topic: {:?} is not in DDSCache", topic_name); 
       }
     }
   }

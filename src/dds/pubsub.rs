@@ -24,7 +24,7 @@ use crate::dds::{
   topic::*,
   qos::*,
   reader::ReaderIngredients,
-  writer::Writer,
+  writer::WriterIngredients,
   with_key::datawriter::DataWriter as WithKeyDataWriter,
   no_key::datawriter::DataWriter as NoKeyDataWriter,
   with_key::datareader::DataReader as WithKeyDataReader,
@@ -80,7 +80,7 @@ impl Publisher {
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
-    add_writer_sender: mio_channel::SyncSender<Writer>,
+    add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Publisher {
     Publisher {
@@ -371,7 +371,7 @@ struct InnerPublisher {
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
-  add_writer_sender: mio_channel::SyncSender<Writer>,
+  add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
@@ -382,7 +382,7 @@ impl InnerPublisher {
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
-    add_writer_sender: mio_channel::SyncSender<Writer>,
+    add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> InnerPublisher {
     InnerPublisher {
@@ -428,14 +428,14 @@ impl InnerPublisher {
               .or_else (|e| log_and_err_internal!("Where is my DomainParticipant? {}",e))?;
 
     let guid = GUID::new_with_prefix_and_id(dp.get_guid().guidPrefix, entity_id);
-    let new_writer = Writer::new(
-        guid.clone(),
-        hccc_download,
-        dp.get_dds_cache(),
-        topic.get_name().to_string(),
-        writer_qos,
-        status_sender, )
-      .or_else(|e| log_and_err_internal!("Creating a new writer failed: {}",e))?; 
+
+    let new_writer = WriterIngredients {
+        guid: guid.clone(),
+        writer_command_receiver: hccc_download,
+        topic_name: topic.get_name().to_string(),
+        qos_policies: writer_qos,
+        status_sender,
+      };
 
     self.add_writer_sender.send(new_writer)
       .or_else(|e| log_and_err_internal!("Adding a new writer failed: {}",e))?;
@@ -477,7 +477,7 @@ impl InnerPublisher {
     Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
   }
 
-  fn add_writer(&self, writer: Writer) -> Result<()> {
+  fn add_writer(&self, writer: WriterIngredients) -> Result<()> {
     match self.add_writer_sender.send(writer) {
       Ok(_) => Ok(()),
       _ => Err(Error::OutOfResources),

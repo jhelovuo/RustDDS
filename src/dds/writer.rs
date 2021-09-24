@@ -10,10 +10,10 @@ use mio_extras::channel::{self as mio_channel, SyncSender, TrySendError};
 use mio::Token;
 use std::{
   sync::{RwLock, Arc},
+  rc::Rc,
   collections::{HashSet, BTreeMap, BTreeSet},
   iter::FromIterator,
   cmp::max,
-  io,
 };
 
 use crate::{
@@ -57,6 +57,17 @@ pub enum DeliveryMode {
   Unicast,
   Multicast,
 }
+
+// This is used to construct an actual Writer.
+// Ingrediants are sendable between threads, whereas the Writer is not.
+pub(crate) struct WriterIngredients {
+  pub guid: GUID,
+  pub writer_command_receiver: mio_channel::Receiver<WriterCommand>,
+  pub topic_name: String,
+  pub qos_policies: QosPolicies,
+  pub status_sender: SyncSender<DataWriterStatus>,
+}
+
 
 pub(crate) struct Writer {
   pub endianness: Endianness,
@@ -114,7 +125,7 @@ pub(crate) struct Writer {
   requested_incompatible_qos_count: i32, // how many times a Reader requested incompatible QoS
   //message: Option<Message>,
 
-  udp_sender: UDPSender,
+  udp_sender: Rc<UDPSender>,
 
   // This writer can read/write to only one of this DDSCache topic caches identified with my_topic_name
   dds_cache: Arc<RwLock<DDSCache>>,
@@ -169,14 +180,11 @@ struct AckWaiter {
 
 impl Writer {
   pub fn new(
-    guid: GUID,
-    writer_command_receiver: mio_channel::Receiver<WriterCommand>,
+    i: WriterIngredients,
     dds_cache: Arc<RwLock<DDSCache>>,
-    topic_name: String,
-    qos_policies: QosPolicies,
-    status_sender: SyncSender<DataWriterStatus>,
-  ) -> io::Result<Writer> {
-    let heartbeat_period = match &qos_policies.reliability {
+    udp_sender: Rc<UDPSender>,
+  ) -> Writer {
+    let heartbeat_period = match &i.qos_policies.reliability {
       Some(r) => match r {
         Reliability::BestEffort => None,
         Reliability::Reliable {
@@ -187,7 +195,7 @@ impl Writer {
     };
 
     let heartbeat_period = match heartbeat_period {
-      Some(hbp) => match qos_policies.liveliness {
+      Some(hbp) => match i.qos_policies.liveliness {
         Some(lv) => match lv {
           policy::Liveliness::Automatic { lease_duration: _ } => Some(hbp),
           policy::Liveliness::ManualByParticipant { lease_duration: _ } => Some(hbp),
@@ -201,9 +209,7 @@ impl Writer {
       None => None,
     };
 
-    let udp_sender = UDPSender::new_with_random_port()?;
-
-    Ok(Writer {
+    Writer {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
       push_mode: true,
@@ -214,25 +220,25 @@ impl Writer {
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
       data_max_size_serialized: 999999999, // TODO: this is not reasonable
-      my_guid: guid,
+      my_guid: i.guid,
       //enpoint_attributes: EndpointAttributes::default(),
-      writer_command_receiver,
+      writer_command_receiver: i.writer_command_receiver ,
       readers: BTreeMap::new(),
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
       endpoint_attributes: EndpointAttributes::default(),
       udp_sender,
       dds_cache,
-      my_topic_name: topic_name,
+      my_topic_name: i.topic_name,
       sequence_number_to_instant: BTreeMap::new(),
       //key_to_instant: HashMap::new(),
       disposed_sequence_numbers: HashSet::new(),
       timed_event_handler: None,
-      qos_policies,
-      status_sender,
+      qos_policies: i.qos_policies,
+      status_sender: i.status_sender,
       //offered_deadline_status: OfferedDeadlineMissedStatus::new(),
       ack_waiter: None,
-    })
+    }
   }
 
   /// To know when token represents a writer we should look entity attribute kind

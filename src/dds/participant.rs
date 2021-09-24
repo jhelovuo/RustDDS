@@ -20,7 +20,7 @@ use crate::{
 };
 
 use crate::dds::{
-  dp_event_loop::DPEventLoop, reader::*, writer::Writer, pubsub::*, topic::*, typedesc::*, qos::*,
+  dp_event_loop::DPEventLoop, reader::*, writer::*, pubsub::*, topic::*, typedesc::*, qos::*,
   values::result::*,
 };
 
@@ -519,7 +519,7 @@ pub(crate) struct DomainParticipant_Inner {
   // out of the struct (take) in order to .join() on the handle.
 
   // Writers
-  add_writer_sender: mio_channel::SyncSender<Writer>,
+  add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
   remove_writer_sender: mio_channel::SyncSender<GUID>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
@@ -628,7 +628,7 @@ impl DomainParticipant_Inner {
     let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(10);
 
     // Writers
-    let (add_writer_sender, add_writer_receiver) = mio_channel::sync_channel::<Writer>(10);
+    let (add_writer_sender, add_writer_receiver) = mio_channel::sync_channel::<WriterIngredients>(10);
     let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
 
     let new_guid = GUID::new_particiapnt_guid();
@@ -638,14 +638,14 @@ impl DomainParticipant_Inner {
       participant_id,
     };
 
-    let a_r_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
 
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(new_guid)));
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
     // Launch the background thread for DomainParticipant
-    let dds_cache_clone = a_r_cache.clone();
+    let dds_cache_clone = dds_cache.clone();
     let disc_db_clone = discovery_db.clone();
     let ev_loop_handle = thread::Builder::new()
       .name("RustDDS Participant event loop".to_string())
@@ -694,7 +694,7 @@ impl DomainParticipant_Inner {
       ev_loop_handle: Some(ev_loop_handle),
       add_writer_sender,
       remove_writer_sender,
-      dds_cache: Arc::new(RwLock::new(DDSCache::new())),
+      dds_cache,
       discovery_db,
     })
   }
@@ -839,7 +839,7 @@ impl DomainParticipant_Inner {
     self.sender_remove_reader.clone()
   }
 
-  pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<Writer> {
+  pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<WriterIngredients> {
     self.add_writer_sender.clone()
   }
 

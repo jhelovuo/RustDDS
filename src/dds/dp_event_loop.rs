@@ -10,7 +10,9 @@ use std::{
 };
 
 use crate::{
-  dds::{message_receiver::MessageReceiver, reader::{Reader, ReaderIngredients,}, writer::Writer},
+  dds::{message_receiver::MessageReceiver}, 
+  dds::reader::{Reader, ReaderIngredients,}, 
+  dds::writer::{Writer, WriterIngredients,},
   network::util::get_local_multicast_locators,
   structure::builtin_endpoint::{BuiltinEndpointSet, },
   dds::qos::policy,
@@ -63,7 +65,7 @@ pub struct DPEventLoop {
   reader_timed_event_receiver: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
 
   // Writers
-  add_writer_receiver: TokenReceiverPair<Writer>,
+  add_writer_receiver: TokenReceiverPair<WriterIngredients>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
   writer_timed_event_reciever: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
 
@@ -87,7 +89,7 @@ impl DPEventLoop {
     participant_guid_prefix: GuidPrefix,
     add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
     remove_reader_receiver: TokenReceiverPair<GUID>,
-    add_writer_receiver: TokenReceiverPair<Writer>,
+    add_writer_receiver: TokenReceiverPair<WriterIngredients>,
     remove_writer_receiver: TokenReceiverPair<GUID>,
     stop_poll_receiver: mio_channel::Receiver<()>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
@@ -377,7 +379,10 @@ impl DPEventLoop {
   fn handle_writer_action(&mut self, event: &Event) {
     match event.token() {
       ADD_WRITER_TOKEN => {
-        while let Ok(mut new_writer) = self.add_writer_receiver.receiver.try_recv() {
+        while let Ok(new_writer_ingredients) = self.add_writer_receiver.receiver.try_recv() {
+          let mut new_writer = Writer::new(
+            new_writer_ingredients, self.ddscache.clone(), self.udp_sender.clone() );
+
           self.poll.register(
             &new_writer.writer_command_receiver,
             new_writer.get_entity_token(),
