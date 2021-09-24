@@ -791,7 +791,8 @@ impl Reader {
   }
 
   fn send_acknack(&self, acknack: AckNack, mr_state: MessageReceiverState) {
-    // TODO: How to determine which flags should be one? Both on atm
+    // Indicate our endianness.
+    // Set final flag to indicate that we are NOT requesting immediate heartbeat response.
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
       | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
 
@@ -829,8 +830,8 @@ impl Reader {
 
   // TODO: This is much duplicate code from send_acknack.
   pub fn send_preemptive_acknacks(&mut self) {
-    let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
-      | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
+    let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness);
+    // Do not set final flag --> we are requesting immediate heartbeat from writers.
 
     let infodst_flags =
       BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
