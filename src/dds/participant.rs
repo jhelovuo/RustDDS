@@ -1,4 +1,4 @@
-use mio::Token;
+//use mio::Token;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{error, debug, info, warn, trace};
@@ -74,17 +74,21 @@ impl DomainParticipant {
     let (discovery_started_sender, discovery_started_receiver) =
       std::sync::mpsc::channel::<Result<()>>();
 
-    let discovery = Discovery::new(
-      dp.weak_clone(),
-      dp.discovery_db(),
-      discovery_started_sender,
-      discovery_updated_sender,
-      discovery_command_receiver,
-    );
-
+    // Construct and start background thread
+    let dp_clone = dp.weak_clone();
+    let disc_db_clone = dp.discovery_db();
     let discovery_handle = thread::Builder::new()
       .name("RustDDS discovery thread".to_string())
-      .spawn(move || Discovery::discovery_event_loop(discovery))?;
+      .spawn(move || { 
+          let discovery = Discovery::new(
+            dp_clone,
+            disc_db_clone,
+            discovery_started_sender,
+            discovery_updated_sender,
+            discovery_command_receiver,
+          );
+          Discovery::discovery_event_loop(discovery)
+        })?;
     djh_sender.send(discovery_handle).unwrap_or(());
 
     debug!("Waiting for discovery to start"); // blocking until discovery answers
@@ -500,10 +504,9 @@ pub(crate) struct DomainParticipant_Inner {
   participant_id: u16,
 
   my_guid: GUID,
-  reader_binds: HashMap<Token, mio_channel::Receiver<(Token, Reader)>>,
 
   // Adding Readers
-  sender_add_reader: mio_channel::SyncSender<Reader>,
+  sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
   sender_remove_reader: mio_channel::SyncSender<GUID>,
 
   // Adding DataReaders
@@ -621,7 +624,7 @@ impl DomainParticipant_Inner {
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     // Adding readers
-    let (sender_add_reader, receiver_add_reader) = mio_channel::sync_channel::<Reader>(100);
+    let (sender_add_reader, receiver_add_reader) = mio_channel::sync_channel::<ReaderIngredients>(100);
     let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(10);
 
     // Writers
@@ -641,35 +644,39 @@ impl DomainParticipant_Inner {
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
-    let ev_wrapper = DPEventLoop::new(
-      domain_info,
-      listeners,
-      a_r_cache.clone(),
-      discovery_db.clone(),
-      new_guid.guidPrefix,
-      TokenReceiverPair {
-        token: ADD_READER_TOKEN,
-        receiver: receiver_add_reader,
-      },
-      TokenReceiverPair {
-        token: REMOVE_READER_TOKEN,
-        receiver: receiver_remove_reader,
-      },
-      TokenReceiverPair {
-        token: ADD_WRITER_TOKEN,
-        receiver: add_writer_receiver,
-      },
-      TokenReceiverPair {
-        token: REMOVE_WRITER_TOKEN,
-        receiver: remove_writer_receiver,
-      },
-      stop_poll_receiver,
-      discovery_update_notification_receiver,
-    );
     // Launch the background thread for DomainParticipant
+    let dds_cache_clone = a_r_cache.clone();
+    let disc_db_clone = discovery_db.clone();
     let ev_loop_handle = thread::Builder::new()
       .name("RustDDS Participant event loop".to_string())
-      .spawn(move || ev_wrapper.event_loop())?;
+      .spawn(move || { 
+        let ev_wrapper = DPEventLoop::new(
+          domain_info,
+          listeners,
+          dds_cache_clone,
+          disc_db_clone,
+          new_guid.guidPrefix,
+          TokenReceiverPair {
+            token: ADD_READER_TOKEN,
+            receiver: receiver_add_reader,
+          },
+          TokenReceiverPair {
+            token: REMOVE_READER_TOKEN,
+            receiver: receiver_remove_reader,
+          },
+          TokenReceiverPair {
+            token: ADD_WRITER_TOKEN,
+            receiver: add_writer_receiver,
+          },
+          TokenReceiverPair {
+            token: REMOVE_WRITER_TOKEN,
+            receiver: remove_writer_receiver,
+          },
+          stop_poll_receiver,
+          discovery_update_notification_receiver,
+        );
+        ev_wrapper.event_loop()
+      })?;
 
     info!("New DomainParticipant_Inner: domain_id={:?} participant_id={:?} GUID={:?}",
       domain_id, participant_id, new_guid);
@@ -677,8 +684,6 @@ impl DomainParticipant_Inner {
       domain_id,
       participant_id,
       my_guid: new_guid,
-      reader_binds: HashMap::new(),
-      // ddscache: a_r_cache,
       // Adding readers
       sender_add_reader,
       sender_remove_reader,
@@ -698,7 +703,7 @@ impl DomainParticipant_Inner {
     self.dds_cache.clone()
   }
 
-  pub fn add_reader(&self, reader: Reader) {
+  pub fn add_reader(&self, reader: ReaderIngredients) {
     self.sender_add_reader.send(reader).unwrap();
   }
 
@@ -826,7 +831,7 @@ impl DomainParticipant_Inner {
 
   // The following methods are not for application use.
 
-  pub(crate) fn get_add_reader_sender(&self) -> mio_channel::SyncSender<Reader> {
+  pub(crate) fn get_add_reader_sender(&self) -> mio_channel::SyncSender<ReaderIngredients> {
     self.sender_add_reader.clone()
   }
 

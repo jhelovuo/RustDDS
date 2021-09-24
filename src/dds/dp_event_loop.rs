@@ -5,16 +5,18 @@ use mio::{Poll, Event, Events, Token, Ready, PollOpt};
 use mio_extras::channel as mio_channel;
 use std::{collections::HashMap, time::Duration};
 use std::{
+  rc::Rc,
   sync::{Arc, RwLock},
 };
 
 use crate::{
-  dds::{message_receiver::MessageReceiver, reader::Reader, writer::Writer},
+  dds::{message_receiver::MessageReceiver, reader::{Reader, ReaderIngredients,}, writer::Writer},
   network::util::get_local_multicast_locators,
   structure::builtin_endpoint::{BuiltinEndpointSet, },
   dds::qos::policy,
 };
 use crate::network::udp_listener::UDPListener;
+use crate::network::udp_sender::UDPSender;
 use crate::network::constant::*;
 use crate::structure::guid::{GuidPrefix, GUID, EntityId, TokenDecode};
 use crate::structure::entity::RTPSEntity;
@@ -56,7 +58,7 @@ pub struct DPEventLoop {
   message_receiver: MessageReceiver, // This contains our Readers
 
   // Adding readers
-  add_reader_receiver: TokenReceiverPair<Reader>,
+  add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
   remove_reader_receiver: TokenReceiverPair<GUID>,
   reader_timed_event_receiver: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
 
@@ -70,9 +72,9 @@ pub struct DPEventLoop {
   ack_nack_reciever: mio_channel::Receiver<(GuidPrefix, AckNack)>,
 
   writers: HashMap<EntityId, Writer>,
+  udp_sender: Rc<UDPSender>,
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-
 }
 
 impl DPEventLoop {
@@ -83,7 +85,7 @@ impl DPEventLoop {
     ddscache: Arc<RwLock<DDSCache>>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     participant_guid_prefix: GuidPrefix,
-    add_reader_receiver: TokenReceiverPair<Reader>,
+    add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
     remove_reader_receiver: TokenReceiverPair<GUID>,
     add_writer_receiver: TokenReceiverPair<Writer>,
     remove_writer_receiver: TokenReceiverPair<GUID>,
@@ -167,6 +169,9 @@ impl DPEventLoop {
       )
       .expect("Failed to register reader update notification.");
 
+    // port number 0 menas OS chooses an available port number.
+    let udp_sender = UDPSender::new(0)
+      .expect("UDPSender construction fail"); // TODO
 
     DPEventLoop {
       domain_info,
@@ -174,6 +179,7 @@ impl DPEventLoop {
       ddscache,
       discovery_db,
       udp_listeners,
+      udp_sender: Rc::new(udp_sender),
       message_receiver: MessageReceiver::new(participant_guid_prefix, acknack_sender),
       add_reader_receiver,
       remove_reader_receiver,
@@ -309,9 +315,13 @@ impl DPEventLoop {
     match event.token() {
       ADD_READER_TOKEN => {
         trace!("add reader(s)");
-        while let Ok(mut new_reader) = self.add_reader_receiver.receiver.try_recv() {
+        while let Ok(new_reader_ing) = self.add_reader_receiver.receiver.try_recv() {
           let (timed_action_sender, timed_action_receiver) =
             mio_channel::sync_channel::<TimerMessageType>(10);
+
+          let mut new_reader = 
+            Reader::new(new_reader_ing, self.ddscache.clone(), self.udp_sender.clone());
+
           let time_handler: TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
           new_reader.add_timed_event_handler(time_handler);
           // Timed action polling
@@ -675,7 +685,7 @@ mod tests {
   #[test]
   fn dpew_add_and_remove_readers() {
     // Adding readers
-    let (sender_add_reader, receiver_add) = mio_channel::channel::<Reader>();
+    let (sender_add_reader, receiver_add) = mio_channel::channel::<ReaderIngredients>();
     let (sender_remove_reader, receiver_remove) = mio_channel::channel::<GUID>();
 
     let (_add_writer_sender, add_writer_receiver) = mio_channel::channel();
@@ -746,7 +756,7 @@ mod tests {
       let (_reader_commander, reader_command_receiver) =
         mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
-      let new_reader = Reader::new(
+      let new_reader = ReaderIngredients::new(
         new_guid,
         send,
         status_sender,

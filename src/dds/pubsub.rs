@@ -23,7 +23,7 @@ use crate::dds::{
   participant::*,
   topic::*,
   qos::*,
-  reader::Reader,
+  reader::ReaderIngredients,
   writer::Writer,
   with_key::datawriter::DataWriter as WithKeyDataWriter,
   no_key::datawriter::DataWriter as NoKeyDataWriter,
@@ -572,7 +572,7 @@ impl Subscriber {
     domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
-    sender_add_reader: mio_channel::SyncSender<Reader>,
+    sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
     sender_remove_reader: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Subscriber {
@@ -800,7 +800,7 @@ pub struct InnerSubscriber {
   domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   qos: QosPolicies,
-  sender_add_reader: mio_channel::SyncSender<Reader>,
+  sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
   sender_remove_reader: mio_channel::SyncSender<GUID>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
 }
@@ -810,7 +810,7 @@ impl InnerSubscriber {
     domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     qos: QosPolicies,
-    sender_add_reader: mio_channel::SyncSender<Reader>,
+    sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
     sender_remove_reader: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> InnerSubscriber {
@@ -861,15 +861,21 @@ impl InnerSubscriber {
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
 
-    let new_reader = Reader::new(
-      reader_guid,
-      send,
+    let new_reader = ReaderIngredients {
+      guid: reader_guid,
+      notification_sender: send,
       status_sender,
-      dp.get_dds_cache(),
-      topic.get_name().to_string(),
-      qos.clone(),
-      reader_command_receiver,
-    )?;
+      topic_name: topic.get_name().to_string(),
+      qos_policy: qos.clone(),
+      data_reader_command_receiver: reader_command_receiver,
+    };
+
+    {
+      let mut db = self.discovery_db.write()
+                .or_else(|e| log_and_err_internal!("Cannot lock discovery_db. {}",e))?;
+      db.update_local_topic_reader(&dp, &topic, &new_reader);
+      db.update_topic_data_p(&topic);
+    }
 
     let datareader = WithKeyDataReader::<D, SA>::new(
       outer.clone(),
@@ -882,13 +888,6 @@ impl InnerSubscriber {
       status_receiver,
       reader_command_sender,
     )?;
-
-    {
-      let mut db = self.discovery_db.write()
-                .or_else(|e| log_and_err_internal!("Cannot lock discovery_db. {}",e))?;
-      db.update_local_topic_reader(&dp, &topic, &new_reader);
-      db.update_topic_data_p(&topic);
-    }
 
     // Create new topic to DDScache if one isn't present
     match dp.get_dds_cache().write() {

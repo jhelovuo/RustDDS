@@ -7,12 +7,11 @@ use crate::{
   network::util::get_local_multicast_locators,
   network::util::get_local_unicast_socket_address,
   structure::{
-    entity::RTPSEntity,
     guid::{EntityId, GUID, EntityKind},
     locator::{Locator, LocatorList},
     sequence_number::{SequenceNumber},
   },
-  dds::qos::{QosPolicies, HasQoSPolicy},
+  dds::qos::{QosPolicies,},
   messages::submessages::submessages::{AckNack},
   discovery::data_types::topic_data::DiscoveredReaderData,
 };
@@ -22,7 +21,7 @@ use std::{
   net::{SocketAddr, Ipv4Addr},
 };
 
-use super::reader::Reader;
+use super::reader::{ReaderIngredients,};
 
 #[derive(Debug, PartialEq, Clone)]
 /// ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
@@ -74,7 +73,7 @@ impl RtpsReaderProxy {
     &self.qos
   }
 
-  pub fn from_reader(reader: &Reader, domain_id: u16, participant_id: u16) -> RtpsReaderProxy {
+  pub fn from_reader(reader: &ReaderIngredients, domain_id: u16, participant_id: u16) -> RtpsReaderProxy {
     let unicast_locator_list =
       get_local_unicast_socket_address(get_user_traffic_unicast_port(domain_id, participant_id));
 
@@ -82,7 +81,7 @@ impl RtpsReaderProxy {
       get_local_multicast_locators(get_user_traffic_multicast_port(domain_id));
 
     RtpsReaderProxy {
-      remote_reader_guid: reader.get_guid(),
+      remote_reader_guid: reader.guid,
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN, //TODO
       unicast_locator_list,
       multicast_locator_list,
@@ -91,7 +90,7 @@ impl RtpsReaderProxy {
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
-      qos: reader.get_qos().clone(),
+      qos: reader.qos_policy.clone(),
     }
   }
 

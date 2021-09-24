@@ -17,7 +17,8 @@ use crate::structure::{guid::GUID, guid::EntityId,
 
 use crate::{
   dds::{
-    rtps_reader_proxy::RtpsReaderProxy, reader::Reader, participant::DomainParticipant,
+    rtps_reader_proxy::RtpsReaderProxy, reader::{ReaderIngredients,}, 
+    participant::DomainParticipant,
     topic::Topic, traits::TopicDescription,
   },
 };
@@ -413,9 +414,9 @@ impl DiscoveryDB {
     &mut self,
     domain_participant: &DomainParticipant,
     topic: &Topic,
-    reader: &Reader,
+    reader: &ReaderIngredients,
   ) {
-    let reader_guid = reader.get_guid();
+    let reader_guid = reader.guid;
 
     let reader_proxy = RtpsReaderProxy::from_reader(
       reader,

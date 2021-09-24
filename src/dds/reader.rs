@@ -18,7 +18,7 @@ use std::{
   collections::BTreeSet,
   iter::FromIterator,
   sync::{Arc, RwLock},
-  io,
+  rc::Rc,
 };
 use crate::structure::dds_cache::{DDSCache};
 //use std::time::Instant;
@@ -53,12 +53,22 @@ use super::{
 
 use super::qos::InlineQos;
 
+// Some pieces necessary to contruct a reader.
+// These can be sent between threads, whereas a Reader cannot.
+pub (crate) struct ReaderIngredients {
+  pub guid: GUID,
+  pub notification_sender: mio_channel::SyncSender<()>,
+  pub status_sender: mio_channel::SyncSender<DataReaderStatus>,
+  pub topic_name: String,
+  pub qos_policy: QosPolicies,
+  pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>, 
+}
 
 pub(crate) struct Reader {
   // Should the instant be sent?
   notification_sender: mio_channel::SyncSender<()>,
   status_sender: mio_channel::SyncSender<DataReaderStatus>,
-  udp_sender: UDPSender,
+  udp_sender: Rc<UDPSender>,
 
   is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
   // Currently we support only stateful behaviour.
@@ -90,28 +100,22 @@ pub(crate) struct Reader {
 
 impl Reader {
   pub fn new(
-    guid: GUID,
-    notification_sender: mio_channel::SyncSender<()>,
-    status_sender: mio_channel::SyncSender<DataReaderStatus>,
+    i : ReaderIngredients,
     dds_cache: Arc<RwLock<DDSCache>>,
-    topic_name: String,
-    qos_policy: QosPolicies,
-    data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>, //qos_policy: QosPolicies, add later to constructor
-  ) -> io::Result<Reader> {
-    let udp_sender = UDPSender::new_with_random_port()?;
-    Ok( 
+    udp_sender: Rc<UDPSender>,
+  ) -> Reader {
       Reader {
-        notification_sender,
-        status_sender,
+        notification_sender: i.notification_sender,
+        status_sender: i.status_sender,
         udp_sender,
-        is_stateful: true,
+        is_stateful: true, // Do not change this before stateless functionality is implemented.
         dds_cache,
-        topic_name,
-        qos_policy,
+        topic_name: i.topic_name,
+        qos_policy: i.qos_policy,
 
         #[cfg(test)]
         seqnum_instant_map: BTreeMap::new(),
-        my_guid: guid ,
+        my_guid: i.guid ,
         enpoint_attributes: EndpointAttributes::default(),
 
         heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
@@ -123,8 +127,8 @@ impl Reader {
         requested_deadline_missed_count: 0,
         offered_incompatible_qos_count: 0,
         timed_event_handler: None,
-        data_reader_command_receiver,
-      })
+        data_reader_command_receiver: i.data_reader_command_receiver,
+      }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
   // and user messages
@@ -884,12 +888,6 @@ impl Reader {
 } // impl
 
 impl HasQoSPolicy for Reader {
-  // fn set_qos(&mut self, policy: &QosPolicies) -> DDSResult<()> {
-  //   // TODO: check liveliness of qos_policy
-  //   self.qos_policy = policy.clone();
-  //   Ok(())
-  // }
-
   fn get_qos(&self) -> QosPolicies {
     self.qos_policy.clone()
   }
