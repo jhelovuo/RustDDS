@@ -1,7 +1,8 @@
 use crate::dds::data_types::GUID;
 use std::collections::BTreeSet;
 use crate::structure::sequence_number::SequenceNumber;
-use log::{error, trace};
+
+#[allow(unused_imports)] use log::{debug, error, info,trace};
 
 use std::{
   collections::{BTreeMap, HashMap, /*btree_map::Range*/ },
@@ -45,7 +46,7 @@ impl DDSCache {
   ) {
     self.topic_caches.insert(
         topic_name.to_string(),
-        TopicCache::new(topic_kind, topic_data_type),
+        TopicCache::new(topic_name, topic_kind, topic_data_type),
       );
   }
 
@@ -120,6 +121,7 @@ impl DDSCache {
 
 #[derive(Debug)]
 pub struct TopicCache {
+  topic_name: String,
   topic_data_type: TypeDesc,
   topic_kind: TopicKind,
   topic_qos: QosPolicies,
@@ -127,8 +129,9 @@ pub struct TopicCache {
 }
 
 impl TopicCache {
-  pub fn new(topic_kind: TopicKind, topic_data_type: TypeDesc) -> TopicCache {
+  pub fn new(topic_name: &String, topic_kind: TopicKind, topic_data_type: TypeDesc) -> TopicCache {
     TopicCache {
+      topic_name: topic_name.clone(),
       topic_data_type: topic_data_type,
       topic_kind: topic_kind,
       topic_qos: QosPolicyBuilder::new().build(),
@@ -142,6 +145,11 @@ impl TopicCache {
 
   pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
     self.history_cache.add_change(instant, cache_change)
+      .map( |cc_back| { 
+        info!("DDSCache insert failed topic={:?} cache_change={:?}",
+                self.topic_name, cc_back); 
+            }
+          );
   }
 
   pub fn get_changes_in_range(
@@ -219,20 +227,21 @@ impl DDSHistoryCache {
     //TODO: If this makes a SN set empty, remove it from BTreeMap.
   }
 
-  pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
+  pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) -> Option<CacheChange> {
     if self.have_sn(&cache_change) {
       trace!("Received duplicate {:?} from {:?}, discarding.",
         cache_change.sequence_number, cache_change.writer_guid);
-      // nothing else
+      Some(cache_change)
     } else {
       self.insert_sn(&cache_change);
       let result = self.changes.insert(*instant, cache_change);
       match result {
-        None => (), // all is good. timestamp was not inserted before.
+        None => None, // all is good. timestamp was not inserted before.
         Some(old_cc) => {
           // If this happens cahce changes were created at exactly same instant.
-          error!("DDSHistoryCache already contained element with key {:?} !!!", instant);
-          self.remove_sn(&old_cc)
+          error!("DDSHistoryCache already contained element with key {:?} !!!", instant);
+          self.remove_sn(&old_cc);
+          Some(old_cc)
         }
       }
     }
