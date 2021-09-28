@@ -10,7 +10,7 @@ use crate::discovery::data_types::topic_data::ReaderProxy;
 use crate::network::util::get_local_multicast_locators;
 use crate::dds::data_types::SubscriptionBuiltinTopicData;
 use crate::dds::rtps_reader_proxy::RtpsReaderProxy;
-#[allow(unused_imports)] use log::{debug, error, info,trace};
+#[allow(unused_imports)] use log::{debug, error, warn, info,trace};
 
 use mio::{Ready, Poll, PollOpt, Events};
 use mio_extras::timer::Timer;
@@ -687,13 +687,13 @@ impl Discovery {
     &self,
     reader: &mut DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
   ) {
-    match reader.take(100, ReadCondition::not_read()) {
-      Ok(d) => {
-        let mut db = self.discovery_db_write();
-        for data in d.into_iter() {
-          match data.value() {
+    loop {
+      match reader.take_next_sample() {
+        Ok(Some(d)) => {
+          let mut db = self.discovery_db_write();
+          match d.value {
             Ok(val) => {
-              debug!("Discovered Reader {:?}", &val);
+              trace!("handle_subscription_reader discovered {:?}", &val);
               if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(&val) {
                 debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
                   &drd, &rtps_reader_proxy);
@@ -710,35 +710,33 @@ impl Discovery {
               debug!("Dispose Reader {:?}", reader_key);
               db.remove_topic_reader(reader_key.0);
               self.send_discovery_notification(
-                  DiscoveryNotificationType::ReaderLost {
-                    reader_guid: reader_key.0,
-                });
+                  DiscoveryNotificationType::ReaderLost { reader_guid: reader_key.0 });
             }
           }
         }
+        Ok(None) => return, // no more data
+        Err(e) => error!("handle_publication_reader: {:?}",e),
       }
-      _ => (),
-    };
+    } // loop
   }
 
-  pub fn handle_publication_reader(
-    &self,
+  pub fn handle_publication_reader( &self,
     reader: &mut DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
   ) {
-    match reader.take(100, ReadCondition::not_read()) {
-      Ok(d) => {
-        let mut db = self.discovery_db_write();
-        for data in d.into_iter() {
-          match data.value() {
-            Ok(val) => {
-              if let Some(discovered_writer_data) =  db.update_publication(&val) {
+    loop {
+      match reader.take_next_sample() {
+        Ok(Some(d)) => {
+          let mut db = self.discovery_db_write();
+          match d.value {
+            Ok(dwd) => {
+              trace!("handle_publication_reader discovered {:?}", &dwd);
+              if let Some(discovered_writer_data) =  db.update_publication(&dwd) {
                 self.send_discovery_notification(
-                    DiscoveryNotificationType::WriterUpdated{ discovered_writer_data }
-                  );
+                    DiscoveryNotificationType::WriterUpdated{ discovered_writer_data } );
               }
-              db.update_topic_data_dwd(&val);
-              debug!("Discovered Writer {:?}", &val);
-            }
+              db.update_topic_data_dwd(&dwd);
+              debug!("Discovered Writer {:?}", &dwd);
+            },
             Err(writer_key) => {
               db.remove_topic_writer(writer_key.0);
               self.send_discovery_notification(
@@ -747,38 +745,36 @@ impl Discovery {
             }
           }
         }
+        Ok(None) => return, // no more data
+        Err(e) => error!("handle_publication_reader: {:?}",e),
       }
-      _ => (),
-    };
+    } // loop
   }
 
-  pub fn handle_topic_reader(
-    &self,
+  pub fn handle_topic_reader( &self,
     reader: &mut DataReader<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>,
-  ) {
-    let topic_data_vec: Option<Vec<DiscoveredTopicData>> =
-      match reader.take(100, ReadCondition::any()) {
-        Ok(d) => Some(
-          d.into_iter()
-            .map(|p| p.value().clone())
-            .filter_map(Result::ok)
-            .collect(),
-        ),
-        _ => None,
-      };
-
-    let topic_data_vec = match topic_data_vec {
-      Some(d) => d,
-      None => return,
-    };
-
-    let mut db = self.discovery_db_write();
-    topic_data_vec.iter().for_each(|data| {
-      let updated = db.update_topic_data(data);
-      if updated {
-        self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);
+  ) 
+  {
+    loop {
+      match reader.take_next_sample() {
+        Ok(Some(d)) => match d.value {
+            Ok(topic_data) => {
+              trace!("handle_topic_reader discovered {:?}", &topic_data);
+              let updated = self.discovery_db_write()
+                .update_topic_data(&topic_data);
+              if updated {
+                self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);
+              }    
+            },
+            // Err means disposed
+            Err(key) => {
+              warn!("not implemented - Topic was disposed: {:?}", &key);
+            }
+          },
+        Ok(None) => return, // no more data
+        Err(e) => error!("handle_topic_reader: {:?}",e),
       }
-    });
+    } // loop
   }
 
   // These messages are for updating participant liveliness

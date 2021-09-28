@@ -146,7 +146,7 @@ impl TopicCache {
   pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
     self.history_cache.add_change(instant, cache_change)
       .map( |cc_back| { 
-        info!("DDSCache insert failed topic={:?} cache_change={:?}",
+        debug!("DDSCache insert failed topic={:?} cache_change={:?}",
                 self.topic_name, cc_back); 
             }
           );

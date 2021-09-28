@@ -287,7 +287,7 @@ impl DiscoveryDB {
     self.external_topic_writers.values()
   }
 
-  
+  // TODO: This is silly. Returns one of the paramters cloned, or None
   pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> Option<(DiscoveredReaderData, RtpsReaderProxy)> {
     let guid = data.reader_proxy.remote_reader_guid;
     // we could return None to indicate that we already knew all about this reader
@@ -319,6 +319,7 @@ impl DiscoveryDB {
     }
   }
 
+  // TODO: This is silly. Returns one of the paramters cloned, or None
   pub fn update_publication(&mut self, data: &DiscoveredWriterData) -> Option<DiscoveredWriterData> {
     match self.external_topic_writers.get(&data.writer_proxy.remote_writer_guid) {
       Some(dwd) if dwd == data => None , // already up to date
