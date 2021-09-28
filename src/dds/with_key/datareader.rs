@@ -250,14 +250,15 @@ where
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<&D>>> {
+    // Clear notification buffer. This must be done first to avoid race conditions.
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
     self.fill_local_datasample_cache();
 
     let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.read_by_keys(&selected);
-    // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
 
     Ok(result)
   }
@@ -312,6 +313,9 @@ where
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
+    // Clear notification buffer. This must be done first to avoid race conditions.
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
     self.fill_local_datasample_cache();
     let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
     debug!("take selected count = {}", selected.len() );
@@ -320,9 +324,6 @@ where
     let result = self.datasample_cache.take_by_keys(&selected);
     debug!("take taken count = {}", result.len() );
     
-    // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
-
     Ok(result)
   }
 
@@ -778,6 +779,9 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<&D>>> {
+    // Clear notification buffer. This must be done first to avoid race conditions.
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
     self.fill_local_datasample_cache();
 
     let key = match self.infer_key(instance_key, this_or_next) {
@@ -791,9 +795,6 @@ where
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.read_by_keys(&selected);
-
-    // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
 
     Ok(result)
   }
@@ -851,6 +852,9 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
+    // Clear notification buffer. This must be done first to avoid race conditions.
+    while let Ok(_) = self.notification_receiver.try_recv() {}
+
     self.fill_local_datasample_cache();
 
     let key = match self.infer_key(instance_key, this_or_next) {
@@ -864,9 +868,6 @@ where
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.take_by_keys(&selected);
-
-    // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
 
     Ok(result)
   }
