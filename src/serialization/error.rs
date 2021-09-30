@@ -1,5 +1,5 @@
 use std;
-use std::fmt::{self, Display};
+use std::fmt::Display;
 use serde::{de, ser};
 use crate::dds::values::result::Error as DDSError;
 
@@ -9,23 +9,41 @@ pub type Result<T> = std::result::Result<T, Error>;
 // information in its error type, for example the line and column at which the
 // error occurred, the byte offset into the input, or the current key being
 // processed.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
   // One or more variants that can be created by data structures through the
   // `ser::Error` and `de::Error` traits. For example the Serialize impl for
   // Mutex<T> might return an error because the mutex is poisoned, or the
   // Deserialize impl for a struct may return an error because a required
   // field is missing.
+  #[error("{0}")]
   Message(String),
-  IOError(std::io::Error),
+
+  #[error("io::Error: {0}")]
+  IOError(#[from] std::io::Error),
+
+  #[error("CDR serialization requires sequence length to be specified at the start.")]
   SequenceLengthUnknown,
+
   // Zero or more variants that can be created directly by the Serializer and
   // Deserializer without going through `ser::Error` and `de::Error`.
+  #[error("unexpected end of input")]
   Eof,
+
+  #[error("Expected 0 or 1 as Boolean, got: {0}")]
   BadBoolean(u8),
-  BadString(std::str::Utf8Error), // was not valid UTF-8
+
+  // was not valid UTF-8
+  #[error("UTF-8 error: {0}")]
+  BadString(std::str::Utf8Error),
+
+  #[error("Bad Unicode character code: {0}")]
   BadChar(u32),                   // invalid Unicode codepoint
+
+  #[error("Option value must have discriminant 0 or 1, read: {0}")]
   BadOption(u32),                 // Option variant tag (discriminant) is not 0 or 1
+
+  #[error("Trailing garbage, {:?} bytes", .0.len())]
   TrailingCharacters(Vec<u8>),
 }
 
@@ -41,41 +59,9 @@ impl de::Error for Error {
   }
 }
 
-impl Display for Error {
-  fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-    match self {
-      Error::Message(msg) => formatter.write_str(msg),
-      Error::Eof => formatter.write_str("unexpected end of input"),
-      Error::IOError(e) => formatter.write_fmt(format_args!("io::Error: {:?}", e)),
-      Error::SequenceLengthUnknown => formatter
-        .write_str("CDR serialization requires sequence length to be specified at the start."),
-      Error::BadChar(e) => formatter.write_fmt(format_args!("Bad Unicode character code: {:?}", e)),
-      Error::BadBoolean(e) => {
-        formatter.write_fmt(format_args!("Expected 0 or 1 as Boolean, got: {:?}", e))
-      }
-      Error::TrailingCharacters(vec) => {
-        formatter.write_fmt(format_args!("Trailing garbage, {:?} bytes", vec.len()))
-      }
-      Error::BadString(utf_err) => formatter.write_fmt(format_args!("UTF-8 error: {:?}", utf_err)),
-      Error::BadOption(tag) => formatter.write_fmt(format_args!(
-        "Option value must have discriminant 0 or 1, read: {:?}",
-        tag
-      )),
-      /* and so forth */
-    }
-  }
-}
-
-impl From<std::io::Error> for Error {
-  fn from(ioerr: std::io::Error) -> Error {
-    Error::IOError(ioerr)
-  }
-}
-
 impl From<Error> for DDSError {
   fn from(ser_error: Error) -> DDSError {
     DDSError::Serialization{ reason: format!("{:?}",ser_error) }
   }
 }
 
-impl std::error::Error for Error {}
