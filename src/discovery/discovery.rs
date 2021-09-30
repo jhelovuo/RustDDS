@@ -68,6 +68,7 @@ pub enum DiscoveryCommand {
   REMOVE_LOCAL_READER { guid: GUID },
   MANUAL_ASSERT_LIVELINESS,
   ASSERT_TOPIC_LIVELINESS { writer_guid: GUID , manual_assertion: bool, },
+  DISCOVERY_PARTICIPANT_REDISCOVERY { guid_prefix: GuidPrefix, }
 }
 
 pub struct LivelinessState {
@@ -91,6 +92,10 @@ pub(crate) struct Discovery {
   discovery_started_sender: std::sync::mpsc::Sender<Result<(), Error>>,
   discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
   discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
+  discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>, 
+  //^ it is a bit silly to send commands to ourself. TODO: Refactor this away when
+  // all the DataReaders, DataWriters, etc. in the event loop are changed from function local
+  // variables to struct fields.
 }
 
 impl Discovery {
@@ -125,6 +130,7 @@ impl Discovery {
     discovery_started_sender: std::sync::mpsc::Sender<Result<(), Error>>,
     discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
+    discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Discovery {
     let poll = mio::Poll::new()
       .unwrap_or_else(|e| {
@@ -142,6 +148,7 @@ impl Discovery {
       discovery_started_sender,
       discovery_updated_sender,
       discovery_command_receiver,
+      discovery_command_sender,
     }
   }
 
@@ -316,11 +323,11 @@ impl Discovery {
     ) ,"Unable to register readers info sender. {:?}");
 
     // Topic
-    let dcps_topic_qos = QosPolicyBuilder::new().build();
     let dcps_topic = try_construct!( discovery.domain_participant.create_topic(
       "DCPSTopic",
       "DiscoveredTopicData",
-      &dcps_topic_qos,
+      //&dcps_publication_qos,
+      &QosPolicyBuilder::new().build(),
       TopicKind::WithKey,
     ) ,"Unable to create DCPSTopic topic. {:?}");
 
@@ -483,6 +490,14 @@ impl Discovery {
                     DiscoveryNotificationType::AssertTopicLiveliness { writer_guid , manual_assertion },
                   );
                 }
+                DiscoveryCommand::DISCOVERY_PARTICIPANT_REDISCOVERY { guid_prefix } => {
+                  info!("Participant rediscovery start");
+                  discovery.handle_topic_reader(&mut dcps_reader, Some(guid_prefix));
+                  discovery.handle_subscription_reader(&mut dcps_subscription_reader, Some(guid_prefix));
+                  discovery.handle_publication_reader(&mut dcps_publication_reader, Some(guid_prefix));
+                  info!("Participant rediscovery finished");
+                }
+
               };
             }
           }
@@ -518,7 +533,7 @@ impl Discovery {
             participant_send_info_timer.set_timeout(Discovery::SEND_PARTICIPANT_INFO_PERIOD, ());
           }
           DISCOVERY_READER_DATA_TOKEN => {
-            discovery.handle_subscription_reader(&mut dcps_subscription_reader);
+            discovery.handle_subscription_reader(&mut dcps_subscription_reader, None);
           }
           DISCOVERY_SEND_READERS_INFO_TOKEN => {
             if discovery.read_readers_info() {
@@ -528,7 +543,7 @@ impl Discovery {
             readers_send_info_timer.set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
           }
           DISCOVERY_WRITER_DATA_TOKEN => {
-            discovery.handle_publication_reader(&mut dcps_publication_reader);
+            discovery.handle_publication_reader(&mut dcps_publication_reader, None);
           }
           DISCOVERY_SEND_WRITERS_INFO_TOKEN => {
             if discovery.read_writers_info() {
@@ -538,7 +553,7 @@ impl Discovery {
             writers_send_info_timer.set_timeout(Discovery::SEND_WRITERS_INFO_PERIOD, ());
           }
           DISCOVERY_TOPIC_DATA_TOKEN => {
-            discovery.handle_topic_reader(&mut dcps_reader);
+            discovery.handle_topic_reader(&mut dcps_reader, None);
           }
           DISCOVERY_TOPIC_CLEANUP_TOKEN => {
             discovery.topic_cleanup();
@@ -654,18 +669,26 @@ impl Discovery {
       PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>) 
   {
     loop {
-      let s = reader.take_next_sample();
+      let s = reader.read_next_sample();
       debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(d)) => match d.value {
             Ok(participant_data) => {
               debug!("handle_participant_reader discovered {:?}", &participant_data);
-              self.discovery_db_write()
+              let was_new = self.discovery_db_write()
                 .update_participant(&participant_data);
+              let guid_prefix = participant_data.participant_guid.guidPrefix;
               self.send_discovery_notification(
-                DiscoveryNotificationType::ParticipantUpdated { 
-                  guid_prefix: participant_data.participant_guid.guidPrefix 
-                } );              
+                DiscoveryNotificationType::ParticipantUpdated { guid_prefix } );
+              if was_new {
+                // This may be a rediscovery of a previously seen participant that
+                // was temporarily lost due to network outage. Check if we already know
+                // what it has (readers, writers, topics).
+                info!("Participant was new!");
+                self.discovery_command_sender.try_send(
+                    DiscoveryCommand::DISCOVERY_PARTICIPANT_REDISCOVERY{ guid_prefix })
+                  .unwrap_or_else(|e| error!("Cannot send discovery command: {:?}",e) );
+              }      
             },
             // Err means that DomainParticipant was disposed
             Err(guid) => {
@@ -686,48 +709,71 @@ impl Discovery {
   pub fn handle_subscription_reader(
     &self,
     reader: &mut DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
+    read_history: Option<GuidPrefix>,
   ) {
-    loop {
-      match reader.take_next_sample() {
-        Ok(Some(d)) => {
-          let mut db = self.discovery_db_write();
-          match d.value {
-            Ok(val) => {
-              trace!("handle_subscription_reader discovered {:?}", &val);
-              if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(&val) {
-                debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
-                  &drd, &rtps_reader_proxy);
-                self.send_discovery_notification(
-                  DiscoveryNotificationType::ReaderUpdated {
-                    discovered_reader_data: drd, 
-                    rtps_reader_proxy,
-                    _needs_new_cache_change: true,
-                  });  
-              }
-              db.update_topic_data_drd(&val);
-            }
-            Err(reader_key) => {
-              debug!("Dispose Reader {:?}", reader_key);
-              db.remove_topic_reader(reader_key.0);
+    let drds = match reader
+        .conditional_iterator(  if read_history.is_some() { ReadCondition::any() } 
+                                else { ReadCondition::not_read() } ) 
+      {
+        Ok(d) => d,
+        Err(e) => { error!("handle_subscription_reader: {:?}",e); return }
+      };
+
+    for d in drds {
+      let mut db = self.discovery_db_write();
+      match d {
+        Ok(d) => {
+          trace!("handle_subscription_reader discovered {:?}", &d);
+          if read_history
+              .map( |e| e == d.reader_proxy.remote_reader_guid.guidPrefix )
+              .unwrap_or(true) {
+            if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(&d) {
+              debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
+                &drd, &rtps_reader_proxy);
               self.send_discovery_notification(
-                  DiscoveryNotificationType::ReaderLost { reader_guid: reader_key.0 });
+                DiscoveryNotificationType::ReaderUpdated {
+                  discovered_reader_data: drd, 
+                  rtps_reader_proxy,
+                  _needs_new_cache_change: true,
+                });  
+            } else {
+              info!("handle_subscription_reader - DiscoveryDB already knows reader {:?}",
+                d.reader_proxy.remote_reader_guid);
             }
+            db.update_topic_data_drd(&d);
+            if read_history.is_some() {
+              info!("Rediscovered reader {:?} topic={:?}",
+                d.reader_proxy.remote_reader_guid, d.subscription_topic_data.topic_name());
+            }
+          } else {
+            // Skip, because we were asked to look for specific
+            // GuidPrefx, but it did not match.
           }
         }
-        Ok(None) => return, // no more data
-        Err(e) => error!("handle_publication_reader: {:?}",e),
-      }
+        Err(reader_key) => {
+          debug!("Dispose Reader {:?}", reader_key);
+          db.remove_topic_reader(reader_key.0);
+          self.send_discovery_notification(
+              DiscoveryNotificationType::ReaderLost { reader_guid: reader_key.0 });
+        }
+      }      
     } // loop
   }
 
   pub fn handle_publication_reader( &self,
     reader: &mut DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
+    read_history: Option<GuidPrefix>,
   ) {
-    loop {
-      match reader.take_next_sample() {
-        Ok(Some(d)) => {
-          let mut db = self.discovery_db_write();
-          match d.value {
+    let dwds = match reader
+        .conditional_iterator(  if read_history.is_some() { ReadCondition::any() } 
+                                else { ReadCondition::not_read() } ) 
+      {
+        Ok(d) => d,
+        Err(e) => { error!("handle_publication_reader: {:?}",e); return }
+      };
+    for d in dwds {
+      let mut db = self.discovery_db_write();
+      match d {
             Ok(dwd) => {
               trace!("handle_publication_reader discovered {:?}", &dwd);
               if let Some(discovered_writer_data) =  db.update_publication(&dwd) {
@@ -743,36 +789,37 @@ impl Discovery {
                 DiscoveryNotificationType::WriterLost { writer_guid: writer_key.0 });
               debug!("Disposed Writer {:?}", writer_key);
             }
-          }
-        }
-        Ok(None) => return, // no more data
-        Err(e) => error!("handle_publication_reader: {:?}",e),
+          
       }
     } // loop
   }
 
   pub fn handle_topic_reader( &self,
     reader: &mut DataReader<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>,
+    read_history: Option<GuidPrefix>,
   ) 
   {
-    loop {
-      match reader.take_next_sample() {
-        Ok(Some(d)) => match d.value {
-            Ok(topic_data) => {
-              trace!("handle_topic_reader discovered {:?}", &topic_data);
-              let updated = self.discovery_db_write()
-                .update_topic_data(&topic_data);
-              if updated {
-                self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);
-              }    
-            },
-            // Err means disposed
-            Err(key) => {
-              warn!("not implemented - Topic was disposed: {:?}", &key);
-            }
-          },
-        Ok(None) => return, // no more data
-        Err(e) => error!("handle_topic_reader: {:?}",e),
+    let ts = match reader
+        .conditional_iterator(  if read_history.is_some() { ReadCondition::any() } 
+                                else { ReadCondition::not_read() } ) 
+      {
+        Ok(d) => d,
+        Err(e) => { error!("handle_topic_reader: {:?}",e); return }
+      };
+    for t in ts {
+      match t {
+        Ok(topic_data) => {
+          trace!("handle_topic_reader discovered {:?}", &topic_data);
+          let updated = self.discovery_db_write()
+            .update_topic_data(&topic_data);
+          if updated {
+            self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);
+          }    
+        },
+        // Err means disposed
+        Err(key) => {
+          warn!("not implemented - Topic was disposed: {:?}", &key);
+        }
       }
     } // loop
   }
@@ -1038,7 +1085,7 @@ impl Discovery {
         max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
-      .history(History::KeepLast { depth: 1 }) // there should be no need fo historical data here
+      .history(History::KeepLast { depth: 10 }) 
       // .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
       //   max_instances: std::i32::MAX,
       //   max_samples: std::i32::MAX,
@@ -1068,7 +1115,7 @@ impl Discovery {
         max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
-      .history(History::KeepLast { depth: 1 }) // there should be no need fo historical data here
+      .history(History::KeepLast { depth: 10 }) 
       // .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
       //   max_instances: std::i32::MAX,
       //   max_samples: std::i32::MAX,

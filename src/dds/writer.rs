@@ -806,7 +806,7 @@ impl Writer {
       }
       Some(bad_policy_id) => {
         // QoS not compliant :(
-        debug!("update_reader_proxy - QoS mismatch {:?}", bad_policy_id);
+        info!("update_reader_proxy - QoS mismatch {:?} topic={:?}", bad_policy_id, self.topic_name());
         self.requested_incompatible_qos_count += 1;
         self.send_status(DataWriterStatus::OfferedIncompatibleQos { 
               count: CountWithChange::new(self.requested_incompatible_qos_count , 1 ),

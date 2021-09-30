@@ -76,13 +76,16 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) {
+  // Returns if particiapnt was previously unkonwn
+  pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) -> bool {
       debug!("update_participant: {:?}",&data);
       let guid = data.participant_guid;
+
       // sanity check
       if guid.entityId != EntityId::ENTITYID_PARTICIPANT {
         error!("Discovered participant GUID entity_id is not for participant: {:?}",guid);
-        return // Maybe we should discard the participant here?
+        // Maybe we should discard the participant here?
+        return false 
       }
 
       // We allow discovery to discover self, since our discovery readers
@@ -95,16 +98,21 @@ impl DiscoveryDB {
       //   return
       // }
 
+      let mut new_participant = false;
       if self.participant_proxies.get( &guid.guidPrefix ).is_none() {
         info!("New remote participant: {:?}", &data);
+        new_participant = true;
         if guid == self.my_guid {
           info!("Remote participant {:?} is myself, but some reflection is good.",
             guid);
+          new_participant = false;
         }
       }
       // actual work here:
       self.participant_proxies.insert(guid.guidPrefix, data.clone());
       self.participant_last_life_signs.insert(guid.guidPrefix, Instant::now() );
+
+      new_participant
   }
 
   pub fn remove_participant(&mut self, guid_prefix: GuidPrefix) {
@@ -140,6 +148,7 @@ impl DiscoveryDB {
   }
 
   pub fn remove_topic_reader(&mut self, guid: GUID) {
+    info!("remove_topic_reader {:?}",guid);
     self.external_topic_readers.remove(&guid);
   }
 
@@ -188,11 +197,9 @@ impl DiscoveryDB {
         }
       } // match
     } // for
-    for guid in &to_remove {
-      self.participant_proxies.remove(guid).expect("Removing fail 1");
-      self.participant_last_life_signs.remove(guid).expect("Removing fail 2");
+    for guid in to_remove.iter() {
+      self.remove_participant(*guid);
     }
-
     to_remove
   }
 
@@ -288,6 +295,7 @@ impl DiscoveryDB {
   }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None
+  // TODO: Why are we here checking if discovery db already has this? What about reader proxies in writers?
   pub fn update_subscription(&mut self, data: &DiscoveredReaderData) -> Option<(DiscoveredReaderData, RtpsReaderProxy)> {
     let guid = data.reader_proxy.remote_reader_guid;
     // we could return None to indicate that we already knew all about this reader
