@@ -31,7 +31,7 @@ where
     &repr_ids
   }
 
-  fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D> {
+  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
     match encoding {
       RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::CDR_LE => {
         PlCdrDeserializer::from_little_endian_bytes::<D>(input_bytes)
@@ -50,7 +50,7 @@ where
   D: Keyed + DeserializeOwned,
   <D as Keyed>::K: DeserializeOwned, // why is this not inferred from D:Keyed ?
 {
-  fn key_from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D::K> {
+  fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K> {
     match encoding {
       RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::CDR_LE => {
         PlCdrDeserializer::from_little_endian_bytes::<D::K>(input_bytes)
@@ -77,12 +77,12 @@ impl<'de> PlCdrDeserializer<'de> {
     }
   }
 
-  pub fn from_little_endian_bytes<'a, T: DeserializeOwned>(s: &'a [u8]) -> Result<T> {
+  pub fn from_little_endian_bytes<T: DeserializeOwned>(s: &[u8]) -> Result<T> {
     let deserializer = PlCdrDeserializer::new(s, RepresentationIdentifier::PL_CDR_LE);
     T::deserialize(deserializer)
   }
 
-  pub fn from_big_endian_bytes<'a, T: DeserializeOwned>(s: &'a [u8]) -> Result<T> {
+  pub fn from_big_endian_bytes<T: DeserializeOwned>(s: &[u8]) -> Result<T> {
     let deserializer = PlCdrDeserializer::new(s, RepresentationIdentifier::PL_CDR_BE);
     T::deserialize(deserializer)
   }

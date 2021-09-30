@@ -18,7 +18,7 @@ pub mod no_key {
 		// Which data encodings can this deserializer read?
 	  fn supported_encodings() -> &'static [RepresentationIdentifier]; 
 
-	  fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D>;
+	  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D>;
 	}
 
 	pub trait SerializerAdapter<D>
@@ -49,7 +49,7 @@ pub mod with_key {
 	where
 	  D: Keyed + DeserializeOwned,
 	{
-	  fn key_from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D::K>;
+	  fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K>;
 	}
 
 	pub trait SerializerAdapter<D> : no_key::SerializerAdapter<D>

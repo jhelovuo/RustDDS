@@ -19,7 +19,7 @@ pub enum SubmessageBody {
 }
 
 impl<C: Context> Writable<C> for SubMessage {
-  fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_value(&self.header)?;
     match &self.body {
       SubmessageBody::Entity(e) => writer.write_value(&e),

@@ -123,7 +123,7 @@ impl SerializedPayload {
 }
 
 impl<C: Context> Writable<C> for SerializedPayload {
-  fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_u8(self.representation_identifier.bytes[0])?;
     writer.write_u8(self.representation_identifier.bytes[1])?;
     writer.write_u8(self.representation_options[0])?;

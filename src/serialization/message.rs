@@ -258,7 +258,7 @@ impl Default for Message {
 }
 
 impl<C: Context> Writable<C> for Message {
-  fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_value(&self.header)?;
     for x in &self.submessages {
       writer.write_value(&x)?;
