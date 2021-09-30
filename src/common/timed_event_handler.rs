@@ -41,7 +41,7 @@ impl<'a> TimedEventHandler {
           .get(&timer_type)
           .unwrap()
           .clone()
-          .schedule_with_delay(duration.clone(), move || {
+          .schedule_with_delay(*duration, move || {
             new_chanenel
               .try_send(timer_type)
               .expect("Unable to send timeout message of type ");

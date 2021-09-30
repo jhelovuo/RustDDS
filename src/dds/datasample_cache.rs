@@ -131,7 +131,7 @@ where
     // update instance metadata
     instance_metadata
       .instance_samples
-      .insert(receive_timestamp.clone());
+      .insert(receive_timestamp);
 
     match (instance_metadata.instance_state, new_instance_state) {
       (InstanceState::Alive, _) => (), // was Alive, does not change counts
@@ -228,7 +228,7 @@ where
       .filter_map(|(ts, dsm)| {
         let key = dsm.get_key();
         if self.sample_selector(&rc, self.instance_map.get(&key).unwrap(), &dsm) {
-          Some((ts.clone(), key.clone()))
+          Some((*ts, key.clone()))
         } else {
           None
         }
@@ -249,7 +249,7 @@ where
         .filter_map(|ts| {
           if let Some(ds) = self.datasamples.get(&ts) {
             if self.sample_selector(&rc, &imd, ds) {
-              Some((ts.clone(), instance.clone()))
+              Some((*ts, instance.clone()))
             } else {
               None
             }
@@ -310,11 +310,11 @@ where
         ViewState::NotNew
       },
       instance_state: imd.instance_state,
-      generation_counts: dswm.generation_counts.clone(),
+      generation_counts: dswm.generation_counts,
       sample_rank: sample_rank as i32, // how many samples follow this one
       generation_rank: mrsic_generations - dswm.generation_counts.total(),
       absolute_generation_rank: mrs_generations - dswm.generation_counts.total(),
-      source_timestamp: dswm.source_timestamp.clone(),
+      source_timestamp: dswm.source_timestamp,
       publication_handle: dswm.writer_guid,
     }
   }

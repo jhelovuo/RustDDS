@@ -576,12 +576,12 @@ pub mod policy {
   where
     D: Serialize + Copy + Clone,
   {
-    pub fn new(parameter_id: ParameterId, qosparam: D) -> QosData<D> {
+    pub fn new(parameter_id: ParameterId, qos_param: D) -> QosData<D> {
       match parameter_id {
         ParameterId::PID_DURABILITY => QosData {
           parameter_id,
           parameter_length: 4,
-          qos_param: qosparam.clone(),
+          qos_param,
         },
         ParameterId::PID_DEADLINE
         | ParameterId::PID_LATENCY_BUDGET
@@ -591,19 +591,19 @@ pub mod policy {
         | ParameterId::PID_HISTORY => QosData {
           parameter_id,
           parameter_length: 8,
-          qos_param: qosparam.clone(),
+          qos_param,
         },
         ParameterId::PID_LIVELINESS
         | ParameterId::PID_RELIABILITY
         | ParameterId::PID_RESOURCE_LIMITS => QosData {
           parameter_id,
           parameter_length: 12,
-          qos_param: qosparam.clone(),
+          qos_param,
         },
         _ => QosData {
           parameter_id,
           parameter_length: 4,
-          qos_param: qosparam.clone(),
+          qos_param,
         },
       }
     }
@@ -634,8 +634,7 @@ impl InlineQos {
     let status_info = params
       .parameters
       .iter()
-      .find(|p| p.parameter_id == ParameterId::PID_STATUS_INFO)
-      .clone();
+      .find(|p| p.parameter_id == ParameterId::PID_STATUS_INFO);
     let status_info = match status_info {
       Some(p) => StatusInfo::from_cdr_bytes(&p.value, rep_id)?,
       None => StatusInfo::empty(),
@@ -650,8 +649,7 @@ impl InlineQos {
     let key_hash = params
       .parameters
       .iter()
-      .find(|p| p.parameter_id == ParameterId::PID_KEY_HASH)
-      .clone();
+      .find(|p| p.parameter_id == ParameterId::PID_KEY_HASH);
     Ok(
       match key_hash {
         Some(p) => Some(KeyHash::from_cdr_bytes(p.value.clone())?) ,
