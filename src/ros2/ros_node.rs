@@ -312,7 +312,7 @@ impl RosNode {
       Some(
         ros_participant
           .get_ros_discovery_publisher()
-          .create_datawriter_no_key(rosout_topic.clone(), None)?,
+          .create_datawriter_no_key(rosout_topic, None)?,
       )
     } else {
       None
@@ -320,7 +320,7 @@ impl RosNode {
 
     let parameter_events_writer = ros_participant
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(paramtopic.clone(), None)?;
+      .create_datawriter_no_key(paramtopic, None)?;
 
     Ok(RosNode {
       name: String::from(name),
@@ -434,11 +434,11 @@ impl RosNode {
     qos: QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic, Error> {
-    if name.len() == 0 { return Error::bad_parameter("Topic name must not be empty.") }
+    if name.is_empty() { return Error::bad_parameter("Topic name must not be empty.") }
     // TODO: Implement the rest of the rules.
 
     let mut oname = "rt/".to_owned();
-    let name_stripped = name.strip_prefix("/").unwrap_or(name); // avoid double slash in name
+    let name_stripped = name.strip_prefix('/').unwrap_or(name); // avoid double slash in name
     oname.push_str(name_stripped);
     info!("Creating topic, DDS name: {}",oname);
     let topic = self.ros_participant.domain_participant()

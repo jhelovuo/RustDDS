@@ -5,7 +5,7 @@ macro_rules! checked_impl {
     impl $trait_name for $t {
       #[inline]
       fn $method(&self, v: &$t) -> Option<$t> {
-        (self.0).$method(v.0).map(|value| <$t>::from(value))
+        (self.0).$method(v.0).map(<$t>::from)
       }
     }
   };

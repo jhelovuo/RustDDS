@@ -61,7 +61,7 @@ impl ContentFilterPropertyData {
     for param in content_filter_property.expressionParameters.iter() {
       let len_temp = param.len();
       let len_temp = len_temp + (4 - len_temp % 4) + 4;
-      parameter_length = parameter_length + len_temp;
+      parameter_length += len_temp;
     }
 
     parameter_length = parameter_length + (4 - parameter_length % 4) + 4;

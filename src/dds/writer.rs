@@ -396,7 +396,7 @@ impl Writer {
           let wait_until = self.last_change_sequence_number;
           let readers_pending: BTreeSet<_> = self.readers.iter()
               .filter_map( |(guid,rp)| {
-                  if let Some(_) = rp.qos().reliability() {
+                  if rp.qos().reliability().is_some() {
                     if rp.all_acked_before <= wait_until { Some(*guid) } else { None } // already acked
                   } else { None } // not reliable reader
                 } )
@@ -569,7 +569,7 @@ impl Writer {
         // if we cannot send more data, we are done.
         // This is to prevent empty "repair data" messages from being sent.
         if reader_proxy.all_acked_before > last_seq {
-          return 
+           
         } else {
           // prime timer to send repair data
           reader_proxy.repair_mode = true; // hold sending normal DATA
@@ -717,7 +717,7 @@ impl Writer {
   }
 
   fn increase_heartbeat_counter(&mut self) {
-    self.heartbeat_message_counter = self.heartbeat_message_counter + 1;
+    self.heartbeat_message_counter += 1;
   }
 
   fn send_message_to_readers(&self, preferred_mode: DeliveryMode, message: &Message, 

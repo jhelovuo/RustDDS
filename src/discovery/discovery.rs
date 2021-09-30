@@ -909,7 +909,7 @@ impl Discovery {
               Ok(_) => (),
               Err(e) => {
                 error!("Failed to writer ParticipantMessageData manual. {:?}", e);
-                return;
+                
               }
             }
           }

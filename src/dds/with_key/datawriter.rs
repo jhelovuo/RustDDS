@@ -167,7 +167,7 @@ where
       },
       None => (),
     };
-    let qos = topic.get_qos().clone();
+    let qos = topic.get_qos();
     Ok(DataWriter {
       my_publisher: publisher,
       my_topic: topic,

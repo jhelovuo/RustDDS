@@ -347,10 +347,7 @@ impl DomainParticipantWeak {
   }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
-    match self.dpi.upgrade() {
-      Some(d) => Some(DomainParticipant { dpi: d }),
-      None => None,
-    }
+    self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
   }
 } // end impl
 
@@ -861,7 +858,7 @@ impl DomainParticipant_Inner {
       Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
     };
 
-    db.get_all_topics().map(|p| p.clone()).collect()
+    db.get_all_topics().cloned().collect()
   }
 } // impl
 

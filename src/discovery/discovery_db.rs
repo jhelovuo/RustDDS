@@ -217,20 +217,18 @@ impl DiscoveryDB {
       return true
     }
 
-    if let Some(_) =
-      self
+    if self
         .external_topic_readers
         .values()
-        .find(|p| p.subscription_topic_data.topic_name() == topic_name)
+        .find(|p| p.subscription_topic_data.topic_name() == topic_name).is_some()
     {
       return true
     }
 
-    if let Some(_) =
-      self
+    if self
         .external_topic_writers
         .values()
-        .find(|p| &p.publication_topic_data.topic_name == topic_name)
+        .find(|p| &p.publication_topic_data.topic_name == topic_name).is_some()
     {
       return true
     }
@@ -244,8 +242,7 @@ impl DiscoveryDB {
       .topics
       .iter()
       .map(|(tn, _)| tn)
-      .filter(|tn| !self.topic_has_writers_or_readers(tn))
-      .map(|tn| tn.clone())
+      .filter(|tn| !self.topic_has_writers_or_readers(tn)).cloned()
       .collect();
     for dt in dead_topics.iter() {
       self.topics.remove(dt);
