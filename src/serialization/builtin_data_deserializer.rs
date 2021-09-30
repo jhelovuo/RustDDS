@@ -731,7 +731,7 @@ impl BuiltinDataDeserializer {
 
             let own = match own {
               OwnershipKind::SHARED => Ownership::Shared,
-              OwnershipKind::EXCLUSIVE => Ownership::Exclusive { strength: strength },
+              OwnershipKind::EXCLUSIVE => Ownership::Exclusive { strength },
             };
 
             self.ownership = Some(own);

@@ -129,8 +129,8 @@ pub struct TopicCache {
 impl TopicCache {
   pub fn new(topic_kind: TopicKind, topic_data_type: TypeDesc) -> TopicCache {
     TopicCache {
-      topic_data_type: topic_data_type,
-      topic_kind: topic_kind,
+      topic_data_type,
+      topic_kind,
       topic_qos: QosPolicyBuilder::new().build(),
       history_cache: DDSHistoryCache::new(),
     }

@@ -488,7 +488,7 @@ impl<'a, 'de, BO> SequenceHelper<'a, 'de, BO> {
     SequenceHelper {
       de,
       elementCounter: 0,
-      expectedCount: expectedCount,
+      expectedCount,
     }
   }
 }

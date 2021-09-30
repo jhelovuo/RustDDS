@@ -1228,7 +1228,7 @@ impl<'a> BuiltinDataSerializer<'a> {
         let history_data = match hs {
           History::KeepLast { depth } => HistoryData {
             kind: HistoryKind::KEEP_LAST,
-            depth: depth,
+            depth,
           },
           History::KeepAll => HistoryData {
             kind: HistoryKind::KEEP_ALL,
