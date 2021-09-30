@@ -290,14 +290,14 @@ impl DomainParticipantWeak {
 
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_publisher(&self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_publisher(self, qos),
       None => Err(Error::OutOfResources),
     }
   }
 
   pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_subscriber(&self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
       None => Err(Error::OutOfResources),
     }
   }
@@ -313,14 +313,14 @@ impl DomainParticipantWeak {
       Some(dpi) => dpi
         .lock()
         .unwrap()
-        .create_topic(&self, name, type_desc, qos, topic_kind),
+        .create_topic(self, name, type_desc, qos, topic_kind),
       None => Err(Error::LockPoisoned),
     }
   }
 
   pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().find_topic(&self, name, timeout),
+      Some(dpi) => dpi.lock().unwrap().find_topic(self, name, timeout),
       None => Err(Error::LockPoisoned),
     }
   }
@@ -402,7 +402,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_publisher(&dp, qos, self.discovery_command_channel.clone())
+      .create_publisher(dp, qos, self.discovery_command_channel.clone())
   }
 
   pub fn create_subscriber<'a>(
@@ -414,7 +414,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_subscriber(&dp, qos, self.discovery_command_channel.clone())
+      .create_subscriber(dp, qos, self.discovery_command_channel.clone())
   }
 
   pub fn create_topic(
@@ -430,7 +430,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_topic(&dp, name, type_desc, qos, topic_kind)
+      .create_topic(dp, name, type_desc, qos, topic_kind)
   }
 
   pub fn find_topic(
@@ -439,7 +439,7 @@ impl DomainParticipant_Disc {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    self.dpi.lock().unwrap().find_topic(&dp, name, timeout)
+    self.dpi.lock().unwrap().find_topic(dp, name, timeout)
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -767,7 +767,7 @@ impl DomainParticipant_Inner {
       domain_participant_weak,
       name.to_string(),
       TypeDesc::new(type_desc),
-      &qos,
+      qos,
       topic_kind,
     );
     Ok(topic)

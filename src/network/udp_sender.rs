@@ -83,7 +83,7 @@ impl UDPSender {
           let a = l.to_socket_address();
           if a.ip().is_multicast() {
             for socket in self.multicast_sockets.iter() {
-              self.send_to_udp_socket(buffer, &socket, &a);
+              self.send_to_udp_socket(buffer, socket, &a);
             }
           } else {
             self.send_to_udp_socket(buffer, &self.unicast_socket, &a);

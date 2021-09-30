@@ -694,7 +694,7 @@ impl Discovery {
           match data.value() {
             Ok(val) => {
               debug!("Discovered Reader {:?}", &val);
-              if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(&val) {
+              if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(val) {
                 debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
                   &drd, &rtps_reader_proxy);
                 self.send_discovery_notification(
@@ -704,7 +704,7 @@ impl Discovery {
                     _needs_new_cache_change: true,
                   });  
               }
-              db.update_topic_data_drd(&val);
+              db.update_topic_data_drd(val);
             }
             Err(reader_key) => {
               debug!("Dispose Reader {:?}", reader_key);
@@ -731,12 +731,12 @@ impl Discovery {
         for data in d.into_iter() {
           match data.value() {
             Ok(val) => {
-              if let Some(discovered_writer_data) =  db.update_publication(&val) {
+              if let Some(discovered_writer_data) =  db.update_publication(val) {
                 self.send_discovery_notification(
                     DiscoveryNotificationType::WriterUpdated{ discovered_writer_data }
                   );
               }
-              db.update_topic_data_dwd(&val);
+              db.update_topic_data_dwd(val);
               debug!("Discovered Writer {:?}", &val);
             }
             Err(writer_key) => {
@@ -848,7 +848,7 @@ impl Discovery {
     // Automatic
     {
       let current_duration =
-        (inow.duration_since(liveliness_state.last_auto_update) / 3);
+        inow.duration_since(liveliness_state.last_auto_update) / 3;
       let min_automatic = automatic
         .iter()
         .map(|lv| match lv {
@@ -887,7 +887,7 @@ impl Discovery {
     // Manual By Participant
     {
       let current_duration =
-        (inow.duration_since(liveliness_state.last_manual_participant_update) / 3);
+        inow.duration_since(liveliness_state.last_manual_participant_update) / 3;
       let min_manual_participant = manual_by_participant
         .iter()
         .map(|lv| match lv {
