@@ -693,7 +693,7 @@ impl Writer {
     let acked_by_all_readers = self.readers.values()
           .map(|r| r.acked_up_to_before())
           .min()
-          .unwrap_or(SequenceNumber::zero());
+          .unwrap_or_else(SequenceNumber::zero);
     // If all readers have acked all up to before 5, and depth is 5, we need
     // to keep samples 0..4, i.e. from acked_up_to_before - depth .
     let first_keeper = 

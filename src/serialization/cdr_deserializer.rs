@@ -323,25 +323,25 @@ where
   ///Sequences are encoded as an unsigned long value, followed by the elements of the
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
-  fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value>
+  fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
-    visitor.visit_seq(SequenceHelper::new(&mut self, element_count))
+    visitor.visit_seq(SequenceHelper::new(self, element_count))
   }
 
   // if sequence is fixed length array then number of elements is not included
-  fn deserialize_tuple<V>(mut self, len: usize, visitor: V) -> Result<V::Value>
+  fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_seq(SequenceHelper::new(&mut self, len))
+    visitor.visit_seq(SequenceHelper::new(self, len))
   }
 
   fn deserialize_tuple_struct<V>(
-    mut self,
+    self,
     _name: &'static str,
     len: usize,
     visitor: V,
@@ -349,20 +349,20 @@ where
   where
     V: Visitor<'de>,
   {
-    visitor.visit_seq(SequenceHelper::new(&mut self, len))
+    visitor.visit_seq(SequenceHelper::new(self, len))
   }
 
-  fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
+  fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
-    visitor.visit_map(SequenceHelper::new(&mut self, element_count))
+    visitor.visit_map(SequenceHelper::new(self, element_count))
   }
 
   fn deserialize_struct<V>(
-    mut self,
+    self,
     _name: &'static str,
     fields: &'static [&'static str],
     visitor: V,
@@ -370,14 +370,14 @@ where
   where
     V: Visitor<'de>,
   {
-    visitor.visit_seq(SequenceHelper::new(&mut self, fields.len()))
+    visitor.visit_seq(SequenceHelper::new(self, fields.len()))
   }
 
   ///Enum values are encoded as unsigned longs. (u32)
   /// The numeric values associated with enum identifiers are determined by the order in which the identifiers appear in the enum declaration.
   /// The first enum identifier has the numeric value zero (0). Successive enum identifiers take ascending numeric values, in order of declaration from left to right.
   fn deserialize_enum<V>(
-    mut self,
+    self,
     _name: &'static str,
     _variants: &'static [&'static str],
     visitor: V,
@@ -386,7 +386,7 @@ where
     V: Visitor<'de>,
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    visitor.visit_enum(EnumerationHelper::<BO>::new(&mut self))
+    visitor.visit_enum(EnumerationHelper::<BO>::new(self))
   }
 
   /// An identifier in Serde is the type that identifies a field of a struct or

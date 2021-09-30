@@ -37,7 +37,6 @@ impl<'a> TimedEventHandler {
           .timers
           .get(&timer_type)
           .unwrap()
-          .clone()
           .schedule_with_delay(*duration, move || {
             new_chanenel
               .try_send(timer_type)
