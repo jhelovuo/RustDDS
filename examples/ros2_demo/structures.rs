@@ -138,11 +138,10 @@ impl<'a> MainController<'a> {
               termion::event::Event::Key(key) => {
                 write!(
                   self.stdout,
-                  "{}{}{:?} : {}",
+                  "{}{}{:?} : Press q to quit, cursor keys to control turtle.",
                   termion::cursor::Goto(1, 1),
                   termion::clear::CurrentLine,
                   key,
-                  "Press q to quit, cursor keys to control turtle.",
                 )
                 .unwrap();
               }
@@ -158,7 +157,7 @@ impl<'a> MainController<'a> {
           while let Ok(rec_nodes) = self.nodelist_receiver.try_recv() {
             match rec_nodes {
               DataUpdate::UpdateNode { info } => {
-                let nodes: Vec<NodeInfo> = info.nodes().iter().map(|p| p.clone()).collect();
+                let nodes: Vec<NodeInfo> = info.nodes().to_vec();
 
                 write!(
                   self.stdout,
@@ -350,7 +349,7 @@ impl<'a> MainController<'a> {
       Ok(_) => return true,
       Err(e) => error!("Failed to send command. {:?}", e),
     };
-    return false;
+    false
   }
 
   fn init_main_registers(&mut self) {
@@ -387,10 +386,9 @@ impl<'a> MainController<'a> {
   fn print_turtle_cmd_vel(&mut self, twist: &Twist) {
     write!(
       self.stdout,
-      "{}{}{}",
+      "{}{}Turtle cmd_vel",
       termion::cursor::Goto(40, 1),
-      termion::clear::CurrentLine,
-      "Turtle cmd_vel"
+      termion::clear::CurrentLine
     )
     .unwrap();
     write!(
@@ -406,10 +404,9 @@ impl<'a> MainController<'a> {
   fn print_sent_turtle_cmd_vel(&mut self, twist: &Twist) {
     write!(
       self.stdout,
-      "{}{}{}",
+      "{}{}Sent Turtle cmd_vel",
       termion::cursor::Goto(40, 3),
-      termion::clear::CurrentLine,
-      "Sent Turtle cmd_vel"
+      termion::clear::CurrentLine
     )
     .unwrap();
     write!(
