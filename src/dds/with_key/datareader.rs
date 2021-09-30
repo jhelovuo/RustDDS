@@ -257,7 +257,7 @@ where
 
     let result = self.datasample_cache.read_by_keys(&selected);
     // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
+    while self.notification_receiver.try_recv().is_ok() {}
 
     Ok(result)
   }
@@ -321,7 +321,7 @@ where
     debug!("take taken count = {}", result.len() );
     
     // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
+    while self.notification_receiver.try_recv().is_ok() {}
 
     Ok(result)
   }
@@ -792,7 +792,7 @@ where
     let result = self.datasample_cache.read_by_keys(&selected);
 
     // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
+    while self.notification_receiver.try_recv().is_ok() {}
 
     Ok(result)
   }
@@ -865,7 +865,7 @@ where
     let result = self.datasample_cache.take_by_keys(&selected);
 
     // clearing receiver buffer
-    while let Ok(_) = self.notification_receiver.try_recv() {}
+    while self.notification_receiver.try_recv().is_ok() {}
 
     Ok(result)
   }

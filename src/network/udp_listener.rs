@@ -27,15 +27,10 @@ pub struct UDPListener {
 
 impl Drop for UDPListener {
   fn drop(&mut self) {
-    match self.multicast_group {
-      Some(mcg) => 
-        self
-          .socket
-          .leave_multicast_v4(&mcg, &Ipv4Addr::UNSPECIFIED)
-          .unwrap_or_else(|e| { error!("leave_multicast_group: {:?}",e); } )
-          ,
-      None => (),
-    }
+    if let Some(mcg) = self.multicast_group { self
+    .socket
+    .leave_multicast_v4(&mcg, &Ipv4Addr::UNSPECIFIED)
+    .unwrap_or_else(|e| { error!("leave_multicast_group: {:?}",e); } ) }
   }
 }
 
@@ -68,12 +63,9 @@ impl UDPListener {
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, 
       port);
 
-    match raw_socket.bind( &SockAddr::from(address) ) {
-      Err(e) => {
-        info!("new_socket - cannot bind socket: {:?}",e);
-        return Err(e)
-      }
-      Ok(_) => (), 
+    if let Err(e) = raw_socket.bind( &SockAddr::from(address) ) {
+      info!("new_socket - cannot bind socket: {:?}",e);
+      return Err(e)
     }
 
     let std_socket = std::net::UdpSocket::from( raw_socket );

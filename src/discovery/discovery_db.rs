@@ -199,20 +199,18 @@ impl DiscoveryDB {
   fn topic_has_writers_or_readers(&self, topic_name: &str) -> bool {
     // TODO: This entire function has silly implementation.
     // We should really have a separate map from Topic to Readers & Writers
-    if let Some(_) =
-      self
+    if self
         .local_topic_readers
         .iter()
-        .find(|(_, p)| p.subscription_topic_data.topic_name() == topic_name)
+        .any(|(_, p)| p.subscription_topic_data.topic_name() == topic_name)
     {
       return true
     }
 
-    if let Some(_) =
-      self
+    if self
         .local_topic_writers
         .iter()
-        .find(|(_, p)| &p.publication_topic_data.topic_name == topic_name)
+        .any(|(_, p)| p.publication_topic_data.topic_name == topic_name)
     {
       return true
     }
@@ -220,7 +218,7 @@ impl DiscoveryDB {
     if self
         .external_topic_readers
         .values()
-        .find(|p| p.subscription_topic_data.topic_name() == topic_name).is_some()
+        .any(|p| p.subscription_topic_data.topic_name() == topic_name)
     {
       return true
     }
@@ -228,7 +226,7 @@ impl DiscoveryDB {
     if self
         .external_topic_writers
         .values()
-        .find(|p| &p.publication_topic_data.topic_name == topic_name).is_some()
+        .any(|p| p.publication_topic_data.topic_name == topic_name)
     {
       return true
     }
@@ -466,19 +464,19 @@ impl DiscoveryDB {
     self.writers_updated = updated;
   }
 
-  pub fn get_all_local_topic_readers<'a>(
-    &'a self,
-  ) -> impl Iterator<Item = &'a DiscoveredReaderData> {
+  pub fn get_all_local_topic_readers(
+    &self,
+  ) -> impl Iterator<Item = &DiscoveredReaderData> {
     self.local_topic_readers.iter().map(|(_, p)| p)
   }
 
-  pub fn get_all_local_topic_writers<'a>(
-    &'a self,
-  ) -> impl Iterator<Item = &'a DiscoveredWriterData> {
+  pub fn get_all_local_topic_writers(
+    &self,
+  ) -> impl Iterator<Item = &DiscoveredWriterData> {
     self.local_topic_writers.iter().map(|(_, p)| p)
   }
 
-  pub fn get_all_topics<'a>(&'a self) -> impl Iterator<Item = &'a DiscoveredTopicData> {
+  pub fn get_all_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
     self.topics.iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
       .map(|(_, v)| v)

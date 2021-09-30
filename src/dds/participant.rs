@@ -295,7 +295,7 @@ impl DomainParticipantWeak {
     }
   }
 
-  pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
     match self.dpi.upgrade() {
       Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
       None => Err(Error::OutOfResources),
@@ -402,7 +402,7 @@ impl DomainParticipant_Disc {
       .create_publisher(dp, qos, self.discovery_command_channel.clone())
   }
 
-  pub fn create_subscriber<'a>(
+  pub fn create_subscriber(
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
@@ -780,10 +780,7 @@ impl DomainParticipant_Inner {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    match self.find_topic_in_discovery_db(domain_participant_weak, name)? {
-      Some(topic) => return Ok(Some(topic)),
-      None => (),
-    }
+    if let Some(topic) = self.find_topic_in_discovery_db(domain_participant_weak, name)? { return Ok(Some(topic)) }
 
     std::thread::sleep(timeout);
 

@@ -687,37 +687,34 @@ impl Discovery {
     &self,
     reader: &mut DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
   ) {
-    match reader.take(100, ReadCondition::not_read()) {
-      Ok(d) => {
-        let mut db = self.discovery_db_write();
-        for data in d.into_iter() {
-          match data.value() {
-            Ok(val) => {
-              debug!("Discovered Reader {:?}", &val);
-              if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(val) {
-                debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
-                  &drd, &rtps_reader_proxy);
-                self.send_discovery_notification(
-                  DiscoveryNotificationType::ReaderUpdated {
-                    discovered_reader_data: drd, 
-                    rtps_reader_proxy,
-                    _needs_new_cache_change: true,
-                  });  
-              }
-              db.update_topic_data_drd(val);
-            }
-            Err(reader_key) => {
-              debug!("Dispose Reader {:?}", reader_key);
-              db.remove_topic_reader(reader_key.0);
+    if let Ok(d) = reader.take(100, ReadCondition::not_read()) {
+      let mut db = self.discovery_db_write();
+      for data in d.into_iter() {
+        match data.value() {
+          Ok(val) => {
+            debug!("Discovered Reader {:?}", &val);
+            if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(val) {
+              debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
+                &drd, &rtps_reader_proxy);
               self.send_discovery_notification(
-                  DiscoveryNotificationType::ReaderLost {
-                    reader_guid: reader_key.0,
-                });
+                DiscoveryNotificationType::ReaderUpdated {
+                  discovered_reader_data: drd, 
+                  rtps_reader_proxy,
+                  _needs_new_cache_change: true,
+                });  
             }
+            db.update_topic_data_drd(val);
+          }
+          Err(reader_key) => {
+            debug!("Dispose Reader {:?}", reader_key);
+            db.remove_topic_reader(reader_key.0);
+            self.send_discovery_notification(
+                DiscoveryNotificationType::ReaderLost {
+                  reader_guid: reader_key.0,
+              });
           }
         }
       }
-      _ => (),
     };
   }
 
@@ -725,30 +722,27 @@ impl Discovery {
     &self,
     reader: &mut DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
   ) {
-    match reader.take(100, ReadCondition::not_read()) {
-      Ok(d) => {
-        let mut db = self.discovery_db_write();
-        for data in d.into_iter() {
-          match data.value() {
-            Ok(val) => {
-              if let Some(discovered_writer_data) =  db.update_publication(val) {
-                self.send_discovery_notification(
-                    DiscoveryNotificationType::WriterUpdated{ discovered_writer_data }
-                  );
-              }
-              db.update_topic_data_dwd(val);
-              debug!("Discovered Writer {:?}", &val);
-            }
-            Err(writer_key) => {
-              db.remove_topic_writer(writer_key.0);
+    if let Ok(d) = reader.take(100, ReadCondition::not_read()) {
+      let mut db = self.discovery_db_write();
+      for data in d.into_iter() {
+        match data.value() {
+          Ok(val) => {
+            if let Some(discovered_writer_data) =  db.update_publication(val) {
               self.send_discovery_notification(
-                DiscoveryNotificationType::WriterLost { writer_guid: writer_key.0 });
-              debug!("Disposed Writer {:?}", writer_key);
+                  DiscoveryNotificationType::WriterUpdated{ discovered_writer_data }
+                );
             }
+            db.update_topic_data_dwd(val);
+            debug!("Discovered Writer {:?}", &val);
+          }
+          Err(writer_key) => {
+            db.remove_topic_writer(writer_key.0);
+            self.send_discovery_notification(
+              DiscoveryNotificationType::WriterLost { writer_guid: writer_key.0 });
+            debug!("Disposed Writer {:?}", writer_key);
           }
         }
       }
-      _ => (),
     };
   }
 
@@ -861,26 +855,23 @@ impl Discovery {
         "Current auto duration {:?}. Min auto duration {:?}",
         current_duration, min_automatic
       );
-      match min_automatic {
-        Some(&mm) => {
-          if current_duration > mm {
-            let pp = ParticipantMessageData {
-              guid: self.domain_participant.get_guid_prefix(),
-              kind:
-                ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE,
-              data: Vec::new(),
-            };
-            match writer.write(pp, None) {
-              Ok(_) => (),
-              Err(e) => {
-                error!("Failed to write ParticipantMessageData auto. {:?}", e);
-                return;
-              }
+      if let Some(&mm) = min_automatic {
+        if current_duration > mm {
+          let pp = ParticipantMessageData {
+            guid: self.domain_participant.get_guid_prefix(),
+            kind:
+              ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE,
+            data: Vec::new(),
+          };
+          match writer.write(pp, None) {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to write ParticipantMessageData auto. {:?}", e);
+              return;
             }
-            liveliness_state.last_auto_update = inow;
           }
+          liveliness_state.last_auto_update = inow;
         }
-        None => (),
       };
     }
 
@@ -896,25 +887,22 @@ impl Discovery {
           | Liveliness::ManualByTopic { lease_duration } => lease_duration,
         })
         .min();
-      match min_manual_participant {
-        Some(&dur) => {
-          if current_duration > dur {
-            let pp = ParticipantMessageData {
-              guid: self.domain_participant.get_guid_prefix(),
-              kind:
-                ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
-              data: Vec::new(),
-            };
-            match writer.write(pp, None) {
-              Ok(_) => (),
-              Err(e) => {
-                error!("Failed to writer ParticipantMessageData manual. {:?}", e);
-                
-              }
+      if let Some(&dur) = min_manual_participant {
+        if current_duration > dur {
+          let pp = ParticipantMessageData {
+            guid: self.domain_participant.get_guid_prefix(),
+            kind:
+              ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
+            data: Vec::new(),
+          };
+          match writer.write(pp, None) {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to writer ParticipantMessageData manual. {:?}", e);
+              
             }
           }
         }
-        None => (),
       };
     }
   }

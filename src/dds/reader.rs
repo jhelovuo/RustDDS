@@ -416,13 +416,10 @@ impl Reader {
     };
 
     // checking lifespan for silent dropping of message
-    match self.get_qos().lifespan {
-      Some(ls) => {
-        if ls.duration < duration {
-          return;
-        }
+    if let Some(ls) = self.get_qos().lifespan {
+      if ls.duration < duration {
+        return;
       }
-      None => (),
     }
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);

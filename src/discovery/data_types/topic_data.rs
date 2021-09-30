@@ -445,7 +445,7 @@ impl<'de> Deserialize<'de> for WriterProxy {
     let res = deserializer.deserialize_any(custom_ds)?;
     res
       .generate_writer_proxy()
-      .ok_or(de::Error::custom("WriterProxy deserialization"))
+      .ok_or_else(|| de::Error::custom("WriterProxy deserialization"))
   }
 }
 

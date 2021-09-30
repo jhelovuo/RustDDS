@@ -38,11 +38,10 @@ impl Parameter {
     bit_vec.set(5, is_filtered);
     let bytes = bit_vec.to_bytes();
     let last_byte = bytes[0];
-    let pid_status_info_parameter = Parameter {
+    Parameter {
       parameter_id: ParameterId::PID_STATUS_INFO,
       value: vec![0, 0, 0, last_byte],
-    };
-    pid_status_info_parameter
+    }
   }
 }
 

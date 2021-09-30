@@ -144,14 +144,12 @@ impl Default for DataFrag {
 }
 
 impl<C: Context> Writable<C> for DataFrag {
-  fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_u16(0)?;
     if self.inline_qos.is_some() && !self.inline_qos.as_ref().unwrap().parameters.is_empty() {
       debug!("self.inline_qos {:?}", self.inline_qos);
       todo!()
-    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.is_empty() {
-      writer.write_u16(24)?;
-    } else if self.inline_qos.is_none() {
+    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.is_empty() | self.inline_qos.is_none() {
       writer.write_u16(24)?;
     }
     writer.write_value(&self.reader_id)?;

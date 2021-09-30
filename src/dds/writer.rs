@@ -502,15 +502,12 @@ impl Writer {
 
   /// after heartbeat is handled timer should be set running again.
   fn set_heartbeat_timer(&mut self) {
-    match self.heartbeat_period {
-      Some(period) => {
-        self.timed_event_handler.as_mut().unwrap().set_timeout(
-          &chronoDuration::from(period),
-          TimerMessageType::WriterHeartbeat,
-        );
-        trace!("set heartbeat timer to {:?} in topic {:?}",period, self.topic_name());
-      }
-      None => (),
+    if let Some(period) = self.heartbeat_period {
+      self.timed_event_handler.as_mut().unwrap().set_timeout(
+        &chronoDuration::from(period),
+        TimerMessageType::WriterHeartbeat,
+      );
+      trace!("set heartbeat timer to {:?} in topic {:?}",period, self.topic_name());
     }
   }
 
@@ -674,7 +671,7 @@ impl Writer {
       // Try to send repair messages at 5x rate compared to usual deadline rate
       let delay_to_next_message = 
         self.qos_policies.deadline().map( |dl| dl.0 )
-          .unwrap_or(Duration::from_millis(100)) / 5;
+          .unwrap_or_else(|| Duration::from_millis(100)) / 5;
       self.timed_event_handler.as_mut().unwrap().set_timeout(
         &chronoDuration::from(delay_to_next_message),
         TimerMessageType::WriterSendRepairData{ to_reader: reader_proxy.remote_reader_guid },
@@ -794,11 +791,7 @@ impl Writer {
                 current: CountWithChange::new(self.readers.len() as i32 , change)
               });
           // send out hearbeat, so that new reader can catch up
-          match self.qos_policies.reliability {
-            Some(Reliability::Reliable{..}) =>
-              self.notify_new_data_to_all_readers(),
-            _ => (),
-          }
+          if let Some(Reliability::Reliable{..}) = self.qos_policies.reliability { self.notify_new_data_to_all_readers() }
           info!("Matched new remote reader on topic={:?} reader= {:?}", 
                 self.topic_name(), &reader_proxy);
 

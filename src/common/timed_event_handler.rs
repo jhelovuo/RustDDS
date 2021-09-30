@@ -19,16 +19,15 @@ pub struct TimedEventHandler {
 
 impl<'a> TimedEventHandler {
   pub fn new(channel_send: mio_channel::SyncSender<TimerMessageType>) -> TimedEventHandler {
-    let hbh = TimedEventHandler {
+    TimedEventHandler {
       timers: HashMap::new(),
       channel_send,
       guards: HashMap::new(),
-    };
-    hbh
+    }
   }
 
   pub fn set_timeout(&mut self, duration: &'a chrono::Duration, timer_type: TimerMessageType) {
-    self.timers.entry(timer_type).or_insert_with(|| Timer::new());
+    self.timers.entry(timer_type).or_insert_with(Timer::new);
 
     let new_chanenel = self.channel_send.clone();
     self.guards.insert(
