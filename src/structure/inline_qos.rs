@@ -80,7 +80,7 @@ impl StatusInfo {
   }
 
   pub fn from_cdr_bytes(
-    bytes: &Vec<u8>,
+    bytes: &[u8],
     representation_id: RepresentationIdentifier,
   ) -> Result<StatusInfo, crate::serialization::error::Error> {
     CDRDeserializerAdapter::from_bytes(bytes, representation_id)

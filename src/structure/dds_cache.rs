@@ -39,7 +39,7 @@ impl DDSCache {
 
   pub fn add_new_topic(
     &mut self,
-    topic_name: &String,
+    topic_name: &str,
     topic_kind: TopicKind,
     topic_data_type: TypeDesc,
   ) {
@@ -49,13 +49,13 @@ impl DDSCache {
       );
   }
 
-  pub fn remove_topic(&mut self, topic_name: &String) {
+  pub fn remove_topic(&mut self, topic_name: &str) {
     if self.topic_caches.contains_key(topic_name) {
       self.topic_caches.remove(topic_name);
     }
   }
 
-  pub fn from_topic_get_change(&self, topic_name: &String, instant: &Timestamp) 
+  pub fn from_topic_get_change(&self, topic_name: &str, instant: &Timestamp) 
     -> Option<&CacheChange> 
   {
     self.topic_caches.get(topic_name)
@@ -67,7 +67,7 @@ impl DDSCache {
   /// Removes cacheChange permanently
   pub fn from_topic_remove_change(
     &mut self,
-    topic_name: &String,
+    topic_name: &str,
     instant: &Timestamp,
   ) -> Option<CacheChange> {
     match self.topic_caches.get_mut(topic_name) {
@@ -80,7 +80,7 @@ impl DDSCache {
   }
 
   /// Removes cacheChange permanently
-  pub fn from_topic_remove_before(&mut self, topic_name: &String, instant: Timestamp) 
+  pub fn from_topic_remove_before(&mut self, topic_name: &str, instant: Timestamp) 
   {
     match self.topic_caches.get_mut(topic_name) {
       Some(tc) => tc.remove_changes_before(instant),
@@ -93,7 +93,7 @@ impl DDSCache {
 
   pub fn from_topic_get_changes_in_range(
     &self,
-    topic_name: &String,
+    topic_name: &str,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
   ) -> Box<dyn Iterator<Item=(Timestamp, &CacheChange)> + '_> {
@@ -105,7 +105,7 @@ impl DDSCache {
 
   pub fn to_topic_add_change(
     &mut self,
-    topic_name: &String,
+    topic_name: &str,
     instant: &Timestamp,
     cache_change: CacheChange,
   ) {

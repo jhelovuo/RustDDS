@@ -39,7 +39,7 @@ impl VendorIdData {
     VendorIdData {
       parameter_id: ParameterId::PID_VENDOR_ID,
       parameter_length: 4,
-      vendor_id: vendor_id,
+      vendor_id,
     }
   }
 }
