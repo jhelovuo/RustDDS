@@ -5,7 +5,7 @@ use mio::net::UdpSocket;
 use std::net::{SocketAddr, IpAddr,};
 use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
 
-#[cfg(test)] use std::net::{IpAddr, Ipv4Addr};
+#[cfg(test)] use std::net::{Ipv4Addr};
 use std::io;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::network::util::get_local_multicast_ip_addrs;

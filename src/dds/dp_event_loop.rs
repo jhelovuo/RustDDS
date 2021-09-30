@@ -681,7 +681,6 @@ mod tests {
   use mio::{Ready, PollOpt};
   use crate::{
     dds::with_key::datareader::ReaderCommand,
-    structure::entity::RTPSEntity,
     dds::qos::QosPolicies,
   };
   use crate::structure::dds_cache::DDSCache;
