@@ -38,13 +38,6 @@ socket2 = { version = "0.4", features = ["all"] }
 bytes = "1"
 static_assertions = "1.1"
 
-[[example]]
-name = "shapes_demo"
-
-
-[[example]]
-name = "ros2_demo"
-
 [dev-dependencies]
 # shapes-demo:
 ctrlc = "3.1.6"     
