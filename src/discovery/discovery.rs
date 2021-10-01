@@ -1163,7 +1163,7 @@ mod tests {
       .unwrap();
 
     // sending participant data to discovery
-    let udp_sender = UDPSender::new_with_random_port();
+    let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
     let addresses = vec![SocketAddr::new(
       "127.0.0.1".parse().unwrap(),
       get_spdp_well_known_unicast_port(0, 0),
@@ -1224,7 +1224,7 @@ mod tests {
       )
       .unwrap();
 
-    let udp_sender = UDPSender::new_with_random_port();
+    let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");;
     let addresses = vec![SocketAddr::new(
       "127.0.0.1".parse().unwrap(),
       get_spdp_well_known_unicast_port(14, 0),
@@ -1313,7 +1313,7 @@ mod tests {
       )
       .unwrap();
 
-    let udp_sender = UDPSender::new_with_random_port();
+    let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
     let addresses = vec![SocketAddr::new(
       "127.0.0.1".parse().unwrap(),
       get_spdp_well_known_unicast_port(15, 0),
@@ -1380,7 +1380,7 @@ mod tests {
       EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
     );
 
-    let udp_sender = UDPSender::new_with_random_port();
+    let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");;
     let addresses = vec![SocketAddr::new(
       "127.0.0.1".parse().unwrap(),
       get_spdp_well_known_unicast_port(16, 0),

@@ -2,10 +2,10 @@
 use log::{debug,warn,error,trace, info};
 
 use mio::net::UdpSocket;
-use std::net::{SocketAddr, IpAddr,};
+use std::net::{SocketAddr, IpAddr};
 use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
 
-#[cfg(test)] use std::net::{IpAddr, Ipv4Addr};
+#[cfg(test)] use std::net::Ipv4Addr;
 use std::io;
 use crate::structure::locator::{LocatorKind, LocatorList, Locator};
 use crate::network::util::get_local_multicast_ip_addrs;
@@ -132,7 +132,7 @@ mod tests {
   #[test]
   fn udps_single_send() {
     let listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 10201).unwrap();
-    let sender = UDPSender::new(11201);
+    let sender = UDPSender::new(11201).expect("failed to create UDPSender");
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
@@ -149,7 +149,7 @@ mod tests {
   fn udps_multi_send() {
     let listener_1 = UDPListener::new_unicast(Token(0), "127.0.0.1", 10301).unwrap();
     let listener_2 = UDPListener::new_unicast(Token(1), "127.0.0.1", 10302).unwrap();
-    let sender = UDPSender::new(11301);
+    let sender = UDPSender::new(11301).expect("failed to create UDPSender");
 
     let data: Vec<u8> = vec![5, 4, 3, 2, 1, 0];
 
