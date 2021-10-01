@@ -588,7 +588,7 @@ impl Discovery {
             // setting 5 times the duration so lease doesn't break if update fails once or twice
             let data = SPDPDiscoveredParticipantData::from_local_participant(
               &strong_dp,
-              2.0 *  Duration::from(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+              5.0 *  Duration::from(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
             );
 
             self.dcps_participant_writer.write(data, None).unwrap_or(());
