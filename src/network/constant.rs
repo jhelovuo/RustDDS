@@ -9,11 +9,6 @@ use mio_extras::channel as mio_channel;
 
 use crate::structure::guid::{GUID,EntityKind};
 
-// Thease are the fixed poll tokens.
-// These are decoded using bitmaps, so the number of fixed tokens
-// is limited to 64 (0..63)
-// See GUID module for decoder details.
-
 const PTB : usize = EntityKind::POLL_TOKEN_BASE;
 
 pub const STOP_POLL_TOKEN: Token = Token(0 + PTB);

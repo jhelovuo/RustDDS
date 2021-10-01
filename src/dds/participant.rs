@@ -52,7 +52,11 @@ impl DomainParticipant {
   /// ```
   pub fn new(domain_id: u16) -> Result<DomainParticipant> {
     trace!("DomainParticipant construct start");
+
+    // Discovery join channel is used to just send a join handle into the inner participant,
+    // so its .drop() can wait until discovery has had a chance to stop.
     let (djh_sender, djh_receiver) = mio_channel::channel();
+
     let mut dpd = DomainParticipant_Disc::new(domain_id, djh_receiver)?;
 
     let discovery_updated_sender = match dpd.discovery_updated_sender.take() {
@@ -81,17 +85,20 @@ impl DomainParticipant {
     let discovery_handle = thread::Builder::new()
       .name("RustDDS discovery thread".to_string())
       .spawn(move || { 
-          let discovery = Discovery::new(
-            dp_clone,
-            disc_db_clone,
-            discovery_started_sender,
-            discovery_updated_sender,
-            discovery_command_receiver,
-            discovery_command_sender,
-          );
-          Discovery::discovery_event_loop(discovery)
+          match Discovery::new(
+              dp_clone,
+              disc_db_clone,
+              discovery_started_sender,
+              discovery_updated_sender,
+              discovery_command_receiver,
+            ) {
+            Ok(mut discovery) => // run the event loop
+              discovery.discovery_event_loop(),
+            Err(_) => (),
+          }
         })?;
-    djh_sender.send(discovery_handle).unwrap_or(());
+
+    djh_sender.send(discovery_handle).unwrap_or(()); // send join handle to inner participant
 
     debug!("Waiting for discovery to start"); // blocking until discovery answers
     match discovery_started_receiver.recv_timeout(Duration::from_secs(10)) {
@@ -539,7 +546,6 @@ impl Drop for DomainParticipant_Inner {
     };
 
     debug!("Waiting for dp_event_loop join");
-
     match self.ev_loop_handle.take() {
       Some(join_handle) => {
         join_handle
@@ -550,7 +556,6 @@ impl Drop for DomainParticipant_Inner {
         error!("Someone managed to steal dp_event_loop join handle from DomainParticipant_Inner.");
       }
     }
-
     debug!("Joined dp_event_loop");
   }
 }
@@ -650,7 +655,7 @@ impl DomainParticipant_Inner {
     let dds_cache_clone = dds_cache.clone();
     let disc_db_clone = discovery_db.clone();
     let ev_loop_handle = thread::Builder::new()
-      .name("RustDDS Participant event loop".to_string())
+      .name(format!("RustDDS Participant {} event loop",participant_id))
       .spawn(move || { 
         let ev_wrapper = DPEventLoop::new(
           domain_info,

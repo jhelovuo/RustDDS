@@ -47,6 +47,9 @@ use crate::messages::submessages::submessage_elements::serialized_payload::Seria
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
 use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand, };
 
+/// Simplified type for CDR encoding
+pub type DataWriter_CDR<D> = DataWriter<D,CDRSerializerAdapter<D>>;
+
 /// DDS DataWriter for keyed topics
 ///
 /// # Examples

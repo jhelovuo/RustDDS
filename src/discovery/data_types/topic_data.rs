@@ -801,6 +801,8 @@ impl Serialize for DiscoveredTopicData {
   }
 }
 
+pub type DiscoveredTopicData_Key = GUID;
+
 impl Keyed for DiscoveredTopicData {
   type K = GUID;
 
