@@ -49,3 +49,4 @@ termion = "1.5.5"
 env_logger = "0.7.1"
 # ros2-demo
 log4rs = "1"
+test-case = "1.2.0"

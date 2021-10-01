@@ -922,7 +922,7 @@ mod tests {
   fn dp_basic_domain_participant() {
     // let _dp = DomainParticipant::new();
 
-    let sender = UDPSender::new(11401);
+    let sender = UDPSender::new(11401).expect("failed to create UDPSender");
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
     let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 7412)];
@@ -969,7 +969,7 @@ mod tests {
       .expect("Failed to create datawriter");
 
     let portNumber: u16 = get_user_traffic_unicast_port(5, 0);
-    let _sender = UDPSender::new(1234);
+    let sender = UDPSender::new(1234).expect("failed to create UDPSender");
     let mut m: Message = Message::default();
 
     let a: AckNack = AckNack {
@@ -1013,6 +1013,6 @@ mod tests {
        * 0x00, 0x00, 0x01], */
     };
     let locas = vec![loca];
-    _sender.send_to_locator_list(&_data, &locas);
+    sender.send_to_locator_list(&_data, &locas);
   }
 }

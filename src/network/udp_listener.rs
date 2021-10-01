@@ -231,7 +231,7 @@ mod tests {
   #[test]
   fn udpl_single_address() {
     let listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 10001).unwrap();
-    let sender = UDPSender::new_with_random_port();
+    let sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
