@@ -70,7 +70,6 @@ impl DomainParticipant {
       // this error should never happen
       None => return log_and_err_internal!("Unable to get Discovery Command Receiver."),
     };
-    let discovery_command_sender = dpd.discovery_command_channel.clone();
 
     let dp = DomainParticipant {
       dpi: Arc::new(Mutex::new(dpd)),

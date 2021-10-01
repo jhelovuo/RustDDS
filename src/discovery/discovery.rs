@@ -27,7 +27,7 @@ use std::{
 use crate::{
   dds::{
     with_key::datareader::DataReader, with_key::datareader::DataReader_CDR,
-    with_key::datawriter::DataWriter, with_key::datawriter::DataWriter_CDR,
+    /*with_key::datawriter::DataWriter,*/ with_key::datawriter::DataWriter_CDR,
     topic::*,
     participant::{DomainParticipantWeak},
     Publisher, Subscriber,
@@ -55,13 +55,12 @@ use crate::discovery::{
 
 use crate::structure::{duration::Duration, guid::EntityId, time::Timestamp};
 
-use crate::serialization::{CDRSerializerAdapter, pl_cdr_deserializer::PlCdrDeserializerAdapter};
+use crate::serialization::{pl_cdr_deserializer::PlCdrDeserializerAdapter};
 
 use crate::network::constant::*;
 use super::data_types::topic_data::{
   DiscoveredTopicData, ParticipantMessageData, ParticipantMessageDataKind,
 };
-use byteorder::LittleEndian;
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum DiscoveryCommand {
@@ -220,7 +219,7 @@ impl Discovery {
       ),
       "Unable to create DCPSParticipant topic. {:?}");
   
-    let mut dcps_participant_reader = try_construct!( discovery_subscriber
+    let dcps_participant_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
         dcps_participant_topic.clone(),
         EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
@@ -273,7 +272,7 @@ impl Discovery {
       TopicKind::WithKey,
     ) ,"Unable to create DCPSSubscription topic. {:?}");
 
-    let mut dcps_subscription_reader = try_construct!( discovery_subscriber
+    let dcps_subscription_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
         dcps_subscription_topic.clone(),
         EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
@@ -287,7 +286,7 @@ impl Discovery {
       PollOpt::edge(),
     ) ,"Unable to register subscription reader. {:?}");
 
-    let mut dcps_subscription_writer = try_construct!( discovery_publisher
+    let dcps_subscription_writer = try_construct!( discovery_publisher
       .create_datawriter_CDR_with_entityid::<DiscoveredReaderData>(
         EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
         dcps_subscription_topic.clone(),
@@ -314,7 +313,7 @@ impl Discovery {
       TopicKind::WithKey,
     ) ,"Unable to create DCPSPublication topic. {:?}");
 
-    let mut dcps_publication_reader = try_construct!( discovery_subscriber
+    let dcps_publication_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         dcps_publication_topic.clone(),
         EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
@@ -328,7 +327,7 @@ impl Discovery {
       PollOpt::edge(),
     ) ,"Unable to regiser writers info sender. {:?}");
 
-    let mut dcps_publication_writer = try_construct!( discovery_publisher
+    let dcps_publication_writer = try_construct!( discovery_publisher
       .create_datawriter_CDR_with_entityid::<DiscoveredWriterData>(
         EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
         dcps_publication_topic.clone(),
@@ -355,7 +354,7 @@ impl Discovery {
     ) ,"Unable to create DCPSTopic topic. {:?}");
 
 
-    let mut dcps_topic_reader = try_construct!( discovery_subscriber
+    let dcps_topic_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         dcps_topic_topic.clone(),
         EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
@@ -369,7 +368,7 @@ impl Discovery {
       PollOpt::edge(),
     ) ,"Unable to register topic reader. {:?}");
 
-    let mut dcps_topic_writer = try_construct!( discovery_publisher
+    let dcps_topic_writer = try_construct!( discovery_publisher
       .create_datawriter_CDR_with_entityid::<DiscoveredTopicData>(
         EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
         dcps_topic_topic.clone(),
@@ -405,7 +404,7 @@ impl Discovery {
       TopicKind::WithKey,
     ) ,"Unable to create DCPSParticipantMessage topic. {:?}");
 
-    let mut dcps_participant_message_reader = try_construct!( discovery_subscriber
+    let dcps_participant_message_reader = try_construct!( discovery_subscriber
       .create_datareader_CDR_with_entityid::<ParticipantMessageData>(
         participant_message_topic.clone(),
         EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
@@ -419,7 +418,7 @@ impl Discovery {
       PollOpt::edge(),
     ) ,"Unable to register DCPSParticipantMessage reader. {:?}");
 
-    let mut dcps_participant_message_writer = try_construct!( discovery_publisher
+    let dcps_participant_message_writer = try_construct!( discovery_publisher
       .create_datawriter_CDR_with_entityid::<ParticipantMessageData>(
         EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
         participant_message_topic.clone(),
