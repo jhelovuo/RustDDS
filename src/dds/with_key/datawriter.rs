@@ -155,21 +155,18 @@ where
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
     };
 
-    match topic.get_qos().liveliness {
-      Some(lv) => match lv {
-        Liveliness::Automatic { lease_duration: _ } => (),
-        Liveliness::ManualByParticipant { lease_duration: _ } => {
-          match discovery_command.send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS) {
-            Ok(_) => (),
-            Err(e) => {
-              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
-            }
+    if let Some(lv) = topic.get_qos().liveliness { match lv {
+      Liveliness::Automatic { lease_duration: _ } => (),
+      Liveliness::ManualByParticipant { lease_duration: _ } => {
+        match discovery_command.send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS) {
+          Ok(_) => (),
+          Err(e) => {
+            error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
           }
         }
-        Liveliness::ManualByTopic { lease_duration: _ } => (),
-      },
-      None => (),
-    };
+      }
+      Liveliness::ManualByTopic { lease_duration: _ } => (),
+    } };
     let qos = topic.get_qos().clone();
     Ok(DataWriter {
       my_publisher: publisher,
@@ -225,24 +222,21 @@ where
 
   // TODO: What is this function? To what part of DDS spec does it correspond to?
   pub fn refresh_manual_liveliness(&self) {
-    match self.get_qos().liveliness {
-      Some(lv) => match lv {
-        Liveliness::Automatic { lease_duration: _ } => (),
-        Liveliness::ManualByParticipant { lease_duration: _ } => {
-          match self
-            .discovery_command
-            .send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
-          {
-            Ok(_) => (),
-            Err(e) => {
-              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
-            }
+    if let Some(lv) = self.get_qos().liveliness { match lv {
+      Liveliness::Automatic { lease_duration: _ } => (),
+      Liveliness::ManualByParticipant { lease_duration: _ } => {
+        match self
+          .discovery_command
+          .send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
+        {
+          Ok(_) => (),
+          Err(e) => {
+            error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
           }
         }
-        Liveliness::ManualByTopic { lease_duration: _ } => (),
-      },
-      None => (),
-    };
+      }
+      Liveliness::ManualByTopic { lease_duration: _ } => (),
+    } };
   }
 
   /// Writes single data instance to a topic.
