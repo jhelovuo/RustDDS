@@ -24,7 +24,7 @@ impl<'a> TimedEventHandler {
       channel_send,
       guards: HashMap::new(),
     };
-    return hbh;
+    hbh
   }
 
   pub fn set_timeout(&mut self, duration: &'a chrono::Duration, timer_type: TimerMessageType) {

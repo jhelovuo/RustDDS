@@ -350,7 +350,7 @@ impl<'a> MainController<'a> {
       Ok(_) => return true,
       Err(e) => error!("Failed to send command. {:?}", e),
     };
-    return false;
+    false
   }
 
   fn init_main_registers(&mut self) {
