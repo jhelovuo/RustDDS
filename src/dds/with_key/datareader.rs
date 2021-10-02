@@ -740,8 +740,7 @@ where
         .datasample_cache
         .instance_map
         .keys()
-        .next()
-        .map(|k| k.clone()),
+        .next().cloned(),
     }
   }
 

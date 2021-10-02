@@ -251,8 +251,7 @@ impl DiscoveryDB {
       .topics
       .iter()
       .map(|(tn, _)| tn)
-      .filter(|tn| !self.topic_has_writers_or_readers(tn))
-      .map(|tn| tn.clone())
+      .filter(|tn| !self.topic_has_writers_or_readers(tn)).cloned()
       .collect();
     for dt in dead_topics.iter() {
       self.topics.remove(dt);

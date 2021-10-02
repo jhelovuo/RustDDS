@@ -184,7 +184,7 @@ impl RtpsReaderProxy {
         }
       }
 
-      AckSubmessage::NackFrag_Variant(nack_frag) => {
+      AckSubmessage::NackFrag_Variant(_nack_frag) => {
         // TODO
         error!("NACKFRAG not implemented")
       }
