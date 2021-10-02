@@ -313,7 +313,7 @@ impl MessageReceiver {
           }
         }
       }
-      EntitySubmessage::NackFrag(nackfrag, _flags) => {
+      EntitySubmessage::NackFrag(_nackfrag, _flags) => {
         // TODO
         error!("NackFrag handling is not implemented")
       }
