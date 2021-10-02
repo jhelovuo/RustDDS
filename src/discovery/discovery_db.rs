@@ -140,7 +140,7 @@ impl DiscoveryDB {
     let to_remove :Vec<GUID> = 
           self.external_topic_readers
             .range( guid_prefix.range() )
-            .map(|(g,_)| g.clone() )
+            .map(|(g,_)| *g )
             .collect();
     for guid in to_remove {
       self.external_topic_readers.remove(&guid);
@@ -157,7 +157,7 @@ impl DiscoveryDB {
     let to_remove :Vec<GUID> = 
           self.external_topic_writers
             .range( guid_prefix.range() )
-            .map(|(g,_)| g.clone() )
+            .map(|(g,_)| *g )
             .collect();
     for guid in to_remove {
       self.external_topic_writers.remove(&guid);
@@ -345,17 +345,17 @@ impl DiscoveryDB {
       key: None,
       name: drd.subscription_topic_data.topic_name().clone(),
       type_name: drd.subscription_topic_data.type_name().clone(),
-      durability: drd.subscription_topic_data.durability().clone(),
-      deadline: drd.subscription_topic_data.deadline().clone(),
-      latency_budget: drd.subscription_topic_data.latency_budget().clone(),
-      liveliness: drd.subscription_topic_data.liveliness().clone(),
-      reliability: drd.subscription_topic_data.reliability().clone(),
-      lifespan: drd.subscription_topic_data.lifespan().clone(),
-      destination_order: drd.subscription_topic_data.destination_order().clone(),
-      presentation: drd.subscription_topic_data.presentation().clone(),
+      durability: *drd.subscription_topic_data.durability(),
+      deadline: *drd.subscription_topic_data.deadline(),
+      latency_budget: *drd.subscription_topic_data.latency_budget(),
+      liveliness: *drd.subscription_topic_data.liveliness(),
+      reliability: *drd.subscription_topic_data.reliability(),
+      lifespan: *drd.subscription_topic_data.lifespan(),
+      destination_order: *drd.subscription_topic_data.destination_order(),
+      presentation: *drd.subscription_topic_data.presentation(),
       history: None,
       resource_limits: None,
-      ownership: drd.subscription_topic_data.ownership().clone(),
+      ownership: *drd.subscription_topic_data.ownership(),
     });
 
     self.update_topic_data(&topic_data);
@@ -366,17 +366,17 @@ impl DiscoveryDB {
       key: None,
       name: dwd.publication_topic_data.topic_name.clone(),
       type_name: dwd.publication_topic_data.type_name.clone(),
-      durability: dwd.publication_topic_data.durability.clone(),
-      deadline: dwd.publication_topic_data.deadline.clone(),
-      latency_budget: dwd.publication_topic_data.latency_budget.clone(),
-      liveliness: dwd.publication_topic_data.liveliness.clone(),
-      reliability: dwd.publication_topic_data.reliability.clone(),
-      lifespan: dwd.publication_topic_data.lifespan.clone(),
-      destination_order: dwd.publication_topic_data.destination_order.clone(),
-      presentation: dwd.publication_topic_data.presentation.clone(),
+      durability: dwd.publication_topic_data.durability,
+      deadline: dwd.publication_topic_data.deadline,
+      latency_budget: dwd.publication_topic_data.latency_budget,
+      liveliness: dwd.publication_topic_data.liveliness,
+      reliability: dwd.publication_topic_data.reliability,
+      lifespan: dwd.publication_topic_data.lifespan,
+      destination_order: dwd.publication_topic_data.destination_order,
+      presentation: dwd.publication_topic_data.presentation,
       history: None,
       resource_limits: None,
-      ownership: dwd.publication_topic_data.ownership.clone(),
+      ownership: dwd.publication_topic_data.ownership,
     });
 
     self.update_topic_data(&topic_data);
@@ -387,17 +387,17 @@ impl DiscoveryDB {
       key: None,
       name: String::from(topic.get_name()),
       type_name: String::from(topic.get_type().name()),
-      durability: topic.get_qos().durability.clone(),
-      deadline: topic.get_qos().deadline.clone(),
-      latency_budget: topic.get_qos().latency_budget.clone(),
-      liveliness: topic.get_qos().liveliness.clone(),
-      reliability: topic.get_qos().reliability.clone(),
-      lifespan: topic.get_qos().lifespan.clone(),
-      destination_order: topic.get_qos().destination_order.clone(),
-      presentation: topic.get_qos().presentation.clone(),
-      history: topic.get_qos().history.clone(),
-      resource_limits: topic.get_qos().resource_limits.clone(),
-      ownership: topic.get_qos().ownership.clone(),
+      durability: topic.get_qos().durability,
+      deadline: topic.get_qos().deadline,
+      latency_budget: topic.get_qos().latency_budget,
+      liveliness: topic.get_qos().liveliness,
+      reliability: topic.get_qos().reliability,
+      lifespan: topic.get_qos().lifespan,
+      destination_order: topic.get_qos().destination_order,
+      presentation: topic.get_qos().presentation,
+      history: topic.get_qos().history,
+      resource_limits: topic.get_qos().resource_limits,
+      ownership: topic.get_qos().ownership,
     });
 
     self.update_topic_data(&topic_data);

@@ -115,7 +115,7 @@ impl RtpsReaderProxy {
         &default_multicast_locators);
 
     RtpsReaderProxy {
-      remote_reader_guid: discovered_reader_data.reader_proxy.remote_reader_guid.clone(),
+      remote_reader_guid: discovered_reader_data.reader_proxy.remote_reader_guid,
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN, //TODO
       unicast_locator_list,
       multicast_locator_list,
@@ -132,7 +132,7 @@ impl RtpsReaderProxy {
     if self.remote_reader_guid == updated.remote_reader_guid {
       self.unicast_locator_list = updated.unicast_locator_list.clone();
       self.multicast_locator_list = updated.multicast_locator_list.clone();
-      self.expects_in_line_qos = updated.expects_in_line_qos.clone();
+      self.expects_in_line_qos = updated.expects_in_line_qos;
     }
   }
 
@@ -184,7 +184,7 @@ impl RtpsReaderProxy {
         }
       }
 
-      AckSubmessage::NackFrag_Variant(nack_frag) => {
+      AckSubmessage::NackFrag_Variant(_nack_frag) => {
         // TODO
         error!("NACKFRAG not implemented")
       }

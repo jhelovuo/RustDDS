@@ -154,7 +154,7 @@ impl BuiltinDataDeserializer {
       metatraffic_multicast_locators: self.metatraffic_multicast_locators.clone(),
       default_unicast_locators: self.default_unicast_locators.clone(),
       default_multicast_locators: self.default_multicast_locators.clone(),
-      available_builtin_endpoints: self.available_builtin_endpoints.clone()
+      available_builtin_endpoints: self.available_builtin_endpoints
         .ok_or_else(| | log_and_err_discovery!("available_builtin_endpoints missing"))?,
       lease_duration: self.lease_duration,
       manual_liveliness_count: self.manual_liveliness_count

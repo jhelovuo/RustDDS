@@ -160,7 +160,7 @@ impl DurationData {
     DurationData {
       parameter_id: ParameterId::PID_PARTICIPANT_LEASE_DURATION,
       parameter_length: 8,
-      duration: duration.clone(),
+      duration: duration,
     }
   }
 }
