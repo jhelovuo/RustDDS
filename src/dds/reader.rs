@@ -669,8 +669,7 @@ impl Reader {
               // Limit the set to maximum that can be sent in acknack submessage..
             SequenceNumberSet
               ::from_base_and_set(first_missing, 
-                &BTreeSet::from_iter(missing_seqnums.iter()
-                                      .map(|s| *s)
+                &BTreeSet::from_iter(missing_seqnums.iter().copied()
                                       .take_while( |sn| sn < &(first_missing + SequenceNumber::from(256)) ))
                 )
             }
@@ -753,8 +752,7 @@ impl Reader {
     //   1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
     let mut removed_changes : BTreeSet<Timestamp> = 
       writer_proxy.irrelevant_changes_range(gap.gap_start, gap.gap_list.base())
-        .values()
-        .map(|s|*s)
+        .values().copied()
         .collect();
 
     //   2. All the sequence numbers that appear explicitly listed in the gapList.

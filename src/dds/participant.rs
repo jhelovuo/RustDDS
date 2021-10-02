@@ -867,7 +867,7 @@ impl DomainParticipant_Inner {
       Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
     };
 
-    db.get_all_topics().map(|p| p.clone()).collect()
+    db.get_all_topics().cloned().collect()
   }
 } // impl
 
