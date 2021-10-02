@@ -398,7 +398,7 @@ impl Writer {
           let wait_until = self.last_change_sequence_number;
           let readers_pending: BTreeSet<_> = self.readers.iter()
               .filter_map( |(guid,rp)| {
-                  if let Some(_) = rp.qos().reliability() {
+                  if rp.qos().reliability().is_some() {
                     if rp.all_acked_before <= wait_until { Some(*guid) } else { None } // already acked
                   } else { None } // not reliable reader
                 } )
