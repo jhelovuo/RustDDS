@@ -106,7 +106,7 @@ impl Data {
 }
 
 impl<C: Context> Writable<C> for Data {
-  fn write_to<'a, T: ?Sized + Writer<C>>(&'a self, writer: &mut T) -> Result<(), C::Error> {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     //This version of the protocol (2.3) should set all the bits in the extraFlags to zero
     writer.write_u16(0)?;
     //The octetsToInlineQos field contains the number of octets starting from the first octet immediately following

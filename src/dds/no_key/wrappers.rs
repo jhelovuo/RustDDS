@@ -121,7 +121,7 @@ where
     DA::supported_encodings()
   }
 
-  fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) 
+  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
     -> Result<NoKeyWrapper<D>> 
   {
     DA::from_bytes(input_bytes, encoding).map(|d| NoKeyWrapper::<D> { d })
@@ -134,7 +134,7 @@ where
   D: DeserializeOwned,
   DA: no_key::DeserializerAdapter<D>,
 {
-  fn key_from_bytes<'de>(_input_bytes: &'de [u8], _encoding: RepresentationIdentifier) 
+  fn key_from_bytes(input_bytes: &[u8], _encoding: RepresentationIdentifier) 
     -> Result< <NoKeyWrapper<D> as Keyed>::K > 
   {
     // also unreachable!() should work here, as this is not supposed to be used
