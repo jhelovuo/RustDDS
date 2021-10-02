@@ -19,12 +19,12 @@ pub mod no_key {
 		/// See RTPS specification Section 10 and Table 10.3
 	  fn supported_encodings() -> &'static [RepresentationIdentifier]; 
 
-	  fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D>;
+	  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D>;
 
 	  /// This method has a default implementation, but the default will make a copy of
 	  /// all the input data in memory and then call from_bytes() .
 	  // In order to avoid the copy, implement also this method.
-	  fn from_vec_bytes<'de>(input_vec_bytes: &'de [Bytes], encoding: RepresentationIdentifier) -> Result<D> {
+	  fn from_vec_bytes(input_vec_bytes: &[Bytes], encoding: RepresentationIdentifier) -> Result<D> {
 	  	let total_len = input_vec_bytes.iter().map( |s| s.len()).sum();
 	  	let mut total_payload = Vec::with_capacity(total_len);
 	  	for iv in input_vec_bytes {
@@ -62,7 +62,7 @@ pub mod with_key {
 	where
 	  D: Keyed + DeserializeOwned,
 	{
-	  fn key_from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D::K>;
+	  fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K>;
 	}
 
 	pub trait SerializerAdapter<D> : no_key::SerializerAdapter<D>

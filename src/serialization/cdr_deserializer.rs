@@ -41,7 +41,7 @@ where
     &repr_ids
   }
 
-  fn from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D> {
+  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
     match encoding {
       RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
         deserialize_from_little_endian(input_bytes)
@@ -58,7 +58,7 @@ where
   D: Keyed + DeserializeOwned,
   <D as Keyed>::K: DeserializeOwned, // Key should do this already?
 {
-  fn key_from_bytes<'de>(input_bytes: &'de [u8], encoding: RepresentationIdentifier) -> Result<D::K> {
+  fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K> {
     match encoding {
       RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
         deserialize_from_little_endian(input_bytes)
@@ -141,7 +141,7 @@ where
   }
 }
 
-pub fn deserialize_from_little_endian<'a, T>(s: &'a [u8]) -> Result<T>
+pub fn deserialize_from_little_endian<T>(s: &[u8]) -> Result<T>
 where
   T: DeserializeOwned,
 {
@@ -149,7 +149,7 @@ where
   T::deserialize(&mut deserializer)
 }
 
-pub fn deserialize_from_big_endian<'a, T>(s: &'a [u8]) -> Result<T>
+pub fn deserialize_from_big_endian<T>(s: &[u8]) -> Result<T>
 where
   T: DeserializeOwned,
 {

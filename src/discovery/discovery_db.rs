@@ -478,19 +478,19 @@ impl DiscoveryDB {
     self.writers_updated = updated;
   }
 
-  pub fn get_all_local_topic_readers<'a>(
-    &'a self,
-  ) -> impl Iterator<Item = &'a DiscoveredReaderData> {
+  pub fn get_all_local_topic_readers(
+    &self,
+  ) -> impl Iterator<Item = &DiscoveredReaderData> {
     self.local_topic_readers.iter().map(|(_, p)| p)
   }
 
-  pub fn get_all_local_topic_writers<'a>(
-    &'a self,
-  ) -> impl Iterator<Item = &'a DiscoveredWriterData> {
+  pub fn get_all_local_topic_writers(
+    &self,
+  ) -> impl Iterator<Item = &DiscoveredWriterData> {
     self.local_topic_writers.iter().map(|(_, p)| p)
   }
 
-  pub fn get_all_topics<'a>(&'a self) -> impl Iterator<Item = &'a DiscoveredTopicData> {
+  pub fn get_all_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
     self.topics.iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
       .map(|(_, v)| v)
