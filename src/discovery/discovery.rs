@@ -970,26 +970,23 @@ impl Discovery {
         "Current auto duration {:?}. Min auto duration {:?}",
         current_duration, min_automatic
       );
-      match min_automatic {
-        Some(&mm) => {
-          if current_duration > mm {
-            let pp = ParticipantMessageData {
-              guid: self.domain_participant.get_guid_prefix(),
-              kind:
-                ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE,
-              data: Vec::new(),
-            };
-            match self.dcps_participant_message_writer.write(pp, None) {
-              Ok(_) => (),
-              Err(e) => {
-                error!("Failed to write ParticipantMessageData auto. {:?}", e);
-                return;
-              }
+      if let Some(&mm) = min_automatic {
+        if current_duration > mm {
+          let pp = ParticipantMessageData {
+            guid: self.domain_participant.get_guid_prefix(),
+            kind:
+              ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE,
+            data: Vec::new(),
+          };
+          match self.dcps_participant_message_writer.write(pp, None) {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to write ParticipantMessageData auto. {:?}", e);
+              return;
             }
-            self.liveliness_state.last_auto_update = inow;
           }
+          self.liveliness_state.last_auto_update = inow;
         }
-        None => (),
       };
     }
 
@@ -1005,25 +1002,22 @@ impl Discovery {
           | Liveliness::ManualByTopic { lease_duration } => lease_duration,
         })
         .min();
-      match min_manual_participant {
-        Some(&dur) => {
-          if current_duration > dur {
-            let pp = ParticipantMessageData {
-              guid: self.domain_participant.get_guid_prefix(),
-              kind:
-                ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
-              data: Vec::new(),
-            };
-            match self.dcps_participant_message_writer.write(pp, None) {
-              Ok(_) => (),
-              Err(e) => {
-                error!("Failed to writer ParticipantMessageData manual. {:?}", e);
-                return;
-              }
+      if let Some(&dur) = min_manual_participant {
+        if current_duration > dur {
+          let pp = ParticipantMessageData {
+            guid: self.domain_participant.get_guid_prefix(),
+            kind:
+              ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
+            data: Vec::new(),
+          };
+          match self.dcps_participant_message_writer.write(pp, None) {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to writer ParticipantMessageData manual. {:?}", e);
+              return;
             }
           }
         }
-        None => (),
       };
     }
   }

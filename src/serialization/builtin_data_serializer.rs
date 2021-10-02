@@ -775,29 +775,23 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_expects_inline_qos<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.expects_inline_qos {
-      Some(iqos) => {
-        let iq = ExpectsInlineQos {
-          parameter_id: ParameterId::PID_EXPECTS_INLINE_QOS,
-          parameter_length: 4,
-          expects_inline_qos: iqos,
-        };
-        s.serialize_field("expects_inline_qos", &iq).unwrap();
-      }
-      None => (),
+    if let Some(iqos) = self.expects_inline_qos {
+      let iq = ExpectsInlineQos {
+        parameter_id: ParameterId::PID_EXPECTS_INLINE_QOS,
+        parameter_length: 4,
+        expects_inline_qos: iqos,
+      };
+      s.serialize_field("expects_inline_qos", &iq).unwrap();
     }
   }
 
   fn add_participant_guid<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.participant_guid {
-      Some(guid) => {
-        s.serialize_field(
-          "participant_guid",
-          &GUIDData::from(guid, ParameterId::PID_PARTICIPANT_GUID),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(guid) = self.participant_guid {
+      s.serialize_field(
+        "participant_guid",
+        &GUIDData::from(guid, ParameterId::PID_PARTICIPANT_GUID),
+      )
+      .unwrap();
     }
   }
 
@@ -866,77 +860,59 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_available_builtin_endpoint_set<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.available_builtin_endpoints {
-      Some(eps) => {
-        s.serialize_field(
-          "available_builtin_endpoints",
-          &BuiltinEndpointSetData::from(eps, ParameterId::PID_BUILTIN_ENDPOINT_SET),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(eps) = self.available_builtin_endpoints {
+      s.serialize_field(
+        "available_builtin_endpoints",
+        &BuiltinEndpointSetData::from(eps, ParameterId::PID_BUILTIN_ENDPOINT_SET),
+      )
+      .unwrap();
     }
   }
 
   fn add_lease_duration<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.lease_duration {
-      Some(dur) => {
-        s.serialize_field("lease_duration", &DurationData::from(dur))
-          .unwrap();
-      }
-      None => (),
+    if let Some(dur) = self.lease_duration {
+      s.serialize_field("lease_duration", &DurationData::from(dur))
+        .unwrap();
     }
   }
 
   fn add_manual_liveliness_count<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.manual_liveliness_count {
-      Some(liv) => {
-        let mliv = ManualLivelinessCount {
-          parameter_id: ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT,
-          parameter_length: 4,
-          manual_liveliness_count: liv,
-        };
-        s.serialize_field("manual_liveliness_count", &mliv).unwrap();
-      }
-      None => (),
+    if let Some(liv) = self.manual_liveliness_count {
+      let mliv = ManualLivelinessCount {
+        parameter_id: ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT,
+        parameter_length: 4,
+        manual_liveliness_count: liv,
+      };
+      s.serialize_field("manual_liveliness_count", &mliv).unwrap();
     }
   }
 
   fn add_builtin_endpoint_qos<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.builtin_endpoint_qos {
-      Some(qos) => {
-        s.serialize_field("builtin_endpoint_qos", &BuiltinEndpointQosData::from(qos))
-          .unwrap();
-      }
-      None => (),
+    if let Some(qos) = self.builtin_endpoint_qos {
+      s.serialize_field("builtin_endpoint_qos", &BuiltinEndpointQosData::from(qos))
+        .unwrap();
     }
   }
 
   fn add_entity_name<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.entity_name.as_ref() {
-      Some(name) => {
-        let ename = EntityName {
-          parameter_id: ParameterId::PID_ENTITY_NAME,
-          // adding 4 bytes for string lenght and 1 byte for terminate
-          parameter_length: name.len() as u16 + 5,
-          entity_name: name.to_string(),
-        };
-        s.serialize_field("entity_name", &ename).unwrap();
-      }
-      None => (),
+    if let Some(name) = self.entity_name.as_ref() {
+      let ename = EntityName {
+        parameter_id: ParameterId::PID_ENTITY_NAME,
+        // adding 4 bytes for string lenght and 1 byte for terminate
+        parameter_length: name.len() as u16 + 5,
+        entity_name: name.to_string(),
+      };
+      s.serialize_field("entity_name", &ename).unwrap();
     }
   }
 
   fn add_endpoint_guid<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.endpoint_guid {
-      Some(guid) => {
-        s.serialize_field(
-          "endpoint_guid",
-          &GUIDData::from(guid, ParameterId::PID_ENDPOINT_GUID),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(guid) = self.endpoint_guid {
+      s.serialize_field(
+        "endpoint_guid",
+        &GUIDData::from(guid, ParameterId::PID_ENDPOINT_GUID),
+      )
+      .unwrap();
     }
   }
 
@@ -973,64 +949,49 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_topic_name<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.topic_name.as_ref() {
-      Some(name) => {
-        s.serialize_field(
-          "topic_name",
-          &StringData::new(ParameterId::PID_TOPIC_NAME, name),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(name) = self.topic_name.as_ref() {
+      s.serialize_field(
+        "topic_name",
+        &StringData::new(ParameterId::PID_TOPIC_NAME, name),
+      )
+      .unwrap();
     }
   }
 
   fn add_type_name<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.type_name.as_ref() {
-      Some(name) => {
-        s.serialize_field(
-          "type_name",
-          &StringData::new(ParameterId::PID_TYPE_NAME, name),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(name) = self.type_name.as_ref() {
+      s.serialize_field(
+        "type_name",
+        &StringData::new(ParameterId::PID_TYPE_NAME, name),
+      )
+      .unwrap();
     }
   }
 
   fn add_durability<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.durability {
-      Some(dur) => {
-        s.serialize_field(
-          "durability",
-          &QosData::new(ParameterId::PID_DURABILITY, dur),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(dur) = self.durability {
+      s.serialize_field(
+        "durability",
+        &QosData::new(ParameterId::PID_DURABILITY, dur),
+      )
+      .unwrap();
     }
   }
 
   fn add_deadline<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.deadline {
-      Some(dl) => {
-        s.serialize_field("deadline", &QosData::new(ParameterId::PID_DEADLINE, dl))
-          .unwrap();
-      }
-      None => (),
+    if let Some(dl) = self.deadline {
+      s.serialize_field("deadline", &QosData::new(ParameterId::PID_DEADLINE, dl))
+        .unwrap();
     }
   }
 
   fn add_latency_budget<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.latency_budget {
-      Some(lb) => {
-        s.serialize_field(
-          "latency_budget",
-          &QosData::new(ParameterId::PID_LATENCY_BUDGET, lb),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(lb) = self.latency_budget {
+      s.serialize_field(
+        "latency_budget",
+        &QosData::new(ParameterId::PID_LATENCY_BUDGET, lb),
+      )
+      .unwrap();
     }
   }
 
@@ -1047,34 +1008,31 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub kind: LivelinessKind,
       pub lease_duration: Duration,
     }
-    match self.liveliness {
-      Some(l) => {
-        let data = match l {
-          Liveliness::Automatic { lease_duration } => QosData::new(
-            ParameterId::PID_LIVELINESS,
-            LivelinessData {
-              kind: LivelinessKind::Automatic,
-              lease_duration,
-            },
-          ),
-          Liveliness::ManualByParticipant { lease_duration } => QosData::new(
-            ParameterId::PID_LIVELINESS,
-            LivelinessData {
-              kind: LivelinessKind::ManualByParticipant,
-              lease_duration,
-            },
-          ),
-          Liveliness::ManualByTopic { lease_duration } => QosData::new(
-            ParameterId::PID_LIVELINESS,
-            LivelinessData {
-              kind: LivelinessKind::ManualbyTopic,
-              lease_duration,
-            },
-          ),
-        };
-        s.serialize_field("liveliness", &data).unwrap();
-      }
-      None => (),
+    if let Some(l) = self.liveliness {
+      let data = match l {
+        Liveliness::Automatic { lease_duration } => QosData::new(
+          ParameterId::PID_LIVELINESS,
+          LivelinessData {
+            kind: LivelinessKind::Automatic,
+            lease_duration,
+          },
+        ),
+        Liveliness::ManualByParticipant { lease_duration } => QosData::new(
+          ParameterId::PID_LIVELINESS,
+          LivelinessData {
+            kind: LivelinessKind::ManualByParticipant,
+            lease_duration,
+          },
+        ),
+        Liveliness::ManualByTopic { lease_duration } => QosData::new(
+          ParameterId::PID_LIVELINESS,
+          LivelinessData {
+            kind: LivelinessKind::ManualbyTopic,
+            lease_duration,
+          },
+        ),
+      };
+      s.serialize_field("liveliness", &data).unwrap();
     }
   }
 
@@ -1085,33 +1043,30 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub max_blocking_time: Duration,
     }
 
-    match self.reliability {
-      Some(rel) => match rel {
-        Reliability::BestEffort => {
-          let data = ReliabilityBestEffortData {
-            reliability_kind: ReliabilityKind::BEST_EFFORT,
-            max_blocking_time: Duration::from(StdDuration::from_secs(0)),
-          };
-          s.serialize_field(
-            "reliability",
-            &QosData::new(ParameterId::PID_RELIABILITY, &data),
-          )
-          .unwrap();
-        }
-        Reliability::Reliable { max_blocking_time } => {
-          let data = ReliabilityBestEffortData {
-            reliability_kind: ReliabilityKind::RELIABLE,
-            max_blocking_time: max_blocking_time.clone(),
-          };
-          s.serialize_field(
-            "reliability",
-            &QosData::new(ParameterId::PID_RELIABILITY, &data),
-          )
-          .unwrap();
-        }
-      },
-      None => (),
-    }
+    if let Some(rel) = self.reliability { match rel {
+      Reliability::BestEffort => {
+        let data = ReliabilityBestEffortData {
+          reliability_kind: ReliabilityKind::BEST_EFFORT,
+          max_blocking_time: Duration::from(StdDuration::from_secs(0)),
+        };
+        s.serialize_field(
+          "reliability",
+          &QosData::new(ParameterId::PID_RELIABILITY, &data),
+        )
+        .unwrap();
+      }
+      Reliability::Reliable { max_blocking_time } => {
+        let data = ReliabilityBestEffortData {
+          reliability_kind: ReliabilityKind::RELIABLE,
+          max_blocking_time: max_blocking_time.clone(),
+        };
+        s.serialize_field(
+          "reliability",
+          &QosData::new(ParameterId::PID_RELIABILITY, &data),
+        )
+        .unwrap();
+      }
+    } }
   }
 
   fn add_ownership<S: Serializer>(&self, s: &mut S::SerializeStruct) {
@@ -1127,86 +1082,71 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub parameter_length: u16,
       pub kind: OwnershipKind,
     }
-    match self.ownership {
-      Some(own) => match own {
-        Ownership::Shared => {
-          s.serialize_field(
-            "ownership",
-            &OwnershipData {
-              parameter_id: ParameterId::PID_OWNERSHIP,
-              parameter_length: 4,
-              kind: OwnershipKind::SHARED,
-            },
-          )
-          .unwrap();
-        }
-        Ownership::Exclusive { strength } => {
-          s.serialize_field(
-            "ownership",
-            &OwnershipData {
-              parameter_id: ParameterId::PID_OWNERSHIP,
-              parameter_length: 4,
-              kind: OwnershipKind::EXCLUSIVE,
-            },
-          )
-          .unwrap();
-          s.serialize_field(
-            "ownership_strength",
-            &I32Data::new(ParameterId::PID_OWNERSHIP_STRENGTH, strength.clone()),
-          )
-          .unwrap();
-        }
-      },
-      None => (),
-    }
-  }
-
-  fn add_destination_order<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.destination_order {
-      Some(deor) => {
+    if let Some(own) = self.ownership { match own {
+      Ownership::Shared => {
         s.serialize_field(
-          "destination_order",
-          &QosData::new(ParameterId::PID_DESTINATION_ORDER, deor),
+          "ownership",
+          &OwnershipData {
+            parameter_id: ParameterId::PID_OWNERSHIP,
+            parameter_length: 4,
+            kind: OwnershipKind::SHARED,
+          },
         )
         .unwrap();
       }
-      None => (),
+      Ownership::Exclusive { strength } => {
+        s.serialize_field(
+          "ownership",
+          &OwnershipData {
+            parameter_id: ParameterId::PID_OWNERSHIP,
+            parameter_length: 4,
+            kind: OwnershipKind::EXCLUSIVE,
+          },
+        )
+        .unwrap();
+        s.serialize_field(
+          "ownership_strength",
+          &I32Data::new(ParameterId::PID_OWNERSHIP_STRENGTH, strength.clone()),
+        )
+        .unwrap();
+      }
+    } }
+  }
+
+  fn add_destination_order<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    if let Some(deor) = self.destination_order {
+      s.serialize_field(
+        "destination_order",
+        &QosData::new(ParameterId::PID_DESTINATION_ORDER, deor),
+      )
+      .unwrap();
     }
   }
 
   fn add_time_based_filter<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.time_based_filter {
-      Some(tbf) => {
-        s.serialize_field(
-          "time_based_filter",
-          &QosData::new(ParameterId::PID_TIME_BASED_FILTER, tbf),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(tbf) = self.time_based_filter {
+      s.serialize_field(
+        "time_based_filter",
+        &QosData::new(ParameterId::PID_TIME_BASED_FILTER, tbf),
+      )
+      .unwrap();
     }
   }
 
   fn add_presentation<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.presentation {
-      Some(p) => {
-        s.serialize_field(
-          "presentation",
-          &QosData::new(ParameterId::PID_PRESENTATION, p),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(p) = self.presentation {
+      s.serialize_field(
+        "presentation",
+        &QosData::new(ParameterId::PID_PRESENTATION, p),
+      )
+      .unwrap();
     }
   }
 
   fn add_lifespan<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.lifespan {
-      Some(ls) => {
-        s.serialize_field("lifespan", &QosData::new(ParameterId::PID_LIFESPAN, ls))
-          .unwrap();
-      }
-      None => (),
+    if let Some(ls) = self.lifespan {
+      s.serialize_field("lifespan", &QosData::new(ParameterId::PID_LIFESPAN, ls))
+        .unwrap();
     }
   }
 
@@ -1223,64 +1163,52 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub depth: i32,
     }
 
-    match self.history {
-      Some(hs) => {
-        let history_data = match hs {
-          History::KeepLast { depth } => HistoryData {
-            kind: HistoryKind::KEEP_LAST,
-            depth: depth,
-          },
-          History::KeepAll => HistoryData {
-            kind: HistoryKind::KEEP_ALL,
-            depth: 0,
-          },
-        };
-        s.serialize_field(
-          "history",
-          &QosData::new(ParameterId::PID_HISTORY, &history_data),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(hs) = self.history {
+      let history_data = match hs {
+        History::KeepLast { depth } => HistoryData {
+          kind: HistoryKind::KEEP_LAST,
+          depth: depth,
+        },
+        History::KeepAll => HistoryData {
+          kind: HistoryKind::KEEP_ALL,
+          depth: 0,
+        },
+      };
+      s.serialize_field(
+        "history",
+        &QosData::new(ParameterId::PID_HISTORY, &history_data),
+      )
+      .unwrap();
     }
   }
 
   fn add_resource_limits<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.resource_limits {
-      Some(rl) => {
-        s.serialize_field(
-          "resource_limits",
-          &QosData::new(ParameterId::PID_RESOURCE_LIMITS, rl),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(rl) = self.resource_limits {
+      s.serialize_field(
+        "resource_limits",
+        &QosData::new(ParameterId::PID_RESOURCE_LIMITS, rl),
+      )
+      .unwrap();
     }
   }
 
   fn add_content_filter_property<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.content_filter_property {
-      Some(cfp) => {
-        s.serialize_field(
-          "content_filter_property",
-          &ContentFilterPropertyData::new(cfp),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(cfp) = self.content_filter_property {
+      s.serialize_field(
+        "content_filter_property",
+        &ContentFilterPropertyData::new(cfp),
+      )
+      .unwrap();
     }
   }
 
   fn add_data_max_size_serialized<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.data_max_size_serialized {
-      Some(dmss) => {
-        s.serialize_field(
-          "data_max_size_serialized",
-          &U32Data::new(ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED, dmss),
-        )
-        .unwrap();
-      }
-      None => (),
+    if let Some(dmss) = self.data_max_size_serialized {
+      s.serialize_field(
+        "data_max_size_serialized",
+        &U32Data::new(ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED, dmss),
+      )
+      .unwrap();
     }
   }
 }

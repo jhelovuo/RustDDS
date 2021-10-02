@@ -423,13 +423,10 @@ impl Reader {
     };
 
     // checking lifespan for silent dropping of message
-    match self.get_qos().lifespan {
-      Some(ls) => {
-        if ls.duration < duration {
-          return;
-        }
+    if let Some(ls) = self.get_qos().lifespan {
+      if ls.duration < duration {
+        return;
       }
-      None => (),
     }
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
@@ -453,16 +450,13 @@ impl Reader {
     let receive_timestamp = Timestamp::now();
 
     // check if this submessage is expired already
-    match (mr_state.timestamp, self.get_qos().lifespan) {
-      (Some(source_timestamp), Some(lifespan)) => {
-        let elapsed = receive_timestamp.duration_since(source_timestamp);
-        if lifespan.duration < elapsed {
-          info!("DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
-              seq_num, writer_guid, lifespan.duration, elapsed);
-          return
-        }
+    if let (Some(source_timestamp), Some(lifespan)) = (mr_state.timestamp, self.get_qos().lifespan) {
+      let elapsed = receive_timestamp.duration_since(source_timestamp);
+      if lifespan.duration < elapsed {
+        info!("DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
+            seq_num, writer_guid, lifespan.duration, elapsed);
+        return
       }
-      _ => (), // ok, continue
     }
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
     if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {

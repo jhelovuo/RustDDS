@@ -84,17 +84,13 @@ impl DomainParticipant {
     let discovery_handle = thread::Builder::new()
       .name("RustDDS discovery thread".to_string())
       .spawn(move || { 
-          match Discovery::new(
+          if let Ok(mut discovery) = Discovery::new(
               dp_clone,
               disc_db_clone,
               discovery_started_sender,
               discovery_updated_sender,
               discovery_command_receiver,
-            ) {
-            Ok(mut discovery) => // run the event loop
-              discovery.discovery_event_loop(),
-            Err(_) => (),
-          }
+            ) { discovery.discovery_event_loop() }
         })?;
 
     djh_sender.send(discovery_handle).unwrap_or(()); // send join handle to inner participant
@@ -355,10 +351,7 @@ impl DomainParticipantWeak {
   }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
-    match self.dpi.upgrade() {
-      Some(d) => Some(DomainParticipant { dpi: d }),
-      None => None,
-    }
+    self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
   }
 } // end impl
 
@@ -789,10 +782,7 @@ impl DomainParticipant_Inner {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    match self.find_topic_in_discovery_db(domain_participant_weak, name)? {
-      Some(topic) => return Ok(Some(topic)),
-      None => (),
-    }
+    if let Some(topic) = self.find_topic_in_discovery_db(domain_participant_weak, name)? { return Ok(Some(topic)) }
 
     std::thread::sleep(timeout);
 

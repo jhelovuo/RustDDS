@@ -276,10 +276,7 @@ impl BuiltinDataDeserializer {
 
     let mut sbtd = SubscriptionBuiltinTopicData::new(key, topic_name, type_name, &qos);
 
-    match self.participant_guid {
-      Some(g) => sbtd.set_participant_key(g),
-      None => (),
-    };
+    if let Some(g) = self.participant_guid { sbtd.set_participant_key(g) };
 
     Ok(sbtd)
   }
@@ -400,253 +397,190 @@ impl BuiltinDataDeserializer {
       ParameterId::PID_PARTICIPANT_GUID => {
         let guid: Result<GUID, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match guid {
-          Ok(gg) => {
-            self.participant_guid = Some(gg);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(gg) = guid {
+          self.participant_guid = Some(gg);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_PROTOCOL_VERSION => {
         let version: Result<ProtocolVersion, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match version {
-          Ok(vv) => {
-            self.protocol_version = Some(vv);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(vv) = version {
+          self.protocol_version = Some(vv);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_VENDOR_ID => {
         let vendor: Result<VendorId, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match vendor {
-          Ok(vv) => {
-            self.vendor_id = Some(vv);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(vv) = vendor {
+          self.vendor_id = Some(vv);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_EXPECTS_INLINE_QOS => {
         let inline_qos: Result<bool, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match inline_qos {
-          Ok(qos) => {
-            self.expects_inline_qos = Some(qos);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(qos) = inline_qos {
+          self.expects_inline_qos = Some(qos);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match locator {
-          Ok(loc) => {
-            self.metatraffic_unicast_locators.push(loc);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(loc) = locator {
+          self.metatraffic_unicast_locators.push(loc);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match locator {
-          Ok(loc) => {
-            self.metatraffic_multicast_locators.push(loc);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(loc) = locator {
+          self.metatraffic_multicast_locators.push(loc);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match locator {
-          Ok(loc) => {
-            self.default_unicast_locators.push(loc);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(loc) = locator {
+          self.default_unicast_locators.push(loc);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match locator {
-          Ok(loc) => {
-            self.default_multicast_locators.push(loc);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(loc) = locator {
+          self.default_multicast_locators.push(loc);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_BUILTIN_ENDPOINT_SET => {
         let endpoints: Result<BuiltinEndpointSet, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match endpoints {
-          Ok(ep) => {
-            self.available_builtin_endpoints = Some(ep);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(ep) = endpoints {
+          self.available_builtin_endpoints = Some(ep);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_PARTICIPANT_LEASE_DURATION => {
         let duration: Result<Duration, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match duration {
-          Ok(dur) => {
-            self.lease_duration = Some(dur);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(dur) = duration {
+          self.lease_duration = Some(dur);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT => {
         let count: Result<i32, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match count {
-          Ok(c) => {
-            self.manual_liveliness_count = Some(c);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(c) = count {
+          self.manual_liveliness_count = Some(c);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_BUILTIN_ENDPOINT_QOS => {
         let qos: Result<BuiltinEndpointQos, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match qos {
-          Ok(q) => {
-            self.builtin_endpoint_qos = Some(q);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(q) = qos {
+          self.builtin_endpoint_qos = Some(q);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_ENTITY_NAME => {
         let name: Result<String, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match name {
-          Ok(n) => {
-            self.entity_name = Some(n);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(n) = name {
+          self.entity_name = Some(n);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_ENDPOINT_GUID => {
         let guid: Result<GUID, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match guid {
-          Ok(gg) => {
-            self.endpoint_guid = Some(gg);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(gg) = guid {
+          self.endpoint_guid = Some(gg);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_UNICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match locator {
-          Ok(loc) => {
-            self.unicast_locator_list.push(loc);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(loc) = locator {
+          self.unicast_locator_list.push(loc);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_MULTICAST_LOCATOR => {
         let locator: Result<Locator, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match locator {
-          Ok(loc) => {
-            self.multicast_locator_list.push(loc);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(loc) = locator {
+          self.multicast_locator_list.push(loc);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_TOPIC_NAME => {
         let topic_name: Result<String, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match topic_name {
-          Ok(name) => {
-            self.topic_name = Some(name);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(name) = topic_name {
+          self.topic_name = Some(name);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_TYPE_NAME => {
         let type_name: Result<String, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match type_name {
-          Ok(name) => {
-            self.type_name = Some(name);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(name) = type_name {
+          self.type_name = Some(name);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_DURABILITY => {
         let durability: Result<Durability, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match durability {
-          Ok(dur) => {
-            self.durability = Some(dur);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(dur) = durability {
+          self.durability = Some(dur);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_DEADLINE => {
         let deadline: Result<Deadline, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match deadline {
-          Ok(dl) => {
-            self.deadline = Some(dl);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(dl) = deadline {
+          self.deadline = Some(dl);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_LATENCY_BUDGET => {
         let latency_budget: Result<LatencyBudget, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match latency_budget {
-          Ok(lb) => {
-            self.latency_budget = Some(lb);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(lb) = latency_budget {
+          self.latency_budget = Some(lb);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_LIVELINESS => {
@@ -664,23 +598,20 @@ impl BuiltinDataDeserializer {
         }
         let liveliness: Result<LivelinessData, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match liveliness {
-          Ok(liv) => {
-            self.liveliness = match liv.kind {
-              LivelinessKind::Automatic => Some(Liveliness::Automatic {
-                lease_duration: liv.lease_duration,
-              }),
-              LivelinessKind::ManualByParticipant => Some(Liveliness::ManualByParticipant {
-                lease_duration: liv.lease_duration,
-              }),
-              LivelinessKind::ManualbyTopic => Some(Liveliness::ManualByTopic {
-                lease_duration: liv.lease_duration,
-              }),
-            };
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(liv) = liveliness {
+          self.liveliness = match liv.kind {
+            LivelinessKind::Automatic => Some(Liveliness::Automatic {
+              lease_duration: liv.lease_duration,
+            }),
+            LivelinessKind::ManualByParticipant => Some(Liveliness::ManualByParticipant {
+              lease_duration: liv.lease_duration,
+            }),
+            LivelinessKind::ManualbyTopic => Some(Liveliness::ManualByTopic {
+              lease_duration: liv.lease_duration,
+            }),
+          };
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_RELIABILITY => {
@@ -692,23 +623,20 @@ impl BuiltinDataDeserializer {
 
         let reliability: Result<ReliabilityBestEffortData, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match reliability {
-          Ok(rel) => {
-            self.reliability = match rel.reliability_kind {
-              ReliabilityKind::BEST_EFFORT => Some(Reliability::BestEffort),
-              ReliabilityKind::RELIABLE => Some(Reliability::Reliable {
-                max_blocking_time: rel.max_blocking_time,
-              }),
-              _ => {
-                buffer.drain(..4 + parameter_length);
-                return self;
-              }
-            };
+        if let Ok(rel) = reliability {
+          self.reliability = match rel.reliability_kind {
+            ReliabilityKind::BEST_EFFORT => Some(Reliability::BestEffort),
+            ReliabilityKind::RELIABLE => Some(Reliability::Reliable {
+              max_blocking_time: rel.max_blocking_time,
+            }),
+            _ => {
+              buffer.drain(..4 + parameter_length);
+              return self;
+            }
+          };
 
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_OWNERSHIP => {
@@ -719,44 +647,38 @@ impl BuiltinDataDeserializer {
         }
         let ownership: Result<OwnershipKind, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match ownership {
-          Ok(own) => {
-            let strength = match self.ownership {
-              Some(v) => match v {
-                Ownership::Exclusive { strength } => strength,
-                _ => 0,
-              },
-              None => 0,
-            };
+        if let Ok(own) = ownership {
+          let strength = match self.ownership {
+            Some(v) => match v {
+              Ownership::Exclusive { strength } => strength,
+              _ => 0,
+            },
+            None => 0,
+          };
 
-            let own = match own {
-              OwnershipKind::SHARED => Ownership::Shared,
-              OwnershipKind::EXCLUSIVE => Ownership::Exclusive { strength: strength },
-            };
+          let own = match own {
+            OwnershipKind::SHARED => Ownership::Shared,
+            OwnershipKind::EXCLUSIVE => Ownership::Exclusive { strength: strength },
+          };
 
-            self.ownership = Some(own);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+          self.ownership = Some(own);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_OWNERSHIP_STRENGTH => {
         let ownership_strength: Result<i32, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match ownership_strength {
-          Ok(stri) => {
-            self.ownership = match self.ownership {
-              Some(v) => match v {
-                Ownership::Exclusive { strength: _ } => {
-                  Some(Ownership::Exclusive { strength: stri })
-                }
-                _ => Some(v),
-              },
-              None => Some(Ownership::Exclusive { strength: stri }),
-            }
+        if let Ok(stri) = ownership_strength {
+          self.ownership = match self.ownership {
+            Some(v) => match v {
+              Ownership::Exclusive { strength: _ } => {
+                Some(Ownership::Exclusive { strength: stri })
+              }
+              _ => Some(v),
+            },
+            None => Some(Ownership::Exclusive { strength: stri }),
           }
-          _ => (),
         };
         buffer.drain(..4 + parameter_length);
         return self;
@@ -764,73 +686,55 @@ impl BuiltinDataDeserializer {
       ParameterId::PID_DESTINATION_ORDER => {
         let destination_order: Result<DestinationOrder, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match destination_order {
-          Ok(deor) => {
-            self.destination_order = Some(deor);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(deor) = destination_order {
+          self.destination_order = Some(deor);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_TIME_BASED_FILTER => {
         let time_based_filter: Result<TimeBasedFilter, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match time_based_filter {
-          Ok(tbf) => {
-            self.time_based_filter = Some(tbf);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(tbf) = time_based_filter {
+          self.time_based_filter = Some(tbf);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_PRESENTATION => {
         let presentation: Result<Presentation, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match presentation {
-          Ok(p) => {
-            self.presentation = Some(p);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(p) = presentation {
+          self.presentation = Some(p);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_LIFESPAN => {
         let lifespan: Result<Lifespan, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match lifespan {
-          Ok(ls) => {
-            self.lifespan = Some(ls);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(ls) = lifespan {
+          self.lifespan = Some(ls);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
         let content_filter: Result<ContentFilterProperty, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match content_filter {
-          Ok(cfp) => {
-            self.content_filter_property = Some(cfp);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(cfp) = content_filter {
+          self.content_filter_property = Some(cfp);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED => {
         let max_size: Result<u32, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match max_size {
-          Ok(ms) => {
-            self.data_max_size_serialized = Some(ms);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(ms) = max_size {
+          self.data_max_size_serialized = Some(ms);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_HISTORY => {
@@ -848,29 +752,23 @@ impl BuiltinDataDeserializer {
 
         let history: Result<HistoryData, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match history {
-          Ok(his) => {
-            let h = match his.kind {
-              HistoryKind::KEEP_LAST => History::KeepLast { depth: his.depth },
-              HistoryKind::KEEP_ALL => History::KeepAll,
-            };
-            self.history = Some(h);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(his) = history {
+          let h = match his.kind {
+            HistoryKind::KEEP_LAST => History::KeepLast { depth: his.depth },
+            HistoryKind::KEEP_ALL => History::KeepAll,
+          };
+          self.history = Some(h);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_RESOURCE_LIMITS => {
         let resource_limits: Result<ResourceLimits, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        match resource_limits {
-          Ok(lim) => {
-            self.resource_limits = Some(lim);
-            buffer.drain(..4 + parameter_length);
-            return self;
-          }
-          _ => (),
+        if let Ok(lim) = resource_limits {
+          self.resource_limits = Some(lim);
+          buffer.drain(..4 + parameter_length);
+          return self;
         }
       }
       ParameterId::PID_SENTINEL => {
