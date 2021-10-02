@@ -583,7 +583,7 @@ impl Writer {
         }
       }
     }
-    AckSubmessage::NackFrag_Variant(nackfrag) => {
+    AckSubmessage::NackFrag_Variant(_nackfrag) => {
       // TODO
       error!("NACKFRAG Not implemented")
     }
