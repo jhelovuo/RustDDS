@@ -134,7 +134,7 @@ where
     status_receiver_rec: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
     let entity_id = match guid {
-      Some(g) => g.entityId.clone(),
+      Some(g) => g.entityId,
       None => EntityId::ENTITYID_UNKNOWN,
     };
 
@@ -144,7 +144,7 @@ where
         log_and_err_precondition_not_met!("Cannot create new DataWriter, DomainParticipant doesn't exist.") ,
     };
 
-    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix().clone(), entity_id );
+    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), entity_id );
 
     match dds_cache.write() {
       Ok(mut cache) => cache.add_new_topic(

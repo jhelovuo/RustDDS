@@ -41,9 +41,9 @@ impl BuiltinEndpointSetData {
     parameter_id: ParameterId,
   ) -> BuiltinEndpointSetData {
     BuiltinEndpointSetData {
-      parameter_id: parameter_id.clone(),
+      parameter_id: parameter_id,
       parameter_length: 4,
-      builtin_endpoint_set: builtin_endpoint_set.clone(),
+      builtin_endpoint_set: builtin_endpoint_set,
     }
   }
 }
@@ -73,7 +73,7 @@ impl BuiltinEndpointQosData {
     BuiltinEndpointQosData {
       parameter_id: ParameterId::PID_BUILTIN_ENDPOINT_QOS,
       parameter_length: 4,
-      builtin_endpoint_qos: builtin_endpoint_qos.clone(),
+      builtin_endpoint_qos: builtin_endpoint_qos,
     }
   }
 }
