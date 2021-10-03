@@ -1069,9 +1069,10 @@ impl<'a> BuiltinDataSerializer<'a> {
 
   fn add_ownership<S: Serializer>(&self, s: &mut S::SerializeStruct) {
     #[derive(Serialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     enum OwnershipKind {
-      SHARED,
-      EXCLUSIVE,
+      Shared,
+      Exclusive,
     }
 
     #[derive(Serialize)]
@@ -1087,7 +1088,7 @@ impl<'a> BuiltinDataSerializer<'a> {
           &OwnershipData {
             parameter_id: ParameterId::PID_OWNERSHIP,
             parameter_length: 4,
-            kind: OwnershipKind::SHARED,
+            kind: OwnershipKind::Shared,
           },
         )
         .unwrap();
@@ -1098,7 +1099,7 @@ impl<'a> BuiltinDataSerializer<'a> {
           &OwnershipData {
             parameter_id: ParameterId::PID_OWNERSHIP,
             parameter_length: 4,
-            kind: OwnershipKind::EXCLUSIVE,
+            kind: OwnershipKind::Exclusive,
           },
         )
         .unwrap();

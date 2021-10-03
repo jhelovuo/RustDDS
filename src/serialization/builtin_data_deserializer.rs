@@ -641,9 +641,10 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_OWNERSHIP => {
         #[derive(Deserialize)]
+        #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
         enum OwnershipKind {
-          SHARED,
-          EXCLUSIVE,
+          Shared,
+          Exclusive,
         }
         let ownership: Result<OwnershipKind, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
@@ -654,8 +655,8 @@ impl BuiltinDataDeserializer {
           };
 
           let own = match own {
-            OwnershipKind::SHARED => Ownership::Shared,
-            OwnershipKind::EXCLUSIVE => Ownership::Exclusive { strength },
+            OwnershipKind::Shared => Ownership::Shared,
+            OwnershipKind::Exclusive => Ownership::Exclusive { strength },
           };
 
           self.ownership = Some(own);

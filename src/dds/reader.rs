@@ -787,8 +787,8 @@ impl Reader {
         si.change_kind(), // get from inline QoS
         // TODO: What if si.change_kind() gives ALIVE ??
       None => { 
-        if no_writers { ChangeKind::NOT_ALIVE_UNREGISTERED } 
-        else { ChangeKind::NOT_ALIVE_DISPOSED } // TODO: Is this reasonable default?
+        if no_writers { ChangeKind::NotAliveUnregistered } 
+        else { ChangeKind::NotAliveDisposed } // TODO: Is this reasonable default?
       }
     }
   }

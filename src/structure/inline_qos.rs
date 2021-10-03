@@ -63,13 +63,13 @@ impl StatusInfo {
   pub fn change_kind(&self) -> ChangeKind {
     if self.contains(StatusInfoEnum::Disposed) {
       // DISPOSED is strongest
-      ChangeKind::NOT_ALIVE_DISPOSED
+      ChangeKind::NotAliveDisposed
     } else if self.contains(StatusInfoEnum::Unregistered) {
       // Checking unregistered second
-      ChangeKind::NOT_ALIVE_UNREGISTERED
+      ChangeKind::NotAliveUnregistered
     } else {
       // Even if filtered is set it is still alive
-      ChangeKind::ALIVE
+      ChangeKind::Alive
     }
   }
 

@@ -123,7 +123,7 @@ impl FragmentAssembler {
 				);
 				let ddsdata = 
 					if flags.contains(DATAFRAG_Flags::Key) {
-						DDSData::new_disposed_by_key(ChangeKind::NOT_ALIVE_DISPOSED, ser_data_or_key)
+						DDSData::new_disposed_by_key(ChangeKind::NotAliveDisposed, ser_data_or_key)
 					} else {
 						// it is data
 						DDSData::new(ser_data_or_key)
