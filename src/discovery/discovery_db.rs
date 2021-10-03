@@ -206,20 +206,18 @@ impl DiscoveryDB {
   fn topic_has_writers_or_readers(&self, topic_name: &str) -> bool {
     // TODO: This entire function has silly implementation.
     // We should really have a separate map from Topic to Readers & Writers
-    if let Some(_) =
-      self
+    if self
         .local_topic_readers
         .iter()
-        .find(|(_, p)| p.subscription_topic_data.topic_name() == topic_name)
+        .any(|(_, p)| p.subscription_topic_data.topic_name() == topic_name)
     {
       return true
     }
 
-    if let Some(_) =
-      self
+    if self
         .local_topic_writers
         .iter()
-        .find(|(_, p)| &p.publication_topic_data.topic_name == topic_name)
+        .any(|(_, p)| p.publication_topic_data.topic_name == topic_name)
     {
       return true
     }
@@ -227,7 +225,7 @@ impl DiscoveryDB {
     if self
         .external_topic_readers
         .values()
-        .find(|p| p.subscription_topic_data.topic_name() == topic_name).is_some()
+        .any(|p| p.subscription_topic_data.topic_name() == topic_name)
     {
       return true
     }

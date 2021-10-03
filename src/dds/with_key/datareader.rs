@@ -251,7 +251,7 @@ where
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<&D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
-    while let Ok(_) = self.notification_receiver.try_recv() {}
+    while self.notification_receiver.try_recv().is_ok() {}
 
     self.fill_local_datasample_cache();
 
@@ -314,7 +314,7 @@ where
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
-    while let Ok(_) = self.notification_receiver.try_recv() {}
+    while self.notification_receiver.try_recv().is_ok() {}
 
     self.fill_local_datasample_cache();
     let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
@@ -803,7 +803,7 @@ where
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<&D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
-    while let Ok(_) = self.notification_receiver.try_recv() {}
+    while self.notification_receiver.try_recv().is_ok() {}
 
     self.fill_local_datasample_cache();
 
@@ -876,7 +876,7 @@ where
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
-    while let Ok(_) = self.notification_receiver.try_recv() {}
+    while self.notification_receiver.try_recv().is_ok() {}
 
     self.fill_local_datasample_cache();
 
