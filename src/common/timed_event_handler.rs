@@ -28,9 +28,7 @@ impl<'a> TimedEventHandler {
   }
 
   pub fn set_timeout(&mut self, duration: &'a chrono::Duration, timer_type: TimerMessageType) {
-    if !self.timers.contains_key(&timer_type) {
-      self.timers.insert(timer_type, Timer::new());
-    }
+    self.timers.entry(timer_type).or_insert_with(Timer::new);
 
     let new_chanenel = self.channel_send.clone();
     self.guards.insert(
