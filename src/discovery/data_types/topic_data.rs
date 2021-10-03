@@ -310,7 +310,7 @@ impl DiscoveredReaderData {
     let reader_proxy = ReaderProxy::new(reader.get_guid());
     let mut subscription_topic_data = SubscriptionBuiltinTopicData::new(
       reader.get_guid(),
-      &topic.get_name().to_string(),
+      &topic.get_name(),
       &topic.get_type().name().to_string(),
       &topic.get_qos(),
     );
@@ -616,7 +616,7 @@ impl DiscoveredWriterData {
     let mut publication_topic_data = PublicationBuiltinTopicData::new(
       writer.get_guid(),
       dp.get_guid(),
-      &topic.get_name().to_string(),
+      &topic.get_name(),
       &topic.get_type().name().to_string(),
     );
 

@@ -432,7 +432,7 @@ impl InnerPublisher {
     let new_writer = WriterIngredients {
         guid: guid,
         writer_command_receiver: hccc_download,
-        topic_name: topic.get_name().to_string(),
+        topic_name: topic.get_name(),
         qos_policies: writer_qos,
         status_sender,
       };
@@ -846,7 +846,7 @@ impl InnerSubscriber {
       mio_channel::sync_channel::<ReaderCommand>(4);
 
 
-    let qos = optional_qos.unwrap_or_else(|| topic.get_qos().clone());
+    let qos = optional_qos.unwrap_or_else(|| topic.get_qos());
 
     let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
 
@@ -865,7 +865,7 @@ impl InnerSubscriber {
       guid: reader_guid,
       notification_sender: send,
       status_sender,
-      topic_name: topic.get_name().to_string(),
+      topic_name: topic.get_name(),
       qos_policy: qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
     };
@@ -893,7 +893,7 @@ impl InnerSubscriber {
     match dp.get_dds_cache().write() {
       Ok(mut dds_cache) => {
         dds_cache.add_new_topic(
-            &topic.get_name().to_string(),
+            &topic.get_name(),
             topic.kind(),
             topic.get_type(),
           );                   
