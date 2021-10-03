@@ -36,13 +36,6 @@ bytes = "1"
 static_assertions = "1.1"
 thiserror = "1.0.29"
 
-[[example]]
-name = "shapes_demo"
-
-
-[[example]]
-name = "ros2_demo"
-
 [dev-dependencies]
 # shapes-demo:
 ctrlc = "3.1.6"     
