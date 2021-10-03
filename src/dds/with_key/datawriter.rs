@@ -830,7 +830,7 @@ where
     let send_buffer = SA::key_to_Bytes( &key  )?; // serialize key
 
     let ddsdata = DDSData::new_disposed_by_key( 
-      ChangeKind::NOT_ALIVE_DISPOSED,
+      ChangeKind::NotAliveDisposed,
       SerializedPayload::new_from_Bytes( SA::output_encoding() , send_buffer) 
     );
     self.cc_upload

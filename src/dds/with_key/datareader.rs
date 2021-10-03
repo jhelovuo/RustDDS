@@ -1026,10 +1026,10 @@ where
 
   fn change_kind_to_instance_state(c_k: &ChangeKind) -> InstanceState {
     match c_k {
-      ChangeKind::ALIVE => InstanceState::Alive,
-      ChangeKind::NOT_ALIVE_DISPOSED => InstanceState::NotAlive_Disposed,
+      ChangeKind::Alive => InstanceState::Alive,
+      ChangeKind::NotAliveDisposed => InstanceState::NotAlive_Disposed,
       // TODO check this..?
-      ChangeKind::NOT_ALIVE_UNREGISTERED => InstanceState::NotAlive_NoWriters,
+      ChangeKind::NotAliveUnregistered => InstanceState::NotAlive_NoWriters,
     }
   }
   */ 

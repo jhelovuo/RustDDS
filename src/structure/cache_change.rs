@@ -5,9 +5,9 @@ use crate::dds::ddsdata::DDSData;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Copy, Clone)]
 pub enum ChangeKind {
-  ALIVE,
-  NOT_ALIVE_DISPOSED,
-  NOT_ALIVE_UNREGISTERED,
+  Alive,
+  NotAliveDisposed,
+  NotAliveUnregistered,
 }
 
 #[derive(Debug, Clone)]

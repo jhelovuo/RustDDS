@@ -40,7 +40,7 @@ impl DDSData {
 
   pub fn change_kind(&self) -> ChangeKind {
     match self {
-      DDSData::Data {..} | DDSData::DataFrags {..} => ChangeKind::ALIVE,
+      DDSData::Data {..} | DDSData::DataFrags {..} => ChangeKind::Alive,
       DDSData::DisposeByKey { change_kind, ..} => *change_kind,
       DDSData::DisposeByKeyHash { change_kind, .. } => *change_kind,
     }
