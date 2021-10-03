@@ -94,11 +94,11 @@ impl RtpsReaderProxy {
     }
   }
 
-  fn discovered_or_default(drd: &LocatorList, default: &LocatorList) -> LocatorList {
+  fn discovered_or_default(drd: &[Locator], default: &[Locator]) -> Vec<Locator> {
     if drd.is_empty() {
-      default.clone()
+      default.to_vec()
     } else {
-      drd.clone()
+      drd.to_vec()
     }
   }
 

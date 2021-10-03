@@ -44,13 +44,13 @@ struct StringData {
 }
 
 impl StringData {
-  pub fn new(parameter_id: ParameterId, string_data: &String) -> StringData {
+  pub fn new(parameter_id: ParameterId, string_data: &str) -> StringData {
     let parameter_length = string_data.len() as u16;
     let parameter_length = parameter_length + (4 - parameter_length % 4) + 4;
     StringData {
       parameter_id,
       parameter_length,
-      string_data: string_data.clone(),
+      string_data: string_data.to_string(),
     }
   }
 }

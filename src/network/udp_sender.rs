@@ -7,7 +7,7 @@ use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
 
 #[cfg(test)] use std::net::Ipv4Addr;
 use std::io;
-use crate::structure::locator::{LocatorKind, LocatorList, Locator};
+use crate::structure::locator::{LocatorKind, Locator};
 use crate::network::util::get_local_multicast_ip_addrs;
 
 // We need one multicast sender socket per interface
@@ -56,8 +56,8 @@ impl UDPSender {
   }
 
 
-  pub fn send_to_locator_list(&self, buffer: &[u8], ll: &LocatorList) {
-    for loc in ll.iter() {
+  pub fn send_to_locator_list(&self, buffer: &[u8], ll: &[Locator]) {
+    for loc in ll {
       self.send_to_locator(buffer,loc)
     }
   }
