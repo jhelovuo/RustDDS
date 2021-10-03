@@ -88,7 +88,7 @@ where
   fn to_Bytes(value: &D) -> Result<Bytes> {
     let size_estimate = std::mem::size_of_val(value) * 2; // TODO: crude estimate
     let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate); 
-    to_writer::<D, BO, &mut Vec<u8>>(&mut buffer, &value)?;
+    to_writer::<D, BO, &mut Vec<u8>>(&mut buffer, value)?;
     Ok(Bytes::from(buffer))
   }
 }
@@ -102,7 +102,7 @@ where
   fn key_to_Bytes(value: &D::K) -> Result<Bytes> {
     let size_estimate = std::mem::size_of_val(value) * 2; // TODO: crude estimate
     let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate); 
-    to_writer::<D::K, BO, &mut Vec<u8>>(&mut buffer, &value)?;
+    to_writer::<D::K, BO, &mut Vec<u8>>(&mut buffer, value)?;
     Ok(Bytes::from(buffer))
   }
 }
@@ -180,7 +180,7 @@ where
   BO: ByteOrder,
 {
   let mut buffer: Vec<u8> = Vec::with_capacity(std::mem::size_of_val(value) * 2); 
-  to_writer::<T, BO, &mut Vec<u8>>(&mut buffer, &value)?;
+  to_writer::<T, BO, &mut Vec<u8>>(&mut buffer, value)?;
   Ok(buffer)
 }
 

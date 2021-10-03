@@ -87,7 +87,7 @@ impl Serialize for ReaderProxy {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_reader_proxy(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_reader_proxy(self);
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
@@ -270,7 +270,7 @@ impl Serialize for SubscriptionBuiltinTopicData {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_subscription_topic_data(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_subscription_topic_data(self);
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
@@ -378,7 +378,7 @@ impl Serialize for DiscoveredReaderData {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_reader_data(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_reader_data(self);
     builtin_data_serializer.serialize::<S>(serializer, true)
   }
 }
@@ -403,7 +403,7 @@ impl Serialize for DiscoveredReaderData_Key {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_reader_data_key(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_reader_data_key(self);
     builtin_data_serializer.serialize_key::<S>(serializer, true)
   }
 }
@@ -454,7 +454,7 @@ impl Serialize for WriterProxy {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_writer_proxy(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_writer_proxy(self);
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
@@ -556,7 +556,7 @@ impl Serialize for PublicationBuiltinTopicData {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_publication_topic_data(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_publication_topic_data(self);
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
@@ -654,7 +654,7 @@ impl Serialize for DiscoveredWriterData {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_writer_data(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_writer_data(self);
     builtin_data_serializer.serialize::<S>(serializer, true)
   }
 }
@@ -677,7 +677,7 @@ impl Serialize for DiscoveredWriterData_Key {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_writer_data_key(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_writer_data_key(self);
     builtin_data_serializer.serialize_key::<S>(serializer, true)
   }
 }
@@ -740,7 +740,7 @@ impl Serialize for TopicBuiltinTopicData {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_topic_data(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_topic_data(self);
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }

@@ -192,7 +192,7 @@ impl Serialize for SPDPDiscoveredParticipantData {
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_participant_data(&self);
+    let builtin_data_serializer = BuiltinDataSerializer::from_participant_data(self);
     builtin_data_serializer.serialize::<S>(serializer, true)
   }
 }

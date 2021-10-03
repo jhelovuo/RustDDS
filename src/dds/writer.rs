@@ -668,7 +668,7 @@ impl Writer {
     }
     // Add GAP submessage, if some chache changes could not be found.
     if ! no_longer_relevant.is_empty() {
-      partial_message = partial_message.gap_msg(BTreeSet::from_iter(no_longer_relevant), &self, reader_guid);
+      partial_message = partial_message.gap_msg(BTreeSet::from_iter(no_longer_relevant), self, reader_guid);
     }
     let data_gap_msg = partial_message
       .add_header_and_build(self.my_guid.guidPrefix);

@@ -385,9 +385,9 @@ impl BuiltinDataDeserializer {
     buffer: &mut Vec<u8>,
     rep: RepresentationIdentifier,
   ) -> BuiltinDataDeserializer {
-    let parameter_id = BuiltinDataDeserializer::read_parameter_id(&buffer, rep).unwrap();
+    let parameter_id = BuiltinDataDeserializer::read_parameter_id(buffer, rep).unwrap();
     let mut parameter_length: usize =
-      BuiltinDataDeserializer::read_parameter_length(&buffer, rep).unwrap() as usize;
+      BuiltinDataDeserializer::read_parameter_length(buffer, rep).unwrap() as usize;
 
     if (parameter_length + 4) > buffer.len() {
       parameter_length = buffer.len() - 4;

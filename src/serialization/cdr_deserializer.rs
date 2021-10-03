@@ -329,7 +329,7 @@ where
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
-    visitor.visit_seq(SequenceHelper::new(&mut self, element_count))
+    visitor.visit_seq(SequenceHelper::new(self, element_count))
   }
 
   // if sequence is fixed length array then number of elements is not included
@@ -337,7 +337,7 @@ where
   where
     V: Visitor<'de>,
   {
-    visitor.visit_seq(SequenceHelper::new(&mut self, len))
+    visitor.visit_seq(SequenceHelper::new(self, len))
   }
 
   fn deserialize_tuple_struct<V>(
@@ -349,7 +349,7 @@ where
   where
     V: Visitor<'de>,
   {
-    visitor.visit_seq(SequenceHelper::new(&mut self, len))
+    visitor.visit_seq(SequenceHelper::new(self, len))
   }
 
   fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
@@ -358,7 +358,7 @@ where
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let element_count = self.next_bytes(4)?.read_u32::<BO>().unwrap() as usize;
-    visitor.visit_map(SequenceHelper::new(&mut self, element_count))
+    visitor.visit_map(SequenceHelper::new(self, element_count))
   }
 
   fn deserialize_struct<V>(
@@ -370,7 +370,7 @@ where
   where
     V: Visitor<'de>,
   {
-    visitor.visit_seq(SequenceHelper::new(&mut self, fields.len()))
+    visitor.visit_seq(SequenceHelper::new(self, fields.len()))
   }
 
   ///Enum values are encoded as unsigned longs. (u32)
@@ -386,7 +386,7 @@ where
     V: Visitor<'de>,
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
-    visitor.visit_enum(EnumerationHelper::<BO>::new(&mut self))
+    visitor.visit_enum(EnumerationHelper::<BO>::new(self))
   }
 
   /// An identifier in Serde is the type that identifies a field of a struct or

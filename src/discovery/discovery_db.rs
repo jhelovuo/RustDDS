@@ -431,7 +431,7 @@ impl DiscoveryDB {
     let mut subscription_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
       &topic.get_name(),
-      &topic.get_type().name(),
+      topic.get_type().name(),
       &topic.get_qos(),
     );
     subscription_data.set_participant_key(domain_participant.get_guid());

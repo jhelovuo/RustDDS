@@ -227,7 +227,7 @@ where
       .iter()
       .filter_map(|(ts, dsm)| {
         let key = dsm.get_key();
-        if self.sample_selector(&rc, self.instance_map.get(&key).unwrap(), &dsm) {
+        if self.sample_selector(&rc, self.instance_map.get(&key).unwrap(), dsm) {
           Some((*ts, key))
         } else {
           None
@@ -247,8 +247,8 @@ where
         .instance_samples
         .iter()
         .filter_map(|ts| {
-          if let Some(ds) = self.datasamples.get(&ts) {
-            if self.sample_selector(&rc, &imd, ds) {
+          if let Some(ds) = self.datasamples.get(ts) {
+            if self.sample_selector(&rc, imd, ds) {
               Some((*ts, instance.clone()))
             } else {
               None
