@@ -534,7 +534,7 @@ impl Drop for DomainParticipant_Inner {
     // ev_loop_thread anyways
     match self.stop_poll_sender.send(()) {
       Ok(_) => (),
-      _ => return (),
+      _ => return,
     };
 
     debug!("Waiting for dp_event_loop join");

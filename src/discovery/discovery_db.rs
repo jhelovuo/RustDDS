@@ -185,7 +185,7 @@ impl DiscoveryDB {
           // keep, if duration not exeeded
           let elapsed = Duration::from_std(inow.duration_since(last_life));
           if elapsed <= lease_duration {
-            () // this is a keeper
+            // this is a keeper
           } else {
             info!("participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} elapsed = {:?}",
                   guid, lease_duration, elapsed);

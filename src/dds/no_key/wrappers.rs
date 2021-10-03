@@ -39,8 +39,8 @@ impl<D> Deref for NoKeyWrapper<D> {
 
 impl<D> Keyed for NoKeyWrapper<D> {
   type K = ();
-  fn get_key(&self) -> () {
-    ()
+  fn get_key(&self) {
+    
   }
 }
 
