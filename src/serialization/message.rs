@@ -86,7 +86,7 @@ impl<'a> Message {
     let mut message = Message::new(rtps_header);
     let mut submessages_left : Bytes = buffer.slice(20..); // header is 20 bytes
                                               // submessage loop
-    while submessages_left.len() > 0 {
+    while !submessages_left.is_empty() {
       let sub_header = SubmessageHeader::read_from_buffer(&submessages_left)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
       // Try to figure out how large this submessage is.

@@ -124,7 +124,7 @@ where
   }
 
   fn check_if_bytes_left(&mut self) -> bool {
-    self.input.len() > 0
+    !self.input.is_empty()
   }
 
   fn calculate_padding_count_from_written_bytes_and_remove(

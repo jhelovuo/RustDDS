@@ -373,7 +373,7 @@ impl BuiltinDataDeserializer {
 
   fn parse_data(mut self, buffer: &[u8], rep: RepresentationIdentifier) -> BuiltinDataDeserializer {
     let mut buffer = buffer.to_vec();
-    while self.sentinel.is_none() && buffer.len() > 0 {
+    while self.sentinel.is_none() && !buffer.is_empty() {
       self = self.read_next(&mut buffer, rep);
     }
 
