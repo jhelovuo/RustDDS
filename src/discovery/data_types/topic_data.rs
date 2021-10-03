@@ -547,7 +547,7 @@ impl<'de> Deserialize<'de> for PublicationBuiltinTopicData {
     let res = deserializer.deserialize_any(custom_ds)?;
     res
       .generate_publication_topic_data()
-      .map_err(|e| de::Error::custom(e))
+      .map_err(de::Error::custom)
   }
 }
 
@@ -645,7 +645,7 @@ impl<'de> Deserialize<'de> for DiscoveredWriterData {
     let res = deserializer.deserialize_any(custom_ds)?;
     res
       .generate_discovered_writer_data()
-      .map_err(|e| de::Error::custom(e))
+      .map_err(de::Error::custom)
   }
 }
 
@@ -668,7 +668,7 @@ impl<'de> Deserialize<'de> for DiscoveredWriterData_Key {
     let res = deserializer.deserialize_any(custom_ds)?;
     res
       .generate_discovered_writer_data_key()
-      .map_err(|e| de::Error::custom(e))
+      .map_err(de::Error::custom)
   }
 }
 
@@ -731,7 +731,7 @@ impl<'de> Deserialize<'de> for TopicBuiltinTopicData {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    res.generate_topic_data().map_err(|e| de::Error::custom(e))
+    res.generate_topic_data().map_err(de::Error::custom)
   }
 }
 
@@ -785,7 +785,7 @@ impl<'de> Deserialize<'de> for DiscoveredTopicData {
     let res = deserializer.deserialize_any(custom_ds)?;
     let topic_data = res
       .generate_topic_data()
-      .map_err(|e| de::Error::custom(e))?;
+      .map_err(de::Error::custom)?;
 
     Ok(DiscoveredTopicData::new(topic_data))
   }
