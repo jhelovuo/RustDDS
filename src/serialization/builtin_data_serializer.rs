@@ -129,7 +129,7 @@ impl BuiltinDataSerializer_Key {
     self.add_participant_guid::<S>(&mut s);
 
     if add_sentinel {
-      s.serialize_field("sentinel", &(1 as u32)).unwrap();
+      s.serialize_field("sentinel", 1_u32).unwrap();
     }
 
     s.end()
@@ -673,7 +673,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     self.add_content_filter_property::<S>(&mut s);
 
     if add_sentinel {
-      s.serialize_field("sentinel", &(1 as u32)).unwrap();
+      s.serialize_field("sentinel", 1_u32).unwrap();
     }
 
     s.end()
@@ -692,7 +692,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     self.add_endpoint_guid::<S>(&mut s);
 
     if add_sentinel {
-      s.serialize_field("sentinel", &(1 as u32)).unwrap();
+      s.serialize_field("sentinel", 1_u32).unwrap();
     }
 
     s.end()
