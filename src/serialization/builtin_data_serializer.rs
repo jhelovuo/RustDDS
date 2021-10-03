@@ -702,46 +702,45 @@ impl<'a> BuiltinDataSerializer<'a> {
     let mut count: usize = 0;
 
     let empty_ll = LocatorList::new();
-    count = count + self.protocol_version.is_some() as usize;
-    count = count + self.vendor_id.is_some() as usize;
-    count = count + self.expects_inline_qos.is_some() as usize;
-    count = count + self.participant_guid.is_some() as usize;
-    count = count + self.metatraffic_unicast_locators.unwrap_or(&empty_ll).len();
-    count = count
-      + self
+    count += self.protocol_version.is_some() as usize;
+    count += self.vendor_id.is_some() as usize;
+    count += self.expects_inline_qos.is_some() as usize;
+    count += self.participant_guid.is_some() as usize;
+    count += self.metatraffic_unicast_locators.unwrap_or(&empty_ll).len();
+    count += self
         .metatraffic_multicast_locators
         .unwrap_or(&empty_ll)
         .len();
-    count = count + self.default_unicast_locators.unwrap_or(&empty_ll).len();
-    count = count + self.default_multicast_locators.unwrap_or(&empty_ll).len();
-    count = count + self.available_builtin_endpoints.is_some() as usize;
-    count = count + self.lease_duration.is_some() as usize;
-    count = count + self.manual_liveliness_count.is_some() as usize;
-    count = count + self.builtin_endpoint_qos.is_some() as usize;
-    count = count + self.entity_name.is_some() as usize;
+    count += self.default_unicast_locators.unwrap_or(&empty_ll).len();
+    count += self.default_multicast_locators.unwrap_or(&empty_ll).len();
+    count += self.available_builtin_endpoints.is_some() as usize;
+    count += self.lease_duration.is_some() as usize;
+    count += self.manual_liveliness_count.is_some() as usize;
+    count += self.builtin_endpoint_qos.is_some() as usize;
+    count += self.entity_name.is_some() as usize;
 
-    count = count + self.endpoint_guid.is_some() as usize;
-    count = count + self.unicast_locator_list.unwrap_or(&empty_ll).len();
-    count = count + self.multicast_locator_list.unwrap_or(&empty_ll).len();
+    count += self.endpoint_guid.is_some() as usize;
+    count += self.unicast_locator_list.unwrap_or(&empty_ll).len();
+    count += self.multicast_locator_list.unwrap_or(&empty_ll).len();
 
-    count = count + self.data_max_size_serialized.is_some() as usize;
+    count += self.data_max_size_serialized.is_some() as usize;
 
-    count = count + self.topic_name.is_some() as usize;
-    count = count + self.type_name.is_some() as usize;
-    count = count + self.durability.is_some() as usize;
-    count = count + self.deadline.is_some() as usize;
-    count = count + self.latency_budget.is_some() as usize;
-    count = count + self.liveliness.is_some() as usize;
-    count = count + self.reliability.is_some() as usize;
-    count = count + self.ownership.is_some() as usize;
-    count = count + self.destination_order.is_some() as usize;
-    count = count + self.time_based_filter.is_some() as usize;
-    count = count + self.presentation.is_some() as usize;
-    count = count + self.lifespan.is_some() as usize;
-    count = count + self.history.is_some() as usize;
-    count = count + self.resource_limits.is_some() as usize;
+    count += self.topic_name.is_some() as usize;
+    count += self.type_name.is_some() as usize;
+    count += self.durability.is_some() as usize;
+    count += self.deadline.is_some() as usize;
+    count += self.latency_budget.is_some() as usize;
+    count += self.liveliness.is_some() as usize;
+    count += self.reliability.is_some() as usize;
+    count += self.ownership.is_some() as usize;
+    count += self.destination_order.is_some() as usize;
+    count += self.time_based_filter.is_some() as usize;
+    count += self.presentation.is_some() as usize;
+    count += self.lifespan.is_some() as usize;
+    count += self.history.is_some() as usize;
+    count += self.resource_limits.is_some() as usize;
 
-    count = count + self.content_filter_property.is_some() as usize;
+    count += self.content_filter_property.is_some() as usize;
 
     count
   }

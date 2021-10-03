@@ -723,7 +723,7 @@ impl Writer {
   }
 
   fn increase_heartbeat_counter(&mut self) {
-    self.heartbeat_message_counter = self.heartbeat_message_counter + 1;
+    self.heartbeat_message_counter += 1;
   }
 
   fn send_message_to_readers(&self, preferred_mode: DeliveryMode, message: &Message, 
