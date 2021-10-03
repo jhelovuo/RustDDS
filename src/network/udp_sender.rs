@@ -65,7 +65,7 @@ impl UDPSender {
   fn send_to_udp_socket(&self, buffer: &[u8], socket: &UdpSocket, addr: &SocketAddr) {
     match socket.send_to(buffer, addr) {
       Ok(bytes_sent) =>
-        if bytes_sent == buffer.len() { () // ok
+        if bytes_sent == buffer.len() { // ok
         } else {
           error!("send_to_locator - send_to tried {} bytes, sent only {}",
               buffer.len(), bytes_sent);
