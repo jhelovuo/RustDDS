@@ -312,7 +312,7 @@ impl RosNode {
       Some(
         ros_participant
           .get_ros_discovery_publisher()
-          .create_datawriter_no_key(rosout_topic.clone(), None)?,
+          .create_datawriter_no_key(rosout_topic, None)?,
       )
     } else {
       None
@@ -320,7 +320,7 @@ impl RosNode {
 
     let parameter_events_writer = ros_participant
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(paramtopic.clone(), None)?;
+      .create_datawriter_no_key(paramtopic, None)?;
 
     Ok(RosNode {
       name: String::from(name),

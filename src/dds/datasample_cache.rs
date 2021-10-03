@@ -228,7 +228,7 @@ where
       .filter_map(|(ts, dsm)| {
         let key = dsm.get_key();
         if self.sample_selector(&rc, self.instance_map.get(&key).unwrap(), &dsm) {
-          Some((*ts, key.clone()))
+          Some((*ts, key))
         } else {
           None
         }
