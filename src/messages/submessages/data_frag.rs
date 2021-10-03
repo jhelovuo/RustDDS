@@ -146,10 +146,10 @@ impl Default for DataFrag {
 impl<C: Context> Writable<C> for DataFrag {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_u16(0)?;
-    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0 {
+    if self.inline_qos.is_some() && !self.inline_qos.as_ref().unwrap().parameters.is_empty() {
       debug!("self.inline_qos {:?}", self.inline_qos);
       todo!()
-    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() == 0 {
+    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.is_empty() {
       writer.write_u16(24)?;
     } else if self.inline_qos.is_none() {
       writer.write_u16(24)?;
@@ -161,7 +161,7 @@ impl<C: Context> Writable<C> for DataFrag {
     writer.write_value(&self.fragments_in_submessage)?;
     writer.write_value(&self.fragment_size)?;
     writer.write_value(&self.data_size)?;
-    if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.len() > 0 {
+    if self.inline_qos.is_some() && !self.inline_qos.as_ref().unwrap().parameters.is_empty() {
       writer.write_value(&self.inline_qos)?;
     }
     writer.write_value(&self.serialized_payload)?;

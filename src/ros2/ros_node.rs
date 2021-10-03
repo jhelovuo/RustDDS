@@ -434,7 +434,7 @@ impl RosNode {
     qos: QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic, Error> {
-    if name.len() == 0 { return Error::bad_parameter("Topic name must not be empty.") }
+    if name.is_empty() { return Error::bad_parameter("Topic name must not be empty.") }
     // TODO: Implement the rest of the rules.
 
     let mut oname = "rt/".to_owned();
