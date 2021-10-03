@@ -380,7 +380,7 @@ impl DiscoveryDB {
   pub fn update_topic_data_p(&mut self, topic: &Topic) {
     let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
       key: None,
-      name: String::from(topic.get_name()),
+      name: topic.get_name(),
       type_name: String::from(topic.get_type().name()),
       durability: topic.get_qos().durability,
       deadline: topic.get_qos().deadline,

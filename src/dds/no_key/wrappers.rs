@@ -134,7 +134,7 @@ where
   D: DeserializeOwned,
   DA: no_key::DeserializerAdapter<D>,
 {
-  fn key_from_bytes(input_bytes: &[u8], _encoding: RepresentationIdentifier) 
+  fn key_from_bytes(_input_bytes: &[u8], _encoding: RepresentationIdentifier) 
     -> Result< <NoKeyWrapper<D> as Keyed>::K > 
   {
     // also unreachable!() should work here, as this is not supposed to be used
