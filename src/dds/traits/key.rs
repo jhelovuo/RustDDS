@@ -126,7 +126,7 @@ pub trait Key:
         not on any particular data value.
     */
 
-    let mut cdr_bytes = to_bytes::<Self, BigEndian>(&self)
+    let mut cdr_bytes = to_bytes::<Self, BigEndian>(self)
       .unwrap_or_else(|e| {
         error!("Hashing key {:?} failed!", e);
         // This would cause a lot of hash collisions, but wht else we could do

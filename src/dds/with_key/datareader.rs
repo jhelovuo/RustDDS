@@ -703,7 +703,7 @@ where
           if let Some(recognized_rep_id) = 
               DA::supported_encodings().iter().find(|r| *r == representation_identifier)
           {
-            match DA::from_vec_bytes(&bytes_frags, *recognized_rep_id) {
+            match DA::from_vec_bytes(bytes_frags, *recognized_rep_id) {
               Ok(payload) => {
                 self
                 .datasample_cache

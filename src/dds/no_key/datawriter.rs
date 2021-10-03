@@ -286,7 +286,7 @@ where
   /// assert_eq!(&topic, data_writer.get_topic());
   /// ```
   pub fn get_topic(&self) -> &Topic {
-    &self.keyed_datawriter.get_topic()
+    self.keyed_datawriter.get_topic()
   }
 
   /// Publisher this DataWriter is connected to.
@@ -315,7 +315,7 @@ where
   /// assert_eq!(&publisher, data_writer.get_publisher());
   /// ```
   pub fn get_publisher(&self) -> &Publisher {
-    &self.keyed_datawriter.get_publisher()
+    self.keyed_datawriter.get_publisher()
   }
 
   /// Manually asserts liveliness if QoS agrees

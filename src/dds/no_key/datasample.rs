@@ -62,7 +62,7 @@ impl<D> DataSample<D> {
     keyed: WithKeyDataSample<&NoKeyWrapper<D>>,
   ) -> Option<DataSample<&D>> {
     match keyed.value {
-      Ok(ref kv) => Some(DataSample::<&D> {
+      Ok(kv) => Some(DataSample::<&D> {
         sample_info: keyed.sample_info,
         value: &kv.d,
       }),
