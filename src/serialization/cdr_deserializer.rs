@@ -105,7 +105,7 @@ where
     if count <= self.input.len() {
       let (head, tail) = self.input.split_at(count);
       self.input = tail;
-      self.serializedDataCount = self.serializedDataCount + count;
+      self.serializedDataCount += count;
       Ok(head)
     } else {
       Err(Error::Eof)
@@ -508,7 +508,7 @@ where
     if self.elementCounter == self.expectedCount {
       Ok(None)
     } else {
-      self.elementCounter = self.elementCounter + 1;
+      self.elementCounter += 1;
       seed.deserialize(&mut *self.de).map(Some)
     }
   }
@@ -529,7 +529,7 @@ where
     if self.elementCounter == self.expectedCount {
       Ok(None)
     } else {
-      self.elementCounter = self.elementCounter + 1;
+      self.elementCounter += 1;
       seed.deserialize(&mut *self.de).map(Some)
     }
   }
