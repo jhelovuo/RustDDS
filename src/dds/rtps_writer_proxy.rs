@@ -193,7 +193,7 @@ impl RtpsWriterProxy {
     -> RtpsWriterProxy 
   {
     RtpsWriterProxy {
-      remote_writer_guid: discovered_writer_data.writer_proxy.remote_writer_guid.clone(),
+      remote_writer_guid: discovered_writer_data.writer_proxy.remote_writer_guid,
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
       unicast_locator_list: discovered_writer_data
         .writer_proxy

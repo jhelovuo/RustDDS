@@ -129,7 +129,7 @@ impl LocatorData {
     LocatorData {
       parameter_id,
       parameter_length: 24,
-      locator: locator.clone(),
+      locator: *locator,
     }
   }
 }

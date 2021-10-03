@@ -178,7 +178,7 @@ where
         log_and_err_precondition_not_met!("Cannot create new DataReader, DomainParticipant doesn't exist.") ,
     };
 
-    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix().clone(), my_id);
+    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), my_id);
 
     Ok(Self {
       my_subscriber: subscriber,

@@ -102,7 +102,7 @@ impl DPEventLoop {
       poll
         .register(
           listener.mio_socket(),
-          token.clone(),
+          *token,
           Ready::readable(),
           PollOpt::edge(),
         )
@@ -112,7 +112,7 @@ impl DPEventLoop {
     poll
       .register(
         &add_reader_receiver.receiver,
-        add_reader_receiver.token.clone(),
+        add_reader_receiver.token,
         Ready::readable(),
         PollOpt::edge(),
       )
@@ -121,7 +121,7 @@ impl DPEventLoop {
     poll
       .register(
         &remove_reader_receiver.receiver,
-        remove_reader_receiver.token.clone(),
+        remove_reader_receiver.token,
         Ready::readable(),
         PollOpt::edge(),
       )

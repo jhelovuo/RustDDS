@@ -222,16 +222,16 @@ impl SubscriptionBuiltinTopicData {
   }
 
   pub fn set_qos(&mut self, qos: &QosPolicies) {
-    self.durability = qos.durability.clone();
-    self.deadline = qos.deadline.clone();
-    self.latency_budget = qos.latency_budget.clone();
-    self.liveliness = qos.liveliness.clone();
-    self.reliability = qos.reliability.clone();
-    self.ownership = qos.ownership.clone();
-    self.destination_order = qos.destination_order.clone();
-    self.time_based_filter = qos.time_based_filter.clone();
-    self.presentation = qos.presentation.clone();
-    self.lifespan = qos.lifespan.clone();
+    self.durability = qos.durability;
+    self.deadline = qos.deadline;
+    self.latency_budget = qos.latency_budget;
+    self.liveliness = qos.liveliness;
+    self.reliability = qos.reliability;
+    self.ownership = qos.ownership;
+    self.destination_order = qos.destination_order;
+    self.time_based_filter = qos.time_based_filter;
+    self.presentation = qos.presentation;
+    self.lifespan = qos.lifespan;
   }
 
   pub fn generate_qos(&self) -> QosPolicies {
@@ -340,8 +340,8 @@ impl DiscoveredReaderData {
   }
 
   pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
-    self.reader_proxy.remote_reader_guid = rtps_reader_proxy.remote_reader_guid.clone();
-    self.reader_proxy.expects_inline_qos = rtps_reader_proxy.expects_in_line_qos.clone();
+    self.reader_proxy.remote_reader_guid = rtps_reader_proxy.remote_reader_guid;
+    self.reader_proxy.expects_inline_qos = rtps_reader_proxy.expects_in_line_qos;
     self.reader_proxy.unicast_locator_list = rtps_reader_proxy.unicast_locator_list.clone();
     self.reader_proxy.multicast_locator_list = rtps_reader_proxy.multicast_locator_list.clone();
   }
@@ -630,7 +630,7 @@ impl DiscoveredWriterData {
   }
 
   pub(crate) fn update(&mut self, rtps_writer_proxy: &RtpsWriterProxy) {
-    self.writer_proxy.remote_writer_guid = rtps_writer_proxy.remote_writer_guid.clone();
+    self.writer_proxy.remote_writer_guid = rtps_writer_proxy.remote_writer_guid;
     self.writer_proxy.unicast_locator_list = rtps_writer_proxy.unicast_locator_list.clone();
     self.writer_proxy.multicast_locator_list = rtps_writer_proxy.multicast_locator_list.clone();
   }

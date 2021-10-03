@@ -453,22 +453,22 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: None,
       builtin_endpoint_qos: None,
       entity_name: None,
-      endpoint_guid: Some(subscription_topic_data.key().clone()),
+      endpoint_guid: Some(subscription_topic_data.key()),
       unicast_locator_list: None,
       multicast_locator_list: None,
       data_max_size_serialized: None,
       topic_name: Some(subscription_topic_data.topic_name()),
       type_name: Some(subscription_topic_data.type_name()),
-      durability: subscription_topic_data.durability().clone(),
-      deadline: subscription_topic_data.deadline().clone(),
-      latency_budget: subscription_topic_data.latency_budget().clone(),
-      liveliness: subscription_topic_data.liveliness().clone(),
-      reliability: subscription_topic_data.reliability().clone(),
-      ownership: subscription_topic_data.ownership().clone(),
-      destination_order: subscription_topic_data.destination_order().clone(),
-      time_based_filter: subscription_topic_data.time_based_filter().clone(),
-      presentation: subscription_topic_data.presentation().clone(),
-      lifespan: subscription_topic_data.lifespan().clone(),
+      durability: *subscription_topic_data.durability(),
+      deadline: *subscription_topic_data.deadline(),
+      latency_budget: *subscription_topic_data.latency_budget(),
+      liveliness: *subscription_topic_data.liveliness(),
+      reliability: *subscription_topic_data.reliability(),
+      ownership: *subscription_topic_data.ownership(),
+      destination_order: *subscription_topic_data.destination_order(),
+      time_based_filter: *subscription_topic_data.time_based_filter(),
+      presentation: *subscription_topic_data.presentation(),
+      lifespan: *subscription_topic_data.lifespan(),
       history: None,
       resource_limits: None,
       content_filter_property: None,
@@ -1058,7 +1058,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       Reliability::Reliable { max_blocking_time } => {
         let data = ReliabilityBestEffortData {
           reliability_kind: ReliabilityKind::RELIABLE,
-          max_blocking_time: max_blocking_time.clone(),
+          max_blocking_time: max_blocking_time,
         };
         s.serialize_field(
           "reliability",
@@ -1106,7 +1106,7 @@ impl<'a> BuiltinDataSerializer<'a> {
         .unwrap();
         s.serialize_field(
           "ownership_strength",
-          &I32Data::new(ParameterId::PID_OWNERSHIP_STRENGTH, strength.clone()),
+          &I32Data::new(ParameterId::PID_OWNERSHIP_STRENGTH, strength),
         )
         .unwrap();
       }

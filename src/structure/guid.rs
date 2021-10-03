@@ -389,7 +389,7 @@ impl GUID {
   /// Generates GUID for specific entityId from current prefix
   pub fn from_prefix(self, entity_id: EntityId) -> GUID {
     GUID {
-      guidPrefix: self.guidPrefix.clone(),
+      guidPrefix: self.guidPrefix,
       entityId: entity_id,
     }
   }

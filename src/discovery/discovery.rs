@@ -781,7 +781,7 @@ impl Discovery {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
-        Ok(ds) => ds.iter().map( |d| d.value.clone().map(|o| o.clone()) ).collect(),
+        Ok(ds) => ds.iter().map( |d| d.value.map(|o| o.clone()) ).collect(),
         Err(e) => { error!("handle_subscription_reader: {:?}",e); return }
       };
 
@@ -836,7 +836,7 @@ impl Discovery {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
-        Ok(ds) => ds.iter().map( |d| d.value.clone().map(|o| o.clone()) ).collect(),
+        Ok(ds) => ds.iter().map( |d| d.value.map(|o| o.clone()) ).collect(),
         Err(e) => { error!("handle_publication_reader: {:?}",e); return }
       };
 
@@ -874,7 +874,7 @@ impl Discovery {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
-        Ok(ds) => ds.iter().map( |d| d.value.clone().map(|o| o.clone()) ).collect(),
+        Ok(ds) => ds.iter().map( |d| d.value.map(|o| o.clone()) ).collect(),
         Err(e) => { error!("handle_topic_reader: {:?}",e); return }
       };
 
