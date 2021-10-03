@@ -353,8 +353,7 @@ impl MessageReceiver {
 
   pub fn notify_data_to_readers(&self, readers: Vec<EntityId>) {
     for eid in readers {
-      self.available_readers.get(&eid)
-        .map( |r| r.notify_cache_change() );
+      if let Some(r) = self.available_readers.get(&eid) { r.notify_cache_change() }
     }
   }
 

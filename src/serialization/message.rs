@@ -421,8 +421,7 @@ impl MessageBuilder {
               gap_list 
           };
         let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer.endianness);
-        gap.create_submessage(gap_flags)
-          .map( |s| self.submessages.push(s) );      
+        if let Some(s) = gap.create_submessage(gap_flags) { self.submessages.push(s) }      
       }
       (_,_) =>  error!("gap_msg called with empty SN set. Skipping GAP submessage"),
     }

@@ -260,8 +260,7 @@ impl DPEventLoop {
 
                     TopicsInfoUpdated => ev_wrapper.update_topics(),
                     AssertTopicLiveliness{ writer_guid , manual_assertion } => {
-                      ev_wrapper.writers.get_mut(&writer_guid.entityId)
-                        .map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
+                      if let Some(w) = ev_wrapper.writers.get_mut(&writer_guid.entityId) { w.handle_heartbeat_tick(manual_assertion) } 
                     }
                   }
                 }              
@@ -434,9 +433,8 @@ impl DPEventLoop {
     let reciever = self.writer_timed_event_reciever.get(&event.token())
       .expect("Did not find a heartbeat receiver");
     while let Ok(timer_message) = reciever.try_recv() {
-      self.writers.iter_mut()
-          .find(|(_guid,writer)| writer.get_timed_event_entity_token() == event.token())
-          .map( |(_guid, writer)| writer.handle_timed_event(timer_message));
+      if let Some((_guid, writer)) = self.writers.iter_mut()
+          .find(|(_guid,writer)| writer.get_timed_event_entity_token() == event.token()) { writer.handle_timed_event(timer_message) }
     }
   }
 
