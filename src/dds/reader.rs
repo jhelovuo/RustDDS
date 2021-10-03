@@ -472,9 +472,8 @@ impl Reader {
 
   // common parts of processing DATA or a completed DATAFRAG (when all frags are received)
   fn process_received_data(&mut self, ddsdata:DDSData, receive_timestamp: Timestamp, writer_guid:GUID, writer_sn: SequenceNumber) {
-    let mut no_writers = false;
-    trace!("handle_data_msg from {:?}  no_writers={:?} seq={:?} topic={:?} stateful={:?}", 
-        &writer_guid,  no_writers, writer_sn, self.topic_name, self.is_stateful,);
+    trace!("handle_data_msg from {:?} seq={:?} topic={:?} stateful={:?}", 
+        &writer_guid, writer_sn, self.topic_name, self.is_stateful,);
     if self.is_stateful {
       let my_entityid = self.my_guid.entityId; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
@@ -495,7 +494,6 @@ impl Reader {
         // no writer proxy found
         info!("handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
           my_entityid, writer_guid, self.topic_name, );
-        no_writers = true;
       }
     } else {
       // stateless reader

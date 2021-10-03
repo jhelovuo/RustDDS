@@ -323,7 +323,7 @@ where
   ///Sequences are encoded as an unsigned long value, followed by the elements of the
   //sequence. The initial unsigned long contains the number of elements in the sequence.
   //The elements of the sequence are encoded as specified for their type.
-  fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value>
+  fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -333,7 +333,7 @@ where
   }
 
   // if sequence is fixed length array then number of elements is not included
-  fn deserialize_tuple<V>(mut self, len: usize, visitor: V) -> Result<V::Value>
+  fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -341,7 +341,7 @@ where
   }
 
   fn deserialize_tuple_struct<V>(
-    mut self,
+    self,
     _name: &'static str,
     len: usize,
     visitor: V,
@@ -352,7 +352,7 @@ where
     visitor.visit_seq(SequenceHelper::new(self, len))
   }
 
-  fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
+  fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
@@ -362,7 +362,7 @@ where
   }
 
   fn deserialize_struct<V>(
-    mut self,
+    self,
     _name: &'static str,
     fields: &'static [&'static str],
     visitor: V,
@@ -377,7 +377,7 @@ where
   /// The numeric values associated with enum identifiers are determined by the order in which the identifiers appear in the enum declaration.
   /// The first enum identifier has the numeric value zero (0). Successive enum identifiers take ascending numeric values, in order of declaration from left to right.
   fn deserialize_enum<V>(
-    mut self,
+    self,
     _name: &'static str,
     _variants: &'static [&'static str],
     visitor: V,

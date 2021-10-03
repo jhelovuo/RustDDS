@@ -957,7 +957,7 @@ impl Discovery {
     // Automatic
     {
       let current_duration =
-        (inow.duration_since(self.liveliness_state.last_auto_update) / 3);
+        inow.duration_since(self.liveliness_state.last_auto_update) / 3;
       let min_automatic = automatic
         .iter()
         .map(|lv| match lv {
@@ -993,7 +993,7 @@ impl Discovery {
     // Manual By Participant
     {
       let current_duration =
-        (inow.duration_since(self.liveliness_state.last_manual_participant_update) / 3);
+        inow.duration_since(self.liveliness_state.last_manual_participant_update) / 3;
       let min_manual_participant = manual_by_participant
         .iter()
         .map(|lv| match lv {
