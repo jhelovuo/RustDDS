@@ -323,7 +323,7 @@ impl DiscoveredReaderData {
     }
   }
 
-  pub fn default(topic_name: &String, type_name: &String) -> DiscoveredReaderData {
+  pub fn default(topic_name: &str, type_name: &str) -> DiscoveredReaderData {
     let rguid = GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_BUILT_IN);
     let reader_proxy = ReaderProxy::new(rguid);
     let subscription_topic_data = SubscriptionBuiltinTopicData::new(
@@ -486,14 +486,14 @@ impl PublicationBuiltinTopicData {
   pub fn new(
     guid: GUID,
     participant_guid: GUID,
-    topic_name: &String,
-    type_name: &String,
+    topic_name: &str,
+    type_name: &str,
   ) -> PublicationBuiltinTopicData {
     PublicationBuiltinTopicData {
       key: guid,
       participant_key: Some(participant_guid),
-      topic_name: topic_name.clone(),
-      type_name: type_name.clone(),
+      topic_name: topic_name.to_string(),
+      type_name: type_name.to_string(),
       durability: None,
       deadline: None,
       latency_budget: None,

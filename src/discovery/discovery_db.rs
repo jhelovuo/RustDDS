@@ -203,7 +203,7 @@ impl DiscoveryDB {
     to_remove
   }
 
-  fn topic_has_writers_or_readers(&self, topic_name: &String) -> bool {
+  fn topic_has_writers_or_readers(&self, topic_name: &str) -> bool {
     // TODO: This entire function has silly implementation.
     // We should really have a separate map from Topic to Readers & Writers
     if let Some(_) =

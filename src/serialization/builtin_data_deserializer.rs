@@ -783,7 +783,7 @@ impl BuiltinDataDeserializer {
     self
   }
 
-  pub fn read_parameter_id(buffer: &Vec<u8>, rep: RepresentationIdentifier) -> Option<ParameterId> {
+  pub fn read_parameter_id(buffer: &[u8], rep: RepresentationIdentifier) -> Option<ParameterId> {
     let par: Result<ParameterId, Error> = CDRDeserializerAdapter::from_bytes(&buffer[..2], rep);
     match par {
       Ok(val) => Some(val),
@@ -791,7 +791,7 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn read_parameter_length(buffer: &Vec<u8>, rep: RepresentationIdentifier) -> Option<u16> {
+  pub fn read_parameter_length(buffer: &[u8], rep: RepresentationIdentifier) -> Option<u16> {
     if buffer.len() < 4 {
       return Some(0);
     }
