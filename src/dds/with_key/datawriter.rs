@@ -148,7 +148,7 @@ where
 
     match dds_cache.write() {
       Ok(mut cache) => cache.add_new_topic(
-        &String::from(topic.get_name()),
+        &topic.get_name(),
         TopicKind::NoKey,
         topic.get_type(),
       ),

@@ -202,7 +202,7 @@ impl Writer {
           policy::Liveliness::Automatic { lease_duration: _ } => Some(hbp),
           policy::Liveliness::ManualByParticipant { lease_duration: _ } => Some(hbp),
           policy::Liveliness::ManualByTopic { lease_duration } => {
-            let std_dur = Duration::from(lease_duration);
+            let std_dur = lease_duration;
             Some(std_dur / 3)
           }
         },

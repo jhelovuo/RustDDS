@@ -99,7 +99,7 @@ impl DDSCache {
     end_instant: &Timestamp,
   ) -> Box<dyn Iterator<Item=(Timestamp, &CacheChange)> + '_> {
     match self.topic_caches.get(topic_name) {
-      Some(tc) => Box::new(tc.get_changes_in_range(start_instant, end_instant).into_iter()),
+      Some(tc) => Box::new(tc.get_changes_in_range(start_instant, end_instant)),
       None => Box::new(vec![].into_iter()),
     }
   }

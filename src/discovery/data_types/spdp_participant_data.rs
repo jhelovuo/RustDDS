@@ -166,7 +166,7 @@ impl SPDPDiscoveredParticipantData {
       default_unicast_locators,
       default_multicast_locators,
       available_builtin_endpoints: BuiltinEndpointSet::from_u32(builtin_endpoints),
-      lease_duration: Some(Duration::from(lease_duration)),
+      lease_duration: Some(lease_duration),
       manual_liveliness_count: 0,
       builtin_endpoint_qos: None,
       entity_name: None,

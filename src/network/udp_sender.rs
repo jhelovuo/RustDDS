@@ -80,7 +80,7 @@ impl UDPSender {
       match l.kind {
         LocatorKind::LOCATOR_KIND_UDPv4 |
         LocatorKind::LOCATOR_KIND_UDPv6 => {
-          let a = SocketAddr::from(l.to_socket_address());
+          let a = l.to_socket_address();
           if a.ip().is_multicast() {
             for socket in self.multicast_sockets.iter() {
               self.send_to_udp_socket(buffer, &socket, &a);
