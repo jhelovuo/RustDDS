@@ -42,7 +42,7 @@ impl Parameter {
       parameter_id: ParameterId::PID_STATUS_INFO,
       value: vec![0, 0, 0, last_byte],
     };
-    return pid_status_info_parameter;
+    pid_status_info_parameter
   }
 }
 

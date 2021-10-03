@@ -569,7 +569,7 @@ impl Writer {
         // if we cannot send more data, we are done.
         // This is to prevent empty "repair data" messages from being sent.
         if reader_proxy.all_acked_before > last_seq {
-          return 
+           
         } else {
           // prime timer to send repair data
           reader_proxy.repair_mode = true; // hold sending normal DATA
