@@ -607,8 +607,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     let bds_ptd = BuiltinDataSerializer::from_publication_topic_data(
       &discovered_writer_data.publication_topic_data,
     );
-    let bds_merged = bds_wp.merge(bds_ptd);
-    bds_merged
+    bds_wp.merge(bds_ptd)
   }
 
   // -----------------------
