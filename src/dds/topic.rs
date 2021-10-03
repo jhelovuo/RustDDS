@@ -52,16 +52,16 @@ impl Topic {
   }
 
   fn get_participant(&self) -> Option<DomainParticipant> {
-    self.inner.get_participant().clone()
+    self.inner.get_participant()
   }
 
   // TODO: Confusing combination of borrows and owns
   fn get_type(&self) -> TypeDesc {
-    self.inner.get_type().clone()
+    self.inner.get_type()
   }
 
   fn get_name(&self) -> String {
-    self.inner.get_name().to_string()
+    self.inner.get_name()
   }
 
   /// Gets Topics TopicKind
