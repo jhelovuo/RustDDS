@@ -430,7 +430,7 @@ impl InnerPublisher {
     let guid = GUID::new_with_prefix_and_id(dp.get_guid().guidPrefix, entity_id);
 
     let new_writer = WriterIngredients {
-        guid: guid,
+        guid,
         writer_command_receiver: hccc_download,
         topic_name: topic.get_name(),
         qos_policies: writer_qos,

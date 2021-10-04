@@ -420,9 +420,9 @@ pub(crate) struct GUIDData {
 impl GUIDData {
   pub fn from(guid: GUID, parameter_id: ParameterId) -> GUIDData {
     GUIDData {
-      parameter_id: parameter_id,
+      parameter_id,
       parameter_length: 16,
-      guid: guid,
+      guid,
     }
   }
 }

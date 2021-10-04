@@ -60,8 +60,8 @@ impl<'a, C: Context> Readable<'a, C> for Parameter {
     }
 
     Ok(Parameter {
-      parameter_id: parameter_id,
-      value: value,
+      parameter_id,
+      value,
     })
   }
 

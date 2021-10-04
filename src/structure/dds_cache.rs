@@ -132,8 +132,8 @@ impl TopicCache {
   pub fn new(topic_name: &str, topic_kind: TopicKind, topic_data_type: TypeDesc) -> TopicCache {
     TopicCache {
       topic_name: topic_name.to_string(),
-      topic_data_type: topic_data_type,
-      topic_kind: topic_kind,
+      topic_data_type,
+      topic_kind,
       topic_qos: QosPolicyBuilder::new().build(),
       history_cache: DDSHistoryCache::new(),
     }
