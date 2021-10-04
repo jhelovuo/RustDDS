@@ -316,14 +316,14 @@ where
   fn serialize_str(self, v: &str) -> Result<()> {
     let byte_count: u32 = v.as_bytes().len() as u32 + 1;
     self.serialize_u32(byte_count)?; // +1 for terminator
-    self.writer.write(v.as_bytes())?;
+    self.writer.write_all(v.as_bytes())?;
     self.writer.write_u8(0)?; // CDR spec requires a null terminator
     Ok(())
     // The end result is not UTF-8-encoded string, but how could we do better in CDR?
   }
 
   fn serialize_bytes(self, v: &[u8]) -> Result<()> {
-    self.writer.write(v)?;
+    self.writer.write_all(v)?;
     Ok(())
   }
 
