@@ -289,9 +289,9 @@ impl BuiltinDataDeserializer {
       key,
       participant_key: self.participant_guid,
       topic_name: self.topic_name.clone()
-        .ok_or(Error::Message("Failed to parse topic name.".to_string()))?,
+        .ok_or_else(|| Error::Message("Failed to parse topic name.".to_string()))?,
       type_name: self.type_name.clone()
-        .ok_or(Error::Message("Failed to parse topic type.".to_string()))?,
+        .ok_or_else(|| Error::Message("Failed to parse topic type.".to_string()))?,
       durability: self.durability,
       deadline: self.deadline,
       latency_budget: self.latency_budget,
@@ -309,9 +309,9 @@ impl BuiltinDataDeserializer {
     Ok(TopicBuiltinTopicData {
       key: self.endpoint_guid,
       name: self.topic_name
-        .ok_or(Error::Message("Failed to parse topic name.".to_string()))?,
+        .ok_or_else(|| Error::Message("Failed to parse topic name.".to_string()))?,
       type_name: self.type_name
-        .ok_or(Error::Message("Failed to parse topic type.".to_string()))?,
+        .ok_or_else(|| Error::Message("Failed to parse topic type.".to_string()))?,
       durability: self.durability,
       deadline: self.deadline,
       latency_budget: self.latency_budget,
@@ -328,7 +328,7 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData,Error> {
     let reader_proxy = self.generate_reader_proxy()
-          .ok_or(Error::Message("ReaderProxy deserialization".to_string() ))?;
+          .ok_or_else(|| Error::Message("ReaderProxy deserialization".to_string() ))?;
     let subscription_topic_data = self.generate_subscription_topic_data()?;
     Ok(DiscoveredReaderData {
       reader_proxy,
@@ -339,7 +339,7 @@ impl BuiltinDataDeserializer {
 
   pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData,Error> {
     let writer_proxy = self.generate_writer_proxy()
-          .ok_or(Error::Message("WriterProxy deserialization".to_string() ))?;
+          .ok_or_else(|| Error::Message("WriterProxy deserialization".to_string() ))?;
     let publication_topic_data = self.generate_publication_topic_data()?;
     Ok( DiscoveredWriterData {
       last_updated: Instant::now(),

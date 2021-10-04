@@ -233,7 +233,7 @@ impl DiscoveryDB {
     if self
         .external_topic_writers
         .values()
-        .find(|p| &p.publication_topic_data.topic_name == topic_name).is_some()
+        .any(|p| p.publication_topic_data.topic_name == topic_name)
     {
       return true
     }
