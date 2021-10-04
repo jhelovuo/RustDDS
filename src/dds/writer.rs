@@ -680,7 +680,7 @@ impl Writer {
       // Try to send repair messages at 5x rate compared to usual deadline rate
       let delay_to_next_message = 
         self.qos_policies.deadline().map( |dl| dl.0 )
-          .unwrap_or(Duration::from_millis(100)) / 5;
+          .unwrap_or_else(|| Duration::from_millis(100)) / 5;
       self.timed_event_handler.as_mut().unwrap().set_timeout(
         &chronoDuration::from(delay_to_next_message),
         TimerMessageType::WriterSendRepairData{ to_reader: reader_proxy.remote_reader_guid },
@@ -702,7 +702,7 @@ impl Writer {
     let acked_by_all_readers = self.readers.values()
           .map(|r| r.acked_up_to_before())
           .min()
-          .unwrap_or(SequenceNumber::zero());
+          .unwrap_or_else(SequenceNumber::zero);
     // If all readers have acked all up to before 5, and depth is 5, we need
     // to keep samples 0..4, i.e. from acked_up_to_before - depth .
     let first_keeper = 

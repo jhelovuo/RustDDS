@@ -438,7 +438,7 @@ impl RosNode {
     // TODO: Implement the rest of the rules.
 
     let mut oname = "rt/".to_owned();
-    let name_stripped = name.strip_prefix("/").unwrap_or(name); // avoid double slash in name
+    let name_stripped = name.strip_prefix('/').unwrap_or(name); // avoid double slash in name
     oname.push_str(name_stripped);
     info!("Creating topic, DDS name: {}",oname);
     let topic = self.ros_participant.domain_participant()
