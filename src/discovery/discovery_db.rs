@@ -1,6 +1,5 @@
 use std::{
-  collections::{btree_map::Iter as BTreeIter, HashMap, BTreeMap},
-  iter::Map,
+  collections::{HashMap, BTreeMap},
   time::Instant,
 };
 
@@ -254,21 +253,8 @@ impl DiscoveryDB {
     }
   }
 
-  // Please explain how this works.
-  pub fn get_participants<'a>(&'a self) -> Map<
-    BTreeIter<'a, GuidPrefix, SPDPDiscoveredParticipantData>,
-    fn((&GuidPrefix, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData,
-  > {
-    type cvfun<'a> =
-      fn((&GuidPrefix, &'a SPDPDiscoveredParticipantData)) -> &'a SPDPDiscoveredParticipantData;
-    fn conver<'a>(
-      (_, data): (&GuidPrefix, &'a SPDPDiscoveredParticipantData),
-    ) -> &'a SPDPDiscoveredParticipantData {
-      data
-    }
-    let cv: cvfun = conver;
-    let a = self.participant_proxies.iter().map(cv);
-    a
+  pub fn get_participants(&self) -> impl Iterator<Item = &SPDPDiscoveredParticipantData> {
+    self.participant_proxies.values()
   }
 
   pub fn update_local_topic_writer(&mut self, writer: DiscoveredWriterData) {
