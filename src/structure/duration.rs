@@ -58,10 +58,10 @@ impl Duration {
   }
 
   pub const fn from_nanos(nanos: i64) -> Duration {
-    let fraction = (((nanos % 1000_000_000) << 32) / 1000_000_000) as u32; 
+    let fraction = (((nanos % 1_000_000_000) << 32) / 1_000_000_000) as u32; 
 
     Duration {
-      seconds: (nanos / 1000_000_000) as i32,
+      seconds: (nanos / 1_000_000_000) as i32,
       fraction,
     }
   }
