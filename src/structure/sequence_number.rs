@@ -455,11 +455,11 @@ mod tests {
   },
   {
     sequence_number_set_one,
-    (|| {
-          let mut set = SequenceNumberSet::new(SequenceNumber::from(1),1);
-          set.insert(SequenceNumber::from(1));
-          set
-      })(),
+    {
+        let mut set = SequenceNumberSet::new(SequenceNumber::from(1),1);
+        set.insert(SequenceNumber::from(1));
+        set
+      },
       le = [0x00, 0x00, 0x00, 0x00, // bitmapBase high
             0x01, 0x00, 0x00, 0x00, // bitmapBase low
             0x01, 0x00, 0x00, 0x00, // bitmap bit count
@@ -477,13 +477,13 @@ mod tests {
   },
   {
       sequence_number_set_manual,
-      (|| {
-          let mut set = SequenceNumberSet::new(SequenceNumber::from(1),25);
-          for sn in 1..11 {
-            set.insert(SequenceNumber::from(sn));
-          }
-          set
-      })(),
+      {
+        let mut set = SequenceNumberSet::new(SequenceNumber::from(1),25);
+        for sn in 1..11 {
+          set.insert(SequenceNumber::from(sn));
+        }
+        set
+      },
       le = [0x00, 0x00, 0x00, 0x00,
             0x01, 0x00, 0x00, 0x00,
             0x19, 0x00, 0x00, 0x00,
@@ -500,14 +500,14 @@ mod tests {
   },
   {
       sequence_number_set_multiword,
-      (|| {
-          // send sequence numbers 10,11,12,..,52. (43 ones) Set goes up to 64.
-          let mut set = SequenceNumberSet::new(SequenceNumber::from(10),64);
-          for sn in 10..=52 {
-            set.insert(SequenceNumber::from(sn));
-          }
-          set
-      })(),
+      {
+        // send sequence numbers 10,11,12,..,52. (43 ones) Set goes up to 64.
+        let mut set = SequenceNumberSet::new(SequenceNumber::from(10),64);
+        for sn in 10..=52 {
+          set.insert(SequenceNumber::from(sn));
+        }
+        set
+      },
       le = [0x00, 0x00, 0x00, 0x00,
             0x0A, 0x00, 0x00, 0x00, // base = 10
             0x40, 0x00, 0x00, 0x00, // 0x40 = 64 bits in map => 2 words
@@ -524,16 +524,16 @@ mod tests {
 
   serialization_test!( type = FragmentNumberSet,
   {
-      fragment_number_set_empty,
-      FragmentNumberSet::new_empty(FragmentNumber::from(42u32) ),
-      le = [0x2A, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00],
-      be = [0x00, 0x00, 0x00, 0x2A,
-            0x00, 0x00, 0x00, 0x00]
+    fragment_number_set_empty,
+    FragmentNumberSet::new_empty(FragmentNumber::from(42u32) ),
+    le = [0x2A, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00],
+    be = [0x00, 0x00, 0x00, 0x2A,
+          0x00, 0x00, 0x00, 0x00]
   },
   {
       fragment_number_set_manual,
-      (|| {
+      {
           let mut set = FragmentNumberSet::new(FragmentNumber::from(1000u32), 14);
           set.insert(FragmentNumber::from(1001u32));
           set.insert(FragmentNumber::from(1003u32));
@@ -543,7 +543,7 @@ mod tests {
           set.insert(FragmentNumber::from(1010u32));
           set.insert(FragmentNumber::from(1013u32));
           set
-      })(),
+      },
       le = [0xE8, 0x03, 0x00, 0x00,
             0x0E, 0x00, 0x00, 0x00,
             0x00, 0x00, 0xA4, 0x5A],
