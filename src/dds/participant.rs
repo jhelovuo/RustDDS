@@ -299,7 +299,7 @@ impl DomainParticipantWeak {
     }
   }
 
-  pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
     match self.dpi.upgrade() {
       Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
       None => Err(Error::OutOfResources),
@@ -406,7 +406,7 @@ impl DomainParticipant_Disc {
       .create_publisher(dp, qos, self.discovery_command_channel.clone())
   }
 
-  pub fn create_subscriber<'a>(
+  pub fn create_subscriber(
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
