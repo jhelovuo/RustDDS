@@ -1056,7 +1056,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       Reliability::Reliable { max_blocking_time } => {
         let data = ReliabilityBestEffortData {
           reliability_kind: ReliabilityKind::RELIABLE,
-          max_blocking_time: max_blocking_time,
+          max_blocking_time,
         };
         s.serialize_field(
           "reliability",
@@ -1165,7 +1165,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       let history_data = match hs {
         History::KeepLast { depth } => HistoryData {
           kind: HistoryKind::KEEP_LAST,
-          depth: depth,
+          depth,
         },
         History::KeepAll => HistoryData {
           kind: HistoryKind::KEEP_ALL,
