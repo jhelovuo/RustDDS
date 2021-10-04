@@ -649,16 +649,13 @@ impl BuiltinDataDeserializer {
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         if let Ok(own) = ownership {
           let strength = match self.ownership {
-            Some(v) => match v {
-              Ownership::Exclusive { strength } => strength,
-              _ => 0,
-            },
-            None => 0,
+            Some(Ownership::Exclusive { strength }) => strength,
+            _ => 0,
           };
 
           let own = match own {
             OwnershipKind::SHARED => Ownership::Shared,
-            OwnershipKind::EXCLUSIVE => Ownership::Exclusive { strength: strength },
+            OwnershipKind::EXCLUSIVE => Ownership::Exclusive { strength },
           };
 
           self.ownership = Some(own);
