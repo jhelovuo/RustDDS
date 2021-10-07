@@ -44,13 +44,13 @@ struct StringData {
 }
 
 impl StringData {
-  pub fn new(parameter_id: ParameterId, string_data: &str) -> StringData {
+  pub fn new(parameter_id: ParameterId, string_data: String) -> StringData {
     let parameter_length = string_data.len() as u16;
     let parameter_length = parameter_length + (4 - parameter_length % 4) + 4;
     StringData {
       parameter_id,
       parameter_length,
-      string_data: string_data.to_string(),
+      string_data,
     }
   }
 }
@@ -947,20 +947,20 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_topic_name<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    if let Some(name) = self.topic_name.as_ref() {
+    if let Some(name) = self.topic_name {
       s.serialize_field(
         "topic_name",
-        &StringData::new(ParameterId::PID_TOPIC_NAME, name),
+        &StringData::new(ParameterId::PID_TOPIC_NAME, name.to_string()),
       )
       .unwrap();
     }
   }
 
   fn add_type_name<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    if let Some(name) = self.type_name.as_ref() {
+    if let Some(name) = self.type_name {
       s.serialize_field(
         "type_name",
-        &StringData::new(ParameterId::PID_TYPE_NAME, name),
+        &StringData::new(ParameterId::PID_TYPE_NAME, name.to_string()),
       )
       .unwrap();
     }

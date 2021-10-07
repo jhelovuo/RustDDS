@@ -212,8 +212,8 @@ impl Discovery {
     // Participant
     let dcps_participant_topic = try_construct!(
       domain_participant.create_topic(
-        "DCPSParticipant",
-        "SPDPDiscoveredParticipantData",
+        "DCPSParticipant".to_string(),
+        "SPDPDiscoveredParticipantData".to_string(),
         &Discovery::create_spdp_patricipant_qos(),
         TopicKind::WithKey,
       ),
@@ -266,8 +266,8 @@ impl Discovery {
     // Subscriptions: What are the Readers on the network and what are they subscribing to?
 
     let dcps_subscription_topic = try_construct!( domain_participant.create_topic(
-      "DCPSSubscription",
-      "DiscoveredReaderData",
+      "DCPSSubscription".to_string(),
+      "DiscoveredReaderData".to_string(),
       &discovery_subscriber_qos,
       TopicKind::WithKey,
     ) ,"Unable to create DCPSSubscription topic. {:?}");
@@ -307,8 +307,8 @@ impl Discovery {
     // Publication : Who are thr Writers?
 
     let dcps_publication_topic = try_construct!( domain_participant.create_topic(
-      "DCPSPublication",
-      "DiscoveredWriterData",
+      "DCPSPublication".to_string(),
+      "DiscoveredWriterData".to_string(),
       &discovery_publisher_qos,
       TopicKind::WithKey,
     ) ,"Unable to create DCPSPublication topic. {:?}");
@@ -347,8 +347,8 @@ impl Discovery {
     // Topic topic (not a typo)
 
     let dcps_topic_topic = try_construct!( domain_participant.create_topic(
-      "DCPSTopic",
-      "DiscoveredTopicData",
+      "DCPSTopic".to_string(),
+      "DiscoveredTopicData".to_string(),
       &QosPolicyBuilder::new().build(), //TODO: check what this should be
       TopicKind::WithKey,
     ) ,"Unable to create DCPSTopic topic. {:?}");
@@ -398,8 +398,8 @@ impl Discovery {
     // Participant Message Data 8.4.13
 
     let participant_message_topic = try_construct!( domain_participant.create_topic(
-      "DCPSParticipantMessage",
-      "ParticipantMessageData",
+      "DCPSParticipantMessage".to_string(),
+      "ParticipantMessageData".to_string(),
       &Discovery::PARTICIPANT_MESSAGE_QOS,
       TopicKind::WithKey,
     ) ,"Unable to create DCPSParticipantMessage topic. {:?}");
@@ -683,8 +683,8 @@ impl Discovery {
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
-      &String::from("DCPSParticipant"),
-      &String::from("SPDPDiscoveredParticipantData"),
+      String::from("DCPSParticipant"),
+      String::from("SPDPDiscoveredParticipantData"),
       &Discovery::create_spdp_patricipant_qos(),
     );
     let drd = DiscoveredReaderData {
@@ -705,8 +705,8 @@ impl Discovery {
     let pub_topic_data = PublicationBuiltinTopicData::new(
       writer_guid,
       dp.get_guid(),
-      &String::from("DCPSParticipant"),
-      &String::from("SPDPDiscoveredParticipantData"),
+      String::from("DCPSParticipant"),
+      String::from("SPDPDiscoveredParticipantData"),
     );
     let dwd = DiscoveredWriterData {
       last_updated: Instant::now(),
@@ -1277,8 +1277,8 @@ mod tests {
 
     let topic = participant
       .create_topic(
-        "Square",
-        "ShapeType",
+        "Square".to_string(),
+        "ShapeType".to_string(),
         &QosPolicies::qos_none(),
         TopicKind::WithKey,
       )
@@ -1363,8 +1363,8 @@ mod tests {
 
     let topic = participant
       .create_topic(
-        "Square",
-        "ShapeType",
+        "Square".to_string(),
+        "ShapeType".to_string(),
         &QosPolicies::qos_none(),
         TopicKind::WithKey,
       )

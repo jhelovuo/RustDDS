@@ -40,12 +40,12 @@ impl DDSCache {
 
   pub fn add_new_topic(
     &mut self,
-    topic_name: &str,
+    topic_name: String,
     topic_kind: TopicKind,
     topic_data_type: TypeDesc,
   ) {
     self.topic_caches.insert(
-        topic_name.to_string(),
+        topic_name.clone(),
         TopicCache::new(topic_name, topic_kind, topic_data_type),
       );
   }
@@ -129,9 +129,9 @@ pub struct TopicCache {
 }
 
 impl TopicCache {
-  pub fn new(topic_name: &str, topic_kind: TopicKind, topic_data_type: TypeDesc) -> TopicCache {
+  pub fn new(topic_name: String, topic_kind: TopicKind, topic_data_type: TypeDesc) -> TopicCache {
     TopicCache {
-      topic_name: topic_name.to_string(),
+      topic_name,
       topic_data_type,
       topic_kind,
       topic_qos: QosPolicyBuilder::new().build(),
@@ -301,7 +301,7 @@ mod tests {
   #[test]
   fn create_dds_cache() {
     let cache = Arc::new(RwLock::new(DDSCache::new()));
-    let topic_name = &String::from("ImJustATopic");
+    let topic_name = String::from("ImJustATopic");
     let change1 = CacheChange::new(
       GUID::GUID_UNKNOWN,
       SequenceNumber::from(1),
@@ -311,17 +311,17 @@ mod tests {
     cache.write().unwrap().add_new_topic(
       topic_name,
       TopicKind::WithKey,
-      TypeDesc::new("IDontKnowIfThisIsNecessary"),
+      TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
     );
     cache
       .write()
       .unwrap()
-      .to_topic_add_change(topic_name, &DDSTimestamp::now(), change1);
+      .to_topic_add_change(&topic_name, &DDSTimestamp::now(), change1);
 
     let pointerToCache1 = cache.clone();
 
     thread::spawn(move || {
-      let topic_name = &String::from("ImJustATopic");
+      let topic_name = String::from("ImJustATopic");
       let cahange2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(1),
@@ -329,7 +329,7 @@ mod tests {
         DDSData::new(SerializedPayload::default()),
       );
       pointerToCache1.write().unwrap().to_topic_add_change(
-        topic_name,
+        &topic_name,
         &DDSTimestamp::now(),
         cahange2,
       );
@@ -340,7 +340,7 @@ mod tests {
         DDSData::new(SerializedPayload::default()),
       );
       pointerToCache1.write().unwrap().to_topic_add_change(
-        topic_name,
+        &topic_name,
         &DDSTimestamp::now(),
         cahange3,
       );
@@ -351,13 +351,13 @@ mod tests {
     cache
       .read()
       .unwrap()
-      .from_topic_get_change(topic_name, &DDSTimestamp::now());
+      .from_topic_get_change(&topic_name, &DDSTimestamp::now());
     assert_eq!(
       cache
         .read()
         .unwrap()
         .from_topic_get_changes_in_range(
-          topic_name,
+          &topic_name,
           &(DDSTimestamp::now() - DDSDuration::from_secs(23)),
           &DDSTimestamp::now()
         )

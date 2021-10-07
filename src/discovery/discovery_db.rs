@@ -416,8 +416,8 @@ impl DiscoveryDB {
 
     let mut subscription_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
-      &topic.get_name(),
-      topic.get_type().name(),
+      topic.get_name(),
+      topic.get_type().name().to_string(),
       &topic.get_qos(),
     );
     subscription_data.set_participant_key(domain_participant.get_guid());
@@ -554,7 +554,7 @@ mod tests {
     let _discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
     let topic_name = String::from("some_topic");
     let type_name = String::from("RandomData");
-    let _dreader = DiscoveredReaderData::default(&topic_name, &type_name);
+    let _dreader = DiscoveredReaderData::default(topic_name, type_name);
 
     // TODO: more tests :)
   }
@@ -566,16 +566,16 @@ mod tests {
     let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant
       .create_topic(
-        "Foobar",
-        "RandomData",
+        "Foobar".to_string(),
+        "RandomData".to_string(),
         &QosPolicies::qos_none(),
         TopicKind::WithKey,
       )
       .unwrap();
     let topic2 = domain_participant
       .create_topic(
-        "Barfoo",
-        "RandomData",
+        "Barfoo".to_string(),
+        "RandomData".to_string(),
         &QosPolicies::qos_none(),
         TopicKind::WithKey,
       )
@@ -649,8 +649,8 @@ mod tests {
     let dp = DomainParticipant::new(0).expect("Failed to create participant");
     let topic = dp
       .create_topic(
-        "some topic name",
-        "Wazzup",
+        "some topic name".to_string(),
+        "Wazzup".to_string(),
         &QosPolicies::qos_none(),
         TopicKind::WithKey,
       )

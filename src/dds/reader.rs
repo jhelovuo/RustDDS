@@ -997,9 +997,9 @@ mod tests {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
-      &"test".to_string(),
+      "test".to_string(),
       TopicKind::NoKey,
-      TypeDesc::new("testi"),
+      TypeDesc::new("testi".to_string()),
     );
 
     let reader_ing = ReaderIngredients {
@@ -1056,9 +1056,9 @@ mod tests {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
-      &"test".to_string(),
+      "test".to_string(),
       TopicKind::NoKey,
-      TypeDesc::new("testi"),
+      TypeDesc::new("testi".to_string()),
     );
 
     let reader_ing = ReaderIngredients {
@@ -1126,9 +1126,9 @@ mod tests {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
-      &"test".to_string(),
+      "test".to_string(),
       TopicKind::NoKey,
-      TypeDesc::new("testi"),
+      TypeDesc::new("testi".to_string()),
     );
     let reader_ing = ReaderIngredients {
       guid: new_guid,
@@ -1267,9 +1267,9 @@ mod tests {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
-      &"test".to_string(),
+      "test".to_string(),
       TopicKind::NoKey,
-      TypeDesc::new("testi"),
+      TypeDesc::new("testi".to_string()),
     );
 
     let reader_ing = ReaderIngredients {

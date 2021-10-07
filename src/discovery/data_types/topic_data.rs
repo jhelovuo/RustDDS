@@ -124,15 +124,15 @@ pub struct SubscriptionBuiltinTopicData {
 impl SubscriptionBuiltinTopicData {
   pub fn new(
     key: GUID,
-    topic_name: &str,
-    type_name: &str,
+    topic_name: String,
+    type_name: String,
     qos: &QosPolicies,
   ) -> SubscriptionBuiltinTopicData {
     let mut sbtd = SubscriptionBuiltinTopicData {
       key,
       participant_key: None,
-      topic_name: topic_name.to_string(),
-      type_name: type_name.to_string(),
+      topic_name,
+      type_name,
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -310,8 +310,8 @@ impl DiscoveredReaderData {
     let reader_proxy = ReaderProxy::new(reader.get_guid());
     let mut subscription_topic_data = SubscriptionBuiltinTopicData::new(
       reader.get_guid(),
-      &topic.get_name(),
-      &topic.get_type().name().to_string(),
+      topic.get_name(),
+      topic.get_type().name().to_string(),
       &topic.get_qos(),
     );
     subscription_topic_data.set_participant_key(dp.get_guid());
@@ -323,7 +323,7 @@ impl DiscoveredReaderData {
     }
   }
 
-  pub fn default(topic_name: &str, type_name: &str) -> DiscoveredReaderData {
+  pub fn default(topic_name: String, type_name: String) -> DiscoveredReaderData {
     let rguid = GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_BUILT_IN);
     let reader_proxy = ReaderProxy::new(rguid);
     let subscription_topic_data = SubscriptionBuiltinTopicData::new(
@@ -486,14 +486,14 @@ impl PublicationBuiltinTopicData {
   pub fn new(
     guid: GUID,
     participant_guid: GUID,
-    topic_name: &str,
-    type_name: &str,
+    topic_name: String,
+    type_name: String,
   ) -> PublicationBuiltinTopicData {
     PublicationBuiltinTopicData {
       key: guid,
       participant_key: Some(participant_guid),
-      topic_name: topic_name.to_string(),
-      type_name: type_name.to_string(),
+      topic_name,
+      type_name,
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -616,8 +616,8 @@ impl DiscoveredWriterData {
     let mut publication_topic_data = PublicationBuiltinTopicData::new(
       writer.get_guid(),
       dp.get_guid(),
-      &topic.get_name(),
-      &topic.get_type().name().to_string(),
+      topic.get_name(),
+      topic.get_type().name().to_string(),
     );
 
     publication_topic_data.read_qos(&topic.get_qos());

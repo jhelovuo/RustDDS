@@ -1212,7 +1212,7 @@ mod tests {
 
     let sub = dp.create_subscriber(&qos).unwrap();
     let topic = dp
-      .create_topic("dr", "drtest?", &qos, TopicKind::WithKey)
+      .create_topic("dr".to_string(), "drtest?".to_string(), &qos, TopicKind::WithKey)
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
@@ -1349,7 +1349,7 @@ mod tests {
 
     let sub = dp.create_subscriber(&qos).unwrap();
     let topic = dp
-      .create_topic("dr read", "read fn test?", &qos, TopicKind::WithKey)
+      .create_topic("dr read".to_string(), "read fn test?".to_string(), &qos, TopicKind::WithKey)
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
@@ -1607,7 +1607,7 @@ mod tests {
 
     let sub = dp.create_subscriber(&qos).unwrap();
     let topic = dp
-      .create_topic("wakeup", "Wake up!", &qos, TopicKind::WithKey)
+      .create_topic("wakeup".to_string(), "Wake up!".to_string(), &qos, TopicKind::WithKey)
       .unwrap();
 
     let (send, rec) = mio_channel::sync_channel::<()>(10);

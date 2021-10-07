@@ -264,13 +264,13 @@ impl BuiltinDataDeserializer {
       None => return Err(Error::Message("Failed to parse key.".to_string())),
     };
 
-    let topic_name: &str = match self.topic_name.as_ref() {
-      Some(tn) => tn,
+    let topic_name = match &self.topic_name {
+      Some(tn) => tn.clone(),
       None => return Err(Error::Message("Failed to parse topic name.".to_string())),
     };
 
-    let type_name: &str = match self.type_name.as_ref() {
-      Some(tn) => tn,
+    let type_name = match &self.type_name {
+      Some(tn) => tn.clone(),
       None => return Err(Error::Message("Failed to parse type name.".to_string())),
     };
 

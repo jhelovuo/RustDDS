@@ -643,8 +643,8 @@ impl DPEventLoop {
               Some(_) => TopicKind::WithKey,
               None => TopicKind::NoKey,
             };
-            ddsc.add_new_topic(&topic.topic_data.name, topic_kind,
-               TypeDesc::new(&topic.topic_data.type_name));
+            ddsc.add_new_topic(topic.topic_data.name.clone(), topic_kind,
+               TypeDesc::new(topic.topic_data.type_name.clone()));
           }
         }
         _ => panic!("DDSCache is poisoned"),
