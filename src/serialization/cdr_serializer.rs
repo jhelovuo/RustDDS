@@ -3,11 +3,8 @@ use std::marker::PhantomData;
 use std::io;
 use std::io::Write;
 
-extern crate byteorder;
-
 use bytes::Bytes;
-use crate::serialization::cdr_serializer::byteorder::WriteBytesExt;
-use byteorder::{BigEndian, LittleEndian, ByteOrder};
+use byteorder::{BigEndian, LittleEndian, ByteOrder, WriteBytesExt};
 
 use crate::serialization::error::Error;
 use crate::serialization::error::Result;

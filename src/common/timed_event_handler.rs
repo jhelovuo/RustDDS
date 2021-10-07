@@ -1,6 +1,3 @@
-extern crate timer;
-extern crate chrono;
-
 use timer::Timer;
 use timer::Guard;
 use mio_extras::channel as mio_channel;
@@ -51,7 +48,6 @@ impl<'a> TimedEventHandler {
 mod tests {
   use super::*;
   use mio_extras::channel as mio_channel;
-  extern crate chrono;
   use chrono::Duration;
   use mio::{Token, Poll, Ready, PollOpt};
   use std::thread;

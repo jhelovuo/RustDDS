@@ -32,8 +32,6 @@ use crate::{
   network::constant::*,
 };
 
-//use std::{time::Duration as StdDuration};
-
 use chrono::Utc;
 
 // separate type is needed to serialize correctly

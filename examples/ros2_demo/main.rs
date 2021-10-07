@@ -1,11 +1,6 @@
 #![deny(clippy::all)]
 
-extern crate rustdds;
-extern crate mio;
-extern crate mio_extras;
-
 use std::{io::Write, time::Duration};
-
 use rustdds::{
   ros2::RosParticipant,
 };

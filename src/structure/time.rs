@@ -1,7 +1,6 @@
 use speedy::{Readable, Writable};
 use serde::{Serialize, Deserialize};
 use std::ops::Sub;
-use chrono;
 
 use super::duration::Duration;
 

@@ -1,12 +1,5 @@
 #![deny(clippy::all)]
 
-extern crate rustdds;
-extern crate serde;
-extern crate mio;
-extern crate mio_extras;
-extern crate byteorder;
-extern crate termion;
-
 use rustdds::{
   serialization::{CDRSerializerAdapter, CDRDeserializerAdapter},
   dds::{

@@ -7,7 +7,7 @@ use std::ops::RangeBounds;
 use mio::Token;
 use log::warn;
 
-extern crate static_assertions as sa;
+use static_assertions as sa;
 
 use super::parameter_id::ParameterId;
 use crate::dds::traits::key::Key;
