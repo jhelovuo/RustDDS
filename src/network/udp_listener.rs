@@ -149,7 +149,6 @@ impl UDPListener {
       }
       Err(e) => {
         debug!("UDPListener::get_message failed: {:?}", e);
-        ()
       }
     };
     message

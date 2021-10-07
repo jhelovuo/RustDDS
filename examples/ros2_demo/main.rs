@@ -15,7 +15,6 @@ use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{channel as mio_channel};
 use structures::{MainController, DataUpdate, RosCommand};
 use termion::raw::*;
-use log4rs;
 use turtle_listener::TurtleListener;
 use turtle_sender::TurtleSender;
 
@@ -144,7 +143,7 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
                 nodes_updated_sender = Some(sender),
               RosCommand::TurtleCmdVel { twist } => 
                 match tsender_sender.send(twist) {
-                  Ok(_) => { /*debug!("main: send twist");*/ () },
+                  Ok(_) => { /*debug!("main: send twist");*/  },
                   Err(e) => error!("Failed to send to turtle sender. {:?}", e),
                 },
             };
