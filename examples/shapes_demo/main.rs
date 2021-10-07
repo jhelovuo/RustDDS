@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 extern crate rustdds;
 extern crate serde;
 extern crate mio;
