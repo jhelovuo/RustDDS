@@ -160,6 +160,7 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
+  #[allow(clippy::too_many_arguments)]
   pub(crate) fn new(
     subscriber: Subscriber,
     my_id: EntityId,

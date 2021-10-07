@@ -20,7 +20,7 @@ pub enum Error {
   Message(String),
 
   #[error("io::Error: {0}")]
-  IOError(#[from] std::io::Error),
+  Io(#[from] std::io::Error),
 
   #[error("CDR serialization requires sequence length to be specified at the start.")]
   SequenceLengthUnknown,

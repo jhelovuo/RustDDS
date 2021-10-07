@@ -81,6 +81,7 @@ pub struct DPEventLoop {
 
 impl DPEventLoop {
   // This pub(crate) , because it should be constructed only by DomainParticipant.
+  #[allow(clippy::too_many_arguments)]
   pub(crate) fn new(
     domain_info: DomainInfo,
     udp_listeners: HashMap<Token, UDPListener>,

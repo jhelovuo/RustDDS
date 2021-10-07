@@ -443,7 +443,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       protocol_version: None,
       vendor_id: None,
       expects_inline_qos: None,
-      participant_guid: subscription_topic_data.participant_key().clone(),
+      participant_guid: *subscription_topic_data.participant_key(),
       metatraffic_unicast_locators: None,
       metatraffic_multicast_locators: None,
       default_unicast_locators: None,
