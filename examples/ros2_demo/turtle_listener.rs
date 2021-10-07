@@ -34,7 +34,7 @@ impl TurtleListener {
 
     let turtle_cmd_vel_topic = ros_node.create_ros_topic(
       &TurtleCmdVelTopic::topic_name(),
-      &TurtleCmdVelTopic::type_name(),
+      TurtleCmdVelTopic::type_name(),
       TurtleCmdVelTopic::get_qos(),
       TurtleCmdVelTopic::topic_kind(),
     )

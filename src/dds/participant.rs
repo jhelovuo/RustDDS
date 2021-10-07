@@ -179,8 +179,8 @@ impl DomainParticipant {
   /// ```
   pub fn create_topic(
     &self,
-    name: &str,
-    type_desc: &str,
+    name: String,
+    type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic> {
@@ -312,8 +312,8 @@ impl DomainParticipantWeak {
 
   pub fn create_topic(
     &self,
-    name: &str,
-    type_desc: &str,
+    name: String,
+    type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic> {
@@ -428,8 +428,8 @@ impl DomainParticipant_Disc {
   pub fn create_topic(
     &self,
     dp: &DomainParticipantWeak,
-    name: &str,
-    type_desc: &str,
+    name: String,
+    type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic> {
@@ -764,14 +764,14 @@ impl DomainParticipant_Inner {
   pub fn create_topic(
     &self,
     domain_participant_weak: &DomainParticipantWeak,
-    name: &str,
-    type_desc: &str,
+    name: String,
+    type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic> {
     let topic = Topic::new(
       domain_participant_weak,
-      name.to_string(),
+      name,
       TypeDesc::new(type_desc),
       &qos,
       topic_kind,
@@ -821,7 +821,7 @@ impl DomainParticipant_Inner {
         let name = d.get_topic_name().clone();
         let type_desc = d.topic_data.type_name.clone();
         let topic =
-          self.create_topic(domain_participant_weak, &name, &type_desc, &qos, topic_kind)?;
+          self.create_topic(domain_participant_weak, name, type_desc, &qos, topic_kind)?;
         Ok(Some(topic))
       }
       None => Ok(None),
@@ -951,7 +951,7 @@ mod tests {
       .expect("Failed to create publisher");
 
     let topic = domain_participant
-      .create_topic("Aasii", "RandomData", &qos.clone(), TopicKind::WithKey)
+      .create_topic("Aasii".to_string(), "RandomData".to_string(), &qos.clone(), TopicKind::WithKey)
       .expect("Failed to create topic");
 
     let mut _data_writer = publisher
@@ -972,7 +972,7 @@ mod tests {
       .expect("Failed to create publisher");
 
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos.clone(), TopicKind::WithKey)
+      .create_topic("Aasii".to_string(), "Huh?".to_string(), &qos.clone(), TopicKind::WithKey)
       .expect("Failed to create topic");
 
     let mut _data_writer = publisher

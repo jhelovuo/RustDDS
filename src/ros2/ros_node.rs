@@ -129,8 +129,8 @@ impl RosParticipantInner {
   {
 
     let ros_discovery_topic = domain_participant.create_topic(
-        ROSDiscoveryTopic::topic_name(),
-        ROSDiscoveryTopic::type_name(),
+        ROSDiscoveryTopic::topic_name().to_string(),
+        ROSDiscoveryTopic::type_name().to_string(),
         &ROSDiscoveryTopic::get_qos(),
         TopicKind::NoKey,
       )?;
@@ -141,15 +141,15 @@ impl RosParticipantInner {
       domain_participant.create_subscriber(&ROSDiscoveryTopic::get_qos())?;
 
     let ros_parameter_events_topic = domain_participant.create_topic(
-      ParameterEventsTopic::topic_name(),
-      ParameterEventsTopic::type_name(),
+      ParameterEventsTopic::topic_name().to_string(),
+      ParameterEventsTopic::type_name().to_string(),
       &ParameterEventsTopic::get_qos(),
       TopicKind::NoKey,
     )?;
 
     let ros_rosout_topic = domain_participant.create_topic(
-      RosOutTopic::topic_name(),
-      RosOutTopic::type_name(),
+      RosOutTopic::topic_name().to_string(),
+      RosOutTopic::type_name().to_string(),
       &RosOutTopic::get_qos(),
       TopicKind::NoKey,
     )?;
@@ -430,7 +430,7 @@ impl RosNode {
   /// * must have balanced curly braces ({}) when used, i.e. {sub}/foo but not {sub/foo nor /foo}
   pub fn create_ros_topic(&self,
     name: &str,
-    type_name: &str,
+    type_name: String,
     qos: QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic, Error> {
@@ -442,7 +442,7 @@ impl RosNode {
     oname.push_str(name_stripped);
     info!("Creating topic, DDS name: {}",oname);
     let topic = self.ros_participant.domain_participant()
-      .create_topic(&oname, type_name, &qos, topic_kind)?;
+      .create_topic(oname, type_name, &qos, topic_kind)?;
     info!("Created topic");
     Ok(topic)
   }

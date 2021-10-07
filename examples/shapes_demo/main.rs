@@ -105,11 +105,11 @@ fn event_loop(running_flag: Arc<AtomicBool>, domain_id: u16) {
 
   // declare topics, subscriber, publisher, readers and writers
   let square_topic = domain_participant
-    .create_topic("Square", "ShapeType", &pub_qos, TopicKind::WithKey)
+    .create_topic("Square".to_string(), "ShapeType".to_string(), &pub_qos, TopicKind::WithKey)
     .unwrap();
   //println!("Square");
   let triangle_topic = domain_participant
-    .create_topic("Triangle", "ShapeType", &pub_qos, TopicKind::WithKey)
+    .create_topic("Triangle".to_string(), "ShapeType".to_string(), &pub_qos, TopicKind::WithKey)
     .unwrap();
   //println!("Triangle. Have topics. Create subscriber.");
 

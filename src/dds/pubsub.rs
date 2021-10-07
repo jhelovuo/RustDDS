@@ -11,12 +11,8 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use byteorder::{LittleEndian};
 
-use crate::{
-  discovery::discovery::DiscoveryCommand,
-  structure::{guid::GUID, entity::RTPSEntity, guid::EntityId},
-};
+use crate::{discovery::discovery::DiscoveryCommand, log_and_err_precondition_not_met, structure::{guid::GUID, entity::RTPSEntity, guid::EntityId}};
 
-use crate::log_and_err_precondition_not_met;
 use crate::dds::{
   values::result::*,
   data_types::EntityKind,
@@ -855,8 +851,9 @@ impl InnerSubscriber {
 
     let dp = match self.get_participant() {
         Some(dp) => dp,
-        None => return 
-          log_and_err_precondition_not_met!("DomainParticipant doesn't exist anymore.") ,
+        None => {
+          return log_and_err_precondition_not_met!("DomainParticipant doesn't exist anymore.")
+        }
       };
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
@@ -893,7 +890,7 @@ impl InnerSubscriber {
     match dp.get_dds_cache().write() {
       Ok(mut dds_cache) => {
         dds_cache.add_new_topic(
-            &topic.get_name(),
+            topic.get_name(),
             topic.kind(),
             topic.get_type(),
           );                   

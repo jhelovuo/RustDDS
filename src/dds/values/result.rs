@@ -58,14 +58,14 @@ pub enum Error {
 
 
 impl Error {
-  pub fn bad_parameter<T>(reason: &str) -> Result<T> 
+  pub fn bad_parameter<T>(reason: impl Into<String>) -> Result<T> 
   { 
-    Err( Error::BadParameter{ reason: reason.to_string() }) 
+    Err( Error::BadParameter{ reason: reason.into() }) 
   }
 
-  pub fn precondition_not_met<T>(precondition: &str) -> Result<T> 
+  pub fn precondition_not_met<T>(precondition: impl Into<String>) -> Result<T> 
   { 
-    Err( Error::PreconditionNotMet{ precondition: precondition.to_string() }) 
+    Err( Error::PreconditionNotMet{ precondition: precondition.into() }) 
   }
   
 }
