@@ -84,7 +84,7 @@ impl TurtleSender {
         } else if event.token() == TurtleSender::TURTLE_TWIST_TOKEN {
           while let Ok(twist) = receiver.try_recv() {
             match turtle_cmd_vel_writer.write(twist, None) {
-              Ok(_) => { /*info!("Wrote twist!");*/ ()},
+              Ok(_) => { /*info!("Wrote twist!");*/ },
               Err(e) => {
                 error!("Failed to write to turtle writer. {:?}", e);
                 ros_node.clear_node();

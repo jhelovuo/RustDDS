@@ -47,7 +47,7 @@ mod shapes;
 fn main() {
   env_logger::init();
 
-  let domain_id = std::env::args().nth(1).unwrap_or(String::from("0"));
+  let domain_id = std::env::args().nth(1).unwrap_or_else(|| String::from("0"));
   let domain_id = domain_id.parse::<u16>().unwrap();
 
   let running = Arc::new(AtomicBool::new(true));
@@ -230,7 +230,7 @@ fn event_loop(running_flag: Arc<AtomicBool>, domain_id: u16) {
           let mut square_moved = false;
           let mut dispose_square = false;
 
-          while let Some(c) = areader.next() {
+          for c in areader.by_ref() {
             write!(stdout, "{}", termion::cursor::Goto(1, row))
               .unwrap();
 
