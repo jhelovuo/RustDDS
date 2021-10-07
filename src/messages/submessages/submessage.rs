@@ -47,6 +47,7 @@ impl<C: Context> Writable<C> for EntitySubmessage {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+#[allow(clippy::enum_variant_names)]
 pub enum InterpreterSubmessage {
   InfoSource(InfoSource, BitFlags<INFOSOURCE_Flags>),
   InfoDestination(InfoDestination, BitFlags<INFODESTINATION_Flags>),

@@ -98,11 +98,9 @@ where
   SA: no_key::SerializerAdapter<D>,
 {
   fn key_to_Bytes(_value: &() ) -> Result<Bytes> {
-    Ok(no_bytes)
+    Ok(Bytes::new())
   }
 }
-
-const no_bytes : Bytes = Bytes::new();
 
 // wrapper for DeerializerAdapter
 // * inside is NO_KEY

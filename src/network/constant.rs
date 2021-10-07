@@ -11,7 +11,7 @@ use crate::structure::guid::{GUID,EntityKind};
 
 const PTB : usize = EntityKind::POLL_TOKEN_BASE;
 
-pub const STOP_POLL_TOKEN: Token = Token(0 + PTB);
+pub const STOP_POLL_TOKEN: Token = Token(PTB);
 
 pub const DISCOVERY_SENDER_TOKEN: Token = Token(1 + PTB);
 pub const USER_TRAFFIC_SENDER_TOKEN: Token = Token(2 + PTB);

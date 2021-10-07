@@ -17,6 +17,7 @@ pub mod submessage_flag;
 pub mod submessage_header;
 pub mod submessage_kind;
 
+#[allow(clippy::module_inception)]
 pub mod submessages {
   pub use super::submessage_elements::RepresentationIdentifier;
 

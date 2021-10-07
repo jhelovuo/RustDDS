@@ -95,9 +95,11 @@ impl From<Locator> for SocketAddr {
 impl<'a, C: Context> Readable<'a, C> for Locator {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut locator = Locator::default();
-    locator.kind = reader.read_value()?;
-    locator.port = reader.read_value()?;
+    let mut locator = Locator {
+      kind: reader.read_value()?,
+      port: reader.read_value()?,
+      ..Locator::default()
+    };
     for i in 0..locator.address.len() {
       locator.address[i] = reader.read_u8()?;
     }
