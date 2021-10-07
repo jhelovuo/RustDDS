@@ -85,8 +85,8 @@ where
     SA::output_encoding()
   }
 
-  fn to_Bytes(value: &NoKeyWrapper<D>) -> Result<Bytes> {
-    SA::to_Bytes(&value.d)
+  fn to_bytes(value: &NoKeyWrapper<D>) -> Result<Bytes> {
+    SA::to_bytes(&value.d)
   }
 }
 
@@ -97,7 +97,7 @@ where
   D: Serialize, 
   SA: no_key::SerializerAdapter<D>,
 {
-  fn key_to_Bytes(_value: &() ) -> Result<Bytes> {
+  fn key_to_bytes(_value: &() ) -> Result<Bytes> {
     Ok(Bytes::new())
   }
 }

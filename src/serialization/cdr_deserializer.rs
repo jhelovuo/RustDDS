@@ -16,9 +16,9 @@ use crate::dds::traits::key::{Keyed};
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
-/// This type adapts CDR_deserializer (which implements serde::Deserializer) to work as a
-/// [`DeserializerAdapter`]. CDR_deserializer cannot directly implement the trait itself, because
-/// CDR_deserializer has the type parameter BO open, and the adapter needs to be bi-endian.
+/// This type adapts CdrDeserializer (which implements serde::Deserializer) to work as a
+/// [`DeserializerAdapter`]. CdrDeserializer cannot directly implement the trait itself, because
+/// CdrDeserializer has the type parameter BO open, and the adapter needs to be bi-endian.
 ///
 /// [`DeserializerAdapter`]: ../dds/traits/serde_adapters/trait.DeserializerAdapter.html
 pub struct CDRDeserializerAdapter<D> {
@@ -26,7 +26,7 @@ pub struct CDRDeserializerAdapter<D> {
   // no-one home
 }
 
-const repr_ids: [RepresentationIdentifier; 3] = [
+const REPR_IDS: [RepresentationIdentifier; 3] = [
   RepresentationIdentifier::CDR_BE,
   RepresentationIdentifier::CDR_LE,
   RepresentationIdentifier::PL_CDR_LE,
@@ -38,7 +38,7 @@ where
   D: DeserializeOwned,
 {
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
-    &repr_ids
+    &REPR_IDS
   }
 
   fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
@@ -74,29 +74,29 @@ where
 
 /// CDR deserializer.
 /// Input is from &[u8], since we expect to have the data in contiguous memory buffers.
-pub struct CDR_deserializer<'de, BO> {
+pub struct CdrDeserializer<'de, BO> {
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
   input: &'de [u8],         // We borrow the input data, therefore we carry lifetime 'de all around.
-  serializedDataCount: usize, // This is to keep track of CDR data alignment requirements.
+  serialized_data_count: usize, // This is to keep track of CDR data alignment requirements.
 }
 
-impl<'de, BO> CDR_deserializer<'de, BO>
+impl<'de, BO> CdrDeserializer<'de, BO>
 where
   BO: ByteOrder,
 {
-  pub fn new_little_endian(input: &[u8]) -> CDR_deserializer<LittleEndian> {
-    CDR_deserializer::<LittleEndian>::new(input)
+  pub fn new_little_endian(input: &[u8]) -> CdrDeserializer<LittleEndian> {
+    CdrDeserializer::<LittleEndian>::new(input)
   }
 
-  pub fn new_big_endian(input: &[u8]) -> CDR_deserializer<BigEndian> {
-    CDR_deserializer::<BigEndian>::new(input)
+  pub fn new_big_endian(input: &[u8]) -> CdrDeserializer<BigEndian> {
+    CdrDeserializer::<BigEndian>::new(input)
   }
 
-  pub fn new(input: &'de [u8]) -> CDR_deserializer<'de, BO> {
-    CDR_deserializer::<BO> {
+  pub fn new(input: &'de [u8]) -> CdrDeserializer<'de, BO> {
+    CdrDeserializer::<BO> {
       phantom: PhantomData,
       input,
-      serializedDataCount: 0,
+      serialized_data_count: 0,
     }
   }
 
@@ -105,7 +105,7 @@ where
     if count <= self.input.len() {
       let (head, tail) = self.input.split_at(count);
       self.input = tail;
-      self.serializedDataCount += count;
+      self.serialized_data_count += count;
       Ok(head)
     } else {
       Err(Error::Eof)
@@ -129,11 +129,11 @@ where
 
   fn calculate_padding_count_from_written_bytes_and_remove(
     &mut self,
-    typeOctetAligment: usize,
+    type_octet_aligment: usize,
   ) -> Result<()> {
-    let modulo = self.serializedDataCount % typeOctetAligment;
+    let modulo = self.serialized_data_count % type_octet_aligment;
     if modulo != 0 {
-      let padding = typeOctetAligment - modulo;
+      let padding = type_octet_aligment - modulo;
       self.remove_bytes_from_input(padding)
     } else {
       Ok(())
@@ -145,7 +145,7 @@ pub fn deserialize_from_little_endian<T>(s: &[u8]) -> Result<T>
 where
   T: DeserializeOwned,
 {
-  let mut deserializer = CDR_deserializer::<LittleEndian>::new(s);
+  let mut deserializer = CdrDeserializer::<LittleEndian>::new(s);
   T::deserialize(&mut deserializer)
 }
 
@@ -153,7 +153,7 @@ pub fn deserialize_from_big_endian<T>(s: &[u8]) -> Result<T>
 where
   T: DeserializeOwned,
 {
-  let mut deserializer = CDR_deserializer::<BigEndian>::new(s);
+  let mut deserializer = CdrDeserializer::<BigEndian>::new(s);
   T::deserialize(&mut deserializer)
 }
 
@@ -166,17 +166,17 @@ macro_rules! deserialize_multibyte_number {
       where
         V: Visitor<'de>,
       {
-        const size :usize = std::mem::size_of::<$num_type>();
-        assert!(size > 1, "multibyte means size must be > 1");
-        self.calculate_padding_count_from_written_bytes_and_remove(size)?;
+        const SIZE :usize = std::mem::size_of::<$num_type>();
+        assert!(SIZE > 1, "multibyte means size must be > 1");
+        self.calculate_padding_count_from_written_bytes_and_remove(SIZE)?;
         visitor.[<visit_ $num_type>](
-          self.next_bytes(size)?.[<read_ $num_type>]::<BO>().unwrap() )
+          self.next_bytes(SIZE)?.[<read_ $num_type>]::<BO>().unwrap() )
       }
     }
   };
 }
 
-impl<'de, 'a, BO> de::Deserializer<'de> for &'a mut CDR_deserializer<'de, BO>
+impl<'de, 'a, BO> de::Deserializer<'de> for &'a mut CdrDeserializer<'de, BO>
 where
   BO: ByteOrder,
 {
@@ -411,14 +411,14 @@ where
 // ----------------------------------------------------------
 
 struct EnumerationHelper<'a, 'de: 'a, BO> {
-  de: &'a mut CDR_deserializer<'de, BO>,
+  de: &'a mut CdrDeserializer<'de, BO>,
 }
 
 impl<'a, 'de, BO> EnumerationHelper<'a, 'de, BO>
 where
   BO: ByteOrder,
 {
-  fn new(de: &'a mut CDR_deserializer<'de, BO>) -> Self {
+  fn new(de: &'a mut CdrDeserializer<'de, BO>) -> Self {
     EnumerationHelper::<BO> { de }
   }
 }
@@ -478,17 +478,17 @@ where
 // ----------------------------------------------------------
 
 struct SequenceHelper<'a, 'de: 'a, BO> {
-  de: &'a mut CDR_deserializer<'de, BO>,
-  elementCounter: usize,
-  expectedCount: usize,
+  de: &'a mut CdrDeserializer<'de, BO>,
+  element_counter: usize,
+  expected_count: usize,
 }
 
 impl<'a, 'de, BO> SequenceHelper<'a, 'de, BO> {
-  fn new(de: &'a mut CDR_deserializer<'de, BO>, expectedCount: usize) -> Self {
+  fn new(de: &'a mut CdrDeserializer<'de, BO>, expected_count: usize) -> Self {
     SequenceHelper {
       de,
-      elementCounter: 0,
-      expectedCount,
+      element_counter: 0,
+      expected_count,
     }
   }
 }
@@ -505,10 +505,10 @@ where
   where
     T: DeserializeSeed<'de>,
   {
-    if self.elementCounter == self.expectedCount {
+    if self.element_counter == self.expected_count {
       Ok(None)
     } else {
-      self.elementCounter += 1;
+      self.element_counter += 1;
       seed.deserialize(&mut *self.de).map(Some)
     }
   }
@@ -526,10 +526,10 @@ where
   where
     K: DeserializeSeed<'de>,
   {
-    if self.elementCounter == self.expectedCount {
+    if self.element_counter == self.expected_count {
       Ok(None)
     } else {
-      self.elementCounter += 1;
+      self.element_counter += 1;
       seed.deserialize(&mut *self.de).map(Some)
     }
   }
@@ -713,12 +713,12 @@ mod tests {
     // 10.2.2 Example
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct example {
+    struct Example {
       a: u32,
       b: [u8; 4],
     }
 
-    let o = example {
+    let o = Example {
       a: 1,
       b: [b'a', b'b', b'c', b'd'],
     };
@@ -727,10 +727,10 @@ mod tests {
 
     let serialized_be: Vec<u8> = vec![0x00, 0x00, 0x00, 0x01, 0x61, 0x62, 0x63, 0x64];
 
-    let deserialized_le: example = deserialize_from_little_endian(&serialized_le).unwrap();
-    let deserialized_be: example = deserialize_from_big_endian(&serialized_be).unwrap();
-    let serializedO_le = to_bytes::<example, LittleEndian>(&o).unwrap();
-    let serializedO_be = to_bytes::<example, BigEndian>(&o).unwrap();
+    let deserialized_le: Example = deserialize_from_little_endian(&serialized_le).unwrap();
+    let deserialized_be: Example = deserialize_from_big_endian(&serialized_be).unwrap();
+    let serializedO_le = to_bytes::<Example, LittleEndian>(&o).unwrap();
+    let serializedO_be = to_bytes::<Example, BigEndian>(&o).unwrap();
 
     assert_eq!(
       serializedO_le,
@@ -792,7 +792,7 @@ mod tests {
     //string test
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct messageType {
+    struct MessageType {
       x: f64,
       y: f64,
       heading: f64,
@@ -810,7 +810,7 @@ mod tests {
       0x3f, 0x00, //0x00, 0x00,
     ];
 
-    let value: messageType = deserialize_from_little_endian(&recieved_message_le).unwrap();
+    let value: MessageType = deserialize_from_little_endian(&recieved_message_le).unwrap();
     info!("{:?}", value);
     assert_eq!(value.test, "Toimiiko?");
   }

@@ -4,23 +4,23 @@ use std::thread;
 use std::convert::From;
 
 
-const timeout_epsilon : Duration = Duration::from_nanos( 1000 );
+const TIMEOUT_EPSILON : Duration = Duration::from_nanos( 1000 );
 
 // Always give background thread 1 ms to react
-const timeout_fallback : Duration = Duration::from_nanos( 1_000_000 );
+const TIMEOUT_FALLBACK : Duration = Duration::from_nanos( 1_000_000 );
 
 pub fn try_send_timeout<T>(sender: &SyncSender<T>, t: T, timeout_opt:Option<Duration>) 
   -> Result<(), TrySendError<T>> 
 {
   // TODO: Write a more optimized fast path, where send succeeds on first try.
 
-  let timeout = timeout_opt.unwrap_or(timeout_fallback);
+  let timeout = timeout_opt.unwrap_or(TIMEOUT_FALLBACK);
   let mut delays = Vec::with_capacity(20);
-  if timeout <= timeout_epsilon {
-    delays.push(timeout_epsilon)
+  if timeout <= TIMEOUT_EPSILON {
+    delays.push(TIMEOUT_EPSILON)
   } else {
     let mut to = timeout;
-    while to > timeout_epsilon {
+    while to > TIMEOUT_EPSILON {
       to = to / 2;
       delays.push(to);
     }

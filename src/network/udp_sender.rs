@@ -100,8 +100,8 @@ impl UDPSender {
 
   pub fn send_to_locator(&self, buffer: &[u8], l: &Locator) {
       match l.kind {
-        LocatorKind::LOCATOR_KIND_UDPv4 |
-        LocatorKind::LOCATOR_KIND_UDPv6 => {
+        LocatorKind::LOCATOR_KIND_UDP_V4 |
+        LocatorKind::LOCATOR_KIND_UDP_V6 => {
           let a = l.to_socket_address();
           if a.ip().is_multicast() {
             for socket in self.multicast_sockets.iter() {

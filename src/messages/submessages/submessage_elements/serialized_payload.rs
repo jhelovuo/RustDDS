@@ -86,7 +86,7 @@ impl SerializedPayload {
     }
   }
 
-  pub fn new_from_Bytes(rep_id: RepresentationIdentifier, payload: Bytes) -> SerializedPayload {
+  pub fn new_from_bytes(rep_id: RepresentationIdentifier, payload: Bytes) -> SerializedPayload {
     SerializedPayload {
       representation_identifier: rep_id,
       representation_options: [0, 0],

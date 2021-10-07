@@ -15,12 +15,12 @@ use crate::dds::traits::key::Key;
 /// DDS/RTPS Participant GuidPrefix
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct GuidPrefix {
-  pub entityKey: [u8; 12],
+  pub entity_key: [u8; 12],
 }
 
 impl GuidPrefix {
   pub const GUIDPREFIX_UNKNOWN: GuidPrefix = GuidPrefix {
-    entityKey: [0x00; 12],
+    entity_key: [0x00; 12],
   };
 
   pub fn new(prefix: &[u8]) -> GuidPrefix {
@@ -31,7 +31,7 @@ impl GuidPrefix {
       }
       pr[ix] = *data
     }
-    GuidPrefix { entityKey: pr }
+    GuidPrefix { entity_key: pr }
   }
 
   pub fn range(&self) -> impl RangeBounds<GUID> {
@@ -52,8 +52,8 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let mut guid_prefix = GuidPrefix::default();
-    for i in 0..guid_prefix.entityKey.len() {
-      guid_prefix.entityKey[i] = reader.read_u8()?;
+    for i in 0..guid_prefix.entity_key.len() {
+      guid_prefix.entity_key[i] = reader.read_u8()?;
     }
     Ok(guid_prefix)
   }
@@ -67,7 +67,7 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix {
 impl<C: Context> Writable<C> for GuidPrefix {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    for elem in &self.entityKey {
+    for elem in &self.entity_key {
       writer.write_u8(*elem)?
     }
     Ok(())
@@ -150,8 +150,8 @@ impl From<EntityKind> for u8 {
 /// See RTPS spec section 8.2.4 , 8.3.5.1 and 9.3.1.2
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct EntityId {
-  pub entityKey: [u8; 3],
-  pub entityKind: EntityKind,
+  pub entity_key: [u8; 3],
+  pub entity_kind: EntityKind,
 }
 
 // We are going to pack 32 bits of payload into an usize, or ultimately
@@ -168,76 +168,76 @@ pub enum TokenDecode {
 
 impl EntityId {
   pub const ENTITYID_UNKNOWN: EntityId = EntityId {
-    entityKey: [0x00; 3],
-    entityKind: EntityKind::UNKNOWN_USER_DEFINED,
+    entity_key: [0x00; 3],
+    entity_kind: EntityKind::UNKNOWN_USER_DEFINED,
   };
   pub const ENTITYID_PARTICIPANT: EntityId = EntityId {
-    entityKey: [0x00, 0x00, 0x01],
-    entityKind: EntityKind::PARTICIPANT_BUILT_IN,
+    entity_key: [0x00, 0x00, 0x01],
+    entity_kind: EntityKind::PARTICIPANT_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_TOPIC_WRITER: EntityId = EntityId {
-    entityKey: [0x00, 0x00, 0x02],
-    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x00, 0x02],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_TOPIC_READER: EntityId = EntityId {
-    entityKey: [0x00, 0x00, 0x02],
-    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x00, 0x02],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER: EntityId = EntityId {
-    entityKey: [0x00, 0x00, 0x03],
-    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x00, 0x03],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER: EntityId = EntityId {
-    entityKey: [0x00, 0x00, 0x03],
-    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x00, 0x03],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER: EntityId = EntityId {
-    entityKey: [0x00, 0x00, 0x04],
-    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x00, 0x04],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER: EntityId = EntityId {
-    entityKey: [0x00, 0x00, 0x04],
-    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x00, 0x04],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER: EntityId = EntityId {
-    entityKey: [0x00, 0x01, 0x00],
-    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x01, 0x00],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER: EntityId = EntityId {
-    entityKey: [0x00, 0x01, 0x00],
-    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x01, 0x00],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER: EntityId = EntityId {
-    entityKey: [0x00, 0x02, 0x00],
-    entityKind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x02, 0x00],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
   pub const ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: EntityId = EntityId {
-    entityKey: [0x00, 0x02, 0x00],
-    entityKind: EntityKind::READER_WITH_KEY_BUILT_IN,
+    entity_key: [0x00, 0x02, 0x00],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
 
 
   pub const MIN: EntityId = EntityId {
-    entityKey: [0x00; 3],
-    entityKind: EntityKind::MIN,
+    entity_key: [0x00; 3],
+    entity_kind: EntityKind::MIN,
   };
   pub const MAX: EntityId = EntityId {
-    entityKey: [0xFF, 0xFF, 0xFF],
-    entityKind: EntityKind::MAX,
+    entity_key: [0xFF, 0xFF, 0xFF],
+    entity_kind: EntityKind::MAX,
   };
 
 
-  pub fn createCustomEntityID(entityKey: [u8; 3], entityKind: EntityKind) -> EntityId {
-    EntityId { entityKey, entityKind }
+  pub fn create_custom_entity_id(entity_key: [u8; 3], entity_kind: EntityKind) -> EntityId {
+    EntityId { entity_key, entity_kind }
   }
 
   fn as_usize(self) -> usize {
     // Usize is generated like beacause there needs to be
     // a way to tell entity kind from usize number
-    let u1 = self.entityKey[0] as u32;
-    let u2 = self.entityKey[1] as u32;
-    let u3 = self.entityKey[2] as u32;
-    let u4 = self.entityKind.0 as u32;
+    let u1 = self.entity_key[0] as u32;
+    let u2 = self.entity_key[1] as u32;
+    let u3 = self.entity_key[2] as u32;
+    let u4 = self.entity_kind.0 as u32;
 
     // This is essentially big-endian encoding
     // The type coercion will always succeed, because we have
@@ -254,8 +254,8 @@ impl EntityId {
 
     let result =
       EntityId {
-        entityKey: [u1 , u2 , u3 ],
-        entityKind: EntityKind::from( u4 )
+        entity_key: [u1 , u2 , u3 ],
+        entity_kind: EntityKind::from( u4 )
       };
 
     // check sanity, as the result sohould be
@@ -296,11 +296,11 @@ impl EntityId {
 
 
   pub fn kind(self) -> EntityKind {
-    self.entityKind
+    self.entity_kind
   }
 
-  pub fn set_kind(&mut self, entityKind: EntityKind) {
-    self.entityKind = entityKind;
+  pub fn set_kind(&mut self, entity_kind: EntityKind) {
+    self.entity_kind = entity_kind;
   }
 }
 
@@ -313,11 +313,11 @@ impl Default for EntityId {
 impl<'a, C: Context> Readable<'a, C> for EntityId {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let entityKey = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
-    let entityKind = EntityKind(reader.read_u8()?);
+    let entity_key = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
+    let entity_kind = EntityKind(reader.read_u8()?);
     Ok(EntityId {
-      entityKey,
-      entityKind,
+      entity_key,
+      entity_kind,
     })
   }
 }
@@ -325,10 +325,10 @@ impl<'a, C: Context> Readable<'a, C> for EntityId {
 impl<C: Context> Writable<C> for EntityId {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    for elem in &self.entityKey {
+    for elem in &self.entity_key {
       writer.write_u8(*elem)?
     }
-    writer.write_u8(self.entityKind.0)
+    writer.write_u8(self.entity_kind.0)
   }
 }
 
@@ -349,17 +349,17 @@ impl<C: Context> Writable<C> for EntityId {
   Deserialize,
 )]
 pub struct GUID {
-  // Note: It is important to have guidPrefix first, so that derive'd Ord trait
+  // Note: It is important to have guid_prefix first, so that derive'd Ord trait
   // will produce ordering, where GUIDs with same GuidPrefix are grouped
   // together.
-  pub guidPrefix: GuidPrefix, 
-  pub entityId: EntityId,
+  pub guid_prefix: GuidPrefix, 
+  pub entity_id: EntityId,
 }
 
 impl GUID {
   pub const GUID_UNKNOWN: GUID = GUID {
-    guidPrefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
-    entityId: EntityId::ENTITYID_UNKNOWN,
+    guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
+    entity_id: EntityId::ENTITYID_UNKNOWN,
   };
 
   // basic constructor from components
@@ -367,43 +367,43 @@ impl GUID {
     GUID::new_with_prefix_and_id(prefix,entity_id)
   }
 
-  /// Generates new GUID for Participant when `guidPrefix` is random
+  /// Generates new GUID for Participant when `guid_prefix` is random
   pub fn new_particiapnt_guid() -> GUID {
     let guid = Uuid::new_v4();
     GUID {
-      guidPrefix: GuidPrefix::new(guid.as_bytes()),
-      entityId: EntityId::ENTITYID_PARTICIPANT,
+      guid_prefix: GuidPrefix::new(guid.as_bytes()),
+      entity_id: EntityId::ENTITYID_PARTICIPANT,
     }
   }
 
   pub fn dummy_test_guid(entity_kind: EntityKind) -> GUID {
     GUID {
-      guidPrefix: GuidPrefix::new(b"FakeTestGUID"),
-      entityId: EntityId {
-        entityKey: [1,2,3] ,
-        entityKind: entity_kind,
+      guid_prefix: GuidPrefix::new(b"FakeTestGUID"),
+      entity_id: EntityId {
+        entity_key: [1,2,3] ,
+        entity_kind,
       },
     }
   }
 
-  /// Generates GUID for specific entityId from current prefix
+  /// Generates GUID for specific entity_id from current prefix
   pub fn from_prefix(self, entity_id: EntityId) -> GUID {
     GUID {
-      guidPrefix: self.guidPrefix,
-      entityId: entity_id,
+      guid_prefix: self.guid_prefix,
+      entity_id,
     }
   }
 
   /// Creates GUID from known values
   pub fn new_with_prefix_and_id(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
     GUID {
-      guidPrefix: prefix,
-      entityId: entity_id,
+      guid_prefix: prefix,
+      entity_id,
     }
   }
 
   pub fn as_usize(&self) -> usize {
-    self.entityId.as_usize()
+    self.entity_id.as_usize()
   }
 
 }
@@ -459,7 +459,7 @@ mod tests {
     let entity5 = EntityId::from_usize(e5.as_usize());
     assert_eq!(e5, entity5);
 
-    let e6 = EntityId::createCustomEntityID([12u8, 255u8, 0u8], EntityKind(254u8) );
+    let e6 = EntityId::create_custom_entity_id([12u8, 255u8, 0u8], EntityKind(254u8) );
     let entity6 = EntityId::from_usize(e6.as_usize());
     assert_eq!(e6, entity6);
   }
@@ -488,7 +488,7 @@ mod tests {
   {
       guid_prefix_endianness_insensitive,
       GuidPrefix {
-          entityKey: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+          entity_key: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
                       0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB]
       },
       le = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
@@ -582,8 +582,8 @@ mod tests {
   fn guid_unknown_is_a_combination_of_unknown_members() {
     assert_eq!(
       GUID {
-        entityId: EntityId::ENTITYID_UNKNOWN,
-        guidPrefix: GuidPrefix::GUIDPREFIX_UNKNOWN
+        entity_id: EntityId::ENTITYID_UNKNOWN,
+        guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN
       },
       GUID::GUID_UNKNOWN
     );
@@ -605,7 +605,7 @@ mod tests {
       {
           guid_entity_id_on_the_last_position,
           GUID {
-              entityId: EntityId::ENTITYID_PARTICIPANT,
+              entity_id: EntityId::ENTITYID_PARTICIPANT,
               ..Default::default()
           },
           le = [0x00, 0x00, 0x00, 0x00,

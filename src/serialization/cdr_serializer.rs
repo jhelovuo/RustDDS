@@ -58,13 +58,13 @@ where
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
-/// This type adapts CDR_serializer (which implements serde::Serializer) to work as a
-/// [`SerializerAdapter`]. CDR_serializer cannot directly implement the trait itself, because
-/// CDR_serializer has the type parameter BO open, and the adapter needs to be bi-endian.
+/// This type adapts CdrSeserializer (which implements serde::Serializer) to work as a
+/// [`SerializerAdapter`]. CdrSeserializer cannot directly implement the trait itself, because
+/// CdrSeserializer has the type parameter BO open, and the adapter needs to be bi-endian.
 ///
 /// [`SerializerAdapter`]: ../dds/traits/serde_adapters/trait.SerializerAdapter.html
 
-// A struct separate from CDR_serializer is needed, because the neme to_writer is already taken
+// A struct separate from CdrSeserializer is needed, because the neme to_writer is already taken
 pub struct CDRSerializerAdapter<D, BO = LittleEndian>
 where
   BO: ByteOrder,
@@ -82,7 +82,7 @@ where
     RepresentationIdentifier::CDR_LE
   }
 
-  fn to_Bytes(value: &D) -> Result<Bytes> {
+  fn to_bytes(value: &D) -> Result<Bytes> {
     let size_estimate = std::mem::size_of_val(value) * 2; // TODO: crude estimate
     let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate); 
     to_writer::<D, BO, &mut Vec<u8>>(&mut buffer, value)?;
@@ -96,7 +96,7 @@ where
   <D as Keyed>::K: Serialize,
   BO: ByteOrder,
 {
-  fn key_to_Bytes(value: &D::K) -> Result<Bytes> {
+  fn key_to_bytes(value: &D::K) -> Result<Bytes> {
     let size_estimate = std::mem::size_of_val(value) * 2; // TODO: crude estimate
     let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate); 
     to_writer::<D::K, BO, &mut Vec<u8>>(&mut buffer, value)?;
@@ -110,7 +110,7 @@ where
 
 /// Parameter W is an io::Write that would receive the serialization
 /// Parameter BO is byte order: LittleEndian or BigEndian
-pub struct CDR_serializer<W, BO>
+pub struct CdrSeserializer<W, BO>
 where
   W: io::Write,
 {
@@ -118,23 +118,23 @@ where
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
 }
 
-impl<W, BO> CDR_serializer<W, BO>
+impl<W, BO> CdrSeserializer<W, BO>
 where
   BO: ByteOrder,
   W: io::Write,
 {
-  pub fn new(w: W) -> CDR_serializer<W, BO> {
-    CDR_serializer::<W, BO> {
+  pub fn new(w: W) -> CdrSeserializer<W, BO> {
+    CdrSeserializer::<W, BO> {
       writer: CountingWrite::<W>::new(w),
       phantom: PhantomData,
     }
   }
 
-  fn calculate_padding_need_and_write_padding(&mut self, typeOctetAlignment: u8) -> Result<()> {
-    let modulo: u32 = self.writer.count() as u32 % typeOctetAlignment as u32;
+  fn calculate_padding_need_and_write_padding(&mut self, type_octet_alignment: u8) -> Result<()> {
+    let modulo: u32 = self.writer.count() as u32 % type_octet_alignment as u32;
     if modulo != 0 {
-      let paddingNeed: u32 = typeOctetAlignment as u32 - modulo;
-      for _x in 0..paddingNeed {
+      let padding_need: u32 = type_octet_alignment as u32 - modulo;
+      for _x in 0..padding_need {
         self.writer.write_u8(0)?
       }
     }
@@ -148,7 +148,7 @@ where
   BO: ByteOrder,
   W: io::Write,
 {
-  value.serialize(&mut CDR_serializer::<W, BO>::new(writer))
+  value.serialize(&mut CdrSeserializer::<W, BO>::new(writer))
 }
 
 
@@ -188,7 +188,7 @@ where
 // ----------------------------------------------------------
 
 
-impl<'a, W, BO> ser::Serializer for &'a mut CDR_serializer<W, BO>
+impl<'a, W, BO> ser::Serializer for &'a mut CdrSeserializer<W, BO>
 where
   BO: ByteOrder,
   W: io::Write,
@@ -461,7 +461,7 @@ where
   }
 }
 
-impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeSeq for &'a mut CDR_serializer<W, BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeSeq for &'a mut CdrSeserializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -477,7 +477,7 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeSeq for &'a mut CDR_serializ
   }
 }
 
-impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTuple for &'a mut CDR_serializer<W, BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTuple for &'a mut CdrSeserializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -493,7 +493,7 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTuple for &'a mut CDR_serial
   }
 }
 
-impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_serializer<W, BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleStruct for &'a mut CdrSeserializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -509,7 +509,7 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleStruct for &'a mut CDR_
   }
 }
 
-impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleVariant for &'a mut CDR_serializer<W, BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleVariant for &'a mut CdrSeserializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -524,7 +524,7 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleVariant for &'a mut CDR
   }
 }
 
-impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeMap for &'a mut CDR_serializer<W, BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeMap for &'a mut CdrSeserializer<W, BO> {
   type Ok = ();
   type Error = Error;
   fn serialize_key<T>(&mut self, key: &T) -> Result<()>
@@ -546,7 +546,7 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeMap for &'a mut CDR_serializ
   }
 }
 
-impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStruct for &'a mut CDR_serializer<W, BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStruct for &'a mut CdrSeserializer<W, BO> {
   type Ok = ();
   type Error = Error;
 
@@ -564,7 +564,7 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStruct for &'a mut CDR_seria
 }
 
 impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStructVariant
-  for &'a mut CDR_serializer<W, BO>
+  for &'a mut CdrSeserializer<W, BO>
 {
   type Ok = ();
   type Error = Error;
@@ -630,25 +630,25 @@ mod tests {
     #[derive(Debug, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
     #[repr(u32)]
     pub enum OmaEnumeration {
-      first,
-      second,
-      third,
+      First,
+      Second,
+      Third,
       //fourth(u8,u8,u8,u8),
       //fifth(u8,u8,u16),
       //sixth(i16,i16),
-      seventhHundred = 700,
+      SevenHundredth = 700,
       //eigth(u32),
       //this_should_not_be_valid(u64,u8,u8,u16,String),
       //similar_to_fourth(u8,u8,u8,u8),
     }
 
-    let enum_object_1 = OmaEnumeration::first;
-    let enum_object_2 = OmaEnumeration::second;
-    let enum_object_3 = OmaEnumeration::third;
+    let enum_object_1 = OmaEnumeration::First;
+    let enum_object_2 = OmaEnumeration::Second;
+    let enum_object_3 = OmaEnumeration::Third;
     //let enum_object_4 = OmaEnumeration::fourth(1,2,3,4);
     //let enum_object_5 = OmaEnumeration::fifth(5,6,7);
     //let enum_object_6 = OmaEnumeration::sixth(-8,9);
-    let enum_object_7 = OmaEnumeration::seventhHundred;
+    let enum_object_7 = OmaEnumeration::SevenHundredth;
     //let enum_object_8 = OmaEnumeration::eigth(1000);
     //let enum_object_9 = OmaEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hejssan allihoppa!"));
     //let enum_object_10 = OmaEnumeration::similar_to_fourth(5,6,7,8);
@@ -705,12 +705,12 @@ mod tests {
     // 10.2.2 Example
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct example {
+    struct Example {
       a: u32,
       b: [u8; 4],
     }
 
-    let o = example {
+    let o = Example {
       a: 1,
       b: [b'a', b'b', b'c', b'd'],
     };

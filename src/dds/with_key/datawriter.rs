@@ -50,7 +50,7 @@ use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds
 use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand, };
 
 /// Simplified type for CDR encoding
-pub type DataWriter_CDR<D> = DataWriter<D,CDRSerializerAdapter<D>>;
+pub type DataWriterCdr<D> = DataWriter<D,CDRSerializerAdapter<D>>;
 
 /// DDS DataWriter for keyed topics
 ///
@@ -105,7 +105,7 @@ where
   fn drop(&mut self) {
     match self
       .discovery_command
-      .send(DiscoveryCommand::REMOVE_LOCAL_WRITER {
+      .send(DiscoveryCommand::RemoveLocalWriter {
         guid: self.get_guid(),
       }) {
       Ok(_) => {}
@@ -136,7 +136,7 @@ where
     status_receiver_rec: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
     let entity_id = match guid {
-      Some(g) => g.entityId,
+      Some(g) => g.entity_id,
       None => EntityId::ENTITYID_UNKNOWN,
     };
 
@@ -160,7 +160,7 @@ where
     if let Some(lv) = topic.get_qos().liveliness { match lv {
       Liveliness::Automatic { lease_duration: _ } => (),
       Liveliness::ManualByParticipant { lease_duration: _ } => {
-        match discovery_command.send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS) {
+        match discovery_command.send(DiscoveryCommand::ManualAssertLiveliness) {
           Ok(_) => (),
           Err(e) => {
             error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
@@ -229,7 +229,7 @@ where
       Liveliness::ManualByParticipant { lease_duration: _ } => {
         match self
           .discovery_command
-          .send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
+          .send(DiscoveryCommand::ManualAssertLiveliness)
         {
           Ok(_) => (),
           Err(e) => {
@@ -277,9 +277,9 @@ where
   /// ```
   pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
 
-    let send_buffer = SA::to_Bytes( &data )?; // serialize
+    let send_buffer = SA::to_bytes( &data )?; // serialize
 
-    let ddsdata = DDSData::new( SerializedPayload::new_from_Bytes( SA::output_encoding() , send_buffer) );
+    let ddsdata = DDSData::new( SerializedPayload::new_from_bytes( SA::output_encoding() , send_buffer) );
     let writer_command = WriterCommand::DDSData { data: ddsdata , source_timestamp };
 
     let timeout =
@@ -727,7 +727,7 @@ where
     match self.get_qos().liveliness {
       Some(Liveliness::ManualByTopic { lease_duration: _ }) => {
         self.discovery_command
-          .send(DiscoveryCommand::ASSERT_TOPIC_LIVELINESS {
+          .send(DiscoveryCommand::AssertTopicLiveliness {
             writer_guid: self.get_guid(),
             manual_assertion: true, // by definition of this function
             })
@@ -829,11 +829,11 @@ where
   /// ```
   pub fn dispose(&self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
 
-    let send_buffer = SA::key_to_Bytes( &key  )?; // serialize key
+    let send_buffer = SA::key_to_bytes( &key  )?; // serialize key
 
     let ddsdata = DDSData::new_disposed_by_key( 
       ChangeKind::NotAliveDisposed,
-      SerializedPayload::new_from_Bytes( SA::output_encoding() , send_buffer) 
+      SerializedPayload::new_from_bytes( SA::output_encoding() , send_buffer) 
     );
     self.cc_upload
       .send(WriterCommand::DDSData { data: ddsdata , source_timestamp })

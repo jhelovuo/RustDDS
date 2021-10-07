@@ -24,7 +24,7 @@ use crate::{
 
 use super::{
   data_types::{
-    spdp_participant_data::SPDPDiscoveredParticipantData,
+    spdp_participant_data::SpdpDiscoveredParticipantData,
     topic_data::{
       DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
       ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
@@ -42,7 +42,7 @@ const PARTICIPANT_LEASE_DURATION_TOLREANCE : Duration = Duration::from_secs(0);
 
 pub(crate) struct DiscoveryDB {
   my_guid: GUID,
-  participant_proxies: BTreeMap<GuidPrefix, SPDPDiscoveredParticipantData>,
+  participant_proxies: BTreeMap<GuidPrefix, SpdpDiscoveredParticipantData>,
   participant_last_life_signs: HashMap<GuidPrefix, Instant>,
   // local writer proxies for topics (topic name acts as key)
   local_topic_writers: HashMap<GUID, DiscoveredWriterData>,
@@ -76,12 +76,12 @@ impl DiscoveryDB {
   }
 
   // Returns if particiapnt was previously unkonwn
-  pub fn update_participant(&mut self, data: &SPDPDiscoveredParticipantData) -> bool {
+  pub fn update_participant(&mut self, data: &SpdpDiscoveredParticipantData) -> bool {
       debug!("update_participant: {:?}",&data);
       let guid = data.participant_guid;
 
       // sanity check
-      if guid.entityId != EntityId::ENTITYID_PARTICIPANT {
+      if guid.entity_id != EntityId::ENTITYID_PARTICIPANT {
         error!("Discovered participant GUID entity_id is not for participant: {:?}",guid);
         // Maybe we should discard the participant here?
         return false 
@@ -98,7 +98,7 @@ impl DiscoveryDB {
       // }
 
       let mut new_participant = false;
-      if self.participant_proxies.get( &guid.guidPrefix ).is_none() {
+      if self.participant_proxies.get( &guid.guid_prefix ).is_none() {
         info!("New remote participant: {:?}", &data);
         new_participant = true;
         if guid == self.my_guid {
@@ -108,8 +108,8 @@ impl DiscoveryDB {
         }
       }
       // actual work here:
-      self.participant_proxies.insert(guid.guidPrefix, data.clone());
-      self.participant_last_life_signs.insert(guid.guidPrefix, Instant::now() );
+      self.participant_proxies.insert(guid.guid_prefix, data.clone());
+      self.participant_last_life_signs.insert(guid.guid_prefix, Instant::now() );
 
       new_participant
   }
@@ -125,7 +125,7 @@ impl DiscoveryDB {
   }
 
   pub fn find_participant_proxy(&self, guid_prefix: GuidPrefix) 
-    -> Option<&SPDPDiscoveredParticipantData> 
+    -> Option<&SpdpDiscoveredParticipantData> 
   {
     self.participant_proxies.get( &guid_prefix )
   }
@@ -253,7 +253,7 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn get_participants(&self) -> impl Iterator<Item = &SPDPDiscoveredParticipantData> {
+  pub fn get_participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
     self.participant_proxies.values()
   }
 
@@ -287,16 +287,16 @@ impl DiscoveryDB {
         self.external_topic_readers.insert( guid, data.clone() );
         // fill in the default locators, in case DRD did not provide any
         let default_locator_lists = 
-          self.find_participant_proxy(guid.guidPrefix)
+          self.find_participant_proxy(guid.guid_prefix)
             .map(|pp| {
               debug!("Added default locators to Reader {:?}", guid);
               ( pp.default_unicast_locators.clone(), 
                 pp.default_multicast_locators.clone() ) } )
             .unwrap_or_else( || {
-                if guid.guidPrefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
+                if guid.guid_prefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
                   // This is normal, since we might not know about the participant yet.
                   debug!("No remote participant known for {:?}\nSearched with {:?} in {:?}"
-                    ,data, guid.guidPrefix, self.participant_proxies.keys() );
+                    ,data, guid.guid_prefix, self.participant_proxies.keys() );
                 }
                 (LocatorList::new(), LocatorList::new()) 
               } );
@@ -689,16 +689,13 @@ mod tests {
     );
 
     let reader_ing = ReaderIngredients {
-      guid: GUID::new_with_prefix_and_id(
-        GuidPrefix::new(b"Another fake"),
-        EntityId {
-          entityKey: [1, 2, 3],
-          entityKind: EntityKind::READER_NO_KEY_USER_DEFINED,
-        },
-      ), // GUID needs to be different in order to be added
-      notification_sender,
-      status_sender,
-      topic_name: topic.get_name(),
+      guid: GUID::new_with_prefix_and_id(GuidPrefix::new(b"Another fake"), EntityId {
+        entity_key: [1, 2, 3],
+        entity_kind: EntityKind::READER_NO_KEY_USER_DEFINED
+      }), // GUID needs to be different in order to be added
+      notification_sender: notification_sender.clone(),
+      status_sender: status_sender.clone(),
+      topic_name: topic.get_name().to_string(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
     };

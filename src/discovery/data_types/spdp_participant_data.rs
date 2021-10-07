@@ -26,7 +26,7 @@ use crate::{
 use crate::{
   serialization::{
     builtin_data_serializer::BuiltinDataSerializer,
-    builtin_data_serializer::BuiltinDataSerializer_Key,
+    builtin_data_serializer::BuiltinDataSerializerKey,
     builtin_data_deserializer::BuiltinDataDeserializer,
   },
   network::constant::*,
@@ -36,13 +36,13 @@ use chrono::Utc;
 
 // separate type is needed to serialize correctly
 #[derive(Eq,PartialEq,Ord,PartialOrd,Debug, Clone, Copy, Hash)]
-pub struct SPDPDiscoveredParticipantData_Key(pub GUID);
+pub struct SpdpDiscoveredParticipantDataKey(pub GUID);
 
-impl Key for SPDPDiscoveredParticipantData_Key {}
+impl Key for SpdpDiscoveredParticipantDataKey {}
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SPDPDiscoveredParticipantData {
+pub struct SpdpDiscoveredParticipantData {
   pub updated_time: chrono::DateTime<Utc>, 
   pub protocol_version: ProtocolVersion,
   pub vendor_id: VendorId,
@@ -59,14 +59,14 @@ pub struct SPDPDiscoveredParticipantData {
   pub entity_name: Option<String>,
 }
 
-impl SPDPDiscoveredParticipantData {
+impl SpdpDiscoveredParticipantData {
   pub(crate) fn as_reader_proxy(
     &self,
     is_metatraffic: bool,
     entity_id: Option<EntityId>,
   ) -> RtpsReaderProxy {
     let remote_reader_guid = GUID::new_with_prefix_and_id(
-      self.participant_guid.guidPrefix,
+      self.participant_guid.guid_prefix,
       match entity_id {
         Some(id) => id,
         None => EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
@@ -97,7 +97,7 @@ impl SPDPDiscoveredParticipantData {
     entity_id: Option<EntityId>,
   ) -> RtpsWriterProxy {
     let remote_writer_guid = GUID::new_with_prefix_and_id(
-      self.participant_guid.guidPrefix,
+      self.participant_guid.guid_prefix,
       match entity_id {
         Some(id) => id,
         None => EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
@@ -125,7 +125,7 @@ impl SPDPDiscoveredParticipantData {
   pub fn from_local_participant(
     participant: &DomainParticipant,
     lease_duration: Duration,
-  ) -> SPDPDiscoveredParticipantData {
+  ) -> SpdpDiscoveredParticipantData {
     let spdp_multicast_port = get_spdp_well_known_multicast_port(participant.domain_id());
     let metatraffic_multicast_locators = get_local_multicast_locators(spdp_multicast_port);
 
@@ -151,7 +151,7 @@ impl SPDPDiscoveredParticipantData {
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR;
 
-    SPDPDiscoveredParticipantData {
+    SpdpDiscoveredParticipantData {
       updated_time: Utc::now(),
       protocol_version: ProtocolVersion::PROTOCOLVERSION_2_3,
       vendor_id: VendorId::THIS_IMPLEMENTATION,
@@ -171,7 +171,7 @@ impl SPDPDiscoveredParticipantData {
 }
 
 
-impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
+impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantData {
   fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
@@ -179,11 +179,11 @@ impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData {
     let visitor = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(visitor)?;
     res.generate_spdp_participant_data().map_err(|e| 
-      D::Error::custom(format!("SPDPDiscoveredParticipantData::deserialize - {:?} - data was {:?}",e, &res) ))
+      D::Error::custom(format!("SpdpDiscoveredParticipantData::deserialize - {:?} - data was {:?}",e, &res) ))
   }
 }
 
-impl Serialize for SPDPDiscoveredParticipantData {
+impl Serialize for SpdpDiscoveredParticipantData {
   fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -195,24 +195,24 @@ impl Serialize for SPDPDiscoveredParticipantData {
 
 
 
-impl Keyed for SPDPDiscoveredParticipantData {
-  type K = SPDPDiscoveredParticipantData_Key; 
+impl Keyed for SpdpDiscoveredParticipantData {
+  type K = SpdpDiscoveredParticipantDataKey; 
   fn get_key(&self) -> Self::K {
-    SPDPDiscoveredParticipantData_Key( self.participant_guid ) 
+    SpdpDiscoveredParticipantDataKey( self.participant_guid ) 
   }
 }
 
-impl Serialize for SPDPDiscoveredParticipantData_Key {
+impl Serialize for SpdpDiscoveredParticipantDataKey {
   fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
   {
-    let builtin_data_serializer = BuiltinDataSerializer_Key::from_data(*self);
+    let builtin_data_serializer = BuiltinDataSerializerKey::from_data(*self);
     builtin_data_serializer.serialize::<S>(serializer, true)
   } 
 }
 
-impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData_Key {
+impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantDataKey {
   fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
@@ -220,7 +220,7 @@ impl<'de> Deserialize<'de> for SPDPDiscoveredParticipantData_Key {
     let visitor = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(visitor)?;
     res.generate_spdp_participant_data_key().map_err(|e| 
-      D::Error::custom(format!("SPDPDiscoveredParticipantData_Key::deserialize - {:?} - data was {:?}",e, &res) ))
+      D::Error::custom(format!("SpdpDiscoveredParticipantDataKey::deserialize - {:?} - data was {:?}",e, &res) ))
   }
 }
 
@@ -252,14 +252,14 @@ mod tests {
       match &submsg.body {
         SubmessageBody::Entity(v) => match v {
           EntitySubmessage::Data(d, _) => {
-            let participant_data: SPDPDiscoveredParticipantData =
+            let participant_data: SpdpDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(
                 &d.serialized_payload.as_ref().unwrap().value,
                 RepresentationIdentifier::PL_CDR_LE,
               )
               .unwrap();
             let sdata =
-              to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
+              to_bytes::<SpdpDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
             eprintln!("message data = {:?}",&data);
             eprintln!("payload    = {:?}", &d.serialized_payload.as_ref().unwrap().value.to_vec());
             eprintln!("deserialized  = {:?}", &participant_data);
@@ -270,7 +270,7 @@ mod tests {
             //  d.serialized_payload.as_ref().unwrap().value.len()
             //);
 
-            let mut participant_data_2: SPDPDiscoveredParticipantData =
+            let mut participant_data_2: SpdpDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)
                 .unwrap();
             // force timestamps to be the same, as these are not serialized/deserialized, but
@@ -279,7 +279,7 @@ mod tests {
 
             eprintln!("again deserialized = {:?}", &participant_data_2);
             let _sdata_2 =
-              to_bytes::<SPDPDiscoveredParticipantData, LittleEndian>(&participant_data_2)
+              to_bytes::<SpdpDiscoveredParticipantData, LittleEndian>(&participant_data_2)
                 .unwrap();
             // now the order of bytes should be the same
             assert_eq!(&participant_data_2, &participant_data);

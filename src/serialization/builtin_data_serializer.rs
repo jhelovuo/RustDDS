@@ -1,7 +1,7 @@
-// use crate::discovery::data_types::topic_data::PublicationBuiltinTopicData_Key;
-// use crate::discovery::data_types::topic_data::SubscriptionBuiltinTopicData_Key;
-use crate::discovery::data_types::topic_data::DiscoveredReaderData_Key;
-use crate::discovery::data_types::topic_data::DiscoveredWriterData_Key;
+// use crate::discovery::data_types::topic_data::PublicationBuiltinTopicDataKey;
+// use crate::discovery::data_types::topic_data::SubscriptionBuiltinTopicDataKey;
+use crate::discovery::data_types::topic_data::DiscoveredReaderDataKey;
+use crate::discovery::data_types::topic_data::DiscoveredWriterDataKey;
 use crate::{
   structure::{
     locator::{LocatorList, LocatorData},
@@ -20,8 +20,8 @@ use crate::{
         SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData, WriterProxy,
         PublicationBuiltinTopicData, DiscoveredWriterData, TopicBuiltinTopicData,
       },
-      spdp_participant_data::SPDPDiscoveredParticipantData,
-      spdp_participant_data::SPDPDiscoveredParticipantData_Key,
+      spdp_participant_data::SpdpDiscoveredParticipantData,
+      spdp_participant_data::SpdpDiscoveredParticipantDataKey,
     },
   },
   messages::{
@@ -111,14 +111,14 @@ struct EntityName {
 }
 
 
-pub struct BuiltinDataSerializer_Key {
+pub struct BuiltinDataSerializerKey {
   pub participant_guid: GUID,
 }
 
-impl BuiltinDataSerializer_Key {
+impl BuiltinDataSerializerKey {
 
-  pub fn from_data(participant_data: SPDPDiscoveredParticipantData_Key) -> BuiltinDataSerializer_Key {
-    BuiltinDataSerializer_Key { participant_guid: participant_data.0 }
+  pub fn from_data(participant_data: SpdpDiscoveredParticipantDataKey) -> BuiltinDataSerializerKey {
+    BuiltinDataSerializerKey { participant_guid: participant_data.0 }
   }
 
   pub fn serialize<S: Serializer>(self, serializer: S, add_sentinel: bool) -> Result<S::Ok, S::Error> {
@@ -324,7 +324,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   pub fn from_participant_data(
-    participant_data: &'a SPDPDiscoveredParticipantData,
+    participant_data: &'a SpdpDiscoveredParticipantData,
   ) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
       protocol_version: Some(participant_data.protocol_version),
@@ -613,13 +613,13 @@ impl<'a> BuiltinDataSerializer<'a> {
   // -----------------------
 
   pub fn from_discovered_reader_data_key(
-    discovered_reader_data: &'a DiscoveredReaderData_Key,
+    discovered_reader_data: &'a DiscoveredReaderDataKey,
   ) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer::from_endpoint_guid(&discovered_reader_data.0)
   }
 
   pub fn from_discovered_writer_data_key(
-    discovered_writer_data: &'a DiscoveredWriterData_Key,
+    discovered_writer_data: &'a DiscoveredWriterDataKey,
   ) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer::from_endpoint_guid(&discovered_writer_data.0)
   }
@@ -1151,9 +1151,10 @@ impl<'a> BuiltinDataSerializer<'a> {
 
   fn add_history<S: Serializer>(&self, s: &mut S::SerializeStruct) {
     #[derive(Serialize, Clone)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     enum HistoryKind {
-      KEEP_LAST,
-      KEEP_ALL,
+      KeepLast,
+      KeepAll,
     }
 
     #[derive(Serialize, Clone)]
@@ -1165,11 +1166,11 @@ impl<'a> BuiltinDataSerializer<'a> {
     if let Some(hs) = self.history {
       let history_data = match hs {
         History::KeepLast { depth } => HistoryData {
-          kind: HistoryKind::KEEP_LAST,
+          kind: HistoryKind::KeepLast,
           depth,
         },
         History::KeepAll => HistoryData {
-          kind: HistoryKind::KEEP_ALL,
+          kind: HistoryKind::KeepAll,
           depth: 0,
         },
       };

@@ -26,7 +26,7 @@ use crate::structure::guid::{GuidPrefix, GUID, EntityId, TokenDecode};
 use crate::structure::entity::RTPSEntity;
 use crate::discovery::data_types::topic_data::DiscoveredWriterData;
 use crate::discovery::data_types::topic_data::DiscoveredReaderData;
-//use crate::discovery::data_types::spdp_participant_data::SPDPDiscoveredParticipantData;
+//use crate::discovery::data_types::spdp_participant_data::SpdpDiscoveredParticipantData;
 use crate::discovery::discovery::Discovery;
 
 use crate::{
@@ -270,7 +270,7 @@ impl DPEventLoop {
 
                       TopicsInfoUpdated => ev_wrapper.update_topics(),
                       AssertTopicLiveliness{ writer_guid , manual_assertion } => {
-                        ev_wrapper.writers.get_mut(&writer_guid.entityId)
+                        ev_wrapper.writers.get_mut(&writer_guid.entity_id)
                           .map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
                       }
                     }
@@ -407,12 +407,12 @@ impl DPEventLoop {
             Ready::readable(),
             PollOpt::edge(),
           ).expect("Writer command channel registration failed!!");
-          self.writers.insert(new_writer.get_guid().entityId, new_writer);
+          self.writers.insert(new_writer.get_guid().entity_id, new_writer);
         }
       }
       REMOVE_WRITER_TOKEN => {
         while let Ok(writer_guid) = &self.remove_writer_receiver.receiver.try_recv() {
-          if let Some(w) = self.writers.remove(&writer_guid.entityId) {
+          if let Some(w) = self.writers.remove(&writer_guid.entity_id) {
             self.poll.deregister(&w.writer_command_receiver)
               .unwrap_or_else( |e| error!("Deregister fail (writer command rec) {:?}",e));
             self.poll.deregister(&w.timed_event_timer)
@@ -447,10 +447,10 @@ impl DPEventLoop {
   fn handle_writer_acknack_action(&mut self, _event: &Event) {
     while let Ok((acknack_sender_prefix, acknack_submessage)) = self.ack_nack_reciever.try_recv() {
       let writer_guid = GUID::new_with_prefix_and_id(
-        self.domain_info.domain_participant_guid.guidPrefix,
+        self.domain_info.domain_participant_guid.guid_prefix,
         acknack_submessage.writer_id(),
       );
-      if let Some(found_writer) = self.writers.get_mut(&writer_guid.entityId) {
+      if let Some(found_writer) = self.writers.get_mut(&writer_guid.entity_id) {
         if found_writer.is_reliable() {
           found_writer.handle_ack_nack(acknack_sender_prefix, acknack_submessage)
         }
@@ -467,7 +467,7 @@ impl DPEventLoop {
   fn update_participant(&mut self, participant_guid_prefix: GuidPrefix ) {
     info!("update_participant {:?} myself={}", 
       participant_guid_prefix, 
-      participant_guid_prefix == self.domain_info.domain_participant_guid.guidPrefix);
+      participant_guid_prefix == self.domain_info.domain_participant_guid.guid_prefix);
 
 
     {
@@ -586,7 +586,7 @@ impl DPEventLoop {
   } // fn 
 
   fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix ) {
-    info!("remote_participant_lost guidPrefix={:?}", &participant_guid_prefix );
+    info!("remote_participant_lost guid_prefix={:?}", &participant_guid_prefix );
     // Discovery has already removed Particiapnt from Discovery DB
     // Now we have to remove any ReaderProxies and WriterProxies belonging
     // to that particiapnt, so that we do not send messages to them anymore.

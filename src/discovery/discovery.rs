@@ -4,9 +4,9 @@ use crate::network::util::get_local_unicast_socket_address;
 use crate::discovery::data_types::topic_data::WriterProxy;
 use crate::discovery::data_types::topic_data::PublicationBuiltinTopicData;
 
-use crate::discovery::data_types::topic_data::DiscoveredReaderData_Key;
-use crate::discovery::data_types::topic_data::DiscoveredWriterData_Key;
-use crate::discovery::data_types::topic_data::DiscoveredTopicData_Key;
+use crate::discovery::data_types::topic_data::DiscoveredReaderDataKey;
+use crate::discovery::data_types::topic_data::DiscoveredWriterDataKey;
+use crate::discovery::data_types::topic_data::DiscoveredTopicDataKey;
 use crate::discovery::data_types::topic_data::ReaderProxy;
 use crate::network::util::get_local_multicast_locators;
 use crate::dds::data_types::SubscriptionBuiltinTopicData;
@@ -26,8 +26,8 @@ use std::{
 
 use crate::{
   dds::{
-    with_key::datareader::DataReader, with_key::datareader::DataReader_CDR,
-    /*with_key::datawriter::DataWriter,*/ with_key::datawriter::DataWriter_CDR,
+    with_key::datareader::DataReader, with_key::datareader::DataReaderCdr,
+    /*with_key::datawriter::DataWriter,*/ with_key::datawriter::DataWriterCdr,
     topic::*,
     participant::{DomainParticipantWeak},
     Publisher, Subscriber,
@@ -48,7 +48,7 @@ use crate::{
 
 use crate::discovery::{
   data_types::spdp_participant_data
-    ::{SPDPDiscoveredParticipantData, SPDPDiscoveredParticipantData_Key},
+    ::{SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey},
   data_types::topic_data::{DiscoveredWriterData, DiscoveredReaderData},
   discovery_db::DiscoveryDB,
 };
@@ -64,11 +64,11 @@ use super::data_types::topic_data::{
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum DiscoveryCommand {
-  STOP_DISCOVERY,
-  REMOVE_LOCAL_WRITER { guid: GUID },
-  REMOVE_LOCAL_READER { guid: GUID },
-  MANUAL_ASSERT_LIVELINESS,
-  ASSERT_TOPIC_LIVELINESS { writer_guid: GUID , manual_assertion: bool, },
+  StopDiscovery,
+  RemoveLocalWriter { guid: GUID },
+  RemoveLocalReader { guid: GUID },
+  ManualAssertLiveliness,
+  AssertTopicLiveliness { writer_guid: GUID , manual_assertion: bool, },
 }
 
 pub struct LivelinessState {
@@ -106,34 +106,34 @@ pub(crate) struct Discovery {
   // Handling of "DCPSParticipant" topic. This is the mother of all topics
   // where participants announce their presence and built-in readers and writers.
   dcps_participant_topic: Topic,
-  dcps_participant_reader: DataReader<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>,
-  dcps_participant_writer: DataWriter_CDR<SPDPDiscoveredParticipantData>,
+  dcps_participant_reader: DataReader<SpdpDiscoveredParticipantData,PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>>,
+  dcps_participant_writer: DataWriterCdr<SpdpDiscoveredParticipantData>,
   participant_cleanup_timer: Timer<()>,  // garbage collection timer for dead remote particiapnts
   participant_send_info_timer: Timer<()>, // timer to periodically announce our presence
 
   // Topic "DCPSSubscription" - announcing and detecting Readers
   dcps_subscription_topic: Topic,
   dcps_subscription_reader: DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
-  dcps_subscription_writer: DataWriter_CDR<DiscoveredReaderData>,
+  dcps_subscription_writer: DataWriterCdr<DiscoveredReaderData>,
   readers_send_info_timer: Timer<()>,
 
   // Topic "DCPSPublication" - announcing and detecting Writers
   dcps_publication_topic: Topic,
   dcps_publication_reader: DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
-  dcps_publication_writer: DataWriter_CDR<DiscoveredWriterData>,
+  dcps_publication_writer: DataWriterCdr<DiscoveredWriterData>,
   writers_send_info_timer: Timer<()>,
 
   // Topic "DCPSTopic" - annoncing and detecting topics
   dcps_topic_topic: Topic,
   dcps_topic_reader: DataReader<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>,
-  dcps_topic_writer: DataWriter_CDR<DiscoveredTopicData>,
+  dcps_topic_writer: DataWriterCdr<DiscoveredTopicData>,
   topic_info_send_timer: Timer<()>,
   topic_cleanup_timer: Timer<()>,
 
   // DCPSParticipantMessage - used by participants to communicate liveness
   participant_message_topic: Topic,
-  dcps_participant_message_reader: DataReader_CDR<ParticipantMessageData>,
-  dcps_participant_message_writer: DataWriter_CDR<ParticipantMessageData>,
+  dcps_participant_message_reader: DataReaderCdr<ParticipantMessageData>,
+  dcps_participant_message_writer: DataWriterCdr<ParticipantMessageData>,
   dcps_participant_message_timer: Timer<()>,
 }
 
@@ -220,14 +220,14 @@ impl Discovery {
       "Unable to create DCPSParticipant topic. {:?}");
   
     let dcps_participant_reader = try_construct!( discovery_subscriber
-      .create_datareader_with_entityid::<SPDPDiscoveredParticipantData,PlCdrDeserializerAdapter<SPDPDiscoveredParticipantData>>(
+      .create_datareader_with_entityid::<SpdpDiscoveredParticipantData,PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>>(
         dcps_participant_topic.clone(),
         EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
         None,
       ) ,"Unable to create DataReader for DCPSParticipant. {:?}");
 
     let dcps_participant_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR_with_entityid::<SPDPDiscoveredParticipantData>(
+      .create_datawriter_cdr_with_entityid::<SpdpDiscoveredParticipantData>(
         EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
         dcps_participant_topic.clone(),
         None,
@@ -287,7 +287,7 @@ impl Discovery {
     ) ,"Unable to register subscription reader. {:?}");
 
     let dcps_subscription_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR_with_entityid::<DiscoveredReaderData>(
+      .create_datawriter_cdr_with_entityid::<DiscoveredReaderData>(
         EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
         dcps_subscription_topic.clone(),
         None,
@@ -328,7 +328,7 @@ impl Discovery {
     ) ,"Unable to regiser writers info sender. {:?}");
 
     let dcps_publication_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR_with_entityid::<DiscoveredWriterData>(
+      .create_datawriter_cdr_with_entityid::<DiscoveredWriterData>(
         EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
         dcps_publication_topic.clone(),
         None,
@@ -369,7 +369,7 @@ impl Discovery {
     ) ,"Unable to register topic reader. {:?}");
 
     let dcps_topic_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR_with_entityid::<DiscoveredTopicData>(
+      .create_datawriter_cdr_with_entityid::<DiscoveredTopicData>(
         EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
         dcps_topic_topic.clone(),
         None,
@@ -405,7 +405,7 @@ impl Discovery {
     ) ,"Unable to create DCPSParticipantMessage topic. {:?}");
 
     let dcps_participant_message_reader = try_construct!( discovery_subscriber
-      .create_datareader_CDR_with_entityid::<ParticipantMessageData>(
+      .create_datareader_cdr_with_entityid::<ParticipantMessageData>(
         participant_message_topic.clone(),
         EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
         None,
@@ -419,7 +419,7 @@ impl Discovery {
     ) ,"Unable to register DCPSParticipantMessage reader. {:?}");
 
     let dcps_participant_message_writer = try_construct!( discovery_publisher
-      .create_datawriter_CDR_with_entityid::<ParticipantMessageData>(
+      .create_datawriter_cdr_with_entityid::<ParticipantMessageData>(
         EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
         participant_message_topic.clone(),
         None,
@@ -506,34 +506,34 @@ impl Discovery {
           DISCOVERY_COMMAND_TOKEN => {
             while let Ok(command) = self.discovery_command_receiver.try_recv() {
               match command {
-                DiscoveryCommand::STOP_DISCOVERY => {
+                DiscoveryCommand::StopDiscovery => {
                   info!("Stopping Discovery");
                   // disposing readers
                   let db = self.discovery_db_read();
                   for reader in db.get_all_local_topic_readers() {
                     self.dcps_subscription_writer
-                      .dispose(DiscoveredReaderData_Key(reader.reader_proxy.remote_reader_guid), None)
+                      .dispose(DiscoveredReaderDataKey(reader.reader_proxy.remote_reader_guid), None)
                       .unwrap_or(());
                   }
 
                   for writer in db.get_all_local_topic_writers() {
                     self.dcps_publication_writer
-                      .dispose(DiscoveredWriterData_Key(writer.writer_proxy.remote_writer_guid), None)
+                      .dispose(DiscoveredWriterDataKey(writer.writer_proxy.remote_writer_guid), None)
                       .unwrap_or(());
                   }
                   // finally disposing the participant we have
                   self.dcps_participant_writer.dispose(
-                    SPDPDiscoveredParticipantData_Key(self.domain_participant.get_guid()), 
+                    SpdpDiscoveredParticipantDataKey(self.domain_participant.get_guid()), 
                     None)
                     .unwrap_or(());
                   info!("Stopped Discovery");
                   return  // terminate event loop
                 }
-                DiscoveryCommand::REMOVE_LOCAL_WRITER { guid } => {
+                DiscoveryCommand::RemoveLocalWriter { guid } => {
                   if guid == self.dcps_publication_writer.get_guid() {
                     continue
                   }
-                  self.dcps_publication_writer.dispose(DiscoveredWriterData_Key(guid), None)
+                  self.dcps_publication_writer.dispose(DiscoveredWriterDataKey(guid), None)
                     .unwrap_or(());
 
                   match self.discovery_db.write() {
@@ -541,22 +541,22 @@ impl Discovery {
                     Err(e) => { error!("DiscoveryDB is poisoned. {:?}", e); return }
                   }
                 }
-                DiscoveryCommand::REMOVE_LOCAL_READER { guid } => {
+                DiscoveryCommand::RemoveLocalReader { guid } => {
                   if guid == self.dcps_subscription_writer.get_guid() {
                     continue
                   }
 
-                  self.dcps_subscription_writer.dispose(DiscoveredReaderData_Key(guid), None).unwrap_or(());
+                  self.dcps_subscription_writer.dispose(DiscoveredReaderDataKey(guid), None).unwrap_or(());
 
                   match self.discovery_db.write() {
                     Ok(mut db) => db.remove_local_topic_reader(guid),
                     Err(e) => { error!("DiscoveryDB is poisoned. {:?}", e); return } 
                   }
                 }
-                DiscoveryCommand::MANUAL_ASSERT_LIVELINESS => {
+                DiscoveryCommand::ManualAssertLiveliness => {
                   self.liveliness_state.last_manual_participant_update = Timestamp::now();
                 }
-                DiscoveryCommand::ASSERT_TOPIC_LIVELINESS { writer_guid  , manual_assertion } => {
+                DiscoveryCommand::AssertTopicLiveliness { writer_guid  , manual_assertion } => {
                   self.send_discovery_notification(
                     DiscoveryNotificationType::AssertTopicLiveliness { writer_guid , manual_assertion },
                   );
@@ -586,7 +586,7 @@ impl Discovery {
             };
 
             // setting 5 times the duration so lease doesn't break if update fails once or twice
-            let data = SPDPDiscoveredParticipantData::from_local_participant(
+            let data = SpdpDiscoveredParticipantData::from_local_participant(
               &strong_dp,
               5.0 *  Duration::from(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
             );
@@ -661,7 +661,7 @@ impl Discovery {
     let uc_port = get_spdp_well_known_unicast_port( dp.domain_id(), dp.participant_id() );
 
     let participant_data = 
-      SPDPDiscoveredParticipantData::from_local_participant(&dp, Duration::DURATION_INFINITE);
+      SpdpDiscoveredParticipantData::from_local_participant(&dp, Duration::DURATION_INFINITE);
   
     // Initialize our own particiapnt data into the Discovery DB, so we can talk to ourself.
     self.discovery_db_write()
@@ -671,7 +671,7 @@ impl Discovery {
     // ReaderProxy and WriterProxy objects for built-in Readers and Writers
     self.send_discovery_notification(
       DiscoveryNotificationType::ParticipantUpdated {
-        guid_prefix: dp.get_guid().guidPrefix
+        guid_prefix: dp.get_guid().guid_prefix
     });
 
     // insert a (fake) reader proxy as multicast address, so discovery notifications are sent somewhere
@@ -695,7 +695,7 @@ impl Discovery {
 
     let writer_guid = 
       GUID::new_with_prefix_and_id(
-        dp.get_guid().guidPrefix, 
+        dp.get_guid().guid_prefix, 
         EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER );
 
     let writer_proxy = WriterProxy::new(writer_guid, 
@@ -743,7 +743,7 @@ impl Discovery {
               debug!("handle_participant_reader discovered {:?}", &participant_data);
               let was_new = self.discovery_db_write()
                 .update_participant(&participant_data);
-              let guid_prefix = participant_data.participant_guid.guidPrefix;
+              let guid_prefix = participant_data.participant_guid.guid_prefix;
               self.send_discovery_notification(
                 DiscoveryNotificationType::ParticipantUpdated { guid_prefix } );
               if was_new {
@@ -759,9 +759,9 @@ impl Discovery {
             },
             // Err means that DomainParticipant was disposed
             Err(guid) => {
-              self.discovery_db_write().remove_participant(guid.0.guidPrefix);
+              self.discovery_db_write().remove_participant(guid.0.guid_prefix);
               self.send_discovery_notification(
-                DiscoveryNotificationType::ParticipantLost { guid_prefix: guid.0.guidPrefix });
+                DiscoveryNotificationType::ParticipantLost { guid_prefix: guid.0.guid_prefix });
             }
           },
         Ok(None) => {
@@ -774,7 +774,7 @@ impl Discovery {
   }
 
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>,) {
-    let drds : Vec<std::result::Result<DiscoveredReaderData,DiscoveredReaderData_Key> > = 
+    let drds : Vec<std::result::Result<DiscoveredReaderData,DiscoveredReaderDataKey> > = 
       match self.dcps_subscription_reader.read(std::usize::MAX,
                         if read_history.is_some() { ReadCondition::any() } 
                         else { ReadCondition::not_read() } ) 
@@ -792,7 +792,7 @@ impl Discovery {
           let mut db = self.discovery_db_write();
           trace!("handle_subscription_reader discovered {:?}", &d);
           if read_history
-              .map( |e| e == d.reader_proxy.remote_reader_guid.guidPrefix )
+              .map( |e| e == d.reader_proxy.remote_reader_guid.guid_prefix )
               .unwrap_or(true) {
             if let Some( (drd,rtps_reader_proxy) )  = db.update_subscription(&d) {
               debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
@@ -829,7 +829,7 @@ impl Discovery {
   }
 
   pub fn handle_publication_reader( &mut self, read_history: Option<GuidPrefix>, ) {
-    let dwds : Vec<std::result::Result<DiscoveredWriterData,DiscoveredWriterData_Key> > = 
+    let dwds : Vec<std::result::Result<DiscoveredWriterData,DiscoveredWriterDataKey> > = 
       match self.dcps_publication_reader.read(std::usize::MAX,
                         if read_history.is_some() { ReadCondition::any() } 
                         else { ReadCondition::not_read() } ) 
@@ -868,7 +868,7 @@ impl Discovery {
   pub fn handle_topic_reader( &mut self, read_history: Option<GuidPrefix>,
   ) 
   {
-    let ts : Vec<std::result::Result<DiscoveredTopicData,DiscoveredTopicData_Key> >= 
+    let ts : Vec<std::result::Result<DiscoveredTopicData,DiscoveredTopicDataKey> >= 
       match self.dcps_topic_reader.read(std::usize::MAX,
                         if read_history.is_some() { ReadCondition::any() } 
                         else { ReadCondition::not_read() } ) 
@@ -1063,7 +1063,7 @@ impl Discovery {
     for data in datas
       // filtering out discoveries own readers
       .filter(|p| {
-        let eid = p.reader_proxy.remote_reader_guid.entityId;
+        let eid = p.reader_proxy.remote_reader_guid.entity_id;
         eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
           && eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
           && eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
@@ -1082,7 +1082,7 @@ impl Discovery {
     let db = self.discovery_db_read();
     let datas = db.get_all_local_topic_writers();
     for data in datas.filter(|p| {
-      let eid = p.writer_proxy.remote_writer_guid.entityId;
+      let eid = p.writer_proxy.remote_writer_guid.entity_id;
 
       eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
         && eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER

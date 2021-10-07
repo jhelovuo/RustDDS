@@ -1,3 +1,5 @@
+#![allow(non_camel_case_types)]
+
 use speedy::{Endianness, Readable};
 use enumflags2::BitFlags;
 
@@ -65,7 +67,7 @@ pub enum DATAFRAG_Flags {
 submessageflag_impls!(DATAFRAG_Flags);
 
 impl DATAFRAG_Flags {
-  pub fn to_DATA_Flags(dff: BitFlags<DATAFRAG_Flags>) -> BitFlags<DATA_Flags> {
+  pub fn to_data_flags(dff: BitFlags<DATAFRAG_Flags>) -> BitFlags<DATA_Flags> {
     let mut df : BitFlags<DATA_Flags> = 
       if dff.contains(DATAFRAG_Flags::Key) { DATA_Flags::Key.into()  }
       else { DATA_Flags::Data.into() };

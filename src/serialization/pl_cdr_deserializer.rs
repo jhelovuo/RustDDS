@@ -14,7 +14,7 @@ pub struct PlCdrDeserializerAdapter<D> {
   phantom: PhantomData<D>,
 }
 
-const repr_ids: [RepresentationIdentifier; 4] = [
+const REPR_IDS: [RepresentationIdentifier; 4] = [
   // CDR_* are only added for random interoperability
   RepresentationIdentifier::CDR_BE,
   RepresentationIdentifier::CDR_LE,
@@ -28,7 +28,7 @@ where
   D: DeserializeOwned,
 {
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
-    &repr_ids
+    &REPR_IDS
   }
 
   fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {

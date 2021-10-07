@@ -24,7 +24,7 @@ impl TurtleSender {
     thread_control: mio_channel::Receiver<ThreadControl>,
     receiver: mio_channel::Receiver<Twist>,
   ) {
-    let mut ros_node = ros_participant.new_RosNode(
+    let mut ros_node = ros_participant.new_ros_node(
                             "turtle_sender",  // name
                             "/ros2_demo",     // namespace
                             NodeOptions::new(false), // enable rosout

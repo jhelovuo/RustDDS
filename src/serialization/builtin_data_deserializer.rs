@@ -42,9 +42,9 @@ use crate::{
       topic_data::{
         SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData, WriterProxy,
         PublicationBuiltinTopicData, DiscoveredWriterData, TopicBuiltinTopicData,
-        DiscoveredReaderData_Key, DiscoveredWriterData_Key,
+        DiscoveredReaderDataKey, DiscoveredWriterDataKey,
       },
-      spdp_participant_data::{SPDPDiscoveredParticipantData, SPDPDiscoveredParticipantData_Key},
+      spdp_participant_data::{SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey},
     },
   },
 };
@@ -140,8 +140,8 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn generate_spdp_participant_data(&self) -> Result<SPDPDiscoveredParticipantData,Error> {
-    Ok(SPDPDiscoveredParticipantData {
+  pub fn generate_spdp_participant_data(&self) -> Result<SpdpDiscoveredParticipantData,Error> {
+    Ok(SpdpDiscoveredParticipantData {
       updated_time: Utc::now(),
       protocol_version: self.protocol_version
         .ok_or_else(| | log_and_err_discovery!("protocol_version missing"))?,
@@ -164,8 +164,8 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn generate_spdp_participant_data_key(&self) -> Result<SPDPDiscoveredParticipantData_Key,Error> {
-    Ok(SPDPDiscoveredParticipantData_Key(
+  pub fn generate_spdp_participant_data_key(&self) -> Result<SpdpDiscoveredParticipantDataKey,Error> {
+    Ok(SpdpDiscoveredParticipantDataKey(
       self.participant_guid
         .ok_or_else(| | log_and_err_discovery!("participant_guid missing"))?,
     ))
@@ -348,15 +348,15 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn generate_discovered_reader_data_key(self) -> Result<DiscoveredReaderData_Key,Error> {
-    Ok(DiscoveredReaderData_Key(
+  pub fn generate_discovered_reader_data_key(self) -> Result<DiscoveredReaderDataKey,Error> {
+    Ok(DiscoveredReaderDataKey(
       self.endpoint_guid
         .ok_or_else(| | log_and_err_discovery!("generate_discovered_reader_data_key endpoint_guid missing"))?,
     ))
   }
 
-  pub fn generate_discovered_writer_data_key(self) -> Result<DiscoveredWriterData_Key,Error> {
-    Ok(DiscoveredWriterData_Key(
+  pub fn generate_discovered_writer_data_key(self) -> Result<DiscoveredWriterDataKey,Error> {
+    Ok(DiscoveredWriterDataKey(
       self.endpoint_guid
         .ok_or_else(| | log_and_err_discovery!("generate_discovered_writer_data_key endpoint_guid missing"))?,
     ))
@@ -737,9 +737,10 @@ impl BuiltinDataDeserializer {
       }
       ParameterId::PID_HISTORY => {
         #[derive(Deserialize)]
+        #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
         enum HistoryKind {
-          KEEP_LAST,
-          KEEP_ALL,
+          KeepLast,
+          KeepAll,
         }
 
         #[derive(Deserialize)]
@@ -752,8 +753,8 @@ impl BuiltinDataDeserializer {
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         if let Ok(his) = history {
           let h = match his.kind {
-            HistoryKind::KEEP_LAST => History::KeepLast { depth: his.depth },
-            HistoryKind::KEEP_ALL => History::KeepAll,
+            HistoryKind::KeepLast => History::KeepLast { depth: his.depth },
+            HistoryKind::KeepAll => History::KeepAll,
           };
           self.history = Some(h);
           buffer.drain(..4 + parameter_length);

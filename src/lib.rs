@@ -18,9 +18,6 @@
 #![allow(clippy::option_map_unit_fn, clippy::wrong_self_convention, clippy::single_match, )]
 
 #![allow(dead_code)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-#![allow(non_upper_case_globals)]
 
 #[macro_use]
 mod serialization_test;

@@ -88,7 +88,7 @@ use crate::{
         SubscriptionBuiltinTopicData, ReaderProxy, WriterProxy, PublicationBuiltinTopicData,
         TopicBuiltinTopicData,
       },
-      spdp_participant_data::SPDPDiscoveredParticipantData,
+      spdp_participant_data::SpdpDiscoveredParticipantData,
     },
   },
   messages::submessages::submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader},
@@ -143,8 +143,8 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
     match &mut submsg.body {
       SubmessageBody::Entity(v) => match v {
         EntitySubmessage::Data(d, _) => {
-          let mut participant_data: SPDPDiscoveredParticipantData =
-            PlCdrDeserializerAdapter::<SPDPDiscoveredParticipantData>::from_bytes(
+          let mut participant_data: SpdpDiscoveredParticipantData =
+            PlCdrDeserializerAdapter::<SpdpDiscoveredParticipantData>::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
               RepresentationIdentifier::PL_CDR_LE,
             )
@@ -157,7 +157,7 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
 
           let datalen = d.serialized_payload.as_ref().unwrap().value.len() as u16;
           data =
-            Bytes::from(to_bytes::<SPDPDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
+            Bytes::from(to_bytes::<SpdpDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
               .unwrap());
           d.serialized_payload.as_mut().unwrap().value = data.clone();
           submsglen =
@@ -173,7 +173,7 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
   tdata
 }
 
-pub(crate) fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
+pub(crate) fn spdp_participant_data() -> Option<SpdpDiscoveredParticipantData> {
   let data = spdp_participant_data_raw();
 
   let rtpsmsg = Message::read_from_buffer(data).unwrap();
@@ -183,7 +183,7 @@ pub(crate) fn spdp_participant_data() -> Option<SPDPDiscoveredParticipantData> {
     match &submsg.body {
       SubmessageBody::Entity(v) => match v {
         EntitySubmessage::Data(d, _) => {
-          let particiapant_data: SPDPDiscoveredParticipantData =
+          let particiapant_data: SpdpDiscoveredParticipantData =
             PlCdrDeserializerAdapter::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
               RepresentationIdentifier::PL_CDR_LE,
@@ -338,11 +338,11 @@ pub(crate) fn topic_data() -> Option<TopicBuiltinTopicData> {
 
 pub(crate) fn content_filter_data() -> Option<ContentFilterProperty> {
   let content_filter = ContentFilterProperty {
-    contentFilteredTopicName: "tn".to_string(),
-    relatedTopicName: "rtn".to_string(),
-    filterClassName: "fcn".to_string(),
-    filterExpression: "fexp".to_string(),
-    expressionParameters: vec!["asdf".to_string(), "fdsas".to_string()],
+    content_filtered_topic_name: "tn".to_string(),
+    related_topic_name: "rtn".to_string(),
+    filter_class_name: "fcn".to_string(),
+    filter_expression: "fexp".to_string(),
+    expression_parameters: vec!["asdf".to_string(), "fdsas".to_string()],
   };
 
   Some(content_filter)
@@ -357,7 +357,7 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
 
   let mut rtps_message = Message::default();
   let prefix = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
-  let rtps_message_header = Header::new(prefix.guidPrefix);
+  let rtps_message_header = Header::new(prefix.guid_prefix);
   rtps_message.set_header(rtps_message_header);
 
   let serialized_payload = SerializedPayload {

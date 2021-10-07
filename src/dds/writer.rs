@@ -152,7 +152,7 @@ pub(crate) struct Writer {
   /// Useful when reader requires some sample with acknack.
   disposed_sequence_numbers: HashSet<SequenceNumber>,
 
-  //When dataWriter sends cacheChange message with cacheKind is NotAlive_Disposed
+  //When dataWriter sends cacheChange message with cacheKind is NotAliveDisposed
   //this is set true. If Datawriter after disposing sends new cahceChanges this falg is then
   //turned true.
   //When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with DisposedFlag
@@ -263,12 +263,12 @@ impl Writer {
   /// To know when token represents a writer we should look entity attribute kind
   /// this entity token can be used in DataWriter -> Writer mio::channel.
   pub fn get_entity_token(&self) -> Token {
-    self.get_guid().entityId.as_token()
+    self.get_guid().entity_id.as_token()
   }
 
   /// This token is used in timed event mio::channel HearbeatHandler -> dpEventwrapper
   pub fn get_timed_event_entity_token(&self) -> Token {
-    self.get_guid().entityId.as_alt_token()
+    self.get_guid().entity_id.as_alt_token()
   }
 
   pub fn is_reliable(&self) -> bool {
@@ -276,14 +276,14 @@ impl Writer {
   }
 
   pub fn get_local_readers(&self) -> Vec<EntityId> {
-    let min = GUID::new_with_prefix_and_id(self.my_guid.guidPrefix, EntityId::MIN);
-    let max = GUID::new_with_prefix_and_id(self.my_guid.guidPrefix, EntityId::MAX);
+    let min = GUID::new_with_prefix_and_id(self.my_guid.guid_prefix, EntityId::MIN);
+    let max = GUID::new_with_prefix_and_id(self.my_guid.guid_prefix, EntityId::MAX);
 
     self.readers.range((Included(min), Included(max)))
       .filter_map( 
           |(guid,_)| 
-            if guid.guidPrefix == self.my_guid.guidPrefix {
-              Some(guid.entityId)
+            if guid.guid_prefix == self.my_guid.guid_prefix {
+              Some(guid.entity_id)
             } else {
               None
             }
@@ -395,7 +395,7 @@ impl Writer {
                   .data_msg(cache_change.clone(), 
                             // Now that payload contains Bytes, it is relatively cheap to clone
                             EntityId::ENTITYID_UNKNOWN, // reader
-                            self.my_guid.entityId, // writer
+                            self.my_guid.entity_id, // writer
                             self.endianness ) 
               } else { partial_message }
             } else { partial_message };
@@ -403,7 +403,7 @@ impl Writer {
           let liveliness_flag = false;
           let data_hb_message = data_hb_message_builder
                .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
-               .add_header_and_build(self.my_guid.guidPrefix);
+               .add_header_and_build(self.my_guid.guid_prefix);
           self.send_message_to_readers(DeliveryMode::Multicast, 
             &data_hb_message, &mut self.readers.values() );
         }
@@ -511,8 +511,8 @@ impl Writer {
       let hb_message = MessageBuilder::new()
         .ts_msg(self.endianness, Some(Timestamp::now()) )
         .heartbeat_msg(self, EntityId::ENTITYID_UNKNOWN, final_flag, liveliness_flag)
-        .add_header_and_build(self.my_guid.guidPrefix);
-      debug!("Writer {:?} topic={:} HEARTBEAT {:?}", self.get_guid().entityId, self.topic_name(), hb_message );
+        .add_header_and_build(self.my_guid.guid_prefix);
+      debug!("Writer {:?} topic={:} HEARTBEAT {:?}", self.get_guid().entity_id, self.topic_name(), hb_message );
       self.send_message_to_readers(DeliveryMode::Multicast, &hb_message, 
                                     &mut self.readers.values())
     }
@@ -525,7 +525,7 @@ impl Writer {
   /// sending a HEARTBEAT message when the sample is no longer available
   pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, ack_submessage: AckSubmessage) {
     match ack_submessage {
-      AckSubmessage::AckNack_Variant(ref an) => {
+      AckSubmessage::AckNack(ref an) => {
       // sanity check
       if !self.is_reliable() {
         warn!("Writer {:x?} is best effort! It should not handle acknack messages!", 
@@ -587,7 +587,7 @@ impl Writer {
         }
       }
     }
-    AckSubmessage::NackFrag_Variant(_nackfrag) => {
+    AckSubmessage::NackFrag(_nackfrag) => {
       // TODO
       error!("NACKFRAG Not implemented")
     }
@@ -639,7 +639,7 @@ impl Writer {
     // Note: The reader_proxy is now removed from readers map
     let reader_guid = reader_proxy.remote_reader_guid;
     let mut partial_message = MessageBuilder::new()
-      .dst_submessage(self.endianness, reader_guid.guidPrefix)
+      .dst_submessage(self.endianness, reader_guid.guid_prefix)
       .ts_msg(self.endianness, Some(Timestamp::now())); 
       // TODO: This timestamp should probably not be
       // the current (retransmit) time, but the initial sample production timestamp,
@@ -659,8 +659,8 @@ impl Writer {
             // CacheChange found, construct DATA submessage
             partial_message = partial_message
                 .data_msg(cache_change.clone(), // TODO: We should not clone, too much copying
-                          reader_guid.entityId, // reader
-                          self.my_guid.entityId, // writer
+                          reader_guid.entity_id, // reader
+                          self.my_guid.entity_id, // writer
                           self.endianness); 
             // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
 
@@ -687,7 +687,7 @@ impl Writer {
       partial_message = partial_message.gap_msg(BTreeSet::from_iter(no_longer_relevant), self, reader_guid);
     }
     let data_gap_msg = partial_message
-      .add_header_and_build(self.my_guid.guidPrefix);
+      .add_header_and_build(self.my_guid.guid_prefix);
 
     self.send_message_to_readers(DeliveryMode::Unicast, &data_gap_msg,
               &mut std::iter::once(&reader_proxy));
@@ -759,8 +759,8 @@ impl Writer {
 
     for reader in readers {
       match ( preferred_mode, 
-              reader.unicast_locator_list.iter().find(|l| Locator::isUDP(l) ), 
-              reader.multicast_locator_list.iter().find(|l| Locator::isUDP(l) ) ) {
+              reader.unicast_locator_list.iter().find(|l| Locator::is_udp(l) ), 
+              reader.multicast_locator_list.iter().find(|l| Locator::is_udp(l) ) ) {
         (DeliveryMode::Multicast, _ , Some(_mc_locator)) => {
           send_unless_sent_and_mark!(reader.multicast_locator_list);
         }

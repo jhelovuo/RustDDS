@@ -41,7 +41,7 @@ pub mod no_key {
 		// what encoding do we produce?
 	  fn output_encoding() -> RepresentationIdentifier;
 
-	  fn to_Bytes(value: &D) -> Result<Bytes>;
+	  fn to_bytes(value: &D) -> Result<Bytes>;
 	}
 
 }
@@ -69,7 +69,7 @@ pub mod with_key {
 	where
 	  D: Keyed + Serialize,
 	{
-	  fn key_to_Bytes(value: &D::K) -> Result<Bytes>;
+	  fn key_to_bytes(value: &D::K) -> Result<Bytes>;
 	}
 
 }

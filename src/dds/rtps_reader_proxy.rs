@@ -137,16 +137,16 @@ impl RtpsReaderProxy {
   }
 
   pub fn new_for_unit_testing(port_number: u16) -> RtpsReaderProxy {
-    let mut unicastLocators = LocatorList::new();
+    let mut unicast_locators = LocatorList::new();
     let locator = Locator::from(SocketAddr::new(
       std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
       port_number,
     ));
-    unicastLocators.push(locator);
+    unicast_locators.push(locator);
     RtpsReaderProxy {
       remote_reader_guid: GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_USER_DEFINED),
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
-      unicast_locator_list: unicastLocators,
+      unicast_locator_list: unicast_locators,
       multicast_locator_list: LocatorList::new(),
       expects_in_line_qos: false,
 
@@ -165,7 +165,7 @@ impl RtpsReaderProxy {
 
   pub fn handle_ack_nack(&mut self, ack_submessage: &AckSubmessage, last_available:SequenceNumber) {
     match ack_submessage {
-      AckSubmessage::AckNack_Variant(acknack) => {
+      AckSubmessage::AckNack(acknack) => {
         self.all_acked_before = acknack.reader_sn_state.base();
         // clean up unsent_changes: 
         // The handy split_off function "Returns everything after the given key, including the key."
@@ -184,7 +184,7 @@ impl RtpsReaderProxy {
         }
       }
 
-      AckSubmessage::NackFrag_Variant(_nack_frag) => {
+      AckSubmessage::NackFrag(_nack_frag) => {
         // TODO
         error!("NACKFRAG not implemented")
       }

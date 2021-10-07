@@ -56,7 +56,7 @@ impl MessageReceiver {
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
   ) -> MessageReceiver {
     // could be passed in as a parameter
-    let locator_kind = LocatorKind::LOCATOR_KIND_UDPv4;
+    let locator_kind = LocatorKind::LOCATOR_KIND_UDP_V4;
 
     MessageReceiver {
       available_readers: BTreeMap::new(),
@@ -108,7 +108,7 @@ impl MessageReceiver {
   }
 
   pub fn add_reader(&mut self, new_reader: Reader) {
-    let eid = new_reader.get_guid().entityId;
+    let eid = new_reader.get_guid().entity_id;
     match self.available_readers.entry( eid ) {
       Entry::Occupied( _ ) => warn!("Already have Reader {:?} - not adding.",eid) ,
       e => { e.or_insert(new_reader); }
@@ -116,7 +116,7 @@ impl MessageReceiver {
   }
 
   pub fn remove_reader(&mut self, old_reader_guid: GUID) -> Option<Reader> {
-    self.available_readers.remove( &old_reader_guid.entityId )
+    self.available_readers.remove( &old_reader_guid.entity_id )
   }
 
   pub fn get_reader_mut(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
@@ -271,7 +271,7 @@ impl MessageReceiver {
         // Note: This must not block, because the receiving end is the same thread,
         // i.e. blocking here is an instant deadlock.
         match self.acknack_sender.try_send((self.source_guid_prefix, 
-            AckSubmessage::AckNack_Variant(acknack))) {
+            AckSubmessage::AckNack(acknack))) {
           Ok(_) => (),
           Err(TrySendError::Full(_)) => 
             info!("AckNack pipe full. Looks like I am very busy. Discarding submessage."),
@@ -329,7 +329,7 @@ impl MessageReceiver {
         }
       }
       InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
-        if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guidPrefix {
+        if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guid_prefix {
           self.dest_guid_prefix = info_dest.guid_prefix;
         } else {
           self.dest_guid_prefix = self.own_guid_prefix;
@@ -423,16 +423,16 @@ use super::*;
     ]);
 
     // this guid prefix is set here because exaple message target is this.
-    let guiPrefix = GuidPrefix::new(&[
+    let gui_prefix = GuidPrefix::new(&[
       0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
     ]);
 
     let (acknack_sender, _acknack_reciever) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
-    let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
+    let mut message_receiver = MessageReceiver::new(gui_prefix, acknack_sender);
 
-    let entity = EntityId::createCustomEntityID([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
-    let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
+    let entity = EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
+    let new_guid = GUID::new_with_prefix_and_id(gui_prefix, entity);
 
     new_guid.from_prefix(entity);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
@@ -468,15 +468,15 @@ use super::*;
     assert_eq!(message_receiver.submessage_count, 4);
 
     // this is not correct way to read history cache values but it serves as a test
-    let sequenceNumbers =
-      message_receiver.get_reader_history_cache_start_and_end_seq_num(new_guid.entityId);
+    let sequence_numbers =
+      message_receiver.get_reader_history_cache_start_and_end_seq_num(new_guid.entity_id);
     info!(
       "history change sequence number range: {:?}",
-      sequenceNumbers
+      sequence_numbers
     );
 
     let a = message_receiver
-      .get_reader_and_history_cache_change(new_guid.entityId, *sequenceNumbers.first().unwrap())
+      .get_reader_and_history_cache_change(new_guid.entity_id, *sequence_numbers.first().unwrap())
       .unwrap();
     info!("reader history chache DATA: {:?}", a.data());
 
@@ -499,23 +499,23 @@ use super::*;
     let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
 
     let writer_ing = WriterIngredients {
-      guid: GUID::new_with_prefix_and_id(guiPrefix, 
-          EntityId::createCustomEntityID([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
+      guid: GUID::new_with_prefix_and_id(gui_prefix, 
+          EntityId::create_custom_entity_id([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
       writer_command_receiver: hccc_download,
       topic_name: String::from("topicName1"),
       qos_policies: QosPolicies::qos_none(),
       status_sender,
     };
 
-    let mut _writerObject = Writer::new(
+    let mut _writer_object = Writer::new(
       writer_ing,
       Arc::new(RwLock::new(DDSCache::new())),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
-      new_guid.entityId,
-      *sequenceNumbers.first().unwrap(),
+      new_guid.entity_id,
+      *sequence_numbers.first().unwrap(),
     );
     change.sequence_number = SequenceNumber::from(91);
   }
@@ -546,7 +546,7 @@ use super::*;
     let guid_new = GUID::default();
     let (acknack_sender, _acknack_reciever) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
-    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
+    let mut message_receiver = MessageReceiver::new(guid_new.guid_prefix, acknack_sender);
 
     message_receiver.handle_received_packet(udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);
@@ -558,7 +558,7 @@ use super::*;
   #[test]
   fn mr_test_header() {
     let guid_new = GUID::default();
-    let header = Header::new(guid_new.guidPrefix);
+    let header = Header::new(guid_new.guid_prefix);
 
     let bytes = header.write_to_vec().unwrap();
     let new_header = Header::read_from_buffer(&bytes).unwrap();
