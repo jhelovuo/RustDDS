@@ -42,7 +42,7 @@ use crate::dds::statusevents::*;
 
 
 /// Simplified type for CDR encoding
-pub type DataReader_CDR<D> = DataReader<D,CDRDeserializerAdapter<D>>;
+pub type DataReaderCdr<D> = DataReader<D,CDRDeserializerAdapter<D>>;
 
 /// Parameter for reading [Readers](../struct.With_Key_DataReader.html) data with key or with next from current key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,7 +53,7 @@ pub enum SelectByKey {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ReaderCommand {
-  RESET_REQUESTED_DEADLINE_STATUS,
+  ResetRequestedDeadlineStatus,
 }
 /*
 struct CurrentStatusChanges {
@@ -142,7 +142,7 @@ where
   fn drop(&mut self) {
     match self
       .discovery_command
-      .send(DiscoveryCommand::REMOVE_LOCAL_READER {
+      .send(DiscoveryCommand::RemoveLocalReader {
         guid: self.get_guid(),
       }) {
       Ok(_) => {}
@@ -1029,9 +1029,9 @@ where
   fn change_kind_to_instance_state(c_k: &ChangeKind) -> InstanceState {
     match c_k {
       ChangeKind::Alive => InstanceState::Alive,
-      ChangeKind::NotAliveDisposed => InstanceState::NotAlive_Disposed,
+      ChangeKind::NotAliveDisposed => InstanceState::NotAliveDisposed,
       // TODO check this..?
-      ChangeKind::NotAliveUnregistered => InstanceState::NotAlive_NoWriters,
+      ChangeKind::NotAliveUnregistered => InstanceState::NotAliveNoWriters,
     }
   }
   */ 
@@ -1247,11 +1247,11 @@ mod tests {
     let data_key = random_data.get_key();
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      guid_prefix: GuidPrefix::new(&[1; 12]),
+      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    mr_state.source_guid_prefix = writer_guid.guid_prefix;
 
     new_reader.matched_writer_add(
       writer_guid.clone(),
@@ -1261,8 +1261,8 @@ mod tests {
     );
 
     let mut data = Data::default();
-    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
-    data.writer_id = writer_guid.entityId;
+    data.reader_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
+    data.writer_id = writer_guid.entity_id;
     data.writer_sn = SequenceNumber::from(0);
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
 
@@ -1287,8 +1287,8 @@ mod tests {
       b: "somedata number 2".to_string(),
     };
     let mut data2 = Data::default();
-    data2.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
-    data2.writer_id = writer_guid.entityId;
+    data2.reader_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
+    data2.writer_id = writer_guid.entity_id;
     data2.writer_sn = SequenceNumber::from(1);
 
     data2.serialized_payload = Some(SerializedPayload {
@@ -1302,8 +1302,8 @@ mod tests {
       b: "third somedata".to_string(),
     };
     let mut data3 = Data::default();
-    data3.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
-    data3.writer_id = writer_guid.entityId;
+    data3.reader_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
+    data3.writer_id = writer_guid.entity_id;
     data3.writer_sn = SequenceNumber::from(2);
 
     data3.serialized_payload = Some(SerializedPayload {
@@ -1359,11 +1359,11 @@ mod tests {
       .unwrap();
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      guid_prefix: GuidPrefix::new(&[1; 12]),
+      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    mr_state.source_guid_prefix = writer_guid.guid_prefix;
     reader.matched_writer_add(
       writer_guid.clone(),
       EntityId::ENTITYID_UNKNOWN,
@@ -1384,7 +1384,7 @@ mod tests {
 
     let mut data_msg = Data::default();
     data_msg.reader_id = reader.get_entity_id();
-    data_msg.writer_id = writer_guid.entityId;
+    data_msg.writer_id = writer_guid.entity_id;
     data_msg.writer_sn = SequenceNumber::from(0);
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
 
@@ -1396,7 +1396,7 @@ mod tests {
 
     let mut data_msg2 = Data::default();
     data_msg2.reader_id = reader.get_entity_id();
-    data_msg2.writer_id = writer_guid.entityId;
+    data_msg2.writer_id = writer_guid.entity_id;
     data_msg2.writer_sn = SequenceNumber::from(1);
 
     data_msg2.serialized_payload = Some(SerializedPayload {
@@ -1466,7 +1466,7 @@ mod tests {
 
     let mut data_msg = Data::default();
     data_msg.reader_id = reader.get_entity_id();
-    data_msg.writer_id = writer_guid.entityId;
+    data_msg.writer_id = writer_guid.entity_id;
     data_msg.writer_sn = SequenceNumber::from(2);
 
     data_msg.serialized_payload = Some(SerializedPayload {
@@ -1476,7 +1476,7 @@ mod tests {
     });
     let mut data_msg2 = Data::default();
     data_msg2.reader_id = reader.get_entity_id();
-    data_msg2.writer_id = writer_guid.entityId;
+    data_msg2.writer_id = writer_guid.entity_id;
     data_msg2.writer_sn = SequenceNumber::from(3);
 
     data_msg2.serialized_payload = Some(SerializedPayload {
@@ -1486,7 +1486,7 @@ mod tests {
     });
     let mut data_msg3 = Data::default();
     data_msg3.reader_id = reader.get_entity_id();
-    data_msg3.writer_id = writer_guid.entityId;
+    data_msg3.writer_id = writer_guid.entity_id;
     data_msg3.writer_sn = SequenceNumber::from(4);
 
     data_msg3.serialized_payload = Some(SerializedPayload {
@@ -1496,7 +1496,7 @@ mod tests {
     });
     let mut data_msg4 = Data::default();
     data_msg4.reader_id = reader.get_entity_id();
-    data_msg4.writer_id = writer_guid.entityId;
+    data_msg4.writer_id = writer_guid.entity_id;
     data_msg4.writer_sn = SequenceNumber::from(5);
 
     data_msg4.serialized_payload = Some(SerializedPayload {
@@ -1586,11 +1586,11 @@ mod tests {
     datareader.notification_receiver = rec;
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      guid_prefix: GuidPrefix::new(&[1; 12]),
+      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    mr_state.source_guid_prefix = writer_guid.guid_prefix;
     reader.matched_writer_add(
       writer_guid.clone(),
       EntityId::ENTITYID_UNKNOWN,
@@ -1615,7 +1615,7 @@ mod tests {
 
     let mut data_msg = Data::default();
     data_msg.reader_id = reader.get_entity_id();
-    data_msg.writer_id = writer_guid.entityId;
+    data_msg.writer_id = writer_guid.entity_id;
     data_msg.writer_sn = SequenceNumber::from(0);
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
 
@@ -1627,7 +1627,7 @@ mod tests {
 
     let mut data_msg2 = Data::default();
     data_msg2.reader_id = reader.get_entity_id();
-    data_msg2.writer_id = writer_guid.entityId;
+    data_msg2.writer_id = writer_guid.entity_id;
     data_msg2.writer_sn = SequenceNumber::from(1);
 
     data_msg2.serialized_payload = Some(SerializedPayload {
@@ -1638,7 +1638,7 @@ mod tests {
 
     let mut data_msg3 = Data::default();
     data_msg3.reader_id = reader.get_entity_id();
-    data_msg3.writer_id = writer_guid.entityId;
+    data_msg3.writer_id = writer_guid.entity_id;
     data_msg3.writer_sn = SequenceNumber::from(2);
 
     data_msg3.serialized_payload = Some(SerializedPayload {

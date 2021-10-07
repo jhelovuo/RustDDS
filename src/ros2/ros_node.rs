@@ -44,19 +44,19 @@ pub struct RosParticipant {
 
 impl RosParticipant {
   pub fn new() -> Result<RosParticipant, Error> {
-    Self::from_DomainParticipant(DomainParticipant::new(0)?)
+    Self::from_domain_participant(DomainParticipant::new(0)?)
   }
 
-  pub fn from_DomainParticipant(domain_participant: DomainParticipant) 
+  pub fn from_domain_participant(domain_participant: DomainParticipant) 
   -> Result<RosParticipant, Error> 
   {
-    let i = RosParticipantInner::from_DomainParticipant(domain_participant)?;
+    let i = RosParticipantInner::from_domain_participant(domain_participant)?;
     Ok( RosParticipant {
           inner: Arc::new( Mutex::new( i ) ),
         } )
   }
   /// Create a new ROS2 node
-  pub fn new_RosNode(&self,name: &str, namespace: &str, options: NodeOptions) 
+  pub fn new_ros_node(&self,name: &str, namespace: &str, options: NodeOptions) 
       -> Result<RosNode, Error> {
     RosNode::new(name,namespace,options,self.clone())
   }
@@ -124,7 +124,7 @@ struct RosParticipantInner {
 impl RosParticipantInner {
 
   // "new"
-  pub fn from_DomainParticipant(domain_participant: DomainParticipant) 
+  pub fn from_domain_participant(domain_participant: DomainParticipant) 
   -> Result<RosParticipantInner, Error> 
   {
 

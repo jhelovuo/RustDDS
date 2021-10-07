@@ -47,9 +47,9 @@ impl ViewState {
 pub enum InstanceState {
   Alive = 0b0001,
   /// A DataWriter has actively disposed this instance
-  NotAlive_Disposed = 0b0010,
+  NotAliveDisposed = 0b0010,
   /// There are no writers alive.
-  NotAlive_NoWriters = 0b0100,
+  NotAliveNoWriters = 0b0100,
 }
 
 impl InstanceState {
@@ -59,7 +59,7 @@ impl InstanceState {
   }
   /// Set that contains both not_alive states.
   pub fn not_alive() -> BitFlags<Self> {
-    InstanceState::NotAlive_Disposed | InstanceState::NotAlive_NoWriters
+    InstanceState::NotAliveDisposed | InstanceState::NotAliveNoWriters
   }
 }
 

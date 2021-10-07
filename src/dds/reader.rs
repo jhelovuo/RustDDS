@@ -165,11 +165,11 @@ impl Reader {
 
   /// To know when token represents a reader we should look entity attribute kind
   pub fn get_entity_token(&self) -> Token {
-    self.get_guid().entityId.as_token()
+    self.get_guid().entity_id.as_token()
   }
 
   pub fn get_reader_alt_entity_token(&self) -> Token {
-    self.get_guid().entityId.as_alt_token()
+    self.get_guid().entity_id.as_alt_token()
   }
 
   pub fn add_timed_event_handler(&mut self, time_handler: TimedEventHandler) {
@@ -274,7 +274,7 @@ impl Reader {
     loop {
       use std::sync::mpsc::TryRecvError;
       match self.data_reader_command_receiver.try_recv() {
-        Ok(ReaderCommand::RESET_REQUESTED_DEADLINE_STATUS) => {
+        Ok(ReaderCommand::ResetRequestedDeadlineStatus) => {
           warn!("RESET_REQUESTED_DEADLINE_STATUS not implemented!");
           //TODO: This should be implemented.
         }
@@ -395,7 +395,7 @@ impl Reader {
     self
       .matched_writers
       .iter()
-      .any(|(&g, _)| g.entityId == entity_id)
+      .any(|(&g, _)| g.entity_id == entity_id)
   }
 
   #[cfg(test)]
@@ -485,7 +485,7 @@ impl Reader {
     trace!("handle_data_msg from {:?} seq={:?} topic={:?} stateful={:?}", 
         &writer_guid, writer_sn, self.topic_name, self.is_stateful,);
     if self.is_stateful {
-      let my_entityid = self.my_guid.entityId; // to please borrow checker
+      let my_entityid = self.my_guid.entity_id; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
         if writer_proxy.contains_change(writer_sn) {
           // change already present
@@ -853,7 +853,7 @@ impl Reader {
       protocol_id: ProtocolId::default(),
       protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
       vendor_id: VendorId::THIS_IMPLEMENTATION,
-      guid_prefix: self.my_guid.guidPrefix,
+      guid_prefix: self.my_guid.guid_prefix,
     });
 
     let info_dst = InfoDestination {
@@ -897,16 +897,16 @@ impl Reader {
         protocol_id: ProtocolId::default(),
         protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
         vendor_id: VendorId::THIS_IMPLEMENTATION,
-        guid_prefix: self.my_guid.guidPrefix,
+        guid_prefix: self.my_guid.guid_prefix,
       });
 
       let info_dst = InfoDestination {
-        guid_prefix: writer_proxy.remote_writer_guid.guidPrefix,
+        guid_prefix: writer_proxy.remote_writer_guid.guid_prefix,
       };
 
       let acknack = AckNack {
         reader_id: self.get_entity_id(),
-        writer_id: writer_proxy.remote_writer_guid.entityId,
+        writer_id: writer_proxy.remote_writer_guid.entity_id,
         reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(1)),
         count: self.sent_ack_nack_count,
       };
@@ -992,7 +992,7 @@ mod tests {
   #[test]
   fn rtpsreader_notification() {
     let mut guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
-    guid.entityId = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
+    guid.entity_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
 
     let (send, rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
@@ -1021,12 +1021,12 @@ mod tests {
     );
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      guid_prefix: GuidPrefix::new(&[1; 12]),
+      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
 
     let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    mr_state.source_guid_prefix = writer_guid.guid_prefix;
 
     reader.matched_writer_add(
       writer_guid.clone(),
@@ -1036,8 +1036,8 @@ mod tests {
     );
 
     let mut data = Data::default();
-    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
-    data.writer_id = writer_guid.entityId;
+    data.reader_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
+    data.writer_id = writer_guid.entity_id;
 
     reader.handle_data_msg(data, BitFlags::<DATA_Flags>::empty(), mr_state);
 
@@ -1075,12 +1075,12 @@ mod tests {
     );
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      guid_prefix: GuidPrefix::new(&[1; 12]),
+      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
 
     let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    mr_state.source_guid_prefix = writer_guid.guid_prefix;
 
     new_reader.matched_writer_add(
       writer_guid.clone(),
@@ -1090,7 +1090,7 @@ mod tests {
     );
 
     let mut d = Data::default();
-    d.writer_id = writer_guid.entityId;
+    d.writer_id = writer_guid.entity_id;
     let d_seqnum = d.writer_sn;
     new_reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), mr_state);
 
@@ -1138,14 +1138,14 @@ mod tests {
     );
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      guid_prefix: GuidPrefix::new(&[1; 12]),
+      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
 
-    let writer_id = writer_guid.entityId;
+    let writer_id = writer_guid.entity_id;
 
     let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    mr_state.source_guid_prefix = writer_guid.guid_prefix;
 
     new_reader.matched_writer_add(
       writer_guid.clone(),
@@ -1275,13 +1275,13 @@ mod tests {
 
 
     let writer_guid = GUID {
-      guidPrefix: GuidPrefix::new(&[1; 12]),
-      entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      guid_prefix: GuidPrefix::new(&[1; 12]),
+      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
-    let writer_id = writer_guid.entityId;
+    let writer_id = writer_guid.entity_id;
 
     let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    mr_state.source_guid_prefix = writer_guid.guid_prefix;
 
     reader.matched_writer_add(
       writer_guid.clone(),

@@ -20,7 +20,7 @@
 //!
 //!
 //! // declaring ros node 
-//! let mut ros_node = ros_participant.new_RosNode(
+//! let mut ros_node = ros_participant.new_ros_node(
 //!   "some_node_name",
 //!   "/some_namespace",
 //!   NodeOptions::new(false), // enable rosout?
@@ -66,14 +66,14 @@ pub type KeyedRosPublisher<D, SA> = crate::dds::with_key::datawriter::DataWriter
 
 // Short-hand notation for CDR serialization
 
-pub type RosSubscriber_CDR<D> = 
+pub type RosSubscriberCdr<D> = 
   crate::dds::no_key::datareader::DataReader<D, crate::serialization::CDRDeserializerAdapter<D>>;
 
-pub type KeyedRosSubscriber_CDR<D> = 
+pub type KeyedRosSubscriberCdr<D> = 
   crate::dds::with_key::datareader::DataReader<D, crate::serialization::CDRDeserializerAdapter<D>>;
 
-pub type RosPublisher_CDR<D> = 
+pub type RosPublisherCdr<D> = 
   crate::dds::no_key::datawriter::DataWriter<D, crate::serialization::CDRSerializerAdapter<D>>;
 
-pub type KeyedRosPublisher_CDR<D> = 
+pub type KeyedRosPublisherCdr<D> = 
   crate::dds::with_key::datawriter::DataWriter<D, crate::serialization::CDRSerializerAdapter<D>>;

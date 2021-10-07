@@ -25,7 +25,7 @@ impl TurtleListener {
     sender: mio_channel::Sender<Twist>,
   ) {
     println!("Turtle listener");
-    let mut ros_node = ros_participant.new_RosNode(
+    let mut ros_node = ros_participant.new_ros_node(
                             "turtle_listener",  // name
                             "/ros2_demo",     // namespace
                             NodeOptions::new(false), // enable rosout

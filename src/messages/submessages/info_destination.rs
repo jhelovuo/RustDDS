@@ -12,7 +12,7 @@ use super::{
 };
 
 /// This message is sent from an RTPS Writer to an RTPS Reader
-/// to modify the GuidPrefix used to interpret the Reader entityIds
+/// to modify the GuidPrefix used to interpret the Reader entity_ids
 /// appearing in the Submessages that follow it.
 #[derive(Debug, PartialEq, Clone, Readable, Writable)]
 pub struct InfoDestination {
@@ -57,7 +57,7 @@ mod tests {
       info_destination,
       InfoDestination {
           guid_prefix: GuidPrefix {
-              entityKey: [0x01, 0x02, 0x6D, 0x3F,
+              entity_key: [0x01, 0x02, 0x6D, 0x3F,
                           0x7E, 0x07, 0x00, 0x00,
                           0x01, 0x00, 0x00, 0x00]
           }

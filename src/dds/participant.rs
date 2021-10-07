@@ -38,9 +38,9 @@ use super::dp_event_loop::DomainInfo;
 /// DDS DomainParticipant generally only one per domain per machine should be
 /// active
 #[derive(Clone)]
-// This is a smart pointer for DomainParticipant_Inner for easier manipulation.
+// This is a smart pointer for DomainParticipantInner for easier manipulation.
 pub struct DomainParticipant {
-  dpi: Arc<Mutex<DomainParticipant_Disc>>,
+  dpi: Arc<Mutex<DomainParticipantDisc>>,
 }
 
 #[allow(clippy::new_without_default)]
@@ -57,7 +57,7 @@ impl DomainParticipant {
     // so its .drop() can wait until discovery has had a chance to stop.
     let (djh_sender, djh_receiver) = mio_channel::channel();
 
-    let mut dpd = DomainParticipant_Disc::new(domain_id, djh_receiver)?;
+    let mut dpd = DomainParticipantDisc::new(domain_id, djh_receiver)?;
 
     let discovery_updated_sender = match dpd.discovery_updated_sender.take() {
       Some(dus) => dus,
@@ -283,7 +283,7 @@ impl PartialEq for DomainParticipant {
 
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
-  dpi: Weak<Mutex<DomainParticipant_Disc>>,
+  dpi: Weak<Mutex<DomainParticipantDisc>>,
   // This struct caches the GUID to avoid construction deadlocks
   guid: GUID,
 }
@@ -370,8 +370,8 @@ impl RTPSEntity for DomainParticipantWeak {
 
 // This struct exists only to control and stop Discovery when DomainParticipant
 // should be dropped
-pub(crate) struct DomainParticipant_Disc {
-  dpi: Arc<Mutex<DomainParticipant_Inner>>,
+pub(crate) struct DomainParticipantDisc {
+  dpi: Arc<Mutex<DomainParticipantInner>>,
   // Discovery control
   discovery_updated_sender: Option<mio_channel::SyncSender<DiscoveryNotificationType>>,
   discovery_command_receiver: Option<mio_channel::Receiver<DiscoveryCommand>>,
@@ -379,20 +379,20 @@ pub(crate) struct DomainParticipant_Disc {
   discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
 }
 
-impl DomainParticipant_Disc {
+impl DomainParticipantDisc {
   pub fn new(
     domain_id: u16,
     discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
-  ) -> Result<DomainParticipant_Disc> {
+  ) -> Result<DomainParticipantDisc> {
     let (discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::sync_channel::<DiscoveryNotificationType>(100);
 
-    let dpi = DomainParticipant_Inner::new(domain_id, discovery_update_notification_receiver)?;
+    let dpi = DomainParticipantInner::new(domain_id, discovery_update_notification_receiver)?;
 
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(10);
 
-    Ok(DomainParticipant_Disc {
+    Ok(DomainParticipantDisc {
       dpi: Arc::new(Mutex::new(dpi)),
       discovery_updated_sender: Some(discovery_update_notification_sender),
       discovery_command_receiver: Some(discovery_command_receiver),
@@ -476,7 +476,7 @@ impl DomainParticipant_Disc {
     // by writers with that particular QoS.
     self
       .discovery_command_channel
-      .send(DiscoveryCommand::MANUAL_ASSERT_LIVELINESS)
+      .send(DiscoveryCommand::ManualAssertLiveliness)
       .or_else(|e| {
         log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
       })
@@ -484,12 +484,12 @@ impl DomainParticipant_Disc {
 
 }
 
-impl Drop for DomainParticipant_Disc {
+impl Drop for DomainParticipantDisc {
   fn drop(&mut self) {
     debug!("Sending Discovery Stop signal.");
     match self
       .discovery_command_channel
-      .send(DiscoveryCommand::STOP_DISCOVERY)
+      .send(DiscoveryCommand::StopDiscovery)
     {
       Ok(_) => (),
       _ => {
@@ -507,7 +507,7 @@ impl Drop for DomainParticipant_Disc {
 }
 
 // This is the actual working DomainParticipant.
-pub(crate) struct DomainParticipant_Inner {
+pub(crate) struct DomainParticipantInner {
   domain_id: u16,
   participant_id: u16,
 
@@ -535,7 +535,7 @@ pub(crate) struct DomainParticipant_Inner {
 
 }
 
-impl Drop for DomainParticipant_Inner {
+impl Drop for DomainParticipantInner {
   fn drop(&mut self) {
     // if send has an error simply leave as we have lost control of the
     // ev_loop_thread anyways
@@ -552,7 +552,7 @@ impl Drop for DomainParticipant_Inner {
           .unwrap_or_else(|e| warn!("Failed to join dp_event_loop: {:?}", e));
       }
       None => {
-        error!("Someone managed to steal dp_event_loop join handle from DomainParticipant_Inner.");
+        error!("Someone managed to steal dp_event_loop join handle from DomainParticipantInner.");
       }
     }
     debug!("Joined dp_event_loop");
@@ -560,11 +560,11 @@ impl Drop for DomainParticipant_Inner {
 }
 
 #[allow(clippy::new_without_default)]
-impl DomainParticipant_Inner {
+impl DomainParticipantInner {
   fn new(
     domain_id: u16,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-  ) -> Result<DomainParticipant_Inner> {
+  ) -> Result<DomainParticipantInner> {
     let mut listeners = HashMap::new();
 
     match UDPListener::new_multicast(
@@ -661,7 +661,7 @@ impl DomainParticipant_Inner {
           listeners,
           dds_cache_clone,
           disc_db_clone,
-          new_guid.guidPrefix,
+          new_guid.guid_prefix,
           TokenReceiverPair {
             token: ADD_READER_TOKEN,
             receiver: receiver_add_reader,
@@ -684,9 +684,9 @@ impl DomainParticipant_Inner {
         dp_event_loop.event_loop()
       })?;
 
-    info!("New DomainParticipant_Inner: domain_id={:?} participant_id={:?} GUID={:?}",
+    info!("New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
       domain_id, participant_id, new_guid);
-    Ok(DomainParticipant_Inner {
+    Ok(DomainParticipantInner {
       domain_id,
       participant_id,
       my_guid: new_guid,
@@ -877,13 +877,13 @@ impl RTPSEntity for DomainParticipant {
   }
 }
 
-impl RTPSEntity for DomainParticipant_Disc {
+impl RTPSEntity for DomainParticipantDisc {
   fn get_guid(&self) -> GUID {
     self.dpi.lock().unwrap().get_guid()
   }
 }
 
-impl RTPSEntity for DomainParticipant_Inner {
+impl RTPSEntity for DomainParticipantInner {
   fn get_guid(&self) -> GUID {
     self.my_guid
   }
@@ -979,7 +979,7 @@ mod tests {
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(topic, None)
       .expect("Failed to create datawriter");
 
-    let portNumber: u16 = get_user_traffic_unicast_port(5, 0);
+    let port_number: u16 = get_user_traffic_unicast_port(5, 0);
     let sender = UDPSender::new(1234).unwrap();
     let mut m: Message = Message::default();
 
@@ -1007,15 +1007,15 @@ mod tests {
       protocol_id: ProtocolId::default(),
       protocol_version: ProtocolVersion { major: 2, minor: 3 },
       vendor_id: VendorId::THIS_IMPLEMENTATION,
-      guid_prefix: GUID::default().guidPrefix,
+      guid_prefix: GUID::default().guid_prefix,
     };
     m.set_header(h);
     m.add_submessage(SubMessage::from(s));
     let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
     info!("data to send via udp: {:?}", _data);
     let loca = Locator {
-      kind: LocatorKind::LOCATOR_KIND_UDPv4,
-      port: portNumber as u32,
+      kind: LocatorKind::LOCATOR_KIND_UDP_V4,
+      port: port_number as u32,
       address: [
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00,

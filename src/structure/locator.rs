@@ -13,8 +13,8 @@ pub struct LocatorKind {
 impl LocatorKind {
   pub const LOCATOR_KIND_INVALID: LocatorKind = LocatorKind { value: -1 };
   pub const LOCATOR_KIND_RESERVED: LocatorKind = LocatorKind { value: 0 };
-  pub const LOCATOR_KIND_UDPv4: LocatorKind = LocatorKind { value: 1 };
-  pub const LOCATOR_KIND_UDPv6: LocatorKind = LocatorKind { value: 2 };
+  pub const LOCATOR_KIND_UDP_V4: LocatorKind = LocatorKind { value: 1 };
+  pub const LOCATOR_KIND_UDP_V6: LocatorKind = LocatorKind { value: 2 };
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize, PartialOrd, Ord)]
@@ -40,9 +40,9 @@ impl Locator {
     SocketAddr::from(self)
   }
 
-  pub fn isUDP(&self) -> bool {
-    self.kind == LocatorKind::LOCATOR_KIND_UDPv4 
-    || self.kind == LocatorKind::LOCATOR_KIND_UDPv6
+  pub fn is_udp(&self) -> bool {
+    self.kind == LocatorKind::LOCATOR_KIND_UDP_V4 
+    || self.kind == LocatorKind::LOCATOR_KIND_UDP_V6
   }
 }
 
@@ -58,9 +58,9 @@ impl From<SocketAddr> for Locator {
       kind: if socket_address.ip().is_unspecified() {
         LocatorKind::LOCATOR_KIND_INVALID
       } else if socket_address.ip().is_ipv4() {
-        LocatorKind::LOCATOR_KIND_UDPv4
+        LocatorKind::LOCATOR_KIND_UDP_V4
       } else {
-        LocatorKind::LOCATOR_KIND_UDPv6
+        LocatorKind::LOCATOR_KIND_UDP_V6
       },
       port: u32::from(socket_address.port()),
       address: match socket_address.ip() {
@@ -74,7 +74,7 @@ impl From<SocketAddr> for Locator {
 impl From<Locator> for SocketAddr {
   fn from(locator: Locator) -> Self {
     match locator.kind {
-      LocatorKind::LOCATOR_KIND_UDPv4 => SocketAddr::new(
+      LocatorKind::LOCATOR_KIND_UDP_V4 => SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(
           locator.address[12],
           locator.address[13],
@@ -83,7 +83,7 @@ impl From<Locator> for SocketAddr {
         )),
         locator.port as u16,
       ),
-      LocatorKind::LOCATOR_KIND_UDPv6 => SocketAddr::new(
+      LocatorKind::LOCATOR_KIND_UDP_V6 => SocketAddr::new(
         IpAddr::V6(Ipv6Addr::from(locator.address)),
         locator.port as u16,
       ),
@@ -155,13 +155,13 @@ mod tests {
     },
     {
         locator_kind_udpv4,
-        LocatorKind::LOCATOR_KIND_UDPv4,
+        LocatorKind::LOCATOR_KIND_UDP_V4,
         le = [0x01, 0x00, 0x00, 0x00],
         be = [0x00, 0x00, 0x00, 0x01]
     },
     {
         locator_kind_udpv6,
-        LocatorKind::LOCATOR_KIND_UDPv6,
+        LocatorKind::LOCATOR_KIND_UDP_V6,
         le = [0x02, 0x00, 0x00, 0x00],
         be = [0x00, 0x00, 0x00, 0x02]
     }
@@ -216,7 +216,7 @@ mod tests {
   {
       non_empty_ipv4,
       Locator {
-          kind: LocatorKind::LOCATOR_KIND_UDPv4,
+          kind: LocatorKind::LOCATOR_KIND_UDP_V4,
           address: [
               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
               0x7F, 0x00, 0x00, 0x01
@@ -231,7 +231,7 @@ mod tests {
   {
       non_empty_ipv6,
       Locator {
-          kind: LocatorKind::LOCATOR_KIND_UDPv6,
+          kind: LocatorKind::LOCATOR_KIND_UDP_V6,
           address: [
               0xFF, 0x00, 0x45, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
               0x00, 0x00, 0x32
@@ -257,7 +257,7 @@ mod tests {
               0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
           ],
           be = [
-              0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_UDPv4
+              0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
               0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
               0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
               0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
@@ -289,7 +289,7 @@ mod tests {
           locator_localhost_ipv4,
           Locator::from(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
           le = [
-              0x01, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDPv4
+              0x01, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
               0x90, 0x1F, 0x00, 0x00,  // Locator_t::port(8080),
               0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
               0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
@@ -297,7 +297,7 @@ mod tests {
               0x7F, 0x00, 0x00, 0x01   // Locator_t::address[12:15]
           ],
           be = [
-              0x00, 0x00, 0x00, 0x01,  // LocatorKind_t::LOCATOR_KIND_UDPv4
+              0x00, 0x00, 0x00, 0x01,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
               0x00, 0x00, 0x1F, 0x90,  // Locator_t::port(8080),
               0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
               0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
@@ -309,7 +309,7 @@ mod tests {
           locator_ipv6,
           Locator::from(SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xFF00, 0x4501, 0, 0, 0, 0, 0, 0x0032)), 7171)),
           le = [
-              0x02, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDPv6
+              0x02, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V6
               0x03, 0x1C, 0x00, 0x00,  // Locator_t::port(7171),
               0xFF, 0x00, 0x45, 0x01,  // Locator_t::address[0:3]
               0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
@@ -317,7 +317,7 @@ mod tests {
               0x00, 0x00, 0x00, 0x32   // Locator_t::address[12:15]
           ],
           be = [
-              0x00, 0x00, 0x00, 0x02,  // LocatorKind_t::LOCATOR_KIND_UDPv6
+              0x00, 0x00, 0x00, 0x02,  // LocatorKind_t::LOCATOR_KIND_UDP_V6
               0x00, 0x00, 0x1C, 0x03,  // Locator_t::port(7171),
               0xFF, 0x00, 0x45, 0x01,  // Locator_t::address[0:3]
               0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]

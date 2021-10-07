@@ -14,11 +14,11 @@ use crate::structure::parameter_id::ParameterId;
 pub struct ContentFilterProperty {
   /// Name of the Content-filtered Topic associated with the Reader.
   /// Must have non-zero length.
-  pub contentFilteredTopicName: String,
+  pub content_filtered_topic_name: String,
 
   /// Name of the Topic related to the Content-filtered Topic.
   /// Must have non-zero length.
-  pub relatedTopicName: String,
+  pub related_topic_name: String,
 
   /// Identifies the filter class this filter belongs to. RTPS can support
   /// multiple filter classes (SQL, regular expressions, custom filters,
@@ -27,16 +27,16 @@ pub struct ContentFilterProperty {
   /// “DDSSQL” Default filter class name if none specified.
   /// Matches the SQL filter specified by DDS, which must be available in all
   /// implementations.
-  pub filterClassName: String,
+  pub filter_class_name: String,
 
   /// The actual filter expression. Must be a valid expression for the filter
-  /// class specified using filterClassName.
+  /// class specified using filter_class_name.
   /// Must have non-zero length.
-  pub filterExpression: String,
+  pub filter_expression: String,
 
   /// Defines the value for each parameter in the filter expression.
   /// Can have zero length if the filter expression contains no parameters.
-  pub expressionParameters: Vec<String>,
+  pub expression_parameters: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -48,17 +48,17 @@ pub struct ContentFilterPropertyData {
 
 impl ContentFilterPropertyData {
   pub fn new(content_filter_property: &ContentFilterProperty) -> ContentFilterPropertyData {
-    let len_cftn = content_filter_property.contentFilteredTopicName.len();
+    let len_cftn = content_filter_property.content_filtered_topic_name.len();
     let len_cftn = len_cftn + (4 - len_cftn % 4) + 4;
-    let len_rtn = content_filter_property.relatedTopicName.len();
+    let len_rtn = content_filter_property.related_topic_name.len();
     let len_rtn = len_rtn + (4 - len_rtn % 4) + 4;
-    let len_fcn = content_filter_property.filterClassName.len();
+    let len_fcn = content_filter_property.filter_class_name.len();
     let len_fcn = len_fcn + (4 - len_fcn % 4) + 4;
-    let len_fe = content_filter_property.filterExpression.len();
+    let len_fe = content_filter_property.filter_expression.len();
     let len_fe = len_fe + (4 - len_fe % 4) + 4;
 
     let mut parameter_length = len_cftn + len_rtn + len_fcn + len_fe;
-    for param in content_filter_property.expressionParameters.iter() {
+    for param in content_filter_property.expression_parameters.iter() {
       let len_temp = param.len();
       let len_temp = len_temp + (4 - len_temp % 4) + 4;
       parameter_length += len_temp;

@@ -277,9 +277,9 @@ impl Serialize for SubscriptionBuiltinTopicData {
 // ------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SubscriptionBuiltinTopicData_Key(pub GUID);
+pub struct SubscriptionBuiltinTopicDataKey(pub GUID);
 
-impl Serialize for SubscriptionBuiltinTopicData_Key {
+impl Serialize for SubscriptionBuiltinTopicDataKey {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -349,14 +349,14 @@ impl DiscoveredReaderData {
 
 // separate type is needed to serialize correctly
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
-pub struct DiscoveredReaderData_Key(pub GUID);
+pub struct DiscoveredReaderDataKey(pub GUID);
 
-impl Key for DiscoveredReaderData_Key {}
+impl Key for DiscoveredReaderDataKey {}
 
 impl Keyed for DiscoveredReaderData {
-  type K = DiscoveredReaderData_Key;
+  type K = DiscoveredReaderDataKey;
   fn get_key(&self) -> Self::K {
-    DiscoveredReaderData_Key(self.subscription_topic_data.key)
+    DiscoveredReaderDataKey(self.subscription_topic_data.key)
   }
 }
 
@@ -385,7 +385,7 @@ impl Serialize for DiscoveredReaderData {
 
 // -------
 
-impl<'de> Deserialize<'de> for DiscoveredReaderData_Key {
+impl<'de> Deserialize<'de> for DiscoveredReaderDataKey {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
@@ -398,7 +398,7 @@ impl<'de> Deserialize<'de> for DiscoveredReaderData_Key {
   }
 }
 
-impl Serialize for DiscoveredReaderData_Key {
+impl Serialize for DiscoveredReaderDataKey {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -564,9 +564,9 @@ impl Serialize for PublicationBuiltinTopicData {
 // ------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PublicationBuiltinTopicData_Key(pub GUID);
+pub struct PublicationBuiltinTopicDataKey(pub GUID);
 
-impl Serialize for PublicationBuiltinTopicData_Key {
+impl Serialize for PublicationBuiltinTopicDataKey {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -591,15 +591,15 @@ pub struct DiscoveredWriterData {
 
 // separate type is needed to serialize correctly
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
-pub struct DiscoveredWriterData_Key(pub GUID); // wrapper to enable custom PL CDR (de)serialization
+pub struct DiscoveredWriterDataKey(pub GUID); // wrapper to enable custom PL CDR (de)serialization
 
-impl Key for DiscoveredWriterData_Key {}
+impl Key for DiscoveredWriterDataKey {}
 
 impl Keyed for DiscoveredWriterData {
-  type K = DiscoveredWriterData_Key;
+  type K = DiscoveredWriterDataKey;
 
   fn get_key(&self) -> Self::K {
-    DiscoveredWriterData_Key(self.publication_topic_data.key)
+    DiscoveredWriterDataKey(self.publication_topic_data.key)
   }
 }
 
@@ -659,7 +659,7 @@ impl Serialize for DiscoveredWriterData {
   }
 }
 
-impl<'de> Deserialize<'de> for DiscoveredWriterData_Key {
+impl<'de> Deserialize<'de> for DiscoveredWriterDataKey {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
@@ -672,7 +672,7 @@ impl<'de> Deserialize<'de> for DiscoveredWriterData_Key {
   }
 }
 
-impl Serialize for DiscoveredWriterData_Key {
+impl Serialize for DiscoveredWriterDataKey {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -801,7 +801,7 @@ impl Serialize for DiscoveredTopicData {
   }
 }
 
-pub type DiscoveredTopicData_Key = GUID;
+pub type DiscoveredTopicDataKey = GUID;
 
 impl Keyed for DiscoveredTopicData {
   type K = GUID;

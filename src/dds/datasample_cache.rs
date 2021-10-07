@@ -105,7 +105,7 @@ where
 
     let new_instance_state = match new_sample {
       Ok(_) => InstanceState::Alive,
-      Err(_) => InstanceState::NotAlive_Disposed,
+      Err(_) => InstanceState::NotAliveDisposed,
     };
 
     // find or create metadata record
@@ -136,7 +136,7 @@ where
     match (instance_metadata.instance_state, new_instance_state) {
       (InstanceState::Alive, _) => (), // was Alive, does not change counts
 
-      (InstanceState::NotAlive_Disposed, InstanceState::Alive) =>
+      (InstanceState::NotAliveDisposed, InstanceState::Alive) =>
       // born again
       {
         instance_metadata
@@ -144,9 +144,9 @@ where
           .disposed_generation_count += 1
       }
 
-      (InstanceState::NotAlive_Disposed, _) => (), // you can only die once
+      (InstanceState::NotAliveDisposed, _) => (), // you can only die once
 
-      (InstanceState::NotAlive_NoWriters, InstanceState::Alive) =>
+      (InstanceState::NotAliveNoWriters, InstanceState::Alive) =>
       // born again
       {
         instance_metadata
@@ -154,7 +154,7 @@ where
           .no_writers_generation_count += 1
       }
 
-      (InstanceState::NotAlive_NoWriters, _) => (), // you can only die once
+      (InstanceState::NotAliveNoWriters, _) => (), // you can only die once
     }
     instance_metadata.instance_state = new_instance_state;
 

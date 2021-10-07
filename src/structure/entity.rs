@@ -10,9 +10,9 @@ pub trait RTPSEntity {
   fn get_guid(&self) -> GUID;
 
   fn get_entity_id(&self) -> EntityId {
-    self.get_guid().entityId
+    self.get_guid().entity_id
   }
   fn get_guid_prefix(&self) -> GuidPrefix {
-    self.get_guid().guidPrefix
+    self.get_guid().guid_prefix
   }
 }

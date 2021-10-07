@@ -76,16 +76,15 @@ impl<C: Context> Writable<C> for InterpreterSubmessage {
 
 #[derive(Debug)]
 pub enum AckSubmessage {
-  // use _Variant for less confusing naming
-  AckNack_Variant(AckNack),
-  NackFrag_Variant(NackFrag),
+  AckNack(AckNack),
+  NackFrag(NackFrag),
 }
 
 impl AckSubmessage {
   pub fn writer_id(&self) -> EntityId {
     match self {
-      AckSubmessage::AckNack_Variant(a) => a.writer_id,
-      AckSubmessage::NackFrag_Variant(a) => a.writer_id,
+      AckSubmessage::AckNack(a) => a.writer_id,
+      AckSubmessage::NackFrag(a) => a.writer_id,
     }
   }
 }

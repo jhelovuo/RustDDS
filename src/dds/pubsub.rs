@@ -139,7 +139,7 @@ impl Publisher {
   }
 
   /// Shorthand for crate_datawriter with Commaon Data Representation Little Endian
-  pub fn create_datawriter_CDR<D>(&self, topic: Topic, qos: Option<QosPolicies>) 
+  pub fn create_datawriter_cdr<D>(&self, topic: Topic, qos: Option<QosPolicies>) 
     -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D,LittleEndian>>>
   where
     D: Keyed + Serialize,
@@ -164,7 +164,7 @@ impl Publisher {
     self.inner.create_datawriter(self, Some(entity_id), topic, qos)
   }
   
-  pub(crate) fn create_datawriter_CDR_with_entityid<D>(&self, entity_id: EntityId, 
+  pub(crate) fn create_datawriter_cdr_with_entityid<D>(&self, entity_id: EntityId, 
       topic: Topic, qos: Option<QosPolicies>) 
     -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D,LittleEndian>>>
   where
@@ -217,7 +217,7 @@ impl Publisher {
     self.inner.create_datawriter_no_key(self, None,topic,qos)
   }
 
-  pub fn create_datawriter_no_key_CDR<D>(&self, topic: Topic, qos: Option<QosPolicies>) 
+  pub fn create_datawriter_no_key_cdr<D>(&self, topic: Topic, qos: Option<QosPolicies>) 
     -> Result<NoKeyDataWriter<D,CDRSerializerAdapter<D,LittleEndian> >>
   where
     D: Serialize,
@@ -240,7 +240,7 @@ impl Publisher {
     self.inner.create_datawriter_no_key(self, Some(entity_id),topic,qos)
   }
 
-  pub(crate) fn create_datawriter_no_key_CDR_with_entityid<D>(&self, entity_id: EntityId, 
+  pub(crate) fn create_datawriter_no_key_cdr_with_entityid<D>(&self, entity_id: EntityId, 
       topic: Topic, qos: Option<QosPolicies>) 
     -> Result<NoKeyDataWriter<D,CDRSerializerAdapter<D,LittleEndian> >>
   where
@@ -422,12 +422,12 @@ impl InnerPublisher {
     let writer_qos = optional_qos.unwrap_or_else(
         || self.default_datawriter_qos.modify_by(&topic.get_qos()) );
 
-    let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
+    let entity_id = unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
     let dp = self.get_participant()
               .ok_or("upgrade fail")
               .or_else (|e| log_and_err_internal!("Where is my DomainParticipant? {}",e))?;
 
-    let guid = GUID::new_with_prefix_and_id(dp.get_guid().guidPrefix, entity_id);
+    let guid = GUID::new_with_prefix_and_id(dp.get_guid().guid_prefix, entity_id);
 
     let new_writer = WriterIngredients {
         guid,
@@ -471,7 +471,7 @@ impl InnerPublisher {
     D: Serialize,
     SA: no_key::SerializerAdapter<D>,
   {
-    let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
+    let entity_id = unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
     let d =
       self.create_datawriter::<NoKeyWrapper<D>, SAWrapper<SA>>(outer, Some(entity_id), topic, qos)?;
     Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
@@ -635,7 +635,7 @@ impl Subscriber {
       .create_datareader(self,topic,None,qos)
   }
 
-  pub fn create_datareader_CDR<D: 'static>(
+  pub fn create_datareader_cdr<D: 'static>(
     &self,
     topic: Topic,
     qos: Option<QosPolicies>,
@@ -664,7 +664,7 @@ impl Subscriber {
       .create_datareader(self,topic,Some(entity_id),qos)
   }
 
-  pub(crate) fn create_datareader_CDR_with_entityid<D: 'static>(
+  pub(crate) fn create_datareader_cdr_with_entityid<D: 'static>(
     &self,
     topic: Topic,
     entity_id: EntityId,
@@ -721,7 +721,7 @@ impl Subscriber {
       .create_datareader_no_key(self,topic,None,qos)
   }
 
-  pub fn create_datareader_no_key_CDR<D: 'static>(&self,
+  pub fn create_datareader_no_key_cdr<D: 'static>(&self,
     topic: Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
@@ -744,7 +744,7 @@ impl Subscriber {
       .create_datareader_no_key(self,topic,Some(entity_id),qos)
   }
 
-  pub(crate) fn create_datareader_no_key_CDR_with_entityid<D: 'static>(&self,
+  pub(crate) fn create_datareader_no_key_cdr_with_entityid<D: 'static>(&self,
     topic: Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
@@ -848,7 +848,7 @@ impl InnerSubscriber {
 
     let qos = optional_qos.unwrap_or_else(|| topic.get_qos());
 
-    let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
+    let entity_id = unwrap_or_random_entity_id(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
 
     let reader_id = entity_id;
     let datareader_id = entity_id;
@@ -941,7 +941,7 @@ impl InnerSubscriber {
       return Error::precondition_not_met("Topic is WITH_KEY, but attempted to create NO_KEY Datareader")
     }
 
-    let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
+    let entity_id = unwrap_or_random_entity_id(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
 
     let d = self.create_datareader_internal::<NoKeyWrapper<D>, DAWrapper<SA>>(
       outer,
@@ -958,11 +958,11 @@ impl InnerSubscriber {
   }
 }
 
-fn unwrap_or_random_EntityId(entity_id_opt: Option<EntityId>, entityKind: EntityKind) -> EntityId {
+fn unwrap_or_random_entity_id(entity_id_opt: Option<EntityId>, entity_kind: EntityKind) -> EntityId {
     entity_id_opt // use the given EntityId or generate new random one
       .unwrap_or_else( || {
             let mut rng = rand::thread_rng();
-            EntityId::createCustomEntityID([rng.gen(), rng.gen(), rng.gen()], entityKind)
+            EntityId::create_custom_entity_id([rng.gen(), rng.gen(), rng.gen()], entity_kind)
           } )
 }
 

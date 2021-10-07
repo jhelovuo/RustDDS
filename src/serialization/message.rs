@@ -285,14 +285,14 @@ impl MessageBuilder {
     guid_prefix: GuidPrefix,
   ) -> MessageBuilder {
     let flags = BitFlags::<INFODESTINATION_Flags>::from_endianness(endianness);
-    let submessageHeader = SubmessageHeader {
+    let submessage_header = SubmessageHeader {
       kind: SubmessageKind::INFO_DST,
       flags: flags.bits(),
       content_length: 12u16,
       //InfoDST length is always 12 because message contains only GuidPrefix
     };
     let dst_submessage = SubMessage {
-      header: submessageHeader,
+      header: submessage_header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(
         InfoDestination { guid_prefix },
         flags,
@@ -318,14 +318,14 @@ impl MessageBuilder {
       None => 0, // Not serialized at all
     };
 
-    let submessageHeader = SubmessageHeader {
+    let submessage_header = SubmessageHeader {
       kind: SubmessageKind::INFO_TS,
       flags: flags.bits(),
       content_length, 
     };
 
     let submsg = SubMessage {
-      header: submessageHeader,
+      header: submessage_header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(
         InfoTimestamp {timestamp}, 
         flags)),
@@ -415,7 +415,7 @@ impl MessageBuilder {
       (Some(&base),Some(&_top)) => {
         let gap_list = SequenceNumberSet::from_base_and_set(base, &irrelevant_sns);
         let gap = Gap {
-              reader_id: reader_guid.entityId ,
+              reader_id: reader_guid.entity_id ,
               writer_id: writer.get_entity_id(),
               gap_start: base,
               gap_list 
