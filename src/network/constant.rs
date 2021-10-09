@@ -98,6 +98,7 @@ pub enum TimerMessageType {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum DiscoveryNotificationType {
   ReaderUpdated { 
     rtps_reader_proxy: RtpsReaderProxy,
