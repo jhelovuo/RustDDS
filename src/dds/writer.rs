@@ -450,7 +450,7 @@ impl Writer {
 
     // inserting to DDSCache
     let timestamp = Timestamp::now();
-    self.dds_cache.write().unwrap().to_topic_add_change(
+    self.dds_cache.write().unwrap().add_change(
       &self.my_topic_name,
       &timestamp,
       new_cache_change,

@@ -48,7 +48,7 @@ impl Timestamp {
     Timestamp::from_nanos(chrono::Utc::now().timestamp_nanos() as u64)
   }
 
-  fn to_ticks(&self) -> u64 {
+  fn to_ticks(self) -> u64 {
     ((self.seconds as u64) << 32) + (self.fraction as u64)
   }
 

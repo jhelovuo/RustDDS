@@ -104,7 +104,7 @@ impl DDSCache {
     }
   }
 
-  pub fn to_topic_add_change(
+  pub fn add_change(
     &mut self,
     topic_name: &str,
     instant: &Timestamp,
@@ -315,7 +315,7 @@ mod tests {
     cache
       .write()
       .unwrap()
-      .to_topic_add_change(topic_name, &DDSTimestamp::now(), change1);
+      .add_change(topic_name, &DDSTimestamp::now(), change1);
 
     let pointerToCache1 = cache.clone();
 
@@ -326,7 +326,7 @@ mod tests {
         SequenceNumber::from(1),
         DDSData::new(SerializedPayload::default()),
       );
-      pointerToCache1.write().unwrap().to_topic_add_change(
+      pointerToCache1.write().unwrap().add_change(
         topic_name,
         &DDSTimestamp::now(),
         cahange2,
@@ -336,7 +336,7 @@ mod tests {
         SequenceNumber::from(2),
         DDSData::new(SerializedPayload::default()),
       );
-      pointerToCache1.write().unwrap().to_topic_add_change(
+      pointerToCache1.write().unwrap().add_change(
         topic_name,
         &DDSTimestamp::now(),
         cahange3,

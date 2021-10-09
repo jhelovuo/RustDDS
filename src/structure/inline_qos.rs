@@ -74,9 +74,9 @@ impl StatusInfo {
   }
 
   pub fn into_cdr_bytes<BO: ByteOrder>(
-    &self,
+    self,
   ) -> Result<Vec<u8>, crate::serialization::error::Error> {
-    to_bytes::<StatusInfo, BO>(self)
+    to_bytes::<StatusInfo, BO>(&self)
   }
 
   pub fn from_cdr_bytes(

@@ -57,7 +57,7 @@ impl KeyHash {
     Vec::from(self.0)
   }
 
-  pub fn into_cdr_bytes( &self ) -> Result<Vec<u8>, Error> {
+  pub fn into_cdr_bytes( self ) -> Result<Vec<u8>, Error> {
     Ok( self.to_vec() )
   }
 
@@ -108,7 +108,7 @@ pub trait Key:
   }
 
   // provided method:
-  fn into_hash_key(&self) -> KeyHash {
+  fn hash_key(&self) -> KeyHash {
     // See RTPS Spec v2.3 Section 9.6.3.8 KeyHash
 
     /* The KeyHash_t is computed from the Data as follows using one of two algorithms depending on whether 
@@ -154,7 +154,7 @@ pub trait Key:
 }
 
 impl Key for () {
-  fn into_hash_key(&self) -> KeyHash {
+  fn hash_key(&self) -> KeyHash {
     KeyHash::zero() 
   }
 }

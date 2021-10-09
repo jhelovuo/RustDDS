@@ -96,7 +96,7 @@ impl<'de> PlCdrDeserializer<'de> {
     match self.endianness {
       RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
         //let rep: Result<Vec<u8>> = to_bytes::<u16, LittleEndian>(&u16::from(self.endianness));
-        visitor.visit_bytes(&[self.endianness.to_bytes(), self.input].concat())
+        visitor.visit_bytes(&[&self.endianness.to_bytes(), self.input].concat())
       }
       e => Err(Error::Message(format!("Unsupported endianness {:?}", e))),
     }
