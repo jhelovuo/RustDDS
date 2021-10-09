@@ -992,14 +992,19 @@ mod tests {
       TopicKind::NoKey,
       TypeDesc::new("testi"),
     );
-    let mut reader = Reader::new(
+
+    let reader_ing = ReaderIngredients {
       guid,
-      send,
-      status_sender,
+      notification_sender: send,
+      status_sender: status_sender,
+      topic_name: "test".to_string(),
+      qos_policy: QosPolicies::qos_none(),
+      data_reader_command_receiver: reader_command_receiver,
+    };
+    let reader = Reader::new(
+      reader_ing,
       dds_cache,
-      "test".to_string(),
-      QosPolicies::qos_none(),
-      reader_command_receiver,
+      Rc::new(UDPSender::new(0).unwrap()),
     );
 
     let writer_guid = GUID {
@@ -1041,15 +1046,30 @@ mod tests {
       TopicKind::NoKey,
       TypeDesc::new("testi"),
     );
-    let mut new_reader = Reader::new(
-      new_guid,
-      send,
-      status_sender,
+
+    let reader_ing = ReaderIngredients {
+      guid: new_guid,
+      notification_sender: send,
+      status_sender: status_sender,
+      topic_name: "test".to_string(),
+      qos_policy: QosPolicies::qos_none(),
+      data_reader_command_receiver: reader_command_receiver,
+    };
+    let new_reader = Reader::new(
+      reader_ing,
       dds_cache.clone(),
-      "test".to_string(),
-      QosPolicies::qos_none(),
-      reader_command_receiver,
+      Rc::new(UDPSender::new(0).unwrap()),
     );
+
+    // let mut new_reader = Reader::new(
+    //   new_guid,
+    //   send,
+    //   status_sender,
+    //   dds_cache.clone(),
+    //   "test".to_string(),
+    //   QosPolicies::qos_none(),
+    //   reader_command_receiver,
+    // );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(&[1; 12]),
@@ -1100,14 +1120,18 @@ mod tests {
       TopicKind::NoKey,
       TypeDesc::new("testi"),
     );
-    let mut new_reader = Reader::new(
-      new_guid,
-      send,
-      status_sender,
-      dds_cache,
-      "test".to_string(),
-      QosPolicies::qos_none(),
-      reader_command_receiver,
+    let reader_ing = ReaderIngredients {
+      guid: new_guid,
+      notification_sender: send,
+      status_sender: status_sender,
+      topic_name: "test".to_string(),
+      qos_policy: QosPolicies::qos_none(),
+      data_reader_command_receiver: reader_command_receiver,
+    };
+    let new_reader = Reader::new(
+      reader_ing,
+      dds_cache.clone(),
+      Rc::new(UDPSender::new(0).unwrap()),
     );
 
     let writer_guid = GUID {
@@ -1231,15 +1255,21 @@ mod tests {
       TopicKind::NoKey,
       TypeDesc::new("testi"),
     );
-    let mut reader = Reader::new(
-      new_guid,
-      send,
-      status_sender,
-      dds_cache,
-      "test".to_string(),
-      QosPolicies::qos_none(),
-      reader_command_receiver,
+
+    let reader_ing = ReaderIngredients {
+      guid: new_guid,
+      notification_sender: send,
+      status_sender: status_sender,
+      topic_name: "test".to_string(),
+      qos_policy: QosPolicies::qos_none(),
+      data_reader_command_receiver: reader_command_receiver,
+    };
+    let reader = Reader::new(
+      reader_ing,
+      dds_cache.clone(),
+      Rc::new(UDPSender::new(0).unwrap()),
     );
+
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(&[1; 12]),

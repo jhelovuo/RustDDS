@@ -519,7 +519,10 @@ mod tests {
     },
   };
   use std::sync::{RwLock, Arc};
+  use std::rc::Rc;
 
+  use crate::network::udp_sender::UDPSender;
+  use crate::dds::reader::Reader;
   use crate::structure::guid::*;
   use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
@@ -664,38 +667,46 @@ mod tests {
     let (_reader_commander2, reader_command_receiver2) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
+    let reader_ing = ReaderIngredients {
+      guid: GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
+      notification_sender: notification_sender.clone(),
+      status_sender: status_sender.clone(),
+      topic_name: topic.get_name().to_string(),
+      qos_policy: QosPolicies::qos_none(),
+      data_reader_command_receiver: reader_command_receiver1,
+    };
     let reader = Reader::new(
-      GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
-      notification_sender.clone(),
-      status_sender.clone(),
+      reader_ing,
       Arc::new(RwLock::new(DDSCache::new())),
-      topic.get_name().to_string(),
-      QosPolicies::qos_none(),
-      reader_command_receiver1,
+      Rc::new(UDPSender::new(0).unwrap()),
     );
 
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader);
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader);
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
-    let reader = Reader::new(
-      GUID::new_with_prefix_and_id(GuidPrefix::new(b"Another fake"), EntityId {
+    let reader_ing = ReaderIngredients {
+      guid: GUID::new_with_prefix_and_id(GuidPrefix::new(b"Another fake"), EntityId {
         entityKey: [1, 2, 3],
         entityKind: EntityKind::READER_NO_KEY_USER_DEFINED
       }), // GUID needs to be different in order to be added
-      notification_sender.clone(),
-      status_sender.clone(),
+      notification_sender: notification_sender.clone(),
+      status_sender: status_sender.clone(),
+      topic_name: topic.get_name().to_string(),
+      qos_policy: QosPolicies::qos_none(),
+      data_reader_command_receiver: reader_command_receiver2,
+    };
+    let reader = Reader::new(
+      reader_ing,
       Arc::new(RwLock::new(DDSCache::new())),
-      topic.get_name().to_string(),
-      QosPolicies::qos_none(),
-      reader_command_receiver2,
+      Rc::new(UDPSender::new(0).unwrap()),
     );
 
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader);
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 2);
     assert_eq!(discoverydb.get_all_local_topic_readers().count(), 2);
   }

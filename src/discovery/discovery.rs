@@ -1231,7 +1231,7 @@ mod tests {
   use bytes::Bytes;
     use mio::Token;
   use speedy::{Writable, Endianness};
-  use byteorder::LittleEndian;
+  
 
   #[test]
   fn discovery_participant_data_test() {
@@ -1286,10 +1286,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
-        topic.clone(), None,
-      )
-      .unwrap();
+      .create_datawriter_CDR::<ShapeType>(topic.clone(), None,).unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
@@ -1375,10 +1372,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter::<ShapeType, CDRSerializerAdapter<ShapeType, LittleEndian>>(
-        topic.clone(), None,
-      )
-      .unwrap();
+      .create_datawriter_CDR::<ShapeType>(topic.clone(), None,).unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())

@@ -102,7 +102,7 @@ impl UDPSender {
   #[cfg(test)]
   pub fn send_to_all(&self, buffer: &[u8], addresses: &Vec<SocketAddr>) {
     for address in addresses.iter() {
-      match self.socket.send_to(buffer, address) {
+      match self.unicast_socket.send_to(buffer, address) {
         Ok(_) => (),
         _ => debug!("Unable to send to {}", address),
       };
@@ -113,12 +113,18 @@ impl UDPSender {
   pub fn send_multicast(self, buffer: &[u8], address: Ipv4Addr, port: u16) -> io::Result<usize> {
     if address.is_multicast() {
       let address = SocketAddr::new(IpAddr::V4(address), port);
-      return self.socket.send_to(buffer, &SocketAddr::from(address));
+      let mut size = 0;
+      for s in self.multicast_sockets {
+        size = s.send_to(buffer, &SocketAddr::from(address))?;
+      }
+      Ok(size) 
+      
+    } else {
+      io::Result::Err(io::Error::new(
+        io::ErrorKind::Other,
+        "Not a multicast address",
+      ))
     }
-    io::Result::Err(io::Error::new(
-      io::ErrorKind::Other,
-      "Not a multicast address",
-    ))
   }
 
 }
