@@ -1,6 +1,6 @@
 
-use byteorder::ByteOrder;
-use enumflags2::{bitflags, BitFlags};
+use byteorder::{ByteOrder, };
+use enumflags2::BitFlags;
 
 use super::cache_change::ChangeKind;
 use crate::{
@@ -14,8 +14,7 @@ use crate::{
 use serde::{Serialize, Deserialize};
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[bitflags]
+#[derive(Debug, BitFlags, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum StatusInfoEnum {
   Disposed = 0b0001,

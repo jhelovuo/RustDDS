@@ -1,4 +1,4 @@
-use enumflags2::{BitFlags, bitflags};
+use enumflags2::BitFlags;
 
 use crate::{structure::guid::GUID};
 use crate::structure::time::Timestamp;
@@ -7,8 +7,7 @@ use crate::structure::time::Timestamp;
 
 /// DDS spec 2.2.2.5.4
 /// "Read" indicates whether or not the corresponding data sample has already been read.
-#[derive(Debug, Copy, Clone, PartialEq)]
-#[bitflags]
+#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
 #[repr(u32)] // DDS Spec 1.4 section 2.3.3 DCPS PSM : IDL defines these as "unsigned long", so u32
 pub enum SampleState {
   Read = 0b0001,
@@ -23,8 +22,8 @@ impl SampleState {
 }
 
 /// DDS spec 2.2.2.5.1.8
-#[derive(Debug, Copy, Clone, PartialEq)]
-#[bitflags]
+///
+#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
 #[repr(u32)]
 pub enum ViewState {
   ///  indicates that either this is the first time that the DataReader has ever
@@ -43,8 +42,7 @@ impl ViewState {
   }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-#[bitflags]
+#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
 #[repr(u32)]
 pub enum InstanceState {
   Alive = 0b0001,
