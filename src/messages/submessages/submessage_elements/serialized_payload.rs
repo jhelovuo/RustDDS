@@ -46,8 +46,8 @@ impl RepresentationIdentifier {
     })
   }
 
-  pub fn to_bytes(&self) -> &[u8] {
-    &self.bytes
+  pub fn to_bytes(self) -> [u8; 2] {
+    self.bytes
   }
 }
 /*

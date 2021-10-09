@@ -123,7 +123,7 @@ where
         self.instance_map.insert(instance_key.clone(), imd);
         self
           .hash_to_key_map
-          .insert(instance_key.into_hash_key(), instance_key.clone());
+          .insert(instance_key.hash_key(), instance_key.clone());
         self.instance_map.get_mut(&instance_key).unwrap() // must succeed, since this was just inserted
       }
     };

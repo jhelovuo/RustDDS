@@ -817,7 +817,7 @@ impl Reader {
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
-    cache.to_topic_add_change(&self.topic_name, &receive_timestamp, cache_change);
+    cache.add_change(&self.topic_name, &receive_timestamp, cache_change);
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for this reader)

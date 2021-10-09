@@ -64,7 +64,7 @@ impl Duration {
     }
   }
 
-  pub(crate) fn to_ticks(&self) -> i64 {
+  pub(crate) fn to_ticks(self) -> i64 {
     ((self.seconds as i64) << 32) + (self.fraction as i64)
   }
 
