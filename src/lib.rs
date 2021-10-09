@@ -15,9 +15,7 @@
 //!
 
 #![warn(clippy::all)]
-#![allow(clippy::option_map_unit_fn, clippy::wrong_self_convention, clippy::single_match, )]
-
-#![allow(dead_code)]
+#![allow(clippy::option_map_unit_fn, clippy::wrong_self_convention, clippy::single_match, dead_code)]
 
 #[macro_use]
 mod serialization_test;
