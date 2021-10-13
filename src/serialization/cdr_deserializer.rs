@@ -460,18 +460,18 @@ where
     seed.deserialize(self.de)
   }
 
-  fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
+  fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    de::Deserializer::deserialize_seq(self.de, visitor)
+    de::Deserializer::deserialize_tuple(self.de, len, visitor)
   }
 
-  fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
+  fn struct_variant<V>(self, fields: &'static [&'static str], visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    de::Deserializer::deserialize_map(self.de, visitor)
+    de::Deserializer::deserialize_tuple(self.de, fields.len(), visitor)
   }
 }
 
