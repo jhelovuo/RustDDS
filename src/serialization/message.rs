@@ -343,7 +343,7 @@ impl MessageBuilder {
     endianness: Endianness,
   ) -> MessageBuilder {
     let inline_qos = match cache_change.data_value {
-      DDSData::Data {..} | DDSData::DataFrags{..} => None,
+      DDSData::Data {..} /*| DDSData::DataFrags{..}*/  => None,
       DDSData::DisposeByKey {..} => None,
       DDSData::DisposeByKeyHash{ key_hash, .. } => {
         let mut param_list = ParameterList::new();
@@ -380,7 +380,7 @@ impl MessageBuilder {
     let flags: BitFlags<DATA_Flags> = 
       BitFlags::<DATA_Flags>::from_endianness(endianness)
       | ( match cache_change.data_value {
-           DDSData::Data {..} | DDSData::DataFrags {..} 
+           DDSData::Data {..} /*| DDSData::DataFrags {..} */ 
               => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data),
            DDSData::DisposeByKey{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key),
            DDSData::DisposeByKeyHash{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos),

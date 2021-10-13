@@ -84,13 +84,17 @@ impl DomainParticipant {
     let discovery_handle = thread::Builder::new()
       .name("RustDDS discovery thread".to_string())
       .spawn(move || { 
-          if let Ok(mut discovery) = Discovery::new(
+          match Discovery::new(
               dp_clone,
               disc_db_clone,
               discovery_started_sender,
               discovery_updated_sender,
               discovery_command_receiver,
-            ) { discovery.discovery_event_loop() }
+            ) {
+            Ok(mut discovery) => // run the event loop
+              discovery.discovery_event_loop(),
+            Err(_) => (),
+          }
         })?;
 
     djh_sender.send(discovery_handle).unwrap_or(()); // send join handle to inner participant
@@ -294,14 +298,14 @@ impl DomainParticipantWeak {
 
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_publisher(self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_publisher(&self, qos),
       None => Err(Error::OutOfResources),
     }
   }
 
-  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_subscriber(&self, qos),
       None => Err(Error::OutOfResources),
     }
   }
@@ -317,14 +321,14 @@ impl DomainParticipantWeak {
       Some(dpi) => dpi
         .lock()
         .unwrap()
-        .create_topic(self, name, type_desc, qos, topic_kind),
+        .create_topic(&self, name, type_desc, qos, topic_kind),
       None => Err(Error::LockPoisoned),
     }
   }
 
   pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().find_topic(self, name, timeout),
+      Some(dpi) => dpi.lock().unwrap().find_topic(&self, name, timeout),
       None => Err(Error::LockPoisoned),
     }
   }
@@ -351,7 +355,10 @@ impl DomainParticipantWeak {
   }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
-    self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
+    match self.dpi.upgrade() {
+      Some(d) => Some(DomainParticipant { dpi: d }),
+      None => None,
+    }
   }
 } // end impl
 
@@ -403,10 +410,10 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_publisher(dp, qos, self.discovery_command_channel.clone())
+      .create_publisher(&dp, qos, self.discovery_command_channel.clone())
   }
 
-  pub fn create_subscriber(
+  pub fn create_subscriber<'a>(
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
@@ -415,7 +422,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_subscriber(dp, qos, self.discovery_command_channel.clone())
+      .create_subscriber(&dp, qos, self.discovery_command_channel.clone())
   }
 
   pub fn create_topic(
@@ -431,7 +438,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_topic(dp, name, type_desc, qos, topic_kind)
+      .create_topic(&dp, name, type_desc, qos, topic_kind)
   }
 
   pub fn find_topic(
@@ -440,7 +447,7 @@ impl DomainParticipant_Disc {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    self.dpi.lock().unwrap().find_topic(dp, name, timeout)
+    self.dpi.lock().unwrap().find_topic(&dp, name, timeout)
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -534,7 +541,7 @@ impl Drop for DomainParticipant_Inner {
     // ev_loop_thread anyways
     match self.stop_poll_sender.send(()) {
       Ok(_) => (),
-      _ => return,
+      _ => return (),
     };
 
     debug!("Waiting for dp_event_loop join");
@@ -649,7 +656,7 @@ impl DomainParticipant_Inner {
     let ev_loop_handle = thread::Builder::new()
       .name(format!("RustDDS Participant {} event loop",participant_id))
       .spawn(move || { 
-        let ev_wrapper = DPEventLoop::new(
+        let dp_event_loop = DPEventLoop::new(
           domain_info,
           listeners,
           dds_cache_clone,
@@ -674,7 +681,7 @@ impl DomainParticipant_Inner {
           stop_poll_receiver,
           discovery_update_notification_receiver,
         );
-        ev_wrapper.event_loop()
+        dp_event_loop.event_loop()
       })?;
 
     info!("New DomainParticipant_Inner: domain_id={:?} participant_id={:?} GUID={:?}",
@@ -766,7 +773,7 @@ impl DomainParticipant_Inner {
       domain_participant_weak,
       name.to_string(),
       TypeDesc::new(type_desc),
-      qos,
+      &qos,
       topic_kind,
     );
     Ok(topic)
@@ -782,7 +789,10 @@ impl DomainParticipant_Inner {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    if let Some(topic) = self.find_topic_in_discovery_db(domain_participant_weak, name)? { return Ok(Some(topic)) }
+    match self.find_topic_in_discovery_db(domain_participant_weak, name)? {
+      Some(topic) => return Ok(Some(topic)),
+      None => (),
+    }
 
     std::thread::sleep(timeout);
 
@@ -857,7 +867,7 @@ impl DomainParticipant_Inner {
       Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
     };
 
-    db.get_all_topics().cloned().collect()
+    db.get_all_topics().map(|p| p.clone()).collect()
   }
 } // impl
 
@@ -922,7 +932,7 @@ mod tests {
   fn dp_basic_domain_participant() {
     // let _dp = DomainParticipant::new();
 
-    let sender = UDPSender::new(11401).expect("failed to create UDPSender");
+    let sender = UDPSender::new(11401).unwrap();
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
     let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 7412)];
@@ -969,7 +979,7 @@ mod tests {
       .expect("Failed to create datawriter");
 
     let portNumber: u16 = get_user_traffic_unicast_port(5, 0);
-    let sender = UDPSender::new(1234).expect("failed to create UDPSender");
+    let sender = UDPSender::new(1234).unwrap();
     let mut m: Message = Message::default();
 
     let a: AckNack = AckNack {

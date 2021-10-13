@@ -710,34 +710,35 @@ mod tests {
       participant_id: 0,
     };
 
-    let dp_event_loop = DPEventLoop::new(
-      domain_info,
-      HashMap::new(),
-      ddshc,
-      discovery_db,
-      GuidPrefix::default(),
-      TokenReceiverPair {
-        token: ADD_READER_TOKEN,
-        receiver: receiver_add,
-      },
-      TokenReceiverPair {
-        token: REMOVE_READER_TOKEN,
-        receiver: receiver_remove,
-      },
-      TokenReceiverPair {
-        token: ADD_WRITER_TOKEN,
-        receiver: add_writer_receiver,
-      },
-      TokenReceiverPair {
-        token: REMOVE_WRITER_TOKEN,
-        receiver: remove_writer_receiver,
-      },
-      stop_poll_receiver,
-      discovery_update_notification_receiver,
-    );
-
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
-    dp_event_loop
+    
+    let child = thread::spawn(move || {
+      let dp_event_loop = DPEventLoop::new(
+        domain_info,
+        HashMap::new(),
+        ddshc,
+        discovery_db,
+        GuidPrefix::default(),
+        TokenReceiverPair {
+          token: ADD_READER_TOKEN,
+          receiver: receiver_add,
+        },
+        TokenReceiverPair {
+          token: REMOVE_READER_TOKEN,
+          receiver: receiver_remove,
+        },
+        TokenReceiverPair {
+          token: ADD_WRITER_TOKEN,
+          receiver: add_writer_receiver,
+        },
+        TokenReceiverPair {
+          token: REMOVE_WRITER_TOKEN,
+          receiver: remove_writer_receiver,
+        },
+        stop_poll_receiver,
+        discovery_update_notification_receiver,
+      );
+      dp_event_loop
       .poll
       .register(
         &receiver_stop,
@@ -746,8 +747,8 @@ mod tests {
         PollOpt::edge(),
       )
       .expect("Failed to register receivers.");
-
-    let child = thread::spawn(move || DPEventLoop::event_loop(dp_event_loop));
+      dp_event_loop.event_loop()
+    });
 
     let n = 3;
 
@@ -761,19 +762,23 @@ mod tests {
       let (_reader_commander, reader_command_receiver) =
         mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
-      let new_reader = ReaderIngredients::new(
-        new_guid,
-        send,
+      let new_reader_ing = ReaderIngredients {
+        guid: new_guid,
+        notification_sender: send,
         status_sender,
-        Arc::new(RwLock::new(DDSCache::new())),
-        "test".to_string(),
-        QosPolicies::qos_none(),
-        reader_command_receiver,
-      );
+        topic_name: "test".to_string(),
+        qos_policy: QosPolicies::qos_none(),
+        data_reader_command_receiver: reader_command_receiver,
+      };
 
-      reader_guids.push(new_reader.get_guid().clone());
-      info!("\nSent reader number {}: {:?}\n", i, &new_reader);
-      sender_add_reader.send(new_reader).unwrap();
+      // let new_reader = Reader::new(
+      //   new_reader_ing, 
+      //   Arc::new(RwLock::new(DDSCache::new())), 
+      //   Rc::new(UDPSender::new_with_random_port()), );
+
+      reader_guids.push(new_reader_ing.guid);
+      info!("\nSent reader number {}: {:?}\n", i, &new_reader_ing);
+      sender_add_reader.send(new_reader_ing).unwrap();
       std::thread::sleep(Duration::new(0, 100));
     }
 

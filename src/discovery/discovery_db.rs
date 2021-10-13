@@ -675,19 +675,20 @@ mod tests {
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver1,
     };
-    let reader = Reader::new(
+
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
+    assert_eq!(discoverydb.local_topic_readers.len(), 1);
+    assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
+
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
+    assert_eq!(discoverydb.local_topic_readers.len(), 1);
+    assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
+
+    let _reader = Reader::new(
       reader_ing,
       Arc::new(RwLock::new(DDSCache::new())),
       Rc::new(UDPSender::new(0).unwrap()),
     );
-
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
-    assert_eq!(discoverydb.local_topic_readers.len(), 1);
-    assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
-
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
-    assert_eq!(discoverydb.local_topic_readers.len(), 1);
-    assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
     let reader_ing = ReaderIngredients {
       guid: GUID::new_with_prefix_and_id(GuidPrefix::new(b"Another fake"), EntityId {
@@ -700,14 +701,15 @@ mod tests {
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
     };
-    let reader = Reader::new(
-      reader_ing,
-      Arc::new(RwLock::new(DDSCache::new())),
-      Rc::new(UDPSender::new(0).unwrap()),
-    );
 
     discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 2);
     assert_eq!(discoverydb.get_all_local_topic_readers().count(), 2);
+
+    let _reader = Reader::new(
+      reader_ing,
+      Arc::new(RwLock::new(DDSCache::new())),
+      Rc::new(UDPSender::new(0).unwrap()),
+    );
   }
 }

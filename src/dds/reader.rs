@@ -64,6 +64,17 @@ pub (crate) struct ReaderIngredients {
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>, 
 }
 
+impl fmt::Debug for ReaderIngredients {
+  // Need manual implementation, because channels cannot be Dubug formatted.
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.debug_struct("Reader")
+      .field("my_guid", &self.guid)
+      .field("topic_name", &self.topic_name)
+      .field("qos_policy", &self.qos_policy)
+      .finish()
+  }
+}
+
 pub(crate) struct Reader {
   // Should the instant be sent?
   notification_sender: mio_channel::SyncSender<()>,
@@ -1001,7 +1012,7 @@ mod tests {
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
-    let reader = Reader::new(
+    let mut reader = Reader::new(
       reader_ing,
       dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
@@ -1055,21 +1066,11 @@ mod tests {
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
-    let new_reader = Reader::new(
+    let mut new_reader = Reader::new(
       reader_ing,
       dds_cache.clone(),
       Rc::new(UDPSender::new(0).unwrap()),
     );
-
-    // let mut new_reader = Reader::new(
-    //   new_guid,
-    //   send,
-    //   status_sender,
-    //   dds_cache.clone(),
-    //   "test".to_string(),
-    //   QosPolicies::qos_none(),
-    //   reader_command_receiver,
-    // );
 
     let writer_guid = GUID {
       guidPrefix: GuidPrefix::new(&[1; 12]),
@@ -1128,7 +1129,7 @@ mod tests {
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
-    let new_reader = Reader::new(
+    let mut new_reader = Reader::new(
       reader_ing,
       dds_cache.clone(),
       Rc::new(UDPSender::new(0).unwrap()),
@@ -1264,7 +1265,7 @@ mod tests {
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
-    let reader = Reader::new(
+    let mut reader = Reader::new(
       reader_ing,
       dds_cache.clone(),
       Rc::new(UDPSender::new(0).unwrap()),

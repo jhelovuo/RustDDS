@@ -11,15 +11,13 @@ use crate::serialization::submessage::SubmessageBody;
 
 use crate::dds::reader::Reader;
 use crate::structure::guid::EntityId;
-//use crate::messages::submessages::submessages::AckNack;
-use crate::messages::submessages::submessages::AckSubmessage;
 
 #[cfg(test)] use crate::dds::ddsdata::DDSData;
 #[cfg(test)] use crate::structure::cache_change::CacheChange;
 #[cfg(test)] use crate::structure::sequence_number::{SequenceNumber};
 
 use mio_extras::channel as mio_channel;
-use log::{error, debug, warn, trace, info};
+use log::{debug, warn, trace, info};
 use bytes::Bytes;
 
 use std::collections::{BTreeMap, btree_map::Entry};
@@ -36,7 +34,7 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 pub(crate) struct MessageReceiver {
   pub available_readers: BTreeMap<EntityId,Reader>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
-  acknack_to_eventloop: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
+  acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
 
   own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
@@ -54,14 +52,14 @@ pub(crate) struct MessageReceiver {
 impl MessageReceiver {
   pub fn new(
     participant_guid_prefix: GuidPrefix,
-    acknack_to_eventloop: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
+    acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
   ) -> MessageReceiver {
     // could be passed in as a parameter
     let locator_kind = LocatorKind::LOCATOR_KIND_UDPv4;
 
     MessageReceiver {
       available_readers: BTreeMap::new(),
-      acknack_to_eventloop,
+      acknack_sender,
       own_guid_prefix: participant_guid_prefix,
 
       source_version: ProtocolVersion::THIS_IMPLEMENTATION,
@@ -237,8 +235,10 @@ impl MessageReceiver {
             debug!("handle_entity_submessage DATA from unknown handling in {:?}",&reader);
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
-        } else if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
-          target_reader.handle_data_msg(data, data_flags, mr_state);
+        } else {
+          if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
+            target_reader.handle_data_msg(data, data_flags, mr_state);
+          }
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -255,12 +255,14 @@ impl MessageReceiver {
               mr_state.clone(),
             );
           }
-        } else if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
-          target_reader.handle_heartbeat_msg(
-            heartbeat,
-            flags.contains(HEARTBEAT_Flags::Final),
-            mr_state,
-          );
+        } else {
+          if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
+            target_reader.handle_heartbeat_msg(
+              heartbeat,
+              flags.contains(HEARTBEAT_Flags::Final),
+              mr_state,
+            );
+          }
         }
       }
       EntitySubmessage::Gap(gap, _flags) => {
@@ -269,28 +271,15 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::AckNack(acknack, _) => {
-        match self.acknack_to_eventloop
-            .send((self.source_guid_prefix, AckSubmessage::AckNack_Variant(acknack))) {
+        match self.acknack_sender.send((self.source_guid_prefix, 
+            AckSubmessage::AckNack_Variant(acknack))) {
           Ok(_) => (),
           Err(e) => warn!("Failed to send AckNack. {:?}", e),
         }
       }
-      EntitySubmessage::DataFrag(datafrag, datafrag_flags) => {
-        if datafrag.reader_id == EntityId::ENTITYID_UNKNOWN {
-          trace!("send_submessage DATAFRAG for unknown. writer_id = {:?}", &datafrag.writer_id);
-          for reader in self
-            .available_readers
-            .values_mut()
-            .filter(|r| r.contains_writer(datafrag.writer_id) )
-          {
-            trace!("send_submessage DATAFRAG for unknown handling in {:?}",&reader);
-            reader.handle_datafrag_msg(datafrag.clone(), datafrag_flags, mr_state.clone());
-          }
-        } else {
-          // normal case here
-          if let Some(target_reader) = self.get_reader_mut(datafrag.reader_id) {
-            target_reader.handle_datafrag_msg(datafrag, datafrag_flags, mr_state);
-          }
+      EntitySubmessage::DataFrag(datafrag, flags) => {
+        if let Some(target_reader) = self.get_reader_mut(datafrag.reader_id) {
+          target_reader.handle_datafrag_msg(datafrag, flags, mr_state, );
         }
       }
       EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
@@ -303,14 +292,13 @@ impl MessageReceiver {
           {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
-        } else if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
-          target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+        } else {
+          if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
+            target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+          }
         }
       }
-      EntitySubmessage::NackFrag(_nackfrag, _flags) => {
-        // TODO
-        error!("NackFrag handling is not implemented")
-      }
+      EntitySubmessage::NackFrag(_, _) => {}
     }
   }
 
@@ -396,6 +384,9 @@ use super::*;
     dds::writer::WriterCommand, messages::header::Header,
     dds::with_key::datareader::ReaderCommand,
   };
+  use crate::dds::reader::ReaderIngredients;
+  use crate::dds::writer::WriterIngredients;
+  use crate::network::udp_sender::UDPSender;
   use crate::dds::statusevents::DataReaderStatus;
   use crate::speedy::{Writable, Readable};
   use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
@@ -407,6 +398,7 @@ use super::*;
   use mio_extras::channel as mio_channel;
   use crate::structure::dds_cache::DDSCache;
   use std::sync::{RwLock, Arc};
+  use std::rc::Rc;
 
   use crate::structure::topic_kind::TopicKind;
   use crate::structure::guid::EntityKind;
@@ -435,9 +427,9 @@ use super::*;
       0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
     ]);
 
-    let (acknack_to_eventloop, _acknack_reciever) =
-      mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
-    let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_to_eventloop);
+    let (acknack_sender, _acknack_reciever) =
+      mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
+    let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
 
     let entity = EntityId::createCustomEntityID([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
@@ -454,15 +446,17 @@ use super::*;
       TopicKind::NoKey,
       TypeDesc::new("testi"),
     );
-    let new_reader = Reader::new(
-      new_guid,
-      send,
+    let reader_ing = ReaderIngredients {
+      guid: new_guid,
+      notification_sender: send,
       status_sender,
-      dds_cache,
-      "test".to_string(),
-      QosPolicies::qos_none(), // TODO: Check intended qos
-      reader_command_receiver,
-    );
+      topic_name: "test".to_string(),
+      qos_policy: QosPolicies::qos_none(),
+      data_reader_command_receiver: reader_command_receiver,
+    };
+
+    let new_reader = Reader::new(reader_ing, dds_cache,
+      Rc::new(UDPSender::new_with_random_port().unwrap()));
 
     // Skip for now+
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);
@@ -503,13 +497,19 @@ use super::*;
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<WriterCommand>();
     let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
 
-    let mut _writerObject = Writer::new(
-      GUID::new_with_prefix_and_id(guiPrefix, EntityId::createCustomEntityID([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
-      hccc_download,
-      Arc::new(RwLock::new(DDSCache::new())),
-      String::from("topicName1"),
-      QosPolicies::qos_none(),
+    let writer_ing = WriterIngredients {
+      guid: GUID::new_with_prefix_and_id(guiPrefix, 
+          EntityId::createCustomEntityID([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
+      writer_command_receiver: hccc_download,
+      topic_name: String::from("topicName1"),
+      qos_policies: QosPolicies::qos_none(),
       status_sender,
+    };
+
+    let mut _writerObject = Writer::new(
+      writer_ing,
+      Arc::new(RwLock::new(DDSCache::new())),
+      Rc::new(UDPSender::new_with_random_port().unwrap())
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entityId,
@@ -542,9 +542,9 @@ use super::*;
     ]);
 
     let guid_new = GUID::default();
-    let (acknack_to_eventloop, _acknack_reciever) =
-      mio_channel::sync_channel::<(GuidPrefix, AckNack)>(10);
-    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_to_eventloop);
+    let (acknack_sender, _acknack_reciever) =
+      mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
+    let mut message_receiver = MessageReceiver::new(guid_new.guidPrefix, acknack_sender);
 
     message_receiver.handle_received_packet(udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);
