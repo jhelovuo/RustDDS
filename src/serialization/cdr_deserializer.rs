@@ -815,8 +815,29 @@ mod tests {
     assert_eq!(value.test, "Toimiiko?");
   }
 
-  #[test]
 
+  #[derive(Serialize, Deserialize, Debug, PartialEq)]
+  struct InterestingMessage {
+    unboundedString: String,
+    x: i32,
+    y: i32,
+    shapesize: i32,
+    liuku: f32,
+    tuplaliuku: f64,
+    kolmeLyhytta: [u16; 3],
+    neljaLyhytta: [i16; 4],
+    totuusarvoja: Vec<bool>,
+    kolmeTavua: Vec<u8>,
+  }
+
+  #[derive(Serialize, Deserialize, Debug, PartialEq)]
+  enum BigEnum {
+    Interesting( InterestingMessage ),
+    Boring,
+    Something{ x:f32, y:f32, }
+  }
+
+  #[test]
   fn CDR_Deserialization_custom_type() {
     // IDL Definition of message:
     /*struct InterestingMessage
@@ -851,19 +872,6 @@ mod tests {
       ser_var.kolmeTavua({23,0,2});
     */
 
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct InterestingMessage {
-      unboundedString: String,
-      x: i32,
-      y: i32,
-      shapesize: i32,
-      liuku: f32,
-      tuplaliuku: f64,
-      kolmeLyhytta: [u16; 3],
-      neljaLyhytta: [i16; 4],
-      totuusarvoja: Vec<bool>,
-      kolmeTavua: Vec<u8>,
-    }
 
     let value = InterestingMessage {
       unboundedString: "Tassa on aika pitka teksti".to_string(),
@@ -896,6 +904,7 @@ mod tests {
     info!("{:?}", deserializationResult);
   }
 
+
   #[test_case(35_u8 ; "u8")]
   #[test_case(35_u16 ; "u16")]
   #[test_case(352323_u32 ; "u32")]
@@ -911,6 +920,33 @@ mod tests {
   #[test_case('a' ; "char")]
   #[test_case("BLUE".to_string() ; "string")]
   #[test_case(vec![1_i32, -2_i32, 3_i32] ; "Vec<i32>")]
+  #[test_case(InterestingMessage {
+      unboundedString: "Tässä on aika pitkä teksti".to_string(),
+      x: 2,
+      y: -3,
+      shapesize: -4,
+      liuku: 5.5,
+      tuplaliuku: -6.6,
+      kolmeLyhytta: [1, 2, 3],
+      neljaLyhytta: [1, -2, -3, 4],
+      totuusarvoja: vec![true, false, true],
+      kolmeTavua: [23, 0, 2].to_vec(),
+    } ; "InterestingMessage")]
+  #[test_case( BigEnum::Boring ; "BigEnum::Boring")]
+  #[test_case( BigEnum::Interesting(InterestingMessage {
+      unboundedString: "Tässä on aika pitkä teksti".to_string(),
+      x: 2,
+      y: -3,
+      shapesize: -4,
+      liuku: 5.5,
+      tuplaliuku: -6.6,
+      kolmeLyhytta: [1, 2, 3],
+      neljaLyhytta: [1, -2, -3, 4],
+      totuusarvoja: vec![true, false, true],
+      kolmeTavua: [23, 0, 2].to_vec(),
+    }) ; "BigEnum::Interesting")]
+  #[test_case( BigEnum::Something{ x:123.0, y:-0.1 } ; "BigEnum::Something")]
+
   fn CDR_serde_round_trip<T>(input: T) where T: PartialEq + std::fmt::Debug + Serialize + for<'a> Deserialize<'a> {
     let serialized = to_bytes::<_, LittleEndian>(&input).unwrap();
     let deserialized = deserialize_from_little_endian(&serialized).unwrap();
