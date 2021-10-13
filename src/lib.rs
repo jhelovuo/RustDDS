@@ -14,8 +14,9 @@
 //! when communicating to ROS2 components.
 //!
 
-#![deny(clippy::all)]
-#![allow(clippy::option_map_unit_fn, clippy::wrong_self_convention)]
+#![warn(clippy::all)]
+#![allow(clippy::option_map_unit_fn, clippy::wrong_self_convention, clippy::single_match, )]
+
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]

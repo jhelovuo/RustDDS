@@ -298,14 +298,14 @@ impl DomainParticipantWeak {
 
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_publisher(&self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_publisher(self, qos),
       None => Err(Error::OutOfResources),
     }
   }
 
-  pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_subscriber(&self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
       None => Err(Error::OutOfResources),
     }
   }
@@ -321,14 +321,14 @@ impl DomainParticipantWeak {
       Some(dpi) => dpi
         .lock()
         .unwrap()
-        .create_topic(&self, name, type_desc, qos, topic_kind),
+        .create_topic(self, name, type_desc, qos, topic_kind),
       None => Err(Error::LockPoisoned),
     }
   }
 
   pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().find_topic(&self, name, timeout),
+      Some(dpi) => dpi.lock().unwrap().find_topic(self, name, timeout),
       None => Err(Error::LockPoisoned),
     }
   }
@@ -355,10 +355,8 @@ impl DomainParticipantWeak {
   }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
-    match self.dpi.upgrade() {
-      Some(d) => Some(DomainParticipant { dpi: d }),
-      None => None,
-    }
+    self.dpi.upgrade()
+      .map( |d| DomainParticipant { dpi: d } )
   }
 } // end impl
 
@@ -410,10 +408,10 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_publisher(&dp, qos, self.discovery_command_channel.clone())
+      .create_publisher(dp, qos, self.discovery_command_channel.clone())
   }
 
-  pub fn create_subscriber<'a>(
+  pub fn create_subscriber(
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
@@ -422,7 +420,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_subscriber(&dp, qos, self.discovery_command_channel.clone())
+      .create_subscriber(dp, qos, self.discovery_command_channel.clone())
   }
 
   pub fn create_topic(
@@ -438,7 +436,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_topic(&dp, name, type_desc, qos, topic_kind)
+      .create_topic(dp, name, type_desc, qos, topic_kind)
   }
 
   pub fn find_topic(
@@ -447,7 +445,7 @@ impl DomainParticipant_Disc {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    self.dpi.lock().unwrap().find_topic(&dp, name, timeout)
+    self.dpi.lock().unwrap().find_topic(dp, name, timeout)
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -463,7 +461,7 @@ impl DomainParticipant_Disc {
   }
 
   pub(crate) fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    return self.dpi.lock().unwrap().get_dds_cache();
+    self.dpi.lock().unwrap().get_dds_cache()
   }
 
   pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
@@ -541,7 +539,7 @@ impl Drop for DomainParticipant_Inner {
     // ev_loop_thread anyways
     match self.stop_poll_sender.send(()) {
       Ok(_) => (),
-      _ => return (),
+      _ => return,
     };
 
     debug!("Waiting for dp_event_loop join");
@@ -773,7 +771,7 @@ impl DomainParticipant_Inner {
       domain_participant_weak,
       name.to_string(),
       TypeDesc::new(type_desc),
-      &qos,
+      qos,
       topic_kind,
     );
     Ok(topic)
@@ -867,7 +865,7 @@ impl DomainParticipant_Inner {
       Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
     };
 
-    db.get_all_topics().map(|p| p.clone()).collect()
+    db.get_all_topics().cloned().collect()
   }
 } // impl
 
