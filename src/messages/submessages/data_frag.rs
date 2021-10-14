@@ -67,23 +67,23 @@ impl<'a> DataFrag {
     let map_speedy_err = |p: Error| io::Error::new(io::ErrorKind::Other, p);
 
     let _extra_flags =
-      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let octets_to_inline_qos =
-      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let reader_id =
-      EntityId::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let writer_id =
-      EntityId::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let writer_sn =
-      SequenceNumber::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      SequenceNumber::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let fragment_starting_num =
-      FragmentNumber::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      FragmentNumber::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let fragments_in_submessage =
-      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let fragment_size =
-      u16::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let data_size =
-      u32::read_from_stream_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      u32::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
 
     let expect_qos = flags.contains(DATAFRAG_Flags::InlineQos);
     //let expect_key = flags.contains(DATAFRAG_Flags::Key);
@@ -101,7 +101,7 @@ impl<'a> DataFrag {
 
     let inline_qos = if expect_qos {
       Some(
-        ParameterList::read_from_stream_with_ctx(endianness, &mut cursor)
+        ParameterList::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
           .map_err(map_speedy_err)?,
       )
     } else {

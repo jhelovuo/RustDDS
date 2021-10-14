@@ -218,7 +218,7 @@ impl MessageReceiver {
       EntitySubmessage::Data(data, data_flags) => {
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
         if data.reader_id == EntityId::ENTITYID_UNKNOWN {
-          trace!("handle_entity_submessage DATA for unknown reader. writer_id = {:?}", &data.writer_id);
+          trace!("handle_entity_submessage DATA from unknown. writer_id = {:?}", &data.writer_id);
           for reader in self
             .available_readers
             .values_mut()
@@ -232,14 +232,13 @@ impl MessageReceiver {
                             )
                       )
           {
-            debug!("handle_entity_submessage DATA for unknown reader. Handling in {:?}",&reader);
+            debug!("handle_entity_submessage DATA from unknown handling in {:?}",&reader);
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
-        } else if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
-          target_reader.handle_data_msg(data, data_flags, mr_state);
         } else {
-          // We have no such reader present
-          debug!("DATA for reader {:?}, but it does not exist.", data.reader_id)
+          if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
+            target_reader.handle_data_msg(data, data_flags, mr_state);
+          }
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -256,14 +255,14 @@ impl MessageReceiver {
               mr_state.clone(),
             );
           }
-        } else if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
-          target_reader.handle_heartbeat_msg(
-            heartbeat,
-            flags.contains(HEARTBEAT_Flags::Final),
-            mr_state,
-          );
         } else {
-          debug!("HEARTBEAT for reader {:?}, but it does not exist.", heartbeat.reader_id)
+          if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
+            target_reader.handle_heartbeat_msg(
+              heartbeat,
+              flags.contains(HEARTBEAT_Flags::Final),
+              mr_state,
+            );
+          }
         }
       }
       EntitySubmessage::Gap(gap, _flags) => {
@@ -293,10 +292,10 @@ impl MessageReceiver {
           {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
-        } else if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
-          target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state); 
         } else {
-          debug!("HEARTBEATFRAG for reader {:?}, but it does not exist.", heartbeatfrag.reader_id)
+          if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
+            target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+          }
         }
       }
       EntitySubmessage::NackFrag(_, _) => {}
@@ -389,21 +388,22 @@ use super::*;
   use crate::dds::writer::WriterIngredients;
   use crate::network::udp_sender::UDPSender;
   use crate::dds::statusevents::DataReaderStatus;
-  use crate::speedy::{Writable, Readable};
   use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
   use crate::serialization::cdr_serializer::to_bytes;
-  use byteorder::LittleEndian;
-  use log::info;
-  use serde::{Serialize, Deserialize};
   use crate::dds::writer::Writer;
-  use mio_extras::channel as mio_channel;
   use crate::structure::dds_cache::DDSCache;
-  use std::sync::{RwLock, Arc};
-  use std::rc::Rc;
-
   use crate::structure::topic_kind::TopicKind;
   use crate::structure::guid::EntityKind;
   use crate::dds::{qos::QosPolicies, typedesc::TypeDesc};
+
+  use speedy::{Writable, Readable};
+  use byteorder::LittleEndian;
+  use log::info;
+  use serde::{Serialize, Deserialize};
+  use mio_extras::channel as mio_channel;
+  use std::sync::{RwLock, Arc};
+  use std::rc::Rc;
+
 
   #[test]
 

@@ -483,7 +483,7 @@ mod tests {
   use log::info;
 
   use super::*;
-  use crate::speedy::{Writable};
+  use speedy::{Writable};
 
   #[test]
 
