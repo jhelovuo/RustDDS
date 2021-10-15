@@ -501,6 +501,6 @@ mod tests {
     let res = data_writer
       .wait_for_acknowledgments(Duration::from_secs(2))
       .unwrap();
-    assert_eq!(res, true); // no "Reliable" QoS policy => "succeeds" immediately 
+    assert!(res); // no "Reliable" QoS policy => "succeeds" immediately
   }
 }

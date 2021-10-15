@@ -18,6 +18,7 @@ use std::io;
 /// The fragments contained in the DataFrag Submessages are then re-assembled by
 /// the RTPS Reader.
 #[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(test, derive(Default))]
 pub struct DataFrag {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.
@@ -123,23 +124,6 @@ impl<'a> DataFrag {
       inline_qos,
       serialized_payload,
     })
-  }
-}
-
-#[cfg(test)]
-impl Default for DataFrag {
-  fn default() -> Self {
-    DataFrag {
-      reader_id: EntityId::default(),
-      writer_id: EntityId::default(),
-      writer_sn: SequenceNumber::default(),
-      fragment_starting_num: FragmentNumber::default(),
-      fragments_in_submessage: 0,
-      data_size: 0,
-      fragment_size: 0,
-      inline_qos: None,
-      serialized_payload: SerializedPayload::default(),
-    }
   }
 }
 

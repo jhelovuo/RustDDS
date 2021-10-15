@@ -73,7 +73,7 @@ impl TurtleListener {
 
       for event in events.iter() {
         if event.token() == TurtleListener::THREAD_CONTROL_TOKEN {
-          while let Ok(ctrl) = tc_receiver.try_recv() {
+          if let Ok(ctrl) = tc_receiver.try_recv() {
             match ctrl {
               ThreadControl::Stop => {
                 info!("Stopping TurtleListener");

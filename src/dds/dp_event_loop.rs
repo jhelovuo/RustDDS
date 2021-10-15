@@ -770,7 +770,7 @@ mod tests {
     }
 
     info!("\npoistetaan toka\n");
-    let some_guid = reader_guids[1].clone();
+    let some_guid = reader_guids[1];
     sender_remove_reader.send(some_guid).unwrap();
     std::thread::sleep(Duration::new(0, 100));
 

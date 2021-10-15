@@ -1404,7 +1404,7 @@ mod tests {
       match &mut submsg.body {
         SubmessageBody::Interpreter(v) => match v {
           InterpreterSubmessage::InfoDestination(dst, _flags) => {
-            dst.guid_prefix = participant.get_guid_prefix().clone();
+            dst.guid_prefix = participant.get_guid_prefix();
           }
           _ => continue,
         },

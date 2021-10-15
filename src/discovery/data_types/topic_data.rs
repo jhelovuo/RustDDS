@@ -944,7 +944,7 @@ mod tests {
   fn td_discovered_reader_data_ser_deser() {
     let mut reader_proxy = reader_proxy_data().unwrap();
     let sub_topic_data = subscription_builtin_topic_data().unwrap();
-    reader_proxy.remote_reader_guid = sub_topic_data.key.clone();
+    reader_proxy.remote_reader_guid = sub_topic_data.key;
     let content_filter = content_filter_data().unwrap();
 
     let drd = DiscoveredReaderData {
@@ -989,7 +989,7 @@ mod tests {
   fn td_discovered_writer_data_ser_deser() {
     let mut writer_proxy = writer_proxy_data().unwrap();
     let pub_topic_data = publication_builtin_topic_data().unwrap();
-    writer_proxy.remote_writer_guid = pub_topic_data.key.clone();
+    writer_proxy.remote_writer_guid = pub_topic_data.key;
 
     let dwd = DiscoveredWriterData {
       last_updated: Instant::now(),

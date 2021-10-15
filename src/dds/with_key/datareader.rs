@@ -1228,7 +1228,7 @@ mod tests {
       guid: reader_guid,
       notification_sender: send,
       status_sender,
-      topic_name: topic.get_name().to_string(),
+      topic_name: topic.get_name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
@@ -1252,27 +1252,35 @@ mod tests {
       guidPrefix: GuidPrefix::new(&[1; 12]),
       entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.guidPrefix,
+      ..Default::default()
+    };
 
     new_reader.matched_writer_add(
-      writer_guid.clone(),
+      writer_guid,
       EntityId::ENTITYID_UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
 
-    let mut data = Data::default();
-    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
-    data.writer_id = writer_guid.entityId;
-    data.writer_sn = SequenceNumber::from(0);
-    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
-
-    data.serialized_payload = Some(SerializedPayload {
+    let serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data).unwrap()), /* TODO: Can RandomData be transformed to bytes directly? */
     });
+
+    let data = Data {
+      reader_id: EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111)),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(0),
+      serialized_payload,
+      ..Default::default()
+    };
+
+    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
+
     new_reader.handle_data_msg(data, data_flags, mr_state.clone());
 
     matching_datareader.fill_local_datasample_cache();
@@ -1288,31 +1296,39 @@ mod tests {
       a: 1,
       b: "somedata number 2".to_string(),
     };
-    let mut data2 = Data::default();
-    data2.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
-    data2.writer_id = writer_guid.entityId;
-    data2.writer_sn = SequenceNumber::from(1);
 
-    data2.serialized_payload = Some(SerializedPayload {
+    let serialized_payload2 = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap()),
     });
 
+    let data2 = Data {
+      reader_id: EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111)),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(1),
+      serialized_payload: serialized_payload2,
+      ..Default::default()
+    };
+
     let random_data3 = RandomData {
       a: 1,
       b: "third somedata".to_string(),
     };
-    let mut data3 = Data::default();
-    data3.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
-    data3.writer_id = writer_guid.entityId;
-    data3.writer_sn = SequenceNumber::from(2);
 
-    data3.serialized_payload = Some(SerializedPayload {
+    let serialized_payload3 = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap()),
     });
+
+    let data3 = Data {
+      reader_id: EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111)),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(2),
+      serialized_payload: serialized_payload3,
+      ..Default::default()
+    };
 
     new_reader.handle_data_msg(data2, data_flags, mr_state.clone());
     new_reader.handle_data_msg(data3, data_flags, mr_state);
@@ -1349,7 +1365,7 @@ mod tests {
       guid: reader_guid,
       notification_sender: send,
       status_sender,
-      topic_name: topic.get_name().to_string(),
+      topic_name: topic.get_name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
@@ -1368,10 +1384,14 @@ mod tests {
       guidPrefix: GuidPrefix::new(&[1; 12]),
       entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.guidPrefix,
+      ..Default::default()
+    };
+
     reader.matched_writer_add(
-      writer_guid.clone(),
+      writer_guid,
       EntityId::ENTITYID_UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
@@ -1388,28 +1408,36 @@ mod tests {
       b: ":)))".to_string(),
     };
 
-    let mut data_msg = Data::default();
-    data_msg.reader_id = reader.get_entity_id();
-    data_msg.writer_id = writer_guid.entityId;
-    data_msg.writer_sn = SequenceNumber::from(0);
-    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
-
-    data_msg.serialized_payload = Some(SerializedPayload {
+    let serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data).unwrap()),
     });
 
-    let mut data_msg2 = Data::default();
-    data_msg2.reader_id = reader.get_entity_id();
-    data_msg2.writer_id = writer_guid.entityId;
-    data_msg2.writer_sn = SequenceNumber::from(1);
+    let data_msg = Data {
+      reader_id: reader.get_entity_id(),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(0),
+      serialized_payload,
+      ..Default::default()
+    };
 
-    data_msg2.serialized_payload = Some(SerializedPayload {
+    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
+    
+    let serialized_payload2 = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
     });
+
+    let data_msg2 = Data {
+      reader_id: reader.get_entity_id(),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(1),
+      serialized_payload: serialized_payload2,
+      ..Default::default()
+    };
+      
     reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
     reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
 
@@ -1470,50 +1498,66 @@ mod tests {
     assert!(data_key2_1.get_key() == data_key2_2.get_key());
     assert!(data_key2_3.get_key() == key2);
 
-    let mut data_msg = Data::default();
-    data_msg.reader_id = reader.get_entity_id();
-    data_msg.writer_id = writer_guid.entityId;
-    data_msg.writer_sn = SequenceNumber::from(2);
-
-    data_msg.serialized_payload = Some(SerializedPayload {
+    let serialized_payload = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
     });
-    let mut data_msg2 = Data::default();
-    data_msg2.reader_id = reader.get_entity_id();
-    data_msg2.writer_id = writer_guid.entityId;
-    data_msg2.writer_sn = SequenceNumber::from(3);
 
-    data_msg2.serialized_payload = Some(SerializedPayload {
+    let data_msg = Data {
+      reader_id: reader.get_entity_id(),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(2),
+      serialized_payload,
+      ..Default::default()
+    };
+
+    let serialized_payload2 = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
     });
-    let mut data_msg3 = Data::default();
-    data_msg3.reader_id = reader.get_entity_id();
-    data_msg3.writer_id = writer_guid.entityId;
-    data_msg3.writer_sn = SequenceNumber::from(4);
 
-    data_msg3.serialized_payload = Some(SerializedPayload {
+    let data_msg2 = Data {
+      reader_id: reader.get_entity_id(),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(3),
+      serialized_payload: serialized_payload2,
+      ..Default::default()
+    };
+
+    let serialized_payload3 = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
     });
-    let mut data_msg4 = Data::default();
-    data_msg4.reader_id = reader.get_entity_id();
-    data_msg4.writer_id = writer_guid.entityId;
-    data_msg4.writer_sn = SequenceNumber::from(5);
 
-    data_msg4.serialized_payload = Some(SerializedPayload {
+    let data_msg3 = Data {
+      reader_id: reader.get_entity_id(),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(4),
+      serialized_payload: serialized_payload3,
+      ..Default::default()
+    };
+
+    let serialized_payload4 = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
     });
+
+    let data_msg4 = Data {
+      reader_id: reader.get_entity_id(),
+      writer_id: writer_guid.entityId,
+      writer_sn: SequenceNumber::from(5),
+      serialized_payload: serialized_payload4,
+      ..Default::default()
+    };
+
     reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
     reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
     reader.handle_data_msg(data_msg3, data_flags, mr_state.clone());
-    reader.handle_data_msg(data_msg4, data_flags, mr_state.clone());
+    reader.handle_data_msg(data_msg4, data_flags, mr_state);
 
     info!("calling read with key 1 and this");
     let results =

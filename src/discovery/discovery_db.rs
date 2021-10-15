@@ -483,7 +483,7 @@ impl DiscoveryDB {
     &'a self,
     topic: &'a T,
   ) -> Vec<&DiscoveredReaderData> {
-    let topic_name = String::from(topic.get_name());
+    let topic_name = topic.get_name();
     self
       .local_topic_readers
       .iter()
@@ -544,7 +544,7 @@ mod tests {
 
     std::thread::sleep(StdDuration::from_secs(2));
     discoverydb.participant_cleanup();
-    assert!(discoverydb.participant_proxies.len() == 0);
+    assert!(discoverydb.participant_proxies.is_empty());
 
     // TODO: more operations tests
   }
@@ -592,7 +592,7 @@ mod tests {
 
     let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
 
-    let _writer_key = writer_data.writer_proxy.remote_writer_guid.clone();
+    let _writer_key = writer_data.writer_proxy.remote_writer_guid;
     discovery_db.update_local_topic_writer(writer_data);
     assert_eq!(discovery_db.local_topic_writers.len(), 1);
 
@@ -605,10 +605,7 @@ mod tests {
       )
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
-    let _writer2_key = writer_data2
-      .writer_proxy
-      .remote_writer_guid
-      .clone();
+    let _writer2_key = writer_data2.writer_proxy.remote_writer_guid;
     discovery_db.update_local_topic_writer(writer_data2);
     assert_eq!(discovery_db.local_topic_writers.len(), 2);
 
@@ -635,7 +632,7 @@ mod tests {
     };
     discovery_db.update_subscription(&dreader2);
 
-    let reader3 = reader1.clone();
+    let reader3 = reader1;
     let reader3sub = reader1sub.clone();
     let dreader3 = DiscoveredReaderData {
       reader_proxy: reader3,
@@ -671,7 +668,7 @@ mod tests {
       guid: GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
       notification_sender: notification_sender.clone(),
       status_sender: status_sender.clone(),
-      topic_name: topic.get_name().to_string(),
+      topic_name: topic.get_name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver1,
     };
@@ -692,13 +689,16 @@ mod tests {
     );
 
     let reader_ing = ReaderIngredients {
-      guid: GUID::new_with_prefix_and_id(GuidPrefix::new(b"Another fake"), EntityId {
-        entityKey: [1, 2, 3],
-        entityKind: EntityKind::READER_NO_KEY_USER_DEFINED
-      }), // GUID needs to be different in order to be added
-      notification_sender: notification_sender.clone(),
-      status_sender: status_sender.clone(),
-      topic_name: topic.get_name().to_string(),
+      guid: GUID::new_with_prefix_and_id(
+        GuidPrefix::new(b"Another fake"),
+        EntityId {
+          entityKey: [1, 2, 3],
+          entityKind: EntityKind::READER_NO_KEY_USER_DEFINED,
+        },
+      ), // GUID needs to be different in order to be added
+      notification_sender,
+      status_sender,
+      topic_name: topic.get_name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
     };

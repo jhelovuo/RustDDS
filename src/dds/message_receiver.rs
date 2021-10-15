@@ -236,10 +236,8 @@ impl MessageReceiver {
             debug!("handle_entity_submessage DATA from unknown handling in {:?}",&reader);
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
-        } else {
-          if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
-            target_reader.handle_data_msg(data, data_flags, mr_state);
-          }
+        } else if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
+          target_reader.handle_data_msg(data, data_flags, mr_state);
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -256,14 +254,12 @@ impl MessageReceiver {
               mr_state.clone(),
             );
           }
-        } else {
-          if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
-            target_reader.handle_heartbeat_msg(
-              heartbeat,
-              flags.contains(HEARTBEAT_Flags::Final),
-              mr_state,
-            );
-          }
+        } else if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
+          target_reader.handle_heartbeat_msg(
+            heartbeat,
+            flags.contains(HEARTBEAT_Flags::Final),
+            mr_state,
+          );
         }
       }
       EntitySubmessage::Gap(gap, _flags) => {
@@ -297,10 +293,8 @@ impl MessageReceiver {
           {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
-        } else {
-          if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
-            target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
-          }
+        } else if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
+          target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
         }
       }
       EntitySubmessage::NackFrag(_, _) => {}
@@ -469,7 +463,7 @@ use super::*;
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);
     message_receiver.add_reader(new_reader);
 
-    message_receiver.handle_received_packet(udp_bits1.clone());
+    message_receiver.handle_received_packet(udp_bits1);
 
     assert_eq!(message_receiver.submessage_count, 4);
 

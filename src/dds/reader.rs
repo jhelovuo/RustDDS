@@ -158,15 +158,12 @@ impl Reader {
     let dds_cache = self.dds_cache.read().unwrap();
     let cc = dds_cache.from_topic_get_change(
       &self.topic_name,
-      &self.seqnum_instant_map.get(&sequence_number).unwrap(),
+      self.seqnum_instant_map.get(&sequence_number).unwrap(),
     );
 
     debug!("history cache !!!! {:?}", cc);
 
-    match cc {
-      Some(cc) => Some(cc.data_value.clone()) , //  Some(DDSData::new(cc.data_value.as_ref().unwrap().clone())),
-      None => None,
-    }
+    cc.map(|cc| cc.data_value.clone())
   }
 
   /// To know when token represents a reader we should look entity attribute kind
@@ -303,13 +300,10 @@ impl Reader {
     let dds_cache = self.dds_cache.read().unwrap();
     let cc = dds_cache.from_topic_get_change(
       &self.topic_name,
-      &self.seqnum_instant_map.get(&sequence_number).unwrap(),
+      self.seqnum_instant_map.get(&sequence_number).unwrap(),
     );
     debug!("history cache !!!! {:?}", cc);
-    match cc {
-      Some(cc) => Some(cc.clone()),
-      None => None,
-    }
+    cc.cloned()
   }
 
   // TODO Used for test/debugging purposes
@@ -1011,7 +1005,7 @@ mod tests {
     let reader_ing = ReaderIngredients {
       guid,
       notification_sender: send,
-      status_sender: status_sender,
+      status_sender,
       topic_name: "test".to_string(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
@@ -1028,19 +1022,23 @@ mod tests {
       entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
 
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.guidPrefix,
+      ..Default::default()
+    };
 
     reader.matched_writer_add(
-      writer_guid.clone(),
+      writer_guid,
       EntityId::ENTITYID_UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
 
-    let mut data = Data::default();
-    data.reader_id = EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111));
-    data.writer_id = writer_guid.entityId;
+    let data = Data {
+      reader_id: EntityId::createCustomEntityID([1, 2, 3], EntityKind::from(111)),
+      writer_id: writer_guid.entityId,
+      ..Default::default()
+    };
 
     reader.handle_data_msg(data, BitFlags::<DATA_Flags>::empty(), mr_state);
 
@@ -1066,7 +1064,7 @@ mod tests {
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
-      status_sender: status_sender,
+      status_sender,
       topic_name: "test".to_string(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
@@ -1083,18 +1081,23 @@ mod tests {
       entityId: EntityId::createCustomEntityID([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
 
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.guidPrefix,
+      ..Default::default()
+    };
 
     new_reader.matched_writer_add(
-      writer_guid.clone(),
+      writer_guid,
       EntityId::ENTITYID_UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
 
-    let mut d = Data::default();
-    d.writer_id = writer_guid.entityId;
+    let d = Data {
+      writer_id: writer_guid.entityId,
+      ..Default::default()
+    };
+
     let d_seqnum = d.writer_sn;
     new_reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), mr_state);
 
@@ -1103,7 +1106,7 @@ mod tests {
     let hc_locked = dds_cache.read().unwrap();
     let cc_from_chache = hc_locked.from_topic_get_change(
       &new_reader.topic_name,
-      &new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
+      new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
     );
 
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
@@ -1130,14 +1133,14 @@ mod tests {
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
-      status_sender: status_sender,
+      status_sender,
       topic_name: "test".to_string(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
     let mut new_reader = Reader::new(
       reader_ing,
-      dds_cache.clone(),
+      dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1149,11 +1152,13 @@ mod tests {
 
     let writer_id = writer_guid.entityId;
 
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    let mr_state = MessageReceiverState {
+        source_guid_prefix: writer_guid.guidPrefix,
+        ..Default::default()
+    };
 
     new_reader.matched_writer_add(
-      writer_guid.clone(),
+      writer_guid,
       EntityId::ENTITYID_UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
@@ -1270,14 +1275,14 @@ mod tests {
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
-      status_sender: status_sender,
+      status_sender,
       topic_name: "test".to_string(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
     let mut reader = Reader::new(
       reader_ing,
-      dds_cache.clone(),
+      dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1289,19 +1294,23 @@ mod tests {
     };
     let writer_id = writer_guid.entityId;
 
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guidPrefix;
+    let mr_state = MessageReceiverState {
+        source_guid_prefix: writer_guid.guidPrefix,
+        ..Default::default()
+    };
 
     reader.matched_writer_add(
-      writer_guid.clone(),
+      writer_guid,
       EntityId::ENTITYID_UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
 
     let n: i64 = 10;
-    let mut d = Data::default();
-    d.writer_id = writer_id;
+    let mut d = Data {
+      writer_id,
+      ..Default::default()
+    };
     let mut changes = Vec::new();
 
     for i in 0..n {
