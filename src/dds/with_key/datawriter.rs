@@ -1001,6 +1001,7 @@ mod tests {
     let res = data_writer
       .wait_for_acknowledgments(Duration::from_secs(2))
       .unwrap();
-    assert_eq!(res, true); // we should get "true" immediately, because we have no Reliable QoS 
+    assert!(res) // we should get "true" immediately, because we have
+                           // no Reliable QoS
   }
 }

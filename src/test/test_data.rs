@@ -120,22 +120,19 @@ use crate::messages::submessages::submessages::*;
 pub(crate) fn spdp_participant_msg() -> Message {
   let data = spdp_participant_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer(data).unwrap();
-  rtpsmsg
+  Message::read_from_buffer(data).unwrap()
 }
 
 pub(crate) fn spdp_subscription_msg() -> Message {
   let data = spdp_subscription_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer(data).unwrap();
-  rtpsmsg
+  Message::read_from_buffer(data).unwrap()
 }
 
 pub(crate) fn spdp_publication_msg() -> Message {
   let data = spdp_publication_data_raw();
 
-  let rtpsmsg = Message::read_from_buffer(data).unwrap();
-  rtpsmsg
+  Message::read_from_buffer(data).unwrap()
 }
 
 pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
@@ -366,7 +363,7 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
   let serialized_payload = SerializedPayload {
     representation_identifier: RepresentationIdentifier::PL_CDR_LE,
     representation_options: [0; 2],
-    value: tdata.clone(),
+    value: tdata,
   };
   let data_message = Data {
     reader_id,

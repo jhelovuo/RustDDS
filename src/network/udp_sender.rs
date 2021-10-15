@@ -100,7 +100,7 @@ impl UDPSender {
   }
 
   #[cfg(test)]
-  pub fn send_to_all(&self, buffer: &[u8], addresses: &Vec<SocketAddr>) {
+  pub fn send_to_all(&self, buffer: &[u8], addresses: &[SocketAddr]) {
     for address in addresses.iter() {
       match self.unicast_socket.send_to(buffer, address) {
         Ok(_) => (),
@@ -115,7 +115,7 @@ impl UDPSender {
       let address = SocketAddr::new(IpAddr::V4(address), port);
       let mut size = 0;
       for s in self.multicast_sockets {
-        size = s.send_to(buffer, &SocketAddr::from(address))?;
+        size = s.send_to(buffer, &address)?;
       }
       Ok(size) 
       
