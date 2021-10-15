@@ -545,7 +545,9 @@ impl Reader {
               .flatten().flatten() {
             Some(h) => Ok(h),
             None => {
-              warn!("Received DATA that has no payload and no key_hash inline QoS - discarding");
+              info!("Received DATA that has no payload and no key_hash inline QoS - discarding");
+              // Note: This case is normal when handling coherent sets.
+              // The coherent set end marker is sent as DATA with no payload and not key, only Inline QoS.
               Err("DATA with no contents".to_string())
             }
           }?;
