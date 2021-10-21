@@ -146,8 +146,9 @@ where
         guid: self.get_guid(),
       }) {
       Ok(_) => {}
-      Err(e) => error!(
-        "Failed to send REMOVE_LOCAL_READER DiscoveryCommand. {:?}",
+      Err(mio_channel::SendError::Disconnected(_) ) =>
+        debug!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. Maybe shutting down?"),
+      Err(e) => error!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. {:?}",
         e
       ),
     }

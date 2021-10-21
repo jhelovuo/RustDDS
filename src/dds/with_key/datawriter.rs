@@ -8,7 +8,9 @@ use mio::{Poll, Events, Token, Ready, PollOpt, Evented};
 use mio_extras::channel::{self as mio_channel, Receiver, SendError,};
 
 use serde::Serialize;
-use log::{info, error, warn};
+
+#[allow(unused_imports)]
+use log::{error,warn,debug,trace,info};
 
 use crate::{
   discovery::discovery::DiscoveryCommand, serialization::CDRSerializerAdapter,
@@ -109,7 +111,7 @@ where
       Ok(_) => {}
 
       // This is fairly normal at shutdown, as the other end is down already.
-      Err(SendError::Disconnected(_cmd)) => info!(
+      Err(SendError::Disconnected(_cmd)) => debug!(
         "Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand: Disconnected." ),
       // other errors must be taken more seriously
       Err(e) => 
