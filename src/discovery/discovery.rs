@@ -526,6 +526,7 @@ impl Discovery {
                     SPDPDiscoveredParticipantData_Key(self.domain_participant.get_guid()), 
                     None)
                     .unwrap_or(());
+                  info!("Stopped Discovery");
                   return  // terminate event loop
                 }
                 DiscoveryCommand::REMOVE_LOCAL_WRITER { guid } => {

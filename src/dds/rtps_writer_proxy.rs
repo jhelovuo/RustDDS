@@ -16,6 +16,9 @@ use std::collections::BTreeMap;
 use enumflags2::BitFlags;
 use std::cmp::max;
 
+#[allow(unused_imports)]
+use log::{error,warn,debug,trace,info};
+
 #[derive(Debug)] // these are not cloneable, because contined data may be large
 pub(crate) struct RtpsWriterProxy {
   /// Identifies the remote matched Writer
@@ -79,9 +82,8 @@ impl RtpsWriterProxy {
     self.remote_group_entity_id = other.remote_group_entity_id;
   }
 
-  // TODO: This is quite inefficient
   pub fn last_change_timestamp(&self) -> Option<Timestamp> {
-    self.changes.values().max().copied()
+    self.changes.values().next_back().copied()
   }
 
   pub fn no_changes(&self) -> bool {
@@ -95,12 +97,22 @@ impl RtpsWriterProxy {
   ) -> Vec<SequenceNumber> {
     let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
 
-    for msq in SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)  {
-      if !self.changes.contains_key(&msq) && msq >= SequenceNumber::default() {
-        missing_seqnums.push(msq)
+    let mut we_have = self.changes
+        .range(SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn))
+        .map(|e| *e.0 );
+    let mut have_head = we_have.next();
+
+    for s in SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)  {
+      match have_head {
+        None => missing_seqnums.push(s),
+        Some(have_sn) =>
+          if have_sn == s {
+            have_head = we_have.next();
+          } else {
+            missing_seqnums.push(s);
+          }
       }
     }
-
     missing_seqnums
   }
 
@@ -112,10 +124,12 @@ impl RtpsWriterProxy {
     if hb_last_sn < hb_first_sn { // This means writer has nothing to send
       return false
     }
-    for s in SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)  {
-      if !self.changes.contains_key(&s) { return true }
-    }
-    false
+
+    let we_have = self.changes
+      .range(SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn))
+      .map(|e| *e.0 );
+    SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)
+      .ne(we_have)
   }
 
   pub fn contains_change(&self, seqnum: SequenceNumber) -> bool {

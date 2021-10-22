@@ -4,6 +4,9 @@ use std::hash::Hash;
 //use crate::messages::fragment_number::FragmentNumber;
 use std::collections::BTreeSet;
 use std::cmp::{min,Ord,PartialOrd};
+use std::ops::Bound;
+use std::ops::RangeBounds;
+
 use num_derive::{FromPrimitive, NumOps, ToPrimitive};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::{convert::From};
@@ -90,6 +93,16 @@ impl Iterator for SequenceNumberRange {
       self.begin = b + SequenceNumber::new(1);
       Some(b)
     }
+  }
+}
+
+impl RangeBounds<SequenceNumber> for SequenceNumberRange
+{
+  fn start_bound(&self) -> Bound<&SequenceNumber> {
+    Bound::Included(&self.begin)
+  }
+  fn end_bound(&self) -> Bound<&SequenceNumber> {
+    Bound::Included(&self.end)
   }
 }
 
