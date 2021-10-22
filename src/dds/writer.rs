@@ -356,7 +356,7 @@ impl Writer {
           // 2. Send out data. 
           //    If we are pushing data, send the DATA submessage and HEARTBEAT.
           //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the DATA with ACKNACK.
-          let timestamp = self.insert_to_history_cache(data);
+          let timestamp = self.insert_to_history_cache(data, source_timestamp);
 
           self.increase_heartbeat_counter();
 
@@ -419,7 +419,7 @@ impl Writer {
     }
   }
 
-  fn insert_to_history_cache(&mut self, data: DDSData) -> Timestamp {
+  fn insert_to_history_cache(&mut self, data: DDSData, source_timestamp: Option<Timestamp>) -> Timestamp {
     // first increasing last SequenceNumber
     let new_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
     self.last_change_sequence_number = new_sequence_number;
@@ -444,11 +444,12 @@ impl Writer {
     let new_cache_change = CacheChange::new(
       self.get_guid(),
       self.last_change_sequence_number,
+      source_timestamp,
       data,
     );
-    //let data_key = new_cache_change.key;
 
     // inserting to DDSCache
+    // timestamp taken here is used as a unique(!) key in the DDSCache.
     let timestamp = Timestamp::now();
     self.dds_cache.write().unwrap().to_topic_add_change(
       &self.my_topic_name,

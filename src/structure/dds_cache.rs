@@ -305,6 +305,7 @@ mod tests {
     let change1 = CacheChange::new(
       GUID::GUID_UNKNOWN,
       SequenceNumber::from(1),
+      None,
       DDSData::new(SerializedPayload::default()),
     );
     cache.write().unwrap().add_new_topic(
@@ -324,6 +325,7 @@ mod tests {
       let cahange2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(1),
+        None,
         DDSData::new(SerializedPayload::default()),
       );
       pointerToCache1.write().unwrap().to_topic_add_change(
@@ -334,6 +336,7 @@ mod tests {
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(2),
+        None,
         DDSData::new(SerializedPayload::default()),
       );
       pointerToCache1.write().unwrap().to_topic_add_change(

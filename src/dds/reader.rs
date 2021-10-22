@@ -444,7 +444,8 @@ impl Reader {
 
     match Self::data_to_ddsdata(data,data_flags) {
       Ok(ddsdata) => {
-        self.process_received_data(ddsdata, receive_timestamp, writer_guid, writer_seq_num)    
+        self.process_received_data(ddsdata, receive_timestamp, mr_state.timestamp, 
+          writer_guid, writer_seq_num)    
       }
       Err(e) => debug!("Parsing DATA to DDSData failed: {}",e),
     }
@@ -471,7 +472,8 @@ impl Reader {
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
     if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
       if let Some(complete_ddsdata) = writer_proxy.handle_datafrag(datafrag, datafrag_flags) {
-        self.process_received_data(complete_ddsdata, receive_timestamp, writer_guid, writer_seq_num );  
+        // Source timestamp (if any) will be the timestamp of the last fragment (that completes the sample).
+        self.process_received_data(complete_ddsdata, receive_timestamp, mr_state.timestamp, writer_guid, writer_seq_num );  
       } else {
         // not yet complete, nothing more to do
       }
@@ -481,7 +483,10 @@ impl Reader {
   }
 
   // common parts of processing DATA or a completed DATAFRAG (when all frags are received)
-  fn process_received_data(&mut self, ddsdata:DDSData, receive_timestamp: Timestamp, writer_guid:GUID, writer_sn: SequenceNumber) {
+  fn process_received_data(&mut self, ddsdata:DDSData, receive_timestamp: Timestamp,
+      source_timestamp: Option<Timestamp>, 
+      writer_guid:GUID, writer_sn: SequenceNumber) 
+  {
     trace!("handle_data_msg from {:?} seq={:?} topic={:?} stateful={:?}", 
         &writer_guid, writer_sn, self.topic_name, self.is_stateful,);
     if self.is_stateful {
@@ -510,7 +515,7 @@ impl Reader {
       todo!()
     }
 
-    self.make_cache_change(ddsdata, receive_timestamp, writer_guid, writer_sn);
+    self.make_cache_change(ddsdata, receive_timestamp, source_timestamp, writer_guid, writer_sn);
 
     // Add to own track-keeping datastructure
     #[cfg(test)]
@@ -811,11 +816,12 @@ impl Reader {
     &mut self,
     data: DDSData,
     receive_timestamp: Timestamp,
+    source_timestamp: Option<Timestamp>,
     writer_guid: GUID,
     writer_sn: SequenceNumber,
   ) {
 
-    let cache_change = CacheChange::new(writer_guid, writer_sn, data);
+    let cache_change = CacheChange::new(writer_guid, writer_sn, source_timestamp, data);
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
@@ -1103,7 +1109,7 @@ mod tests {
     );
 
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
-    let cc_built_here = CacheChange::new( writer_guid, d_seqnum, ddsdata );
+    let cc_built_here = CacheChange::new( writer_guid, d_seqnum, None, ddsdata );
 
     assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
   }
@@ -1179,6 +1185,7 @@ mod tests {
     let change = CacheChange::new(
       new_reader.get_guid(),
       SequenceNumber::from(1),
+      None,
       d.clone(),
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
@@ -1211,6 +1218,7 @@ mod tests {
     let change = CacheChange::new(
       new_reader.get_guid(),
       SequenceNumber::from(2),
+      None,
       d.clone(),
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
@@ -1223,6 +1231,7 @@ mod tests {
     let change = CacheChange::new(
       new_reader.get_guid(),
       SequenceNumber::from(3),
+      None,
       d,
     );
     new_reader.dds_cache.write().unwrap().to_topic_add_change(
