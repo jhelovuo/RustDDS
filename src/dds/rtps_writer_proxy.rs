@@ -44,9 +44,9 @@ pub(crate) struct RtpsWriterProxy {
   pub sent_ack_nack_count: i32,
 
   ack_base : SequenceNumber, // We can ACK everything before this number.
-  // ack_base can be increased from N-1 to N, ifwe receive SequenceNumber N-1
-  // heartbeat(first,last) => ack_base can be increased to first
-  // gap is treated like receiving message
+  // ack_base can be increased from N-1 to N, if we receive DATA with SequenceNumber N-1
+  // heartbeat(first,last) => ack_base can be increased to first.
+  // GAP is treated like receiving a message.
   
   //pub qos : QosPolicies,
   fragment_assembler: Option<FragmentAssembler>,
