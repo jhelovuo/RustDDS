@@ -69,6 +69,9 @@ impl Timestamp {
   pub fn duration_since(&self, since: Timestamp) -> Duration {
     *self - since
   }
+  pub fn sub_duration(&self, duration: Duration) -> Timestamp {
+    *self - duration
+  }
 }
 
 impl Sub for Timestamp {
