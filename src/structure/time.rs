@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 use serde::{Serialize, Deserialize};
-use std::ops::Sub;
+use std::ops::{Add,Sub};
 
 use super::duration::Duration;
 
@@ -92,6 +92,17 @@ impl Sub<Duration> for Timestamp {
 
     Timestamp::from_ticks(lhs_ticks - rhs_ticks)
   }
+}
+
+impl Add<Duration> for Timestamp {
+  type Output = Timestamp;
+
+  fn add(self, rhs: Duration) -> Self::Output {
+    let lhs_ticks = self.to_ticks();
+    let rhs_ticks = rhs.to_ticks() as u64;
+
+    Timestamp::from_ticks(lhs_ticks + rhs_ticks)
+  }  
 }
 
 #[cfg(test)]
