@@ -1,6 +1,6 @@
 use crate::{
-  common::timed_event_handler::TimedEventHandler,
-  network::constant::TimerMessageType,
+  //common::timed_event_handler::TimedEventHandler,
+  //network::constant::TimerMessageType,
   structure::{cache_change::ChangeKind, entity::RTPSEntity},
 };
 use crate::structure::endpoint::{Endpoint, EndpointAttributes};
@@ -24,6 +24,7 @@ use crate::structure::dds_cache::{DDSCache};
 //use std::time::Instant;
 
 use mio::Token;
+use mio_extras::timer::Timer;
 use mio_extras::channel as mio_channel;
 use log::{debug, info, warn, trace, error};
 use std::fmt;
@@ -45,13 +46,18 @@ use crate::messages::vendor_id::VendorId;
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 
 use speedy::{Writable, Endianness};
-use chrono::Duration as chronoDuration;
+//use chrono::Duration as chronoDuration;
 
 use super::{
   with_key::datareader::ReaderCommand,
 };
 
 use super::qos::InlineQos;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TimedEvent {
+  DeadlineMissedCheck,
+}
 
 // Some pieces necessary to contruct a reader.
 // These can be sent between threads, whereas a Reader cannot.
@@ -85,8 +91,9 @@ pub(crate) struct Reader {
   // Currently we support only stateful behaviour.
 
   dds_cache: Arc<RwLock<DDSCache>>,
-  #[cfg(test)]
-  seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
+
+  #[cfg(test)] seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
+
   topic_name: String,
   qos_policy: QosPolicies,
 
@@ -105,7 +112,8 @@ pub(crate) struct Reader {
   requested_deadline_missed_count: i32,
   offered_incompatible_qos_count: i32,
 
-  timed_event_handler: Option<TimedEventHandler>,
+  //timed_event_handler: Option<TimedEventHandler>,
+  pub(crate) timed_event_timer: Timer<TimedEvent>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
 
 } 
@@ -115,6 +123,7 @@ impl Reader {
     i : ReaderIngredients,
     dds_cache: Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
+    timed_event_timer: Timer<TimedEvent>,
   ) -> Reader {
       Reader {
         notification_sender: i.notification_sender,
@@ -139,7 +148,7 @@ impl Reader {
       writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
       offered_incompatible_qos_count: 0,
-      timed_event_handler: None,
+      timed_event_timer,
       data_reader_command_receiver: i.data_reader_command_receiver,
     }
   }
@@ -172,23 +181,12 @@ impl Reader {
     self.get_guid().entityId.as_alt_token()
   }
 
-  pub fn add_timed_event_handler(&mut self, time_handler: TimedEventHandler) {
-    self.timed_event_handler = Some(time_handler);
-  }
 
   pub fn set_requested_deadline_check_timer(&mut self) {
     if let Some(deadline) = self.qos_policy.deadline {
-      debug!("GUID={:?} set_requested_deadline_check_timer: {:?}", 
-        self.my_guid, deadline.0.to_std() );
-      match chronoDuration::from_std(deadline.0.to_std()) {
-        Ok(cdur) => match self.timed_event_handler.as_mut() {
-          Some(teh) => teh.set_timeout(&cdur, TimerMessageType::ReaderDeadlineMissedCheck),
-          None => warn!("Unable to get timed_event_handler."),
-        },
-        Err(_) => {
-          warn!("Failed to get chrono duration from deadline {:?}", deadline);
-        }
-      }
+      debug!("GUID={:?} set_requested_deadline_check_timer: {:?}", self.my_guid, deadline.0.to_std() );
+      self.timed_event_timer
+        .set_timeout(deadline.0.to_std(), TimedEvent::DeadlineMissedCheck ); 
     } else {
       trace!("GUID={:?} - no deaadline policy - do not set set_requested_deadline_check_timer",
         self.my_guid);
@@ -260,12 +258,14 @@ impl Reader {
     } // match
   } // fn
 
-  pub fn handle_timed_event(&mut self, timer_message: TimerMessageType) {
-    match timer_message {
-      TimerMessageType::ReaderDeadlineMissedCheck => 
-        self.handle_requested_deadline_event(),
-      other_message => 
-        error!("handle_timed_event - I do not know how to handle {:?}", other_message),
+  pub fn handle_timed_event(&mut self) {
+    while let Some(e) =  self.timed_event_timer.poll() {
+      match e {
+        TimedEvent::DeadlineMissedCheck => {
+          self.handle_requested_deadline_event();
+          self.set_requested_deadline_check_timer(); // re-prime timer
+        }
+      }
     }
   }
 
@@ -297,7 +297,6 @@ impl Reader {
     for missed_deadline in self.calculate_if_requested_deadline_is_missed() {
       self.send_status_change(missed_deadline);
     }
-    self.set_requested_deadline_check_timer();
   }
 
   // Used for test/debugging purposes

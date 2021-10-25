@@ -308,8 +308,8 @@ impl Writer {
         self.handle_cache_cleaning(),
       TimerMessageType::WriterSendRepairData{ to_reader: r } =>
         self.handle_repair_data_send(r),
-      other_msg => 
-        error!("handle_timed_event - unexpected message: {:?}", other_msg),
+      // other_msg => 
+      //   error!("handle_timed_event - unexpected message: {:?}", other_msg),
     }
   }
 

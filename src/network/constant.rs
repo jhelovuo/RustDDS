@@ -94,7 +94,7 @@ pub enum TimerMessageType {
   WriterHeartbeat,
   WriterCacheCleaning,
   WriterSendRepairData { to_reader: GUID },
-  ReaderDeadlineMissedCheck,
+  //ReaderDeadlineMissedCheck,
 }
 
 #[derive(Debug)]

@@ -17,6 +17,9 @@ use crate::{
   structure::builtin_endpoint::{BuiltinEndpointSet, },
   dds::qos::policy,
 };
+//use crate::dds::reader;
+//use crate::dds::writer;
+
 use crate::network::udp_listener::UDPListener;
 use crate::network::udp_sender::UDPSender;
 use crate::network::constant::*;
@@ -62,7 +65,7 @@ pub struct DPEventLoop {
   // Adding readers
   add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
   remove_reader_receiver: TokenReceiverPair<GUID>,
-  reader_timed_event_receiver: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
+  //reader_timed_event_receiver: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
 
   // Writers
   add_writer_receiver: TokenReceiverPair<WriterIngredients>,
@@ -186,7 +189,7 @@ impl DPEventLoop {
       message_receiver: MessageReceiver::new(participant_guid_prefix, acknack_sender),
       add_reader_receiver,
       remove_reader_receiver,
-      reader_timed_event_receiver: HashMap::new(),
+      //reader_timed_event_receiver: HashMap::new(),
       add_writer_receiver,
       remove_writer_receiver,
       writer_timed_event_reciever: HashMap::new(),
@@ -303,7 +306,7 @@ impl DPEventLoop {
           // Timed Actions
           TokenDecode::AltEntity( eid ) =>
             if eid.kind().is_reader() { 
-              ev_wrapper.handle_reader_timed_event(&event); 
+              ev_wrapper.handle_reader_timed_event(eid); 
             } else if eid.kind().is_writer() {
               ev_wrapper.handle_writer_timed_event(&event);
             }
@@ -319,27 +322,36 @@ impl DPEventLoop {
       ADD_READER_TOKEN => {
         trace!("add reader(s)");
         while let Ok(new_reader_ing) = self.add_reader_receiver.receiver.try_recv() {
-          let (timed_action_sender, timed_action_receiver) =
-            mio_channel::sync_channel::<TimerMessageType>(10);
+          // let (timed_action_sender, timed_action_receiver) =
+          //   mio_channel::sync_channel::<TimerMessageType>(10);
 
-          let mut new_reader = 
-            Reader::new(new_reader_ing, self.ddscache.clone(), self.udp_sender.clone());
-
-          let time_handler: TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
-          new_reader.add_timed_event_handler(time_handler);
-          // Timed action polling
+          let timer = mio_extras::timer::Builder::default()
+            .num_slots(8)
+            .build();
           self
             .poll
             .register(
-              &timed_action_receiver,
-              new_reader.get_reader_alt_entity_token(),
+              &timer,
+              new_reader_ing.guid.entityId.as_alt_token(),
               Ready::readable(),
               PollOpt::edge(),
             )
             .expect("Reader timer channel registeration failed!");
-          self
-            .reader_timed_event_receiver
-            .insert(new_reader.get_reader_alt_entity_token(), timed_action_receiver);
+          let mut new_reader = 
+            Reader::new(
+              new_reader_ing, 
+              self.ddscache.clone(), 
+              self.udp_sender.clone(),
+              timer,
+              );
+
+          //let time_handler: TimedEventHandler = TimedEventHandler::new(timed_action_sender.clone());
+
+          //new_reader.add_timed_event_handler(time_handler);
+          // Timed action polling
+          // self
+          //   .reader_timed_event_receiver
+          //   .insert(new_reader.get_reader_alt_entity_token(), timed_action_receiver);
           // Non-timed action polling
           self
             .poll
@@ -359,13 +371,15 @@ impl DPEventLoop {
       REMOVE_READER_TOKEN => {
         while let Ok(old_reader_guid) = self.remove_reader_receiver.receiver.try_recv() {
           if let Some(old_reader) = self.message_receiver.remove_reader(old_reader_guid) {
-            if let Some(receiver) = 
-              self.reader_timed_event_receiver.remove(&old_reader.get_reader_alt_entity_token()) {
-                self.poll.deregister(&receiver)
-                  .unwrap_or_else(|e| error!("reader_timed_event_receiver deregister: {:?}",e));
-            } else {
-              warn!("Reader had no reader_timed_event_receiver? {:?}", old_reader_guid);
-            }
+            // if let Some(receiver) = 
+            //   self.reader_timed_event_receiver.remove(&old_reader.get_reader_alt_entity_token()) {
+            //     self.poll.deregister(&receiver)
+            //       .unwrap_or_else(|e| error!("reader_timed_event_receiver deregister: {:?}",e));
+            // } else {
+            //   warn!("Reader had no reader_timed_event_receiver? {:?}", old_reader_guid);
+            // }
+            self.poll.deregister( &old_reader.timed_event_timer )
+              .unwrap_or_else(|e| error!("Cannot deregister Reader timed_event_timer: {:?}",e));
             self.poll.deregister( &old_reader.data_reader_command_receiver )
               .unwrap_or_else(|e| error!("Cannot deregister data_reader_command_receiver: {:?}",e));
           } else {
@@ -441,19 +455,12 @@ impl DPEventLoop {
     }
   }
 
-  fn handle_reader_timed_event(&mut self, event: &Event) {
-    let reciever = self.reader_timed_event_receiver.get(&event.token())
-      .expect("Did not found reader timed event reciever!");
-    // TODO: Why do we have separate message channels for reader and writer, if they have contain the same data type?
-
-    while let Ok(timer_message) = reciever.try_recv() {
-      match self.message_receiver.available_readers.values_mut()
-          .find(|reader| reader.get_entity_token() == event.token()) {
-        Some(reader) => {
-          reader.handle_timed_event(timer_message);
-        }
-        None => error!("Reader was not found with entity token {:?}",  event.token()),
+  fn handle_reader_timed_event(&mut self, entity_id: EntityId) {
+    match self.message_receiver.get_reader_mut(entity_id) {
+      Some(reader) => {
+        reader.handle_timed_event()
       }
+      None => error!("Reader was not found with {:?}",entity_id),
     }
   }
 
