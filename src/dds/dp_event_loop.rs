@@ -195,7 +195,7 @@ impl DPEventLoop {
   }
 
   pub fn event_loop(self) {
-    let mut events = Events::with_capacity(8);  // too small capacity just delays events to next poll
+    let mut events = Events::with_capacity(16);  // too small capacity just delays events to next poll
     let mut acknack_timer = mio_extras::timer::Timer::default();
     acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
 
@@ -205,109 +205,112 @@ impl DPEventLoop {
 
     let mut ev_wrapper = self;
     loop {
-      ev_wrapper.poll.poll(&mut events, None)
+      ev_wrapper.poll.poll(&mut events, Some(Duration::from_millis(2000)))
         .expect("Failed in waiting of poll.");
 
-      for event in events.iter() {
-        match EntityId::from_token( event.token() ) {
-          TokenDecode::FixedToken(fixed_token) =>
-            match fixed_token {
-              STOP_POLL_TOKEN => {
-                info!("Stopping dp_event_loop");
-                return
-              }
-              DISCOVERY_LISTENER_TOKEN |
-              DISCOVERY_MUL_LISTENER_TOKEN |
-              USER_TRAFFIC_LISTENER_TOKEN |
-              USER_TRAFFIC_MUL_LISTENER_TOKEN => {
-                let udp_messages = ev_wrapper.udp_listeners.get_mut(&event.token())
-                  .map_or_else(
-                      | | { error!("No listener with token {:?}", &event.token() ); vec![] }, 
-                      |l| l.get_messages()
-                    );
-                for packet in udp_messages.into_iter() {
-                  ev_wrapper.message_receiver.handle_received_packet(packet)
+      if events.is_empty() {
+        info!("dp_event_loop idling.")
+      } else {
+        for event in events.iter() {
+          match EntityId::from_token( event.token() ) {
+            TokenDecode::FixedToken(fixed_token) =>
+              match fixed_token {
+                STOP_POLL_TOKEN => {
+                  info!("Stopping dp_event_loop");
+                  return
                 }
-              }
-              ADD_READER_TOKEN | REMOVE_READER_TOKEN => {
-                ev_wrapper.handle_reader_action(&event);
-              }
-              ADD_WRITER_TOKEN | REMOVE_WRITER_TOKEN => {
-                ev_wrapper.handle_writer_action(&event); 
-              }
-              ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN => {
-                ev_wrapper.handle_writer_acknack_action(&event);
-              }
-              DISCOVERY_UPDATE_NOTIFICATION_TOKEN => {
-                while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
-                  use DiscoveryNotificationType::*;
-                  match dnt {
-                    WriterUpdated{ discovered_writer_data } => 
-                      ev_wrapper.remote_writer_discovered(discovered_writer_data),
+                DISCOVERY_LISTENER_TOKEN |
+                DISCOVERY_MUL_LISTENER_TOKEN |
+                USER_TRAFFIC_LISTENER_TOKEN |
+                USER_TRAFFIC_MUL_LISTENER_TOKEN => {
+                  let udp_messages = ev_wrapper.udp_listeners.get_mut(&event.token())
+                    .map_or_else(
+                        | | { error!("No listener with token {:?}", &event.token() ); vec![] }, 
+                        |l| l.get_messages()
+                      );
+                  for packet in udp_messages.into_iter() {
+                    ev_wrapper.message_receiver.handle_received_packet(packet)
+                  }
+                }
+                ADD_READER_TOKEN | REMOVE_READER_TOKEN => {
+                  ev_wrapper.handle_reader_action(&event);
+                }
+                ADD_WRITER_TOKEN | REMOVE_WRITER_TOKEN => {
+                  ev_wrapper.handle_writer_action(&event); 
+                }
+                ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN => {
+                  ev_wrapper.handle_writer_acknack_action(&event);
+                }
+                DISCOVERY_UPDATE_NOTIFICATION_TOKEN => {
+                  while let Ok(dnt) = ev_wrapper.discovery_update_notification_receiver.try_recv() {
+                    use DiscoveryNotificationType::*;
+                    match dnt {
+                      WriterUpdated{ discovered_writer_data } => 
+                        ev_wrapper.remote_writer_discovered(discovered_writer_data),
 
-                    WriterLost{writer_guid} => ev_wrapper.remote_writer_lost(writer_guid) ,
+                      WriterLost{writer_guid} => ev_wrapper.remote_writer_lost(writer_guid) ,
 
-                    ReaderUpdated{ discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change } => 
-                      ev_wrapper.remote_reader_discovered(discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change),
+                      ReaderUpdated{ discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change } => 
+                        ev_wrapper.remote_reader_discovered(discovered_reader_data, rtps_reader_proxy, _needs_new_cache_change),
 
-                    ReaderLost{ reader_guid } => ev_wrapper.remote_reader_lost(reader_guid) ,
+                      ReaderLost{ reader_guid } => ev_wrapper.remote_reader_lost(reader_guid) ,
 
-                    ParticipantUpdated{ guid_prefix } => ev_wrapper.update_participant(guid_prefix),
-                      
-                    ParticipantLost{ guid_prefix } => ev_wrapper.remote_participant_lost(guid_prefix),
+                      ParticipantUpdated{ guid_prefix } => ev_wrapper.update_participant(guid_prefix),
+                        
+                      ParticipantLost{ guid_prefix } => ev_wrapper.remote_participant_lost(guid_prefix),
 
-                    TopicsInfoUpdated => ev_wrapper.update_topics(),
-                    AssertTopicLiveliness{ writer_guid , manual_assertion } => {
-                      ev_wrapper.writers.get_mut(&writer_guid.entityId)
-                        .map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
+                      TopicsInfoUpdated => ev_wrapper.update_topics(),
+                      AssertTopicLiveliness{ writer_guid , manual_assertion } => {
+                        ev_wrapper.writers.get_mut(&writer_guid.entityId)
+                          .map( |w| w.handle_heartbeat_tick(manual_assertion) ); 
+                      }
                     }
-                  }
-                }              
-              }
-              DPEV_ACKNACK_TIMER_TOKEN => {
-                ev_wrapper.message_receiver.send_preemptive_acknacks();
-                acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
-              }
+                  }              
+                }
+                DPEV_ACKNACK_TIMER_TOKEN => {
+                  ev_wrapper.message_receiver.send_preemptive_acknacks();
+                  acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
+                }
 
-              fixed_unknown => {
-                error!("Unknown event.token {:?} = 0x{:x?} , decoded as {:?}", 
-                  event.token(), event.token().0, fixed_unknown );
+                fixed_unknown => {
+                  error!("Unknown event.token {:?} = 0x{:x?} , decoded as {:?}", 
+                    event.token(), event.token().0, fixed_unknown );
+                }
+              },
+
+            // Commands/actions
+            TokenDecode::Entity( eid ) => 
+              if eid.kind().is_reader() {
+                ev_wrapper.message_receiver.get_reader_mut( eid )
+                  .map( |reader| reader.process_command() )
+                  .unwrap_or_else(|| error!("Event for unknown reader {:?}",eid));
+              } else if eid.kind().is_writer() {
+                let local_readers =
+                  match ev_wrapper.writers.get_mut( &eid ) {
+                    None => { error!("Event for unknown writer {:?}",eid); vec![] },
+                    Some(writer) => {
+                      // Writer will record data to DDSCache and send it out.
+                      writer.process_writer_command();
+                      writer.get_local_readers()
+                    }
+                  };
+                // Notify local (same participant) readers that new data is available in the cache.
+                ev_wrapper.message_receiver.notify_data_to_readers(local_readers);
+              } else { 
+                error!("Entity Event for unknown EntityKind {:?}",eid); 
+              },
+              
+            // Timed Actions
+            TokenDecode::AltEntity( eid ) =>
+              if eid.kind().is_reader() { 
+                ev_wrapper.handle_reader_timed_event(eid); 
+              } else if eid.kind().is_writer() {
+                ev_wrapper.handle_writer_timed_event(eid);
               }
-            },
-
-          // Commands/actions
-          TokenDecode::Entity( eid ) => 
-            if eid.kind().is_reader() {
-              ev_wrapper.message_receiver.get_reader_mut( eid )
-                .map( |reader| reader.process_command() )
-                .unwrap_or_else(|| error!("Event for unknown reader {:?}",eid));
-            } else if eid.kind().is_writer() {
-              let local_readers =
-                match ev_wrapper.writers.get_mut( &eid ) {
-                  None => { error!("Event for unknown writer {:?}",eid); vec![] },
-                  Some(writer) => {
-                    // Writer will record data to DDSCache and send it out.
-                    writer.process_writer_command();
-                    writer.get_local_readers()
-                  }
-                };
-              // Notify local (same participant) readers that new data is available in the cache.
-              ev_wrapper.message_receiver.notify_data_to_readers(local_readers);
-            } else { 
-              error!("Entity Event for unknown EntityKind {:?}",eid); 
-            },
-            
-          // Timed Actions
-          TokenDecode::AltEntity( eid ) =>
-            if eid.kind().is_reader() { 
-              ev_wrapper.handle_reader_timed_event(eid); 
-            } else if eid.kind().is_writer() {
-              ev_wrapper.handle_writer_timed_event(eid);
-            }
-            else { error!("AltEntity Event for unknown EntityKind {:?}",eid); },
-        }
-      } // for    
-
+              else { error!("AltEntity Event for unknown EntityKind {:?}",eid); },
+          }
+        } // for    
+      } // if
     } // loop
   } // fn
 

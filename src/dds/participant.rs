@@ -537,6 +537,10 @@ pub(crate) struct DomainParticipant_Inner {
 
 impl Drop for DomainParticipant_Inner {
   fn drop(&mut self) {
+    if std::thread::panicking() {
+      error!("PANIC in dp_event_loop!")
+    }
+
     // if send has an error simply leave as we have lost control of the
     // ev_loop_thread anyways
     match self.stop_poll_sender.send(()) {
@@ -681,6 +685,7 @@ impl DomainParticipant_Inner {
           stop_poll_receiver,
           discovery_update_notification_receiver,
         );
+
         dp_event_loop.event_loop()
       })?;
 
