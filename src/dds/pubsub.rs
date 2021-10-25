@@ -423,7 +423,7 @@ impl InnerPublisher {
     // Use Publisher QoS as basis, modify by Topic settings, and modify by specified QoS.
     let writer_qos = self.default_datawriter_qos
       .modify_by(&topic.get_qos())
-      .modify_by(&optional_qos.unwrap_or( QosPolicies::qos_none() ));
+      .modify_by(&optional_qos.unwrap_or_else( QosPolicies::qos_none ));
 
     let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
     let dp = self.get_participant()
@@ -851,7 +851,7 @@ impl InnerSubscriber {
     // Use subscriber QoS as basis, modify by Topic settings, and modify by specified QoS.
     let qos = self.qos
       .modify_by(&topic.get_qos())
-      .modify_by(&optional_qos.unwrap_or( QosPolicies::qos_none() ));
+      .modify_by(&optional_qos.unwrap_or_else( QosPolicies::qos_none ));
 
     let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
 
