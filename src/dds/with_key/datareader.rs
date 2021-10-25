@@ -641,7 +641,7 @@ where
     );
 
     for ( instant,
-          CacheChange { writer_guid, sequence_number: _, data_value }
+          CacheChange { writer_guid, sequence_number: _ , source_timestamp, data_value }
         ) in cache_changes
     {
       self.latest_instant = instant; // update our time pointer
@@ -655,7 +655,7 @@ where
           {
             Ok(key) => self
               .datasample_cache
-              .add_sample(Err(key), *writer_guid, instant, None),
+              .add_sample(Err(key), *writer_guid, instant, *source_timestamp),
             Err(e) => {
               warn!("Failed to deserialize key {}, Topic = {}, Type = {:?}", 
                       e, self.my_topic.get_name(), self.my_topic.get_type() );
@@ -670,7 +670,7 @@ where
           match self.datasample_cache.get_key_by_hash(*key_hash) {
             Some(key) => self
               .datasample_cache
-              .add_sample(Err(key), *writer_guid, instant, None),
+              .add_sample(Err(key), *writer_guid, instant, *source_timestamp),
             /* TODO: How to get source timestamps other then None ?? */
             None => warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash),
           }
@@ -685,7 +685,7 @@ where
               Ok(payload) => {
                 self
                 .datasample_cache
-                .add_sample(Ok(payload), *writer_guid, instant, None)
+                .add_sample(Ok(payload), *writer_guid, instant, *source_timestamp)
               }
               Err(e) => {
                 error!("Failed to deserialize bytes: {}, Topic = {}, Type = {:?}", 

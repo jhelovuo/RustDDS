@@ -419,8 +419,11 @@ impl InnerPublisher {
     // If no QoS is specified, we should take the Publisher default
     // QoS, modify it to match any QoS settings (that are set) in the
     // Topic QoS and use that.
-    let writer_qos = optional_qos.unwrap_or_else(
-        || self.default_datawriter_qos.modify_by(&topic.get_qos()) );
+
+    // Use Publisher QoS as basis, modify by Topic settings, and modify by specified QoS.
+    let writer_qos = self.default_datawriter_qos
+      .modify_by(&topic.get_qos())
+      .modify_by(&optional_qos.unwrap_or( QosPolicies::qos_none() ));
 
     let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
     let dp = self.get_participant()
@@ -845,8 +848,10 @@ impl InnerSubscriber {
     let (reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(4);
 
-
-    let qos = optional_qos.unwrap_or_else(|| topic.get_qos());
+    // Use subscriber QoS as basis, modify by Topic settings, and modify by specified QoS.
+    let qos = self.qos
+      .modify_by(&topic.get_qos())
+      .modify_by(&optional_qos.unwrap_or( QosPolicies::qos_none() ));
 
     let entity_id = unwrap_or_random_EntityId(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
 
