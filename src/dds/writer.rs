@@ -1,12 +1,11 @@
 use std::ops::Bound::Included;
-use chrono::Duration as chronoDuration;
-
 
 #[allow(unused_imports)]
 use log::{debug, error, warn, info, trace};
 
 use speedy::{Writable, Endianness};
 use mio_extras::channel::{self as mio_channel, SyncSender, TrySendError};
+use mio_extras::timer::Timer;
 use mio::Token;
 use std::{
   sync::{RwLock, Arc},
@@ -38,14 +37,13 @@ use crate::{
 
 use crate::dds::{ddsdata::DDSData, qos::HasQoSPolicy};
 use crate::{
-  network::{constant::TimerMessageType, udp_sender::UDPSender},
+  network::udp_sender::UDPSender,
   structure::{
     entity::RTPSEntity,
     endpoint::{EndpointAttributes, Endpoint},
     locator::Locator,
     dds_cache::DDSCache,
   },
-  common::timed_event_handler::{TimedEventHandler},
 };
 use super::{
   qos::{policy, QosPolicies},
@@ -59,6 +57,14 @@ pub enum DeliveryMode {
   Unicast,
   Multicast,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TimedEvent {
+  Heartbeat,
+  CacheCleaning,
+  SendRepairData { to_reader: GUID },
+}
+
 
 // This is used to construct an actual Writer.
 // Ingrediants are sendable between threads, whereas the Writer is not.
@@ -90,7 +96,7 @@ pub(crate) struct Writer {
   ///Heartbeat Message.
   pub heartbeat_period: Option<Duration>,
   /// duration to launch cahche change remove from DDSCache
-  pub cahce_cleaning_perioid: Duration,
+  pub cache_cleaning_period: Duration,
   ///Protocol tuning parameter that
   ///allows the RTPS Writer to delay
   ///the response to a request for data
@@ -155,7 +161,7 @@ pub(crate) struct Writer {
   ///Contains timer that needs to be set to timeout with duration of self.heartbeat_perioid
   ///timed_event_handler sends notification when timer is up via miochannel to poll in Dp_eventWrapper
   ///this also handles writers cache cleaning timeouts.
-  timed_event_handler: Option<TimedEventHandler>,
+  pub(crate) timed_event_timer: Timer<TimedEvent>,
 
   qos_policies: QosPolicies,
 
@@ -185,6 +191,7 @@ impl Writer {
     i: WriterIngredients,
     dds_cache: Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
+    timed_event_timer: Timer<TimedEvent>,
   ) -> Writer {
     let heartbeat_period = match &i.qos_policies.reliability {
       Some(r) => match r {
@@ -216,14 +223,13 @@ impl Writer {
       heartbeat_message_counter: 1,
       push_mode: true,
       heartbeat_period,
-      cahce_cleaning_perioid: Duration::from_secs(2 * 60),
+      cache_cleaning_period: Duration::from_secs(2 * 60),
       nack_respose_delay: Duration::from_millis(200),
       nack_suppression_duration: Duration::from_millis(0),
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
       data_max_size_serialized: 999999999, // TODO: this is not reasonable
       my_guid: i.guid,
-      //enpoint_attributes: EndpointAttributes::default(),
       writer_command_receiver: i.writer_command_receiver ,
       readers: BTreeMap::new(),
       matched_readers_count_total: 0,
@@ -233,9 +239,8 @@ impl Writer {
       dds_cache,
       my_topic_name: i.topic_name,
       sequence_number_to_instant: BTreeMap::new(),
-      //key_to_instant: HashMap::new(),
       disposed_sequence_numbers: HashSet::new(),
-      timed_event_handler: None,
+      timed_event_timer,
       qos_policies: i.qos_policies,
       status_sender: i.status_sender,
       //offered_deadline_status: OfferedDeadlineMissedStatus::new(),
@@ -288,28 +293,36 @@ impl Writer {
   // --------------------------------------------------------------
   // --------------------------------------------------------------
 
-  // Called by dp_wrapper
-  pub fn add_timed_event_handler(&mut self, time_handler: TimedEventHandler) {
-    self.timed_event_handler = Some(time_handler);
-    self.set_cache_cleaning_timer();
-    self.set_heartbeat_timer(); // prime the timer
-  }
-
-
-  // --------------------------------------------------------------
-  // --------------------------------------------------------------
-  // --------------------------------------------------------------
-
-  pub fn handle_timed_event(&mut self, timer_message:TimerMessageType) {
-    match timer_message {
-      TimerMessageType::WriterHeartbeat => 
-        self.handle_heartbeat_tick(false), // false = This is automatic heartbeat by timer, not manual by application call.
-      TimerMessageType::WriterCacheCleaning =>
-        self.handle_cache_cleaning(),
-      TimerMessageType::WriterSendRepairData{ to_reader: r } =>
-        self.handle_repair_data_send(r),
-      // other_msg => 
-      //   error!("handle_timed_event - unexpected message: {:?}", other_msg),
+  pub fn handle_timed_event(&mut self) {
+    while let Some(e) =  self.timed_event_timer.poll() {
+      match e {
+        TimedEvent::Heartbeat => {
+          self.handle_heartbeat_tick(false); 
+          // ^^ false = This is automatic heartbeat by timer, not manual by application call.
+          if let Some(period) = self.heartbeat_period {
+            self.timed_event_timer
+              .set_timeout(std::time::Duration::from(period), TimedEvent::Heartbeat);
+          }
+        }
+        TimedEvent::CacheCleaning => {
+          self.handle_cache_cleaning();
+          self.timed_event_timer
+            .set_timeout(std::time::Duration::from(self.cache_cleaning_period), TimedEvent::CacheCleaning);
+        }
+        TimedEvent::SendRepairData{ to_reader: reader_guid } => {
+          self.handle_repair_data_send(reader_guid);
+          if let Some(rp) = self.lookup_readerproxy_mut(reader_guid.guidPrefix, reader_guid.entityId) {
+            if rp.repair_mode {
+              let delay_to_next_repair = 
+              self.qos_policies.deadline().map( |dl| dl.0 )
+                .unwrap_or_else(|| Duration::from_millis(100)) / 5;
+              self.timed_event_timer
+                .set_timeout(std::time::Duration::from(delay_to_next_repair),
+                   TimedEvent::SendRepairData{to_reader: reader_guid});
+            }
+          }
+        }        
+      }
     }
   }
 
@@ -332,14 +345,6 @@ impl Writer {
       }
     }
 
-    self.set_cache_cleaning_timer();
-  }
-
-  fn set_cache_cleaning_timer(&mut self) {
-    self.timed_event_handler.as_mut().unwrap().set_timeout(
-      &chronoDuration::from(self.cahce_cleaning_perioid),
-      TimerMessageType::WriterCacheCleaning,
-    )
   }
 
   // --------------------------------------------------------------
@@ -500,19 +505,8 @@ impl Writer {
                                     &mut self.readers.values())
     }
 
-    self.set_heartbeat_timer(); // keep the heart beating
   }
 
-  /// after heartbeat is handled timer should be set running again.
-  fn set_heartbeat_timer(&mut self) {
-    if let Some(period) = self.heartbeat_period {
-      self.timed_event_handler.as_mut().unwrap().set_timeout(
-        &chronoDuration::from(period),
-        TimerMessageType::WriterHeartbeat,
-      );
-      trace!("set heartbeat timer to {:?} in topic {:?}",period, self.topic_name());
-    }
-  }
 
   /// When receiving an ACKNACK Message indicating a Reader is missing some data samples, the Writer must
   /// respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
@@ -536,11 +530,10 @@ impl Writer {
           warn!("Request for SN zero! : {:?}",an),
         Some(_) => (), // ok
       }
-    let my_topic = self.my_topic_name.clone(); // for debugging
+      let my_topic = self.my_topic_name.clone(); // for debugging
+      let reader_guid = GUID::new(reader_guid_prefix, an.reader_id);
 
-      self.update_ack_waiters( 
-        GUID::new(reader_guid_prefix, an.reader_id) , 
-        Some(an.reader_sn_state.base()));
+      self.update_ack_waiters( reader_guid, Some(an.reader_sn_state.base()));
 
       if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
         reader_proxy.handle_ack_nack(&ack_submessage, last_seq);
@@ -570,14 +563,13 @@ impl Writer {
         // if we cannot send more data, we are done.
         // This is to prevent empty "repair data" messages from being sent.
         if reader_proxy.all_acked_before > last_seq {
-           
+          reader_proxy.repair_mode = false;
         } else {
-          // prime timer to send repair data
-          reader_proxy.repair_mode = true; // hold sending normal DATA
-          self.timed_event_handler.as_mut().unwrap().set_timeout(
-            &chronoDuration::from_std(NACK_RESPONSE_DELAY).unwrap(),
-            TimerMessageType::WriterSendRepairData{ to_reader: reader_guid },
-          );
+          reader_proxy.repair_mode = true; // TODO: Is this correct? Do we need to repair immediately?
+          // set repair timer to fire
+          self.timed_event_timer
+            .set_timeout(NACK_RESPONSE_DELAY,
+                   TimedEvent::SendRepairData{to_reader: reader_guid});
         }
       }
     }
@@ -677,15 +669,7 @@ impl Writer {
     self.send_message_to_readers(DeliveryMode::Unicast, &data_gap_msg,
               &mut std::iter::once(&reader_proxy));
 
-    if found_data { // prime repair timer again, if data was found
-      // Try to send repair messages at 5x rate compared to usual deadline rate
-      let delay_to_next_message = 
-        self.qos_policies.deadline().map( |dl| dl.0 )
-          .unwrap_or_else(|| Duration::from_millis(100)) / 5;
-      self.timed_event_handler.as_mut().unwrap().set_timeout(
-        &chronoDuration::from(delay_to_next_message),
-        TimerMessageType::WriterSendRepairData{ to_reader: reader_proxy.remote_reader_guid },
-      );        
+    if found_data { 
     } else {
       reader_proxy.repair_mode = false; // resume normal data sending
     }     

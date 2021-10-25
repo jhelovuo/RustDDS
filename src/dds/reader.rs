@@ -21,7 +21,6 @@ use std::{
   rc::Rc,
 };
 use crate::structure::dds_cache::{DDSCache};
-//use std::time::Instant;
 
 use mio::Token;
 use mio_extras::timer::Timer;
@@ -46,7 +45,6 @@ use crate::messages::vendor_id::VendorId;
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 
 use speedy::{Writable, Endianness};
-//use chrono::Duration as chronoDuration;
 
 use super::{
   with_key::datareader::ReaderCommand,
@@ -112,7 +110,6 @@ pub(crate) struct Reader {
   requested_deadline_missed_count: i32,
   offered_incompatible_qos_count: i32,
 
-  //timed_event_handler: Option<TimedEventHandler>,
   pub(crate) timed_event_timer: Timer<TimedEvent>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
 

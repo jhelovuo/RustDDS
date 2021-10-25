@@ -89,13 +89,13 @@ pub fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16
   PB + DG * domain_id + D3 + PG * participant_id
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum TimerMessageType {
-  WriterHeartbeat,
-  WriterCacheCleaning,
-  WriterSendRepairData { to_reader: GUID },
-  //ReaderDeadlineMissedCheck,
-}
+// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// pub enum TimerMessageType {
+//   WriterHeartbeat,
+//   WriterCacheCleaning,
+//   WriterSendRepairData { to_reader: GUID },
+//   //ReaderDeadlineMissedCheck,
+// }
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
