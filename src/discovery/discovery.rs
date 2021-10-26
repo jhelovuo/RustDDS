@@ -842,19 +842,20 @@ impl Discovery {
       };
 
     for d in dwds {
-      let mut db = self.discovery_db_write();
       match d {
             Ok(dwd) => {
               trace!("handle_publication_reader discovered {:?}", &dwd);
-              if let Some(discovered_writer_data) =  db.update_publication(&dwd) {
+              if let Some(discovered_writer_data) = 
+                  self.discovery_db_write().update_publication(&dwd) 
+              {
                 self.send_discovery_notification(
                     DiscoveryNotificationType::WriterUpdated{ discovered_writer_data } );
               }
-              db.update_topic_data_dwd(&dwd);
+              self.discovery_db_write().update_topic_data_dwd(&dwd);
               debug!("Discovered Writer {:?}", &dwd);
             },
             Err(writer_key) => {
-              db.remove_topic_writer(writer_key.0);
+              self.discovery_db_write().remove_topic_writer(writer_key.0);
               self.send_discovery_notification(
                 DiscoveryNotificationType::WriterLost { writer_guid: writer_key.0 });
               debug!("Disposed Writer {:?}", writer_key);
