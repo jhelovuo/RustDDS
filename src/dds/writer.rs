@@ -191,20 +191,17 @@ impl Writer {
     i: WriterIngredients,
     dds_cache: Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
-    timed_event_timer: Timer<TimedEvent>,
+    mut timed_event_timer: Timer<TimedEvent>,
   ) -> Writer {
     let heartbeat_period = match &i.qos_policies.reliability {
-      Some(r) => match r {
-        Reliability::BestEffort => None,
-        Reliability::Reliable {
-          max_blocking_time: _,
-        } => Some(Duration::from_secs(1)),
-      },
+      Some(Reliability::Reliable{ .. }) => Some(Duration::from_secs(1)), // TODO: make configurable
+      Some(Reliability::BestEffort) => None,
       None => None,
     };
 
     let heartbeat_period = match heartbeat_period {
       Some(hbp) => match i.qos_policies.liveliness {
+        // What is the logic here? Which spec section?
         Some(lv) => match lv {
           policy::Liveliness::Automatic { lease_duration: _ } => Some(hbp),
           policy::Liveliness::ManualByParticipant { lease_duration: _ } => Some(hbp),
@@ -218,12 +215,27 @@ impl Writer {
       None => None,
     };
 
+    // TODO: Configuration value
+    let cache_cleaning_period = Duration::from_secs(2 * 60);
+
+    // Start periodic Heartbeat
+    if let Some(period) = heartbeat_period {
+      timed_event_timer.set_timeout(
+        std::time::Duration::from(period), 
+        TimedEvent::Heartbeat);
+    }
+    // start periodic cache cleaning
+    timed_event_timer.set_timeout(
+      std::time::Duration::from(cache_cleaning_period), 
+      TimedEvent::CacheCleaning);
+    
+
     Writer {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
       push_mode: true,
       heartbeat_period,
-      cache_cleaning_period: Duration::from_secs(2 * 60),
+      cache_cleaning_period,
       nack_respose_delay: Duration::from_millis(200),
       nack_suppression_duration: Duration::from_millis(0),
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
