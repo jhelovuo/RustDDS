@@ -7,6 +7,7 @@ use std::{collections::HashMap, time::Duration};
 use std::{
   rc::Rc,
   sync::{Arc, RwLock},
+  time::Instant,
 };
 
 use crate::{
@@ -202,11 +203,19 @@ impl DPEventLoop {
     self.poll
       .register(&acknack_timer, DPEV_ACKNACK_TIMER_TOKEN, Ready::readable(), PollOpt::edge() )
       .unwrap();
-
+    let mut poll_alive = Instant::now();
     let mut ev_wrapper = self;
     loop {
       ev_wrapper.poll.poll(&mut events, Some(Duration::from_millis(2000)))
         .expect("Failed in waiting of poll.");
+
+      // liveness watchdog
+      let now = Instant::now();
+      if now > poll_alive + Duration::from_secs(2) {
+        info!("Poll loop alive");
+        poll_alive = now;
+      }
+
 
       if events.is_empty() {
         info!("dp_event_loop idling.")

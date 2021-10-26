@@ -17,6 +17,7 @@ use crate::structure::guid::EntityId;
 #[cfg(test)] use crate::structure::sequence_number::{SequenceNumber};
 
 use mio_extras::channel as mio_channel;
+use mio_extras::channel::TrySendError;
 use log::{debug, warn, trace, info};
 use bytes::Bytes;
 
@@ -271,10 +272,14 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::AckNack(acknack, _) => {
-        match self.acknack_sender.send((self.source_guid_prefix, 
+        // Note: This must not block, because the receiving end is the same thread,
+        // i.e. blocking here is an instant deadlock.
+        match self.acknack_sender.try_send((self.source_guid_prefix, 
             AckSubmessage::AckNack_Variant(acknack))) {
           Ok(_) => (),
-          Err(e) => warn!("Failed to send AckNack. {:?}", e),
+          Err(TrySendError::Full(_)) => 
+            info!("AckNack pipe full. Looks like I am very busy. Discarding submessage."),
+          Err(e) => warn!("AckNack pipe fail: {:?}", e),
         }
       }
       EntitySubmessage::DataFrag(datafrag, flags) => {
