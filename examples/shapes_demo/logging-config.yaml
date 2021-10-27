@@ -1,0 +1,34 @@
+# configuration for log4rs crate
+refresh_rate: 10 seconds # interval for checking config changes
+appenders:
+  stdout:
+    kind: console
+root:
+#  level: info
+  level: warn
+  appenders:
+    - stdout
+loggers:
+#  mio:
+#    level: warn
+  mio_extras: 
+    level: warn
+#  rustdds::dds::qos:
+#    level: trace
+#  rustdds::network::udp_listener:
+#    level: trace
+#  rustdds::discovery::discovery:
+#    level: warn
+#  rustdds::dds::dp_event_loop:
+#    level: error
+#  rustdds::discovery::discovery_db:
+#    level: info
+#  rustdds::dds::with_key::datareader:
+#    level: debug
+#  rustdds::dds::reader:
+#    level: info
+#  rustdds::dds::writer:
+#    level: info
+#  rustdds::dds::rtps_writer_proxy:
+#    level: debug
+
