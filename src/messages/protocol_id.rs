@@ -1,4 +1,4 @@
-use crate::common::validity_trait::Validity;
+use crate::messages::validity_trait::Validity;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]

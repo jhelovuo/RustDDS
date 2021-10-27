@@ -1,4 +1,4 @@
-use crate::common::validity_trait::Validity;
+use crate::messages::validity_trait::Validity;
 use crate::messages::protocol_id::ProtocolId;
 use crate::messages::protocol_version::ProtocolVersion;
 use crate::messages::vendor_id::VendorId;
