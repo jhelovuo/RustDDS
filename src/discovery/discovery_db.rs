@@ -688,6 +688,7 @@ mod tests {
       reader_ing,
       Arc::new(RwLock::new(DDSCache::new())),
       Rc::new(UDPSender::new(0).unwrap()),
+      mio_extras::timer::Builder::default().build(),
     );
 
     let reader_ing = ReaderIngredients {
@@ -710,6 +711,7 @@ mod tests {
       reader_ing,
       Arc::new(RwLock::new(DDSCache::new())),
       Rc::new(UDPSender::new(0).unwrap()),
+      mio_extras::timer::Builder::default().build(),
     );
   }
 }

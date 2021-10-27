@@ -1234,7 +1234,8 @@ mod tests {
     };
 
     let mut new_reader = Reader::new(reader_ing, dp.get_dds_cache(), 
-      Rc::new(UDPSender::new_with_random_port().unwrap())
+      Rc::new(UDPSender::new_with_random_port().unwrap()),
+      mio_extras::timer::Builder::default().build(),
     );
 
     let mut matching_datareader = sub
@@ -1353,7 +1354,11 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver,
     };
 
-    let mut reader = Reader::new(reader_ing, dp.get_dds_cache(), Rc::new(UDPSender::new_with_random_port().unwrap()));
+    let mut reader = Reader::new(reader_ing, 
+      dp.get_dds_cache(), 
+      Rc::new(UDPSender::new_with_random_port().unwrap()),
+      mio_extras::timer::Builder::default().build(),
+      );
 
     let mut datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)

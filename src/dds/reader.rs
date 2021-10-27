@@ -1020,6 +1020,7 @@ mod tests {
       reader_ing,
       dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
+      mio_extras::timer::Builder::default().build(),
     );
 
     let writer_guid = GUID {
@@ -1074,6 +1075,7 @@ mod tests {
       reader_ing,
       dds_cache.clone(),
       Rc::new(UDPSender::new(0).unwrap()),
+      mio_extras::timer::Builder::default().build(),
     );
 
     let writer_guid = GUID {
@@ -1137,6 +1139,7 @@ mod tests {
       reader_ing,
       dds_cache.clone(),
       Rc::new(UDPSender::new(0).unwrap()),
+      mio_extras::timer::Builder::default().build(),
     );
 
     let writer_guid = GUID {
@@ -1276,6 +1279,7 @@ mod tests {
       reader_ing,
       dds_cache.clone(),
       Rc::new(UDPSender::new(0).unwrap()),
+      mio_extras::timer::Builder::default().build(),
     );
 
 

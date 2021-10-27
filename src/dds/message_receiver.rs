@@ -462,7 +462,8 @@ use super::*;
     };
 
     let new_reader = Reader::new(reader_ing, dds_cache,
-      Rc::new(UDPSender::new_with_random_port().unwrap()));
+      Rc::new(UDPSender::new_with_random_port().unwrap()),
+      mio_extras::timer::Builder::default().build(),);
 
     // Skip for now+
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);
@@ -515,7 +516,8 @@ use super::*;
     let mut _writerObject = Writer::new(
       writer_ing,
       Arc::new(RwLock::new(DDSCache::new())),
-      Rc::new(UDPSender::new_with_random_port().unwrap())
+      Rc::new(UDPSender::new_with_random_port().unwrap()),
+      mio_extras::timer::Builder::default().build(),
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entityId,
