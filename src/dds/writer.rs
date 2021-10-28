@@ -548,6 +548,8 @@ impl Writer {
       self.update_ack_waiters( reader_guid, Some(an.reader_sn_state.base()));
 
       if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
+
+        // Mark requested SNs as "unsent changes"
         reader_proxy.handle_ack_nack(&ack_submessage, last_seq);
 
         let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow 
@@ -621,7 +623,7 @@ impl Writer {
     // Doing a .get_mut() on the reader map would make self immutable.
     if let Some(reader_proxy) = self.readers.remove(&to_reader) {
       // We use a worker function to ensure that afterwards we can insert the reader_proxy back.
-      // This technique ensures that all return paths lead to insertion.
+      // This technique ensures that all return paths lead to re-insertion.
       let reader_proxy = self.handle_repair_data_send_worker(reader_proxy);
       // insert reader back
       let reject = self.readers.insert(reader_proxy.remote_reader_guid, reader_proxy);
@@ -648,17 +650,23 @@ impl Writer {
     let mut no_longer_relevant = Vec::new();
     let mut found_data = false;
     if let Some(&unsent_sn) = reader_proxy.unsent_changes.iter().next() {
+      // There are unsent changes.
       match self.sequence_number_to_instant(unsent_sn) {
         Some(timestamp) => {
+          // Try to find the cache change from DDSCache
           if let Some(cache_change) = self.dds_cache.read().unwrap()
               .from_topic_get_change(&self.my_topic_name, &timestamp) {
+            // CacheChange found, construct DATA submessage
             partial_message = partial_message
                 .data_msg(cache_change.clone(), // TODO: We should not clone, too much copying
                           reader_guid.entityId, // reader
                           self.my_guid.entityId, // writer
                           self.endianness); 
             // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
+
+            // CC will be sent. Remove from unsent list.
           } else {
+            // Change not in cache anymore, mark SN as not relevant anymore
             no_longer_relevant.push(unsent_sn);
           }
         }
@@ -668,6 +676,9 @@ impl Writer {
           no_longer_relevant.push(unsent_sn);
         }  
       } // match
+
+      // This SN will be sent or found no longer relevant => remove
+      // from unsent list.
       reader_proxy.unsent_changes.remove(&unsent_sn);
       found_data = true;
     }
@@ -681,9 +692,11 @@ impl Writer {
     self.send_message_to_readers(DeliveryMode::Unicast, &data_gap_msg,
               &mut std::iter::once(&reader_proxy));
 
-    if found_data { 
+    if found_data {
+      // Data was found. Continue.
     } else {
-      reader_proxy.repair_mode = false; // resume normal data sending
+      // Unset list is empty. Switch off repair mode.
+      reader_proxy.repair_mode = false;
     }     
 
     reader_proxy
