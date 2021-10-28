@@ -1507,14 +1507,6 @@ mod tests {
     data_msg4.writer_id = writer_guid.entity_id;
     data_msg4.writer_sn = SequenceNumber::from(5);
 
-    let data_msg3 = Data {
-      reader_id: reader.get_entity_id(),
-      writer_id: writer_guid.entityId,
-      writer_sn: SequenceNumber::from(4),
-      serialized_payload: serialized_payload3,
-      ..Default::default()
-    };
-
     let serialized_payload4 = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],

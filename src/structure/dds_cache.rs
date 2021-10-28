@@ -316,7 +316,7 @@ mod tests {
     cache
       .write()
       .unwrap()
-      .add_change(topic_name, &DDSTimestamp::now(), change1);
+      .add_change(&topic_name, &DDSTimestamp::now(), change1);
 
     let pointerToCache1 = cache.clone();
 

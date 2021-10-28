@@ -960,7 +960,7 @@ mod tests {
       b: "Fobar".to_string(),
     };
 
-    let key = &data.get_key().into_hash_key();
+    let key = &data.get_key().hash_key();
     info!("key: {:?}", key);
 
     data_writer

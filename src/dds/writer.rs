@@ -323,7 +323,7 @@ impl Writer {
         }
         TimedEvent::SendRepairData{ to_reader: reader_guid } => {
           self.handle_repair_data_send(reader_guid);
-          if let Some(rp) = self.lookup_readerproxy_mut(reader_guid.guidPrefix, reader_guid.entityId) {
+          if let Some(rp) = self.lookup_readerproxy_mut(reader_guid) {
             if rp.repair_mode {
               let delay_to_next_repair = 
               self.qos_policies.deadline().map( |dl| dl.0 )
@@ -547,7 +547,7 @@ impl Writer {
 
       self.update_ack_waiters( reader_guid, Some(an.reader_sn_state.base()));
 
-      if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid_prefix, an.reader_id) {
+      if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid) {
 
         // Mark requested SNs as "unsent changes"
         reader_proxy.handle_ack_nack(&ack_submessage, last_seq);
@@ -899,18 +899,8 @@ impl Writer {
   }
 
 
-  ///This operation finds the ReaderProxy with GUID_t a_reader_guid from the set
-  /// get guid Prefix from RTPS message main header
-  /// get reader guid from AckNack submessage readerEntityId
-  fn lookup_readerproxy_mut(
-    &mut self,
-    guid_prefix: GuidPrefix,
-    reader_entity_id: EntityId,
-  ) -> Option<&mut RtpsReaderProxy> {
-    // TODO: This lookup is done very frequently. It should be done by some
-    // map instead of iterating through a Vec.
-      let search_guid: GUID = GUID::new_with_prefix_and_id(guid_prefix, reader_entity_id);
-    self.readers.get_mut(&search_guid)
+  fn lookup_readerproxy_mut(&mut self, guid: GUID) -> Option<&mut RtpsReaderProxy> {
+    self.readers.get_mut(&guid)
   }
 
   pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<Timestamp> {

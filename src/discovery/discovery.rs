@@ -1288,7 +1288,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter_CDR::<ShapeType>(topic.clone(), None,).unwrap();
+      .create_datawriter_cdr::<ShapeType>(topic.clone(), None,).unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
@@ -1374,7 +1374,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter_CDR::<ShapeType>(topic.clone(), None,).unwrap();
+      .create_datawriter_cdr::<ShapeType>(topic.clone(), None,).unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())

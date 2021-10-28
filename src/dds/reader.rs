@@ -1181,7 +1181,7 @@ mod tests {
       None,
       d.clone(),
     );
-    new_reader.dds_cache.write().unwrap().to_topic_add_change(
+    new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
       change.clone(),
@@ -1214,7 +1214,7 @@ mod tests {
       None,
       d.clone(),
     );
-    new_reader.dds_cache.write().unwrap().to_topic_add_change(
+    new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
       change.clone(),
@@ -1227,7 +1227,7 @@ mod tests {
       None,
       d,
     );
-    new_reader.dds_cache.write().unwrap().to_topic_add_change(
+    new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
       change.clone(),
