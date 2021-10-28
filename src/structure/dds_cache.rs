@@ -356,7 +356,7 @@ mod tests {
       let topic_name = String::from("ImJustATopic");
       let cahange2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
-        SequenceNumber::from(1),
+        SequenceNumber::from(2),
         None,
         DDSData::new(SerializedPayload::default()),
       );
@@ -366,7 +366,7 @@ mod tests {
         .add_change(&topic_name, &DDSTimestamp::now(), cahange2);
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
-        SequenceNumber::from(2),
+        SequenceNumber::from(3),
         None,
         DDSData::new(SerializedPayload::default()),
       );
