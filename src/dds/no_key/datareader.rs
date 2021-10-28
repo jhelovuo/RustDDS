@@ -4,14 +4,10 @@ use serde::{de::DeserializeOwned};
 use mio::{Poll, Token, Ready, PollOpt, Evented};
 
 use crate::{
-  structure::{
-    entity::RTPSEntity ,
-  },
+  structure::{entity::RTPSEntity},
 };
 use crate::dds::{
-  traits::serde_adapters::no_key::*, 
-  values::result::*, qos::*,
-  readcondition::*, data_types::*, 
+  traits::serde_adapters::no_key::*, values::result::*, qos::*, readcondition::*, data_types::*,
 };
 
 use crate::dds::with_key::datareader as datareader_with_key;
@@ -47,10 +43,7 @@ use super::{
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
 /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
 /// ```
-pub struct DataReader<
-  D: DeserializeOwned,
-  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> {
+pub struct DataReader<D: DeserializeOwned, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
   keyed_datareader: datareader_with_key::DataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
 }
 

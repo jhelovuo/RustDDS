@@ -2,16 +2,17 @@ use crate::dds::data_types::GUID;
 use std::collections::BTreeSet;
 use crate::structure::sequence_number::SequenceNumber;
 
-#[allow(unused_imports)] use log::{debug, error, info,trace};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace};
 
 use std::{
-  collections::{BTreeMap, HashMap, /*btree_map::Range*/ },
+  collections::{BTreeMap, HashMap /*btree_map::Range*/},
   cmp::max,
 };
 
 use crate::dds::{
   typedesc::TypeDesc,
-  qos::{QosPolicies, QosPolicyBuilder, policy::ResourceLimits },
+  qos::{QosPolicies, QosPolicyBuilder, policy::ResourceLimits},
 };
 use crate::structure::time::Timestamp;
 
@@ -45,9 +46,9 @@ impl DDSCache {
     topic_data_type: TypeDesc,
   ) {
     self.topic_caches.insert(
-        topic_name.clone(),
-        TopicCache::new(topic_name, topic_kind, topic_data_type),
-      );
+      topic_name.clone(),
+      TopicCache::new(topic_name, topic_kind, topic_data_type),
+    );
   }
 
   pub fn remove_topic(&mut self, topic_name: &str) {
@@ -56,14 +57,17 @@ impl DDSCache {
     }
   }
 
-  pub fn from_topic_get_change(&self, topic_name: &str, instant: &Timestamp) 
-    -> Option<&CacheChange> 
-  {
-    self.topic_caches.get(topic_name)
-      .map( |tc| tc.get_change(instant) )
+  pub fn from_topic_get_change(
+    &self,
+    topic_name: &str,
+    instant: &Timestamp,
+  ) -> Option<&CacheChange> {
+    self
+      .topic_caches
+      .get(topic_name)
+      .map(|tc| tc.get_change(instant))
       .flatten()
   }
-
 
   /// Removes cacheChange permanently
   pub fn from_topic_remove_change(
@@ -74,46 +78,48 @@ impl DDSCache {
     match self.topic_caches.get_mut(topic_name) {
       Some(tc) => tc.remove_change(instant),
       None => {
-        error!("from_topic_remove_change: Topic {:?} is not in DDSCache", topic_name); 
-        None  
+        error!(
+          "from_topic_remove_change: Topic {:?} is not in DDSCache",
+          topic_name
+        );
+        None
       }
     }
   }
 
   /// Removes cacheChange permanently
-  pub fn from_topic_remove_before(&mut self, topic_name: &str, instant: Timestamp) 
-  {
+  pub fn from_topic_remove_before(&mut self, topic_name: &str, instant: Timestamp) {
     match self.topic_caches.get_mut(topic_name) {
       Some(tc) => tc.remove_changes_before(instant),
       None => {
-        error!("from_topic_remove_before: topic: {:?} is not in DDSCache", topic_name); 
+        error!(
+          "from_topic_remove_before: topic: {:?} is not in DDSCache",
+          topic_name
+        );
       }
     }
   }
-
 
   pub fn from_topic_get_changes_in_range(
     &self,
     topic_name: &str,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
-  ) -> Box<dyn Iterator<Item=(Timestamp, &CacheChange)> + '_> {
+  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
     match self.topic_caches.get(topic_name) {
       Some(tc) => Box::new(tc.get_changes_in_range(start_instant, end_instant)),
       None => Box::new(vec![].into_iter()),
     }
   }
 
-  pub fn add_change(
-    &mut self,
-    topic_name: &str,
-    instant: &Timestamp,
-    cache_change: CacheChange,
-  ) {
+  pub fn add_change(&mut self, topic_name: &str, instant: &Timestamp, cache_change: CacheChange) {
     match self.topic_caches.get_mut(topic_name) {
       Some(tc) => tc.add_change(instant, cache_change),
       None => {
-        error!("to_topic_add_change: Topic: {:?} is not in DDSCache", topic_name); 
+        error!(
+          "to_topic_add_change: Topic: {:?} is not in DDSCache",
+          topic_name
+        );
       }
     }
   }
@@ -144,19 +150,22 @@ impl TopicCache {
   }
 
   pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
-    self.history_cache.add_change(instant, cache_change)
-      .map( |cc_back| { 
-        debug!("DDSCache insert failed topic={:?} cache_change={:?}",
-                self.topic_name, cc_back); 
-            }
-          );
+    self
+      .history_cache
+      .add_change(instant, cache_change)
+      .map(|cc_back| {
+        debug!(
+          "DDSCache insert failed topic={:?} cache_change={:?}",
+          self.topic_name, cc_back
+        );
+      });
   }
 
   pub fn get_changes_in_range(
     &self,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
-  ) -> Box<dyn Iterator<Item=(Timestamp, &CacheChange)> + '_> {
+  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
     self
       .history_cache
       .get_range_of_changes(start_instant, end_instant)
@@ -171,32 +180,35 @@ impl TopicCache {
     // Look up some Topic-specific resource limit
     // and remove earliest samples until we are within limit.
     // This prevents cache from groving indefinetly.
-    let max_keep_samples = self.topic_qos.resource_limits()
-        .unwrap_or( ResourceLimits {
-                    max_samples: 1024,
-                    max_instances: 1024,
-                    max_samples_per_instance: 64,
-                  })
-        .max_samples;
+    let max_keep_samples = self
+      .topic_qos
+      .resource_limits()
+      .unwrap_or(ResourceLimits {
+        max_samples: 1024,
+        max_instances: 1024,
+        max_samples_per_instance: 64,
+      })
+      .max_samples;
     // TODO: We cannot currently keep track of instance counts, because TopicCache or
     // DDSCache below do not know about instances.
     let remove_count = self.history_cache.changes.len() as i32 - max_keep_samples as i32;
-    let split_key = 
-          *self.history_cache.changes.keys()
-            .take(max(0,remove_count) as usize + 1)
-            .last()
-            .map( |lim| max(lim,&instant) )
-            .unwrap_or(&instant);
+    let split_key = *self
+      .history_cache
+      .changes
+      .keys()
+      .take(max(0, remove_count) as usize + 1)
+      .last()
+      .map(|lim| max(lim, &instant))
+      .unwrap_or(&instant);
     self.history_cache.remove_changes_before(split_key)
   }
-
 }
 
 // This is contained in a TopicCache
 #[derive(Debug)]
 pub struct DDSHistoryCache {
   pub(crate) changes: BTreeMap<Timestamp, CacheChange>,
-  sequence_numbers: BTreeMap<GUID,BTreeSet<SequenceNumber>>,
+  sequence_numbers: BTreeMap<GUID, BTreeSet<SequenceNumber>>,
 }
 
 impl DDSHistoryCache {
@@ -215,22 +227,36 @@ impl DDSHistoryCache {
   }
 
   fn insert_sn(&mut self, cc: &CacheChange) {
-    self.sequence_numbers.entry(cc.writer_guid)
-      .or_insert_with(|| {let mut s = BTreeSet::new(); s.insert(cc.sequence_number); s } )
+    self
+      .sequence_numbers
+      .entry(cc.writer_guid)
+      .or_insert_with(|| {
+        let mut s = BTreeSet::new();
+        s.insert(cc.sequence_number);
+        s
+      })
       .insert(cc.sequence_number);
   }
 
   fn remove_sn(&mut self, cc: &CacheChange) {
-    self.sequence_numbers.entry(cc.writer_guid)
-      .and_modify(|s| {s.remove(&cc.sequence_number);} );
+    self.sequence_numbers.entry(cc.writer_guid).and_modify(|s| {
+      s.remove(&cc.sequence_number);
+    });
 
     //TODO: If this makes a SN set empty, remove it from BTreeMap.
   }
 
-  pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) -> Option<CacheChange> {
+  pub fn add_change(
+    &mut self,
+    instant: &Timestamp,
+    cache_change: CacheChange,
+  ) -> Option<CacheChange> {
     if self.have_sn(&cache_change) {
-      trace!("Received duplicate {:?} from {:?}, discarding.",
-        cache_change.sequence_number, cache_change.writer_guid);
+      trace!(
+        "Received duplicate {:?} from {:?}, discarding.",
+        cache_change.sequence_number,
+        cache_change.writer_guid
+      );
       Some(cache_change)
     } else {
       self.insert_sn(&cache_change);
@@ -239,7 +265,10 @@ impl DDSHistoryCache {
         None => None, // all is good. timestamp was not inserted before.
         Some(old_cc) => {
           // If this happens cahce changes were created at exactly same instant.
-          error!("DDSHistoryCache already contained element with key {:?} !!!", instant);
+          error!(
+            "DDSHistoryCache already contained element with key {:?} !!!",
+            instant
+          );
           self.remove_sn(&old_cc);
           Some(old_cc)
         }
@@ -255,26 +284,29 @@ impl DDSHistoryCache {
     &self,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
-  ) -> Box<dyn Iterator<Item=(Timestamp, &CacheChange)> + '_> {
+  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
     Box::new(
       self
         .changes
         .range((Excluded(start_instant), Included(end_instant)))
-        .map(|(i,c)| (*i,c)))
+        .map(|(i, c)| (*i, c)),
+    )
   }
 
   /// Removes and returns value if it was found
   pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
-    self.changes.remove(instant)
-      .map( |cc| { self.remove_sn(&cc); cc })
+    self.changes.remove(instant).map(|cc| {
+      self.remove_sn(&cc);
+      cc
+    })
   }
 
   pub fn remove_changes_before(&mut self, instant: Timestamp) {
     let to_retain = self.changes.split_off(&instant);
-    let to_remove = std::mem::replace(&mut self.changes, to_retain); 
+    let to_remove = std::mem::replace(&mut self.changes, to_retain);
     for r in to_remove.values() {
       self.remove_sn(r);
-    } 
+    }
   }
 }
 
@@ -328,22 +360,20 @@ mod tests {
         None,
         DDSData::new(SerializedPayload::default()),
       );
-      pointerToCache1.write().unwrap().add_change(
-        &topic_name,
-        &DDSTimestamp::now(),
-        cahange2,
-      );
+      pointerToCache1
+        .write()
+        .unwrap()
+        .add_change(&topic_name, &DDSTimestamp::now(), cahange2);
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(2),
         None,
         DDSData::new(SerializedPayload::default()),
       );
-      pointerToCache1.write().unwrap().add_change(
-        &topic_name,
-        &DDSTimestamp::now(),
-        cahange3,
-      );
+      pointerToCache1
+        .write()
+        .unwrap()
+        .add_change(&topic_name, &DDSTimestamp::now(), cahange3);
     })
     .join()
     .unwrap();

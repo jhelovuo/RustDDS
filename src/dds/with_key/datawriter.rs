@@ -5,12 +5,12 @@ use std::{
 };
 
 use mio::{Poll, Events, Token, Ready, PollOpt, Evented};
-use mio_extras::channel::{self as mio_channel, Receiver, SendError,};
+use mio_extras::channel::{self as mio_channel, Receiver, SendError};
 
 use serde::Serialize;
 
 #[allow(unused_imports)]
-use log::{error,warn,debug,trace,info};
+use log::{error, warn, debug, trace, info};
 
 use crate::{
   discovery::discovery::DiscoveryCommand, serialization::CDRSerializerAdapter,
@@ -29,7 +29,7 @@ use crate::dds::topic::Topic;
 use crate::log_and_err_precondition_not_met;
 use crate::log_and_err_internal;
 
-use crate::dds::values::result::{ Result, Error, };
+use crate::dds::values::result::{Result, Error};
 use crate::dds::statusevents::*;
 use crate::dds::traits::dds_entity::DDSEntity;
 use crate::dds::traits::key::*;
@@ -41,16 +41,16 @@ use crate::dds::qos::{
   policy::{Reliability},
 };
 use crate::dds::traits::serde_adapters::with_key::SerializerAdapter;
-//use crate::dds::traits::serde_adapters::no_key::SerializerAdapter 
+//use crate::dds::traits::serde_adapters::no_key::SerializerAdapter
 //  as no_key_SerializerAdapter; // needs to be visible only, no direct use
- 
+
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 
 use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
-use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand, };
+use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand};
 
 /// Simplified type for CDR encoding
-pub type DataWriterCdr<D> = DataWriter<D,CDRSerializerAdapter<D>>;
+pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 
 /// DDS DataWriter for keyed topics
 ///
@@ -83,8 +83,7 @@ pub type DataWriterCdr<D> = DataWriter<D,CDRSerializerAdapter<D>>;
 /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
 /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None);
 /// ```
-pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>>
-{
+pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
   my_publisher: Publisher,
   my_topic: Topic,
   qos_policy: QosPolicies,
@@ -111,11 +110,14 @@ where
       Ok(_) => {}
 
       // This is fairly normal at shutdown, as the other end is down already.
-      Err(SendError::Disconnected(_cmd)) => debug!(
-        "Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand: Disconnected." ),
+      Err(SendError::Disconnected(_cmd)) => {
+        debug!("Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand: Disconnected.")
+      }
       // other errors must be taken more seriously
-      Err(e) => 
-        error!("Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand. {:?}",e ),
+      Err(e) => error!(
+        "Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand. {:?}",
+        e
+      ),
     }
   }
 }
@@ -142,33 +144,34 @@ where
 
     let dp = match publisher.get_participant() {
       Some(dp) => dp,
-      None => return 
-        log_and_err_precondition_not_met!("Cannot create new DataWriter, DomainParticipant doesn't exist.") ,
+      None => {
+        return log_and_err_precondition_not_met!(
+          "Cannot create new DataWriter, DomainParticipant doesn't exist."
+        )
+      }
     };
 
-    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), entity_id );
+    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), entity_id);
 
     match dds_cache.write() {
-      Ok(mut cache) => cache.add_new_topic(
-        topic.get_name(),
-        TopicKind::NoKey,
-        topic.get_type(),
-      ),
+      Ok(mut cache) => cache.add_new_topic(topic.get_name(), TopicKind::NoKey, topic.get_type()),
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
     };
 
-    if let Some(lv) = topic.get_qos().liveliness { match lv {
-      Liveliness::Automatic { lease_duration: _ } => (),
-      Liveliness::ManualByParticipant { lease_duration: _ } => {
-        match discovery_command.send(DiscoveryCommand::ManualAssertLiveliness) {
-          Ok(_) => (),
-          Err(e) => {
-            error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+    if let Some(lv) = topic.get_qos().liveliness {
+      match lv {
+        Liveliness::Automatic { lease_duration: _ } => (),
+        Liveliness::ManualByParticipant { lease_duration: _ } => {
+          match discovery_command.send(DiscoveryCommand::ManualAssertLiveliness) {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+            }
           }
         }
+        Liveliness::ManualByTopic { lease_duration: _ } => (),
       }
-      Liveliness::ManualByTopic { lease_duration: _ } => (),
-    } };
+    };
     let qos = topic.get_qos();
     Ok(DataWriter {
       my_publisher: publisher,
@@ -224,21 +227,23 @@ where
 
   // TODO: What is this function? To what part of DDS spec does it correspond to?
   pub fn refresh_manual_liveliness(&self) {
-    if let Some(lv) = self.get_qos().liveliness { match lv {
-      Liveliness::Automatic { lease_duration: _ } => (),
-      Liveliness::ManualByParticipant { lease_duration: _ } => {
-        match self
-          .discovery_command
-          .send(DiscoveryCommand::ManualAssertLiveliness)
-        {
-          Ok(_) => (),
-          Err(e) => {
-            error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+    if let Some(lv) = self.get_qos().liveliness {
+      match lv {
+        Liveliness::Automatic { lease_duration: _ } => (),
+        Liveliness::ManualByParticipant { lease_duration: _ } => {
+          match self
+            .discovery_command
+            .send(DiscoveryCommand::ManualAssertLiveliness)
+          {
+            Ok(_) => (),
+            Err(e) => {
+              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+            }
           }
         }
+        Liveliness::ManualByTopic { lease_duration: _ } => (),
       }
-      Liveliness::ManualByTopic { lease_duration: _ } => (),
-    } };
+    };
   }
 
   /// Writes single data instance to a topic.
@@ -276,35 +281,42 @@ where
   /// data_writer.write(some_data, None).unwrap();
   /// ```
   pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+    let send_buffer = SA::to_bytes(&data)?; // serialize
 
-    let send_buffer = SA::to_bytes( &data )?; // serialize
+    let ddsdata = DDSData::new(SerializedPayload::new_from_bytes(
+      SA::output_encoding(),
+      send_buffer,
+    ));
+    let writer_command = WriterCommand::DDSData {
+      data: ddsdata,
+      source_timestamp,
+    };
 
-    let ddsdata = DDSData::new( SerializedPayload::new_from_bytes( SA::output_encoding() , send_buffer) );
-    let writer_command = WriterCommand::DDSData { data: ddsdata , source_timestamp };
+    let timeout = match self.get_qos().reliability() {
+      Some(Reliability::Reliable { max_blocking_time }) => Some(max_blocking_time),
+      _ => None,
+    };
 
-    let timeout =
-      match self.get_qos().reliability() {
-        Some(Reliability::Reliable { max_blocking_time }) => Some(max_blocking_time),
-        _ => None,
-      };
-
-    match try_send_timeout(&self.cc_upload, writer_command, timeout)
-    {
+    match try_send_timeout(&self.cc_upload, writer_command, timeout) {
       Ok(_) => {
         self.refresh_manual_liveliness();
         Ok(())
       }
       Err(e) => {
-        warn!("Failed to write new data: topic={:?}  reason={:?}  timeout={:?}", 
-             self.my_topic.get_name(), e, timeout, );
+        warn!(
+          "Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
+          self.my_topic.get_name(),
+          e,
+          timeout,
+        );
         Err(Error::OutOfResources)
       }
     }
   }
 
-  /// This operation blocks the calling thread until either all data written by the 
+  /// This operation blocks the calling thread until either all data written by the
   /// reliable DataWriter entities is acknowledged by all
-  /// matched reliable DataReader entities, or else the duration specified by the 
+  /// matched reliable DataReader entities, or else the duration specified by the
   /// `max_wait` parameter elapses, whichever happens first.
   ///
   /// See DDS Spec 1.4 Section 2.2.2.4.1.12 wait_for_acknowledgments.
@@ -313,9 +325,9 @@ where
   /// with Realibale QoS, the call succeeds imediately.
   ///
   /// Return values
-  /// * `Ok(true)` - all acknowledged 
+  /// * `Ok(true)` - all acknowledged
   /// * `Ok(false)`- timed out waiting for acknowledgments
-  /// * `Err(_)` - something went wrong 
+  /// * `Err(_)` - something went wrong
   ///
   /// # Examples
   ///
@@ -355,17 +367,25 @@ where
       None => Ok(true),
       Some(Reliability::BestEffort) => Ok(true),
       Some(Reliability::Reliable { .. }) => {
-        let (acked_sender,acked_receiver) = mio_channel::sync_channel::<()>(1);
+        let (acked_sender, acked_receiver) = mio_channel::sync_channel::<()>(1);
         let poll = Poll::new()?;
-        poll.register(&acked_receiver, Token(0), Ready::readable(), PollOpt::edge() )?;
-        self.cc_upload.try_send(
-          WriterCommand::WaitForAcknowledgments { all_acked: acked_sender })?;
+        poll.register(
+          &acked_receiver,
+          Token(0),
+          Ready::readable(),
+          PollOpt::edge(),
+        )?;
+        self
+          .cc_upload
+          .try_send(WriterCommand::WaitForAcknowledgments {
+            all_acked: acked_sender,
+          })?;
         let mut events = Events::with_capacity(1);
-        poll.poll(&mut events, Some(max_wait) )?;
-        if let Some( _event ) = events.iter().next() {
-          let _ = acked_receiver.try_recv()
-            .or_else(|_e| log_and_err_internal!(
-              "wait_for_acknowledgments - Spurious poll event?"));
+        poll.poll(&mut events, Some(max_wait))?;
+        if let Some(_event) = events.iter().next() {
+          let _ = acked_receiver
+            .try_recv()
+            .or_else(|_e| log_and_err_internal!("wait_for_acknowledgments - Spurious poll event?"));
           // got reply
           Ok(true)
         } else {
@@ -609,7 +629,7 @@ where
   pub fn get_publication_matched_status(&self) -> Result<PublicationMatchedStatus> {
     todo!()
   }
-  
+
   */
 
   /// Topic assigned to this DataWriter
@@ -726,13 +746,14 @@ where
 
     match self.get_qos().liveliness {
       Some(Liveliness::ManualByTopic { lease_duration: _ }) => {
-        self.discovery_command
+        self
+          .discovery_command
           .send(DiscoveryCommand::AssertTopicLiveliness {
             writer_guid: self.get_guid(),
             manual_assertion: true, // by definition of this function
-            })
-          .unwrap_or_else( |e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e))
-        }
+          })
+          .unwrap_or_else(|e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e))
+      }
       _other => (),
     }
     Ok(())
@@ -828,24 +849,26 @@ where
   /// data_writer.dispose(1, None).unwrap();
   /// ```
   pub fn dispose(&self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
+    let send_buffer = SA::key_to_bytes(&key)?; // serialize key
 
-    let send_buffer = SA::key_to_bytes( &key  )?; // serialize key
-
-    let ddsdata = DDSData::new_disposed_by_key( 
+    let ddsdata = DDSData::new_disposed_by_key(
       ChangeKind::NotAliveDisposed,
-      SerializedPayload::new_from_bytes( SA::output_encoding() , send_buffer) 
+      SerializedPayload::new_from_bytes(SA::output_encoding(), send_buffer),
     );
-    self.cc_upload
-      .send(WriterCommand::DDSData { data: ddsdata , source_timestamp })
-      .or_else(|huh| 
-        log_and_err_internal!("Cannot send dispose command: {:?}", huh))?;
+    self
+      .cc_upload
+      .send(WriterCommand::DDSData {
+        data: ddsdata,
+        source_timestamp,
+      })
+      .or_else(|huh| log_and_err_internal!("Cannot send dispose command: {:?}", huh))?;
 
     self.refresh_manual_liveliness();
     Ok(())
   }
 }
 
-impl <D,SA> StatusEvented<DataWriterStatus> for DataWriter<D,SA>
+impl<D, SA> StatusEvented<DataWriterStatus> for DataWriter<D, SA>
 where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
@@ -856,7 +879,7 @@ where
 
   fn try_recv_status(&self) -> Option<DataWriterStatus> {
     self.status_receiver.try_recv_status()
-  }  
+  }
 }
 
 impl<D, SA> RTPSEntity for DataWriter<D, SA>
@@ -912,7 +935,12 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii".to_string(), "Huh?".to_string(), &qos, TopicKind::WithKey)
+      .create_topic(
+        "Aasii".to_string(),
+        "Huh?".to_string(),
+        &qos,
+        TopicKind::WithKey,
+      )
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -947,7 +975,12 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii".to_string(), "Huh?".to_string(), &qos, TopicKind::WithKey)
+      .create_topic(
+        "Aasii".to_string(),
+        "Huh?".to_string(),
+        &qos,
+        TopicKind::WithKey,
+      )
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -983,7 +1016,12 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii".to_string(), "Huh?".to_string(), &qos, TopicKind::WithKey)
+      .create_topic(
+        "Aasii".to_string(),
+        "Huh?".to_string(),
+        &qos,
+        TopicKind::WithKey,
+      )
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -1002,6 +1040,6 @@ mod tests {
       .wait_for_acknowledgments(Duration::from_secs(2))
       .unwrap();
     assert!(res) // we should get "true" immediately, because we have
-                           // no Reliable QoS
+                 // no Reliable QoS
   }
 }

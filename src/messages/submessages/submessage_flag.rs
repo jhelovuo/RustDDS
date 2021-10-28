@@ -68,12 +68,20 @@ submessageflag_impls!(DATAFRAG_Flags);
 
 impl DATAFRAG_Flags {
   pub fn to_data_flags(dff: BitFlags<DATAFRAG_Flags>) -> BitFlags<DATA_Flags> {
-    let mut df : BitFlags<DATA_Flags> = 
-      if dff.contains(DATAFRAG_Flags::Key) { DATA_Flags::Key.into()  }
-      else { DATA_Flags::Data.into() };
-    if dff.contains(DATAFRAG_Flags::Endianness) {  df.insert( DATA_Flags::Endianness) }
-    if dff.contains(DATAFRAG_Flags::InlineQos) { df.insert(DATA_Flags::InlineQos) }
-    if dff.contains(DATAFRAG_Flags::NonStandardPayload) { df.insert(DATA_Flags::NonStandardPayload) }
+    let mut df: BitFlags<DATA_Flags> = if dff.contains(DATAFRAG_Flags::Key) {
+      DATA_Flags::Key.into()
+    } else {
+      DATA_Flags::Data.into()
+    };
+    if dff.contains(DATAFRAG_Flags::Endianness) {
+      df.insert(DATA_Flags::Endianness)
+    }
+    if dff.contains(DATAFRAG_Flags::InlineQos) {
+      df.insert(DATA_Flags::InlineQos)
+    }
+    if dff.contains(DATAFRAG_Flags::NonStandardPayload) {
+      df.insert(DATA_Flags::NonStandardPayload)
+    }
     df
   }
 }

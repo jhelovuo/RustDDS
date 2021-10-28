@@ -1,8 +1,4 @@
-use rustdds::{
-  ros2::NodeOptions, 
-  ros2::RosParticipant,
-  serialization::CDRDeserializerAdapter, 
-};
+use rustdds::{ros2::NodeOptions, ros2::RosParticipant, serialization::CDRDeserializerAdapter};
 
 use log::{info, warn};
 use mio::{Events, Poll, PollOpt, Ready, Token};
@@ -25,26 +21,25 @@ impl TurtleListener {
     sender: mio_channel::Sender<Twist>,
   ) {
     println!("Turtle listener");
-    let mut ros_node = ros_participant.new_ros_node(
-                            "turtle_listener",  // name
-                            "/ros2_demo",     // namespace
-                            NodeOptions::new(false), // enable rosout
-                            )
-                        .unwrap();
+    let mut ros_node = ros_participant
+      .new_ros_node(
+        "turtle_listener",       // name
+        "/ros2_demo",            // namespace
+        NodeOptions::new(false), // enable rosout
+      )
+      .unwrap();
 
-    let turtle_cmd_vel_topic = ros_node.create_ros_topic(
-      &TurtleCmdVelTopic::topic_name(),
-      TurtleCmdVelTopic::type_name(),
-      TurtleCmdVelTopic::get_qos(),
-      TurtleCmdVelTopic::topic_kind(),
-    )
-    .unwrap();
+    let turtle_cmd_vel_topic = ros_node
+      .create_ros_topic(
+        &TurtleCmdVelTopic::topic_name(),
+        TurtleCmdVelTopic::type_name(),
+        TurtleCmdVelTopic::get_qos(),
+        TurtleCmdVelTopic::topic_kind(),
+      )
+      .unwrap();
 
     let mut turtle_cmd_vel_reader = ros_node
-      .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(
-        turtle_cmd_vel_topic,
-        None,
-      )
+      .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(turtle_cmd_vel_topic, None)
       .unwrap();
 
     let poll = Poll::new().unwrap();
@@ -91,6 +86,5 @@ impl TurtleListener {
         }
       }
     }
-  
   }
 }

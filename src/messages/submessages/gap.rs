@@ -7,9 +7,7 @@ use enumflags2::BitFlags;
 use log::error;
 use speedy::{Readable, Writable};
 
-use super::{
-  submessage::EntitySubmessage, submessage_flag::GAP_Flags, submessage_kind::SubmessageKind,
-};
+use super::{submessage::EntitySubmessage, submessage_flag::GAP_Flags, submessage_kind::SubmessageKind};
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers
 /// is no longer relevant. The set may be a contiguous range of
@@ -42,7 +40,7 @@ impl Gap {
       Ok(bytes) => bytes.len() as u16,
       Err(e) => {
         error!("Reader couldn't write GAP to bytes: {}", e);
-        return None
+        return None;
       }
     };
 

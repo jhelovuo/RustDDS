@@ -132,7 +132,6 @@ pub struct SampleInfo {
 
 #[allow(clippy::new_without_default)]
 impl SampleInfo {
-
   /* These accessor methods should not be needed, as the SampleInfo structure is likely
      not about to change too much, as it is specified by the DDS spec.
 

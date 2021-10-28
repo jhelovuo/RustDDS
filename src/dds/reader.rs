@@ -11,7 +11,8 @@ use crate::dds::statusevents::*;
 use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
 use crate::structure::guid::{GUID, EntityId, GuidPrefix};
 use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
-#[cfg(test)] use crate::structure::locator::LocatorList;
+#[cfg(test)]
+use crate::structure::locator::LocatorList;
 use crate::structure::{duration::Duration, time::Timestamp};
 
 use std::{
@@ -46,9 +47,7 @@ use crate::messages::submessages::submessage_elements::parameter_list::Parameter
 
 use speedy::{Writable, Endianness};
 
-use super::{
-  with_key::datareader::ReaderCommand,
-};
+use super::{with_key::datareader::ReaderCommand};
 
 use super::qos::InlineQos;
 
@@ -59,13 +58,13 @@ pub(crate) enum TimedEvent {
 
 // Some pieces necessary to contruct a reader.
 // These can be sent between threads, whereas a Reader cannot.
-pub (crate) struct ReaderIngredients {
+pub(crate) struct ReaderIngredients {
   pub guid: GUID,
   pub notification_sender: mio_channel::SyncSender<()>,
   pub status_sender: mio_channel::SyncSender<DataReaderStatus>,
   pub topic_name: String,
   pub qos_policy: QosPolicies,
-  pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>, 
+  pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
 }
 
 impl fmt::Debug for ReaderIngredients {
@@ -87,10 +86,10 @@ pub(crate) struct Reader {
 
   is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
   // Currently we support only stateful behaviour.
-
   dds_cache: Arc<RwLock<DDSCache>>,
 
-  #[cfg(test)] seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
+  #[cfg(test)]
+  seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
 
   topic_name: String,
   qos_policy: QosPolicies,
@@ -112,29 +111,27 @@ pub(crate) struct Reader {
 
   pub(crate) timed_event_timer: Timer<TimedEvent>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
-
-} 
+}
 
 impl Reader {
   pub fn new(
-    i : ReaderIngredients,
+    i: ReaderIngredients,
     dds_cache: Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
     timed_event_timer: Timer<TimedEvent>,
   ) -> Reader {
-      Reader {
-        notification_sender: i.notification_sender,
-        status_sender: i.status_sender,
-        udp_sender,
-        is_stateful: true, // Do not change this before stateless functionality is implemented.
-        dds_cache,
-        topic_name: i.topic_name,
-        qos_policy: i.qos_policy,
-
+    Reader {
+      notification_sender: i.notification_sender,
+      status_sender: i.status_sender,
+      udp_sender,
+      is_stateful: true, // Do not change this before stateless functionality is implemented.
+      dds_cache,
+      topic_name: i.topic_name,
+      qos_policy: i.qos_policy,
 
       #[cfg(test)]
       seqnum_instant_map: BTreeMap::new(),
-      my_guid: i.guid ,
+      my_guid: i.guid,
       enpoint_attributes: EndpointAttributes::default(),
 
       heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
@@ -175,15 +172,21 @@ impl Reader {
     self.get_guid().entity_id.as_alt_token()
   }
 
-
   pub fn set_requested_deadline_check_timer(&mut self) {
     if let Some(deadline) = self.qos_policy.deadline {
-      debug!("GUID={:?} set_requested_deadline_check_timer: {:?}", self.my_guid, deadline.0.to_std() );
-      self.timed_event_timer
-        .set_timeout(deadline.0.to_std(), TimedEvent::DeadlineMissedCheck ); 
+      debug!(
+        "GUID={:?} set_requested_deadline_check_timer: {:?}",
+        self.my_guid,
+        deadline.0.to_std()
+      );
+      self
+        .timed_event_timer
+        .set_timeout(deadline.0.to_std(), TimedEvent::DeadlineMissedCheck);
     } else {
-      trace!("GUID={:?} - no deaadline policy - do not set set_requested_deadline_check_timer",
-        self.my_guid);
+      trace!(
+        "GUID={:?} - no deaadline policy - do not set set_requested_deadline_check_timer",
+        self.my_guid
+      );
     }
   }
 
@@ -203,7 +206,7 @@ impl Reader {
         info!("send_status_change - cannot send status, DataReader Disconnected.")
       }
       Err(mio_channel::TrySendError::Io(e)) => {
-        error!("send_status_change - cannot send status: {:?}",e);
+        error!("send_status_change - cannot send status: {:?}", e);
       }
     }
   }
@@ -214,10 +217,10 @@ impl Reader {
   // this calculation should be repeated every self.qos_policy.deadline
   fn calculate_if_requested_deadline_is_missed(&mut self) -> Vec<DataReaderStatus> {
     debug!("calculate_if_requested_deadline_is_missed");
-    
+
     match self.qos_policy.deadline {
       None => vec![],
-      
+
       Some(policy::Deadline(deadline_duration)) => {
         let mut changes: Vec<DataReaderStatus> = vec![];
         let now = Timestamp::now();
@@ -226,25 +229,30 @@ impl Reader {
             Some(last_change) => {
               let since_last = now.duration_since(last_change);
               // if time singe last received message is greater than deadline increase status and return notification.
-              trace!("Comparing deadlines: {:?} - {:?}", since_last, deadline_duration);
-              if since_last > deadline_duration{
-                debug!("Deadline missed: {:?} - {:?}", since_last, deadline_duration);
-                self.requested_deadline_missed_count += 1;
-                changes.push( DataReaderStatus::RequestedDeadlineMissed {
-                                count: CountWithChange::start_from(self.requested_deadline_missed_count,1)
-                              } 
+              trace!(
+                "Comparing deadlines: {:?} - {:?}",
+                since_last,
+                deadline_duration
+              );
+              if since_last > deadline_duration {
+                debug!(
+                  "Deadline missed: {:?} - {:?}",
+                  since_last, deadline_duration
                 );
-              }      
+                self.requested_deadline_missed_count += 1;
+                changes.push(DataReaderStatus::RequestedDeadlineMissed {
+                  count: CountWithChange::start_from(self.requested_deadline_missed_count, 1),
+                });
+              }
             }
             None => {
               // no messages recieved ever so deadline must be missed.
               // TODO: But what if the Reader or WriterProxy was just created?
               self.requested_deadline_missed_count += 1;
-              changes.push( DataReaderStatus::RequestedDeadlineMissed {
-                                count: CountWithChange::start_from(self.requested_deadline_missed_count,1)
-                            } 
-              );
-            } 
+              changes.push(DataReaderStatus::RequestedDeadlineMissed {
+                count: CountWithChange::start_from(self.requested_deadline_missed_count, 1),
+              });
+            }
           }
         } // for
         changes
@@ -253,7 +261,7 @@ impl Reader {
   } // fn
 
   pub fn handle_timed_event(&mut self) {
-    while let Some(e) =  self.timed_event_timer.poll() {
+    while let Some(e) = self.timed_event_timer.poll() {
       match e {
         TimedEvent::DeadlineMissedCheck => {
           self.handle_requested_deadline_event();
@@ -264,7 +272,7 @@ impl Reader {
   }
 
   pub fn process_command(&mut self) {
-    trace!("process_command {:?}", self.my_guid );
+    trace!("process_command {:?}", self.my_guid);
     loop {
       use std::sync::mpsc::TryRecvError;
       match self.data_reader_command_receiver.try_recv() {
@@ -274,13 +282,13 @@ impl Reader {
         }
 
         // Disconnected is normal when terminating
-        Err(TryRecvError::Disconnected) => { 
+        Err(TryRecvError::Disconnected) => {
           trace!("DataReader disconnected");
-          break
+          break;
         }
         Err(TryRecvError::Empty) => {
           warn!("There was no command. Spurious command event??");
-          break
+          break;
         }
       }
     }
@@ -314,26 +322,28 @@ impl Reader {
     return vec![*start, *end];
   }
 
- 
   // updates or adds a new writer proxy, doesn't touch changes
   pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy, offered_qos: QosPolicies) {
-    debug!("update_writer_proxy topic={:?}",self.topic_name);
-    match offered_qos.compliance_failure_wrt( &self.qos_policy ) {
-      None => { // success, update or insert
+    debug!("update_writer_proxy topic={:?}", self.topic_name);
+    match offered_qos.compliance_failure_wrt(&self.qos_policy) {
+      None => {
+        // success, update or insert
         let writer_id = proxy.remote_writer_guid;
-        let count_change =
-          self.matched_writer_update(proxy); 
+        let count_change = self.matched_writer_update(proxy);
         if count_change > 0 {
           self.writer_match_count_total += count_change;
-          self.send_status_change(DataReaderStatus::SubscriptionMatched{
-              total: CountWithChange::new(self.writer_match_count_total, count_change ), 
-              current: CountWithChange::new(self.matched_writers.len() as i32, count_change ),
+          self.send_status_change(DataReaderStatus::SubscriptionMatched {
+            total: CountWithChange::new(self.writer_match_count_total, count_change),
+            current: CountWithChange::new(self.matched_writers.len() as i32, count_change),
           });
-          info!("Matched new remote writer on topic={:?} writer= {:?}", 
-                self.topic_name, writer_id);
+          info!(
+            "Matched new remote writer on topic={:?} writer= {:?}",
+            self.topic_name, writer_id
+          );
         }
       }
-      Some(bad_policy_id) => { // no QoS match
+      Some(bad_policy_id) => {
+        // no QoS match
         self.offered_incompatible_qos_count += 1;
         self.send_status_change(DataReaderStatus::RequestedIncompatibleQos {
           count: CountWithChange::new(self.offered_incompatible_qos_count, 1),
@@ -349,33 +359,34 @@ impl Reader {
   fn matched_writer_update(&mut self, proxy: RtpsWriterProxy) -> i32 {
     match self.matched_writer_lookup(proxy.remote_writer_guid) {
       Some(op) => {
-        op.update_contents(proxy); 
+        op.update_contents(proxy);
         0
       }
       None => {
-        self.matched_writers.insert(proxy.remote_writer_guid, proxy); 
-        1 
+        self.matched_writers.insert(proxy.remote_writer_guid, proxy);
+        1
       }
     }
   }
 
-  pub fn remove_writer_proxy(&mut self, writer_guid:GUID) {
+  pub fn remove_writer_proxy(&mut self, writer_guid: GUID) {
     if self.matched_writers.contains_key(&writer_guid) {
       self.matched_writers.remove(&writer_guid);
-      self.send_status_change(DataReaderStatus::SubscriptionMatched { 
-                total: CountWithChange::new(self.writer_match_count_total , 0 ),
-                current: CountWithChange::new(self.matched_writers.len() as i32 , -1)
-              });
+      self.send_status_change(DataReaderStatus::SubscriptionMatched {
+        total: CountWithChange::new(self.writer_match_count_total, 0),
+        current: CountWithChange::new(self.matched_writers.len() as i32, -1),
+      });
     }
   }
 
   // Entire remote participant was lost.
   // Remove all remote readers belonging to it.
   pub fn participant_lost(&mut self, guid_prefix: GuidPrefix) {
-    let lost_readers : Vec<GUID> = 
-      self.matched_writers.range( guid_prefix.range() )
-        .map(|(g,_)| *g)
-        .collect();
+    let lost_readers: Vec<GUID> = self
+      .matched_writers
+      .range(guid_prefix.range())
+      .map(|(g, _)| *g)
+      .collect();
     for reader in lost_readers {
       self.remove_writer_proxy(reader)
     }
@@ -402,18 +413,20 @@ impl Reader {
       multicast_locator_list,
       remote_group_entity_id,
     );
-    self.update_writer_proxy(proxy, QosPolicies::qos_none() );
+    self.update_writer_proxy(proxy, QosPolicies::qos_none());
   }
 
   fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
     self.matched_writers.get_mut(&remote_writer_guid)
   }
 
-
   // handles regular data message and updates history cache
-  pub fn handle_data_msg(&mut self, data: Data, 
-      data_flags:BitFlags<DATA_Flags>, mr_state: MessageReceiverState ) 
-  {
+  pub fn handle_data_msg(
+    &mut self,
+    data: Data,
+    data_flags: BitFlags<DATA_Flags>,
+    mr_state: MessageReceiverState,
+  ) {
     //trace!("handle_data_msg entry");
     let receive_timestamp = Timestamp::now();
 
@@ -432,38 +445,51 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let writer_seq_num = data.writer_sn; // for borrow checker
 
-    match Self::data_to_ddsdata(data,data_flags) {
-      Ok(ddsdata) => {
-        self.process_received_data(ddsdata, receive_timestamp, mr_state.timestamp, 
-          writer_guid, writer_seq_num)    
-      }
-      Err(e) => debug!("Parsing DATA to DDSData failed: {}",e),
+    match Self::data_to_ddsdata(data, data_flags) {
+      Ok(ddsdata) => self.process_received_data(
+        ddsdata,
+        receive_timestamp,
+        mr_state.timestamp,
+        writer_guid,
+        writer_seq_num,
+      ),
+      Err(e) => debug!("Parsing DATA to DDSData failed: {}", e),
     }
-
-    
   }
 
-  pub fn handle_datafrag_msg(&mut self, datafrag: DataFrag, datafrag_flags: BitFlags<DATAFRAG_Flags>,
-     mr_state: MessageReceiverState) 
-  {
+  pub fn handle_datafrag_msg(
+    &mut self,
+    datafrag: DataFrag,
+    datafrag_flags: BitFlags<DATAFRAG_Flags>,
+    mr_state: MessageReceiverState,
+  ) {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
     let seq_num = datafrag.writer_sn;
     let receive_timestamp = Timestamp::now();
 
     // check if this submessage is expired already
-    if let (Some(source_timestamp), Some(lifespan)) = (mr_state.timestamp, self.get_qos().lifespan) {
+    if let (Some(source_timestamp), Some(lifespan)) = (mr_state.timestamp, self.get_qos().lifespan)
+    {
       let elapsed = receive_timestamp.duration_since(source_timestamp);
       if lifespan.duration < elapsed {
-        info!("DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
-            seq_num, writer_guid, lifespan.duration, elapsed);
-        return
+        info!(
+          "DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
+          seq_num, writer_guid, lifespan.duration, elapsed
+        );
+        return;
       }
     }
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
     if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
       if let Some(complete_ddsdata) = writer_proxy.handle_datafrag(datafrag, datafrag_flags) {
         // Source timestamp (if any) will be the timestamp of the last fragment (that completes the sample).
-        self.process_received_data(complete_ddsdata, receive_timestamp, mr_state.timestamp, writer_guid, writer_seq_num );  
+        self.process_received_data(
+          complete_ddsdata,
+          receive_timestamp,
+          mr_state.timestamp,
+          writer_guid,
+          writer_seq_num,
+        );
       } else {
         // not yet complete, nothing more to do
       }
@@ -473,12 +499,21 @@ impl Reader {
   }
 
   // common parts of processing DATA or a completed DATAFRAG (when all frags are received)
-  fn process_received_data(&mut self, ddsdata:DDSData, receive_timestamp: Timestamp,
-      source_timestamp: Option<Timestamp>, 
-      writer_guid:GUID, writer_sn: SequenceNumber) 
-  {
-    trace!("handle_data_msg from {:?} seq={:?} topic={:?} stateful={:?}", 
-        &writer_guid, writer_sn, self.topic_name, self.is_stateful,);
+  fn process_received_data(
+    &mut self,
+    ddsdata: DDSData,
+    receive_timestamp: Timestamp,
+    source_timestamp: Option<Timestamp>,
+    writer_guid: GUID,
+    writer_sn: SequenceNumber,
+  ) {
+    trace!(
+      "handle_data_msg from {:?} seq={:?} topic={:?} stateful={:?}",
+      &writer_guid,
+      writer_sn,
+      self.topic_name,
+      self.is_stateful,
+    );
     if self.is_stateful {
       let my_entityid = self.my_guid.entity_id; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
@@ -490,22 +525,30 @@ impl Reader {
             // This is an attmpted workaround to eProsima FastRTPS not
             // incrementing sequence numbers. (eProsime shapes demo 2.1.0 from 2021)
           } else {
-            return 
+            return;
           }
         }
         // Add the change and get the instant
         writer_proxy.received_changes_add(writer_sn, receive_timestamp);
       } else {
         // no writer proxy found
-        info!("handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
-          my_entityid, writer_guid, self.topic_name, );
+        info!(
+          "handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
+          my_entityid, writer_guid, self.topic_name,
+        );
       }
     } else {
       // stateless reader
       todo!()
     }
 
-    self.make_cache_change(ddsdata, receive_timestamp, source_timestamp, writer_guid, writer_sn);
+    self.make_cache_change(
+      ddsdata,
+      receive_timestamp,
+      source_timestamp,
+      writer_guid,
+      writer_sn,
+    );
 
     // Add to own track-keeping datastructure
     #[cfg(test)]
@@ -514,62 +557,74 @@ impl Reader {
     self.notify_cache_change();
   }
 
-  fn data_to_ddsdata(data:Data, data_flags:BitFlags<DATA_Flags>) -> Result<DDSData,String> {
-    let representation_identifier = 
-      if data_flags.contains(DATA_Flags::Endianness) { RepresentationIdentifier::CDR_LE } 
-      else { RepresentationIdentifier::CDR_BE };
+  fn data_to_ddsdata(data: Data, data_flags: BitFlags<DATA_Flags>) -> Result<DDSData, String> {
+    let representation_identifier = if data_flags.contains(DATA_Flags::Endianness) {
+      RepresentationIdentifier::CDR_LE
+    } else {
+      RepresentationIdentifier::CDR_BE
+    };
 
-    match (data.serialized_payload , 
-        data_flags.contains(DATA_Flags::Data) , data_flags.contains(DATA_Flags::Key)) {
-      (Some(sp), true, false ) => { // data
+    match (
+      data.serialized_payload,
+      data_flags.contains(DATA_Flags::Data),
+      data_flags.contains(DATA_Flags::Key),
+    ) {
+      (Some(sp), true, false) => {
+        // data
         Ok(DDSData::new(sp))
       }
 
-      (Some(sp), false, true  ) => { // key
+      (Some(sp), false, true) => {
+        // key
         Ok(DDSData::new_disposed_by_key(
-            Self::deduce_change_kind(data.inline_qos, false, representation_identifier), 
-            sp))
+          Self::deduce_change_kind(data.inline_qos, false, representation_identifier),
+          sp,
+        ))
       }
 
-      (None, false, false ) => { // no data, no key. Maybe there is inline QoS?
+      (None, false, false) => {
+        // no data, no key. Maybe there is inline QoS?
         // At least we should find key hash, or we do not know WTF the writer is talking about
-        let key_hash = 
-          match data.inline_qos
-              .as_ref()
-              .map( |iqos| InlineQos::key_hash(iqos).ok() )
-              .flatten().flatten() {
-            Some(h) => Ok(h),
-            None => {
-              info!("Received DATA that has no payload and no key_hash inline QoS - discarding");
-              // Note: This case is normal when handling coherent sets.
-              // The coherent set end marker is sent as DATA with no payload and not key, only Inline QoS.
-              Err("DATA with no contents".to_string())
-            }
-          }?;
+        let key_hash = match data
+          .inline_qos
+          .as_ref()
+          .map(|iqos| InlineQos::key_hash(iqos).ok())
+          .flatten()
+          .flatten()
+        {
+          Some(h) => Ok(h),
+          None => {
+            info!("Received DATA that has no payload and no key_hash inline QoS - discarding");
+            // Note: This case is normal when handling coherent sets.
+            // The coherent set end marker is sent as DATA with no payload and not key, only Inline QoS.
+            Err("DATA with no contents".to_string())
+          }
+        }?;
         // now, let's try to determine what is the dispose reason
-        let change_kind = 
+        let change_kind =
           Self::deduce_change_kind(data.inline_qos, false, representation_identifier);
-        Ok(DDSData::new_disposed_by_key_hash(change_kind, key_hash ))
+        Ok(DDSData::new_disposed_by_key_hash(change_kind, key_hash))
       }
 
-      (Some(_), true , true  ) => { // payload cannot be both key and data.
+      (Some(_), true, true) => {
+        // payload cannot be both key and data.
         // RTPS Spec 9.4.5.3.1 Flags in the Submessage Header says
         // "D=1 and K=1 is an invalid combination in this version of the protocol."
         warn!("Got DATA that claims to be both data and key - discarding.");
         Err("Ambiguous data/key received.".to_string())
       }
 
-      (Some(_), false, false ) => { // data but no data? - this should not be possible
+      (Some(_), false, false) => {
+        // data but no data? - this should not be possible
         warn!("make_cache_change - Flags says no data or key, but got payload!");
         Err("DATA message has mystery contents".to_string())
       }
-      (None, true, _ ) | (None, _ , true ) => {
+      (None, true, _) | (None, _, true) => {
         warn!("make_cache_change - Where is my SerializedPayload?");
         Err("DATA message contents missing".to_string())
       }
     }
   }
-
 
   // Returns if responding with ACKNACK?
   // TODO: Return value seems to go unused in callers.
@@ -582,28 +637,34 @@ impl Reader {
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
-    if ! self.is_stateful {
-      debug!("HEARTBEAT from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}", 
-        writer_guid,self.topic_name, self.my_guid);
-        return false
+    if !self.is_stateful {
+      debug!(
+        "HEARTBEAT from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}",
+        writer_guid, self.topic_name, self.my_guid
+      );
+      return false;
     }
 
     if !self.matched_writers.contains_key(&writer_guid) {
-      info!("HEARTBEAT from {:?}, but no writer proxy available. topic={:?} reader={:?}", 
-        writer_guid, self.topic_name, self.my_guid);
-      return false
+      info!(
+        "HEARTBEAT from {:?}, but no writer proxy available. topic={:?} reader={:?}",
+        writer_guid, self.topic_name, self.my_guid
+      );
+      return false;
     }
     // sanity check
     if heartbeat.first_sn < SequenceNumber::default() {
-      warn!("Writer {:?} advertised SequenceNumbers from {:?} to {:?}!",
-          writer_guid, heartbeat.first_sn, heartbeat.last_sn);
+      warn!(
+        "Writer {:?} advertised SequenceNumbers from {:?} to {:?}!",
+        writer_guid, heartbeat.first_sn, heartbeat.last_sn
+      );
     }
 
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
       Some(wp) => wp,
       None => {
         error!("Writer proxy disappeared 1!");
-        return false
+        return false;
       } // Matching writer not found
     };
 
@@ -612,7 +673,7 @@ impl Reader {
 
     if heartbeat.count <= writer_proxy.received_heartbeat_count {
       // This heartbeat was already seen an processed.
-      return false
+      return false;
     }
     writer_proxy.received_heartbeat_count = heartbeat.count;
 
@@ -641,42 +702,44 @@ impl Reader {
       Some(wp) => wp,
       None => {
         error!("Writer proxy disappeared 2!");
-        return false
+        return false;
       } // Matching writer not found
     };
 
     // See if ACKNACK is needed, and generate one.
     let missing_seqnums =
-        writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
-    
-    // Interpretation of final flag in RTPS spec 
+      writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
+
+    // Interpretation of final flag in RTPS spec
     // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with final flag not set
-    // 
-    // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must respond 
-    // with an ACKNACK Message. The ACKNACK Message may acknowledge having received all 
+    //
+    // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must respond
+    // with an ACKNACK Message. The ACKNACK Message may acknowledge having received all
     // the data samples or may indicate that some data samples are missing.
     // The response may be delayed to avoid message storms.
 
-    if ! missing_seqnums.is_empty() || ! final_flag_set {
+    if !missing_seqnums.is_empty() || !final_flag_set {
       // report of what we have.
-      // We claim to have received all SNs before "base" and produce a set of missing 
+      // We claim to have received all SNs before "base" and produce a set of missing
       // sequence numbers that are >= base.
-      let reader_sn_state =
-        match missing_seqnums.get(0)  {
-          Some(&first_missing) => {
-              // Here we assume missing_seqnums are returned in order.
-              // Limit the set to maximum that can be sent in acknack submessage..
-            SequenceNumberSet
-              ::from_base_and_set(first_missing, 
-                &BTreeSet::from_iter(missing_seqnums.iter().copied()
-                                      .take_while( |sn| sn < &(first_missing + SequenceNumber::from(256)) ))
-                )
-            }
+      let reader_sn_state = match missing_seqnums.get(0) {
+        Some(&first_missing) => {
+          // Here we assume missing_seqnums are returned in order.
+          // Limit the set to maximum that can be sent in acknack submessage..
+          SequenceNumberSet::from_base_and_set(
+            first_missing,
+            &BTreeSet::from_iter(
+              missing_seqnums
+                .iter()
+                .copied()
+                .take_while(|sn| sn < &(first_missing + SequenceNumber::from(256))),
+            ),
+          )
+        }
 
-          // Nothing missing. Report that we have all we have.
-          None => SequenceNumberSet::new_empty(writer_proxy.all_ackable_before()),           
-        };
-
+        // Nothing missing. Report that we have all we have.
+        None => SequenceNumberSet::new_empty(writer_proxy.all_ackable_before()),
+      };
 
       let response_ack_nack = AckNack {
         reader_id: self.get_entity_id(),
@@ -689,38 +752,42 @@ impl Reader {
 
       // Sanity check
       if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn + SequenceNumber::new(1) {
-        error!("OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}",
+        error!(
+          "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}",
           &heartbeat, &response_ack_nack
-          );
+        );
       }
-
 
       // The acknack can be sent now or later. The rest of the RTPS message
       // needs to be constructed. p. 48
       self.send_acknack(response_ack_nack, mr_state);
-      return true
+      return true;
     }
-    
+
     false
-  } // fn 
+  } // fn
 
   pub fn handle_gap_msg(&mut self, gap: Gap, mr_state: MessageReceiverState) {
     // ATM all things related to groups is ignored. TODO?
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
 
-    if ! self.is_stateful {
-      debug!("GAP from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}", 
-        writer_guid,self.topic_name, self.my_guid);
-        return
+    if !self.is_stateful {
+      debug!(
+        "GAP from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}",
+        writer_guid, self.topic_name, self.my_guid
+      );
+      return;
     }
 
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
       Some(wp) => wp,
       None => {
-        info!("GAP from {:?}, but no writer proxy available. topic={:?} reader={:?}", 
-        writer_guid, self.topic_name, self.my_guid);
-        return
+        info!(
+          "GAP from {:?}, but no writer proxy available. topic={:?} reader={:?}",
+          writer_guid, self.topic_name, self.my_guid
+        );
+        return;
       } // Matching writer not found
     };
 
@@ -744,20 +811,20 @@ impl Reader {
     //   return;
     // };
 
-
-
     // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups:
     //   1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
-    let mut removed_changes : BTreeSet<Timestamp> = 
-      writer_proxy.irrelevant_changes_range(gap.gap_start, gap.gap_list.base())
-        .values().copied()
-        .collect();
+    let mut removed_changes: BTreeSet<Timestamp> = writer_proxy
+      .irrelevant_changes_range(gap.gap_start, gap.gap_list.base())
+      .values()
+      .copied()
+      .collect();
 
     //   2. All the sequence numbers that appear explicitly listed in the gapList.
     for seq_num in gap.gap_list.iter() {
-      writer_proxy.set_irrelevant_change(seq_num)
-        .map( |t| removed_changes.insert(t) );
+      writer_proxy
+        .set_irrelevant_change(seq_num)
+        .map(|t| removed_changes.insert(t));
     }
 
     // Remove from DDSHistoryCache
@@ -774,7 +841,6 @@ impl Reader {
     // self.notify_cache_change();
   }
 
-
   pub fn handle_heartbeatfrag_msg(
     &mut self,
     _heartbeatfrag: HeartbeatFrag,
@@ -784,19 +850,24 @@ impl Reader {
   }
 
   // This is used to determine exact change kind in case we do not get a data payload in DATA submessage
-  fn deduce_change_kind(inline_qos: Option<ParameterList>, no_writers:bool , ri:RepresentationIdentifier ) 
-    -> ChangeKind
-  {
-
+  fn deduce_change_kind(
+    inline_qos: Option<ParameterList>,
+    no_writers: bool,
+    ri: RepresentationIdentifier,
+  ) -> ChangeKind {
     match inline_qos
-        .as_ref().map( |iqos| InlineQos::status_info(iqos, ri).ok())
-        .flatten() {
-      Some(si) => 
-        si.change_kind(), // get from inline QoS
-        // TODO: What if si.change_kind() gives ALIVE ??
-      None => { 
-        if no_writers { ChangeKind::NotAliveUnregistered } 
-        else { ChangeKind::NotAliveDisposed } // TODO: Is this reasonable default?
+      .as_ref()
+      .map(|iqos| InlineQos::status_info(iqos, ri).ok())
+      .flatten()
+    {
+      Some(si) => si.change_kind(), // get from inline QoS
+      // TODO: What if si.change_kind() gives ALIVE ??
+      None => {
+        if no_writers {
+          ChangeKind::NotAliveUnregistered
+        } else {
+          ChangeKind::NotAliveDisposed
+        } // TODO: Is this reasonable default?
       }
     }
   }
@@ -810,7 +881,6 @@ impl Reader {
     writer_guid: GUID,
     writer_sn: SequenceNumber,
   ) {
-
     let cache_change = CacheChange::new(writer_guid, writer_sn, source_timestamp, data);
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
@@ -871,7 +941,9 @@ impl Reader {
     let bytes = message
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .unwrap();
-    self.udp_sender.send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
+    self
+      .udp_sender
+      .send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
   }
 
   // TODO: This is much duplicate code from send_acknack.
@@ -884,11 +956,7 @@ impl Reader {
 
     self.sent_ack_nack_count += 1;
 
-    for (_, writer_proxy) in self
-      .matched_writers
-      .iter()
-      .filter(|(_, p)| p.no_changes() )
-    {
+    for (_, writer_proxy) in self.matched_writers.iter().filter(|(_, p)| p.no_changes()) {
       let mut message = Message::new(Header {
         protocol_id: ProtocolId::default(),
         protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
@@ -920,7 +988,9 @@ impl Reader {
       let bytes = message
         .write_to_vec_with_ctx(Endianness::LittleEndian)
         .unwrap();
-      self.udp_sender.send_to_locator_list(&bytes, &writer_proxy.unicast_locator_list);
+      self
+        .udp_sender
+        .send_to_locator_list(&bytes, &writer_proxy.unicast_locator_list);
     }
   }
 
@@ -991,7 +1061,8 @@ mod tests {
     guid.entity_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
 
     let (send, rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
+    let (status_sender, _status_reciever) =
+      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
 
@@ -1019,7 +1090,10 @@ mod tests {
 
     let writer_guid = GUID {
       guid_prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      entity_id: EntityId::create_custom_entity_id(
+        [1; 3],
+        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
+      ),
     };
 
     let mut mr_state = MessageReceiverState::default();
@@ -1046,7 +1120,8 @@ mod tests {
     let new_guid = GUID::default();
 
     let (send, rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
+    let (status_sender, _status_reciever) =
+      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
 
@@ -1074,7 +1149,10 @@ mod tests {
 
     let writer_guid = GUID {
       guid_prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      entity_id: EntityId::create_custom_entity_id(
+        [1; 3],
+        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
+      ),
     };
 
     let mut mr_state = MessageReceiverState::default();
@@ -1101,7 +1179,7 @@ mod tests {
     );
 
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
-    let cc_built_here = CacheChange::new( writer_guid, d_seqnum, None, ddsdata );
+    let cc_built_here = CacheChange::new(writer_guid, d_seqnum, None, ddsdata);
 
     assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
   }
@@ -1111,7 +1189,8 @@ mod tests {
     let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
 
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
+    let (status_sender, _status_reciever) =
+      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
 
@@ -1138,7 +1217,10 @@ mod tests {
 
     let writer_guid = GUID {
       guid_prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      entity_id: EntityId::create_custom_entity_id(
+        [1; 3],
+        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
+      ),
     };
 
     let writer_id = writer_guid.entity_id;
@@ -1221,12 +1303,7 @@ mod tests {
     );
     changes.push(change);
 
-    let change = CacheChange::new(
-      new_reader.get_guid(),
-      SequenceNumber::from(3),
-      None,
-      d,
-    );
+    let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), None, d);
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1250,7 +1327,8 @@ mod tests {
   fn rtpsreader_handle_gap() {
     let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
+    let (status_sender, _status_reciever) =
+      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
 
@@ -1276,10 +1354,12 @@ mod tests {
       mio_extras::timer::Builder::default().build(),
     );
 
-
     let writer_guid = GUID {
       guid_prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      entity_id: EntityId::create_custom_entity_id(
+        [1; 3],
+        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
+      ),
     };
     let writer_id = writer_guid.entity_id;
 
@@ -1312,8 +1392,8 @@ mod tests {
     }
 
     // make sequence numbers 1-3 and 5 7 irrelevant
-    let mut gap_list = SequenceNumberSet::new(SequenceNumber::from(4),7);
-    gap_list.insert(SequenceNumber::from(5)); 
+    let mut gap_list = SequenceNumberSet::new(SequenceNumber::from(4), 7);
+    gap_list.insert(SequenceNumber::from(5));
     gap_list.insert(SequenceNumber::from(7));
 
     let gap = Gap {

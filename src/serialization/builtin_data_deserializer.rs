@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use chrono::Utc;
 
-use log::{warn,error};
+use log::{warn, error};
 
 use crate::{
   log_and_err_discovery,
@@ -24,9 +24,7 @@ use crate::messages::{
   submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
 };
 
-use crate::serialization::{
-  error::Error,
-};
+use crate::serialization::{error::Error};
 
 use crate::{
   dds::{
@@ -140,71 +138,82 @@ impl BuiltinDataDeserializer {
     }
   }
 
-  pub fn generate_spdp_participant_data(&self) -> Result<SpdpDiscoveredParticipantData,Error> {
+  pub fn generate_spdp_participant_data(&self) -> Result<SpdpDiscoveredParticipantData, Error> {
     Ok(SpdpDiscoveredParticipantData {
       updated_time: Utc::now(),
-      protocol_version: self.protocol_version
-        .ok_or_else(| | log_and_err_discovery!("protocol_version missing"))?,
-      vendor_id: self.vendor_id
-        .ok_or_else(| | log_and_err_discovery!("vendor_id missing"))?,
+      protocol_version: self
+        .protocol_version
+        .ok_or_else(|| log_and_err_discovery!("protocol_version missing"))?,
+      vendor_id: self
+        .vendor_id
+        .ok_or_else(|| log_and_err_discovery!("vendor_id missing"))?,
       expects_inline_qos: self.expects_inline_qos.unwrap_or(false),
-      participant_guid: self.participant_guid
-        .ok_or_else(| | log_and_err_discovery!("participant_guid missing"))?,
+      participant_guid: self
+        .participant_guid
+        .ok_or_else(|| log_and_err_discovery!("participant_guid missing"))?,
       metatraffic_unicast_locators: self.metatraffic_unicast_locators.clone(),
       metatraffic_multicast_locators: self.metatraffic_multicast_locators.clone(),
       default_unicast_locators: self.default_unicast_locators.clone(),
       default_multicast_locators: self.default_multicast_locators.clone(),
-      available_builtin_endpoints: self.available_builtin_endpoints
-        .ok_or_else(| | log_and_err_discovery!("available_builtin_endpoints missing"))?,
+      available_builtin_endpoints: self
+        .available_builtin_endpoints
+        .ok_or_else(|| log_and_err_discovery!("available_builtin_endpoints missing"))?,
       lease_duration: self.lease_duration,
-      manual_liveliness_count: self.manual_liveliness_count
-        .unwrap_or(0),
+      manual_liveliness_count: self.manual_liveliness_count.unwrap_or(0),
       builtin_endpoint_qos: self.builtin_endpoint_qos,
       entity_name: self.entity_name.clone(),
     })
   }
 
-  pub fn generate_spdp_participant_data_key(&self) -> Result<SpdpDiscoveredParticipantDataKey,Error> {
+  pub fn generate_spdp_participant_data_key(
+    &self,
+  ) -> Result<SpdpDiscoveredParticipantDataKey, Error> {
     Ok(SpdpDiscoveredParticipantDataKey(
-      self.participant_guid
-        .ok_or_else(| | log_and_err_discovery!("participant_guid missing"))?,
+      self
+        .participant_guid
+        .ok_or_else(|| log_and_err_discovery!("participant_guid missing"))?,
     ))
   }
-
 
   pub fn generate_reader_proxy(&self) -> Option<ReaderProxy> {
     let remote_reader_guid = match self.endpoint_guid {
       Some(g) => g,
       None => {
-        warn!("Discovery received ReaderProxy data without GUID: {:?}",self);
-        return None
+        warn!(
+          "Discovery received ReaderProxy data without GUID: {:?}",
+          self
+        );
+        return None;
       }
     };
-    Some( ReaderProxy {
+    Some(ReaderProxy {
       remote_reader_guid,
-      expects_inline_qos: self.expects_inline_qos.unwrap_or(false),  
+      expects_inline_qos: self.expects_inline_qos.unwrap_or(false),
       unicast_locator_list: self.unicast_locator_list.clone(),
       multicast_locator_list: self.multicast_locator_list.clone(),
-    } )
+    })
   }
 
   pub fn generate_writer_proxy(&self) -> Option<WriterProxy> {
     let remote_writer_guid = match self.endpoint_guid {
       Some(g) => g,
       None => {
-        warn!("Discovery received WriterProxy data without GUID: {:?}",self);
-        return None
+        warn!(
+          "Discovery received WriterProxy data without GUID: {:?}",
+          self
+        );
+        return None;
       }
     };
-    Some( WriterProxy {
+    Some(WriterProxy {
       remote_writer_guid,
       unicast_locator_list: self.unicast_locator_list.clone(),
       multicast_locator_list: self.multicast_locator_list.clone(),
       data_max_size_serialized: self.data_max_size_serialized,
-    } )
+    })
   }
 
-  pub fn generate_subscription_topic_data(&self) -> Result<SubscriptionBuiltinTopicData,Error> {
+  pub fn generate_subscription_topic_data(&self) -> Result<SubscriptionBuiltinTopicData, Error> {
     let qos = QosPolicyBuilder::new();
 
     let qos = match self.durability {
@@ -276,21 +285,28 @@ impl BuiltinDataDeserializer {
 
     let mut sbtd = SubscriptionBuiltinTopicData::new(key, topic_name, type_name, &qos);
 
-    if let Some(g) = self.participant_guid { sbtd.set_participant_key(g) };
+    if let Some(g) = self.participant_guid {
+      sbtd.set_participant_key(g)
+    };
 
     Ok(sbtd)
   }
 
-  pub fn generate_publication_topic_data(&self) ->  Result<PublicationBuiltinTopicData,Error> {
-    let key = self.endpoint_guid
-      .ok_or_else( || Error::Message("generate_publication_topic_data: No GUID".to_string()) )?;
+  pub fn generate_publication_topic_data(&self) -> Result<PublicationBuiltinTopicData, Error> {
+    let key = self
+      .endpoint_guid
+      .ok_or_else(|| Error::Message("generate_publication_topic_data: No GUID".to_string()))?;
 
     Ok(PublicationBuiltinTopicData {
       key,
       participant_key: self.participant_guid,
-      topic_name: self.topic_name.clone()
+      topic_name: self
+        .topic_name
+        .clone()
         .ok_or_else(|| Error::Message("Failed to parse topic name.".to_string()))?,
-      type_name: self.type_name.clone()
+      type_name: self
+        .type_name
+        .clone()
         .ok_or_else(|| Error::Message("Failed to parse topic type.".to_string()))?,
       durability: self.durability,
       deadline: self.deadline,
@@ -305,12 +321,14 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn generate_topic_data(self) -> Result<TopicBuiltinTopicData,Error> {
+  pub fn generate_topic_data(self) -> Result<TopicBuiltinTopicData, Error> {
     Ok(TopicBuiltinTopicData {
       key: self.endpoint_guid,
-      name: self.topic_name
+      name: self
+        .topic_name
         .ok_or_else(|| Error::Message("Failed to parse topic name.".to_string()))?,
-      type_name: self.type_name
+      type_name: self
+        .type_name
         .ok_or_else(|| Error::Message("Failed to parse topic type.".to_string()))?,
       durability: self.durability,
       deadline: self.deadline,
@@ -326,9 +344,10 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData,Error> {
-    let reader_proxy = self.generate_reader_proxy()
-          .ok_or_else(|| Error::Message("ReaderProxy deserialization".to_string() ))?;
+  pub fn generate_discovered_reader_data(self) -> Result<DiscoveredReaderData, Error> {
+    let reader_proxy = self
+      .generate_reader_proxy()
+      .ok_or_else(|| Error::Message("ReaderProxy deserialization".to_string()))?;
     let subscription_topic_data = self.generate_subscription_topic_data()?;
     Ok(DiscoveredReaderData {
       reader_proxy,
@@ -337,31 +356,29 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData,Error> {
-    let writer_proxy = self.generate_writer_proxy()
-          .ok_or_else(|| Error::Message("WriterProxy deserialization".to_string() ))?;
+  pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData, Error> {
+    let writer_proxy = self
+      .generate_writer_proxy()
+      .ok_or_else(|| Error::Message("WriterProxy deserialization".to_string()))?;
     let publication_topic_data = self.generate_publication_topic_data()?;
-    Ok( DiscoveredWriterData {
+    Ok(DiscoveredWriterData {
       last_updated: Instant::now(),
       writer_proxy,
       publication_topic_data,
     })
   }
 
-  pub fn generate_discovered_reader_data_key(self) -> Result<DiscoveredReaderDataKey,Error> {
-    Ok(DiscoveredReaderDataKey(
-      self.endpoint_guid
-        .ok_or_else(| | log_and_err_discovery!("generate_discovered_reader_data_key endpoint_guid missing"))?,
-    ))
+  pub fn generate_discovered_reader_data_key(self) -> Result<DiscoveredReaderDataKey, Error> {
+    Ok(DiscoveredReaderDataKey(self.endpoint_guid.ok_or_else(
+      || log_and_err_discovery!("generate_discovered_reader_data_key endpoint_guid missing"),
+    )?))
   }
 
-  pub fn generate_discovered_writer_data_key(self) -> Result<DiscoveredWriterDataKey,Error> {
-    Ok(DiscoveredWriterDataKey(
-      self.endpoint_guid
-        .ok_or_else(| | log_and_err_discovery!("generate_discovered_writer_data_key endpoint_guid missing"))?,
-    ))
+  pub fn generate_discovered_writer_data_key(self) -> Result<DiscoveredWriterDataKey, Error> {
+    Ok(DiscoveredWriterDataKey(self.endpoint_guid.ok_or_else(
+      || log_and_err_discovery!("generate_discovered_writer_data_key endpoint_guid missing"),
+    )?))
   }
-
 
   pub fn parse_data_little_endian(self, buffer: &[u8]) -> BuiltinDataDeserializer {
     self.parse_data(buffer, RepresentationIdentifier::CDR_LE)
@@ -670,9 +687,7 @@ impl BuiltinDataDeserializer {
         if let Ok(stri) = ownership_strength {
           self.ownership = match self.ownership {
             Some(v) => match v {
-              Ownership::Exclusive { strength: _ } => {
-                Some(Ownership::Exclusive { strength: stri })
-              }
+              Ownership::Exclusive { strength: _ } => Some(Ownership::Exclusive { strength: stri }),
               _ => Some(v),
             },
             None => Some(Ownership::Exclusive { strength: stri }),

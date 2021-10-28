@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 //use crate::messages::fragment_number::FragmentNumber;
 use std::collections::BTreeSet;
-use std::cmp::{min,Ord,PartialOrd};
+use std::cmp::{min, Ord, PartialOrd};
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
@@ -21,10 +21,9 @@ use log::error;
 pub struct SequenceNumber(i64);
 
 impl SequenceNumber {
-  pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber = 
-    SequenceNumber((std::u32::MAX as i64) << 32);
+  pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber = SequenceNumber((std::u32::MAX as i64) << 32);
 
-  pub fn new(value:i64) -> SequenceNumber {
+  pub fn new(value: i64) -> SequenceNumber {
     SequenceNumber::from(value)
   }
   // Zero interface may be still in unstable Rust
@@ -42,9 +41,8 @@ impl SequenceNumber {
     }
   }
 
-  pub fn range_inclusive(begin:Self, end:Self) -> SequenceNumberRange
-  {
-    SequenceNumberRange::new(begin,end)
+  pub fn range_inclusive(begin: Self, end: Self) -> SequenceNumberRange {
+    SequenceNumberRange::new(begin, end)
   }
 }
 
@@ -78,7 +76,7 @@ pub struct SequenceNumberRange {
 }
 
 impl SequenceNumberRange {
-  pub fn new(begin:SequenceNumber, end:SequenceNumber) -> SequenceNumberRange {
+  pub fn new(begin: SequenceNumber, end: SequenceNumber) -> SequenceNumberRange {
     SequenceNumberRange { begin, end }
   }
 }
@@ -96,8 +94,7 @@ impl Iterator for SequenceNumberRange {
   }
 }
 
-impl RangeBounds<SequenceNumber> for SequenceNumberRange
-{
+impl RangeBounds<SequenceNumber> for SequenceNumberRange {
   fn start_bound(&self) -> Bound<&SequenceNumber> {
     Bound::Included(&self.begin)
   }
@@ -117,7 +114,7 @@ mod sequence_number_checked {
 //
 // RTPS Spec v2.3 Section 9.4.2.5:
 // SequenceNumber is serialized 32 bit high word first, then low 32 bits,
-// regardless of endianness. Then within those 32 bit words, ecncoding 
+// regardless of endianness. Then within those 32 bit words, ecncoding
 // endianness is followed.
 // E.g. SequenceNumber(1) is encoded in 8 little-endian bytes as:
 // 00 00 00 00 01 00 00 00
@@ -154,10 +151,20 @@ impl Default for SequenceNumber {
 // ---------------------------------------------------------------
 // ---------------------------------------------------------------
 
-
-#[derive(Copy,Clone,Debug, Hash, PartialOrd, PartialEq, Ord, Eq, 
-  Readable, Writable, 
-  NumOps, FromPrimitive, ToPrimitive,
+#[derive(
+  Copy,
+  Clone,
+  Debug,
+  Hash,
+  PartialOrd,
+  PartialEq,
+  Ord,
+  Eq,
+  Readable,
+  Writable,
+  NumOps,
+  FromPrimitive,
+  ToPrimitive,
 )]
 pub struct FragmentNumber(u32);
 
@@ -201,34 +208,35 @@ mod fragment_number_checked {
   checked_impl!(CheckedDiv, checked_div, FragmentNumber);
 }
 // ---------------------------------------------------------------
- 
+
 pub type SequenceNumberSet = NumberSet<SequenceNumber>;
 pub type FragmentNumberSet = NumberSet<FragmentNumber>;
 
 // ---------------------------------------------------------------
- 
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NumberSet<N>
-  where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64>
+where
+  N: Clone + Debug + Hash + PartialEq + Eq + NumOps + From<i64>,
 {
   bitmap_base: N,
   num_bits: u32,
   bitmap: Vec<u32>, // .len() == (numBits+31)/32
-  // bitmap bits are numbered from MSB to LSB. Bit 0 (MSB of bitmap[0])
-  // represents SequenceNumber bitmap_base. Bit 31 (LSB of bitmap[0])
-  // represents SequenceNumber (bitmap_base + 31).
-  // When num_bits == 0 , bitmap.len() == 0
+                    // bitmap bits are numbered from MSB to LSB. Bit 0 (MSB of bitmap[0])
+                    // represents SequenceNumber bitmap_base. Bit 31 (LSB of bitmap[0])
+                    // represents SequenceNumber (bitmap_base + 31).
+                    // When num_bits == 0 , bitmap.len() == 0
 }
 
 // Not that empty sets also have a valid "base".
 
 impl<N> NumberSet<N>
-where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64>  + Ord + PartialOrd,
-      i64: From<N>
-
+where
+  N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd,
+  i64: From<N>,
 {
   // Construct an empy set from given base number
-  pub fn new(bitmap_base:N, num_bits:u32) -> NumberSet<N> {
+  pub fn new(bitmap_base: N, num_bits: u32) -> NumberSet<N> {
     let word_count = (num_bits + 31) / 32;
     NumberSet::<N> {
       bitmap_base,
@@ -237,64 +245,67 @@ where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64>  + O
     }
   }
 
-  pub fn base(&self) -> N { self.bitmap_base }
- 
-  pub fn new_empty(bitmap_base:N,) -> NumberSet<N> {
+  pub fn base(&self) -> N {
+    self.bitmap_base
+  }
+
+  pub fn new_empty(bitmap_base: N) -> NumberSet<N> {
     NumberSet::<N>::new(bitmap_base, 0)
   }
 
   pub fn is_empty(&self) -> bool {
-    self.num_bits == 0 ||
-      self.iter().next().is_none()
+    self.num_bits == 0 || self.iter().next().is_none()
   }
 
-  pub fn insert(&mut self, sn:N)  {
-    if sn < self.bitmap_base 
-        || self.num_bits == 0
-        || sn >= self.bitmap_base + N::from(self.num_bits as i64) {
-      error!("out of bounds .insert({:?}) to {:?}",sn, self);
+  pub fn insert(&mut self, sn: N) {
+    if sn < self.bitmap_base
+      || self.num_bits == 0
+      || sn >= self.bitmap_base + N::from(self.num_bits as i64)
+    {
+      error!("out of bounds .insert({:?}) to {:?}", sn, self);
     } else {
-      let bit_pos = i64::from( sn - self.bitmap_base ) as u32;
+      let bit_pos = i64::from(sn - self.bitmap_base) as u32;
       let word_num = bit_pos / 32;
       let bit_num = bit_pos % 32;
-      if word_num >= self.bitmap.len() as u32 { 
-        error!("Tried to index {:?} (bit_pos={:?}) (word {:?} bit {:?}) in {:?}", 
-          sn, bit_pos, word_num, bit_num, self);
+      if word_num >= self.bitmap.len() as u32 {
+        error!(
+          "Tried to index {:?} (bit_pos={:?}) (word {:?} bit {:?}) in {:?}",
+          sn, bit_pos, word_num, bit_num, self
+        );
       }
-      self.bitmap[word_num as usize] |= 1u32 << (31-bit_num); 
+      self.bitmap[word_num as usize] |= 1u32 << (31 - bit_num);
     }
   }
 
-  pub fn from_base_and_set(base: N, set: &BTreeSet<N>)
-    -> NumberSet<N> 
-  {
+  pub fn from_base_and_set(base: N, set: &BTreeSet<N>) -> NumberSet<N> {
     match (set.iter().next(), set.iter().next_back()) {
-      (Some(&start),Some(&end)) => {
+      (Some(&start), Some(&end)) => {
         // sanity
-        if start < base { 
-          error!("from_base_and_set : need base <= set start: base={:?} and set {:?}",
-            base, set); 
+        if start < base {
+          error!(
+            "from_base_and_set : need base <= set start: base={:?} and set {:?}",
+            base, set
+          );
         }
-        let end = 
-          if i64::from(end - start) > 256 {
-            let truncated_end = start + N::from(256);
-            error!("from_base_and_set : max size (256) exceeded, start = {:?} end = {:?}. Truncating end to {:?}",
+        let end = if i64::from(end - start) > 256 {
+          let truncated_end = start + N::from(256);
+          error!("from_base_and_set : max size (256) exceeded, start = {:?} end = {:?}. Truncating end to {:?}",
               start, end, truncated_end );
-            truncated_end
-          } else { end }; // sanity ok.
-        // TODO: Sanity check that (end - base) <= 256
-        // work:
-        let num_bits =  i64::from(end - start + N::from(1));
-        let mut sns = NumberSet::<N>::new(
-                        min(base,start),
-                        min(256,num_bits as u32));
+          truncated_end
+        } else {
+          end
+        }; // sanity ok.
+           // TODO: Sanity check that (end - base) <= 256
+           // work:
+        let num_bits = i64::from(end - start + N::from(1));
+        let mut sns = NumberSet::<N>::new(min(base, start), min(256, num_bits as u32));
         for &s in set.iter() {
-          sns.insert(s) 
+          sns.insert(s)
         }
         sns
       }
-      (_,_) => NumberSet::<N>::new_empty(base),
-    }   
+      (_, _) => NumberSet::<N>::new_empty(base),
+    }
   }
 
   pub fn iter(&self) -> NumberSetIter<N> {
@@ -306,20 +317,26 @@ where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64>  + O
   }
 }
 
-impl<'a, C: Context, N> Readable<'a, C> for NumberSet<N> 
-  where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd + Readable<'a, C>,
-        i64: From<N>
+impl<'a, C: Context, N> Readable<'a, C> for NumberSet<N>
+where
+  N:
+    Clone + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd + Readable<'a, C>,
+  i64: From<N>,
 {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let bitmap_base : N = reader.read_value()?;
-    let num_bits : u32 = reader.read_value()?;
+    let bitmap_base: N = reader.read_value()?;
+    let num_bits: u32 = reader.read_value()?;
     let word_count = (num_bits + 31) / 32;
-    let mut bitmap : Vec<u32> = Vec::with_capacity( word_count as usize);
+    let mut bitmap: Vec<u32> = Vec::with_capacity(word_count as usize);
     for _ in 0..word_count {
-      bitmap.push( reader.read_value()? );
+      bitmap.push(reader.read_value()?);
     }
-    Ok( NumberSet::<N> { bitmap_base, num_bits, bitmap })
+    Ok(NumberSet::<N> {
+      bitmap_base,
+      num_bits,
+      bitmap,
+    })
   }
 
   #[inline]
@@ -328,8 +345,9 @@ impl<'a, C: Context, N> Readable<'a, C> for NumberSet<N>
   }
 }
 
-impl<C: Context, N > Writable<C> for NumberSet<N> 
-  where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd + Writable<C>
+impl<C: Context, N> Writable<C> for NumberSet<N>
+where
+  N: Clone + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd + Writable<C>,
 {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
@@ -339,27 +357,32 @@ impl<C: Context, N > Writable<C> for NumberSet<N>
     let bitmap_len = self.bitmap.len() as u32;
     // sanity check
     if bitmap_len != word_count {
-      error!("SequenceNumberSet bitmap.len() = {} but word_count = {}",
-        self.bitmap.len(), word_count);
+      error!(
+        "SequenceNumberSet bitmap.len() = {} but word_count = {}",
+        self.bitmap.len(),
+        word_count
+      );
     }
     for i in 0..min(word_count, bitmap_len) {
-      writer.write_u32( self.bitmap[i as usize])?;
+      writer.write_u32(self.bitmap[i as usize])?;
     }
     Ok(())
   }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct NumberSetIter<'a,N>
-  where N: Clone + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd
+pub struct NumberSetIter<'a, N>
+where
+  N: Clone + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd,
 {
   seq: &'a NumberSet<N>,
   at_bit: u32,
   rev_at_bit: u32,
 }
 
-impl<'a,N> Iterator for NumberSetIter<'_,N>
-  where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd
+impl<'a, N> Iterator for NumberSetIter<'_, N>
+where
+  N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd,
 {
   type Item = N;
 
@@ -369,34 +392,29 @@ impl<'a,N> Iterator for NumberSetIter<'_,N>
     // one step, given that we have clz as a machine instruction or short sequence.
     while self.at_bit < self.rev_at_bit {
       // bit indexing formula from RTPS spec v2.3 Section 9.4.2.6
-      let have_one = 
-        self.seq.bitmap[(self.at_bit / 32) as usize] 
-          & (1 << (31 - self.at_bit % 32))
-        != 0;
+      let have_one =
+        self.seq.bitmap[(self.at_bit / 32) as usize] & (1 << (31 - self.at_bit % 32)) != 0;
       self.at_bit += 1;
-      if have_one { 
-        return Some(N::from((self.at_bit - 1) as i64) 
-                      + self.seq.bitmap_base)  
-      } 
+      if have_one {
+        return Some(N::from((self.at_bit - 1) as i64) + self.seq.bitmap_base);
+      }
     }
     None
   }
 }
-impl<'a,N> DoubleEndedIterator for NumberSetIter<'_,N>
-  where N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps +  From<i64> + Ord + PartialOrd
+impl<'a, N> DoubleEndedIterator for NumberSetIter<'_, N>
+where
+  N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd,
 {
   fn next_back(&mut self) -> Option<Self::Item> {
     while self.at_bit < self.rev_at_bit {
       // bit indexing formula from RTPS spec v2.3 Section 9.4.2.6
       self.rev_at_bit -= 1;
-      let have_one = 
-        self.seq.bitmap[(self.rev_at_bit / 32) as usize] 
-          & (1 << (31 - self.rev_at_bit % 32))
-        != 0;
-      if have_one { 
-        return Some( N::from(self.rev_at_bit as i64) 
-                      + self.seq.bitmap_base )  
-      } 
+      let have_one =
+        self.seq.bitmap[(self.rev_at_bit / 32) as usize] & (1 << (31 - self.rev_at_bit % 32)) != 0;
+      if have_one {
+        return Some(N::from(self.rev_at_bit as i64) + self.seq.bitmap_base);
+      }
     }
     None
   }
@@ -479,7 +497,7 @@ mod tests {
             0x00, 0x00, 0x00, 0x80], // bitmap word 0
       // The last word here has 11 bits set from MSB end, and then 25-11 = 14 zeroes.
       // The last 32-25 = 7 bits are undefined. Our implementation sets them to zero,
-      // but others may set to ones. 
+      // but others may set to ones.
       // 0xffc0_00YZ, where  YZ & 0x80 = 0x00, but otherwise undefined
       // So e.g. 0x7f is valid least siginifanct byte, as is 0x00, or 0x0f.
       be = [0x00, 0x00, 0x00, 0x00,
@@ -503,7 +521,7 @@ mod tests {
             0x00, 0x00, 0xc0, 0xff],
       // The last word here has 11 bits set from MSB end, and then 25-11 = 14 zeroes.
       // The last 32-25 = 7 bits are undefined. Our implementation sets them to zero,
-      // but others may set to ones. 
+      // but others may set to ones.
       // 0xffc0_00YZ, where  YZ & 0x80 = 0x00, but otherwise undefined
       // So e.g. 0x7f is valid least siginifanct byte, as is 0x00, or 0x0f.
       be = [0x00, 0x00, 0x00, 0x00,
@@ -533,7 +551,6 @@ mod tests {
             0xff, 0xff, 0xff, 0xff,
             0xff, 0xe0, 0x00, 0x00]
   });
-
 
   serialization_test!( type = FragmentNumberSet,
   {

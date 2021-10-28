@@ -21,7 +21,6 @@ use std::ops::Bound::*;
 // between e.g. RTPS Reader and the application-facing DataReader. It keeps track of what each
 // DataReader has "read" or "taken".
 
-
 // helper function
 // somewhat like result.as_ref() , but one-sided only
 pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(
@@ -129,9 +128,7 @@ where
     };
 
     // update instance metadata
-    instance_metadata
-      .instance_samples
-      .insert(receive_timestamp);
+    instance_metadata.instance_samples.insert(receive_timestamp);
 
     match (instance_metadata.instance_state, new_instance_state) {
       (InstanceState::Alive, _) => (), // was Alive, does not change counts
@@ -274,7 +271,7 @@ where
           .contains( if d.sample_has_been_read { SampleState::Read } else {SampleState::NotRead} ) )
     &&
     // check view state
-    (*rc.view_state_mask() == ViewState::any() 
+    (*rc.view_state_mask() == ViewState::any()
       ||
       { let sample_gen = d.generation_counts.total();
         let last_accessed = imd.last_generation_accessed.total();
@@ -530,8 +527,11 @@ where
     match self.hash_to_key_map.get(&key_hash) {
       Some(k) => Some(k.clone()),
       None => {
-        debug!("get_key_by_hash: requested KeyHash {:?}, but not found. I have {:?}", 
-          key_hash, self.hash_to_key_map.keys() );
+        debug!(
+          "get_key_by_hash: requested KeyHash {:?}, but not found. I have {:?}",
+          key_hash,
+          self.hash_to_key_map.keys()
+        );
         None
       }
     }

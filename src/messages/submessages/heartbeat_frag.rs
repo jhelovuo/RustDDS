@@ -1,5 +1,5 @@
 use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::{SequenceNumber,FragmentNumber};
+use crate::structure::sequence_number::{SequenceNumber, FragmentNumber};
 use speedy::{Readable, Writable};
 
 /// When fragmenting data and until all fragments are available, the

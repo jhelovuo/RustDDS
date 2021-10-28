@@ -4,8 +4,20 @@ pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use serde::{Serialize, Deserialize};
 use super::parameter_id::ParameterId;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, 
-          Readable, Writable, Serialize, Deserialize)]
+#[derive(
+  Copy,
+  Clone,
+  Debug,
+  Eq,
+  PartialEq,
+  PartialOrd,
+  Ord,
+  Hash,
+  Readable,
+  Writable,
+  Serialize,
+  Deserialize,
+)]
 pub struct LocatorKind {
   value: i32,
 }
@@ -41,8 +53,7 @@ impl Locator {
   }
 
   pub fn is_udp(&self) -> bool {
-    self.kind == LocatorKind::LOCATOR_KIND_UDP_V4 
-    || self.kind == LocatorKind::LOCATOR_KIND_UDP_V6
+    self.kind == LocatorKind::LOCATOR_KIND_UDP_V4 || self.kind == LocatorKind::LOCATOR_KIND_UDP_V6
   }
 }
 

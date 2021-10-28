@@ -1,4 +1,4 @@
-use crate::{dds::traits::key::*, };
+use crate::{dds::traits::key::*};
 
 use crate::dds::sampleinfo::*;
 
@@ -11,7 +11,7 @@ use crate::dds::sampleinfo::*;
 /// We are making a bit unorthodox use of `Result`:
 /// It replaces the use of valid_data flag, because when valid_data = false, we should
 /// not provide any data value.
-/// Now 
+/// Now
 /// * `Ok(D)` means valid_data = true and there is a sample.
 /// * `Err(D::K)` means valid_data = false, no sample exists, but only a Key and instance_state has changed.
 

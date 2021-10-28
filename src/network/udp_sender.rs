@@ -1,13 +1,14 @@
 #[allow(unused_imports)]
-use log::{debug,warn,error,trace, info};
+use log::{debug, warn, error, trace, info};
 
 use mio::net::UdpSocket;
 use std::net::{SocketAddr, IpAddr};
-use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
+use socket2::{Socket, Domain, Type, SockAddr, Protocol};
 
 #[cfg(windows)] use local_ip_address::list_afinet_netifas;
 
-#[cfg(test)] use std::net::Ipv4Addr;
+#[cfg(test)]
+use std::net::Ipv4Addr;
 use std::io;
 use crate::structure::locator::{LocatorKind, Locator};
 use crate::network::util::get_local_multicast_ip_addrs;
@@ -45,30 +46,40 @@ impl UDPSender {
 
     // We set multicasting loop on so that we can hear other DomainParticipant
     // instances running on the same host.
-    unicast_socket.set_multicast_loop_v4(true)
-      .unwrap_or_else(|e| { error!("Cannot set multicast loop on: {:?}",e); } );
+    unicast_socket
+      .set_multicast_loop_v4(true)
+      .unwrap_or_else(|e| {
+        error!("Cannot set multicast loop on: {:?}", e);
+      });
 
     let mut multicast_sockets = Vec::with_capacity(1);
     for multicast_if_ipaddr in get_local_multicast_ip_addrs()? {
-      let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP) )?;
+      let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
       // beef: specify otput interface
-      info!("UDPSender: Multicast sender on interface {:?}",multicast_if_ipaddr);
+      info!(
+        "UDPSender: Multicast sender on interface {:?}",
+        multicast_if_ipaddr
+      );
       match multicast_if_ipaddr {
         IpAddr::V4(a) => {
           raw_socket.set_multicast_if_v4(&a)?;
           if cfg!(windows) { raw_socket.set_reuse_address(true)?; } // Necessary? TODO: Check if necessary.
-          raw_socket.bind( &SockAddr::from(SocketAddr::new(multicast_if_ipaddr, 0)) )?;
-        }   
-        IpAddr::V6(_a) => error!("UDPSender::new() not implemented for IpV6") , // TODO
+          raw_socket.bind(&SockAddr::from(SocketAddr::new(multicast_if_ipaddr, 0)))?;
+        }
+        IpAddr::V6(_a) => error!("UDPSender::new() not implemented for IpV6"), // TODO
       }
-      
-      let mc_socket = std::net::UdpSocket::from( raw_socket );
-      mc_socket.set_multicast_loop_v4(true)
-        .unwrap_or_else(|e| { error!("Cannot set multicast loop on: {:?}",e); } );
-      multicast_sockets.push( UdpSocket::from_socket(mc_socket)? );
+
+      let mc_socket = std::net::UdpSocket::from(raw_socket);
+      mc_socket.set_multicast_loop_v4(true).unwrap_or_else(|e| {
+        error!("Cannot set multicast loop on: {:?}", e);
+      });
+      multicast_sockets.push(UdpSocket::from_socket(mc_socket)?);
     } // end for
 
-    let sender = UDPSender { unicast_socket, multicast_sockets, };
+    let sender = UDPSender {
+      unicast_socket,
+      multicast_sockets,
+    };
     info!("UDPSender::new() --> {:?}", sender);
     Ok(sender)
   }
@@ -77,48 +88,52 @@ impl UDPSender {
     Self::new(0)
   }
 
-
   pub fn send_to_locator_list(&self, buffer: &[u8], ll: &[Locator]) {
     for loc in ll {
-      self.send_to_locator(buffer,loc)
+      self.send_to_locator(buffer, loc)
     }
   }
 
   fn send_to_udp_socket(&self, buffer: &[u8], socket: &UdpSocket, addr: &SocketAddr) {
     match socket.send_to(buffer, addr) {
-      Ok(bytes_sent) =>
+      Ok(bytes_sent) => {
         if bytes_sent == buffer.len() { // ok
         } else {
-          error!("send_to_locator - send_to tried {} bytes, sent only {}",
-              buffer.len(), bytes_sent);
+          error!(
+            "send_to_locator - send_to tried {} bytes, sent only {}",
+            buffer.len(),
+            bytes_sent
+          );
         }
+      }
       Err(e) => {
         warn!("send_to_locator - send_to {} : {:?}", addr, e);
       }
-    }    
+    }
   }
 
   pub fn send_to_locator(&self, buffer: &[u8], l: &Locator) {
-      match l.kind {
-        LocatorKind::LOCATOR_KIND_UDP_V4 |
-        LocatorKind::LOCATOR_KIND_UDP_V6 => {
-          let a = l.to_socket_address();
-          if a.ip().is_multicast() {
-            for socket in self.multicast_sockets.iter() {
-              self.send_to_udp_socket(buffer, socket, &a);
-            }
-          } else {
-            self.send_to_udp_socket(buffer, &self.unicast_socket, &a);
+    match l.kind {
+      LocatorKind::LOCATOR_KIND_UDP_V4 | LocatorKind::LOCATOR_KIND_UDP_V6 => {
+        let a = l.to_socket_address();
+        if a.ip().is_multicast() {
+          for socket in self.multicast_sockets.iter() {
+            self.send_to_udp_socket(buffer, socket, &a);
           }
+        } else {
+          self.send_to_udp_socket(buffer, &self.unicast_socket, &a);
         }
-        LocatorKind::LOCATOR_KIND_INVALID |
-        LocatorKind::LOCATOR_KIND_RESERVED =>
-          error!("send_to_locator: Cannot send to {:?}",l.kind),
-        _unknown_kind  =>
-          // This is normal, as other implementations can define their own kinds.
-          // We get those from Discovery.
-          trace!("send_to_locator: Unknown LocatorKind: {:?}",l.kind),
       }
+      LocatorKind::LOCATOR_KIND_INVALID | LocatorKind::LOCATOR_KIND_RESERVED => {
+        error!("send_to_locator: Cannot send to {:?}", l.kind)
+      }
+      _unknown_kind =>
+      // This is normal, as other implementations can define their own kinds.
+      // We get those from Discovery.
+      {
+        trace!("send_to_locator: Unknown LocatorKind: {:?}", l.kind)
+      }
+    }
   }
 
   #[cfg(test)]
@@ -139,8 +154,7 @@ impl UDPSender {
       for s in self.multicast_sockets {
         size = s.send_to(buffer, &address)?;
       }
-      Ok(size) 
-      
+      Ok(size)
     } else {
       io::Result::Err(io::Error::new(
         io::ErrorKind::Other,
@@ -148,7 +162,6 @@ impl UDPSender {
       ))
     }
   }
-
 }
 
 #[cfg(test)]

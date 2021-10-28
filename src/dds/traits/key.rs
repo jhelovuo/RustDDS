@@ -45,32 +45,27 @@ pub trait Keyed {
 
 // See RTPS spec Section 8.7.10 Key Hash
 // and Section 9.6.3.8 KeyHash
-#[derive(Eq,PartialEq,Ord,PartialOrd,Debug, Clone, Copy)]
-pub struct KeyHash([u8;16]);
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
+pub struct KeyHash([u8; 16]);
 
 impl KeyHash {
   pub fn zero() -> KeyHash {
-    KeyHash([0;16])
+    KeyHash([0; 16])
   }
 
   pub fn to_vec(self) -> Vec<u8> {
     Vec::from(self.0)
   }
 
-  pub fn into_cdr_bytes( self ) -> Result<Vec<u8>, Error> {
-    Ok( self.to_vec() )
+  pub fn into_cdr_bytes(self) -> Result<Vec<u8>, Error> {
+    Ok(self.to_vec())
   }
 
   pub fn from_cdr_bytes(bytes: Vec<u8>) -> Result<KeyHash, Error> {
-    let a =
-      <[u8;16]>::try_from( bytes )
-        .map_err( |_e|  Error::Eof )?;
+    let a = <[u8; 16]>::try_from(bytes).map_err(|_e| Error::Eof)?;
     Ok(KeyHash(a))
   }
-
 }
-
-
 
 /// Key trait for Keyed Topics
 ///
@@ -87,15 +82,14 @@ impl KeyHash {
 /// * [DeserializeOwned](https://docs.serde.rs/serde/de/trait.DeserializeOwned.html) .
 ///
 /// Note: When implementing Key, DeserializeOwned cannot and need not be derived, as it is a type alias.
-/// Derive (or implement) the Deserialize trait instead. 
+/// Derive (or implement) the Deserialize trait instead.
 
 pub trait Key:
   Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned
 {
-  
   // no methods required
 
-  /// This function tries to determine if the maximum size of the sequential CDR encapsulation of 
+  /// This function tries to determine if the maximum size of the sequential CDR encapsulation of
   /// all the key fields is less than or equal to 128 bits.
   /// In case this function gets it wrong, it can be overridden.
   fn may_exceed_128_bits() -> bool {
@@ -111,31 +105,30 @@ pub trait Key:
   fn hash_key(&self) -> KeyHash {
     // See RTPS Spec v2.3 Section 9.6.3.8 KeyHash
 
-    /* The KeyHash_t is computed from the Data as follows using one of two algorithms depending on whether 
-        the Data type is such that the maximum size of the sequential CDR encapsulation of 
+    /* The KeyHash_t is computed from the Data as follows using one of two algorithms depending on whether
+        the Data type is such that the maximum size of the sequential CDR encapsulation of
         all the key fields is less than or equal to 128 bits (the size of the KeyHash_t).
-        
-        • If the maximum size of the sequential CDR representation of all the key fields is less 
-        than or equal to 128 bits, then the KeyHash_t shall be computed as the CDR Big-Endian 
-        representation of all the Key fields in sequence. Any unfilled bits in the KeyHash_t 
+
+        • If the maximum size of the sequential CDR representation of all the key fields is less
+        than or equal to 128 bits, then the KeyHash_t shall be computed as the CDR Big-Endian
+        representation of all the Key fields in sequence. Any unfilled bits in the KeyHash_t
         shall be set to zero.
-        • Otherwise the KeyHash_t shall be computed as a 128-bit MD5 Digest (IETF RFC 1321) 
+        • Otherwise the KeyHash_t shall be computed as a 128-bit MD5 Digest (IETF RFC 1321)
         applied to the CDR Big- Endian representation of all the Key fields in sequence.
 
-        Note that the choice of the algorithm to use depends on the data-type, 
+        Note that the choice of the algorithm to use depends on the data-type,
         not on any particular data value.
     */
 
-    let mut cdr_bytes = to_bytes::<Self, BigEndian>(self)
-      .unwrap_or_else(|e| {
-        error!("Hashing key {:?} failed!", e);
-        // This would cause a lot of hash collisions, but wht else we could do
-        // if the key cannot be serialized? Are there any realistic conditions
-        // this could even ocur?
-        vec![0;16]
-      });
+    let mut cdr_bytes = to_bytes::<Self, BigEndian>(self).unwrap_or_else(|e| {
+      error!("Hashing key {:?} failed!", e);
+      // This would cause a lot of hash collisions, but wht else we could do
+      // if the key cannot be serialized? Are there any realistic conditions
+      // this could even ocur?
+      vec![0; 16]
+    });
 
-    KeyHash( 
+    KeyHash(
       // TODO: Here we just detect at run-time that the cdr_bytes is too long
       // fit into 16-byte hash field as-is. This should be done statically, and the
       // writer and reader (acreoss implementations of RTPS) must agree on this
@@ -146,16 +139,15 @@ pub trait Key:
         *md5::compute(&cdr_bytes)
       } else {
         cdr_bytes.resize(16, 0x00); // pad with zeros to get 16 bytes
-        <[u8;16]>::try_from(cdr_bytes).unwrap() // this succeeds, because of the resize above
-      }
+        <[u8; 16]>::try_from(cdr_bytes).unwrap() // this succeeds, because of the resize above
+      },
     )
-
-  } 
+  }
 }
 
 impl Key for () {
   fn hash_key(&self) -> KeyHash {
-    KeyHash::zero() 
+    KeyHash::zero()
   }
 }
 

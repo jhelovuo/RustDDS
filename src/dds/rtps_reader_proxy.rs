@@ -11,7 +11,7 @@ use crate::{
     locator::{Locator, LocatorList},
     sequence_number::{SequenceNumber},
   },
-  dds::qos::{QosPolicies,},
+  dds::qos::{QosPolicies},
   messages::submessages::{submessage::AckSubmessage},
   discovery::data_types::topic_data::DiscoveredReaderData,
 };
@@ -21,7 +21,7 @@ use std::{
   net::{SocketAddr, Ipv4Addr},
 };
 
-use super::reader::{ReaderIngredients,};
+use super::reader::{ReaderIngredients};
 
 #[derive(Debug, PartialEq, Clone)]
 /// ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
@@ -42,15 +42,15 @@ pub(crate) struct RtpsReaderProxy {
 
   // Reader has positively acked all SequenceNumbers _before_ this.
   // This is directly the same as readerSNState.base in ACKNACK submessage.
-  pub all_acked_before : SequenceNumber,
+  pub all_acked_before: SequenceNumber,
 
   // List of SequenceNumbers to be sent to Reader. Both unsent and requested by ACKNACK.
   pub unsent_changes: BTreeSet<SequenceNumber>,
 
   // true = send repair data messages due to NACKs, buffer messages by DataWriter
   // false = send data messages directly from DataWriter
-  pub repair_mode : bool,
-  pub qos : QosPolicies,
+  pub repair_mode: bool,
+  pub qos: QosPolicies,
 }
 
 impl RtpsReaderProxy {
@@ -73,7 +73,11 @@ impl RtpsReaderProxy {
     &self.qos
   }
 
-  pub fn from_reader(reader: &ReaderIngredients, domain_id: u16, participant_id: u16) -> RtpsReaderProxy {
+  pub fn from_reader(
+    reader: &ReaderIngredients,
+    domain_id: u16,
+    participant_id: u16,
+  ) -> RtpsReaderProxy {
     let unicast_locator_list =
       get_local_unicast_socket_address(get_user_traffic_unicast_port(domain_id, participant_id));
 
@@ -103,16 +107,18 @@ impl RtpsReaderProxy {
   }
 
   pub fn from_discovered_reader_data(
-    discovered_reader_data: &DiscoveredReaderData, 
+    discovered_reader_data: &DiscoveredReaderData,
     default_unicast_locators: LocatorList,
     default_multicast_locators: LocatorList,
   ) -> RtpsReaderProxy {
     let unicast_locator_list = Self::discovered_or_default(
-        &discovered_reader_data.reader_proxy.unicast_locator_list, 
-        &default_unicast_locators);
+      &discovered_reader_data.reader_proxy.unicast_locator_list,
+      &default_unicast_locators,
+    );
     let multicast_locator_list = Self::discovered_or_default(
-        &discovered_reader_data.reader_proxy.multicast_locator_list, 
-        &default_multicast_locators);
+      &discovered_reader_data.reader_proxy.multicast_locator_list,
+      &default_multicast_locators,
+    );
 
     RtpsReaderProxy {
       remote_reader_guid: discovered_reader_data.reader_proxy.remote_reader_guid,
@@ -124,7 +130,9 @@ impl RtpsReaderProxy {
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
-      qos: discovered_reader_data.subscription_topic_data.generate_qos(),
+      qos: discovered_reader_data
+        .subscription_topic_data
+        .generate_qos(),
     }
   }
 
@@ -158,16 +166,19 @@ impl RtpsReaderProxy {
     }
   }
 
-
   pub fn can_send(&self) -> bool {
-    ! self.unsent_changes.is_empty()
+    !self.unsent_changes.is_empty()
   }
 
-  pub fn handle_ack_nack(&mut self, ack_submessage: &AckSubmessage, last_available:SequenceNumber) {
+  pub fn handle_ack_nack(
+    &mut self,
+    ack_submessage: &AckSubmessage,
+    last_available: SequenceNumber,
+  ) {
     match ack_submessage {
       AckSubmessage::AckNack(acknack) => {
         self.all_acked_before = acknack.reader_sn_state.base();
-        // clean up unsent_changes: 
+        // clean up unsent_changes:
         // The handy split_off function "Returns everything after the given key, including the key."
         self.unsent_changes = self.unsent_changes.split_off(&self.all_acked_before);
 
@@ -176,10 +187,12 @@ impl RtpsReaderProxy {
           self.unsent_changes.insert(nack_sn);
         }
         // sanity check
-        if let Some(&high) = self.unsent_changes.iter().next_back()  {
-          if high > last_available { 
-            warn!("ReaderProxy {:?} asks for {:?} but I have only up to {:?}. ACKNACK = {:?}", 
-              self.remote_reader_guid, self.unsent_changes, last_available, acknack);
+        if let Some(&high) = self.unsent_changes.iter().next_back() {
+          if high > last_available {
+            warn!(
+              "ReaderProxy {:?} asks for {:?} but I have only up to {:?}. ACKNACK = {:?}",
+              self.remote_reader_guid, self.unsent_changes, last_available, acknack
+            );
           }
         }
       }
@@ -194,7 +207,10 @@ impl RtpsReaderProxy {
   /// this should be called everytime a new CacheChange is set to RTPS writer HistoryCache
   pub fn notify_new_cache_change(&mut self, sequence_number: SequenceNumber) {
     if sequence_number == SequenceNumber::from(0) {
-      error!("new cache change with {:?}! bad! my GUID = {:?}",sequence_number, self.remote_reader_guid);
+      error!(
+        "new cache change with {:?}! bad! my GUID = {:?}",
+        sequence_number, self.remote_reader_guid
+      );
     }
     self.unsent_changes.insert(sequence_number);
   }

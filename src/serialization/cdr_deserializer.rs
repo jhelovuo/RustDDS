@@ -32,7 +32,6 @@ const REPR_IDS: [RepresentationIdentifier; 3] = [
   RepresentationIdentifier::PL_CDR_LE,
 ];
 
-
 impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
 where
   D: DeserializeOwned,
@@ -48,7 +47,9 @@ where
       }
       RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
       repr_id => Err(Error::Message(format!(
-        "Unknown representaiton identifier {:?}.", repr_id ))),
+        "Unknown representaiton identifier {:?}.",
+        repr_id
+      ))),
     }
   }
 }
@@ -65,12 +66,12 @@ where
       }
       RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
       repr_id => Err(Error::Message(format!(
-        "Unknown representaiton identifier {:?}.", repr_id ))),
+        "Unknown representaiton identifier {:?}.",
+        repr_id
+      ))),
     }
   }
 }
-
-
 
 /// CDR deserializer.
 /// Input is from &[u8], since we expect to have the data in contiguous memory buffers.
@@ -187,7 +188,9 @@ where
   where
     V: Visitor<'de>,
   {
-    Err(Error::Message("cdr_desrializer: Cannot deserialize \"any\" type. ".to_string()))
+    Err(Error::Message(
+      "cdr_desrializer: Cannot deserialize \"any\" type. ".to_string(),
+    ))
   }
 
   //15.3.1.5 Boolean
@@ -815,7 +818,6 @@ mod tests {
     assert_eq!(value.test, "Toimiiko?");
   }
 
-
   #[derive(Serialize, Deserialize, Debug, PartialEq)]
   struct InterestingMessage {
     unboundedString: String,
@@ -832,9 +834,9 @@ mod tests {
 
   #[derive(Serialize, Deserialize, Debug, PartialEq)]
   enum BigEnum {
-    Interesting( InterestingMessage ),
+    Interesting(InterestingMessage),
     Boring,
-    Something{ x:f32, y:f32, }
+    Something { x: f32, y: f32 },
   }
 
   #[test]
@@ -872,7 +874,6 @@ mod tests {
       ser_var.kolmeTavua({23,0,2});
     */
 
-
     let value = InterestingMessage {
       unboundedString: "Tassa on aika pitka teksti".to_string(),
       x: 2,
@@ -903,7 +904,6 @@ mod tests {
 
     info!("{:?}", deserializationResult);
   }
-
 
   #[test_case(35_u8 ; "u8")]
   #[test_case(35_u16 ; "u16")]
@@ -947,7 +947,10 @@ mod tests {
     }) ; "BigEnum::Interesting")]
   #[test_case( BigEnum::Something{ x:123.0, y:-0.1 } ; "BigEnum::Something")]
 
-  fn CDR_serde_round_trip<T>(input: T) where T: PartialEq + std::fmt::Debug + Serialize + for<'a> Deserialize<'a> {
+  fn CDR_serde_round_trip<T>(input: T)
+  where
+    T: PartialEq + std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,
+  {
     let serialized = to_bytes::<_, LittleEndian>(&input).unwrap();
     let deserialized = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(input, deserialized);

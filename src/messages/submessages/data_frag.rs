@@ -1,8 +1,7 @@
-
 use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
 use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::{SequenceNumber,FragmentNumber};
+use crate::structure::sequence_number::{SequenceNumber, FragmentNumber};
 
 use crate::messages::submessages::submessages::*;
 
@@ -71,14 +70,15 @@ impl<'a> DataFrag {
       u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let octets_to_inline_qos =
       u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
-    let reader_id =
-      EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
-    let writer_id =
-      EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
-    let writer_sn =
-      SequenceNumber::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let reader_id = EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
+      .map_err(map_speedy_err)?;
+    let writer_id = EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
+      .map_err(map_speedy_err)?;
+    let writer_sn = SequenceNumber::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
+      .map_err(map_speedy_err)?;
     let fragment_starting_num =
-      FragmentNumber::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      FragmentNumber::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
+        .map_err(map_speedy_err)?;
     let fragments_in_submessage =
       u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let fragment_size =
@@ -110,7 +110,7 @@ impl<'a> DataFrag {
     };
 
     // Payload should be always present, be it data or key fragments.
-    let serialized_payload = 
+    let serialized_payload =
       SerializedPayload::from_bytes(buffer.clone().split_off(cursor.position() as usize))?;
 
     Ok(DataFrag {
@@ -133,7 +133,9 @@ impl<C: Context> Writable<C> for DataFrag {
     if self.inline_qos.is_some() && !self.inline_qos.as_ref().unwrap().parameters.is_empty() {
       debug!("self.inline_qos {:?}", self.inline_qos);
       todo!()
-    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.is_empty() || self.inline_qos.is_none() {
+    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.is_empty()
+      || self.inline_qos.is_none()
+    {
       writer.write_u16(24)?;
     }
     writer.write_value(&self.reader_id)?;

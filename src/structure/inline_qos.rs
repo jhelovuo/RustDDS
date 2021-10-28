@@ -1,18 +1,16 @@
-
-use byteorder::{ByteOrder, };
+use byteorder::{ByteOrder};
 use enumflags2::BitFlags;
 
 use super::cache_change::ChangeKind;
 use crate::{
   messages::submessages::submessage_elements::RepresentationIdentifier,
   serialization::{
-    CDRDeserializerAdapter, 
+    CDRDeserializerAdapter,
     cdr_serializer::{to_bytes},
   },
   dds::traits::serde_adapters::no_key::*,
 };
 use serde::{Serialize, Deserialize};
-
 
 #[derive(Debug, BitFlags, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
@@ -28,24 +26,24 @@ pub enum StatusInfoEnum {
 pub struct StatusInfo {
   em: [u8; 3],
   si: BitFlags<StatusInfoEnum>, // This is now a bit set of StatusInfoEnum
-  // Interpretation:
-  // empty set => Sample is ALIVE and must be present in the message
-  // not Unregistered and not Disposed => ALIVE (but may be asbent)
-  // Disposed => DataWriter disposed instance. NOT_ALIVE
-  // Unregistered => DataWriter unregistered message. Note that DataWriter is not required 
-  //  notify about any unregister operations. This does not make the instance NOT_ALIVE, but infoms
-  //  that the DataWriter is not going to update that instance anymore.
-  // Filtered => DataWriter wrote a sample, but it was filtered away by the current QoS settings and
-  // thus data is not present.
-  //
-  // There may be several flags set at the same time.
-  // 
-  // Disposed & Unregistered:
-  // 
-  // Meanings of some combinations are uknown:
-  // Disposed & Filtered : ???
-  // Unregistered & Filtered: ???
-  // Disposed & Unregistered & Filtered: ???
+                                // Interpretation:
+                                // empty set => Sample is ALIVE and must be present in the message
+                                // not Unregistered and not Disposed => ALIVE (but may be asbent)
+                                // Disposed => DataWriter disposed instance. NOT_ALIVE
+                                // Unregistered => DataWriter unregistered message. Note that DataWriter is not required
+                                //  notify about any unregister operations. This does not make the instance NOT_ALIVE, but infoms
+                                //  that the DataWriter is not going to update that instance anymore.
+                                // Filtered => DataWriter wrote a sample, but it was filtered away by the current QoS settings and
+                                // thus data is not present.
+                                //
+                                // There may be several flags set at the same time.
+                                //
+                                // Disposed & Unregistered:
+                                //
+                                // Meanings of some combinations are uknown:
+                                // Disposed & Filtered : ???
+                                // Unregistered & Filtered: ???
+                                // Disposed & Unregistered & Filtered: ???
 }
 
 impl StatusInfo {
@@ -90,9 +88,9 @@ impl StatusInfo {
 #[cfg(test)]
 mod tests {
   use byteorder::LittleEndian;
-use byteorder::BigEndian;
-use crate::dds::traits::key::KeyHash;
-use super::*;
+  use byteorder::BigEndian;
+  use crate::dds::traits::key::KeyHash;
+  use super::*;
 
   #[test]
   fn inline_qos_status_info() {
@@ -140,7 +138,10 @@ use super::*;
   #[test]
   fn inline_qos_key_hash() {
     // Little endian
-    let hbytes = KeyHash::from_cdr_bytes(vec![1]).unwrap().into_cdr_bytes().unwrap();
+    let hbytes = KeyHash::from_cdr_bytes(vec![1])
+      .unwrap()
+      .into_cdr_bytes()
+      .unwrap();
 
     let bytes: Vec<u8> = vec![
       0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -148,17 +149,20 @@ use super::*;
     ];
     assert_eq!(hbytes, bytes);
 
-    let key_hash = KeyHash::from_cdr_bytes(bytes,).unwrap();
+    let key_hash = KeyHash::from_cdr_bytes(bytes).unwrap();
     assert_eq!(KeyHash::from_cdr_bytes(vec![1]).unwrap(), key_hash);
 
     // Big endian
-    let hbytes = KeyHash::from_cdr_bytes(vec![1]).unwrap().into_cdr_bytes().unwrap();
+    let hbytes = KeyHash::from_cdr_bytes(vec![1])
+      .unwrap()
+      .into_cdr_bytes()
+      .unwrap();
     let bytes: Vec<u8> = vec![
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x01,
     ];
     assert_eq!(hbytes, bytes);
-    let key_hash = KeyHash::from_cdr_bytes(bytes,).unwrap();
+    let key_hash = KeyHash::from_cdr_bytes(bytes).unwrap();
     assert_eq!(KeyHash::from_cdr_bytes(vec![1]).unwrap(), key_hash);
   }
 }

@@ -19,7 +19,7 @@
 //! let mut ros_participant = RosParticipant::new().unwrap();
 //!
 //!
-//! // declaring ros node 
+//! // declaring ros node
 //! let mut ros_node = ros_participant.new_ros_node(
 //!   "some_node_name",
 //!   "/some_namespace",
@@ -43,7 +43,7 @@
 //! // Readers and RosParticipant implement mio Evented trait and thus function the same way as
 //! // std::sync::mpcs and can be handled the same way for reading the data
 //!
-//! 
+//!
 //! ```
 
 /// Some builtin datatypes needed for ROS2 communication
@@ -63,17 +63,16 @@ pub type RosPublisher<D, SA> = crate::dds::no_key::datawriter::DataWriter<D, SA>
 
 pub type KeyedRosPublisher<D, SA> = crate::dds::with_key::datawriter::DataWriter<D, SA>;
 
-
 // Short-hand notation for CDR serialization
 
-pub type RosSubscriberCdr<D> = 
+pub type RosSubscriberCdr<D> =
   crate::dds::no_key::datareader::DataReader<D, crate::serialization::CDRDeserializerAdapter<D>>;
 
-pub type KeyedRosSubscriberCdr<D> = 
+pub type KeyedRosSubscriberCdr<D> =
   crate::dds::with_key::datareader::DataReader<D, crate::serialization::CDRDeserializerAdapter<D>>;
 
-pub type RosPublisherCdr<D> = 
+pub type RosPublisherCdr<D> =
   crate::dds::no_key::datawriter::DataWriter<D, crate::serialization::CDRSerializerAdapter<D>>;
 
-pub type KeyedRosPublisherCdr<D> = 
+pub type KeyedRosPublisherCdr<D> =
   crate::dds::with_key::datawriter::DataWriter<D, crate::serialization::CDRSerializerAdapter<D>>;

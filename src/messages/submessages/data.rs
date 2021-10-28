@@ -57,12 +57,13 @@ impl Data {
       u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
     let octets_to_inline_qos =
       u16::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
-    let reader_id =
-      EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
-    let writer_id =
-      EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+    let reader_id = EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
+      .map_err(map_speedy_err)?;
+    let writer_id = EntityId::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
+      .map_err(map_speedy_err)?;
     let sequence_number =
-      SequenceNumber::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
+      SequenceNumber::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
+        .map_err(map_speedy_err)?;
 
     let expect_qos = flags.contains(DATA_Flags::InlineQos);
     let expect_data = flags.contains(DATA_Flags::Data) || flags.contains(DATA_Flags::Key);
@@ -71,7 +72,7 @@ impl Data {
     // extraFlags (2) + octetsToInlineQos (2) + readerId (4) + writerId (4) + writerSN (8)
     // = 20 bytes
     // of which 16 bytes is after octetsToInlineQos field.
-    let rtps_v23_data_header_size: u16 = 16; 
+    let rtps_v23_data_header_size: u16 = 16;
     // There may be some extra data between writerSN and inlineQos, if the header is extended in
     // future versions. But as of RTPS v2.3 , extra_octets should be always zero.
     let extra_octets = octets_to_inline_qos - rtps_v23_data_header_size;
@@ -88,8 +89,7 @@ impl Data {
     };
 
     let payload = if expect_data {
-      let p = SerializedPayload::from_bytes(buffer.clone()
-                                            .split_off(cursor.position() as usize))?;
+      let p = SerializedPayload::from_bytes(buffer.clone().split_off(cursor.position() as usize))?;
       Some(p)
     } else {
       None

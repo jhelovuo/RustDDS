@@ -156,9 +156,10 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
           participant_data.default_multicast_locators.clear();
 
           let datalen = d.serialized_payload.as_ref().unwrap().value.len() as u16;
-          data =
-            Bytes::from(to_bytes::<SpdpDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
-              .unwrap());
+          data = Bytes::from(
+            to_bytes::<SpdpDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
+              .unwrap(),
+          );
           d.serialized_payload.as_mut().unwrap().value = data.clone();
           submsglen =
             submsglen + d.serialized_payload.as_ref().unwrap().value.len() as u16 - datalen;
@@ -262,8 +263,12 @@ pub(crate) fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTop
     })
     .build();
 
-  let sub_topic_data =
-    SubscriptionBuiltinTopicData::new(GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED), "some topic name".to_string(), "RandomData".to_string(), &qos);
+  let sub_topic_data = SubscriptionBuiltinTopicData::new(
+    GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED),
+    "some topic name".to_string(),
+    "RandomData".to_string(),
+    &qos,
+  );
 
   Some(sub_topic_data)
 }

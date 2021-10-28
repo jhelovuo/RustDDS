@@ -63,16 +63,15 @@ impl<C: Context> Writable<C> for InterpreterSubmessage {
       InterpreterSubmessage::InfoSource(s, _f) => writer.write_value(s),
       InterpreterSubmessage::InfoDestination(s, _f) => writer.write_value(s),
       InterpreterSubmessage::InfoReply(s, _f) => writer.write_value(s),
-      InterpreterSubmessage::InfoTimestamp(s, _f) => 
-        match s {
-          InfoTimestamp {timestamp: None } => Ok( () ), // serialization is empty string
-          InfoTimestamp {timestamp: Some(ts) } =>
-            writer.write_value(ts),
-        }
+      InterpreterSubmessage::InfoTimestamp(s, _f) => match s {
+        InfoTimestamp { timestamp: None } => Ok(()), // serialization is empty string
+        InfoTimestamp {
+          timestamp: Some(ts),
+        } => writer.write_value(ts),
+      },
     }
   }
 }
-
 
 #[derive(Debug)]
 pub enum AckSubmessage {
@@ -88,4 +87,3 @@ impl AckSubmessage {
     }
   }
 }
-

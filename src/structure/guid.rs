@@ -35,11 +35,8 @@ impl GuidPrefix {
   }
 
   pub fn range(&self) -> impl RangeBounds<GUID> {
-    GUID::new(*self,EntityId::MIN)
-    ..=
-    GUID::new(*self,EntityId::MAX)
+    GUID::new(*self, EntityId::MIN)..=GUID::new(*self, EntityId::MAX)
   }
-
 }
 
 impl Default for GuidPrefix {
@@ -79,37 +76,37 @@ pub struct EntityKind(u8);
 
 impl EntityKind {
   // constants from RTPS spec Table 9.1
-  pub const UNKNOWN_USER_DEFINED : EntityKind = EntityKind(0x00);
+  pub const UNKNOWN_USER_DEFINED: EntityKind = EntityKind(0x00);
   //pub const PARTICIPANT_USER_DEFINED : EntityKind = EntityKind(0x01);
   // User-defined participants do not exist by definition.
-  pub const WRITER_WITH_KEY_USER_DEFINED : EntityKind = EntityKind(0x02);
-  pub const WRITER_NO_KEY_USER_DEFINED : EntityKind = EntityKind(0x03);
-  pub const READER_NO_KEY_USER_DEFINED : EntityKind = EntityKind(0x04);
-  pub const READER_WITH_KEY_USER_DEFINED : EntityKind = EntityKind(0x07);
-  pub const WRITER_GROUP_USER_DEFINED : EntityKind = EntityKind(0x08);
-  pub const READER_GROUP_USER_DEFINED : EntityKind = EntityKind(0x09);
+  pub const WRITER_WITH_KEY_USER_DEFINED: EntityKind = EntityKind(0x02);
+  pub const WRITER_NO_KEY_USER_DEFINED: EntityKind = EntityKind(0x03);
+  pub const READER_NO_KEY_USER_DEFINED: EntityKind = EntityKind(0x04);
+  pub const READER_WITH_KEY_USER_DEFINED: EntityKind = EntityKind(0x07);
+  pub const WRITER_GROUP_USER_DEFINED: EntityKind = EntityKind(0x08);
+  pub const READER_GROUP_USER_DEFINED: EntityKind = EntityKind(0x09);
 
-  pub const UNKNOWN_BUILT_IN : EntityKind = EntityKind(0xC0);
-  pub const PARTICIPANT_BUILT_IN : EntityKind = EntityKind(0xC1);
-  pub const WRITER_WITH_KEY_BUILT_IN : EntityKind = EntityKind(0xC2);
-  pub const WRITER_NO_KEY_BUILT_IN : EntityKind = EntityKind(0xC3);
-  pub const READER_NO_KEY_BUILT_IN : EntityKind = EntityKind(0xC4);
-  pub const READER_WITH_KEY_BUILT_IN : EntityKind = EntityKind(0xC7);
-  pub const WRITER_GROUP_BUILT_IN : EntityKind = EntityKind(0xC8);
-  pub const READER_GROUP_BUILT_IN : EntityKind = EntityKind(0xC9);
+  pub const UNKNOWN_BUILT_IN: EntityKind = EntityKind(0xC0);
+  pub const PARTICIPANT_BUILT_IN: EntityKind = EntityKind(0xC1);
+  pub const WRITER_WITH_KEY_BUILT_IN: EntityKind = EntityKind(0xC2);
+  pub const WRITER_NO_KEY_BUILT_IN: EntityKind = EntityKind(0xC3);
+  pub const READER_NO_KEY_BUILT_IN: EntityKind = EntityKind(0xC4);
+  pub const READER_WITH_KEY_BUILT_IN: EntityKind = EntityKind(0xC7);
+  pub const WRITER_GROUP_BUILT_IN: EntityKind = EntityKind(0xC8);
+  pub const READER_GROUP_BUILT_IN: EntityKind = EntityKind(0xC9);
 
-  pub const MIN : EntityKind = EntityKind(0x00);
-  pub const MAX : EntityKind = EntityKind(0xFF);
+  pub const MIN: EntityKind = EntityKind(0x00);
+  pub const MAX: EntityKind = EntityKind(0xFF);
 
   // We will encode polling tokens as EntityId, containing an EntityKind
   // The upper nibble of EntityKind will distinguish between different
   // poll tokens:
   // 0 = user-defined entity
-  // 1 
+  // 1
   // 2 = user-defined alt token (timers etc)
-  // 3 
+  // 3
   // 4 = fixed poll tokens (not entity-specific)
-  pub const POLL_TOKEN_BASE : usize = 0x40;
+  pub const POLL_TOKEN_BASE: usize = 0x40;
   // 5 = fixed poll tokens continued
   // 6 = fixed poll tokens continued
   // 7 = fixed poll tokens continued
@@ -131,7 +128,6 @@ impl EntityKind {
     let e = self.0 & 0x0F;
     e == 0x02 || e == 0x03 || e == 0x08
   }
-
 }
 
 impl From<u8> for EntityKind {
@@ -156,15 +152,14 @@ pub struct EntityId {
 
 // We are going to pack 32 bits of payload into an usize, or ultimately
 // into a mio::Token, so we need it to be large enough.
-sa::const_assert!( std::mem::size_of::<usize>() >= std::mem::size_of::<u32>() );
+sa::const_assert!(std::mem::size_of::<usize>() >= std::mem::size_of::<u32>());
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub enum TokenDecode {
-  Entity( EntityId ),
-  AltEntity( EntityId ),
-  FixedToken( Token )
+  Entity(EntityId),
+  AltEntity(EntityId),
+  FixedToken(Token),
 }
-
 
 impl EntityId {
   pub const ENTITYID_UNKNOWN: EntityId = EntityId {
@@ -216,7 +211,6 @@ impl EntityId {
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
 
-
   pub const MIN: EntityId = EntityId {
     entity_key: [0x00; 3],
     entity_kind: EntityKind::MIN,
@@ -226,9 +220,11 @@ impl EntityId {
     entity_kind: EntityKind::MAX,
   };
 
-
   pub fn create_custom_entity_id(entity_key: [u8; 3], entity_kind: EntityKind) -> EntityId {
-    EntityId { entity_key, entity_kind }
+    EntityId {
+      entity_key,
+      entity_kind,
+    }
   }
 
   fn as_usize(self) -> usize {
@@ -252,18 +248,17 @@ impl EntityId {
     let u2 = ((number >> 16) & 0xFF) as u8;
     let u1 = ((number >> 24) & 0xFF) as u8;
 
-    let result =
-      EntityId {
-        entity_key: [u1 , u2 , u3 ],
-        entity_kind: EntityKind::from( u4 )
-      };
+    let result = EntityId {
+      entity_key: [u1, u2, u3],
+      entity_kind: EntityKind::from(u4),
+    };
 
     // check sanity, as the result sohould be
     let kind_kind = u4 & (0xC0 | 0x10);
     if kind_kind == 0xC0 || kind_kind == 0x00 {
       // this is ok, all normal
     } else {
-      warn!("EntityId::from_usize tried to decode 0x{:x?}",number)
+      warn!("EntityId::from_usize tried to decode 0x{:x?}", number)
     }
 
     result
@@ -271,29 +266,25 @@ impl EntityId {
 
   pub fn as_token(self) -> Token {
     let u = self.as_usize();
-    assert_eq!( u & !0x20 , u ); // check bit 5 is zero 
-    Token( u )
+    assert_eq!(u & !0x20, u); // check bit 5 is zero
+    Token(u)
   }
 
   pub fn as_alt_token(self) -> Token {
-    Token( self.as_usize() | 0x20 ) // set bit 5
+    Token(self.as_usize() | 0x20) // set bit 5
   }
 
-  pub fn from_token(t : Token) -> TokenDecode {
+  pub fn from_token(t: Token) -> TokenDecode {
     match (t.0 & 0xF0) as u8 {
-      0x00 | 0xC0 => 
-        TokenDecode::Entity( EntityId::from_usize( t.0 ) ) ,
-      0x20 | 0xE0 => 
-        TokenDecode::AltEntity( EntityId::from_usize( t.0 & !0x20 )) ,
-      0x40 | 0x50 | 0x60 | 0x70 =>
-        TokenDecode::FixedToken( t ) ,
+      0x00 | 0xC0 => TokenDecode::Entity(EntityId::from_usize(t.0)),
+      0x20 | 0xE0 => TokenDecode::AltEntity(EntityId::from_usize(t.0 & !0x20)),
+      0x40 | 0x50 | 0x60 | 0x70 => TokenDecode::FixedToken(t),
       _other => {
-        warn!("EntityId::from_token tried to decode 0x{:x?}",t.0);
-        TokenDecode::FixedToken( t )
+        warn!("EntityId::from_token tried to decode 0x{:x?}", t.0);
+        TokenDecode::FixedToken(t)
       }
     }
   }
-
 
   pub fn kind(self) -> EntityKind {
     self.entity_kind
@@ -352,7 +343,7 @@ pub struct GUID {
   // Note: It is important to have guid_prefix first, so that derive'd Ord trait
   // will produce ordering, where GUIDs with same GuidPrefix are grouped
   // together.
-  pub guid_prefix: GuidPrefix, 
+  pub guid_prefix: GuidPrefix,
   pub entity_id: EntityId,
 }
 
@@ -364,7 +355,7 @@ impl GUID {
 
   // basic constructor from components
   pub fn new(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
-    GUID::new_with_prefix_and_id(prefix,entity_id)
+    GUID::new_with_prefix_and_id(prefix, entity_id)
   }
 
   /// Generates new GUID for Participant when `guid_prefix` is random
@@ -380,7 +371,7 @@ impl GUID {
     GUID {
       guid_prefix: GuidPrefix::new(b"FakeTestGUID"),
       entity_id: EntityId {
-        entity_key: [1,2,3] ,
+        entity_key: [1, 2, 3],
         entity_kind,
       },
     }
@@ -405,7 +396,6 @@ impl GUID {
   pub fn as_usize(&self) -> usize {
     self.entity_id.as_usize()
   }
-
 }
 
 impl Key for GUID {}
@@ -459,7 +449,7 @@ mod tests {
     let entity5 = EntityId::from_usize(e5.as_usize());
     assert_eq!(e5, entity5);
 
-    let e6 = EntityId::create_custom_entity_id([12u8, 255u8, 0u8], EntityKind(254u8) );
+    let e6 = EntityId::create_custom_entity_id([12u8, 255u8, 0u8], EntityKind(254u8));
     let entity6 = EntityId::from_usize(e6.as_usize());
     assert_eq!(e6, entity6);
   }

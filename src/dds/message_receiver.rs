@@ -223,10 +223,10 @@ impl MessageReceiver {
           for reader in self
             .available_readers
             .values_mut()
-            .filter(|r| r.contains_writer(data.writer_id) 
-                        // exception: discovery prococol reader must read from unkonwn discovery protocol writers
-                        // TODO: This logic here is uglyish. Can we just inject a presupposed writer (proxy)
-                        // to the built-in reader as it is created?
+            // exception: discovery prococol reader must read from unkonwn discovery protocol writers
+            // TODO: This logic here is uglyish. Can we just inject a presupposed writer (proxy)
+            // to the built-in reader as it is created?
+            .filter(|r| r.contains_writer(data.writer_id)
                         || (data.writer_id == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
                             &&
                             r.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
@@ -236,8 +236,10 @@ impl MessageReceiver {
             debug!("handle_entity_submessage DATA from unknown handling in {:?}",&reader);
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
-        } else if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
-          target_reader.handle_data_msg(data, data_flags, mr_state);
+        } else {
+          if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
+            target_reader.handle_data_msg(data, data_flags, mr_state);
+          }
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -254,12 +256,14 @@ impl MessageReceiver {
               mr_state.clone(),
             );
           }
-        } else if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
-          target_reader.handle_heartbeat_msg(
-            heartbeat,
-            flags.contains(HEARTBEAT_Flags::Final),
-            mr_state,
-          );
+        } else {
+          if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
+            target_reader.handle_heartbeat_msg(
+              heartbeat,
+              flags.contains(HEARTBEAT_Flags::Final),
+              mr_state,
+            );
+          }
         }
       }
       EntitySubmessage::Gap(gap, _flags) => {
@@ -293,8 +297,10 @@ impl MessageReceiver {
           {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
-        } else if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
-          target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+        } else {
+          if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
+            target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+          }
         }
       }
       EntitySubmessage::NackFrag(_, _) => {}
@@ -423,16 +429,16 @@ use super::*;
     ]);
 
     // this guid prefix is set here because exaple message target is this.
-    let gui_prefix = GuidPrefix::new(&[
+    let guiPrefix = GuidPrefix::new(&[
       0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
     ]);
 
     let (acknack_sender, _acknack_reciever) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
-    let mut message_receiver = MessageReceiver::new(gui_prefix, acknack_sender);
+    let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
 
     let entity = EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
-    let new_guid = GUID::new_with_prefix_and_id(gui_prefix, entity);
+    let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
 
     new_guid.from_prefix(entity);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
@@ -463,20 +469,20 @@ use super::*;
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);
     message_receiver.add_reader(new_reader);
 
-    message_receiver.handle_received_packet(udp_bits1);
+    message_receiver.handle_received_packet(udp_bits1.clone());
 
     assert_eq!(message_receiver.submessage_count, 4);
 
     // this is not correct way to read history cache values but it serves as a test
-    let sequence_numbers =
+    let sequenceNumbers =
       message_receiver.get_reader_history_cache_start_and_end_seq_num(new_guid.entity_id);
     info!(
       "history change sequence number range: {:?}",
-      sequence_numbers
+      sequenceNumbers
     );
 
     let a = message_receiver
-      .get_reader_and_history_cache_change(new_guid.entity_id, *sequence_numbers.first().unwrap())
+      .get_reader_and_history_cache_change(new_guid.entity_id, *sequenceNumbers.first().unwrap())
       .unwrap();
     info!("reader history chache DATA: {:?}", a.data());
 
@@ -499,7 +505,7 @@ use super::*;
     let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
 
     let writer_ing = WriterIngredients {
-      guid: GUID::new_with_prefix_and_id(gui_prefix, 
+      guid: GUID::new_with_prefix_and_id(guiPrefix, 
           EntityId::create_custom_entity_id([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
       writer_command_receiver: hccc_download,
       topic_name: String::from("topicName1"),
@@ -507,7 +513,7 @@ use super::*;
       status_sender,
     };
 
-    let mut _writer_object = Writer::new(
+    let mut _writerObject = Writer::new(
       writer_ing,
       Arc::new(RwLock::new(DDSCache::new())),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
@@ -515,7 +521,7 @@ use super::*;
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entity_id,
-      *sequence_numbers.first().unwrap(),
+      *sequenceNumbers.first().unwrap(),
     );
     change.sequence_number = SequenceNumber::from(91);
   }

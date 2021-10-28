@@ -38,10 +38,10 @@ pub enum Error {
   BadString(std::str::Utf8Error),
 
   #[error("Bad Unicode character code: {0}")]
-  BadChar(u32),                   // invalid Unicode codepoint
+  BadChar(u32), // invalid Unicode codepoint
 
   #[error("Option value must have discriminant 0 or 1, read: {0}")]
-  BadOption(u32),                 // Option variant tag (discriminant) is not 0 or 1
+  BadOption(u32), // Option variant tag (discriminant) is not 0 or 1
 
   #[error("Trailing garbage, {:?} bytes", .0.len())]
   TrailingCharacters(Vec<u8>),
@@ -61,7 +61,8 @@ impl de::Error for Error {
 
 impl From<Error> for DDSError {
   fn from(ser_error: Error) -> DDSError {
-    DDSError::Serialization{ reason: format!("{:?}",ser_error) }
+    DDSError::Serialization {
+      reason: format!("{:?}", ser_error),
+    }
   }
 }
-

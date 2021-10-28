@@ -1,9 +1,7 @@
 use serde::{
   de::{Visitor, Error},
 };
-use super::{
-  builtin_data_deserializer::BuiltinDataDeserializer, 
-};
+use super::{builtin_data_deserializer::BuiltinDataDeserializer};
 
 use crate::{messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier};
 

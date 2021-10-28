@@ -17,7 +17,7 @@ use enumflags2::BitFlags;
 use std::cmp::max;
 
 #[allow(unused_imports)]
-use log::{error,warn,debug,trace,info};
+use log::{error, warn, debug, trace, info};
 
 #[derive(Debug)] // these are not cloneable, because contined data may be large
 pub(crate) struct RtpsWriterProxy {
@@ -38,16 +38,15 @@ pub(crate) struct RtpsWriterProxy {
   /// List of sequence_numbers received from the matched RTPS Writer
   changes: BTreeMap<SequenceNumber, Timestamp>,
   // The changes map is cleaned on heartbeat messages. The changes no longer available are dropped.
-
   pub received_heartbeat_count: i32,
 
   pub sent_ack_nack_count: i32,
 
-  ack_base : SequenceNumber, // We can ACK everything before this number.
+  ack_base: SequenceNumber, // We can ACK everything before this number.
   // ack_base can be increased from N-1 to N, if we receive DATA with SequenceNumber N-1
   // heartbeat(first,last) => ack_base can be increased to first.
   // GAP is treated like receiving a message.
-  
+
   //pub qos : QosPolicies,
   fragment_assembler: Option<FragmentAssembler>,
 }
@@ -97,20 +96,22 @@ impl RtpsWriterProxy {
   ) -> Vec<SequenceNumber> {
     let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
 
-    let mut we_have = self.changes
-        .range(SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn))
-        .map(|e| *e.0 );
+    let mut we_have = self
+      .changes
+      .range(SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn))
+      .map(|e| *e.0);
     let mut have_head = we_have.next();
 
-    for s in SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)  {
+    for s in SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn) {
       match have_head {
         None => missing_seqnums.push(s),
-        Some(have_sn) =>
+        Some(have_sn) => {
           if have_sn == s {
             have_head = we_have.next();
           } else {
             missing_seqnums.push(s);
           }
+        }
       }
     }
     missing_seqnums
@@ -121,15 +122,16 @@ impl RtpsWriterProxy {
     hb_first_sn: SequenceNumber,
     hb_last_sn: SequenceNumber,
   ) -> bool {
-    if hb_last_sn < hb_first_sn { // This means writer has nothing to send
-      return false
+    if hb_last_sn < hb_first_sn {
+      // This means writer has nothing to send
+      return false;
     }
 
-    let we_have = self.changes
-      .range(SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn))
-      .map(|e| *e.0 );
-    SequenceNumber::range_inclusive(hb_first_sn,hb_last_sn)
-      .ne(we_have)
+    let we_have = self
+      .changes
+      .range(SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn))
+      .map(|e| *e.0);
+    SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn).ne(we_have)
   }
 
   pub fn contains_change(&self, seqnum: SequenceNumber) -> bool {
@@ -145,15 +147,15 @@ impl RtpsWriterProxy {
     // Remember, ack_base is the SN one past the last received/irrelevant SN.
     if seq_num == self.ack_base {
       let mut s = seq_num;
-      for (&sn,_) in self.changes.range((Excluded(&seq_num), Unbounded)) {
+      for (&sn, _) in self.changes.range((Excluded(&seq_num), Unbounded)) {
         if sn == s + SequenceNumber::new(1) {
           // got consecutive number from previous
           s = s + SequenceNumber::new(1) // and continue looping
         } else {
-          break // not consecutive
+          break; // not consecutive
         }
       } // end for
-      // Now we have received everything up to and including s. Ack base is one up from that.
+        // Now we have received everything up to and including s. Ack base is one up from that.
       self.ack_base = s + SequenceNumber::new(1)
     }
   }
@@ -173,39 +175,41 @@ impl RtpsWriterProxy {
     // TODO: Update ack_base
   }
 
-  pub fn irrelevant_changes_range(&mut self, 
-    remove_from: SequenceNumber, 
-    remove_until_before: SequenceNumber ) -> BTreeMap<SequenceNumber, Timestamp> 
-  {
+  pub fn irrelevant_changes_range(
+    &mut self,
+    remove_from: SequenceNumber,
+    remove_until_before: SequenceNumber,
+  ) -> BTreeMap<SequenceNumber, Timestamp> {
     let mut removed_and_after = self.changes.split_off(&remove_from);
     let mut after = removed_and_after.split_off(&remove_until_before);
     let removed = removed_and_after;
     self.changes.append(&mut after);
 
     if self.ack_base >= remove_from {
-      self.ack_base = max( remove_until_before , self.ack_base)
+      self.ack_base = max(remove_until_before, self.ack_base)
     }
 
     removed
   }
 
   // smallest_seqnum is the lowest key to be retained
-  pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) 
-    -> BTreeMap<SequenceNumber, Timestamp> 
-  {
-    // split_off() Splits the collection into two at the given key. 
+  pub fn irrelevant_changes_up_to(
+    &mut self,
+    smallest_seqnum: SequenceNumber,
+  ) -> BTreeMap<SequenceNumber, Timestamp> {
+    // split_off() Splits the collection into two at the given key.
     // Returns everything after the given key, including the key.
     let remaining_changes = self.changes.split_off(&smallest_seqnum);
-    let irrelevant = std::mem::replace(&mut self.changes, remaining_changes); 
+    let irrelevant = std::mem::replace(&mut self.changes, remaining_changes);
 
-    self.ack_base = max( smallest_seqnum , self.ack_base);
+    self.ack_base = max(smallest_seqnum, self.ack_base);
 
     irrelevant
   }
 
-  pub fn from_discovered_writer_data(discovered_writer_data: &DiscoveredWriterData) 
-    -> RtpsWriterProxy 
-  {
+  pub fn from_discovered_writer_data(
+    discovered_writer_data: &DiscoveredWriterData,
+  ) -> RtpsWriterProxy {
     RtpsWriterProxy {
       remote_writer_guid: discovered_writer_data.writer_proxy.remote_writer_guid,
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
@@ -225,11 +229,11 @@ impl RtpsWriterProxy {
     }
   } // fn
 
-
-
-  pub fn handle_datafrag(&mut self, datafrag:DataFrag, flags: BitFlags<DATAFRAG_Flags>) 
-    -> Option<DDSData> 
-  {
+  pub fn handle_datafrag(
+    &mut self,
+    datafrag: DataFrag,
+    flags: BitFlags<DATAFRAG_Flags>,
+  ) -> Option<DDSData> {
     match self.fragment_assembler {
       Some(ref mut fa) => fa.new_datafrag(datafrag, flags),
       None => {
@@ -241,5 +245,4 @@ impl RtpsWriterProxy {
       }
     }
   } // fn
-
 } // impl

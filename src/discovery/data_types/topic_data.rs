@@ -783,9 +783,7 @@ impl<'de> Deserialize<'de> for DiscoveredTopicData {
   {
     let custom_ds = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(custom_ds)?;
-    let topic_data = res
-      .generate_topic_data()
-      .map_err(de::Error::custom)?;
+    let topic_data = res.generate_topic_data().map_err(de::Error::custom)?;
 
     Ok(DiscoveredTopicData::new(topic_data))
   }

@@ -25,7 +25,7 @@ macro_rules! serialization_test {
                 let original: $type = $original;
 
                 let serialized = original.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
-                let deserialized: $type = 
+                let deserialized: $type =
                     Readable::read_from_buffer_with_ctx(Endianness::LittleEndian, &serialized)
                     .expect(&format!("deserialize failed from {:?} original={:?}",
                                     serialized, original));
@@ -38,7 +38,7 @@ macro_rules! serialization_test {
                 let original: $type = $original;
 
                 let serialized = original.write_to_vec_with_ctx(Endianness::BigEndian).unwrap();
-                let deserialized: $type = 
+                let deserialized: $type =
                     Readable::read_from_buffer_with_ctx(Endianness::BigEndian, &serialized)
                     .unwrap();
 

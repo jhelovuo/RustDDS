@@ -1,8 +1,4 @@
-use rustdds::{
-  ros2::NodeOptions, 
-  ros2::RosParticipant,
-  serialization::CDRSerializerAdapter, 
-};
+use rustdds::{ros2::NodeOptions, ros2::RosParticipant, serialization::CDRSerializerAdapter};
 
 use log::{error, info};
 use mio::{Events, Poll, PollOpt, Ready, Token};
@@ -24,26 +20,25 @@ impl TurtleSender {
     thread_control: mio_channel::Receiver<ThreadControl>,
     receiver: mio_channel::Receiver<Twist>,
   ) {
-    let mut ros_node = ros_participant.new_ros_node(
-                            "turtle_sender",  // name
-                            "/ros2_demo",     // namespace
-                            NodeOptions::new(false), // enable rosout
-                            )
-                        .unwrap();
+    let mut ros_node = ros_participant
+      .new_ros_node(
+        "turtle_sender",         // name
+        "/ros2_demo",            // namespace
+        NodeOptions::new(false), // enable rosout
+      )
+      .unwrap();
 
-    let turtle_cmd_vel_topic = ros_node.create_ros_topic(
-      &TurtleCmdVelTopic::topic_name(),
-      TurtleCmdVelTopic::type_name(),
-      TurtleCmdVelTopic::get_qos(),
-      TurtleCmdVelTopic::topic_kind(),
-    )
-    .unwrap();
+    let turtle_cmd_vel_topic = ros_node
+      .create_ros_topic(
+        &TurtleCmdVelTopic::topic_name(),
+        TurtleCmdVelTopic::type_name(),
+        TurtleCmdVelTopic::get_qos(),
+        TurtleCmdVelTopic::topic_kind(),
+      )
+      .unwrap();
 
     let turtle_cmd_vel_writer = ros_node
-      .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(
-        turtle_cmd_vel_topic,
-        None,
-      )
+      .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(turtle_cmd_vel_topic, None)
       .unwrap();
 
     let poll = Poll::new().unwrap();
@@ -65,7 +60,7 @@ impl TurtleSender {
         PollOpt::edge(),
       )
       .unwrap();
-      info!("TurtleSender initialized");
+    info!("TurtleSender initialized");
     loop {
       let mut events = Events::with_capacity(10);
       poll.poll(&mut events, None).unwrap();
@@ -84,7 +79,7 @@ impl TurtleSender {
         } else if event.token() == TurtleSender::TURTLE_TWIST_TOKEN {
           while let Ok(twist) = receiver.try_recv() {
             match turtle_cmd_vel_writer.write(twist, None) {
-              Ok(_) => { /*info!("Wrote twist!");*/ },
+              Ok(_) => { /*info!("Wrote twist!");*/ }
               Err(e) => {
                 error!("Failed to write to turtle writer. {:?}", e);
                 ros_node.clear_node();
@@ -96,5 +91,4 @@ impl TurtleSender {
       }
     }
   }
-
 }

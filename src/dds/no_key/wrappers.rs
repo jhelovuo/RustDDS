@@ -5,8 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwn
 
 use crate::{
   dds::traits::key::Keyed, dds::traits::serde_adapters::*,
-  messages::submessages::submessages::RepresentationIdentifier,
-  serialization::error::Result,
+  messages::submessages::submessages::RepresentationIdentifier, serialization::error::Result,
 };
 
 // This wrapper is used to convert NO_KEY types to WITH_KEY
@@ -39,9 +38,7 @@ impl<D> Deref for NoKeyWrapper<D> {
 
 impl<D> Keyed for NoKeyWrapper<D> {
   type K = ();
-  fn get_key(&self) {
-    
-  }
+  fn get_key(&self) {}
 }
 
 impl<'de, D> Deserialize<'de> for NoKeyWrapper<D>
@@ -78,7 +75,7 @@ pub struct SAWrapper<SA> {
 // have to implement base trait first, just trivial passthrough
 impl<D, SA> no_key::SerializerAdapter<NoKeyWrapper<D>> for SAWrapper<SA>
 where
-  D: Serialize, 
+  D: Serialize,
   SA: no_key::SerializerAdapter<D>,
 {
   fn output_encoding() -> RepresentationIdentifier {
@@ -94,10 +91,10 @@ where
 // Of course, this is never supposed to be actually called.
 impl<D, SA> with_key::SerializerAdapter<NoKeyWrapper<D>> for SAWrapper<SA>
 where
-  D: Serialize, 
+  D: Serialize,
   SA: no_key::SerializerAdapter<D>,
 {
-  fn key_to_bytes(_value: &() ) -> Result<Bytes> {
+  fn key_to_bytes(_value: &()) -> Result<Bytes> {
     Ok(Bytes::new())
   }
 }
@@ -111,7 +108,7 @@ pub struct DAWrapper<DA> {
 
 // first, implement no_key DA
 impl<D, DA> no_key::DeserializerAdapter<NoKeyWrapper<D>> for DAWrapper<DA>
-where 
+where
   D: DeserializeOwned,
   DA: no_key::DeserializerAdapter<D>,
 {
@@ -119,25 +116,22 @@ where
     DA::supported_encodings()
   }
 
-  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
-    -> Result<NoKeyWrapper<D>> 
-  {
+  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<NoKeyWrapper<D>> {
     DA::from_bytes(input_bytes, encoding).map(|d| NoKeyWrapper::<D> { d })
   }
 }
 
 // then, implement with_key DA
 impl<D, DA> with_key::DeserializerAdapter<NoKeyWrapper<D>> for DAWrapper<DA>
-where 
+where
   D: DeserializeOwned,
   DA: no_key::DeserializerAdapter<D>,
 {
-  fn key_from_bytes(_input_bytes: &[u8], _encoding: RepresentationIdentifier) 
-    -> Result< <NoKeyWrapper<D> as Keyed>::K > 
-  {
+  fn key_from_bytes(
+    _input_bytes: &[u8],
+    _encoding: RepresentationIdentifier,
+  ) -> Result<<NoKeyWrapper<D> as Keyed>::K> {
     // also unreachable!() should work here, as this is not supposed to be used
-    Ok( () ) 
+    Ok(())
   }
 }
-
-

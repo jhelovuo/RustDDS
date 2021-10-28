@@ -20,7 +20,9 @@ pub type Result<T> = result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
   /// Illegal parameter value.
-  BadParameter { reason: String },
+  BadParameter {
+    reason: String,
+  },
   /// Unsupported operation. Can only be returned by operations that are optional.
   Unsupported,
   /// Service ran out of the resources needed to complete the operation.
@@ -30,18 +32,23 @@ pub enum Error {
   /// Application attempted to modify an immutable QosPolicy.
   ImmutablePolicy, // can we check this statically?
   /// Application specified a set of policies that are not consistent with each other.
-  InconsistentPolicy { reason: String },
+  InconsistentPolicy {
+    reason: String,
+  },
   /// A pre-condition for the operation was not met.
-  PreconditionNotMet { precondition: String },
+  PreconditionNotMet {
+    precondition: String,
+  },
   /// An operation was invoked on an inappropriate object or at
   /// an inappropriate time (as determined by policies set by the
   /// specification or the Service implementation). There is no
   /// precondition that could be changed to make the operation
   /// succeed.
-  IllegalOperation { reason: String },
+  IllegalOperation {
+    reason: String,
+  },
 
   // Our own additions to the DDS spec below:
-
   /// Synchronization with another thread failed because the [other thread
   /// has exited while holding a lock.](https://doc.rust-lang.org/std/sync/struct.PoisonError.html)
   /// Does not exist in the DDS spec.
@@ -49,35 +56,42 @@ pub enum Error {
 
   /// Something that should not go wrong went wrong anyway.
   /// This is usually a bug in RustDDS
-  Internal { reason: String },
+  Internal {
+    reason: String,
+  },
 
-  Io { inner: std::io::Error },
-  Serialization { reason: String },
-  Discovery {reason: String},
+  Io {
+    inner: std::io::Error,
+  },
+  Serialization {
+    reason: String,
+  },
+  Discovery {
+    reason: String,
+  },
 }
 
-
 impl Error {
-  pub fn bad_parameter<T>(reason: impl Into<String>) -> Result<T> 
-  { 
-    Err( Error::BadParameter{ reason: reason.into() }) 
+  pub fn bad_parameter<T>(reason: impl Into<String>) -> Result<T> {
+    Err(Error::BadParameter {
+      reason: reason.into(),
+    })
   }
 
-  pub fn precondition_not_met<T>(precondition: impl Into<String>) -> Result<T> 
-  { 
-    Err( Error::PreconditionNotMet{ precondition: precondition.into() }) 
+  pub fn precondition_not_met<T>(precondition: impl Into<String>) -> Result<T> {
+    Err(Error::PreconditionNotMet {
+      precondition: precondition.into(),
+    })
   }
-  
 }
 
 #[doc(hidden)]
 #[macro_export]
 macro_rules! log_and_err_precondition_not_met {
-  ($err_msg:literal) => (
-      { error!($err_msg);
-        Error::precondition_not_met($err_msg)
-      }
-    )
+  ($err_msg:literal) => {{
+    error!($err_msg);
+    Error::precondition_not_met($err_msg)
+  }};
 }
 
 #[doc(hidden)]
@@ -95,28 +109,30 @@ macro_rules! log_and_err_internal {
 macro_rules! log_and_err_discovery {
   ($($arg:tt)*) => (
       { error!($($arg)*);
-        Error::Message(format!($($arg)*) ) 
+        Error::Message(format!($($arg)*) )
       }
     )
 }
 
 impl From<std::io::Error> for Error {
-  fn from(e:std::io::Error) -> Error {
+  fn from(e: std::io::Error) -> Error {
     Error::Io { inner: e }
   }
 }
 
 impl<T> From<std::sync::PoisonError<T>> for Error {
-  fn from(_e : std::sync::PoisonError<T>) -> Error {
+  fn from(_e: std::sync::PoisonError<T>) -> Error {
     Error::LockPoisoned
   }
 }
 
-impl<T> From<TrySendError<T>> for Error 
-where TrySendError<T> : std::error::Error 
+impl<T> From<TrySendError<T>> for Error
+where
+  TrySendError<T>: std::error::Error,
 {
-  fn from(e : TrySendError<T>) -> Error {
-    Error::Internal{reason: format!("Cannot send to internal mio channel: {:?}",e) }
+  fn from(e: TrySendError<T>) -> Error {
+    Error::Internal {
+      reason: format!("Cannot send to internal mio channel: {:?}", e),
+    }
   }
 }
-

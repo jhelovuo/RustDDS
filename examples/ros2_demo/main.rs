@@ -1,9 +1,7 @@
 #![deny(clippy::all)]
 
 use std::{io::Write, time::Duration};
-use rustdds::{
-  ros2::RosParticipant,
-};
+use rustdds::{ros2::RosParticipant};
 use commands::ThreadControl;
 use log::{debug, error};
 use mio::{Events, Poll, PollOpt, Ready, Token};
@@ -56,22 +54,17 @@ fn main() {
 fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
   let mut ros_participant = RosParticipant::new().unwrap();
 
-
   // turtle listener
   let (tlisterner_sender, tlistener_receiver) = mio_channel::channel();
   let (tc_tl_sender, tc_ts_receiver) = mio_channel::channel();
   let listener_rp = ros_participant.clone();
-  std::thread::spawn(move || {
-    TurtleListener::run(listener_rp, tc_ts_receiver, tlisterner_sender, )
-  });
+  std::thread::spawn(move || TurtleListener::run(listener_rp, tc_ts_receiver, tlisterner_sender));
 
   // turtle writer
   let (tsender_sender, tsender_receiver) = mio_channel::channel();
   let (tc_ts_sender, tc_ts_receiver) = mio_channel::channel();
   let sender_rp = ros_participant.clone();
-  std::thread::spawn(move || {
-    TurtleSender::run(sender_rp, tc_ts_receiver, tsender_receiver, )
-  });
+  std::thread::spawn(move || TurtleSender::run(sender_rp, tc_ts_receiver, tsender_receiver));
 
   {
     // topic update timer (or any update)
@@ -134,13 +127,11 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
                 ros_participant.clear();
                 break 'asdf;
               }
-              RosCommand::AddNodeListSender { sender } => 
-                nodes_updated_sender = Some(sender),
-              RosCommand::TurtleCmdVel { twist } => 
-                match tsender_sender.send(twist) {
-                  Ok(_) => { /*debug!("main: send twist");*/  },
-                  Err(e) => error!("Failed to send to turtle sender. {:?}", e),
-                },
+              RosCommand::AddNodeListSender { sender } => nodes_updated_sender = Some(sender),
+              RosCommand::TurtleCmdVel { twist } => match tsender_sender.send(twist) {
+                Ok(_) => { /*debug!("main: send twist");*/ }
+                Err(e) => error!("Failed to send to turtle sender. {:?}", e),
+              },
             };
           }
         } else if event.token() == ROS2_NODE_RECEIVED_TOKEN {
@@ -178,9 +169,8 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
             None => (),
           };
           update_timer.set_timeout(Duration::from_secs(1), ());
-        } 
-        else {
-          error!("Unknown poll token {:?}",event.token())
+        } else {
+          error!("Unknown poll token {:?}", event.token())
         }
       }
     }

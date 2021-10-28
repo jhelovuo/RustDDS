@@ -13,7 +13,6 @@ use crate::messages::submessages::submessage_elements::serialized_payload::Repre
 use crate::dds::traits::serde_adapters::*;
 use crate::dds::traits::key::Keyed;
 
-
 // This is a wrapper object for a Write object. The wrapper keeps count of bytes written.
 // Such a wrapper seemed easier implementation strategy than capturing the return values of all
 // write and write_* calls in serializer implementation.
@@ -73,7 +72,7 @@ where
   ghost: PhantomData<BO>,
 }
 
-impl<D,BO> no_key::SerializerAdapter<D> for CDRSerializerAdapter<D, BO>
+impl<D, BO> no_key::SerializerAdapter<D> for CDRSerializerAdapter<D, BO>
 where
   D: Serialize,
   BO: ByteOrder,
@@ -84,13 +83,13 @@ where
 
   fn to_bytes(value: &D) -> Result<Bytes> {
     let size_estimate = std::mem::size_of_val(value) * 2; // TODO: crude estimate
-    let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate); 
+    let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate);
     to_writer::<D, BO, &mut Vec<u8>>(&mut buffer, value)?;
     Ok(Bytes::from(buffer))
   }
 }
 
-impl<D,BO> with_key::SerializerAdapter<D> for CDRSerializerAdapter<D, BO>
+impl<D, BO> with_key::SerializerAdapter<D> for CDRSerializerAdapter<D, BO>
 where
   D: Keyed + Serialize,
   <D as Keyed>::K: Serialize,
@@ -98,12 +97,11 @@ where
 {
   fn key_to_bytes(value: &D::K) -> Result<Bytes> {
     let size_estimate = std::mem::size_of_val(value) * 2; // TODO: crude estimate
-    let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate); 
+    let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate);
     to_writer::<D::K, BO, &mut Vec<u8>>(&mut buffer, value)?;
     Ok(Bytes::from(buffer))
   }
 }
-
 
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
@@ -151,7 +149,6 @@ where
   value.serialize(&mut CdrSeserializer::<W, BO>::new(writer))
 }
 
-
 // This is private, for unit test cases only
 // Public interface should use to_writer() instead, as it is recommended by serde documentation
 pub(crate) fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
@@ -176,7 +173,7 @@ where
   T: Serialize,
   BO: ByteOrder,
 {
-  let mut buffer: Vec<u8> = Vec::with_capacity(std::mem::size_of_val(value) * 2); 
+  let mut buffer: Vec<u8> = Vec::with_capacity(std::mem::size_of_val(value) * 2);
   to_writer::<T, BO, &mut Vec<u8>>(&mut buffer, value)?;
   Ok(buffer)
 }
@@ -186,7 +183,6 @@ where
 // ----------------------------------------------------------
 // ----------------------------------------------------------
 // ----------------------------------------------------------
-
 
 impl<'a, W, BO> ser::Serializer for &'a mut CdrSeserializer<W, BO>
 where
@@ -509,7 +505,9 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleStruct for &'a mut CdrS
   }
 }
 
-impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleVariant for &'a mut CdrSeserializer<W, BO> {
+impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeTupleVariant
+  for &'a mut CdrSeserializer<W, BO>
+{
   type Ok = ();
   type Error = Error;
 

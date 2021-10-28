@@ -12,13 +12,12 @@ impl VendorId {
     vendor_id: [0x00; 2],
   };
 
-  /// assigned by OMG DDS SIG on 2020-11-21 
+  /// assigned by OMG DDS SIG on 2020-11-21
   pub const ATOSTEK: VendorId = VendorId {
-    vendor_id: [0x01, 0x12],  
+    vendor_id: [0x01, 0x12],
   };
 
   pub const THIS_IMPLEMENTATION: VendorId = VendorId::ATOSTEK;
-
 }
 
 impl Default for VendorId {

@@ -110,18 +110,22 @@ struct EntityName {
   entity_name: String,
 }
 
-
 pub struct BuiltinDataSerializerKey {
   pub participant_guid: GUID,
 }
 
 impl BuiltinDataSerializerKey {
-
   pub fn from_data(participant_data: SpdpDiscoveredParticipantDataKey) -> BuiltinDataSerializerKey {
-    BuiltinDataSerializerKey { participant_guid: participant_data.0 }
+    BuiltinDataSerializerKey {
+      participant_guid: participant_data.0,
+    }
   }
 
-  pub fn serialize<S: Serializer>(self, serializer: S, add_sentinel: bool) -> Result<S::Ok, S::Error> {
+  pub fn serialize<S: Serializer>(
+    self,
+    serializer: S,
+    add_sentinel: bool,
+  ) -> Result<S::Ok, S::Error> {
     let mut s = serializer
       .serialize_struct("SPDPParticipantData_Key", 1)
       .unwrap();
@@ -142,7 +146,6 @@ impl BuiltinDataSerializerKey {
     )
     .unwrap();
   }
-
 }
 
 pub struct BuiltinDataSerializer<'a> {
@@ -624,7 +627,6 @@ impl<'a> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer::from_endpoint_guid(&discovered_writer_data.0)
   }
 
-
   pub fn serialize<S: Serializer>(
     self,
     serializer: S,
@@ -697,7 +699,6 @@ impl<'a> BuiltinDataSerializer<'a> {
     s.end()
   }
 
-
   fn fields_amount(&self) -> usize {
     let mut count: usize = 0;
 
@@ -708,9 +709,9 @@ impl<'a> BuiltinDataSerializer<'a> {
     count += self.participant_guid.is_some() as usize;
     count += self.metatraffic_unicast_locators.unwrap_or(&empty_ll).len();
     count += self
-        .metatraffic_multicast_locators
-        .unwrap_or(&empty_ll)
-        .len();
+      .metatraffic_multicast_locators
+      .unwrap_or(&empty_ll)
+      .len();
     count += self.default_unicast_locators.unwrap_or(&empty_ll).len();
     count += self.default_multicast_locators.unwrap_or(&empty_ll).len();
     count += self.available_builtin_endpoints.is_some() as usize;
@@ -1041,30 +1042,32 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub max_blocking_time: Duration,
     }
 
-    if let Some(rel) = self.reliability { match rel {
-      Reliability::BestEffort => {
-        let data = ReliabilityBestEffortData {
-          reliability_kind: ReliabilityKind::BEST_EFFORT,
-          max_blocking_time: Duration::from(StdDuration::from_secs(0)),
-        };
-        s.serialize_field(
-          "reliability",
-          &QosData::new(ParameterId::PID_RELIABILITY, &data),
-        )
-        .unwrap();
+    if let Some(rel) = self.reliability {
+      match rel {
+        Reliability::BestEffort => {
+          let data = ReliabilityBestEffortData {
+            reliability_kind: ReliabilityKind::BEST_EFFORT,
+            max_blocking_time: Duration::from(StdDuration::from_secs(0)),
+          };
+          s.serialize_field(
+            "reliability",
+            &QosData::new(ParameterId::PID_RELIABILITY, &data),
+          )
+          .unwrap();
+        }
+        Reliability::Reliable { max_blocking_time } => {
+          let data = ReliabilityBestEffortData {
+            reliability_kind: ReliabilityKind::RELIABLE,
+            max_blocking_time,
+          };
+          s.serialize_field(
+            "reliability",
+            &QosData::new(ParameterId::PID_RELIABILITY, &data),
+          )
+          .unwrap();
+        }
       }
-      Reliability::Reliable { max_blocking_time } => {
-        let data = ReliabilityBestEffortData {
-          reliability_kind: ReliabilityKind::RELIABLE,
-          max_blocking_time,
-        };
-        s.serialize_field(
-          "reliability",
-          &QosData::new(ParameterId::PID_RELIABILITY, &data),
-        )
-        .unwrap();
-      }
-    } }
+    }
   }
 
   fn add_ownership<S: Serializer>(&self, s: &mut S::SerializeStruct) {
@@ -1081,35 +1084,37 @@ impl<'a> BuiltinDataSerializer<'a> {
       pub parameter_length: u16,
       pub kind: OwnershipKind,
     }
-    if let Some(own) = self.ownership { match own {
-      Ownership::Shared => {
-        s.serialize_field(
-          "ownership",
-          &OwnershipData {
-            parameter_id: ParameterId::PID_OWNERSHIP,
-            parameter_length: 4,
-            kind: OwnershipKind::Shared,
-          },
-        )
-        .unwrap();
+    if let Some(own) = self.ownership {
+      match own {
+        Ownership::Shared => {
+          s.serialize_field(
+            "ownership",
+            &OwnershipData {
+              parameter_id: ParameterId::PID_OWNERSHIP,
+              parameter_length: 4,
+              kind: OwnershipKind::Shared,
+            },
+          )
+          .unwrap();
+        }
+        Ownership::Exclusive { strength } => {
+          s.serialize_field(
+            "ownership",
+            &OwnershipData {
+              parameter_id: ParameterId::PID_OWNERSHIP,
+              parameter_length: 4,
+              kind: OwnershipKind::Exclusive,
+            },
+          )
+          .unwrap();
+          s.serialize_field(
+            "ownership_strength",
+            &I32Data::new(ParameterId::PID_OWNERSHIP_STRENGTH, strength),
+          )
+          .unwrap();
+        }
       }
-      Ownership::Exclusive { strength } => {
-        s.serialize_field(
-          "ownership",
-          &OwnershipData {
-            parameter_id: ParameterId::PID_OWNERSHIP,
-            parameter_length: 4,
-            kind: OwnershipKind::Exclusive,
-          },
-        )
-        .unwrap();
-        s.serialize_field(
-          "ownership_strength",
-          &I32Data::new(ParameterId::PID_OWNERSHIP_STRENGTH, strength),
-        )
-        .unwrap();
-      }
-    } }
+    }
   }
 
   fn add_destination_order<S: Serializer>(&self, s: &mut S::SerializeStruct) {

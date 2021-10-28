@@ -47,7 +47,7 @@ impl Duration {
   }
 
   pub const fn from_millis(millis: i64) -> Duration {
-    let fraction = (((millis % 1000) << 32) / 1000) as u32; 
+    let fraction = (((millis % 1000) << 32) / 1000) as u32;
 
     Duration {
       seconds: (millis / 1000) as i32,
@@ -56,7 +56,7 @@ impl Duration {
   }
 
   pub const fn from_nanos(nanos: i64) -> Duration {
-    let fraction = (((nanos % 1_000_000_000) << 32) / 1_000_000_000) as u32; 
+    let fraction = (((nanos % 1_000_000_000) << 32) / 1_000_000_000) as u32;
 
     Duration {
       seconds: (nanos / 1_000_000_000) as i32,
@@ -133,18 +133,17 @@ impl Div<i64> for Duration {
 
 impl std::ops::Add for Duration {
   type Output = Self;
-  fn add(self, other:Self) -> Self {
-    Duration::from_ticks( self.to_ticks() + other.to_ticks() )
+  fn add(self, other: Self) -> Self {
+    Duration::from_ticks(self.to_ticks() + other.to_ticks())
   }
 }
 
 impl std::ops::Mul<Duration> for f64 {
-  type Output=Duration;
-  fn mul(self, rhs:Duration) -> Duration {
-    Duration::from_ticks( (self * (rhs.to_ticks() as f64)) as i64 )
+  type Output = Duration;
+  fn mul(self, rhs: Duration) -> Duration {
+    Duration::from_ticks((self * (rhs.to_ticks() as f64)) as i64)
   }
 }
-
 
 #[derive(Serialize, Deserialize)]
 pub struct DurationData {

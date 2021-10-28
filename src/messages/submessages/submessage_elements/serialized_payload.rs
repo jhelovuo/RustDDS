@@ -6,43 +6,54 @@ use log::{warn};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
 pub struct RepresentationIdentifier {
-  pub bytes: [u8;2],
+  pub bytes: [u8; 2],
 }
 
 impl RepresentationIdentifier {
   // Numeric values are from RTPS spec v2.3 Section 10.5 , Table 10.3
-  pub const CDR_BE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x00]};
-  pub const CDR_LE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x01]};
+  pub const CDR_BE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x00],
+  };
+  pub const CDR_LE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x01],
+  };
 
-  pub const PL_CDR_BE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x02]};
-  pub const PL_CDR_LE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x03]};
+  pub const PL_CDR_BE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x02],
+  };
+  pub const PL_CDR_LE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x03],
+  };
 
-  pub const CDR2_BE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x10]};
-  pub const CDR2_LE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x11]};
+  pub const CDR2_BE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x10],
+  };
+  pub const CDR2_LE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x11],
+  };
 
-  pub const PL_CDR2_BE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x12]};
-  pub const PL_CDR2_LE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x13]};
+  pub const PL_CDR2_BE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x12],
+  };
+  pub const PL_CDR2_LE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x13],
+  };
 
-  pub const D_CDR_BE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x14]};
-  pub const D_CDR_LE: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x15]};
+  pub const D_CDR_BE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x14],
+  };
+  pub const D_CDR_LE: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x15],
+  };
 
-  pub const XML: RepresentationIdentifier 
-    = RepresentationIdentifier { bytes: [0x00, 0x04]};
+  pub const XML: RepresentationIdentifier = RepresentationIdentifier {
+    bytes: [0x00, 0x04],
+  };
 
   pub fn from_bytes(bytes: &[u8]) -> io::Result<RepresentationIdentifier> {
     let mut reader = io::Cursor::new(bytes);
-    Ok( RepresentationIdentifier { 
-      bytes: [reader.read_u8()?, reader.read_u8()?] 
+    Ok(RepresentationIdentifier {
+      bytes: [reader.read_u8()?, reader.read_u8()?],
     })
   }
 
@@ -72,7 +83,7 @@ impl<'a, C: Context> Readable<'a, C> for RepresentationIdentifier {
 /// to zero. The receiver shall ignore the value of the representation_options."
 #[derive(Debug, PartialEq, Clone)]
 pub struct SerializedPayload {
-  pub representation_identifier: RepresentationIdentifier, 
+  pub representation_identifier: RepresentationIdentifier,
   pub representation_options: [u8; 2], // Not used. Send as zero, ignore on receive.
   pub value: Bytes,
 }
@@ -94,21 +105,25 @@ impl SerializedPayload {
     }
   }
 
-
   // Implement deserialization here, because Speedy just makes it difficult.
   pub fn from_bytes(bytes: Bytes) -> io::Result<SerializedPayload> {
     let mut reader = io::Cursor::new(&bytes);
-    let representation_identifier = RepresentationIdentifier { 
-      bytes: [reader.read_u8()?, reader.read_u8()?] 
+    let representation_identifier = RepresentationIdentifier {
+      bytes: [reader.read_u8()?, reader.read_u8()?],
     };
     let representation_options = [reader.read_u8()?, reader.read_u8()?];
-    let value = 
-      if bytes.len() >= 4 {
-        bytes.clone().split_off(4) // split_off 4 bytes at beginning: rep_id & rep_optins
-      } else {
-        warn!("DATA submessage was smaller than submessage header: {:?}",bytes);
-        return Err( io::Error::new(io::ErrorKind::Other, "Too short DATA submessage."))
-      };
+    let value = if bytes.len() >= 4 {
+      bytes.clone().split_off(4) // split_off 4 bytes at beginning: rep_id & rep_optins
+    } else {
+      warn!(
+        "DATA submessage was smaller than submessage header: {:?}",
+        bytes
+      );
+      return Err(io::Error::new(
+        io::ErrorKind::Other,
+        "Too short DATA submessage.",
+      ));
+    };
 
     Ok(SerializedPayload {
       representation_identifier,

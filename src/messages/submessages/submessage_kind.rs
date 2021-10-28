@@ -9,7 +9,7 @@ pub struct SubmessageKind {
 }
 
 impl From<SubmessageKind> for u8 {
-  fn from(s:SubmessageKind) -> u8 {
+  fn from(s: SubmessageKind) -> u8 {
     s.value
   }
 }

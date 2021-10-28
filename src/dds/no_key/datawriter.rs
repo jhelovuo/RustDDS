@@ -2,13 +2,9 @@ use std::{
   time::{Duration},
 };
 
-
 use serde::Serialize;
 
-use crate::{
-  serialization::CDRSerializerAdapter, 
-  structure::time::Timestamp,
-};
+use crate::{serialization::CDRSerializerAdapter, structure::time::Timestamp};
 use crate::structure::entity::{RTPSEntity};
 
 use crate::dds::pubsub::Publisher;
@@ -380,7 +376,7 @@ where
   }
   /*
   /// Gets mio receiver for all implemented Status changes
-  ///  
+  ///
   /// # Examples
   ///
   /// ```
@@ -448,7 +444,12 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii".to_string(), "Huh?".to_string(), &qos, TopicKind::NoKey)
+      .create_topic(
+        "Aasii".to_string(),
+        "Huh?".to_string(),
+        &qos,
+        TopicKind::NoKey,
+      )
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
@@ -483,7 +484,12 @@ mod tests {
       .create_publisher(&qos)
       .expect("Failed to create publisher");
     let topic = domain_participant
-      .create_topic("Aasii".to_string(), "Huh?".to_string(), &qos, TopicKind::NoKey)
+      .create_topic(
+        "Aasii".to_string(),
+        "Huh?".to_string(),
+        &qos,
+        TopicKind::NoKey,
+      )
       .expect("Failed to create topic");
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =

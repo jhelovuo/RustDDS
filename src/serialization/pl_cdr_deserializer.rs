@@ -1,4 +1,3 @@
-
 use serde::{Deserializer, de::DeserializeOwned};
 use std::marker::PhantomData;
 
@@ -39,7 +38,9 @@ where
       RepresentationIdentifier::PL_CDR_BE | RepresentationIdentifier::CDR_BE => {
         PlCdrDeserializer::from_big_endian_bytes::<D>(input_bytes)
       }
-      repr_id => Err(Error::Message(format!("Unknown representation identifier {:?}",repr_id
+      repr_id => Err(Error::Message(format!(
+        "Unknown representation identifier {:?}",
+        repr_id
       ))),
     }
   }
@@ -58,7 +59,9 @@ where
       RepresentationIdentifier::PL_CDR_BE | RepresentationIdentifier::CDR_BE => {
         PlCdrDeserializer::from_big_endian_bytes::<D::K>(input_bytes)
       }
-      repr_id => Err(Error::Message(format!("Unknown representation identifier {:?}",repr_id
+      repr_id => Err(Error::Message(format!(
+        "Unknown representation identifier {:?}",
+        repr_id
       ))),
     }
   }

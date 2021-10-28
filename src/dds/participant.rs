@@ -83,19 +83,22 @@ impl DomainParticipant {
     let disc_db_clone = dp.discovery_db();
     let discovery_handle = thread::Builder::new()
       .name("RustDDS discovery thread".to_string())
-      .spawn(move || { 
-          match Discovery::new(
-              dp_clone,
-              disc_db_clone,
-              discovery_started_sender,
-              discovery_updated_sender,
-              discovery_command_receiver,
-            ) {
-            Ok(mut discovery) => // run the event loop
-              discovery.discovery_event_loop(),
-            Err(_) => (),
+      .spawn(move || {
+        match Discovery::new(
+          dp_clone,
+          disc_db_clone,
+          discovery_started_sender,
+          discovery_updated_sender,
+          discovery_command_receiver,
+        ) {
+          Ok(mut discovery) =>
+          // run the event loop
+          {
+            discovery.discovery_event_loop()
           }
-        })?;
+          Err(_) => (),
+        }
+      })?;
 
     djh_sender.send(discovery_handle).unwrap_or(()); // send join handle to inner participant
 
@@ -270,7 +273,6 @@ impl DomainParticipant {
       .discovery_db
       .clone()
   }
-
 }
 
 impl PartialEq for DomainParticipant {
@@ -481,7 +483,6 @@ impl DomainParticipantDisc {
         log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
       })
   }
-
 }
 
 impl Drop for DomainParticipantDisc {
@@ -532,7 +533,6 @@ pub(crate) struct DomainParticipantInner {
 
   dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
-
 }
 
 impl Drop for DomainParticipantInner {
@@ -568,16 +568,16 @@ impl DomainParticipantInner {
     let mut listeners = HashMap::new();
 
     match UDPListener::new_multicast(
-        DISCOVERY_SENDER_TOKEN,
-        "0.0.0.0",
-        get_spdp_well_known_multicast_port(domain_id),
-        Ipv4Addr::new(239, 255, 0, 1) ) 
-    {
-      Ok(l) => { listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, l); }
-      Err(e) =>
-        warn!("Cannot get multicast discovery listener: {:?}",e),
+      DISCOVERY_SENDER_TOKEN,
+      "0.0.0.0",
+      get_spdp_well_known_multicast_port(domain_id),
+      Ipv4Addr::new(239, 255, 0, 1),
+    ) {
+      Ok(l) => {
+        listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, l);
+      }
+      Err(e) => warn!("Cannot get multicast discovery listener: {:?}", e),
     }
-
 
     let mut participant_id = 0;
 
@@ -586,10 +586,11 @@ impl DomainParticipantInner {
     // Magic value 120 below is from RTPS spec Section "9.6.1.3 Default Port Numbers"
     while discovery_listener.is_none() && participant_id < 120 {
       discovery_listener = UDPListener::new_unicast(
-          DISCOVERY_SENDER_TOKEN,
-          "0.0.0.0",
-          get_spdp_well_known_unicast_port(domain_id, participant_id),
-        ).ok();
+        DISCOVERY_SENDER_TOKEN,
+        "0.0.0.0",
+        get_spdp_well_known_unicast_port(domain_id, participant_id),
+      )
+      .ok();
       if discovery_listener.is_none() {
         participant_id += 1;
       }
@@ -607,34 +608,36 @@ impl DomainParticipantInner {
     // Now the user traffic listeners
 
     match UDPListener::new_multicast(
-        USER_TRAFFIC_SENDER_TOKEN,
+      USER_TRAFFIC_SENDER_TOKEN,
       "0.0.0.0",
       get_user_traffic_multicast_port(domain_id),
-      Ipv4Addr::new(239, 255, 0, 1) )
-    {
-      Ok(l) => { listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l); }
-      Err(e) =>
-        warn!("Cannot get multicast discovery listener: {:?}",e),
+      Ipv4Addr::new(239, 255, 0, 1),
+    ) {
+      Ok(l) => {
+        listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l);
+      }
+      Err(e) => warn!("Cannot get multicast discovery listener: {:?}", e),
     }
 
-
     let user_traffic_listener = UDPListener::new_unicast(
-            USER_TRAFFIC_SENDER_TOKEN,
-            "0.0.0.0",
-            get_user_traffic_unicast_port(domain_id, participant_id),
-          );
+      USER_TRAFFIC_SENDER_TOKEN,
+      "0.0.0.0",
+      get_user_traffic_unicast_port(domain_id, participant_id),
+    );
     let user_traffic_listener = match user_traffic_listener {
-          Ok(l) => l,
-          Err(e) => return log_and_err_internal!("Could not open user traffic listener: {:?}",e),
-        };
+      Ok(l) => l,
+      Err(e) => return log_and_err_internal!("Could not open user traffic listener: {:?}", e),
+    };
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     // Adding readers
-    let (sender_add_reader, receiver_add_reader) = mio_channel::sync_channel::<ReaderIngredients>(100);
+    let (sender_add_reader, receiver_add_reader) =
+      mio_channel::sync_channel::<ReaderIngredients>(100);
     let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(10);
 
     // Writers
-    let (add_writer_sender, add_writer_receiver) = mio_channel::sync_channel::<WriterIngredients>(10);
+    let (add_writer_sender, add_writer_receiver) =
+      mio_channel::sync_channel::<WriterIngredients>(10);
     let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
 
     let new_guid = GUID::new_particiapnt_guid();
@@ -654,8 +657,8 @@ impl DomainParticipantInner {
     let dds_cache_clone = dds_cache.clone();
     let disc_db_clone = discovery_db.clone();
     let ev_loop_handle = thread::Builder::new()
-      .name(format!("RustDDS Participant {} event loop",participant_id))
-      .spawn(move || { 
+      .name(format!("RustDDS Participant {} event loop", participant_id))
+      .spawn(move || {
         let dp_event_loop = DPEventLoop::new(
           domain_info,
           listeners,
@@ -684,8 +687,10 @@ impl DomainParticipantInner {
         dp_event_loop.event_loop()
       })?;
 
-    info!("New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
-      domain_id, participant_id, new_guid);
+    info!(
+      "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
+      domain_id, participant_id, new_guid
+    );
     Ok(DomainParticipantInner {
       domain_id,
       participant_id,
@@ -923,7 +928,7 @@ mod tests {
   };
   use super::DomainParticipant;
 
-  use speedy::{Endianness,Writable};
+  use speedy::{Endianness, Writable};
 
   use crate::serialization::cdr_serializer::CDRSerializerAdapter;
   use byteorder::LittleEndian;
@@ -951,7 +956,12 @@ mod tests {
       .expect("Failed to create publisher");
 
     let topic = domain_participant
-      .create_topic("Aasii".to_string(), "RandomData".to_string(), &qos.clone(), TopicKind::WithKey)
+      .create_topic(
+        "Aasii".to_string(),
+        "RandomData".to_string(),
+        &qos.clone(),
+        TopicKind::WithKey,
+      )
       .expect("Failed to create topic");
 
     let mut _data_writer = publisher
@@ -972,7 +982,12 @@ mod tests {
       .expect("Failed to create publisher");
 
     let topic = domain_participant
-      .create_topic("Aasii".to_string(), "Huh?".to_string(), &qos.clone(), TopicKind::WithKey)
+      .create_topic(
+        "Aasii".to_string(),
+        "Huh?".to_string(),
+        &qos.clone(),
+        TopicKind::WithKey,
+      )
       .expect("Failed to create topic");
 
     let mut _data_writer = publisher

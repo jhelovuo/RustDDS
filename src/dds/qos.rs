@@ -1,4 +1,4 @@
-use log::{trace,};
+use log::{trace};
 
 use crate::{
   dds::values::result::*,
@@ -259,7 +259,7 @@ impl QosPolicies {
     self.lifespan
   }
 
-  pub fn modify_by(&self,other: &QosPolicies) -> QosPolicies {
+  pub fn modify_by(&self, other: &QosPolicies) -> QosPolicies {
     QosPolicies {
       durability: other.durability.or(self.durability),
       presentation: other.presentation.or(self.presentation),
@@ -272,7 +272,7 @@ impl QosPolicies {
       destination_order: other.destination_order.or(self.destination_order),
       history: other.history.or(self.history),
       resource_limits: other.resource_limits.or(self.resource_limits),
-      lifespan: other.lifespan.or(self.lifespan),      
+      lifespan: other.lifespan.or(self.lifespan),
     }
   }
 
@@ -282,62 +282,64 @@ impl QosPolicies {
   // "other" is the "requested" (subscriber) QoS
   // yes => None (no failure, i.e. are compatible)
   // no => Some(policyId) , where policyId is (any) one of the policies
-  // causing incompliance 
+  // causing incompliance
   // Compliance (comaptibility) is defined in the table in DDS spec v1.4
   // Section "2.2.3 Supported QoS"
   // This is not symmetric.
   pub fn compliance_failure_wrt(&self, other: &QosPolicies) -> Option<QosPolicyId> {
-    trace!("QoS compatibility check - offered: {:?} - requested {:?}", self, other);
+    trace!(
+      "QoS compatibility check - offered: {:?} - requested {:?}",
+      self,
+      other
+    );
     let result = self.compliance_failure_wrt_impl(other);
-    trace!("Result: {:?}",result);
+    trace!("Result: {:?}", result);
     result
   }
 
-
-  pub fn compliance_failure_wrt_impl (&self, other: &QosPolicies) -> Option<QosPolicyId> {
+  pub fn compliance_failure_wrt_impl(&self, other: &QosPolicies) -> Option<QosPolicyId> {
     // TODO: Check for cases where policy is requested, but not offered (None)
 
     // check Durability: Offered must be better than or equal to Requested.
-    if let (Some(off),Some(req)) = (self.durability, other.durability) {
+    if let (Some(off), Some(req)) = (self.durability, other.durability) {
       if off < req {
-        return Some(QosPolicyId::Durability)
+        return Some(QosPolicyId::Durability);
       }
     }
 
-    // check Presentation: 
+    // check Presentation:
     // * If coherent_access is requsted, it must be offered also. AND
     // * Same for ordered_access. AND
     // * Offered access scope is broader than requested.
-    if let (Some(off),Some(req)) = (self.presentation, other.presentation) {
-      if   (req.coherent_access && ! off.coherent_access)
-        || (req.ordered_access && ! off.ordered_access)
-        || (req.access_scope > off.access_scope) {
-        return Some(QosPolicyId::Presentation)
+    if let (Some(off), Some(req)) = (self.presentation, other.presentation) {
+      if (req.coherent_access && !off.coherent_access)
+        || (req.ordered_access && !off.ordered_access)
+        || (req.access_scope > off.access_scope)
+      {
+        return Some(QosPolicyId::Presentation);
       }
     }
-
 
     // check Deadline: offered period <= requested period
-    if let (Some(off),Some(req)) = (self.deadline, other.deadline) {
+    if let (Some(off), Some(req)) = (self.deadline, other.deadline) {
       if off.0 > req.0 {
-        return Some(QosPolicyId::Deadline)
+        return Some(QosPolicyId::Deadline);
       }
     }
-
 
     // check Latency Budget:
     // offered duration <= requested duration
-    if let (Some(off),Some(req)) = (self.latency_budget, other.latency_budget) {
+    if let (Some(off), Some(req)) = (self.latency_budget, other.latency_budget) {
       if off.duration > req.duration {
-        return Some(QosPolicyId::LatencyBudget)
+        return Some(QosPolicyId::LatencyBudget);
       }
     }
 
     // check Ownership:
     // offered kind == requested kind
-    if let (Some(off),Some(req)) = (self.ownership, other.ownership) {
+    if let (Some(off), Some(req)) = (self.ownership, other.ownership) {
       if off != req {
-        return Some(QosPolicyId::Ownership)
+        return Some(QosPolicyId::Ownership);
       }
     }
 
@@ -347,9 +349,9 @@ impl QosPolicies {
     // AND offered lease_duration <= requested lease_duration
     //
     // See Ord implementation on Liveliness.
-    if let (Some(off),Some(req)) = (self.liveliness, other.liveliness) {
+    if let (Some(off), Some(req)) = (self.liveliness, other.liveliness) {
       if off < req {
-        return Some(QosPolicyId::Liveliness)
+        return Some(QosPolicyId::Liveliness);
       }
     }
 
@@ -357,20 +359,25 @@ impl QosPolicies {
     // offered kind >= requested kind
     // kind ranking: BEST_EFFORT < RELIABLE
     match (self.reliability, other.reliability) {
-      (Some(off),Some(req)) => 
-        if off < req { return Some(QosPolicyId::Reliability) },
-      (None, Some(policy::Reliability::Reliable{..})) =>
-        // request is reliable, but no offer at all. This is bad.
-        return Some(QosPolicyId::Reliability),
+      (Some(off), Some(req)) => {
+        if off < req {
+          return Some(QosPolicyId::Reliability);
+        }
+      }
+      (None, Some(policy::Reliability::Reliable { .. })) =>
+      // request is reliable, but no offer at all. This is bad.
+      {
+        return Some(QosPolicyId::Reliability)
+      }
       _ => (), // otherwise, we shoudl be good to go
     }
 
     // check Destination Order
     // offered kind >= requested kind
     // kind ranking: BY_RECEPTION_TIMESTAMP < BY_SOURCE_TIMESTAMP
-    if let (Some(off),Some(req)) = (self.destination_order, other.destination_order) {
+    if let (Some(off), Some(req)) = (self.destination_order, other.destination_order) {
       if off < req {
-        return Some(QosPolicyId::DestinationOrder)
+        return Some(QosPolicyId::DestinationOrder);
       }
     }
 
@@ -464,39 +471,38 @@ pub mod policy {
     fn kind_num(&self) -> i32 {
       use Liveliness::*;
       match self {
-        Automatic {..} => 0,
-        ManualByParticipant {..} => 1,
-        ManualByTopic {..} => 2,
+        Automatic { .. } => 0,
+        ManualByParticipant { .. } => 1,
+        ManualByTopic { .. } => 2,
       }
     }
 
     pub fn duration(&self) -> Duration {
       use Liveliness::*;
       match self {
-        Automatic {lease_duration} => *lease_duration,
-        ManualByParticipant {lease_duration} => *lease_duration,
-        ManualByTopic {lease_duration} => *lease_duration,
-      }      
+        Automatic { lease_duration } => *lease_duration,
+        ManualByParticipant { lease_duration } => *lease_duration,
+        ManualByTopic { lease_duration } => *lease_duration,
+      }
     }
-
   }
 
   impl Ord for Liveliness {
     fn cmp(&self, other: &Self) -> Ordering {
       // Manual liveliness is greater than automatic, but
       // duration compares in reverse
-     other.kind_num().cmp( &other.kind_num())
-        .then_with( || self.duration().cmp(&other.duration())
-          .reverse() )
+      other
+        .kind_num()
+        .cmp(&other.kind_num())
+        .then_with(|| self.duration().cmp(&other.duration()).reverse())
     }
   }
 
   impl PartialOrd for Liveliness {
-      fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-          Some(self.cmp(other))
-      }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+      Some(self.cmp(other))
+    }
   }
-
 
   /// DDS 2.2.3.12 TIME_BASED_FILTER
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -525,19 +531,19 @@ pub mod policy {
     // but Eq will say they are not equal.
     fn cmp(&self, other: &Self) -> Ordering {
       use Reliability::*;
-      match (self,other) {
+      match (self, other) {
         (BestEffort, BestEffort) => Ordering::Equal,
-        (BestEffort, Reliable {..}) => Ordering::Less,
-        (Reliable{..}, BestEffort) => Ordering::Greater,
-        (Reliable{..}, Reliable {..} ) => Ordering::Equal, 
+        (BestEffort, Reliable { .. }) => Ordering::Less,
+        (Reliable { .. }, BestEffort) => Ordering::Greater,
+        (Reliable { .. }, Reliable { .. }) => Ordering::Equal,
       }
     }
   }
 
   impl PartialOrd for Reliability {
-      fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-          Some(self.cmp(other))
-      }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+      Some(self.cmp(other))
+    }
   }
 
   /// DDS 2.2.3.17 DESTINATION_ORDER
@@ -623,7 +629,7 @@ pub mod policy {
 // Utility for parsing RTPS inlineQoS parameters
 // TODO: This does not need to be a struct, since is has no contents.
 // Maybe someone has had an overdose of object-orientation?
-// Two standalone functions should suffice. 
+// Two standalone functions should suffice.
 pub(crate) struct InlineQos {}
 
 impl InlineQos {
@@ -650,14 +656,12 @@ impl InlineQos {
       .parameters
       .iter()
       .find(|p| p.parameter_id == ParameterId::PID_KEY_HASH);
-    Ok(
-      match key_hash {
-        Some(p) => Some(KeyHash::from_cdr_bytes(p.value.clone())?) ,
-        None => None,
-      })
+    Ok(match key_hash {
+      Some(p) => Some(KeyHash::from_cdr_bytes(p.value.clone())?),
+      None => None,
+    })
   }
 }
-
 
 // TODO: helper function to check is a QosPolices object is inconsistent (by itself)
 

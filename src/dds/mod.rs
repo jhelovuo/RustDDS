@@ -23,7 +23,7 @@
 //! * If you are using CDR serialization (DDS default), then use [`CDRSerializerAdapter`] and [`CDRDeserializerAdapter`]
 //!   when such adapters are required. If you need to use another serialization format, then you should find or write
 //!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
-//! 
+//!
 //! [`DomainParticipant`]: struct.DomainParticipant.html
 //! [`Topic`]: struct.Topic.html
 //! [`Publisher`]: struct.Publisher.html
@@ -108,10 +108,10 @@
 mod datasample_cache;
 pub(crate) mod ddsdata;
 mod dp_event_loop;
-mod message_receiver;
 mod fragment_assembler;
-mod sampleinfo;
 mod helpers;
+mod message_receiver;
+mod sampleinfo;
 
 /// Participating in NoKey topics.
 pub mod no_key;

@@ -35,15 +35,14 @@ use crate::{
 use chrono::Utc;
 
 // separate type is needed to serialize correctly
-#[derive(Eq,PartialEq,Ord,PartialOrd,Debug, Clone, Copy, Hash)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
 pub struct SpdpDiscoveredParticipantDataKey(pub GUID);
 
 impl Key for SpdpDiscoveredParticipantDataKey {}
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpdpDiscoveredParticipantData {
-  pub updated_time: chrono::DateTime<Utc>, 
+  pub updated_time: chrono::DateTime<Utc>,
   pub protocol_version: ProtocolVersion,
   pub vendor_id: VendorId,
   pub expects_inline_qos: bool,
@@ -73,9 +72,10 @@ impl SpdpDiscoveredParticipantData {
       },
     );
 
-    let mut proxy = RtpsReaderProxy::new( remote_reader_guid,
-        QosPolicies::qos_none() // TODO: What is the correct QoS value here?
-      );
+    let mut proxy = RtpsReaderProxy::new(
+      remote_reader_guid,
+      QosPolicies::qos_none(), // TODO: What is the correct QoS value here?
+    );
     proxy.expects_in_line_qos = self.expects_inline_qos;
 
     if !is_metatraffic {
@@ -170,7 +170,6 @@ impl SpdpDiscoveredParticipantData {
   }
 }
 
-
 impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantData {
   fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
   where
@@ -178,8 +177,12 @@ impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantData {
   {
     let visitor = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(visitor)?;
-    res.generate_spdp_participant_data().map_err(|e| 
-      D::Error::custom(format!("SpdpDiscoveredParticipantData::deserialize - {:?} - data was {:?}",e, &res) ))
+    res.generate_spdp_participant_data().map_err(|e| {
+      D::Error::custom(format!(
+        "SpdpDiscoveredParticipantData::deserialize - {:?} - data was {:?}",
+        e, &res
+      ))
+    })
   }
 }
 
@@ -193,12 +196,10 @@ impl Serialize for SpdpDiscoveredParticipantData {
   }
 }
 
-
-
 impl Keyed for SpdpDiscoveredParticipantData {
-  type K = SpdpDiscoveredParticipantDataKey; 
+  type K = SpdpDiscoveredParticipantDataKey;
   fn get_key(&self) -> Self::K {
-    SpdpDiscoveredParticipantDataKey( self.participant_guid ) 
+    SpdpDiscoveredParticipantDataKey(self.participant_guid)
   }
 }
 
@@ -209,7 +210,7 @@ impl Serialize for SpdpDiscoveredParticipantDataKey {
   {
     let builtin_data_serializer = BuiltinDataSerializerKey::from_data(*self);
     builtin_data_serializer.serialize::<S>(serializer, true)
-  } 
+  }
 }
 
 impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantDataKey {
@@ -219,11 +220,14 @@ impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantDataKey {
   {
     let visitor = BuiltinDataDeserializer::new();
     let res = deserializer.deserialize_any(visitor)?;
-    res.generate_spdp_participant_data_key().map_err(|e| 
-      D::Error::custom(format!("SpdpDiscoveredParticipantDataKey::deserialize - {:?} - data was {:?}",e, &res) ))
+    res.generate_spdp_participant_data_key().map_err(|e| {
+      D::Error::custom(format!(
+        "SpdpDiscoveredParticipantDataKey::deserialize - {:?} - data was {:?}",
+        e, &res
+      ))
+    })
   }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -260,8 +264,11 @@ mod tests {
               .unwrap();
             let sdata =
               to_bytes::<SpdpDiscoveredParticipantData, LittleEndian>(&participant_data).unwrap();
-            eprintln!("message data = {:?}",&data);
-            eprintln!("payload    = {:?}", &d.serialized_payload.as_ref().unwrap().value.to_vec());
+            eprintln!("message data = {:?}", &data);
+            eprintln!(
+              "payload    = {:?}",
+              &d.serialized_payload.as_ref().unwrap().value.to_vec()
+            );
             eprintln!("deserialized  = {:?}", &participant_data);
             eprintln!("serialized = {:?}", &sdata);
             // order cannot be known at this point
@@ -279,8 +286,7 @@ mod tests {
 
             eprintln!("again deserialized = {:?}", &participant_data_2);
             let _sdata_2 =
-              to_bytes::<SpdpDiscoveredParticipantData, LittleEndian>(&participant_data_2)
-                .unwrap();
+              to_bytes::<SpdpDiscoveredParticipantData, LittleEndian>(&participant_data_2).unwrap();
             // now the order of bytes should be the same
             assert_eq!(&participant_data_2, &participant_data);
           }

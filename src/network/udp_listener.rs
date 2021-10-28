@@ -1,4 +1,4 @@
-use std::net::{Ipv4Addr, SocketAddr, IpAddr,};
+use std::net::{Ipv4Addr, SocketAddr, IpAddr};
 use std::io;
 
 use mio::Token;
@@ -6,14 +6,14 @@ use mio::net::UdpSocket;
 
 use log::{debug, error, trace, info};
 
-use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
+use socket2::{Socket, Domain, Type, SockAddr, Protocol};
 
-use bytes::{Bytes,BytesMut};
+use bytes::{Bytes, BytesMut};
 
 use crate::network::util::get_local_multicast_ip_addrs;
 
-const MAX_MESSAGE_SIZE : usize = 64 * 1024; // This is max we can get from UDP.
-const MESSAGE_BUFFER_ALLOCATION_CHUNK : usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
+const MAX_MESSAGE_SIZE: usize = 64 * 1024; // This is max we can get from UDP.
+const MESSAGE_BUFFER_ALLOCATION_CHUNK: usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
 
 /// Listens to messages coming to specified host port combination.
 /// Only messages from added listen addressed are read when get_all_messages is called.
@@ -27,20 +27,23 @@ pub struct UDPListener {
 
 impl Drop for UDPListener {
   fn drop(&mut self) {
-    if let Some(mcg) = self.multicast_group { self
-    .socket
-    .leave_multicast_v4(&mcg, &Ipv4Addr::UNSPECIFIED)
-    .unwrap_or_else(|e| { error!("leave_multicast_group: {:?}",e); } ) }
+    if let Some(mcg) = self.multicast_group {
+      self
+        .socket
+        .leave_multicast_v4(&mcg, &Ipv4Addr::UNSPECIFIED)
+        .unwrap_or_else(|e| {
+          error!("leave_multicast_group: {:?}", e);
+        })
+    }
   }
 }
 
 // TODO: Remove panics from this function. Convert return value to Result.
 impl UDPListener {
-
   // TODO: Why is is this function even necessary? Doesn't try_bind() do just the same?
 
   fn new_listening_socket(host: &str, port: u16, reuse_addr: bool) -> io::Result<UdpSocket> {
-    let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP) )?;
+    let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
 
     // We set ReuseAddr so that other DomainParticipants on this host can
     // bind to the same multicast address and port.
@@ -59,46 +62,54 @@ impl UDPListener {
     }
 
     let address = SocketAddr::new(
-      host.parse()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, 
-      port);
+      host
+        .parse()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
+      port,
+    );
 
-    if let Err(e) = raw_socket.bind( &SockAddr::from(address) ) {
-      info!("new_socket - cannot bind socket: {:?}",e);
-      return Err(e)
+    if let Err(e) = raw_socket.bind(&SockAddr::from(address)) {
+      info!("new_socket - cannot bind socket: {:?}", e);
+      return Err(e);
     }
 
-    let std_socket = std::net::UdpSocket::from( raw_socket );
+    let std_socket = std::net::UdpSocket::from(raw_socket);
     std_socket
       .set_nonblocking(true)
       .expect("Failed to set std socket to non blocking.");
 
-    let mio_socket = UdpSocket::from_socket(std_socket)
-                      .expect("Unable to create mio socket");
-    info!("UDPListener: new socket with address {:?}", mio_socket.local_addr());
+    let mio_socket = UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
+    info!(
+      "UDPListener: new socket with address {:?}",
+      mio_socket.local_addr()
+    );
 
     Ok(mio_socket)
   }
 
-
   pub fn new_unicast(token: Token, host: &str, port: u16) -> io::Result<UDPListener> {
+    let mio_socket = Self::new_listening_socket(host, port, false)?;
 
-    let mio_socket = Self::new_listening_socket(host,port,false)?;
-
-    Ok(UDPListener { 
-      socket: mio_socket, 
+    Ok(UDPListener {
+      socket: mio_socket,
       token,
       receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
       multicast_group: None,
     })
   }
 
-  pub fn new_multicast(token: Token, host: &str, port: u16, multicast_group: Ipv4Addr) 
-    -> io::Result<UDPListener> 
-  {
-    if ! multicast_group.is_multicast() {
-          return io::Result::Err(io::Error::new(io::ErrorKind::Other,"Not a multicast address"))
-    } 
+  pub fn new_multicast(
+    token: Token,
+    host: &str,
+    port: u16,
+    multicast_group: Ipv4Addr,
+  ) -> io::Result<UDPListener> {
+    if !multicast_group.is_multicast() {
+      return io::Result::Err(io::Error::new(
+        io::ErrorKind::Other,
+        "Not a multicast address",
+      ));
+    }
 
     let mio_socket = Self::new_listening_socket(host, port, true)?;
 
@@ -106,19 +117,18 @@ impl UDPListener {
       match multicast_if_ipaddr {
         IpAddr::V4(a) => {
           mio_socket.join_multicast_v4(&multicast_group, &a)?;
-        }   
-        IpAddr::V6(_a) => error!("UDPListener::new_multicast() not implemented for IpV6") , // TODO
+        }
+        IpAddr::V6(_a) => error!("UDPListener::new_multicast() not implemented for IpV6"), // TODO
       }
     }
 
-    Ok(UDPListener { 
-      socket: mio_socket, 
+    Ok(UDPListener {
+      socket: mio_socket,
       token,
       receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
       multicast_group: Some(multicast_group),
     })
   }
-
 
   pub fn get_token(&self) -> Token {
     self.token
@@ -139,7 +149,6 @@ impl UDPListener {
   // We cannot read a single packet only, because we use edge-triggered polls.
   #[cfg(test)]
   pub fn get_message(&self) -> Vec<u8> {
-
     let mut message: Vec<u8> = vec![];
     let mut buf: [u8; MAX_MESSAGE_SIZE] = [0; MAX_MESSAGE_SIZE];
     match self.socket.recv(&mut buf) {
@@ -161,11 +170,14 @@ impl UDPListener {
     }
     unsafe {
       // This is safe, because we just checked that there is enough capacity.
-      // We do not read undefined data, because next the recv call in get_messages() 
+      // We do not read undefined data, because next the recv call in get_messages()
       // will overwrite this space and truncate the rest away.
       self.receive_buffer.set_len(MAX_MESSAGE_SIZE)
     }
-    trace!("ensure_receive_buffer_capacity - {} bytes left",self.receive_buffer.capacity());
+    trace!(
+      "ensure_receive_buffer_capacity - {} bytes left",
+      self.receive_buffer.capacity()
+    );
   }
 
   /// Get all messages waiting in the socket.
@@ -180,13 +192,13 @@ impl UDPListener {
       // be aligned also. This assumes that the initial buffer was aligned to begin with.
       while self.receive_buffer.len() % 4 != 0 {
         self.receive_buffer.extend_from_slice(&[0xCC]); // add some funny padding bytes
-        // Funny value encourages fast crash in case these bytes are ever accessed,
-        // as they should not.
+                                                        // Funny value encourages fast crash in case these bytes are ever accessed,
+                                                        // as they should not.
       }
       let mut message = self.receive_buffer.split_to(self.receive_buffer.len());
       self.ensure_receive_buffer_capacity();
       message.truncate(nbytes); // discard (hide) padding
-      messages.push( Bytes::from(message) ); // freeze and push
+      messages.push(Bytes::from(message)); // freeze and push
     }
     messages
   }
@@ -245,14 +257,15 @@ mod tests {
 
   #[test]
   fn udpl_multicast_address() {
-    let listener = UDPListener::new_multicast(Token(0), "0.0.0.0", 10002,Ipv4Addr::new(239, 255, 0, 1)).unwrap();
+    let listener =
+      UDPListener::new_multicast(Token(0), "0.0.0.0", 10002, Ipv4Addr::new(239, 255, 0, 1))
+        .unwrap();
     let sender = UDPSender::new_with_random_port().unwrap();
 
     //setsockopt(sender.socket.as_raw_fd(), IpMulticastLoop, &true)
     //  .expect("Unable set IpMulticastLoop option on socket");
 
     let data: Vec<u8> = vec![2, 4, 6];
-
 
     sender
       .send_multicast(&data, Ipv4Addr::new(239, 255, 0, 1), 10002)

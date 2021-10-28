@@ -7,7 +7,6 @@ use crate::{
 
 pub use crate::structure::topic_kind::TopicKind;
 
-
 /// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class
 pub trait TopicDescription {
   fn get_participant(&self) -> Option<DomainParticipant>;
@@ -46,8 +45,14 @@ impl Topic {
     my_qos_policies: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Topic {
-    Topic { 
-      inner: Arc::new(InnerTopic::new(my_domainparticipant,my_name, my_typedesc, my_qos_policies, topic_kind) )
+    Topic {
+      inner: Arc::new(InnerTopic::new(
+        my_domainparticipant,
+        my_name,
+        my_typedesc,
+        my_qos_policies,
+        topic_kind,
+      )),
     }
   }
 
@@ -131,8 +136,6 @@ impl HasQoSPolicy for Topic {
 }
 
 //impl DDSEntity for Topic {}
-
-
 
 // -------------------------------- InnerTopic -----------------------------
 

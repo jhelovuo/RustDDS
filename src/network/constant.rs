@@ -3,13 +3,12 @@ use crate::discovery::data_types::topic_data::DiscoveredReaderData;
 use crate::discovery::data_types::topic_data::DiscoveredWriterData;
 use crate::dds::data_types::GuidPrefix;
 
-
 use mio::Token;
 use mio_extras::channel as mio_channel;
 
-use crate::structure::guid::{GUID,EntityKind};
+use crate::structure::guid::{GUID, EntityKind};
 
-const PTB : usize = EntityKind::POLL_TOKEN_BASE;
+const PTB: usize = EntityKind::POLL_TOKEN_BASE;
 
 pub const STOP_POLL_TOKEN: Token = Token(PTB);
 
@@ -56,7 +55,6 @@ pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(39 + PTB);
 pub const DISCOVERY_PARTICIPANT_MESSAGE_TOKEN: Token = Token(40 + PTB);
 pub const DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(41 + PTB);
 
-
 pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(50 + PTB);
 
 pub struct TokenReceiverPair<T> {
@@ -100,16 +98,29 @@ pub fn get_user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum DiscoveryNotificationType {
-  ReaderUpdated { 
+  ReaderUpdated {
     rtps_reader_proxy: RtpsReaderProxy,
-    discovered_reader_data: DiscoveredReaderData , 
-    _needs_new_cache_change: bool 
+    discovered_reader_data: DiscoveredReaderData,
+    _needs_new_cache_change: bool,
   },
-  ReaderLost { reader_guid: GUID }, 
-  WriterUpdated { discovered_writer_data: DiscoveredWriterData  },
-  WriterLost { writer_guid: GUID },
-  ParticipantUpdated { guid_prefix: GuidPrefix },
-  ParticipantLost { guid_prefix : GuidPrefix },
+  ReaderLost {
+    reader_guid: GUID,
+  },
+  WriterUpdated {
+    discovered_writer_data: DiscoveredWriterData,
+  },
+  WriterLost {
+    writer_guid: GUID,
+  },
+  ParticipantUpdated {
+    guid_prefix: GuidPrefix,
+  },
+  ParticipantLost {
+    guid_prefix: GuidPrefix,
+  },
   TopicsInfoUpdated,
-  AssertTopicLiveliness { writer_guid: GUID , manual_assertion: bool, },
+  AssertTopicLiveliness {
+    writer_guid: GUID,
+    manual_assertion: bool,
+  },
 }

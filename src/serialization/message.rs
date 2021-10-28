@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet,HashSet,};
+use std::collections::{BTreeSet, HashSet};
 use std::io;
 
 use crate::{
@@ -12,28 +12,29 @@ use crate::{
   messages::submessages::submessages::*,
   messages::submessages::{
     submessage::EntitySubmessage,
-    submessages::SubmessageKind, 
+    submessages::SubmessageKind,
     submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
     submessage_elements::serialized_payload::RepresentationIdentifier,
   },
-  messages::{ protocol_version::ProtocolVersion, vendor_id::VendorId, protocol_id::ProtocolId},
-  serialization::submessage::{SubMessage, SubmessageBody, },
-  structure::{ sequence_number::SequenceNumber, sequence_number::SequenceNumberSet, 
-    guid::{GuidPrefix,EntityKind,},
+  messages::{protocol_version::ProtocolVersion, vendor_id::VendorId, protocol_id::ProtocolId},
+  serialization::submessage::{SubMessage, SubmessageBody},
+  structure::{
+    sequence_number::SequenceNumber,
+    sequence_number::SequenceNumberSet,
+    guid::{GuidPrefix, EntityKind},
     cache_change::{CacheChange},
-    parameter_id::ParameterId, 
+    parameter_id::ParameterId,
   },
   structure::time::Timestamp,
 };
 #[allow(unused_imports)]
-use log::{error,warn,debug,trace};
+use log::{error, warn, debug, trace};
 
 use speedy::{Readable, Writable, Endianness, Context, Writer};
 use enumflags2::BitFlags;
 use bytes::Bytes;
 
-
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct Message {
   pub header: Header,
   pub submessages: Vec<SubMessage>,
@@ -84,8 +85,8 @@ impl<'a> Message {
     let rtps_header =
       Header::read_from_buffer(&buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     let mut message = Message::new(rtps_header);
-    let mut submessages_left : Bytes = buffer.slice(20..); // header is 20 bytes
-                                              // submessage loop
+    let mut submessages_left: Bytes = buffer.slice(20..); // header is 20 bytes
+                                                          // submessage loop
     while !submessages_left.is_empty() {
       let sub_header = SubmessageHeader::read_from_buffer(&submessages_left)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -116,7 +117,7 @@ impl<'a> Message {
       //   submessages_left.split_at(sub_header_length + sub_content_length);
       // submessages_left = new_submessages_left;
       // split fisrt buters to new buffer
-      let mut sub_buffer = submessages_left.split_to( sub_header_length + sub_content_length );
+      let mut sub_buffer = submessages_left.split_to(sub_header_length + sub_content_length);
       // split tail part (content) to new buffer
       let sub_content_buffer = sub_buffer.split_off(sub_header_length);
 
@@ -202,10 +203,18 @@ impl<'a> Message {
         }
         SubmessageKind::INFO_TS => {
           let f = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
-          let tso = 
-                if f.contains(INFOTIMESTAMP_Flags::Invalidate) { None }
-                else { Some ( Timestamp::read_from_buffer_with_ctx(e, &sub_content_buffer)?) };
-          mk_i_subm(InterpreterSubmessage::InfoTimestamp(InfoTimestamp{timestamp: tso}, f ))
+          let tso = if f.contains(INFOTIMESTAMP_Flags::Invalidate) {
+            None
+          } else {
+            Some(Timestamp::read_from_buffer_with_ctx(
+              e,
+              &sub_content_buffer,
+            )?)
+          };
+          mk_i_subm(InterpreterSubmessage::InfoTimestamp(
+            InfoTimestamp { timestamp: tso },
+            f,
+          ))
         }
         SubmessageKind::INFO_REPLY => {
           let f = BitFlags::<INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
@@ -221,7 +230,10 @@ impl<'a> Message {
           let kind = u8::from(unknown_kind);
           if kind >= 0x80 {
             // Kinds 0x80 - 0xFF are vendor-specific.
-            trace!("Received vendor-specific submessage kind {:?}", unknown_kind);
+            trace!(
+              "Received vendor-specific submessage kind {:?}",
+              unknown_kind
+            );
             trace!("Submessage was {:?}", &sub_buffer);
           } else {
             // Kind is 0x00 - 0x7F, is should be in the standard.
@@ -278,7 +290,6 @@ impl MessageBuilder {
     }
   }
 
-
   pub fn dst_submessage(
     mut self,
     endianness: Endianness,
@@ -306,29 +317,33 @@ impl MessageBuilder {
   /// Argument Some(timestamp) means that a timestamp is sent.
   /// Argument None means "invalidate", i.e. the previously sent InfoTimestamp submessage
   /// no longer applies.
-  pub fn ts_msg(mut self, endianness: Endianness, timestamp: Option<DDSTimestamp>) -> MessageBuilder {
-
+  pub fn ts_msg(
+    mut self,
+    endianness: Endianness,
+    timestamp: Option<DDSTimestamp>,
+  ) -> MessageBuilder {
     let mut flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(endianness);
     if timestamp.is_none() {
       flags |= INFOTIMESTAMP_Flags::Invalidate;
     }
 
     let content_length = match timestamp {
-      Some(_) => 8 , // Timestamp is serialized as 2 x 32b words
-      None => 0, // Not serialized at all
+      Some(_) => 8, // Timestamp is serialized as 2 x 32b words
+      None => 0,    // Not serialized at all
     };
 
     let submessage_header = SubmessageHeader {
       kind: SubmessageKind::INFO_TS,
       flags: flags.bits(),
-      content_length, 
+      content_length,
     };
 
     let submsg = SubMessage {
       header: submessage_header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(
-        InfoTimestamp {timestamp}, 
-        flags)),
+        InfoTimestamp { timestamp },
+        flags,
+      )),
     };
 
     self.submessages.push(submsg);
@@ -358,35 +373,35 @@ impl MessageBuilder {
       }
     };
 
-
     let mut data_message = Data {
       reader_id: reader_entity_id,
-      writer_id: writer_entity_id, 
+      writer_id: writer_entity_id,
       writer_sn: cache_change.sequence_number,
       inline_qos,
-      serialized_payload: 
-        match  cache_change.data_value {
-         DDSData::Data{ ref serialized_payload } => Some(serialized_payload.clone()), // contents is Bytes
-         DDSData::DisposeByKey{ ref key , ..} => Some(key.clone()),
-         _ => None,
-        }
+      serialized_payload: match cache_change.data_value {
+        DDSData::Data {
+          ref serialized_payload,
+        } => Some(serialized_payload.clone()), // contents is Bytes
+        DDSData::DisposeByKey { ref key, .. } => Some(key.clone()),
+        _ => None,
+      },
     };
-    
+
     // TODO: please explain this logic here:
     if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-      if let Some(sp) = data_message.serialized_payload.as_mut() { sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE }
+      if let Some(sp) = data_message.serialized_payload.as_mut() {
+        sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE
+      }
     }
 
-    let flags: BitFlags<DATA_Flags> = 
-      BitFlags::<DATA_Flags>::from_endianness(endianness)
-      | ( match cache_change.data_value {
-           DDSData::Data {..} /*| DDSData::DataFrags {..} */ 
-              => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data),
-           DDSData::DisposeByKey{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key),
-           DDSData::DisposeByKeyHash{..} => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos),
-           //_ => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos),
-          }
-        ); 
+    let flags: BitFlags<DATA_Flags> = BitFlags::<DATA_Flags>::from_endianness(endianness)
+      | (match cache_change.data_value {
+        DDSData::Data { .. } => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data),
+        DDSData::DisposeByKey { .. } => BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Key),
+        DDSData::DisposeByKeyHash { .. } => {
+          BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
+        }
+      });
     // TODO: This is stupid. There should be an easier way to get the submessage length
     // than serializing it!
     let size = data_message
@@ -394,39 +409,45 @@ impl MessageBuilder {
       .unwrap()
       .len() as u16;
 
-    self.submessages
-      .push( SubMessage {
-                header: SubmessageHeader {
-                  kind: SubmessageKind::DATA,
-                  flags: flags.bits(),
-                  content_length: size,
-                },
-                body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, flags)),
-              } );   
+    self.submessages.push(SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::DATA,
+        flags: flags.bits(),
+        content_length: size,
+      },
+      body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, flags)),
+    });
     self
   }
 
   // TODO: We should optimize this entire thing to allow long contiguous irrelevant set to be
-  // represented as start_sn + 
-  pub fn gap_msg(mut self, irrelevant_sns: BTreeSet<SequenceNumber>, writer: &RtpsWriter, reader_guid: GUID) 
-      -> MessageBuilder 
-  {
-    match (irrelevant_sns.iter().next(), irrelevant_sns.iter().next_back()) {
-      (Some(&base),Some(&_top)) => {
+  // represented as start_sn +
+  pub fn gap_msg(
+    mut self,
+    irrelevant_sns: BTreeSet<SequenceNumber>,
+    writer: &RtpsWriter,
+    reader_guid: GUID,
+  ) -> MessageBuilder {
+    match (
+      irrelevant_sns.iter().next(),
+      irrelevant_sns.iter().next_back(),
+    ) {
+      (Some(&base), Some(&_top)) => {
         let gap_list = SequenceNumberSet::from_base_and_set(base, &irrelevant_sns);
         let gap = Gap {
-              reader_id: reader_guid.entity_id ,
-              writer_id: writer.get_entity_id(),
-              gap_start: base,
-              gap_list 
-          };
+          reader_id: reader_guid.entity_id,
+          writer_id: writer.get_entity_id(),
+          gap_start: base,
+          gap_list,
+        };
         let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer.endianness);
-        gap.create_submessage(gap_flags)
-          .map( |s| self.submessages.push(s) );      
+        gap
+          .create_submessage(gap_flags)
+          .map(|s| self.submessages.push(s));
       }
-      (_,_) =>  error!("gap_msg called with empty SN set. Skipping GAP submessage"),
+      (_, _) => error!("gap_msg called with empty SN set. Skipping GAP submessage"),
     }
-    self 
+    self
   }
 
   pub fn heartbeat_msg(
@@ -464,7 +485,7 @@ impl MessageBuilder {
     self
   }
 
-  pub fn add_header_and_build(self, guid_prefix:GuidPrefix) -> Message {
+  pub fn add_header_and_build(self, guid_prefix: GuidPrefix) -> Message {
     Message {
       header: Header {
         protocol_id: ProtocolId::default(),
@@ -505,9 +526,11 @@ mod tests {
     let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
     info!("{:?}", rtps);
 
-    let serialized = Bytes::from(rtps
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap());
+    let serialized = Bytes::from(
+      rtps
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap(),
+    );
     assert_eq!(bits1, serialized);
   }
   #[test]
@@ -541,9 +564,11 @@ mod tests {
 
     let rtps_data = Message::read_from_buffer(bits2.clone()).unwrap();
 
-    let serialized_data = Bytes::from(rtps_data
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap());
+    let serialized_data = Bytes::from(
+      rtps_data
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap(),
+    );
     assert_eq!(bits2, serialized_data);
   }
 
@@ -571,9 +596,11 @@ mod tests {
     let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
     info!("{:?}", rtps);
 
-    let serialized = Bytes::from(rtps
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap());
+    let serialized = Bytes::from(
+      rtps
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap(),
+    );
     assert_eq!(bits1, serialized);
   }
 
@@ -595,9 +622,11 @@ mod tests {
     let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
     info!("{:?}", rtps);
 
-    let serialized = Bytes::from(rtps
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap());
+    let serialized = Bytes::from(
+      rtps
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap(),
+    );
     assert_eq!(bits1, serialized);
   }
 
@@ -625,9 +654,11 @@ mod tests {
     let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
     info!("{:?}", rtps);
 
-    let serialized = Bytes::from(rtps
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap());
+    let serialized = Bytes::from(
+      rtps
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap(),
+    );
     assert_eq!(bits1, serialized);
   }
 
@@ -682,9 +713,11 @@ mod tests {
       .clone();
     info!("{:x?}", serializedPayload);
 
-    let serialized = Bytes::from(rtps
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap());
+    let serialized = Bytes::from(
+      rtps
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap(),
+    );
     assert_eq!(bits1, serialized);
   }
 
