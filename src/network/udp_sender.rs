@@ -4,6 +4,8 @@ use log::{debug,warn,error,trace, info};
 use mio::net::UdpSocket;
 use std::net::{SocketAddr, IpAddr};
 use socket2::{Socket,Domain, Type, SockAddr, Protocol, };
+use std::env::consts::OS as CURRENT_OS;
+use local_ip_address::list_afinet_netifas;
 
 #[cfg(test)] use std::net::Ipv4Addr;
 use std::io;
@@ -20,8 +22,29 @@ pub struct UDPSender {
 
 impl UDPSender {
   pub fn new(sender_port: u16) -> io::Result<UDPSender> {
-    let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
-    let unicast_socket: UdpSocket = UdpSocket::bind(&saddr)?;
+    /* for windows users, bind to valid addresses only */
+    let unicast_socket = if CURRENT_OS == "windows" {
+      let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+      raw_socket.set_reuse_address(true)?;
+      // get a list of all detected network interfaces, and try binding to their ip addresses one by one.
+      let network_interfaces = list_afinet_netifas().unwrap();
+      for (name, ip) in network_interfaces.iter() {
+        match raw_socket.bind(&SockAddr::from(SocketAddr::new(*ip, sender_port))) {
+          Ok(_) => {}
+          Err(_) => {
+            println!(
+              "couldn't bind to {}:\t{:?}:{}, ignoring.",
+              name, ip, sender_port
+            );
+          }
+        }
+      }
+      let std_socket = std::net::UdpSocket::from(raw_socket);
+      UdpSocket::from_socket(std_socket)?
+    } else {
+      let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
+      UdpSocket::bind(&saddr)?
+    };
     // We set multicasting loop on so that we can hear other DomainParticipant
     // instances running on the same host.
     unicast_socket.set_multicast_loop_v4(true)
@@ -35,6 +58,7 @@ impl UDPSender {
       match multicast_if_ipaddr {
         IpAddr::V4(a) => {
           raw_socket.set_multicast_if_v4(&a)?;
+          if CURRENT_OS == "windows" { raw_socket.set_reuse_address(true)?; } // Necessary?
           raw_socket.bind( &SockAddr::from(SocketAddr::new(multicast_if_ipaddr, 0)) )?;
         }   
         IpAddr::V6(_a) => error!("UDPSender::new() not implemented for IpV6") , // TODO
