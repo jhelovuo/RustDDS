@@ -34,6 +34,8 @@ socket2 = { version = "0.4", features = ["all"] }
 bytes = "1"
 static_assertions = "1.1"
 thiserror = "1.0.29"
+local-ip-address = "0.4.4"
+
 
 [dev-dependencies]
 serde_repr = {version = "0.1" }
