@@ -309,7 +309,7 @@ mod tests {
       DDSData::new(SerializedPayload::default()),
     );
     cache.write().unwrap().add_new_topic(
-      topic_name,
+      topic_name.clone(),
       TopicKind::WithKey,
       TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
     );

@@ -298,14 +298,14 @@ impl DomainParticipantWeak {
 
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_publisher(self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_publisher(&self, qos),
       None => Err(Error::OutOfResources),
     }
   }
 
-  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber<'a>(&self, qos: &QosPolicies) -> Result<Subscriber> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
+      Some(dpi) => dpi.lock().unwrap().create_subscriber(&self, qos),
       None => Err(Error::OutOfResources),
     }
   }
@@ -321,14 +321,14 @@ impl DomainParticipantWeak {
       Some(dpi) => dpi
         .lock()
         .unwrap()
-        .create_topic(self, name, type_desc, qos, topic_kind),
+        .create_topic(&self, name, type_desc, qos, topic_kind),
       None => Err(Error::LockPoisoned),
     }
   }
 
   pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().find_topic(self, name, timeout),
+      Some(dpi) => dpi.lock().unwrap().find_topic(&self, name, timeout),
       None => Err(Error::LockPoisoned),
     }
   }
@@ -355,7 +355,10 @@ impl DomainParticipantWeak {
   }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
-    self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
+    match self.dpi.upgrade() {
+      Some(d) => Some(DomainParticipant { dpi: d }),
+      None => None,
+    }
   }
 } // end impl
 
@@ -407,10 +410,10 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_publisher(dp, qos, self.discovery_command_channel.clone())
+      .create_publisher(&dp, qos, self.discovery_command_channel.clone())
   }
 
-  pub fn create_subscriber(
+  pub fn create_subscriber<'a>(
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
@@ -419,7 +422,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_subscriber(dp, qos, self.discovery_command_channel.clone())
+      .create_subscriber(&dp, qos, self.discovery_command_channel.clone())
   }
 
   pub fn create_topic(
@@ -435,7 +438,7 @@ impl DomainParticipant_Disc {
       .dpi
       .lock()
       .unwrap()
-      .create_topic(dp, name, type_desc, qos, topic_kind)
+      .create_topic(&dp, name, type_desc, qos, topic_kind)
   }
 
   pub fn find_topic(
@@ -444,7 +447,7 @@ impl DomainParticipant_Disc {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    self.dpi.lock().unwrap().find_topic(dp, name, timeout)
+    self.dpi.lock().unwrap().find_topic(&dp, name, timeout)
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -534,15 +537,12 @@ pub(crate) struct DomainParticipant_Inner {
 
 impl Drop for DomainParticipant_Inner {
   fn drop(&mut self) {
-    if std::thread::panicking() {
-      error!("PANIC in dp_event_loop!")
-    }
-
     // if send has an error simply leave as we have lost control of the
     // ev_loop_thread anyways
-    if self.stop_poll_sender.send(()).is_err() {
-      return
-    }
+    match self.stop_poll_sender.send(()) {
+      Ok(_) => (),
+      _ => return (),
+    };
 
     debug!("Waiting for dp_event_loop join");
     match self.ev_loop_handle.take() {
@@ -681,7 +681,6 @@ impl DomainParticipant_Inner {
           stop_poll_receiver,
           discovery_update_notification_receiver,
         );
-
         dp_event_loop.event_loop()
       })?;
 
@@ -772,9 +771,9 @@ impl DomainParticipant_Inner {
   ) -> Result<Topic> {
     let topic = Topic::new(
       domain_participant_weak,
-      name,
+      name.to_string(),
       TypeDesc::new(type_desc),
-      qos,
+      &qos,
       topic_kind,
     );
     Ok(topic)
@@ -868,7 +867,7 @@ impl DomainParticipant_Inner {
       Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
     };
 
-    db.get_all_topics().cloned().collect()
+    db.get_all_topics().map(|p| p.clone()).collect()
   }
 } // impl
 
@@ -948,11 +947,11 @@ mod tests {
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     let publisher = domain_participant
-      .create_publisher(&qos)
+      .create_publisher(&qos.clone())
       .expect("Failed to create publisher");
 
     let topic = domain_participant
-      .create_topic("Aasii", "RandomData", &qos, TopicKind::WithKey)
+      .create_topic("Aasii".to_string(), "RandomData".to_string(), &qos.clone(), TopicKind::WithKey)
       .expect("Failed to create topic");
 
     let mut _data_writer = publisher
@@ -969,11 +968,11 @@ mod tests {
     let _default_dw_qos = QosPolicies::qos_none();
 
     let publisher = domain_participant
-      .create_publisher(&qos)
+      .create_publisher(&qos.clone())
       .expect("Failed to create publisher");
 
     let topic = domain_participant
-      .create_topic("Aasii", "Huh?", &qos, TopicKind::WithKey)
+      .create_topic("Aasii".to_string(), "Huh?".to_string(), &qos.clone(), TopicKind::WithKey)
       .expect("Failed to create topic");
 
     let mut _data_writer = publisher
@@ -1011,7 +1010,7 @@ mod tests {
       guid_prefix: GUID::default().guidPrefix,
     };
     m.set_header(h);
-    m.add_submessage(s);
+    m.add_submessage(SubMessage::from(s));
     let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
     info!("data to send via udp: {:?}", _data);
     let loca = Locator {

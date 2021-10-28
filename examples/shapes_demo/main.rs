@@ -123,7 +123,7 @@ fn main() {
     };
 
   let topic = domain_participant
-  	.create_topic(topic_name, "ShapeType", &qos, TopicKind::WithKey)
+  	.create_topic(topic_name.to_string(), "ShapeType".to_string(), &qos, TopicKind::WithKey)
   	.unwrap_or_else(|e| panic!("create_topic failed: {:?}",e));
 	println!("Topic name is {}. Type is {}.", topic.get_name(), topic.get_type().name());
 
