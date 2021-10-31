@@ -37,12 +37,12 @@ use crate::{
     endpoint::{Endpoint, EndpointAttributes},
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
+    locator::LocatorList,
     sequence_number::{SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
 };
-#[cfg(test)]
-use crate::structure::locator::LocatorList;
+
 use super::{qos::InlineQos, with_key::datareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -749,8 +749,6 @@ impl Reader {
         count: self.sent_ack_nack_count,
       };
 
-      self.sent_ack_nack_count += 1;
-
       // Sanity check
       if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn + SequenceNumber::new(1) {
         error!(
@@ -759,10 +757,22 @@ impl Reader {
         );
       }
 
-      // The acknack can be sent now or later. The rest of the RTPS message
-      // needs to be constructed. p. 48
-      self.send_acknack(response_ack_nack, mr_state);
-      return true;
+
+        // The acknack can be sent now or later. The rest of the RTPS message
+        // needs to be constructed. p. 48
+        let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
+        | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
+        self.send_acknack_to(
+          flags,
+          response_ack_nack,
+          InfoDestination {
+            guid_prefix: mr_state.source_guid_prefix,
+          },
+          &mr_state.unicast_reply_locator_list,
+        );
+        self.sent_ack_nack_count += 1;
+
+        return true
     }
 
     false
@@ -910,13 +920,13 @@ impl Reader {
     }
   }
 
-  fn send_acknack(&self, acknack: AckNack, mr_state: MessageReceiverState) {
-    // Indicate our endianness.
-    // Set final flag to indicate that we are NOT requesting immediate heartbeat
-    // response.
-    let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
-      | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
-
+  fn send_acknack_to(
+    &self,
+    flags: BitFlags<ACKNACK_Flags>,
+    acknack: AckNack,
+    info_dst: InfoDestination,
+    dst_localtor_list: &LocatorList,
+  ) {
     let infodst_flags =
       BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
 
@@ -926,10 +936,6 @@ impl Reader {
       vendor_id: VendorId::THIS_IMPLEMENTATION,
       guid_prefix: self.my_guid.guid_prefix,
     });
-
-    let info_dst = InfoDestination {
-      guid_prefix: mr_state.source_guid_prefix,
-    };
 
     match info_dst.create_submessage(infodst_flags) {
       Some(m) => message.add_submessage(m),
@@ -941,62 +947,35 @@ impl Reader {
       None => return,
     };
 
-    /*let mut bytes = message.serialize_header();
-    bytes.extend_from_slice(&submessage.serialize_msg()); */
     let bytes = message
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .unwrap();
     self
       .udp_sender
-      .send_to_locator_list(&bytes, &mr_state.unicast_reply_locator_list);
+      .send_to_locator_list(&bytes, &dst_localtor_list);
   }
 
-  // TODO: This is much duplicate code from send_acknack.
   pub fn send_preemptive_acknacks(&mut self) {
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness);
     // Do not set final flag --> we are requesting immediate heartbeat from writers.
 
-    let infodst_flags =
-      BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
-
-    self.sent_ack_nack_count += 1;
-
     for (_, writer_proxy) in self.matched_writers.iter().filter(|(_, p)| p.no_changes()) {
-      let mut message = Message::new(Header {
-        protocol_id: ProtocolId::default(),
-        protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
-        vendor_id: VendorId::THIS_IMPLEMENTATION,
-        guid_prefix: self.my_guid.guid_prefix,
-      });
-
-      let info_dst = InfoDestination {
-        guid_prefix: writer_proxy.remote_writer_guid.guid_prefix,
-      };
-
-      let acknack = AckNack {
-        reader_id: self.get_entity_id(),
-        writer_id: writer_proxy.remote_writer_guid.entity_id,
-        reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(1)),
-        count: self.sent_ack_nack_count,
-      };
-
-      match info_dst.create_submessage(infodst_flags) {
-        Some(m) => message.add_submessage(m),
-        None => continue, //TODO: is this correct??
-      };
-
-      match acknack.create_submessage(flags) {
-        Some(m) => message.add_submessage(m),
-        None => continue, //TODO: ??
-      };
-
-      let bytes = message
-        .write_to_vec_with_ctx(Endianness::LittleEndian)
-        .unwrap();
-      self
-        .udp_sender
-        .send_to_locator_list(&bytes, &writer_proxy.unicast_locator_list);
+      self.send_acknack_to(
+        flags,
+        AckNack {
+          reader_id: self.get_entity_id(),
+          writer_id: writer_proxy.remote_writer_guid.entity_id,
+          reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(1)),
+          count: self.sent_ack_nack_count,
+        },
+        InfoDestination {
+          guid_prefix: writer_proxy.remote_writer_guid.guid_prefix,
+        },
+        &writer_proxy.unicast_locator_list,
+      );
     }
+    
+    self.sent_ack_nack_count += 1;
   }
 
   pub fn topic_name(&self) -> &String {
