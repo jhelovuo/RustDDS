@@ -4,6 +4,8 @@ use serde::{Serialize, Deserialize, de};
 
 use chrono::Utc;
 
+use cdr_encoding_size::*;
+
 use crate::{
   dds::{
     qos::policy::{
@@ -348,7 +350,7 @@ impl DiscoveredReaderData {
 }
 
 // separate type is needed to serialize correctly
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize,)]
 pub struct DiscoveredReaderDataKey(pub GUID);
 
 impl Key for DiscoveredReaderDataKey {}
@@ -563,7 +565,7 @@ impl Serialize for PublicationBuiltinTopicData {
 
 // ------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, CdrEncodingSize,)]
 pub struct PublicationBuiltinTopicDataKey(pub GUID);
 
 impl Serialize for PublicationBuiltinTopicDataKey {
@@ -590,7 +592,7 @@ pub struct DiscoveredWriterData {
 }
 
 // separate type is needed to serialize correctly
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize,)]
 pub struct DiscoveredWriterDataKey(pub GUID); // wrapper to enable custom PL CDR (de)serialization
 
 impl Key for DiscoveredWriterDataKey {}
@@ -818,7 +820,7 @@ impl Keyed for DiscoveredTopicData {
 // =======================================================================
 // =======================================================================
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize,CdrEncodingSize,)]
 pub struct ParticipantMessageDataKind {
   value: [u8; 4],
 }
@@ -852,14 +854,18 @@ pub struct ParticipantMessageData {
 }
 
 impl Keyed for ParticipantMessageData {
-  type K = (GuidPrefix, ParticipantMessageDataKind);
+  type K = ParticipantMessageDataKey;
 
   fn get_key(&self) -> Self::K {
-    (self.guid, self.kind)
+    ParticipantMessageDataKey(self.guid, self.kind)
   }
 }
 
-impl Key for (GuidPrefix, ParticipantMessageDataKind) {}
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash , Ord, PartialOrd, Serialize, Deserialize, CdrEncodingSize,)]
+pub struct ParticipantMessageDataKey(GuidPrefix, ParticipantMessageDataKind);
+
+
+impl Key for ParticipantMessageDataKey {}
 
 // =======================================================================
 // =======================================================================

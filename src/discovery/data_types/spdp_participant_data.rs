@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize, de::Error};
+use cdr_encoding_size::*;
 
 use crate::{
   dds::{
@@ -35,7 +36,7 @@ use crate::{
 use chrono::Utc;
 
 // separate type is needed to serialize correctly
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize,)]
 pub struct SpdpDiscoveredParticipantDataKey(pub GUID);
 
 impl Key for SpdpDiscoveredParticipantDataKey {}

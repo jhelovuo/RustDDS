@@ -7,9 +7,8 @@ use byteorder::{BigEndian};
 use rand::Rng;
 use log::error;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-
+pub use cdr_encoding_size::*;
 use crate::serialization::cdr_serializer::to_bytes;
-//use crate::serialization::error::Result;
 use crate::serialization::error::Error;
 
 /// A sample data type may be `Keyed` : It allows a Key to be extracted from the sample.
@@ -85,21 +84,9 @@ impl KeyHash {
 /// Derive (or implement) the Deserialize trait instead.
 
 pub trait Key:
-  Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned
+  Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned + CdrEncodingSize
 {
   // no methods required
-
-  /// This function tries to determine if the maximum size of the sequential CDR encapsulation of
-  /// all the key fields is less than or equal to 128 bits.
-  /// In case this function gets it wrong, it can be overridden.
-  fn may_exceed_128_bits() -> bool {
-    false //TODO: this is just a placeholder
-
-    // Implementation plan:
-    // We should be able to derive this value (true/false) at compile time. A derive macro looks
-    // lke the best tool to do it. Problem is types that are defined in pre-existing libraries.
-    // Need to think about this a bit further.
-  }
 
   // provided method:
   fn hash_key(&self) -> KeyHash {
@@ -120,6 +107,12 @@ pub trait Key:
         not on any particular data value.
     */
 
+    // The specification calls for "sequential CDR representation of all the key fields" 
+    // and "CDR Big- Endian representation of all the Key fields in sequence". We take this to mean
+    // the CDR encoding of the Key, but with no alignment padding.
+    //
+    // TODO: We need a method to get CDR representation with no alignment padding.
+
     let mut cdr_bytes = to_bytes::<Self, BigEndian>(self).unwrap_or_else(|e| {
       error!("Hashing key {:?} failed!", e);
       // This would cause a lot of hash collisions, but wht else we could do
@@ -129,11 +122,7 @@ pub trait Key:
     });
 
     KeyHash(
-      // TODO: Here we just detect at run-time that the cdr_bytes is too long
-      // fit into 16-byte hash field as-is. This should be done statically, and the
-      // writer and reader (acreoss implementations of RTPS) must agree on this
-      // based on key type alone, not any particular contents.
-      if Self::may_exceed_128_bits() || cdr_bytes.len() > 16 {
+      if Self::cdr_encoding_max_size() > CdrEncodingMaxSize::Bytes(16) {
         // use MD5 hash to get the hash. The MD5 hash is always exactly
         // 16 bytes, so just deref it to [u8;16]
         *md5::compute(&cdr_bytes)
@@ -168,17 +157,17 @@ impl Key for i16 {}
 impl Key for i32 {}
 impl Key for i64 {}
 impl Key for i128 {}
-impl Key for isize {}
+//impl Key for isize {} // should not be used in serializable data, as size is platform-dependent
 impl Key for u8 {}
 impl Key for u16 {}
 impl Key for u32 {}
 impl Key for u64 {}
 impl Key for u128 {}
-impl Key for usize {}
+//impl Key for usize {} // should not be used in serializable data, as size is platform-dependent
 
 impl Key for String {}
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, CdrEncodingSize)]
 /// Key type to identicy data instances in builtin topics
 pub struct BuiltInTopicKey {
   /// IDL PSM (2.3.3, pg 138) uses array of 3x long to implement this

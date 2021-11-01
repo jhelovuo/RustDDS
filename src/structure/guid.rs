@@ -3,6 +3,7 @@ use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use std::hash::Hash;
 use std::ops::RangeBounds;
+use cdr_encoding_size::*;
 
 use mio::Token;
 use log::warn;
@@ -13,7 +14,7 @@ use super::parameter_id::ParameterId;
 use crate::dds::traits::key::Key;
 
 /// DDS/RTPS Participant GuidPrefix
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize,CdrEncodingSize,)]
 pub struct GuidPrefix {
   pub entity_key: [u8; 12],
 }
@@ -71,7 +72,7 @@ impl<C: Context> Writable<C> for GuidPrefix {
   }
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize,CdrEncodingSize,)]
 pub struct EntityKind(u8);
 
 impl EntityKind {
@@ -144,7 +145,7 @@ impl From<EntityKind> for u8 {
 
 /// RTPS EntityId
 /// See RTPS spec section 8.2.4 , 8.3.5.1 and 9.3.1.2
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,)]
 pub struct EntityId {
   pub entity_key: [u8; 3],
   pub entity_kind: EntityKind,
@@ -338,6 +339,7 @@ impl<C: Context> Writable<C> for EntityId {
   Hash,
   Serialize,
   Deserialize,
+  CdrEncodingSize,
 )]
 pub struct GUID {
   // Note: It is important to have guid_prefix first, so that derive'd Ord trait
