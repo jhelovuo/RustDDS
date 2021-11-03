@@ -45,7 +45,7 @@ Using "Shapes" demo programs available. Data exchange worked in both directions:
 
 # Usage
 
-Please see the examples included within the crate and also [Interoperability test][https://github.com/jhelovuo/dds-rtp] .
+Please see the examples included within the crate and also [Interoperability test][https://github.com/jhelovuo/dds-rtps] .
 
 
 # Data serialization and keying
