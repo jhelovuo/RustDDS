@@ -2,7 +2,7 @@ edition = "2018"
 wrap_comments = true
 tab_spaces = 2
 reorder_imports = false
-import_granularity = "Crate"
+imports_granularity = "Crate"
 group_imports = "StdExternalCrate"
 
 # unstable_features = true
