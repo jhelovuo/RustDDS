@@ -9,6 +9,13 @@ The Data Distribution Service for real-time systems (DDS) is an Object Managemen
 
 This is still work-in-progress. Currently, the implementation is complete enough to do data exchange with [ROS2][ros2-url] software.
 
+## Version 0.5.0
+
+This release breaks compatibility with 0.4.0. Differences are
+* Naming convention is morr Rust-like, instead of DDS convention - mostly capitalization and underscores.
+* Some functions new require owned `String` instead of `&str`. Just add `.to_string()` to fix.
+* Key size detection (is it over 16 bytes?) is now implemented in a trait with derive macro.
+
 ## Features Status
 
 * Discovery ✅
@@ -21,13 +28,13 @@ This is still work-in-progress. Currently, the implementation is complete enough
 * Zero-copy receive path ✅
 * Zero-copy transmit path
 * Topic creation ✅
-* Topic finding
+* Topic finding ✅
 * Partition QoS
 * Time-based filter QoS
 * Ownership QoS
 * Presentation QoS: Coherent/atomic sample sets and ordering
 * Deadline and Latency budget QoS
-* Sample fragmentation (large object exchange)
+* Sample fragmentation (large object exchange) (partial ✅)
 * `wait_for_acknowledgments`
 * Listener (or equivalent) for DomainPrticiapnts
 * Listerer (or equivalent) for Topics
