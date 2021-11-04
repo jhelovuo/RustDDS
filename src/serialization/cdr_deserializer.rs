@@ -568,7 +568,7 @@ mod tests {
   };
 
   #[test]
-  fn CDR_Deserialization_struct() {
+  fn cdr_deserialization_struct() {
     //IDL
     /*
     struct OmaTyyppi
@@ -608,10 +608,10 @@ mod tests {
       */
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct OmaTyyppi {
-      firstValue: u8,
-      secondvalue: i8,
-      thirdValue: i32,
-      fourthValue: u64,
+      first_value: u8,
+      second_value: i8,
+      third_value: i32,
+      fourth_value: u64,
       fifth: bool,
       sixth: f32,
       seventh: bool,
@@ -623,11 +623,11 @@ mod tests {
       thirteen: String,
     }
 
-    let mikkiHiiri = OmaTyyppi {
-      firstValue: 1,
-      secondvalue: -3,
-      thirdValue: -5000,
-      fourthValue: 1234u64,
+    let mikki_hiiri = OmaTyyppi {
+      first_value: 1,
+      second_value: -3,
+      third_value: -5000,
+      fourth_value: 1234u64,
       fifth: true,
       sixth: -6.6f32,
       seventh: true,
@@ -648,7 +648,7 @@ mod tests {
       0x00, 0x04, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x00,
     ];
 
-    let sarjallistettu = to_bytes::<OmaTyyppi, LittleEndian>(&mikkiHiiri).unwrap();
+    let sarjallistettu = to_bytes::<OmaTyyppi, LittleEndian>(&mikki_hiiri).unwrap();
 
     for x in 0..expected_serialized_result.len() {
       if expected_serialized_result[x] != sarjallistettu[x] {
@@ -660,13 +660,13 @@ mod tests {
 
     let rakennettu: OmaTyyppi =
       deserialize_from_little_endian(&expected_serialized_result).unwrap();
-    assert_eq!(rakennettu, mikkiHiiri);
+    assert_eq!(rakennettu, mikki_hiiri);
     info!("deserialized: {:?}", rakennettu);
   }
 
   #[test]
 
-  fn CDR_Deserialization_user_defined_data() {
+  fn cdr_deserialization_user_defined_data() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
     //10.7 Example for User-defined Topic Data
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -691,38 +691,40 @@ mod tests {
 
     let serialized = to_bytes::<ShapeType, LittleEndian>(&message).unwrap();
     assert_eq!(serialized, expected_serialized_result);
-    let deserializedMessage: ShapeType = deserialize_from_little_endian(&serialized).unwrap();
-    assert_eq!(deserializedMessage, message)
+    let deserialized_message: ShapeType = deserialize_from_little_endian(&serialized).unwrap();
+    assert_eq!(deserialized_message, message)
   }
 
   #[test]
 
-  fn CDR_Deserialization_serialization_topic_name() {
+  fn cdr_deserialization_serialization_topic_name() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
     //10.6 Example for Built-in Endpoint Data
     // this is just CRD topic name strings
 
     // TODO what about padding??
-    let recievedCDRString: Vec<u8> = vec![
+    let received_cdr_string: Vec<u8> = vec![
       0x07, 0x00, 0x00, 0x00, 0x053, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, /* 0x00, */
     ];
 
-    let deserializedMessage: String = deserialize_from_little_endian(&recievedCDRString).unwrap();
-    info!("{:?}", deserializedMessage);
-    assert_eq!("Square", deserializedMessage);
+    let deserialized_message: String =
+      deserialize_from_little_endian(&received_cdr_string).unwrap();
+    info!("{:?}", deserialized_message);
+    assert_eq!("Square", deserialized_message);
 
-    let recievedCDRString2: Vec<u8> = vec![
+    let received_cdr_string2: Vec<u8> = vec![
       0x0A, 0x00, 0x00, 0x00, 0x53, 0x68, 0x61, 0x70, 0x65, 0x54, 0x79, 0x70, 0x65,
       0x00, /* 0x00, 0x00, */
     ];
 
-    let deserializedMessage2: String = deserialize_from_little_endian(&recievedCDRString2).unwrap();
-    info!("{:?}", deserializedMessage2);
-    assert_eq!("ShapeType", deserializedMessage2);
+    let deserialized_message2: String =
+      deserialize_from_little_endian(&received_cdr_string2).unwrap();
+    info!("{:?}", deserialized_message2);
+    assert_eq!("ShapeType", deserialized_message2);
   }
 
   #[test]
-  fn CDR_Deserialization_example_struct() {
+  fn cdr_deserialization_example_struct() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.2/PDF
     // 10.2.2 Example
 
@@ -743,16 +745,16 @@ mod tests {
 
     let deserialized_le: Example = deserialize_from_little_endian(&serialized_le).unwrap();
     let deserialized_be: Example = deserialize_from_big_endian(&serialized_be).unwrap();
-    let serializedO_le = to_bytes::<Example, LittleEndian>(&o).unwrap();
-    let serializedO_be = to_bytes::<Example, BigEndian>(&o).unwrap();
+    let serialized_O_le = to_bytes::<Example, LittleEndian>(&o).unwrap();
+    let serialized_O_be = to_bytes::<Example, BigEndian>(&o).unwrap();
 
     assert_eq!(
-      serializedO_le,
+      serialized_O_le,
       vec![0x01, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x64,]
     );
 
     assert_eq!(
-      serializedO_be,
+      serialized_O_be,
       vec![0x00, 0x00, 0x00, 0x01, 0x61, 0x62, 0x63, 0x64,]
     );
 
@@ -765,9 +767,9 @@ mod tests {
 
   #[test]
 
-  fn CDR_Deserialization_serialization_payload_shapes() {
+  fn cdr_deserialization_serialization_payload_shapes() {
     // This test uses wireshark captured shapes demo part of serialized message as
-    // recieved_message.
+    // received_message.
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct ShapeType {
       color: String,
@@ -777,27 +779,28 @@ mod tests {
     }
     // this message is DataMessages serialized data withoutt encapsulation kind and
     // encapsulation options
-    let recieved_message: Vec<u8> = vec![
+    let received_message: Vec<u8> = vec![
       0x04, 0x00, 0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x61, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00,
       0x00, 0x1e, 0x00, 0x00, 0x00,
     ];
-    let recieved_message2: Vec<u8> = vec![
+    let received_message2: Vec<u8> = vec![
       0x04, 0x00, 0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x61, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00,
       0x00, 0x1e, 0x00, 0x00, 0x00,
     ];
 
-    let deserializedMessage: ShapeType = deserialize_from_little_endian(&recieved_message).unwrap();
-    info!("{:?}", deserializedMessage);
+    let deserialized_message: ShapeType =
+      deserialize_from_little_endian(&received_message).unwrap();
+    info!("{:?}", deserialized_message);
 
-    let serializedMessage = to_bytes::<ShapeType, LittleEndian>(&deserializedMessage).unwrap();
+    let serialized_message = to_bytes::<ShapeType, LittleEndian>(&deserialized_message).unwrap();
 
-    assert_eq!(serializedMessage, recieved_message2);
-    //assert_eq!(deserializedMessage,recieved_message)
+    assert_eq!(serialized_message, received_message2);
+    //assert_eq!(deserialized_message,received_message)
   }
 
   #[test]
 
-  fn CDR_Deserialization_custom_data_message_from_ROS_and_wireshark() {
+  fn cdr_deserialization_custom_data_message_from_ros_and_wireshark() {
     // IDL of messsage
     //float64 x
     //float64 y
@@ -818,7 +821,7 @@ mod tests {
       test: String,
     }
 
-    let recieved_message_le: Vec<u8> = vec![
+    let received_message_le: Vec<u8> = vec![
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x85, 0xeb, 0x51, 0xb8,
@@ -826,23 +829,23 @@ mod tests {
       0x3f, 0x00, //0x00, 0x00,
     ];
 
-    let value: MessageType = deserialize_from_little_endian(&recieved_message_le).unwrap();
+    let value: MessageType = deserialize_from_little_endian(&received_message_le).unwrap();
     info!("{:?}", value);
     assert_eq!(value.test, "Toimiiko?");
   }
 
   #[derive(Serialize, Deserialize, Debug, PartialEq)]
   struct InterestingMessage {
-    unboundedString: String,
+    unbounded_string: String,
     x: i32,
     y: i32,
     shapesize: i32,
     liuku: f32,
     tuplaliuku: f64,
-    kolmeLyhytta: [u16; 3],
-    neljaLyhytta: [i16; 4],
+    kolme_lyhytta: [u16; 3],
+    nelja_lyhytta: [i16; 4],
     totuusarvoja: Vec<bool>,
-    kolmeTavua: Vec<u8>,
+    kolm_tavua: Vec<u8>,
   }
 
   #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -853,26 +856,26 @@ mod tests {
   }
 
   #[test]
-  fn CDR_Deserialization_custom_type() {
+  fn cdr_deserialization_custom_type() {
     // IDL Definition of message:
     /*struct InterestingMessage
     {
-    string unboundedString;
+    string unbounded_string;
       long x;
       long y;
       long shapesize;
       float liuku;
       double tuplaliuku;
-      unsigned short kolmeLyhytta [3];
-      short neljaLyhytta [4];
+      unsigned short kolme_lyhytta [3];
+      short nelja_lyhytta [4];
       sequence<boolean> totuusarvoja;
-      sequence<octet,3> kolmeTavua;
+      sequence<octet,3> kolm_tavua;
     };
     */
 
     // values put to serilization message with eprosima fastbuffers
     /*
-      ser_var.unboundedString("tassa on aika pitka teksti");
+      ser_var.unbounded_string("tassa on aika pitka teksti");
       ser_var.x(1);
       ser_var.x(2);
       ser_var.y(-3);
@@ -880,27 +883,27 @@ mod tests {
       ser_var.liuku(5.5);
       ser_var.tuplaliuku(-6.6);
       std::array<uint16_t, 3> foo  = {1,2,3};
-      ser_var.kolmeLyhytta(foo);
+      ser_var.kolme_lyhytta(foo);
       std::array<int16_t, 4>  faa = {1,-2,-3,4};
-      ser_var.neljaLyhytta(faa);
+      ser_var.nelja_lyhytta(faa);
       ser_var.totuusarvoja({true,false,true});
-      ser_var.kolmeTavua({23,0,2});
+      ser_var.kolm_tavua({23,0,2});
     */
 
     let value = InterestingMessage {
-      unboundedString: "Tassa on aika pitka teksti".to_string(),
+      unbounded_string: "Tassa on aika pitka teksti".to_string(),
       x: 2,
       y: -3,
       shapesize: -4,
       liuku: 5.5,
       tuplaliuku: -6.6,
-      kolmeLyhytta: [1, 2, 3],
-      neljaLyhytta: [1, -2, -3, 4],
+      kolme_lyhytta: [1, 2, 3],
+      nelja_lyhytta: [1, -2, -3, 4],
       totuusarvoja: vec![true, false, true],
-      kolmeTavua: [23, 0, 2].to_vec(),
+      kolm_tavua: [23, 0, 2].to_vec(),
     };
 
-    let DATA: Vec<u8> = vec![
+    const DATA: &[u8] = &[
       0x1b, 0x00, 0x00, 0x00, 0x54, 0x61, 0x73, 0x73, 0x61, 0x20, 0x6f, 0x6e, 0x20, 0x61, 0x69,
       0x6b, 0x61, 0x20, 0x70, 0x69, 0x74, 0x6b, 0x61, 0x20, 0x74, 0x65, 0x6b, 0x73, 0x74, 0x69,
       0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xfd, 0xff, 0xff, 0xff, 0xfc, 0xff, 0xff, 0xff, 0x00,
@@ -909,13 +912,13 @@ mod tests {
       0x00, 0x01, 0x00, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x17, 0x00, 0x02,
     ];
 
-    let serializationResult_le = to_bytes::<InterestingMessage, LittleEndian>(&value).unwrap();
+    let serialization_result_le = to_bytes::<InterestingMessage, LittleEndian>(&value).unwrap();
 
-    assert_eq!(serializationResult_le, DATA);
+    assert_eq!(serialization_result_le, DATA);
     info!("serialization success!");
-    let deserializationResult: InterestingMessage = deserialize_from_little_endian(&DATA).unwrap();
+    let deserialization_result: InterestingMessage = deserialize_from_little_endian(DATA).unwrap();
 
-    info!("{:?}", deserializationResult);
+    info!("{:?}", deserialization_result);
   }
 
   #[test_case(35_u8 ; "u8")]
@@ -934,33 +937,33 @@ mod tests {
   #[test_case("BLUE".to_string() ; "string")]
   #[test_case(vec![1_i32, -2_i32, 3_i32] ; "Vec<i32>")]
   #[test_case(InterestingMessage {
-      unboundedString: "Tässä on aika pitkä teksti".to_string(),
+      unbounded_string: "Tässä on aika pitkä teksti".to_string(),
       x: 2,
       y: -3,
       shapesize: -4,
       liuku: 5.5,
       tuplaliuku: -6.6,
-      kolmeLyhytta: [1, 2, 3],
-      neljaLyhytta: [1, -2, -3, 4],
+      kolme_lyhytta: [1, 2, 3],
+      nelja_lyhytta: [1, -2, -3, 4],
       totuusarvoja: vec![true, false, true],
-      kolmeTavua: [23, 0, 2].to_vec(),
+      kolm_tavua: [23, 0, 2].to_vec(),
     } ; "InterestingMessage")]
   #[test_case( BigEnum::Boring ; "BigEnum::Boring")]
   #[test_case( BigEnum::Interesting(InterestingMessage {
-      unboundedString: "Tässä on aika pitkä teksti".to_string(),
+      unbounded_string: "Tässä on aika pitkä teksti".to_string(),
       x: 2,
       y: -3,
       shapesize: -4,
       liuku: 5.5,
       tuplaliuku: -6.6,
-      kolmeLyhytta: [1, 2, 3],
-      neljaLyhytta: [1, -2, -3, 4],
+      kolme_lyhytta: [1, 2, 3],
+      nelja_lyhytta: [1, -2, -3, 4],
       totuusarvoja: vec![true, false, true],
-      kolmeTavua: [23, 0, 2].to_vec(),
+      kolm_tavua: [23, 0, 2].to_vec(),
     }) ; "BigEnum::Interesting")]
   #[test_case( BigEnum::Something{ x:123.0, y:-0.1 } ; "BigEnum::Something")]
 
-  fn CDR_serde_round_trip<T>(input: T)
+  fn cdr_serde_round_trip<T>(input: T)
   where
     T: PartialEq + std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,
   {
@@ -971,7 +974,7 @@ mod tests {
 
   /*
   #[test]
-  fn CDR_Deserialization_bytes(){
+  fn cdr_deserialization_bytes(){
     let mut buf = B::with_capacity(1024);
     buf.put(&b"hello world"[..]);
     buf.put_u16(1234);
