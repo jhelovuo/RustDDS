@@ -27,7 +27,7 @@ pub trait TopicDescription {
 /// let domain_participant = DomainParticipant::new(0).unwrap();
 /// let qos = QosPolicyBuilder::new().build();
 /// let topic = domain_participant
-///       .create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey)
+///       .create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey)
 ///       .unwrap();
 /// ```
 #[derive(Clone)]
@@ -82,7 +82,7 @@ impl Topic {
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
   /// let topic = domain_participant
-  ///     .create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey)
+  ///     .create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey)
   ///     .unwrap();
   /// assert_eq!(topic.kind(), TopicKind::WithKey);
   /// ```

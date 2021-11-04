@@ -29,7 +29,7 @@
 //! // Creating some topic for RosNode
 //! let some_topic = ros_node.create_ros_topic(
 //!     "some_topic_name",
-//!     "NodeInfo",
+//!     "NodeInfo".to_string(),
 //!     QosPolicies::builder().build(),
 //!     TopicKind::NoKey)
 //!   .unwrap();
