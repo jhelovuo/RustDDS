@@ -40,18 +40,18 @@ mod tests {
 
   #[test]
   fn submessage_data_submessage_deserialization() {
-    // this is wireshark captured shapesdemo dataSubmessage
-    let serializedDataSubMessage = Bytes::from_static(&[
+    // this is wireshark captured shapesdemo data_submessage
+    let serialized_data_submessage = Bytes::from_static(&[
       0x15, 0x05, 0x2c, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x01,
       0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x04, 0x00,
       0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x69, 0x00, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x1e,
       0x00, 0x00, 0x00,
     ]);
 
-    let header = SubmessageHeader::read_from_buffer(&serializedDataSubMessage[0..4])
+    let header = SubmessageHeader::read_from_buffer(&serialized_data_submessage[0..4])
       .expect("could not create submessage header");
     let flags = BitFlags::<DATA_Flags>::from_bits_truncate(header.flags);
-    let suba = Data::deserialize_data(serializedDataSubMessage.slice(4..), flags)
+    let suba = Data::deserialize_data(serialized_data_submessage.slice(4..), flags)
       .expect("DATA deserialization failed.");
     let sub = SubMessage {
       header,
@@ -59,24 +59,24 @@ mod tests {
     };
     info!("{:?}", sub);
 
-    let messageBuffer = sub.write_to_vec().expect("DATA serialization failed");
+    let message_buffer = sub.write_to_vec().expect("DATA serialization failed");
 
-    assert_eq!(serializedDataSubMessage, messageBuffer);
+    assert_eq!(serialized_data_submessage, message_buffer);
   }
 
   #[test]
   fn submessage_hearbeat_deserialization() {
-    let serializedHeartbeatMessage: Vec<u8> = vec![
+    let serialized_heartbeat_message: Vec<u8> = vec![
       0x07, 0x01, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00, 0x00,
       0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00,
       0x00, 0x00,
     ];
 
-    let header = SubmessageHeader::read_from_buffer(&serializedHeartbeatMessage[0..4])
+    let header = SubmessageHeader::read_from_buffer(&serialized_heartbeat_message[0..4])
       .expect("could not create submessage header");
     let flags = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(header.flags);
     let e = endianness_flag(header.flags);
-    let suba = Heartbeat::read_from_buffer_with_ctx(e, &serializedHeartbeatMessage[4..])
+    let suba = Heartbeat::read_from_buffer_with_ctx(e, &serialized_heartbeat_message[4..])
       .expect("deserialization failed.");
     let sub = SubMessage {
       header,
@@ -84,23 +84,23 @@ mod tests {
     };
     info!("{:?}", sub);
 
-    let messageBuffer = sub.write_to_vec().expect("serialization failed");
+    let message_buffer = sub.write_to_vec().expect("serialization failed");
 
-    assert_eq!(serializedHeartbeatMessage, messageBuffer);
+    assert_eq!(serialized_heartbeat_message, message_buffer);
   }
 
   #[test]
   fn submessage_info_dst_deserialization() {
-    let serializedInfoDSTMessage: Vec<u8> = vec![
+    let serialized_info_dst_message: Vec<u8> = vec![
       0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02,
       0x08,
     ];
 
-    let header = SubmessageHeader::read_from_buffer(&serializedInfoDSTMessage[0..4])
+    let header = SubmessageHeader::read_from_buffer(&serialized_info_dst_message[0..4])
       .expect("could not create submessage header");
     let flags = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(header.flags);
     let e = endianness_flag(header.flags);
-    let suba = InfoDestination::read_from_buffer_with_ctx(e, &serializedInfoDSTMessage[4..])
+    let suba = InfoDestination::read_from_buffer_with_ctx(e, &serialized_info_dst_message[4..])
       .expect("deserialization failed.");
     let sub = SubMessage {
       header,
@@ -108,9 +108,9 @@ mod tests {
     };
     info!("{:?}", sub);
 
-    let messageBuffer = sub.write_to_vec().expect("serialization failed");
+    let message_buffer = sub.write_to_vec().expect("serialization failed");
 
-    assert_eq!(serializedInfoDSTMessage, messageBuffer);
+    assert_eq!(serialized_info_dst_message, message_buffer);
   }
 
   // #[test]
@@ -132,8 +132,8 @@ mod tests {
   // InfoTimestamp(suba, flags)),   };
   //   info!("{:?}", sub);
 
-  //   let messageBuffer = sub.write_to_vec().expect("serialization failed");
+  //   let message_buffer = sub.write_to_vec().expect("serialization failed");
 
-  //   assert_eq!(serializedInfoTSMessage, messageBuffer);
+  //   assert_eq!(serializedInfoTSMessage, message_buffer);
   // }
 }

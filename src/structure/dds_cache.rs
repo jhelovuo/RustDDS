@@ -18,7 +18,7 @@ use crate::{
 use super::{cache_change::CacheChange, topic_kind::TopicKind};
 
 /// DDSCache contains all cacheCahanges that are produced by participant or
-/// recieved by participant. Each topic that is been published or been
+/// received by participant. Each topic that is been published or been
 /// subscribed are contained in separate TopicCaches. One TopicCache cotains
 /// only DDSCacheChanges of one serialized IDL datatype. -> all cachechanges in
 /// same TopicCache can be serialized/deserialized same way. Topic/TopicCache is
@@ -350,7 +350,7 @@ mod tests {
       .unwrap()
       .add_change(&topic_name, &DDSTimestamp::now(), change1);
 
-    let pointerToCache1 = cache.clone();
+    let pointer_to_cache_1 = cache.clone();
 
     thread::spawn(move || {
       let topic_name = String::from("ImJustATopic");
@@ -360,7 +360,7 @@ mod tests {
         None,
         DDSData::new(SerializedPayload::default()),
       );
-      pointerToCache1
+      pointer_to_cache_1
         .write()
         .unwrap()
         .add_change(&topic_name, &DDSTimestamp::now(), cahange2);
@@ -370,7 +370,7 @@ mod tests {
         None,
         DDSData::new(SerializedPayload::default()),
       );
-      pointerToCache1
+      pointer_to_cache_1
         .write()
         .unwrap()
         .add_change(&topic_name, &DDSTimestamp::now(), cahange3);

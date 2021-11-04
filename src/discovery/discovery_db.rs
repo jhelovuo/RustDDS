@@ -692,7 +692,7 @@ mod tests {
     let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander1, reader_command_receiver1) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
@@ -731,9 +731,9 @@ mod tests {
           entity_kind: EntityKind::READER_NO_KEY_USER_DEFINED,
         },
       ), // GUID needs to be different in order to be added
-      notification_sender: notification_sender.clone(),
-      status_sender: status_sender.clone(),
-      topic_name: topic.get_name().to_string(),
+      notification_sender,
+      status_sender,
+      topic_name: topic.get_name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
     };
