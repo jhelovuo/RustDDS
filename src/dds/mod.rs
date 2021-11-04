@@ -62,7 +62,7 @@
 //!
 //! // Some DDS Topic that we can write and read from (basically only binds readers
 //! // and writers together)
-//! let some_topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+//! let some_topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
 //!
 //! // Used type needs Serialize for writers and Deserialize for readers
 //! #[derive(Serialize, Deserialize)]

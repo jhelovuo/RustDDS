@@ -45,7 +45,7 @@ use super::wrappers::{NoKeyWrapper, SAWrapper};
 /// struct SomeType {}
 ///
 /// // NoKey is important
-/// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+/// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
 /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None);
 /// ```
 pub struct DataWriter<D: Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
@@ -85,7 +85,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// let some_data = SomeType {};
@@ -118,7 +118,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// data_writer.wait_for_acknowledgments(Duration::from_millis(100));
@@ -149,7 +149,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// if let Ok(status) = data_writer.get_liveliness_lost_status() {
@@ -181,7 +181,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// if let Ok(odl_status) = data_writer.get_offered_deadline_missed_status() {
@@ -213,7 +213,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// if let Ok(status) = data_writer.get_offered_incompatible_qos_status() {
@@ -245,7 +245,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// if let Ok(status) = data_writer.get_publication_matched_status() {
@@ -276,7 +276,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic.clone(), None).unwrap();
   ///
   /// assert_eq!(&topic, data_writer.get_topic());
@@ -305,7 +305,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// assert_eq!(&publisher, data_writer.get_publisher());
@@ -334,7 +334,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// data_writer.assert_liveliness();
@@ -364,7 +364,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// for sub in data_writer.get_matched_subscriptions().iter() {
@@ -395,7 +395,7 @@ where
   /// # struct SomeType {}
   /// #
   /// // NoKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
   /// // Some status has changed

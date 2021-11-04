@@ -126,7 +126,7 @@ impl Publisher {
   ///   }
   /// }
   ///
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None);
   /// ```
   pub fn create_datawriter<D, SA>(
@@ -214,7 +214,7 @@ impl Publisher {
   /// #[derive(Serialize)]
   /// struct SomeType {}
   ///
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None);
   /// ```
   pub fn create_datawriter_no_key<D, SA>(
@@ -653,7 +653,7 @@ impl Subscriber {
   ///   }
   /// }
   ///
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
   /// ```
   pub fn create_datareader<D: 'static, SA>(
@@ -739,7 +739,7 @@ impl Subscriber {
   /// #[derive(Deserialize)]
   /// struct SomeType {}
   ///
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
   /// ```
   pub fn create_datareader_no_key<D: 'static, SA>(

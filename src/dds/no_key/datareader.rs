@@ -40,7 +40,7 @@ use super::{
 /// struct SomeType {}
 ///
 /// // NoKey is important
-/// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+/// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
 /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
 /// ```
 pub struct DataReader<D: DeserializeOwned, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
@@ -84,7 +84,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
@@ -131,7 +131,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
@@ -172,7 +172,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
@@ -204,7 +204,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
@@ -240,7 +240,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
@@ -278,7 +278,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
@@ -322,7 +322,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
@@ -362,7 +362,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
@@ -402,7 +402,7 @@ where
   /// # let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   /// #
   /// # // NoKey is important
-  /// # let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::NoKey).unwrap();
+  /// # let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// #
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
