@@ -135,34 +135,5 @@ mod tests {
     );
   }
 
-  #[test]
-  fn inline_qos_key_hash() {
-    // Little endian
-    let hbytes = KeyHash::from_cdr_bytes(vec![1])
-      .unwrap()
-      .into_cdr_bytes()
-      .unwrap();
-
-    let bytes: Vec<u8> = vec![
-      0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00,
-    ];
-    assert_eq!(hbytes, bytes);
-
-    let key_hash = KeyHash::from_cdr_bytes(bytes).unwrap();
-    assert_eq!(KeyHash::from_cdr_bytes(vec![1]).unwrap(), key_hash);
-
-    // Big endian
-    let hbytes = KeyHash::from_cdr_bytes(vec![1])
-      .unwrap()
-      .into_cdr_bytes()
-      .unwrap();
-    let bytes: Vec<u8> = vec![
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x01,
-    ];
-    assert_eq!(hbytes, bytes);
-    let key_hash = KeyHash::from_cdr_bytes(bytes).unwrap();
-    assert_eq!(KeyHash::from_cdr_bytes(vec![1]).unwrap(), key_hash);
-  }
+  
 }
