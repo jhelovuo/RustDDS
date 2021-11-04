@@ -1,6 +1,7 @@
-use std;
-use std::fmt::Display;
+use std::{self, fmt::Display};
+
 use serde::{de, ser};
+
 use crate::dds::values::result::Error as DDSError;
 
 pub type Result<T> = std::result::Result<T, Error>;

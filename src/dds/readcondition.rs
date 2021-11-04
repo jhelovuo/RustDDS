@@ -3,15 +3,16 @@ use enumflags2::BitFlags;
 use crate::dds::sampleinfo::*;
 
 // This is used to specify which samples are to be read or taken.
-// To be selected, the current state of the sample must be included in the corresponding bitflags.
+// To be selected, the current state of the sample must be included in the
+// corresponding bitflags.
 /// DDS ReadCondition 2.2.2.5.8
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ReadCondition {
   sample_state_mask: BitFlags<SampleState>,
   view_state_mask: BitFlags<ViewState>,
   instance_state_mask: BitFlags<InstanceState>,
-  // Extension idea: Add a query string and a list of query parameters to upgrade this
-  // to QueryCondition. But that would be a lot of work, especially in DataReader.
+  /* Extension idea: Add a query string and a list of query parameters to upgrade this
+   * to QueryCondition. But that would be a lot of work, especially in DataReader. */
 }
 
 impl ReadCondition {

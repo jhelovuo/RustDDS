@@ -1,5 +1,4 @@
-use std::fmt::Debug;
-use std::fmt;
+use std::{fmt, fmt::Debug};
 
 use speedy::{Readable, Writable};
 

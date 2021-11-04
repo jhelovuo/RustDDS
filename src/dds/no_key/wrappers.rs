@@ -1,17 +1,19 @@
 use std::ops::Deref;
 
 use bytes::Bytes;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
-  dds::traits::key::Keyed, dds::traits::serde_adapters::*,
-  messages::submessages::submessages::RepresentationIdentifier, serialization::error::Result,
+  dds::traits::{key::Keyed, serde_adapters::*},
+  messages::submessages::submessages::RepresentationIdentifier,
+  serialization::error::Result,
 };
 
 // This wrapper is used to convert NO_KEY types to WITH_KEY
 // * inside the wrapper there is a NO_KEY type
 // * the wrapper is good for WITH_KEY
-// The wrapper introduces a dummy key of type (), which of course has an always known value ()
+// The wrapper introduces a dummy key of type (), which of course has an always
+// known value ()
 pub(crate) struct NoKeyWrapper<D> {
   pub(crate) d: D,
 }

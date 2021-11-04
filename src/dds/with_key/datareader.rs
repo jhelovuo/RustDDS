@@ -1,46 +1,47 @@
-use std::{io};
-use std::sync::{Arc, RwLock};
-use std::marker::PhantomData;
+use std::{
+  io,
+  marker::PhantomData,
+  sync::{Arc, RwLock},
+};
 
 //use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
-use log::{error, debug, info, warn};
+use log::{debug, error, info, warn};
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 
 use crate::{
+  dds::{
+    datasample_cache::DataSampleCache,
+    ddsdata::DDSData,
+    pubsub::Subscriber,
+    qos::*,
+    readcondition::*,
+    statusevents::*,
+    topic::Topic,
+    traits::{key::*, serde_adapters::with_key::*, TopicDescription},
+    values::result::*,
+    with_key::datasample::*,
+  },
+  discovery::{data_types::topic_data::PublicationBuiltinTopicData, discovery::DiscoveryCommand},
+  log_and_err_precondition_not_met,
   serialization::CDRDeserializerAdapter,
-  discovery::discovery::DiscoveryCommand,
-  discovery::data_types::topic_data::PublicationBuiltinTopicData,
   structure::{
-    entity::{RTPSEntity},
-    guid::{GUID, EntityId},
-    time::Timestamp,
+    cache_change::CacheChange,
     dds_cache::DDSCache,
-    cache_change::{CacheChange},
     duration::Duration,
+    entity::RTPSEntity,
+    guid::{EntityId, GUID},
+    time::Timestamp,
   },
 };
-use crate::log_and_err_precondition_not_met;
-use crate::dds::{
-  traits::{key::*, TopicDescription},
-  traits::serde_adapters::with_key::*,
-  values::result::*,
-  qos::*,
-  with_key::datasample::*,
-  datasample_cache::DataSampleCache,
-  ddsdata::DDSData,
-  pubsub::Subscriber,
-  topic::Topic,
-  readcondition::*,
-};
-use crate::dds::statusevents::*;
 
 /// Simplified type for CDR encoding
 pub type DataReaderCdr<D> = DataReader<D, CDRDeserializerAdapter<D>>;
 
-/// Parameter for reading [Readers](../struct.With_Key_DataReader.html) data with key or with next from current key.
+/// Parameter for reading [Readers](../struct.With_Key_DataReader.html) data
+/// with key or with next from current key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectByKey {
   This,
@@ -201,7 +202,8 @@ where
     })
   }
 
-  /// Reads amount of samples found with `max_samples` and `read_condition` parameters.
+  /// Reads amount of samples found with `max_samples` and `read_condition`
+  /// parameters.
   ///
   /// # Arguments
   ///
@@ -264,7 +266,8 @@ where
     Ok(result)
   }
 
-  /// Takes amount of sample found with `max_samples` and `read_condition` parameters.
+  /// Takes amount of sample found with `max_samples` and `read_condition`
+  /// parameters.
   ///
   /// # Arguments
   ///
@@ -454,7 +457,8 @@ where
   /// }
   /// ```
   pub fn iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    // TODO: We could come up with a more efficent implementation than wrapping a
+    // read call
     Ok(
       self
         .read(std::usize::MAX, ReadCondition::not_read())?
@@ -506,7 +510,8 @@ where
     &mut self,
     read_condition: ReadCondition,
   ) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    // TODO: We could come up with a more efficent implementation than wrapping a
+    // read call
     Ok(
       self
         .read(std::usize::MAX, read_condition)?
@@ -518,8 +523,8 @@ where
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// Removes samples from `DataReader`.
-  /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
-  /// are still removed from the `Datareader`.
+  /// <strong>Note!</strong> If the iterator is only partially consumed, all the
+  /// samples it could have provided are still removed from the `Datareader`.
   ///
   /// # Examples
   ///
@@ -557,7 +562,8 @@ where
   /// }
   /// ```
   pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    // TODO: We could come up with a more efficent implementation than wrapping a
+    // read call
     Ok(
       self
         .take(std::usize::MAX, ReadCondition::not_read())?
@@ -568,8 +574,8 @@ where
 
   /// Produces an interator over the samples filtered b ygiven condition.
   /// Yields only payload data, not SampleInfo metadata
-  /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
-  /// are still removed from the `Datareader`.
+  /// <strong>Note!</strong> If the iterator is only partially consumed, all the
+  /// samples it could have provided are still removed from the `Datareader`.
   ///
   /// # Examples
   ///
@@ -611,7 +617,8 @@ where
     &mut self,
     read_condition: ReadCondition,
   ) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    // TODO: We could come up with a more efficent implementation than wrapping a
+    // read call
     Ok(
       self
         .take(std::usize::MAX, read_condition)?
@@ -680,7 +687,8 @@ where
         }
 
         DDSData::DisposeByKeyHash { key_hash, .. } => {
-          /* TODO: Instance to be disposed could be specified by serialized payload also, not only key_hash? */
+          /* TODO: Instance to be disposed could be specified by serialized payload
+           * also, not only key_hash? */
           match self.datasample_cache.get_key_by_hash(*key_hash) {
             Some(key) => {
               self
@@ -766,14 +774,15 @@ where
     }
   }
 
-  /// Works similarly to read(), but will return only samples from a specific instance.
-  /// The instance is specified by an optional key. In case the key is not specified, the smallest
-  /// (in key order) instance is selected.
-  /// If a key is specified, then the parameter this_or_next specifies whether to access the instance
-  /// with specified key or the following one, in key order.
+  /// Works similarly to read(), but will return only samples from a specific
+  /// instance. The instance is specified by an optional key. In case the key
+  /// is not specified, the smallest (in key order) instance is selected.
+  /// If a key is specified, then the parameter this_or_next specifies whether
+  /// to access the instance with specified key or the following one, in key
+  /// order.
   ///
-  /// This should cover DDS DataReader methods read_instance, read_next_instance,
-  /// read_next_instance_w_condition.
+  /// This should cover DDS DataReader methods read_instance,
+  /// read_next_instance, read_next_instance_w_condition.
   ///
   /// # Examples
   ///
@@ -845,8 +854,8 @@ where
   }
 
   /// Similar to read_instance, but will return owned datasamples
-  /// This should cover DDS DataReader methods take_instance, take_next_instance,
-  /// take_next_instance_w_condition.
+  /// This should cover DDS DataReader methods take_instance,
+  /// take_next_instance, take_next_instance_w_condition.
   ///
   /// # Examples
   ///
@@ -1125,14 +1134,15 @@ where
   }
 } // impl
 
-// This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
-// poll DataReader(s).
+// This is  not part of DDS spec. We implement mio Eventd so that the
+// application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  // We just delegate all the operations to notification_receiver, since it already implements Evented
+  // We just delegate all the operations to notification_receiver, since it
+  // already implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
       .notification_receiver
@@ -1198,26 +1208,34 @@ where
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use crate::dds::{participant::DomainParticipant, topic::TopicKind};
-  use crate::test::random_data::*;
-  use crate::dds::traits::key::Keyed;
+  use std::rc::Rc;
+
   use bytes::Bytes;
   use mio_extras::channel as mio_channel;
   use log::info;
-  use crate::dds::reader::Reader;
-  use crate::dds::reader::ReaderIngredients;
-  use crate::messages::submessages::data::Data;
-  use crate::dds::message_receiver::*;
-  use crate::network::udp_sender::UDPSender;
-  use crate::structure::guid::{GuidPrefix, EntityKind};
-  use crate::structure::sequence_number::SequenceNumber;
-  use crate::serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes};
   use byteorder::LittleEndian;
-  use crate::messages::submessages::submessage_elements::serialized_payload::{
-    SerializedPayload, RepresentationIdentifier,
+
+  use super::*;
+  use crate::{
+    dds::{
+      message_receiver::*,
+      participant::DomainParticipant,
+      reader::{Reader, ReaderIngredients},
+      topic::TopicKind,
+      traits::key::Keyed,
+    },
+    messages::submessages::{
+      data::Data,
+      submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload},
+    },
+    network::udp_sender::UDPSender,
+    serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes},
+    structure::{
+      guid::{EntityKind, GuidPrefix},
+      sequence_number::SequenceNumber,
+    },
+    test::random_data::*,
   };
-  use std::rc::Rc;
   //use mio::{Events};
   use crate::messages::submessages::submessage_flag::*;
 

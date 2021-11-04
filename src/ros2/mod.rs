@@ -42,8 +42,6 @@
 //!
 //! // Readers and RosParticipant implement mio Evented trait and thus function the same way as
 //! // std::sync::mpcs and can be handled the same way for reading the data
-//!
-//!
 //! ```
 
 /// Some builtin datatypes needed for ROS2 communication

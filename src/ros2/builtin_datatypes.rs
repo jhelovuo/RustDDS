@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use cdr_encoding_size::*;
 
 use crate::{
@@ -7,7 +7,9 @@ use crate::{
 };
 
 /// Analog of DDS GUID in ROS2 builtin datastructures
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, CdrEncodingSize,)]
+#[derive(
+  Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, CdrEncodingSize,
+)]
 pub struct Gid {
   data: [u8; 24],
 }

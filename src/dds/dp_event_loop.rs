@@ -1,38 +1,40 @@
-use log::{debug, error, info, warn, trace};
-use mio::{Poll, Event, Events, Token, Ready, PollOpt};
-use mio_extras::channel as mio_channel;
-use std::{collections::HashMap, time::Duration};
 use std::{
+  collections::HashMap,
   rc::Rc,
   sync::{Arc, RwLock},
-  time::Instant,
+  time::{Duration, Instant},
 };
+
+use log::{debug, error, info, trace, warn};
+use mio::{Event, Events, Poll, PollOpt, Ready, Token};
+use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{message_receiver::MessageReceiver},
-  dds::reader::{Reader, ReaderIngredients},
-  dds::writer::{Writer, WriterIngredients},
-  network::util::get_local_multicast_locators,
-  structure::builtin_endpoint::{BuiltinEndpointSet},
-  dds::qos::policy,
+  dds::{
+    message_receiver::MessageReceiver,
+    qos::policy,
+    reader::{Reader, ReaderIngredients},
+    writer::{Writer, WriterIngredients},
+  },
+  discovery::{
+    data_types::topic_data::{DiscoveredReaderData, DiscoveredWriterData},
+    discovery_db::DiscoveryDB,
+  },
+  messages::submessages::submessages::AckSubmessage,
+  network::{
+    constant::*, udp_listener::UDPListener, udp_sender::UDPSender,
+    util::get_local_multicast_locators,
+  },
+  structure::{
+    builtin_endpoint::BuiltinEndpointSet,
+    dds_cache::DDSCache,
+    entity::RTPSEntity,
+    guid::{EntityId, GuidPrefix, TokenDecode, GUID},
+    topic_kind::TopicKind,
+  },
 };
-
-use crate::network::udp_listener::UDPListener;
-use crate::network::udp_sender::UDPSender;
-use crate::network::constant::*;
-use crate::structure::guid::{GuidPrefix, GUID, EntityId, TokenDecode};
-use crate::structure::entity::RTPSEntity;
-use crate::discovery::data_types::topic_data::DiscoveredWriterData;
-use crate::discovery::data_types::topic_data::DiscoveredReaderData;
 //use crate::discovery::data_types::spdp_participant_data::SpdpDiscoveredParticipantData;
 use crate::discovery::discovery::Discovery;
-
-use crate::{
-  discovery::discovery_db::DiscoveryDB,
-  structure::{dds_cache::DDSCache, topic_kind::TopicKind},
-  messages::submessages::submessages::AckSubmessage,
-};
-
 use super::{
   rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy, typedesc::TypeDesc,
 };
@@ -66,7 +68,8 @@ pub struct DPEventLoop {
   remove_writer_receiver: TokenReceiverPair<GUID>,
   //writer_timed_event_reciever: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
   stop_poll_receiver: mio_channel::Receiver<()>,
-  // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
+  // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this
+  // to locate RTPSReaderProxy if negative acknack.
   ack_nack_reciever: mio_channel::Receiver<(GuidPrefix, AckSubmessage)>,
 
   writers: HashMap<EntityId, Writer>,
@@ -334,7 +337,8 @@ impl DPEventLoop {
                     writer.get_local_readers()
                   }
                 };
-                // Notify local (same participant) readers that new data is available in the cache.
+                // Notify local (same participant) readers that new data is available in the
+                // cache.
                 ev_wrapper
                   .message_receiver
                   .notify_data_to_readers(local_readers);
@@ -473,7 +477,8 @@ impl DPEventLoop {
   }
 
   /// Writer timed events can be heatrbeats or cache cleaning events.
-  /// events are distinguished by TimerMessageType which is send via mio channel. Channel token in
+  /// events are distinguished by TimerMessageType which is send via mio
+  /// channel. Channel token in
   fn handle_writer_timed_event(&mut self, entity_id: EntityId) {
     match self.writers.get_mut(&entity_id) {
       Some(writer) => writer.handle_timed_event(),
@@ -744,13 +749,15 @@ impl DPEventLoop {
 
 #[cfg(test)]
 mod tests {
+  use std::{thread, time::Duration};
+
+  use mio::{PollOpt, Ready};
+
   use super::*;
-  use std::thread;
-  use std::time::Duration;
-  use crate::{dds::statusevents::DataReaderStatus};
-  use mio::{Ready, PollOpt};
-  use crate::{dds::with_key::datareader::ReaderCommand, dds::qos::QosPolicies};
-  use crate::structure::dds_cache::DDSCache;
+  use crate::{
+    dds::{qos::QosPolicies, statusevents::DataReaderStatus, with_key::datareader::ReaderCommand},
+    structure::dds_cache::DDSCache,
+  };
 
   #[test]
   fn dpew_add_and_remove_readers() {
@@ -877,8 +884,8 @@ mod tests {
   //     resource_limits: None,
   //     lifespan: None,
   //   };
-  //   let dp = DomainParticipant::new(0).expect("Failed to create participant");
-  //   let sub = dp.create_subscriber(&somePolicies).unwrap();
+  //   let dp = DomainParticipant::new(0).expect("Failed to create
+  // participant");   let sub = dp.create_subscriber(&somePolicies).unwrap();
 
   //   let topic_1 = dp
   //     .create_topic("TOPIC_1", "jotain", &somePolicies, TopicKind::WithKey)
@@ -892,15 +899,17 @@ mod tests {
 
   //   // Adding readers
   //   let (sender_add_reader, receiver_add) = mio_channel::channel::<Reader>();
-  //   let (_sender_remove_reader, receiver_remove) = mio_channel::channel::<GUID>();
+  //   let (_sender_remove_reader, receiver_remove) =
+  // mio_channel::channel::<GUID>();
 
   //   let (_add_writer_sender, add_writer_receiver) = mio_channel::channel();
-  //   let (_remove_writer_sender, remove_writer_receiver) = mio_channel::channel();
+  //   let (_remove_writer_sender, remove_writer_receiver) =
+  // mio_channel::channel();
 
   //   let (_stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
 
-  //   let (_discovery_update_notification_sender, discovery_update_notification_receiver) =
-  //     mio_channel::channel();
+  //   let (_discovery_update_notification_sender,
+  // discovery_update_notification_receiver) =     mio_channel::channel();
 
   //   let ddshc = Arc::new(RwLock::new(DDSCache::new()));
   //   let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
@@ -948,15 +957,16 @@ mod tests {
   //     )
   //     .expect("Failed to register receivers.");
 
-  //   let child = thread::spawn(move || DPEventLoop::event_loop(dp_event_loop));
+  //   let child = thread::spawn(move ||
+  // DPEventLoop::event_loop(dp_event_loop));
 
   //   //TODO IF THIS IS SET TO 1 TEST SUCCEEDS
   //   let n = 1;
 
   //   let mut reader_guids = Vec::new();
-  //   let mut data_readers: Vec<DataReader<RandomData, CDRDeserializerAdapter<RandomData>>> = vec![];
-  //   let _topics: Vec<Topic> = vec![];
-  //   for i in 0..n {
+  //   let mut data_readers: Vec<DataReader<RandomData,
+  // CDRDeserializerAdapter<RandomData>>> = vec![];   let _topics: Vec<Topic>
+  // = vec![];   for i in 0..n {
   //     //topics.push(topic);
   //     let new_guid = GUID::default();
 
@@ -1003,11 +1013,11 @@ mod tests {
   //     data_readers.push(datareader);
 
   //     //new_reader.set_qos(&somePolicies).unwrap();
-  //     new_reader.matched_writer_add(GUID::default(), EntityId::ENTITYID_UNKNOWN, vec![], vec![]);
-  //     reader_guids.push(new_reader.get_guid().clone());
-  //     info!("\nSent reader number {}: {:?}\n", i, &new_reader);
-  //     sender_add_reader.send(new_reader).unwrap();
-  //     std::thread::sleep(Duration::from_millis(100));
+  //     new_reader.matched_writer_add(GUID::default(),
+  // EntityId::ENTITYID_UNKNOWN, vec![], vec![]);     reader_guids.
+  // push(new_reader.get_guid().clone());     info!("\nSent reader number {}:
+  // {:?}\n", i, &new_reader);     sender_add_reader.send(new_reader).
+  // unwrap();     std::thread::sleep(Duration::from_millis(100));
   //   }
   //   thread::sleep(Duration::from_millis(100));
 

@@ -1,10 +1,6 @@
-use std::fmt::Debug;
-use std::sync::{Arc};
+use std::{fmt::Debug, sync::Arc};
 
-use crate::{
-  dds::{participant::*, typedesc::*, qos::*, traits::dds_entity::DDSEntity},
-};
-
+use crate::dds::{participant::*, qos::*, traits::dds_entity::DDSEntity, typedesc::*};
 pub use crate::structure::topic_kind::TopicKind;
 
 /// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class
@@ -113,7 +109,8 @@ impl Debug for Topic {
 
 /// Implements some default topic interfaces functions defined in DDS spec
 impl TopicDescription for Topic {
-  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it is still alive.
+  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it is still
+  /// alive.
   fn get_participant(&self) -> Option<DomainParticipant> {
     self.get_participant()
   }
@@ -209,7 +206,8 @@ impl Debug for InnerTopic {
 
 /// Implements some default topic interfaces functions defined in DDS spec
 impl TopicDescription for InnerTopic {
-  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it is still alive.
+  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it is still
+  /// alive.
   fn get_participant(&self) -> Option<DomainParticipant> {
     self.get_participant()
   }

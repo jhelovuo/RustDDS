@@ -1,38 +1,31 @@
 //use mio::Token;
-use mio_extras::channel as mio_channel;
-#[allow(unused_imports)]
-use log::{error, debug, info, warn, trace};
-
 use std::{
+  collections::HashMap,
+  net::Ipv4Addr,
+  sync::{Arc, Mutex, RwLock, Weak},
   thread,
   thread::JoinHandle,
-  collections::HashMap,
   time::Duration,
-  sync::{Arc, RwLock, Mutex, Weak},
-  net::Ipv4Addr,
 };
 
-use crate::log_and_err_internal;
-use crate::{
-  discovery::data_types::topic_data::DiscoveredTopicData,
-  discovery::discovery::DiscoveryCommand,
-  network::{udp_listener::UDPListener, constant::*},
-};
-
-use crate::dds::{
-  dp_event_loop::DPEventLoop, reader::*, writer::*, pubsub::*, topic::*, typedesc::*, qos::*,
-  values::result::*,
-};
+use mio_extras::channel as mio_channel;
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 
 use crate::{
-  discovery::{discovery::Discovery, discovery_db::DiscoveryDB},
-  structure::{
-    entity::{RTPSEntity},
-    guid::GUID,
-    dds_cache::DDSCache,
+  dds::{
+    dp_event_loop::DPEventLoop, pubsub::*, qos::*, reader::*, topic::*, typedesc::*,
+    values::result::*, writer::*,
   },
+  discovery::{
+    data_types::topic_data::DiscoveredTopicData,
+    discovery::{Discovery, DiscoveryCommand},
+    discovery_db::DiscoveryDB,
+  },
+  log_and_err_internal,
+  network::{constant::*, udp_listener::UDPListener},
+  structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::GUID},
 };
-
 use super::dp_event_loop::DomainInfo;
 
 /// DDS DomainParticipant generally only one per domain per machine should be
@@ -53,8 +46,9 @@ impl DomainParticipant {
   pub fn new(domain_id: u16) -> Result<DomainParticipant> {
     trace!("DomainParticipant construct start");
 
-    // Discovery join channel is used to just send a join handle into the inner participant,
-    // so its .drop() can wait until discovery has had a chance to stop.
+    // Discovery join channel is used to just send a join handle into the inner
+    // participant, so its .drop() can wait until discovery has had a chance to
+    // stop.
     let (djh_sender, djh_receiver) = mio_channel::channel();
 
     let mut dpd = DomainParticipantDisc::new(domain_id, djh_receiver)?;
@@ -583,7 +577,8 @@ impl DomainParticipantInner {
 
     let mut discovery_listener = None;
 
-    // Magic value 120 below is from RTPS spec Section "9.6.1.3 Default Port Numbers"
+    // Magic value 120 below is from RTPS spec Section "9.6.1.3 Default Port
+    // Numbers"
     while discovery_listener.is_none() && participant_id < 120 {
       discovery_listener = UDPListener::new_unicast(
         DISCOVERY_SENDER_TOKEN,
@@ -905,33 +900,31 @@ impl std::fmt::Debug for DomainParticipant {
 #[cfg(test)]
 mod tests {
   use std::{collections::BTreeSet, net::SocketAddr};
+
   use enumflags2::BitFlags;
   use log::info;
-  use crate::dds::topic::TopicKind;
+  use speedy::{Endianness, Writable};
+  use byteorder::LittleEndian;
+
   use crate::{
-    dds::qos::QosPolicies,
-    network::{udp_sender::UDPSender, constant::get_user_traffic_unicast_port},
-    test::random_data::RandomData,
+    dds::{qos::QosPolicies, topic::TopicKind},
+    messages::{
+      header::Header,
+      protocol_id::ProtocolId,
+      protocol_version::ProtocolVersion,
+      submessages::submessages::{AckNack, EntitySubmessage, SubmessageHeader, SubmessageKind, *},
+      vendor_id::VendorId,
+    },
+    network::{constant::get_user_traffic_unicast_port, udp_sender::UDPSender},
+    serialization::{cdr_serializer::CDRSerializerAdapter, submessage::*, Message, SubMessage},
     structure::{
-      locator::{LocatorKind, Locator},
       guid::{EntityId, GUID},
+      locator::{Locator, LocatorKind},
       sequence_number::{SequenceNumber, SequenceNumberSet},
     },
-    messages::submessages::submessages::{
-      EntitySubmessage, AckNack, SubmessageHeader, SubmessageKind,
-    },
-    serialization::{SubMessage, Message, submessage::*},
-    messages::{
-      protocol_version::ProtocolVersion, header::Header, vendor_id::VendorId,
-      protocol_id::ProtocolId, submessages::submessages::*,
-    },
+    test::random_data::RandomData,
   };
   use super::DomainParticipant;
-
-  use speedy::{Endianness, Writable};
-
-  use crate::serialization::cdr_serializer::CDRSerializerAdapter;
-  use byteorder::LittleEndian;
 
   // TODO: improve basic test when more or the structure is known
   #[test]

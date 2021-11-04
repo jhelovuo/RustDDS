@@ -1,17 +1,20 @@
-use crate::dds::traits::key::KeyHash;
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-//use crate::messages::submessages::submessages::RepresentationIdentifier;
-use crate::structure::cache_change::ChangeKind;
-
 #[cfg(test)]
 use bytes::Bytes;
+
+use crate::{
+  dds::traits::key::KeyHash,
+  messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+};
+//use crate::messages::submessages::submessages::RepresentationIdentifier;
+use crate::structure::cache_change::ChangeKind;
 
 // DDSData represets a serialized data sample with metadata
 
 #[derive(Debug, PartialEq, Clone)]
 
-// Contents of a DATA submessage or several DATAFRAG submessages. This is either a
-// new sample, or key, or a key hash. The latter two are used to indicate dispose or unregister.
+// Contents of a DATA submessage or several DATAFRAG submessages. This is either
+// a new sample, or key, or a key hash. The latter two are used to indicate
+// dispose or unregister.
 pub enum DDSData {
   Data {
     serialized_payload: SerializedPayload,

@@ -3,29 +3,32 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-use log::{debug, trace, error, LevelFilter};
-use log4rs::{Config, config::Appender, config::Root, append::console::ConsoleAppender};
+use std::{
+  io,
+  time::{Duration, Instant},
+};
 
-use rustdds::dds::DomainParticipant;
-use rustdds::dds::qos::QosPolicyBuilder;
-use rustdds::dds::qos::policy::{Reliability, Durability, History, Deadline};
-use rustdds::dds::data_types::DDSDuration;
-use rustdds::dds::data_types::TopicKind;
-use rustdds::dds::traits::TopicDescription;
-use rustdds::dds::traits::Keyed;
-use rustdds::dds::statusevents::StatusEvented;
-use serde::{Serialize, Deserialize};
-
+use log::{debug, error, trace, LevelFilter};
+use log4rs::{
+  append::console::ConsoleAppender,
+  config::{Appender, Root},
+  Config,
+};
+use rustdds::dds::{
+  data_types::{DDSDuration, TopicKind},
+  qos::{
+    policy::{Deadline, Durability, History, Reliability},
+    QosPolicyBuilder,
+  },
+  statusevents::StatusEvented,
+  traits::{Keyed, TopicDescription},
+  DomainParticipant,
+};
+use serde::{Deserialize, Serialize};
 use clap::{App, Arg, ArgMatches}; // command line argument processing
-
 use mio::{Events, Poll, PollOpt, Ready, Token}; // polling
 use mio_extras::channel; // pollable channel
-
-use std::io;
-
 use rand::prelude::*;
-
-use std::time::{Duration, Instant};
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Shape {

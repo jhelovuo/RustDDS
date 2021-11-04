@@ -1,21 +1,19 @@
+use std::{io, io::Write, marker::PhantomData};
+
 use serde::{ser, Serialize};
-use std::marker::PhantomData;
-use std::io;
-use std::io::Write;
-
 use bytes::Bytes;
-use byteorder::{BigEndian, LittleEndian, ByteOrder, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
 
-use crate::serialization::error::Error;
-use crate::serialization::error::Result;
+use crate::{
+  dds::traits::{key::Keyed, serde_adapters::*},
+  messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+  serialization::error::{Error, Result},
+};
 
-use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
-use crate::dds::traits::serde_adapters::*;
-use crate::dds::traits::key::Keyed;
-
-// This is a wrapper object for a Write object. The wrapper keeps count of bytes written.
-// Such a wrapper seemed easier implementation strategy than capturing the return values of all
-// write and write_* calls in serializer implementation.
+// This is a wrapper object for a Write object. The wrapper keeps count of bytes
+// written. Such a wrapper seemed easier implementation strategy than capturing
+// the return values of all write and write_* calls in serializer
+// implementation.
 struct CountingWrite<W: io::Write> {
   writer: W,
   bytes_written: u64,
@@ -57,13 +55,16 @@ where
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
-/// This type adapts CdrSeserializer (which implements serde::Serializer) to work as a
-/// [`SerializerAdapter`]. CdrSeserializer cannot directly implement the trait itself, because
-/// CdrSeserializer has the type parameter BO open, and the adapter needs to be bi-endian.
+/// This type adapts CdrSeserializer (which implements serde::Serializer) to
+/// work as a [`SerializerAdapter`]. CdrSeserializer cannot directly implement
+/// the trait itself, because CdrSeserializer has the type parameter BO open,
+/// and the adapter needs to be bi-endian.
 ///
-/// [`SerializerAdapter`]: ../dds/traits/serde_adapters/trait.SerializerAdapter.html
+/// [`SerializerAdapter`]:
+/// ../dds/traits/serde_adapters/trait.SerializerAdapter.html
 
-// A struct separate from CdrSeserializer is needed, because the neme to_writer is already taken
+// A struct separate from CdrSeserializer is needed, because the neme to_writer
+// is already taken
 pub struct CDRSerializerAdapter<D, BO = LittleEndian>
 where
   BO: ByteOrder,
@@ -150,7 +151,8 @@ where
 }
 
 // This is private, for unit test cases only
-// Public interface should use to_writer() instead, as it is recommended by serde documentation
+// Public interface should use to_writer() instead, as it is recommended by
+// serde documentation
 pub(crate) fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
@@ -159,7 +161,8 @@ where
 }
 
 // This is private, for unit test cases only
-// Public interface should use to_writer() instead, as it is recommended by serde documentation
+// Public interface should use to_writer() instead, as it is recommended by
+// serde documentation
 fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
@@ -208,7 +211,8 @@ where
   //Little-Endian endcoding least significant bit is first.
 
   //15.3.1.5 Boolean
-  //  Boolean values are encoded as single octets, where TRUE is the value 1, and FALSE as 0.
+  //  Boolean values are encoded as single octets, where TRUE is the value 1, and
+  // FALSE as 0.
   fn serialize_bool(self, v: bool) -> Result<()> {
     if v {
       self.writer.write_u8(1u8)?;
@@ -218,8 +222,8 @@ where
     Ok(())
   }
 
-  //Figure 15-1 on page 15-7 illustrates the representations for OMG IDL integer data
-  //types, including the following data types:
+  //Figure 15-1 on page 15-7 illustrates the representations for OMG IDL integer
+  // data types, including the following data types:
   //short
   //unsigned short
   //long
@@ -290,9 +294,10 @@ where
     Ok(())
   }
 
-  //An IDL character is represented as a single octet; the code set used for transmission of
-  //character data (e.g., TCS-C) between a particular client and server ORBs is determined
-  //via the process described in Section 13.10, “Code Set Conversion,”
+  //An IDL character is represented as a single octet; the code set used for
+  // transmission of character data (e.g., TCS-C) between a particular client
+  // and server ORBs is determined via the process described in Section 13.10,
+  // “Code Set Conversion,”
   fn serialize_char(self, v: char) -> Result<()> {
     // Rust "char" means a 32-bit Unicode code point.
     // IDL & CDR "char" means an octet.
@@ -302,17 +307,19 @@ where
     Ok(())
   }
 
-  //A string is encoded as an unsigned long indicating the length of the string in octets,
-  //followed by the string value in single- or multi-byte form represented as a sequence of
-  //octets. The string contents include a single terminating null character. The string
-  //length includes the null character, so an empty string has a length of 1.
+  //A string is encoded as an unsigned long indicating the length of the string
+  // in octets, followed by the string value in single- or multi-byte form
+  // represented as a sequence of octets. The string contents include a single
+  // terminating null character. The string length includes the null character,
+  // so an empty string has a length of 1.
   fn serialize_str(self, v: &str) -> Result<()> {
     let byte_count: u32 = v.as_bytes().len() as u32 + 1;
     self.serialize_u32(byte_count)?; // +1 for terminator
     self.writer.write_all(v.as_bytes())?;
     self.writer.write_u8(0)?; // CDR spec requires a null terminator
     Ok(())
-    // The end result is not UTF-8-encoded string, but how could we do better in CDR?
+    // The end result is not UTF-8-encoded string, but how could we do better in
+    // CDR?
   }
 
   fn serialize_bytes(self, v: &[u8]) -> Result<()> {
@@ -333,8 +340,8 @@ where
     Ok(())
   }
 
-  // Unit contains no data, but the CDR spec has no concept of types that carry no data.
-  // We decide to serialize this as nothing.
+  // Unit contains no data, but the CDR spec has no concept of types that carry no
+  // data. We decide to serialize this as nothing.
   fn serialize_unit(self) -> Result<()> {
     // nothing
     Ok(())
@@ -345,10 +352,11 @@ where
   }
 
   // CDR 15.3.2.6:
-  // Enum values are encoded as unsigned longs. The numeric values associated with enum
-  // identifiers are determined by the order in which the identifiers appear in the enum
-  // declaration. The first enum identifier has the numeric value zero (0). Successive enum
-  // identifiers take ascending numeric values, in order of declaration from left to right.
+  // Enum values are encoded as unsigned longs. The numeric values associated with
+  // enum identifiers are determined by the order in which the identifiers
+  // appear in the enum declaration. The first enum identifier has the numeric
+  // value zero (0). Successive enum identifiers take ascending numeric values,
+  // in order of declaration from left to right.
   fn serialize_unit_variant(
     self,
     _name: &'static str,
@@ -381,12 +389,13 @@ where
     value.serialize(self)
   }
 
-  //Sequences are encoded as an unsigned long value, followed by the elements of the
-  //sequence. The initial unsigned long contains the number of elements in the sequence.
-  //The elements of the sequence are encoded as specified for their type.
+  //Sequences are encoded as an unsigned long value, followed by the elements of
+  // the sequence. The initial unsigned long contains the number of elements in
+  // the sequence. The elements of the sequence are encoded as specified for
+  // their type.
   //
-  // Serde calls this to start sequence. Then it calls serialize_element() for each element, and
-  // finally calls end().
+  // Serde calls this to start sequence. Then it calls serialize_element() for
+  // each element, and finally calls end().
   fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
     match len {
       None => Err(Error::SequenceLengthUnknown),
@@ -444,7 +453,8 @@ where
     Ok(self)
   }
 
-  // Same as tuple variant: Serialize variant index. Serde will then serialize fields.
+  // Same as tuple variant: Serialize variant index. Serde will then serialize
+  // fields.
   fn serialize_struct_variant(
     self,
     _name: &'static str,
@@ -582,12 +592,14 @@ impl<'a, W: io::Write, BO: ByteOrder> ser::SerializeStructVariant
 
 #[cfg(test)]
 mod tests {
-  use crate::serialization::cdr_serializer::to_little_endian_binary;
-  use crate::serialization::cdr_serializer::to_big_endian_binary;
-  use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
   use log::info;
-  use serde::{Serialize, Deserialize};
-  use serde_repr::{Serialize_repr, Deserialize_repr};
+  use serde::{Deserialize, Serialize};
+  use serde_repr::{Deserialize_repr, Serialize_repr};
+
+  use crate::serialization::{
+    cdr_deserializer::deserialize_from_little_endian,
+    cdr_serializer::{to_big_endian_binary, to_little_endian_binary},
+  };
 
   #[test]
 
@@ -618,13 +630,14 @@ mod tests {
 
   #[test]
   fn CDR_serialize_enum() {
-    //Enum values are encoded as unsigned longs. The numeric values associated with enum
-    //identifiers are determined by the order in which the identifiers appear in the enum
-    //declaration. The first enum identifier has the numeric value zero (0). Successive enum
-    //identifiers are take ascending numeric values, in order of declaration from left to right.
-    // -> Only C type "classic enumerations" are possible to be serialized.
-    // use Serialize_repr and Deserialize_repr when enum member has value taht is not same as unit variant index
-    // (when specified explicitly in code with assing)
+    //Enum values are encoded as unsigned longs. The numeric values associated with
+    // enum identifiers are determined by the order in which the identifiers
+    // appear in the enum declaration. The first enum identifier has the numeric
+    // value zero (0). Successive enum identifiers are take ascending numeric
+    // values, in order of declaration from left to right. -> Only C type
+    // "classic enumerations" are possible to be serialized. use Serialize_repr
+    // and Deserialize_repr when enum member has value taht is not same as unit
+    // variant index (when specified explicitly in code with assing)
     #[derive(Debug, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
     #[repr(u32)]
     pub enum OmaEnumeration {
@@ -635,9 +648,9 @@ mod tests {
       //fifth(u8,u8,u16),
       //sixth(i16,i16),
       SevenHundredth = 700,
-      //eigth(u32),
-      //this_should_not_be_valid(u64,u8,u8,u16,String),
-      //similar_to_fourth(u8,u8,u8,u8),
+      /*eigth(u32),
+       *this_should_not_be_valid(u64,u8,u8,u16,String),
+       *similar_to_fourth(u8,u8,u8,u8), */
     }
 
     let enum_object_1 = OmaEnumeration::First;
@@ -648,8 +661,10 @@ mod tests {
     //let enum_object_6 = OmaEnumeration::sixth(-8,9);
     let enum_object_7 = OmaEnumeration::SevenHundredth;
     //let enum_object_8 = OmaEnumeration::eigth(1000);
-    //let enum_object_9 = OmaEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hejssan allihoppa!"));
-    //let enum_object_10 = OmaEnumeration::similar_to_fourth(5,6,7,8);
+    //let enum_object_9 =
+    // OmaEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hejssan
+    // allihoppa!")); let enum_object_10 =
+    // OmaEnumeration::similar_to_fourth(5,6,7,8);
 
     let serialized_1 = to_little_endian_binary(&enum_object_1).unwrap();
     info!("{:?}", serialized_1);

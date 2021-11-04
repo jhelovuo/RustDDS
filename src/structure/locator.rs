@@ -1,7 +1,9 @@
-use speedy::{Context, Readable, Reader, Writable, Writer};
 use std::convert::From;
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use serde::{Serialize, Deserialize};
+
+use speedy::{Context, Readable, Reader, Writable, Writer};
+use serde::{Deserialize, Serialize};
+
 use super::parameter_id::ParameterId;
 
 #[derive(

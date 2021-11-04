@@ -1,25 +1,26 @@
-use log::debug;
-
-use crate::structure::{time::Timestamp, guid::GUID};
-
-use crate::{
-  dds::traits::key::{Key, Keyed, KeyHash},
+use std::{
+  collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
+  ops::Bound::*,
 };
 
-use crate::dds::with_key::datasample::DataSample;
-use crate::dds::sampleinfo::*;
-use crate::dds::qos::QosPolicies;
-use crate::dds::qos::policy;
-use crate::dds::readcondition::ReadCondition;
+use log::debug;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
-use std::ops::Bound::*;
+use crate::{
+  dds::{
+    qos::{policy, QosPolicies},
+    readcondition::ReadCondition,
+    sampleinfo::*,
+    traits::key::{Key, KeyHash, Keyed},
+    with_key::datasample::DataSample,
+  },
+  structure::{guid::GUID, time::Timestamp},
+};
 
 //use std::num::Zero; unstable
 
-// DataSampleCache is a structure local to DataReader and DataWriter. It acts as a buffer
-// between e.g. RTPS Reader and the application-facing DataReader. It keeps track of what each
-// DataReader has "read" or "taken".
+// DataSampleCache is a structure local to DataReader and DataWriter. It acts as
+// a buffer between e.g. RTPS Reader and the application-facing DataReader. It
+// keeps track of what each DataReader has "read" or "taken".
 
 // helper function
 // somewhat like result.as_ref() , but one-sided only
@@ -32,12 +33,13 @@ pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(
   }
 }
 
-// Data samples are here ordered and indexed by Timestamp, which must be a unique key.
-// RTPS Timestamp has sub-nanosecond resolution, so it could be unique, provided that the source
-// clock ticks frequently enough.
+// Data samples are here ordered and indexed by Timestamp, which must be a
+// unique key. RTPS Timestamp has sub-nanosecond resolution, so it could be
+// unique, provided that the source clock ticks frequently enough.
 pub struct DataSampleCache<D: Keyed> {
   qos: QosPolicies,
-  datasamples: BTreeMap<Timestamp, SampleWithMetaData<D>>, // ordered storage for deserialized samples
+  datasamples: BTreeMap<Timestamp, SampleWithMetaData<D>>, /* ordered storage for deserialized
+                                                            * samples */
   pub(crate) instance_map: BTreeMap<D::K, InstanceMetaData>, // ordered storage for instances
   hash_to_key_map: BTreeMap<KeyHash, D::K>,
 }
@@ -116,14 +118,17 @@ where
         let imd = InstanceMetaData {
           instance_samples: BTreeSet::new(),
           instance_state: new_instance_state,
-          latest_generation_available: NotAliveGenerationCounts::zero(), // this is new instance, so start from zero
+          latest_generation_available: NotAliveGenerationCounts::zero(), /* this is new instance,
+                                                                          * so start from zero */
           last_generation_accessed: NotAliveGenerationCounts::sub_zero(), // never accessed
         };
         self.instance_map.insert(instance_key.clone(), imd);
         self
           .hash_to_key_map
           .insert(instance_key.hash_key(), instance_key.clone());
-        self.instance_map.get_mut(&instance_key).unwrap() // must succeed, since this was just inserted
+        self.instance_map.get_mut(&instance_key).unwrap() // must succeed, since
+                                                          // this was just
+                                                          // inserted
       }
     };
 
@@ -169,8 +174,8 @@ where
         },
       )
       .map_or_else(
-        /* None: ok*/ || (),
-        /* Some: key was there already!*/
+        /* None: ok */ || (),
+        /* Some: key was there already! */
         |_already_existed| {
           panic!(
             "Tried to add duplicate datasample with the same key {:?}",
@@ -212,12 +217,14 @@ where
       }
     }
 
-    // TODO: Implement other resource_limit settings than max_instances_per sample, i.e.
+    // TODO: Implement other resource_limit settings than max_instances_per
+    // sample, i.e.
   }
 
   // Calling select_(instance)_keys_for access does not constitute access, i.e.
   // it does not change any state of the cache.
-  // Samples are marked read or viewed only when "read" or "take" methods (below) are called.
+  // Samples are marked read or viewed only when "read" or "take" methods (below)
+  // are called.
   pub fn select_keys_for_access(&self, rc: ReadCondition) -> Vec<(Timestamp, D::K)> {
     self
       .datasamples
@@ -344,11 +351,12 @@ where
     }
   }
 
-  // read methods perform actual read or take. They must be called with key vectors
-  // obtained from select_*_for_access -methods above, or their subvectors.
+  // read methods perform actual read or take. They must be called with key
+  // vectors obtained from select_*_for_access -methods above, or their
+  // subvectors.
   //
-  // Therea are two versions of both read and take: Return DataSample<D> (incl. metadata)
-  // and "bare" versions without metadata.
+  // Therea are two versions of both read and take: Return DataSample<D> (incl.
+  // metadata) and "bare" versions without metadata.
   pub fn read_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<&D>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
@@ -391,11 +399,12 @@ where
     // mark instances viewed
     self.mark_instances_viewed(instance_generations);
 
-    // We need to do SampleInfo construction and final result construction as separate passes.
-    // This is becaue SampleInfo construction needs to mark items as read and generations
-    // as viewed, i.e. needs mutable reference to data_samples.
-    // Result construction (in read, not take) needs to hand out multiple references into
-    // data_samples, therefore it needs immutable access, not mutable.
+    // We need to do SampleInfo construction and final result construction as
+    // separate passes. This is becaue SampleInfo construction needs to mark
+    // items as read and generations as viewed, i.e. needs mutable reference to
+    // data_samples. Result construction (in read, not take) needs to hand out
+    // multiple references into data_samples, therefore it needs immutable
+    // access, not mutable.
 
     // construct results
     for (ts, _key) in keys.iter() {
@@ -438,7 +447,8 @@ where
       let dswm = self.datasamples.remove(ts).unwrap();
       let imd = self.instance_map.get(key).unwrap();
       let sample_info = Self::make_sample_info(&dswm, imd, len - index - 1, mrs_total, mrsic_total);
-      //dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is about to be destroyed
+      //dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is
+      // about to be destroyed
       Self::record_instance_generation_viewed(
         &mut instance_generations,
         dswm.generation_counts,
@@ -477,8 +487,8 @@ where
 
     self.mark_instances_viewed(instance_generations);
 
-    // We need to do SampleInfo construction and final result construction as separate passes.
-    // See reason in read function above.
+    // We need to do SampleInfo construction and final result construction as
+    // separate passes. See reason in read function above.
 
     // construct results
     for (ts, _key) in keys.iter() {
@@ -504,7 +514,8 @@ where
 
     for (ts, key) in keys.iter() {
       let dswm = self.datasamples.remove(ts).unwrap();
-      //dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is about to be destroyed
+      //dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is
+      // about to be destroyed
       Self::record_instance_generation_viewed(
         &mut instance_generations,
         dswm.generation_counts,

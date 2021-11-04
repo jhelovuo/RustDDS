@@ -1,8 +1,7 @@
-use crate::structure::locator::LocatorList;
-use crate::structure::topic_kind;
-
 use speedy::{Readable, Writable};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
+use crate::structure::{locator::LocatorList, topic_kind};
 
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable, Serialize, Deserialize)]
 pub struct ReliabilityKind(u32);

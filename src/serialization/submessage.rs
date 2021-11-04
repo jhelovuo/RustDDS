@@ -1,8 +1,8 @@
-use crate::messages::submessages::submessage_header::SubmessageHeader;
-use crate::messages::submessages::submessage::EntitySubmessage;
-use crate::messages::submessages::submessages::*;
+use speedy::{Context, Writable, Writer};
 
-use speedy::{Context, Writer, Writable};
+use crate::messages::submessages::{
+  submessage::EntitySubmessage, submessage_header::SubmessageHeader, submessages::*,
+};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SubMessage {
@@ -10,8 +10,8 @@ pub struct SubMessage {
   pub body: SubmessageBody,
 }
 
-// TODO: Submessages should implement some Length trait that returns the length of
-// Submessage in bytes. This is needed for Submessage construction.
+// TODO: Submessages should implement some Length trait that returns the length
+// of Submessage in bytes. This is needed for Submessage construction.
 #[derive(Debug, PartialEq, Clone)]
 pub enum SubmessageBody {
   Entity(EntitySubmessage),
@@ -33,10 +33,10 @@ mod tests {
   use bytes::Bytes;
   use enumflags2::BitFlags;
   use log::info;
-  use super::SubMessage;
   use speedy::{Readable, Writable};
-  use crate::{messages::submessages::submessages::*};
-  use crate::serialization::submessage::*;
+
+  use super::SubMessage;
+  use crate::{messages::submessages::submessages::*, serialization::submessage::*};
 
   #[test]
   fn submessage_data_submessage_deserialization() {
@@ -118,16 +118,18 @@ mod tests {
   //   let serializedInfoTSMessage: Vec<u8> = vec![
   //     0x09, 0x01, 0x08, 0x00, 0x1a, 0x15, 0xf3, 0x5e, 0x00, 0xcc, 0xfb, 0x13,
   //   ];
-  //   let header = SubmessageHeader::read_from_buffer(&serializedInfoTSMessage[0..4])
+  //   let header =
+  // SubmessageHeader::read_from_buffer(&serializedInfoTSMessage[0..4])
   //     .expect("could not create submessage header");
-  //   let flags = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(header.flags);
+  //   let flags =
+  // BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(header.flags);
   //   let e = endianness_flag(header.flags);
-  //   let suba = InfoTimestamp::read_from_buffer_with_ctx(e, &serializedInfoTSMessage[4..])
-  //     .expect("deserialization failed.");
+  //   let suba = InfoTimestamp::read_from_buffer_with_ctx(e,
+  // &serializedInfoTSMessage[4..])     .expect("deserialization failed.");
   //   let sub = SubMessage {
   //     header,
-  //     body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(suba, flags)),
-  //   };
+  //     body: SubmessageBody::Interpreter(InterpreterSubmessage::
+  // InfoTimestamp(suba, flags)),   };
   //   info!("{:?}", sub);
 
   //   let messageBuffer = sub.write_to_vec().expect("serialization failed");

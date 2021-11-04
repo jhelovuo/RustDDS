@@ -1,55 +1,49 @@
-use crate::{
-  //common::timed_event_handler::TimedEventHandler,
-  //network::constant::TimerMessageType,
-  structure::{cache_change::ChangeKind, entity::RTPSEntity},
-};
-use crate::structure::endpoint::{Endpoint, EndpointAttributes};
-use crate::messages::submessages::submessages::*;
-
-use crate::dds::ddsdata::DDSData;
-use crate::dds::statusevents::*;
-use crate::dds::rtps_writer_proxy::RtpsWriterProxy;
-use crate::structure::guid::{GUID, EntityId, GuidPrefix};
-use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
-#[cfg(test)]
-use crate::structure::locator::LocatorList;
-use crate::structure::{duration::Duration, time::Timestamp};
-
 use std::{
-  collections::BTreeSet,
+  collections::{BTreeMap, BTreeSet},
+  fmt,
   iter::FromIterator,
-  sync::{Arc, RwLock},
   rc::Rc,
+  sync::{Arc, RwLock},
+  time::Duration as StdDuration,
 };
-use crate::structure::dds_cache::{DDSCache};
 
 use mio::Token;
-use mio_extras::timer::Timer;
-use mio_extras::channel as mio_channel;
-use log::{debug, info, warn, trace, error};
-use std::fmt;
-
-use std::collections::{BTreeMap};
-use std::time::Duration as StdDuration;
+use mio_extras::{channel as mio_channel, timer::Timer};
+use log::{debug, error, info, trace, warn};
 use enumflags2::BitFlags;
+use speedy::{Endianness, Writable};
 
-use crate::structure::cache_change::CacheChange;
-use crate::dds::message_receiver::MessageReceiverState;
-use crate::dds::qos::{QosPolicies, HasQoSPolicy, policy};
-use crate::network::udp_sender::UDPSender;
-
-use crate::serialization::message::Message;
-use crate::messages::header::Header;
-use crate::messages::protocol_id::ProtocolId;
-use crate::messages::protocol_version::ProtocolVersion;
-use crate::messages::vendor_id::VendorId;
-use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
-
-use speedy::{Writable, Endianness};
-
-use super::{with_key::datareader::ReaderCommand};
-
-use super::qos::InlineQos;
+use crate::{
+  dds::{
+    ddsdata::DDSData,
+    message_receiver::MessageReceiverState,
+    qos::{policy, HasQoSPolicy, QosPolicies},
+    rtps_writer_proxy::RtpsWriterProxy,
+    statusevents::*,
+  },
+  messages::{
+    header::Header,
+    protocol_id::ProtocolId,
+    protocol_version::ProtocolVersion,
+    submessages::{submessage_elements::parameter_list::ParameterList, submessages::*},
+    vendor_id::VendorId,
+  },
+  network::udp_sender::UDPSender,
+  serialization::message::Message,
+  structure::{
+    cache_change::{CacheChange, ChangeKind},
+    dds_cache::DDSCache,
+    duration::Duration,
+    endpoint::{Endpoint, EndpointAttributes},
+    entity::RTPSEntity,
+    guid::{EntityId, GuidPrefix, GUID},
+    sequence_number::{SequenceNumber, SequenceNumberSet},
+    time::Timestamp,
+  },
+};
+#[cfg(test)]
+use crate::structure::locator::LocatorList;
+use super::{qos::InlineQos, with_key::datareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {
@@ -163,7 +157,8 @@ impl Reader {
     cc.map(|cc| cc.data_value.clone())
   }
 
-  /// To know when token represents a reader we should look entity attribute kind
+  /// To know when token represents a reader we should look entity attribute
+  /// kind
   pub fn get_entity_token(&self) -> Token {
     self.get_guid().entity_id.as_token()
   }
@@ -199,9 +194,9 @@ impl Reader {
         // no-one is required to be listening to these.
       }
       Err(mio_channel::TrySendError::Disconnected(_)) => {
-        // If we get here, our DataReader has died. The Reader should now dispose itself.
-        // Or possibly it has lost the receiver object, which is sort of sloppy,
-        // but does not necessarily mean the end of the world.
+        // If we get here, our DataReader has died. The Reader should now dispose
+        // itself. Or possibly it has lost the receiver object, which is sort of
+        // sloppy, but does not necessarily mean the end of the world.
         // TODO: Implement Reader disposal.
         info!("send_status_change - cannot send status, DataReader Disconnected.")
       }
@@ -228,7 +223,8 @@ impl Reader {
           match writer_proxy.last_change_timestamp() {
             Some(last_change) => {
               let since_last = now.duration_since(last_change);
-              // if time singe last received message is greater than deadline increase status and return notification.
+              // if time singe last received message is greater than deadline increase status
+              // and return notification.
               trace!(
                 "Comparing deadlines: {:?} - {:?}",
                 since_last,
@@ -482,7 +478,8 @@ impl Reader {
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
     if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
       if let Some(complete_ddsdata) = writer_proxy.handle_datafrag(datafrag, datafrag_flags) {
-        // Source timestamp (if any) will be the timestamp of the last fragment (that completes the sample).
+        // Source timestamp (if any) will be the timestamp of the last fragment (that
+        // completes the sample).
         self.process_received_data(
           complete_ddsdata,
           receive_timestamp,
@@ -498,7 +495,8 @@ impl Reader {
     }
   }
 
-  // common parts of processing DATA or a completed DATAFRAG (when all frags are received)
+  // common parts of processing DATA or a completed DATAFRAG (when all frags are
+  // received)
   fn process_received_data(
     &mut self,
     ddsdata: DDSData,
@@ -523,7 +521,8 @@ impl Reader {
           if my_entityid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER {
             debug!("Accepting duplicate message to participant reader.");
             // This is an attmpted workaround to eProsima FastRTPS not
-            // incrementing sequence numbers. (eProsime shapes demo 2.1.0 from 2021)
+            // incrementing sequence numbers. (eProsime shapes demo 2.1.0 from
+            // 2021)
           } else {
             return;
           }
@@ -584,7 +583,8 @@ impl Reader {
 
       (None, false, false) => {
         // no data, no key. Maybe there is inline QoS?
-        // At least we should find key hash, or we do not know WTF the writer is talking about
+        // At least we should find key hash, or we do not know WTF the writer is talking
+        // about
         let key_hash = match data
           .inline_qos
           .as_ref()
@@ -596,7 +596,8 @@ impl Reader {
           None => {
             info!("Received DATA that has no payload and no key_hash inline QoS - discarding");
             // Note: This case is normal when handling coherent sets.
-            // The coherent set end marker is sent as DATA with no payload and not key, only Inline QoS.
+            // The coherent set end marker is sent as DATA with no payload and not key, only
+            // Inline QoS.
             Err("DATA with no contents".to_string())
           }
         }?;
@@ -691,13 +692,13 @@ impl Reader {
       for instant in removed_instances.values() {
         match cache.from_topic_remove_change(&self.topic_name, instant) {
           Some(_) => (),
-          None => debug!("WriterProxy told to remove an instant which was not present"), // This may be normal?
+          None => debug!("WriterProxy told to remove an instant which was not present"), /* This may be normal? */
         }
       }
     }
 
-    // this is duplicate code from above, but needed, because we need another mutable borrow.
-    // TODO: Maybe could be written in some sensible way.
+    // this is duplicate code from above, but needed, because we need another
+    // mutable borrow. TODO: Maybe could be written in some sensible way.
     let writer_proxy = match self.matched_writer_lookup(writer_guid) {
       Some(wp) => wp,
       None => {
@@ -711,12 +712,13 @@ impl Reader {
       writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
 
     // Interpretation of final flag in RTPS spec
-    // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with final flag not set
+    // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with
+    // final flag not set
     //
-    // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must respond
-    // with an ACKNACK Message. The ACKNACK Message may acknowledge having received all
-    // the data samples or may indicate that some data samples are missing.
-    // The response may be delayed to avoid message storms.
+    // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must
+    // respond with an ACKNACK Message. The ACKNACK Message may acknowledge
+    // having received all the data samples or may indicate that some data
+    // samples are missing. The response may be delayed to avoid message storms.
 
     if !missing_seqnums.is_empty() || !final_flag_set {
       // report of what we have.
@@ -803,8 +805,8 @@ impl Reader {
 
     // if gap.gap_list.set.len() != 0 {
     //   if i64::from(gap.gap_start) < 1i64
-    //     || (gap.gap_list.set.iter().max().unwrap() - gap.gap_list.set.iter().min().unwrap()) >= 256
-    //   {
+    //     || (gap.gap_list.set.iter().max().unwrap() -
+    // gap.gap_list.set.iter().min().unwrap()) >= 256   {
     //     return;
     //   }
     // } else {
@@ -813,7 +815,8 @@ impl Reader {
 
     // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups:
-    //   1. All sequence numbers in the range gapStart <= sequence_number < gapList.base
+    //   1. All sequence numbers in the range gapStart <= sequence_number <
+    // gapList.base
     let mut removed_changes: BTreeSet<Timestamp> = writer_proxy
       .irrelevant_changes_range(gap.gap_start, gap.gap_list.base())
       .values()
@@ -849,7 +852,8 @@ impl Reader {
     todo!()
   }
 
-  // This is used to determine exact change kind in case we do not get a data payload in DATA submessage
+  // This is used to determine exact change kind in case we do not get a data
+  // payload in DATA submessage
   fn deduce_change_kind(
     inline_qos: Option<ParameterList>,
     no_writers: bool,
@@ -890,15 +894,16 @@ impl Reader {
     cache.add_change(&self.topic_name, &receive_timestamp, cache_change);
   }
 
-  // notifies DataReaders (or any listeners that history cache has changed for this reader)
-  // likely use of mio channel
+  // notifies DataReaders (or any listeners that history cache has changed for
+  // this reader) likely use of mio channel
   pub fn notify_cache_change(&self) {
     match self.notification_sender.try_send(()) {
       Ok(()) => (),
-      Err(mio_channel::TrySendError::Full(_)) => (), // This is harmless. There is a notification in already.
+      Err(mio_channel::TrySendError::Full(_)) => (), /* This is harmless. There is a */
+      // notification in already.
       Err(mio_channel::TrySendError::Disconnected(_)) => {
-        // If we get here, our DataReader has died. The Reader should now dispose itself.
-        // TODO: Implement Reader disposal.
+        // If we get here, our DataReader has died. The Reader should now
+        // dispose itself. TODO: Implement Reader disposal.
       }
       Err(mio_channel::TrySendError::Io(_)) => {
         // TODO: What does this mean? Can we ever get here?
@@ -908,7 +913,8 @@ impl Reader {
 
   fn send_acknack(&self, acknack: AckNack, mr_state: MessageReceiverState) {
     // Indicate our endianness.
-    // Set final flag to indicate that we are NOT requesting immediate heartbeat response.
+    // Set final flag to indicate that we are NOT requesting immediate heartbeat
+    // response.
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
       | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
 
@@ -1048,12 +1054,14 @@ impl fmt::Debug for Reader {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::structure::guid::{GUID, EntityId};
-  use crate::messages::submessages::submessage_elements::serialized_payload::{SerializedPayload};
-  use crate::structure::guid::{GuidPrefix, EntityKind};
-  use crate::dds::statusevents::DataReaderStatus;
-  use crate::structure::topic_kind::TopicKind;
-  use crate::dds::typedesc::TypeDesc;
+  use crate::{
+    dds::{statusevents::DataReaderStatus, typedesc::TypeDesc},
+    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+    structure::{
+      guid::{EntityId, EntityKind, GuidPrefix, GUID},
+      topic_kind::TopicKind,
+    },
+  };
 
   #[test]
   fn rtpsreader_notification() {

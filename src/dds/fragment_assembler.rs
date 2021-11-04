@@ -1,20 +1,23 @@
 //use crate::structure::guid::{GUID, /*EntityId, GuidPrefix*/ };
-use crate::structure::time::Timestamp;
-use crate::structure::sequence_number::SequenceNumber;
-use crate::structure::cache_change::ChangeKind;
-use crate::messages::submessages::submessages::*;
-use crate::dds::ddsdata::DDSData;
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+use std::{
+  collections::BTreeMap,
+  convert::{From, TryInto},
+  fmt,
+};
 
 use bit_vec::BitVec;
 use enumflags2::BitFlags;
 use bytes::BytesMut;
-use std::collections::BTreeMap;
-use std::convert::{From, TryInto};
-use std::fmt;
-
 #[allow(unused_imports)]
-use log::{debug, error, warn, info, trace};
+use log::{debug, error, info, trace, warn};
+
+use crate::{
+  dds::ddsdata::DDSData,
+  messages::submessages::{
+    submessage_elements::serialized_payload::SerializedPayload, submessages::*,
+  },
+  structure::{cache_change::ChangeKind, sequence_number::SequenceNumber, time::Timestamp},
+};
 
 // This is for the assembly of a single object
 struct AssemblyBuffer {
@@ -34,7 +37,8 @@ impl AssemblyBuffer {
     // we have unwrap here, but it will succeed as long as usize >= u32
 
     let mut buffer_bytes = BytesMut::with_capacity(data_size);
-    buffer_bytes.resize(data_size, 0); //TODO: Can we replace this with faster (and unsafer) .set_len and live with uninitialized data?
+    buffer_bytes.resize(data_size, 0); //TODO: Can we replace this with faster (and unsafer) .set_len and live with
+                                       // uninitialized data?
 
     let frag_size = usize::from(fragment_size);
     // fragment count formula from RTPS spec v2.5 Section 8.3.8.3.5

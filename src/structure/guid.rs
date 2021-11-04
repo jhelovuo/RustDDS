@@ -1,20 +1,20 @@
-use speedy::{Context, Readable, Reader, Writable, Writer};
-use serde::{Serialize, Deserialize};
-use uuid::Uuid;
-use std::hash::Hash;
-use std::ops::RangeBounds;
-use cdr_encoding_size::*;
+use std::{hash::Hash, ops::RangeBounds};
 
+use speedy::{Context, Readable, Reader, Writable, Writer};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+use cdr_encoding_size::*;
 use mio::Token;
 use log::warn;
-
 use static_assertions as sa;
 
 use super::parameter_id::ParameterId;
 use crate::dds::traits::key::Key;
 
 /// DDS/RTPS Participant GuidPrefix
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize,CdrEncodingSize,)]
+#[derive(
+  Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
+)]
 pub struct GuidPrefix {
   pub entity_key: [u8; 12],
 }
@@ -72,7 +72,9 @@ impl<C: Context> Writable<C> for GuidPrefix {
   }
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize,CdrEncodingSize,)]
+#[derive(
+  Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
+)]
 pub struct EntityKind(u8);
 
 impl EntityKind {
@@ -145,7 +147,9 @@ impl From<EntityKind> for u8 {
 
 /// RTPS EntityId
 /// See RTPS spec section 8.2.4 , 8.3.5.1 and 9.3.1.2
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,)]
+#[derive(
+  Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
+)]
 pub struct EntityId {
   pub entity_key: [u8; 3],
   pub entity_kind: EntityKind,
@@ -421,11 +425,11 @@ impl GUIDData {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-
   use speedy::Endianness;
   use mio::Token;
   use log::info;
+
+  use super::*;
 
   #[test]
   fn convert_entity_id_to_token_and_back() {

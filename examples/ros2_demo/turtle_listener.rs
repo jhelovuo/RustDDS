@@ -1,5 +1,7 @@
-use rustdds::{ros2::NodeOptions, ros2::RosParticipant, serialization::CDRDeserializerAdapter};
-
+use rustdds::{
+  ros2::{NodeOptions, RosParticipant},
+  serialization::CDRDeserializerAdapter,
+};
 use log::{info, warn};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;

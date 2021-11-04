@@ -1,7 +1,8 @@
+use std::{convert::From, thread};
+
 use mio_extras::channel::{SyncSender, TrySendError};
+
 use crate::structure::duration::Duration;
-use std::thread;
-use std::convert::From;
 
 const TIMEOUT_EPSILON: Duration = Duration::from_nanos(1000);
 

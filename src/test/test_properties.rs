@@ -1,11 +1,9 @@
 use crate::{
-  messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-  messages::submessages::submessages::{RepresentationIdentifier, Data},
-  structure::guid::EntityId,
-  structure::sequence_number::SequenceNumber,
-  //dds::datareader::DataReader,
-  //dds::datareader::ReaderCommand,
-  //dds::values::result::*
+  messages::submessages::{
+    submessage_elements::serialized_payload::SerializedPayload,
+    submessages::{Data, RepresentationIdentifier},
+  },
+  structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
 /*
 use mio_extras::channel as mio_channel;
@@ -16,7 +14,8 @@ use crate::dds::traits::serde_adapters::DeserializerAdapter;
 use serde::de::DeserializeOwned;
 */
 
-// Different properties that do not belong to the actual library but make testing easier.
+// Different properties that do not belong to the actual library but make
+// testing easier.
 
 impl Default for SerializedPayload {
   fn default() -> SerializedPayload {

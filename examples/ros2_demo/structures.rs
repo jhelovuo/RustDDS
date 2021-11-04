@@ -1,16 +1,19 @@
-use log::{debug, error};
-use mio::{Events, Poll, PollOpt, Ready, Token};
-use mio_extras::timer::Timer;
-use mio_extras::channel as mio_channel;
-use termion::{event::Key, raw::RawTerminal, input::TermRead, AsyncReader};
-use rustdds::{
-  dds::data_types::DiscoveredTopicData,
-  ros2::builtin_datatypes::{ROSParticipantInfo, NodeInfo, Gid},
+use std::{
+  collections::HashMap,
+  io::{StdoutLock, Write},
+  time::Duration as StdDuration,
 };
 
-use std::{collections::HashMap, io::StdoutLock, io::Write, time::Duration as StdDuration};
+use log::{debug, error};
+use mio::{Events, Poll, PollOpt, Ready, Token};
+use mio_extras::{channel as mio_channel, timer::Timer};
+use termion::{event::Key, input::TermRead, raw::RawTerminal, AsyncReader};
+use rustdds::{
+  dds::data_types::DiscoveredTopicData,
+  ros2::builtin_datatypes::{Gid, NodeInfo, ROSParticipantInfo},
+};
 
-use crate::{ros2::turtle_control::TurtleControl, ros2::turtle_data::Twist};
+use crate::ros2::{turtle_control::TurtleControl, turtle_data::Twist};
 
 pub enum RosCommand {
   StopEventLoop,

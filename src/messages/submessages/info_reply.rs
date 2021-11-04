@@ -1,5 +1,6 @@
-use crate::structure::locator::LocatorList;
 use speedy::{Readable, Writable};
+
+use crate::structure::locator::LocatorList;
 
 /// This message is sent from an RTPS Reader to an RTPS Writer.
 /// It contains explicit information on where to send a reply

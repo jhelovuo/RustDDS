@@ -1,38 +1,40 @@
 use std::time::Instant;
 
-use serde::{Serialize, Deserialize, de};
-
+use serde::{de, Deserialize, Serialize};
 use chrono::Utc;
-
 use cdr_encoding_size::*;
 
 use crate::{
   dds::{
-    qos::policy::{
-      Deadline, Durability, LatencyBudget, Reliability, Ownership, DestinationOrder, Liveliness,
-      TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
-    },
-    traits::key::Keyed,
-    traits::serde_adapters::with_key::SerializerAdapter, // these are WITH_KEY data
-    rtps_reader_proxy::RtpsReaderProxy,
-    reader::Reader,
     participant::DomainParticipant,
-    topic::Topic,
-    with_key::datawriter::DataWriter,
+    qos::{
+      policy::{
+        Deadline, DestinationOrder, Durability, History, LatencyBudget, Lifespan, Liveliness,
+        Ownership, Presentation, Reliability, ResourceLimits, TimeBasedFilter,
+      },
+      HasQoSPolicy, QosPolicies,
+    },
+    reader::Reader,
+    rtps_reader_proxy::RtpsReaderProxy,
     rtps_writer_proxy::RtpsWriterProxy,
+    topic::Topic,
+    traits::{
+      key::{Key, Keyed},
+      serde_adapters::with_key::SerializerAdapter,
+      TopicDescription,
+    },
+    with_key::datawriter::DataWriter,
   },
-  dds::qos::HasQoSPolicy,
-  dds::qos::QosPolicies,
-  dds::traits::{key::Key, TopicDescription},
   discovery::content_filter_property::ContentFilterProperty,
-  network::constant::get_user_traffic_unicast_port,
-  network::util::get_local_unicast_socket_address,
+  network::{constant::get_user_traffic_unicast_port, util::get_local_unicast_socket_address},
   serialization::{
-    builtin_data_serializer::BuiltinDataSerializer,
     builtin_data_deserializer::BuiltinDataDeserializer,
+    builtin_data_serializer::BuiltinDataSerializer,
   },
   structure::{
-    entity::RTPSEntity, guid::GUID, guid::GuidPrefix, guid::EntityKind, locator::LocatorList,
+    entity::RTPSEntity,
+    guid::{EntityKind, GuidPrefix, GUID},
+    locator::LocatorList,
   },
 };
 
@@ -350,7 +352,7 @@ impl DiscoveredReaderData {
 }
 
 // separate type is needed to serialize correctly
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize,)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize)]
 pub struct DiscoveredReaderDataKey(pub GUID);
 
 impl Key for DiscoveredReaderDataKey {}
@@ -565,7 +567,7 @@ impl Serialize for PublicationBuiltinTopicData {
 
 // ------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, CdrEncodingSize,)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, CdrEncodingSize)]
 pub struct PublicationBuiltinTopicDataKey(pub GUID);
 
 impl Serialize for PublicationBuiltinTopicDataKey {
@@ -592,7 +594,7 @@ pub struct DiscoveredWriterData {
 }
 
 // separate type is needed to serialize correctly
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize,)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize)]
 pub struct DiscoveredWriterDataKey(pub GUID); // wrapper to enable custom PL CDR (de)serialization
 
 impl Key for DiscoveredWriterDataKey {}
@@ -820,7 +822,9 @@ impl Keyed for DiscoveredTopicData {
 // =======================================================================
 // =======================================================================
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize,CdrEncodingSize,)]
+#[derive(
+  Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
+)]
 pub struct ParticipantMessageDataKind {
   value: [u8; 4],
 }
@@ -861,9 +865,10 @@ impl Keyed for ParticipantMessageData {
   }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash , Ord, PartialOrd, Serialize, Deserialize, CdrEncodingSize,)]
+#[derive(
+  Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd, Serialize, Deserialize, CdrEncodingSize,
+)]
 pub struct ParticipantMessageDataKey(GuidPrefix, ParticipantMessageDataKind);
-
 
 impl Key for ParticipantMessageDataKey {}
 
@@ -873,27 +878,22 @@ impl Key for ParticipantMessageDataKey {}
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-
-  // use crate::serialization::cdr_serializer::to_little_endian_binary;
-  use crate::serialization::{
-    Message,
-    cdr_serializer::{to_bytes},
-  };
   use byteorder::LittleEndian;
   use bytes::Bytes;
   use log::info;
-  use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
 
+  use super::*;
+  // use crate::serialization::cdr_serializer::to_little_endian_binary;
   use crate::{
-    test::test_data::{
-      subscription_builtin_topic_data, reader_proxy_data, content_filter_data, writer_proxy_data,
-      publication_builtin_topic_data, topic_data,
-    },
-  };
-  use crate::{
-    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
     dds::traits::serde_adapters::no_key::DeserializerAdapter,
+    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+    serialization::{
+      cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, Message,
+    },
+    test::test_data::{
+      content_filter_data, publication_builtin_topic_data, reader_proxy_data,
+      subscription_builtin_topic_data, topic_data, writer_proxy_data,
+    },
   };
 
   #[test]

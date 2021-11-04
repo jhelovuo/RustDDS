@@ -1,11 +1,12 @@
-use crate::{
-  serialization::SubMessage, serialization::SubmessageBody, structure::guid::GuidPrefix,
-  messages::submessages::submessages::SubmessageHeader,
-};
 use enumflags2::BitFlags;
 use log::error;
 use speedy::{Readable, Writable};
 
+use crate::{
+  messages::submessages::submessages::SubmessageHeader,
+  serialization::{SubMessage, SubmessageBody},
+  structure::guid::GuidPrefix,
+};
 use super::{
   submessage::InterpreterSubmessage, submessage_flag::INFODESTINATION_Flags,
   submessage_kind::SubmessageKind,

@@ -1,13 +1,11 @@
-use std::net::{Ipv4Addr, SocketAddr, IpAddr};
-use std::io;
+use std::{
+  io,
+  net::{IpAddr, Ipv4Addr, SocketAddr},
+};
 
-use mio::Token;
-use mio::net::UdpSocket;
-
-use log::{debug, error, trace, info};
-
-use socket2::{Socket, Domain, Type, SockAddr, Protocol};
-
+use mio::{net::UdpSocket, Token};
+use log::{debug, error, info, trace};
+use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use bytes::{Bytes, BytesMut};
 
 use crate::network::util::get_local_multicast_ip_addrs;
@@ -16,7 +14,8 @@ const MAX_MESSAGE_SIZE: usize = 64 * 1024; // This is max we can get from UDP.
 const MESSAGE_BUFFER_ALLOCATION_CHUNK: usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
 
 /// Listens to messages coming to specified host port combination.
-/// Only messages from added listen addressed are read when get_all_messages is called.
+/// Only messages from added listen addressed are read when get_all_messages is
+/// called.
 #[derive(Debug)]
 pub struct UDPListener {
   socket: UdpSocket,
@@ -40,15 +39,16 @@ impl Drop for UDPListener {
 
 // TODO: Remove panics from this function. Convert return value to Result.
 impl UDPListener {
-  // TODO: Why is is this function even necessary? Doesn't try_bind() do just the same?
+  // TODO: Why is is this function even necessary? Doesn't try_bind() do just the
+  // same?
 
   fn new_listening_socket(host: &str, port: u16, reuse_addr: bool) -> io::Result<UdpSocket> {
     let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
 
     // We set ReuseAddr so that other DomainParticipants on this host can
     // bind to the same multicast address and port.
-    // To have an effect on bind, this must be done before bind call, so must be done
-    // below Rust std::net::UdpSocket level.
+    // To have an effect on bind, this must be done before bind call, so must be
+    // done below Rust std::net::UdpSocket level.
     if reuse_addr {
       raw_socket.set_reuse_address(true)?;
     }
@@ -189,10 +189,15 @@ impl UDPListener {
     while let Ok(nbytes) = self.socket.recv(&mut self.receive_buffer) {
       self.receive_buffer.truncate(nbytes);
       // Now append some extra data to align the buffer end, so the next piece will
-      // be aligned also. This assumes that the initial buffer was aligned to begin with.
+      // be aligned also. This assumes that the initial buffer was aligned to begin
+      // with.
       while self.receive_buffer.len() % 4 != 0 {
-        self.receive_buffer.extend_from_slice(&[0xCC]); // add some funny padding bytes
-                                                        // Funny value encourages fast crash in case these bytes are ever accessed,
+        self.receive_buffer.extend_from_slice(&[0xCC]); // add some funny
+                                                        // padding bytes
+                                                        // Funny value
+                                                        // encourages fast crash
+                                                        // in case these bytes
+                                                        // are ever accessed,
                                                         // as they should not.
       }
       let mut message = self.receive_buffer.split_to(self.receive_buffer.len());
@@ -230,14 +235,13 @@ impl UDPListener {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use crate::network::udp_sender::*;
-
   //use std::os::unix::io::AsRawFd;
   //use nix::sys::socket::setsockopt;
   //use nix::sys::socket::sockopt::IpMulticastLoop;
-
   use std::{thread, time};
+
+  use super::*;
+  use crate::network::udp_sender::*;
 
   #[test]
   fn udpl_single_address() {

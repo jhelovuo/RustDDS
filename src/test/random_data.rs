@@ -1,13 +1,10 @@
-use std::hash::{Hash};
-use serde::Serialize;
-use serde::Deserialize;
+use std::hash::Hash;
+
+use serde::{Deserialize, Serialize};
 
 #[allow(unused_imports)] // since this is testing code only
 use crate::{
-  dds::traits::{
-    key::{Key, Keyed},
-    //datasample_trait::DataSampleTrait,
-  },
+  dds::traits::key::{Key, Keyed},
   serialization::cdr_serializer::to_bytes,
 };
 

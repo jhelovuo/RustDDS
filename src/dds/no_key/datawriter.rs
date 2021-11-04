@@ -1,28 +1,21 @@
-use std::{
-  time::{Duration},
-};
+use std::time::Duration;
 
 use serde::Serialize;
 
-use crate::{serialization::CDRSerializerAdapter, structure::time::Timestamp};
-use crate::structure::entity::{RTPSEntity};
-
-use crate::dds::pubsub::Publisher;
-use crate::dds::topic::Topic;
-use crate::dds::values::result::Result;
-
-use crate::dds::data_types::*;
-use crate::dds::traits::dds_entity::DDSEntity;
-
-use crate::dds::traits::serde_adapters::no_key::SerializerAdapter;
-
-use crate::dds::qos::{HasQoSPolicy, QosPolicies};
-
 use crate::{
+  dds::{
+    data_types::*,
+    pubsub::Publisher,
+    qos::{HasQoSPolicy, QosPolicies},
+    topic::Topic,
+    traits::{dds_entity::DDSEntity, serde_adapters::no_key::SerializerAdapter},
+    values::result::Result,
+    with_key::datawriter as datawriter_with_key,
+  },
   discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
-  dds::with_key::datawriter as datawriter_with_key,
+  serialization::CDRSerializerAdapter,
+  structure::{entity::RTPSEntity, time::Timestamp},
 };
-
 use super::wrappers::{NoKeyWrapper, SAWrapper};
 
 /// DDS DataWriter for no key topics
@@ -346,7 +339,6 @@ where
   /// Unimplemented. <b>Do not use</b>.
   ///
   /// # Examples
-  ///
   // TODO: enable run when implemented
   /// ```no_run
   /// # use serde::{Serialize, Deserialize};
@@ -429,11 +421,14 @@ impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<D, SA> {}
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use crate::dds::{participant::DomainParticipant, topic::TopicKind};
-  use crate::test::random_data::*;
-  use crate::serialization::cdr_serializer::*;
   use byteorder::LittleEndian;
+
+  use super::*;
+  use crate::{
+    dds::{participant::DomainParticipant, topic::TopicKind},
+    serialization::cdr_serializer::*,
+    test::random_data::*,
+  };
 
   #[test]
   fn dw_write_test() {

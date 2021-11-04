@@ -1,6 +1,6 @@
-use crate::messages::submessages::submessage_flag::*;
-use crate::messages::submessages::submessage_kind::SubmessageKind;
 use speedy::{Context, Endianness, Readable, Reader, Writable, Writer};
+
+use crate::messages::submessages::{submessage_flag::*, submessage_kind::SubmessageKind};
 
 #[derive(Debug, PartialEq, Clone, Copy)] // This is only 32 bits, so better Copy
 pub struct SubmessageHeader {
@@ -59,6 +59,7 @@ impl<C: Context> Writable<C> for SubmessageHeader {
 #[cfg(test)]
 mod tests {
   use enumflags2::BitFlags;
+
   use super::*;
 
   serialization_test!( type = SubmessageHeader,

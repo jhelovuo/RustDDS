@@ -1,22 +1,18 @@
-use crate::dds::data_types::EntityId;
-
-use crate::messages::submessages::ack_nack::AckNack;
-use crate::messages::submessages::data::Data;
-use crate::messages::submessages::data_frag::DataFrag;
-use crate::messages::submessages::gap::Gap;
-use crate::messages::submessages::heartbeat::Heartbeat;
-use crate::messages::submessages::heartbeat_frag::HeartbeatFrag;
-use crate::messages::submessages::info_destination::InfoDestination;
-use crate::messages::submessages::info_reply::InfoReply;
-use crate::messages::submessages::info_source::InfoSource;
-use crate::messages::submessages::info_timestamp::InfoTimestamp;
-use crate::messages::submessages::nack_frag::NackFrag;
-use crate::messages::submessages::submessage_flag::*;
-
-use speedy::{Writable, Writer, Context};
+use speedy::{Context, Writable, Writer};
 use enumflags2::BitFlags;
 
-//TODO: These messages are structured a bit oddly. Why is flags separate from the submessage proper?
+use crate::{
+  dds::data_types::EntityId,
+  messages::submessages::{
+    ack_nack::AckNack, data::Data, data_frag::DataFrag, gap::Gap, heartbeat::Heartbeat,
+    heartbeat_frag::HeartbeatFrag, info_destination::InfoDestination, info_reply::InfoReply,
+    info_source::InfoSource, info_timestamp::InfoTimestamp, nack_frag::NackFrag,
+    submessage_flag::*,
+  },
+};
+
+//TODO: These messages are structured a bit oddly. Why is flags separate from
+// the submessage proper?
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum EntitySubmessage {
@@ -30,8 +26,9 @@ pub enum EntitySubmessage {
 }
 
 // we must write this manually, because
-// 1) we cannot implement Writable for *Flags defined using enumflags2, as they are foreign types (coherence rules)
-// 2) Writer should not use any enum variant tag in this type, as we have SubmessageHeader already.
+// 1) we cannot implement Writable for *Flags defined using enumflags2, as they
+// are foreign types (coherence rules) 2) Writer should not use any enum variant
+// tag in this type, as we have SubmessageHeader already.
 impl<C: Context> Writable<C> for EntitySubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {

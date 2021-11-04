@@ -4,49 +4,43 @@ use std::{
   time::Duration,
 };
 
-use mio::{Poll, Events, Token, Ready, PollOpt, Evented};
+use mio::{Evented, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel::{self as mio_channel, Receiver, SendError};
-
 use serde::Serialize;
-
 #[allow(unused_imports)]
-use log::{error, warn, debug, trace, info};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
-  discovery::discovery::DiscoveryCommand, serialization::CDRSerializerAdapter,
-  dds::qos::policy::Liveliness, structure::time::Timestamp,
+  dds::{
+    ddsdata::DDSData,
+    helpers::*,
+    pubsub::Publisher,
+    qos::{
+      policy::{Liveliness, Reliability},
+      HasQoSPolicy, QosPolicies,
+    },
+    statusevents::*,
+    topic::Topic,
+    traits::{
+      dds_entity::DDSEntity, key::*, serde_adapters::with_key::SerializerAdapter, TopicDescription,
+    },
+    values::result::{Error, Result},
+  },
+  discovery::{data_types::topic_data::SubscriptionBuiltinTopicData, discovery::DiscoveryCommand},
+  log_and_err_internal, log_and_err_precondition_not_met,
+  serialization::CDRSerializerAdapter,
+  structure::{
+    cache_change::ChangeKind,
+    dds_cache::DDSCache,
+    entity::RTPSEntity,
+    guid::{EntityId, GUID},
+    time::Timestamp,
+    topic_kind::TopicKind,
+  },
 };
-use crate::structure::entity::{RTPSEntity};
-use crate::structure::{
-  dds_cache::DDSCache,
-  guid::{GUID, EntityId},
-  topic_kind::TopicKind,
-  cache_change::ChangeKind,
-};
-
-use crate::dds::pubsub::Publisher;
-use crate::dds::topic::Topic;
-use crate::log_and_err_precondition_not_met;
-use crate::log_and_err_internal;
-
-use crate::dds::values::result::{Result, Error};
-use crate::dds::statusevents::*;
-use crate::dds::traits::dds_entity::DDSEntity;
-use crate::dds::traits::key::*;
-use crate::dds::traits::TopicDescription;
-use crate::dds::helpers::*;
-
-use crate::dds::qos::{
-  HasQoSPolicy, QosPolicies,
-  policy::{Reliability},
-};
-use crate::dds::traits::serde_adapters::with_key::SerializerAdapter;
 //use crate::dds::traits::serde_adapters::no_key::SerializerAdapter
 //  as no_key_SerializerAdapter; // needs to be visible only, no direct use
-
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-
-use crate::{discovery::data_types::topic_data::SubscriptionBuiltinTopicData, dds::ddsdata::DDSData};
 use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand};
 
 /// Simplified type for CDR encoding
@@ -187,9 +181,10 @@ where
     })
   }
 
-  // This one function provides both get_matched_subscrptions and get_matched_subscription_data
-  // TODO: Maybe we could return references to the subscription data to avoid copying?
-  // But then what if the result set changes while the application processes it?
+  // This one function provides both get_matched_subscrptions and
+  // get_matched_subscription_data TODO: Maybe we could return references to the
+  // subscription data to avoid copying? But then what if the result set changes
+  // while the application processes it?
 
   /// Manually refreshes liveliness if QoS allows it
   ///
@@ -314,15 +309,15 @@ where
     }
   }
 
-  /// This operation blocks the calling thread until either all data written by the
-  /// reliable DataWriter entities is acknowledged by all
-  /// matched reliable DataReader entities, or else the duration specified by the
-  /// `max_wait` parameter elapses, whichever happens first.
+  /// This operation blocks the calling thread until either all data written by
+  /// the reliable DataWriter entities is acknowledged by all
+  /// matched reliable DataReader entities, or else the duration specified by
+  /// the `max_wait` parameter elapses, whichever happens first.
   ///
   /// See DDS Spec 1.4 Section 2.2.2.4.1.12 wait_for_acknowledgments.
   ///
-  /// If this DataWriter is not set to Realiable, or there are no matched DataReaders
-  /// with Realibale QoS, the call succeeds imediately.
+  /// If this DataWriter is not set to Realiable, or there are no matched
+  /// DataReaders with Realibale QoS, the call succeeds imediately.
   ///
   /// Return values
   /// * `Ok(true)` - all acknowledged
@@ -739,8 +734,9 @@ where
   /// data_writer.assert_liveliness().unwrap();
   /// ```
 
-  // TODO: This cannot really fail, so could change type to () (alternatively, make send error visible)
-  // TODO: Better make send failure visible, so application can see if Discovery has failed.
+  // TODO: This cannot really fail, so could change type to () (alternatively,
+  // make send error visible) TODO: Better make send failure visible, so
+  // application can see if Discovery has failed.
   pub fn assert_liveliness(&self) -> Result<()> {
     self.refresh_manual_liveliness();
 
@@ -788,8 +784,10 @@ where
   /// }
   ///
   /// // WithKey is important
-  /// let topic = domain_participant.create_topic("some_topic", "SomeType", &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let topic = domain_participant.create_topic("some_topic", "SomeType",
+  /// &qos, TopicKind::WithKey).unwrap(); let data_writer =
+  /// publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic,
+  /// None).unwrap();
   ///
   /// for sub in data_writer.get_matched_subscriptions().iter() {
   ///   // do something
@@ -803,7 +801,8 @@ where
   /// # Arguments
   ///
   /// * `key` - Key of the instance
-  /// * `source_timestamp` - DDS source timestamp (None uses now as time as specified in DDS spec)
+  /// * `source_timestamp` - DDS source timestamp (None uses now as time as
+  ///   specified in DDS spec)
   ///
   /// # Examples
   ///
@@ -917,14 +916,17 @@ where
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use crate::dds::participant::DomainParticipant;
-  use crate::test::random_data::*;
   use std::thread;
-  use crate::dds::traits::key::Keyed;
-  use crate::serialization::cdr_serializer::CDRSerializerAdapter;
+
   use byteorder::LittleEndian;
   use log::info;
+
+  use super::*;
+  use crate::{
+    dds::{participant::DomainParticipant, traits::key::Keyed},
+    serialization::cdr_serializer::CDRSerializerAdapter,
+    test::random_data::*,
+  };
 
   #[test]
   fn dw_write_test() {

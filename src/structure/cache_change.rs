@@ -1,7 +1,6 @@
-use crate::structure::time::Timestamp;
-use crate::structure::guid::GUID;
-use crate::structure::sequence_number::SequenceNumber;
-//use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
+use crate::structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp};
+//use crate::messages::submessages::submessage_elements::serialized_payload::
+// SerializedPayload;
 use crate::dds::ddsdata::DDSData;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Copy, Clone)]

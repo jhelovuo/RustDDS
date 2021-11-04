@@ -1,12 +1,12 @@
 use std::{
-  net::{SocketAddr, IpAddr},
+  io,
+  net::{IpAddr, SocketAddr},
 };
-use std::io;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace};
 
-use crate::structure::locator::{LocatorList, Locator};
+use crate::structure::locator::{Locator, LocatorList};
 
 pub fn get_local_multicast_locators(port: u16) -> LocatorList {
   let saddr = SocketAddr::new("239.255.0.1".parse().unwrap(), port);

@@ -1,32 +1,28 @@
-use crate::dds::data_types::GUID;
-use std::collections::BTreeSet;
-use crate::structure::sequence_number::SequenceNumber;
+use std::{
+  cmp::max,
+  collections::{BTreeMap, BTreeSet, HashMap},
+  ops::Bound::{Excluded, Included},
+};
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace};
 
-use std::{
-  collections::{BTreeMap, HashMap /*btree_map::Range*/},
-  cmp::max,
+use crate::{
+  dds::{
+    data_types::GUID,
+    qos::{policy::ResourceLimits, QosPolicies, QosPolicyBuilder},
+    typedesc::TypeDesc,
+  },
+  structure::{sequence_number::SequenceNumber, time::Timestamp},
 };
+use super::{cache_change::CacheChange, topic_kind::TopicKind};
 
-use crate::dds::{
-  typedesc::TypeDesc,
-  qos::{QosPolicies, QosPolicyBuilder, policy::ResourceLimits},
-};
-use crate::structure::time::Timestamp;
-
-use super::{
-  topic_kind::TopicKind,
-  cache_change::{CacheChange},
-};
-use std::ops::Bound::{Included, Excluded};
-
-/// DDSCache contains all cacheCahanges that are produced by participant or recieved by participant.
-/// Each topic that is been published or been subscribed are contained in separate TopicCaches.
-/// One TopicCache cotains only DDSCacheChanges of one serialized IDL datatype.
-/// -> all cachechanges in same TopicCache can be serialized/deserialized same way.
-/// Topic/TopicCache is identified by its name, which must be unique in the whole Domain.
+/// DDSCache contains all cacheCahanges that are produced by participant or
+/// recieved by participant. Each topic that is been published or been
+/// subscribed are contained in separate TopicCaches. One TopicCache cotains
+/// only DDSCacheChanges of one serialized IDL datatype. -> all cachechanges in
+/// same TopicCache can be serialized/deserialized same way. Topic/TopicCache is
+/// identified by its name, which must be unique in the whole Domain.
 #[derive(Debug)]
 pub struct DDSCache {
   topic_caches: HashMap<String, TopicCache>,
@@ -189,8 +185,8 @@ impl TopicCache {
         max_samples_per_instance: 64,
       })
       .max_samples;
-    // TODO: We cannot currently keep track of instance counts, because TopicCache or
-    // DDSCache below do not know about instances.
+    // TODO: We cannot currently keep track of instance counts, because TopicCache
+    // or DDSCache below do not know about instances.
     let remove_count = self.history_cache.changes.len() as i32 - max_keep_samples as i32;
     let split_key = *self
       .history_cache
@@ -316,17 +312,21 @@ impl DDSHistoryCache {
 
 #[cfg(test)]
 mod tests {
-  use std::sync::{Arc, RwLock};
-  use std::{thread};
+  use std::{
+    sync::{Arc, RwLock},
+    thread,
+  };
 
   use super::DDSCache;
   use crate::{
     dds::{
-      data_types::DDSTimestamp, ddsdata::DDSData, data_types::DDSDuration, typedesc::TypeDesc,
+      data_types::{DDSDuration, DDSTimestamp},
+      ddsdata::DDSData,
+      typedesc::TypeDesc,
     },
-    messages::submessages::submessage_elements::serialized_payload::{SerializedPayload},
+    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::{
-      cache_change::CacheChange, topic_kind::TopicKind, guid::GUID, sequence_number::SequenceNumber,
+      cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, topic_kind::TopicKind,
     },
   };
 

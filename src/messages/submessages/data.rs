@@ -1,13 +1,16 @@
-use bytes::Bytes;
-use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::messages::submessages::submessages::*;
-use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::SequenceNumber;
-
-use speedy::{Readable, Writable, Context, Writer, Error};
-use enumflags2::BitFlags;
 use std::io;
+
+use bytes::Bytes;
+use speedy::{Context, Error, Readable, Writable, Writer};
+use enumflags2::BitFlags;
+
+use crate::{
+  messages::submessages::{
+    submessage_elements::{parameter_list::ParameterList, serialized_payload::SerializedPayload},
+    submessages::*,
+  },
+  structure::{guid::EntityId, sequence_number::SequenceNumber},
+};
 //use log::debug;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
@@ -45,8 +48,9 @@ pub struct Data {
 }
 
 impl Data {
-  /// DATA submessage cannot be speedy Readable because deserializing this requires info from submessage header.
-  /// Required iformation is  expect_qos and expect_payload whish are told on submessage headerflags.
+  /// DATA submessage cannot be speedy Readable because deserializing this
+  /// requires info from submessage header. Required iformation is  expect_qos
+  /// and expect_payload whish are told on submessage headerflags.
 
   pub fn deserialize_data(buffer: Bytes, flags: BitFlags<DATA_Flags>) -> io::Result<Data> {
     let mut cursor = io::Cursor::new(&buffer);
@@ -69,12 +73,13 @@ impl Data {
     let expect_data = flags.contains(DATA_Flags::Data) || flags.contains(DATA_Flags::Key);
 
     // size of DATA-specific header above is
-    // extraFlags (2) + octetsToInlineQos (2) + readerId (4) + writerId (4) + writerSN (8)
-    // = 20 bytes
+    // extraFlags (2) + octetsToInlineQos (2) + readerId (4) + writerId (4) +
+    // writerSN (8) = 20 bytes
     // of which 16 bytes is after octetsToInlineQos field.
     let rtps_v23_data_header_size: u16 = 16;
-    // There may be some extra data between writerSN and inlineQos, if the header is extended in
-    // future versions. But as of RTPS v2.3 , extra_octets should be always zero.
+    // There may be some extra data between writerSN and inlineQos, if the header is
+    // extended in future versions. But as of RTPS v2.3 , extra_octets should be
+    // always zero.
     let extra_octets = octets_to_inline_qos - rtps_v23_data_header_size;
     // Nevertheless, skip over that extra data, if we are told such exists.
     cursor.set_position(cursor.position() + extra_octets as u64);
@@ -107,12 +112,14 @@ impl Data {
 
 impl<C: Context> Writable<C> for Data {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    //This version of the protocol (2.3) should set all the bits in the extraFlags to zero
+    //This version of the protocol (2.3) should set all the bits in the extraFlags
+    // to zero
     writer.write_u16(0)?;
-    //The octetsToInlineQos field contains the number of octets starting from the first octet immediately following
-    //this field until the first octet of the inlineQos SubmessageElement. If the inlineQos SubmessageElement is not
-    //present (i.e., the InlineQosFlag is not set), then octetsToInlineQos contains the offset to the next field after
-    //the inlineQos.
+    //The octetsToInlineQos field contains the number of octets starting from the
+    // first octet immediately following this field until the first octet of the
+    // inlineQos SubmessageElement. If the inlineQos SubmessageElement is not
+    // present (i.e., the InlineQosFlag is not set), then octetsToInlineQos contains
+    // the offset to the next field after the inlineQos.
     writer.write_u16(16)?;
 
     writer.write_value(&self.reader_id)?;

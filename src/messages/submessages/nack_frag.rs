@@ -1,6 +1,6 @@
-use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::*;
 use speedy::{Readable, Writable};
+
+use crate::structure::{guid::EntityId, sequence_number::*};
 
 /// The NackFrag Submessage is used to communicate the state of a Reader to a
 /// Writer. When a data change is sent as a series of fragments, the NackFrag

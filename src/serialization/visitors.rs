@@ -1,9 +1,7 @@
-use serde::{
-  de::{Visitor, Error},
-};
-use super::{builtin_data_deserializer::BuiltinDataDeserializer};
+use serde::de::{Error, Visitor};
 
-use crate::{messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier};
+use super::builtin_data_deserializer::BuiltinDataDeserializer;
+use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
 impl<'de> Visitor<'de> for BuiltinDataDeserializer {
   type Value = BuiltinDataDeserializer;

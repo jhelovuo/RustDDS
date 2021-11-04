@@ -1,4 +1,5 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
 use crate::structure::parameter_id::ParameterId;
 
 /// The ContentFilterProperty field provides all the required information to

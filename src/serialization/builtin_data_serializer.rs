@@ -1,40 +1,41 @@
 // use crate::discovery::data_types::topic_data::PublicationBuiltinTopicDataKey;
-// use crate::discovery::data_types::topic_data::SubscriptionBuiltinTopicDataKey;
-use crate::discovery::data_types::topic_data::DiscoveredReaderDataKey;
-use crate::discovery::data_types::topic_data::DiscoveredWriterDataKey;
+// use crate::discovery::data_types::topic_data::
+// SubscriptionBuiltinTopicDataKey;
+use std::time::Duration as StdDuration;
+
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+
 use crate::{
-  structure::{
-    locator::{LocatorList, LocatorData},
-    parameter_id::ParameterId,
-    guid::{GUID, GUIDData},
-    builtin_endpoint::{
-      BuiltinEndpointQosData, BuiltinEndpointSetData, BuiltinEndpointSet, BuiltinEndpointQos,
-    },
-    duration::{Duration, DurationData},
-    endpoint::ReliabilityKind,
+  dds::qos::policy::{
+    Deadline, DestinationOrder, Durability, History, LatencyBudget, Lifespan, Liveliness,
+    Ownership, Presentation, QosData, Reliability, ResourceLimits, TimeBasedFilter,
   },
   discovery::{
-    content_filter_property::{ContentFilterPropertyData, ContentFilterProperty},
+    content_filter_property::{ContentFilterProperty, ContentFilterPropertyData},
     data_types::{
+      spdp_participant_data::{SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey},
       topic_data::{
-        SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData, WriterProxy,
-        PublicationBuiltinTopicData, DiscoveredWriterData, TopicBuiltinTopicData,
+        DiscoveredReaderData, DiscoveredReaderDataKey, DiscoveredWriterData,
+        DiscoveredWriterDataKey, PublicationBuiltinTopicData, ReaderProxy,
+        SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
       },
-      spdp_participant_data::SpdpDiscoveredParticipantData,
-      spdp_participant_data::SpdpDiscoveredParticipantDataKey,
     },
   },
   messages::{
-    vendor_id::{VendorId, VendorIdData},
     protocol_version::{ProtocolVersion, ProtocolVersionData},
+    vendor_id::{VendorId, VendorIdData},
   },
-  dds::qos::policy::{
-    Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
-    TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits, QosData,
+  structure::{
+    builtin_endpoint::{
+      BuiltinEndpointQos, BuiltinEndpointQosData, BuiltinEndpointSet, BuiltinEndpointSetData,
+    },
+    duration::{Duration, DurationData},
+    endpoint::ReliabilityKind,
+    guid::{GUIDData, GUID},
+    locator::{LocatorData, LocatorList},
+    parameter_id::ParameterId,
   },
 };
-use serde::{Serialize, Serializer, ser::SerializeStruct, Deserialize};
-use std::time::Duration as StdDuration;
 
 #[derive(Serialize, Deserialize)]
 struct StringData {

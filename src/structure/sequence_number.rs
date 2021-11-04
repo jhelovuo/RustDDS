@@ -1,16 +1,17 @@
-use num_traits::NumOps;
-use std::fmt::Debug;
-use std::hash::Hash;
+use std::{
+  cmp::{min, Ord, PartialOrd},
+  convert::From,
+  fmt::Debug,
+  hash::Hash,
+  mem::size_of,
+  ops::{Bound, RangeBounds},
+};
 //use crate::messages::fragment_number::FragmentNumber;
 use std::collections::BTreeSet;
-use std::cmp::{min, Ord, PartialOrd};
-use std::ops::Bound;
-use std::ops::RangeBounds;
 
+use num_traits::NumOps;
 use num_derive::{FromPrimitive, NumOps, ToPrimitive};
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use std::{convert::From};
-use std::mem::size_of;
 use log::error;
 
 //
@@ -221,11 +222,11 @@ where
 {
   bitmap_base: N,
   num_bits: u32,
-  bitmap: Vec<u32>, // .len() == (numBits+31)/32
-                    // bitmap bits are numbered from MSB to LSB. Bit 0 (MSB of bitmap[0])
-                    // represents SequenceNumber bitmap_base. Bit 31 (LSB of bitmap[0])
-                    // represents SequenceNumber (bitmap_base + 31).
-                    // When num_bits == 0 , bitmap.len() == 0
+  bitmap: Vec<u32>, /* .len() == (numBits+31)/32
+                     * bitmap bits are numbered from MSB to LSB. Bit 0 (MSB of bitmap[0])
+                     * represents SequenceNumber bitmap_base. Bit 31 (LSB of bitmap[0])
+                     * represents SequenceNumber (bitmap_base + 31).
+                     * When num_bits == 0 , bitmap.len() == 0 */
 }
 
 // Not that empty sets also have a valid "base".

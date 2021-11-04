@@ -6,13 +6,13 @@
 //! DDS communicates over the network using the [RTPS](https://www.omg.org/spec/DDSI-RTPS/2.3)
 //! protocol, which by default runs over UDP/IP.
 //!
-//! This implementation does not attempt to make an accurate implementation of the DDS object API,
-//! as it would be quite unnatural to use in Rust as such. However, we aim for functional compatibility,
-//! while at the same time using Rust techniques and conventions.
+//! This implementation does not attempt to make an accurate implementation of
+//! the DDS object API, as it would be quite unnatural to use in Rust as such.
+//! However, we aim for functional compatibility, while at the same time using
+//! Rust techniques and conventions.
 //!
 //! Additionally, there is a [ROS2](https://index.ros.org/doc/ros2/) interface, that is simpler to use than DDS
 //! when communicating to ROS2 components.
-//!
 
 #![warn(clippy::all)]
 #![allow(
