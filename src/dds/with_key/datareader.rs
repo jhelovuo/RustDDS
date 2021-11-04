@@ -28,21 +28,17 @@ use crate::{
   log_and_err_precondition_not_met,
   serialization::CDRDeserializerAdapter,
   structure::{
-    entity::{RTPSEntity, },
-    guid::{GUID, EntityId},
-    time::Timestamp,
     cache_change::CacheChange,
     dds_cache::DDSCache,
     duration::Duration,
-
+    entity::RTPSEntity,
+    guid::{EntityId, GUID},
+    time::Timestamp,
   },
 };
 
-
-
-
 /// Simplified type for CDR encoding
-pub type DataReaderCdr<D> = DataReader<D,CDRDeserializerAdapter<D>>;
+pub type DataReaderCdr<D> = DataReader<D, CDRDeserializerAdapter<D>>;
 
 /// Parameter for reading [Readers](../struct.With_Key_DataReader.html) data
 /// with key or with next from current key.
@@ -112,17 +108,15 @@ impl CurrentStatusChanges {
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
 /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
 /// ```
-pub struct DataReader
-  < D: Keyed + DeserializeOwned,
-    DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D> 
-  > 
-{
+pub struct DataReader<
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+> {
   my_subscriber: Subscriber,
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
-  pub(crate) // so that no_key version can access this
-  notification_receiver: mio_channel::Receiver<()>,
+  pub(crate) notification_receiver: mio_channel::Receiver<()>,
 
   dds_cache: Arc<RwLock<DDSCache>>,
 
@@ -147,9 +141,11 @@ where
         guid: self.get_guid(),
       }) {
       Ok(_) => {}
-      Err(mio_channel::SendError::Disconnected(_) ) =>
-        debug!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. Maybe shutting down?"),
-      Err(e) => error!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. {:?}",
+      Err(mio_channel::SendError::Disconnected(_)) => {
+        debug!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. Maybe shutting down?")
+      }
+      Err(e) => error!(
+        "Failed to send REMOVE_LOCAL_READER DiscoveryCommand. {:?}",
         e
       ),
     }
@@ -177,8 +173,11 @@ where
   ) -> Result<Self> {
     let dp = match subscriber.get_participant() {
       Some(dp) => dp,
-      None => return 
-        log_and_err_precondition_not_met!("Cannot create new DataReader, DomainParticipant doesn't exist.") ,
+      None => {
+        return log_and_err_precondition_not_met!(
+          "Cannot create new DataReader, DomainParticipant doesn't exist."
+        )
+      }
     };
 
     let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), my_id);
@@ -197,7 +196,7 @@ where
       latest_instant: Timestamp::now(),
       deserializer_type: PhantomData,
       discovery_command,
-      status_receiver: StatusReceiver::new(status_channel_rec) ,
+      status_receiver: StatusReceiver::new(status_channel_rec),
       //current_status: CurrentStatusChanges::new(),
       reader_command,
     })
@@ -323,12 +322,12 @@ where
 
     self.fill_local_datasample_cache();
     let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
-    debug!("take selected count = {}", selected.len() );
+    debug!("take selected count = {}", selected.len());
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.take_by_keys(&selected);
-    debug!("take taken count = {}", result.len() );
-    
+    debug!("take taken count = {}", result.len());
+
     Ok(result)
   }
 
@@ -647,92 +646,116 @@ where
       &Timestamp::now(),
     );
 
-    for ( instant,
-          CacheChange { writer_guid, sequence_number: _ , source_timestamp, data_value }
-        ) in cache_changes
+    for (
+      instant,
+      CacheChange {
+        writer_guid,
+        sequence_number: _,
+        source_timestamp,
+        data_value,
+      },
+    ) in cache_changes
     {
       self.latest_instant = instant; // update our time pointer
 
       match data_value {
-        DDSData::DisposeByKey { key: serialized_key , .. } => {
+        DDSData::DisposeByKey {
+          key: serialized_key,
+          ..
+        } => {
           // TODO: Should be parameterizable by DeserializerAdapter
           match DA::key_from_bytes(
-            &serialized_key.value, 
-            serialized_key.representation_identifier) 
-          {
-            Ok(key) => self
-              .datasample_cache
-              .add_sample(Err(key), *writer_guid, instant, *source_timestamp),
+            &serialized_key.value,
+            serialized_key.representation_identifier,
+          ) {
+            Ok(key) => {
+              self
+                .datasample_cache
+                .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
+            }
             Err(e) => {
-              warn!("Failed to deserialize key {}, Topic = {}, Type = {:?}", 
-                      e, self.my_topic.get_name(), self.my_topic.get_type() );
-              debug!("Bytes were {:?}",&serialized_key.value);
-              continue // skip this sample
+              warn!(
+                "Failed to deserialize key {}, Topic = {}, Type = {:?}",
+                e,
+                self.my_topic.get_name(),
+                self.my_topic.get_type()
+              );
+              debug!("Bytes were {:?}", &serialized_key.value);
+              continue; // skip this sample
             }
           }
         }
 
-        DDSData::DisposeByKeyHash { key_hash , .. } => {
+        DDSData::DisposeByKeyHash { key_hash, .. } => {
           /* TODO: Instance to be disposed could be specified by serialized payload
            * also, not only key_hash? */
           match self.datasample_cache.get_key_by_hash(*key_hash) {
-            Some(key) => self
-              .datasample_cache
-              .add_sample(Err(key), *writer_guid, instant, *source_timestamp),
+            Some(key) => {
+              self
+                .datasample_cache
+                .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
+            }
             /* TODO: How to get source timestamps other then None ?? */
             None => warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash),
           }
         }
         DDSData::Data { serialized_payload } => {
           // what is our data serialization format (representation identifier) ?
-          if let Some(recognized_rep_id) = 
-              DA::supported_encodings().iter()
-                .find(|r| **r == serialized_payload.representation_identifier)
+          if let Some(recognized_rep_id) = DA::supported_encodings()
+            .iter()
+            .find(|r| **r == serialized_payload.representation_identifier)
           {
             match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
-              Ok(payload) => {
-                self
-                .datasample_cache
-                .add_sample(Ok(payload), *writer_guid, instant, *source_timestamp)
-              }
+              Ok(payload) => self.datasample_cache.add_sample(
+                Ok(payload),
+                *writer_guid,
+                instant,
+                *source_timestamp,
+              ),
               Err(e) => {
-                error!("Failed to deserialize bytes: {}, Topic = {}, Type = {:?}", 
-                        e, self.my_topic.get_name(), self.my_topic.get_type() );
-                debug!("Bytes were {:?}",&serialized_payload.value);
-                continue // skip this sample
+                error!(
+                  "Failed to deserialize bytes: {}, Topic = {}, Type = {:?}",
+                  e,
+                  self.my_topic.get_name(),
+                  self.my_topic.get_type()
+                );
+                debug!("Bytes were {:?}", &serialized_payload.value);
+                continue; // skip this sample
               }
             }
           } else {
-              warn!("Unknown representation id {:?}.", serialized_payload.representation_identifier);
-              debug!("Serialized payload was {:?}", &serialized_payload);
-              continue // skip this sample, as we cannot decode it                
+            warn!(
+              "Unknown representation id {:?}.",
+              serialized_payload.representation_identifier
+            );
+            debug!("Serialized payload was {:?}", &serialized_payload);
+            continue; // skip this sample, as we cannot decode it
           }
-        }
-        /*
-        DDSData::DataFrags { representation_identifier, bytes_frags } => {
-          // what is our data serialization format (representation identifier) ?
-          if let Some(recognized_rep_id) = 
-              DA::supported_encodings().iter().find(|r| *r == representation_identifier)
-          {
-            match DA::from_vec_bytes(bytes_frags, *recognized_rep_id) {
-              Ok(payload) => {
-                self
-                .datasample_cache
-                .add_sample(Ok(payload), *writer_guid, instant, None)
+        } /*
+          DDSData::DataFrags { representation_identifier, bytes_frags } => {
+            // what is our data serialization format (representation identifier) ?
+            if let Some(recognized_rep_id) =
+                DA::supported_encodings().iter().find(|r| *r == representation_identifier)
+            {
+              match DA::from_vec_bytes(bytes_frags, *recognized_rep_id) {
+                Ok(payload) => {
+                  self
+                  .datasample_cache
+                  .add_sample(Ok(payload), *writer_guid, instant, None)
+                }
+                Err(e) => {
+                  error!("Failed to deserialize (DATAFRAG) bytes: {}, Topic = {}, Type = {:?}",
+                          e, self.my_topic.get_name(), self.my_topic.get_type() );
+                  //debug!("Bytes were {:?}",&serialized_payload.value);
+                  continue // skip this sample
+                }
               }
-              Err(e) => {
-                error!("Failed to deserialize (DATAFRAG) bytes: {}, Topic = {}, Type = {:?}", 
-                        e, self.my_topic.get_name(), self.my_topic.get_type() );
-                //debug!("Bytes were {:?}",&serialized_payload.value);
-                continue // skip this sample
-              }
+            } else {
+                warn!("Unknown representation id {:?}.", representation_identifier);
+                //debug!("Serialized payload was {:?}", &serialized_payload);
+                continue // skip this sample, as we cannot decode it
             }
-          } else {
-              warn!("Unknown representation id {:?}.", representation_identifier);
-              //debug!("Serialized payload was {:?}", &serialized_payload);
-              continue // skip this sample, as we cannot decode it                
-          }
-        } */
+          } */
       }
     }
   }
@@ -747,11 +770,7 @@ where
         SelectByKey::This => Some(k),
         SelectByKey::Next => self.datasample_cache.get_next_key(&k),
       },
-      None => self
-        .datasample_cache
-        .instance_map
-        .keys()
-        .next().cloned(),
+      None => self.datasample_cache.instance_map.keys().next().cloned(),
     }
   }
 
@@ -1044,7 +1063,7 @@ where
       ChangeKind::NotAliveUnregistered => InstanceState::NotAliveNoWriters,
     }
   }
-  */ 
+  */
   /*
   /// Gets RequestedDeadlineMissedStatus
   ///
@@ -1085,7 +1104,7 @@ where
   /// }
   ///
   /// ```
-  
+
   pub fn get_requested_deadline_missed_status(
     &mut self,
   ) -> Result<Option<RequestedDeadlineMissedStatus>> {
@@ -1108,14 +1127,12 @@ where
   // But we do not believe in handle-oriented programming, so just return
   // the actual data right away. Since the handles are quite opaque, about the
   // only thing that could be done with the handles would be counting how many
-  // we got. 
+  // we got.
 
-  pub fn get_matched_publications(&self) -> impl Iterator<Item=PublicationBuiltinTopicData> {
+  pub fn get_matched_publications(&self) -> impl Iterator<Item = PublicationBuiltinTopicData> {
     vec![].into_iter()
   }
-
 } // impl
-
 
 // This is  not part of DDS spec. We implement mio Eventd so that the
 // application can asynchronously poll DataReader(s).
@@ -1149,7 +1166,7 @@ where
   }
 }
 
-impl <D,DA> StatusEvented<DataReaderStatus> for DataReader<D,DA>
+impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -1160,7 +1177,7 @@ where
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
     self.status_receiver.try_recv_status()
-  }  
+  }
 }
 
 impl<D, DA> HasQoSPolicy for DataReader<D, DA>
@@ -1230,7 +1247,12 @@ mod tests {
 
     let sub = dp.create_subscriber(&qos).unwrap();
     let topic = dp
-      .create_topic("dr".to_string(), "drtest?".to_string(), &qos, TopicKind::WithKey)
+      .create_topic(
+        "dr".to_string(),
+        "drtest?".to_string(),
+        &qos,
+        TopicKind::WithKey,
+      )
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
@@ -1251,7 +1273,9 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver,
     };
 
-    let mut new_reader = Reader::new(reader_ing, dp.get_dds_cache(), 
+    let mut new_reader = Reader::new(
+      reader_ing,
+      dp.get_dds_cache(),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1268,7 +1292,10 @@ mod tests {
 
     let writer_guid = GUID {
       guid_prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      entity_id: EntityId::create_custom_entity_id(
+        [1; 3],
+        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
+      ),
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guid_prefix;
@@ -1352,7 +1379,12 @@ mod tests {
 
     let sub = dp.create_subscriber(&qos).unwrap();
     let topic = dp
-      .create_topic("dr read".to_string(), "read fn test?".to_string(), &qos, TopicKind::WithKey)
+      .create_topic(
+        "dr read".to_string(),
+        "read fn test?".to_string(),
+        &qos,
+        TopicKind::WithKey,
+      )
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
@@ -1373,11 +1405,12 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver,
     };
 
-    let mut reader = Reader::new(reader_ing, 
-      dp.get_dds_cache(), 
+    let mut reader = Reader::new(
+      reader_ing,
+      dp.get_dds_cache(),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
-      );
+    );
 
     let mut datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)
@@ -1385,7 +1418,10 @@ mod tests {
 
     let writer_guid = GUID {
       guid_prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      entity_id: EntityId::create_custom_entity_id(
+        [1; 3],
+        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
+      ),
     };
     let mut mr_state = MessageReceiverState::default();
     mr_state.source_guid_prefix = writer_guid.guid_prefix;
@@ -1425,7 +1461,7 @@ mod tests {
     data_msg2.writer_sn = SequenceNumber::from(2);
 
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
-    
+
     let serialized_payload2 = Some(SerializedPayload {
       representation_identifier: RepresentationIdentifier::CDR_LE,
       representation_options: [0, 0],
@@ -1437,13 +1473,13 @@ mod tests {
     // Read the same sample two times.
     {
       let result_vec = datareader.read(100, ReadCondition::any()).unwrap();
-      assert_eq!(result_vec.len(),2);
+      assert_eq!(result_vec.len(), 2);
       let d = result_vec[0].value().unwrap();
       assert_eq!(&test_data, d);
     }
     {
       let result_vec2 = datareader.read(100, ReadCondition::any()).unwrap();
-      assert_eq!(result_vec2.len(),2);
+      assert_eq!(result_vec2.len(), 2);
       let d2 = result_vec2[1].value().unwrap();
       assert_eq!(&test_data2, d2);
     }
@@ -1576,7 +1612,7 @@ mod tests {
     assert!(results.unwrap().is_empty());
   }
 
-/* removing this test case, because UDPSender cannot be moved across threads.
+  /* removing this test case, because UDPSender cannot be moved across threads.
   #[test]
   fn dr_wake_up() {
     let dp = DomainParticipant::new(0).expect("Publisher creation failed!");
