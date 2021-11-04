@@ -1,8 +1,9 @@
 use speedy::{Readable, Writable};
 
-use crate::messages::protocol_version::ProtocolVersion;
-use crate::messages::vendor_id::VendorId;
-use crate::structure::guid::GuidPrefix;
+use crate::{
+  messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
+  structure::guid::GuidPrefix,
+};
 
 /// This message modifies the logical source of the Submessages
 /// that follow.

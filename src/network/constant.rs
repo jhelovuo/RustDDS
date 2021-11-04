@@ -1,12 +1,11 @@
-use crate::dds::rtps_reader_proxy::RtpsReaderProxy;
-use crate::discovery::data_types::topic_data::DiscoveredReaderData;
-use crate::discovery::data_types::topic_data::DiscoveredWriterData;
-use crate::dds::data_types::GuidPrefix;
-
 use mio::Token;
 use mio_extras::channel as mio_channel;
 
-use crate::structure::guid::{GUID, EntityKind};
+use crate::{
+  dds::{data_types::GuidPrefix, rtps_reader_proxy::RtpsReaderProxy},
+  discovery::data_types::topic_data::{DiscoveredReaderData, DiscoveredWriterData},
+  structure::guid::{EntityKind, GUID},
+};
 
 const PTB: usize = EntityKind::POLL_TOKEN_BASE;
 

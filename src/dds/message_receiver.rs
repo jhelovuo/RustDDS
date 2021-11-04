@@ -1,40 +1,44 @@
-use crate::messages::protocol_version::ProtocolVersion;
-use crate::messages::vendor_id::VendorId;
-use crate::messages::submessages::submessages::EntitySubmessage;
-use crate::messages::submessages::submessages::*;
-use crate::structure::guid::{GuidPrefix, GUID};
-use crate::structure::entity::RTPSEntity;
-use crate::structure::locator::{LocatorKind, LocatorList, Locator};
-use crate::structure::time::Timestamp;
-use crate::serialization::Message;
-use crate::serialization::submessage::SubmessageBody;
+use std::collections::{btree_map::Entry, BTreeMap};
 
-use crate::dds::reader::Reader;
-use crate::structure::guid::EntityId;
-
-#[cfg(test)] use crate::dds::ddsdata::DDSData;
-#[cfg(test)] use crate::structure::cache_change::CacheChange;
-#[cfg(test)] use crate::structure::sequence_number::{SequenceNumber};
-
-use mio_extras::channel as mio_channel;
-use mio_extras::channel::TrySendError;
-use log::{debug, warn, trace, info};
+use mio_extras::{channel as mio_channel, channel::TrySendError};
+use log::{debug, info, trace, warn};
 use bytes::Bytes;
 
-use std::collections::{BTreeMap, btree_map::Entry};
-
+use crate::{
+  dds::reader::Reader,
+  messages::{
+    protocol_version::ProtocolVersion,
+    submessages::submessages::{EntitySubmessage, *},
+    vendor_id::VendorId,
+  },
+  serialization::{submessage::SubmessageBody, Message},
+  structure::{
+    entity::RTPSEntity,
+    guid::{EntityId, GuidPrefix, GUID},
+    locator::{Locator, LocatorKind, LocatorList},
+    time::Timestamp,
+  },
+};
+#[cfg(test)]
+use crate::dds::ddsdata::DDSData;
+#[cfg(test)]
+use crate::structure::cache_change::CacheChange;
+#[cfg(test)]
+use crate::structure::sequence_number::SequenceNumber;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
-/// MessageReceiver is the submessage sequence interpreter described in 
+/// MessageReceiver is the submessage sequence interpreter described in
 /// RTPS spec v2.3 Section 8.3.4 "The RTPS Message Receiver".
-/// It calls the message/submessage deserializers to parse the sequence of submessages.
-/// Then it processes the instructions in the Interpreter SUbmessages and forwards data in
-/// Enity Submessages to the appropriate Entities. (See RTPS spec Section 8.3.7)
+/// It calls the message/submessage deserializers to parse the sequence of
+/// submessages. Then it processes the instructions in the Interpreter
+/// SUbmessages and forwards data in Enity Submessages to the appropriate
+/// Entities. (See RTPS spec Section 8.3.7)
 
 pub(crate) struct MessageReceiver {
-  pub available_readers: BTreeMap<EntityId,Reader>,
-  // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this to locate RTPSReaderProxy if negative acknack.
+  pub available_readers: BTreeMap<EntityId, Reader>,
+  // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this
+  // to locate RTPSReaderProxy if negative acknack.
   acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
 
   own_guid_prefix: GuidPrefix,
@@ -109,28 +113,37 @@ impl MessageReceiver {
 
   pub fn add_reader(&mut self, new_reader: Reader) {
     let eid = new_reader.get_guid().entity_id;
-    match self.available_readers.entry( eid ) {
-      Entry::Occupied( _ ) => warn!("Already have Reader {:?} - not adding.",eid) ,
-      e => { e.or_insert(new_reader); }
+    match self.available_readers.entry(eid) {
+      Entry::Occupied(_) => warn!("Already have Reader {:?} - not adding.", eid),
+      e => {
+        e.or_insert(new_reader);
+      }
     }
   }
 
   pub fn remove_reader(&mut self, old_reader_guid: GUID) -> Option<Reader> {
-    self.available_readers.remove( &old_reader_guid.entity_id )
+    self.available_readers.remove(&old_reader_guid.entity_id)
   }
 
   pub fn get_reader_mut(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
-    self.available_readers.get_mut( &reader_id )
+    self.available_readers.get_mut(&reader_id)
   }
 
   // use for test and debugging only
   #[cfg(test)]
-  fn get_reader_and_history_cache_change(&self, reader_id: EntityId, 
+  fn get_reader_and_history_cache_change(
+    &self,
+    reader_id: EntityId,
     sequence_number: SequenceNumber,
   ) -> Option<DDSData> {
-    Some (self.available_readers.get( &reader_id ).unwrap()
-      .get_history_cache_change_data(sequence_number)
-      .unwrap() )
+    Some(
+      self
+        .available_readers
+        .get(&reader_id)
+        .unwrap()
+        .get_history_cache_change_data(sequence_number)
+        .unwrap(),
+    )
   }
 
   // use for test and debugging only
@@ -140,15 +153,23 @@ impl MessageReceiver {
     reader_id: EntityId,
     sequence_number: SequenceNumber,
   ) -> CacheChange {
-    self.available_readers.get( &reader_id ).unwrap()
+    self
+      .available_readers
+      .get(&reader_id)
+      .unwrap()
       .get_history_cache_change(sequence_number)
       .unwrap()
   }
 
   #[cfg(test)]
-  fn get_reader_history_cache_start_and_end_seq_num( &self, reader_id: EntityId ) 
-      -> Vec<SequenceNumber> {
-    self.available_readers.get( &reader_id ).unwrap()
+  fn get_reader_history_cache_start_and_end_seq_num(
+    &self,
+    reader_id: EntityId,
+  ) -> Vec<SequenceNumber> {
+    self
+      .available_readers
+      .get(&reader_id)
+      .unwrap()
       .get_history_cache_sequence_start_and_end_numbers()
   }
 
@@ -163,15 +184,18 @@ impl MessageReceiver {
     // Check for RTPS ping message. At least RTI implementation sends these.
     // What should we do with them? The spec does not say.
     if msg_bytes.len() < RTPS_MESSAGE_HEADER_SIZE {
-      if msg_bytes.len() >= 16 && msg_bytes[0..4] == b"RTPS"[..] && msg_bytes[9..16] == b"DDSPING"[..] {
-        // TODO: Add some sensible ping message handling here. 
+      if msg_bytes.len() >= 16
+        && msg_bytes[0..4] == b"RTPS"[..]
+        && msg_bytes[9..16] == b"DDSPING"[..]
+      {
+        // TODO: Add some sensible ping message handling here.
         info!("Received RTPS PING. Do not know how to respond.");
-        debug!("Data was {:?}",&msg_bytes);
-        return
+        debug!("Data was {:?}", &msg_bytes);
+        return;
       } else {
         warn!("Message is shorter than header. Cannot deserialize.");
-        debug!("Data was {:?}",&msg_bytes);
-        return
+        debug!("Data was {:?}", &msg_bytes);
+        return;
       }
     }
 
@@ -181,8 +205,8 @@ impl MessageReceiver {
       Ok(m) => m,
       Err(speedy_err) => {
         warn!("RTPS deserialize error {:?}", speedy_err);
-        debug!("Data was {:?}",msg_bytes);
-        return
+        debug!("Data was {:?}", msg_bytes);
+        return;
       }
     };
 
@@ -191,8 +215,7 @@ impl MessageReceiver {
   }
 
   // This is also called directly from dp_event_loop in case of loopback messages.
-  pub fn handle_parsed_message(&mut self, rtps_message: Message)
-  {
+  pub fn handle_parsed_message(&mut self, rtps_message: Message) {
     self.reset();
     self.dest_guid_prefix = self.own_guid_prefix;
     self.source_guid_prefix = rtps_message.header.guid_prefix;
@@ -207,33 +230,40 @@ impl MessageReceiver {
   }
 
   fn handle_entity_submessage(&mut self, submessage: EntitySubmessage) {
-    if self.dest_guid_prefix != self.own_guid_prefix 
-        && self.dest_guid_prefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
+    if self.dest_guid_prefix != self.own_guid_prefix
+      && self.dest_guid_prefix != GuidPrefix::GUIDPREFIX_UNKNOWN
+    {
       debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
         self.dest_guid_prefix, self.own_guid_prefix);
-      return 
+      return;
     }
 
     let mr_state = self.give_message_receiver_info();
     match submessage {
       EntitySubmessage::Data(data, data_flags) => {
-        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
+        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched
+        // readers
         if data.reader_id == EntityId::ENTITYID_UNKNOWN {
-          trace!("handle_entity_submessage DATA from unknown. writer_id = {:?}", &data.writer_id);
+          trace!(
+            "handle_entity_submessage DATA from unknown. writer_id = {:?}",
+            &data.writer_id
+          );
           for reader in self
             .available_readers
             .values_mut()
-            // exception: discovery prococol reader must read from unkonwn discovery protocol writers
-            // TODO: This logic here is uglyish. Can we just inject a presupposed writer (proxy)
-            // to the built-in reader as it is created?
-            .filter(|r| r.contains_writer(data.writer_id)
-                        || (data.writer_id == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
-                            &&
-                            r.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
-                            )
-                      )
+            // exception: discovery prococol reader must read from unkonwn discovery protocol
+            // writers TODO: This logic here is uglyish. Can we just inject a
+            // presupposed writer (proxy) to the built-in reader as it is created?
+            .filter(|r| {
+              r.contains_writer(data.writer_id)
+                || (data.writer_id == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
+                  && r.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER)
+            })
           {
-            debug!("handle_entity_submessage DATA from unknown handling in {:?}",&reader);
+            debug!(
+              "handle_entity_submessage DATA from unknown handling in {:?}",
+              &reader
+            );
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
         } else {
@@ -243,7 +273,8 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
-        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
+        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched
+        // readers
         if heartbeat.reader_id == EntityId::ENTITYID_UNKNOWN {
           for reader in self
             .available_readers
@@ -274,21 +305,25 @@ impl MessageReceiver {
       EntitySubmessage::AckNack(acknack, _) => {
         // Note: This must not block, because the receiving end is the same thread,
         // i.e. blocking here is an instant deadlock.
-        match self.acknack_sender.try_send((self.source_guid_prefix, 
-            AckSubmessage::AckNack(acknack))) {
+        match self
+          .acknack_sender
+          .try_send((self.source_guid_prefix, AckSubmessage::AckNack(acknack)))
+        {
           Ok(_) => (),
-          Err(TrySendError::Full(_)) => 
-            info!("AckNack pipe full. Looks like I am very busy. Discarding submessage."),
+          Err(TrySendError::Full(_)) => {
+            info!("AckNack pipe full. Looks like I am very busy. Discarding submessage.")
+          }
           Err(e) => warn!("AckNack pipe fail: {:?}", e),
         }
       }
       EntitySubmessage::DataFrag(datafrag, flags) => {
         if let Some(target_reader) = self.get_reader_mut(datafrag.reader_id) {
-          target_reader.handle_datafrag_msg(datafrag, flags, mr_state, );
+          target_reader.handle_datafrag_msg(datafrag, flags, mr_state);
         }
       }
       EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
-        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched readers
+        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched
+        // readers
         if heartbeatfrag.reader_id == EntityId::ENTITYID_UNKNOWN {
           for reader in self
             .available_readers
@@ -346,8 +381,10 @@ impl MessageReceiver {
 
   pub fn notify_data_to_readers(&self, readers: Vec<EntityId>) {
     for eid in readers {
-      self.available_readers.get(&eid)
-        .map( |r| r.notify_cache_change() );
+      self
+        .available_readers
+        .get(&eid)
+        .map(|r| r.notify_cache_change());
     }
   }
 
@@ -383,32 +420,34 @@ impl Default for MessageReceiverState {
 #[cfg(test)]
 
 mod tests {
-  use crate::structure::sequence_number::SequenceNumber;
-use super::*;
-  use crate::{
-    dds::writer::WriterCommand, messages::header::Header,
-    dds::with_key::datareader::ReaderCommand,
+  use std::{
+    rc::Rc,
+    sync::{Arc, RwLock},
   };
-  use crate::dds::reader::ReaderIngredients;
-  use crate::dds::writer::WriterIngredients;
-  use crate::network::udp_sender::UDPSender;
-  use crate::dds::statusevents::DataReaderStatus;
-  use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
-  use crate::serialization::cdr_serializer::to_bytes;
-  use crate::dds::writer::Writer;
-  use crate::structure::dds_cache::DDSCache;
-  use crate::structure::topic_kind::TopicKind;
-  use crate::structure::guid::EntityKind;
-  use crate::dds::{qos::QosPolicies, typedesc::TypeDesc};
 
-  use speedy::{Writable, Readable};
+  use speedy::{Readable, Writable};
   use byteorder::LittleEndian;
   use log::info;
-  use serde::{Serialize, Deserialize};
+  use serde::{Deserialize, Serialize};
   use mio_extras::channel as mio_channel;
-  use std::sync::{RwLock, Arc};
-  use std::rc::Rc;
 
+  use crate::{
+    dds::{
+      qos::QosPolicies,
+      reader::ReaderIngredients,
+      statusevents::DataReaderStatus,
+      typedesc::TypeDesc,
+      with_key::datareader::ReaderCommand,
+      writer::{Writer, WriterCommand, WriterIngredients},
+    },
+    messages::header::Header,
+    network::udp_sender::UDPSender,
+    serialization::{cdr_deserializer::deserialize_from_little_endian, cdr_serializer::to_bytes},
+    structure::{
+      dds_cache::DDSCache, guid::EntityKind, sequence_number::SequenceNumber, topic_kind::TopicKind,
+    },
+  };
+  use super::*;
 
   #[test]
 
@@ -437,12 +476,14 @@ use super::*;
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
 
-    let entity = EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
+    let entity =
+      EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
     let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
 
     new_guid.from_prefix(entity);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) = mio_extras::channel::sync_channel::<DataReaderStatus>(100);
+    let (status_sender, _status_reciever) =
+      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
@@ -461,9 +502,12 @@ use super::*;
       data_reader_command_receiver: reader_command_receiver,
     };
 
-    let new_reader = Reader::new(reader_ing, dds_cache,
+    let new_reader = Reader::new(
+      reader_ing,
+      dds_cache,
       Rc::new(UDPSender::new_with_random_port().unwrap()),
-      mio_extras::timer::Builder::default().build(),);
+      mio_extras::timer::Builder::default().build(),
+    );
 
     // Skip for now+
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);
@@ -494,7 +538,8 @@ use super::*;
       size: i32,
     }
 
-    let deserializedShapeType: ShapeType = deserialize_from_little_endian(&a.data().unwrap()).unwrap();
+    let deserializedShapeType: ShapeType =
+      deserialize_from_little_endian(&a.data().unwrap()).unwrap();
     info!("deserialized shapeType: {:?}", deserializedShapeType);
     assert_eq!(deserializedShapeType.color, "RED");
 
@@ -505,8 +550,10 @@ use super::*;
     let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
 
     let writer_ing = WriterIngredients {
-      guid: GUID::new_with_prefix_and_id(guiPrefix, 
-          EntityId::create_custom_entity_id([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED)),
+      guid: GUID::new_with_prefix_and_id(
+        guiPrefix,
+        EntityId::create_custom_entity_id([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+      ),
       writer_command_receiver: hccc_download,
       topic_name: String::from("topicName1"),
       qos_policies: QosPolicies::qos_none(),

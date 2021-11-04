@@ -1,41 +1,46 @@
-#[allow(unused_imports)]
-use log::{debug, warn, trace, error};
-
-use crate::{
-  network::constant::get_user_traffic_multicast_port,
-  network::constant::get_user_traffic_unicast_port,
-  network::util::get_local_multicast_locators,
-  network::util::get_local_unicast_socket_address,
-  structure::{
-    guid::{EntityId, GUID, EntityKind},
-    locator::{Locator, LocatorList},
-    sequence_number::{SequenceNumber},
-  },
-  dds::qos::{QosPolicies},
-  messages::submessages::{submessage::AckSubmessage},
-  discovery::data_types::topic_data::DiscoveredReaderData,
-};
-
 use std::{
   collections::BTreeSet,
-  net::{SocketAddr, Ipv4Addr},
+  net::{Ipv4Addr, SocketAddr},
 };
 
-use super::reader::{ReaderIngredients};
+#[allow(unused_imports)]
+use log::{debug, error, trace, warn};
+
+use crate::{
+  dds::qos::QosPolicies,
+  discovery::data_types::topic_data::DiscoveredReaderData,
+  messages::submessages::submessage::AckSubmessage,
+  network::{
+    constant::{get_user_traffic_multicast_port, get_user_traffic_unicast_port},
+    util::{get_local_multicast_locators, get_local_unicast_socket_address},
+  },
+  structure::{
+    guid::{EntityId, EntityKind, GUID},
+    locator::{Locator, LocatorList},
+    sequence_number::SequenceNumber,
+  },
+};
+use super::reader::ReaderIngredients;
 
 #[derive(Debug, PartialEq, Clone)]
-/// ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched RTPS Reader
+/// ReaderProxy class represents the information an RTPS StatefulWriter
+/// maintains on each matched RTPS Reader
 pub(crate) struct RtpsReaderProxy {
-  ///Identifies the remote matched RTPS Reader that is represented by the ReaderProxy
+  ///Identifies the remote matched RTPS Reader that is represented by the
+  /// ReaderProxy
   pub remote_reader_guid: GUID,
   /// Identifies the group to which the matched Reader belongs
   pub remote_group_entity_id: EntityId,
-  /// List of unicast locators (transport, address, port combinations) that can be used to send messages to the matched RTPS Reader. The list may be empty
+  /// List of unicast locators (transport, address, port combinations) that can
+  /// be used to send messages to the matched RTPS Reader. The list may be empty
   pub unicast_locator_list: LocatorList,
-  /// List of multicast locators (transport, address, port combinations) that can be used to send messages to the matched RTPS Reader. The list may be empty
+  /// List of multicast locators (transport, address, port combinations) that
+  /// can be used to send messages to the matched RTPS Reader. The list may be
+  /// empty
   pub multicast_locator_list: LocatorList,
 
-  /// Specifies whether the remote matched RTPS Reader expects in-line QoS to be sent along with any data.
+  /// Specifies whether the remote matched RTPS Reader expects in-line QoS to be
+  /// sent along with any data.
   pub expects_in_line_qos: bool,
   /// Specifies whether the remote Reader is responsive to the Writer
   pub is_active: bool,
@@ -179,7 +184,8 @@ impl RtpsReaderProxy {
       AckSubmessage::AckNack(acknack) => {
         self.all_acked_before = acknack.reader_sn_state.base();
         // clean up unsent_changes:
-        // The handy split_off function "Returns everything after the given key, including the key."
+        // The handy split_off function "Returns everything after the given key,
+        // including the key."
         self.unsent_changes = self.unsent_changes.split_off(&self.all_acked_before);
 
         // Insert the requested changes.
@@ -204,7 +210,8 @@ impl RtpsReaderProxy {
     }
   }
 
-  /// this should be called everytime a new CacheChange is set to RTPS writer HistoryCache
+  /// this should be called everytime a new CacheChange is set to RTPS writer
+  /// HistoryCache
   pub fn notify_new_cache_change(&mut self, sequence_number: SequenceNumber) {
     if sequence_number == SequenceNumber::from(0) {
       error!(
@@ -215,8 +222,8 @@ impl RtpsReaderProxy {
     self.unsent_changes.insert(sequence_number);
   }
 
-  // pub fn remove_unsent_cache_change(&mut self, sequence_number: SequenceNumber) {
-  //   self.unsent_changes.remove(&sequence_number);
+  // pub fn remove_unsent_cache_change(&mut self, sequence_number: SequenceNumber)
+  // {   self.unsent_changes.remove(&sequence_number);
   // }
 
   // pub fn sequence_is_acked(&self, sequence_number: SequenceNumber) -> bool {
@@ -245,13 +252,13 @@ impl RtpsReaderProxy {
 //   UNDERWAY,
 // }
 
-// ///The RTPS ChangeForReader is an association class that maintains information of a CacheChange in the RTPS
-// ///Writer HistoryCache as it pertains to the RTPS Reader represented by the ReaderProxy
-// pub struct RTPSChangeForReader {
-//   ///Indicates the status of a CacheChange relative to the RTPS Reader represented by the ReaderProxy.
-//   pub kind: ChangeForReaderStatusKind,
-//   ///Indicates whether the change is relevant to the RTPS Reader represented by the ReaderProxy.
-//   pub is_relevant: bool,
+// ///The RTPS ChangeForReader is an association class that maintains
+// information of a CacheChange in the RTPS ///Writer HistoryCache as it
+// pertains to the RTPS Reader represented by the ReaderProxy pub struct
+// RTPSChangeForReader {   ///Indicates the status of a CacheChange relative to
+// the RTPS Reader represented by the ReaderProxy.   pub kind:
+// ChangeForReaderStatusKind,   ///Indicates whether the change is relevant to
+// the RTPS Reader represented by the ReaderProxy.   pub is_relevant: bool,
 // }
 
 // impl RTPSChangeForReader {

@@ -1,12 +1,15 @@
-use crate::structure::sequence_number::{SequenceNumber, SequenceNumberSet};
-use crate::{
-  serialization::SubMessage, serialization::SubmessageBody, structure::guid::EntityId,
-  messages::submessages::submessages::SubmessageHeader,
-};
 use enumflags2::BitFlags;
 use log::error;
 use speedy::{Readable, Writable};
 
+use crate::{
+  messages::submessages::submessages::SubmessageHeader,
+  serialization::{SubMessage, SubmessageBody},
+  structure::{
+    guid::EntityId,
+    sequence_number::{SequenceNumber, SequenceNumberSet},
+  },
+};
 use super::{submessage::EntitySubmessage, submessage_flag::GAP_Flags, submessage_kind::SubmessageKind};
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers

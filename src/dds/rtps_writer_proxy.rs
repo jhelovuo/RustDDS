@@ -1,23 +1,21 @@
-use core::ops::Bound::Excluded;
-use core::ops::Bound::Unbounded;
-use crate::structure::locator::LocatorList;
-use crate::structure::guid::{EntityId, GUID};
-use crate::{
-  discovery::data_types::topic_data::DiscoveredWriterData,
-  structure::sequence_number::{SequenceNumber},
-  structure::time::Timestamp,
-};
-use crate::dds::fragment_assembler::FragmentAssembler;
-use crate::messages::submessages::submessages::DataFrag;
-use crate::messages::submessages::submessages::DATAFRAG_Flags;
-use crate::dds::ddsdata::DDSData;
+use core::ops::Bound::{Excluded, Unbounded};
+use std::{cmp::max, collections::BTreeMap};
 
-use std::collections::BTreeMap;
 use enumflags2::BitFlags;
-use std::cmp::max;
-
 #[allow(unused_imports)]
-use log::{error, warn, debug, trace, info};
+use log::{debug, error, info, trace, warn};
+
+use crate::{
+  dds::{ddsdata::DDSData, fragment_assembler::FragmentAssembler},
+  discovery::data_types::topic_data::DiscoveredWriterData,
+  messages::submessages::submessages::{DATAFRAG_Flags, DataFrag},
+  structure::{
+    guid::{EntityId, GUID},
+    locator::LocatorList,
+    sequence_number::SequenceNumber,
+    time::Timestamp,
+  },
+};
 
 #[derive(Debug)] // these are not cloneable, because contined data may be large
 pub(crate) struct RtpsWriterProxy {
@@ -155,19 +153,22 @@ impl RtpsWriterProxy {
           break; // not consecutive
         }
       } // end for
-        // Now we have received everything up to and including s. Ack base is one up from that.
+        // Now we have received everything up to and including s. Ack base is one up
+        // from that.
       self.ack_base = s + SequenceNumber::new(1)
     }
   }
 
   pub fn available_changes_max(&self) -> Option<SequenceNumber> {
-    // TODO: replace this when BTreeMap function last_key_value() is in stable release
+    // TODO: replace this when BTreeMap function last_key_value() is in stable
+    // release
     self.changes.keys().next_back().copied()
   }
 
   pub fn available_changes_min(&self) -> Option<SequenceNumber> {
     self.changes.keys().next().copied()
-    // TODO: replace this when BTreeMap function first_key_value() is in stable release
+    // TODO: replace this when BTreeMap function first_key_value() is in stable
+    // release
   }
 
   pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Timestamp> {

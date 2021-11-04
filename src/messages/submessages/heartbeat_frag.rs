@@ -1,6 +1,9 @@
-use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::{SequenceNumber, FragmentNumber};
 use speedy::{Readable, Writable};
+
+use crate::structure::{
+  guid::EntityId,
+  sequence_number::{FragmentNumber, SequenceNumber},
+};
 
 /// When fragmenting data and until all fragments are available, the
 /// HeartbeatFrag Submessage is sent from an RTPS Writer to an RTPS Reader to

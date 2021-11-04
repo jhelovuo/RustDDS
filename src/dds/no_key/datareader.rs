@@ -1,22 +1,22 @@
 use std::io;
 
-use serde::{de::DeserializeOwned};
-use mio::{Poll, Token, Ready, PollOpt, Evented};
+use serde::de::DeserializeOwned;
+use mio::{Evented, Poll, PollOpt, Ready, Token};
 
 use crate::{
-  structure::{entity::RTPSEntity},
+  dds::{
+    data_types::*,
+    no_key::datasample::DataSample,
+    qos::*,
+    readcondition::*,
+    traits::serde_adapters::no_key::*,
+    values::result::*,
+    with_key::{datareader as datareader_with_key, datasample::DataSample as WithKeyDataSample},
+  },
+  serialization::CDRDeserializerAdapter,
+  structure::entity::RTPSEntity,
 };
-use crate::dds::{
-  traits::serde_adapters::no_key::*, values::result::*, qos::*, readcondition::*, data_types::*,
-};
-
-use crate::dds::with_key::datareader as datareader_with_key;
-use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
-use crate::serialization::CDRDeserializerAdapter;
-use crate::dds::no_key::datasample::DataSample;
-use super::{
-  wrappers::{NoKeyWrapper, DAWrapper},
-};
+use super::wrappers::{DAWrapper, NoKeyWrapper};
 
 // ----------------------------------------------------
 
@@ -47,7 +47,8 @@ pub struct DataReader<D: DeserializeOwned, DA: DeserializerAdapter<D> = CDRDeser
   keyed_datareader: datareader_with_key::DataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
 }
 
-// TODO: rewrite DataSample so it can use current Keyed version (and send back datasamples instead of current data)
+// TODO: rewrite DataSample so it can use current Keyed version (and send back
+// datasamples instead of current data)
 impl<D: 'static, DA> DataReader<D, DA>
 where
   D: DeserializeOwned,
@@ -61,7 +62,8 @@ where
     }
   }
 
-  /// Reads amount of samples found with `max_samples` and `read_condition` parameters.
+  /// Reads amount of samples found with `max_samples` and `read_condition`
+  /// parameters.
   ///
   /// # Arguments
   ///
@@ -108,7 +110,8 @@ where
     Ok(result)
   }
 
-  /// Takes amount of sample found with `max_samples` and `read_condition` parameters.
+  /// Takes amount of sample found with `max_samples` and `read_condition`
+  /// parameters.
   ///
   /// # Arguments
   ///
@@ -251,7 +254,8 @@ where
   /// }
   /// ```
   pub fn iterator(&mut self) -> Result<impl Iterator<Item = &D>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    // TODO: We could come up with a more efficent implementation than wrapping a
+    // read call
     Ok(
       self
         .read(std::usize::MAX, ReadCondition::not_read())?
@@ -292,7 +296,8 @@ where
     &mut self,
     read_condition: ReadCondition,
   ) -> Result<impl Iterator<Item = &D>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    // TODO: We could come up with a more efficent implementation than wrapping a
+    // read call
     Ok(
       self
         .read(std::usize::MAX, read_condition)?
@@ -304,8 +309,8 @@ where
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// Removes samples from `DataReader`.
-  /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
-  /// are still removed from the `Datareader`.
+  /// <strong>Note!</strong> If the iterator is only partially consumed, all the
+  /// samples it could have provided are still removed from the `Datareader`.
   ///
   /// # Examples
   ///
@@ -333,7 +338,8 @@ where
   /// }
   /// ```
   pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = D>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    // TODO: We could come up with a more efficent implementation than wrapping a
+    // read call
     Ok(
       self
         .take(std::usize::MAX, ReadCondition::not_read())?
@@ -344,8 +350,8 @@ where
 
   /// Produces an interator over the samples filtered b ygiven condition.
   /// Yields only payload data, not SampleInfo metadata
-  /// <strong>Note!</strong> If the iterator is only partially consumed, all the samples it could have provided
-  /// are still removed from the `Datareader`.
+  /// <strong>Note!</strong> If the iterator is only partially consumed, all the
+  /// samples it could have provided are still removed from the `Datareader`.
   ///
   /// # Examples
   ///
@@ -376,7 +382,8 @@ where
     &mut self,
     read_condition: ReadCondition,
   ) -> Result<impl Iterator<Item = D>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a read call
+    // TODO: We could come up with a more efficent implementation than wrapping a
+    // read call
     Ok(
       self
         .take(std::usize::MAX, read_condition)?
@@ -420,14 +427,15 @@ where
   */
 }
 
-// This is  not part of DDS spec. We implement mio Eventd so that the application can asynchronously
-// poll DataReader(s).
+// This is  not part of DDS spec. We implement mio Eventd so that the
+// application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for DataReader<D, DA>
 where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  // We just delegate all the operations to notification_receiver, since it alrady implements Evented
+  // We just delegate all the operations to notification_receiver, since it alrady
+  // implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
       .keyed_datareader

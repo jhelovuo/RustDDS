@@ -40,6 +40,7 @@ use crate::dds::qos::{
   HasQoSPolicy, QosPolicies,
   policy::{Reliability},
 };
+
 use crate::dds::traits::serde_adapters::with_key::SerializerAdapter;
 //use crate::dds::traits::serde_adapters::no_key::SerializerAdapter 
 //  as no_key_SerializerAdapter; // needs to be visible only, no direct use

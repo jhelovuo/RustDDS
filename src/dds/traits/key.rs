@@ -1,25 +1,31 @@
 // This module defines traits to specifiy a key as defined in DDS specification.
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
-use std::collections::hash_map::DefaultHasher;
-use std::convert::TryFrom;
-use std::hash::{Hash, Hasher};
-use byteorder::{BigEndian};
+use std::{
+  collections::hash_map::DefaultHasher,
+  convert::TryFrom,
+  hash::{Hash, Hasher},
+};
+
+use byteorder::BigEndian;
 use rand::Rng;
 use log::error;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use cdr_encoding_size::*;
-use crate::serialization::cdr_serializer::to_bytes;
-use crate::serialization::error::Error;
 
-/// A sample data type may be `Keyed` : It allows a Key to be extracted from the sample.
-/// In its simplest form, the key may be just a part of the sample data, but it can be anything
-/// computable from a sample by an application-defined function.
+use crate::serialization::{cdr_serializer::to_bytes, error::Error};
+
+/// A sample data type may be `Keyed` : It allows a Key to be extracted from the
+/// sample. In its simplest form, the key may be just a part of the sample data,
+/// but it can be anything computable from a sample by an application-defined
+/// function.
 ///
-/// The key is used to distinguish between different Instances of the data in a DDS Topic.
+/// The key is used to distinguish between different Instances of the data in a
+/// DDS Topic.
 ///
-/// A `Keyed` type has an associated type `K`, which is the actual key type. `K` must
-/// implement [`Key`]. Otherwise, `K` can be chosen to suit the application. It is advisable that `K`
-/// is something that can be cloned with reasonable effort.
+/// A `Keyed` type has an associated type `K`, which is the actual key type. `K`
+/// must implement [`Key`]. Otherwise, `K` can be chosen to suit the
+/// application. It is advisable that `K` is something that can be cloned with
+/// reasonable effort.
 ///
 /// [`Key`]: trait.Key.html
 
@@ -78,10 +84,12 @@ impl KeyHash {
 ///
 /// and Serde traits
 /// * [Serialize](https://docs.serde.rs/serde/trait.Serialize.html) and
-/// * [DeserializeOwned](https://docs.serde.rs/serde/de/trait.DeserializeOwned.html) .
+/// * [DeserializeOwned](https://docs.serde.rs/serde/de/trait.DeserializeOwned.html)
+///   .
 ///
-/// Note: When implementing Key, DeserializeOwned cannot and need not be derived, as it is a type alias.
-/// Derive (or implement) the Deserialize trait instead.
+/// Note: When implementing Key, DeserializeOwned cannot and need not be
+/// derived, as it is a type alias. Derive (or implement) the Deserialize trait
+/// instead.
 
 pub trait Key:
   Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned + CdrEncodingSize
@@ -107,9 +115,10 @@ pub trait Key:
         not on any particular data value.
     */
 
-    // The specification calls for "sequential CDR representation of all the key fields" 
-    // and "CDR Big- Endian representation of all the Key fields in sequence". We take this to mean
-    // the CDR encoding of the Key, but with no alignment padding.
+    // The specification calls for "sequential CDR representation of all the key
+    // fields" and "CDR Big- Endian representation of all the Key fields in
+    // sequence". We take this to mean the CDR encoding of the Key, but with no
+    // alignment padding.
     //
     // TODO: We need a method to get CDR representation with no alignment padding.
 
@@ -128,7 +137,8 @@ pub trait Key:
         *md5::compute(&cdr_bytes)
       } else {
         cdr_bytes.resize(16, 0x00); // pad with zeros to get 16 bytes
-        <[u8; 16]>::try_from(cdr_bytes).unwrap() // this succeeds, because of the resize above
+        <[u8; 16]>::try_from(cdr_bytes).unwrap() // this succeeds, because of
+                                                 // the resize above
       },
     )
   }
@@ -157,13 +167,15 @@ impl Key for i16 {}
 impl Key for i32 {}
 impl Key for i64 {}
 impl Key for i128 {}
-//impl Key for isize {} // should not be used in serializable data, as size is platform-dependent
+//impl Key for isize {} // should not be used in serializable data, as size is
+// platform-dependent
 impl Key for u8 {}
 impl Key for u16 {}
 impl Key for u32 {}
 impl Key for u64 {}
 impl Key for u128 {}
-//impl Key for usize {} // should not be used in serializable data, as size is platform-dependent
+//impl Key for usize {} // should not be used in serializable data, as size is
+// platform-dependent
 
 impl Key for String {}
 

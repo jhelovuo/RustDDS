@@ -1,26 +1,25 @@
 use std::marker::PhantomData;
 
-use byteorder::{ByteOrder, LittleEndian, BigEndian, ReadBytesExt};
-use serde::{
-  de::{
-    self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess,
-    Visitor, DeserializeOwned,
-  },
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+use serde::de::{
+  self, DeserializeOwned, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess,
+  VariantAccess, Visitor,
 };
 use paste::paste;
 
-use crate::serialization::error::Error;
-use crate::serialization::error::Result;
-use crate::dds::traits::serde_adapters::*;
-use crate::dds::traits::key::{Keyed};
+use crate::{
+  dds::traits::{key::Keyed, serde_adapters::*},
+  messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+  serialization::error::{Error, Result},
+};
 
-use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
-
-/// This type adapts CdrDeserializer (which implements serde::Deserializer) to work as a
-/// [`DeserializerAdapter`]. CdrDeserializer cannot directly implement the trait itself, because
-/// CdrDeserializer has the type parameter BO open, and the adapter needs to be bi-endian.
+/// This type adapts CdrDeserializer (which implements serde::Deserializer) to
+/// work as a [`DeserializerAdapter`]. CdrDeserializer cannot directly implement
+/// the trait itself, because CdrDeserializer has the type parameter BO open,
+/// and the adapter needs to be bi-endian.
 ///
-/// [`DeserializerAdapter`]: ../dds/traits/serde_adapters/trait.DeserializerAdapter.html
+/// [`DeserializerAdapter`]:
+/// ../dds/traits/serde_adapters/trait.DeserializerAdapter.html
 pub struct CDRDeserializerAdapter<D> {
   phantom: PhantomData<D>,
   // no-one home
@@ -74,10 +73,12 @@ where
 }
 
 /// CDR deserializer.
-/// Input is from &[u8], since we expect to have the data in contiguous memory buffers.
+/// Input is from &[u8], since we expect to have the data in contiguous memory
+/// buffers.
 pub struct CdrDeserializer<'de, BO> {
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
-  input: &'de [u8],         // We borrow the input data, therefore we carry lifetime 'de all around.
+  input: &'de [u8],         /* We borrow the input data, therefore we carry lifetime 'de all
+                             * around. */
   serialized_data_count: usize, // This is to keep track of CDR data alignment requirements.
 }
 
@@ -158,8 +159,8 @@ where
   T::deserialize(&mut deserializer)
 }
 
-/// macro for writing primitive number deserializers. Rust does not allow declaring a macro
-/// inside impl block, so it is here.
+/// macro for writing primitive number deserializers. Rust does not allow
+/// declaring a macro inside impl block, so it is here.
 macro_rules! deserialize_multibyte_number {
   ($num_type:ident) => {
     paste! {
@@ -183,7 +184,8 @@ where
 {
   type Error = Error;
 
-  /// CDR serialization is not a self-describing data format, so we cannot implement this.
+  /// CDR serialization is not a self-describing data format, so we cannot
+  /// implement this.
   fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
@@ -194,7 +196,8 @@ where
   }
 
   //15.3.1.5 Boolean
-  //  Boolean values are encoded as single octets, where TRUE is the value 1, and FALSE as 0.
+  //  Boolean values are encoded as single octets, where TRUE is the value 1, and
+  // FALSE as 0.
   fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
@@ -313,7 +316,8 @@ where
   where
     V: Visitor<'de>,
   {
-    self.deserialize_unit(visitor) // This means a named type, which has no data.
+    self.deserialize_unit(visitor) // This means a named type, which has no
+                                   // data.
   }
 
   fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
@@ -323,9 +327,11 @@ where
     visitor.visit_newtype_struct(self)
   }
 
-  ///Sequences are encoded as an unsigned long value, followed by the elements of the
-  //sequence. The initial unsigned long contains the number of elements in the sequence.
-  //The elements of the sequence are encoded as specified for their type.
+  ///Sequences are encoded as an unsigned long value, followed by the elements
+  /// of the
+  //sequence. The initial unsigned long contains the number of elements in the
+  // sequence. The elements of the sequence are encoded as specified for their
+  // type.
   fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
@@ -377,8 +383,11 @@ where
   }
 
   ///Enum values are encoded as unsigned longs. (u32)
-  /// The numeric values associated with enum identifiers are determined by the order in which the identifiers appear in the enum declaration.
-  /// The first enum identifier has the numeric value zero (0). Successive enum identifiers take ascending numeric values, in order of declaration from left to right.
+  /// The numeric values associated with enum identifiers are determined by the
+  /// order in which the identifiers appear in the enum declaration. The first
+  /// enum identifier has the numeric value zero (0). Successive enum
+  /// identifiers take ascending numeric values, in order of declaration from
+  /// left to right.
   fn deserialize_enum<V>(
     self,
     _name: &'static str,
@@ -548,13 +557,15 @@ where
 
 #[cfg(test)]
 mod tests {
-  use crate::serialization::cdr_serializer::to_bytes;
   use byteorder::{BigEndian, LittleEndian};
   use log::info;
-  use crate::serialization::cdr_deserializer::deserialize_from_little_endian;
-  use crate::serialization::cdr_deserializer::deserialize_from_big_endian;
-  use serde::{Serialize, Deserialize};
+  use serde::{Deserialize, Serialize};
   use test_case::test_case;
+
+  use crate::serialization::{
+    cdr_deserializer::{deserialize_from_big_endian, deserialize_from_little_endian},
+    cdr_serializer::to_bytes,
+  };
 
   #[test]
   fn CDR_Deserialization_struct() {
@@ -755,7 +766,8 @@ mod tests {
   #[test]
 
   fn CDR_Deserialization_serialization_payload_shapes() {
-    // This test uses wireshark captured shapes demo part of serialized message as recieved_message.
+    // This test uses wireshark captured shapes demo part of serialized message as
+    // recieved_message.
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct ShapeType {
       color: String,
@@ -763,7 +775,8 @@ mod tests {
       y: i32,
       size: i32,
     }
-    // this message is DataMessages serialized data withoutt encapsulation kind and encapsulation options
+    // this message is DataMessages serialized data withoutt encapsulation kind and
+    // encapsulation options
     let recieved_message: Vec<u8> = vec![
       0x04, 0x00, 0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x61, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00,
       0x00, 0x1e, 0x00, 0x00, 0x00,

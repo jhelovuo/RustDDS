@@ -1,42 +1,35 @@
-use serde::{Serialize, Deserialize, de::Error};
+use serde::{de::Error, Deserialize, Serialize};
 use cdr_encoding_size::*;
+use chrono::Utc;
 
 use crate::{
   dds::{
-    traits::{key::Keyed, Key},
-    rtps_reader_proxy::RtpsReaderProxy,
     participant::DomainParticipant,
+    qos::QosPolicies,
+    rtps_reader_proxy::RtpsReaderProxy,
     rtps_writer_proxy::RtpsWriterProxy,
+    traits::{key::Keyed, Key},
   },
-  network::util::get_local_multicast_locators,
-  network::util::get_local_unicast_socket_address,
-  dds::qos::QosPolicies,
-};
-
-use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
-use crate::{
-  structure::{
-    locator::LocatorList,
-    guid::{EntityId, GUID},
-    duration::Duration,
-    builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
-    entity::RTPSEntity,
+  messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
+  network::{
+    constant::*,
+    util::{get_local_multicast_locators, get_local_unicast_socket_address},
   },
-};
-
-use crate::{
   serialization::{
-    builtin_data_serializer::BuiltinDataSerializer,
-    builtin_data_serializer::BuiltinDataSerializerKey,
     builtin_data_deserializer::BuiltinDataDeserializer,
+    builtin_data_serializer::{BuiltinDataSerializer, BuiltinDataSerializerKey},
   },
-  network::constant::*,
+  structure::{
+    builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
+    duration::Duration,
+    entity::RTPSEntity,
+    guid::{EntityId, GUID},
+    locator::LocatorList,
+  },
 };
-
-use chrono::Utc;
 
 // separate type is needed to serialize correctly
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize,)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash, CdrEncodingSize)]
 pub struct SpdpDiscoveredParticipantDataKey(pub GUID);
 
 impl Key for SpdpDiscoveredParticipantDataKey {}
@@ -232,19 +225,21 @@ impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantDataKey {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-
-  use crate::messages::submessages::submessages::EntitySubmessage;
-  use crate::serialization::message::Message;
-  use crate::serialization::submessage::*;
-  use crate::serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter;
-  use crate::serialization::cdr_serializer::{to_bytes};
   use byteorder::LittleEndian;
+
+  use super::*;
   use crate::{
-    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+    dds::traits::serde_adapters::no_key::DeserializerAdapter,
+    messages::submessages::{
+      submessage_elements::serialized_payload::RepresentationIdentifier,
+      submessages::EntitySubmessage,
+    },
+    serialization::{
+      cdr_serializer::to_bytes, message::Message, pl_cdr_deserializer::PlCdrDeserializerAdapter,
+      submessage::*,
+    },
     test::test_data::*,
   };
-  use crate::dds::traits::serde_adapters::no_key::DeserializerAdapter;
 
   #[test]
   fn pdata_deserialize_serialize() {
@@ -281,8 +276,8 @@ mod tests {
             let mut participant_data_2: SpdpDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)
                 .unwrap();
-            // force timestamps to be the same, as these are not serialized/deserialized, but
-            // stamped during deserialization
+            // force timestamps to be the same, as these are not serialized/deserialized,
+            // but stamped during deserialization
             participant_data_2.updated_time = participant_data.updated_time;
 
             eprintln!("again deserialized = {:?}", &participant_data_2);

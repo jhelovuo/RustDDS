@@ -4,12 +4,13 @@
 // These implement a mechanism equivalent to what is described in
 // Section 2.2.4 Listeners, Conditions, and Wait-sets
 //
-// Communcation statues are detailed in Figure 2.13 and tables in Section 2.2.4.1
-// in DDS Specification v1.4
+// Communcation statues are detailed in Figure 2.13 and tables in Section
+// 2.2.4.1 in DDS Specification v1.4
+
+use mio::Evented;
+use mio_extras::channel as mio_channel;
 
 use crate::dds::qos::QosPolicyId;
-use mio::{Evented};
-use mio_extras::channel as mio_channel;
 
 /// This trait corresponds to set_listener() of the Entity class in DDS spec.
 /// Types implementing this trait can be registered to a poll and
@@ -88,7 +89,8 @@ pub enum DataReaderStatus {
     count: CountWithChange,
     //last_instance_key:
   },
-  /// This DataReader has requested a QoS policy that is incompatibel with what is offered.
+  /// This DataReader has requested a QoS policy that is incompatibel with what
+  /// is offered.
   RequestedIncompatibleQos {
     count: CountWithChange,
     last_policy_id: QosPolicyId,

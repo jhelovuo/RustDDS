@@ -1,13 +1,14 @@
-use rustdds::{
-  dds::data_types::{DDSDuration, TopicKind},
-  dds::qos::{
-    QosPolicies, policy::Deadline, policy::DestinationOrder, policy::Durability, policy::History,
-    policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::Ownership,
-    QosPolicyBuilder, policy::Reliability,
+use rustdds::dds::{
+  data_types::{DDSDuration, TopicKind},
+  qos::{
+    policy::{
+      Deadline, DestinationOrder, Durability, History, LatencyBudget, Lifespan, Liveliness,
+      Ownership, Reliability,
+    },
+    QosPolicies, QosPolicyBuilder,
   },
 };
-
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub struct TurtleCmdVelTopic {}
 
@@ -64,15 +65,16 @@ pub struct Vector3 {
 
 #[cfg(test)]
 mod tests {
+  use std::{fs::File, io::Read};
+
   use rustdds::{
     dds::traits::serde_adapters::DeserializerAdapter,
-    serialization::cdr_deserializer::CDRDeserializerAdapter,
-    serialization::cdr_serializer::to_bytes, submessages::RepresentationIdentifier,
+    serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes},
+    submessages::RepresentationIdentifier,
   };
   use byteorder::LittleEndian;
 
   use super::*;
-  use std::{fs::File, io::Read};
 
   #[test]
   fn twist_test() {

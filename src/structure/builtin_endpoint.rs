@@ -1,4 +1,5 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
 use super::parameter_id::ParameterId;
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub struct BuiltinEndpointSet {

@@ -1,5 +1,6 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
 use crate::structure::parameter_id::ParameterId;
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
@@ -71,8 +72,9 @@ impl<C: Context> Writable<C> for VendorId {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
   use speedy::Endianness;
+
+  use super::*;
 
   #[test]
   fn minimum_bytes_needed() {

@@ -1,34 +1,34 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::{
+  collections::{HashMap, HashSet},
+  sync::{Arc, Mutex},
+};
+
 use log::{error, info};
 use mio::Evented;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
   dds::{
+    data_types::DiscoveredTopicData,
     no_key::{
       datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
     },
-    DomainParticipant,
-    pubsub::Publisher,
-    pubsub::Subscriber,
+    pubsub::{Publisher, Subscriber},
     qos::QosPolicies,
     topic::{Topic, TopicKind},
-    traits::key::Key,
-    traits::key::Keyed,
-    traits::serde_adapters::*,
+    traits::{
+      key::{Key, Keyed},
+      serde_adapters::*,
+    },
     values::result::Error,
-    data_types::DiscoveredTopicData,
+    DomainParticipant,
   },
   structure::{entity::RTPSEntity, guid::GUID},
 };
-
 use super::{
+  builtin_datatypes::{Gid, Log, NodeInfo, ParameterEvents, ROSParticipantInfo},
+  builtin_topics::{ParameterEventsTopic, ROSDiscoveryTopic, RosOutTopic},
   KeyedRosPublisher, KeyedRosSubscriber, RosPublisher, RosSubscriber,
-  builtin_datatypes::NodeInfo,
-  builtin_datatypes::{Gid, Log, ParameterEvents, ROSParticipantInfo},
-  builtin_topics::ParameterEventsTopic,
-  builtin_topics::{ROSDiscoveryTopic, RosOutTopic},
 };
 
 // ----------------------------------------------------------------------------------------------------
@@ -36,7 +36,8 @@ use super::{
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
 
-/// [RosParticipant](struct.RosParticipant.html) sends and receives other participants information in ROS2 network
+/// [RosParticipant](struct.RosParticipant.html) sends and receives other
+/// participants information in ROS2 network
 #[derive(Clone)]
 pub struct RosParticipant {
   inner: Arc<Mutex<RosParticipantInner>>,
@@ -291,7 +292,7 @@ impl NodeOptions {
   /// # Arguments
   ///
   /// * `enable_rosout` -  Wheter or not ros logging is enabled (rosout writer)
-  pub fn new(/*domain_id: u16, */ enable_rosout: bool) -> NodeOptions {
+  pub fn new(/* domain_id: u16, */ enable_rosout: bool) -> NodeOptions {
     NodeOptions { enable_rosout }
   }
 }
@@ -301,8 +302,9 @@ impl NodeOptions {
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
 
-/// Node in ROS2 network. Holds necessary readers and writers for rosout and parameter events topics internally.
-/// Should be constructed using [builder](struct.RosNodeBuilder.html).
+/// Node in ROS2 network. Holds necessary readers and writers for rosout and
+/// parameter events topics internally. Should be constructed using
+/// [builder](struct.RosNodeBuilder.html).
 pub struct RosNode {
   // node info
   name: String,
@@ -441,26 +443,32 @@ impl RosNode {
   ///
   /// # Arguments
   ///
-  /// * `domain_participant` - [DomainParticipant](../dds/struct.DomainParticipant.html)
+  /// * `domain_participant` -
+  ///   [DomainParticipant](../dds/struct.DomainParticipant.html)
   /// * `name` - Name of the topic
   /// * `type_name` - What type the topic holds in string form
-  /// * `qos` - Quality of Service parameters for the topic (not restricted only to ROS2)
-  /// * `topic_kind` - Does the topic have a key (multiple DDS instances)? NoKey or WithKey
+  /// * `qos` - Quality of Service parameters for the topic (not restricted only
+  ///   to ROS2)
+  /// * `topic_kind` - Does the topic have a key (multiple DDS instances)? NoKey
+  ///   or WithKey
   ///
   ///  
   ///   [summary of all rules for topic and service names in ROS 2](https://design.ros2.org/articles/topic_and_service_names.html)
   ///   (as of Dec 2020)
   ///
   /// * must not be empty
-  /// * may contain alphanumeric characters ([0-9|a-z|A-Z]), underscores (_), or forward slashes (/)
+  /// * may contain alphanumeric characters ([0-9|a-z|A-Z]), underscores (_), or
+  ///   forward slashes (/)
   /// * may use balanced curly braces ({}) for substitutions
   /// * may start with a tilde (~), the private namespace substitution character
   /// * must not start with a numeric character ([0-9])
   /// * must not end with a forward slash (/)
   /// * must not contain any number of repeated forward slashes (/)
   /// * must not contain any number of repeated underscores (_)
-  /// * must separate a tilde (~) from the rest of the name with a forward slash (/), i.e. ~/foo not ~foo
-  /// * must have balanced curly braces ({}) when used, i.e. {sub}/foo but not {sub/foo nor /foo}
+  /// * must separate a tilde (~) from the rest of the name with a forward slash
+  ///   (/), i.e. ~/foo not ~foo
+  /// * must have balanced curly braces ({}) when used, i.e. {sub}/foo but not
+  ///   {sub/foo nor /foo}
   pub fn create_ros_topic(
     &self,
     name: &str,
@@ -490,7 +498,8 @@ impl RosNode {
   /// # Arguments
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if
+  ///   it's compatible with topics QOS. `None` indicates the use of Topics QOS.
   pub fn create_ros_nokey_subscriber<
     D: DeserializeOwned + 'static,
     DA: no_key::DeserializerAdapter<D>,
@@ -512,7 +521,9 @@ impl RosNode {
   /// # Arguments
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it
+  ///   if it's compatible with topics QOS. `None` indicates the use of Topics
+  ///   QOS.
   pub fn create_ros_subscriber<D, DA: with_key::DeserializerAdapter<D>>(
     &mut self,
     topic: Topic,
@@ -535,7 +546,9 @@ impl RosNode {
   /// # Arguments
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it
+  ///   if it's compatible with topics QOS. `None` indicates the use of Topics
+  ///   QOS.
   pub fn create_ros_nokey_publisher<D: Serialize, SA: no_key::SerializerAdapter<D>>(
     &mut self,
     topic: Topic,
@@ -554,7 +567,9 @@ impl RosNode {
   /// # Arguments
   ///
   /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it if it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it
+  ///   if it's compatible with topics QOS. `None` indicates the use of Topics
+  ///   QOS.
   pub fn create_ros_publisher<D, SA: with_key::SerializerAdapter<D>>(
     &mut self,
     topic: Topic,

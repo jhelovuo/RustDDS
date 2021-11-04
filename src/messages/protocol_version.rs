@@ -1,5 +1,6 @@
 use speedy::{Readable, Writable};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
 use crate::structure::parameter_id::ParameterId;
 
 #[derive(

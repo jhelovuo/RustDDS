@@ -2,24 +2,30 @@
 //!
 //! # DDS usage summary
 //!
-//! * Create a [`DomainParticipant`]. You have to choose a domain id. The default value is zero.
-//! * Create or find a [`Topic`] from the [`DomainParticipant`]. Topics have a name and a type.
-//! * Create a [`Publisher`] and/or [`Subscriber`] from the [`DomainParticipant`].
+//! * Create a [`DomainParticipant`]. You have to choose a domain id. The
+//!   default value is zero.
+//! * Create or find a [`Topic`] from the [`DomainParticipant`]. Topics have a
+//!   name and a type.
+//! * Create a [`Publisher`] and/or [`Subscriber`] from the
+//!   [`DomainParticipant`].
 //! * To receive data, create a [`DataReader`] from `Subscriber` and `Topic`.
 //! * To send data, create a [`DataWriter`]from `Publisher` and `Topic`.
-//! * Data from `DataReader` can be read or taken. Taking removes the data samples from the DataReader,
-//!   whereas reading only marks them as read.
-//! * Topics are either WithKey or NoKey. WithKey topics are like map data structures, containing multiple
-//!   instances (map items), identified by key. The key must be something that can be extracted from the
-//!   data samples. Instances can be created (published) and deleted (disposed).
-//!   NoKey topics have always only one instance of the data.
-//! * Data is sent and received in consecutive samples. When read, a smaple is accompanied with metadata (SampleInfo).
+//! * Data from `DataReader` can be read or taken. Taking removes the data
+//!   samples from the DataReader, whereas reading only marks them as read.
+//! * Topics are either WithKey or NoKey. WithKey topics are like map data
+//!   structures, containing multiple instances (map items), identified by key.
+//!   The key must be something that can be extracted from the data samples.
+//!   Instances can be created (published) and deleted (disposed). NoKey topics
+//!   have always only one instance of the data.
+//! * Data is sent and received in consecutive samples. When read, a smaple is
+//!   accompanied with metadata (SampleInfo).
 //!
 //! # Interfacing Rust data types to DDS
 //! * DDS takes care of serialization and deserialization.
-//! In order to do this, the payload data must be Serde serializable/deserializable.
-//! * If your data is to be communicated over a WithKey topic, the payload data type must
-//!   implement [`Keyed`] trait from this crate.
+//! In order to do this, the payload data must be Serde
+//! serializable/deserializable.
+//! * If your data is to be communicated over a WithKey topic, the payload data
+//!   type must implement [`Keyed`] trait from this crate.
 //! * If you are using CDR serialization (DDS default), then use [`CDRSerializerAdapter`] and [`CDRDeserializerAdapter`]
 //!   when such adapters are required. If you need to use another serialization format, then you should find or write
 //!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
@@ -31,9 +37,9 @@
 //! [`DataReader`]: struct.With_Key_DataReader.html
 //! [`DataWriter`]: struct.With_Key_DataWriter.html
 //! [`CDRSerializerAdapter`]: ../serialization/struct.CDRSerializerAdapter.html
-//! [`CDRDeserializerAdapter`]: ../serialization/struct.CDRDeserializerAdapter.html
-//! [`Keyed`]: traits/trait.Keyed.html
-//! # Examples
+//! [`CDRDeserializerAdapter`]:
+//! ../serialization/struct.CDRDeserializerAdapter.html [`Keyed`]:
+//! traits/trait.Keyed.html # Examples
 //!
 //! ```
 //! use rustdds::dds::DomainParticipant;
@@ -139,23 +145,22 @@ pub mod statusevents;
 
 /// Datatypes needed for overall operability with this crate
 pub mod data_types {
-  pub use crate::discovery::data_types::topic_data::{
-    DiscoveredTopicData, SubscriptionBuiltinTopicData,
+  pub use crate::{
+    dds::sampleinfo::SampleInfo,
+    discovery::data_types::topic_data::{DiscoveredTopicData, SubscriptionBuiltinTopicData},
+    structure::guid::*,
   };
   #[doc(inline)]
   pub use crate::structure::duration::Duration as DDSDuration;
-  pub use super::readcondition::ReadCondition;
+  pub use super::{readcondition::ReadCondition, traits::key::BuiltInTopicKey};
   #[doc(inline)]
   pub use super::with_key::datareader::SelectByKey;
   #[doc(inline)]
   pub use crate::structure::time::Timestamp as DDSTimestamp;
-  pub use crate::structure::guid::*;
   // TODO: move typedesc module somewhere better
   pub use crate::dds::typedesc::TypeDesc;
-  pub use crate::dds::sampleinfo::SampleInfo;
   #[doc(inline)]
   pub use crate::structure::topic_kind::TopicKind; // AKA dds::topic::TopicKind
-  pub use super::traits::key::BuiltInTopicKey;
 }
 
 /// DDS Error
@@ -165,17 +170,12 @@ pub mod error {
 
 pub use participant::DomainParticipant;
 pub use topic::Topic;
-pub use pubsub::Subscriber;
-pub use pubsub::Publisher;
-
+pub use pubsub::{Publisher, Subscriber};
 #[doc(inline)]
 pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
-
 #[doc(inline)]
 pub use no_key::datawriter::DataWriter as No_Key_DataWriter;
-
 #[doc(inline)]
 pub use with_key::datareader::DataReader as With_Key_DataReader;
-
 #[doc(inline)]
 pub use no_key::datareader::DataReader as No_Key_DataReader;

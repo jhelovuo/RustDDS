@@ -1,8 +1,10 @@
 use crate::{
   dds::qos::{
-    QosPolicies, policy::Deadline, policy::DestinationOrder, policy::Durability, policy::History,
-    policy::LatencyBudget, policy::Lifespan, policy::Liveliness, policy::Ownership,
-    policy::Reliability,
+    policy::{
+      Deadline, DestinationOrder, Durability, History, LatencyBudget, Lifespan, Liveliness,
+      Ownership, Reliability,
+    },
+    QosPolicies,
   },
   structure::duration::Duration,
 };

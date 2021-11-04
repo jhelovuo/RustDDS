@@ -1,38 +1,44 @@
-use std::collections::{BTreeSet, HashSet};
-use std::io;
-
-use crate::{
-  structure::entity::RTPSEntity,
-  dds::{
-    data_types::{DDSTimestamp, GUID, EntityId},
-    writer::Writer as RtpsWriter,
-    ddsdata::DDSData,
-  },
-  messages::header::Header,
-  messages::submessages::submessages::*,
-  messages::submessages::{
-    submessage::EntitySubmessage,
-    submessages::SubmessageKind,
-    submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
-    submessage_elements::serialized_payload::RepresentationIdentifier,
-  },
-  messages::{protocol_version::ProtocolVersion, vendor_id::VendorId, protocol_id::ProtocolId},
-  serialization::submessage::{SubMessage, SubmessageBody},
-  structure::{
-    sequence_number::SequenceNumber,
-    sequence_number::SequenceNumberSet,
-    guid::{GuidPrefix, EntityKind},
-    cache_change::{CacheChange},
-    parameter_id::ParameterId,
-  },
-  structure::time::Timestamp,
+use std::{
+  collections::{BTreeSet, HashSet},
+  io,
 };
-#[allow(unused_imports)]
-use log::{error, warn, debug, trace};
 
-use speedy::{Readable, Writable, Endianness, Context, Writer};
+#[allow(unused_imports)]
+use log::{debug, error, trace, warn};
+use speedy::{Context, Endianness, Readable, Writable, Writer};
 use enumflags2::BitFlags;
 use bytes::Bytes;
+
+use crate::{
+  dds::{
+    data_types::{DDSTimestamp, EntityId, GUID},
+    ddsdata::DDSData,
+    writer::Writer as RtpsWriter,
+  },
+  messages::{
+    header::Header,
+    protocol_id::ProtocolId,
+    protocol_version::ProtocolVersion,
+    submessages::{
+      submessage::EntitySubmessage,
+      submessage_elements::{
+        parameter::Parameter, parameter_list::ParameterList,
+        serialized_payload::RepresentationIdentifier,
+      },
+      submessages::{SubmessageKind, *},
+    },
+    vendor_id::VendorId,
+  },
+  serialization::submessage::{SubMessage, SubmessageBody},
+  structure::{
+    cache_change::CacheChange,
+    entity::RTPSEntity,
+    guid::{EntityKind, GuidPrefix},
+    parameter_id::ParameterId,
+    sequence_number::{SequenceNumber, SequenceNumberSet},
+    time::Timestamp,
+  },
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Message {
@@ -78,8 +84,8 @@ impl<'a> Message {
 
   // We implement this instead of Speedy trait Readable, because
   // we need to run-time decide which endianness we input. Speedy requires the
-  // top level to fix that. And there seems to be no reasonable way to change endianness.
-  // TODO: The error type should be something better
+  // top level to fix that. And there seems to be no reasonable way to change
+  // endianness. TODO: The error type should be something better
   pub fn read_from_buffer(buffer: Bytes) -> io::Result<Message> {
     // The Header deserializes the same
     let rtps_header =
@@ -111,8 +117,8 @@ impl<'a> Message {
         sub_header.content_length as usize
       };
 
-      // we have to use temporary variable new_submessages_left to avoid creating another
-      // submessages_left
+      // we have to use temporary variable new_submessages_left to avoid creating
+      // another submessages_left
       // let (sub_buffer, new_submessages_left) =
       //   submessages_left.split_at(sub_header_length + sub_content_length);
       // submessages_left = new_submessages_left;
@@ -315,8 +321,8 @@ impl MessageBuilder {
   }
 
   /// Argument Some(timestamp) means that a timestamp is sent.
-  /// Argument None means "invalidate", i.e. the previously sent InfoTimestamp submessage
-  /// no longer applies.
+  /// Argument None means "invalidate", i.e. the previously sent InfoTimestamp
+  /// submessage no longer applies.
   pub fn ts_msg(
     mut self,
     endianness: Endianness,
@@ -402,8 +408,8 @@ impl MessageBuilder {
           BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
         }
       });
-    // TODO: This is stupid. There should be an easier way to get the submessage length
-    // than serializing it!
+    // TODO: This is stupid. There should be an easier way to get the submessage
+    // length than serializing it!
     let size = data_message
       .write_to_vec_with_ctx(endianness)
       .unwrap()
@@ -420,8 +426,8 @@ impl MessageBuilder {
     self
   }
 
-  // TODO: We should optimize this entire thing to allow long contiguous irrelevant set to be
-  // represented as start_sn +
+  // TODO: We should optimize this entire thing to allow long contiguous
+  // irrelevant set to be represented as start_sn +
   pub fn gap_msg(
     mut self,
     irrelevant_sns: BTreeSet<SequenceNumber>,
@@ -502,9 +508,9 @@ impl MessageBuilder {
 
 mod tests {
   use log::info;
+  use speedy::Writable;
 
   use super::*;
-  use speedy::{Writable};
 
   #[test]
 
@@ -666,8 +672,8 @@ mod tests {
   fn RTPS_message_infoDST_infoTS_Data_w_heartbeat() {
     // caprured with wireshark from shapes demo.
     // rtps packet with InfoDST InfoTS Data(w) Heartbeat
-    // This datamessage serialized payload maybe contains topic name (square) and its type (shapetype)
-    // look https://www.omg.org/spec/DDSI-RTPS/2.3/PDF page 185
+    // This datamessage serialized payload maybe contains topic name (square) and
+    // its type (shapetype) look https://www.omg.org/spec/DDSI-RTPS/2.3/PDF page 185
     let bits1 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
       0x00, 0x01, 0x00, 0x00, 0x00, 0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d,
@@ -721,6 +727,6 @@ mod tests {
     assert_eq!(bits1, serialized);
   }
 
-  // removed case test_RTPS_submessage_flags_helper , as it was cut-and-paste from
-  // submessage_flag module - and obsoleted there.
+  // removed case test_RTPS_submessage_flags_helper , as it was cut-and-paste
+  // from submessage_flag module - and obsoleted there.
 }

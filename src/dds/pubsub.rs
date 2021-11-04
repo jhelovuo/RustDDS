@@ -1,52 +1,51 @@
-use mio_extras::channel as mio_channel;
-use log::error;
-
 use std::{
   fmt::Debug,
-  sync::{RwLock, Arc},
+  sync::{Arc, RwLock},
   time::Duration,
 };
 
-use serde::{Serialize, de::DeserializeOwned};
-
-use byteorder::{LittleEndian};
-
-use crate::{
-  discovery::discovery::DiscoveryCommand,
-  log_and_err_precondition_not_met,
-  structure::{guid::GUID, entity::RTPSEntity, guid::EntityId},
-};
-
-use crate::dds::{
-  values::result::*,
-  data_types::EntityKind,
-  participant::*,
-  topic::*,
-  qos::*,
-  reader::ReaderIngredients,
-  writer::WriterIngredients,
-  with_key::datawriter::DataWriter as WithKeyDataWriter,
-  no_key::datawriter::DataWriter as NoKeyDataWriter,
-  with_key::datareader::DataReader as WithKeyDataReader,
-  no_key::datareader::DataReader as NoKeyDataReader,
-  traits::key::{Keyed, Key},
-  traits::serde_adapters::*,
-};
-use crate::dds::statusevents::*;
-
-use crate::{
-  discovery::{discovery_db::DiscoveryDB, data_types::topic_data::DiscoveredWriterData},
-  structure::topic_kind::TopicKind,
-  serialization::cdr_serializer::{CDRSerializerAdapter},
-  serialization::cdr_deserializer::{CDRDeserializerAdapter},
-};
-
+use mio_extras::channel as mio_channel;
+use log::error;
+use serde::{de::DeserializeOwned, Serialize};
+use byteorder::LittleEndian;
 use rand::Rng;
-use crate::log_and_err_internal;
 
+use crate::{
+  dds::{
+    data_types::EntityKind,
+    no_key::{
+      datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
+    },
+    participant::*,
+    qos::*,
+    reader::ReaderIngredients,
+    statusevents::*,
+    topic::*,
+    traits::{
+      key::{Key, Keyed},
+      serde_adapters::*,
+    },
+    values::result::*,
+    with_key::{
+      datareader::DataReader as WithKeyDataReader, datawriter::DataWriter as WithKeyDataWriter,
+    },
+    writer::WriterIngredients,
+  },
+  discovery::{
+    data_types::topic_data::DiscoveredWriterData, discovery::DiscoveryCommand,
+    discovery_db::DiscoveryDB,
+  },
+  log_and_err_internal, log_and_err_precondition_not_met,
+  serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter},
+  structure::{
+    entity::RTPSEntity,
+    guid::{EntityId, GUID},
+    topic_kind::TopicKind,
+  },
+};
 use super::{
+  no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
   with_key::datareader::ReaderCommand,
-  no_key::wrappers::{DAWrapper, SAWrapper, NoKeyWrapper},
   writer::WriterCommand,
 };
 
@@ -142,7 +141,8 @@ impl Publisher {
     self.inner.create_datawriter(self, None, topic, qos)
   }
 
-  /// Shorthand for crate_datawriter with Commaon Data Representation Little Endian
+  /// Shorthand for crate_datawriter with Commaon Data Representation Little
+  /// Endian
   pub fn create_datawriter_cdr<D>(
     &self,
     topic: Topic,
@@ -271,12 +271,15 @@ impl Publisher {
     )
   }
 
-  // delete_datawriter should not be needed. The DataWriter object itself should be deleted to accomplish this.
+  // delete_datawriter should not be needed. The DataWriter object itself should
+  // be deleted to accomplish this.
 
-  // lookup datawriter: maybe not necessary? App should remember datawriters it has created.
+  // lookup datawriter: maybe not necessary? App should remember datawriters it
+  // has created.
 
   // Suspend and resume publications are preformance optimization methods.
-  // The minimal correct implementation is to do nothing. See DDS spec 2.2.2.4.1.8 and .9
+  // The minimal correct implementation is to do nothing. See DDS spec 2.2.2.4.1.8
+  // and .9
   /// Currently does nothing
   pub fn suspend_publications(&self) -> Result<()> {
     Ok(())
@@ -300,14 +303,16 @@ impl Publisher {
     Ok(())
   }
 
-  // Wait for all matched reliable DataReaders acknowledge data written so far, or timeout.
-  // TODO: implement
+  // Wait for all matched reliable DataReaders acknowledge data written so far, or
+  // timeout. TODO: implement
   pub(crate) fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     unimplemented!();
   }
 
-  // What is the use case for this? (is it useful in Rust style of programming? Should it be public?)
-  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it has not disappeared from all scopes.
+  // What is the use case for this? (is it useful in Rust style of programming?
+  // Should it be public?)
+  /// Gets [DomainParticipant](struct.DomainParticipant.html) if it has not
+  /// disappeared from all scopes.
   ///
   /// # Example
   ///
@@ -326,7 +331,8 @@ impl Publisher {
     self.inner.domain_participant.clone().upgrade()
   }
 
-  // delete_contained_entities: We should not need this. Contained DataWriters should dispose themselves and notify publisher.
+  // delete_contained_entities: We should not need this. Contained DataWriters
+  // should dispose themselves and notify publisher.
 
   /// Returns default DataWriter qos. Currently default qos is not used.
   ///
@@ -360,7 +366,8 @@ impl Publisher {
   // / let qos = QosPolicyBuilder::new().build();
   // /
   // / let mut publisher = domain_participant.create_publisher(&qos).unwrap();
-  // / let qos2 = QosPolicyBuilder::new().durability(Durability::Transient).build();
+  // / let qos2 =
+  // QosPolicyBuilder::new().durability(Durability::Transient).build();
   // / publisher.set_default_datawriter_qos(&qos2);
   // /
   // / assert_ne!(qos, *publisher.get_default_datawriter_qos());
@@ -438,7 +445,8 @@ impl InnerPublisher {
     // QoS, modify it to match any QoS settings (that are set) in the
     // Topic QoS and use that.
 
-    // Use Publisher QoS as basis, modify by Topic settings, and modify by specified QoS.
+    // Use Publisher QoS as basis, modify by Topic settings, and modify by specified
+    // QoS.
     let writer_qos = self
       .default_datawriter_qos
       .modify_by(&topic.get_qos())
@@ -622,8 +630,10 @@ impl Subscriber {
   ///
   /// # Arguments
   ///
-  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
-  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
+  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader
+  ///   reads from
+  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if
+  ///   necessary for DDS communication (random if None)
   /// * `qos` - Not in use
   ///
   /// # Examples
@@ -716,9 +726,11 @@ impl Subscriber {
   ///
   /// # Arguments
   ///
-  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader reads from
-  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if necessary for DDS communication (random if None)
-  /// * `qos` - Not in use  
+  /// * `topic` - Reference to the DDS [Topic](struct.Topic.html) this reader
+  ///   reads from
+  /// * `entity_id` - Optional [EntityId](data_types/struct.EntityId.html) if
+  ///   necessary for DDS communication (random if None)
+  /// * `qos` - Not in use
   ///
   /// # Examples
   ///
@@ -794,7 +806,8 @@ impl Subscriber {
   }
 
   // Retrieves a previously created DataReader belonging to the Subscriber.
-  // TODO: Is this even possible. Whould probably need to return reference and store references on creation
+  // TODO: Is this even possible. Whould probably need to return reference and
+  // store references on creation
   /*
   pub(crate) fn lookup_datareader<D, SA>(
     &self,
@@ -810,7 +823,8 @@ impl Subscriber {
   }
   */
 
-  /// Returns [DomainParticipant](struct.DomainParticipant.html) if it is sill alive.
+  /// Returns [DomainParticipant](struct.DomainParticipant.html) if it is sill
+  /// alive.
   ///
   /// # Example
   ///
@@ -859,7 +873,7 @@ impl InnerSubscriber {
     }
   }
 
-  /*pub(super)*/
+  /* pub(super) */
   fn create_datareader_internal<D: 'static, SA>(
     &self,
     outer: &Subscriber,
@@ -880,7 +894,8 @@ impl InnerSubscriber {
     let (reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(4);
 
-    // Use subscriber QoS as basis, modify by Topic settings, and modify by specified QoS.
+    // Use subscriber QoS as basis, modify by Topic settings, and modify by
+    // specified QoS.
     let qos = self
       .qos
       .modify_by(&topic.get_qos())

@@ -1,8 +1,9 @@
-use bytes::Bytes;
-use speedy::{Writable, Readable, Writer, Context};
 use std::io;
-use byteorder::{ReadBytesExt};
-use log::{warn};
+
+use bytes::Bytes;
+use speedy::{Context, Readable, Writable, Writer};
+use byteorder::ReadBytesExt;
+use log::warn;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
 pub struct RepresentationIdentifier {
@@ -71,16 +72,17 @@ impl<'a, C: Context> Readable<'a, C> for RepresentationIdentifier {
 }
 */
 
-/// A SerializedPayload submessage element contains the serialized representation of
-/// either value of an application-defined data-object or
+/// A SerializedPayload submessage element contains the serialized
+/// representation of either value of an application-defined data-object or
 /// the value of the key that uniquely identifies the data-object
 /// See RTPS spec v2.3 section 10.
 /// Standard representation identifer values are defined in sections 10.2 - 10.5
 /// representation_options "shall be interpreted in the context of the
-/// RepresentationIdentifier, such that each RepresentationIdentifier may define the
-/// representation_options that it requires." and "The [2.3] version of the protocol
-/// does not use the representation_options: The sender shall set the representation_options
-/// to zero. The receiver shall ignore the value of the representation_options."
+/// RepresentationIdentifier, such that each RepresentationIdentifier may define
+/// the representation_options that it requires." and "The [2.3] version of the
+/// protocol does not use the representation_options: The sender shall set the
+/// representation_options to zero. The receiver shall ignore the value of the
+/// representation_options."
 #[derive(Debug, PartialEq, Clone)]
 pub struct SerializedPayload {
   pub representation_identifier: RepresentationIdentifier,
@@ -113,7 +115,8 @@ impl SerializedPayload {
     };
     let representation_options = [reader.read_u8()?, reader.read_u8()?];
     let value = if bytes.len() >= 4 {
-      bytes.clone().split_off(4) // split_off 4 bytes at beginning: rep_id & rep_optins
+      bytes.clone().split_off(4) // split_off 4 bytes at beginning: rep_id &
+                                 // rep_optins
     } else {
       warn!(
         "DATA submessage was smaller than submessage header: {:?}",

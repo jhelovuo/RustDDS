@@ -1,14 +1,15 @@
-use crate::structure::guid::GUID;
-use crate::structure::time::Timestamp;
-
-use crate::dds::sampleinfo::*;
-
-use crate::dds::no_key::wrappers::NoKeyWrapper;
-use crate::dds::with_key::datasample::DataSample as WithKeyDataSample;
+use crate::{
+  dds::{
+    no_key::wrappers::NoKeyWrapper, sampleinfo::*,
+    with_key::datasample::DataSample as WithKeyDataSample,
+  },
+  structure::{guid::GUID, time::Timestamp},
+};
 
 /// DDS spec 2.2.2.5.4
 ///
-/// Note that no_key::DataSample and with_key::DataSample are two different but similar structs.
+/// Note that no_key::DataSample and with_key::DataSample are two different but
+/// similar structs.
 #[derive(PartialEq, Debug)]
 pub struct DataSample<D> {
   pub(crate) sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?

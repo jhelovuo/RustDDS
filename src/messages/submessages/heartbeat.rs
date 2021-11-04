@@ -1,12 +1,12 @@
-use crate::{
-  serialization::SubMessage, serialization::SubmessageBody, structure::guid::EntityId,
-  messages::submessages::submessages::SubmessageHeader,
-};
-use crate::structure::sequence_number::SequenceNumber;
 use enumflags2::BitFlags;
 use log::error;
 use speedy::{Readable, Writable};
 
+use crate::{
+  messages::submessages::submessages::SubmessageHeader,
+  serialization::{SubMessage, SubmessageBody},
+  structure::{guid::EntityId, sequence_number::SequenceNumber},
+};
 use super::{
   submessage::EntitySubmessage, submessage_flag::HEARTBEAT_Flags, submessage_kind::SubmessageKind,
 };

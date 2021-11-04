@@ -1,13 +1,12 @@
-use serde::{Deserializer, de::DeserializeOwned};
 use std::marker::PhantomData;
 
-use crate::serialization::error::Error;
+use serde::{de::DeserializeOwned, Deserializer};
+
 use crate::{
+  dds::traits::{serde_adapters::*, Keyed},
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
-  serialization::error::Result,
+  serialization::error::{Error, Result},
 };
-use crate::dds::traits::Keyed;
-use crate::dds::traits::serde_adapters::*;
 
 pub struct PlCdrDeserializerAdapter<D> {
   phantom: PhantomData<D>,
@@ -93,12 +92,13 @@ impl<'de> PlCdrDeserializer<'de> {
   fn custom_deserialize_any<V>(self, visitor: V) -> Result<V::Value>
   where
     V: serde::de::Visitor<'de>,
-    //BuiltinDataDeserializer<LittleEndian, V::Value>: DataGeneration<V::Value>,
-    //BuiltinDataDeserializer<BigEndian, V::Value>: DataGeneration<V::Value>,
+    /*BuiltinDataDeserializer<LittleEndian, V::Value>: DataGeneration<V::Value>,
+     *BuiltinDataDeserializer<BigEndian, V::Value>: DataGeneration<V::Value>, */
   {
     match self.endianness {
       RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
-        //let rep: Result<Vec<u8>> = to_bytes::<u16, LittleEndian>(&u16::from(self.endianness));
+        //let rep: Result<Vec<u8>> = to_bytes::<u16,
+        // LittleEndian>(&u16::from(self.endianness));
         visitor.visit_bytes(&[&self.endianness.to_bytes(), self.input].concat())
       }
       e => Err(Error::Message(format!("Unsupported endianness {:?}", e))),

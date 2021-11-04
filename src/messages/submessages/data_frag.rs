@@ -1,16 +1,20 @@
-use crate::messages::submessages::submessage_elements::parameter_list::ParameterList;
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use crate::structure::guid::EntityId;
-use crate::structure::sequence_number::{SequenceNumber, FragmentNumber};
-
-use crate::messages::submessages::submessages::*;
+use std::io;
 
 use log::debug;
-use speedy::{Context, Writer, Readable, Writable, Error};
+use speedy::{Context, Error, Readable, Writable, Writer};
 use enumflags2::BitFlags;
 use bytes::Bytes;
 
-use std::io;
+use crate::{
+  messages::submessages::{
+    submessage_elements::{parameter_list::ParameterList, serialized_payload::SerializedPayload},
+    submessages::*,
+  },
+  structure::{
+    guid::EntityId,
+    sequence_number::{FragmentNumber, SequenceNumber},
+  },
+};
 
 /// The DataFrag Submessage extends the Data Submessage by enabling the
 /// serializedData to be fragmented and sent as multiple DataFrag Submessages.

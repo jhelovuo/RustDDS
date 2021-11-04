@@ -1,27 +1,30 @@
-use log::{trace};
+use log::trace;
 
 use crate::{
-  dds::values::result::*,
-  dds::traits::key::*,
+  dds::{traits::key::*, values::result::*},
   messages::submessages::submessage_elements::{
     parameter_list::ParameterList, RepresentationIdentifier,
   },
-  structure::{parameter_id::ParameterId, inline_qos::StatusInfo},
+  structure::{inline_qos::StatusInfo, parameter_id::ParameterId},
 };
 
-// This is to be implemented by all DomanParticipant, Publisher, Subscriber, DataWriter, DataReader, Topic
-/// Trait that is implemented by all necessary DDS Entities that are required to provide QosPolicies.
+// This is to be implemented by all DomanParticipant, Publisher, Subscriber,
+// DataWriter, DataReader, Topic
+/// Trait that is implemented by all necessary DDS Entities that are required to
+/// provide QosPolicies.
 pub trait HasQoSPolicy {
   fn get_qos(&self) -> QosPolicies;
 }
 
-/// Trait that is implemented by all necessary DDS Entities that are required to have a mutable QosPolicies.
+/// Trait that is implemented by all necessary DDS Entities that are required to
+/// have a mutable QosPolicies.
 pub trait MutQosPolicy {
   fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<()>;
 }
 
 /// DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.
-/// numbering is from IDL PSM, but it should be unnecessary at the Rust application interface
+/// numbering is from IDL PSM, but it should be unnecessary at the Rust
+/// application interface
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum QosPolicyId {
   //Invalid  // We should represent this using Option<QosPolicyId> where needed
@@ -386,12 +389,15 @@ impl QosPolicies {
   }
 }
 
-// put these into a submodule to avoid repeating the word "policy" or "qospolicy"
+// put these into a submodule to avoid repeating the word "policy" or
+// "qospolicy"
 /// Contains all available QoSPolicies
 pub mod policy {
-  use crate::structure::{parameter_id::ParameterId, duration::Duration};
-  use serde::{Serialize, Deserialize};
   use std::cmp::Ordering;
+
+  use serde::{Deserialize, Serialize};
+
+  use crate::structure::{duration::Duration, parameter_id::ParameterId};
 
   /*
   pub struct UserData {
@@ -663,7 +669,8 @@ impl InlineQos {
   }
 }
 
-// TODO: helper function to check is a QosPolices object is inconsistent (by itself)
+// TODO: helper function to check is a QosPolices object is inconsistent (by
+// itself)
 
 // TODO: helper function to check if two QosPolicies: Reequested and Offered are
 // compatible, according to DDS spec 2.2.3

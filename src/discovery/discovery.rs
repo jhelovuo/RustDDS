@@ -1,65 +1,57 @@
-use std::time::Instant;
-use crate::network::util::get_local_unicast_socket_address;
-use crate::discovery::data_types::topic_data::WriterProxy;
-use crate::discovery::data_types::topic_data::PublicationBuiltinTopicData;
-
-use crate::discovery::data_types::topic_data::DiscoveredReaderDataKey;
-use crate::discovery::data_types::topic_data::DiscoveredWriterDataKey;
-use crate::discovery::data_types::topic_data::DiscoveredTopicDataKey;
-use crate::discovery::data_types::topic_data::ReaderProxy;
-use crate::network::util::get_local_multicast_locators;
-use crate::dds::data_types::SubscriptionBuiltinTopicData;
-use crate::dds::rtps_reader_proxy::RtpsReaderProxy;
-#[allow(unused_imports)]
-use log::{debug, error, warn, info, trace};
-
-use mio::{Ready, Poll, PollOpt, Events};
-use mio_extras::timer::Timer;
-use mio_extras::channel as mio_channel;
-
 use std::{
-  sync::{Arc, RwLock},
-  sync::RwLockReadGuard,
-  sync::RwLockWriteGuard,
-  time::Duration as StdDuration,
+  sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+  time::{Duration as StdDuration, Instant},
 };
+
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+use mio::{Events, Poll, PollOpt, Ready};
+use mio_extras::{channel as mio_channel, timer::Timer};
 
 use crate::{
   dds::{
-    with_key::datareader::DataReader,
-    with_key::datareader::DataReaderCdr,
-    /*with_key::datawriter::DataWriter,*/ with_key::datawriter::DataWriterCdr,
-    topic::*,
-    participant::{DomainParticipantWeak},
-    Publisher, Subscriber,
+    data_types::SubscriptionBuiltinTopicData,
+    participant::DomainParticipantWeak,
     qos::{
-      QosPolicies,
       policy::{
-        Reliability, History, Durability, Presentation, PresentationAccessScope, Deadline,
-        Ownership, Liveliness, TimeBasedFilter, DestinationOrder,
+        Deadline, DestinationOrder, Durability, History, Liveliness, Ownership, Presentation,
+        PresentationAccessScope, Reliability, TimeBasedFilter,
       },
+      QosPolicies, QosPolicyBuilder,
     },
     readcondition::ReadCondition,
+    rtps_reader_proxy::RtpsReaderProxy,
+    topic::*,
+    values::result::{Error, Result},
+    with_key::{
+      datareader::{DataReader, DataReaderCdr},
+      datawriter::DataWriterCdr,
+    },
+    Publisher, Subscriber,
   },
-  dds::values::result::{Error, Result},
-  structure::entity::RTPSEntity,
-  structure::guid::{GUID, GuidPrefix},
-  dds::qos::QosPolicyBuilder,
-};
-
-use crate::discovery::{
-  data_types::spdp_participant_data::{
-    SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey,
+  discovery::{
+    data_types::{
+      spdp_participant_data::{SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey},
+      topic_data::{
+        DiscoveredReaderData, DiscoveredReaderDataKey, DiscoveredTopicDataKey,
+        DiscoveredWriterData, DiscoveredWriterDataKey, PublicationBuiltinTopicData, ReaderProxy,
+        WriterProxy,
+      },
+    },
+    discovery_db::DiscoveryDB,
   },
-  data_types::topic_data::{DiscoveredWriterData, DiscoveredReaderData},
-  discovery_db::DiscoveryDB,
+  network::{
+    constant::*,
+    util::{get_local_multicast_locators, get_local_unicast_socket_address},
+  },
+  serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter,
+  structure::{
+    duration::Duration,
+    entity::RTPSEntity,
+    guid::{EntityId, GuidPrefix, GUID},
+    time::Timestamp,
+  },
 };
-
-use crate::structure::{duration::Duration, guid::EntityId, time::Timestamp};
-
-use crate::serialization::{pl_cdr_deserializer::PlCdrDeserializerAdapter};
-
-use crate::network::constant::*;
 use super::data_types::topic_data::{
   DiscoveredTopicData, ParticipantMessageData, ParticipantMessageDataKind,
 };
@@ -291,7 +283,8 @@ impl Discovery {
       "Unable to register participant info sender. {:?}"
     );
 
-    // Subscriptions: What are the Readers on the network and what are they subscribing to?
+    // Subscriptions: What are the Readers on the network and what are they
+    // subscribing to?
 
     let dcps_subscription_topic = try_construct!(
       domain_participant.create_topic(
@@ -684,7 +677,8 @@ impl Discovery {
               }
             };
 
-            // setting 5 times the duration so lease doesn't break if update fails once or twice
+            // setting 5 times the duration so lease doesn't break if update fails once or
+            // twice
             let data = SpdpDiscoveredParticipantData::from_local_participant(
               &strong_dp,
               5.0 * Duration::from(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
@@ -757,7 +751,8 @@ impl Discovery {
   // That causes ReaderProxies and WriterProxies to be constructed and
   // and we also get our own local readers and writers connected, both
   // built-in and user-defined.
-  // If we did not do this, the Readers and Writers in this participant could not find each other.
+  // If we did not do this, the Readers and Writers in this participant could not
+  // find each other.
   fn initialize_participant(&self) {
     let dp = match self.domain_participant.clone().upgrade() {
       Some(dp) => dp,
@@ -773,7 +768,8 @@ impl Discovery {
     let participant_data =
       SpdpDiscoveredParticipantData::from_local_participant(&dp, Duration::DURATION_INFINITE);
 
-    // Initialize our own particiapnt data into the Discovery DB, so we can talk to ourself.
+    // Initialize our own particiapnt data into the Discovery DB, so we can talk to
+    // ourself.
     self
       .discovery_db_write()
       .update_participant(&participant_data);
@@ -784,7 +780,8 @@ impl Discovery {
       guid_prefix: dp.get_guid().guid_prefix,
     });
 
-    // insert a (fake) reader proxy as multicast address, so discovery notifications are sent somewhere
+    // insert a (fake) reader proxy as multicast address, so discovery notifications
+    // are sent somewhere
     let reader_guid = GUID::new_with_prefix_and_id(
       GuidPrefix::GUIDPREFIX_UNKNOWN,
       EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
@@ -851,7 +848,8 @@ impl Discovery {
         Ok(Some(d)) => match d.value {
           Ok(participant_data) => {
             let participant_data = participant_data.clone(); // .clone() is necessary, because .read
-                                                             // returns references to within Reader, so we cannot operate on self until we clone.
+                                                             // returns references to within Reader, so we cannot operate on self until we
+                                                             // clone.
             debug!(
               "handle_participant_reader discovered {:?}",
               &participant_data
@@ -1346,33 +1344,33 @@ impl Discovery {
 
 #[cfg(test)]
 mod tests {
+  use std::net::SocketAddr;
+
+  use bytes::Bytes;
+  use mio::Token;
+  use speedy::{Endianness, Writable};
+
   use super::*;
   use crate::{
+    dds::{participant::DomainParticipant, traits::serde_adapters::no_key::DeserializerAdapter},
+    discovery::data_types::topic_data::TopicBuiltinTopicData,
+    messages::submessages::{
+      submessage_elements::serialized_payload::RepresentationIdentifier,
+      submessages::{EntitySubmessage, InterpreterSubmessage},
+    },
+    network::{udp_listener::UDPListener, udp_sender::UDPSender},
+    serialization::{
+      cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes, submessage::*,
+    },
+    structure::{entity::RTPSEntity, locator::Locator},
     test::{
       shape_type::ShapeType,
       test_data::{
-        spdp_subscription_msg, spdp_publication_msg, spdp_participant_msg_mod,
-        create_rtps_data_message,
+        create_rtps_data_message, spdp_participant_msg_mod, spdp_publication_msg,
+        spdp_subscription_msg,
       },
     },
-    network::{udp_listener::UDPListener, udp_sender::UDPSender},
-    structure::{entity::RTPSEntity, locator::Locator},
-    serialization::{cdr_serializer::to_bytes, cdr_deserializer::CDRDeserializerAdapter},
-    messages::submessages::submessages::{InterpreterSubmessage, EntitySubmessage},
-    messages::{
-      submessages::submessage_elements::serialized_payload::{RepresentationIdentifier},
-    },
   };
-  use crate::{
-    discovery::data_types::topic_data::TopicBuiltinTopicData,
-    dds::{participant::DomainParticipant, traits::serde_adapters::no_key::DeserializerAdapter},
-  };
-  use crate::serialization::submessage::*;
-
-  use std::{net::SocketAddr};
-  use bytes::Bytes;
-  use mio::Token;
-  use speedy::{Writable, Endianness};
 
   #[test]
   fn discovery_participant_data_test() {
@@ -1407,7 +1405,8 @@ mod tests {
       .unwrap();
 
     let _data2 = udp_listener.get_message();
-    // TODO: we should have received our own participants info decoding the actual message might be good idea
+    // TODO: we should have received our own participants info decoding the
+    // actual message might be good idea
   }
 
   #[test]

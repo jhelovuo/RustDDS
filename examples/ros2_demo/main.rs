@@ -1,12 +1,13 @@
 #![deny(clippy::all)]
 
 use std::{io::Write, time::Duration};
-use rustdds::{ros2::RosParticipant};
+
+use rustdds::ros2::RosParticipant;
 use commands::ThreadControl;
 use log::{debug, error};
 use mio::{Events, Poll, PollOpt, Ready, Token};
-use mio_extras::{channel as mio_channel};
-use structures::{MainController, DataUpdate, RosCommand};
+use mio_extras::channel as mio_channel;
+use structures::{DataUpdate, MainController, RosCommand};
 use termion::raw::*;
 use turtle_listener::TurtleListener;
 use turtle_sender::TurtleSender;

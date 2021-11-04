@@ -1,4 +1,4 @@
-use crate::structure::guid::{GUID, EntityId, GuidPrefix};
+use crate::structure::guid::{EntityId, GuidPrefix, GUID};
 
 /// Base class for all RTPS entities. RTPS Entity represents the class of
 /// objects that are visible to other RTPS Entities on the network. As such,

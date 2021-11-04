@@ -1,46 +1,37 @@
-use std::ops::Bound::Included;
+use std::{
+  cmp::max,
+  collections::{BTreeMap, BTreeSet, HashSet},
+  iter::FromIterator,
+  ops::Bound::Included,
+  rc::Rc,
+  sync::{Arc, RwLock},
+};
 
 #[allow(unused_imports)]
-use log::{debug, error, warn, info, trace};
-
-use speedy::{Writable, Endianness};
-use mio_extras::channel::{self as mio_channel, SyncSender, TrySendError};
-use mio_extras::timer::Timer;
+use log::{debug, error, info, trace, warn};
+use speedy::{Endianness, Writable};
+use mio_extras::{
+  channel::{self as mio_channel, SyncSender, TrySendError},
+  timer::Timer,
+};
 use mio::Token;
-use std::{
-  sync::{RwLock, Arc},
-  rc::Rc,
-  collections::{HashSet, BTreeMap, BTreeSet},
-  iter::FromIterator,
-  cmp::max,
-};
+use policy::{History, Reliability};
 
-use crate::{serialization::MessageBuilder};
-
-use crate::structure::time::Timestamp;
-use crate::structure::duration::Duration;
-
-use crate::structure::guid::{GuidPrefix, EntityId, GUID};
-use crate::structure::sequence_number::{SequenceNumber};
 use crate::{
-  // messages::submessages::submessages::{
-  //   AckNack,
-  // },
+  dds::{ddsdata::DDSData, dp_event_loop::NACK_RESPONSE_DELAY, qos::HasQoSPolicy},
   messages::submessages::submessages::AckSubmessage,
-
-  structure::cache_change::{CacheChange},
-  serialization::{Message},
-  dds::dp_event_loop::NACK_RESPONSE_DELAY,
-};
-
-use crate::dds::{ddsdata::DDSData, qos::HasQoSPolicy};
-use crate::{
   network::udp_sender::UDPSender,
+  serialization::{Message, MessageBuilder},
   structure::{
-    entity::RTPSEntity,
-    endpoint::{EndpointAttributes, Endpoint},
-    locator::Locator,
+    cache_change::CacheChange,
     dds_cache::DDSCache,
+    duration::Duration,
+    endpoint::{Endpoint, EndpointAttributes},
+    entity::RTPSEntity,
+    guid::{EntityId, GuidPrefix, GUID},
+    locator::Locator,
+    sequence_number::SequenceNumber,
+    time::Timestamp,
   },
 };
 use super::{
@@ -48,7 +39,6 @@ use super::{
   rtps_reader_proxy::RtpsReaderProxy,
   statusevents::*,
 };
-use policy::{History, Reliability};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DeliveryMode {
@@ -122,15 +112,16 @@ pub(crate) struct Writer {
   endpoint_attributes: EndpointAttributes,
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
-  ///The RTPS ReaderProxy class represents the information an RTPS StatefulWriter maintains on each matched
-  ///RTPS Reader
+  ///The RTPS ReaderProxy class represents the information an RTPS
+  /// StatefulWriter maintains on each matched RTPS Reader
   readers: BTreeMap<GUID, RtpsReaderProxy>, // TODO: Convert to BTreeMap for faster finds.
   matched_readers_count_total: i32, // all matches, never decremented
   requested_incompatible_qos_count: i32, // how many times a Reader requested incompatible QoS
   //message: Option<Message>,
   udp_sender: Rc<UDPSender>,
 
-  // This writer can read/write to only one of this DDSCache topic caches identified with my_topic_name
+  // This writer can read/write to only one of this DDSCache topic caches identified with
+  // my_topic_name
   dds_cache: Arc<RwLock<DDSCache>>,
   /// Writer can only read/write to this topic DDSHistoryCache.
   my_topic_name: String,
@@ -150,11 +141,12 @@ pub(crate) struct Writer {
   //When dataWriter sends cacheChange message with cacheKind is NotAliveDisposed
   //this is set true. If Datawriter after disposing sends new cahceChanges this falg is then
   //turned true.
-  //When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with DisposedFlag
-  // pub writer_is_disposed: bool,
-  ///Contains timer that needs to be set to timeout with duration of self.heartbeat_perioid
-  ///timed_event_handler sends notification when timer is up via miochannel to poll in Dp_eventWrapper
-  ///this also handles writers cache cleaning timeouts.
+  //When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with
+  // DisposedFlag pub writer_is_disposed: bool,
+  ///Contains timer that needs to be set to timeout with duration of
+  /// self.heartbeat_perioid timed_event_handler sends notification when timer
+  /// is up via miochannel to poll in Dp_eventWrapper this also handles
+  /// writers cache cleaning timeouts.
   pub(crate) timed_event_timer: Timer<TimedEvent>,
 
   qos_policies: QosPolicies,
@@ -190,7 +182,8 @@ impl Writer {
     mut timed_event_timer: Timer<TimedEvent>,
   ) -> Writer {
     let heartbeat_period = match &i.qos_policies.reliability {
-      Some(Reliability::Reliable { .. }) => Some(Duration::from_secs(1)), // TODO: make configurable
+      Some(Reliability::Reliable { .. }) => Some(Duration::from_secs(1)), /* TODO: make */
+      // configurable
       Some(Reliability::BestEffort) => None,
       None => None,
     };
@@ -254,13 +247,14 @@ impl Writer {
     }
   }
 
-  /// To know when token represents a writer we should look entity attribute kind
-  /// this entity token can be used in DataWriter -> Writer mio::channel.
+  /// To know when token represents a writer we should look entity attribute
+  /// kind this entity token can be used in DataWriter -> Writer mio::channel.
   pub fn get_entity_token(&self) -> Token {
     self.get_guid().entity_id.as_token()
   }
 
-  /// This token is used in timed event mio::channel HearbeatHandler -> dpEventwrapper
+  /// This token is used in timed event mio::channel HearbeatHandler ->
+  /// dpEventwrapper
   pub fn get_timed_event_entity_token(&self) -> Token {
     self.get_guid().entity_id.as_alt_token()
   }
@@ -305,7 +299,8 @@ impl Writer {
       match e {
         TimedEvent::Heartbeat => {
           self.handle_heartbeat_tick(false);
-          // ^^ false = This is automatic heartbeat by timer, not manual by application call.
+          // ^^ false = This is automatic heartbeat by timer, not manual by application
+          // call.
           if let Some(period) = self.heartbeat_period {
             self
               .timed_event_timer
@@ -380,7 +375,8 @@ impl Writer {
           // 1. Insert it to history cache and get it sequence numbered
           // 2. Send out data.
           //    If we are pushing data, send the DATA submessage and HEARTBEAT.
-          //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the DATA with ACKNACK.
+          //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the
+          // DATA with ACKNACK.
           let timestamp = self.insert_to_history_cache(data, source_timestamp);
 
           self.increase_heartbeat_counter();
@@ -475,7 +471,8 @@ impl Writer {
     let new_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
     self.last_change_sequence_number = new_sequence_number;
 
-    // setting first change sequence number according to our qos (not offering more than our QOS says)
+    // setting first change sequence number according to our qos (not offering more
+    // than our QOS says)
     self.first_change_sequence_number = match self.get_qos().history {
       None => self.last_change_sequence_number, // default: depth = 1
 
@@ -532,7 +529,8 @@ impl Writer {
   /// This is called periodically.
   pub fn handle_heartbeat_tick(&mut self, is_manual_assertion: bool) {
     // Reliable Stateless Writer will set the final flag.
-    // Reliable Stateful Writer (that tracks Readers by ReaderProxy) will not set the final flag.
+    // Reliable Stateful Writer (that tracks Readers by ReaderProxy) will not set
+    // the final flag.
     let final_flag = false;
     let liveliness_flag = is_manual_assertion; // RTPS spec "8.3.7.5 Heartbeat"
 
@@ -576,8 +574,9 @@ impl Writer {
     }
   }
 
-  /// When receiving an ACKNACK Message indicating a Reader is missing some data samples, the Writer must
-  /// respond by either sending the missing data samples, sending a GAP message when the sample is not relevant, or
+  /// When receiving an ACKNACK Message indicating a Reader is missing some data
+  /// samples, the Writer must respond by either sending the missing data
+  /// samples, sending a GAP message when the sample is not relevant, or
   /// sending a HEARTBEAT message when the sample is no longer available
   pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, ack_submessage: AckSubmessage) {
     match ack_submessage {
@@ -609,8 +608,9 @@ impl Writer {
           reader_proxy.handle_ack_nack(&ack_submessage, last_seq);
 
           let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow
-                                                             // Sanity Check: if the reader asked for something we did not even advertise yet.
-                                                             // TODO: This checks the stored unset_changes, not presentely received ACKNACK.
+                                                             // Sanity Check: if the reader asked for something we did not even advertise
+                                                             // yet. TODO: This
+                                                             // checks the stored unset_changes, not presentely received ACKNACK.
           if let Some(&high) = reader_proxy.unsent_changes.iter().next_back() {
             if high > last_seq {
               warn!(
@@ -694,8 +694,9 @@ impl Writer {
     // Then we can mutate both the reader and other fields in self.
     // Doing a .get_mut() on the reader map would make self immutable.
     if let Some(reader_proxy) = self.readers.remove(&to_reader) {
-      // We use a worker function to ensure that afterwards we can insert the reader_proxy back.
-      // This technique ensures that all return paths lead to re-insertion.
+      // We use a worker function to ensure that afterwards we can insert the
+      // reader_proxy back. This technique ensures that all return paths lead to
+      // re-insertion.
       let reader_proxy = self.handle_repair_data_send_worker(reader_proxy);
       // insert reader back
       let reject = self
@@ -744,7 +745,8 @@ impl Writer {
               self.my_guid.entity_id, // writer
               self.endianness,
             );
-            // TODO: Here we are cloning the entire payload. We need to rewrite the transmit path to avoid copying.
+            // TODO: Here we are cloning the entire payload. We need to rewrite
+            // the transmit path to avoid copying.
 
             // CC will be sent. Remove from unsent list.
           } else {
@@ -790,8 +792,8 @@ impl Writer {
   } // fn
 
   /// Removes permanently cacheChanges from DDSCache.
-  /// CacheChanges can be safely removed only if they are acked by all readers. (Reliable)
-  /// Depth is QoS policy History depth.
+  /// CacheChanges can be safely removed only if they are acked by all readers.
+  /// (Reliable) Depth is QoS policy History depth.
   /// Returns SequenceNumbers of removed CacheChanges
   /// This is called repeadedly by handle_cache_cleaning action.
   fn remove_all_acked_changes_but_keep_depth(&mut self, depth: usize) {
@@ -835,8 +837,8 @@ impl Writer {
     readers: &mut dyn Iterator<Item = &RtpsReaderProxy>,
   ) {
     // TODO: This is a stupid transmit algorithm. We should compute a preferred
-    // unicast and multicast locators for each reader only on every reader update, and
-    // not find it dynamically on every message.
+    // unicast and multicast locators for each reader only on every reader update,
+    // and not find it dynamically on every message.
     let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
     let mut already_sent_to = BTreeSet::new();
 
@@ -1073,17 +1075,19 @@ impl HasQoSPolicy for Writer {
 
 #[cfg(test)]
 mod tests {
-  use crate::{
-    dds::{
-      participant::DomainParticipant, qos::QosPolicies, with_key::datawriter::DataWriter,
-      topic::TopicKind,
-    },
-  };
   use std::thread;
-  use crate::test::random_data::*;
-  use crate::serialization::cdr_serializer::CDRSerializerAdapter;
+
   use byteorder::LittleEndian;
   use log::info;
+
+  use crate::{
+    dds::{
+      participant::DomainParticipant, qos::QosPolicies, topic::TopicKind,
+      with_key::datawriter::DataWriter,
+    },
+    serialization::cdr_serializer::CDRSerializerAdapter,
+    test::random_data::*,
+  };
 
   #[test]
   fn test_writer_recieves_datawriter_cache_change_notifications() {

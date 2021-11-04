@@ -1,34 +1,28 @@
 use std::{
-  collections::{HashMap, BTreeMap},
+  collections::{BTreeMap, HashMap},
   time::Instant,
 };
 
 #[allow(unused_imports)]
-use log::{error, warn, debug, trace, info};
-
-use crate::{dds::qos::HasQoSPolicy, structure::guid::GuidPrefix};
-
-use crate::structure::{
-  guid::GUID, guid::EntityId, duration::Duration, entity::RTPSEntity, locator::LocatorList,
-};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{
-    rtps_reader_proxy::RtpsReaderProxy,
-    reader::{ReaderIngredients},
-    participant::DomainParticipant,
-    topic::Topic,
-    traits::TopicDescription,
+    participant::DomainParticipant, qos::HasQoSPolicy, reader::ReaderIngredients,
+    rtps_reader_proxy::RtpsReaderProxy, topic::Topic, traits::TopicDescription,
+  },
+  structure::{
+    duration::Duration,
+    entity::RTPSEntity,
+    guid::{EntityId, GuidPrefix, GUID},
+    locator::LocatorList,
   },
 };
-
-use super::{
-  data_types::{
-    spdp_participant_data::SpdpDiscoveredParticipantData,
-    topic_data::{
-      DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
-      ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
-    },
+use super::data_types::{
+  spdp_participant_data::SpdpDiscoveredParticipantData,
+  topic_data::{
+    DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
+    ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
   },
 };
 
@@ -144,7 +138,8 @@ impl DiscoveryDB {
   }
 
   fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {
-    // TODO: Implement this using .drain_filter() in BTreeMap once it lands in stable.
+    // TODO: Implement this using .drain_filter() in BTreeMap once it lands in
+    // stable.
     let to_remove: Vec<GUID> = self
       .external_topic_readers
       .range(guid_prefix.range())
@@ -161,7 +156,8 @@ impl DiscoveryDB {
   }
 
   fn remove_topic_writer_with_prefix(&mut self, guid_prefix: GuidPrefix) {
-    // TODO: Implement this using .drain_filter() in BTreeMap once it lands in stable.
+    // TODO: Implement this using .drain_filter() in BTreeMap once it lands in
+    // stable.
     let to_remove: Vec<GUID> = self
       .external_topic_writers
       .range(guid_prefix.range())
@@ -176,13 +172,14 @@ impl DiscoveryDB {
     self.external_topic_writers.remove(&guid);
   }
 
-  // Delete participant proxies, if we have not heard of them within lease_duration
+  // Delete participant proxies, if we have not heard of them within
+  // lease_duration
   pub fn participant_cleanup(&mut self) -> Vec<GuidPrefix> {
     let inow = Instant::now();
 
     let mut to_remove = Vec::new();
-    // TODO: We are not cleaning up liast_life_signs table, but that should not be a problem,
-    // except for a slight memory leak.
+    // TODO: We are not cleaning up liast_life_signs table, but that should not be a
+    // problem, except for a slight memory leak.
     for (&guid, sp) in self.participant_proxies.iter() {
       let lease_duration = sp
         .lease_duration
@@ -292,14 +289,16 @@ impl DiscoveryDB {
   }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None
-  // TODO: Why are we here checking if discovery db already has this? What about reader proxies in writers?
+  // TODO: Why are we here checking if discovery db already has this? What about
+  // reader proxies in writers?
   pub fn update_subscription(
     &mut self,
     data: &DiscoveredReaderData,
   ) -> Option<(DiscoveredReaderData, RtpsReaderProxy)> {
     let guid = data.reader_proxy.remote_reader_guid;
     // we could return None to indicate that we already knew all about this reader
-    // To do that, we should check that the reader is the same as what we have in the DB already.
+    // To do that, we should check that the reader is the same as what we have in
+    // the DB already.
     match self.external_topic_readers.get(&guid) {
       Some(drd) if drd == data => None, // already have this
       _ => {
@@ -540,28 +539,28 @@ impl DiscoveryDB {
 #[cfg(test)]
 
 mod tests {
-  use super::*;
+  use std::{
+    rc::Rc,
+    sync::{Arc, RwLock},
+    time::Duration as StdDuration,
+  };
 
+  use byteorder::LittleEndian;
+
+  use super::*;
   use crate::{
-    dds::qos::QosPolicies,
-    structure::dds_cache::DDSCache,
-    dds::topic::TopicKind,
+    dds::{
+      qos::QosPolicies, reader::Reader, statusevents::DataReaderStatus, topic::TopicKind,
+      with_key::datareader::ReaderCommand,
+    },
+    network::udp_sender::UDPSender,
+    serialization::cdr_serializer::CDRSerializerAdapter,
+    structure::{dds_cache::DDSCache, guid::*},
     test::{
       random_data::RandomData,
-      test_data::{subscription_builtin_topic_data, spdp_participant_data, reader_proxy_data},
+      test_data::{reader_proxy_data, spdp_participant_data, subscription_builtin_topic_data},
     },
   };
-  use std::sync::{RwLock, Arc};
-  use std::rc::Rc;
-
-  use crate::network::udp_sender::UDPSender;
-  use crate::dds::reader::Reader;
-  use crate::structure::guid::*;
-  use crate::serialization::cdr_serializer::CDRSerializerAdapter;
-  use byteorder::LittleEndian;
-  use std::time::Duration as StdDuration;
-  use crate::dds::statusevents::DataReaderStatus;
-  use crate::dds::with_key::datareader::ReaderCommand;
 
   #[test]
   fn discdb_participant_operations() {

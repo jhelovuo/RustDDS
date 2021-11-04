@@ -1,9 +1,12 @@
-use crate::messages::validity_trait::Validity;
-use crate::messages::protocol_id::ProtocolId;
-use crate::messages::protocol_version::ProtocolVersion;
-use crate::messages::vendor_id::VendorId;
-use crate::structure::guid::GuidPrefix;
 use speedy::{Readable, Writable};
+
+use crate::{
+  messages::{
+    protocol_id::ProtocolId, protocol_version::ProtocolVersion, validity_trait::Validity,
+    vendor_id::VendorId,
+  },
+  structure::guid::GuidPrefix,
+};
 
 #[derive(Debug, Clone, Readable, Writable, PartialEq)]
 pub struct Header {
@@ -27,7 +30,8 @@ impl Header {
 impl Validity for Header {
   fn valid(&self) -> bool {
     // Three validity rules from RTPS 2.3 spec section 8.3.6.3
-    // (1) We cannot reach this point if the message has too few bytes to contain a full header.
+    // (1) We cannot reach this point if the message has too few bytes to contain a
+    // full header.
     self.protocol_id == ProtocolId::PROTOCOL_RTPS // (2)
     && self.protocol_version.major <= ProtocolVersion::THIS_IMPLEMENTATION.major
     // (3)

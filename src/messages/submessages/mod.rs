@@ -19,23 +19,10 @@ pub mod submessage_kind;
 
 #[allow(clippy::module_inception)]
 pub mod submessages {
-  pub use super::submessage_elements::RepresentationIdentifier;
-
-  pub use super::submessage::*;
-  pub use super::submessage_header::*;
-  pub use super::submessage_flag::*;
-  pub use super::submessage_kind::*;
-
-  pub use super::ack_nack::*;
-  pub use super::data::*;
-  pub use super::data_frag::*;
-  pub use super::gap::*;
-  pub use super::heartbeat::*;
-  pub use super::heartbeat_frag::*;
-  pub use super::nack_frag::*;
-
-  pub use super::info_destination::*;
-  pub use super::info_reply::*;
-  pub use super::info_source::*;
-  pub use super::info_timestamp::*;
+  pub use super::{
+    ack_nack::*, data::*, data_frag::*, gap::*, heartbeat::*, heartbeat_frag::*,
+    info_destination::*, info_reply::*, info_source::*, info_timestamp::*, nack_frag::*,
+    submessage::*, submessage_elements::RepresentationIdentifier, submessage_flag::*,
+    submessage_header::*, submessage_kind::*,
+  };
 }

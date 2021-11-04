@@ -1,7 +1,11 @@
+use std::{
+  convert::{From, TryFrom},
+  ops::Div,
+};
+
 use speedy::{Readable, Writable};
-use std::convert::{From, TryFrom};
-use std::ops::Div;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
 use super::parameter_id::ParameterId;
 
 #[derive(
@@ -118,7 +122,8 @@ impl From<std::time::Duration> for Duration {
 impl From<Duration> for std::time::Duration {
   fn from(d: Duration) -> std::time::Duration {
     std::time::Duration::from_nanos(
-      u64::try_from(d.to_nanoseconds()).unwrap_or(0), // saturate to zero, becaues std::time::Duraiton is unsigned
+      u64::try_from(d.to_nanoseconds()).unwrap_or(0), /* saturate to zero, becaues
+                                                       * std::time::Duraiton is unsigned */
     )
   }
 }

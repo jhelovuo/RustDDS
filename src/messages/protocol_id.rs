@@ -1,5 +1,6 @@
-use crate::messages::validity_trait::Validity;
 use speedy::{Context, Readable, Reader, Writable, Writer};
+
+use crate::messages::validity_trait::Validity;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub struct ProtocolId {
@@ -52,8 +53,9 @@ impl<C: Context> Writable<C> for ProtocolId {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
   use speedy::Endianness;
+
+  use super::*;
 
   #[test]
   fn validity() {

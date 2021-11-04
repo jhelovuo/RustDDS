@@ -1,21 +1,23 @@
-use std;
-use std::result;
+use std::{self, result};
 
 #[allow(unused_imports)]
-use log::{debug, info, warn, trace, error};
-
-use mio_extras::channel::{TrySendError};
+use log::{debug, error, info, trace, warn};
+use mio_extras::channel::TrySendError;
 
 /// This is a specialized Result, similar to std::io::Result
 pub type Result<T> = result::Result<T, Error>;
 
-/// This roughly corresponds to "Return codes" in DDS spec 2.2.1.1 Format and Conventions
+/// This roughly corresponds to "Return codes" in DDS spec 2.2.1.1 Format and
+/// Conventions
 ///
 /// Deviations from the DDS spec:
-/// * `OK` is not included. It is not an error. Ok/Error should be distinguished with the `Result` type.
+/// * `OK` is not included. It is not an error. Ok/Error should be distinguished
+///   with the `Result` type.
 /// * `Error` is too unspecific.
-/// * `AlreadyDeleted` We should use Rust type system to avoid these, so no need for run-time error.
-/// * `Timeout`  This is normal operation and should be encoded as `Option` or `Result`
+/// * `AlreadyDeleted` We should use Rust type system to avoid these, so no need
+///   for run-time error.
+/// * `Timeout`  This is normal operation and should be encoded as `Option` or
+///   `Result`
 /// * `NoData`  This should be encoded as `Option<SomeData>`, not an error code.
 #[derive(Debug)]
 pub enum Error {
@@ -23,7 +25,8 @@ pub enum Error {
   BadParameter {
     reason: String,
   },
-  /// Unsupported operation. Can only be returned by operations that are optional.
+  /// Unsupported operation. Can only be returned by operations that are
+  /// optional.
   Unsupported,
   /// Service ran out of the resources needed to complete the operation.
   OutOfResources,
@@ -31,7 +34,8 @@ pub enum Error {
   NotEnabled,
   /// Application attempted to modify an immutable QosPolicy.
   ImmutablePolicy, // can we check this statically?
-  /// Application specified a set of policies that are not consistent with each other.
+  /// Application specified a set of policies that are not consistent with each
+  /// other.
   InconsistentPolicy {
     reason: String,
   },

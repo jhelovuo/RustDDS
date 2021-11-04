@@ -72,50 +72,54 @@ pub(crate) fn spdp_publication_data_raw() -> Bytes {
   Bytes::from_static(&DATA)
 }
 
+use std::{net::SocketAddr, time::Duration as StdDuration};
+
+use bytes::Bytes;
+use speedy::{Endianness, Writable};
+use serde::Serialize;
+use byteorder::LittleEndian;
+use enumflags2::BitFlags;
+
 use crate::{
   dds::{
-    qos::policy::{
-      Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
-      TimeBasedFilter, Presentation, PresentationAccessScope, Lifespan, History, ResourceLimits,
+    qos::{
+      policy::{
+        Deadline, DestinationOrder, Durability, History, LatencyBudget, Lifespan, Liveliness,
+        Ownership, Presentation, PresentationAccessScope, Reliability, ResourceLimits,
+        TimeBasedFilter,
+      },
+      QosPolicyBuilder,
     },
     traits::serde_adapters::no_key::DeserializerAdapter,
-    qos::QosPolicyBuilder,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
     data_types::{
-      topic_data::{
-        SubscriptionBuiltinTopicData, ReaderProxy, WriterProxy, PublicationBuiltinTopicData,
-        TopicBuiltinTopicData,
-      },
       spdp_participant_data::SpdpDiscoveredParticipantData,
+      topic_data::{
+        PublicationBuiltinTopicData, ReaderProxy, SubscriptionBuiltinTopicData,
+        TopicBuiltinTopicData, WriterProxy,
+      },
     },
   },
-  messages::submessages::submessages::{Data, EntitySubmessage, SubmessageKind, SubmessageHeader},
   messages::{
     header::Header,
-    submessages::submessage_elements::serialized_payload::{
-      SerializedPayload, RepresentationIdentifier,
+    submessages::{
+      submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload},
+      submessages::{Data, EntitySubmessage, SubmessageHeader, SubmessageKind, *},
     },
   },
   serialization::{
-    Message, cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, SubMessage,
+    cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, Message, SubMessage,
     SubmessageBody,
   },
   structure::{
-    locator::Locator,
-    guid::{EntityId, GUID, EntityKind},
     duration::Duration,
+    guid::{EntityId, EntityKind, GUID},
+    locator::Locator,
     sequence_number::SequenceNumber,
   },
 };
-use bytes::Bytes;
-use speedy::{Endianness, Writable};
-use std::{net::SocketAddr, time::Duration as StdDuration};
-use serde::Serialize;
-use byteorder::LittleEndian;
-use enumflags2::BitFlags;
-use crate::messages::submessages::submessages::*;
 
 pub(crate) fn spdp_participant_msg() -> Message {
   let data = spdp_participant_data_raw();

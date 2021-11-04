@@ -1,52 +1,47 @@
 use std::time::Instant;
 
 use serde::Deserialize;
-
 use chrono::Utc;
-
-use log::{warn, error};
-
-use crate::{
-  log_and_err_discovery,
-  dds::{qos::QosPolicyBuilder},
-  structure::{
-    guid::GUID,
-    parameter_id::ParameterId,
-    locator::{LocatorList, Locator},
-    builtin_endpoint::{BuiltinEndpointSet, BuiltinEndpointQos},
-    duration::Duration,
-    endpoint::ReliabilityKind,
-  },
-};
-
-use crate::messages::{
-  protocol_version::ProtocolVersion, vendor_id::VendorId,
-  submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
-};
-
-use crate::serialization::{error::Error};
+use log::{error, warn};
 
 use crate::{
   dds::{
-    qos::policy::{
-      Deadline, Durability, LatencyBudget, Liveliness, Reliability, Ownership, DestinationOrder,
-      TimeBasedFilter, Presentation, Lifespan, History, ResourceLimits,
+    qos::{
+      policy::{
+        Deadline, DestinationOrder, Durability, History, LatencyBudget, Lifespan, Liveliness,
+        Ownership, Presentation, Reliability, ResourceLimits, TimeBasedFilter,
+      },
+      QosPolicyBuilder,
     },
     traits::serde_adapters::no_key::*,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
     data_types::{
-      topic_data::{
-        SubscriptionBuiltinTopicData, ReaderProxy, DiscoveredReaderData, WriterProxy,
-        PublicationBuiltinTopicData, DiscoveredWriterData, TopicBuiltinTopicData,
-        DiscoveredReaderDataKey, DiscoveredWriterDataKey,
-      },
       spdp_participant_data::{SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey},
+      topic_data::{
+        DiscoveredReaderData, DiscoveredReaderDataKey, DiscoveredWriterData,
+        DiscoveredWriterDataKey, PublicationBuiltinTopicData, ReaderProxy,
+        SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
+      },
     },
   },
+  log_and_err_discovery,
+  messages::{
+    protocol_version::ProtocolVersion,
+    submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+    vendor_id::VendorId,
+  },
+  serialization::error::Error,
+  structure::{
+    builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
+    duration::Duration,
+    endpoint::ReliabilityKind,
+    guid::GUID,
+    locator::{Locator, LocatorList},
+    parameter_id::ParameterId,
+  },
 };
-
 use super::cdr_deserializer::CDRDeserializerAdapter;
 
 #[derive(Debug)]
