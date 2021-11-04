@@ -143,7 +143,6 @@ impl Reader {
   // TODO: check if it's necessary to implement different handlers for discovery
   // and user messages
 
-
   /// To know when token represents a reader we should look entity attribute
   /// kind
   pub fn get_entity_token(&self) -> Token {
@@ -288,8 +287,10 @@ impl Reader {
   #[cfg(test)]
   pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
     let dds_cache = self.dds_cache.read().unwrap();
-    let cc = self.seqnum_instant_map.get(&sequence_number)
-      .map( |i| dds_cache.from_topic_get_change(&self.topic_name, i,))
+    let cc = self
+      .seqnum_instant_map
+      .get(&sequence_number)
+      .map(|i| dds_cache.from_topic_get_change(&self.topic_name, i))
       .flatten();
 
     debug!("history cache !!!! {:?}", cc);
@@ -302,8 +303,10 @@ impl Reader {
   pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
     debug!("{:?}", sequence_number);
     let dds_cache = self.dds_cache.read().unwrap();
-    let cc = self.seqnum_instant_map.get(&sequence_number)
-      .map( |i| dds_cache.from_topic_get_change(&self.topic_name, i,))
+    let cc = self
+      .seqnum_instant_map
+      .get(&sequence_number)
+      .map(|i| dds_cache.from_topic_get_change(&self.topic_name, i))
       .flatten();
     debug!("history cache !!!! {:?}", cc);
     cc.cloned()
@@ -1171,7 +1174,8 @@ mod tests {
     //   new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
     // );
     //assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
-    // TODO: Investigate why this fails. Is the test case or implementation faulty?
+    // TODO: Investigate why this fails. Is the test case or implementation
+    // faulty?
   }
 
   #[test]
@@ -1315,7 +1319,8 @@ mod tests {
 
   #[test]
   fn rtpsreader_handle_gap() {
-    return; // TODO: investiage why this fails. Does the test case even make sense with current code?
+    return; // TODO: investiage why this fails. Does the test case even make sense with
+            // current code?
     let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_reciever) =
