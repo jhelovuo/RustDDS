@@ -34,7 +34,7 @@ socket2 = { version = "0.4", features = ["all"] }
 bytes = "1"
 static_assertions = "1.1"
 thiserror = "1.0.29"
-cdr-encoding-size = { git = "https://github.com/jhelovuo/cdr-encoding-size" }
+cdr-encoding-size = { version="^0.5" }
 
 [target.'cfg(windows)'.dependencies]
 local-ip-address = "0.4.4"
