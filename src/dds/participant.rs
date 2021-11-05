@@ -78,19 +78,14 @@ impl DomainParticipant {
     let discovery_handle = thread::Builder::new()
       .name("RustDDS discovery thread".to_string())
       .spawn(move || {
-        match Discovery::new(
+        if let Ok(mut discovery) = Discovery::new(
           dp_clone,
           disc_db_clone,
           discovery_started_sender,
           discovery_updated_sender,
           discovery_command_receiver,
         ) {
-          Ok(mut discovery) =>
-          // run the event loop
-          {
-            discovery.discovery_event_loop()
-          }
-          Err(_) => (),
+            discovery.discovery_event_loop() // run the event loop
         }
       })?;
 
@@ -788,14 +783,15 @@ impl DomainParticipantInner {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    match self.find_topic_in_discovery_db(domain_participant_weak, name)? {
-      Some(topic) => return Ok(Some(topic)),
-      None => (),
+    // Do we know it already?
+    if let Some(topic) = self.find_topic_in_discovery_db(domain_participant_weak, name)? {
+      Ok(Some(topic))
+    } else {
+      // No. Wait until timeout and look again.
+      // TODO: Interrupt waiting and return if topic is discovered before timeout.
+      std::thread::sleep(timeout);
+      self.find_topic_in_discovery_db(domain_participant_weak, name)
     }
-
-    std::thread::sleep(timeout);
-
-    self.find_topic_in_discovery_db(domain_participant_weak, name)
   }
 
   fn find_topic_in_discovery_db(
