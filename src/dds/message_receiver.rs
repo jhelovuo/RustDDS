@@ -191,12 +191,11 @@ impl MessageReceiver {
         // TODO: Add some sensible ping message handling here.
         info!("Received RTPS PING. Do not know how to respond.");
         debug!("Data was {:?}", &msg_bytes);
-        return;
       } else {
         warn!("Message is shorter than header. Cannot deserialize.");
         debug!("Data was {:?}", &msg_bytes);
-        return;
       }
+      return
     }
 
     // call Speedy reader
@@ -206,7 +205,7 @@ impl MessageReceiver {
       Err(speedy_err) => {
         warn!("RTPS deserialize error {:?}", speedy_err);
         debug!("Data was {:?}", msg_bytes);
-        return;
+        return
       }
     };
 
@@ -266,10 +265,9 @@ impl MessageReceiver {
             );
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
-        } else {
-          if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
+        } else if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
             target_reader.handle_data_msg(data, data_flags, mr_state);
-          }
+          
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -287,14 +285,12 @@ impl MessageReceiver {
               mr_state.clone(),
             );
           }
-        } else {
-          if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
-            target_reader.handle_heartbeat_msg(
-              heartbeat,
-              flags.contains(HEARTBEAT_Flags::Final),
-              mr_state,
-            );
-          }
+        } else if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
+          target_reader.handle_heartbeat_msg(
+            heartbeat,
+            flags.contains(HEARTBEAT_Flags::Final),
+            mr_state,
+          );          
         }
       }
       EntitySubmessage::Gap(gap, _flags) => {
@@ -332,10 +328,9 @@ impl MessageReceiver {
           {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
-        } else {
-          if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
+        } else if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
             target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
-          }
+          
         }
       }
       EntitySubmessage::NackFrag(_, _) => {}

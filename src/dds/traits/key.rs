@@ -117,10 +117,9 @@ pub trait Key:
 
     // The specification calls for "sequential CDR representation of all the key
     // fields" and "CDR Big- Endian representation of all the Key fields in
-    // sequence". We take this to mean the CDR encoding of the Key, but with no
-    // alignment padding.
+    // sequence". We take this to mean the CDR encoding of the Key.
+    // (Does it include CDR-specified alignment padding too?)
     //
-    // TODO: We need a method to get CDR representation with no alignment padding.
 
     let mut cdr_bytes = to_bytes::<Self, BigEndian>(self).unwrap_or_else(|e| {
       error!("Hashing key {:?} failed!", e);

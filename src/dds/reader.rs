@@ -37,7 +37,7 @@ use crate::{
     endpoint::{Endpoint, EndpointAttributes},
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
-    locator::LocatorList,
+    locator::Locator,
     sequence_number::{SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
@@ -928,7 +928,7 @@ impl Reader {
     flags: BitFlags<ACKNACK_Flags>,
     acknack: AckNack,
     info_dst: InfoDestination,
-    dst_localtor_list: &LocatorList,
+    dst_localtor_list: &[Locator],
   ) {
     let infodst_flags =
       BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
@@ -955,7 +955,7 @@ impl Reader {
       .unwrap();
     self
       .udp_sender
-      .send_to_locator_list(&bytes, &dst_localtor_list);
+      .send_to_locator_list(&bytes, dst_localtor_list);
   }
 
   pub fn send_preemptive_acknacks(&mut self) {
