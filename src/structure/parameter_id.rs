@@ -7,6 +7,7 @@ pub struct ParameterId {
 }
 
 impl ParameterId {
+  #![allow(dead_code)] // since do not necessarily use all of the named constants, but that's ok
   pub const PID_PAD: ParameterId = ParameterId { value: 0x0000 };
   pub const PID_SENTINEL: ParameterId = ParameterId { value: 0x0001 };
   pub const PID_USER_DATA: ParameterId = ParameterId { value: 0x002c };

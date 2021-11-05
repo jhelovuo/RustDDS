@@ -3,7 +3,6 @@ use crate::{
     no_key::wrappers::NoKeyWrapper, sampleinfo::*,
     with_key::datasample::DataSample as WithKeyDataSample,
   },
-  structure::{guid::GUID, time::Timestamp},
 };
 
 /// DDS spec 2.2.2.5.4
@@ -18,36 +17,6 @@ pub struct DataSample<D> {
 }
 
 impl<D> DataSample<D> {
-  //TODO: At least rename this. This is not a proper constructor.
-  pub(crate) fn new_deprecated(
-    source_timestamp: Timestamp,
-    payload: D,
-    writer_guid: GUID,
-  ) -> DataSample<D> {
-    // begin dummy placeholder values
-    let sample_state = SampleState::NotRead;
-    let view_state = ViewState::New;
-    let instance_state = InstanceState::Alive;
-    let sample_rank = 0;
-    let generation_rank = 0;
-    let absolute_generation_rank = 0;
-    // end dummy placeholder values
-
-    DataSample {
-      sample_info: SampleInfo {
-        sample_state,
-        view_state,
-        instance_state,
-        generation_counts: NotAliveGenerationCounts::zero(),
-        sample_rank,
-        generation_rank,
-        absolute_generation_rank,
-        source_timestamp: Some(source_timestamp),
-        publication_handle: writer_guid,
-      },
-      value: payload,
-    }
-  }
 
   pub(crate) fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> {
     match keyed.value {

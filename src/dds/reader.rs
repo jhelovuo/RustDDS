@@ -43,6 +43,8 @@ use crate::{
   },
 };
 
+#[cfg(test)] use crate::structure::locator::LocatorList;
+
 use super::{qos::InlineQos, with_key::datareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

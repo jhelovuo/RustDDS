@@ -1,5 +1,5 @@
 use std::{
-  collections::{BTreeSet, HashSet},
+  collections::{BTreeSet,},
   io,
 };
 
@@ -47,40 +47,42 @@ pub(crate) struct Message {
 }
 
 impl<'a> Message {
-  pub fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Header {
-    Header::read_from_buffer_with_ctx(context, buffer).unwrap()
-  }
+  // pub fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Header {
+  //   Header::read_from_buffer_with_ctx(context, buffer).unwrap()
+  // }
 
-  pub fn serialize_header(self) -> Vec<u8> {
-    let buffer = self.header.write_to_vec_with_ctx(Endianness::LittleEndian);
-    buffer.unwrap()
-  }
+  // pub fn serialize_header(self) -> Vec<u8> {
+  //   let buffer = self.header.write_to_vec_with_ctx(Endianness::LittleEndian);
+  //   buffer.unwrap()
+  // }
 
   pub fn add_submessage(&mut self, submessage: SubMessage) {
     self.submessages.push(submessage);
   }
 
-  pub fn remove_submessage(mut self, index: usize) {
-    self.submessages.remove(index);
-  }
+  // pub fn remove_submessage(mut self, index: usize) {
+  //   self.submessages.remove(index);
+  // }
 
+  #[cfg(test)]
   pub fn submessages(self) -> Vec<SubMessage> {
     self.submessages
   }
 
+  #[cfg(test)]
   pub fn set_header(&mut self, header: Header) {
     self.header = header;
   }
 
-  pub fn get_data_sub_message_sequence_numbers(&self) -> HashSet<SequenceNumber> {
-    let mut sequence_numbers = HashSet::new();
-    for mes in self.submessages.iter() {
-      if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm, _)) = &mes.body {
-        sequence_numbers.insert(data_subm.writer_sn);
-      }
-    }
-    sequence_numbers
-  }
+  // pub fn get_data_sub_message_sequence_numbers(&self) -> HashSet<SequenceNumber> {
+  //   let mut sequence_numbers = HashSet::new();
+  //   for mes in self.submessages.iter() {
+  //     if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm, _)) = &mes.body {
+  //       sequence_numbers.insert(data_subm.writer_sn);
+  //     }
+  //   }
+  //   sequence_numbers
+  // }
 
   // We implement this instead of Speedy trait Readable, because
   // we need to run-time decide which endianness we input. Speedy requires the
