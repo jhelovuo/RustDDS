@@ -731,9 +731,9 @@ mod tests {
           entity_kind: EntityKind::READER_NO_KEY_USER_DEFINED,
         },
       ), // GUID needs to be different in order to be added
-      notification_sender: notification_sender.clone(),
-      status_sender: status_sender.clone(),
-      topic_name: topic.get_name().to_string(),
+      notification_sender,
+      status_sender,
+      topic_name: topic.get_name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
     };

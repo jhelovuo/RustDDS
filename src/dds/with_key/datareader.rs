@@ -1370,8 +1370,9 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   fn dr_read_and_take() {
-    return; // TODO: Find out why this does not work, fix, and re-enable.
+    // TODO: Find out why this does not work, fix, and re-enable.
     let dp = DomainParticipant::new(0).expect("Particpant creation failed!");
 
     let mut qos = QosPolicies::qos_none();

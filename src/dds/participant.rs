@@ -85,7 +85,7 @@ impl DomainParticipant {
           discovery_updated_sender,
           discovery_command_receiver,
         ) {
-            discovery.discovery_event_loop() // run the event loop
+          discovery.discovery_event_loop() // run the event loop
         }
       })?;
 
@@ -346,9 +346,7 @@ impl DomainParticipantWeak {
   }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
-    self.dpi
-      .upgrade()
-      .map( |d| DomainParticipant { dpi: d } )
+    self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
   }
 } // end impl
 
@@ -529,7 +527,7 @@ impl Drop for DomainParticipantInner {
     // ev_loop_thread anyways
     match self.stop_poll_sender.send(()) {
       Ok(_) => (),
-      _     => return,
+      _ => return,
     };
 
     debug!("Waiting for dp_event_loop join");

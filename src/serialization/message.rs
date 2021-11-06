@@ -1,7 +1,4 @@
-use std::{
-  collections::{BTreeSet,},
-  io,
-};
+use std::{collections::BTreeSet, io};
 
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
@@ -74,11 +71,11 @@ impl<'a> Message {
     self.header = header;
   }
 
-  // pub fn get_data_sub_message_sequence_numbers(&self) -> HashSet<SequenceNumber> {
-  //   let mut sequence_numbers = HashSet::new();
+  // pub fn get_data_sub_message_sequence_numbers(&self) ->
+  // HashSet<SequenceNumber> {   let mut sequence_numbers = HashSet::new();
   //   for mes in self.submessages.iter() {
-  //     if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm, _)) = &mes.body {
-  //       sequence_numbers.insert(data_subm.writer_sn);
+  //     if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm, _)) =
+  // &mes.body {       sequence_numbers.insert(data_subm.writer_sn);
   //     }
   //   }
   //   sequence_numbers
