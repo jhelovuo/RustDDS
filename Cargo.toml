@@ -50,3 +50,4 @@ clap = "2.33"
 # ros2-demo
 log4rs = "1"
 test-case = "1.2.0"
+lazy_static = "1.4.0"

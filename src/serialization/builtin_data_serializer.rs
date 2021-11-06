@@ -149,6 +149,7 @@ impl BuiltinDataSerializerKey {
   }
 }
 
+#[derive(Default)]
 pub struct BuiltinDataSerializer<'a> {
   // Participant Data
   pub protocol_version: Option<ProtocolVersion>,
@@ -344,99 +345,27 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: Some(participant_data.manual_liveliness_count),
       builtin_endpoint_qos: participant_data.builtin_endpoint_qos,
       entity_name: participant_data.entity_name.as_ref(),
-      endpoint_guid: None,
-      unicast_locator_list: None,
-      multicast_locator_list: None,
-      data_max_size_serialized: None,
-      topic_name: None,
-      type_name: None,
-      durability: None,
-      deadline: None,
-      latency_budget: None,
-      liveliness: None,
-      reliability: None,
-      ownership: None,
-      destination_order: None,
-      time_based_filter: None,
-      presentation: None,
-      lifespan: None,
-      history: None,
-      resource_limits: None,
-      content_filter_property: None,
+      ..BuiltinDataSerializer::default()
     }
   }
 
   pub fn from_reader_proxy(reader_proxy: &'a ReaderProxy) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
-      protocol_version: None,
-      vendor_id: None,
       expects_inline_qos: Some(reader_proxy.expects_inline_qos),
-      participant_guid: None,
-      metatraffic_unicast_locators: None,
-      metatraffic_multicast_locators: None,
-      default_unicast_locators: None,
-      default_multicast_locators: None,
-      available_builtin_endpoints: None,
-      lease_duration: None,
-      manual_liveliness_count: None,
-      builtin_endpoint_qos: None,
-      entity_name: None,
       endpoint_guid: Some(reader_proxy.remote_reader_guid),
       unicast_locator_list: Some(&reader_proxy.unicast_locator_list),
       multicast_locator_list: Some(&reader_proxy.multicast_locator_list),
-      data_max_size_serialized: None,
-      topic_name: None,
-      type_name: None,
-      durability: None,
-      deadline: None,
-      latency_budget: None,
-      liveliness: None,
-      reliability: None,
-      ownership: None,
-      destination_order: None,
-      time_based_filter: None,
-      presentation: None,
-      lifespan: None,
-      history: None,
-      resource_limits: None,
-      content_filter_property: None,
+      ..BuiltinDataSerializer::default()
     }
   }
 
   pub fn from_writer_proxy(writer_proxy: &'a WriterProxy) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
-      protocol_version: None,
-      vendor_id: None,
-      expects_inline_qos: None,
-      participant_guid: None,
-      metatraffic_unicast_locators: None,
-      metatraffic_multicast_locators: None,
-      default_unicast_locators: None,
-      default_multicast_locators: None,
-      available_builtin_endpoints: None,
-      lease_duration: None,
-      manual_liveliness_count: None,
-      builtin_endpoint_qos: None,
-      entity_name: None,
       endpoint_guid: Some(writer_proxy.remote_writer_guid),
       unicast_locator_list: Some(&writer_proxy.unicast_locator_list),
       multicast_locator_list: Some(&writer_proxy.multicast_locator_list),
       data_max_size_serialized: writer_proxy.data_max_size_serialized,
-      topic_name: None,
-      type_name: None,
-      durability: None,
-      deadline: None,
-      latency_budget: None,
-      liveliness: None,
-      reliability: None,
-      ownership: None,
-      destination_order: None,
-      time_based_filter: None,
-      presentation: None,
-      lifespan: None,
-      history: None,
-      resource_limits: None,
-      content_filter_property: None,
+      ..BuiltinDataSerializer::default()
     }
   }
 
@@ -444,23 +373,8 @@ impl<'a> BuiltinDataSerializer<'a> {
     subscription_topic_data: &'a SubscriptionBuiltinTopicData,
   ) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
-      protocol_version: None,
-      vendor_id: None,
-      expects_inline_qos: None,
       participant_guid: *subscription_topic_data.participant_key(),
-      metatraffic_unicast_locators: None,
-      metatraffic_multicast_locators: None,
-      default_unicast_locators: None,
-      default_multicast_locators: None,
-      available_builtin_endpoints: None,
-      lease_duration: None,
-      manual_liveliness_count: None,
-      builtin_endpoint_qos: None,
-      entity_name: None,
       endpoint_guid: Some(subscription_topic_data.key()),
-      unicast_locator_list: None,
-      multicast_locator_list: None,
-      data_max_size_serialized: None,
       topic_name: Some(subscription_topic_data.topic_name()),
       type_name: Some(subscription_topic_data.type_name()),
       durability: *subscription_topic_data.durability(),
@@ -473,9 +387,7 @@ impl<'a> BuiltinDataSerializer<'a> {
       time_based_filter: *subscription_topic_data.time_based_filter(),
       presentation: *subscription_topic_data.presentation(),
       lifespan: *subscription_topic_data.lifespan(),
-      history: None,
-      resource_limits: None,
-      content_filter_property: None,
+      ..BuiltinDataSerializer::default()
     }
   }
 
@@ -483,23 +395,8 @@ impl<'a> BuiltinDataSerializer<'a> {
     publication_topic_data: &'a PublicationBuiltinTopicData,
   ) -> BuiltinDataSerializer {
     BuiltinDataSerializer {
-      protocol_version: None,
-      vendor_id: None,
-      expects_inline_qos: None,
       participant_guid: publication_topic_data.participant_key,
-      metatraffic_unicast_locators: None,
-      metatraffic_multicast_locators: None,
-      default_unicast_locators: None,
-      default_multicast_locators: None,
-      available_builtin_endpoints: None,
-      lease_duration: None,
-      manual_liveliness_count: None,
-      builtin_endpoint_qos: None,
-      entity_name: None,
       endpoint_guid: Some(publication_topic_data.key),
-      unicast_locator_list: None,
-      multicast_locator_list: None,
-      data_max_size_serialized: None,
       topic_name: Some(&publication_topic_data.topic_name),
       type_name: Some(&publication_topic_data.type_name),
       durability: publication_topic_data.durability,
@@ -512,68 +409,20 @@ impl<'a> BuiltinDataSerializer<'a> {
       time_based_filter: publication_topic_data.time_based_filter,
       presentation: publication_topic_data.presentation,
       lifespan: publication_topic_data.lifespan,
-      history: None,
-      resource_limits: None,
-      content_filter_property: None,
+      ..BuiltinDataSerializer::default()
     }
   }
 
   pub fn from_endpoint_guid(guid: &'a GUID) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
-      protocol_version: None,
-      vendor_id: None,
-      expects_inline_qos: None,
-      participant_guid: None,
-      metatraffic_unicast_locators: None,
-      metatraffic_multicast_locators: None,
-      default_unicast_locators: None,
-      default_multicast_locators: None,
-      available_builtin_endpoints: None,
-      lease_duration: None,
-      manual_liveliness_count: None,
-      builtin_endpoint_qos: None,
-      entity_name: None,
       endpoint_guid: Some(*guid),
-      unicast_locator_list: None,
-      multicast_locator_list: None,
-      data_max_size_serialized: None,
-      topic_name: None,
-      type_name: None,
-      durability: None,
-      deadline: None,
-      latency_budget: None,
-      liveliness: None,
-      reliability: None,
-      ownership: None,
-      destination_order: None,
-      time_based_filter: None,
-      presentation: None,
-      lifespan: None,
-      history: None,
-      resource_limits: None,
-      content_filter_property: None,
+      ..BuiltinDataSerializer::default()
     }
   }
 
   pub fn from_topic_data(topic_data: &'a TopicBuiltinTopicData) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
-      protocol_version: None,
-      vendor_id: None,
-      expects_inline_qos: None,
-      participant_guid: None,
-      metatraffic_unicast_locators: None,
-      metatraffic_multicast_locators: None,
-      default_unicast_locators: None,
-      default_multicast_locators: None,
-      available_builtin_endpoints: None,
-      lease_duration: None,
-      manual_liveliness_count: None,
-      builtin_endpoint_qos: None,
-      entity_name: None,
       endpoint_guid: topic_data.key,
-      unicast_locator_list: None,
-      multicast_locator_list: None,
-      data_max_size_serialized: None,
       topic_name: Some(&topic_data.name),
       type_name: Some(&topic_data.type_name),
       durability: topic_data.durability,
@@ -583,12 +432,11 @@ impl<'a> BuiltinDataSerializer<'a> {
       reliability: topic_data.reliability,
       ownership: topic_data.ownership,
       destination_order: topic_data.destination_order,
-      time_based_filter: None,
       presentation: topic_data.presentation,
       lifespan: topic_data.lifespan,
       history: topic_data.history,
       resource_limits: topic_data.resource_limits,
-      content_filter_property: None,
+      ..BuiltinDataSerializer::default()
     }
   }
 
