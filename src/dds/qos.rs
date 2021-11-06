@@ -53,6 +53,7 @@ pub enum QosPolicyId {
 }
 
 /// Utility for building [QosPolicies](struct.QosPolicies.html)
+#[derive(Default)]
 pub struct QosPolicyBuilder {
   durability: Option<policy::Durability>,
   presentation: Option<policy::Presentation>,
@@ -69,21 +70,8 @@ pub struct QosPolicyBuilder {
 }
 
 impl QosPolicyBuilder {
-  pub const fn new() -> QosPolicyBuilder {
-    QosPolicyBuilder {
-      durability: None,
-      presentation: None,
-      deadline: None,
-      latency_budget: None,
-      ownership: None,
-      liveliness: None,
-      time_based_filter: None,
-      reliability: None,
-      destination_order: None,
-      history: None,
-      resource_limits: None,
-      lifespan: None,
-    }
+  pub fn new() -> QosPolicyBuilder {
+    Self::default()
   }
 
   pub const fn durability(mut self, durability: policy::Durability) -> QosPolicyBuilder {
@@ -174,7 +162,7 @@ impl QosPolicyBuilder {
 }
 
 /// Describes single RTPS/DDS QoS policy
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct QosPolicies {
   // pub(crate) beacuse as we want to have some builtin QoS Policies as constant.
   pub(crate) durability: Option<policy::Durability>,
@@ -193,24 +181,11 @@ pub struct QosPolicies {
 
 impl QosPolicies {
   // #[cfg(test)]
-  pub const fn qos_none() -> QosPolicies {
-    QosPolicies {
-      durability: None,
-      presentation: None,
-      deadline: None,
-      latency_budget: None,
-      ownership: None,
-      liveliness: None,
-      time_based_filter: None,
-      reliability: None,
-      destination_order: None,
-      history: None,
-      resource_limits: None,
-      lifespan: None,
-    }
+  pub fn qos_none() -> QosPolicies {
+    Self::default()
   }
 
-  pub const fn builder() -> QosPolicyBuilder {
+  pub fn builder() -> QosPolicyBuilder {
     QosPolicyBuilder::new()
   }
 

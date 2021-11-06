@@ -44,7 +44,7 @@ use crate::{
 };
 use super::cdr_deserializer::CDRDeserializerAdapter;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BuiltinDataDeserializer {
   // Participant Data
   pub protocol_version: Option<ProtocolVersion>,
@@ -92,45 +92,7 @@ pub struct BuiltinDataDeserializer {
 
 impl BuiltinDataDeserializer {
   pub fn new() -> BuiltinDataDeserializer {
-    BuiltinDataDeserializer {
-      protocol_version: None,
-      vendor_id: None,
-      expects_inline_qos: None,
-      participant_guid: None,
-      metatraffic_unicast_locators: LocatorList::new(),
-      metatraffic_multicast_locators: LocatorList::new(),
-      default_unicast_locators: LocatorList::new(),
-      default_multicast_locators: LocatorList::new(),
-      available_builtin_endpoints: None,
-      lease_duration: None,
-      manual_liveliness_count: None,
-      builtin_endpoint_qos: None,
-      entity_name: None,
-      sentinel: None,
-
-      endpoint_guid: None,
-      unicast_locator_list: LocatorList::new(),
-      multicast_locator_list: LocatorList::new(),
-
-      data_max_size_serialized: None,
-
-      topic_name: None,
-      type_name: None,
-      durability: None,
-      deadline: None,
-      latency_budget: None,
-      liveliness: None,
-      reliability: None,
-      ownership: None,
-      destination_order: None,
-      time_based_filter: None,
-      presentation: None,
-      lifespan: None,
-      history: None,
-      resource_limits: None,
-
-      content_filter_property: None,
-    }
+    Self::default()
   }
 
   pub fn generate_spdp_participant_data(&self) -> Result<SpdpDiscoveredParticipantData, Error> {

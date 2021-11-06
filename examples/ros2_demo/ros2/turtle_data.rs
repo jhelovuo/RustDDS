@@ -9,30 +9,35 @@ use rustdds::dds::{
   },
 };
 use serde::{Deserialize, Serialize};
+use lazy_static::lazy_static;
+
+lazy_static! {
+  static ref QOS: QosPolicies = {
+    QosPolicyBuilder::new()
+      .durability(Durability::Volatile)
+      .deadline(Deadline(DDSDuration::DURATION_INFINITE))
+      .latency_budget(LatencyBudget {
+        duration: DDSDuration::DURATION_ZERO,
+      })
+      .ownership(Ownership::Shared)
+      .liveliness(Liveliness::Automatic {
+        lease_duration: DDSDuration::DURATION_INFINITE,
+      })
+      .reliability(Reliability::Reliable {
+        max_blocking_time: DDSDuration::DURATION_ZERO,
+      })
+      .destination_order(DestinationOrder::ByReceptionTimestamp)
+      .history(History::KeepLast { depth: 10 })
+      .lifespan(Lifespan {
+        duration: DDSDuration::DURATION_INFINITE,
+      })
+      .build()
+  };
+}
 
 pub struct TurtleCmdVelTopic {}
 
 impl TurtleCmdVelTopic {
-  const QOS: QosPolicies = QosPolicyBuilder::new()
-    .durability(Durability::Volatile)
-    .deadline(Deadline(DDSDuration::DURATION_INFINITE))
-    .latency_budget(LatencyBudget {
-      duration: DDSDuration::DURATION_ZERO,
-    })
-    .ownership(Ownership::Shared)
-    .liveliness(Liveliness::Automatic {
-      lease_duration: DDSDuration::DURATION_INFINITE,
-    })
-    .reliability(Reliability::Reliable {
-      max_blocking_time: DDSDuration::DURATION_ZERO,
-    })
-    .destination_order(DestinationOrder::ByReceptionTimestamp)
-    .history(History::KeepLast { depth: 10 })
-    .lifespan(Lifespan {
-      duration: DDSDuration::DURATION_INFINITE,
-    })
-    .build();
-
   pub fn topic_name() -> String {
     String::from("/turtle1/cmd_vel")
   }
@@ -46,7 +51,7 @@ impl TurtleCmdVelTopic {
   }
 
   pub fn get_qos() -> QosPolicies {
-    TurtleCmdVelTopic::QOS
+    QOS.clone()
   }
 }
 
