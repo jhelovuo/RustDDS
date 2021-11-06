@@ -1,8 +1,6 @@
-use crate::{
-  dds::{
-    no_key::wrappers::NoKeyWrapper, sampleinfo::*,
-    with_key::datasample::DataSample as WithKeyDataSample,
-  },
+use crate::dds::{
+  no_key::wrappers::NoKeyWrapper, sampleinfo::*,
+  with_key::datasample::DataSample as WithKeyDataSample,
 };
 
 /// DDS spec 2.2.2.5.4
@@ -17,7 +15,6 @@ pub struct DataSample<D> {
 }
 
 impl<D> DataSample<D> {
-
   pub(crate) fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> {
     match keyed.value {
       Ok(kv) => Some(DataSample::<D> {

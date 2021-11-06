@@ -91,7 +91,6 @@ impl StatusInfo {
 mod tests {
   use byteorder::{BigEndian, LittleEndian};
 
-  use crate::dds::traits::key::KeyHash;
   use super::*;
 
   #[test]

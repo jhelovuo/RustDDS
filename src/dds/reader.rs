@@ -42,9 +42,8 @@ use crate::{
     time::Timestamp,
   },
 };
-
-#[cfg(test)] use crate::structure::locator::LocatorList;
-
+#[cfg(test)]
+use crate::structure::locator::LocatorList;
 use super::{qos::InlineQos, with_key::datareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -762,22 +761,21 @@ impl Reader {
         );
       }
 
-
-        // The acknack can be sent now or later. The rest of the RTPS message
-        // needs to be constructed. p. 48
-        let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
+      // The acknack can be sent now or later. The rest of the RTPS message
+      // needs to be constructed. p. 48
+      let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
         | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
-        self.send_acknack_to(
-          flags,
-          response_ack_nack,
-          InfoDestination {
-            guid_prefix: mr_state.source_guid_prefix,
-          },
-          &mr_state.unicast_reply_locator_list,
-        );
-        self.sent_ack_nack_count += 1;
+      self.send_acknack_to(
+        flags,
+        response_ack_nack,
+        InfoDestination {
+          guid_prefix: mr_state.source_guid_prefix,
+        },
+        &mr_state.unicast_reply_locator_list,
+      );
+      self.sent_ack_nack_count += 1;
 
-        return true
+      return true;
     }
 
     false
@@ -979,7 +977,7 @@ impl Reader {
         &writer_proxy.unicast_locator_list,
       );
     }
-    
+
     self.sent_ack_nack_count += 1;
   }
 
@@ -1051,7 +1049,7 @@ mod tests {
     let mut guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     guid.entity_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
 
-    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_reciever) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
@@ -1112,7 +1110,7 @@ mod tests {
   fn rtpsreader_handle_data() {
     let new_guid = GUID::default();
 
-    let (send, rec) = mio_channel::sync_channel::<()>(100);
+    let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_reciever) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
@@ -1320,9 +1318,10 @@ mod tests {
   }
 
   #[test]
+  #[ignore]
   fn rtpsreader_handle_gap() {
-    return; // TODO: investiage why this fails. Does the test case even make sense with
-            // current code?
+    // TODO: investiage why this fails. Does the test case even make sense with
+    // current code?
     let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_reciever) =
