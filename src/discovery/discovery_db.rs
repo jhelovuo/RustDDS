@@ -1,7 +1,7 @@
 use std::{
   collections::{BTreeMap, HashMap},
-  time::Instant,
   sync::{Arc, Condvar, Mutex},
+  time::Instant,
 };
 
 #[allow(unused_imports)]
@@ -33,6 +33,8 @@ const DEFAULT_PARTICIPANT_LEASE_DURATION: Duration = Duration::from_secs(60);
 // How much longer to wait than lease duration before pronouncing lost.
 const PARTICIPANT_LEASE_DURATION_TOLREANCE: Duration = Duration::from_secs(0);
 
+// TODO: Let DiscoveryDB itself become thread-safe and support smaller-scope
+// lock
 pub(crate) struct DiscoveryDB {
   my_guid: GUID,
   participant_proxies: BTreeMap<GuidPrefix, SpdpDiscoveredParticipantData>,
@@ -518,6 +520,10 @@ impl DiscoveryDB {
       .map(|(_, v)| v)
   }
 
+  pub fn get_topic(&self, topic_name: &str) -> Option<&DiscoveredTopicData> {
+    self.topics.get(topic_name)
+  }
+
   pub fn wait_new_topic_fn(
     &self,
     topic_name: impl Into<String>,
@@ -529,7 +535,7 @@ impl DiscoveryDB {
       let (lock, cvar) = &*lastest_topic;
       let result = cvar
         .wait_timeout_while(lock.lock().unwrap(), timeout, |lastest_topic_data| {
-          lastest_topic_data.as_ref().map(|e| &e.topic_data.name) == Some(&topic_name)
+          lastest_topic_data.as_ref().map(|e| e.get_topic_name()) == Some(&topic_name)
         })
         .unwrap();
       if result.1.timed_out() {
