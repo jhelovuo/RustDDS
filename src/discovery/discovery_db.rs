@@ -1,6 +1,7 @@
 use std::{
   collections::{BTreeMap, HashMap},
   time::Instant,
+  sync::{Arc, Condvar, Mutex},
 };
 
 #[allow(unused_imports)]
@@ -46,6 +47,7 @@ pub(crate) struct DiscoveryDB {
   external_topic_writers: BTreeMap<GUID, DiscoveredWriterData>,
 
   topics: HashMap<String, DiscoveredTopicData>,
+  lastest_topic: Arc<(Mutex<Option<DiscoveredTopicData>>, Condvar)>,
 
   readers_updated: bool,
   writers_updated: bool,
@@ -62,6 +64,7 @@ impl DiscoveryDB {
       external_topic_readers: BTreeMap::new(),
       external_topic_writers: BTreeMap::new(),
       topics: HashMap::new(),
+      lastest_topic: Arc::new((Mutex::new(None), Condvar::new())),
       readers_updated: false,
       writers_updated: false,
     }
@@ -427,6 +430,11 @@ impl DiscoveryDB {
     match self.topics.get_mut(&data.topic_data.name) {
       Some(t) => *t = data.clone(),
       None => {
+        let (lock, cvar) = &*self.lastest_topic;
+        let mut lastest_topic = lock.lock().unwrap();
+        *lastest_topic = Some(data.clone());
+        cvar.notify_all();
+
         self.topics.insert(topic_name, data.clone());
       }
     };
@@ -508,6 +516,27 @@ impl DiscoveryDB {
       .iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
       .map(|(_, v)| v)
+  }
+
+  pub fn wait_new_topic_fn(
+    &self,
+    topic_name: impl Into<String>,
+    timeout: std::time::Duration,
+  ) -> impl Fn() -> Option<DiscoveredTopicData> {
+    let lastest_topic = self.lastest_topic.clone();
+    let topic_name: String = topic_name.into();
+    move || {
+      let (lock, cvar) = &*lastest_topic;
+      let result = cvar
+        .wait_timeout_while(lock.lock().unwrap(), timeout, |lastest_topic_data| {
+          lastest_topic_data.as_ref().map(|e| &e.topic_data.name) == Some(&topic_name)
+        })
+        .unwrap();
+      if result.1.timed_out() {
+        return None;
+      }
+      result.0.clone()
+    }
   }
 
   // // TODO: return iterator somehow?
