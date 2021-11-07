@@ -461,21 +461,21 @@ mod tests {
     ]);
 
     // this guid prefix is set here because exaple message target is this.
-    let guiPrefix = GuidPrefix::new(&[
+    let gui_prefix = GuidPrefix::new(&[
       0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
     ]);
 
-    let (acknack_sender, _acknack_reciever) =
+    let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
-    let mut message_receiver = MessageReceiver::new(guiPrefix, acknack_sender);
+    let mut message_receiver = MessageReceiver::new(gui_prefix, acknack_sender);
 
     let entity =
       EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
-    let new_guid = GUID::new_with_prefix_and_id(guiPrefix, entity);
+    let new_guid = GUID::new_with_prefix_and_id(gui_prefix, entity);
 
     new_guid.from_prefix(entity);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
@@ -511,15 +511,15 @@ mod tests {
     assert_eq!(message_receiver.submessage_count, 4);
 
     // this is not correct way to read history cache values but it serves as a test
-    let sequenceNumbers =
+    let sequence_numbers =
       message_receiver.get_reader_history_cache_start_and_end_seq_num(new_guid.entity_id);
     info!(
       "history change sequence number range: {:?}",
-      sequenceNumbers
+      sequence_numbers
     );
 
     let a = message_receiver
-      .get_reader_and_history_cache_change(new_guid.entity_id, *sequenceNumbers.first().unwrap())
+      .get_reader_and_history_cache_change(new_guid.entity_id, *sequence_numbers.first().unwrap())
       .unwrap();
     info!("reader history chache DATA: {:?}", a.data());
 
@@ -531,20 +531,20 @@ mod tests {
       size: i32,
     }
 
-    let deserializedShapeType: ShapeType =
+    let deserialized_shape_type: ShapeType =
       deserialize_from_little_endian(&a.data().unwrap()).unwrap();
-    info!("deserialized shapeType: {:?}", deserializedShapeType);
-    assert_eq!(deserializedShapeType.color, "RED");
+    info!("deserialized shapeType: {:?}", deserialized_shape_type);
+    assert_eq!(deserialized_shape_type.color, "RED");
 
     // now try to serialize same message
 
-    let _serializedPayload = to_bytes::<ShapeType, LittleEndian>(&deserializedShapeType);
+    let _serialized_payload = to_bytes::<ShapeType, LittleEndian>(&deserialized_shape_type);
     let (_dwcc_upload, hccc_download) = mio_channel::channel::<WriterCommand>();
     let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
 
     let writer_ing = WriterIngredients {
       guid: GUID::new_with_prefix_and_id(
-        guiPrefix,
+        gui_prefix,
         EntityId::create_custom_entity_id([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
       ),
       writer_command_receiver: hccc_download,
@@ -553,7 +553,7 @@ mod tests {
       status_sender,
     };
 
-    let mut _writerObject = Writer::new(
+    let mut _writer_object = Writer::new(
       writer_ing,
       Arc::new(RwLock::new(DDSCache::new())),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
@@ -561,7 +561,7 @@ mod tests {
     );
     let mut change = message_receiver.get_reader_and_history_cache_change_object(
       new_guid.entity_id,
-      *sequenceNumbers.first().unwrap(),
+      *sequence_numbers.first().unwrap(),
     );
     change.sequence_number = SequenceNumber::from(91);
   }
@@ -590,7 +590,7 @@ mod tests {
     ]);
 
     let guid_new = GUID::default();
-    let (acknack_sender, _acknack_reciever) =
+    let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let mut message_receiver = MessageReceiver::new(guid_new.guid_prefix, acknack_sender);
 

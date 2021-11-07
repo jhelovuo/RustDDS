@@ -692,7 +692,7 @@ mod tests {
     let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander1, reader_command_receiver1) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);

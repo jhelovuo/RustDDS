@@ -513,7 +513,7 @@ mod tests {
 
   #[test]
 
-  fn RTPS_message_test_shapes_demo_message_deserialization() {
+  fn rtps_message_test_shapes_demo_message_deserialization() {
     // Data message should contain Shapetype values.
     // caprured with wireshark from shapes demo.
     // packet with INFO_DST, INFO_TS, DATA, HEARTBEAT
@@ -539,7 +539,7 @@ mod tests {
     assert_eq!(bits1, serialized);
   }
   #[test]
-  fn RTPS_message_test_shapes_demo_DataP() {
+  fn rtps_message_test_shapes_demo_DataP() {
     // / caprured with wireshark from shapes demo.
     // packet with DATA(p)
     let bits2 = Bytes::from_static(&[
@@ -578,7 +578,7 @@ mod tests {
   }
 
   #[test]
-  fn RTPS_message_test_shapes_demo_info_TS_dataP() {
+  fn rtps_message_test_shapes_demo_info_TS_dataP() {
     // caprured with wireshark from shapes demo.
     // rtps packet with info TS and Data(p)
     let bits1 = Bytes::from_static(&[
@@ -610,7 +610,7 @@ mod tests {
   }
 
   #[test]
-  fn RTPS_message_test_shapes_demo_info_TS_AckNack() {
+  fn rtps_message_test_shapes_demo_info_TS_AckNack() {
     // caprured with wireshark from shapes demo.
     // rtps packet with info TS three AckNacks
     let bits1 = Bytes::from_static(&[
@@ -636,7 +636,7 @@ mod tests {
   }
 
   #[test]
-  fn RTPS_message_info_ts_and_dataP() {
+  fn rtps_message_info_ts_and_dataP() {
     // caprured with wireshark from shapes demo.
     // rtps packet with info TS and data(p)
     let bits1 = Bytes::from_static(&[
@@ -668,7 +668,7 @@ mod tests {
   }
 
   #[test]
-  fn RTPS_message_infoDST_infoTS_Data_w_heartbeat() {
+  fn rtps_message_infoDST_infoTS_Data_w_heartbeat() {
     // caprured with wireshark from shapes demo.
     // rtps packet with InfoDST InfoTS Data(w) Heartbeat
     // This datamessage serialized payload maybe contains topic name (square) and
@@ -703,20 +703,20 @@ mod tests {
     let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
     info!("{:?}", rtps);
 
-    let dataSubmessage = match &rtps.submessages[2] {
+    let data_submessage = match &rtps.submessages[2] {
       SubMessage {
         header: _,
         body: SubmessageBody::Entity(EntitySubmessage::Data(d, _flags)),
       } => d,
       wtf => panic!("Unexpected message structure {:?}", wtf),
     };
-    let serializedPayload = dataSubmessage
+    let serialized_payload = data_submessage
       .serialized_payload
       .as_ref()
       .unwrap()
       .value
       .clone();
-    info!("{:x?}", serializedPayload);
+    info!("{:x?}", serialized_payload);
 
     let serialized = Bytes::from(
       rtps

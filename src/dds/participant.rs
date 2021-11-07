@@ -525,10 +525,9 @@ impl Drop for DomainParticipantInner {
   fn drop(&mut self) {
     // if send has an error simply leave as we have lost control of the
     // ev_loop_thread anyways
-    match self.stop_poll_sender.send(()) {
-      Ok(_) => (),
-      _ => return,
-    };
+    if self.stop_poll_sender.send(()).is_err() {
+      return;
+    }
 
     debug!("Waiting for dp_event_loop join");
     match self.ev_loop_handle.take() {
@@ -938,14 +937,14 @@ mod tests {
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
     let publisher = domain_participant
-      .create_publisher(&qos.clone())
+      .create_publisher(&qos)
       .expect("Failed to create publisher");
 
     let topic = domain_participant
       .create_topic(
         "Aasii".to_string(),
         "RandomData".to_string(),
-        &qos.clone(),
+        &qos,
         TopicKind::WithKey,
       )
       .expect("Failed to create topic");
@@ -956,7 +955,7 @@ mod tests {
   }
 
   #[test]
-  fn dp_recieve_acknack_message_test() {
+  fn dp_receive_acknack_message_test() {
     // TODO SEND ACKNACK
     let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
 
@@ -964,14 +963,14 @@ mod tests {
     let _default_dw_qos = QosPolicies::qos_none();
 
     let publisher = domain_participant
-      .create_publisher(&qos.clone())
+      .create_publisher(&qos)
       .expect("Failed to create publisher");
 
     let topic = domain_participant
       .create_topic(
         "Aasii".to_string(),
         "Huh?".to_string(),
-        &qos.clone(),
+        &qos,
         TopicKind::WithKey,
       )
       .expect("Failed to create topic");
@@ -994,14 +993,14 @@ mod tests {
       count: 1,
     };
     let flags = BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::BigEndian);
-    let subHeader: SubmessageHeader = SubmessageHeader {
+    let sub_header: SubmessageHeader = SubmessageHeader {
       kind: SubmessageKind::ACKNACK,
       flags: flags.bits(),
       content_length: 24,
     };
 
     let s: SubMessage = SubMessage {
-      header: subHeader,
+      header: sub_header,
       body: SubmessageBody::Entity(EntitySubmessage::AckNack(a, flags)),
     };
     let h = Header {
@@ -1011,7 +1010,7 @@ mod tests {
       guid_prefix: GUID::default().guid_prefix,
     };
     m.set_header(h);
-    m.add_submessage(SubMessage::from(s));
+    m.add_submessage(s);
     let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
     info!("data to send via udp: {:?}", _data);
     let loca = Locator {

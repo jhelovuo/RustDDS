@@ -229,7 +229,7 @@ impl Reader {
               }
             }
             None => {
-              // no messages recieved ever so deadline must be missed.
+              // no messages received ever so deadline must be missed.
               // TODO: But what if the Reader or WriterProxy was just created?
               self.requested_deadline_missed_count += 1;
               changes.push(DataReaderStatus::RequestedDeadlineMissed {
@@ -1050,7 +1050,7 @@ mod tests {
     guid.entity_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
 
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1095,9 +1095,12 @@ mod tests {
       mr_state.multicast_reply_locator_list.clone(),
     );
 
-    let mut data = Data::default();
-    data.reader_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
-    data.writer_id = writer_guid.entity_id;
+    let reader_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
+    let data = Data {
+      reader_id,
+      writer_id: writer_guid.entity_id,
+      ..Data::default()
+    };
 
     reader.handle_data_msg(data, BitFlags::<DATA_Flags>::empty(), mr_state);
 
@@ -1111,7 +1114,7 @@ mod tests {
     let new_guid = GUID::default();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1183,7 +1186,7 @@ mod tests {
     let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
 
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1324,7 +1327,7 @@ mod tests {
     // current code?
     let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);

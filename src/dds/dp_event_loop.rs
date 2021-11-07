@@ -66,11 +66,11 @@ pub struct DPEventLoop {
   // Writers
   add_writer_receiver: TokenReceiverPair<WriterIngredients>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
-  //writer_timed_event_reciever: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
+  //writer_timed_event_receiver: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
   stop_poll_receiver: mio_channel::Receiver<()>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this
   // to locate RTPSReaderProxy if negative acknack.
-  ack_nack_reciever: mio_channel::Receiver<(GuidPrefix, AckSubmessage)>,
+  ack_nack_receiver: mio_channel::Receiver<(GuidPrefix, AckSubmessage)>,
 
   writers: HashMap<EntityId, Writer>,
   udp_sender: Rc<UDPSender>,
@@ -95,7 +95,7 @@ impl DPEventLoop {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
   ) -> DPEventLoop {
     let poll = Poll::new().expect("Unable to create new poll.");
-    let (acknack_sender, acknack_reciever) =
+    let (acknack_sender, acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(100);
     let mut udp_listeners = udp_listeners;
     for (token, listener) in &mut udp_listeners {
@@ -155,7 +155,7 @@ impl DPEventLoop {
 
     poll
       .register(
-        &acknack_reciever,
+        &acknack_receiver,
         ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
@@ -188,7 +188,7 @@ impl DPEventLoop {
       remove_writer_receiver,
       stop_poll_receiver,
       writers: HashMap::new(),
-      ack_nack_reciever: acknack_reciever,
+      ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
     }
   }
@@ -494,7 +494,7 @@ impl DPEventLoop {
   }
 
   fn handle_writer_acknack_action(&mut self, _event: &Event) {
-    while let Ok((acknack_sender_prefix, acknack_submessage)) = self.ack_nack_reciever.try_recv() {
+    while let Ok((acknack_sender_prefix, acknack_submessage)) = self.ack_nack_receiver.try_recv() {
       let writer_guid = GUID::new_with_prefix_and_id(
         self.domain_info.domain_participant_guid.guid_prefix,
         acknack_submessage.writer_id(),
@@ -829,7 +829,7 @@ mod tests {
       let new_guid = GUID::default();
 
       let (send, _rec) = mio_channel::sync_channel::<()>(100);
-      let (status_sender, _status_reciever) =
+      let (status_sender, _status_receiver) =
         mio_extras::channel::sync_channel::<DataReaderStatus>(100);
       let (_reader_commander, reader_command_receiver) =
         mio_extras::channel::sync_channel::<ReaderCommand>(100);
@@ -971,7 +971,7 @@ mod tests {
   //     let new_guid = GUID::default();
 
   //     let (send, _rec) = mio_channel::sync_channel::<()>(100);
-  //     let (status_sender, status_reciever_DataReader) =
+  //     let (status_sender, status_receiver_DataReader) =
   //       mio_extras::channel::sync_channel::<DataReaderStatus>(1000);
   //     let (reader_commander, reader_command_receiver) =
   //       mio_extras::channel::sync_channel::<ReaderCommand>(1000);
@@ -1008,7 +1008,7 @@ mod tests {
   //       )
   //       .unwrap();
 
-  //     datareader.set_status_change_receiver(status_reciever_DataReader);
+  //     datareader.set_status_change_receiver(status_receiver_DataReader);
   //     datareader.set_reader_commander(reader_commander);
   //     data_readers.push(datareader);
 

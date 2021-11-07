@@ -127,11 +127,11 @@ pub(crate) struct Writer {
   my_topic_name: String,
 
   /// Maps this writers local sequence numbers to DDSHistodyCache instants.
-  /// Useful when negative acknack is recieved.
+  /// Useful when negative acknack is received.
   sequence_number_to_instant: BTreeMap<SequenceNumber, Timestamp>,
 
   /// Maps this writers local sequence numbers to DDSHistodyCache instants.
-  /// Useful when datawriter dispose is recieved.
+  /// Useful when datawriter dispose is received.
   //key_to_instant: HashMap<u128, Timestamp>,  // unused?
 
   /// Set of disposed samples.
@@ -1090,7 +1090,7 @@ mod tests {
   };
 
   #[test]
-  fn test_writer_recieves_datawriter_cache_change_notifications() {
+  fn test_writer_receives_datawriter_cache_change_notifications() {
     let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
@@ -1126,19 +1126,19 @@ mod tests {
       b: "Fobar".to_string(),
     };
 
-    let writeResult = data_writer.write(data, None).expect("Unable to write data");
+    let write_result = data_writer.write(data, None).expect("Unable to write data");
 
-    info!("writerResult:  {:?}", writeResult);
-    let writeResult = data_writer
+    info!("writerResult:  {:?}", write_result);
+    let write_result = data_writer
       .write(data2, None)
       .expect("Unable to write data");
 
-    info!("writerResult:  {:?}", writeResult);
-    let writeResult = data_writer
+    info!("writerResult:  {:?}", write_result);
+    let write_result = data_writer
       .write(data3, None)
       .expect("Unable to write data");
 
     thread::sleep(std::time::Duration::from_millis(100));
-    info!("writerResult:  {:?}", writeResult);
+    info!("writerResult:  {:?}", write_result);
   }
 }

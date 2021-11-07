@@ -1026,7 +1026,7 @@ where
     // let res = poll.register(&self.status_receiver, token, interest, opts);
 
     //self.TEST_FUNCTION_get_requested_deadline_missed_status();
-    //info!("register datareader status reciever to poll with token {:?}", token );
+    //info!("register datareader status receiver to poll with token {:?}", token );
     //return res;
   }
   */
@@ -1256,7 +1256,7 @@ mod tests {
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
@@ -1389,7 +1389,7 @@ mod tests {
       .unwrap();
 
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
@@ -1573,7 +1573,7 @@ mod tests {
     reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
     reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
     reader.handle_data_msg(data_msg3, data_flags, mr_state.clone());
-    reader.handle_data_msg(data_msg4, data_flags, mr_state.clone());
+    reader.handle_data_msg(data_msg4, data_flags, mr_state);
 
     info!("calling read with key 1 and this");
     let results =
@@ -1627,7 +1627,7 @@ mod tests {
       .unwrap();
 
     let (send, rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_reciever) =
+    let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
