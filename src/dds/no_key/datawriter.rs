@@ -340,7 +340,7 @@ where
   ///
   /// # Examples
   // TODO: enable run when implemented
-  /// ```no_run
+  /// ```no_run ignore
   /// # use serde::{Serialize, Deserialize};
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
