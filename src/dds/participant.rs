@@ -781,43 +781,54 @@ impl DomainParticipantInner {
     timeout: Duration,
   ) -> Result<Option<Topic>> {
     // Do we know it already?
-    if let Some(topic) = self.find_topic_in_discovery_db(domain_participant_weak, name)? {
-      Ok(Some(topic))
-    } else {
-      // No. Wait until timeout and look again.
-      // TODO: Interrupt waiting and return if topic is discovered before timeout.
-      std::thread::sleep(timeout);
-      self.find_topic_in_discovery_db(domain_participant_weak, name)
+    if let Some(topic) =
+      self.find_topic_in_discovery_db(domain_participant_weak, name, Some(timeout))?
+    {
+      return Ok(Some(topic));
     }
+    // Still need to check for one more time, since it is possible that
+    // the topic is inserted within the time gap (between we release the db lock
+    // and wait on the topic conditional variable)
+    self.find_topic_in_discovery_db(domain_participant_weak, name, None)
   }
 
   fn find_topic_in_discovery_db(
     &self,
     domain_participant_weak: &DomainParticipantWeak,
     name: &str,
+    timeout: Option<Duration>,
   ) -> Result<Option<Topic>> {
     let db = match self.discovery_db.read() {
       Ok(db) => db,
       Err(_) => return Err(Error::LockPoisoned),
     };
 
+    let build_topic_fn = |d: &DiscoveredTopicData| {
+      let qos = d.topic_data.get_qos();
+      let topic_kind = match d.topic_data.key {
+        Some(_) => TopicKind::WithKey,
+        None => TopicKind::NoKey,
+      };
+      let name = d.get_topic_name().clone();
+      let type_desc = d.topic_data.type_name.clone();
+      self.create_topic(domain_participant_weak, name, type_desc, &qos, topic_kind)
+    };
     let maybe_discovered_topic = db.get_all_topics().find(|&d| d.get_topic_name() == name);
-    match maybe_discovered_topic {
-      Some(d) => {
-        // build a Topic from DiscoveredTopicData
-        let qos = d.topic_data.get_qos();
-        let topic_kind = match d.topic_data.key {
-          Some(_) => TopicKind::WithKey,
-          None => TopicKind::NoKey,
-        };
-        let name = d.get_topic_name().clone();
-        let type_desc = d.topic_data.type_name.clone();
-        let topic =
-          self.create_topic(domain_participant_weak, name, type_desc, &qos, topic_kind)?;
-        Ok(Some(topic))
-      }
-      None => Ok(None),
+
+    if let Some(d) = maybe_discovered_topic {
+      // build a Topic from DiscoveredTopicData
+      return build_topic_fn(d).map(Some);
     }
+
+    if let Some(t) = timeout {
+      let wait_fn = db.wait_new_topic_fn(name, t);
+      drop(db);
+      if let Some(d) = wait_fn() {
+        return build_topic_fn(&d).map(Some);
+      }
+    }
+
+    Ok(None)
   }
   // get_builtin_subscriber (why would we need this?)
 
