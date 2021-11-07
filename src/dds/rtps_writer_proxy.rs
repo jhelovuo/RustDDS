@@ -11,7 +11,7 @@ use crate::{
   messages::submessages::submessages::{DATAFRAG_Flags, DataFrag},
   structure::{
     guid::{EntityId, GUID},
-    locator::LocatorList,
+    locator::Locator,
     sequence_number::SequenceNumber,
     time::Timestamp,
   },
@@ -24,11 +24,11 @@ pub(crate) struct RtpsWriterProxy {
 
   /// List of unicast (address, port) combinations that can be used to send
   /// messages to the matched Writer or Writers. The list may be empty.
-  pub unicast_locator_list: LocatorList,
+  pub unicast_locator_list: Vec<Locator>,
 
   /// List of multicast (address, port) combinations that can be used to send
   /// messages to the matched Writer or Writers. The list may be empty.
-  pub multicast_locator_list: LocatorList,
+  pub multicast_locator_list: Vec<Locator>,
 
   /// Identifies the group to which the matched Reader belongs
   pub remote_group_entity_id: EntityId,
@@ -52,8 +52,8 @@ pub(crate) struct RtpsWriterProxy {
 impl RtpsWriterProxy {
   pub fn new(
     remote_writer_guid: GUID,
-    unicast_locator_list: LocatorList,
-    multicast_locator_list: LocatorList,
+    unicast_locator_list: Vec<Locator>,
+    multicast_locator_list: Vec<Locator>,
     remote_group_entity_id: EntityId,
   ) -> Self {
     Self {

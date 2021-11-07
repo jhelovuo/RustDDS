@@ -32,7 +32,7 @@ use crate::{
     duration::{Duration, DurationData},
     endpoint::ReliabilityKind,
     guid::{GUIDData, GUID},
-    locator::{LocatorData, LocatorList},
+    locator::{Locator, LocatorData},
     parameter_id::ParameterId,
   },
 };
@@ -156,10 +156,10 @@ pub struct BuiltinDataSerializer<'a> {
   pub vendor_id: Option<VendorId>,
   pub expects_inline_qos: Option<bool>,
   pub participant_guid: Option<GUID>,
-  pub metatraffic_unicast_locators: Option<&'a LocatorList>,
-  pub metatraffic_multicast_locators: Option<&'a LocatorList>,
-  pub default_unicast_locators: Option<&'a LocatorList>,
-  pub default_multicast_locators: Option<&'a LocatorList>,
+  pub metatraffic_unicast_locators: Option<&'a Vec<Locator>>,
+  pub metatraffic_multicast_locators: Option<&'a Vec<Locator>>,
+  pub default_unicast_locators: Option<&'a Vec<Locator>>,
+  pub default_multicast_locators: Option<&'a Vec<Locator>>,
   pub available_builtin_endpoints: Option<BuiltinEndpointSet>,
   pub lease_duration: Option<Duration>,
   pub manual_liveliness_count: Option<i32>,
@@ -169,8 +169,8 @@ pub struct BuiltinDataSerializer<'a> {
   pub endpoint_guid: Option<GUID>,
 
   // Reader Proxy
-  pub unicast_locator_list: Option<&'a LocatorList>,
-  pub multicast_locator_list: Option<&'a LocatorList>,
+  pub unicast_locator_list: Option<&'a Vec<Locator>>,
+  pub multicast_locator_list: Option<&'a Vec<Locator>>,
 
   // Writer Proxy
   pub data_max_size_serialized: Option<u32>,
@@ -551,7 +551,7 @@ impl<'a> BuiltinDataSerializer<'a> {
   fn fields_amount(&self) -> usize {
     let mut count: usize = 0;
 
-    let empty_ll = LocatorList::new();
+    let empty_ll = Vec::default();
     count += self.protocol_version.is_some() as usize;
     count += self.vendor_id.is_some() as usize;
     count += self.expects_inline_qos.is_some() as usize;

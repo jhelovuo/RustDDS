@@ -15,7 +15,7 @@ use crate::{
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
-    locator::LocatorList,
+    locator::Locator,
   },
 };
 use super::data_types::{
@@ -323,7 +323,7 @@ impl DiscoveryDB {
                 self.participant_proxies.keys()
               );
             }
-            (LocatorList::new(), LocatorList::new())
+            (Vec::default(), Vec::default())
           });
         debug!("External reader: {:?}", data);
         Some((

@@ -24,7 +24,7 @@ use crate::{
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
-    locator::LocatorList,
+    locator::Locator,
   },
 };
 
@@ -41,10 +41,10 @@ pub struct SpdpDiscoveredParticipantData {
   pub vendor_id: VendorId,
   pub expects_inline_qos: bool,
   pub participant_guid: GUID,
-  pub metatraffic_unicast_locators: LocatorList,
-  pub metatraffic_multicast_locators: LocatorList,
-  pub default_unicast_locators: LocatorList,
-  pub default_multicast_locators: LocatorList,
+  pub metatraffic_unicast_locators: Vec<Locator>,
+  pub metatraffic_multicast_locators: Vec<Locator>,
+  pub default_unicast_locators: Vec<Locator>,
+  pub default_multicast_locators: Vec<Locator>,
   pub available_builtin_endpoints: BuiltinEndpointSet,
   pub lease_duration: Option<Duration>,
   pub manual_liveliness_count: i32,

@@ -1,7 +1,7 @@
 use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
 
-use crate::structure::{locator::LocatorList, topic_kind};
+use crate::structure::{locator::Locator, topic_kind};
 
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable, Serialize, Deserialize)]
 pub struct ReliabilityKind(u32);
@@ -25,11 +25,11 @@ pub struct EndpointAttributes {
 
   /// List of unicast locators (transport, address, port combinations) that
   /// can be used to send messages to the Endpoint. The list may be empty.
-  pub unicast_locator_list: LocatorList,
+  pub unicast_locator_list: Vec<Locator>,
 
   /// List of multicast locators (transport, address, port combinations) that
   /// can be used to send messages to the Endpoint. The list may be empty.
-  pub multicast_locator_list: LocatorList,
+  pub multicast_locator_list: Vec<Locator>,
 }
 
 impl EndpointAttributes {
@@ -37,8 +37,8 @@ impl EndpointAttributes {
     EndpointAttributes {
       topic_kind: topic_kind::TopicKind::NoKey,
       reliability_level: ReliabilityKind::BEST_EFFORT,
-      unicast_locator_list: LocatorList::new(),
-      multicast_locator_list: LocatorList::new(),
+      unicast_locator_list: Vec::default(),
+      multicast_locator_list: Vec::default(),
     }
   }
 }

@@ -42,8 +42,6 @@ use crate::{
     time::Timestamp,
   },
 };
-#[cfg(test)]
-use crate::structure::locator::LocatorList;
 use super::{qos::InlineQos, with_key::datareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -403,8 +401,8 @@ impl Reader {
     &mut self,
     remote_writer_guid: GUID,
     remote_group_entity_id: EntityId,
-    unicast_locator_list: LocatorList,
-    multicast_locator_list: LocatorList,
+    unicast_locator_list: Vec<Locator>,
+    multicast_locator_list: Vec<Locator>,
   ) {
     let proxy = RtpsWriterProxy::new(
       remote_writer_guid,
