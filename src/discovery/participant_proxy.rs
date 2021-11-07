@@ -1,7 +1,7 @@
 /*
 use serde::{Serialize, Deserialize};
 
-use crate::structure::{guid::*, locator::LocatorList};
+use crate::structure::{guid::*, locator::Locator};
 
 use crate::messages::{protocol_version::ProtocolVersion, vendor_id::VendorId};
 
@@ -33,12 +33,12 @@ pub struct ParticipantProxyAttributes {
   /// List of unicast locators (transport, address, port
   /// combinations) that can be used to send messages to
   /// the built-in Endpoints contained in the Participant.
-  pub metatraffic_unicast_locator_list: LocatorList,
+  pub metatraffic_unicast_locator_list: Vec<Locator>,
 
   /// List of multicast locators (transport, address, port
   /// combinations) that can be used to send messages to
   /// the built-in Endpoints contained in the Participant.
-  pub metatraffic_multicast_locator_list: LocatorList,
+  pub metatraffic_multicast_locator_list: Vec<Locator>,
 
   /// Default list of unicast locators (transport, address, port
   /// combinations) that can be used to send messages to
@@ -47,14 +47,14 @@ pub struct ParticipantProxyAttributes {
   /// These are the unicast locators that will be used in case
   /// the Endpoint does not specify its own set of Locators, so
   /// at least one Locator must be present
-  pub default_unicast_locator_list: LocatorList,
+  pub default_unicast_locator_list: Vec<Locator>,
 
   /// Default list of multicast locators (transport, address,
   /// port combinations) that can be used to send messages to
   /// the user-defined Endpoints contained in the Participant.
   /// These are the multicast locators that will be used in case
   /// the Endpoint does not specify its own set of Locators.
-  pub default_multicast_locator_list: LocatorList,
+  pub default_multicast_locator_list: Vec<Locator>,
 
   /// All Participants must support the SEDP. This attribute
   /// identifies the kinds of built-in SEDP Endpoints that are

@@ -16,7 +16,7 @@ use crate::{
   },
   structure::{
     guid::{EntityId, EntityKind, GUID},
-    locator::{Locator, LocatorList},
+    locator::Locator,
     sequence_number::SequenceNumber,
   },
 };
@@ -33,11 +33,11 @@ pub(crate) struct RtpsReaderProxy {
   pub remote_group_entity_id: EntityId,
   /// List of unicast locators (transport, address, port combinations) that can
   /// be used to send messages to the matched RTPS Reader. The list may be empty
-  pub unicast_locator_list: LocatorList,
+  pub unicast_locator_list: Vec<Locator>,
   /// List of multicast locators (transport, address, port combinations) that
   /// can be used to send messages to the matched RTPS Reader. The list may be
   /// empty
-  pub multicast_locator_list: LocatorList,
+  pub multicast_locator_list: Vec<Locator>,
 
   /// Specifies whether the remote matched RTPS Reader expects in-line QoS to be
   /// sent along with any data.
@@ -63,8 +63,8 @@ impl RtpsReaderProxy {
     RtpsReaderProxy {
       remote_reader_guid,
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
-      unicast_locator_list: LocatorList::new(),
-      multicast_locator_list: LocatorList::new(),
+      unicast_locator_list: Vec::default(),
+      multicast_locator_list: Vec::default(),
       expects_in_line_qos: false,
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
@@ -113,8 +113,8 @@ impl RtpsReaderProxy {
 
   pub fn from_discovered_reader_data(
     discovered_reader_data: &DiscoveredReaderData,
-    default_unicast_locators: LocatorList,
-    default_multicast_locators: LocatorList,
+    default_unicast_locators: Vec<Locator>,
+    default_multicast_locators: Vec<Locator>,
   ) -> RtpsReaderProxy {
     let unicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.unicast_locator_list,
@@ -150,7 +150,7 @@ impl RtpsReaderProxy {
   }
 
   pub fn new_for_unit_testing(port_number: u16) -> RtpsReaderProxy {
-    let mut unicast_locators = LocatorList::new();
+    let mut unicast_locators = Vec::default();
     let locator = Locator::from(SocketAddr::new(
       std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
       port_number,
@@ -160,7 +160,7 @@ impl RtpsReaderProxy {
       remote_reader_guid: GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_USER_DEFINED),
       remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
       unicast_locator_list: unicast_locators,
-      multicast_locator_list: LocatorList::new(),
+      multicast_locator_list: Vec::default(),
       expects_in_line_qos: false,
 
       is_active: true,

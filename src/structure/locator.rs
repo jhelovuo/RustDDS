@@ -38,8 +38,6 @@ pub struct Locator {
   pub address: [u8; 16],
 }
 
-pub type LocatorList = Vec<Locator>;
-
 impl Locator {
   pub const LOCATOR_INVALID: Locator = Locator {
     kind: LocatorKind::LOCATOR_KIND_INVALID,

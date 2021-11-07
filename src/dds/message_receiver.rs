@@ -15,7 +15,7 @@ use crate::{
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
-    locator::{Locator, LocatorKind, LocatorList},
+    locator::{Locator, LocatorKind},
     time::Timestamp,
   },
 };
@@ -46,8 +46,8 @@ pub(crate) struct MessageReceiver {
   pub source_vendor_id: VendorId,
   pub source_guid_prefix: GuidPrefix,
   pub dest_guid_prefix: GuidPrefix,
-  pub unicast_reply_locator_list: LocatorList,
-  pub multicast_reply_locator_list: LocatorList,
+  pub unicast_reply_locator_list: Vec<Locator>,
+  pub multicast_reply_locator_list: Vec<Locator>,
   pub timestamp: Option<Timestamp>,
 
   pos: usize,
@@ -393,8 +393,8 @@ impl MessageReceiver {
 pub struct MessageReceiverState {
   //pub own_guid_prefix: GuidPrefix,
   pub source_guid_prefix: GuidPrefix,
-  pub unicast_reply_locator_list: LocatorList,
-  pub multicast_reply_locator_list: LocatorList,
+  pub unicast_reply_locator_list: Vec<Locator>,
+  pub multicast_reply_locator_list: Vec<Locator>,
   pub timestamp: Option<Timestamp>,
 }
 
@@ -403,8 +403,8 @@ impl Default for MessageReceiverState {
     Self {
       //own_guid_prefix: GuidPrefix::default(),
       source_guid_prefix: GuidPrefix::default(),
-      unicast_reply_locator_list: LocatorList::default(),
-      multicast_reply_locator_list: LocatorList::default(),
+      unicast_reply_locator_list: Vec::default(),
+      multicast_reply_locator_list: Vec::default(),
       timestamp: Some(Timestamp::TIME_INVALID),
     }
   }

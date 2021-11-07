@@ -34,7 +34,7 @@ use crate::{
   structure::{
     entity::RTPSEntity,
     guid::{EntityKind, GuidPrefix, GUID},
-    locator::LocatorList,
+    locator::Locator,
   },
 };
 
@@ -47,8 +47,8 @@ use crate::{
 pub struct ReaderProxy {
   pub remote_reader_guid: GUID,
   pub expects_inline_qos: bool,
-  pub unicast_locator_list: LocatorList,
-  pub multicast_locator_list: LocatorList,
+  pub unicast_locator_list: Vec<Locator>,
+  pub multicast_locator_list: Vec<Locator>,
 }
 
 impl ReaderProxy {
@@ -420,16 +420,16 @@ impl Serialize for DiscoveredReaderDataKey {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WriterProxy {
   pub remote_writer_guid: GUID,
-  pub unicast_locator_list: LocatorList,
-  pub multicast_locator_list: LocatorList,
+  pub unicast_locator_list: Vec<Locator>,
+  pub multicast_locator_list: Vec<Locator>,
   pub data_max_size_serialized: Option<u32>,
 }
 
 impl WriterProxy {
   pub fn new(
     guid: GUID,
-    multicast_locator_list: LocatorList,
-    unicast_locator_list: LocatorList,
+    multicast_locator_list: Vec<Locator>,
+    unicast_locator_list: Vec<Locator>,
   ) -> WriterProxy {
     WriterProxy {
       remote_writer_guid: guid,

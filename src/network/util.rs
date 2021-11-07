@@ -6,9 +6,9 @@ use std::{
 #[allow(unused_imports)]
 use log::{debug, error, info, trace};
 
-use crate::structure::locator::{Locator, LocatorList};
+use crate::structure::locator::Locator;
 
-pub fn get_local_multicast_locators(port: u16) -> LocatorList {
+pub fn get_local_multicast_locators(port: u16) -> Vec<Locator> {
   let saddr = SocketAddr::new("239.255.0.1".parse().unwrap(), port);
   vec![Locator::from(saddr)]
 }
@@ -24,7 +24,7 @@ pub fn get_local_multicast_ip_addrs() -> io::Result<Vec<IpAddr>> {
   )
 }
 
-pub fn get_local_unicast_socket_address(port: u16) -> LocatorList {
+pub fn get_local_unicast_socket_address(port: u16) -> Vec<Locator> {
   match if_addrs::get_if_addrs() {
     Ok(ifaces) => ifaces
       .iter()
