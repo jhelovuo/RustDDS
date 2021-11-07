@@ -1,4 +1,7 @@
-use std::convert::From;
+use std::{
+  convert::{From, TryInto},
+  net::{SocketAddrV4, SocketAddrV6},
+};
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use speedy::{Context, Readable, Reader, Writable, Writer};
@@ -6,335 +9,273 @@ use serde::{Deserialize, Serialize};
 
 use super::parameter_id::ParameterId;
 
-#[derive(
-  Copy,
-  Clone,
-  Debug,
-  Eq,
-  PartialEq,
-  PartialOrd,
-  Ord,
-  Hash,
-  Readable,
-  Writable,
-  Serialize,
-  Deserialize,
-)]
-pub struct LocatorKind {
-  value: i32,
+mod kind {
+  pub const INVALID: i32 = -1;
+  pub const RESERVED: i32 = 0;
+  pub const UDP_V4: i32 = 1;
+  pub const UDP_V6: i32 = 2;
 }
 
-impl LocatorKind {
-  pub const LOCATOR_KIND_INVALID: LocatorKind = LocatorKind { value: -1 };
-  pub const LOCATOR_KIND_RESERVED: LocatorKind = LocatorKind { value: 0 };
-  pub const LOCATOR_KIND_UDP_V4: LocatorKind = LocatorKind { value: 1 };
-  pub const LOCATOR_KIND_UDP_V6: LocatorKind = LocatorKind { value: 2 };
-}
+const INVALID_PORT: u16 = 0;
+const INVALID_ADDRESS: [u8; 16] = [0; 16];
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize, PartialOrd, Ord)]
-pub struct Locator {
-  pub kind: LocatorKind,
-  pub port: u32,
-  pub address: [u8; 16],
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[serde(into = "repr::Locator", from = "repr::Locator")]
+pub enum Locator {
+  Invalid,
+  Reserved,
+  UdpV4(SocketAddrV4),
+  UdpV6(SocketAddrV6),
+  Other {
+    kind: i32,
+    port: u32,
+    address: [u8; 16],
+  },
 }
 
 impl Locator {
-  pub const LOCATOR_INVALID: Locator = Locator {
-    kind: LocatorKind::LOCATOR_KIND_INVALID,
-    port: Locator::LOCATOR_PORT_INVALID,
-    address: Locator::LOCATOR_ADDRESS_INVALID,
-  };
-
-  pub const LOCATOR_ADDRESS_INVALID: [u8; 16] = [0x00; 16];
-  pub const LOCATOR_PORT_INVALID: u32 = 0;
-
-  pub fn to_socket_address(self) -> SocketAddr {
-    SocketAddr::from(self)
-  }
-
   pub fn is_udp(&self) -> bool {
-    self.kind == LocatorKind::LOCATOR_KIND_UDP_V4 || self.kind == LocatorKind::LOCATOR_KIND_UDP_V6
-  }
-}
-
-impl Default for Locator {
-  fn default() -> Self {
-    Locator::LOCATOR_INVALID
-  }
-}
-
-impl From<SocketAddr> for Locator {
-  fn from(socket_address: SocketAddr) -> Self {
-    Locator {
-      kind: if socket_address.ip().is_unspecified() {
-        LocatorKind::LOCATOR_KIND_INVALID
-      } else if socket_address.ip().is_ipv4() {
-        LocatorKind::LOCATOR_KIND_UDP_V4
-      } else {
-        LocatorKind::LOCATOR_KIND_UDP_V6
-      },
-      port: u32::from(socket_address.port()),
-      address: match socket_address.ip() {
-        IpAddr::V4(ip4) => ip4.to_ipv6_compatible().octets(),
-        IpAddr::V6(ip6) => ip6.octets(),
-      },
-    }
+    matches!(self, Self::UdpV4(_) | Self::UdpV6(_))
   }
 }
 
 impl From<Locator> for SocketAddr {
   fn from(locator: Locator) -> Self {
-    match locator.kind {
-      LocatorKind::LOCATOR_KIND_UDP_V4 => SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(
-          locator.address[12],
-          locator.address[13],
-          locator.address[14],
-          locator.address[15],
-        )),
-        locator.port as u16,
-      ),
-      LocatorKind::LOCATOR_KIND_UDP_V6 => SocketAddr::new(
-        IpAddr::V6(Ipv6Addr::from(locator.address)),
-        locator.port as u16,
-      ),
-      _ => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
+    match locator {
+      Locator::UdpV4(socket_address) => socket_address.into(),
+      Locator::UdpV6(socket_address) => socket_address.into(),
+      Locator::Invalid | Locator::Reserved | Locator::Other { .. } => {
+        let ip = Ipv6Addr::from(INVALID_ADDRESS).into();
+        SocketAddr::new(ip, INVALID_PORT)
+      }
+    }
+  }
+}
+
+impl From<SocketAddr> for Locator {
+  fn from(socket_address: SocketAddr) -> Self {
+    if socket_address.ip().is_unspecified() {
+      return Self::Invalid;
+    }
+    match socket_address {
+      SocketAddr::V4(socket_address) => Self::UdpV4(socket_address),
+      SocketAddr::V6(socket_address) => Self::UdpV6(socket_address),
     }
   }
 }
 
 impl<'a, C: Context> Readable<'a, C> for Locator {
-  #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut locator = Locator {
-      kind: reader.read_value()?,
-      port: reader.read_value()?,
-      ..Locator::default()
-    };
-    for i in 0..locator.address.len() {
-      locator.address[i] = reader.read_u8()?;
-    }
-    Ok(locator)
+    let repr = repr::Locator::read_from(reader)?;
+    Ok(repr.into())
   }
 }
 
 impl<C: Context> Writable<C> for Locator {
-  #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    writer.write_value(&self.kind)?;
-    writer.write_value(&self.port)?;
-    for elem in &self.address {
-      writer.write_u8(*elem)?;
-    }
-    Ok(())
+    let repr = repr::Locator::from(*self);
+    repr.write_to(writer)
   }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct LocatorData {
+pub struct Data {
   parameter_id: ParameterId,
   parameter_length: u16,
   locator: Locator,
 }
 
-impl LocatorData {
-  pub fn from(locator: &Locator, parameter_id: ParameterId) -> LocatorData {
-    LocatorData {
+impl Data {
+  pub fn from(locator: Locator, parameter_id: ParameterId) -> Data {
+    Self {
       parameter_id,
       parameter_length: 24,
-      locator: *locator,
+      locator,
     }
+  }
+}
+
+impl From<repr::Locator> for Locator {
+  fn from(repr: repr::Locator) -> Self {
+    match repr.kind {
+      kind::INVALID => Self::Invalid,
+      kind::RESERVED => Self::Reserved,
+      kind::UDP_V4 => {
+        let ip = Ipv4Addr::new(
+          repr.address[12],
+          repr.address[13],
+          repr.address[14],
+          repr.address[15],
+        );
+        let socket_address = SocketAddrV4::new(ip, repr.port.try_into().unwrap());
+
+        Self::UdpV4(socket_address)
+      }
+      kind::UDP_V6 => {
+        let ip = Ipv6Addr::from(repr.address);
+        let socket_address = SocketAddrV6::new(ip, repr.port.try_into().unwrap(), 0, 0);
+
+        Self::UdpV6(socket_address)
+      }
+      kind => Self::Other {
+        kind,
+        port: repr.port,
+        address: repr.address,
+      },
+    }
+  }
+}
+
+impl From<Locator> for repr::Locator {
+  fn from(locator: Locator) -> Self {
+    let (kind, port, address) = match locator {
+      Locator::Invalid => (kind::INVALID, INVALID_PORT.into(), INVALID_ADDRESS),
+      Locator::Reserved => (kind::RESERVED, INVALID_PORT.into(), INVALID_ADDRESS),
+      Locator::UdpV4(socket_address) => {
+        let kind = kind::UDP_V4;
+        let port = socket_address.port();
+        let address = socket_address.ip().to_ipv6_compatible().octets();
+        (kind, port.into(), address)
+      }
+      Locator::UdpV6(socket_address) => {
+        let kind = kind::UDP_V6;
+        let port = socket_address.port();
+        let address = socket_address.ip().octets();
+        (kind, port.into(), address)
+      }
+      Locator::Other {
+        kind,
+        port,
+        address,
+      } => (kind, port, address),
+    };
+
+    Self {
+      kind,
+      port,
+      address,
+    }
+  }
+}
+
+mod repr {
+  use serde::{Deserialize, Serialize};
+  use speedy::{Readable, Writable};
+
+  #[derive(Writable, Readable, Serialize, Deserialize)]
+  pub struct Locator {
+    pub kind: i32,
+    pub port: u32,
+    pub address: [u8; 16],
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
-  serialization_test!( type = LocatorKind,
-    {
-        locator_kind_invalid,
-        LocatorKind::LOCATOR_KIND_INVALID,
-        le = [0xFF, 0xFF, 0xFF, 0xFF],
-        be = [0xFF, 0xFF, 0xFF, 0xFF]
-    },
-    {
-        locator_kind_reserved,
-        LocatorKind::LOCATOR_KIND_RESERVED,
-        le = [0x00, 0x00, 0x00, 0x00],
-        be = [0x00, 0x00, 0x00, 0x00]
-    },
-    {
-        locator_kind_udpv4,
-        LocatorKind::LOCATOR_KIND_UDP_V4,
-        le = [0x01, 0x00, 0x00, 0x00],
-        be = [0x00, 0x00, 0x00, 0x01]
-    },
-    {
-        locator_kind_udpv6,
-        LocatorKind::LOCATOR_KIND_UDP_V6,
-        le = [0x02, 0x00, 0x00, 0x00],
-        be = [0x00, 0x00, 0x00, 0x02]
-    }
-  );
+  use speedy::{Endianness, Writable};
+  use test_case::test_case;
 
-  #[test]
-  fn verify_locator_address_invalid() {
-    assert_eq!([0x00; 16], Locator::LOCATOR_ADDRESS_INVALID);
+  use super::Locator;
+
+  #[test_case(SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0) => Locator::Invalid ; "unspecified IPv6")]
+  fn from_socket_address(socket_addr: impl Into<Locator>) -> Locator {
+    socket_addr.into()
   }
 
-  #[test]
-  fn verify_locator_port_invalid() {
-    assert_eq!(0, Locator::LOCATOR_PORT_INVALID);
-  }
-
-  #[test]
-  fn locator_invalid_is_a_concatenation_of_invalid_members() {
+  #[test_case(
+    Locator::Invalid,
+    [
+      0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
+    ],
+    [
+      0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
+    ]
+    ; "invalid"
+  )]
+  #[test_case(
+    Locator::from(SocketAddr::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(), 7171)),
+    [
+      0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
+    ],
+    [
+      0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
+    ]
+    ; "invalid IPv6"
+  )]
+  #[test_case(
+    Locator::from(SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080)),
+    [
+      0x00, 0x00, 0x00, 0x01,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
+      0x00, 0x00, 0x1F, 0x90,  // Locator_t::port(8080),
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x7F, 0x00, 0x00, 0x01   // Locator_t::address[12:15]
+    ],
+    [
+      0x01, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
+      0x90, 0x1F, 0x00, 0x00,  // Locator_t::port(8080),
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x7F, 0x00, 0x00, 0x01   // Locator_t::address[12:15]
+    ]
+    ; "IPv4"
+  )]
+  #[test_case(
+    Locator::from(SocketAddr::new(Ipv6Addr::new(0xFF00, 0x4501, 0, 0, 0, 0, 0, 0x0032).into(), 7171)),
+    [
+      0x00, 0x00, 0x00, 0x02,  // LocatorKind_t::LOCATOR_KIND_UDP_V6
+      0x00, 0x00, 0x1C, 0x03,  // Locator_t::port(7171),
+      0xFF, 0x00, 0x45, 0x01,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x00, 0x00, 0x00, 0x32   // Locator_t::address[12:15]
+    ],
+    [
+      0x02, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V6
+      0x03, 0x1C, 0x00, 0x00,  // Locator_t::port(7171),
+      0xFF, 0x00, 0x45, 0x01,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x00, 0x00, 0x00, 0x32   // Locator_t::address[12:15]
+    ]
+    ; "IPv6"
+  )]
+  fn serialization(locator: Locator, big_endian: [u8; 24], little_endian: [u8; 24]) {
     assert_eq!(
-      Locator {
-        kind: LocatorKind::LOCATOR_KIND_INVALID,
-        port: Locator::LOCATOR_PORT_INVALID,
-        address: Locator::LOCATOR_ADDRESS_INVALID
-      },
-      Locator::LOCATOR_INVALID
+      locator
+        .write_to_vec_with_ctx(Endianness::BigEndian)
+        .unwrap(),
+      big_endian,
+    );
+    assert_eq!(
+      locator
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap(),
+      little_endian
     );
   }
-
-  macro_rules! conversion_test {
-        ($({ $name:ident, $left:expr, $right:expr }),+) => {
-            $(mod $name {
-                use super::*;
-
-                #[test]
-                fn left_into_right() {
-                    assert_eq!($right, ($left).into())
-                }
-
-                #[test]
-                fn right_into_left() {
-                    assert_eq!($left, ($right).into());
-                }
-            })+
-        }
-    }
-
-  conversion_test!(
-  {
-      invalid_into_unspecified,
-      Locator::LOCATOR_INVALID,
-      SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
-  },
-  {
-      non_empty_ipv4,
-      Locator {
-          kind: LocatorKind::LOCATOR_KIND_UDP_V4,
-          address: [
-              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0x7F, 0x00, 0x00, 0x01
-          ],
-          port: 8080
-      },
-      SocketAddr::new(
-          IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-          8080
-      )
-  },
-  {
-      non_empty_ipv6,
-      Locator {
-          kind: LocatorKind::LOCATOR_KIND_UDP_V6,
-          address: [
-              0xFF, 0x00, 0x45, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0x00, 0x00, 0x32
-          ],
-          port: 7171
-      },
-      SocketAddr::new(
-          IpAddr::V6(Ipv6Addr::new(0xFF00, 0x4501, 0, 0, 0, 0, 0, 0x0032)),
-          7171
-      )
-  });
-
-  serialization_test!( type = Locator,
-      {
-          locator_invalid,
-          Locator::LOCATOR_INVALID,
-          le = [
-              0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
-              0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
-          ],
-          be = [
-              0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::LOCATOR_PORT_INVALID,
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
-              0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
-          ]
-      },
-      {
-          locator_invalid_ipv6,
-          Locator::from(SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 7171)),
-          le = [
-              0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
-              0x03, 0x1C, 0x00, 0x00,  // Locator_t::port(7171),
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
-              0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
-          ],
-          be = [
-              0xFF, 0xFF, 0xFF, 0xFF,  // LocatorKind_t::LOCATOR_KIND_INVALID
-              0x00, 0x00, 0x1C, 0x03,  // Locator_t::port(7171),
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
-              0x00, 0x00, 0x00, 0x00   // Locator_t::address[12:15]
-          ]
-      },
-      {
-          locator_localhost_ipv4,
-          Locator::from(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
-          le = [
-              0x01, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
-              0x90, 0x1F, 0x00, 0x00,  // Locator_t::port(8080),
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
-              0x7F, 0x00, 0x00, 0x01   // Locator_t::address[12:15]
-          ],
-          be = [
-              0x00, 0x00, 0x00, 0x01,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
-              0x00, 0x00, 0x1F, 0x90,  // Locator_t::port(8080),
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
-              0x7F, 0x00, 0x00, 0x01   // Locator_t::address[12:15]
-          ]
-      },
-      {
-          locator_ipv6,
-          Locator::from(SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xFF00, 0x4501, 0, 0, 0, 0, 0, 0x0032)), 7171)),
-          le = [
-              0x02, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V6
-              0x03, 0x1C, 0x00, 0x00,  // Locator_t::port(7171),
-              0xFF, 0x00, 0x45, 0x01,  // Locator_t::address[0:3]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
-              0x00, 0x00, 0x00, 0x32   // Locator_t::address[12:15]
-          ],
-          be = [
-              0x00, 0x00, 0x00, 0x02,  // LocatorKind_t::LOCATOR_KIND_UDP_V6
-              0x00, 0x00, 0x1C, 0x03,  // Locator_t::port(7171),
-              0xFF, 0x00, 0x45, 0x01,  // Locator_t::address[0:3]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
-              0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
-              0x00, 0x00, 0x00, 0x32   // Locator_t::address[12:15]
-          ]
-      }
-  );
 }

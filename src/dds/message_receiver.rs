@@ -15,7 +15,7 @@ use crate::{
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
-    locator::{Locator, LocatorKind},
+    locator::Locator,
     time::Timestamp,
   },
 };
@@ -59,9 +59,6 @@ impl MessageReceiver {
     participant_guid_prefix: GuidPrefix,
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
   ) -> MessageReceiver {
-    // could be passed in as a parameter
-    let locator_kind = LocatorKind::LOCATOR_KIND_UDP_V4;
-
     MessageReceiver {
       available_readers: BTreeMap::new(),
       acknack_sender,
@@ -71,16 +68,8 @@ impl MessageReceiver {
       source_vendor_id: VendorId::VENDOR_UNKNOWN,
       source_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
       dest_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
-      unicast_reply_locator_list: vec![Locator {
-        kind: locator_kind,
-        address: Locator::LOCATOR_ADDRESS_INVALID,
-        port: Locator::LOCATOR_PORT_INVALID,
-      }],
-      multicast_reply_locator_list: vec![Locator {
-        kind: locator_kind,
-        address: Locator::LOCATOR_ADDRESS_INVALID,
-        port: Locator::LOCATOR_PORT_INVALID,
-      }],
+      unicast_reply_locator_list: vec![Locator::Invalid],
+      multicast_reply_locator_list: vec![Locator::Invalid],
       timestamp: None,
 
       pos: 0,

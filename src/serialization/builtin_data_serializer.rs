@@ -32,7 +32,7 @@ use crate::{
     duration::{Duration, DurationData},
     endpoint::ReliabilityKind,
     guid::{GUIDData, GUID},
-    locator::{Locator, LocatorData},
+    locator::{Data as LocatorData, Locator},
     parameter_id::ParameterId,
   },
 };
@@ -653,7 +653,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     for locator in locators {
       s.serialize_field(
         "metatraffic_unicast_locators",
-        &LocatorData::from(locator, ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR),
+        &LocatorData::from(*locator, ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR),
       )
       .unwrap();
     }
@@ -669,7 +669,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     for locator in locators {
       s.serialize_field(
         "metatraffic_multicast_locators",
-        &LocatorData::from(locator, ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR),
+        &LocatorData::from(*locator, ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR),
       )
       .unwrap();
     }
@@ -685,7 +685,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     for locator in locators {
       s.serialize_field(
         "default_unicast_locators",
-        &LocatorData::from(locator, ParameterId::PID_DEFAULT_UNICAST_LOCATOR),
+        &LocatorData::from(*locator, ParameterId::PID_DEFAULT_UNICAST_LOCATOR),
       )
       .unwrap();
     }
@@ -701,7 +701,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     for locator in locators {
       s.serialize_field(
         "default_multicast_locators",
-        &LocatorData::from(locator, ParameterId::PID_DEFAULT_MULTICAST_LOCATOR),
+        &LocatorData::from(*locator, ParameterId::PID_DEFAULT_MULTICAST_LOCATOR),
       )
       .unwrap();
     }
@@ -774,7 +774,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     for locator in locators {
       s.serialize_field(
         "default_unicast_locators",
-        &LocatorData::from(locator, ParameterId::PID_UNICAST_LOCATOR),
+        &LocatorData::from(*locator, ParameterId::PID_UNICAST_LOCATOR),
       )
       .unwrap();
     }
@@ -790,7 +790,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     for locator in locators {
       s.serialize_field(
         "default_unicast_locators",
-        &LocatorData::from(locator, ParameterId::PID_MULTICAST_LOCATOR),
+        &LocatorData::from(*locator, ParameterId::PID_MULTICAST_LOCATOR),
       )
       .unwrap();
     }
