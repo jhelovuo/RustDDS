@@ -12,10 +12,7 @@ use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 #[cfg(windows)]
 use local_ip_address::list_afinet_netifas;
 
-use crate::{
-  network::util::get_local_multicast_ip_addrs,
-  structure::locator::{Locator, LocatorKind},
-};
+use crate::{network::util::get_local_multicast_ip_addrs, structure::locator::Locator};
 
 // We need one multicast sender socket per interface
 
@@ -124,26 +121,28 @@ impl UDPSender {
     }
   }
 
-  pub fn send_to_locator(&self, buffer: &[u8], l: &Locator) {
-    match l.kind {
-      LocatorKind::LOCATOR_KIND_UDP_V4 | LocatorKind::LOCATOR_KIND_UDP_V6 => {
-        let a = l.to_socket_address();
-        if a.ip().is_multicast() {
-          for socket in self.multicast_sockets.iter() {
-            self.send_to_udp_socket(buffer, socket, &a);
-          }
-        } else {
-          self.send_to_udp_socket(buffer, &self.unicast_socket, &a);
+  pub fn send_to_locator(&self, buffer: &[u8], locator: &Locator) {
+    let send = |socket_address: SocketAddr| {
+      if socket_address.ip().is_multicast() {
+        for socket in self.multicast_sockets.iter() {
+          self.send_to_udp_socket(buffer, socket, &socket_address);
         }
+      } else {
+        self.send_to_udp_socket(buffer, &self.unicast_socket, &socket_address);
       }
-      LocatorKind::LOCATOR_KIND_INVALID | LocatorKind::LOCATOR_KIND_RESERVED => {
-        error!("send_to_locator: Cannot send to {:?}", l.kind)
+    };
+
+    match locator {
+      Locator::UdpV4(socket_address) => send(SocketAddr::from(*socket_address)),
+      Locator::UdpV6(socket_address) => send(SocketAddr::from(*socket_address)),
+      Locator::Invalid | Locator::Reserved => {
+        error!("send_to_locator: Cannot send to {:?}", locator)
       }
-      _unknown_kind =>
+      Locator::Other { kind, .. } =>
       // This is normal, as other implementations can define their own kinds.
       // We get those from Discovery.
       {
-        trace!("send_to_locator: Unknown LocatorKind: {:?}", l.kind)
+        trace!("send_to_locator: Unknown LocatorKind: {:?}", kind)
       }
     }
   }

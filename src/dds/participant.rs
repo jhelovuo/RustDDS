@@ -920,7 +920,10 @@ impl std::fmt::Debug for DomainParticipant {
 
 #[cfg(test)]
 mod tests {
-  use std::{collections::BTreeSet, net::SocketAddr};
+  use std::{
+    collections::BTreeSet,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+  };
 
   use enumflags2::BitFlags;
   use log::info;
@@ -940,7 +943,7 @@ mod tests {
     serialization::{cdr_serializer::CDRSerializerAdapter, submessage::*, Message, SubMessage},
     structure::{
       guid::{EntityId, GUID},
-      locator::{Locator, LocatorKind},
+      locator::Locator,
       sequence_number::{SequenceNumber, SequenceNumberSet},
     },
     test::random_data::RandomData,
@@ -1042,17 +1045,9 @@ mod tests {
     m.add_submessage(s);
     let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
     info!("data to send via udp: {:?}", _data);
-    let loca = Locator {
-      kind: LocatorKind::LOCATOR_KIND_UDP_V4,
-      port: port_number as u32,
-      address: [
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00,
-      ],
-      /* address: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F,
-       * 0x00, 0x00, 0x01], */
-    };
-    let locas = vec![loca];
-    sender.send_to_locator_list(&_data, &locas);
+    let ip = Ipv4Addr::from([0x00, 0x00, 0x00, 0x00]);
+    let socket_address = SocketAddrV4::new(ip, port_number);
+    let locators = vec![Locator::UdpV4(socket_address)];
+    sender.send_to_locator_list(&_data, &locators);
   }
 }
