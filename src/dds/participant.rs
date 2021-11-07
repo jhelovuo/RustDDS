@@ -813,9 +813,8 @@ impl DomainParticipantInner {
       let type_desc = d.topic_data.type_name.clone();
       self.create_topic(domain_participant_weak, name, type_desc, &qos, topic_kind)
     };
-    let maybe_discovered_topic = db.get_all_topics().find(|&d| d.get_topic_name() == name);
 
-    if let Some(d) = maybe_discovered_topic {
+    if let Some(d) = db.get_topic(name) {
       // build a Topic from DiscoveredTopicData
       return build_topic_fn(d).map(Some);
     }
