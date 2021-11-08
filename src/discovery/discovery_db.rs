@@ -15,7 +15,6 @@ use crate::{
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
-    locator::Locator,
   },
 };
 use super::data_types::{
