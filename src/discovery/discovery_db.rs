@@ -1,6 +1,5 @@
 use std::{
   collections::{BTreeMap, HashMap},
-  sync::{Arc, Condvar, Mutex},
   time::Instant,
 };
 
@@ -49,14 +48,17 @@ pub(crate) struct DiscoveryDB {
   external_topic_writers: BTreeMap<GUID, DiscoveredWriterData>,
 
   topics: HashMap<String, DiscoveredTopicData>,
-  lastest_topic: Arc<(Mutex<Option<DiscoveredTopicData>>, Condvar)>,
 
+  event_sender: Option<mio_extras::channel::SyncSender<()>>,
   readers_updated: bool,
   writers_updated: bool,
 }
 
 impl DiscoveryDB {
-  pub fn new(my_guid: GUID) -> DiscoveryDB {
+  pub fn new(
+    my_guid: GUID,
+    event_sender: Option<mio_extras::channel::SyncSender<()>>,
+  ) -> DiscoveryDB {
     DiscoveryDB {
       my_guid,
       participant_proxies: BTreeMap::new(),
@@ -66,7 +68,7 @@ impl DiscoveryDB {
       external_topic_readers: BTreeMap::new(),
       external_topic_writers: BTreeMap::new(),
       topics: HashMap::new(),
-      lastest_topic: Arc::new((Mutex::new(None), Condvar::new())),
+      event_sender,
       readers_updated: false,
       writers_updated: false,
     }
@@ -432,12 +434,10 @@ impl DiscoveryDB {
     match self.topics.get_mut(&data.topic_data.name) {
       Some(t) => *t = data.clone(),
       None => {
-        let (lock, cvar) = &*self.lastest_topic;
-        let mut lastest_topic = lock.lock().unwrap();
-        *lastest_topic = Some(data.clone());
-        cvar.notify_all();
-
         self.topics.insert(topic_name, data.clone());
+        if let Some(c) = &self.event_sender {
+          let _ = c.try_send(());
+        }
       }
     };
 
@@ -524,25 +524,8 @@ impl DiscoveryDB {
     self.topics.get(topic_name)
   }
 
-  pub fn wait_new_topic_fn(
-    &self,
-    topic_name: impl Into<String>,
-    timeout: std::time::Duration,
-  ) -> impl Fn() -> Option<DiscoveredTopicData> {
-    let lastest_topic = self.lastest_topic.clone();
-    let topic_name: String = topic_name.into();
-    move || {
-      let (lock, cvar) = &*lastest_topic;
-      let result = cvar
-        .wait_timeout_while(lock.lock().unwrap(), timeout, |lastest_topic_data| {
-          lastest_topic_data.as_ref().map(|e| e.get_topic_name()) == Some(&topic_name)
-        })
-        .unwrap();
-      if result.1.timed_out() {
-        return None;
-      }
-      result.0.clone()
-    }
+  pub fn new_topic_token() -> mio::Token {
+    mio::Token(0)
   }
 
   // // TODO: return iterator somehow?
@@ -598,7 +581,7 @@ mod tests {
 
   #[test]
   fn discdb_participant_operations() {
-    let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
+    let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid(), None);
     let mut data = spdp_participant_data().unwrap();
     data.lease_duration = Some(Duration::from(StdDuration::from_secs(1)));
 
@@ -617,7 +600,7 @@ mod tests {
 
   #[test]
   fn discdb_writer_proxies() {
-    let _discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
+    let _discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid(), None);
     let topic_name = String::from("some_topic");
     let type_name = String::from("RandomData");
     let _dreader = DiscoveredReaderData::default(topic_name, type_name);
@@ -627,7 +610,7 @@ mod tests {
 
   #[test]
   fn discdb_subscription_operations() {
-    let mut discovery_db = DiscoveryDB::new(GUID::new_particiapnt_guid());
+    let mut discovery_db = DiscoveryDB::new(GUID::new_particiapnt_guid(), None);
 
     let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant
@@ -723,7 +706,7 @@ mod tests {
         TopicKind::WithKey,
       )
       .unwrap();
-    let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid());
+    let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid(), None);
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
     let (status_sender, _status_receiver) =

@@ -5,7 +5,7 @@ use std::{
   sync::{Arc, Mutex, RwLock, Weak},
   thread,
   thread::JoinHandle,
-  time::Duration,
+  time::{Duration, Instant},
 };
 
 use mio_extras::channel as mio_channel;
@@ -519,6 +519,7 @@ pub(crate) struct DomainParticipantInner {
 
   dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
+  discovery_db_event_receiver: mio_channel::Receiver<()>,
 }
 
 impl Drop for DomainParticipantInner {
@@ -635,7 +636,12 @@ impl DomainParticipantInner {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
 
-    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(new_guid)));
+    let (discovery_db_event_sender, discovery_db_event_receiver) =
+      mio_channel::sync_channel::<()>(1);
+    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
+      new_guid,
+      Some(discovery_db_event_sender),
+    )));
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
 
@@ -693,6 +699,7 @@ impl DomainParticipantInner {
       remove_writer_sender,
       dds_cache,
       discovery_db,
+      discovery_db_event_receiver,
     })
   }
 
@@ -780,23 +787,43 @@ impl DomainParticipantInner {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
-    // Do we know it already?
-    if let Some(topic) =
-      self.find_topic_in_discovery_db(domain_participant_weak, name, Some(timeout))?
-    {
-      return Ok(Some(topic));
+    let poll = mio::Poll::new()?;
+    let mut events = mio::Events::with_capacity(1);
+    // Should be register before the check and use level trigger to avoid missing
+    // event
+    poll.register(
+      &self.discovery_db_event_receiver,
+      mio::Token(0),
+      mio::Ready::readable(),
+      mio::PollOpt::level(),
+    )?;
+
+    let find_end = Instant::now() + timeout;
+    loop {
+      if let Some(topic) = self.find_topic_in_discovery_db(domain_participant_weak, name)? {
+        return Ok(Some(topic));
+      }
+      let timeout = find_end - Instant::now();
+      poll.poll(&mut events, Some(timeout))?;
+
+      if let Some(_event) = events.iter().next() {
+        if self.discovery_db_event_receiver.try_recv().is_ok() {
+          continue;
+        }
+      }
+
+      if Instant::now() > find_end {
+        break;
+      }
     }
-    // Still need to check for one more time, since it is possible that
-    // the topic is inserted within the time gap (between we release the db lock
-    // and wait on the topic conditional variable)
-    self.find_topic_in_discovery_db(domain_participant_weak, name, None)
+
+    Ok(None)
   }
 
   fn find_topic_in_discovery_db(
     &self,
     domain_participant_weak: &DomainParticipantWeak,
     name: &str,
-    timeout: Option<Duration>,
   ) -> Result<Option<Topic>> {
     let db = match self.discovery_db.read() {
       Ok(db) => db,
@@ -816,18 +843,10 @@ impl DomainParticipantInner {
 
     if let Some(d) = db.get_topic(name) {
       // build a Topic from DiscoveredTopicData
-      return build_topic_fn(d).map(Some);
+      build_topic_fn(d).map(Some)
+    } else {
+      Ok(None)
     }
-
-    if let Some(t) = timeout {
-      let wait_fn = db.wait_new_topic_fn(name, t);
-      drop(db);
-      if let Some(d) = wait_fn() {
-        return build_topic_fn(&d).map(Some);
-      }
-    }
-
-    Ok(None)
   }
   // get_builtin_subscriber (why would we need this?)
 
