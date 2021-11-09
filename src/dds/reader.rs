@@ -34,7 +34,7 @@ use crate::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::DDSCache,
     duration::Duration,
-    endpoint::{Endpoint, EndpointAttributes},
+    endpoint::{Endpoint, EndpointAttributes, ReliabilityKind},
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -42,7 +42,7 @@ use crate::{
     time::Timestamp,
   },
 };
-use super::{qos::InlineQos, with_key::datareader::ReaderCommand};
+use super::{qos::InlineQos, topic::TopicKind, with_key::datareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {
@@ -88,7 +88,7 @@ pub(crate) struct Reader {
   qos_policy: QosPolicies,
 
   my_guid: GUID,
-  pub enpoint_attributes: EndpointAttributes,
+  pub endpoint_attributes: EndpointAttributes,
 
   heartbeat_response_delay: StdDuration,
   heartbeat_supression_duration: StdDuration,
@@ -125,7 +125,7 @@ impl Reader {
       #[cfg(test)]
       seqnum_instant_map: BTreeMap::new(),
       my_guid: i.guid,
-      enpoint_attributes: EndpointAttributes::default(),
+      endpoint_attributes: EndpointAttributes::default(),
 
       heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
       heartbeat_supression_duration: StdDuration::new(0, 0),
@@ -996,8 +996,20 @@ impl RTPSEntity for Reader {
 }
 
 impl Endpoint for Reader {
-  fn as_endpoint(&self) -> &crate::structure::endpoint::EndpointAttributes {
-    &self.enpoint_attributes
+  fn topic_kind(&self) -> TopicKind {
+    self.endpoint_attributes.topic_kind
+  }
+
+  fn reliability_level(&self) -> ReliabilityKind {
+    self.endpoint_attributes.reliability_level
+  }
+
+  fn unicast_locators(&self) -> &Vec<Locator> {
+    &self.endpoint_attributes.unicast_locator_list
+  }
+
+  fn multicast_locators(&self) -> &Vec<Locator> {
+    &self.endpoint_attributes.multicast_locator_list
   }
 }
 
@@ -1021,7 +1033,7 @@ impl fmt::Debug for Reader {
       .field("notification_sender, dds_cache", &"can't print".to_string())
       .field("topic_name", &self.topic_name)
       .field("my_guid", &self.my_guid)
-      .field("enpoint_attributes", &self.enpoint_attributes)
+      .field("endpoint_attributes", &self.endpoint_attributes)
       .field("heartbeat_response_delay", &self.heartbeat_response_delay)
       .field("sent_ack_nack_count", &self.sent_ack_nack_count)
       .field("received_hearbeat_count", &self.received_hearbeat_count)

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::structure::{locator::Locator, topic_kind};
 
-#[derive(Debug, Clone, PartialEq, Eq, Readable, Writable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Readable, Writable, Serialize, Deserialize)]
 pub struct ReliabilityKind(u32);
 
 impl ReliabilityKind {
@@ -50,7 +50,20 @@ impl Default for EndpointAttributes {
 }
 
 pub trait Endpoint {
-  fn as_endpoint(&self) -> &EndpointAttributes;
+  /// Used to indicate whether the Endpoint is associated with a DataType that
+  /// has defined some fields as containing the DDS key.
+  fn topic_kind(&self) -> topic_kind::TopicKind;
+
+  /// The levels of reliability supported by the Endpoint.
+  fn reliability_level(&self) -> ReliabilityKind;
+
+  /// List of unicast locators (transport, address, port combinations) that
+  /// can be used to send messages to the Endpoint. The list may be empty.
+  fn unicast_locators(&self) -> &Vec<Locator>;
+
+  /// List of multicast locators (transport, address, port combinations) that
+  /// can be used to send messages to the Endpoint. The list may be empty.
+  fn multicast_locators(&self) -> &Vec<Locator>;
 }
 
 #[cfg(test)]
