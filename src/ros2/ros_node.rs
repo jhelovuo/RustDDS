@@ -77,8 +77,8 @@ impl RosParticipant {
     self.inner.lock().unwrap().domain_participant.domain_id()
   }
 
-  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self.domain_participant().get_discovered_topics()
+  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+    self.domain_participant().discovered_topics()
   }
 
   pub fn add_node_info(&mut self, node_info: NodeInfo) {
@@ -138,26 +138,25 @@ impl RosParticipantInner {
     let ros_discovery_topic = domain_participant.create_topic(
       ROSDiscoveryTopic::topic_name().to_string(),
       ROSDiscoveryTopic::type_name().to_string(),
-      &ROSDiscoveryTopic::get_qos(),
+      &ROSDiscoveryTopic::qos(),
       TopicKind::NoKey,
     )?;
 
-    let ros_discovery_publisher =
-      domain_participant.create_publisher(&ROSDiscoveryTopic::get_qos())?;
+    let ros_discovery_publisher = domain_participant.create_publisher(&ROSDiscoveryTopic::qos())?;
     let ros_discovery_subscriber =
-      domain_participant.create_subscriber(&ROSDiscoveryTopic::get_qos())?;
+      domain_participant.create_subscriber(&ROSDiscoveryTopic::qos())?;
 
     let ros_parameter_events_topic = domain_participant.create_topic(
       ParameterEventsTopic::topic_name().to_string(),
       ParameterEventsTopic::type_name().to_string(),
-      &ParameterEventsTopic::get_qos(),
+      &ParameterEventsTopic::qos(),
       TopicKind::NoKey,
     )?;
 
     let ros_rosout_topic = domain_participant.create_topic(
       RosOutTopic::topic_name().to_string(),
       RosOutTopic::type_name().to_string(),
-      &RosOutTopic::get_qos(),
+      &RosOutTopic::qos(),
       TopicKind::NoKey,
     )?;
 
@@ -185,15 +184,15 @@ impl RosParticipantInner {
   /// Gets our current participant info we have sent to ROS2 network
   pub fn get_ros_participant_info(&self) -> ROSParticipantInfo {
     ROSParticipantInfo::new(
-      Gid::from_guid(self.domain_participant.get_guid()),
+      Gid::from_guid(self.domain_participant.guid()),
       self.nodes.iter().map(|(_, p)| p.clone()).collect(),
     )
   }
 
   // Adds new NodeInfo and updates our RosParticipantInfo to ROS2 network
   fn add_node_info(&mut self, mut node_info: NodeInfo) {
-    node_info.add_reader(Gid::from_guid(self.node_reader.get_guid()));
-    node_info.add_writer(Gid::from_guid(self.node_writer.get_guid()));
+    node_info.add_reader(Gid::from_guid(self.node_reader.guid()));
+    node_info.add_writer(Gid::from_guid(self.node_writer.guid()));
 
     self.nodes.insert(node_info.get_full_name(), node_info);
     self.broadcast_node_infos();
@@ -364,9 +363,9 @@ impl RosNode {
   fn generate_node_info(&self) -> NodeInfo {
     let mut node_info = NodeInfo::new(self.name.to_owned(), self.namespace.to_owned());
 
-    node_info.add_writer(Gid::from_guid(self.parameter_events_writer.get_guid()));
+    node_info.add_writer(Gid::from_guid(self.parameter_events_writer.guid()));
     if let Some(row) = &self.rosout_writer {
-      node_info.add_writer(Gid::from_guid(row.get_guid()))
+      node_info.add_writer(Gid::from_guid(row.guid()))
     }
 
     for reader in self.readers.iter() {
@@ -417,11 +416,11 @@ impl RosNode {
       .add_node_info(self.generate_node_info());
   }
 
-  pub fn get_name(&self) -> &str {
+  pub fn name(&self) -> &str {
     &self.name
   }
 
-  pub fn get_namespace(&self) -> &str {
+  pub fn namespace(&self) -> &str {
     &self.namespace
   }
 
@@ -512,7 +511,7 @@ impl RosNode {
       .ros_participant
       .get_ros_discovery_subscriber()
       .create_datareader_no_key::<D, DA>(topic, qos)?;
-    self.add_reader(sub.get_guid());
+    self.add_reader(sub.guid());
     Ok(sub)
   }
 
@@ -537,7 +536,7 @@ impl RosNode {
       .ros_participant
       .get_ros_discovery_subscriber()
       .create_datareader::<D, DA>(topic, qos)?;
-    self.add_reader(sub.get_guid());
+    self.add_reader(sub.guid());
     Ok(sub)
   }
 
@@ -558,7 +557,7 @@ impl RosNode {
       .ros_participant
       .get_ros_discovery_publisher()
       .create_datawriter_no_key(topic, qos)?;
-    self.add_writer(p.get_guid());
+    self.add_writer(p.guid());
     Ok(p)
   }
 
@@ -583,7 +582,7 @@ impl RosNode {
       .ros_participant
       .get_ros_discovery_publisher()
       .create_datawriter(topic, qos)?;
-    self.add_writer(p.get_guid());
+    self.add_writer(p.guid());
     Ok(p)
   }
 }

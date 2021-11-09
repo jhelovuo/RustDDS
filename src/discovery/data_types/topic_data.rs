@@ -26,7 +26,7 @@ use crate::{
     with_key::datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
-  network::{constant::get_user_traffic_unicast_port, util::get_local_unicast_socket_address},
+  network::{constant::user_traffic_unicast_port, util::get_local_unicast_socket_address},
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
     builtin_data_serializer::BuiltinDataSerializer,
@@ -311,14 +311,14 @@ impl DiscoveredReaderData {
     dp: &DomainParticipant,
     topic: &Topic,
   ) -> DiscoveredReaderData {
-    let reader_proxy = ReaderProxy::new(reader.get_guid());
+    let reader_proxy = ReaderProxy::new(reader.guid());
     let mut subscription_topic_data = SubscriptionBuiltinTopicData::new(
-      reader.get_guid(),
-      topic.get_name(),
+      reader.guid(),
+      topic.name(),
       topic.get_type().name().to_string(),
-      &topic.get_qos(),
+      &topic.qos(),
     );
-    subscription_topic_data.set_participant_key(dp.get_guid());
+    subscription_topic_data.set_participant_key(dp.guid());
 
     DiscoveredReaderData {
       reader_proxy,
@@ -359,7 +359,7 @@ impl Key for DiscoveredReaderDataKey {}
 
 impl Keyed for DiscoveredReaderData {
   type K = DiscoveredReaderDataKey;
-  fn get_key(&self) -> Self::K {
+  fn key(&self) -> Self::K {
     DiscoveredReaderDataKey(self.subscription_topic_data.key)
   }
 }
@@ -602,7 +602,7 @@ impl Key for DiscoveredWriterDataKey {}
 impl Keyed for DiscoveredWriterData {
   type K = DiscoveredWriterDataKey;
 
-  fn get_key(&self) -> Self::K {
+  fn key(&self) -> Self::K {
     DiscoveredWriterDataKey(self.publication_topic_data.key)
   }
 }
@@ -613,18 +613,18 @@ impl DiscoveredWriterData {
     topic: &Topic,
     dp: &DomainParticipant,
   ) -> DiscoveredWriterData {
-    let unicast_port = get_user_traffic_unicast_port(dp.domain_id(), dp.participant_id());
+    let unicast_port = user_traffic_unicast_port(dp.domain_id(), dp.participant_id());
     let unicast_addresses = get_local_unicast_socket_address(unicast_port);
 
-    let writer_proxy = WriterProxy::new(writer.get_guid(), vec![], unicast_addresses);
+    let writer_proxy = WriterProxy::new(writer.guid(), vec![], unicast_addresses);
     let mut publication_topic_data = PublicationBuiltinTopicData::new(
-      writer.get_guid(),
-      dp.get_guid(),
-      topic.get_name(),
+      writer.guid(),
+      dp.guid(),
+      topic.name(),
       topic.get_type().name().to_string(),
     );
 
-    publication_topic_data.read_qos(&topic.get_qos());
+    publication_topic_data.read_qos(&topic.qos());
 
     DiscoveredWriterData {
       last_updated: Instant::now(),
@@ -710,7 +710,7 @@ pub struct TopicBuiltinTopicData {
 }
 
 impl HasQoSPolicy for TopicBuiltinTopicData {
-  fn get_qos(&self) -> QosPolicies {
+  fn qos(&self) -> QosPolicies {
     QosPolicies {
       durability: self.durability,
       presentation: self.presentation,
@@ -771,11 +771,11 @@ impl DiscoveredTopicData {
     }
   }
 
-  pub fn get_topic_name(&self) -> &String {
+  pub fn topic_name(&self) -> &String {
     &self.topic_data.name
   }
 
-  pub fn get_type_name(&self) -> &String {
+  pub fn type_name(&self) -> &String {
     &self.topic_data.type_name
   }
 }
@@ -808,7 +808,7 @@ pub type DiscoveredTopicDataKey = GUID;
 impl Keyed for DiscoveredTopicData {
   type K = GUID;
 
-  fn get_key(&self) -> Self::K {
+  fn key(&self) -> Self::K {
     // topic should always have a name, if this crashes the problem is in the
     // overall logic (or message parsing)
     match self.topic_data.key {
@@ -860,7 +860,7 @@ pub struct ParticipantMessageData {
 impl Keyed for ParticipantMessageData {
   type K = ParticipantMessageDataKey;
 
-  fn get_key(&self) -> Self::K {
+  fn key(&self) -> Self::K {
     ParticipantMessageDataKey(self.guid, self.kind)
   }
 }

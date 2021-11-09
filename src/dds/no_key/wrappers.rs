@@ -40,7 +40,7 @@ impl<D> Deref for NoKeyWrapper<D> {
 
 impl<D> Keyed for NoKeyWrapper<D> {
   type K = ();
-  fn get_key(&self) {}
+  fn key(&self) {}
 }
 
 impl<'de, D> Deserialize<'de> for NoKeyWrapper<D>

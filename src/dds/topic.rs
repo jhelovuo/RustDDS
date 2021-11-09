@@ -5,9 +5,9 @@ pub use crate::structure::topic_kind::TopicKind;
 
 /// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class
 pub trait TopicDescription {
-  fn get_participant(&self) -> Option<DomainParticipant>;
-  fn get_type(&self) -> TypeDesc; // This replaces get_type_name() from spec
-  fn get_name(&self) -> String;
+  fn participant(&self) -> Option<DomainParticipant>;
+  fn get_type(&self) -> TypeDesc; // This replaces type_name() from spec
+  fn name(&self) -> String;
 }
 
 /// DDS Topic
@@ -52,8 +52,8 @@ impl Topic {
     }
   }
 
-  fn get_participant(&self) -> Option<DomainParticipant> {
-    self.inner.get_participant()
+  fn participant(&self) -> Option<DomainParticipant> {
+    self.inner.participant()
   }
 
   // TODO: Confusing combination of borrows and owns
@@ -61,8 +61,8 @@ impl Topic {
     self.inner.get_type()
   }
 
-  fn get_name(&self) -> String {
-    self.inner.get_name()
+  fn name(&self) -> String {
+    self.inner.name()
   }
 
   /// Gets Topics TopicKind
@@ -111,8 +111,8 @@ impl Debug for Topic {
 impl TopicDescription for Topic {
   /// Gets [DomainParticipant](struct.DomainParticipant.html) if it is still
   /// alive.
-  fn get_participant(&self) -> Option<DomainParticipant> {
-    self.get_participant()
+  fn participant(&self) -> Option<DomainParticipant> {
+    self.participant()
   }
 
   /// Gets type description of this Topic
@@ -121,14 +121,14 @@ impl TopicDescription for Topic {
   }
 
   /// Gets name of this topic
-  fn get_name(&self) -> String {
-    self.get_name()
+  fn name(&self) -> String {
+    self.name()
   }
 }
 
 impl HasQoSPolicy for Topic {
-  fn get_qos(&self) -> QosPolicies {
-    self.inner.get_qos()
+  fn qos(&self) -> QosPolicies {
+    self.inner.qos()
   }
 }
 
@@ -164,7 +164,7 @@ impl InnerTopic {
     }
   }
 
-  fn get_participant(&self) -> Option<DomainParticipant> {
+  fn participant(&self) -> Option<DomainParticipant> {
     self.my_domainparticipant.clone().upgrade()
   }
 
@@ -172,7 +172,7 @@ impl InnerTopic {
     self.my_typedesc.clone()
   }
 
-  fn get_name(&self) -> String {
+  fn name(&self) -> String {
     self.my_name.to_string()
   }
 
@@ -187,20 +187,20 @@ impl InnerTopic {
 
 impl PartialEq for InnerTopic {
   fn eq(&self, other: &Self) -> bool {
-    self.get_participant() == other.get_participant()
+    self.participant() == other.participant()
       && self.get_type() == other.get_type()
-      && self.get_name() == other.get_name()
-      && self.get_qos() == other.get_qos()
+      && self.name() == other.name()
+      && self.qos() == other.qos()
       && self.topic_kind == other.topic_kind
   }
 }
 
 impl Debug for InnerTopic {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_fmt(format_args!("{:?}", self.get_participant()))?;
-    f.write_fmt(format_args!("Topic name: {}", self.get_name()))?;
+    f.write_fmt(format_args!("{:?}", self.participant()))?;
+    f.write_fmt(format_args!("Topic name: {}", self.name()))?;
     f.write_fmt(format_args!("Topic type: {:?}", self.get_type()))?;
-    f.write_fmt(format_args!("Topic QoS: {:?} ", self.get_qos()))
+    f.write_fmt(format_args!("Topic QoS: {:?} ", self.qos()))
   }
 }
 
@@ -208,8 +208,8 @@ impl Debug for InnerTopic {
 impl TopicDescription for InnerTopic {
   /// Gets [DomainParticipant](struct.DomainParticipant.html) if it is still
   /// alive.
-  fn get_participant(&self) -> Option<DomainParticipant> {
-    self.get_participant()
+  fn participant(&self) -> Option<DomainParticipant> {
+    self.participant()
   }
 
   /// Gets type description of this Topic
@@ -218,8 +218,8 @@ impl TopicDescription for InnerTopic {
   }
 
   /// Gets name of this topic
-  fn get_name(&self) -> String {
-    self.get_name()
+  fn name(&self) -> String {
+    self.name()
   }
 }
 
@@ -230,7 +230,7 @@ impl HasQoSPolicy for InnerTopic {
   //   Ok(())
   // }
 
-  fn get_qos(&self) -> QosPolicies {
+  fn qos(&self) -> QosPolicies {
     self.my_qos_policies.clone()
   }
 }

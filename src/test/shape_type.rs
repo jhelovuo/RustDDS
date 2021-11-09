@@ -9,7 +9,7 @@ pub struct ShapeType {
 
 impl Keyed for ShapeType {
   type K = i32;
-  fn get_key(&self) -> Self::K {
+  fn key(&self) -> Self::K {
     self.a
   }
 }

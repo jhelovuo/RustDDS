@@ -30,7 +30,7 @@ pub struct RandomData {
 
 impl Keyed for RandomData {
   type K = i64;
-  fn get_key(&self) -> i64 {
+  fn key(&self) -> i64 {
     self.a
   }
 }

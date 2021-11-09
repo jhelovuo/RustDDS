@@ -595,7 +595,7 @@ impl Discovery {
                   self
                     .dcps_participant_writer
                     .dispose(
-                      SpdpDiscoveredParticipantDataKey(self.domain_participant.get_guid()),
+                      SpdpDiscoveredParticipantDataKey(self.domain_participant.guid()),
                       None,
                     )
                     .unwrap_or(());
@@ -603,7 +603,7 @@ impl Discovery {
                   return; // terminate event loop
                 }
                 DiscoveryCommand::RemoveLocalWriter { guid } => {
-                  if guid == self.dcps_publication_writer.get_guid() {
+                  if guid == self.dcps_publication_writer.guid() {
                     continue;
                   }
                   self
@@ -620,7 +620,7 @@ impl Discovery {
                   }
                 }
                 DiscoveryCommand::RemoveLocalReader { guid } => {
-                  if guid == self.dcps_subscription_writer.get_guid() {
+                  if guid == self.dcps_subscription_writer.guid() {
                     continue;
                   }
 
@@ -762,8 +762,8 @@ impl Discovery {
       }
     };
 
-    let mc_port = get_spdp_well_known_multicast_port(dp.domain_id());
-    let uc_port = get_spdp_well_known_unicast_port(dp.domain_id(), dp.participant_id());
+    let mc_port = spdp_well_known_multicast_port(dp.domain_id());
+    let uc_port = spdp_well_known_unicast_port(dp.domain_id(), dp.participant_id());
 
     let participant_data =
       SpdpDiscoveredParticipantData::from_local_participant(&dp, Duration::DURATION_INFINITE);
@@ -777,7 +777,7 @@ impl Discovery {
     // This will read the participant from Discovery DB and construct
     // ReaderProxy and WriterProxy objects for built-in Readers and Writers
     self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
-      guid_prefix: dp.get_guid().guid_prefix,
+      guid_prefix: dp.guid().guid_prefix,
     });
 
     // insert a (fake) reader proxy as multicast address, so discovery notifications
@@ -803,7 +803,7 @@ impl Discovery {
     };
 
     let writer_guid = GUID::new_with_prefix_and_id(
-      dp.get_guid().guid_prefix,
+      dp.guid().guid_prefix,
       EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
     );
 
@@ -815,7 +815,7 @@ impl Discovery {
 
     let pub_topic_data = PublicationBuiltinTopicData::new(
       writer_guid,
-      dp.get_guid(),
+      dp.guid(),
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
     );
@@ -1118,7 +1118,7 @@ impl Discovery {
       if let Some(&mm) = min_automatic {
         if current_duration > mm {
           let pp = ParticipantMessageData {
-            guid: self.domain_participant.get_guid_prefix(),
+            guid: self.domain_participant.guid_prefix(),
             kind:
               ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE,
             data: Vec::new(),
@@ -1150,7 +1150,7 @@ impl Discovery {
       if let Some(&dur) = min_manual_participant {
         if current_duration > dur {
           let pp = ParticipantMessageData {
-            guid: self.domain_participant.get_guid_prefix(),
+            guid: self.domain_participant.guid_prefix(),
             kind:
               ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
             data: Vec::new(),
@@ -1240,7 +1240,7 @@ impl Discovery {
 
   pub fn write_topic_info(&self) {
     let db = self.discovery_db_read();
-    let datas = db.get_all_topics();
+    let datas = db.all_topics();
     for data in datas {
       match self.dcps_topic_writer.write(data.clone(), None) {
         Ok(_) => (),
@@ -1389,7 +1389,7 @@ mod tests {
     let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
     let addresses = vec![SocketAddr::new(
       "127.0.0.1".parse().unwrap(),
-      get_spdp_well_known_unicast_port(0, 0),
+      spdp_well_known_unicast_port(0, 0),
     )];
 
     let tdata = spdp_participant_msg_mod(11000);
@@ -1449,7 +1449,7 @@ mod tests {
     let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
     let addresses = vec![SocketAddr::new(
       "127.0.0.1".parse().unwrap(),
-      get_spdp_well_known_unicast_port(14, 0),
+      spdp_well_known_unicast_port(14, 0),
     )];
 
     let mut tdata = spdp_subscription_msg();
@@ -1537,7 +1537,7 @@ mod tests {
     let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
     let addresses = vec![SocketAddr::new(
       "127.0.0.1".parse().unwrap(),
-      get_spdp_well_known_unicast_port(15, 0),
+      spdp_well_known_unicast_port(15, 0),
     )];
 
     let mut tdata = spdp_publication_msg();
@@ -1545,7 +1545,7 @@ mod tests {
       match &mut submsg.body {
         SubmessageBody::Interpreter(v) => match v {
           InterpreterSubmessage::InfoDestination(dst, _flags) => {
-            dst.guid_prefix = participant.get_guid_prefix();
+            dst.guid_prefix = participant.guid_prefix();
           }
           _ => continue,
         },
@@ -1569,7 +1569,7 @@ mod tests {
       .poll(&mut events, Some(StdDuration::from_secs(1)))
       .unwrap();
 
-    for _ in udp_listener.get_messages() {
+    for _ in udp_listener.messages() {
       info!("Message received");
     }
   }
@@ -1604,7 +1604,7 @@ mod tests {
     let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
     let addresses = vec![SocketAddr::new(
       "127.0.0.1".parse().unwrap(),
-      get_spdp_well_known_unicast_port(16, 0),
+      spdp_well_known_unicast_port(16, 0),
     )];
 
     let rr = rtps_message

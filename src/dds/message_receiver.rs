@@ -112,7 +112,7 @@ impl MessageReceiver {
   }
 
   pub fn add_reader(&mut self, new_reader: Reader) {
-    let eid = new_reader.get_guid().entity_id;
+    let eid = new_reader.guid().entity_id;
     match self.available_readers.entry(eid) {
       Entry::Occupied(_) => warn!("Already have Reader {:?} - not adding.", eid),
       e => {
@@ -125,7 +125,7 @@ impl MessageReceiver {
     self.available_readers.remove(&old_reader_guid.entity_id)
   }
 
-  pub fn get_reader_mut(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
+  pub fn reader_mut(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
     self.available_readers.get_mut(&reader_id)
   }
 
@@ -141,7 +141,7 @@ impl MessageReceiver {
         .available_readers
         .get(&reader_id)
         .unwrap()
-        .get_history_cache_change_data(sequence_number)
+        .history_cache_change_data(sequence_number)
         .unwrap(),
     )
   }
@@ -157,7 +157,7 @@ impl MessageReceiver {
       .available_readers
       .get(&reader_id)
       .unwrap()
-      .get_history_cache_change(sequence_number)
+      .history_cache_change(sequence_number)
       .unwrap()
   }
 
@@ -170,7 +170,7 @@ impl MessageReceiver {
       .available_readers
       .get(&reader_id)
       .unwrap()
-      .get_history_cache_sequence_start_and_end_numbers()
+      .history_cache_sequence_start_and_end_numbers()
   }
 
   // pub fn handle_discovery_msg(&mut self, msg: Bytes) {
@@ -256,7 +256,7 @@ impl MessageReceiver {
             .filter(|r| {
               r.contains_writer(data.writer_id)
                 || (data.writer_id == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
-                  && r.get_entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER)
+                  && r.entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER)
             })
           {
             debug!(
@@ -265,7 +265,7 @@ impl MessageReceiver {
             );
             reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
           }
-        } else if let Some(target_reader) = self.get_reader_mut(data.reader_id) {
+        } else if let Some(target_reader) = self.reader_mut(data.reader_id) {
           target_reader.handle_data_msg(data, data_flags, mr_state);
         }
       }
@@ -284,7 +284,7 @@ impl MessageReceiver {
               mr_state.clone(),
             );
           }
-        } else if let Some(target_reader) = self.get_reader_mut(heartbeat.reader_id) {
+        } else if let Some(target_reader) = self.reader_mut(heartbeat.reader_id) {
           target_reader.handle_heartbeat_msg(
             heartbeat,
             flags.contains(HEARTBEAT_Flags::Final),
@@ -293,7 +293,7 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::Gap(gap, _flags) => {
-        if let Some(target_reader) = self.get_reader_mut(gap.reader_id) {
+        if let Some(target_reader) = self.reader_mut(gap.reader_id) {
           target_reader.handle_gap_msg(gap, mr_state);
         }
       }
@@ -312,7 +312,7 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::DataFrag(datafrag, flags) => {
-        if let Some(target_reader) = self.get_reader_mut(datafrag.reader_id) {
+        if let Some(target_reader) = self.reader_mut(datafrag.reader_id) {
           target_reader.handle_datafrag_msg(datafrag, flags, mr_state);
         }
       }
@@ -327,7 +327,7 @@ impl MessageReceiver {
           {
             reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
           }
-        } else if let Some(target_reader) = self.get_reader_mut(heartbeatfrag.reader_id) {
+        } else if let Some(target_reader) = self.reader_mut(heartbeatfrag.reader_id) {
           target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
         }
       }

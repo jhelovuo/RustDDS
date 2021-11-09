@@ -120,18 +120,18 @@ impl SpdpDiscoveredParticipantData {
     participant: &DomainParticipant,
     lease_duration: Duration,
   ) -> SpdpDiscoveredParticipantData {
-    let spdp_multicast_port = get_spdp_well_known_multicast_port(participant.domain_id());
+    let spdp_multicast_port = spdp_well_known_multicast_port(participant.domain_id());
     let metatraffic_multicast_locators = get_local_multicast_locators(spdp_multicast_port);
 
     let spdp_unicast_port =
-      get_spdp_well_known_unicast_port(participant.domain_id(), participant.participant_id());
+      spdp_well_known_unicast_port(participant.domain_id(), participant.participant_id());
     let metatraffic_unicast_locators = get_local_unicast_socket_address(spdp_unicast_port);
 
-    let multicast_port = get_user_traffic_multicast_port(participant.domain_id());
+    let multicast_port = user_traffic_multicast_port(participant.domain_id());
     let default_multicast_locators = get_local_multicast_locators(multicast_port);
 
     let unicast_port =
-      get_user_traffic_unicast_port(participant.domain_id(), participant.participant_id());
+      user_traffic_unicast_port(participant.domain_id(), participant.participant_id());
     let default_unicast_locators = get_local_unicast_socket_address(unicast_port);
 
     let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
@@ -150,7 +150,7 @@ impl SpdpDiscoveredParticipantData {
       protocol_version: ProtocolVersion::PROTOCOLVERSION_2_3,
       vendor_id: VendorId::THIS_IMPLEMENTATION,
       expects_inline_qos: false,
-      participant_guid: participant.get_guid(),
+      participant_guid: participant.guid(),
       metatraffic_unicast_locators,
       metatraffic_multicast_locators,
       default_unicast_locators,
@@ -192,7 +192,7 @@ impl Serialize for SpdpDiscoveredParticipantData {
 
 impl Keyed for SpdpDiscoveredParticipantData {
   type K = SpdpDiscoveredParticipantDataKey;
-  fn get_key(&self) -> Self::K {
+  fn key(&self) -> Self::K {
     SpdpDiscoveredParticipantDataKey(self.participant_guid)
   }
 }

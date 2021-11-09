@@ -249,21 +249,21 @@ impl Writer {
 
   /// To know when token represents a writer we should look entity attribute
   /// kind this entity token can be used in DataWriter -> Writer mio::channel.
-  pub fn get_entity_token(&self) -> Token {
-    self.get_guid().entity_id.as_token()
+  pub fn entity_token(&self) -> Token {
+    self.guid().entity_id.as_token()
   }
 
   /// This token is used in timed event mio::channel HearbeatHandler ->
   /// dpEventwrapper
-  pub fn get_timed_event_entity_token(&self) -> Token {
-    self.get_guid().entity_id.as_alt_token()
+  pub fn timed_event_entity_token(&self) -> Token {
+    self.guid().entity_id.as_alt_token()
   }
 
   pub fn is_reliable(&self) -> bool {
     self.qos_policies.reliability.is_some()
   }
 
-  pub fn get_local_readers(&self) -> Vec<EntityId> {
+  pub fn local_readers(&self) -> Vec<EntityId> {
     let min = GUID::new_with_prefix_and_id(self.my_guid.guid_prefix, EntityId::MIN);
     let max = GUID::new_with_prefix_and_id(self.my_guid.guid_prefix, EntityId::MAX);
 
@@ -473,7 +473,7 @@ impl Writer {
 
     // setting first change sequence number according to our qos (not offering more
     // than our QOS says)
-    self.first_change_sequence_number = match self.get_qos().history {
+    self.first_change_sequence_number = match self.qos().history {
       None => self.last_change_sequence_number, // default: depth = 1
 
       Some(History::KeepAll) =>
@@ -492,7 +492,7 @@ impl Writer {
 
     // create new CacheChange from DDSData
     let new_cache_change = CacheChange::new(
-      self.get_guid(),
+      self.guid(),
       self.last_change_sequence_number,
       source_timestamp,
       data,
@@ -562,7 +562,7 @@ impl Writer {
         .add_header_and_build(self.my_guid.guid_prefix);
       debug!(
         "Writer {:?} topic={:} HEARTBEAT {:?}",
-        self.get_guid().entity_id,
+        self.guid().entity_id,
         self.topic_name(),
         hb_message
       );
@@ -585,7 +585,7 @@ impl Writer {
         if !self.is_reliable() {
           warn!(
             "Writer {:x?} is best effort! It should not handle acknack messages!",
-            self.get_entity_id()
+            self.entity_id()
           );
           return;
         }
@@ -1052,7 +1052,7 @@ impl Writer {
 }
 
 impl RTPSEntity for Writer {
-  fn get_guid(&self) -> GUID {
+  fn guid(&self) -> GUID {
     self.my_guid
   }
 }
@@ -1064,7 +1064,7 @@ impl Endpoint for Writer {
 }
 
 impl HasQoSPolicy for Writer {
-  fn get_qos(&self) -> QosPolicies {
+  fn qos(&self) -> QosPolicies {
     self.qos_policies.clone()
   }
 }

@@ -120,7 +120,7 @@ impl Publisher {
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -325,9 +325,9 @@ impl Publisher {
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let publisher = domain_participant.create_publisher(&qos).unwrap();
-  /// assert_eq!(domain_participant, publisher.get_participant().unwrap());
+  /// assert_eq!(domain_participant, publisher.participant().unwrap());
   /// ```
-  pub fn get_participant(&self) -> Option<DomainParticipant> {
+  pub fn participant(&self) -> Option<DomainParticipant> {
     self.inner.domain_participant.clone().upgrade()
   }
 
@@ -449,22 +449,22 @@ impl InnerPublisher {
     // QoS.
     let writer_qos = self
       .default_datawriter_qos
-      .modify_by(&topic.get_qos())
+      .modify_by(&topic.qos())
       .modify_by(&optional_qos.unwrap_or_else(QosPolicies::qos_none));
 
     let entity_id =
       unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
     let dp = self
-      .get_participant()
+      .participant()
       .ok_or("upgrade fail")
       .or_else(|e| log_and_err_internal!("Where is my DomainParticipant? {}", e))?;
 
-    let guid = GUID::new_with_prefix_and_id(dp.get_guid().guid_prefix, entity_id);
+    let guid = GUID::new_with_prefix_and_id(dp.guid().guid_prefix, entity_id);
 
     let new_writer = WriterIngredients {
       guid,
       writer_command_receiver: hccc_download,
-      topic_name: topic.get_name(),
+      topic_name: topic.name(),
       qos_policies: writer_qos,
       status_sender,
     };
@@ -480,7 +480,7 @@ impl InnerPublisher {
       Some(guid),
       dwcc_upload,
       self.discovery_command.clone(),
-      dp.get_dds_cache(),
+      dp.dds_cache(),
       status_receiver,
     )?;
 
@@ -542,7 +542,7 @@ impl InnerPublisher {
     unimplemented!();
   }
 
-  pub fn get_participant(&self) -> Option<DomainParticipant> {
+  pub fn participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }
 
@@ -557,7 +557,7 @@ impl InnerPublisher {
 
 impl PartialEq for InnerPublisher {
   fn eq(&self, other: &Self) -> bool {
-    self.get_participant() == other.get_participant()
+    self.participant() == other.participant()
       && self.my_qos_policies == other.my_qos_policies
       && self.default_datawriter_qos == other.default_datawriter_qos
     // TODO: publisher is DDSEntity?
@@ -566,7 +566,7 @@ impl PartialEq for InnerPublisher {
 
 impl Debug for InnerPublisher {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_fmt(format_args!("{:?}", self.get_participant()))?;
+    f.write_fmt(format_args!("{:?}", self.participant()))?;
     f.write_fmt(format_args!("Publisher QoS: {:?}", self.my_qos_policies))?;
     f.write_fmt(format_args!(
       "Publishers default Writer QoS: {:?}",
@@ -658,7 +658,7 @@ impl Subscriber {
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -837,10 +837,10 @@ impl Subscriber {
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  /// assert_eq!(domain_participant, subscriber.get_participant().unwrap());
+  /// assert_eq!(domain_participant, subscriber.participant().unwrap());
   /// ```
-  pub fn get_participant(&self) -> Option<DomainParticipant> {
-    self.inner.get_participant()
+  pub fn participant(&self) -> Option<DomainParticipant> {
+    self.inner.participant()
   }
 }
 
@@ -898,7 +898,7 @@ impl InnerSubscriber {
     // specified QoS.
     let qos = self
       .qos
-      .modify_by(&topic.get_qos())
+      .modify_by(&topic.qos())
       .modify_by(&optional_qos.unwrap_or_else(QosPolicies::qos_none));
 
     let entity_id =
@@ -907,18 +907,18 @@ impl InnerSubscriber {
     let reader_id = entity_id;
     let datareader_id = entity_id;
 
-    let dp = match self.get_participant() {
+    let dp = match self.participant() {
       Some(dp) => dp,
       None => return log_and_err_precondition_not_met!("DomainParticipant doesn't exist anymore."),
     };
 
-    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), reader_id);
 
     let new_reader = ReaderIngredients {
       guid: reader_guid,
       notification_sender: send,
       status_sender,
-      topic_name: topic.get_name(),
+      topic_name: topic.name(),
       qos_policy: qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
     };
@@ -938,16 +938,16 @@ impl InnerSubscriber {
       topic.clone(),
       qos,
       rec,
-      dp.get_dds_cache(),
+      dp.dds_cache(),
       self.discovery_command.clone(),
       status_receiver,
       reader_command_sender,
     )?;
 
     // Create new topic to DDScache if one isn't present
-    match dp.get_dds_cache().write() {
+    match dp.dds_cache().write() {
       Ok(mut dds_cache) => {
-        dds_cache.add_new_topic(topic.get_name(), topic.kind(), topic.get_type());
+        dds_cache.add_new_topic(topic.name(), topic.kind(), topic.get_type());
       }
       Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
     }
@@ -1011,7 +1011,7 @@ impl InnerSubscriber {
     Ok(NoKeyDataReader::<D, SA>::from_keyed(d))
   }
 
-  pub fn get_participant(&self) -> Option<DomainParticipant> {
+  pub fn participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }
 }

@@ -11,7 +11,7 @@ use crate::{
   discovery::data_types::topic_data::DiscoveredReaderData,
   messages::submessages::submessage::AckSubmessage,
   network::{
-    constant::{get_user_traffic_multicast_port, get_user_traffic_unicast_port},
+    constant::{user_traffic_multicast_port, user_traffic_unicast_port},
     util::{get_local_multicast_locators, get_local_unicast_socket_address},
   },
   structure::{
@@ -84,10 +84,10 @@ impl RtpsReaderProxy {
     participant_id: u16,
   ) -> RtpsReaderProxy {
     let unicast_locator_list =
-      get_local_unicast_socket_address(get_user_traffic_unicast_port(domain_id, participant_id));
+      get_local_unicast_socket_address(user_traffic_unicast_port(domain_id, participant_id));
 
     let multicast_locator_list =
-      get_local_multicast_locators(get_user_traffic_multicast_port(domain_id));
+      get_local_multicast_locators(user_traffic_multicast_port(domain_id));
 
     RtpsReaderProxy {
       remote_reader_guid: reader.guid,

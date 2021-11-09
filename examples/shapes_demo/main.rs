@@ -40,7 +40,7 @@ struct Shape {
 
 impl Keyed for Shape {
   type K = String;
-  fn get_key(&self) -> String {
+  fn key(&self) -> String {
     self.color.clone()
   }
 }
@@ -138,7 +138,7 @@ fn main() {
     .unwrap_or_else(|e| panic!("create_topic failed: {:?}", e));
   println!(
     "Topic name is {}. Type is {}.",
-    topic.get_name(),
+    topic.name(),
     topic.get_type().name()
   );
 
@@ -248,7 +248,7 @@ fn main() {
                   Ok(Some(sample)) => match sample.into_value() {
                     Ok(sample) => println!(
                       "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
-                      topic.get_name(),
+                      topic.name(),
                       sample.color,
                       sample.x,
                       sample.y,

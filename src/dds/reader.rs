@@ -144,12 +144,12 @@ impl Reader {
 
   /// To know when token represents a reader we should look entity attribute
   /// kind
-  pub fn get_entity_token(&self) -> Token {
-    self.get_guid().entity_id.as_token()
+  pub fn entity_token(&self) -> Token {
+    self.guid().entity_id.as_token()
   }
 
-  pub fn get_reader_alt_entity_token(&self) -> Token {
-    self.get_guid().entity_id.as_alt_token()
+  pub fn reader_alt_entity_token(&self) -> Token {
+    self.guid().entity_id.as_alt_token()
   }
 
   pub fn set_requested_deadline_check_timer(&mut self) {
@@ -284,7 +284,7 @@ impl Reader {
 
   // TODO Used for test/debugging purposes
   #[cfg(test)]
-  pub fn get_history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
+  pub fn history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
     let dds_cache = self.dds_cache.read().unwrap();
     let cc = self
       .seqnum_instant_map
@@ -299,7 +299,7 @@ impl Reader {
 
   // Used for test/debugging purposes
   #[cfg(test)]
-  pub fn get_history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
+  pub fn history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
     debug!("{:?}", sequence_number);
     let dds_cache = self.dds_cache.read().unwrap();
     let cc = self
@@ -313,7 +313,7 @@ impl Reader {
 
   // TODO Used for test/debugging purposes
   #[cfg(test)]
-  pub fn get_history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
+  pub fn history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
     let start = self.seqnum_instant_map.iter().min().unwrap().0;
     let end = self.seqnum_instant_map.iter().max().unwrap().0;
     return vec![*start, *end];
@@ -433,7 +433,7 @@ impl Reader {
     };
 
     // checking lifespan for silent dropping of message
-    if let Some(ls) = self.get_qos().lifespan {
+    if let Some(ls) = self.qos().lifespan {
       if ls.duration < duration {
         return;
       }
@@ -465,8 +465,7 @@ impl Reader {
     let receive_timestamp = Timestamp::now();
 
     // check if this submessage is expired already
-    if let (Some(source_timestamp), Some(lifespan)) = (mr_state.timestamp, self.get_qos().lifespan)
-    {
+    if let (Some(source_timestamp), Some(lifespan)) = (mr_state.timestamp, self.qos().lifespan) {
       let elapsed = receive_timestamp.duration_since(source_timestamp);
       if lifespan.duration < elapsed {
         info!(
@@ -710,7 +709,7 @@ impl Reader {
 
     // See if ACKNACK is needed, and generate one.
     let missing_seqnums =
-      writer_proxy.get_missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
+      writer_proxy.missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
 
     // Interpretation of final flag in RTPS spec
     // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with
@@ -745,7 +744,7 @@ impl Reader {
       };
 
       let response_ack_nack = AckNack {
-        reader_id: self.get_entity_id(),
+        reader_id: self.entity_id(),
         writer_id: heartbeat.writer_id,
         reader_sn_state,
         count: self.sent_ack_nack_count,
@@ -964,7 +963,7 @@ impl Reader {
       self.send_acknack_to(
         flags,
         AckNack {
-          reader_id: self.get_entity_id(),
+          reader_id: self.entity_id(),
           writer_id: writer_proxy.remote_writer_guid.entity_id,
           reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(1)),
           count: self.sent_ack_nack_count,
@@ -985,13 +984,13 @@ impl Reader {
 } // impl
 
 impl HasQoSPolicy for Reader {
-  fn get_qos(&self) -> QosPolicies {
+  fn qos(&self) -> QosPolicies {
     self.qos_policy.clone()
   }
 }
 
 impl RTPSEntity for Reader {
-  fn get_guid(&self) -> GUID {
+  fn guid(&self) -> GUID {
     self.my_guid
   }
 }
@@ -1234,7 +1233,7 @@ mod tests {
     let mut changes = Vec::new();
 
     let hb_new = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
       last_sn: SequenceNumber::from(0),
@@ -1243,7 +1242,7 @@ mod tests {
     assert!(!new_reader.handle_heartbeat_msg(hb_new, true, mr_state.clone())); // should be false, no ack
 
     let hb_one = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
       last_sn: SequenceNumber::from(1),
@@ -1252,12 +1251,7 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(hb_one, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following change
-    let change = CacheChange::new(
-      new_reader.get_guid(),
-      SequenceNumber::from(1),
-      None,
-      d.clone(),
-    );
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(1), None, d.clone());
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1267,7 +1261,7 @@ mod tests {
 
     // Duplicate
     let hb_one2 = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // Only one in writers cache
       last_sn: SequenceNumber::from(1),
@@ -1276,7 +1270,7 @@ mod tests {
     assert!(!new_reader.handle_heartbeat_msg(hb_one2, false, mr_state.clone())); // No acknack
 
     let hb_3_1 = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(1), // writer has last 2 in cache
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
@@ -1285,12 +1279,7 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(hb_3_1, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following changes
-    let change = CacheChange::new(
-      new_reader.get_guid(),
-      SequenceNumber::from(2),
-      None,
-      d.clone(),
-    );
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(2), None, d.clone());
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1298,7 +1287,7 @@ mod tests {
     );
     changes.push(change);
 
-    let change = CacheChange::new(new_reader.get_guid(), SequenceNumber::from(3), None, d);
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(3), None, d);
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1307,7 +1296,7 @@ mod tests {
     changes.push(change);
 
     let hb_none = Heartbeat {
-      reader_id: new_reader.get_entity_id(),
+      reader_id: new_reader.entity_id(),
       writer_id,
       first_sn: SequenceNumber::from(4), // writer has no samples available
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
@@ -1381,12 +1370,7 @@ mod tests {
     for i in 0..n {
       d.writer_sn = SequenceNumber::from(i);
       reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), mr_state.clone());
-      changes.push(
-        reader
-          .get_history_cache_change(d.writer_sn)
-          .unwrap()
-          .clone(),
-      );
+      changes.push(reader.history_cache_change(d.writer_sn).unwrap().clone());
     }
 
     // make sequence numbers 1-3 and 5 7 irrelevant
@@ -1395,7 +1379,7 @@ mod tests {
     gap_list.insert(SequenceNumber::from(7));
 
     let gap = Gap {
-      reader_id: reader.get_entity_id(),
+      reader_id: reader.entity_id(),
       writer_id,
       gap_start: SequenceNumber::from(1),
       gap_list,
@@ -1405,43 +1389,28 @@ mod tests {
     reader.handle_gap_msg(gap, mr_state);
 
     assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(0)),
+      reader.history_cache_change(SequenceNumber::from(0)),
       Some(changes[0].clone())
     );
+    assert_eq!(reader.history_cache_change(SequenceNumber::from(1)), None);
+    assert_eq!(reader.history_cache_change(SequenceNumber::from(2)), None);
+    assert_eq!(reader.history_cache_change(SequenceNumber::from(3)), None);
     assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(1)),
-      None
-    );
-    assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(2)),
-      None
-    );
-    assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(3)),
-      None
-    );
-    assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(4)),
+      reader.history_cache_change(SequenceNumber::from(4)),
       Some(changes[4].clone())
     );
+    assert_eq!(reader.history_cache_change(SequenceNumber::from(5)), None);
     assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(5)),
-      None
-    );
-    assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(6)),
+      reader.history_cache_change(SequenceNumber::from(6)),
       Some(changes[6].clone())
     );
+    assert_eq!(reader.history_cache_change(SequenceNumber::from(7)), None);
     assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(7)),
-      None
-    );
-    assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(8)),
+      reader.history_cache_change(SequenceNumber::from(8)),
       Some(changes[8].clone())
     );
     assert_eq!(
-      reader.get_history_cache_change(SequenceNumber::from(9)),
+      reader.history_cache_change(SequenceNumber::from(9)),
       Some(changes[9].clone())
     );
   }
