@@ -1042,11 +1042,12 @@ mod tests {
   };
 
   #[test]
+  #[ignore]
   fn rtpsreader_notification() {
     let mut guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     guid.entity_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
 
-    let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let (send, rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
@@ -1081,9 +1082,10 @@ mod tests {
         EntityKind::WRITER_WITH_KEY_USER_DEFINED,
       ),
     };
-
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guid_prefix;
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.guid_prefix,
+      ..Default::default()
+    };
 
     reader.matched_writer_add(
       writer_guid,
@@ -1101,16 +1103,17 @@ mod tests {
 
     reader.handle_data_msg(data, BitFlags::<DATA_Flags>::empty(), mr_state);
 
-    //assert!(rec.try_recv().is_ok());
     // TODO:
     // Investaige whyt this fails. Is the test case correct?
+    assert!(rec.try_recv().is_ok());
   }
 
   #[test]
+  #[ignore]
   fn rtpsreader_handle_data() {
     let new_guid = GUID::default();
 
-    let (send, _rec) = mio_channel::sync_channel::<()>(100);
+    let (send, rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
     let (_reader_command_sender, reader_command_receiver) =
@@ -1146,8 +1149,10 @@ mod tests {
       ),
     };
 
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guid_prefix;
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.guid_prefix,
+      ..Default::default()
+    };
 
     new_reader.matched_writer_add(
       writer_guid,
@@ -1156,26 +1161,28 @@ mod tests {
       mr_state.multicast_reply_locator_list.clone(),
     );
 
-    let mut d = Data::default();
-    d.writer_id = writer_guid.entity_id;
+    let d = Data {
+      writer_id: writer_guid.entity_id,
+      ..Default::default()
+    };
     let d_seqnum = d.writer_sn;
     new_reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), mr_state);
 
-    //assert!(rec.try_recv().is_ok());
     // TODO: Investigate why this fails. Is the test case or implementation faulty?
+    assert!(rec.try_recv().is_ok());
 
     let hc_locked = dds_cache.read().unwrap();
 
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
     let cc_built_here = CacheChange::new(writer_guid, d_seqnum, None, ddsdata);
 
-    // let cc_from_chache = hc_locked.from_topic_get_change(
-    //   &new_reader.topic_name,
-    //   new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
-    // );
-    //assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
+    let cc_from_chache = hc_locked.from_topic_get_change(
+      &new_reader.topic_name,
+      new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
+    );
     // TODO: Investigate why this fails. Is the test case or implementation
     // faulty?
+    assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
   }
 
   #[test]
@@ -1219,8 +1226,10 @@ mod tests {
 
     let writer_id = writer_guid.entity_id;
 
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guid_prefix;
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.guid_prefix,
+      ..Default::default()
+    };
 
     new_reader.matched_writer_add(
       writer_guid,
@@ -1350,8 +1359,10 @@ mod tests {
     };
     let writer_id = writer_guid.entity_id;
 
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guid_prefix;
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.guid_prefix,
+      ..Default::default()
+    };
 
     reader.matched_writer_add(
       writer_guid,
