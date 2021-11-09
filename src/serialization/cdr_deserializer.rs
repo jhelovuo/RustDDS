@@ -745,16 +745,16 @@ mod tests {
 
     let deserialized_le: Example = deserialize_from_little_endian(&serialized_le).unwrap();
     let deserialized_be: Example = deserialize_from_big_endian(&serialized_be).unwrap();
-    let serialized_O_le = to_bytes::<Example, LittleEndian>(&o).unwrap();
-    let serialized_O_be = to_bytes::<Example, BigEndian>(&o).unwrap();
+    let serialized_o_le = to_bytes::<Example, LittleEndian>(&o).unwrap();
+    let serialized_o_be = to_bytes::<Example, BigEndian>(&o).unwrap();
 
     assert_eq!(
-      serialized_O_le,
+      serialized_o_le,
       vec![0x01, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x64,]
     );
 
     assert_eq!(
-      serialized_O_be,
+      serialized_o_be,
       vec![0x00, 0x00, 0x00, 0x01, 0x61, 0x62, 0x63, 0x64,]
     );
 

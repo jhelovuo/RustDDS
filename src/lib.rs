@@ -14,7 +14,7 @@
 //! Additionally, there is a [ROS2](https://index.ros.org/doc/ros2/) interface, that is simpler to use than DDS
 //! when communicating to ROS2 components.
 
-#![warn(clippy::all)]
+#![deny(clippy::all)]
 #![allow(
   clippy::option_map_unit_fn,
   // option_map_unit_fn suggests changing option.map( ) with () return value to if let -construct,
