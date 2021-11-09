@@ -70,9 +70,9 @@ where
   D: Keyed,
   <D as Keyed>::K: Key,
 {
-  pub fn get_key(&self) -> D::K {
+  pub fn key(&self) -> D::K {
     match &self.sample {
-      Ok(d) => d.get_key(),
+      Ok(d) => d.key(),
       Err(k) => k.clone(),
     }
   }
@@ -100,7 +100,7 @@ where
     source_timestamp: Option<Timestamp>,
   ) {
     let instance_key = match &new_sample {
-      Ok(d) => d.get_key(),
+      Ok(d) => d.key(),
       Err(k) => k.clone(),
     };
 
@@ -230,7 +230,7 @@ where
       .datasamples
       .iter()
       .filter_map(|(ts, dsm)| {
-        let key = dsm.get_key();
+        let key = dsm.key();
         if self.sample_selector(&rc, self.instance_map.get(&key).unwrap(), dsm) {
           Some((*ts, key))
         } else {
@@ -534,12 +534,12 @@ where
   }
   */
 
-  pub fn get_key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
+  pub fn key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
     match self.hash_to_key_map.get(&key_hash) {
       Some(k) => Some(k.clone()),
       None => {
         debug!(
-          "get_key_by_hash: requested KeyHash {:?}, but not found. I have {:?}",
+          "key_by_hash: requested KeyHash {:?}, but not found. I have {:?}",
           key_hash,
           self.hash_to_key_map.keys()
         );
@@ -548,7 +548,7 @@ where
     }
   }
 
-  pub fn get_next_key(&self, key: &D::K) -> Option<D::K> {
+  pub fn next_key(&self, key: &D::K) -> Option<D::K> {
     self
       .instance_map
       .range((Excluded(key), Unbounded))
@@ -585,7 +585,7 @@ mod tests {
 
     let org_ddsdata = DDSData::from(&data, Some(timestamp));
 
-    let key = data.get_key().clone();
+    let key = data.key().clone();
     datasample_cache.add_sample(Ok(data.clone()), GUID::GUID_UNKNOWN, timestamp, None);
     //datasample_cache.add_datasample(datasample).unwrap();
 

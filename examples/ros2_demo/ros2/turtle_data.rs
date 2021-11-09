@@ -50,7 +50,7 @@ impl TurtleCmdVelTopic {
     String::from("geometry_msgs::msg::dds_::Twist_")
   }
 
-  pub fn get_qos() -> QosPolicies {
+  pub fn qos() -> QosPolicies {
     QOS.clone()
   }
 }

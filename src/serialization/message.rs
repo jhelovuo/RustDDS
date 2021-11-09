@@ -441,7 +441,7 @@ impl MessageBuilder {
         let gap_list = SequenceNumberSet::from_base_and_set(base, &irrelevant_sns);
         let gap = Gap {
           reader_id: reader_guid.entity_id,
-          writer_id: writer.get_entity_id(),
+          writer_id: writer.entity_id(),
           gap_start: base,
           gap_list,
         };
@@ -467,7 +467,7 @@ impl MessageBuilder {
 
     let heartbeat = Heartbeat {
       reader_id: reader_entityid,
-      writer_id: writer.get_entity_id(),
+      writer_id: writer.entity_id(),
       first_sn: first,
       last_sn: last,
       count: writer.heartbeat_message_counter,

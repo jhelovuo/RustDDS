@@ -219,13 +219,13 @@ impl DomainParticipant {
   /// ```
   /// # use rustdds::dds::DomainParticipant;
   /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let discovered_topics = domain_participant.get_discovered_topics();
+  /// let discovered_topics = domain_participant.discovered_topics();
   /// for dtopic in discovered_topics.iter() {
   ///   // do something
   /// }
   /// ```
-  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self.dpi.lock().unwrap().get_discovered_topics()
+  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+    self.dpi.lock().unwrap().discovered_topics()
   }
 
   /// Manually asserts liveliness, affecting all writers with
@@ -244,11 +244,11 @@ impl DomainParticipant {
   }
 
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
-    DomainParticipantWeak::new(self.clone(), self.get_guid())
+    DomainParticipantWeak::new(self.clone(), self.guid())
   }
 
-  pub(crate) fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    self.dpi.lock().unwrap().get_dds_cache()
+  pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
+    self.dpi.lock().unwrap().dds_cache()
   }
 
   pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
@@ -266,7 +266,7 @@ impl DomainParticipant {
 
 impl PartialEq for DomainParticipant {
   fn eq(&self, other: &Self) -> bool {
-    self.get_guid() == other.get_guid()
+    self.guid() == other.guid()
       && self.domain_id() == other.domain_id()
       && self.participant_id() == other.participant_id()
   }
@@ -338,9 +338,9 @@ impl DomainParticipantWeak {
     }
   }
 
-  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
     match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().get_discovered_topics(),
+      Some(dpi) => dpi.lock().unwrap().discovered_topics(),
       None => Vec::new(),
     }
   }
@@ -351,7 +351,7 @@ impl DomainParticipantWeak {
 } // end impl
 
 impl RTPSEntity for DomainParticipantWeak {
-  fn get_guid(&self) -> GUID {
+  fn guid(&self) -> GUID {
     self.guid
   }
 }
@@ -446,12 +446,12 @@ impl DomainParticipantDisc {
     self.dpi.lock().unwrap().participant_id()
   }
 
-  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self.dpi.lock().unwrap().get_discovered_topics()
+  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+    self.dpi.lock().unwrap().discovered_topics()
   }
 
-  pub(crate) fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    return self.dpi.lock().unwrap().get_dds_cache();
+  pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
+    return self.dpi.lock().unwrap().dds_cache();
   }
 
   pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
@@ -556,7 +556,7 @@ impl DomainParticipantInner {
     match UDPListener::new_multicast(
       DISCOVERY_SENDER_TOKEN,
       "0.0.0.0",
-      get_spdp_well_known_multicast_port(domain_id),
+      spdp_well_known_multicast_port(domain_id),
       Ipv4Addr::new(239, 255, 0, 1),
     ) {
       Ok(l) => {
@@ -575,7 +575,7 @@ impl DomainParticipantInner {
       discovery_listener = UDPListener::new_unicast(
         DISCOVERY_SENDER_TOKEN,
         "0.0.0.0",
-        get_spdp_well_known_unicast_port(domain_id, participant_id),
+        spdp_well_known_unicast_port(domain_id, participant_id),
       )
       .ok();
       if discovery_listener.is_none() {
@@ -597,7 +597,7 @@ impl DomainParticipantInner {
     match UDPListener::new_multicast(
       USER_TRAFFIC_SENDER_TOKEN,
       "0.0.0.0",
-      get_user_traffic_multicast_port(domain_id),
+      user_traffic_multicast_port(domain_id),
       Ipv4Addr::new(239, 255, 0, 1),
     ) {
       Ok(l) => {
@@ -609,7 +609,7 @@ impl DomainParticipantInner {
     let user_traffic_listener = UDPListener::new_unicast(
       USER_TRAFFIC_SENDER_TOKEN,
       "0.0.0.0",
-      get_user_traffic_unicast_port(domain_id, participant_id),
+      user_traffic_unicast_port(domain_id, participant_id),
     );
     let user_traffic_listener = match user_traffic_listener {
       Ok(l) => l,
@@ -703,7 +703,7 @@ impl DomainParticipantInner {
     })
   }
 
-  pub fn get_dds_cache(&self) -> Arc<RwLock<DDSCache>> {
+  pub fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
     self.dds_cache.clone()
   }
 
@@ -831,12 +831,12 @@ impl DomainParticipantInner {
     };
 
     let build_topic_fn = |d: &DiscoveredTopicData| {
-      let qos = d.topic_data.get_qos();
+      let qos = d.topic_data.qos();
       let topic_kind = match d.topic_data.key {
         Some(_) => TopicKind::WithKey,
         None => TopicKind::NoKey,
       };
-      let name = d.get_topic_name().clone();
+      let name = d.topic_name().clone();
       let type_desc = d.topic_data.type_name.clone();
       self.create_topic(domain_participant_weak, name, type_desc, &qos, topic_kind)
     };
@@ -882,30 +882,30 @@ impl DomainParticipantInner {
     self.participant_id
   }
 
-  pub fn get_discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
     let db = match self.discovery_db.read() {
       Ok(db) => db,
       Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
     };
 
-    db.get_all_topics().cloned().collect()
+    db.all_topics().cloned().collect()
   }
 } // impl
 
 impl RTPSEntity for DomainParticipant {
-  fn get_guid(&self) -> GUID {
-    self.dpi.lock().unwrap().get_guid()
+  fn guid(&self) -> GUID {
+    self.dpi.lock().unwrap().guid()
   }
 }
 
 impl RTPSEntity for DomainParticipantDisc {
-  fn get_guid(&self) -> GUID {
-    self.dpi.lock().unwrap().get_guid()
+  fn guid(&self) -> GUID {
+    self.dpi.lock().unwrap().guid()
   }
 }
 
 impl RTPSEntity for DomainParticipantInner {
-  fn get_guid(&self) -> GUID {
+  fn guid(&self) -> GUID {
     self.my_guid
   }
 }
@@ -913,7 +913,7 @@ impl RTPSEntity for DomainParticipantInner {
 impl std::fmt::Debug for DomainParticipant {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("DomainParticipant")
-      .field("Guid", &self.get_guid())
+      .field("Guid", &self.guid())
       .finish()
   }
 }
@@ -936,7 +936,7 @@ mod tests {
       submessages::submessages::{AckNack, EntitySubmessage, SubmessageHeader, SubmessageKind, *},
       vendor_id::VendorId,
     },
-    network::{constant::get_user_traffic_unicast_port, udp_sender::UDPSender},
+    network::{constant::user_traffic_unicast_port, udp_sender::UDPSender},
     serialization::{cdr_serializer::CDRSerializerAdapter, submessage::*, Message, SubMessage},
     structure::{
       guid::{EntityId, GUID},
@@ -1008,7 +1008,7 @@ mod tests {
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(topic, None)
       .expect("Failed to create datawriter");
 
-    let port_number: u16 = get_user_traffic_unicast_port(5, 0);
+    let port_number: u16 = user_traffic_unicast_port(5, 0);
     let sender = UDPSender::new(1234).unwrap();
     let mut m: Message = Message::default();
 

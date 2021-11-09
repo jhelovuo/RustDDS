@@ -210,8 +210,8 @@ impl<'a> MainController<'a> {
               self.stdout,
               "{}{}{}",
               termion::cursor::Goto(1, 21 + i as u16),
-              node_info.get_namespace(),
-              node_info.get_name()
+              node_info.namespace(),
+              node_info.name()
             )
             .unwrap();
           }
@@ -221,15 +221,15 @@ impl<'a> MainController<'a> {
           let (topics, services): (Vec<&DiscoveredTopicData>, Vec<&DiscoveredTopicData>) =
             topic_list
               .iter()
-              .partition(|p| p.get_topic_name().starts_with("rt"));
+              .partition(|p| p.topic_name().starts_with("rt"));
           let (services_request, services): (Vec<&DiscoveredTopicData>, Vec<&DiscoveredTopicData>) =
             services
               .iter()
-              .partition(|p| p.get_topic_name().starts_with("rq"));
+              .partition(|p| p.topic_name().starts_with("rq"));
           let (services_reply, dds_topics): (Vec<&DiscoveredTopicData>, Vec<&DiscoveredTopicData>) =
             services
               .iter()
-              .partition(|p| p.get_topic_name().starts_with("rr"));
+              .partition(|p| p.topic_name().starts_with("rr"));
 
           write!(
             self.stdout,
@@ -241,11 +241,7 @@ impl<'a> MainController<'a> {
 
           let mut max_width = 9;
           for (i, topic_info) in topics.iter().enumerate() {
-            let ft = format!(
-              "{} - {}",
-              topic_info.get_topic_name(),
-              topic_info.get_type_name()
-            );
+            let ft = format!("{} - {}", topic_info.topic_name(), topic_info.type_name());
             max_width = if ft.len() > max_width {
               ft.len()
             } else {
@@ -270,8 +266,8 @@ impl<'a> MainController<'a> {
           for (i, service_info) in services_request.iter().enumerate() {
             let ft = format!(
               "{} - {}",
-              service_info.get_topic_name(),
-              service_info.get_type_name()
+              service_info.topic_name(),
+              service_info.type_name()
             );
             write!(
               self.stdout,
@@ -299,11 +295,7 @@ impl<'a> MainController<'a> {
 
           max_width = 20;
           for (i, reply_info) in services_reply.iter().enumerate() {
-            let ft = format!(
-              "{} - {}",
-              reply_info.get_topic_name(),
-              reply_info.get_type_name()
-            );
+            let ft = format!("{} - {}", reply_info.topic_name(), reply_info.type_name());
             max_width = if ft.len() > max_width {
               ft.len()
             } else {
@@ -327,11 +319,7 @@ impl<'a> MainController<'a> {
           .unwrap();
 
           for (i, dds_info) in dds_topics.iter().enumerate() {
-            let ft = format!(
-              "{} - {}",
-              dds_info.get_topic_name(),
-              dds_info.get_type_name()
-            );
+            let ft = format!("{} - {}", dds_info.topic_name(), dds_info.type_name());
             write!(
               self.stdout,
               "{}{}",

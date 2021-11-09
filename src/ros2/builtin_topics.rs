@@ -46,7 +46,7 @@ impl ROSDiscoveryTopic {
     ROSDiscoveryTopic::TYPE_NAME
   }
 
-  pub const fn get_qos() -> QosPolicies {
+  pub const fn qos() -> QosPolicies {
     ROSDiscoveryTopic::QOS
   }
 }
@@ -82,7 +82,7 @@ impl ParameterEventsTopic {
     ParameterEventsTopic::TYPE_NAME
   }
 
-  pub fn get_qos() -> QosPolicies {
+  pub fn qos() -> QosPolicies {
     ParameterEventsTopic::QOS
   }
 }
@@ -124,7 +124,7 @@ impl RosOutTopic {
     RosOutTopic::TYPE_NAME
   }
 
-  pub fn get_qos() -> QosPolicies {
+  pub fn qos() -> QosPolicies {
     RosOutTopic::QOS
   }
 }

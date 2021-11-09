@@ -35,7 +35,7 @@ pub trait Keyed {
   // where <D as Keyed>::K : Key,
   type K;
 
-  fn get_key(&self) -> Self::K;
+  fn key(&self) -> Self::K;
 
   // provided method (TODO: what for?)
   fn get_hash(&self) -> u64
@@ -43,7 +43,7 @@ pub trait Keyed {
     Self::K: Key,
   {
     let mut hasher = DefaultHasher::new();
-    self.get_key().hash(&mut hasher);
+    self.key().hash(&mut hasher);
     hasher.finish()
   }
 }
@@ -153,8 +153,8 @@ impl Key for () {
 /// This is required internally for the implementation of NoKey topics.
 impl<D: Keyed> Keyed for &D {
   type K = D::K;
-  fn get_key(&self) -> Self::K {
-    (*self).get_key()
+  fn key(&self) -> Self::K {
+    (*self).key()
   }
 }
 
@@ -186,7 +186,7 @@ pub struct BuiltInTopicKey {
 }
 
 impl BuiltInTopicKey {
-  pub fn get_random_key() -> BuiltInTopicKey {
+  pub fn random_key() -> BuiltInTopicKey {
     let mut rng = rand::thread_rng();
     BuiltInTopicKey {
       value: [rng.gen(), rng.gen(), rng.gen()],

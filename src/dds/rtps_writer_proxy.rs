@@ -87,7 +87,7 @@ impl RtpsWriterProxy {
     self.changes.is_empty()
   }
 
-  pub fn get_missing_sequence_numbers(
+  pub fn missing_sequence_numbers(
     &self,
     hb_first_sn: SequenceNumber,
     hb_last_sn: SequenceNumber,

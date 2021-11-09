@@ -470,8 +470,8 @@ where
   //   self.keyed_datareader.set_qos(policy)
   // }
 
-  fn get_qos(&self) -> QosPolicies {
-    self.keyed_datareader.get_qos()
+  fn qos(&self) -> QosPolicies {
+    self.keyed_datareader.qos()
   }
 }
 
@@ -480,7 +480,7 @@ where
   D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  fn get_guid(&self) -> GUID {
-    self.keyed_datareader.get_guid()
+  fn guid(&self) -> GUID {
+    self.keyed_datareader.guid()
   }
 }

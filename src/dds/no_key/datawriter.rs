@@ -272,10 +272,10 @@ where
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic.clone(), None).unwrap();
   ///
-  /// assert_eq!(&topic, data_writer.get_topic());
+  /// assert_eq!(&topic, data_writer.topic());
   /// ```
-  pub fn get_topic(&self) -> &Topic {
-    self.keyed_datawriter.get_topic()
+  pub fn topic(&self) -> &Topic {
+    self.keyed_datawriter.topic()
   }
 
   /// Publisher this DataWriter is connected to.
@@ -301,10 +301,10 @@ where
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
-  /// assert_eq!(&publisher, data_writer.get_publisher());
+  /// assert_eq!(&publisher, data_writer.publisher());
   /// ```
-  pub fn get_publisher(&self) -> &Publisher {
-    self.keyed_datawriter.get_publisher()
+  pub fn publisher(&self) -> &Publisher {
+    self.keyed_datawriter.publisher()
   }
 
   /// Manually asserts liveliness if QoS agrees
@@ -402,8 +402,8 @@ where
 }
 
 impl<D: Serialize, SA: SerializerAdapter<D>> RTPSEntity for DataWriter<D, SA> {
-  fn get_guid(&self) -> GUID {
-    self.keyed_datawriter.get_guid()
+  fn guid(&self) -> GUID {
+    self.keyed_datawriter.guid()
   }
 }
 
@@ -412,8 +412,8 @@ impl<D: Serialize, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<D, SA> 
   //   self.keyed_datawriter.set_qos(policy)
   // }
 
-  fn get_qos(&self) -> QosPolicies {
-    self.keyed_datawriter.get_qos()
+  fn qos(&self) -> QosPolicies {
+    self.keyed_datawriter.qos()
   }
 }
 

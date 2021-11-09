@@ -244,7 +244,7 @@ impl DPEventLoop {
                       error!("No listener with token {:?}", &event.token());
                       vec![]
                     },
-                    |l| l.get_messages(),
+                    |l| l.messages(),
                   );
                 for packet in udp_messages.into_iter() {
                   ev_wrapper.message_receiver.handle_received_packet(packet)
@@ -322,7 +322,7 @@ impl DPEventLoop {
               if eid.kind().is_reader() {
                 ev_wrapper
                   .message_receiver
-                  .get_reader_mut(eid)
+                  .reader_mut(eid)
                   .map(|reader| reader.process_command())
                   .unwrap_or_else(|| error!("Event for unknown reader {:?}", eid));
               } else if eid.kind().is_writer() {
@@ -334,7 +334,7 @@ impl DPEventLoop {
                   Some(writer) => {
                     // Writer will record data to DDSCache and send it out.
                     writer.process_writer_command();
-                    writer.get_local_readers()
+                    writer.local_readers()
                   }
                 };
                 // Notify local (same participant) readers that new data is available in the
@@ -390,7 +390,7 @@ impl DPEventLoop {
             .poll
             .register(
               &new_reader.data_reader_command_receiver,
-              new_reader.get_entity_token(),
+              new_reader.entity_token(),
               Ready::readable(),
               PollOpt::edge(),
             )
@@ -448,14 +448,12 @@ impl DPEventLoop {
             .poll
             .register(
               &new_writer.writer_command_receiver,
-              new_writer.get_entity_token(),
+              new_writer.entity_token(),
               Ready::readable(),
               PollOpt::edge(),
             )
             .expect("Writer command channel registration failed!!");
-          self
-            .writers
-            .insert(new_writer.get_guid().entity_id, new_writer);
+          self.writers.insert(new_writer.guid().entity_id, new_writer);
         }
       }
       REMOVE_WRITER_TOKEN => {
@@ -487,7 +485,7 @@ impl DPEventLoop {
   }
 
   fn handle_reader_timed_event(&mut self, entity_id: EntityId) {
-    match self.message_receiver.get_reader_mut(entity_id) {
+    match self.message_receiver.reader_mut(entity_id) {
       Some(reader) => reader.handle_timed_event(),
       None => error!("Reader was not found with {:?}", entity_id),
     }
@@ -590,7 +588,7 @@ impl DPEventLoop {
               );
 
               reader_proxy.multicast_locator_list = get_local_multicast_locators(
-                get_spdp_well_known_multicast_port(self.domain_info.domain_id),
+                spdp_well_known_multicast_port(self.domain_info.domain_id),
               );
             }
             // common processing for SPDP and SEDP
@@ -723,7 +721,7 @@ impl DPEventLoop {
     match self.discovery_db.read() {
       Ok(db) => match self.ddscache.write() {
         Ok(mut ddsc) => {
-          for topic in db.get_all_topics() {
+          for topic in db.all_topics() {
             // TODO: how do you know when topic is keyed and is not
             let topic_kind = match &topic.topic_data.key {
               Some(_) => TopicKind::WithKey,
@@ -1018,7 +1016,7 @@ mod tests {
   //     //new_reader.set_qos(&somePolicies).unwrap();
   //     new_reader.matched_writer_add(GUID::default(),
   // EntityId::ENTITYID_UNKNOWN, vec![], vec![]);     reader_guids.
-  // push(new_reader.get_guid().clone());     info!("\nSent reader number {}:
+  // push(new_reader.guid().clone());     info!("\nSent reader number {}:
   // {:?}\n", i, &new_reader);     sender_add_reader.send(new_reader).
   // unwrap();     std::thread::sleep(Duration::from_millis(100));
   //   }

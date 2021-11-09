@@ -33,12 +33,12 @@ where
 
   // convenience shorthand to get the key directly, without digging out the
   // "value"
-  pub fn get_key(&self) -> D::K
+  pub fn key(&self) -> D::K
   where
     <D as Keyed>::K: Key,
   {
     match &self.value {
-      Ok(d) => d.get_key(),
+      Ok(d) => d.key(),
       Err(k) => k.clone(),
     }
   } // fn

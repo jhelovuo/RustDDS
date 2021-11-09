@@ -266,7 +266,7 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn get_participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
+  pub fn participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
     self.participant_proxies.values()
   }
 
@@ -282,15 +282,11 @@ impl DiscoveryDB {
     self.writers_updated = true;
   }
 
-  pub fn get_external_reader_proxies<'a>(
-    &'a self,
-  ) -> impl Iterator<Item = &DiscoveredReaderData> + 'a {
+  pub fn external_reader_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredReaderData> + 'a {
     self.external_topic_readers.values()
   }
 
-  pub fn get_external_writer_proxies<'a>(
-    &'a self,
-  ) -> impl Iterator<Item = &DiscoveredWriterData> + 'a {
+  pub fn external_writer_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredWriterData> + 'a {
     self.external_topic_writers.values()
   }
 
@@ -409,19 +405,19 @@ impl DiscoveryDB {
   pub fn update_topic_data_p(&mut self, topic: &Topic) {
     let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
       key: None,
-      name: topic.get_name(),
+      name: topic.name(),
       type_name: String::from(topic.get_type().name()),
-      durability: topic.get_qos().durability,
-      deadline: topic.get_qos().deadline,
-      latency_budget: topic.get_qos().latency_budget,
-      liveliness: topic.get_qos().liveliness,
-      reliability: topic.get_qos().reliability,
-      lifespan: topic.get_qos().lifespan,
-      destination_order: topic.get_qos().destination_order,
-      presentation: topic.get_qos().presentation,
-      history: topic.get_qos().history,
-      resource_limits: topic.get_qos().resource_limits,
-      ownership: topic.get_qos().ownership,
+      durability: topic.qos().durability,
+      deadline: topic.qos().deadline,
+      latency_budget: topic.qos().latency_budget,
+      liveliness: topic.qos().liveliness,
+      reliability: topic.qos().reliability,
+      lifespan: topic.qos().lifespan,
+      destination_order: topic.qos().destination_order,
+      presentation: topic.qos().presentation,
+      history: topic.qos().history,
+      resource_limits: topic.qos().resource_limits,
+      ownership: topic.qos().ownership,
     });
 
     self.update_topic_data(&topic_data);
@@ -461,11 +457,11 @@ impl DiscoveryDB {
 
     let mut subscription_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
-      topic.get_name(),
+      topic.name(),
       topic.get_type().name().to_string(),
-      &topic.get_qos(),
+      &topic.qos(),
     );
-    subscription_data.set_participant_key(domain_participant.get_guid());
+    subscription_data.set_participant_key(domain_participant.guid());
 
     // TODO: possibly change content filter to dynamic value
     let content_filter = None;
@@ -512,7 +508,7 @@ impl DiscoveryDB {
     self.local_topic_writers.iter().map(|(_, p)| p)
   }
 
-  pub fn get_all_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
+  pub fn all_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
     self
       .topics
       .iter()
@@ -534,7 +530,7 @@ impl DiscoveryDB {
     &'a self,
     topic: &'a T,
   ) -> Vec<&DiscoveredReaderData> {
-    let topic_name = topic.get_name();
+    let topic_name = topic.name();
     self
       .local_topic_readers
       .iter()
@@ -664,7 +660,7 @@ mod tests {
     let reader1 = reader_proxy_data().unwrap();
     let mut reader1sub = subscription_builtin_topic_data().unwrap();
     reader1sub.set_key(reader1.remote_reader_guid);
-    reader1sub.set_topic_name(&topic.get_name());
+    reader1sub.set_topic_name(&topic.name());
     let dreader1 = DiscoveredReaderData {
       reader_proxy: reader1.clone(),
       subscription_topic_data: reader1sub.clone(),
@@ -675,7 +671,7 @@ mod tests {
     let reader2 = reader_proxy_data().unwrap();
     let mut reader2sub = subscription_builtin_topic_data().unwrap();
     reader2sub.set_key(reader2.remote_reader_guid);
-    reader2sub.set_topic_name(&topic2.get_name());
+    reader2sub.set_topic_name(&topic2.name());
     let dreader2 = DiscoveredReaderData {
       reader_proxy: reader2,
       subscription_topic_data: reader2sub,
@@ -720,7 +716,7 @@ mod tests {
       guid: GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
       notification_sender: notification_sender.clone(),
       status_sender: status_sender.clone(),
-      topic_name: topic.get_name(),
+      topic_name: topic.name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver1,
     };
@@ -750,7 +746,7 @@ mod tests {
       ), // GUID needs to be different in order to be added
       notification_sender,
       status_sender,
-      topic_name: topic.get_name(),
+      topic_name: topic.name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
     };

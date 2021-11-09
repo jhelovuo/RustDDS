@@ -7,12 +7,12 @@ use crate::structure::guid::{EntityId, GuidPrefix, GUID};
 /// (for usage, DomainParticipant, DataReader and DataWriter implement this)
 /// RTPS 2.3 specification section 8.2.4
 pub trait RTPSEntity {
-  fn get_guid(&self) -> GUID;
+  fn guid(&self) -> GUID;
 
-  fn get_entity_id(&self) -> EntityId {
-    self.get_guid().entity_id
+  fn entity_id(&self) -> EntityId {
+    self.guid().entity_id
   }
-  fn get_guid_prefix(&self) -> GuidPrefix {
-    self.get_guid().guid_prefix
+  fn guid_prefix(&self) -> GuidPrefix {
+    self.guid().guid_prefix
   }
 }

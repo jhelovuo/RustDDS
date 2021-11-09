@@ -68,7 +68,7 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 /// impl Keyed for SomeType {
 ///   type K = i32;
 ///
-///   fn get_key(&self) -> Self::K {
+///   fn key(&self) -> Self::K {
 ///     self.a
 ///   }
 /// }
@@ -98,9 +98,8 @@ where
   fn drop(&mut self) {
     match self
       .discovery_command
-      .send(DiscoveryCommand::RemoveLocalWriter {
-        guid: self.get_guid(),
-      }) {
+      .send(DiscoveryCommand::RemoveLocalWriter { guid: self.guid() })
+    {
       Ok(_) => {}
 
       // This is fairly normal at shutdown, as the other end is down already.
@@ -136,7 +135,7 @@ where
       None => EntityId::ENTITYID_UNKNOWN,
     };
 
-    let dp = match publisher.get_participant() {
+    let dp = match publisher.participant() {
       Some(dp) => dp,
       None => {
         return log_and_err_precondition_not_met!(
@@ -145,14 +144,14 @@ where
       }
     };
 
-    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), entity_id);
+    let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
 
     match dds_cache.write() {
-      Ok(mut cache) => cache.add_new_topic(topic.get_name(), TopicKind::NoKey, topic.get_type()),
+      Ok(mut cache) => cache.add_new_topic(topic.name(), TopicKind::NoKey, topic.get_type()),
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
     };
 
-    if let Some(lv) = topic.get_qos().liveliness {
+    if let Some(lv) = topic.qos().liveliness {
       match lv {
         Liveliness::Automatic { lease_duration: _ } => (),
         Liveliness::ManualByParticipant { lease_duration: _ } => {
@@ -166,7 +165,7 @@ where
         Liveliness::ManualByTopic { lease_duration: _ } => (),
       }
     };
-    let qos = topic.get_qos();
+    let qos = topic.qos();
     Ok(DataWriter {
       my_publisher: publisher,
       my_topic: topic,
@@ -208,7 +207,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -222,7 +221,7 @@ where
 
   // TODO: What is this function? To what part of DDS spec does it correspond to?
   pub fn refresh_manual_liveliness(&self) {
-    if let Some(lv) = self.get_qos().liveliness {
+    if let Some(lv) = self.qos().liveliness {
       match lv {
         Liveliness::Automatic { lease_duration: _ } => (),
         Liveliness::ManualByParticipant { lease_duration: _ } => {
@@ -263,7 +262,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -287,7 +286,7 @@ where
       source_timestamp,
     };
 
-    let timeout = match self.get_qos().reliability() {
+    let timeout = match self.qos().reliability() {
       Some(Reliability::Reliable { max_blocking_time }) => Some(max_blocking_time),
       _ => None,
     };
@@ -300,7 +299,7 @@ where
       Err(e) => {
         warn!(
           "Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
-          self.my_topic.get_name(),
+          self.my_topic.name(),
           e,
           timeout,
         );
@@ -344,7 +343,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -413,7 +412,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -432,7 +431,7 @@ where
     match self
       .cc_upload
       .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
-        writer_guid: self.get_guid(),
+        writer_guid: self.guid(),
       }) {
       Ok(_) => (),
       Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
@@ -463,7 +462,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -504,7 +503,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -532,7 +531,7 @@ where
     match self
       .cc_upload
       .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
-        writer_guid: self.get_guid(),
+        writer_guid: self.guid(),
       }) {
       Ok(_) => (),
       Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
@@ -564,7 +563,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -606,7 +605,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -649,7 +648,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -658,9 +657,9 @@ where
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic.clone(), None).unwrap();
   ///
-  /// assert_eq!(data_writer.get_topic(), &topic);
+  /// assert_eq!(data_writer.topic(), &topic);
   /// ```
-  pub fn get_topic(&self) -> &Topic {
+  pub fn topic(&self) -> &Topic {
     &self.my_topic
   }
 
@@ -686,7 +685,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -695,8 +694,8 @@ where
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
   ///
-  /// assert_eq!(data_writer.get_publisher(), &publisher);
-  pub fn get_publisher(&self) -> &Publisher {
+  /// assert_eq!(data_writer.publisher(), &publisher);
+  pub fn publisher(&self) -> &Publisher {
     &self.my_publisher
   }
 
@@ -722,7 +721,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -740,12 +739,12 @@ where
   pub fn assert_liveliness(&self) -> Result<()> {
     self.refresh_manual_liveliness();
 
-    match self.get_qos().liveliness {
+    match self.qos().liveliness {
       Some(Liveliness::ManualByTopic { lease_duration: _ }) => {
         self
           .discovery_command
           .send(DiscoveryCommand::AssertTopicLiveliness {
-            writer_guid: self.get_guid(),
+            writer_guid: self.guid(),
             manual_assertion: true, // by definition of this function
           })
           .unwrap_or_else(|e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e))
@@ -778,7 +777,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -824,7 +823,7 @@ where
   /// impl Keyed for SomeType {
   ///   type K = i32;
   ///
-  ///   fn get_key(&self) -> Self::K {
+  ///   fn key(&self) -> Self::K {
   ///     self.a
   ///   }
   /// }
@@ -886,7 +885,7 @@ where
   D: Keyed + Serialize,
   SA: SerializerAdapter<D>,
 {
-  fn get_guid(&self) -> GUID {
+  fn guid(&self) -> GUID {
     self.my_guid
   }
 }
@@ -902,7 +901,7 @@ where
   //   Ok(())
   // }
 
-  fn get_qos(&self) -> QosPolicies {
+  fn qos(&self) -> QosPolicies {
     self.qos_policy.clone()
   }
 }
@@ -995,7 +994,7 @@ mod tests {
       b: "Fobar".to_string(),
     };
 
-    let key = &data.get_key().hash_key();
+    let key = &data.key().hash_key();
     info!("key: {:?}", key);
 
     data_writer
@@ -1004,7 +1003,7 @@ mod tests {
 
     thread::sleep(Duration::from_millis(100));
     data_writer
-      .dispose(data.get_key(), None)
+      .dispose(data.key(), None)
       .expect("Unable to dispose data");
 
     // TODO: verify that dispose is sent correctly

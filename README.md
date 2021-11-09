@@ -66,7 +66,7 @@ The payload type D is required to implement `serde::Serialize` when used with a 
 
 In DDS, a WITH_KEY topic contains multiple different instances, that are distinguished by a key. The key must be somehow embedded into the data samples. In our implementation, if the payload type D is communicated in a WITH_KEY topic, then D is additionally required to implement trait `Keyed`.
 
-The trait `Keyed` requires one method: `get_key(&self) -> Self::K` , which is used to extract a key of an associated type `K` from `D`. They key type `K` must implement trait `Key`, which is a combination of pre-existing traits `Eq + 
+The trait `Keyed` requires one method: `key(&self) -> Self::K` , which is used to extract a key of an associated type `K` from `D`. They key type `K` must implement trait `Key`, which is a combination of pre-existing traits `Eq + 
 PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned` and no additional methods.
 
 A serializer adapter type SA (wrapper for a Serde data format) is provided for OMG Common Data Representation (CDR), as this is the default serialization format used by DDS/RTPS. It is possible to use another serialization format for the objects communicated over DDS by providing a Serde [data format][serde-data-format-url] implementation.

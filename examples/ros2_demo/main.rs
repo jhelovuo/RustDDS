@@ -164,7 +164,7 @@ fn ros2_loop(command_receiver: mio_channel::Receiver<RosCommand>) {
             None => (),
           }
         } else if event.token() == TOPIC_UPDATE_TIMER_TOKEN {
-          let list = ros_participant.get_discovered_topics();
+          let list = ros_participant.discovered_topics();
           match &nodes_updated_sender {
             Some(s) => s.send(DataUpdate::TopicList { list }).unwrap(),
             None => (),

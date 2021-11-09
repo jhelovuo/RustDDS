@@ -170,7 +170,7 @@ impl UDPListener {
     }
     unsafe {
       // This is safe, because we just checked that there is enough capacity.
-      // We do not read undefined data, because next the recv call in get_messages()
+      // We do not read undefined data, because next the recv call in messages()
       // will overwrite this space and truncate the rest away.
       self.receive_buffer.set_len(MAX_MESSAGE_SIZE)
     }
@@ -181,7 +181,7 @@ impl UDPListener {
   }
 
   /// Get all messages waiting in the socket.
-  pub fn get_messages(&mut self) -> Vec<Bytes> {
+  pub fn messages(&mut self) -> Vec<Bytes> {
     // This code may seem slighlty non-sensical, if you do not know
     // how BytesMut works.
     let mut messages = Vec::with_capacity(4); // just a guess, should cover most cases

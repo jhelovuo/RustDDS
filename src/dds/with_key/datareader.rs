@@ -99,7 +99,7 @@ impl CurrentStatusChanges {
 /// impl Keyed for SomeType {
 ///   type K = i32;
 ///
-///   fn get_key(&self) -> Self::K {
+///   fn key(&self) -> Self::K {
 ///     self.a
 ///   }
 /// }
@@ -137,9 +137,8 @@ where
   fn drop(&mut self) {
     match self
       .discovery_command
-      .send(DiscoveryCommand::RemoveLocalReader {
-        guid: self.get_guid(),
-      }) {
+      .send(DiscoveryCommand::RemoveLocalReader { guid: self.guid() })
+    {
       Ok(_) => {}
       Err(mio_channel::SendError::Disconnected(_)) => {
         debug!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. Maybe shutting down?")
@@ -171,7 +170,7 @@ where
     status_channel_rec: mio_channel::Receiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
   ) -> Result<Self> {
-    let dp = match subscriber.get_participant() {
+    let dp = match subscriber.participant() {
       Some(dp) => dp,
       None => {
         return log_and_err_precondition_not_met!(
@@ -180,7 +179,7 @@ where
       }
     };
 
-    let my_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), my_id);
+    let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), my_id);
 
     Ok(Self {
       my_subscriber: subscriber,
@@ -188,7 +187,7 @@ where
       my_guid,
       notification_receiver,
       dds_cache,
-      datasample_cache: DataSampleCache::new(topic.get_qos()),
+      datasample_cache: DataSampleCache::new(topic.qos()),
       // The reader is created before the datareader, hence initializing the
       // latest_instant to now should be fine. There should be no smaller instants
       // added by the reader.
@@ -231,7 +230,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -295,7 +294,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -353,7 +352,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -395,7 +394,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -441,7 +440,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -491,7 +490,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -546,7 +545,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -598,7 +597,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -641,7 +640,7 @@ where
     };
 
     let cache_changes = dds_cache.from_topic_get_changes_in_range(
-      &self.my_topic.get_name(),
+      &self.my_topic.name(),
       &self.latest_instant,
       &Timestamp::now(),
     );
@@ -677,7 +676,7 @@ where
               warn!(
                 "Failed to deserialize key {}, Topic = {}, Type = {:?}",
                 e,
-                self.my_topic.get_name(),
+                self.my_topic.name(),
                 self.my_topic.get_type()
               );
               debug!("Bytes were {:?}", &serialized_key.value);
@@ -689,7 +688,7 @@ where
         DDSData::DisposeByKeyHash { key_hash, .. } => {
           /* TODO: Instance to be disposed could be specified by serialized payload
            * also, not only key_hash? */
-          match self.datasample_cache.get_key_by_hash(*key_hash) {
+          match self.datasample_cache.key_by_hash(*key_hash) {
             Some(key) => {
               self
                 .datasample_cache
@@ -716,7 +715,7 @@ where
                 error!(
                   "Failed to deserialize bytes: {}, Topic = {}, Type = {:?}",
                   e,
-                  self.my_topic.get_name(),
+                  self.my_topic.name(),
                   self.my_topic.get_type()
                 );
                 debug!("Bytes were {:?}", &serialized_payload.value);
@@ -745,7 +744,7 @@ where
                 }
                 Err(e) => {
                   error!("Failed to deserialize (DATAFRAG) bytes: {}, Topic = {}, Type = {:?}",
-                          e, self.my_topic.get_name(), self.my_topic.get_type() );
+                          e, self.my_topic.name(), self.my_topic.get_type() );
                   //debug!("Bytes were {:?}",&serialized_payload.value);
                   continue // skip this sample
                 }
@@ -768,7 +767,7 @@ where
     match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => Some(k),
-        SelectByKey::Next => self.datasample_cache.get_next_key(&k),
+        SelectByKey::Next => self.datasample_cache.next_key(&k),
       },
       None => self.datasample_cache.instance_map.keys().next().cloned(),
     }
@@ -805,7 +804,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -878,7 +877,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -1089,7 +1088,7 @@ where
   /// # impl Keyed for SomeType {
   /// #   type K = i32;
   /// #
-  /// #   fn get_key(&self) -> Self::K {
+  /// #   fn key(&self) -> Self::K {
   /// #     self.a
   /// #   }
   /// # }
@@ -1191,7 +1190,7 @@ where
   //   Ok(())
   // }
 
-  fn get_qos(&self) -> QosPolicies {
+  fn qos(&self) -> QosPolicies {
     self.qos_policy.clone()
   }
 }
@@ -1201,7 +1200,7 @@ where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
-  fn get_guid(&self) -> GUID {
+  fn guid(&self) -> GUID {
     self.my_guid
   }
 }
@@ -1262,20 +1261,20 @@ mod tests {
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let reader_id = EntityId::default();
-    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), reader_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), reader_id);
 
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
       notification_sender: send,
       status_sender,
-      topic_name: topic.get_name(),
+      topic_name: topic.name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
 
     let mut new_reader = Reader::new(
       reader_ing,
-      dp.get_dds_cache(),
+      dp.dds_cache(),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1288,7 +1287,7 @@ mod tests {
       a: 1,
       b: "somedata".to_string(),
     };
-    let data_key = random_data.get_key();
+    let data_key = random_data.key();
 
     let writer_guid = GUID {
       guid_prefix: GuidPrefix::new(&[1; 12]),
@@ -1395,20 +1394,20 @@ mod tests {
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let default_id = EntityId::default();
-    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), default_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), default_id);
 
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
       notification_sender: send,
       status_sender,
-      topic_name: topic.get_name(),
+      topic_name: topic.name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
 
     let mut reader = Reader::new(
       reader_ing,
-      dp.get_dds_cache(),
+      dp.dds_cache(),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1445,7 +1444,7 @@ mod tests {
     };
 
     let mut data_msg = Data::default();
-    data_msg.reader_id = reader.get_entity_id();
+    data_msg.reader_id = reader.entity_id();
     data_msg.writer_id = writer_guid.entity_id;
     data_msg.writer_sn = SequenceNumber::from(1);
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
@@ -1457,7 +1456,7 @@ mod tests {
     });
 
     let mut data_msg2 = Data::default();
-    data_msg2.reader_id = reader.get_entity_id();
+    data_msg2.reader_id = reader.entity_id();
     data_msg2.writer_id = writer_guid.entity_id;
     data_msg2.writer_sn = SequenceNumber::from(2);
 
@@ -1524,14 +1523,14 @@ mod tests {
       b: "xD".to_string(),
     };
 
-    let key1 = data_key1.get_key();
-    let key2 = data_key2_1.get_key();
+    let key1 = data_key1.key();
+    let key2 = data_key2_1.key();
 
-    assert!(data_key2_1.get_key() == data_key2_2.get_key());
-    assert!(data_key2_3.get_key() == key2);
+    assert!(data_key2_1.key() == data_key2_2.key());
+    assert!(data_key2_3.key() == key2);
 
     let mut data_msg = Data::default();
-    data_msg.reader_id = reader.get_entity_id();
+    data_msg.reader_id = reader.entity_id();
     data_msg.writer_id = writer_guid.entity_id;
     data_msg.writer_sn = SequenceNumber::from(2);
 
@@ -1541,7 +1540,7 @@ mod tests {
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
     });
     let mut data_msg2 = Data::default();
-    data_msg2.reader_id = reader.get_entity_id();
+    data_msg2.reader_id = reader.entity_id();
     data_msg2.writer_id = writer_guid.entity_id;
     data_msg2.writer_sn = SequenceNumber::from(3);
 
@@ -1551,7 +1550,7 @@ mod tests {
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
     });
     let mut data_msg3 = Data::default();
-    data_msg3.reader_id = reader.get_entity_id();
+    data_msg3.reader_id = reader.entity_id();
     data_msg3.writer_id = writer_guid.entity_id;
     data_msg3.writer_sn = SequenceNumber::from(4);
 
@@ -1561,7 +1560,7 @@ mod tests {
       value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
     });
     let mut data_msg4 = Data::default();
-    data_msg4.reader_id = reader.get_entity_id();
+    data_msg4.reader_id = reader.entity_id();
     data_msg4.writer_id = writer_guid.entity_id;
     data_msg4.writer_sn = SequenceNumber::from(5);
 
@@ -1633,18 +1632,18 @@ mod tests {
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let default_id = EntityId::default();
-    let reader_guid = GUID::new_with_prefix_and_id(dp.get_guid_prefix(), default_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), default_id);
 
     let mut reader_ing = ReaderIngredients {
       guid: reader_guid,
       notification_sender: send,
       status_sender,
-      topic_name: topic.get_name().to_string(),
+      topic_name: topic.name().to_string(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
 
-    let reader = Reader::new(reader_ing, dp.get_dds_cache(), Rc::new(UDPSender::new_with_random_port().unwrap()));
+    let reader = Reader::new(reader_ing, dp.dds_cache(), Rc::new(UDPSender::new_with_random_port().unwrap()));
 
     let mut datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)
@@ -1680,7 +1679,7 @@ mod tests {
     };
 
     let mut data_msg = Data::default();
-    data_msg.reader_id = reader.get_entity_id();
+    data_msg.reader_id = reader.entity_id();
     data_msg.writer_id = writer_guid.entity_id;
     data_msg.writer_sn = SequenceNumber::from(0);
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
@@ -1692,7 +1691,7 @@ mod tests {
     });
 
     let mut data_msg2 = Data::default();
-    data_msg2.reader_id = reader.get_entity_id();
+    data_msg2.reader_id = reader.entity_id();
     data_msg2.writer_id = writer_guid.entity_id;
     data_msg2.writer_sn = SequenceNumber::from(1);
 
@@ -1703,7 +1702,7 @@ mod tests {
     });
 
     let mut data_msg3 = Data::default();
-    data_msg3.reader_id = reader.get_entity_id();
+    data_msg3.reader_id = reader.entity_id();
     data_msg3.writer_id = writer_guid.entity_id;
     data_msg3.writer_sn = SequenceNumber::from(2);
 

@@ -34,7 +34,7 @@ impl TurtleSender {
       .create_ros_topic(
         &TurtleCmdVelTopic::topic_name(),
         TurtleCmdVelTopic::type_name(),
-        TurtleCmdVelTopic::get_qos(),
+        TurtleCmdVelTopic::qos(),
         TurtleCmdVelTopic::topic_kind(),
       )
       .unwrap();

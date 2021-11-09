@@ -45,11 +45,11 @@ impl NodeInfo {
     }
   }
 
-  pub fn get_namespace(&self) -> &str {
+  pub fn namespace(&self) -> &str {
     &self.node_namespace
   }
 
-  pub fn get_name(&self) -> &str {
+  pub fn name(&self) -> &str {
     &self.node_name
   }
 
@@ -162,7 +162,7 @@ impl Log {
   }
 
   /// Name of the rosout message
-  pub fn get_name(&self) -> &str {
+  pub fn name(&self) -> &str {
     &self.name
   }
 
