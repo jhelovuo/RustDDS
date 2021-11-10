@@ -15,7 +15,6 @@ categories = ["network-programming", "science::robotics"]
 [dependencies]
 mio = "^0.6.23"
 mio-extras = "2.0.6"
-tokio-util = { version = "0.6.8", features = ["codec"] }
 bit-vec = "0.6.2"
 speedy = "0.8.0"
 log = "0.4.11"
