@@ -34,7 +34,6 @@ use crate::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::DDSCache,
     duration::Duration,
-    endpoint::EndpointAttributes,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -88,7 +87,6 @@ pub(crate) struct Reader {
   qos_policy: QosPolicies,
 
   my_guid: GUID,
-  pub endpoint_attributes: EndpointAttributes,
 
   heartbeat_response_delay: StdDuration,
   heartbeat_supression_duration: StdDuration,
@@ -125,7 +123,6 @@ impl Reader {
       #[cfg(test)]
       seqnum_instant_map: BTreeMap::new(),
       my_guid: i.guid,
-      endpoint_attributes: EndpointAttributes::default(),
 
       heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
       heartbeat_supression_duration: StdDuration::new(0, 0),
@@ -1015,7 +1012,6 @@ impl fmt::Debug for Reader {
       .field("notification_sender, dds_cache", &"can't print".to_string())
       .field("topic_name", &self.topic_name)
       .field("my_guid", &self.my_guid)
-      .field("endpoint_attributes", &self.endpoint_attributes)
       .field("heartbeat_response_delay", &self.heartbeat_response_delay)
       .field("sent_ack_nack_count", &self.sent_ack_nack_count)
       .field("received_hearbeat_count", &self.received_hearbeat_count)

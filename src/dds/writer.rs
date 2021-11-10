@@ -26,7 +26,6 @@ use crate::{
     cache_change::CacheChange,
     dds_cache::DDSCache,
     duration::Duration,
-    endpoint::EndpointAttributes,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -109,7 +108,6 @@ pub(crate) struct Writer {
   ///SerializedPayload that may be
   ///sent by the Writer
   pub data_max_size_serialized: u64,
-  endpoint_attributes: EndpointAttributes,
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   ///The RTPS ReaderProxy class represents the information an RTPS
@@ -233,7 +231,6 @@ impl Writer {
       readers: BTreeMap::new(),
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
-      endpoint_attributes: EndpointAttributes::default(),
       udp_sender,
       dds_cache,
       my_topic_name: i.topic_name,
