@@ -34,7 +34,7 @@ use crate::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::DDSCache,
     duration::Duration,
-    endpoint::{Endpoint, EndpointAttributes, ReliabilityKind},
+    endpoint::EndpointAttributes,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -42,7 +42,7 @@ use crate::{
     time::Timestamp,
   },
 };
-use super::{qos::InlineQos, topic::TopicKind, with_key::datareader::ReaderCommand};
+use super::{qos::InlineQos, with_key::datareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {
@@ -992,24 +992,6 @@ impl HasQoSPolicy for Reader {
 impl RTPSEntity for Reader {
   fn guid(&self) -> GUID {
     self.my_guid
-  }
-}
-
-impl Endpoint for Reader {
-  fn topic_kind(&self) -> TopicKind {
-    self.endpoint_attributes.topic_kind
-  }
-
-  fn reliability_level(&self) -> ReliabilityKind {
-    self.endpoint_attributes.reliability_level
-  }
-
-  fn unicast_locators(&self) -> &Vec<Locator> {
-    &self.endpoint_attributes.unicast_locator_list
-  }
-
-  fn multicast_locators(&self) -> &Vec<Locator> {
-    &self.endpoint_attributes.multicast_locator_list
   }
 }
 

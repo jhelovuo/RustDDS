@@ -26,7 +26,7 @@ use crate::{
     cache_change::CacheChange,
     dds_cache::DDSCache,
     duration::Duration,
-    endpoint::{Endpoint, EndpointAttributes, ReliabilityKind},
+    endpoint::EndpointAttributes,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -38,7 +38,6 @@ use super::{
   qos::{policy, QosPolicies},
   rtps_reader_proxy::RtpsReaderProxy,
   statusevents::*,
-  topic::TopicKind,
 };
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1055,24 +1054,6 @@ impl Writer {
 impl RTPSEntity for Writer {
   fn guid(&self) -> GUID {
     self.my_guid
-  }
-}
-
-impl Endpoint for Writer {
-  fn topic_kind(&self) -> TopicKind {
-    self.endpoint_attributes.topic_kind
-  }
-
-  fn reliability_level(&self) -> ReliabilityKind {
-    self.endpoint_attributes.reliability_level
-  }
-
-  fn unicast_locators(&self) -> &Vec<Locator> {
-    &self.endpoint_attributes.unicast_locator_list
-  }
-
-  fn multicast_locators(&self) -> &Vec<Locator> {
-    &self.endpoint_attributes.multicast_locator_list
   }
 }
 
