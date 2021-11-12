@@ -1,11 +1,7 @@
-use std::{self, result};
-
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
 use mio_extras::channel::TrySendError;
 
 /// This is a specialized Result, similar to std::io::Result
-pub type Result<T> = result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// This roughly corresponds to "Return codes" in DDS spec 2.2.1.1 Format and
 /// Conventions
@@ -19,60 +15,66 @@ pub type Result<T> = result::Result<T, Error>;
 /// * `Timeout`  This is normal operation and should be encoded as `Option` or
 ///   `Result`
 /// * `NoData`  This should be encoded as `Option<SomeData>`, not an error code.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
   /// Illegal parameter value.
-  BadParameter {
-    reason: String,
-  },
+  #[error("Bad parameter: {reason}")]
+  BadParameter { reason: String },
+
   /// Unsupported operation. Can only be returned by operations that are
   /// optional.
+  #[error("Unsupported operation")]
   Unsupported,
+
   /// Service ran out of the resources needed to complete the operation.
+  #[error("Out of resources")]
   OutOfResources,
+
   /// Operation invoked on an Entity that is not yet enabled.
+  #[error("Entity not yet enabled")]
   NotEnabled,
+
   /// Application attempted to modify an immutable QosPolicy.
+  #[error("Attempted to modify immutable entity")]
   ImmutablePolicy, // can we check this statically?
+
   /// Application specified a set of policies that are not consistent with each
   /// other.
-  InconsistentPolicy {
-    reason: String,
-  },
+  #[error("Inconsistent policies: {reason}")]
+  InconsistentPolicy { reason: String },
+
   /// A pre-condition for the operation was not met.
-  PreconditionNotMet {
-    precondition: String,
-  },
+  #[error("Precondition not met: {precondition}")]
+  PreconditionNotMet { precondition: String },
+
   /// An operation was invoked on an inappropriate object or at
   /// an inappropriate time (as determined by policies set by the
   /// specification or the Service implementation). There is no
   /// precondition that could be changed to make the operation
   /// succeed.
-  IllegalOperation {
-    reason: String,
-  },
+  #[error("Illegal operation: {reason}")]
+  IllegalOperation { reason: String },
 
   // Our own additions to the DDS spec below:
   /// Synchronization with another thread failed because the [other thread
   /// has exited while holding a lock.](https://doc.rust-lang.org/std/sync/struct.PoisonError.html)
   /// Does not exist in the DDS spec.
+  #[error("Lock poisoned")]
   LockPoisoned,
 
   /// Something that should not go wrong went wrong anyway.
   /// This is usually a bug in RustDDS
-  Internal {
-    reason: String,
-  },
+  #[error("Internal error: {reason}")]
+  Internal { reason: String },
 
-  Io {
-    inner: std::io::Error,
-  },
-  Serialization {
-    reason: String,
-  },
-  Discovery {
-    reason: String,
-  },
+  #[error(transparent)]
+  Io(#[from] std::io::Error),
+
+  #[error("Serialization error: {reason}")]
+  Serialization { reason: String },
+
+  #[error("Discovery error: {reason}")]
+  Discovery { reason: String },
 }
 
 impl Error {
@@ -93,7 +95,7 @@ impl Error {
 #[macro_export]
 macro_rules! log_and_err_precondition_not_met {
   ($err_msg:literal) => {{
-    error!($err_msg);
+    log::error!($err_msg);
     Error::precondition_not_met($err_msg)
   }};
 }
@@ -102,7 +104,7 @@ macro_rules! log_and_err_precondition_not_met {
 #[macro_export]
 macro_rules! log_and_err_internal {
   ($($arg:tt)*) => (
-      { error!($($arg)*);
+      { log::error!($($arg)*);
         Err( Error::Internal{ reason: format!($($arg)*) } )
       }
     )
@@ -116,12 +118,6 @@ macro_rules! log_and_err_discovery {
         Error::Message(format!($($arg)*) )
       }
     )
-}
-
-impl From<std::io::Error> for Error {
-  fn from(e: std::io::Error) -> Error {
-    Error::Io { inner: e }
-  }
 }
 
 impl<T> From<std::sync::PoisonError<T>> for Error {

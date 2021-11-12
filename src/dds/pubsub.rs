@@ -5,7 +5,6 @@ use std::{
 };
 
 use mio_extras::channel as mio_channel;
-use log::error;
 use serde::{de::DeserializeOwned, Serialize};
 use byteorder::LittleEndian;
 use rand::Rng;
