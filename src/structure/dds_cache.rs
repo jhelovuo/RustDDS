@@ -1,6 +1,6 @@
 use std::{
   cmp::max,
-  collections::{BTreeMap, BTreeSet, HashMap},
+  collections::{BTreeMap, HashMap},
   ops::Bound::{Excluded, Included},
 };
 
@@ -204,7 +204,8 @@ impl TopicCache {
 #[derive(Debug)]
 pub struct DDSHistoryCache {
   pub(crate) changes: BTreeMap<Timestamp, CacheChange>,
-  sequence_numbers: BTreeMap<GUID, BTreeSet<SequenceNumber>>,
+  // sequence_numbers is an index to "changes" by GUID and SN
+  sequence_numbers: BTreeMap<GUID, BTreeMap<SequenceNumber,Timestamp>>,
 }
 
 impl DDSHistoryCache {
@@ -218,28 +219,27 @@ impl DDSHistoryCache {
   fn have_sn(&self, cc: &CacheChange) -> bool {
     match self.sequence_numbers.get(&cc.writer_guid) {
       None => false,
-      Some(sn_set) => sn_set.contains(&cc.sequence_number),
+      Some(sn_map) => sn_map.contains_key(&cc.sequence_number),
     }
   }
 
-  fn insert_sn(&mut self, cc: &CacheChange) {
+  fn insert_sn(&mut self, instant: Timestamp, cc: &CacheChange) {
     self
       .sequence_numbers
       .entry(cc.writer_guid)
-      .or_insert_with(|| {
-        let mut s = BTreeSet::new();
-        s.insert(cc.sequence_number);
-        s
-      })
-      .insert(cc.sequence_number);
+      .or_insert_with(|| BTreeMap::new())
+      .insert(cc.sequence_number, instant);
   }
 
   fn remove_sn(&mut self, cc: &CacheChange) {
-    self.sequence_numbers.entry(cc.writer_guid).and_modify(|s| {
-      s.remove(&cc.sequence_number);
-    });
+    let mut emptied = false;
 
-    //TODO: If this makes a SN set empty, remove it from BTreeMap.
+    self.sequence_numbers.entry(cc.writer_guid)
+      .and_modify(|s| { 
+        s.remove(&cc.sequence_number); 
+        emptied = s.is_empty(); 
+      });
+    if emptied { self.sequence_numbers.remove(&cc.writer_guid); } 
   }
 
   pub fn add_change(
@@ -248,14 +248,40 @@ impl DDSHistoryCache {
     cache_change: CacheChange,
   ) -> Option<CacheChange> {
     if self.have_sn(&cache_change) {
-      trace!(
-        "Received duplicate {:?} from {:?}, discarding.",
+      // Got duplicate DATA for a SN that we already have. It should be discarded.
+      //
+      // Excpet that we cannot, because it is apparently legal in Discovery to keep sending with
+      // the same SN the participant announcement. If we drop the duplicates here, the
+      // Discovery DataReader will not get any announcements after the first one, which will
+      // lead to dropping the participant then the lease time expires.
+      // At least eProsma FastRTPS seems to do this.
+      //
+      // See https://github.com/eProsima/Fast-DDS/issues/35
+      // and
+      // RTPS spec 2.5 Section "8.5.3.1 General Approach":
+      // "This is achieved by periodically calling
+      //  StatelessWriter::unsent_changes_reset, which causes the
+      //  StatelessWriter to resend all changes present in its HistoryCache
+      //  to all locators."
+      //
+      // Reading the definition of unsent_changes_reset from "8.4.7.2.4 unsent_changes_reset",
+      // looks like not incrementing SNs is conformant to the spec. 
+      // OTOH, according to testing, e.g. RTI Connext does increment the SN.
+      // Maybe this is a bug in the spec?
+      //
+      // So we update the indexing instant, and receive timestamp.
+      // DataReader has to worry about not giving duplicate SN objects to the application,
+      // unless they are Discovery, in which case Datareader must report updated duplicates.
+      // This design idea is the best one I could think of today.
+
+      trace!("Received duplicate {:?} from {:?}, updating timestamp.",
         cache_change.sequence_number,
         cache_change.writer_guid
       );
       Some(cache_change)
     } else {
-      self.insert_sn(&cache_change);
+      // This is a new (to us) SequenceNumber, this is the default processing path.
+      self.insert_sn( *instant, &cache_change );
       let result = self.changes.insert(*instant, cache_change);
       match result {
         None => None, // all is good. timestamp was not inserted before.
