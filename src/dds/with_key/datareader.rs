@@ -2,6 +2,7 @@ use std::{
   io,
   marker::PhantomData,
   sync::{Arc, RwLock},
+  collections::BTreeMap,
 };
 
 //use itertools::Itertools;
@@ -32,8 +33,9 @@ use crate::{
     dds_cache::DDSCache,
     duration::Duration,
     entity::RTPSEntity,
-    guid::{EntityId, GUID},
+    guid::{EntityId, GUID, },
     time::Timestamp,
+    sequence_number::SequenceNumber,
   },
 };
 
@@ -122,6 +124,7 @@ pub struct DataReader<
 
   datasample_cache: DataSampleCache<D>,
   latest_instant: Timestamp,
+   latest_sequence_number: BTreeMap<GUID,SequenceNumber>,
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
@@ -193,6 +196,7 @@ where
       // added by the reader.
       my_topic: topic,
       latest_instant: Timestamp::now(),
+      latest_sequence_number: BTreeMap::new(),
       deserializer_type: PhantomData,
       discovery_command,
       status_receiver: StatusReceiver::new(status_channel_rec),
@@ -645,119 +649,139 @@ where
       &Timestamp::now(),
     );
 
-    for (
-      instant,
-      CacheChange {
-        writer_guid,
-        sequence_number: _,
-        source_timestamp,
-        data_value,
-      },
-    ) in cache_changes
+    // TODO: Sort cache changes by sequence numbers. The current implementation will discard
+    // samples, if the changes are out of order, even if none are missing.
+
+    for ( instant, 
+          CacheChange { writer_guid, sequence_number, source_timestamp, data_value, }, ) 
+    in cache_changes
     {
       self.latest_instant = instant; // update our time pointer
+      // what was the latest
+      let latest_sequence_number_have_already 
+        = self.latest_sequence_number.get(writer_guid);
 
-      match data_value {
-        DDSData::DisposeByKey {
-          key: serialized_key,
-          ..
-        } => {
-          // TODO: Should be parameterizable by DeserializerAdapter
-          match DA::key_from_bytes(
-            &serialized_key.value,
-            serialized_key.representation_identifier,
-          ) {
-            Ok(key) => {
-              self
-                .datasample_cache
-                .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
-            }
-            Err(e) => {
+      // Check that SequenceNumber always goes forward.
+      if latest_sequence_number_have_already
+            .map( |latest| latest >= sequence_number)
+            .unwrap_or(false)
+          && writer_guid.entity_id != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
+          // RTPS spec weirdness: It is legal to send periodic SPDP announcements with
+          // the same SequenceNumber, so we make an axception for it here so that
+          // Discovery keeps seeing them, and does not timeout.
+      {
+        // we have seen this sequence_number (or larger) already.
+
+      } else {
+        // normal case: sequence_number not seen before
+        // first, update our last-seen-pointer
+        self.latest_sequence_number.insert(*writer_guid, *sequence_number);
+
+        // deserialize into datasample cache              
+        match data_value {
+          DDSData::Data { serialized_payload } => {
+            // what is our data serialization format (representation identifier) ?
+            if let Some(recognized_rep_id) = DA::supported_encodings()
+              .iter()
+              .find(|r| **r == serialized_payload.representation_identifier)
+            {
+              match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
+                Ok(payload) => self.datasample_cache.add_sample(
+                  Ok(payload),
+                  *writer_guid,
+                  instant,
+                  *source_timestamp,
+                ),
+                Err(e) => {
+                  error!(
+                    "Failed to deserialize bytes: {}, Topic = {}, Type = {:?}",
+                    e,
+                    self.my_topic.name(),
+                    self.my_topic.get_type()
+                  );
+                  debug!("Bytes were {:?}", &serialized_payload.value);
+                  continue; // skip this sample
+                }
+              }
+            } else {
               warn!(
-                "Failed to deserialize key {}, Topic = {}, Type = {:?}",
-                e,
-                self.my_topic.name(),
-                self.my_topic.get_type()
+                "Unknown representation id {:?}.",
+                serialized_payload.representation_identifier
               );
-              debug!("Bytes were {:?}", &serialized_key.value);
-              continue; // skip this sample
+              debug!("Serialized payload was {:?}", &serialized_payload);
+              continue; // skip this sample, as we cannot decode it
             }
-          }
-        }
+          } 
 
-        DDSData::DisposeByKeyHash { key_hash, .. } => {
-          /* TODO: Instance to be disposed could be specified by serialized payload
-           * also, not only key_hash? */
-          match self.datasample_cache.key_by_hash(*key_hash) {
-            Some(key) => {
-              self
-                .datasample_cache
-                .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
-            }
-            /* TODO: How to get source timestamps other then None ?? */
-            None => warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash),
-          }
-        }
-        DDSData::Data { serialized_payload } => {
-          // what is our data serialization format (representation identifier) ?
-          if let Some(recognized_rep_id) = DA::supported_encodings()
-            .iter()
-            .find(|r| **r == serialized_payload.representation_identifier)
-          {
-            match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
-              Ok(payload) => self.datasample_cache.add_sample(
-                Ok(payload),
-                *writer_guid,
-                instant,
-                *source_timestamp,
-              ),
+          DDSData::DisposeByKey {
+            key: serialized_key,
+            ..
+          } => {
+            // TODO: Should be parameterizable by DeserializerAdapter
+            match DA::key_from_bytes(
+              &serialized_key.value,
+              serialized_key.representation_identifier,
+            ) {
+              Ok(key) => {
+                self
+                  .datasample_cache
+                  .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
+              }
               Err(e) => {
-                error!(
-                  "Failed to deserialize bytes: {}, Topic = {}, Type = {:?}",
+                warn!(
+                  "Failed to deserialize key {}, Topic = {}, Type = {:?}",
                   e,
                   self.my_topic.name(),
                   self.my_topic.get_type()
                 );
-                debug!("Bytes were {:?}", &serialized_payload.value);
+                debug!("Bytes were {:?}", &serialized_key.value);
                 continue; // skip this sample
               }
             }
-          } else {
-            warn!(
-              "Unknown representation id {:?}.",
-              serialized_payload.representation_identifier
-            );
-            debug!("Serialized payload was {:?}", &serialized_payload);
-            continue; // skip this sample, as we cannot decode it
           }
-        } /*
-          DDSData::DataFrags { representation_identifier, bytes_frags } => {
-            // what is our data serialization format (representation identifier) ?
-            if let Some(recognized_rep_id) =
-                DA::supported_encodings().iter().find(|r| *r == representation_identifier)
-            {
-              match DA::from_vec_bytes(bytes_frags, *recognized_rep_id) {
-                Ok(payload) => {
-                  self
+
+          DDSData::DisposeByKeyHash { key_hash, .. } => {
+            /* TODO: Instance to be disposed could be specified by serialized payload
+             * also, not only key_hash? */
+            match self.datasample_cache.key_by_hash(*key_hash) {
+              Some(key) => {
+                self
                   .datasample_cache
-                  .add_sample(Ok(payload), *writer_guid, instant, None)
-                }
-                Err(e) => {
-                  error!("Failed to deserialize (DATAFRAG) bytes: {}, Topic = {}, Type = {:?}",
-                          e, self.my_topic.name(), self.my_topic.get_type() );
-                  //debug!("Bytes were {:?}",&serialized_payload.value);
-                  continue // skip this sample
-                }
+                  .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
               }
-            } else {
-                warn!("Unknown representation id {:?}.", representation_identifier);
-                //debug!("Serialized payload was {:?}", &serialized_payload);
-                continue // skip this sample, as we cannot decode it
+              /* TODO: How to get source timestamps other then None ?? */
+              None => warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash),
             }
-          } */
-      }
-    }
-  }
+          }
+          /*
+            DDSData::DataFrags { representation_identifier, bytes_frags } => {
+              // what is our data serialization format (representation identifier) ?
+              if let Some(recognized_rep_id) =
+                  DA::supported_encodings().iter().find(|r| *r == representation_identifier)
+              {
+                match DA::from_vec_bytes(bytes_frags, *recognized_rep_id) {
+                  Ok(payload) => {
+                    self
+                    .datasample_cache
+                    .add_sample(Ok(payload), *writer_guid, instant, None)
+                  }
+                  Err(e) => {
+                    error!("Failed to deserialize (DATAFRAG) bytes: {}, Topic = {}, Type = {:?}",
+                            e, self.my_topic.name(), self.my_topic.get_type() );
+                    //debug!("Bytes were {:?}",&serialized_payload.value);
+                    continue // skip this sample
+                  }
+                }
+              } else {
+                  warn!("Unknown representation id {:?}.", representation_identifier);
+                  //debug!("Serialized payload was {:?}", &serialized_payload);
+                  continue // skip this sample, as we cannot decode it
+              }
+            } */
+        } // match
+      } // if seen already
+    } // for loop
+  } // fn
 
   fn infer_key(
     &self,
