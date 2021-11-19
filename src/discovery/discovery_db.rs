@@ -121,6 +121,12 @@ impl DiscoveryDB {
 
     new_participant
   }
+  pub fn participant_is_alive(&mut self, guid_prefix: GuidPrefix) {
+    match self.participant_last_life_signs.get_mut(&guid_prefix) {
+      Some(ts) => *ts = Instant::now(),
+      None => info!("Participant alive update for unknown {:?}. This is normal, if the message does not repeat.", guid_prefix),
+    }
+  }
 
   pub fn remove_participant(&mut self, guid_prefix: GuidPrefix) {
     info!("removing participant {:?}", guid_prefix);

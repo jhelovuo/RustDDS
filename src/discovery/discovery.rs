@@ -97,6 +97,7 @@ pub(crate) struct Discovery {
   discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
   // Discovery gets commands from dp_event_loop from this channel
   discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
+  spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
 
   liveliness_state: LivelinessState,
 
@@ -175,6 +176,7 @@ impl Discovery {
     discovery_started_sender: std::sync::mpsc::Sender<Result<()>>,
     discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
+    spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
   ) -> Result<Discovery> {
     // helper macro to handle initialization failures.
     macro_rules! try_construct {
@@ -204,6 +206,16 @@ impl Discovery {
       "Failed to register Discovery poll. {:?}"
     );
 
+    try_construct!(
+      poll.register(
+        &spdp_liveness_receiver,
+        SPDP_LIVENESS_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      ),
+      "Failed to register Discovery poll. {:?}"
+    );
+
     let discovery_subscriber_qos = Discovery::subscriber_qos();
     let discovery_publisher_qos = Discovery::publisher_qos();
 
@@ -217,6 +229,8 @@ impl Discovery {
       domain_participant.create_publisher(&discovery_publisher_qos),
       "Unable to create Discovery Publisher. {:?}"
     );
+
+
 
     // Participant
     let dcps_participant_topic = try_construct!(
@@ -506,7 +520,8 @@ impl Discovery {
       discovery_started_sender,
       discovery_updated_sender,
       discovery_command_receiver,
-
+      spdp_liveness_receiver,
+      
       liveliness_state: LivelinessState::new(),
 
       discovery_subscriber,
@@ -738,6 +753,17 @@ impl Discovery {
             self
               .dcps_participant_message_timer
               .set_timeout(Discovery::CHECK_PARTICIPANT_MESSAGES, ());
+          }
+          SPDP_LIVENESS_TOKEN => {
+            while let Ok(guid_prefix) = self.spdp_liveness_receiver.try_recv() {
+              match self.discovery_db.write() {
+                Ok(mut db) => db.participant_is_alive(guid_prefix),
+                Err(e) => {
+                  error!("DiscoveryDB is poisoned. {:?}", e);
+                  return;
+                }
+              }
+            }
           }
           other_token => {
             error!("discovery event loop got token: {:?}", other_token);

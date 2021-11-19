@@ -16,6 +16,7 @@ use crate::{
   dds::{
     dp_event_loop::DPEventLoop, pubsub::*, qos::*, reader::*, topic::*, typedesc::*,
     values::result::*, writer::*,
+    data_types::*,
   },
   discovery::{
     data_types::topic_data::DiscoveredTopicData,
@@ -51,23 +52,35 @@ impl DomainParticipant {
     // stop.
     let (djh_sender, djh_receiver) = mio_channel::channel();
 
-    let mut dpd = DomainParticipantDisc::new(domain_id, djh_receiver)?;
+    // Channel is used to notify Discovery of (duplicate) SPDP messages from the wire.
+    let (spdp_liveness_sender, spdp_liveness_receiver) = mio_channel::sync_channel(8);
+    
+    // Discovery thread receives and decodes updates from the wire.
+    // It updates data to DiscoveryDB, and sends notifications to dp_event_loop,
+    // which owns the Readers and Writers and notifies them also.
+    let (discovery_updated_sender, discovery_update_notification_receiver) =
+      mio_channel::sync_channel::<DiscoveryNotificationType>(32);
+    
+    // This channel is used to:
+    // * local DataReader and DataWriter notify Discovery on drop() so that
+    // Discovery knows we no longer have them.
+    // * Participant commands Discovery to assert liveness, i.e. send liveness
+    // message to remote participants.
+    // * Discovery commands Discovery (thread) to terminate on exit.
+    let (discovery_command_sender, discovery_command_receiver) =
+      mio_channel::sync_channel::<DiscoveryCommand>(64);
 
-    let discovery_updated_sender = match dpd.discovery_updated_sender.take() {
-      Some(dus) => dus,
-      // this error should never happen
-      None => return log_and_err_internal!("Unable to receive Discovery Updated Sender."),
-    };
-
-    let discovery_command_receiver = match dpd.discovery_command_receiver.take() {
-      Some(dsr) => dsr,
-      // this error should never happen
-      None => return log_and_err_internal!("Unable to get Discovery Command Receiver."),
-    };
-
-    let dp = DomainParticipant {
-      dpi: Arc::new(Mutex::new(dpd)),
-    };
+    let dp =  
+      DomainParticipant {
+        dpi: Arc::new( Mutex::new(
+          DomainParticipantDisc::new(
+            domain_id, 
+            djh_receiver, 
+            discovery_update_notification_receiver, 
+            discovery_command_sender,
+            spdp_liveness_sender)?
+          )),
+      };
 
     let (discovery_started_sender, discovery_started_receiver) =
       std::sync::mpsc::channel::<Result<()>>();
@@ -84,6 +97,7 @@ impl DomainParticipant {
           discovery_started_sender,
           discovery_updated_sender,
           discovery_command_receiver,
+          spdp_liveness_receiver,
         ) {
           discovery.discovery_event_loop() // run the event loop
         }
@@ -361,9 +375,9 @@ impl RTPSEntity for DomainParticipantWeak {
 pub(crate) struct DomainParticipantDisc {
   dpi: Arc<Mutex<DomainParticipantInner>>,
   // Discovery control
-  discovery_updated_sender: Option<mio_channel::SyncSender<DiscoveryNotificationType>>,
-  discovery_command_receiver: Option<mio_channel::Receiver<DiscoveryCommand>>,
-  discovery_command_channel: mio_channel::SyncSender<DiscoveryCommand>,
+  //discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
+  //discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
+  discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
   discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
 }
 
@@ -371,20 +385,20 @@ impl DomainParticipantDisc {
   pub fn new(
     domain_id: u16,
     discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
+    discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+    discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
+    spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
   ) -> Result<DomainParticipantDisc> {
-    let (discovery_update_notification_sender, discovery_update_notification_receiver) =
-      mio_channel::sync_channel::<DiscoveryNotificationType>(100);
 
-    let dpi = DomainParticipantInner::new(domain_id, discovery_update_notification_receiver)?;
-
-    let (discovery_command_sender, discovery_command_receiver) =
-      mio_channel::sync_channel::<DiscoveryCommand>(10);
+    let dpi = DomainParticipantInner::new(domain_id, 
+      discovery_update_notification_receiver, 
+      spdp_liveness_sender)?;
 
     Ok(DomainParticipantDisc {
       dpi: Arc::new(Mutex::new(dpi)),
-      discovery_updated_sender: Some(discovery_update_notification_sender),
-      discovery_command_receiver: Some(discovery_command_receiver),
-      discovery_command_channel: discovery_command_sender,
+      //discovery_updated_sender,
+      //discovery_command_receiver,
+      discovery_command_sender,
       discovery_join_handle,
     })
   }
@@ -398,7 +412,7 @@ impl DomainParticipantDisc {
       .dpi
       .lock()
       .unwrap()
-      .create_publisher(dp, qos, self.discovery_command_channel.clone())
+      .create_publisher(dp, qos, self.discovery_command_sender.clone())
   }
 
   pub fn create_subscriber(
@@ -410,7 +424,7 @@ impl DomainParticipantDisc {
       .dpi
       .lock()
       .unwrap()
-      .create_subscriber(dp, qos, self.discovery_command_channel.clone())
+      .create_subscriber(dp, qos, self.discovery_command_sender.clone())
   }
 
   pub fn create_topic(
@@ -463,7 +477,7 @@ impl DomainParticipantDisc {
     // the discovery command mutates a field which is only read
     // by writers with that particular QoS.
     self
-      .discovery_command_channel
+      .discovery_command_sender
       .send(DiscoveryCommand::ManualAssertLiveliness)
       .or_else(|e| {
         log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
@@ -475,7 +489,7 @@ impl Drop for DomainParticipantDisc {
   fn drop(&mut self) {
     debug!("Sending Discovery Stop signal.");
     match self
-      .discovery_command_channel
+      .discovery_command_sender
       .send(DiscoveryCommand::StopDiscovery)
     {
       Ok(_) => (),
@@ -550,6 +564,7 @@ impl DomainParticipantInner {
   fn new(
     domain_id: u16,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+    spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
   ) -> Result<DomainParticipantInner> {
     let mut listeners = HashMap::new();
 
@@ -675,6 +690,7 @@ impl DomainParticipantInner {
           },
           stop_poll_receiver,
           discovery_update_notification_receiver,
+          spdp_liveness_sender,
         );
         dp_event_loop.event_loop()
       })?;

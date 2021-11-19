@@ -93,6 +93,7 @@ impl DPEventLoop {
     remove_writer_receiver: TokenReceiverPair<GUID>,
     stop_poll_receiver: mio_channel::Receiver<()>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+    spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
   ) -> DPEventLoop {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_receiver) =
@@ -171,7 +172,7 @@ impl DPEventLoop {
       )
       .expect("Failed to register reader update notification.");
 
-    // port number 0 menas OS chooses an available port number.
+    // port number 0 means OS chooses an available port number.
     let udp_sender = UDPSender::new(0).expect("UDPSender construction fail"); // TODO
 
     DPEventLoop {
@@ -181,7 +182,8 @@ impl DPEventLoop {
       discovery_db,
       udp_listeners,
       udp_sender: Rc::new(udp_sender),
-      message_receiver: MessageReceiver::new(participant_guid_prefix, acknack_sender),
+      message_receiver: 
+        MessageReceiver::new(participant_guid_prefix, acknack_sender, spdp_liveness_sender,),
       add_reader_receiver,
       remove_reader_receiver,
       add_writer_receiver,

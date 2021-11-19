@@ -40,6 +40,10 @@ pub(crate) struct MessageReceiver {
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this
   // to locate RTPSReaderProxy if negative acknack.
   acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
+  // We send notification of remote DomainPArticiapnt liveness to Discovery to
+  // bypass Reader. DDSCache, DatasampleCache, and DataReader, because thse will drop
+  // reperated messages with duplicate SequenceNumbers, but Discovery needs to see them.
+  spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>, 
 
   own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
@@ -58,10 +62,12 @@ impl MessageReceiver {
   pub fn new(
     participant_guid_prefix: GuidPrefix,
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
+    spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
   ) -> MessageReceiver {
     MessageReceiver {
       available_readers: BTreeMap::new(),
       acknack_sender,
+      spdp_liveness_sender,
       own_guid_prefix: participant_guid_prefix,
 
       source_version: ProtocolVersion::THIS_IMPLEMENTATION,
@@ -229,6 +235,8 @@ impl MessageReceiver {
     let mr_state = self.give_message_receiver_info();
     match submessage {
       EntitySubmessage::Data(data, data_flags) => {
+        let writer_entity_id = data.writer_id;
+        let source_guid_prefix = mr_state.source_guid_prefix;
         // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched
         // readers
         if data.reader_id == EntityId::ENTITYID_UNKNOWN {
@@ -256,6 +264,11 @@ impl MessageReceiver {
           }
         } else if let Some(target_reader) = self.reader_mut(data.reader_id) {
           target_reader.handle_data_msg(data, data_flags, mr_state);
+        }
+        // bypass lane fro SPDP messages
+        if writer_entity_id == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
+          self.spdp_liveness_sender.try_send(source_guid_prefix)
+            .unwrap_or_else(|e| debug!("spdp_liveness_sender.try_send(): {:?}. Is Discovery alive?",e));
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
