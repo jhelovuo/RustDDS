@@ -80,7 +80,7 @@ impl DiscoveryDB {
     let guid = data.participant_guid;
 
     // sanity check
-    if guid.entity_id != EntityId::ENTITYID_PARTICIPANT {
+    if guid.entity_id != EntityId::PARTICIPANT {
       error!(
         "Discovered participant GUID entity_id is not for participant: {:?}",
         guid
@@ -328,7 +328,7 @@ impl DiscoveryDB {
             )
           })
           .unwrap_or_else(|| {
-            if guid.guid_prefix != GuidPrefix::GUIDPREFIX_UNKNOWN {
+            if guid.guid_prefix != GuidPrefix::UNKNOWN {
               // This is normal, since we might not know about the participant yet.
               debug!(
                 "No remote participant known for {:?}\nSearched with {:?} in {:?}",

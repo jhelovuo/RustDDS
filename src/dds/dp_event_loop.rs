@@ -533,28 +533,28 @@ impl DPEventLoop {
 
       for (writer_eid, reader_eid, endpoint) in &[
         (
-          EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
-          EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+          EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
+          EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
           BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR,
         ),
         (
-          EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
-          EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+          EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
+          EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
           BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
         ),
         (
-          EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-          EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+          EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
           BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR,
         ),
         (
-          EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
-          EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
+          EntityId::SEDP_BUILTIN_TOPIC_WRITER,
+          EntityId::SEDP_BUILTIN_TOPIC_READER,
           BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR,
         ),
         (
-          EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-          EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+          EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+          EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
           BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER,
         ),
       ] {
@@ -564,7 +564,7 @@ impl DPEventLoop {
           // special case by RTPS 2.3 spec Section
           // "8.4.13.3 BuiltinParticipantMessageWriter and
           // BuiltinParticipantMessageReader QoS"
-          if *reader_eid == EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
+          if *reader_eid == EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
             && discovered_participant
               .builtin_endpoint_qos
               .map(|beq| beq.is_best_effort())
@@ -579,14 +579,14 @@ impl DPEventLoop {
           {
             let mut reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
 
-            if *writer_eid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
+            if *writer_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
               // Simple Particiapnt Discovery Protocol (SPDP) writer is special,
               // different from SEDP writers
               qos = Discovery::create_spdp_patricipant_qos(); // different QoS
                                                               // adding a multicast reader
               reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
-                GuidPrefix::GUIDPREFIX_UNKNOWN,
-                EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+                GuidPrefix::UNKNOWN,
+                EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
               );
 
               reader_proxy.multicast_locator_list = get_local_multicast_locators(
@@ -609,34 +609,34 @@ impl DPEventLoop {
       // EntityIds are for announcers
       for (writer_eid, reader_eid, endpoint) in &[
         (
-          EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
-          EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+          EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
+          EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
           BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER,
         ),
         (
-          EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
-          EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+          EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
+          EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
           BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
         ),
         (
-          EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
-          EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+          EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
           BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
         ),
         (
-          EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
-          EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
+          EntityId::SEDP_BUILTIN_TOPIC_WRITER,
+          EntityId::SEDP_BUILTIN_TOPIC_READER,
           BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER,
         ),
         (
-          EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-          EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+          EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+          EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
           BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER,
         ),
       ] {
         if let Some(reader) = self.message_receiver.available_readers.get_mut(reader_eid) {
           debug!("try update_discovery_reader - {:?}", reader.topic_name());
-          let qos = if *reader_eid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER {
+          let qos = if *reader_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
             Discovery::create_spdp_patricipant_qos()
           } else {
             Discovery::publisher_qos()
@@ -1017,7 +1017,7 @@ mod tests {
 
   //     //new_reader.set_qos(&somePolicies).unwrap();
   //     new_reader.matched_writer_add(GUID::default(),
-  // EntityId::ENTITYID_UNKNOWN, vec![], vec![]);     reader_guids.
+  // EntityId::UNKNOWN, vec![], vec![]);     reader_guids.
   // push(new_reader.guid().clone());     info!("\nSent reader number {}:
   // {:?}\n", i, &new_reader);     sender_add_reader.send(new_reader).
   // unwrap();     std::thread::sleep(Duration::from_millis(100));

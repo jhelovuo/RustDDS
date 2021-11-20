@@ -76,8 +76,8 @@ mod tests {
   {
       acknack,
       AckNack {
-          reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-          writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          reader_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
+          writer_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
           reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(0)),
           count: 1,
       },

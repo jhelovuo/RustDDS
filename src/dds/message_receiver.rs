@@ -72,8 +72,8 @@ impl MessageReceiver {
 
       source_version: ProtocolVersion::THIS_IMPLEMENTATION,
       source_vendor_id: VendorId::VENDOR_UNKNOWN,
-      source_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
-      dest_guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
+      source_guid_prefix: GuidPrefix::UNKNOWN,
+      dest_guid_prefix: GuidPrefix::UNKNOWN,
       unicast_reply_locator_list: vec![Locator::Invalid],
       multicast_reply_locator_list: vec![Locator::Invalid],
       timestamp: None,
@@ -86,8 +86,8 @@ impl MessageReceiver {
   pub fn reset(&mut self) {
     self.source_version = ProtocolVersion::THIS_IMPLEMENTATION;
     self.source_vendor_id = VendorId::VENDOR_UNKNOWN;
-    self.source_guid_prefix = GuidPrefix::GUIDPREFIX_UNKNOWN;
-    self.dest_guid_prefix = GuidPrefix::GUIDPREFIX_UNKNOWN;
+    self.source_guid_prefix = GuidPrefix::UNKNOWN;
+    self.dest_guid_prefix = GuidPrefix::UNKNOWN;
     self.unicast_reply_locator_list.clear();
     self.multicast_reply_locator_list.clear();
     self.timestamp = None;
@@ -225,7 +225,7 @@ impl MessageReceiver {
 
   fn handle_entity_submessage(&mut self, submessage: EntitySubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix
-      && self.dest_guid_prefix != GuidPrefix::GUIDPREFIX_UNKNOWN
+      && self.dest_guid_prefix != GuidPrefix::UNKNOWN
     {
       debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
         self.dest_guid_prefix, self.own_guid_prefix);
@@ -237,9 +237,9 @@ impl MessageReceiver {
       EntitySubmessage::Data(data, data_flags) => {
         let writer_entity_id = data.writer_id;
         let source_guid_prefix = mr_state.source_guid_prefix;
-        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched
+        // If reader_id == UNKNOWN, message should be sent to all matched
         // readers
-        if data.reader_id == EntityId::ENTITYID_UNKNOWN {
+        if data.reader_id == EntityId::UNKNOWN {
           trace!(
             "handle_entity_submessage DATA from unknown. writer_id = {:?}",
             &data.writer_id
@@ -252,8 +252,8 @@ impl MessageReceiver {
             // presupposed writer (proxy) to the built-in reader as it is created?
             .filter(|r| {
               r.contains_writer(data.writer_id)
-                || (data.writer_id == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
-                  && r.entity_id() == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER)
+                || (data.writer_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
+                  && r.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
             })
           {
             debug!(
@@ -266,15 +266,15 @@ impl MessageReceiver {
           target_reader.handle_data_msg(data, data_flags, mr_state);
         }
         // bypass lane fro SPDP messages
-        if writer_entity_id == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER {
+        if writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
           self.spdp_liveness_sender.try_send(source_guid_prefix)
             .unwrap_or_else(|e| debug!("spdp_liveness_sender.try_send(): {:?}. Is Discovery alive?",e));
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
-        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched
+        // If reader_id == UNKNOWN, message should be sent to all matched
         // readers
-        if heartbeat.reader_id == EntityId::ENTITYID_UNKNOWN {
+        if heartbeat.reader_id == EntityId::UNKNOWN {
           for reader in self
             .available_readers
             .values_mut()
@@ -319,9 +319,9 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
-        // If reader_id == ENTITYID_UNKNOWN, message should be sent to all matched
+        // If reader_id == UNKNOWN, message should be sent to all matched
         // readers
-        if heartbeatfrag.reader_id == EntityId::ENTITYID_UNKNOWN {
+        if heartbeatfrag.reader_id == EntityId::UNKNOWN {
           for reader in self
             .available_readers
             .values_mut()

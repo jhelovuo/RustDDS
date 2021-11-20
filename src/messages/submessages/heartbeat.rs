@@ -20,7 +20,7 @@ pub struct Heartbeat {
   /// Identifies the Reader Entity that is being informed of the
   /// availability of a set of sequence numbers.
   ///
-  /// Can be set to ENTITYID_UNKNOWN to indicate all readers
+  /// Can be set to UNKNOWN to indicate all readers
   /// for the writer that sent the message.
   pub reader_id: EntityId,
 
@@ -75,8 +75,8 @@ mod tests {
   {
       heartbeat,
       Heartbeat {
-          reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-          writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          reader_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
+          writer_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
           first_sn: SequenceNumber::from(42),
           last_sn: SequenceNumber::from(7),
           count: 9,

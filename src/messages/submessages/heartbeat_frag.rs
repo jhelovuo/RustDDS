@@ -14,7 +14,7 @@ use crate::structure::{
 #[derive(Debug, PartialEq, Clone, Readable, Writable)]
 pub struct HeartbeatFrag {
   /// Identifies the Reader Entity that is being informed of the availability
-  /// of fragments. Can be set to ENTITYID_UNKNOWN to indicate all readers for
+  /// of fragments. Can be set to UNKNOWN to indicate all readers for
   /// the writer that sent the message.
   pub reader_id: EntityId,
 
@@ -44,8 +44,8 @@ mod tests {
   {
       heartbeat_frag,
       HeartbeatFrag {
-          reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-          writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          reader_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
+          writer_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
           writer_sn: SequenceNumber::from(42),
           last_fragment_num: FragmentNumber::from(99_u32),
           count: 6,

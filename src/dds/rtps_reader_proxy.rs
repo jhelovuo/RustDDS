@@ -62,7 +62,7 @@ impl RtpsReaderProxy {
   pub fn new(remote_reader_guid: GUID, qos: QosPolicies) -> RtpsReaderProxy {
     RtpsReaderProxy {
       remote_reader_guid,
-      remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
+      remote_group_entity_id: EntityId::UNKNOWN,
       unicast_locator_list: Vec::default(),
       multicast_locator_list: Vec::default(),
       expects_in_line_qos: false,
@@ -91,7 +91,7 @@ impl RtpsReaderProxy {
 
     RtpsReaderProxy {
       remote_reader_guid: reader.guid,
-      remote_group_entity_id: EntityId::ENTITYID_UNKNOWN, //TODO
+      remote_group_entity_id: EntityId::UNKNOWN, //TODO
       unicast_locator_list,
       multicast_locator_list,
       expects_in_line_qos: false,
@@ -127,7 +127,7 @@ impl RtpsReaderProxy {
 
     RtpsReaderProxy {
       remote_reader_guid: discovered_reader_data.reader_proxy.remote_reader_guid,
-      remote_group_entity_id: EntityId::ENTITYID_UNKNOWN, //TODO
+      remote_group_entity_id: EntityId::UNKNOWN, //TODO
       unicast_locator_list,
       multicast_locator_list,
       expects_in_line_qos: discovered_reader_data.reader_proxy.expects_inline_qos,
@@ -158,7 +158,7 @@ impl RtpsReaderProxy {
     unicast_locators.push(locator);
     RtpsReaderProxy {
       remote_reader_guid: GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_USER_DEFINED),
-      remote_group_entity_id: EntityId::ENTITYID_UNKNOWN,
+      remote_group_entity_id: EntityId::UNKNOWN,
       unicast_locator_list: unicast_locators,
       multicast_locator_list: Vec::default(),
       expects_in_line_qos: false,

@@ -44,8 +44,8 @@ mod tests {
   {
       nack_frag,
       NackFrag {
-          reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-          writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          reader_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
+          writer_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
           writer_sn: SequenceNumber::from(42),
           fragment_number_state: FragmentNumberSet::new_empty(FragmentNumber::from(1000u32)),
           count: 6,

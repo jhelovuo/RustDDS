@@ -268,7 +268,7 @@ impl Message {
 impl Default for Message {
   fn default() -> Self {
     Message {
-      header: Header::new(GuidPrefix::GUIDPREFIX_UNKNOWN),
+      header: Header::new(GuidPrefix::UNKNOWN),
       submessages: vec![],
     }
   }

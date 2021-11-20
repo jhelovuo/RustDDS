@@ -1303,7 +1303,7 @@ mod tests {
 
     new_reader.matched_writer_add(
       writer_guid,
-      EntityId::ENTITYID_UNKNOWN,
+      EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
@@ -1436,7 +1436,7 @@ mod tests {
     };
     reader.matched_writer_add(
       writer_guid,
-      EntityId::ENTITYID_UNKNOWN,
+      EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
@@ -1672,7 +1672,7 @@ mod tests {
     mr_state.source_guid_prefix = writer_guid.guid_prefix;
     reader.matched_writer_add(
       writer_guid.clone(),
-      EntityId::ENTITYID_UNKNOWN,
+      EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );

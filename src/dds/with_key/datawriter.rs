@@ -132,7 +132,7 @@ where
   ) -> Result<DataWriter<D, SA>> {
     let entity_id = match guid {
       Some(g) => g.entity_id,
-      None => EntityId::ENTITYID_UNKNOWN,
+      None => EntityId::UNKNOWN,
     };
 
     let dp = match publisher.participant() {

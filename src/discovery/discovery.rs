@@ -246,13 +246,13 @@ impl Discovery {
     let dcps_participant_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<SpdpDiscoveredParticipantData,PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>>(
         dcps_participant_topic.clone(),
-        EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+        EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
         None,
       ) ,"Unable to create DataReader for DCPSParticipant. {:?}");
 
     let dcps_participant_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<SpdpDiscoveredParticipantData>(
-        EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+        EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
         dcps_participant_topic.clone(),
         None,
       ),
@@ -313,7 +313,7 @@ impl Discovery {
     let dcps_subscription_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
         dcps_subscription_topic.clone(),
-        EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
         None,
       ) ,"Unable to create DataReader for DCPSSubscription. {:?}");
 
@@ -329,7 +329,7 @@ impl Discovery {
 
     let dcps_subscription_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredReaderData>(
-        EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
+        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
         dcps_subscription_topic.clone(),
         None,
       ),
@@ -363,7 +363,7 @@ impl Discovery {
     let dcps_publication_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         dcps_publication_topic.clone(),
-        EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+        EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
         None,
       ) ,"Unable to create DataReader for DCPSPublication. {:?}");
 
@@ -379,7 +379,7 @@ impl Discovery {
 
     let dcps_publication_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredWriterData>(
-        EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+        EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
         dcps_publication_topic.clone(),
         None,
       ),
@@ -413,7 +413,7 @@ impl Discovery {
     let dcps_topic_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         dcps_topic_topic.clone(),
-        EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
+        EntityId::SEDP_BUILTIN_TOPIC_READER,
         None,
       ) ,"Unable to create DataReader for DCPSTopic. {:?}");
 
@@ -429,7 +429,7 @@ impl Discovery {
 
     let dcps_topic_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredTopicData>(
-        EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
+        EntityId::SEDP_BUILTIN_TOPIC_WRITER,
         dcps_topic_topic.clone(),
         None,
       ),
@@ -476,7 +476,7 @@ impl Discovery {
     let dcps_participant_message_reader = try_construct!(
       discovery_subscriber.create_datareader_cdr_with_entityid::<ParticipantMessageData>(
         participant_message_topic.clone(),
-        EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
         None,
       ),
       "Unable to create DCPSParticipantMessage reader. {:?}"
@@ -494,7 +494,7 @@ impl Discovery {
 
     let dcps_participant_message_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<ParticipantMessageData>(
-        EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
         participant_message_topic.clone(),
         None,
       ),
@@ -809,8 +809,8 @@ impl Discovery {
     // insert a (fake) reader proxy as multicast address, so discovery notifications
     // are sent somewhere
     let reader_guid = GUID::new_with_prefix_and_id(
-      GuidPrefix::GUIDPREFIX_UNKNOWN,
-      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+      GuidPrefix::UNKNOWN,
+      EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
     );
 
     let mut reader_proxy = ReaderProxy::new(reader_guid);
@@ -830,7 +830,7 @@ impl Discovery {
 
     let writer_guid = GUID::new_with_prefix_and_id(
       dp.guid().guid_prefix,
-      EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+      EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
     );
 
     let writer_proxy = WriterProxy::new(
@@ -1231,11 +1231,11 @@ impl Discovery {
       // filtering out discoveries own readers
       .filter(|p| {
         let eid = p.reader_proxy.remote_reader_guid.entity_id;
-        eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER
-          && eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER
-          && eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER
-          && eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER
-          && eid != EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
+        eid != EntityId::SPDP_BUILTIN_PARTICIPANT_READER
+          && eid != EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER
+          && eid != EntityId::SEDP_BUILTIN_PUBLICATIONS_READER
+          && eid != EntityId::SEDP_BUILTIN_TOPIC_READER
+          && eid != EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
       })
     {
       match self.dcps_subscription_writer.write(data.clone(), None) {
@@ -1251,11 +1251,11 @@ impl Discovery {
     for data in datas.filter(|p| {
       let eid = p.writer_proxy.remote_writer_guid.entity_id;
 
-      eid != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
-        && eid != EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
-        && eid != EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER
-        && eid != EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER
-        && eid != EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
+      eid != EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
+        && eid != EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
+        && eid != EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER
+        && eid != EntityId::SEDP_BUILTIN_TOPIC_WRITER
+        && eid != EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
     }) {
       match self.dcps_publication_writer.write(data.clone(), None) {
         Ok(_) => (),
@@ -1623,8 +1623,8 @@ mod tests {
 
     let rtps_message = create_rtps_data_message(
       topic_data,
-      EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
-      EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
+      EntityId::SEDP_BUILTIN_TOPIC_READER,
+      EntityId::SEDP_BUILTIN_TOPIC_WRITER,
     );
 
     let udp_sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");

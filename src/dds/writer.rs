@@ -396,7 +396,7 @@ impl Writer {
               partial_message.data_msg(
                 cache_change.clone(),
                 // Now that payload contains Bytes, it is relatively cheap to clone
-                EntityId::ENTITYID_UNKNOWN, // reader
+                EntityId::UNKNOWN, // reader
                 self.my_guid.entity_id,     // writer
                 self.endianness,
               )
@@ -411,7 +411,7 @@ impl Writer {
           let data_hb_message = data_hb_message_builder
             .heartbeat_msg(
               self,
-              EntityId::ENTITYID_UNKNOWN,
+              EntityId::UNKNOWN,
               final_flag,
               liveliness_flag,
             )
@@ -552,7 +552,7 @@ impl Writer {
         .ts_msg(self.endianness, Some(Timestamp::now()))
         .heartbeat_msg(
           self,
-          EntityId::ENTITYID_UNKNOWN,
+          EntityId::UNKNOWN,
           final_flag,
           liveliness_flag,
         )

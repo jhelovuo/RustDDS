@@ -1032,8 +1032,8 @@ mod tests {
     let mut m: Message = Message::default();
 
     let a: AckNack = AckNack {
-      reader_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
-      writer_id: EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+      reader_id: EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+      writer_id: EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
       reader_sn_state: SequenceNumberSet::from_base_and_set(
         SequenceNumber::default(),
         &BTreeSet::new(),

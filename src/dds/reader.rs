@@ -515,7 +515,7 @@ impl Reader {
         if writer_proxy.contains_change(writer_sn) {
           // change already present
           debug!("handle_data_msg already have this seq={:?}", writer_sn);
-          if my_entityid == EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER {
+          if my_entityid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
             debug!("Accepting duplicate message to participant reader.");
             // This is an attmpted workaround to eProsima FastRTPS not
             // incrementing sequence numbers. (eProsime shapes demo 2.1.0 from
@@ -1079,7 +1079,7 @@ mod tests {
 
     reader.matched_writer_add(
       writer_guid,
-      EntityId::ENTITYID_UNKNOWN,
+      EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
@@ -1146,7 +1146,7 @@ mod tests {
 
     new_reader.matched_writer_add(
       writer_guid,
-      EntityId::ENTITYID_UNKNOWN,
+      EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
@@ -1223,7 +1223,7 @@ mod tests {
 
     new_reader.matched_writer_add(
       writer_guid,
-      EntityId::ENTITYID_UNKNOWN,
+      EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );
@@ -1356,7 +1356,7 @@ mod tests {
 
     reader.matched_writer_add(
       writer_guid,
-      EntityId::ENTITYID_UNKNOWN,
+      EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
     );

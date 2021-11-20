@@ -68,8 +68,8 @@ mod tests {
   {
       gap,
       Gap {
-          reader_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
-          writer_id: EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+          reader_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
+          writer_id: EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
           gap_start: SequenceNumber::from(42),
           gap_list: SequenceNumberSet::new_empty(SequenceNumber::from(7))
       },

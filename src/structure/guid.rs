@@ -20,7 +20,7 @@ pub struct GuidPrefix {
 }
 
 impl GuidPrefix {
-  pub const GUIDPREFIX_UNKNOWN: GuidPrefix = GuidPrefix {
+  pub const UNKNOWN: GuidPrefix = GuidPrefix {
     entity_key: [0x00; 12],
   };
 
@@ -42,7 +42,7 @@ impl GuidPrefix {
 
 impl Default for GuidPrefix {
   fn default() -> GuidPrefix {
-    GuidPrefix::GUIDPREFIX_UNKNOWN
+    GuidPrefix::UNKNOWN
   }
 }
 
@@ -167,51 +167,51 @@ pub enum TokenDecode {
 }
 
 impl EntityId {
-  pub const ENTITYID_UNKNOWN: EntityId = EntityId {
+  pub const UNKNOWN: EntityId = EntityId {
     entity_key: [0x00; 3],
     entity_kind: EntityKind::UNKNOWN_USER_DEFINED,
   };
-  pub const ENTITYID_PARTICIPANT: EntityId = EntityId {
+  pub const PARTICIPANT: EntityId = EntityId {
     entity_key: [0x00, 0x00, 0x01],
     entity_kind: EntityKind::PARTICIPANT_BUILT_IN,
   };
-  pub const ENTITYID_SEDP_BUILTIN_TOPIC_WRITER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_TOPIC_WRITER: EntityId = EntityId {
     entity_key: [0x00, 0x00, 0x02],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_SEDP_BUILTIN_TOPIC_READER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_TOPIC_READER: EntityId = EntityId {
     entity_key: [0x00, 0x00, 0x02],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_PUBLICATIONS_WRITER: EntityId = EntityId {
     entity_key: [0x00, 0x00, 0x03],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_PUBLICATIONS_READER: EntityId = EntityId {
     entity_key: [0x00, 0x00, 0x03],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_SUBSCRIPTIONS_WRITER: EntityId = EntityId {
     entity_key: [0x00, 0x00, 0x04],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_SUBSCRIPTIONS_READER: EntityId = EntityId {
     entity_key: [0x00, 0x00, 0x04],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER: EntityId = EntityId {
+  pub const SPDP_BUILTIN_PARTICIPANT_WRITER: EntityId = EntityId {
     entity_key: [0x00, 0x01, 0x00],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER: EntityId = EntityId {
+  pub const SPDP_BUILTIN_PARTICIPANT_READER: EntityId = EntityId {
     entity_key: [0x00, 0x01, 0x00],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER: EntityId = EntityId {
+  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER: EntityId = EntityId {
     entity_key: [0x00, 0x02, 0x00],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: EntityId = EntityId {
+  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: EntityId = EntityId {
     entity_key: [0x00, 0x02, 0x00],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
@@ -302,7 +302,7 @@ impl EntityId {
 
 impl Default for EntityId {
   fn default() -> EntityId {
-    EntityId::ENTITYID_UNKNOWN
+    EntityId::UNKNOWN
   }
 }
 
@@ -355,8 +355,8 @@ pub struct GUID {
 
 impl GUID {
   pub const GUID_UNKNOWN: GUID = GUID {
-    guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN,
-    entity_id: EntityId::ENTITYID_UNKNOWN,
+    guid_prefix: GuidPrefix::UNKNOWN,
+    entity_id: EntityId::UNKNOWN,
   };
 
   // basic constructor from components
@@ -369,7 +369,7 @@ impl GUID {
     let guid = Uuid::new_v4();
     GUID {
       guid_prefix: GuidPrefix::new(guid.as_bytes()),
-      entity_id: EntityId::ENTITYID_PARTICIPANT,
+      entity_id: EntityId::PARTICIPANT,
     }
   }
 
@@ -433,25 +433,25 @@ mod tests {
 
   #[test]
   fn convert_entity_id_to_token_and_back() {
-    let e = EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER;
+    let e = EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER;
     let _t = Token(e.as_usize());
     info!("{:?}", e.as_usize());
     let entity = EntityId::from_usize(e.as_usize());
     assert_eq!(e, entity);
 
-    let e2 = EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER;
+    let e2 = EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER;
     let entity2 = EntityId::from_usize(e2.as_usize());
     assert_eq!(e2, entity2);
 
-    let e3 = EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER;
+    let e3 = EntityId::SEDP_BUILTIN_TOPIC_WRITER;
     let entity3 = EntityId::from_usize(e3.as_usize());
     assert_eq!(e3, entity3);
 
-    let e4 = EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER;
+    let e4 = EntityId::SEDP_BUILTIN_TOPIC_WRITER;
     let entity4 = EntityId::from_usize(e4.as_usize());
     assert_eq!(e4, entity4);
 
-    let e5 = EntityId::ENTITYID_UNKNOWN;
+    let e5 = EntityId::UNKNOWN;
     let entity5 = EntityId::from_usize(e5.as_usize());
     assert_eq!(e5, entity5);
 
@@ -471,7 +471,7 @@ mod tests {
   serialization_test!( type = GuidPrefix,
   {
       guid_prefix_unknown,
-      GuidPrefix::GUIDPREFIX_UNKNOWN,
+      GuidPrefix::UNKNOWN,
       le = [0x00; 12],
       be = [0x00; 12]
   },
@@ -496,7 +496,7 @@ mod tests {
   serialization_test!( type = EntityId,
     {
         entity_unknown,
-        EntityId::ENTITYID_UNKNOWN,
+        EntityId::UNKNOWN,
         le = [0x00, 0x00, 0x00, 0x00],
         be = [0x00, 0x00, 0x00, 0x00]
     },
@@ -508,67 +508,67 @@ mod tests {
     },
     {
         entity_participant,
-        EntityId::ENTITYID_PARTICIPANT,
+        EntityId::PARTICIPANT,
         le = [0x00, 0x00, 0x01, 0xC1],
         be = [0x00, 0x00, 0x01, 0xC1]
     },
     {
         entity_sedp_builtin_topic_writer,
-        EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_WRITER,
+        EntityId::SEDP_BUILTIN_TOPIC_WRITER,
         le = [0x00, 0x00, 0x02, 0xC2],
         be = [0x00, 0x00, 0x02, 0xC2]
     },
     {
         entity_sedp_builtin_topic_reader,
-        EntityId::ENTITYID_SEDP_BUILTIN_TOPIC_READER,
+        EntityId::SEDP_BUILTIN_TOPIC_READER,
         le = [0x00, 0x00, 0x02, 0xC7],
         be = [0x00, 0x00, 0x02, 0xC7]
     },
     {
         entity_sedp_builtin_publications_writer,
-        EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_WRITER,
+        EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
         le = [0x00, 0x00, 0x03, 0xC2],
         be = [0x00, 0x00, 0x03, 0xC2]
     },
     {
         entity_sedp_builtin_publications_reader,
-        EntityId::ENTITYID_SEDP_BUILTIN_PUBLICATIONS_READER,
+        EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
         le = [0x00, 0x00, 0x03, 0xC7],
         be = [0x00, 0x00, 0x03, 0xC7]
     },
     {
         entity_sedp_builtin_subscriptions_writer,
-        EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
+        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
         le = [0x00, 0x00, 0x04, 0xC2],
         be = [0x00, 0x00, 0x04, 0xC2]
     },
     {
         entity_sedp_builtin_subscriptions_reader,
-        EntityId::ENTITYID_SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
         le = [0x00, 0x00, 0x04, 0xC7],
         be = [0x00, 0x00, 0x04, 0xC7]
     },
     {
         entity_spdp_builtin_participant_writer,
-        EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+        EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
         le = [0x00, 0x01, 0x00, 0xC2],
         be = [0x00, 0x01, 0x00, 0xC2]
     },
     {
         entity_spdp_builtin_participant_reader,
-        EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+        EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
         le = [0x00, 0x01, 0x00, 0xC7],
         be = [0x00, 0x01, 0x00, 0xC7]
     },
     {
         entity_p2p_builtin_participant_message_writer,
-        EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
         le = [0x00, 0x02, 0x00, 0xC2],
         be = [0x00, 0x02, 0x00, 0xC2]
     },
     {
         entity_p2p_builtin_participant_message_reader,
-        EntityId::ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
         le = [0x00, 0x02, 0x00, 0xC7],
         be = [0x00, 0x02, 0x00, 0xC7]
     }
@@ -578,8 +578,8 @@ mod tests {
   fn guid_unknown_is_a_combination_of_unknown_members() {
     assert_eq!(
       GUID {
-        entity_id: EntityId::ENTITYID_UNKNOWN,
-        guid_prefix: GuidPrefix::GUIDPREFIX_UNKNOWN
+        entity_id: EntityId::UNKNOWN,
+        guid_prefix: GuidPrefix::UNKNOWN
       },
       GUID::GUID_UNKNOWN
     );
@@ -601,7 +601,7 @@ mod tests {
       {
           guid_entity_id_on_the_last_position,
           GUID {
-              entity_id: EntityId::ENTITYID_PARTICIPANT,
+              entity_id: EntityId::PARTICIPANT,
               ..Default::default()
           },
           le = [0x00, 0x00, 0x00, 0x00,

@@ -62,7 +62,7 @@ impl SpdpDiscoveredParticipantData {
       self.participant_guid.guid_prefix,
       match entity_id {
         Some(id) => id,
-        None => EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_READER,
+        None => EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
       },
     );
 
@@ -94,7 +94,7 @@ impl SpdpDiscoveredParticipantData {
       self.participant_guid.guid_prefix,
       match entity_id {
         Some(id) => id,
-        None => EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER,
+        None => EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
       },
     );
 
@@ -102,7 +102,7 @@ impl SpdpDiscoveredParticipantData {
       remote_writer_guid,
       Vec::new(),
       Vec::new(),
-      EntityId::ENTITYID_UNKNOWN,
+      EntityId::UNKNOWN,
     );
 
     if !is_metatraffic {
