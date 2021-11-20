@@ -250,51 +250,24 @@ impl DDSHistoryCache {
     match self.find_by_sn(&cache_change) {
       Some(old_instant) => {
         // Got duplicate DATA for a SN that we already have. It should be discarded.
-        //
-        // Excpet that we cannot, because it is apparently legal in Discovery to keep sending with
-        // the same SN the participant announcement. If we drop the duplicates here, the
-        // Discovery DataReader will not get any announcements after the first one, which will
-        // lead to dropping the participant then the lease time expires.
-        // At least eProsma FastRTPS seems to do this.
-        //
-        // See https://github.com/eProsima/Fast-DDS/issues/35
-        // and
-        // RTPS spec 2.5 Section "8.5.3.1 General Approach":
-        // "This is achieved by periodically calling
-        //  StatelessWriter::unsent_changes_reset, which causes the
-        //  StatelessWriter to resend all changes present in its HistoryCache
-        //  to all locators."
-        //
-        // Reading the definition of unsent_changes_reset from "8.4.7.2.4 unsent_changes_reset",
-        // looks like not incrementing SNs is conformant to the spec. 
-        // OTOH, according to testing, e.g. RTI Connext does increment the SN.
-        // Maybe this is a bug in the spec?
-        //
-        // So we update the indexing instant, and receive timestamp.
-        // DataReader has to worry about not giving duplicate SN objects to the application,
-        // unless they are Discovery, in which case Datareader must report updated duplicates.
-        // This design idea is the best one I could think of today.
-
-        debug!("Received duplicate {:?} from {:?}, updating timestamp.",
+        debug!("add_change: discarding duplicate {:?} from {:?}. old timestamp = {:?}, new = {:?}",
           cache_change.sequence_number,
-          cache_change.writer_guid
+          cache_change.writer_guid,
+          old_instant,
+          instant,
         );
-        let old_cc = self.remove_change(&old_instant)  // This also removes from SN index
-          .expect("DDSCache index corrupted"); // we just checked it exists in the index
-        // re-insert the new one.
-        self.insert_sn(*instant, &cache_change);
-        // TODO: Sanity check that the new CacheChange is identical to the old one.
-        // If not, we are getting inconsistent retransmits.
-        self.changes.insert(*instant, cache_change); // TODO: If this returns Some(_), then we have duplicate instant.
-        Some(old_cc)
+        Some(cache_change)
       }
-      None => { // This is a new (to us) SequenceNumber, this is the default processing path.
+      None => { 
+        // This is a new (to us) SequenceNumber, this is the default processing path.
         self.insert_sn( *instant, &cache_change );
         let result = self.changes.insert(*instant, cache_change);
         match result {
           None => None, // all is good. timestamp was not inserted before.
           Some(old_cc) => {
-            // If this happens cahce changes were created at exactly same instant.
+            // If this happens, cache changes were created at exactly same instant.
+            // This is bad, since we are using instants as keys and assume that they
+            // are unique.
             error!(
               "DDSHistoryCache already contained element with key {:?} !!!",
               instant
