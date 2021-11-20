@@ -469,7 +469,8 @@ mod tests {
 
     let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
-    let mut message_receiver = MessageReceiver::new(gui_prefix, acknack_sender);
+    let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
+    let mut message_receiver = MessageReceiver::new(gui_prefix, acknack_sender, spdp_liveness_sender);
 
     let entity =
       EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
@@ -594,7 +595,8 @@ mod tests {
     let guid_new = GUID::default();
     let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
-    let mut message_receiver = MessageReceiver::new(guid_new.guid_prefix, acknack_sender);
+    let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
+    let mut message_receiver = MessageReceiver::new(guid_new.guid_prefix, acknack_sender, spdp_liveness_sender);
 
     message_receiver.handle_received_packet(udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);

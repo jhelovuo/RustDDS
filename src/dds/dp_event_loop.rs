@@ -772,6 +772,7 @@ mod tests {
 
     let (_discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::channel();
+    let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
 
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
@@ -812,6 +813,7 @@ mod tests {
         },
         stop_poll_receiver,
         discovery_update_notification_receiver,
+        spdp_liveness_sender,
       );
       dp_event_loop
         .poll
