@@ -1,6 +1,6 @@
 use std::{
   cmp::max,
-  collections::{BTreeMap, BTreeSet, HashMap},
+  collections::{BTreeMap, HashMap},
   ops::Bound::{Excluded, Included},
 };
 
@@ -204,7 +204,8 @@ impl TopicCache {
 #[derive(Debug)]
 pub struct DDSHistoryCache {
   pub(crate) changes: BTreeMap<Timestamp, CacheChange>,
-  sequence_numbers: BTreeMap<GUID, BTreeSet<SequenceNumber>>,
+  // sequence_numbers is an index to "changes" by GUID and SN
+  sequence_numbers: BTreeMap<GUID, BTreeMap<SequenceNumber,Timestamp>>,
 }
 
 impl DDSHistoryCache {
@@ -215,31 +216,30 @@ impl DDSHistoryCache {
     }
   }
 
-  fn have_sn(&self, cc: &CacheChange) -> bool {
-    match self.sequence_numbers.get(&cc.writer_guid) {
-      None => false,
-      Some(sn_set) => sn_set.contains(&cc.sequence_number),
-    }
+  fn find_by_sn(&self, cc: &CacheChange) -> Option<Timestamp> {
+    self.sequence_numbers.get(&cc.writer_guid)
+      .map( |snm| snm.get(&cc.sequence_number))
+      .flatten()
+      .cloned()
   }
 
-  fn insert_sn(&mut self, cc: &CacheChange) {
+  fn insert_sn(&mut self, instant: Timestamp, cc: &CacheChange) {
     self
       .sequence_numbers
       .entry(cc.writer_guid)
-      .or_insert_with(|| {
-        let mut s = BTreeSet::new();
-        s.insert(cc.sequence_number);
-        s
-      })
-      .insert(cc.sequence_number);
+      .or_insert_with(|| BTreeMap::new())
+      .insert(cc.sequence_number, instant);
   }
 
   fn remove_sn(&mut self, cc: &CacheChange) {
-    self.sequence_numbers.entry(cc.writer_guid).and_modify(|s| {
-      s.remove(&cc.sequence_number);
-    });
+    let mut emptied = false;
 
-    //TODO: If this makes a SN set empty, remove it from BTreeMap.
+    self.sequence_numbers.entry(cc.writer_guid)
+      .and_modify(|s| { 
+        s.remove(&cc.sequence_number); 
+        emptied = s.is_empty(); 
+      });
+    if emptied { self.sequence_numbers.remove(&cc.writer_guid); } 
   }
 
   pub fn add_change(
@@ -247,26 +247,34 @@ impl DDSHistoryCache {
     instant: &Timestamp,
     cache_change: CacheChange,
   ) -> Option<CacheChange> {
-    if self.have_sn(&cache_change) {
-      trace!(
-        "Received duplicate {:?} from {:?}, discarding.",
-        cache_change.sequence_number,
-        cache_change.writer_guid
-      );
-      Some(cache_change)
-    } else {
-      self.insert_sn(&cache_change);
-      let result = self.changes.insert(*instant, cache_change);
-      match result {
-        None => None, // all is good. timestamp was not inserted before.
-        Some(old_cc) => {
-          // If this happens cahce changes were created at exactly same instant.
-          error!(
-            "DDSHistoryCache already contained element with key {:?} !!!",
-            instant
-          );
-          self.remove_sn(&old_cc);
-          Some(old_cc)
+    match self.find_by_sn(&cache_change) {
+      Some(old_instant) => {
+        // Got duplicate DATA for a SN that we already have. It should be discarded.
+        debug!("add_change: discarding duplicate {:?} from {:?}. old timestamp = {:?}, new = {:?}",
+          cache_change.sequence_number,
+          cache_change.writer_guid,
+          old_instant,
+          instant,
+        );
+        Some(cache_change)
+      }
+      None => { 
+        // This is a new (to us) SequenceNumber, this is the default processing path.
+        self.insert_sn( *instant, &cache_change );
+        let result = self.changes.insert(*instant, cache_change);
+        match result {
+          None => None, // all is good. timestamp was not inserted before.
+          Some(old_cc) => {
+            // If this happens, cache changes were created at exactly same instant.
+            // This is bad, since we are using instants as keys and assume that they
+            // are unique.
+            error!(
+              "DDSHistoryCache already contained element with key {:?} !!!",
+              instant
+            );
+            self.remove_sn(&old_cc);
+            Some(old_cc)
+          }
         }
       }
     }
