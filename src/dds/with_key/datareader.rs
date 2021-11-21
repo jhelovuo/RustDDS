@@ -3,6 +3,8 @@ use std::{
   marker::PhantomData,
   sync::{Arc, RwLock},
   collections::BTreeMap,
+  convert::From,
+  cmp::max,
 };
 
 //use itertools::Itertools;
@@ -634,6 +636,12 @@ where
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
   fn fill_local_datasample_cache(&mut self) {
+    let is_reliable = 
+      match self.qos_policy.reliability() {
+        Some(policy::Reliability::Reliable{..}) => true,
+        _ => false,
+      };
+
     let dds_cache = match self.dds_cache.read() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
@@ -649,30 +657,46 @@ where
       &Timestamp::now(),
     );
 
-    // TODO: Sort cache changes by sequence numbers. The current implementation will discard
-    // samples, if the changes are out of order, even if none are missing.
+    let mut cache_changes_vec  : Vec<(Timestamp,&CacheChange)> = 
+      cache_changes.collect();
+
+    // We sort by sequence number so that earlier SNs (from the same writer) are
+    // forced to appear earlier. This way we do not lose any CacheChanges even if they
+    // were received out of order.
+    // The next loop will discard any CacheChanges that appear out of sequence.
+    cache_changes_vec.sort_by_key( |(_ts,cc)| cc.sequence_number );
 
     for ( instant, 
           CacheChange { writer_guid, sequence_number, source_timestamp, data_value, }, ) 
-    in cache_changes
+    in cache_changes_vec
     {
-      self.latest_instant = instant; // update our time pointer
+      self.latest_instant = max(self.latest_instant, instant); // update our time pointer
       // what was the latest
       let latest_sequence_number_have_already 
         = self.latest_sequence_number.get(writer_guid);
-
-      // Check that SequenceNumber always goes forward.
-      if latest_sequence_number_have_already
-            .map( |latest| latest >= sequence_number)
-            .unwrap_or(false)
-          && writer_guid.entity_id != EntityId::ENTITYID_SPDP_BUILTIN_PARTICIPANT_WRITER
-          // RTPS spec weirdness: It is legal to send periodic SPDP announcements with
-          // the same SequenceNumber, so we make an axception for it here so that
-          // Discovery keeps seeing them, and does not timeout.
+      
+      // Check that the sequence numbers proceed in correct order.
+      // The reliable mode gets stuck if DDSCache is not able to produce
+      // all the SNs withot gaps. (TODO: Ensure that DDSCache satisfies this.)
+      // 
+      // If no previous SN is known, then any SN is acceptable, as we may be
+      // joining the data stream at any time.
+      //
+      if  ( ! is_reliable &&
+            // Check that SequenceNumber always goes forward.
+            // Getting the same SN means duplicate packet, which we must drop.
+            latest_sequence_number_have_already
+              .map( |latest| sequence_number > latest)
+              .unwrap_or(true)
+          ) 
+          ||
+          ( is_reliable &&
+            // Check that we get all the sequence numbers in order
+            latest_sequence_number_have_already
+              .map( |latest| *latest + SequenceNumber::from(1) == *sequence_number)
+              .unwrap_or(true)
+          )
       {
-        // we have seen this sequence_number (or larger) already.
-
-      } else {
         // normal case: sequence_number not seen before
         // first, update our last-seen-pointer
         self.latest_sequence_number.insert(*writer_guid, *sequence_number);
@@ -779,7 +803,10 @@ where
               }
             } */
         } // match
-      } // if seen already
+      } // if (acceptable SN)
+      else {
+        // sequence naumber is not acceptable
+      }
     } // for loop
   } // fn
 
