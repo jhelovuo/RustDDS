@@ -182,8 +182,11 @@ impl DPEventLoop {
       discovery_db,
       udp_listeners,
       udp_sender: Rc::new(udp_sender),
-      message_receiver: 
-        MessageReceiver::new(participant_guid_prefix, acknack_sender, spdp_liveness_sender,),
+      message_receiver: MessageReceiver::new(
+        participant_guid_prefix,
+        acknack_sender,
+        spdp_liveness_sender,
+      ),
       add_reader_receiver,
       remove_reader_receiver,
       add_writer_receiver,

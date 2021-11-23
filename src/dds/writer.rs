@@ -396,8 +396,8 @@ impl Writer {
               partial_message.data_msg(
                 cache_change.clone(),
                 // Now that payload contains Bytes, it is relatively cheap to clone
-                EntityId::UNKNOWN, // reader
-                self.my_guid.entity_id,     // writer
+                EntityId::UNKNOWN,      // reader
+                self.my_guid.entity_id, // writer
                 self.endianness,
               )
             } else {
@@ -409,12 +409,7 @@ impl Writer {
           let final_flag = false;
           let liveliness_flag = false;
           let data_hb_message = data_hb_message_builder
-            .heartbeat_msg(
-              self,
-              EntityId::UNKNOWN,
-              final_flag,
-              liveliness_flag,
-            )
+            .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
             .add_header_and_build(self.my_guid.guid_prefix);
           self.send_message_to_readers(
             DeliveryMode::Multicast,
@@ -550,12 +545,7 @@ impl Writer {
     } else {
       let hb_message = MessageBuilder::new()
         .ts_msg(self.endianness, Some(Timestamp::now()))
-        .heartbeat_msg(
-          self,
-          EntityId::UNKNOWN,
-          final_flag,
-          liveliness_flag,
-        )
+        .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
         .add_header_and_build(self.my_guid.guid_prefix);
       debug!(
         "Writer {:?} topic={:} HEARTBEAT {:?}",

@@ -230,8 +230,6 @@ impl Discovery {
       "Unable to create Discovery Publisher. {:?}"
     );
 
-
-
     // Participant
     let dcps_participant_topic = try_construct!(
       domain_participant.create_topic(
@@ -521,7 +519,7 @@ impl Discovery {
       discovery_updated_sender,
       discovery_command_receiver,
       spdp_liveness_receiver,
-      
+
       liveliness_state: LivelinessState::new(),
 
       discovery_subscriber,

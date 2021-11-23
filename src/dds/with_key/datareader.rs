@@ -1,10 +1,10 @@
 use std::{
+  cmp::max,
+  collections::BTreeMap,
+  convert::From,
   io,
   marker::PhantomData,
   sync::{Arc, RwLock},
-  collections::BTreeMap,
-  convert::From,
-  cmp::max,
 };
 
 //use itertools::Itertools;
@@ -35,9 +35,9 @@ use crate::{
     dds_cache::DDSCache,
     duration::Duration,
     entity::RTPSEntity,
-    guid::{EntityId, GUID, },
-    time::Timestamp,
+    guid::{EntityId, GUID},
     sequence_number::SequenceNumber,
+    time::Timestamp,
   },
 };
 
@@ -126,7 +126,7 @@ pub struct DataReader<
 
   datasample_cache: DataSampleCache<D>,
   latest_instant: Timestamp,
-   latest_sequence_number: BTreeMap<GUID,SequenceNumber>,
+  latest_sequence_number: BTreeMap<GUID, SequenceNumber>,
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
@@ -636,11 +636,10 @@ where
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
   fn fill_local_datasample_cache(&mut self) {
-    let is_reliable = 
-      match self.qos_policy.reliability() {
-        Some(policy::Reliability::Reliable{..}) => true,
-        _ => false,
-      };
+    let is_reliable = matches!(
+      self.qos_policy.reliability(),
+      Some(policy::Reliability::Reliable { .. })
+    );
 
     let dds_cache = match self.dds_cache.read() {
       Ok(rwlock) => rwlock,
@@ -657,51 +656,54 @@ where
       &Timestamp::now(),
     );
 
-    let mut cache_changes_vec  : Vec<(Timestamp,&CacheChange)> = 
-      cache_changes.collect();
+    let mut cache_changes_vec: Vec<(Timestamp, &CacheChange)> = cache_changes.collect();
 
     // We sort by sequence number so that earlier SNs (from the same writer) are
-    // forced to appear earlier. This way we do not lose any CacheChanges even if they
-    // were received out of order.
+    // forced to appear earlier. This way we do not lose any CacheChanges even if
+    // they were received out of order.
     // The next loop will discard any CacheChanges that appear out of sequence.
-    cache_changes_vec.sort_by_key( |(_ts,cc)| cc.sequence_number );
+    cache_changes_vec.sort_by_key(|(_ts, cc)| cc.sequence_number);
 
-    for ( instant, 
-          CacheChange { writer_guid, sequence_number, source_timestamp, data_value, }, ) 
-    in cache_changes_vec
+    for (
+      instant,
+      CacheChange {
+        writer_guid,
+        sequence_number,
+        source_timestamp,
+        data_value,
+      },
+    ) in cache_changes_vec
     {
       self.latest_instant = max(self.latest_instant, instant); // update our time pointer
-      // what was the latest
-      let latest_sequence_number_have_already 
-        = self.latest_sequence_number.get(writer_guid);
-      
+                                                               // what was the latest
+      let latest_sequence_number_have_already = self.latest_sequence_number.get(writer_guid);
+
       // Check that the sequence numbers proceed in correct order.
       // The reliable mode gets stuck if DDSCache is not able to produce
       // all the SNs withot gaps. (TODO: Ensure that DDSCache satisfies this.)
-      // 
+      //
       // If no previous SN is known, then any SN is acceptable, as we may be
       // joining the data stream at any time.
       //
-      if  ( ! is_reliable &&
+      if (! is_reliable &&
             // Check that SequenceNumber always goes forward.
             // Getting the same SN means duplicate packet, which we must drop.
             latest_sequence_number_have_already
               .map( |latest| sequence_number > latest)
-              .unwrap_or(true)
-          ) 
-          ||
-          ( is_reliable &&
+              .unwrap_or(true))
+        || (is_reliable &&
             // Check that we get all the sequence numbers in order
             latest_sequence_number_have_already
               .map( |latest| *latest + SequenceNumber::from(1) == *sequence_number)
-              .unwrap_or(true)
-          )
+              .unwrap_or(true))
       {
         // normal case: sequence_number not seen before
         // first, update our last-seen-pointer
-        self.latest_sequence_number.insert(*writer_guid, *sequence_number);
+        self
+          .latest_sequence_number
+          .insert(*writer_guid, *sequence_number);
 
-        // deserialize into datasample cache              
+        // deserialize into datasample cache
         match data_value {
           DDSData::Data { serialized_payload } => {
             // what is our data serialization format (representation identifier) ?
@@ -735,7 +737,7 @@ where
               debug!("Serialized payload was {:?}", &serialized_payload);
               continue; // skip this sample, as we cannot decode it
             }
-          } 
+          }
 
           DDSData::DisposeByKey {
             key: serialized_key,
@@ -776,8 +778,7 @@ where
               /* TODO: How to get source timestamps other then None ?? */
               None => warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash),
             }
-          }
-          /*
+          } /*
             DDSData::DataFrags { representation_identifier, bytes_frags } => {
               // what is our data serialization format (representation identifier) ?
               if let Some(recognized_rep_id) =
@@ -803,7 +804,8 @@ where
               }
             } */
         } // match
-      } // if (acceptable SN)
+      }
+      // if (acceptable SN)
       else {
         // sequence naumber is not acceptable
       }

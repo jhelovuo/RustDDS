@@ -43,7 +43,7 @@ pub(crate) struct MessageReceiver {
   // We send notification of remote DomainPArticiapnt liveness to Discovery to
   // bypass Reader. DDSCache, DatasampleCache, and DataReader, because thse will drop
   // reperated messages with duplicate SequenceNumbers, but Discovery needs to see them.
-  spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>, 
+  spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
 
   own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
@@ -224,8 +224,7 @@ impl MessageReceiver {
   }
 
   fn handle_entity_submessage(&mut self, submessage: EntitySubmessage) {
-    if self.dest_guid_prefix != self.own_guid_prefix
-      && self.dest_guid_prefix != GuidPrefix::UNKNOWN
+    if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
     {
       debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
         self.dest_guid_prefix, self.own_guid_prefix);
@@ -267,8 +266,15 @@ impl MessageReceiver {
         }
         // bypass lane fro SPDP messages
         if writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
-          self.spdp_liveness_sender.try_send(source_guid_prefix)
-            .unwrap_or_else(|e| debug!("spdp_liveness_sender.try_send(): {:?}. Is Discovery alive?",e));
+          self
+            .spdp_liveness_sender
+            .try_send(source_guid_prefix)
+            .unwrap_or_else(|e| {
+              debug!(
+                "spdp_liveness_sender.try_send(): {:?}. Is Discovery alive?",
+                e
+              )
+            });
         }
       }
       EntitySubmessage::Heartbeat(heartbeat, flags) => {
@@ -470,7 +476,8 @@ mod tests {
     let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
-    let mut message_receiver = MessageReceiver::new(gui_prefix, acknack_sender, spdp_liveness_sender);
+    let mut message_receiver =
+      MessageReceiver::new(gui_prefix, acknack_sender, spdp_liveness_sender);
 
     let entity =
       EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
@@ -596,7 +603,8 @@ mod tests {
     let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
-    let mut message_receiver = MessageReceiver::new(guid_new.guid_prefix, acknack_sender, spdp_liveness_sender);
+    let mut message_receiver =
+      MessageReceiver::new(guid_new.guid_prefix, acknack_sender, spdp_liveness_sender);
 
     message_receiver.handle_received_packet(udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);
