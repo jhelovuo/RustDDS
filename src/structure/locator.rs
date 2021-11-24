@@ -1,5 +1,5 @@
 use std::{
-  convert::{From, TryInto},
+  convert::TryInto,
   net::{SocketAddrV4, SocketAddrV6},
 };
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};

@@ -1,6 +1,5 @@
 use std::{
   cmp::{min, Ord, PartialOrd},
-  convert::From,
   fmt::Debug,
   hash::Hash,
   mem::size_of,

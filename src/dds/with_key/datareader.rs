@@ -1,7 +1,6 @@
 use std::{
   cmp::max,
   collections::BTreeMap,
-  convert::From,
   io,
   marker::PhantomData,
   sync::{Arc, RwLock},
