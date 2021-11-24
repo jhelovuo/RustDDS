@@ -195,47 +195,43 @@ impl Reader {
   fn calculate_if_requested_deadline_is_missed(&mut self) -> Vec<DataReaderStatus> {
     debug!("calculate_if_requested_deadline_is_missed");
 
-    match self.qos_policy.deadline {
-      None => vec![],
+    let deadline_duration = match self.qos_policy.deadline {
+      None => return vec![],
+      Some(policy::Deadline(deadline_duration)) => deadline_duration,
+    };
 
-      Some(policy::Deadline(deadline_duration)) => {
-        let mut changes: Vec<DataReaderStatus> = vec![];
-        let now = Timestamp::now();
-        for (_g, writer_proxy) in self.matched_writers.iter_mut() {
-          match writer_proxy.last_change_timestamp() {
-            Some(last_change) => {
-              let since_last = now.duration_since(last_change);
-              // if time singe last received message is greater than deadline increase status
-              // and return notification.
-              trace!(
-                "Comparing deadlines: {:?} - {:?}",
-                since_last,
-                deadline_duration
-              );
-              if since_last > deadline_duration {
-                debug!(
-                  "Deadline missed: {:?} - {:?}",
-                  since_last, deadline_duration
-                );
-                self.requested_deadline_missed_count += 1;
-                changes.push(DataReaderStatus::RequestedDeadlineMissed {
-                  count: CountWithChange::start_from(self.requested_deadline_missed_count, 1),
-                });
-              }
-            }
-            None => {
-              // no messages received ever so deadline must be missed.
-              // TODO: But what if the Reader or WriterProxy was just created?
-              self.requested_deadline_missed_count += 1;
-              changes.push(DataReaderStatus::RequestedDeadlineMissed {
-                count: CountWithChange::start_from(self.requested_deadline_missed_count, 1),
-              });
-            }
-          }
-        } // for
-        changes
-      } // Some
-    } // match
+    let mut changes: Vec<DataReaderStatus> = vec![];
+    let now = Timestamp::now();
+    for writer_proxy in self.matched_writers.values_mut() {
+      if let Some(last_change) = writer_proxy.last_change_timestamp() {
+        let since_last = now.duration_since(last_change);
+        // if time singe last received message is greater than deadline increase status
+        // and return notification.
+        trace!(
+          "Comparing deadlines: {:?} - {:?}",
+          since_last,
+          deadline_duration
+        );
+        if since_last > deadline_duration {
+          debug!(
+            "Deadline missed: {:?} - {:?}",
+            since_last, deadline_duration
+          );
+          self.requested_deadline_missed_count += 1;
+          changes.push(DataReaderStatus::RequestedDeadlineMissed {
+            count: CountWithChange::start_from(self.requested_deadline_missed_count, 1),
+          });
+        }
+      } else {
+        // no messages received ever so deadline must be missed.
+        // TODO: But what if the Reader or WriterProxy was just created?
+        self.requested_deadline_missed_count += 1;
+        changes.push(DataReaderStatus::RequestedDeadlineMissed {
+          count: CountWithChange::start_from(self.requested_deadline_missed_count, 1),
+        });
+      }
+    } // for
+    changes
   } // fn
 
   pub fn handle_timed_event(&mut self) {
@@ -351,15 +347,12 @@ impl Reader {
 
   // return value counts how many new proxies were added
   fn matched_writer_update(&mut self, proxy: RtpsWriterProxy) -> i32 {
-    match self.matched_writer_lookup(proxy.remote_writer_guid) {
-      Some(op) => {
-        op.update_contents(proxy);
-        0
-      }
-      None => {
-        self.matched_writers.insert(proxy.remote_writer_guid, proxy);
-        1
-      }
+    if let Some(op) = self.matched_writer_lookup(proxy.remote_writer_guid) {
+      op.update_contents(proxy);
+      0
+    } else {
+      self.matched_writers.insert(proxy.remote_writer_guid, proxy);
+      1
     }
   }
 
@@ -582,21 +575,19 @@ impl Reader {
         // no data, no key. Maybe there is inline QoS?
         // At least we should find key hash, or we do not know WTF the writer is talking
         // about
-        let key_hash = match data
+        let key_hash = if let Some(h) = data
           .inline_qos
           .as_ref()
-          .map(|iqos| InlineQos::key_hash(iqos).ok())
-          .flatten()
+          .and_then(|iqos| InlineQos::key_hash(iqos).ok())
           .flatten()
         {
-          Some(h) => Ok(h),
-          None => {
-            info!("Received DATA that has no payload and no key_hash inline QoS - discarding");
-            // Note: This case is normal when handling coherent sets.
-            // The coherent set end marker is sent as DATA with no payload and not key, only
-            // Inline QoS.
-            Err("DATA with no contents".to_string())
-          }
+          Ok(h)
+        } else {
+          info!("Received DATA that has no payload and no key_hash inline QoS - discarding");
+          // Note: This case is normal when handling coherent sets.
+          // The coherent set end marker is sent as DATA with no payload and not key, only
+          // Inline QoS.
+          Err("DATA with no contents".to_string())
         }?;
         // now, let's try to determine what is the dispose reason
         let change_kind =
@@ -658,12 +649,11 @@ impl Reader {
       );
     }
 
-    let writer_proxy = match self.matched_writer_lookup(writer_guid) {
-      Some(wp) => wp,
-      None => {
-        error!("Writer proxy disappeared 1!");
-        return false;
-      } // Matching writer not found
+    let writer_proxy = if let Some(wp) = self.matched_writer_lookup(writer_guid) {
+      wp
+    } else {
+      error!("Writer proxy disappeared 1!");
+      return false;
     };
 
     let mut mr_state = mr_state;
@@ -687,21 +677,23 @@ impl Reader {
         Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
       };
       for instant in removed_instances.values() {
-        match cache.from_topic_remove_change(&self.topic_name, instant) {
-          Some(_) => (),
-          None => debug!("WriterProxy told to remove an instant which was not present"), /* This may be normal? */
+        if cache
+          .from_topic_remove_change(&self.topic_name, instant)
+          .is_none()
+        {
+          debug!("WriterProxy told to remove an instant which was not present");
+          /* This may be normal? */
         }
       }
     }
 
     // this is duplicate code from above, but needed, because we need another
     // mutable borrow. TODO: Maybe could be written in some sensible way.
-    let writer_proxy = match self.matched_writer_lookup(writer_guid) {
-      Some(wp) => wp,
-      None => {
-        error!("Writer proxy disappeared 2!");
-        return false;
-      } // Matching writer not found
+    let writer_proxy = if let Some(wp) = self.matched_writer_lookup(writer_guid) {
+      wp
+    } else {
+      error!("Writer proxy disappeared 2!");
+      return false;
     };
 
     // See if ACKNACK is needed, and generate one.
@@ -788,15 +780,14 @@ impl Reader {
       return;
     }
 
-    let writer_proxy = match self.matched_writer_lookup(writer_guid) {
-      Some(wp) => wp,
-      None => {
-        info!(
-          "GAP from {:?}, but no writer proxy available. topic={:?} reader={:?}",
-          writer_guid, self.topic_name, self.my_guid
-        );
-        return;
-      } // Matching writer not found
+    let writer_proxy = if let Some(wp) = self.matched_writer_lookup(writer_guid) {
+      wp
+    } else {
+      info!(
+        "GAP from {:?}, but no writer proxy available. topic={:?} reader={:?}",
+        writer_guid, self.topic_name, self.my_guid
+      );
+      return;
     };
 
     // Sequencenumber set in the gap is invalid: (section 8.3.5.5)

@@ -483,16 +483,18 @@ impl DPEventLoop {
   /// events are distinguished by TimerMessageType which is send via mio
   /// channel. Channel token in
   fn handle_writer_timed_event(&mut self, entity_id: EntityId) {
-    match self.writers.get_mut(&entity_id) {
-      Some(writer) => writer.handle_timed_event(),
-      None => error!("Writer was not found with {:?}", entity_id),
+    if let Some(writer) = self.writers.get_mut(&entity_id) {
+      writer.handle_timed_event()
+    } else {
+      error!("Writer was not found with {:?}", entity_id)
     }
   }
 
   fn handle_reader_timed_event(&mut self, entity_id: EntityId) {
-    match self.message_receiver.reader_mut(entity_id) {
-      Some(reader) => reader.handle_timed_event(),
-      None => error!("Reader was not found with {:?}", entity_id),
+    if let Some(reader) = self.message_receiver.reader_mut(entity_id) {
+      reader.handle_timed_event()
+    } else {
+      error!("Reader was not found with {:?}", entity_id)
     }
   }
 
@@ -526,13 +528,13 @@ impl DPEventLoop {
     {
       let db = self.discovery_db.read().unwrap();
       // new Remote Participant discovered
-      let discovered_participant = match db.find_participant_proxy(participant_guid_prefix) {
-        Some(dpd) => dpd,
-        None => {
+      let discovered_participant =
+        if let Some(dpd) = db.find_participant_proxy(participant_guid_prefix) {
+          dpd
+        } else {
           error!("Participant was updated, but DB does not have it. Strange.");
           return;
-        }
-      };
+        };
 
       for (writer_eid, reader_eid, endpoint) in &[
         (

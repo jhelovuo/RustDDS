@@ -133,15 +133,14 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn generate_reader_proxy(&self) -> Option<ReaderProxy> {
-    let remote_reader_guid = match self.endpoint_guid {
-      Some(g) => g,
-      None => {
-        warn!(
-          "Discovery received ReaderProxy data without GUID: {:?}",
-          self
-        );
-        return None;
-      }
+    let remote_reader_guid = if let Some(g) = self.endpoint_guid {
+      g
+    } else {
+      warn!(
+        "Discovery received ReaderProxy data without GUID: {:?}",
+        self
+      );
+      return None;
     };
     Some(ReaderProxy {
       remote_reader_guid,
@@ -152,15 +151,14 @@ impl BuiltinDataDeserializer {
   }
 
   pub fn generate_writer_proxy(&self) -> Option<WriterProxy> {
-    let remote_writer_guid = match self.endpoint_guid {
-      Some(g) => g,
-      None => {
-        warn!(
-          "Discovery received WriterProxy data without GUID: {:?}",
-          self
-        );
-        return None;
-      }
+    let remote_writer_guid = if let Some(g) = self.endpoint_guid {
+      g
+    } else {
+      warn!(
+        "Discovery received WriterProxy data without GUID: {:?}",
+        self
+      );
+      return None;
     };
     Some(WriterProxy {
       remote_writer_guid,

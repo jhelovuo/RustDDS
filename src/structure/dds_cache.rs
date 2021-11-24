@@ -71,15 +71,14 @@ impl DDSCache {
     topic_name: &str,
     instant: &Timestamp,
   ) -> Option<CacheChange> {
-    match self.topic_caches.get_mut(topic_name) {
-      Some(tc) => tc.remove_change(instant),
-      None => {
-        error!(
-          "from_topic_remove_change: Topic {:?} is not in DDSCache",
-          topic_name
-        );
-        None
-      }
+    if let Some(tc) = self.topic_caches.get_mut(topic_name) {
+      tc.remove_change(instant)
+    } else {
+      error!(
+        "from_topic_remove_change: Topic {:?} is not in DDSCache",
+        topic_name
+      );
+      None
     }
   }
 
@@ -250,34 +249,27 @@ impl DDSHistoryCache {
     instant: &Timestamp,
     cache_change: CacheChange,
   ) -> Option<CacheChange> {
-    match self.find_by_sn(&cache_change) {
-      Some(old_instant) => {
-        // Got duplicate DATA for a SN that we already have. It should be discarded.
-        debug!(
-          "add_change: discarding duplicate {:?} from {:?}. old timestamp = {:?}, new = {:?}",
-          cache_change.sequence_number, cache_change.writer_guid, old_instant, instant,
+    if let Some(old_instant) = self.find_by_sn(&cache_change) {
+      // Got duplicate DATA for a SN that we already have. It should be discarded.
+      debug!(
+        "add_change: discarding duplicate {:?} from {:?}. old timestamp = {:?}, new = {:?}",
+        cache_change.sequence_number, cache_change.writer_guid, old_instant, instant,
+      );
+      Some(cache_change)
+    } else {
+      // This is a new (to us) SequenceNumber, this is the default processing path.
+      self.insert_sn(*instant, &cache_change);
+      self.changes.insert(*instant, cache_change).map(|old_cc| {
+        // If this happens, cache changes were created at exactly same instant.
+        // This is bad, since we are using instants as keys and assume that they
+        // are unique.
+        error!(
+          "DDSHistoryCache already contained element with key {:?} !!!",
+          instant
         );
-        Some(cache_change)
-      }
-      None => {
-        // This is a new (to us) SequenceNumber, this is the default processing path.
-        self.insert_sn(*instant, &cache_change);
-        let result = self.changes.insert(*instant, cache_change);
-        match result {
-          None => None, // all is good. timestamp was not inserted before.
-          Some(old_cc) => {
-            // If this happens, cache changes were created at exactly same instant.
-            // This is bad, since we are using instants as keys and assume that they
-            // are unique.
-            error!(
-              "DDSHistoryCache already contained element with key {:?} !!!",
-              instant
-            );
-            self.remove_sn(&old_cc);
-            Some(old_cc)
-          }
-        }
-      }
+        self.remove_sn(&old_cc);
+        old_cc
+      })
     }
   }
 

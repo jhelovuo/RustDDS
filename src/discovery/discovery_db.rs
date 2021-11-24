@@ -122,15 +122,17 @@ impl DiscoveryDB {
     new_participant
   }
   pub fn participant_is_alive(&mut self, guid_prefix: GuidPrefix) {
-    match self.participant_last_life_signs.get_mut(&guid_prefix) {
-      Some(ts) => {
-        let now = Instant::now();
-        if now.duration_since(*ts) > std::time::Duration::from_secs(1) {
-          debug!("Participant alive update for {:?}, but no full update.", guid_prefix);
-        }
-        *ts = now;
+    if let Some(ts) = self.participant_last_life_signs.get_mut(&guid_prefix) {
+      let now = Instant::now();
+      if now.duration_since(*ts) > std::time::Duration::from_secs(1) {
+        debug!(
+          "Participant alive update for {:?}, but no full update.",
+          guid_prefix
+        );
       }
-      None => info!("Participant alive update for unknown {:?}. This is normal, if the message does not repeat.", guid_prefix),
+      *ts = now;
+    } else {
+      info!("Participant alive update for unknown {:?}. This is normal, if the message does not repeat.", guid_prefix)
     }
   }
 
@@ -439,13 +441,12 @@ impl DiscoveryDB {
     trace!("Update topic data: {:?}", &data);
     let topic_name = data.topic_data.name.clone();
 
-    match self.topics.get_mut(&data.topic_data.name) {
-      Some(t) => *t = data.clone(),
-      None => {
-        self.topics.insert(topic_name, data.clone());
-        if let Some(c) = &self.event_sender {
-          let _ = c.try_send(());
-        }
+    if let Some(t) = self.topics.get_mut(&data.topic_data.name) {
+      *t = data.clone()
+    } else {
+      self.topics.insert(topic_name, data.clone());
+      if let Some(c) = &self.event_sender {
+        let _ = c.try_send(());
       }
     };
 
