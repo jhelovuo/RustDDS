@@ -487,15 +487,13 @@ impl DomainParticipantDisc {
 impl Drop for DomainParticipantDisc {
   fn drop(&mut self) {
     debug!("Sending Discovery Stop signal.");
-    match self
+    if self
       .discovery_command_sender
       .send(DiscoveryCommand::StopDiscovery)
+      .is_err()
     {
-      Ok(_) => (),
-      _ => {
-        warn!("Failed to send stop signal to Discovery");
-        return;
-      }
+      warn!("Failed to send stop signal to Discovery");
+      return;
     }
 
     debug!("Waiting for Discovery join.");

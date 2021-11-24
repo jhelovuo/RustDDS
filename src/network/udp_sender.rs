@@ -150,9 +150,8 @@ impl UDPSender {
   #[cfg(test)]
   pub fn send_to_all(&self, buffer: &[u8], addresses: &[SocketAddr]) {
     for address in addresses.iter() {
-      match self.unicast_socket.send_to(buffer, address) {
-        Ok(_) => (),
-        _ => debug!("Unable to send to {}", address),
+      if self.unicast_socket.send_to(buffer, address).is_err() {
+        debug!("Unable to send to {}", address);
       };
     }
   }

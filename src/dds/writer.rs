@@ -716,38 +716,35 @@ impl Writer {
     let mut found_data = false;
     if let Some(&unsent_sn) = reader_proxy.unsent_changes.iter().next() {
       // There are unsent changes.
-      match self.sequence_number_to_instant(unsent_sn) {
-        Some(timestamp) => {
-          // Try to find the cache change from DDSCache
-          if let Some(cache_change) = self
-            .dds_cache
-            .read()
-            .unwrap()
-            .from_topic_get_change(&self.my_topic_name, &timestamp)
-          {
-            // CacheChange found, construct DATA submessage
-            partial_message = partial_message.data_msg(
-              cache_change.clone(),   // TODO: We should not clone, too much copying
-              reader_guid.entity_id,  // reader
-              self.my_guid.entity_id, // writer
-              self.endianness,
-            );
-            // TODO: Here we are cloning the entire payload. We need to rewrite
-            // the transmit path to avoid copying.
-
-            // CC will be sent. Remove from unsent list.
-          } else {
-            // Change not in cache anymore, mark SN as not relevant anymore
-            no_longer_relevant.push(unsent_sn);
-          }
-        }
-        None => {
-          error!(
-            "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
-            self.my_guid, unsent_sn
+      if let Some(timestamp) = self.sequence_number_to_instant(unsent_sn) {
+        // Try to find the cache change from DDSCache
+        if let Some(cache_change) = self
+          .dds_cache
+          .read()
+          .unwrap()
+          .from_topic_get_change(&self.my_topic_name, &timestamp)
+        {
+          // CacheChange found, construct DATA submessage
+          partial_message = partial_message.data_msg(
+            cache_change.clone(),   // TODO: We should not clone, too much copying
+            reader_guid.entity_id,  // reader
+            self.my_guid.entity_id, // writer
+            self.endianness,
           );
+          // TODO: Here we are cloning the entire payload. We need to rewrite
+          // the transmit path to avoid copying.
+
+          // CC will be sent. Remove from unsent list.
+        } else {
+          // Change not in cache anymore, mark SN as not relevant anymore
           no_longer_relevant.push(unsent_sn);
         }
+      } else {
+        error!(
+          "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
+          self.my_guid, unsent_sn
+        );
+        no_longer_relevant.push(unsent_sn);
       } // match
 
       // This SN will be sent or found no longer relevant => remove

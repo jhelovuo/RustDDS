@@ -768,14 +768,12 @@ where
           DDSData::DisposeByKeyHash { key_hash, .. } => {
             /* TODO: Instance to be disposed could be specified by serialized payload
              * also, not only key_hash? */
-            match self.datasample_cache.key_by_hash(*key_hash) {
-              Some(key) => {
-                self
-                  .datasample_cache
-                  .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
-              }
-              /* TODO: How to get source timestamps other then None ?? */
-              None => warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash),
+            if let Some(key) = self.datasample_cache.key_by_hash(*key_hash) {
+              self
+                .datasample_cache
+                .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
+            } else {
+              warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash)
             }
           } /*
             DDSData::DataFrags { representation_identifier, bytes_frags } => {

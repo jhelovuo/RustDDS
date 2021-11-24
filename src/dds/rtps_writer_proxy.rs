@@ -235,15 +235,14 @@ impl RtpsWriterProxy {
     datafrag: DataFrag,
     flags: BitFlags<DATAFRAG_Flags>,
   ) -> Option<DDSData> {
-    match self.fragment_assembler {
-      Some(ref mut fa) => fa.new_datafrag(datafrag, flags),
-      None => {
-        let mut fa = FragmentAssembler::new(datafrag.fragment_size);
-        //TODO: Test that the fragment size is not zero
-        let ret = fa.new_datafrag(datafrag, flags);
-        self.fragment_assembler = Some(fa);
-        ret
-      }
+    if let Some(ref mut fa) = self.fragment_assembler {
+      fa.new_datafrag(datafrag, flags)
+    } else {
+      let mut fa = FragmentAssembler::new(datafrag.fragment_size);
+      //TODO: Test that the fragment size is not zero
+      let ret = fa.new_datafrag(datafrag, flags);
+      self.fragment_assembler = Some(fa);
+      ret
     }
   } // fn
 } // impl

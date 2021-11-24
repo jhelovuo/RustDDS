@@ -682,12 +682,11 @@ impl Discovery {
           }
 
           DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN => {
-            let strong_dp = match self.domain_participant.clone().upgrade() {
-              Some(dp) => dp,
-              None => {
-                error!("DomainParticipant doesn't exist anymore, exiting Discovery.");
-                return;
-              }
+            let strong_dp = if let Some(dp) = self.domain_participant.clone().upgrade() {
+              dp
+            } else {
+              error!("DomainParticipant doesn't exist anymore, exiting Discovery.");
+              return;
             };
 
             // setting 5 times the duration so lease doesn't break if update fails once or
@@ -778,12 +777,11 @@ impl Discovery {
   // If we did not do this, the Readers and Writers in this participant could not
   // find each other.
   fn initialize_participant(&self) {
-    let dp = match self.domain_participant.clone().upgrade() {
-      Some(dp) => dp,
-      None => {
-        error!("Cannot get actual DomainParticipant in initialize_participant! Giving up.");
-        return;
-      }
+    let dp = if let Some(dp) = self.domain_participant.clone().upgrade() {
+      dp
+    } else {
+      error!("Cannot get actual DomainParticipant in initialize_participant! Giving up.");
+      return;
     };
 
     let mc_port = spdp_well_known_multicast_port(dp.domain_id());
@@ -1255,9 +1253,12 @@ impl Discovery {
         && eid != EntityId::SEDP_BUILTIN_TOPIC_WRITER
         && eid != EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
     }) {
-      match self.dcps_publication_writer.write(data.clone(), None) {
-        Ok(_) => (),
-        _ => error!("Unable to write new readers info."),
+      if self
+        .dcps_publication_writer
+        .write(data.clone(), None)
+        .is_err()
+      {
+        error!("Unable to write new readers info.")
       }
     }
   }
@@ -1266,9 +1267,8 @@ impl Discovery {
     let db = self.discovery_db_read();
     let datas = db.all_topics();
     for data in datas {
-      match self.dcps_topic_writer.write(data.clone(), None) {
-        Ok(_) => (),
-        Err(e) => error!("Unable to write new topic info: {:?}", e),
+      if let Err(e) = self.dcps_topic_writer.write(data.clone(), None) {
+        error!("Unable to write new topic info: {:?}", e);
       }
     }
   }

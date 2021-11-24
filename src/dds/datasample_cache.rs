@@ -110,26 +110,26 @@ where
     };
 
     // find or create metadata record
-    let instance_metadata = match self.instance_map.get_mut(&instance_key) {
-      // cannot use unwrap_or_else here, because of multiple borrowing.
-      Some(imd) => imd,
-      None => {
-        // not found, create new one.
-        let imd = InstanceMetaData {
-          instance_samples: BTreeSet::new(),
-          instance_state: new_instance_state,
-          latest_generation_available: NotAliveGenerationCounts::zero(), /* this is new instance,
-                                                                          * so start from zero */
-          last_generation_accessed: NotAliveGenerationCounts::sub_zero(), // never accessed
-        };
-        self.instance_map.insert(instance_key.clone(), imd);
-        self
-          .hash_to_key_map
-          .insert(instance_key.hash_key(), instance_key.clone());
-        self.instance_map.get_mut(&instance_key).unwrap() // must succeed, since
-                                                          // this was just
-                                                          // inserted
-      }
+    let instance_metadata = if let Some(imd) = self.instance_map.get_mut(&instance_key) {
+      imd
+    } else {
+      // not found, create new one.
+      let imd = InstanceMetaData {
+        instance_samples: BTreeSet::new(),
+        instance_state: new_instance_state,
+        latest_generation_available: NotAliveGenerationCounts::zero(), /* this is new instance,
+                                                                        * so start from zero */
+        last_generation_accessed: NotAliveGenerationCounts::sub_zero(), // never accessed
+      };
+      self.instance_map.insert(instance_key.clone(), imd);
+      self
+        .hash_to_key_map
+        .insert(instance_key.hash_key(), instance_key.clone());
+      self
+        .instance_map
+        .get_mut(&instance_key)
+        // must succeed, since this was just inserted
+        .unwrap()
     };
 
     // update instance metadata
@@ -535,16 +535,15 @@ where
   */
 
   pub fn key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
-    match self.hash_to_key_map.get(&key_hash) {
-      Some(k) => Some(k.clone()),
-      None => {
-        debug!(
-          "key_by_hash: requested KeyHash {:?}, but not found. I have {:?}",
-          key_hash,
-          self.hash_to_key_map.keys()
-        );
-        None
-      }
+    if let Some(k) = self.hash_to_key_map.get(&key_hash) {
+      Some(k.clone())
+    } else {
+      debug!(
+        "key_by_hash: requested KeyHash {:?}, but not found. I have {:?}",
+        key_hash,
+        self.hash_to_key_map.keys()
+      );
+      None
     }
   }
 
