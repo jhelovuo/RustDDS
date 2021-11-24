@@ -1,9 +1,5 @@
 //use crate::structure::guid::{GUID, /*EntityId, GuidPrefix*/ };
-use std::{
-  collections::BTreeMap,
-  convert::{From, TryInto},
-  fmt,
-};
+use std::{collections::BTreeMap, convert::TryInto, fmt};
 
 use bit_vec::BitVec;
 use enumflags2::BitFlags;

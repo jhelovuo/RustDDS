@@ -1,4 +1,4 @@
-use std::{convert::From, thread};
+use std::thread;
 
 use mio_extras::channel::{SyncSender, TrySendError};
 

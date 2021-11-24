@@ -1,7 +1,4 @@
-use std::{
-  convert::{From, TryFrom},
-  ops::Div,
-};
+use std::{convert::TryFrom, ops::Div};
 
 use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
