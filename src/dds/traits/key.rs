@@ -1,10 +1,6 @@
 // This module defines traits to specifiy a key as defined in DDS specification.
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
-use std::{
-  collections::hash_map::DefaultHasher,
-  convert::TryFrom,
-  hash::{Hash, Hasher},
-};
+use std::{convert::TryFrom, hash::Hash};
 
 use byteorder::BigEndian;
 use rand::Rng;
@@ -16,8 +12,9 @@ use crate::serialization::{cdr_serializer::to_bytes, error::Error};
 
 /// A sample data type may be `Keyed` : It allows a Key to be extracted from the
 /// sample. In its simplest form, the key may be just a part of the sample data,
-/// but it can be anything computable from a sample by an application-defined
-/// function.
+/// but it can be anything computable from an immutable sample by an
+/// application-defined function. It is recommended that this function be
+/// lightwieght to compute.
 ///
 /// The key is used to distinguish between different Instances of the data in a
 /// DDS Topic.
@@ -36,16 +33,6 @@ pub trait Keyed {
   type K;
 
   fn key(&self) -> Self::K;
-
-  // provided method (TODO: what for?)
-  fn get_hash(&self) -> u64
-  where
-    Self::K: Key,
-  {
-    let mut hasher = DefaultHasher::new();
-    self.key().hash(&mut hasher);
-    hasher.finish()
-  }
 }
 
 // See RTPS spec Section 8.7.10 Key Hash
