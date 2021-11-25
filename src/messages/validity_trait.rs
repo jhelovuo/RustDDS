@@ -2,5 +2,5 @@
 
 // Having a separate trait is probably a bit overengineering.
 pub trait Validity {
-  fn valid(&self) -> bool;
+    fn valid(&self) -> bool;
 }

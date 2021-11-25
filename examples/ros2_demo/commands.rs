@@ -1,3 +1,3 @@
 pub enum ThreadControl {
-  Stop,
+    Stop,
 }

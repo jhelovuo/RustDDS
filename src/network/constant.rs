@@ -2,9 +2,9 @@ use mio::Token;
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{data_types::GuidPrefix, rtps_reader_proxy::RtpsReaderProxy},
-  discovery::data_types::topic_data::{DiscoveredReaderData, DiscoveredWriterData},
-  structure::guid::{EntityKind, GUID},
+    dds::{data_types::GuidPrefix, rtps_reader_proxy::RtpsReaderProxy},
+    discovery::data_types::topic_data::{DiscoveredReaderData, DiscoveredWriterData},
+    structure::guid::{EntityKind, GUID},
 };
 
 const PTB: usize = EntityKind::POLL_TOKEN_BASE;
@@ -58,8 +58,8 @@ pub const DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(41 + PTB);
 pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(50 + PTB);
 
 pub struct TokenReceiverPair<T> {
-  pub token: Token,
-  pub receiver: mio_channel::Receiver<T>,
+    pub token: Token,
+    pub receiver: mio_channel::Receiver<T>,
 }
 
 // These constants are from RTPS spec Section 9.6.2.3 Default Port Numbers
@@ -73,47 +73,47 @@ const D2: u16 = 1;
 const D3: u16 = 11;
 
 pub fn spdp_well_known_multicast_port(domain_id: u16) -> u16 {
-  PB + DG * domain_id + D0
+    PB + DG * domain_id + D0
 }
 
 pub fn spdp_well_known_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
-  PB + DG * domain_id + D1 + PG * participant_id
+    PB + DG * domain_id + D1 + PG * participant_id
 }
 
 pub fn user_traffic_multicast_port(domain_id: u16) -> u16 {
-  PB + DG * domain_id + D2
+    PB + DG * domain_id + D2
 }
 
 pub fn user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
-  PB + DG * domain_id + D3 + PG * participant_id
+    PB + DG * domain_id + D3 + PG * participant_id
 }
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum DiscoveryNotificationType {
-  ReaderUpdated {
-    rtps_reader_proxy: RtpsReaderProxy,
-    discovered_reader_data: DiscoveredReaderData,
-    _needs_new_cache_change: bool,
-  },
-  ReaderLost {
-    reader_guid: GUID,
-  },
-  WriterUpdated {
-    discovered_writer_data: DiscoveredWriterData,
-  },
-  WriterLost {
-    writer_guid: GUID,
-  },
-  ParticipantUpdated {
-    guid_prefix: GuidPrefix,
-  },
-  ParticipantLost {
-    guid_prefix: GuidPrefix,
-  },
-  TopicsInfoUpdated,
-  AssertTopicLiveliness {
-    writer_guid: GUID,
-    manual_assertion: bool,
-  },
+    ReaderUpdated {
+        rtps_reader_proxy: RtpsReaderProxy,
+        discovered_reader_data: DiscoveredReaderData,
+        _needs_new_cache_change: bool,
+    },
+    ReaderLost {
+        reader_guid: GUID,
+    },
+    WriterUpdated {
+        discovered_writer_data: DiscoveredWriterData,
+    },
+    WriterLost {
+        writer_guid: GUID,
+    },
+    ParticipantUpdated {
+        guid_prefix: GuidPrefix,
+    },
+    ParticipantLost {
+        guid_prefix: GuidPrefix,
+    },
+    TopicsInfoUpdated,
+    AssertTopicLiveliness {
+        writer_guid: GUID,
+        manual_assertion: bool,
+    },
 }

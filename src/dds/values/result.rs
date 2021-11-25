@@ -17,87 +17,87 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// * `NoData`  This should be encoded as `Option<SomeData>`, not an error code.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-  /// Illegal parameter value.
-  #[error("Bad parameter: {reason}")]
-  BadParameter { reason: String },
+    /// Illegal parameter value.
+    #[error("Bad parameter: {reason}")]
+    BadParameter { reason: String },
 
-  /// Unsupported operation. Can only be returned by operations that are
-  /// optional.
-  #[error("Unsupported operation")]
-  Unsupported,
+    /// Unsupported operation. Can only be returned by operations that are
+    /// optional.
+    #[error("Unsupported operation")]
+    Unsupported,
 
-  /// Service ran out of the resources needed to complete the operation.
-  #[error("Out of resources")]
-  OutOfResources,
+    /// Service ran out of the resources needed to complete the operation.
+    #[error("Out of resources")]
+    OutOfResources,
 
-  /// Operation invoked on an Entity that is not yet enabled.
-  #[error("Entity not yet enabled")]
-  NotEnabled,
+    /// Operation invoked on an Entity that is not yet enabled.
+    #[error("Entity not yet enabled")]
+    NotEnabled,
 
-  /// Application attempted to modify an immutable QosPolicy.
-  #[error("Attempted to modify immutable entity")]
-  ImmutablePolicy, // can we check this statically?
+    /// Application attempted to modify an immutable QosPolicy.
+    #[error("Attempted to modify immutable entity")]
+    ImmutablePolicy, // can we check this statically?
 
-  /// Application specified a set of policies that are not consistent with each
-  /// other.
-  #[error("Inconsistent policies: {reason}")]
-  InconsistentPolicy { reason: String },
+    /// Application specified a set of policies that are not consistent with
+    /// each other.
+    #[error("Inconsistent policies: {reason}")]
+    InconsistentPolicy { reason: String },
 
-  /// A pre-condition for the operation was not met.
-  #[error("Precondition not met: {precondition}")]
-  PreconditionNotMet { precondition: String },
+    /// A pre-condition for the operation was not met.
+    #[error("Precondition not met: {precondition}")]
+    PreconditionNotMet { precondition: String },
 
-  /// An operation was invoked on an inappropriate object or at
-  /// an inappropriate time (as determined by policies set by the
-  /// specification or the Service implementation). There is no
-  /// precondition that could be changed to make the operation
-  /// succeed.
-  #[error("Illegal operation: {reason}")]
-  IllegalOperation { reason: String },
+    /// An operation was invoked on an inappropriate object or at
+    /// an inappropriate time (as determined by policies set by the
+    /// specification or the Service implementation). There is no
+    /// precondition that could be changed to make the operation
+    /// succeed.
+    #[error("Illegal operation: {reason}")]
+    IllegalOperation { reason: String },
 
-  // Our own additions to the DDS spec below:
-  /// Synchronization with another thread failed because the [other thread
-  /// has exited while holding a lock.](https://doc.rust-lang.org/std/sync/struct.PoisonError.html)
-  /// Does not exist in the DDS spec.
-  #[error("Lock poisoned")]
-  LockPoisoned,
+    // Our own additions to the DDS spec below:
+    /// Synchronization with another thread failed because the [other thread
+    /// has exited while holding a lock.](https://doc.rust-lang.org/std/sync/struct.PoisonError.html)
+    /// Does not exist in the DDS spec.
+    #[error("Lock poisoned")]
+    LockPoisoned,
 
-  /// Something that should not go wrong went wrong anyway.
-  /// This is usually a bug in RustDDS
-  #[error("Internal error: {reason}")]
-  Internal { reason: String },
+    /// Something that should not go wrong went wrong anyway.
+    /// This is usually a bug in RustDDS
+    #[error("Internal error: {reason}")]
+    Internal { reason: String },
 
-  #[error(transparent)]
-  Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 
-  #[error("Serialization error: {reason}")]
-  Serialization { reason: String },
+    #[error("Serialization error: {reason}")]
+    Serialization { reason: String },
 
-  #[error("Discovery error: {reason}")]
-  Discovery { reason: String },
+    #[error("Discovery error: {reason}")]
+    Discovery { reason: String },
 }
 
 impl Error {
-  pub fn bad_parameter<T>(reason: impl Into<String>) -> Result<T> {
-    Err(Error::BadParameter {
-      reason: reason.into(),
-    })
-  }
+    pub fn bad_parameter<T>(reason: impl Into<String>) -> Result<T> {
+        Err(Error::BadParameter {
+            reason: reason.into(),
+        })
+    }
 
-  pub fn precondition_not_met<T>(precondition: impl Into<String>) -> Result<T> {
-    Err(Error::PreconditionNotMet {
-      precondition: precondition.into(),
-    })
-  }
+    pub fn precondition_not_met<T>(precondition: impl Into<String>) -> Result<T> {
+        Err(Error::PreconditionNotMet {
+            precondition: precondition.into(),
+        })
+    }
 }
 
 #[doc(hidden)]
 #[macro_export]
 macro_rules! log_and_err_precondition_not_met {
-  ($err_msg:literal) => {{
-    log::error!($err_msg);
-    Error::precondition_not_met($err_msg)
-  }};
+    ($err_msg:literal) => {{
+        log::error!($err_msg);
+        Error::precondition_not_met($err_msg)
+    }};
 }
 
 #[doc(hidden)]
@@ -121,18 +121,18 @@ macro_rules! log_and_err_discovery {
 }
 
 impl<T> From<std::sync::PoisonError<T>> for Error {
-  fn from(_e: std::sync::PoisonError<T>) -> Error {
-    Error::LockPoisoned
-  }
+    fn from(_e: std::sync::PoisonError<T>) -> Error {
+        Error::LockPoisoned
+    }
 }
 
 impl<T> From<TrySendError<T>> for Error
 where
-  TrySendError<T>: std::error::Error,
+    TrySendError<T>: std::error::Error,
 {
-  fn from(e: TrySendError<T>) -> Error {
-    Error::Internal {
-      reason: format!("Cannot send to internal mio channel: {:?}", e),
+    fn from(e: TrySendError<T>) -> Error {
+        Error::Internal {
+            reason: format!("Cannot send to internal mio channel: {:?}", e),
+        }
     }
-  }
 }

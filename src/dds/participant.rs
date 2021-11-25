@@ -1,1068 +1,1070 @@
 //use mio::Token;
 use std::{
-  collections::HashMap,
-  net::Ipv4Addr,
-  sync::{Arc, Mutex, RwLock, Weak},
-  thread,
-  thread::JoinHandle,
-  time::{Duration, Instant},
+    collections::HashMap,
+    net::Ipv4Addr,
+    sync::{Arc, Mutex, RwLock, Weak},
+    thread,
+    thread::JoinHandle,
+    time::{Duration, Instant},
 };
 
-use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
+use mio_extras::channel as mio_channel;
 
-use crate::{
-  dds::{
-    data_types::*, dp_event_loop::DPEventLoop, pubsub::*, qos::*, reader::*, topic::*, typedesc::*,
-    values::result::*, writer::*,
-  },
-  discovery::{
-    data_types::topic_data::DiscoveredTopicData,
-    discovery::{Discovery, DiscoveryCommand},
-    discovery_db::DiscoveryDB,
-  },
-  log_and_err_internal,
-  network::{constant::*, udp_listener::UDPListener},
-  structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::GUID},
-};
 use super::dp_event_loop::DomainInfo;
+use crate::{
+    dds::{
+        data_types::*, dp_event_loop::DPEventLoop, pubsub::*, qos::*, reader::*, topic::*,
+        typedesc::*, values::result::*, writer::*,
+    },
+    discovery::{
+        data_types::topic_data::DiscoveredTopicData,
+        discovery::{Discovery, DiscoveryCommand},
+        discovery_db::DiscoveryDB,
+    },
+    log_and_err_internal,
+    network::{constant::*, udp_listener::UDPListener},
+    structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::GUID},
+};
 
 /// DDS DomainParticipant generally only one per domain per machine should be
 /// active
 #[derive(Clone)]
 // This is a smart pointer for DomainParticipantInner for easier manipulation.
 pub struct DomainParticipant {
-  dpi: Arc<Mutex<DomainParticipantDisc>>,
+    dpi: Arc<Mutex<DomainParticipantDisc>>,
 }
 
 #[allow(clippy::new_without_default)]
 impl DomainParticipant {
-  /// # Examples
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// ```
-  pub fn new(domain_id: u16) -> Result<DomainParticipant> {
-    trace!("DomainParticipant construct start");
+    /// # Examples
+    /// ```
+    /// # use rustdds::dds::DomainParticipant;
+    /// let domain_participant = DomainParticipant::new(0).unwrap();
+    /// ```
+    pub fn new(domain_id: u16) -> Result<DomainParticipant> {
+        trace!("DomainParticipant construct start");
 
-    // Discovery join channel is used to just send a join handle into the inner
-    // participant, so its .drop() can wait until discovery has had a chance to
-    // stop.
-    let (djh_sender, djh_receiver) = mio_channel::channel();
+        // Discovery join channel is used to just send a join handle into the inner
+        // participant, so its .drop() can wait until discovery has had a chance to
+        // stop.
+        let (djh_sender, djh_receiver) = mio_channel::channel();
 
-    // Channel is used to notify Discovery of (duplicate) SPDP messages from the
-    // wire.
-    let (spdp_liveness_sender, spdp_liveness_receiver) = mio_channel::sync_channel(8);
+        // Channel is used to notify Discovery of (duplicate) SPDP messages from the
+        // wire.
+        let (spdp_liveness_sender, spdp_liveness_receiver) = mio_channel::sync_channel(8);
 
-    // Discovery thread receives and decodes updates from the wire.
-    // It updates data to DiscoveryDB, and sends notifications to dp_event_loop,
-    // which owns the Readers and Writers and notifies them also.
-    let (discovery_updated_sender, discovery_update_notification_receiver) =
-      mio_channel::sync_channel::<DiscoveryNotificationType>(32);
+        // Discovery thread receives and decodes updates from the wire.
+        // It updates data to DiscoveryDB, and sends notifications to dp_event_loop,
+        // which owns the Readers and Writers and notifies them also.
+        let (discovery_updated_sender, discovery_update_notification_receiver) =
+            mio_channel::sync_channel::<DiscoveryNotificationType>(32);
 
-    // This channel is used to:
-    // * local DataReader and DataWriter notify Discovery on drop() so that
-    // Discovery knows we no longer have them.
-    // * Participant commands Discovery to assert liveness, i.e. send liveness
-    // message to remote participants.
-    // * Discovery commands Discovery (thread) to terminate on exit.
-    let (discovery_command_sender, discovery_command_receiver) =
-      mio_channel::sync_channel::<DiscoveryCommand>(64);
+        // This channel is used to:
+        // * local DataReader and DataWriter notify Discovery on drop() so that
+        // Discovery knows we no longer have them.
+        // * Participant commands Discovery to assert liveness, i.e. send liveness
+        // message to remote participants.
+        // * Discovery commands Discovery (thread) to terminate on exit.
+        let (discovery_command_sender, discovery_command_receiver) =
+            mio_channel::sync_channel::<DiscoveryCommand>(64);
 
-    let dp = DomainParticipant {
-      dpi: Arc::new(Mutex::new(DomainParticipantDisc::new(
-        domain_id,
-        djh_receiver,
-        discovery_update_notification_receiver,
-        discovery_command_sender,
-        spdp_liveness_sender,
-      )?)),
-    };
+        let dp = DomainParticipant {
+            dpi: Arc::new(Mutex::new(DomainParticipantDisc::new(
+                domain_id,
+                djh_receiver,
+                discovery_update_notification_receiver,
+                discovery_command_sender,
+                spdp_liveness_sender,
+            )?)),
+        };
 
-    let (discovery_started_sender, discovery_started_receiver) =
-      std::sync::mpsc::channel::<Result<()>>();
+        let (discovery_started_sender, discovery_started_receiver) =
+            std::sync::mpsc::channel::<Result<()>>();
 
-    // Construct and start background thread
-    let dp_clone = dp.weak_clone();
-    let disc_db_clone = dp.discovery_db();
-    let discovery_handle = thread::Builder::new()
-      .name("RustDDS discovery thread".to_string())
-      .spawn(move || {
-        if let Ok(mut discovery) = Discovery::new(
-          dp_clone,
-          disc_db_clone,
-          discovery_started_sender,
-          discovery_updated_sender,
-          discovery_command_receiver,
-          spdp_liveness_receiver,
-        ) {
-          discovery.discovery_event_loop() // run the event loop
+        // Construct and start background thread
+        let dp_clone = dp.weak_clone();
+        let disc_db_clone = dp.discovery_db();
+        let discovery_handle = thread::Builder::new()
+            .name("RustDDS discovery thread".to_string())
+            .spawn(move || {
+                if let Ok(mut discovery) = Discovery::new(
+                    dp_clone,
+                    disc_db_clone,
+                    discovery_started_sender,
+                    discovery_updated_sender,
+                    discovery_command_receiver,
+                    spdp_liveness_receiver,
+                ) {
+                    discovery.discovery_event_loop() // run the event loop
+                }
+            })?;
+
+        djh_sender.send(discovery_handle).unwrap_or(()); // send join handle to inner participant
+
+        debug!("Waiting for discovery to start"); // blocking until discovery answers
+        match discovery_started_receiver.recv_timeout(Duration::from_secs(10)) {
+            Ok(Ok(())) => {
+                // normal case
+                info!("Discovery started. Participant constructed.");
+                Ok(dp)
+            }
+            Ok(Err(e)) => {
+                std::mem::drop(dp);
+                log_and_err_internal!("Failed to start discovery thread: {:?}", e)
+            }
+            Err(e) => log_and_err_internal!("Discovery thread channel error: {:?}", e),
         }
-      })?;
-
-    djh_sender.send(discovery_handle).unwrap_or(()); // send join handle to inner participant
-
-    debug!("Waiting for discovery to start"); // blocking until discovery answers
-    match discovery_started_receiver.recv_timeout(Duration::from_secs(10)) {
-      Ok(Ok(())) => {
-        // normal case
-        info!("Discovery started. Participant constructed.");
-        Ok(dp)
-      }
-      Ok(Err(e)) => {
-        std::mem::drop(dp);
-        log_and_err_internal!("Failed to start discovery thread: {:?}", e)
-      }
-      Err(e) => log_and_err_internal!("Discovery thread channel error: {:?}", e),
     }
-  }
 
-  /// Creates DDS Publisher
-  ///
-  /// # Arguments
-  ///
-  /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) for publisher
-  ///   and given to DataWriter as default.
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let qos = QosPolicyBuilder::new().build();
-  /// let publisher = domain_participant.create_publisher(&qos);
-  /// ```
-  pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
-    let w = self.weak_clone(); // this must be done first to avoid deadlock
-    self.dpi.lock().unwrap().create_publisher(&w, qos)
-  }
+    /// Creates DDS Publisher
+    ///
+    /// # Arguments
+    ///
+    /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) for
+    ///   publisher and given to DataWriter as default.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rustdds::dds::DomainParticipant;
+    /// # use rustdds::dds::qos::QosPolicyBuilder;
+    /// let domain_participant = DomainParticipant::new(0).unwrap();
+    /// let qos = QosPolicyBuilder::new().build();
+    /// let publisher = domain_participant.create_publisher(&qos);
+    /// ```
+    pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
+        let w = self.weak_clone(); // this must be done first to avoid deadlock
+        self.dpi.lock().unwrap().create_publisher(&w, qos)
+    }
 
-  /// Creates DDS Subscriber
-  ///
-  /// # Arguments
-  ///
-  /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) for subscriber
-  ///   and given to DataReader as default.
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let qos = QosPolicyBuilder::new().build();
-  /// let subscriber = domain_participant.create_subscriber(&qos);
-  /// ```
-  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
-    // println!("DP(outer): create_subscriber");
-    let w = self.weak_clone(); // do this first, avoid deadlock
-    self.dpi.lock().unwrap().create_subscriber(&w, qos)
-  }
+    /// Creates DDS Subscriber
+    ///
+    /// # Arguments
+    ///
+    /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) for
+    ///   subscriber and given to DataReader as default.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rustdds::dds::DomainParticipant;
+    /// # use rustdds::dds::qos::QosPolicyBuilder;
+    /// let domain_participant = DomainParticipant::new(0).unwrap();
+    /// let qos = QosPolicyBuilder::new().build();
+    /// let subscriber = domain_participant.create_subscriber(&qos);
+    /// ```
+    pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
+        // println!("DP(outer): create_subscriber");
+        let w = self.weak_clone(); // do this first, avoid deadlock
+        self.dpi.lock().unwrap().create_subscriber(&w, qos)
+    }
 
-  /// Create DDS Topic
-  ///
-  /// # Arguments
-  ///
-  /// * `name` - Name of the topic.
-  /// * `type_desc` - Name of the type this topic is supposed to deliver.
-  /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) that are
-  ///   distributed to DataReaders and DataWriters.
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// use rustdds::dds::data_types::TopicKind;
-  ///
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let qos = QosPolicyBuilder::new().build();
-  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey);
-  /// ```
-  pub fn create_topic(
-    &self,
-    name: String,
-    type_desc: String,
-    qos: &QosPolicies,
-    topic_kind: TopicKind,
-  ) -> Result<Topic> {
-    // println!("Create topic outer");
-    let w = self.weak_clone();
-    self
-      .dpi
-      .lock()
-      .unwrap()
-      .create_topic(&w, name, type_desc, qos, topic_kind)
-  }
+    /// Create DDS Topic
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Name of the topic.
+    /// * `type_desc` - Name of the type this topic is supposed to deliver.
+    /// * `qos` - Takes [qos policies](qos/struct.QosPolicies.html) that are
+    ///   distributed to DataReaders and DataWriters.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rustdds::dds::DomainParticipant;
+    /// # use rustdds::dds::qos::QosPolicyBuilder;
+    /// use rustdds::dds::data_types::TopicKind;
+    ///
+    /// let domain_participant = DomainParticipant::new(0).unwrap();
+    /// let qos = QosPolicyBuilder::new().build();
+    /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey);
+    /// ```
+    pub fn create_topic(
+        &self,
+        name: String,
+        type_desc: String,
+        qos: &QosPolicies,
+        topic_kind: TopicKind,
+    ) -> Result<Topic> {
+        // println!("Create topic outer");
+        let w = self.weak_clone();
+        self.dpi
+            .lock()
+            .unwrap()
+            .create_topic(&w, name, type_desc, qos, topic_kind)
+    }
 
-  pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
-    let w = self.weak_clone();
-    self.dpi.lock().unwrap().find_topic(&w, name, timeout)
-  }
+    pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
+        let w = self.weak_clone();
+        self.dpi.lock().unwrap().find_topic(&w, name, timeout)
+    }
 
-  /// # Examples
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let domain_id = domain_participant.domain_id();
-  /// ```
-  pub fn domain_id(&self) -> u16 {
-    self.dpi.lock().unwrap().domain_id()
-  }
+    /// # Examples
+    ///
+    /// ```
+    /// # use rustdds::dds::DomainParticipant;
+    /// let domain_participant = DomainParticipant::new(0).unwrap();
+    /// let domain_id = domain_participant.domain_id();
+    /// ```
+    pub fn domain_id(&self) -> u16 {
+        self.dpi.lock().unwrap().domain_id()
+    }
 
-  /// # Examples
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let participant_id = domain_participant.participant_id();
-  /// ```
-  pub fn participant_id(&self) -> u16 {
-    self.dpi.lock().unwrap().participant_id()
-  }
+    /// # Examples
+    ///
+    /// ```
+    /// # use rustdds::dds::DomainParticipant;
+    /// let domain_participant = DomainParticipant::new(0).unwrap();
+    /// let participant_id = domain_participant.participant_id();
+    /// ```
+    pub fn participant_id(&self) -> u16 {
+        self.dpi.lock().unwrap().participant_id()
+    }
 
-  /// Gets all DiscoveredTopics from DDS network
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let discovered_topics = domain_participant.discovered_topics();
-  /// for dtopic in discovered_topics.iter() {
-  ///   // do something
-  /// }
-  /// ```
-  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self.dpi.lock().unwrap().discovered_topics()
-  }
+    /// Gets all DiscoveredTopics from DDS network
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rustdds::dds::DomainParticipant;
+    /// let domain_participant = DomainParticipant::new(0).unwrap();
+    /// let discovered_topics = domain_participant.discovered_topics();
+    /// for dtopic in discovered_topics.iter() {
+    ///   // do something
+    /// }
+    /// ```
+    pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+        self.dpi.lock().unwrap().discovered_topics()
+    }
 
-  /// Manually asserts liveliness, affecting all writers with
-  /// LIVELINESS QoS of MANUAL_BY_PARTICIPANT created by
-  /// this particular participant.
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
-  /// domain_participant.assert_liveliness();
-  /// ```
-  pub fn assert_liveliness(self) -> Result<()> {
-    self.dpi.lock().unwrap().assert_liveliness()
-  }
+    /// Manually asserts liveliness, affecting all writers with
+    /// LIVELINESS QoS of MANUAL_BY_PARTICIPANT created by
+    /// this particular participant.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rustdds::dds::DomainParticipant;
+    /// let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
+    /// domain_participant.assert_liveliness();
+    /// ```
+    pub fn assert_liveliness(self) -> Result<()> {
+        self.dpi.lock().unwrap().assert_liveliness()
+    }
 
-  pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
-    DomainParticipantWeak::new(self.clone(), self.guid())
-  }
+    pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
+        DomainParticipantWeak::new(self.clone(), self.guid())
+    }
 
-  pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    self.dpi.lock().unwrap().dds_cache()
-  }
+    pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
+        self.dpi.lock().unwrap().dds_cache()
+    }
 
-  pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
-    self
-      .dpi
-      .lock()
-      .unwrap()
-      .dpi
-      .lock()
-      .unwrap()
-      .discovery_db
-      .clone()
-  }
+    pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
+        self.dpi
+            .lock()
+            .unwrap()
+            .dpi
+            .lock()
+            .unwrap()
+            .discovery_db
+            .clone()
+    }
 }
 
 impl PartialEq for DomainParticipant {
-  fn eq(&self, other: &Self) -> bool {
-    self.guid() == other.guid()
-      && self.domain_id() == other.domain_id()
-      && self.participant_id() == other.participant_id()
-  }
+    fn eq(&self, other: &Self) -> bool {
+        self.guid() == other.guid()
+            && self.domain_id() == other.domain_id()
+            && self.participant_id() == other.participant_id()
+    }
 }
 
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
-  dpi: Weak<Mutex<DomainParticipantDisc>>,
-  // This struct caches the GUID to avoid construction deadlocks
-  guid: GUID,
+    dpi: Weak<Mutex<DomainParticipantDisc>>,
+    // This struct caches the GUID to avoid construction deadlocks
+    guid: GUID,
 }
 
 impl DomainParticipantWeak {
-  pub fn new(dp: DomainParticipant, guid: GUID) -> DomainParticipantWeak {
-    DomainParticipantWeak {
-      dpi: Arc::downgrade(&dp.dpi),
-      guid,
+    pub fn new(dp: DomainParticipant, guid: GUID) -> DomainParticipantWeak {
+        DomainParticipantWeak {
+            dpi: Arc::downgrade(&dp.dpi),
+            guid,
+        }
     }
-  }
 
-  pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_publisher(self, qos),
-      None => Err(Error::OutOfResources),
+    pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
+        match self.dpi.upgrade() {
+            Some(dpi) => dpi.lock().unwrap().create_publisher(self, qos),
+            None => Err(Error::OutOfResources),
+        }
     }
-  }
 
-  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
-      None => Err(Error::OutOfResources),
+    pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
+        match self.dpi.upgrade() {
+            Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
+            None => Err(Error::OutOfResources),
+        }
     }
-  }
 
-  pub fn create_topic(
-    &self,
-    name: String,
-    type_desc: String,
-    qos: &QosPolicies,
-    topic_kind: TopicKind,
-  ) -> Result<Topic> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi
-        .lock()
-        .unwrap()
-        .create_topic(self, name, type_desc, qos, topic_kind),
-      None => Err(Error::LockPoisoned),
+    pub fn create_topic(
+        &self,
+        name: String,
+        type_desc: String,
+        qos: &QosPolicies,
+        topic_kind: TopicKind,
+    ) -> Result<Topic> {
+        match self.dpi.upgrade() {
+            Some(dpi) => dpi
+                .lock()
+                .unwrap()
+                .create_topic(self, name, type_desc, qos, topic_kind),
+            None => Err(Error::LockPoisoned),
+        }
     }
-  }
 
-  pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().find_topic(self, name, timeout),
-      None => Err(Error::LockPoisoned),
+    pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
+        match self.dpi.upgrade() {
+            Some(dpi) => dpi.lock().unwrap().find_topic(self, name, timeout),
+            None => Err(Error::LockPoisoned),
+        }
     }
-  }
 
-  pub fn domain_id(&self) -> u16 {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().domain_id(),
-      None => panic!("Unable to get original domain participant."),
+    pub fn domain_id(&self) -> u16 {
+        match self.dpi.upgrade() {
+            Some(dpi) => dpi.lock().unwrap().domain_id(),
+            None => panic!("Unable to get original domain participant."),
+        }
     }
-  }
 
-  pub fn participant_id(&self) -> u16 {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().participant_id(),
-      None => panic!("Unable to get original domain participant."),
+    pub fn participant_id(&self) -> u16 {
+        match self.dpi.upgrade() {
+            Some(dpi) => dpi.lock().unwrap().participant_id(),
+            None => panic!("Unable to get original domain participant."),
+        }
     }
-  }
 
-  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().discovered_topics(),
-      None => Vec::new(),
+    pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+        match self.dpi.upgrade() {
+            Some(dpi) => dpi.lock().unwrap().discovered_topics(),
+            None => Vec::new(),
+        }
     }
-  }
 
-  pub fn upgrade(self) -> Option<DomainParticipant> {
-    self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
-  }
+    pub fn upgrade(self) -> Option<DomainParticipant> {
+        self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
+    }
 } // end impl
 
 impl RTPSEntity for DomainParticipantWeak {
-  fn guid(&self) -> GUID {
-    self.guid
-  }
+    fn guid(&self) -> GUID {
+        self.guid
+    }
 }
 
 // This struct exists only to control and stop Discovery when DomainParticipant
 // should be dropped
 pub(crate) struct DomainParticipantDisc {
-  dpi: Arc<Mutex<DomainParticipantInner>>,
-  // Discovery control
-  //discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
-  //discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
-  discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
-  discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
+    dpi: Arc<Mutex<DomainParticipantInner>>,
+    // Discovery control
+    //discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
+    //discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
+    discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
+    discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
 }
 
 impl DomainParticipantDisc {
-  pub fn new(
-    domain_id: u16,
-    discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
-    discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-    discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
-    spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> Result<DomainParticipantDisc> {
-    let dpi = DomainParticipantInner::new(
-      domain_id,
-      discovery_update_notification_receiver,
-      spdp_liveness_sender,
-    )?;
+    pub fn new(
+        domain_id: u16,
+        discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
+        discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+        discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
+        spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    ) -> Result<DomainParticipantDisc> {
+        let dpi = DomainParticipantInner::new(
+            domain_id,
+            discovery_update_notification_receiver,
+            spdp_liveness_sender,
+        )?;
 
-    Ok(DomainParticipantDisc {
-      dpi: Arc::new(Mutex::new(dpi)),
-      //discovery_updated_sender,
-      //discovery_command_receiver,
-      discovery_command_sender,
-      discovery_join_handle,
-    })
-  }
+        Ok(DomainParticipantDisc {
+            dpi: Arc::new(Mutex::new(dpi)),
+            //discovery_updated_sender,
+            //discovery_command_receiver,
+            discovery_command_sender,
+            discovery_join_handle,
+        })
+    }
 
-  pub fn create_publisher(
-    &self,
-    dp: &DomainParticipantWeak,
-    qos: &QosPolicies,
-  ) -> Result<Publisher> {
-    self
-      .dpi
-      .lock()
-      .unwrap()
-      .create_publisher(dp, qos, self.discovery_command_sender.clone())
-  }
+    pub fn create_publisher(
+        &self,
+        dp: &DomainParticipantWeak,
+        qos: &QosPolicies,
+    ) -> Result<Publisher> {
+        self.dpi
+            .lock()
+            .unwrap()
+            .create_publisher(dp, qos, self.discovery_command_sender.clone())
+    }
 
-  pub fn create_subscriber(
-    &self,
-    dp: &DomainParticipantWeak,
-    qos: &QosPolicies,
-  ) -> Result<Subscriber> {
-    self
-      .dpi
-      .lock()
-      .unwrap()
-      .create_subscriber(dp, qos, self.discovery_command_sender.clone())
-  }
+    pub fn create_subscriber(
+        &self,
+        dp: &DomainParticipantWeak,
+        qos: &QosPolicies,
+    ) -> Result<Subscriber> {
+        self.dpi
+            .lock()
+            .unwrap()
+            .create_subscriber(dp, qos, self.discovery_command_sender.clone())
+    }
 
-  pub fn create_topic(
-    &self,
-    dp: &DomainParticipantWeak,
-    name: String,
-    type_desc: String,
-    qos: &QosPolicies,
-    topic_kind: TopicKind,
-  ) -> Result<Topic> {
-    // println!("Create topic disc");
-    self
-      .dpi
-      .lock()
-      .unwrap()
-      .create_topic(dp, name, type_desc, qos, topic_kind)
-  }
+    pub fn create_topic(
+        &self,
+        dp: &DomainParticipantWeak,
+        name: String,
+        type_desc: String,
+        qos: &QosPolicies,
+        topic_kind: TopicKind,
+    ) -> Result<Topic> {
+        // println!("Create topic disc");
+        self.dpi
+            .lock()
+            .unwrap()
+            .create_topic(dp, name, type_desc, qos, topic_kind)
+    }
 
-  pub fn find_topic(
-    &self,
-    dp: &DomainParticipantWeak,
-    name: &str,
-    timeout: Duration,
-  ) -> Result<Option<Topic>> {
-    self.dpi.lock().unwrap().find_topic(dp, name, timeout)
-  }
+    pub fn find_topic(
+        &self,
+        dp: &DomainParticipantWeak,
+        name: &str,
+        timeout: Duration,
+    ) -> Result<Option<Topic>> {
+        self.dpi.lock().unwrap().find_topic(dp, name, timeout)
+    }
 
-  pub fn domain_id(&self) -> u16 {
-    self.dpi.lock().unwrap().domain_id()
-  }
+    pub fn domain_id(&self) -> u16 {
+        self.dpi.lock().unwrap().domain_id()
+    }
 
-  pub fn participant_id(&self) -> u16 {
-    self.dpi.lock().unwrap().participant_id()
-  }
+    pub fn participant_id(&self) -> u16 {
+        self.dpi.lock().unwrap().participant_id()
+    }
 
-  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self.dpi.lock().unwrap().discovered_topics()
-  }
+    pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+        self.dpi.lock().unwrap().discovered_topics()
+    }
 
-  pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    return self.dpi.lock().unwrap().dds_cache();
-  }
+    pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
+        return self.dpi.lock().unwrap().dds_cache();
+    }
 
-  pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
-    return self.dpi.lock().unwrap().discovery_db.clone();
-  }
+    pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
+        return self.dpi.lock().unwrap().discovery_db.clone();
+    }
 
-  pub(crate) fn assert_liveliness(&self) -> Result<()> {
-    // No point in checking for the LIVELINESS QoS of MANUAL_BY_PARTICIPANT,
-    // the discovery command mutates a field which is only read
-    // by writers with that particular QoS.
-    self
-      .discovery_command_sender
-      .send(DiscoveryCommand::ManualAssertLiveliness)
-      .or_else(|e| {
-        log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
-      })
-  }
+    pub(crate) fn assert_liveliness(&self) -> Result<()> {
+        // No point in checking for the LIVELINESS QoS of MANUAL_BY_PARTICIPANT,
+        // the discovery command mutates a field which is only read
+        // by writers with that particular QoS.
+        self.discovery_command_sender
+            .send(DiscoveryCommand::ManualAssertLiveliness)
+            .or_else(|e| {
+                log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
+            })
+    }
 }
 
 impl Drop for DomainParticipantDisc {
-  fn drop(&mut self) {
-    debug!("Sending Discovery Stop signal.");
-    match self
-      .discovery_command_sender
-      .send(DiscoveryCommand::StopDiscovery)
-    {
-      Ok(_) => (),
-      _ => {
-        warn!("Failed to send stop signal to Discovery");
-        return;
-      }
-    }
+    fn drop(&mut self) {
+        debug!("Sending Discovery Stop signal.");
+        match self
+            .discovery_command_sender
+            .send(DiscoveryCommand::StopDiscovery)
+        {
+            Ok(_) => (),
+            _ => {
+                warn!("Failed to send stop signal to Discovery");
+                return;
+            }
+        }
 
-    debug!("Waiting for Discovery join.");
-    if let Ok(handle) = self.discovery_join_handle.try_recv() {
-      handle.join().unwrap();
-      debug!("Joined Discovery.");
+        debug!("Waiting for Discovery join.");
+        if let Ok(handle) = self.discovery_join_handle.try_recv() {
+            handle.join().unwrap();
+            debug!("Joined Discovery.");
+        }
     }
-  }
 }
 
 // This is the actual working DomainParticipant.
 pub(crate) struct DomainParticipantInner {
-  domain_id: u16,
-  participant_id: u16,
+    domain_id: u16,
+    participant_id: u16,
 
-  my_guid: GUID,
+    my_guid: GUID,
 
-  // Adding Readers
-  sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
-  sender_remove_reader: mio_channel::SyncSender<GUID>,
+    // Adding Readers
+    sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
+    sender_remove_reader: mio_channel::SyncSender<GUID>,
 
-  // Adding DataReaders
-  sender_add_datareader_vec: Vec<mio_channel::SyncSender<()>>,
-  sender_remove_datareader_vec: Vec<mio_channel::SyncSender<GUID>>,
+    // Adding DataReaders
+    sender_add_datareader_vec: Vec<mio_channel::SyncSender<()>>,
+    sender_remove_datareader_vec: Vec<mio_channel::SyncSender<GUID>>,
 
-  // dp_event_loop control
-  stop_poll_sender: mio_channel::Sender<()>,
-  ev_loop_handle: Option<JoinHandle<()>>, // this is Option, because it needs to be extracted
-  // out of the struct (take) in order to .join() on the handle.
+    // dp_event_loop control
+    stop_poll_sender: mio_channel::Sender<()>,
+    ev_loop_handle: Option<JoinHandle<()>>, // this is Option, because it needs to be extracted
+    // out of the struct (take) in order to .join() on the handle.
 
-  // Writers
-  add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
-  remove_writer_sender: mio_channel::SyncSender<GUID>,
+    // Writers
+    add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
+    remove_writer_sender: mio_channel::SyncSender<GUID>,
 
-  dds_cache: Arc<RwLock<DDSCache>>,
-  discovery_db: Arc<RwLock<DiscoveryDB>>,
-  discovery_db_event_receiver: mio_channel::Receiver<()>,
+    dds_cache: Arc<RwLock<DDSCache>>,
+    discovery_db: Arc<RwLock<DiscoveryDB>>,
+    discovery_db_event_receiver: mio_channel::Receiver<()>,
 }
 
 impl Drop for DomainParticipantInner {
-  fn drop(&mut self) {
-    // if send has an error simply leave as we have lost control of the
-    // ev_loop_thread anyways
-    if self.stop_poll_sender.send(()).is_err() {
-      return;
-    }
+    fn drop(&mut self) {
+        // if send has an error simply leave as we have lost control of the
+        // ev_loop_thread anyways
+        if self.stop_poll_sender.send(()).is_err() {
+            return;
+        }
 
-    debug!("Waiting for dp_event_loop join");
-    match self.ev_loop_handle.take() {
-      Some(join_handle) => {
-        join_handle
-          .join()
-          .unwrap_or_else(|e| warn!("Failed to join dp_event_loop: {:?}", e));
-      }
-      None => {
-        error!("Someone managed to steal dp_event_loop join handle from DomainParticipantInner.");
-      }
+        debug!("Waiting for dp_event_loop join");
+        match self.ev_loop_handle.take() {
+            Some(join_handle) => {
+                join_handle
+                    .join()
+                    .unwrap_or_else(|e| warn!("Failed to join dp_event_loop: {:?}", e));
+            }
+            None => {
+                error!("Someone managed to steal dp_event_loop join handle from DomainParticipantInner.");
+            }
+        }
+        debug!("Joined dp_event_loop");
     }
-    debug!("Joined dp_event_loop");
-  }
 }
 
 #[allow(clippy::new_without_default)]
 impl DomainParticipantInner {
-  fn new(
-    domain_id: u16,
-    discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-    spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> Result<DomainParticipantInner> {
-    let mut listeners = HashMap::new();
+    fn new(
+        domain_id: u16,
+        discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+        spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    ) -> Result<DomainParticipantInner> {
+        let mut listeners = HashMap::new();
 
-    match UDPListener::new_multicast(
-      DISCOVERY_SENDER_TOKEN,
-      "0.0.0.0",
-      spdp_well_known_multicast_port(domain_id),
-      Ipv4Addr::new(239, 255, 0, 1),
-    ) {
-      Ok(l) => {
-        listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, l);
-      }
-      Err(e) => warn!("Cannot get multicast discovery listener: {:?}", e),
-    }
-
-    let mut participant_id = 0;
-
-    let mut discovery_listener = None;
-
-    // Magic value 120 below is from RTPS spec Section "9.6.1.3 Default Port
-    // Numbers"
-    while discovery_listener.is_none() && participant_id < 120 {
-      discovery_listener = UDPListener::new_unicast(
-        DISCOVERY_SENDER_TOKEN,
-        "0.0.0.0",
-        spdp_well_known_unicast_port(domain_id, participant_id),
-      )
-      .ok();
-      if discovery_listener.is_none() {
-        participant_id += 1;
-      }
-    }
-
-    info!("ParticipantId {} selected.", participant_id);
-
-    // here discovery_listener is redefinde (shadowed)
-    let discovery_listener = match discovery_listener {
-      Some(dl) => dl,
-      None => return log_and_err_internal!("Could not find free ParticipantId"),
-    };
-    listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
-
-    // Now the user traffic listeners
-
-    match UDPListener::new_multicast(
-      USER_TRAFFIC_SENDER_TOKEN,
-      "0.0.0.0",
-      user_traffic_multicast_port(domain_id),
-      Ipv4Addr::new(239, 255, 0, 1),
-    ) {
-      Ok(l) => {
-        listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l);
-      }
-      Err(e) => warn!("Cannot get multicast discovery listener: {:?}", e),
-    }
-
-    let user_traffic_listener = UDPListener::new_unicast(
-      USER_TRAFFIC_SENDER_TOKEN,
-      "0.0.0.0",
-      user_traffic_unicast_port(domain_id, participant_id),
-    );
-    let user_traffic_listener = match user_traffic_listener {
-      Ok(l) => l,
-      Err(e) => return log_and_err_internal!("Could not open user traffic listener: {:?}", e),
-    };
-    listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
-
-    // Adding readers
-    let (sender_add_reader, receiver_add_reader) =
-      mio_channel::sync_channel::<ReaderIngredients>(100);
-    let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(10);
-
-    // Writers
-    let (add_writer_sender, add_writer_receiver) =
-      mio_channel::sync_channel::<WriterIngredients>(10);
-    let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
-
-    let new_guid = GUID::new_particiapnt_guid();
-    let domain_info = DomainInfo {
-      domain_participant_guid: new_guid,
-      domain_id,
-      participant_id,
-    };
-
-    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-
-    let (discovery_db_event_sender, discovery_db_event_receiver) =
-      mio_channel::sync_channel::<()>(1);
-    let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
-      new_guid,
-      Some(discovery_db_event_sender),
-    )));
-
-    let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
-
-    // Launch the background thread for DomainParticipant
-    let dds_cache_clone = dds_cache.clone();
-    let disc_db_clone = discovery_db.clone();
-    let ev_loop_handle = thread::Builder::new()
-      .name(format!("RustDDS Participant {} event loop", participant_id))
-      .spawn(move || {
-        let dp_event_loop = DPEventLoop::new(
-          domain_info,
-          listeners,
-          dds_cache_clone,
-          disc_db_clone,
-          new_guid.guid_prefix,
-          TokenReceiverPair {
-            token: ADD_READER_TOKEN,
-            receiver: receiver_add_reader,
-          },
-          TokenReceiverPair {
-            token: REMOVE_READER_TOKEN,
-            receiver: receiver_remove_reader,
-          },
-          TokenReceiverPair {
-            token: ADD_WRITER_TOKEN,
-            receiver: add_writer_receiver,
-          },
-          TokenReceiverPair {
-            token: REMOVE_WRITER_TOKEN,
-            receiver: remove_writer_receiver,
-          },
-          stop_poll_receiver,
-          discovery_update_notification_receiver,
-          spdp_liveness_sender,
-        );
-        dp_event_loop.event_loop()
-      })?;
-
-    info!(
-      "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
-      domain_id, participant_id, new_guid
-    );
-    Ok(DomainParticipantInner {
-      domain_id,
-      participant_id,
-      my_guid: new_guid,
-      // Adding readers
-      sender_add_reader,
-      sender_remove_reader,
-      // Adding datareaders
-      sender_add_datareader_vec: Vec::new(),
-      sender_remove_datareader_vec: Vec::new(),
-      stop_poll_sender,
-      ev_loop_handle: Some(ev_loop_handle),
-      add_writer_sender,
-      remove_writer_sender,
-      dds_cache,
-      discovery_db,
-      discovery_db_event_receiver,
-    })
-  }
-
-  pub fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    self.dds_cache.clone()
-  }
-
-  pub fn add_reader(&self, reader: ReaderIngredients) {
-    self.sender_add_reader.send(reader).unwrap();
-  }
-
-  pub fn remove_reader(&self, guid: GUID) {
-    let reader_guid = guid; // How to identify reader to be removed?
-    self.sender_remove_reader.send(reader_guid).unwrap();
-  }
-
-  // Publisher and subscriber creation
-  //
-  // There are no delete function for publisher or subscriber. Deletion is
-  // performed by deleting the Publisher or Subscriber object, who upon deletion
-  // will notify the DomainParticipant.
-  pub fn create_publisher(
-    &self,
-    domain_participant: &DomainParticipantWeak,
-    qos: &QosPolicies,
-    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Result<Publisher> {
-    Ok(Publisher::new(
-      domain_participant.clone(),
-      self.discovery_db.clone(),
-      qos.clone(),
-      qos.clone(),
-      self.add_writer_sender.clone(),
-      discovery_command,
-    ))
-  }
-
-  pub fn create_subscriber(
-    &self,
-    domain_participant: &DomainParticipantWeak,
-    qos: &QosPolicies,
-    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Result<Subscriber> {
-    Ok(Subscriber::new(
-      domain_participant.clone(),
-      self.discovery_db.clone(),
-      qos.clone(),
-      self.sender_add_reader.clone(),
-      self.sender_remove_reader.clone(),
-      discovery_command,
-    ))
-  }
-
-  // Topic creation. Data types should be handled as something (potentially) more
-  // structured than a String. NOTE: Here we are using &str for topic name. &str
-  // is Unicode string, whereas DDS specifes topic name to be a sequence of
-  // octets, which would be &[u8] in Rust. This may cause problems if there are
-  // topic names with non-ASCII characters. On the other hand, string handling
-  // with &str is easier in Rust.
-  pub fn create_topic(
-    &self,
-    domain_participant_weak: &DomainParticipantWeak,
-    name: String,
-    type_desc: String,
-    qos: &QosPolicies,
-    topic_kind: TopicKind,
-  ) -> Result<Topic> {
-    let topic = Topic::new(
-      domain_participant_weak,
-      name,
-      TypeDesc::new(type_desc),
-      qos,
-      topic_kind,
-    );
-    Ok(topic)
-
-    // TODO: refine
-  }
-
-  // Do not implement contentfilteredtopics or multitopics (yet)
-
-  pub fn find_topic(
-    &self,
-    domain_participant_weak: &DomainParticipantWeak,
-    name: &str,
-    timeout: Duration,
-  ) -> Result<Option<Topic>> {
-    let poll = mio::Poll::new()?;
-    let mut events = mio::Events::with_capacity(1);
-    // Should be register before the check and use level trigger to avoid missing
-    // event
-    poll.register(
-      &self.discovery_db_event_receiver,
-      mio::Token(0),
-      mio::Ready::readable(),
-      mio::PollOpt::level(),
-    )?;
-
-    let find_end = Instant::now() + timeout;
-    loop {
-      if let Some(topic) = self.find_topic_in_discovery_db(domain_participant_weak, name)? {
-        return Ok(Some(topic));
-      }
-      let timeout = find_end - Instant::now();
-      poll.poll(&mut events, Some(timeout))?;
-
-      if let Some(_event) = events.iter().next() {
-        if self.discovery_db_event_receiver.try_recv().is_ok() {
-          continue;
+        match UDPListener::new_multicast(
+            DISCOVERY_SENDER_TOKEN,
+            "0.0.0.0",
+            spdp_well_known_multicast_port(domain_id),
+            Ipv4Addr::new(239, 255, 0, 1),
+        ) {
+            Ok(l) => {
+                listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, l);
+            }
+            Err(e) => warn!("Cannot get multicast discovery listener: {:?}", e),
         }
-      }
 
-      if Instant::now() > find_end {
-        break;
-      }
+        let mut participant_id = 0;
+
+        let mut discovery_listener = None;
+
+        // Magic value 120 below is from RTPS spec Section "9.6.1.3 Default Port
+        // Numbers"
+        while discovery_listener.is_none() && participant_id < 120 {
+            discovery_listener = UDPListener::new_unicast(
+                DISCOVERY_SENDER_TOKEN,
+                "0.0.0.0",
+                spdp_well_known_unicast_port(domain_id, participant_id),
+            )
+            .ok();
+            if discovery_listener.is_none() {
+                participant_id += 1;
+            }
+        }
+
+        info!("ParticipantId {} selected.", participant_id);
+
+        // here discovery_listener is redefinde (shadowed)
+        let discovery_listener = match discovery_listener {
+            Some(dl) => dl,
+            None => return log_and_err_internal!("Could not find free ParticipantId"),
+        };
+        listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
+
+        // Now the user traffic listeners
+
+        match UDPListener::new_multicast(
+            USER_TRAFFIC_SENDER_TOKEN,
+            "0.0.0.0",
+            user_traffic_multicast_port(domain_id),
+            Ipv4Addr::new(239, 255, 0, 1),
+        ) {
+            Ok(l) => {
+                listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l);
+            }
+            Err(e) => warn!("Cannot get multicast discovery listener: {:?}", e),
+        }
+
+        let user_traffic_listener = UDPListener::new_unicast(
+            USER_TRAFFIC_SENDER_TOKEN,
+            "0.0.0.0",
+            user_traffic_unicast_port(domain_id, participant_id),
+        );
+        let user_traffic_listener = match user_traffic_listener {
+            Ok(l) => l,
+            Err(e) => {
+                return log_and_err_internal!("Could not open user traffic listener: {:?}", e)
+            }
+        };
+        listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
+
+        // Adding readers
+        let (sender_add_reader, receiver_add_reader) =
+            mio_channel::sync_channel::<ReaderIngredients>(100);
+        let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(10);
+
+        // Writers
+        let (add_writer_sender, add_writer_receiver) =
+            mio_channel::sync_channel::<WriterIngredients>(10);
+        let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
+
+        let new_guid = GUID::new_particiapnt_guid();
+        let domain_info = DomainInfo {
+            domain_participant_guid: new_guid,
+            domain_id,
+            participant_id,
+        };
+
+        let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+
+        let (discovery_db_event_sender, discovery_db_event_receiver) =
+            mio_channel::sync_channel::<()>(1);
+        let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
+            new_guid,
+            Some(discovery_db_event_sender),
+        )));
+
+        let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
+
+        // Launch the background thread for DomainParticipant
+        let dds_cache_clone = dds_cache.clone();
+        let disc_db_clone = discovery_db.clone();
+        let ev_loop_handle = thread::Builder::new()
+            .name(format!("RustDDS Participant {} event loop", participant_id))
+            .spawn(move || {
+                let dp_event_loop = DPEventLoop::new(
+                    domain_info,
+                    listeners,
+                    dds_cache_clone,
+                    disc_db_clone,
+                    new_guid.guid_prefix,
+                    TokenReceiverPair {
+                        token: ADD_READER_TOKEN,
+                        receiver: receiver_add_reader,
+                    },
+                    TokenReceiverPair {
+                        token: REMOVE_READER_TOKEN,
+                        receiver: receiver_remove_reader,
+                    },
+                    TokenReceiverPair {
+                        token: ADD_WRITER_TOKEN,
+                        receiver: add_writer_receiver,
+                    },
+                    TokenReceiverPair {
+                        token: REMOVE_WRITER_TOKEN,
+                        receiver: remove_writer_receiver,
+                    },
+                    stop_poll_receiver,
+                    discovery_update_notification_receiver,
+                    spdp_liveness_sender,
+                );
+                dp_event_loop.event_loop()
+            })?;
+
+        info!(
+            "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
+            domain_id, participant_id, new_guid
+        );
+        Ok(DomainParticipantInner {
+            domain_id,
+            participant_id,
+            my_guid: new_guid,
+            // Adding readers
+            sender_add_reader,
+            sender_remove_reader,
+            // Adding datareaders
+            sender_add_datareader_vec: Vec::new(),
+            sender_remove_datareader_vec: Vec::new(),
+            stop_poll_sender,
+            ev_loop_handle: Some(ev_loop_handle),
+            add_writer_sender,
+            remove_writer_sender,
+            dds_cache,
+            discovery_db,
+            discovery_db_event_receiver,
+        })
     }
 
-    Ok(None)
-  }
-
-  fn find_topic_in_discovery_db(
-    &self,
-    domain_participant_weak: &DomainParticipantWeak,
-    name: &str,
-  ) -> Result<Option<Topic>> {
-    let db = match self.discovery_db.read() {
-      Ok(db) => db,
-      Err(_) => return Err(Error::LockPoisoned),
-    };
-
-    let build_topic_fn = |d: &DiscoveredTopicData| {
-      let qos = d.topic_data.qos();
-      let topic_kind = match d.topic_data.key {
-        Some(_) => TopicKind::WithKey,
-        None => TopicKind::NoKey,
-      };
-      let name = d.topic_name().clone();
-      let type_desc = d.topic_data.type_name.clone();
-      self.create_topic(domain_participant_weak, name, type_desc, &qos, topic_kind)
-    };
-
-    if let Some(d) = db.get_topic(name) {
-      // build a Topic from DiscoveredTopicData
-      build_topic_fn(d).map(Some)
-    } else {
-      Ok(None)
+    pub fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
+        self.dds_cache.clone()
     }
-  }
-  // get_builtin_subscriber (why would we need this?)
 
-  // ignore_* operations. TODO: Do we needa any of those?
+    pub fn add_reader(&self, reader: ReaderIngredients) {
+        self.sender_add_reader.send(reader).unwrap();
+    }
 
-  // delete_contained_entities is not needed. Data structures shoud be designed so
-  // that lifetime of all created objects is within the lifetime of
-  // DomainParticipant. Then such deletion is implicit.
+    pub fn remove_reader(&self, guid: GUID) {
+        let reader_guid = guid; // How to identify reader to be removed?
+        self.sender_remove_reader.send(reader_guid).unwrap();
+    }
 
-  // The following methods are not for application use.
+    // Publisher and subscriber creation
+    //
+    // There are no delete function for publisher or subscriber. Deletion is
+    // performed by deleting the Publisher or Subscriber object, who upon deletion
+    // will notify the DomainParticipant.
+    pub fn create_publisher(
+        &self,
+        domain_participant: &DomainParticipantWeak,
+        qos: &QosPolicies,
+        discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    ) -> Result<Publisher> {
+        Ok(Publisher::new(
+            domain_participant.clone(),
+            self.discovery_db.clone(),
+            qos.clone(),
+            qos.clone(),
+            self.add_writer_sender.clone(),
+            discovery_command,
+        ))
+    }
 
-  pub(crate) fn get_add_reader_sender(&self) -> mio_channel::SyncSender<ReaderIngredients> {
-    self.sender_add_reader.clone()
-  }
+    pub fn create_subscriber(
+        &self,
+        domain_participant: &DomainParticipantWeak,
+        qos: &QosPolicies,
+        discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    ) -> Result<Subscriber> {
+        Ok(Subscriber::new(
+            domain_participant.clone(),
+            self.discovery_db.clone(),
+            qos.clone(),
+            self.sender_add_reader.clone(),
+            self.sender_remove_reader.clone(),
+            discovery_command,
+        ))
+    }
 
-  pub(crate) fn get_remove_reader_sender(&self) -> mio_channel::SyncSender<GUID> {
-    self.sender_remove_reader.clone()
-  }
+    // Topic creation. Data types should be handled as something (potentially) more
+    // structured than a String. NOTE: Here we are using &str for topic name. &str
+    // is Unicode string, whereas DDS specifes topic name to be a sequence of
+    // octets, which would be &[u8] in Rust. This may cause problems if there are
+    // topic names with non-ASCII characters. On the other hand, string handling
+    // with &str is easier in Rust.
+    pub fn create_topic(
+        &self,
+        domain_participant_weak: &DomainParticipantWeak,
+        name: String,
+        type_desc: String,
+        qos: &QosPolicies,
+        topic_kind: TopicKind,
+    ) -> Result<Topic> {
+        let topic = Topic::new(
+            domain_participant_weak,
+            name,
+            TypeDesc::new(type_desc),
+            qos,
+            topic_kind,
+        );
+        Ok(topic)
 
-  pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<WriterIngredients> {
-    self.add_writer_sender.clone()
-  }
+        // TODO: refine
+    }
 
-  pub(crate) fn get_remove_writer_sender(&self) -> mio_channel::SyncSender<GUID> {
-    self.remove_writer_sender.clone()
-  }
+    // Do not implement contentfilteredtopics or multitopics (yet)
 
-  pub fn domain_id(&self) -> u16 {
-    self.domain_id
-  }
+    pub fn find_topic(
+        &self,
+        domain_participant_weak: &DomainParticipantWeak,
+        name: &str,
+        timeout: Duration,
+    ) -> Result<Option<Topic>> {
+        let poll = mio::Poll::new()?;
+        let mut events = mio::Events::with_capacity(1);
+        // Should be register before the check and use level trigger to avoid missing
+        // event
+        poll.register(
+            &self.discovery_db_event_receiver,
+            mio::Token(0),
+            mio::Ready::readable(),
+            mio::PollOpt::level(),
+        )?;
 
-  pub fn participant_id(&self) -> u16 {
-    self.participant_id
-  }
+        let find_end = Instant::now() + timeout;
+        loop {
+            if let Some(topic) = self.find_topic_in_discovery_db(domain_participant_weak, name)? {
+                return Ok(Some(topic));
+            }
+            let timeout = find_end - Instant::now();
+            poll.poll(&mut events, Some(timeout))?;
 
-  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    let db = match self.discovery_db.read() {
-      Ok(db) => db,
-      Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-    };
+            if let Some(_event) = events.iter().next() {
+                if self.discovery_db_event_receiver.try_recv().is_ok() {
+                    continue;
+                }
+            }
 
-    db.all_topics().cloned().collect()
-  }
+            if Instant::now() > find_end {
+                break;
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn find_topic_in_discovery_db(
+        &self,
+        domain_participant_weak: &DomainParticipantWeak,
+        name: &str,
+    ) -> Result<Option<Topic>> {
+        let db = match self.discovery_db.read() {
+            Ok(db) => db,
+            Err(_) => return Err(Error::LockPoisoned),
+        };
+
+        let build_topic_fn = |d: &DiscoveredTopicData| {
+            let qos = d.topic_data.qos();
+            let topic_kind = match d.topic_data.key {
+                Some(_) => TopicKind::WithKey,
+                None => TopicKind::NoKey,
+            };
+            let name = d.topic_name().clone();
+            let type_desc = d.topic_data.type_name.clone();
+            self.create_topic(domain_participant_weak, name, type_desc, &qos, topic_kind)
+        };
+
+        if let Some(d) = db.get_topic(name) {
+            // build a Topic from DiscoveredTopicData
+            build_topic_fn(d).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+    // get_builtin_subscriber (why would we need this?)
+
+    // ignore_* operations. TODO: Do we needa any of those?
+
+    // delete_contained_entities is not needed. Data structures shoud be designed so
+    // that lifetime of all created objects is within the lifetime of
+    // DomainParticipant. Then such deletion is implicit.
+
+    // The following methods are not for application use.
+
+    pub(crate) fn get_add_reader_sender(&self) -> mio_channel::SyncSender<ReaderIngredients> {
+        self.sender_add_reader.clone()
+    }
+
+    pub(crate) fn get_remove_reader_sender(&self) -> mio_channel::SyncSender<GUID> {
+        self.sender_remove_reader.clone()
+    }
+
+    pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<WriterIngredients> {
+        self.add_writer_sender.clone()
+    }
+
+    pub(crate) fn get_remove_writer_sender(&self) -> mio_channel::SyncSender<GUID> {
+        self.remove_writer_sender.clone()
+    }
+
+    pub fn domain_id(&self) -> u16 {
+        self.domain_id
+    }
+
+    pub fn participant_id(&self) -> u16 {
+        self.participant_id
+    }
+
+    pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+        let db = match self.discovery_db.read() {
+            Ok(db) => db,
+            Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
+        };
+
+        db.all_topics().cloned().collect()
+    }
 } // impl
 
 impl RTPSEntity for DomainParticipant {
-  fn guid(&self) -> GUID {
-    self.dpi.lock().unwrap().guid()
-  }
+    fn guid(&self) -> GUID {
+        self.dpi.lock().unwrap().guid()
+    }
 }
 
 impl RTPSEntity for DomainParticipantDisc {
-  fn guid(&self) -> GUID {
-    self.dpi.lock().unwrap().guid()
-  }
+    fn guid(&self) -> GUID {
+        self.dpi.lock().unwrap().guid()
+    }
 }
 
 impl RTPSEntity for DomainParticipantInner {
-  fn guid(&self) -> GUID {
-    self.my_guid
-  }
+    fn guid(&self) -> GUID {
+        self.my_guid
+    }
 }
 
 impl std::fmt::Debug for DomainParticipant {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("DomainParticipant")
-      .field("Guid", &self.guid())
-      .finish()
-  }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DomainParticipant")
+            .field("Guid", &self.guid())
+            .finish()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-  use std::{
-    collections::BTreeSet,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-  };
-
-  use enumflags2::BitFlags;
-  use log::info;
-  use speedy::{Endianness, Writable};
-  use byteorder::LittleEndian;
-
-  use crate::{
-    dds::{qos::QosPolicies, topic::TopicKind},
-    messages::{
-      header::Header,
-      protocol_id::ProtocolId,
-      protocol_version::ProtocolVersion,
-      submessages::submessages::{AckNack, EntitySubmessage, SubmessageHeader, SubmessageKind, *},
-      vendor_id::VendorId,
-    },
-    network::{constant::user_traffic_unicast_port, udp_sender::UDPSender},
-    serialization::{cdr_serializer::CDRSerializerAdapter, submessage::*, Message, SubMessage},
-    structure::{
-      guid::{EntityId, GUID},
-      locator::Locator,
-      sequence_number::{SequenceNumber, SequenceNumberSet},
-    },
-    test::random_data::RandomData,
-  };
-  use super::DomainParticipant;
-
-  // TODO: improve basic test when more or the structure is known
-  #[test]
-  fn dp_basic_domain_participant() {
-    // let _dp = DomainParticipant::new();
-
-    let sender = UDPSender::new(11401).unwrap();
-    let data: Vec<u8> = vec![0, 1, 2, 3, 4];
-
-    let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 7412)];
-    sender.send_to_all(&data, &addrs);
-
-    // TODO: get result data from Reader
-  }
-  #[test]
-  fn dp_writer_hearbeat_test() {
-    let domain_participant = DomainParticipant::new(0).expect("Participant creation failed!");
-    let qos = QosPolicies::qos_none();
-    let _default_dw_qos = QosPolicies::qos_none();
-    let publisher = domain_participant
-      .create_publisher(&qos)
-      .expect("Failed to create publisher");
-
-    let topic = domain_participant
-      .create_topic(
-        "Aasii".to_string(),
-        "RandomData".to_string(),
-        &qos,
-        TopicKind::WithKey,
-      )
-      .expect("Failed to create topic");
-
-    let mut _data_writer = publisher
-      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(topic, None)
-      .expect("Failed to create datawriter");
-  }
-
-  #[test]
-  fn dp_receive_acknack_message_test() {
-    // TODO SEND ACKNACK
-    let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
-
-    let qos = QosPolicies::qos_none();
-    let _default_dw_qos = QosPolicies::qos_none();
-
-    let publisher = domain_participant
-      .create_publisher(&qos)
-      .expect("Failed to create publisher");
-
-    let topic = domain_participant
-      .create_topic(
-        "Aasii".to_string(),
-        "Huh?".to_string(),
-        &qos,
-        TopicKind::WithKey,
-      )
-      .expect("Failed to create topic");
-
-    let mut _data_writer = publisher
-      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(topic, None)
-      .expect("Failed to create datawriter");
-
-    let port_number: u16 = user_traffic_unicast_port(5, 0);
-    let sender = UDPSender::new(1234).unwrap();
-    let mut m: Message = Message::default();
-
-    let a: AckNack = AckNack {
-      reader_id: EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-      writer_id: EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
-      reader_sn_state: SequenceNumberSet::from_base_and_set(
-        SequenceNumber::default(),
-        &BTreeSet::new(),
-      ),
-      count: 1,
-    };
-    let flags = BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::BigEndian);
-    let sub_header: SubmessageHeader = SubmessageHeader {
-      kind: SubmessageKind::ACKNACK,
-      flags: flags.bits(),
-      content_length: 24,
+    use std::{
+        collections::BTreeSet,
+        net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     };
 
-    let s: SubMessage = SubMessage {
-      header: sub_header,
-      body: SubmessageBody::Entity(EntitySubmessage::AckNack(a, flags)),
+    use byteorder::LittleEndian;
+    use enumflags2::BitFlags;
+    use log::info;
+    use speedy::{Endianness, Writable};
+
+    use super::DomainParticipant;
+    use crate::{
+        dds::{qos::QosPolicies, topic::TopicKind},
+        messages::{
+            header::Header,
+            protocol_id::ProtocolId,
+            protocol_version::ProtocolVersion,
+            submessages::submessages::{
+                AckNack, EntitySubmessage, SubmessageHeader, SubmessageKind, *,
+            },
+            vendor_id::VendorId,
+        },
+        network::{constant::user_traffic_unicast_port, udp_sender::UDPSender},
+        serialization::{cdr_serializer::CDRSerializerAdapter, submessage::*, Message, SubMessage},
+        structure::{
+            guid::{EntityId, GUID},
+            locator::Locator,
+            sequence_number::{SequenceNumber, SequenceNumberSet},
+        },
+        test::random_data::RandomData,
     };
-    let h = Header {
-      protocol_id: ProtocolId::default(),
-      protocol_version: ProtocolVersion { major: 2, minor: 3 },
-      vendor_id: VendorId::THIS_IMPLEMENTATION,
-      guid_prefix: GUID::default().guid_prefix,
-    };
-    m.set_header(h);
-    m.add_submessage(s);
-    let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
-    info!("data to send via udp: {:?}", _data);
-    let ip = Ipv4Addr::from([0x00, 0x00, 0x00, 0x00]);
-    let socket_address = SocketAddrV4::new(ip, port_number);
-    let locators = vec![Locator::UdpV4(socket_address)];
-    sender.send_to_locator_list(&_data, &locators);
-  }
+
+    // TODO: improve basic test when more or the structure is known
+    #[test]
+    fn dp_basic_domain_participant() {
+        // let _dp = DomainParticipant::new();
+
+        let sender = UDPSender::new(11401).unwrap();
+        let data: Vec<u8> = vec![0, 1, 2, 3, 4];
+
+        let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 7412)];
+        sender.send_to_all(&data, &addrs);
+
+        // TODO: get result data from Reader
+    }
+    #[test]
+    fn dp_writer_hearbeat_test() {
+        let domain_participant = DomainParticipant::new(0).expect("Participant creation failed!");
+        let qos = QosPolicies::qos_none();
+        let _default_dw_qos = QosPolicies::qos_none();
+        let publisher = domain_participant
+            .create_publisher(&qos)
+            .expect("Failed to create publisher");
+
+        let topic = domain_participant
+            .create_topic(
+                "Aasii".to_string(),
+                "RandomData".to_string(),
+                &qos,
+                TopicKind::WithKey,
+            )
+            .expect("Failed to create topic");
+
+        let mut _data_writer = publisher
+            .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
+                topic, None,
+            )
+            .expect("Failed to create datawriter");
+    }
+
+    #[test]
+    fn dp_receive_acknack_message_test() {
+        // TODO SEND ACKNACK
+        let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
+
+        let qos = QosPolicies::qos_none();
+        let _default_dw_qos = QosPolicies::qos_none();
+
+        let publisher = domain_participant
+            .create_publisher(&qos)
+            .expect("Failed to create publisher");
+
+        let topic = domain_participant
+            .create_topic(
+                "Aasii".to_string(),
+                "Huh?".to_string(),
+                &qos,
+                TopicKind::WithKey,
+            )
+            .expect("Failed to create topic");
+
+        let mut _data_writer = publisher
+            .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
+                topic, None,
+            )
+            .expect("Failed to create datawriter");
+
+        let port_number: u16 = user_traffic_unicast_port(5, 0);
+        let sender = UDPSender::new(1234).unwrap();
+        let mut m: Message = Message::default();
+
+        let a: AckNack = AckNack {
+            reader_id: EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+            writer_id: EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
+            reader_sn_state: SequenceNumberSet::from_base_and_set(
+                SequenceNumber::default(),
+                &BTreeSet::new(),
+            ),
+            count: 1,
+        };
+        let flags = BitFlags::<ACKNACK_Flags>::from_endianness(Endianness::BigEndian);
+        let sub_header: SubmessageHeader = SubmessageHeader {
+            kind: SubmessageKind::ACKNACK,
+            flags: flags.bits(),
+            content_length: 24,
+        };
+
+        let s: SubMessage = SubMessage {
+            header: sub_header,
+            body: SubmessageBody::Entity(EntitySubmessage::AckNack(a, flags)),
+        };
+        let h = Header {
+            protocol_id: ProtocolId::default(),
+            protocol_version: ProtocolVersion { major: 2, minor: 3 },
+            vendor_id: VendorId::THIS_IMPLEMENTATION,
+            guid_prefix: GUID::default().guid_prefix,
+        };
+        m.set_header(h);
+        m.add_submessage(s);
+        let _data: Vec<u8> = m.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
+        info!("data to send via udp: {:?}", _data);
+        let ip = Ipv4Addr::from([0x00, 0x00, 0x00, 0x00]);
+        let socket_address = SocketAddrV4::new(ip, port_number);
+        let locators = vec![Locator::UdpV4(socket_address)];
+        sender.send_to_locator_list(&_data, &locators);
+    }
 }

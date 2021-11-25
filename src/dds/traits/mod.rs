@@ -8,5 +8,5 @@ pub mod serde_adapters;
 pub use dds_entity::DDSEntity;
 pub use key::{Key, Keyed};
 
-pub use crate::structure::entity::RTPSEntity;
 pub use super::topic::TopicDescription;
+pub use crate::structure::entity::RTPSEntity;

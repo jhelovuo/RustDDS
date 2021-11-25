@@ -1,8 +1,8 @@
 use speedy::{Context, Readable, Writable, Writer};
 
 use crate::{
-  messages::submessages::submessage_elements::parameter::Parameter,
-  structure::parameter_id::ParameterId,
+    messages::submessages::submessage_elements::parameter::Parameter,
+    structure::parameter_id::ParameterId,
 };
 
 /// ParameterList is used as part of several messages to encapsulate
@@ -11,15 +11,15 @@ use crate::{
 /// extensions to the QoS without breaking backwards compatibility.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParameterList {
-  pub parameters: Vec<Parameter>,
+    pub parameters: Vec<Parameter>,
 }
 
 impl ParameterList {
-  pub fn new() -> ParameterList {
-    ParameterList {
-      parameters: Vec::new(),
+    pub fn new() -> ParameterList {
+        ParameterList {
+            parameters: Vec::new(),
+        }
     }
-  }
 }
 
 /// The PID_PAD is used to enforce alignment of the parameter
@@ -29,37 +29,37 @@ pub const PID_PAD: u16 = 0x00;
 const SENTINEL: u32 = 0x00000001;
 
 impl<C: Context> Writable<C> for ParameterList {
-  #[inline]
-  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    for param in self.parameters.iter() {
-      writer.write_value(param)?;
+    #[inline]
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+        for param in self.parameters.iter() {
+            writer.write_value(param)?;
+        }
+
+        writer.write_u32(SENTINEL)?;
+
+        Ok(())
     }
-
-    writer.write_u32(SENTINEL)?;
-
-    Ok(())
-  }
 }
 
 impl<'a, C: Context> Readable<'a, C> for ParameterList {
-  #[inline]
-  fn read_from<R: speedy::Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut parameters = ParameterList::new();
+    #[inline]
+    fn read_from<R: speedy::Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+        let mut parameters = ParameterList::new();
 
-    // loop ends in failure to read something or catching sentinel
-    loop {
-      let parameter_id = ParameterId::read_from(reader)?;
-      let length = u16::read_from(reader)?;
+        // loop ends in failure to read something or catching sentinel
+        loop {
+            let parameter_id = ParameterId::read_from(reader)?;
+            let length = u16::read_from(reader)?;
 
-      if parameter_id == ParameterId::PID_SENTINEL {
-        // This is paramter list end marker.
-        return Ok(parameters);
-      }
+            if parameter_id == ParameterId::PID_SENTINEL {
+                // This is paramter list end marker.
+                return Ok(parameters);
+            }
 
-      parameters.parameters.push(Parameter {
-        parameter_id,
-        value: reader.read_vec(length as usize)?,
-      })
+            parameters.parameters.push(Parameter {
+                parameter_id,
+                value: reader.read_vec(length as usize)?,
+            })
+        }
     }
-  }
 }

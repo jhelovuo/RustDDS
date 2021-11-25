@@ -13,64 +13,64 @@ use crate::structure::parameter_id::ParameterId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ContentFilterProperty {
-  /// Name of the Content-filtered Topic associated with the Reader.
-  /// Must have non-zero length.
-  pub content_filtered_topic_name: String,
+    /// Name of the Content-filtered Topic associated with the Reader.
+    /// Must have non-zero length.
+    pub content_filtered_topic_name: String,
 
-  /// Name of the Topic related to the Content-filtered Topic.
-  /// Must have non-zero length.
-  pub related_topic_name: String,
+    /// Name of the Topic related to the Content-filtered Topic.
+    /// Must have non-zero length.
+    pub related_topic_name: String,
 
-  /// Identifies the filter class this filter belongs to. RTPS can support
-  /// multiple filter classes (SQL, regular expressions, custom filters,
-  /// etc). Must have non-zero length.
-  /// RTPS predefines the following values:
-  /// “DDSSQL” Default filter class name if none specified.
-  /// Matches the SQL filter specified by DDS, which must be available in all
-  /// implementations.
-  pub filter_class_name: String,
+    /// Identifies the filter class this filter belongs to. RTPS can support
+    /// multiple filter classes (SQL, regular expressions, custom filters,
+    /// etc). Must have non-zero length.
+    /// RTPS predefines the following values:
+    /// “DDSSQL” Default filter class name if none specified.
+    /// Matches the SQL filter specified by DDS, which must be available in all
+    /// implementations.
+    pub filter_class_name: String,
 
-  /// The actual filter expression. Must be a valid expression for the filter
-  /// class specified using filter_class_name.
-  /// Must have non-zero length.
-  pub filter_expression: String,
+    /// The actual filter expression. Must be a valid expression for the filter
+    /// class specified using filter_class_name.
+    /// Must have non-zero length.
+    pub filter_expression: String,
 
-  /// Defines the value for each parameter in the filter expression.
-  /// Can have zero length if the filter expression contains no parameters.
-  pub expression_parameters: Vec<String>,
+    /// Defines the value for each parameter in the filter expression.
+    /// Can have zero length if the filter expression contains no parameters.
+    pub expression_parameters: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ContentFilterPropertyData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  content_filter_property: ContentFilterProperty,
+    parameter_id: ParameterId,
+    parameter_length: u16,
+    content_filter_property: ContentFilterProperty,
 }
 
 impl ContentFilterPropertyData {
-  pub fn new(content_filter_property: &ContentFilterProperty) -> ContentFilterPropertyData {
-    let len_cftn = content_filter_property.content_filtered_topic_name.len();
-    let len_cftn = len_cftn + (4 - len_cftn % 4) + 4;
-    let len_rtn = content_filter_property.related_topic_name.len();
-    let len_rtn = len_rtn + (4 - len_rtn % 4) + 4;
-    let len_fcn = content_filter_property.filter_class_name.len();
-    let len_fcn = len_fcn + (4 - len_fcn % 4) + 4;
-    let len_fe = content_filter_property.filter_expression.len();
-    let len_fe = len_fe + (4 - len_fe % 4) + 4;
+    pub fn new(content_filter_property: &ContentFilterProperty) -> ContentFilterPropertyData {
+        let len_cftn = content_filter_property.content_filtered_topic_name.len();
+        let len_cftn = len_cftn + (4 - len_cftn % 4) + 4;
+        let len_rtn = content_filter_property.related_topic_name.len();
+        let len_rtn = len_rtn + (4 - len_rtn % 4) + 4;
+        let len_fcn = content_filter_property.filter_class_name.len();
+        let len_fcn = len_fcn + (4 - len_fcn % 4) + 4;
+        let len_fe = content_filter_property.filter_expression.len();
+        let len_fe = len_fe + (4 - len_fe % 4) + 4;
 
-    let mut parameter_length = len_cftn + len_rtn + len_fcn + len_fe;
-    for param in content_filter_property.expression_parameters.iter() {
-      let len_temp = param.len();
-      let len_temp = len_temp + (4 - len_temp % 4) + 4;
-      parameter_length += len_temp;
+        let mut parameter_length = len_cftn + len_rtn + len_fcn + len_fe;
+        for param in content_filter_property.expression_parameters.iter() {
+            let len_temp = param.len();
+            let len_temp = len_temp + (4 - len_temp % 4) + 4;
+            parameter_length += len_temp;
+        }
+
+        parameter_length = parameter_length + (4 - parameter_length % 4) + 4;
+
+        ContentFilterPropertyData {
+            parameter_id: ParameterId::PID_CONTENT_FILTER_PROPERTY,
+            parameter_length: parameter_length as u16,
+            content_filter_property: content_filter_property.clone(),
+        }
     }
-
-    parameter_length = parameter_length + (4 - parameter_length % 4) + 4;
-
-    ContentFilterPropertyData {
-      parameter_id: ParameterId::PID_CONTENT_FILTER_PROPERTY,
-      parameter_length: parameter_length as u16,
-      content_filter_property: content_filter_property.clone(),
-    }
-  }
 }

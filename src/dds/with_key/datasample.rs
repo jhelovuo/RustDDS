@@ -18,44 +18,44 @@ use crate::dds::{sampleinfo::*, traits::key::*};
 
 #[derive(PartialEq, Debug)]
 pub struct DataSample<D: Keyed> {
-  pub(crate) sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
+    pub(crate) sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
 
-  pub(crate) value: std::result::Result<D, D::K>,
+    pub(crate) value: std::result::Result<D, D::K>,
 }
 
 impl<D> DataSample<D>
 where
-  D: Keyed,
+    D: Keyed,
 {
-  pub(crate) fn new(sample_info: SampleInfo, value: std::result::Result<D, D::K>) -> Self {
-    DataSample { sample_info, value }
-  }
-
-  // convenience shorthand to get the key directly, without digging out the
-  // "value"
-  pub fn key(&self) -> D::K
-  where
-    <D as Keyed>::K: Key,
-  {
-    match &self.value {
-      Ok(d) => d.key(),
-      Err(k) => k.clone(),
+    pub(crate) fn new(sample_info: SampleInfo, value: std::result::Result<D, D::K>) -> Self {
+        DataSample { sample_info, value }
     }
-  } // fn
 
-  pub fn value(&self) -> &Result<D, D::K> {
-    &self.value
-  }
+    // convenience shorthand to get the key directly, without digging out the
+    // "value"
+    pub fn key(&self) -> D::K
+    where
+        <D as Keyed>::K: Key,
+    {
+        match &self.value {
+            Ok(d) => d.key(),
+            Err(k) => k.clone(),
+        }
+    } // fn
 
-  pub fn into_value(self) -> Result<D, D::K> {
-    self.value
-  }
+    pub fn value(&self) -> &Result<D, D::K> {
+        &self.value
+    }
 
-  pub fn sample_info(&self) -> &SampleInfo {
-    &self.sample_info
-  }
+    pub fn into_value(self) -> Result<D, D::K> {
+        self.value
+    }
 
-  pub fn sample_info_mut(&mut self) -> &mut SampleInfo {
-    &mut self.sample_info
-  }
+    pub fn sample_info(&self) -> &SampleInfo {
+        &self.sample_info
+    }
+
+    pub fn sample_info_mut(&mut self) -> &mut SampleInfo {
+        &mut self.sample_info
+    }
 } // impl

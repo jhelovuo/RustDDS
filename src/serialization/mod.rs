@@ -10,11 +10,11 @@ pub(crate) mod message;
 pub(crate) mod submessage;
 
 // crate exports
-pub(crate) use message::*;
-pub(crate) use submessage::*;
+pub use byteorder::{BigEndian, LittleEndian};
+pub use cdr_deserializer::CDRDeserializerAdapter;
 // public exports
 pub use cdr_serializer::CDRSerializerAdapter;
-pub use cdr_deserializer::CDRDeserializerAdapter;
-pub use byteorder::{BigEndian, LittleEndian};
+pub(crate) use message::*;
+pub(crate) use submessage::*;
 
 pub use crate::dds::traits::serde_adapters::{no_key, with_key};

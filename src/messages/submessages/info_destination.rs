@@ -2,14 +2,14 @@ use enumflags2::BitFlags;
 use log::error;
 use speedy::{Readable, Writable};
 
-use crate::{
-  messages::submessages::submessages::SubmessageHeader,
-  serialization::{SubMessage, SubmessageBody},
-  structure::guid::GuidPrefix,
-};
 use super::{
-  submessage::InterpreterSubmessage, submessage_flag::INFODESTINATION_Flags,
-  submessage_kind::SubmessageKind,
+    submessage::InterpreterSubmessage, submessage_flag::INFODESTINATION_Flags,
+    submessage_kind::SubmessageKind,
+};
+use crate::{
+    messages::submessages::submessages::SubmessageHeader,
+    serialization::{SubMessage, SubmessageBody},
+    structure::guid::GuidPrefix,
 };
 
 /// This message is sent from an RTPS Writer to an RTPS Reader
@@ -17,57 +17,57 @@ use super::{
 /// appearing in the Submessages that follow it.
 #[derive(Debug, PartialEq, Clone, Readable, Writable)]
 pub struct InfoDestination {
-  /// Provides the GuidPrefix that should be used to reconstruct the GUIDs
-  /// of all the RTPS Reader entities whose EntityIds appears
-  /// in the Submessages that follow.
-  pub guid_prefix: GuidPrefix,
+    /// Provides the GuidPrefix that should be used to reconstruct the GUIDs
+    /// of all the RTPS Reader entities whose EntityIds appears
+    /// in the Submessages that follow.
+    pub guid_prefix: GuidPrefix,
 }
 
 impl InfoDestination {
-  pub fn create_submessage(self, flags: BitFlags<INFODESTINATION_Flags>) -> Option<SubMessage> {
-    let submessage_len = match self.write_to_vec() {
-      Ok(bytes) => bytes.len() as u16,
-      Err(e) => {
-        error!(
-          "Reader couldn't write info destination to bytes. Error: {}",
-          e
-        );
-        return None;
-      }
-    };
+    pub fn create_submessage(self, flags: BitFlags<INFODESTINATION_Flags>) -> Option<SubMessage> {
+        let submessage_len = match self.write_to_vec() {
+            Ok(bytes) => bytes.len() as u16,
+            Err(e) => {
+                error!(
+                    "Reader couldn't write info destination to bytes. Error: {}",
+                    e
+                );
+                return None;
+            }
+        };
 
-    let infodst_header = SubmessageHeader {
-      kind: SubmessageKind::INFO_DST,
-      flags: flags.bits(),
-      content_length: submessage_len,
-    };
+        let infodst_header = SubmessageHeader {
+            kind: SubmessageKind::INFO_DST,
+            flags: flags.bits(),
+            content_length: submessage_len,
+        };
 
-    Some(SubMessage {
-      header: infodst_header,
-      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(self, flags)),
-    })
-  }
+        Some(SubMessage {
+            header: infodst_header,
+            body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(self, flags)),
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+    use super::*;
 
-  serialization_test!( type = InfoDestination,
-  {
-      info_destination,
-      InfoDestination {
-          guid_prefix: GuidPrefix {
-              entity_key: [0x01, 0x02, 0x6D, 0x3F,
-                          0x7E, 0x07, 0x00, 0x00,
-                          0x01, 0x00, 0x00, 0x00]
-          }
-      },
-      le = [0x01, 0x02, 0x6D, 0x3F,
-            0x7E, 0x07, 0x00, 0x00,
-            0x01, 0x00, 0x00, 0x00],
-      be = [0x01, 0x02, 0x6D, 0x3F,
-            0x7E, 0x07, 0x00, 0x00,
-            0x01, 0x00, 0x00, 0x00]
-  });
+    serialization_test!( type = InfoDestination,
+    {
+        info_destination,
+        InfoDestination {
+            guid_prefix: GuidPrefix {
+                entity_key: [0x01, 0x02, 0x6D, 0x3F,
+                            0x7E, 0x07, 0x00, 0x00,
+                            0x01, 0x00, 0x00, 0x00]
+            }
+        },
+        le = [0x01, 0x02, 0x6D, 0x3F,
+              0x7E, 0x07, 0x00, 0x00,
+              0x01, 0x00, 0x00, 0x00],
+        be = [0x01, 0x02, 0x6D, 0x3F,
+              0x7E, 0x07, 0x00, 0x00,
+              0x01, 0x00, 0x00, 0x00]
+    });
 }

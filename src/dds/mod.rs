@@ -136,37 +136,36 @@ pub mod statusevents;
 
 /// Datatypes needed for overall operability with this crate
 pub mod data_types {
-  pub use crate::{
-    dds::sampleinfo::SampleInfo,
-    discovery::data_types::topic_data::{DiscoveredTopicData, SubscriptionBuiltinTopicData},
-    structure::guid::*,
-  };
-  #[doc(inline)]
-  pub use crate::structure::duration::Duration as DDSDuration;
-  pub use super::{readcondition::ReadCondition, traits::key::BuiltInTopicKey};
-  #[doc(inline)]
-  pub use super::with_key::datareader::SelectByKey;
-  #[doc(inline)]
-  pub use crate::structure::time::Timestamp as DDSTimestamp;
-  // TODO: move typedesc module somewhere better
-  pub use crate::dds::typedesc::TypeDesc;
-  #[doc(inline)]
-  pub use crate::structure::topic_kind::TopicKind; // AKA dds::topic::TopicKind
+    #[doc(inline)]
+    pub use super::with_key::datareader::SelectByKey;
+    pub use super::{readcondition::ReadCondition, traits::key::BuiltInTopicKey};
+    #[doc(inline)]
+    pub use crate::structure::duration::Duration as DDSDuration;
+    #[doc(inline)]
+    pub use crate::structure::time::Timestamp as DDSTimestamp;
+    #[doc(inline)]
+    pub use crate::structure::topic_kind::TopicKind;
+    // TODO: move typedesc module somewhere better
+    pub use crate::{
+        dds::{sampleinfo::SampleInfo, typedesc::TypeDesc},
+        discovery::data_types::topic_data::{DiscoveredTopicData, SubscriptionBuiltinTopicData},
+        structure::guid::*,
+    }; // AKA dds::topic::TopicKind
 }
 
 /// DDS Error
 pub mod error {
-  pub use super::values::result::*;
+    pub use super::values::result::*;
 }
 
-pub use participant::DomainParticipant;
-pub use topic::Topic;
-pub use pubsub::{Publisher, Subscriber};
 #[doc(inline)]
-pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
+pub use no_key::datareader::DataReader as No_Key_DataReader;
 #[doc(inline)]
 pub use no_key::datawriter::DataWriter as No_Key_DataWriter;
+pub use participant::DomainParticipant;
+pub use pubsub::{Publisher, Subscriber};
+pub use topic::Topic;
 #[doc(inline)]
 pub use with_key::datareader::DataReader as With_Key_DataReader;
 #[doc(inline)]
-pub use no_key::datareader::DataReader as No_Key_DataReader;
+pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
