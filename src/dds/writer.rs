@@ -914,7 +914,7 @@ impl Writer {
       }
       Some(bad_policy_id) => {
         // QoS not compliant :(
-        info!(
+        warn!(
           "update_reader_proxy - QoS mismatch {:?} topic={:?}",
           bad_policy_id,
           self.topic_name()

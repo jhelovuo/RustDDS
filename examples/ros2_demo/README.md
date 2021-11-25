@@ -1,8 +1,15 @@
-# ROS2 Demo
+# ROS2 Demo: Turtlesim Control
 
-ROS2 demo is designed to be interoperable with ROS2 https://index.ros.org/doc/ros2/ turtlesim demo.
+This example program controls the ROS2 "turtlesim" example.
 
-1. Turtle can be commanded with arrow keys.
-2. 'Q' exits the demo
+## Instructions
 
-**Note!** Currently RustDDS might not fully work on same machine and this demo might not function properly in that case. 
+* Install ROS2 and its [turtlesim][https://docs.ros.org/en/foxy/Tutorials/Turtlesim/Introducing-Turtlesim.html] package. These are steps 1 and 2 in the ROS2 Turtlesim tutorial.
+
+* Optionally, perform tutorial step 3 "Use turtlesim":
+ ** Launch teleop node to control the turtle. 
+ ** Test to see that turtlesim responds to teleop commands.
+ ** Quit teleop node.
+
+* Build and execute the RustDDS example: `cargo run --example=ros2_demo`. Use keyboard to control the turtle in a similar way as the native teleop node.
+

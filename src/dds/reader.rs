@@ -344,7 +344,7 @@ impl Reader {
           last_policy_id: bad_policy_id,
           policies: Vec::new(), // TODO. implementation missing
         });
-        debug!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
+        warn!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
       }
     }
   }

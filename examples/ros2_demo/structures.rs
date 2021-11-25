@@ -4,7 +4,9 @@ use std::{
   time::Duration as StdDuration,
 };
 
-use log::{debug, error};
+#[allow(unused_imports)] 
+use log::{debug, info, warn, error};
+
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{channel as mio_channel, timer::Timer};
 use termion::{event::Key, input::TermRead, raw::RawTerminal, AsyncReader};
@@ -13,13 +15,11 @@ use rustdds::{
   ros2::builtin_datatypes::{Gid, NodeInfo, ROSParticipantInfo},
 };
 
-use crate::ros2::{turtle_control::TurtleControl, turtle_data::Twist};
+use crate::{Twist,Vector3};
 
+#[derive(Debug)]
 pub enum RosCommand {
   StopEventLoop,
-  AddNodeListSender {
-    sender: mio_channel::SyncSender<DataUpdate>,
-  },
   TurtleCmdVel {
     twist: Twist,
   },
@@ -29,6 +29,70 @@ pub enum DataUpdate {
   UpdateNode { info: ROSParticipantInfo },
   TurtleCmdVel { twist: Twist },
   TopicList { list: Vec<DiscoveredTopicData> },
+}
+
+pub struct TurtleControl {}
+
+impl TurtleControl {
+  pub fn move_forward() -> Twist {
+    Twist {
+      linear: Vector3 {
+        x: 2.,
+        y: 0.,
+        z: 0.,
+      },
+      angular: Vector3 {
+        x: 0.,
+        y: 0.,
+        z: 0.,
+      },
+    }
+  }
+
+  pub fn move_backward() -> Twist {
+    Twist {
+      linear: Vector3 {
+        x: -2.,
+        y: 0.,
+        z: 0.,
+      },
+      angular: Vector3 {
+        x: 0.,
+        y: 0.,
+        z: 0.,
+      },
+    }
+  }
+
+  pub fn rotate_left() -> Twist {
+    Twist {
+      linear: Vector3 {
+        x: 0.,
+        y: 0.,
+        z: 0.,
+      },
+      angular: Vector3 {
+        x: 0.,
+        y: 0.,
+        z: 2.,
+      },
+    }
+  }
+
+  pub fn rotate_right() -> Twist {
+    Twist {
+      linear: Vector3 {
+        x: 0.,
+        y: 0.,
+        z: 0.,
+      },
+      angular: Vector3 {
+        x: 0.,
+        y: 0.,
+        z: -2.,
+      },
+    }
+  }
 }
 
 pub struct MainController<'a> {
@@ -42,7 +106,7 @@ pub struct MainController<'a> {
 }
 
 impl<'a> MainController<'a> {
-  const KEYBOARD_CHECK_TIMEOUT: u64 = 50;
+  const KEYBOARD_CHECK_TIMEOUT: u64 = 100;
   const NODE_UPDATE_TIMEOUT: u64 = 1;
 
   const KEYBOARD_CHECK_TOKEN: Token = Token(0);
@@ -51,18 +115,13 @@ impl<'a> MainController<'a> {
   pub fn new(
     stdout: RawTerminal<StdoutLock<'a>>,
     command_sender: mio_channel::SyncSender<RosCommand>,
+    nodelist_receiver: mio_channel::Receiver<DataUpdate>,
   ) -> MainController<'a> {
     let poll = Poll::new().unwrap();
     let input_timer = Timer::default();
     let node_timer = Timer::default();
     let async_reader = termion::async_stdin().events();
 
-    let (nodelist_sender, nodelist_receiver) = mio_channel::sync_channel(100);
-    command_sender
-      .send(RosCommand::AddNodeListSender {
-        sender: nodelist_sender,
-      })
-      .unwrap();
 
     MainController {
       poll,
@@ -76,7 +135,43 @@ impl<'a> MainController<'a> {
   }
 
   pub fn start(&mut self) {
-    self.init_main_registers();
+    self
+      .poll
+      .register(
+        &self.input_timer,
+        MainController::KEYBOARD_CHECK_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+
+    self
+      .poll
+      .register(
+        &self.nodelist_receiver,
+        MainController::UPDATE_NODE_LIST_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+    self.input_timer.set_timeout(
+      StdDuration::from_millis(MainController::KEYBOARD_CHECK_TIMEOUT),
+      (),
+    );
+    self.node_timer.set_timeout(
+      StdDuration::from_secs(MainController::NODE_UPDATE_TIMEOUT),
+      (),
+    );
+
+    // clearing screen
+    write!(
+      self.stdout,
+      "{}{}",
+      termion::clear::All,
+      termion::cursor::Goto(1, 1)
+    )
+    .unwrap();
+    self.stdout.flush().unwrap();
 
     write!(
       self.stdout,
@@ -99,6 +194,7 @@ impl<'a> MainController<'a> {
 
       for event in events.iter() {
         if event.token() == MainController::KEYBOARD_CHECK_TOKEN {
+          info!("keyboard check");
           while let Some(Ok(kevent)) = &self.async_reader.next() {
             match kevent {
               termion::event::Event::Key(Key::Char('q')) => {
@@ -343,36 +439,6 @@ impl<'a> MainController<'a> {
     false
   }
 
-  fn init_main_registers(&mut self) {
-    self.input_timer.set_timeout(
-      StdDuration::from_millis(MainController::KEYBOARD_CHECK_TIMEOUT),
-      (),
-    );
-    self.node_timer.set_timeout(
-      StdDuration::from_secs(MainController::NODE_UPDATE_TIMEOUT),
-      (),
-    );
-
-    self
-      .poll
-      .register(
-        &self.input_timer,
-        MainController::KEYBOARD_CHECK_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
-
-    self
-      .poll
-      .register(
-        &self.nodelist_receiver,
-        MainController::UPDATE_NODE_LIST_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
-  }
 
   fn print_turtle_cmd_vel(&mut self, twist: &Twist) {
     write!(

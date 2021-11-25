@@ -3,19 +3,27 @@
 ![continuous-integration](https://github.com/jhelovuo/RustDDS/actions/workflows/CI.yml/badge.svg)
 [![codecov](https://codecov.io/gh/jhelovuo/RustDDS/branch/master/graph/badge.svg)](https://codecov.io/gh/jhelovuo/RustDDS)
 
-The Data Distribution Service for real-time systems (DDS) is an Object Management Group (OMG) machine-to-machine connectivity framework that aims to enable scalable, real-time, dependable, high-performance and interoperable data exchanges using a publish–subscribe pattern. DDS addresses the needs of applications like air-traffic control, smart grid management, autonomous vehicles, robotics, transportation systems, power generation, medical devices, simulation and testing, aerospace and defense, and other applications that require real-time data exchange [[Wiki]][wiki-dds-url].
+[RustDDS][rustdds-url] is a pure Rust implementation of [Data Distribution Service][https://www.omg.org/spec/DDS/], developed by [Atostek Oy][atostek-url]. 
+Atostek provides support and software development services related to DDS, ROS2, and robotics software in general. As a part of our work, we have open-sourced the RustDDS implementation.
 
-[RustDDS][rustdds-url] is a pure Rust implementation of DDS, developed by 
-[Atostek][atostek-url]. We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions, so the API is not quite the same as with DDS specification.
+We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions. Consequently, the API is not exactly as written in the DDS specification, but a functionally equivalent approximation using Rust concepts and conventions.
+
+# Data Distribution Service
+
+The Data Distribution Service for real-time systems (DDS) is an Object Management Group (OMG) machine-to-machine connectivity framework that aims to enable scalable, real-time, dependable, high-performance and interoperable data exchanges using a publish–subscribe pattern. DDS addresses the needs of applications like air-traffic control, smart grid management, autonomous vehicles, robotics, transportation systems, power generation, medical devices, simulation and testing, aerospace and defense, and other applications that require real-time data exchange [[Wiki]][wiki-dds-url].
 
 # Current implementation status
 
 This is still work-in-progress. Currently, the implementation is complete enough to do data exchange with [ROS2][ros2-url] software.
 
-## Version 0.5.0
+## Version 0.6
+
+This release breaks compatibility with 0.5.x. There are some minor differences in public API names. Changes were made to follow Rust naming conventions. Version 0.6.0 fixes a regression, where communication with eProsima FastRTPS was only possible for a short time.
+
+## Version 0.5
 
 This release breaks compatibility with 0.4.0. Differences are
-* Naming convention is morr Rust-like, instead of DDS convention - mostly capitalization and underscores.
+* Naming convention is more Rust-like, instead of DDS convention - mostly capitalization and underscores.
 * Some functions new require owned `String` instead of `&str`. Just add `.to_string()` to fix.
 * Key size detection (is it over 16 bytes?) is now implemented in a trait with derive macro.
 
