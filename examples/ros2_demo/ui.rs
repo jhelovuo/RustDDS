@@ -10,7 +10,7 @@ use mio::{Events, Poll, PollOpt, Ready, Token, unix::EventedFd};
 use mio_extras::{channel as mio_channel, };
 use termion::{event::Key, input::TermRead, AsyncReader};
 
-use crate::{Twist,Vector3};
+use crate::{Twist, Vector3, Pose, };
 
 #[derive(Debug)]
 pub enum RosCommand {
@@ -45,16 +45,19 @@ pub struct UiController {
   async_reader: termion::input::Events<AsyncReader>,
   command_sender: mio_channel::SyncSender<RosCommand>,
   readback_receiver: mio_channel::Receiver<Twist>,
+  pose_receiver: mio_channel::Receiver<Pose>,
 }
 
 impl UiController {
   const KEYBOARD_CHECK_TOKEN: Token = Token(0);
   const READBACK_TOKEN: Token = Token(1);
+  const POSE_TOKEN: Token = Token(2);
 
   pub fn new(
     stdout: std::io::Stdout,
     command_sender: mio_channel::SyncSender<RosCommand>,
     readback_receiver: mio_channel::Receiver<Twist>,
+    pose_receiver: mio_channel::Receiver<Pose>,
   ) -> UiController {
     let poll = Poll::new().unwrap();
     let async_reader = termion::async_stdin().events();
@@ -66,6 +69,7 @@ impl UiController {
       async_reader,
       command_sender,
       readback_receiver,
+      pose_receiver,
     }
   }
 
@@ -86,6 +90,15 @@ impl UiController {
       .register(
         &self.readback_receiver,
         UiController::READBACK_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+    self
+      .poll
+      .register(
+        &self.pose_receiver,
+        UiController::POSE_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
       )
@@ -116,8 +129,8 @@ impl UiController {
           while let Some(Ok(termion::event::Event::Key(key))) = &self.async_reader.next() {
             write!(
               self.stdout,
-              "{}{}{:?} : Press q to quit, cursor keys to control turtle.",
-              termion::cursor::Goto(1, 1),
+              "{}{}{:?}",
+              termion::cursor::Goto(1, 2),
               termion::clear::CurrentLine,
               key,
             )
@@ -159,7 +172,21 @@ impl UiController {
 
         } else if event.token() == UiController::READBACK_TOKEN {
           while let Ok(twist) = self.readback_receiver.try_recv() {
-              self.print_turtle_cmd_vel(&twist);
+            write!(self.stdout, "{}{}Read Turtle cmd_vel {:?}",
+              termion::cursor::Goto(1, 6),
+              termion::clear::CurrentLine,
+              twist
+            )
+            .unwrap();
+          }
+        } else if event.token() == UiController::POSE_TOKEN {
+          while let Ok(pose) = self.pose_receiver.try_recv() {
+            write!(self.stdout, "{}{}Turtle pose {:?}",
+              termion::cursor::Goto(1, 8),
+              termion::clear::CurrentLine,
+              pose
+            )
+            .unwrap();
           }
         } else {
           error!("What is this? {:?}", event.token())
@@ -174,22 +201,11 @@ impl UiController {
   }
 
 
-  fn print_turtle_cmd_vel(&mut self, twist: &Twist) {
-    write!(
-      self.stdout,
-      "{}{}Read Turtle cmd_vel {:?}",
-      termion::cursor::Goto(1, 4),
-      termion::clear::CurrentLine,
-      twist
-    )
-    .unwrap();
-  }
-
   fn print_sent_turtle_cmd_vel(&mut self, twist: &Twist) {
     write!(
       self.stdout,
       "{}{}Sent Turtle cmd_vel {:?}",
-      termion::cursor::Goto(1, 2),
+      termion::cursor::Goto(1, 4),
       termion::clear::CurrentLine,
       twist
     )

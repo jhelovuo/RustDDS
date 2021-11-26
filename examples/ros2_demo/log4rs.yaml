@@ -20,3 +20,6 @@ root:
 loggers:
   rustdds:
     level: warn
+  rustdds::dds::reader:
+    level: info
+    

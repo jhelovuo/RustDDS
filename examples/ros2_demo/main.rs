@@ -32,6 +32,7 @@ mod ui;
 
 const TURTLE_CMD_VEL_READER_TOKEN: Token = Token(1);
 const ROS2_COMMAND_TOKEN: Token = Token(2);
+const TURTLE_POSE_READER_TOKEN: Token = Token(3);
 
 // This corresponds to ROS2 message type 
 // https://github.com/ros2/common_interfaces/blob/master/geometry_msgs/msg/Twist.msg
@@ -42,6 +43,16 @@ const ROS2_COMMAND_TOKEN: Token = Token(2);
 pub struct Twist {
   pub linear: Vector3,
   pub angular: Vector3,
+}
+
+// https://docs.ros2.org/foxy/api/turtlesim/msg/Pose.html
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pose {
+  pub x: f32,
+  pub y: f32,
+  pub theta: f32,
+  pub linear_velocity: f32,
+  pub angular_velocity: f32,
 }
 
 // This corresponds to ROS2 message type
@@ -62,12 +73,13 @@ fn main() {
 
   let (command_sender, command_receiver) = mio_channel::sync_channel::<RosCommand>(10);
   let (readback_sender, readback_receiver) = mio_channel::sync_channel(10);
+  let (pose_sender, pose_receiver) = mio_channel::sync_channel(10);
 
   // For some strange reason the ROS2 messaging event loop is in a separate thread
   // and we talk to it using (mio) mpsc channels.
   let jhandle = std::thread::Builder::new()
       .name("ros2_loop".into())
-      .spawn(move || ros2_loop(command_receiver, readback_sender))
+      .spawn(move || ros2_loop(command_receiver, readback_sender, pose_sender))
       .unwrap();
 
   // From termion docs:
@@ -78,18 +90,20 @@ fn main() {
   // its original cooked mode when the variable is dropped.
   let _stdout_restorer = std::io::stdout().into_raw_mode().unwrap();
 
-  // 
-  let mut main_control = UiController::new(std::io::stdout(), command_sender, readback_receiver);
+  // UI loop, which is in the main thread
+  let mut main_control = 
+    UiController::new(std::io::stdout(), command_sender, readback_receiver, pose_receiver);
   main_control.start();
 
-  jhandle.join().unwrap();
+  jhandle.join().unwrap(); // wait until threads exit.
 
   // need to wait a bit for cleanup, beacuse drop is not waited for join
   std::thread::sleep(Duration::from_millis(10));
 }
 
 fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>, 
-              readback_sender: mio_channel::SyncSender<Twist>, ) 
+              readback_sender: mio_channel::SyncSender<Twist>,
+              pose_sender: mio_channel::SyncSender<Pose>, ) 
 {
   info!("ros2_loop");
 
@@ -137,6 +151,19 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
     .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(turtle_cmd_vel_topic, None)
     .unwrap();
 
+  let turtle_pose_topic = ros_node
+    .create_ros_topic(
+      "/turtle1/pose",
+      String::from("turtlesim::msg::dds_::Pose_"),
+      qos.clone(),
+      TopicKind::NoKey,
+    )
+    .unwrap();
+  let mut turtle_pose_reader = ros_node
+    .create_ros_nokey_subscriber::<Pose, CDRDeserializerAdapter<_>>(turtle_pose_topic, None)
+    .unwrap();
+
+
   let poll = Poll::new().unwrap();
 
   poll
@@ -152,6 +179,14 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
     .register(
       &turtle_cmd_vel_reader,
       TURTLE_CMD_VEL_READER_TOKEN,
+      Ready::readable(),
+      PollOpt::edge(),
+    )
+    .unwrap();
+  poll
+    .register(
+      &turtle_pose_reader,
+      TURTLE_POSE_READER_TOKEN,
       Ready::readable(),
       PollOpt::edge(),
     )
@@ -188,6 +223,12 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
         TURTLE_CMD_VEL_READER_TOKEN => {
           while let Ok(Some(twist)) = turtle_cmd_vel_reader.take_next_sample() {
             readback_sender.send(twist.value().clone())
+              .unwrap();
+          }
+        }  
+        TURTLE_POSE_READER_TOKEN => {
+          while let Ok(Some(pose)) = turtle_pose_reader.take_next_sample() {
+            pose_sender.send(pose.value().clone())
               .unwrap();
           }
         }  
