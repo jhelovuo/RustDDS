@@ -2,12 +2,13 @@ use std::{
   collections::HashMap,
   io::{StdoutLock, Write},
   time::Duration as StdDuration,
+  os::unix::io::AsRawFd,
 };
 
 #[allow(unused_imports)] 
 use log::{debug, info, warn, error};
 
-use mio::{Events, Poll, PollOpt, Ready, Token};
+use mio::{Events, Poll, PollOpt, Ready, Token, unix::EventedFd};
 use mio_extras::{channel as mio_channel, timer::Timer};
 use termion::{event::Key, input::TermRead, raw::RawTerminal, AsyncReader};
 use rustdds::{
@@ -31,103 +32,51 @@ pub enum DataUpdate {
   TopicList { list: Vec<DiscoveredTopicData> },
 }
 
-pub struct TurtleControl {}
+// Define turtle movement commands as Twist values
+const MOVE_FORWARD : Twist = Twist 
+  { linear: Vector3{ x: 2.0, .. Vector3::ZERO }
+  , angular: Vector3::ZERO };
 
-impl TurtleControl {
-  pub fn move_forward() -> Twist {
-    Twist {
-      linear: Vector3 {
-        x: 2.,
-        y: 0.,
-        z: 0.,
-      },
-      angular: Vector3 {
-        x: 0.,
-        y: 0.,
-        z: 0.,
-      },
-    }
-  }
+const MOVE_BACKWARD : Twist = Twist 
+  { linear: Vector3{ x: -2.0, .. Vector3::ZERO }
+  , angular: Vector3::ZERO };
 
-  pub fn move_backward() -> Twist {
-    Twist {
-      linear: Vector3 {
-        x: -2.,
-        y: 0.,
-        z: 0.,
-      },
-      angular: Vector3 {
-        x: 0.,
-        y: 0.,
-        z: 0.,
-      },
-    }
-  }
+const ROTATE_LEFT : Twist = Twist 
+  { linear: Vector3::ZERO 
+  , angular: Vector3{ z: 2.0, .. Vector3::ZERO } };
 
-  pub fn rotate_left() -> Twist {
-    Twist {
-      linear: Vector3 {
-        x: 0.,
-        y: 0.,
-        z: 0.,
-      },
-      angular: Vector3 {
-        x: 0.,
-        y: 0.,
-        z: 2.,
-      },
-    }
-  }
+const ROTATE_RIGHT : Twist = Twist 
+  { linear: Vector3::ZERO
+  , angular: Vector3{ z: -2.0, .. Vector3::ZERO } };
 
-  pub fn rotate_right() -> Twist {
-    Twist {
-      linear: Vector3 {
-        x: 0.,
-        y: 0.,
-        z: 0.,
-      },
-      angular: Vector3 {
-        x: 0.,
-        y: 0.,
-        z: -2.,
-      },
-    }
-  }
-}
 
-pub struct MainController<'a> {
+
+pub struct MainController {
   poll: Poll,
-  stdout: RawTerminal<StdoutLock<'a>>,
-  input_timer: Timer<()>,
-  node_timer: Timer<()>,
+  stdout: RawTerminal<std::io::Stdout>,
   async_reader: termion::input::Events<AsyncReader>,
   command_sender: mio_channel::SyncSender<RosCommand>,
   nodelist_receiver: mio_channel::Receiver<DataUpdate>,
 }
 
-impl<'a> MainController<'a> {
-  const KEYBOARD_CHECK_TIMEOUT: u64 = 100;
+impl MainController {
   const NODE_UPDATE_TIMEOUT: u64 = 1;
 
   const KEYBOARD_CHECK_TOKEN: Token = Token(0);
   const UPDATE_NODE_LIST_TOKEN: Token = Token(1);
 
   pub fn new(
-    stdout: RawTerminal<StdoutLock<'a>>,
+    stdout: RawTerminal<std::io::Stdout>,
     command_sender: mio_channel::SyncSender<RosCommand>,
     nodelist_receiver: mio_channel::Receiver<DataUpdate>,
-  ) -> MainController<'a> {
+  ) -> MainController {
     let poll = Poll::new().unwrap();
-    let input_timer = Timer::default();
-    let node_timer = Timer::default();
     let async_reader = termion::async_stdin().events();
 
 
     MainController {
       poll,
       stdout,
-      input_timer,
-      node_timer,
       async_reader,
       command_sender,
       nodelist_receiver,
@@ -135,13 +84,16 @@ impl<'a> MainController<'a> {
   }
 
   pub fn start(&mut self) {
+
     self
       .poll
       .register(
-        &self.input_timer,
+        &EventedFd(&self.stdout.as_raw_fd()),
+        // stdout seems a silly place to poll for input, but I
+        // think the tty device is the same as for stdin.
         MainController::KEYBOARD_CHECK_TOKEN,
         Ready::readable(),
-        PollOpt::edge(),
+        PollOpt::level(),
       )
       .unwrap();
 
@@ -154,14 +106,6 @@ impl<'a> MainController<'a> {
         PollOpt::edge(),
       )
       .unwrap();
-    self.input_timer.set_timeout(
-      StdDuration::from_millis(MainController::KEYBOARD_CHECK_TIMEOUT),
-      (),
-    );
-    self.node_timer.set_timeout(
-      StdDuration::from_secs(MainController::NODE_UPDATE_TIMEOUT),
-      (),
-    );
 
     // clearing screen
     write!(
@@ -194,45 +138,40 @@ impl<'a> MainController<'a> {
 
       for event in events.iter() {
         if event.token() == MainController::KEYBOARD_CHECK_TOKEN {
-          info!("keyboard check");
+          // a small wait here to allow the termion input mechnism to react.
+          // Still some keyboard presses are missed. What are we doing wrong here?
+          std::thread::sleep(std::time::Duration::from_millis(10));
           while let Some(Ok(kevent)) = &self.async_reader.next() {
+            info!("key: {:?}",kevent);
             match kevent {
               termion::event::Event::Key(Key::Char('q')) => {
                 debug!("Quit.");
                 self.send_command(RosCommand::StopEventLoop);
-                return;
+                return
               }
               termion::event::Event::Key(Key::Up) => {
                 debug!("Move left.");
-                let twist = TurtleControl::move_forward();
+                let twist = MOVE_FORWARD;
                 self.print_sent_turtle_cmd_vel(&twist);
-                if !self.send_command(RosCommand::TurtleCmdVel { twist }) {
-                  return;
-                }
+                self.send_command(RosCommand::TurtleCmdVel { twist })
               }
               termion::event::Event::Key(Key::Right) => {
                 debug!("Move right.");
-                let twist = TurtleControl::rotate_right();
+                let twist = ROTATE_RIGHT;
                 self.print_sent_turtle_cmd_vel(&twist);
-                if !self.send_command(RosCommand::TurtleCmdVel { twist }) {
-                  return;
-                }
+                self.send_command(RosCommand::TurtleCmdVel { twist })
               }
               termion::event::Event::Key(Key::Down) => {
                 debug!("Move down.");
-                let twist = TurtleControl::move_backward();
+                let twist = MOVE_BACKWARD;
                 self.print_sent_turtle_cmd_vel(&twist);
-                if !self.send_command(RosCommand::TurtleCmdVel { twist }) {
-                  return;
-                }
+                self.send_command(RosCommand::TurtleCmdVel { twist })
               }
               termion::event::Event::Key(Key::Left) => {
                 debug!("Move left.");
-                let twist = TurtleControl::rotate_left();
+                let twist = ROTATE_LEFT;
                 self.print_sent_turtle_cmd_vel(&twist);
-                if !self.send_command(RosCommand::TurtleCmdVel { twist }) {
-                  return;
-                }
+                self.send_command(RosCommand::TurtleCmdVel { twist })
               }
               termion::event::Event::Key(key) => {
                 write!(
@@ -248,15 +187,16 @@ impl<'a> MainController<'a> {
             }
           }
 
-          self.input_timer.set_timeout(
-            StdDuration::from_millis(MainController::KEYBOARD_CHECK_TIMEOUT),
-            (),
-          );
+          // self.input_timer.set_timeout(
+          //   StdDuration::from_millis(MainController::KEYBOARD_CHECK_TIMEOUT),
+          //   (),
+          // );
         } else if event.token() == MainController::UPDATE_NODE_LIST_TOKEN {
           while let Ok(rec_nodes) = self.nodelist_receiver.try_recv() {
+           
             match rec_nodes {
               DataUpdate::UpdateNode { info } => {
-                let nodes: Vec<NodeInfo> = info.nodes().to_vec();
+                /*let nodes: Vec<NodeInfo> = info.nodes().to_vec();
 
                 write!(
                   self.stdout,
@@ -268,10 +208,10 @@ impl<'a> MainController<'a> {
                 )
                 .unwrap();
 
-                node_list.insert(info.guid(), nodes);
+                node_list.insert(info.guid(), nodes);*/
               }
               DataUpdate::TopicList { list } => {
-                write!(
+               /* write!(
                   self.stdout,
                   "{}{}{}Topics: {:?}",
                   termion::cursor::Goto(1, 3),
@@ -281,8 +221,8 @@ impl<'a> MainController<'a> {
                 )
                 .unwrap();
 
-                topic_list = list;
-              }
+                topic_list = list;*/
+              } 
               DataUpdate::TurtleCmdVel { twist } => {
                 self.print_turtle_cmd_vel(&twist);
               }
@@ -424,34 +364,24 @@ impl<'a> MainController<'a> {
             )
             .unwrap();
           }
-
-          self.stdout.flush().unwrap();
+      
+          self.stdout.flush().unwrap(); 
         }
-      }
+      } 
     }
   }
 
-  fn send_command(&self, command: RosCommand) -> bool {
-    match self.command_sender.try_send(command) {
-      Ok(_) => return true,
-      Err(e) => error!("Failed to send command. {:?}", e),
-    };
-    false
+  fn send_command(&self, command: RosCommand) {
+    self.command_sender.try_send(command)
+      .unwrap_or_else(|e| error!("UI: Failed to send command {:?}", e) )
   }
 
 
   fn print_turtle_cmd_vel(&mut self, twist: &Twist) {
     write!(
       self.stdout,
-      "{}{}Turtle cmd_vel",
-      termion::cursor::Goto(40, 1),
-      termion::clear::CurrentLine
-    )
-    .unwrap();
-    write!(
-      self.stdout,
-      "{}{}{:?}",
-      termion::cursor::Goto(40, 2),
+      "{}{}Read Turtle cmd_vel {:?}",
+      termion::cursor::Goto(1, 4),
       termion::clear::CurrentLine,
       twist
     )
@@ -461,15 +391,8 @@ impl<'a> MainController<'a> {
   fn print_sent_turtle_cmd_vel(&mut self, twist: &Twist) {
     write!(
       self.stdout,
-      "{}{}Sent Turtle cmd_vel",
-      termion::cursor::Goto(40, 3),
-      termion::clear::CurrentLine
-    )
-    .unwrap();
-    write!(
-      self.stdout,
-      "{}{}{:?}",
-      termion::cursor::Goto(40, 4),
+      "{}{}Sent Turtle cmd_vel {:?}",
+      termion::cursor::Goto(1, 2),
       termion::clear::CurrentLine,
       twist
     )

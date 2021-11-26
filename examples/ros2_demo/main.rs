@@ -1,6 +1,6 @@
 #![deny(clippy::all)]
 
-use std::{io::Write, time::Duration};
+use std::{time::Duration};
 
 use termion::raw::*;
 
@@ -25,15 +25,13 @@ use rustdds::{
   },
 };
 
-use structures::{DataUpdate, MainController, RosCommand};
+use ui::{DataUpdate, MainController, RosCommand};
 
 // modules
-mod structures;
+mod ui;
 
 const TURTLE_CMD_VEL_READER_TOKEN: Token = Token(1);
 const ROS2_COMMAND_TOKEN: Token = Token(2);
-const ROS2_NODE_RECEIVED_TOKEN: Token = Token(3);
-const TOPIC_UPDATE_TIMER_TOKEN: Token = Token(4);
 
 // This corresponds to ROS2 message type 
 // https://github.com/ros2/common_interfaces/blob/master/geometry_msgs/msg/Twist.msg
@@ -55,6 +53,10 @@ pub struct Vector3 {
   pub z: f64,
 }
 
+impl Vector3 {
+  pub const ZERO : Vector3 = Vector3{ x: 0.0, y:0.0, z:0.0};
+}
+
 fn main() {
   log4rs::init_file("examples/ros2_demo/log4rs.yaml", Default::default()).unwrap();
 
@@ -68,7 +70,7 @@ fn main() {
 
   // raw mode stdout for termion library.
   let stdout_org = std::io::stdout();
-  let mut stdout = stdout_org.lock().into_raw_mode().unwrap();
+  let mut stdout = stdout_org.into_raw_mode().unwrap();
 
   let mut main_control = MainController::new(stdout, command_sender, nodelist_receiver);
   main_control.start();
@@ -105,7 +107,7 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
 
   let mut ros_node = ros_participant
     .new_ros_node(
-      "turtle_listener",       // name
+      "turtle_teleop",       // name
       "/ros2_demo",            // namespace
       NodeOptions::new(false), // enable rosout
     )
@@ -120,15 +122,15 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
     )
     .unwrap();
 
+  // The point here is to publish Twist for the turtle
   let turtle_cmd_vel_writer = ros_node
     .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(turtle_cmd_vel_topic.clone(), None)
     .unwrap();
 
+  // But here is how to read it also, if anyone is interested.
   let mut turtle_cmd_vel_reader = ros_node
     .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(turtle_cmd_vel_topic, None)
     .unwrap();
-
-  info!("ros2_loop: ros2 objects created");
 
   let poll = Poll::new().unwrap();
 
@@ -143,25 +145,6 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
 
   poll
     .register(
-      &ros_participant,
-      ROS2_NODE_RECEIVED_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-
-  poll
-    .register(
-      &update_timer,
-      TOPIC_UPDATE_TIMER_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-
-
-  poll
-    .register(
       &turtle_cmd_vel_reader,
       TURTLE_CMD_VEL_READER_TOKEN,
       Ready::readable(),
@@ -170,63 +153,45 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
     .unwrap();
 
 
-  // senders
-  //let mut nodes_updated_sender: Option<mio_channel::SyncSender<DataUpdate>> = None;
   info!("Entering event_loop");
   'event_loop: loop {
     let mut events = Events::with_capacity(100);
     poll.poll(&mut events, None).unwrap();
 
     for event in events.iter() {
-      if event.token() == ROS2_COMMAND_TOKEN {
-        while let Ok(command) = command_receiver.try_recv() {
-          //info!("ROS2 command {:?}",command);
-          match command {
-            RosCommand::StopEventLoop => {
-              // tc_ts_sender.send(ThreadControl::Stop).unwrap_or(());
-              // tc_tl_sender.send(ThreadControl::Stop).unwrap_or(());
-              info!("Stopping main event loop");
-              ros_participant.clear();
-              break 'event_loop
-            }
-            //RosCommand::AddNodeListSender { sender } => nodes_updated_sender = Some(sender),
-            RosCommand::TurtleCmdVel { twist } => 
-              match turtle_cmd_vel_writer.write(twist.clone(), None) {
-                Ok(_) => { info!("Wrote to ROS2 {:?}",twist); }
-                Err(e) => {
-                  error!("Failed to write to turtle writer. {:?}", e);
-                  ros_node.clear_node();
-                  return;
-                }
-              },
-          };
-        }
-      } else if event.token() == ROS2_NODE_RECEIVED_TOKEN {
-        debug!("Started reading nodes.");
-        let pts = ros_participant.handle_node_read();
-        debug!("Nodes read");
-        for pis in pts.iter() {
-          match nodelist_sender.send(DataUpdate::UpdateNode { info: pis.clone() }) {
-            Ok(_) => (),
-            Err(e) => error!("Failed to update node. {:?}", e),
+      match event.token() {
+        ROS2_COMMAND_TOKEN => {
+          while let Ok(command) = command_receiver.try_recv() {
+            match command {
+              RosCommand::StopEventLoop => {
+                info!("Stopping main event loop");
+                ros_participant.clear();
+                break 'event_loop
+              }
+              RosCommand::TurtleCmdVel { twist } => 
+                match turtle_cmd_vel_writer.write(twist.clone(), None) {
+                  Ok(_) => { info!("Wrote to ROS2 {:?}",twist); }
+                  Err(e) => {
+                    error!("Failed to write to turtle writer. {:?}", e);
+                    ros_node.clear_node();
+                    return;
+                  }
+                },
+            };
           }
         }
-        debug!("Finished reading nodes.");
-      } else if event.token() == TOPIC_UPDATE_TIMER_TOKEN {
-        let list = ros_participant.discovered_topics();
-        nodelist_sender.send(DataUpdate::TopicList{ list }).unwrap();
-        update_timer.set_timeout(Duration::from_secs(1), ());
-      } else if event.token() == TURTLE_CMD_VEL_READER_TOKEN {
-        while let Ok(Some(twist)) = turtle_cmd_vel_reader.take_next_sample() {
-          debug!("Sending twist {:?}",twist.value() );
-          nodelist_sender
-            .send(DataUpdate::TurtleCmdVel { twist: twist.value().clone() })
-            .unwrap();
+        TURTLE_CMD_VEL_READER_TOKEN => {
+          while let Ok(Some(twist)) = turtle_cmd_vel_reader.take_next_sample() {
+            debug!("Sending twist {:?}",twist.value() );
+            nodelist_sender
+              .send(DataUpdate::TurtleCmdVel { twist: twist.value().clone() })
+              .unwrap();
+          }
+        }  
+        _ => {
+          error!("Unknown poll token {:?}", event.token())
         }
-      }  else {
-        error!("Unknown poll token {:?}", event.token())
-      }
-    }
-  }
-  
+      } // match
+    } // for 
+  }  
 }
