@@ -8,7 +8,7 @@ use log::{debug, info, warn, error};
 
 use mio::{Events, Poll, PollOpt, Ready, Token, unix::EventedFd};
 use mio_extras::{channel as mio_channel, };
-use termion::{event::Key, input::TermRead, raw::RawTerminal, AsyncReader};
+use termion::{event::Key, input::TermRead, AsyncReader};
 
 use crate::{Twist,Vector3};
 
@@ -39,34 +39,33 @@ const ROTATE_RIGHT : Twist = Twist
   , angular: Vector3{ z: -2.0, .. Vector3::ZERO } };
 
 
-
-pub struct MainController {
+pub struct UiController {
   poll: Poll,
-  stdout: RawTerminal<std::io::Stdout>,
+  stdout: std::io::Stdout,
   async_reader: termion::input::Events<AsyncReader>,
   command_sender: mio_channel::SyncSender<RosCommand>,
-  nodelist_receiver: mio_channel::Receiver<Twist>,
+  readback_receiver: mio_channel::Receiver<Twist>,
 }
 
-impl MainController {
+impl UiController {
   const KEYBOARD_CHECK_TOKEN: Token = Token(0);
-  const UPDATE_NODE_LIST_TOKEN: Token = Token(1);
+  const READBACK_TOKEN: Token = Token(1);
 
   pub fn new(
-    stdout: RawTerminal<std::io::Stdout>,
+    stdout: std::io::Stdout,
     command_sender: mio_channel::SyncSender<RosCommand>,
-    nodelist_receiver: mio_channel::Receiver<Twist>,
-  ) -> MainController {
+    readback_receiver: mio_channel::Receiver<Twist>,
+  ) -> UiController {
     let poll = Poll::new().unwrap();
     let async_reader = termion::async_stdin().events();
 
 
-    MainController {
+    UiController {
       poll,
       stdout,
       async_reader,
       command_sender,
-      nodelist_receiver,
+      readback_receiver,
     }
   }
 
@@ -75,10 +74,8 @@ impl MainController {
     self
       .poll
       .register(
-        &EventedFd(&self.stdout.as_raw_fd()),
-        // stdout seems a silly place to poll for input, but I
-        // think the tty device is the same as for stdin.
-        MainController::KEYBOARD_CHECK_TOKEN,
+        &EventedFd(&std::io::stdin().lock().as_raw_fd()),
+        UiController::KEYBOARD_CHECK_TOKEN,
         Ready::readable(),
         PollOpt::level(),
       )
@@ -87,8 +84,8 @@ impl MainController {
     self
       .poll
       .register(
-        &self.nodelist_receiver,
-        MainController::UPDATE_NODE_LIST_TOKEN,
+        &self.readback_receiver,
+        UiController::READBACK_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
       )
@@ -97,7 +94,7 @@ impl MainController {
     // clearing screen
     write!(
       self.stdout,
-      "{}{}",
+      "{}{}Press q to quit, cursor keys to control turtle.",
       termion::clear::All,
       termion::cursor::Goto(1, 1)
     )
@@ -112,58 +109,56 @@ impl MainController {
       self.poll.poll(&mut events, None).unwrap();
 
       for event in events.iter() {
-        if event.token() == MainController::KEYBOARD_CHECK_TOKEN {
+        if event.token() == UiController::KEYBOARD_CHECK_TOKEN {
           // a small wait here to allow the termion input mechnism to react.
           // Still some keyboard presses are missed. What are we doing wrong here?
           std::thread::sleep(std::time::Duration::from_millis(10));
-          while let Some(Ok(kevent)) = &self.async_reader.next() {
-            info!("key: {:?}",kevent);
-            match kevent {
-              termion::event::Event::Key(Key::Char('q')) => {
+          while let Some(Ok(termion::event::Event::Key(key))) = &self.async_reader.next() {
+            write!(
+              self.stdout,
+              "{}{}{:?} : Press q to quit, cursor keys to control turtle.",
+              termion::cursor::Goto(1, 1),
+              termion::clear::CurrentLine,
+              key,
+            )
+            .unwrap();
+            info!("key: {:?}",key);
+            match key {
+              Key::Char('q') => {
                 debug!("Quit.");
                 self.send_command(RosCommand::StopEventLoop);
-                return
+                return // stop loop
               }
-              termion::event::Event::Key(Key::Up) => {
+              Key::Up => {
                 debug!("Move left.");
                 let twist = MOVE_FORWARD;
                 self.print_sent_turtle_cmd_vel(&twist);
                 self.send_command(RosCommand::TurtleCmdVel { twist })
               }
-              termion::event::Event::Key(Key::Right) => {
+              Key::Right => {
                 debug!("Move right.");
                 let twist = ROTATE_RIGHT;
                 self.print_sent_turtle_cmd_vel(&twist);
                 self.send_command(RosCommand::TurtleCmdVel { twist })
               }
-              termion::event::Event::Key(Key::Down) => {
+              Key::Down => {
                 debug!("Rotate down.");
                 let twist = MOVE_BACKWARD;
                 self.print_sent_turtle_cmd_vel(&twist);
                 self.send_command(RosCommand::TurtleCmdVel { twist })
               }
-              termion::event::Event::Key(Key::Left) => {
+              Key::Left => {
                 debug!("Rotate left.");
                 let twist = ROTATE_LEFT;
                 self.print_sent_turtle_cmd_vel(&twist);
                 self.send_command(RosCommand::TurtleCmdVel { twist })
               }
-              termion::event::Event::Key(key) => {
-                write!(
-                  self.stdout,
-                  "{}{}{:?} : Press q to quit, cursor keys to control turtle.",
-                  termion::cursor::Goto(1, 1),
-                  termion::clear::CurrentLine,
-                  key,
-                )
-                .unwrap();
-              }
               _ => (),
             }
           }
 
-        } else if event.token() == MainController::UPDATE_NODE_LIST_TOKEN {
-          while let Ok(twist) = self.nodelist_receiver.try_recv() {
+        } else if event.token() == UiController::READBACK_TOKEN {
+          while let Ok(twist) = self.readback_receiver.try_recv() {
               self.print_turtle_cmd_vel(&twist);
           }
         } else {

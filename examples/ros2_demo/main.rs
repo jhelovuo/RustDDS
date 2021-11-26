@@ -25,7 +25,7 @@ use rustdds::{
   },
 };
 
-use ui::{MainController, RosCommand};
+use ui::{UiController, RosCommand};
 
 // modules
 mod ui;
@@ -61,18 +61,25 @@ fn main() {
   log4rs::init_file("examples/ros2_demo/log4rs.yaml", Default::default()).unwrap();
 
   let (command_sender, command_receiver) = mio_channel::sync_channel::<RosCommand>(10);
-  let (nodelist_sender, nodelist_receiver) = mio_channel::sync_channel(100);
+  let (readback_sender, readback_receiver) = mio_channel::sync_channel(10);
 
+  // For some strange reason the ROS2 messaging event loop is in a separate thread
+  // and we talk to it using (mio) mpsc channels.
   let jhandle = std::thread::Builder::new()
       .name("ros2_loop".into())
-      .spawn(move || ros2_loop(command_receiver, nodelist_sender))
+      .spawn(move || ros2_loop(command_receiver, readback_sender))
       .unwrap();
 
-  // raw mode stdout for termion library.
-  let stdout_org = std::io::stdout();
-  let mut stdout = stdout_org.into_raw_mode().unwrap();
+  // From termion docs:
+  // "A terminal restorer, which keeps the previous state of the terminal, 
+  // and restores it, when dropped.
+  // Restoring will entirely bring back the old TTY state."
+  // So the point of _stdout_restorer is that it will restore the TTY back to 
+  // its original cooked mode when the variable is dropped.
+  let _stdout_restorer = std::io::stdout().into_raw_mode().unwrap();
 
-  let mut main_control = MainController::new(stdout, command_sender, nodelist_receiver);
+  // 
+  let mut main_control = UiController::new(std::io::stdout(), command_sender, readback_receiver);
   main_control.start();
 
   jhandle.join().unwrap();
@@ -82,7 +89,7 @@ fn main() {
 }
 
 fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>, 
-              nodelist_sender: mio_channel::SyncSender<Twist>, ) 
+              readback_sender: mio_channel::SyncSender<Twist>, ) 
 {
   info!("ros2_loop");
 
@@ -100,10 +107,6 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
   };
 
   let mut ros_participant = RosParticipant::new().unwrap();
-
-  // topic update timer (or any update)
-  let mut update_timer = mio_extras::timer::Timer::default();
-  update_timer.set_timeout(Duration::from_secs(1), ());
 
   let mut ros_node = ros_participant
     .new_ros_node(
@@ -184,7 +187,7 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
         }
         TURTLE_CMD_VEL_READER_TOKEN => {
           while let Ok(Some(twist)) = turtle_cmd_vel_reader.take_next_sample() {
-            nodelist_sender.send(twist.value().clone())
+            readback_sender.send(twist.value().clone())
               .unwrap();
           }
         }  
