@@ -25,7 +25,7 @@ use rustdds::{
   },
 };
 
-use ui::{DataUpdate, MainController, RosCommand};
+use ui::{MainController, RosCommand};
 
 // modules
 mod ui;
@@ -82,7 +82,7 @@ fn main() {
 }
 
 fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>, 
-              nodelist_sender: mio_channel::SyncSender<DataUpdate>, ) 
+              nodelist_sender: mio_channel::SyncSender<Twist>, ) 
 {
   info!("ros2_loop");
 
@@ -128,6 +128,8 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
     .unwrap();
 
   // But here is how to read it also, if anyone is interested.
+  // This should show what is the turle command in case someone else is
+  // also issuing commands, i.e. there are two turtla controllers running.
   let mut turtle_cmd_vel_reader = ros_node
     .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(turtle_cmd_vel_topic, None)
     .unwrap();
@@ -182,9 +184,7 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
         }
         TURTLE_CMD_VEL_READER_TOKEN => {
           while let Ok(Some(twist)) = turtle_cmd_vel_reader.take_next_sample() {
-            debug!("Sending twist {:?}",twist.value() );
-            nodelist_sender
-              .send(DataUpdate::TurtleCmdVel { twist: twist.value().clone() })
+            nodelist_sender.send(twist.value().clone())
               .unwrap();
           }
         }  
