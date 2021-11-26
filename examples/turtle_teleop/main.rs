@@ -1,31 +1,25 @@
 #![deny(clippy::all)]
 
-use std::{time::Duration};
+use std::time::Duration;
 
 use termion::raw::*;
-
-#[allow(unused_imports)] 
-use log::{debug, info, warn, error};
-
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
-
 use rustdds::{
-  ros2::{NodeOptions, RosParticipant},
-  serialization::CDRDeserializerAdapter,
-  serialization::CDRSerializerAdapter,
-  dds::data_types::{DDSDuration, TopicKind},
-  dds::qos::{
-    policy::{
-      Durability, History,  Liveliness,
-      Reliability,
+  dds::{
+    data_types::{DDSDuration, TopicKind},
+    qos::{
+      policy::{Durability, History, Liveliness, Reliability},
+      QosPolicies, QosPolicyBuilder,
     },
-    QosPolicies, QosPolicyBuilder,
   },
+  ros2::{NodeOptions, RosParticipant},
+  serialization::{CDRDeserializerAdapter, CDRSerializerAdapter},
 };
-
-use ui::{UiController, RosCommand};
+use ui::{RosCommand, UiController};
 
 // modules
 mod ui;
@@ -34,7 +28,7 @@ const TURTLE_CMD_VEL_READER_TOKEN: Token = Token(1);
 const ROS2_COMMAND_TOKEN: Token = Token(2);
 const TURTLE_POSE_READER_TOKEN: Token = Token(3);
 
-// This corresponds to ROS2 message type 
+// This corresponds to ROS2 message type
 // https://github.com/ros2/common_interfaces/blob/master/geometry_msgs/msg/Twist.msg
 //
 // The struct definition must have a layout corresponding to the
@@ -65,7 +59,11 @@ pub struct Vector3 {
 }
 
 impl Vector3 {
-  pub const ZERO : Vector3 = Vector3{ x: 0.0, y:0.0, z:0.0};
+  pub const ZERO: Vector3 = Vector3 {
+    x: 0.0,
+    y: 0.0,
+    z: 0.0,
+  };
 }
 
 fn main() {
@@ -80,21 +78,25 @@ fn main() {
   // For some strange reason the ROS2 messaging event loop is in a separate thread
   // and we talk to it using (mio) mpsc channels.
   let jhandle = std::thread::Builder::new()
-      .name("ros2_loop".into())
-      .spawn(move || ros2_loop(command_receiver, readback_sender, pose_sender))
-      .unwrap();
+    .name("ros2_loop".into())
+    .spawn(move || ros2_loop(command_receiver, readback_sender, pose_sender))
+    .unwrap();
 
   // From termion docs:
-  // "A terminal restorer, which keeps the previous state of the terminal, 
+  // "A terminal restorer, which keeps the previous state of the terminal,
   // and restores it, when dropped.
   // Restoring will entirely bring back the old TTY state."
-  // So the point of _stdout_restorer is that it will restore the TTY back to 
+  // So the point of _stdout_restorer is that it will restore the TTY back to
   // its original cooked mode when the variable is dropped.
   let _stdout_restorer = std::io::stdout().into_raw_mode().unwrap();
 
   // UI loop, which is in the main thread
-  let mut main_control = 
-    UiController::new(std::io::stdout(), command_sender, readback_receiver, pose_receiver);
+  let mut main_control = UiController::new(
+    std::io::stdout(),
+    command_sender,
+    readback_receiver,
+    pose_receiver,
+  );
   main_control.start();
 
   jhandle.join().unwrap(); // wait until threads exit.
@@ -103,10 +105,11 @@ fn main() {
   std::thread::sleep(Duration::from_millis(10));
 }
 
-fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>, 
-              readback_sender: mio_channel::SyncSender<Twist>,
-              pose_sender: mio_channel::SyncSender<Pose>, ) 
-{
+fn ros2_loop(
+  command_receiver: mio_channel::Receiver<RosCommand>,
+  readback_sender: mio_channel::SyncSender<Twist>,
+  pose_sender: mio_channel::SyncSender<Pose>,
+) {
   info!("ros2_loop");
 
   let qos: QosPolicies = {
@@ -126,7 +129,7 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
 
   let mut ros_node = ros_participant
     .new_ros_node(
-      "turtle_teleop",       // name
+      "turtle_teleop",         // name
       "/ros2_demo",            // namespace
       NodeOptions::new(false), // enable rosout
     )
@@ -143,7 +146,10 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
 
   // The point here is to publish Twist for the turtle
   let turtle_cmd_vel_writer = ros_node
-    .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(turtle_cmd_vel_topic.clone(), None)
+    .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(
+      turtle_cmd_vel_topic.clone(),
+      None,
+    )
     .unwrap();
 
   // But here is how to read it also, if anyone is interested.
@@ -164,7 +170,6 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
   let mut turtle_pose_reader = ros_node
     .create_ros_nokey_subscriber::<Pose, CDRDeserializerAdapter<_>>(turtle_pose_topic, None)
     .unwrap();
-
 
   let poll = Poll::new().unwrap();
 
@@ -194,7 +199,6 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
     )
     .unwrap();
 
-
   info!("Entering event_loop");
   'event_loop: loop {
     let mut events = Events::with_capacity(100);
@@ -208,36 +212,37 @@ fn ros2_loop( command_receiver: mio_channel::Receiver<RosCommand>,
               RosCommand::StopEventLoop => {
                 info!("Stopping main event loop");
                 ros_participant.clear();
-                break 'event_loop
+                break 'event_loop;
               }
-              RosCommand::TurtleCmdVel { twist } => 
+              RosCommand::TurtleCmdVel { twist } => {
                 match turtle_cmd_vel_writer.write(twist.clone(), None) {
-                  Ok(_) => { info!("Wrote to ROS2 {:?}",twist); }
+                  Ok(_) => {
+                    info!("Wrote to ROS2 {:?}", twist);
+                  }
                   Err(e) => {
                     error!("Failed to write to turtle writer. {:?}", e);
                     ros_node.clear_node();
                     return;
                   }
-                },
+                }
+              }
             };
           }
         }
         TURTLE_CMD_VEL_READER_TOKEN => {
           while let Ok(Some(twist)) = turtle_cmd_vel_reader.take_next_sample() {
-            readback_sender.send(twist.value().clone())
-              .unwrap();
+            readback_sender.send(twist.value().clone()).unwrap();
           }
-        }  
+        }
         TURTLE_POSE_READER_TOKEN => {
           while let Ok(Some(pose)) = turtle_pose_reader.take_next_sample() {
-            pose_sender.send(pose.value().clone())
-              .unwrap();
+            pose_sender.send(pose.value().clone()).unwrap();
           }
-        }  
+        }
         _ => {
           error!("Unknown poll token {:?}", event.token())
         }
       } // match
-    } // for 
-  }  
+    } // for
+  }
 }

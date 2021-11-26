@@ -1,43 +1,51 @@
-use std::{
-  io::{ Write},
-  os::unix::io::AsRawFd,
-};
+use std::{io::Write, os::unix::io::AsRawFd};
 
-#[allow(unused_imports)] 
-use log::{debug, info, warn, error};
-
-use mio::{Events, Poll, PollOpt, Ready, Token, unix::EventedFd};
-use mio_extras::{channel as mio_channel, };
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
+use mio::{unix::EventedFd, Events, Poll, PollOpt, Ready, Token};
+use mio_extras::channel as mio_channel;
 use termion::{event::Key, input::TermRead, AsyncReader};
 
-use crate::{Twist, Vector3, Pose, };
+use crate::{Pose, Twist, Vector3};
 
 #[derive(Debug)]
 pub enum RosCommand {
   StopEventLoop,
-  TurtleCmdVel {
-    twist: Twist,
-  },
+  TurtleCmdVel { twist: Twist },
 }
 
-
 // Define turtle movement commands as Twist values
-const MOVE_FORWARD : Twist = Twist 
-  { linear: Vector3{ x: 2.0, .. Vector3::ZERO }
-  , angular: Vector3::ZERO };
+const MOVE_FORWARD: Twist = Twist {
+  linear: Vector3 {
+    x: 2.0,
+    ..Vector3::ZERO
+  },
+  angular: Vector3::ZERO,
+};
 
-const MOVE_BACKWARD : Twist = Twist 
-  { linear: Vector3{ x: -2.0, .. Vector3::ZERO }
-  , angular: Vector3::ZERO };
+const MOVE_BACKWARD: Twist = Twist {
+  linear: Vector3 {
+    x: -2.0,
+    ..Vector3::ZERO
+  },
+  angular: Vector3::ZERO,
+};
 
-const ROTATE_LEFT : Twist = Twist 
-  { linear: Vector3::ZERO 
-  , angular: Vector3{ z: 2.0, .. Vector3::ZERO } };
+const ROTATE_LEFT: Twist = Twist {
+  linear: Vector3::ZERO,
+  angular: Vector3 {
+    z: 2.0,
+    ..Vector3::ZERO
+  },
+};
 
-const ROTATE_RIGHT : Twist = Twist 
-  { linear: Vector3::ZERO
-  , angular: Vector3{ z: -2.0, .. Vector3::ZERO } };
-
+const ROTATE_RIGHT: Twist = Twist {
+  linear: Vector3::ZERO,
+  angular: Vector3 {
+    z: -2.0,
+    ..Vector3::ZERO
+  },
+};
 
 pub struct UiController {
   poll: Poll,
@@ -62,7 +70,6 @@ impl UiController {
     let poll = Poll::new().unwrap();
     let async_reader = termion::async_stdin().events();
 
-
     UiController {
       poll,
       stdout,
@@ -74,7 +81,6 @@ impl UiController {
   }
 
   pub fn start(&mut self) {
-
     self
       .poll
       .register(
@@ -135,12 +141,12 @@ impl UiController {
               key,
             )
             .unwrap();
-            info!("key: {:?}",key);
+            info!("key: {:?}", key);
             match key {
               Key::Char('q') => {
                 debug!("Quit.");
                 self.send_command(RosCommand::StopEventLoop);
-                return // stop loop
+                return; // stop loop
               }
               Key::Up => {
                 debug!("Move left.");
@@ -169,10 +175,11 @@ impl UiController {
               _ => (),
             }
           }
-
         } else if event.token() == UiController::READBACK_TOKEN {
           while let Ok(twist) = self.readback_receiver.try_recv() {
-            write!(self.stdout, "{}{}Read Turtle cmd_vel {:?}",
+            write!(
+              self.stdout,
+              "{}{}Read Turtle cmd_vel {:?}",
               termion::cursor::Goto(1, 6),
               termion::clear::CurrentLine,
               twist
@@ -181,7 +188,9 @@ impl UiController {
           }
         } else if event.token() == UiController::POSE_TOKEN {
           while let Ok(pose) = self.pose_receiver.try_recv() {
-            write!(self.stdout, "{}{}Turtle pose {:?}",
+            write!(
+              self.stdout,
+              "{}{}Turtle pose {:?}",
               termion::cursor::Goto(1, 8),
               termion::clear::CurrentLine,
               pose
@@ -191,15 +200,16 @@ impl UiController {
         } else {
           error!("What is this? {:?}", event.token())
         }
-      } 
+      }
     }
   }
 
   fn send_command(&self, command: RosCommand) {
-    self.command_sender.try_send(command)
-      .unwrap_or_else(|e| error!("UI: Failed to send command {:?}", e) )
+    self
+      .command_sender
+      .try_send(command)
+      .unwrap_or_else(|e| error!("UI: Failed to send command {:?}", e))
   }
-
 
   fn print_sent_turtle_cmd_vel(&mut self, twist: &Twist) {
     write!(
