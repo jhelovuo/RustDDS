@@ -1,6 +1,6 @@
 [package]
 name = "rustdds"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", "Oiva Moisio <oiva.moisio@atostek.com>", "Miska Melkinen <miska.melkinen@atostek.com>", "Lauri Eneh <lauri.eneh@atostek.com>"]
 description = "Native Rust DDS implementation with RTPS"
 readme = "README.md"
@@ -46,7 +46,6 @@ ctrlc = "3.1.6"
 termion = "1.5.5"
 env_logger = "0.9.0"
 clap = "2.33"
-# ros2-demo
+# turle_teleop
 log4rs = "1"
 test-case = "1.2.0"
-lazy_static = "1.4.0"

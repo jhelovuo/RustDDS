@@ -69,7 +69,9 @@ impl Vector3 {
 }
 
 fn main() {
-  log4rs::init_file("examples/ros2_demo/log4rs.yaml", Default::default()).unwrap();
+  // Here is a fixed path, so this example must be started from
+  // RustDDS main directory
+  log4rs::init_file("examples/turtle_teleop/log4rs.yaml", Default::default()).unwrap();
 
   let (command_sender, command_receiver) = mio_channel::sync_channel::<RosCommand>(10);
   let (readback_sender, readback_receiver) = mio_channel::sync_channel(10);
