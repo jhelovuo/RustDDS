@@ -34,6 +34,8 @@ bytes = "1"
 static_assertions = "1.1"
 thiserror = "1.0.29"
 cdr-encoding-size = { version="^0.5" }
+crossterm = "0.20"
+tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 
 [target.'cfg(windows)'.dependencies]
 local-ip-address = "0.4.4"

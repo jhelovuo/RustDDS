@@ -89,6 +89,22 @@ impl RosParticipant {
     self.inner.lock().unwrap().remove_node_info(node_info)
   }
 
+  pub fn get_all_discovered_external_ros_node_infos(&self) -> HashMap<Gid, Vec<NodeInfo>> {
+    //let mut pts = Vec::new();
+    //println!("get_all_discovered_external_ros_node_infos: {:?}", self.inner.lock().unwrap().external_nodes);
+    self.inner.lock().unwrap().external_nodes.clone()
+  }
+
+  pub fn get_all_discovered_local_ros_node_infos(&self) -> HashMap<String, NodeInfo>{
+    //println!("{:?}", self.inner.lock().unwrap().nodes);
+    self.inner.lock().unwrap().nodes.clone()
+  }
+
+  /// Gets our current participant info we have sent to ROS2 network
+  pub fn get_ros_participant_info(&self) -> ROSParticipantInfo {
+    self.inner.lock().unwrap().get_ros_participant_info()
+  }
+
   fn get_parameter_events_topic(&self) -> Topic {
     self
       .inner
@@ -239,6 +255,16 @@ impl RosParticipantInner {
     }
     pts
   }
+
+  //rustdds::ros2::ros_node::RosParticipantInner
+//external_nodes: HashMap<Gid, Vec<NodeInfo, Global>, RandomState>
+
+  /*
+  pub fn get_all_discovered_ros_node_infos(&self) -> HashMap<Gid, Vec<NodeInfo>> {
+    //let mut pts = Vec::new();
+    self.external_nodes.clone()
+  }
+  */
 }
 
 impl Evented for RosParticipant {
