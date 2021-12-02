@@ -3,21 +3,30 @@
 
 use tui::{
   text::{Span, Spans},
-  widgets::{Paragraph,Block,Wrap,Borders},
-  style::{Color, Style},
+  widgets::{Paragraph,Block,Wrap,Borders,},// List, ListItem},
+  style::{Color, Style,},// Modifier},
   layout::{Constraint, Direction, Layout, Rect},
 };
 
-/*
-pub fn create_list_from_list_items(list_items : Vec<ListItem>, title : String) -> List<'static>{
+/* 
+pub fn new<T>(items: T) -> List<'a>
+where
+  T: Into<Vec<ListItem<'a>>>,
+
+pub fn create_list_from_list_items(list_items : Vec<ListItem>, title :  String)
+-> List<T>
+{
   static highlight : String = ">>".to_string();
-  List::new(list_items)
+  static l : List = List::new(list_items)
     .block(Block::default().title(title).borders(Borders::ALL))
     .style(Style::default().fg(Color::White))
     .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
-    .highlight_symbol(&highlight)
+    .highlight_symbol(&highlight);
+    l
 }
+
 */
+
 
 pub fn create_layput_row(area : Rect) ->  Vec<Rect>{
   Layout::default()

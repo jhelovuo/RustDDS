@@ -2,7 +2,7 @@ use std::{
   io,
   error::Error,
   time::{Duration, Instant},
-  collections::{HashMap}
+//  collections::{HashMap}
 };
 
 use log::{LevelFilter};
@@ -18,12 +18,25 @@ use crate::stateful_list::StatefulList;
 mod display_string;
 use crate::display_string::get_topics_list_view_strings;
 use crate::display_string::get_topic_view_strings;
-use crate::display_string::get_external_node_info_strings;
-use crate::display_string::get_local_ros_participant_info_strings;
+//use crate::display_string::get_external_node_info_strings;
 use crate::display_string::get_node_list_strings;
+use crate::display_string::get_participant_list_view_strings;
+use crate::display_string::get_participant_view_strings;
+use crate::display_string::get_node_view_strings;
+
+
 mod visualization_helpers;
 use crate::visualization_helpers::create_paragraph_from_string_list;
 use crate::visualization_helpers::create_layput_row;
+
+
+
+use mio::Events;
+use mio::Token;
+use mio::Ready;
+use mio::PollOpt;
+use mio::Poll;
+
 
 
 
@@ -53,8 +66,11 @@ use rustdds::ros2::NodeOptions;
 use rustdds::ros2::RosNode;
 use rustdds::ros2::builtin_datatypes::NodeInfo;
 use rustdds::ros2::builtin_datatypes::Gid;
+use rustdds::ros2::builtin_datatypes::ROSParticipantInfo;
 
 use rustdds::dds::data_types::DiscoveredTopicData;
+
+
 
 
 //use rustdds::ros2::builtin_datatypes::NodeInfo;
@@ -77,6 +93,10 @@ use tui::{
 };
 
 
+const ROS2_NODE_RECEIVED_TOKEN: Token = Token(1001);
+const TOPIC_UPDATE_TIMER_TOKEN: Token = Token(1003);
+
+
 struct VisualizatorApp<'a> {
   pub tab_titles: Vec<&'a str>,
   pub tab_index: usize,
@@ -88,10 +108,12 @@ struct VisualizatorApp<'a> {
   pub topic_list_items : Vec<DiscoveredTopicData>,
   pub external_nodes : Vec<NodeInfo>,
   pub local_nodes : Vec<NodeInfo>,
+  pub ros_participants : Vec<ROSParticipantInfo>,
   //viewed datas:
   pub topic_list_display_items : StatefulList<ListItem<'a>>,
   pub external_nodes_display_items : StatefulList<ListItem<'a>>,
   pub local_nodes_display_items : StatefulList<ListItem<'a>>,
+  pub ros_participants_display_items : StatefulList<ListItem<'a>>,
 }
 
 impl<'a> VisualizatorApp<'a> {
@@ -105,9 +127,11 @@ impl<'a> VisualizatorApp<'a> {
           external_nodes : vec!(),
           topic_list_items : vec!(),
           local_nodes : vec!(),
+          ros_participants : vec!(),
           topic_list_display_items : StatefulList::with_items(vec!()),
           external_nodes_display_items : StatefulList::with_items(vec!()),
           local_nodes_display_items : StatefulList::with_items(vec!()),
+          ros_participants_display_items : StatefulList::with_items(vec!()),
       }
   }
 
@@ -138,24 +162,99 @@ impl<'a> VisualizatorApp<'a> {
     let externals = self.ros_participant.get_all_discovered_external_ros_node_infos();
     let locals = self.ros_participant.get_all_discovered_local_ros_node_infos();
 
+    self.local_nodes = locals.clone().into_iter().map(|(_string,nodes)|nodes).collect();
     
-    //let extarnal_node_infos = externals.into_iter().map(|(gid,nodes)|nodes).collect::<NodeInfo>();
+    for (_g,e_nodes) in externals {
+      for node_i in e_nodes{
+        self.external_nodes.push(node_i);
+      }
+    }
 
-    self.local_nodes = locals.clone().into_iter().map(|(string,nodes)|nodes).collect();
     let external_node_list_string = get_node_list_strings(&self.external_nodes);
     let local_node_list_string = get_node_list_strings(&self.local_nodes);
-    let previous_state = self.external_nodes_display_items.state.clone();
-    self.external_nodes_display_items = StatefulList::with_items(vec!());
+    let previous_state_external_nodes = self.external_nodes_display_items.state.clone();
+    let previous_state_local_nodes = self.local_nodes_display_items.state.clone();
     
+    self.external_nodes_display_items = StatefulList::with_items(vec!());
     for string in external_node_list_string {
       self.external_nodes_display_items.push(ListItem::new(string));
     }
+    self.external_nodes_display_items.state = previous_state_external_nodes;
 
     self.local_nodes_display_items = StatefulList::with_items(vec!());
     for string in local_node_list_string {
       self.local_nodes_display_items.push(ListItem::new(string));
     }
+    self.local_nodes_display_items.state = previous_state_local_nodes;
 
+  }
+
+  pub fn set_ros_participant_list_items(&mut self){
+    self.ros_participants = vec!();
+    self.ros_participants.push( self.ros_participant.get_ros_participant_info());
+    let previous_state = self.ros_participants_display_items.state.clone();
+
+    self.ros_participants_display_items = StatefulList::with_items(vec!());
+    let display_strings = get_participant_list_view_strings(&self.ros_participants);
+    for string in display_strings{
+      self.ros_participants_display_items.push(ListItem::new(string))
+    }
+    self.ros_participants_display_items.state = previous_state;
+  }
+
+
+  pub fn get_selected_participant_strings(&self) -> Vec<String>{
+     match self.ros_participants_display_items.state.selected() {
+      Some(index) => {
+        match self.ros_participants.get(index){
+          Some(item) =>{
+            get_participant_view_strings(&item)
+          }None =>{
+            vec!()
+          }
+        }
+      }
+      None => {vec!()}
+    }
+  }
+
+  pub fn get_selected_topic_strings(&self) -> Vec<String>{
+    match self.topic_list_display_items.state.selected(){
+      Some (index) =>{
+        match self.topic_list_items.get(index){
+          Some(item)=>{
+            get_topic_view_strings(&self.ros_participant, item.topic_name())
+          }None=>{vec!()}
+        }
+      }
+      None =>{vec!()}
+    }
+  }
+
+  pub fn get_selected_local_node_strings(&self) -> Vec<String>{
+    match self.local_nodes_display_items.state.selected(){
+      Some (index) =>{
+        match self.local_nodes.get(index){
+          Some(item)=>{
+            get_node_view_strings(&item)
+          }None=>{vec!()}
+        }
+      }
+      None =>{vec!()}
+    }
+  }
+
+  pub fn get_selected_external_node_strings(&self) -> Vec<String>{
+    match self.external_nodes_display_items.state.selected(){
+      Some (index) =>{
+        match self.external_nodes.get(index){
+          Some(item)=>{
+            get_node_view_strings(&item)
+          }None=>{vec!()}
+        }
+      }
+      None =>{vec!()}
+    }
   }
 
 }
@@ -170,9 +269,9 @@ fn handle_user_input(app: &mut VisualizatorApp, timeout : &Duration) -> bool {
             KeyCode::Left => app.previous_tab(),
             KeyCode::Up => {
               match app.tab_index {
-                0 => {},
-                1 => {},
-                2 => {},
+                0 => {app.ros_participants_display_items.previous()},
+                1 => {app.local_nodes_display_items.previous() },
+                2 => {app.external_nodes_display_items.previous()},
                 3 => {app.topic_list_display_items.previous()},
                 _ => {},
               }
@@ -180,9 +279,9 @@ fn handle_user_input(app: &mut VisualizatorApp, timeout : &Duration) -> bool {
             }, 
             KeyCode::Down => {
               match app.tab_index {
-                0 => {},
-                1 => {},
-                2 => {},
+                0 => {app.ros_participants_display_items.next()},
+                1 => {app.local_nodes_display_items.next() },
+                2 => {app.external_nodes_display_items.next()},
                 3 => {app.topic_list_display_items.next()},
                 _ => {},
               }
@@ -196,11 +295,16 @@ fn handle_user_input(app: &mut VisualizatorApp, timeout : &Duration) -> bool {
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: VisualizatorApp, tick_rate: Duration) -> io::Result<()> {
   let mut last_tick = Instant::now();
-  app.ros_participant.clear();
+
+  //let jhandle = std::thread::spawn(ros2_loop(&mut ros_participant));
+  //ros2_loop(&mut app.ros_participant);
+
   loop {
       
-      app.ros_participant.handle_node_read();
+      //app.ros_participant.handle_node_read();
       app.set_topic_list_items();
+      app.set_node_list_items();
+      app.set_ros_participant_list_items();
 
       terminal.draw(|f| ui(f, &mut app))?;
 
@@ -217,12 +321,54 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: VisualizatorApp, tic
   }
 }
 
+fn ros2_loop(visualizator_app  : &mut VisualizatorApp){
+
+  let mut ros_participant = &mut visualizator_app.ros_participant;
+  let poll = Poll::new().unwrap();
+
+  let mut update_timer = mio_extras::timer::Timer::default();
+  update_timer.set_timeout(Duration::from_secs(1), ());
+
+  poll
+  .register(
+    ros_participant,
+    ROS2_NODE_RECEIVED_TOKEN,
+    Ready::readable(),
+    PollOpt::edge(),
+  )
+  .unwrap();
+
+  poll
+    .register(
+      &update_timer,
+      TOPIC_UPDATE_TIMER_TOKEN,
+      Ready::readable(),
+      PollOpt::edge(),
+    )
+    .unwrap();
+
+  loop{
+    let mut events = Events::with_capacity(100);
+    poll.poll(&mut events, None).unwrap();
+
+    for event in events.iter() {
+      if event.token() == ROS2_NODE_RECEIVED_TOKEN {
+        let new_nodes = ros_participant.handle_node_read();
+      }
+      if event.token() == TOPIC_UPDATE_TIMER_TOKEN {
+        let new_tokens = ros_participant.handle_node_read();
+      }
+    }
+    
+  }
+}
+
 
 fn ui<B: Backend>(f: &mut Frame<B>, app: &mut VisualizatorApp) {
   let size = f.size();
   let chunks = Layout::default()
       .direction(Direction::Vertical)
-      .margin(5)
+      .margin(1)
       .constraints([Constraint::Length(5),
                      Constraint::Length(3),
                      Constraint::Length(10)
@@ -267,10 +413,10 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut VisualizatorApp) {
   let first_row = create_layput_row(chunks[2]);
 
   let list_of_topics = List::new(app.topic_list_display_items.items.clone())
-    .block(Block::default().title("Topics").borders(Borders::ALL))
-    .style(Style::default().fg(Color::White))
-    .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
-    .highlight_symbol(">>");
+  .block(Block::default().title("Topics").borders(Borders::ALL))
+  .style(Style::default().fg(Color::White))
+  .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
+  .highlight_symbol(">>");
 
   let list_of_local_nodes = List::new(app.local_nodes_display_items.items.clone())
   .block(Block::default().title("Local Nodes").borders(Borders::ALL))
@@ -283,40 +429,32 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut VisualizatorApp) {
   .style(Style::default().fg(Color::White))
   .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
   .highlight_symbol(">>");
-
-  let participant_strings = get_external_node_info_strings(&app.ros_participant);
-  let local_participant_strings = get_local_ros_participant_info_strings(&app.ros_participant);
-  let mut participant_list_items = vec!();
-  for string in participant_strings{
-    participant_list_items.push(ListItem::new(string));
-  }
-  for string in local_participant_strings{
-    participant_list_items.push(ListItem::new(string));
-  }
-
-  let selected_topic_strings = match app.topic_list_display_items.state.selected(){
-    Some (index) =>{
-      get_topic_view_strings(&app.ros_participant, app.topic_list_items[index].topic_name())
-    }
-    None =>{vec!()}
-  };
-
-  let selected_topic_paragraph = create_paragraph_from_string_list(selected_topic_strings,"Topic information".to_string());
-  
-
-  let list_of_participants = List::new(participant_list_items)
+ 
+  let list_of_participants = List::new(app.ros_participants_display_items.items.clone())
   .block(Block::default().title("Participants").borders(Borders::ALL))
   .style(Style::default().fg(Color::White))
   .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
   .highlight_symbol(">>");
 
+
+  let selected_topic_paragraph = create_paragraph_from_string_list( app.get_selected_topic_strings(),"Topic information".to_string());
+  let selected_participant_paragraph = create_paragraph_from_string_list(app.get_selected_participant_strings(),"Participant information".to_string());
+  let selected_local_node_paragraph = create_paragraph_from_string_list(app.get_selected_local_node_strings(),"Node information".to_string());
+  let selected_external_node_paragraph = create_paragraph_from_string_list(app.get_selected_external_node_strings(),"Node information".to_string());
+
+
   match app.tab_index{
-    0 => {f.render_widget(list_of_participants, first_row[0]);},
+    0 => {
+      f.render_stateful_widget(list_of_participants, first_row[0], &mut app.ros_participants_display_items.state);
+      f.render_widget(selected_participant_paragraph, first_row[1]);
+    },
     1 => {
       f.render_stateful_widget(list_of_local_nodes, first_row[0], &mut app.local_nodes_display_items.state);
+      f.render_widget(selected_local_node_paragraph, first_row[1]);
     }
     2 => {
-      f.render_stateful_widget(list_of_external_nodes, first_row[0], &mut app.local_nodes_display_items.state);
+      f.render_stateful_widget(list_of_external_nodes, first_row[0], &mut app.external_nodes_display_items.state);
+      f.render_widget(selected_external_node_paragraph, first_row[1]);
     },
     3 => {
       f.render_stateful_widget(list_of_topics, first_row[0], &mut app.topic_list_display_items.state);
@@ -352,7 +490,10 @@ fn configure_logging() {
       other_error => panic!("Config problem: {:?}", other_error),
     }
   });
+
+
 }
+
 
 
 
@@ -368,13 +509,18 @@ fn main()  -> Result<(), Box<dyn Error>>  {
   let domain_participant = DomainParticipant::new(domain_id)
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {:?}", e));
     
-  let ros_participant = RosParticipant::new().unwrap();
-  let ros_node = ros_participant.new_ros_node("local_ node", "/ros2_demo", NodeOptions::new(true)).unwrap();
-  
+  let mut ros_participant = RosParticipant::new().unwrap();
+  let mut ros_node = ros_participant.new_ros_node("local_node", "/ros2_demo", NodeOptions::new(true)).unwrap();
+  ros_node.clear_node();
   let visualizor_app = VisualizatorApp::new(domain_participant,ros_participant,ros_node);
+
+
+ 
 
   let tick_rate = Duration::from_millis(250);
   let _res = run_app(&mut terminal, visualizor_app,tick_rate);
+
+  //jhandle.join().unwrap();
 
   disable_raw_mode()?;
   execute!(

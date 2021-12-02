@@ -1,7 +1,7 @@
 use rustdds::ros2::RosParticipant;
 use rustdds::dds::data_types::DiscoveredTopicData;
 use rustdds::ros2::builtin_datatypes::NodeInfo;
-
+use rustdds::ros2::builtin_datatypes::ROSParticipantInfo;
 
 
 /*
@@ -49,13 +49,6 @@ pub fn print_external_node_infos(participant : &RosParticipant){
 }
 */
 
-pub fn get_local_ros_participant_info_strings(participant : &RosParticipant) -> Vec<String>{
-  let info = participant.get_ros_participant_info();
-  let mut strings = vec!();
-  strings.push(format!("guid: {:?}, nodes: {:?}", info.guid(), info.nodes() ));
-  strings
-}
-
 
 
 pub fn get_topics_list_view_strings(discovered_topic_datas : &Vec<DiscoveredTopicData>) -> Vec<String>{
@@ -91,11 +84,41 @@ pub fn get_topic_view_strings(participant : &RosParticipant, topic_name : &Strin
   strings
 }
 
+pub fn get_participant_list_view_strings(participants : &Vec<ROSParticipantInfo>) -> Vec<String> {
+  let mut strings = vec!();
+  for participant in participants{
+    strings.push(format!("{:?}",participant.guid()));
+  }
+  strings
+}
+
+pub fn get_participant_view_strings(participant_info : &ROSParticipantInfo) -> Vec<String>{
+  let mut strings = vec!();
+  
+  //let mut node_strings = vec!();
+
+  strings.push(format!("nodes: {:?}", participant_info.nodes()));
+  strings.push(format!("guid: {:?}", participant_info.guid()));
+  for node in participant_info.nodes() {
+    strings.push(format!("   name: {:?}",node.get_full_name()));
+  }       
+  strings
+}
+
 pub fn get_node_list_strings(nodes : &Vec<NodeInfo>) -> Vec<String>{
   let mut strings = vec!();
   for node in nodes{
-    strings.push(format!("{:?}{:?}", node.namespace(), node.name()));
+    strings.push(format!("{:?}",  node.get_full_name()));
   }
+  strings
+}
+
+pub fn get_node_view_strings(node_info : &NodeInfo) -> Vec<String>{
+  let mut strings = vec!();
+  
+  strings.push(format!("name: {:?}", node_info.name()));
+  strings.push(format!("namespace: {:?}", node_info.namespace()));
+ 
   strings
 }
 
