@@ -59,28 +59,22 @@ pub fn get_topics_list_view_strings(discovered_topic_datas : &Vec<DiscoveredTopi
   strings
 }
 
-pub fn get_topic_view_strings(participant : &RosParticipant, topic_name : &String) -> Vec<String>{
-  let topics = participant.discovered_topics();
+pub fn get_topic_view_strings(topic : &DiscoveredTopicData) -> Vec<String>{
   let mut strings = vec!();
-  match topics.into_iter().find(|x| x.topic_name() == topic_name){
-      //match ok{
-        Some(topic) =>{
-          strings.push(format!("name: {:?}", topic.topic_name()));
-          strings.push(format!("type_name: {:?}", topic.type_name()));
-          strings.push(format!("durability: {:?}", topic.topic_data.durability));
-          strings.push(format!("deadline: {:?}", topic.topic_data.deadline));
-          strings.push(format!("latency_budget: {:?}", topic.topic_data.latency_budget));
-          strings.push(format!("liveliness: {:?}", topic.topic_data.liveliness));
-          strings.push(format!("reliability: {:?}", topic.topic_data.reliability));
-          strings.push(format!("lifespan: {:?}", topic.topic_data.lifespan));
-          strings.push(format!("destination_order: {:?}", topic.topic_data.destination_order));
-          strings.push(format!("presentation: {:?}", topic.topic_data.presentation));
-          strings.push(format!("history: {:?}", topic.topic_data.history));
-          strings.push(format!("resource_limits: {:?}", topic.topic_data.resource_limits));
-          strings.push(format!("ownership: {:?}", topic.topic_data.ownership));  
-        }
-        None => {}
-      }
+  strings.push(format!("name: {:?}", topic.topic_name()));
+  strings.push(format!("type_name: {:?}", topic.type_name()));
+  strings.push(format!("durability: {:?}", topic.topic_data.durability));
+  strings.push(format!("deadline: {:?}", topic.topic_data.deadline));
+  strings.push(format!("latency_budget: {:?}", topic.topic_data.latency_budget));
+  strings.push(format!("liveliness: {:?}", topic.topic_data.liveliness));
+  strings.push(format!("reliability: {:?}", topic.topic_data.reliability));
+  strings.push(format!("lifespan: {:?}", topic.topic_data.lifespan));
+  strings.push(format!("destination_order: {:?}", topic.topic_data.destination_order));
+  strings.push(format!("presentation: {:?}", topic.topic_data.presentation));
+  strings.push(format!("history: {:?}", topic.topic_data.history));
+  strings.push(format!("resource_limits: {:?}", topic.topic_data.resource_limits));
+  strings.push(format!("ownership: {:?}", topic.topic_data.ownership));  
+
   strings
 }
 

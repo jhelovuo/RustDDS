@@ -11,6 +11,8 @@ use log4rs::{
   config::{Appender, Root},
   Config,
 };
+use structures::RosCommand;
+
 
 
 mod stateful_list;
@@ -29,15 +31,16 @@ mod visualization_helpers;
 use crate::visualization_helpers::create_paragraph_from_string_list;
 use crate::visualization_helpers::create_layput_row;
 
+mod structures;
+use crate::structures::DataUpdate;
+//use crate::structures::NewROSParticipantFound;
 
-
-use mio::Events;
+use mio::{Events};
 use mio::Token;
 use mio::Ready;
 use mio::PollOpt;
 use mio::Poll;
-
-
+use mio_extras::channel as mio_channel; 
 
 
 
@@ -65,7 +68,7 @@ use rustdds::ros2::RosParticipant;
 use rustdds::ros2::NodeOptions;
 use rustdds::ros2::RosNode;
 use rustdds::ros2::builtin_datatypes::NodeInfo;
-use rustdds::ros2::builtin_datatypes::Gid;
+//use rustdds::ros2::builtin_datatypes::Gid;
 use rustdds::ros2::builtin_datatypes::ROSParticipantInfo;
 
 use rustdds::dds::data_types::DiscoveredTopicData;
@@ -92,17 +95,17 @@ use tui::{
   Frame, Terminal,
 };
 
-
+const ROS2_COMMAND_TOKEN: Token = Token(1000);
 const ROS2_NODE_RECEIVED_TOKEN: Token = Token(1001);
-const TOPIC_UPDATE_TIMER_TOKEN: Token = Token(1003);
 
 
 struct VisualizatorApp<'a> {
+  receiver : mio_channel::Receiver<DataUpdate>,
   pub tab_titles: Vec<&'a str>,
   pub tab_index: usize,
 
   pub domain_participant : DomainParticipant,
-  pub ros_participant : RosParticipant,
+  //pub ros_participant : RosParticipant,
   pub ros_node : RosNode,
 
   pub topic_list_items : Vec<DiscoveredTopicData>,
@@ -117,12 +120,14 @@ struct VisualizatorApp<'a> {
 }
 
 impl<'a> VisualizatorApp<'a> {
-  fn new( domain_participant: DomainParticipant, ros_participant : RosParticipant, ros_node : RosNode) -> VisualizatorApp<'a> {
+  fn new( domain_participant: DomainParticipant,  ros_node : RosNode, receiver : mio_channel::Receiver<DataUpdate>) -> VisualizatorApp<'a> {
     VisualizatorApp {
+
+          receiver : receiver,
           tab_titles: vec!["Participants", "Local Nodes", "Exteral Nodes",  "Topics",],
           tab_index: 0,
           domain_participant,
-          ros_participant,
+          //ros_participant,
           ros_node,
           external_nodes : vec!(),
           topic_list_items : vec!(),
@@ -147,6 +152,8 @@ impl<'a> VisualizatorApp<'a> {
       }
   }
 
+
+  /*
   pub fn set_topic_list_items(&mut self){
     self.topic_list_items = self.ros_participant.discovered_topics().clone();
     let topic_strings = get_topics_list_view_strings(&self.topic_list_items);
@@ -158,6 +165,8 @@ impl<'a> VisualizatorApp<'a> {
     self.topic_list_display_items.state = previous_state;
   }
 
+  */
+  /*
   pub fn set_node_list_items(&mut self) {
     let externals = self.ros_participant.get_all_discovered_external_ros_node_infos();
     let locals = self.ros_participant.get_all_discovered_local_ros_node_infos();
@@ -188,10 +197,29 @@ impl<'a> VisualizatorApp<'a> {
     self.local_nodes_display_items.state = previous_state_local_nodes;
 
   }
+   */
 
-  pub fn set_ros_participant_list_items(&mut self){
-    self.ros_participants = vec!();
-    self.ros_participants.push( self.ros_participant.get_ros_participant_info());
+  pub fn set_discovered_topics(&mut self, topics : Vec<DiscoveredTopicData>){
+    self.topic_list_items = topics;
+    self.set_topics();
+  }
+
+  fn set_topics(&mut self){
+    let topic_strings = get_topics_list_view_strings(&self.topic_list_items);
+    let previous_state = self.topic_list_display_items.state.clone();
+    self.topic_list_display_items = StatefulList::with_items(vec!());
+    for string in topic_strings{
+      self.topic_list_display_items.push(ListItem::new(string));
+    }
+    self.topic_list_display_items.state = previous_state;
+  }
+
+  pub fn add_new_ros_participant(&mut self, participant : ROSParticipantInfo){
+    self.ros_participants.push(participant);
+    self.set_ros_participants();
+  }
+
+  fn set_ros_participants(&mut self){
     let previous_state = self.ros_participants_display_items.state.clone();
 
     self.ros_participants_display_items = StatefulList::with_items(vec!());
@@ -202,6 +230,23 @@ impl<'a> VisualizatorApp<'a> {
     self.ros_participants_display_items.state = previous_state;
   }
 
+  pub fn set_node_infos(&mut self, nodes : Vec<NodeInfo>){
+    self.local_nodes = nodes;
+    self.set_nodes();
+  }
+   
+  fn set_nodes(&mut self){
+
+    let previous_state = self.local_nodes_display_items.state.clone();
+
+    self.local_nodes_display_items = StatefulList::with_items(vec!());
+    let display_strings = get_node_list_strings(&self.local_nodes);
+    for string in display_strings{
+      self.local_nodes_display_items.push(ListItem::new(string))
+    }
+    self.local_nodes_display_items.state = previous_state;
+
+  }
 
   pub fn get_selected_participant_strings(&self) -> Vec<String>{
      match self.ros_participants_display_items.state.selected() {
@@ -218,18 +263,20 @@ impl<'a> VisualizatorApp<'a> {
     }
   }
 
+  
   pub fn get_selected_topic_strings(&self) -> Vec<String>{
     match self.topic_list_display_items.state.selected(){
       Some (index) =>{
         match self.topic_list_items.get(index){
           Some(item)=>{
-            get_topic_view_strings(&self.ros_participant, item.topic_name())
+            get_topic_view_strings(item)
           }None=>{vec!()}
         }
       }
       None =>{vec!()}
     }
   }
+  
 
   pub fn get_selected_local_node_strings(&self) -> Vec<String>{
     match self.local_nodes_display_items.state.selected(){
@@ -293,25 +340,36 @@ fn handle_user_input(app: &mut VisualizatorApp, timeout : &Duration) -> bool {
   quit_application
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: VisualizatorApp, tick_rate: Duration) -> io::Result<()> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: VisualizatorApp, tick_rate: Duration, command_sender : mio_channel::SyncSender<RosCommand>) -> io::Result<()> {
   let mut last_tick = Instant::now();
-
-  //let jhandle = std::thread::spawn(ros2_loop(&mut ros_participant));
-  //ros2_loop(&mut app.ros_participant);
-
   loop {
-      
-      //app.ros_participant.handle_node_read();
-      app.set_topic_list_items();
-      app.set_node_list_items();
-      app.set_ros_participant_list_items();
+
+      //here check if ros thread has found new data and update it to VisualizatorApp
+      loop{
+        match &mut app.receiver.try_recv(){
+          Ok(data) =>{
+            match data {
+              DataUpdate::NewROSParticipantFound { participant } => {&mut app.add_new_ros_participant(participant.clone())},
+              DataUpdate::DiscoveredTopics {topics} => {& mut app.set_discovered_topics(topics.clone())} ,
+              DataUpdate::DiscoveredNodes {nodes} => {& mut app.set_node_infos(nodes.clone())},
+            };
+          }
+          //TODO HANDLE ERROR
+          Err(_e) =>{
+            break;
+          }
+        }
+      }
 
       terminal.draw(|f| ui(f, &mut app))?;
 
       let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_else(|| Duration::from_secs(0));
 
+      //If user presses quit button then send command to stop ros loop and exit from this loop also.
       if handle_user_input(&mut app, &timeout)
       {
+        //TODO HANDLE RESULT
+        let _send_command_result = command_sender.send(RosCommand::StopRosLoop);
         return Ok(());
       }
         
@@ -321,9 +379,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: VisualizatorApp, tic
   }
 }
 
-fn ros2_loop(visualizator_app  : &mut VisualizatorApp){
-
-  let mut ros_participant = &mut visualizator_app.ros_participant;
+fn ros2_loop(sender : mio_channel::SyncSender<DataUpdate>, command_receiver : mio_channel::Receiver<RosCommand>){
+  let mut ros_participant = RosParticipant::new().unwrap();
+  //let mut ros_participant = &mut visualizator_app.ros_participant;
   let poll = Poll::new().unwrap();
 
   let mut update_timer = mio_extras::timer::Timer::default();
@@ -331,7 +389,7 @@ fn ros2_loop(visualizator_app  : &mut VisualizatorApp){
 
   poll
   .register(
-    ros_participant,
+    &ros_participant,
     ROS2_NODE_RECEIVED_TOKEN,
     Ready::readable(),
     PollOpt::edge(),
@@ -339,13 +397,14 @@ fn ros2_loop(visualizator_app  : &mut VisualizatorApp){
   .unwrap();
 
   poll
-    .register(
-      &update_timer,
-      TOPIC_UPDATE_TIMER_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
+      .register(
+        &command_receiver,
+        ROS2_COMMAND_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+
 
   loop{
     let mut events = Events::with_capacity(100);
@@ -353,13 +412,47 @@ fn ros2_loop(visualizator_app  : &mut VisualizatorApp){
 
     for event in events.iter() {
       if event.token() == ROS2_NODE_RECEIVED_TOKEN {
-        let new_nodes = ros_participant.handle_node_read();
+        let new_participants = ros_participant.handle_node_read();
+
+        let node_infos = ros_participant.get_all_discovered_local_ros_node_infos().values().map(|x|x.clone()).collect();
+
+        let _res_nodes_send = sender.send(
+          DataUpdate::DiscoveredNodes{
+              nodes : node_infos
+            }
+        );
+      
+        for participant in new_participants{
+          let _res_participant_send = sender.send(
+            DataUpdate::NewROSParticipantFound{
+                participant : participant
+              }
+          );        
+
+        }
+
+        let new_topics = ros_participant.discovered_topics();
+        let _res_topics_send = sender.send(
+          DataUpdate::DiscoveredTopics{
+            topics : new_topics
+          }
+        );
+        
+       
       }
-      if event.token() == TOPIC_UPDATE_TIMER_TOKEN {
-        let new_tokens = ros_participant.handle_node_read();
+      if event.token() == ROS2_COMMAND_TOKEN {
+        match command_receiver.try_recv(){
+          Ok(command) =>{
+            match command {
+                RosCommand::StopRosLoop => {return;},
+            }
+          //TODO HANDLE ERROR
+          }Err(_e) =>{
+
+          }
+        }
       }
     }
-    
   }
 }
 
@@ -509,18 +602,26 @@ fn main()  -> Result<(), Box<dyn Error>>  {
   let domain_participant = DomainParticipant::new(domain_id)
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {:?}", e));
     
-  let mut ros_participant = RosParticipant::new().unwrap();
+  let ros_participant = RosParticipant::new().unwrap();
   let mut ros_node = ros_participant.new_ros_node("local_node", "/ros2_demo", NodeOptions::new(true)).unwrap();
   ros_node.clear_node();
-  let visualizor_app = VisualizatorApp::new(domain_participant,ros_participant,ros_node);
+
+  //let (sender, receiver) = mio_channel::channel();
+  let (sender, receiver) = mio_channel::sync_channel::<DataUpdate>(10);
+  let (command_sender, command_receiver) = mio_channel::sync_channel::<RosCommand>(10);
+
+  //ros2_loop(sender);
+  let jhandle = std::thread::spawn(move || ros2_loop(sender,command_receiver));
+
+  let visualizor_app = VisualizatorApp::new(domain_participant,ros_node,receiver);
 
 
  
 
   let tick_rate = Duration::from_millis(250);
-  let _res = run_app(&mut terminal, visualizor_app,tick_rate);
+  let _res = run_app(&mut terminal, visualizor_app,tick_rate, command_sender);
 
-  //jhandle.join().unwrap();
+  jhandle.join().unwrap();
 
   disable_raw_mode()?;
   execute!(
