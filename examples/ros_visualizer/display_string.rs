@@ -4,52 +4,6 @@ use rustdds::ros2::builtin_datatypes::NodeInfo;
 use rustdds::ros2::builtin_datatypes::ROSParticipantInfo;
 
 
-/*
-pub fn clear_screen(){
-  print!("{}[2J", 27 as char);
-  print!("\x1B[2J\x1B[1;1H");
-}
-
-pub fn print_datas(participant : &RosParticipant){
-  clear_screen();
-
-  println!("This application participant: ");
-  print_local_participant_info(participant);
-  println!("");
-  println!("All topics:");
-  print_topics(participant);
-
-  println!("");
-  println!("External nodes:");
-  print_external_node_infos(participant);
-}
-
-
-pub fn print_topics(participant : &RosParticipant){
-  
-  let strings = get_topics_list_view_strings(&participant.discovered_topics());
-  for s in strings{
-    println!("  {:?}",s);
-  }
-}
-
-
-pub fn print_local_participant_info(participant : &RosParticipant){
-  let strings = get_local_ros_participant_info_strings(participant);
-  for s in strings{
-    println!("  {:?}",s);
-  }
-}
-
-pub fn print_external_node_infos(participant : &RosParticipant){
-  let strings = get_external_node_info_strings(participant);
-  for s in strings{
-    println!("  {:?}",s);
-  }
-}
-*/
-
-
 
 pub fn get_topics_list_view_strings(discovered_topic_datas : &Vec<DiscoveredTopicData>) -> Vec<String>{
   let mut strings = vec!();
@@ -88,11 +42,8 @@ pub fn get_participant_list_view_strings(participants : &Vec<ROSParticipantInfo>
 
 pub fn get_participant_view_strings(participant_info : &ROSParticipantInfo) -> Vec<String>{
   let mut strings = vec!();
-  
-  //let mut node_strings = vec!();
-
-  strings.push(format!("nodes: {:?}", participant_info.nodes()));
   strings.push(format!("guid: {:?}", participant_info.guid()));
+  strings.push(format!("nodes: "));
   for node in participant_info.nodes() {
     strings.push(format!("   name: {:?}",node.get_full_name()));
   }       
@@ -101,7 +52,7 @@ pub fn get_participant_view_strings(participant_info : &ROSParticipantInfo) -> V
 
 pub fn get_node_list_strings(nodes : &Vec<NodeInfo>) -> Vec<String>{
   let mut strings = vec!();
-  for node in nodes{
+  for node in nodes {
     strings.push(format!("{:?}",  node.get_full_name()));
   }
   strings
@@ -112,7 +63,14 @@ pub fn get_node_view_strings(node_info : &NodeInfo) -> Vec<String>{
   
   strings.push(format!("name: {:?}", node_info.name()));
   strings.push(format!("namespace: {:?}", node_info.namespace()));
- 
+  strings.push(format!("readers: "));
+  for reader_gid in node_info.get_reader_gid(){
+    strings.push(format!("  {:?}", reader_gid));
+  }
+  strings.push(format!("writers: "));
+  for writer_gid in node_info.get_reader_gid(){
+    strings.push(format!("  {:?}", writer_gid));
+  } 
   strings
 }
 

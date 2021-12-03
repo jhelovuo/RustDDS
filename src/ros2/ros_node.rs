@@ -90,13 +90,10 @@ impl RosParticipant {
   }
 
   pub fn get_all_discovered_external_ros_node_infos(&self) -> HashMap<Gid, Vec<NodeInfo>> {
-    //let mut pts = Vec::new();
-    //println!("get_all_discovered_external_ros_node_infos: {:?}", self.inner.lock().unwrap().external_nodes);
     self.inner.lock().unwrap().external_nodes.clone()
   }
 
   pub fn get_all_discovered_local_ros_node_infos(&self) -> HashMap<String, NodeInfo>{
-    //println!("{:?}", self.inner.lock().unwrap().nodes);
     self.inner.lock().unwrap().nodes.clone()
   }
 

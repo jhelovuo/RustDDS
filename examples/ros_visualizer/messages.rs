@@ -23,8 +23,3 @@ pub enum RosCommand {
   StopRosLoop
 }
 
-/* 
-pub struct NewROSParticipantFound{
-  participant : ROSParticipantInfo
-}
-*/

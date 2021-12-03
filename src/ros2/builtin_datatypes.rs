@@ -53,6 +53,14 @@ impl NodeInfo {
     &self.node_name
   }
 
+  pub fn get_reader_gid(&self) -> Vec<Gid> {
+    self.reader_guid.clone()
+  }
+
+  pub fn get_writer_gid(&self) -> Vec<Gid> {
+    self.writer_guid.clone()
+  }
+
   /// Full name of the node namespace + name eg. /some_node
   pub fn get_full_name(&self) -> String {
     let mut name = self.node_namespace.to_owned();
