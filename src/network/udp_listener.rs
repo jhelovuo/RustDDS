@@ -3,7 +3,7 @@ use std::{
   net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 
-use mio::{net::UdpSocket, Token};
+use mio::net::UdpSocket;
 use log::{debug, error, info, trace};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use bytes::{Bytes, BytesMut};
@@ -19,7 +19,6 @@ const MESSAGE_BUFFER_ALLOCATION_CHUNK: usize = 256 * 1024; // must be >= MAX_MES
 #[derive(Debug)]
 pub struct UDPListener {
   socket: UdpSocket,
-  token: Token,
   receive_buffer: BytesMut,
   multicast_group: Option<Ipv4Addr>,
 }
@@ -87,19 +86,17 @@ impl UDPListener {
     Ok(mio_socket)
   }
 
-  pub fn new_unicast(token: Token, host: &str, port: u16) -> io::Result<UDPListener> {
+  pub fn new_unicast(host: &str, port: u16) -> io::Result<UDPListener> {
     let mio_socket = Self::new_listening_socket(host, port, false)?;
 
     Ok(UDPListener {
       socket: mio_socket,
-      token,
       receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
       multicast_group: None,
     })
   }
 
   pub fn new_multicast(
-    token: Token,
     host: &str,
     port: u16,
     multicast_group: Ipv4Addr,
@@ -124,14 +121,9 @@ impl UDPListener {
 
     Ok(UDPListener {
       socket: mio_socket,
-      token,
       receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
       multicast_group: Some(multicast_group),
     })
-  }
-
-  pub fn get_token(&self) -> Token {
-    self.token
   }
 
   pub fn mio_socket(&mut self) -> &mut UdpSocket {
@@ -245,7 +237,7 @@ mod tests {
 
   #[test]
   fn udpl_single_address() {
-    let listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 10001).unwrap();
+    let listener = UDPListener::new_unicast("127.0.0.1", 10001).unwrap();
     let sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
@@ -262,7 +254,7 @@ mod tests {
   #[test]
   fn udpl_multicast_address() {
     let listener =
-      UDPListener::new_multicast(Token(0), "0.0.0.0", 10002, Ipv4Addr::new(239, 255, 0, 1))
+      UDPListener::new_multicast("0.0.0.0", 10002, Ipv4Addr::new(239, 255, 0, 1))
         .unwrap();
     let sender = UDPSender::new_with_random_port().unwrap();
 

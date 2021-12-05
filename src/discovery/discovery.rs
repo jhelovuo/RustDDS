@@ -1399,7 +1399,7 @@ mod tests {
   #[test]
   fn discovery_participant_data_test() {
     let poll = Poll::new().unwrap();
-    let mut udp_listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 11000).unwrap();
+    let mut udp_listener = UDPListener::new_unicast("127.0.0.1", 11000).unwrap();
     poll
       .register(
         udp_listener.mio_socket(),
@@ -1460,7 +1460,7 @@ mod tests {
       subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None);
 
     let poll = Poll::new().unwrap();
-    let mut udp_listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 11001).unwrap();
+    let mut udp_listener = UDPListener::new_unicast("127.0.0.1", 11001).unwrap();
     poll
       .register(
         udp_listener.mio_socket(),
@@ -1548,7 +1548,7 @@ mod tests {
       subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None);
 
     let poll = Poll::new().unwrap();
-    let mut udp_listener = UDPListener::new_unicast(Token(0), "127.0.0.1", 0).unwrap();
+    let mut udp_listener = UDPListener::new_unicast("127.0.0.1", 0).unwrap();
     poll
       .register(
         udp_listener.mio_socket(),

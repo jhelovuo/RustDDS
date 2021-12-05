@@ -566,7 +566,6 @@ impl DomainParticipantInner {
     let mut listeners = HashMap::new();
 
     match UDPListener::new_multicast(
-      DISCOVERY_SENDER_TOKEN,
       "0.0.0.0",
       spdp_well_known_multicast_port(domain_id),
       Ipv4Addr::new(239, 255, 0, 1),
@@ -581,11 +580,10 @@ impl DomainParticipantInner {
 
     let mut discovery_listener = None;
 
-    // Magic value 120 below is from RTPS spec Section "9.6.1.3 Default Port
+    // Magic value 120 below is from RTPS spec 2.5 Section "9.6.2.3 Default Port
     // Numbers"
     while discovery_listener.is_none() && participant_id < 120 {
       discovery_listener = UDPListener::new_unicast(
-        DISCOVERY_SENDER_TOKEN,
         "0.0.0.0",
         spdp_well_known_unicast_port(domain_id, participant_id),
       )
@@ -607,7 +605,6 @@ impl DomainParticipantInner {
     // Now the user traffic listeners
 
     match UDPListener::new_multicast(
-      USER_TRAFFIC_SENDER_TOKEN,
       "0.0.0.0",
       user_traffic_multicast_port(domain_id),
       Ipv4Addr::new(239, 255, 0, 1),
@@ -615,17 +612,16 @@ impl DomainParticipantInner {
       Ok(l) => {
         listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l);
       }
-      Err(e) => warn!("Cannot get multicast discovery listener: {:?}", e),
+      Err(e) => warn!("Cannot get multicast user traffic listener: {:?}", e),
     }
 
     let user_traffic_listener = UDPListener::new_unicast(
-      USER_TRAFFIC_SENDER_TOKEN,
       "0.0.0.0",
       user_traffic_unicast_port(domain_id, participant_id),
     );
     let user_traffic_listener = match user_traffic_listener {
       Ok(l) => l,
-      Err(e) => return log_and_err_internal!("Could not open user traffic listener: {:?}", e),
+      Err(e) => return log_and_err_internal!("Could not open unicast user traffic listener: {:?}", e),
     };
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
