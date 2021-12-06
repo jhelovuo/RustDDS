@@ -1,6 +1,7 @@
 //use mio::Token;
 use std::{
   collections::HashMap,
+  io::ErrorKind,
   net::Ipv4Addr,
   sync::{Arc, Mutex, RwLock, Weak},
   thread,
@@ -9,6 +10,8 @@ use std::{
 };
 
 use mio_extras::channel as mio_channel;
+use mio::Token;
+
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
@@ -23,8 +26,12 @@ use crate::{
     discovery_db::DiscoveryDB,
   },
   log_and_err_internal,
-  network::{constant::*, udp_listener::UDPListener},
-  structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::GUID},
+  network::{
+    constant::*, 
+    udp_listener::UDPListener,
+    util::{get_local_unicast_locators, get_local_multicast_locators,},
+  },
+  structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::GUID, locator::Locator},
 };
 use super::dp_event_loop::DomainInfo;
 
@@ -70,15 +77,18 @@ impl DomainParticipant {
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(64);
 
-    let dp = DomainParticipant {
-      dpi: Arc::new(Mutex::new(DomainParticipantDisc::new(
+    // intermediate DP wrapper
+    let dp = DomainParticipantDisc::new(
         domain_id,
         djh_receiver,
         discovery_update_notification_receiver,
         discovery_command_sender,
         spdp_liveness_sender,
-      )?)),
-    };
+      )?;
+    let self_locators = dp.self_locators();
+
+    // outer DP wrapper
+    let dp = DomainParticipant{ dpi: Arc::new(Mutex::new(dp)) };
 
     let (discovery_started_sender, discovery_started_receiver) =
       std::sync::mpsc::channel::<Result<()>>();
@@ -96,6 +106,7 @@ impl DomainParticipant {
           discovery_updated_sender,
           discovery_command_receiver,
           spdp_liveness_receiver,
+          self_locators,
         ) {
           discovery.discovery_event_loop() // run the event loop
         }
@@ -464,11 +475,11 @@ impl DomainParticipantDisc {
   }
 
   pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    return self.dpi.lock().unwrap().dds_cache();
+    self.dpi.lock().unwrap().dds_cache()
   }
 
   pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
-    return self.dpi.lock().unwrap().discovery_db.clone();
+    self.dpi.lock().unwrap().discovery_db.clone()
   }
 
   pub(crate) fn assert_liveliness(&self) -> Result<()> {
@@ -481,6 +492,10 @@ impl DomainParticipantDisc {
       .or_else(|e| {
         log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
       })
+  }
+
+  pub(crate) fn self_locators(&self) -> HashMap<Token,Vec<Locator>> {
+    self.dpi.lock().unwrap().self_locators.clone()
   }
 }
 
@@ -531,6 +546,9 @@ pub(crate) struct DomainParticipantInner {
   dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   discovery_db_event_receiver: mio_channel::Receiver<()>,
+
+  // RTPS locators describing how to reach this DP
+  self_locators: HashMap<Token,Vec<Locator>>,
 }
 
 impl Drop for DomainParticipantInner {
@@ -615,15 +633,45 @@ impl DomainParticipantInner {
       Err(e) => warn!("Cannot get multicast user traffic listener: {:?}", e),
     }
 
-    let user_traffic_listener = UDPListener::new_unicast(
-      "0.0.0.0",
-      user_traffic_unicast_port(domain_id, participant_id),
-    );
-    let user_traffic_listener = match user_traffic_listener {
-      Ok(l) => l,
-      Err(e) => return log_and_err_internal!("Could not open unicast user traffic listener: {:?}", e),
-    };
+    let user_traffic_listener = 
+      match UDPListener::new_unicast(
+              "0.0.0.0",
+              user_traffic_unicast_port(domain_id, participant_id)) 
+      {
+        Ok(l) => l,
+        Err(e) => match e.kind() {
+          ErrorKind::AddrInUse => {
+            // If we do not get the proferred listening port,
+            // try again, with "any" port number.
+            match UDPListener::new_unicast("0.0.0.0",0) {
+              Ok(l) => l,
+              Err(e) => 
+                return log_and_err_internal!("Could not open unicast user traffic listener, any port number: {:?}", e),
+            } 
+          }
+          _other_kind => 
+            return log_and_err_internal!("Could not open unicast user traffic listener: {:?}", e),
+        }       
+      };
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
+
+    // construct our own Locators
+    let self_locators: HashMap<Token,Vec<Locator>> = 
+      listeners.iter()
+        .map( |(t,l)|  
+              match l.to_socketaddr() {
+                Ok(sa) => {
+                  let locs = if sa.ip().is_multicast() { get_local_multicast_locators(sa.port()) } 
+                  else { get_local_unicast_locators(sa.port()) };
+                  (*t,locs)
+                }
+                Err(e) => { 
+                  error!("No local network address for token {:?}: {:?}", t, e);
+                  (*t,vec![])
+                }
+              }
+            )
+        .collect();
 
     // Adding readers
     let (sender_add_reader, receiver_add_reader) =
@@ -709,6 +757,7 @@ impl DomainParticipantInner {
       dds_cache,
       discovery_db,
       discovery_db_event_receiver,
+      self_locators,
     })
   }
 

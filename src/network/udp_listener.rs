@@ -36,11 +36,7 @@ impl Drop for UDPListener {
   }
 }
 
-// TODO: Remove panics from this function. Convert return value to Result.
 impl UDPListener {
-  // TODO: Why is is this function even necessary? Doesn't try_bind() do just the
-  // same?
-
   fn new_listening_socket(host: &str, port: u16, reuse_addr: bool) -> io::Result<UdpSocket> {
     let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
 
@@ -84,6 +80,13 @@ impl UDPListener {
     );
 
     Ok(mio_socket)
+  }
+
+
+  // Note that this typically does not give the local IP address, but
+  // "0.0.0.0", which means we are listening to any address.
+  pub fn to_socketaddr(&self) -> io::Result<SocketAddr> {
+    self.socket.local_addr()
   }
 
   pub fn new_unicast(host: &str, port: u16) -> io::Result<UDPListener> {

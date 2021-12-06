@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use mio::Token;
 use serde::{de::Error, Deserialize, Serialize};
 use cdr_encoding_size::*;
 use chrono::Utc;
@@ -13,7 +15,6 @@ use crate::{
   messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
   network::{
     constant::*,
-    util::{get_local_multicast_locators, get_local_unicast_socket_address},
   },
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
@@ -118,21 +119,25 @@ impl SpdpDiscoveredParticipantData {
 
   pub fn from_local_participant(
     participant: &DomainParticipant,
+    self_locators: &HashMap<Token,Vec<Locator>>,
     lease_duration: Duration,
   ) -> SpdpDiscoveredParticipantData {
-    let spdp_multicast_port = spdp_well_known_multicast_port(participant.domain_id());
-    let metatraffic_multicast_locators = get_local_multicast_locators(spdp_multicast_port);
 
-    let spdp_unicast_port =
-      spdp_well_known_unicast_port(participant.domain_id(), participant.participant_id());
-    let metatraffic_unicast_locators = get_local_unicast_socket_address(spdp_unicast_port);
+    let metatraffic_multicast_locators = self_locators.get(&DISCOVERY_MUL_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or(vec![]);
 
-    let multicast_port = user_traffic_multicast_port(participant.domain_id());
-    let default_multicast_locators = get_local_multicast_locators(multicast_port);
+    let metatraffic_unicast_locators = self_locators.get(&DISCOVERY_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or(vec![]);
 
-    let unicast_port =
-      user_traffic_unicast_port(participant.domain_id(), participant.participant_id());
-    let default_unicast_locators = get_local_unicast_socket_address(unicast_port);
+    let default_multicast_locators = self_locators.get(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or(vec![]);
+
+    let default_unicast_locators = self_locators.get(&USER_TRAFFIC_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or(vec![]);
 
     let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR

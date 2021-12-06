@@ -26,7 +26,7 @@ use crate::{
     with_key::datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
-  network::{constant::user_traffic_unicast_port, util::get_local_unicast_socket_address},
+  network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
     builtin_data_serializer::BuiltinDataSerializer,
@@ -614,7 +614,7 @@ impl DiscoveredWriterData {
     dp: &DomainParticipant,
   ) -> DiscoveredWriterData {
     let unicast_port = user_traffic_unicast_port(dp.domain_id(), dp.participant_id());
-    let unicast_addresses = get_local_unicast_socket_address(unicast_port);
+    let unicast_addresses = get_local_unicast_locators(unicast_port);
 
     let writer_proxy = WriterProxy::new(writer.guid(), vec![], unicast_addresses);
     let mut publication_topic_data = PublicationBuiltinTopicData::new(
