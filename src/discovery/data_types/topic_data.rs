@@ -14,7 +14,6 @@ use crate::{
       },
       HasQoSPolicy, QosPolicies,
     },
-    reader::Reader,
     rtps_reader_proxy::RtpsReaderProxy,
     rtps_writer_proxy::RtpsWriterProxy,
     topic::Topic,
@@ -33,10 +32,13 @@ use crate::{
   },
   structure::{
     entity::RTPSEntity,
-    guid::{EntityKind, GuidPrefix, GUID},
+    guid::{GuidPrefix, GUID},
     locator::Locator,
   },
 };
+
+#[cfg(test)]
+use crate::structure::guid::EntityKind;
 
 // Topic data contains all topic related
 // (including reader and writer data structures for serialization and
@@ -52,12 +54,14 @@ pub struct ReaderProxy {
 }
 
 impl ReaderProxy {
-  pub fn new(guid: GUID) -> ReaderProxy {
+  pub fn new(guid: GUID, unicast_locator_list: Vec<Locator>, 
+    multicast_locator_list: Vec<Locator>) -> ReaderProxy 
+  {
     ReaderProxy {
       remote_reader_guid: guid,
       expects_inline_qos: false,
-      unicast_locator_list: Vec::new(),
-      multicast_locator_list: Vec::new(),
+      unicast_locator_list,
+      multicast_locator_list,
     }
   }
 }
@@ -306,6 +310,7 @@ pub struct DiscoveredReaderData {
 }
 
 impl DiscoveredReaderData {
+  /*
   pub(crate) fn new(
     reader: &Reader,
     dp: &DomainParticipant,
@@ -325,11 +330,13 @@ impl DiscoveredReaderData {
       subscription_topic_data,
       content_filter: None,
     }
-  }
+  }*/
 
+  // This is for generating test data only
+  #[cfg(test)]
   pub fn default(topic_name: String, type_name: String) -> DiscoveredReaderData {
     let rguid = GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_BUILT_IN);
-    let reader_proxy = ReaderProxy::new(rguid);
+    let reader_proxy = ReaderProxy::new(rguid, vec![], vec![] );
     let subscription_topic_data = SubscriptionBuiltinTopicData::new(
       rguid,
       topic_name,
@@ -341,7 +348,7 @@ impl DiscoveredReaderData {
       subscription_topic_data,
       content_filter: None,
     }
-  }
+  } 
 
   pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
     self.reader_proxy.remote_reader_guid = rtps_reader_proxy.remote_reader_guid;

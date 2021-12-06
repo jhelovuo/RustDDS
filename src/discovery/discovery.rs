@@ -43,7 +43,6 @@ use crate::{
   },
   network::{
     constant::*,
-    util::{get_local_multicast_locators, get_local_unicast_locators},
   },
   serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter,
   structure::{
@@ -790,11 +789,6 @@ impl Discovery {
       return;
     };
 
-    //
-
-    let mc_port = spdp_well_known_multicast_port(dp.domain_id());
-    let uc_port = spdp_well_known_unicast_port(dp.domain_id(), dp.participant_id());
-
     let participant_data =
       SpdpDiscoveredParticipantData::from_local_participant(&dp,&self.self_locators, Duration::DURATION_INFINITE);
 
@@ -814,8 +808,14 @@ impl Discovery {
     // are sent somewhere
     let reader_guid = GUID::new( GuidPrefix::UNKNOWN, EntityId::SPDP_BUILTIN_PARTICIPANT_READER );
 
-    let mut reader_proxy = ReaderProxy::new(reader_guid);
-    reader_proxy.multicast_locator_list = get_local_multicast_locators(mc_port);
+    let reader_proxy = ReaderProxy::new(reader_guid,
+          self.self_locators.get(&DISCOVERY_LISTENER_TOKEN)
+            .cloned()
+            .unwrap_or(vec![]),
+          self.self_locators.get(&DISCOVERY_MUL_LISTENER_TOKEN)
+            .cloned()
+            .unwrap_or(vec![]),
+          );
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
