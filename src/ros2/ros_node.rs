@@ -93,7 +93,7 @@ impl RosParticipant {
     self.inner.lock().unwrap().external_nodes.clone()
   }
 
-  pub fn get_all_discovered_local_ros_node_infos(&self) -> HashMap<String, NodeInfo>{
+  pub fn get_all_discovered_local_ros_node_infos(&self) -> HashMap<String, NodeInfo> {
     self.inner.lock().unwrap().nodes.clone()
   }
 
@@ -254,7 +254,7 @@ impl RosParticipantInner {
   }
 
   //rustdds::ros2::ros_node::RosParticipantInner
-//external_nodes: HashMap<Gid, Vec<NodeInfo, Global>, RandomState>
+  //external_nodes: HashMap<Gid, Vec<NodeInfo, Global>, RandomState>
 
   /*
   pub fn get_all_discovered_ros_node_infos(&self) -> HashMap<Gid, Vec<NodeInfo>> {

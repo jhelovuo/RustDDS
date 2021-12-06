@@ -36,7 +36,6 @@ use crate::{
     locator::Locator,
   },
 };
-
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
 
@@ -54,9 +53,11 @@ pub struct ReaderProxy {
 }
 
 impl ReaderProxy {
-  pub fn new(guid: GUID, unicast_locator_list: Vec<Locator>, 
-    multicast_locator_list: Vec<Locator>) -> ReaderProxy 
-  {
+  pub fn new(
+    guid: GUID,
+    unicast_locator_list: Vec<Locator>,
+    multicast_locator_list: Vec<Locator>,
+  ) -> ReaderProxy {
     ReaderProxy {
       remote_reader_guid: guid,
       expects_inline_qos: false,
@@ -336,7 +337,7 @@ impl DiscoveredReaderData {
   #[cfg(test)]
   pub fn default(topic_name: String, type_name: String) -> DiscoveredReaderData {
     let rguid = GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_BUILT_IN);
-    let reader_proxy = ReaderProxy::new(rguid, vec![], vec![] );
+    let reader_proxy = ReaderProxy::new(rguid, vec![], vec![]);
     let subscription_topic_data = SubscriptionBuiltinTopicData::new(
       rguid,
       topic_name,
@@ -348,7 +349,7 @@ impl DiscoveredReaderData {
       subscription_topic_data,
       content_filter: None,
     }
-  } 
+  }
 
   pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
     self.reader_proxy.remote_reader_guid = rtps_reader_proxy.remote_reader_guid;

@@ -1,7 +1,7 @@
 use std::{
+  collections::HashMap,
   sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
   time::{Duration as StdDuration, Instant},
-  collections::HashMap,
 };
 
 #[allow(unused_imports)]
@@ -41,16 +41,14 @@ use crate::{
     },
     discovery_db::DiscoveryDB,
   },
-  network::{
-    constant::*,
-  },
+  network::constant::*,
   serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter,
   structure::{
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
-    time::Timestamp,
     locator::Locator,
+    time::Timestamp,
   },
 };
 use super::data_types::topic_data::{
@@ -101,7 +99,7 @@ pub(crate) struct Discovery {
   spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
 
   liveliness_state: LivelinessState,
-  self_locators: HashMap<Token,Vec<Locator>>,
+  self_locators: HashMap<Token, Vec<Locator>>,
 
   // DDS Subsciber and Publisher for Discovery
   discovery_subscriber: Subscriber,
@@ -179,7 +177,7 @@ impl Discovery {
     discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
     spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
-    self_locators: HashMap<Token,Vec<Locator>>,
+    self_locators: HashMap<Token, Vec<Locator>>,
   ) -> Result<Discovery> {
     // helper macro to handle initialization failures.
     macro_rules! try_construct {
@@ -789,8 +787,11 @@ impl Discovery {
       return;
     };
 
-    let participant_data =
-      SpdpDiscoveredParticipantData::from_local_participant(&dp,&self.self_locators, Duration::DURATION_INFINITE);
+    let participant_data = SpdpDiscoveredParticipantData::from_local_participant(
+      &dp,
+      &self.self_locators,
+      Duration::DURATION_INFINITE,
+    );
 
     // Initialize our own particiapnt data into the Discovery DB, so we can talk to
     // ourself.
@@ -806,16 +807,24 @@ impl Discovery {
 
     // insert a (fake) reader proxy as multicast address, so discovery notifications
     // are sent somewhere
-    let reader_guid = GUID::new( GuidPrefix::UNKNOWN, EntityId::SPDP_BUILTIN_PARTICIPANT_READER );
+    let reader_guid = GUID::new(
+      GuidPrefix::UNKNOWN,
+      EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+    );
 
-    let reader_proxy = ReaderProxy::new(reader_guid,
-          self.self_locators.get(&DISCOVERY_LISTENER_TOKEN)
-            .cloned()
-            .unwrap_or(vec![]),
-          self.self_locators.get(&DISCOVERY_MUL_LISTENER_TOKEN)
-            .cloned()
-            .unwrap_or(vec![]),
-          );
+    let reader_proxy = ReaderProxy::new(
+      reader_guid,
+      self
+        .self_locators
+        .get(&DISCOVERY_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or_else(Vec::new),
+      self
+        .self_locators
+        .get(&DISCOVERY_MUL_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or_else(Vec::new),
+    );
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
@@ -829,16 +838,23 @@ impl Discovery {
       content_filter: None,
     };
 
-    let writer_guid = GUID::new( dp.guid().guid_prefix, EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER );
+    let writer_guid = GUID::new(
+      dp.guid().guid_prefix,
+      EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
+    );
 
     let writer_proxy = WriterProxy::new(
       writer_guid,
-      self.self_locators.get(&DISCOVERY_LISTENER_TOKEN)
+      self
+        .self_locators
+        .get(&DISCOVERY_LISTENER_TOKEN)
         .cloned()
-        .unwrap_or(vec![]),
-      self.self_locators.get(&DISCOVERY_MUL_LISTENER_TOKEN)
+        .unwrap_or_else(Vec::new),
+      self
+        .self_locators
+        .get(&DISCOVERY_MUL_LISTENER_TOKEN)
         .cloned()
-        .unwrap_or(vec![]),
+        .unwrap_or_else(Vec::new),
     );
 
     let pub_topic_data = PublicationBuiltinTopicData::new(

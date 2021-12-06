@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use mio::Token;
 use serde::{de::Error, Deserialize, Serialize};
 use cdr_encoding_size::*;
@@ -13,9 +14,7 @@ use crate::{
     traits::{key::Keyed, Key},
   },
   messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
-  network::{
-    constant::*,
-  },
+  network::constant::*,
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
     builtin_data_serializer::{BuiltinDataSerializer, BuiltinDataSerializerKey},
@@ -119,25 +118,28 @@ impl SpdpDiscoveredParticipantData {
 
   pub fn from_local_participant(
     participant: &DomainParticipant,
-    self_locators: &HashMap<Token,Vec<Locator>>,
+    self_locators: &HashMap<Token, Vec<Locator>>,
     lease_duration: Duration,
   ) -> SpdpDiscoveredParticipantData {
+    let metatraffic_multicast_locators = self_locators
+      .get(&DISCOVERY_MUL_LISTENER_TOKEN)
+      .cloned()
+      .unwrap_or_else(Vec::new);
 
-    let metatraffic_multicast_locators = self_locators.get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or(vec![]);
+    let metatraffic_unicast_locators = self_locators
+      .get(&DISCOVERY_LISTENER_TOKEN)
+      .cloned()
+      .unwrap_or_else(Vec::new);
 
-    let metatraffic_unicast_locators = self_locators.get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or(vec![]);
+    let default_multicast_locators = self_locators
+      .get(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
+      .cloned()
+      .unwrap_or_else(Vec::new);
 
-    let default_multicast_locators = self_locators.get(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or(vec![]);
-
-    let default_unicast_locators = self_locators.get(&USER_TRAFFIC_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or(vec![]);
+    let default_unicast_locators = self_locators
+      .get(&USER_TRAFFIC_LISTENER_TOKEN)
+      .cloned()
+      .unwrap_or_else(Vec::new);
 
     let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR

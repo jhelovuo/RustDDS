@@ -198,8 +198,8 @@ mod tests {
 
   #[test]
   fn udps_multi_send() {
-    let listener_1 = UDPListener::new_unicast( "127.0.0.1", 10301).unwrap();
-    let listener_2 = UDPListener::new_unicast( "127.0.0.1", 10302).unwrap();
+    let listener_1 = UDPListener::new_unicast("127.0.0.1", 10301).unwrap();
+    let listener_2 = UDPListener::new_unicast("127.0.0.1", 10302).unwrap();
     let sender = UDPSender::new(11301).expect("failed to create UDPSender");
 
     let data: Vec<u8> = vec![5, 4, 3, 2, 1, 0];

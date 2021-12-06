@@ -11,7 +11,6 @@ use std::{
 
 use mio_extras::channel as mio_channel;
 use mio::Token;
-
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
@@ -27,9 +26,9 @@ use crate::{
   },
   log_and_err_internal,
   network::{
-    constant::*, 
+    constant::*,
     udp_listener::UDPListener,
-    util::{get_local_unicast_locators, get_local_multicast_locators,},
+    util::{get_local_multicast_locators, get_local_unicast_locators},
   },
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::GUID, locator::Locator},
 };
@@ -79,16 +78,18 @@ impl DomainParticipant {
 
     // intermediate DP wrapper
     let dp = DomainParticipantDisc::new(
-        domain_id,
-        djh_receiver,
-        discovery_update_notification_receiver,
-        discovery_command_sender,
-        spdp_liveness_sender,
-      )?;
+      domain_id,
+      djh_receiver,
+      discovery_update_notification_receiver,
+      discovery_command_sender,
+      spdp_liveness_sender,
+    )?;
     let self_locators = dp.self_locators();
 
     // outer DP wrapper
-    let dp = DomainParticipant{ dpi: Arc::new(Mutex::new(dp)) };
+    let dp = DomainParticipant {
+      dpi: Arc::new(Mutex::new(dp)),
+    };
 
     let (discovery_started_sender, discovery_started_receiver) =
       std::sync::mpsc::channel::<Result<()>>();
@@ -494,7 +495,7 @@ impl DomainParticipantDisc {
       })
   }
 
-  pub(crate) fn self_locators(&self) -> HashMap<Token,Vec<Locator>> {
+  pub(crate) fn self_locators(&self) -> HashMap<Token, Vec<Locator>> {
     self.dpi.lock().unwrap().self_locators.clone()
   }
 }
@@ -548,7 +549,7 @@ pub(crate) struct DomainParticipantInner {
   discovery_db_event_receiver: mio_channel::Receiver<()>,
 
   // RTPS locators describing how to reach this DP
-  self_locators: HashMap<Token,Vec<Locator>>,
+  self_locators: HashMap<Token, Vec<Locator>>,
 }
 
 impl Drop for DomainParticipantInner {
@@ -633,45 +634,50 @@ impl DomainParticipantInner {
       Err(e) => warn!("Cannot get multicast user traffic listener: {:?}", e),
     }
 
-    let user_traffic_listener = 
-      match UDPListener::new_unicast(
-              "0.0.0.0",
-              user_traffic_unicast_port(domain_id, participant_id)) 
-      {
-        Ok(l) => l,
-        Err(e) => match e.kind() {
-          ErrorKind::AddrInUse => {
-            // If we do not get the proferred listening port,
-            // try again, with "any" port number.
-            match UDPListener::new_unicast("0.0.0.0",0) {
-              Ok(l) => l,
-              Err(e) => 
-                return log_and_err_internal!("Could not open unicast user traffic listener, any port number: {:?}", e),
-            } 
+    let user_traffic_listener = match UDPListener::new_unicast(
+      "0.0.0.0",
+      user_traffic_unicast_port(domain_id, participant_id),
+    ) {
+      Ok(l) => l,
+      Err(e) => match e.kind() {
+        ErrorKind::AddrInUse => {
+          // If we do not get the proferred listening port,
+          // try again, with "any" port number.
+          match UDPListener::new_unicast("0.0.0.0", 0) {
+            Ok(l) => l,
+            Err(e) => {
+              return log_and_err_internal!(
+                "Could not open unicast user traffic listener, any port number: {:?}",
+                e
+              )
+            }
           }
-          _other_kind => 
-            return log_and_err_internal!("Could not open unicast user traffic listener: {:?}", e),
-        }       
-      };
+        }
+        _other_kind => {
+          return log_and_err_internal!("Could not open unicast user traffic listener: {:?}", e)
+        }
+      },
+    };
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     // construct our own Locators
-    let self_locators: HashMap<Token,Vec<Locator>> = 
-      listeners.iter()
-        .map( |(t,l)|  
-              match l.to_socketaddr() {
-                Ok(sa) => {
-                  let locs = if sa.ip().is_multicast() { get_local_multicast_locators(sa.port()) } 
-                  else { get_local_unicast_locators(sa.port()) };
-                  (*t,locs)
-                }
-                Err(e) => { 
-                  error!("No local network address for token {:?}: {:?}", t, e);
-                  (*t,vec![])
-                }
-              }
-            )
-        .collect();
+    let self_locators: HashMap<Token, Vec<Locator>> = listeners
+      .iter()
+      .map(|(t, l)| match l.to_socketaddr() {
+        Ok(sa) => {
+          let locs = if sa.ip().is_multicast() {
+            get_local_multicast_locators(sa.port())
+          } else {
+            get_local_unicast_locators(sa.port())
+          };
+          (*t, locs)
+        }
+        Err(e) => {
+          error!("No local network address for token {:?}: {:?}", t, e);
+          (*t, vec![])
+        }
+      })
+      .collect();
 
     // Adding readers
     let (sender_add_reader, receiver_add_reader) =

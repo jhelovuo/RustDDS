@@ -82,7 +82,6 @@ impl UDPListener {
     Ok(mio_socket)
   }
 
-
   // Note that this typically does not give the local IP address, but
   // "0.0.0.0", which means we are listening to any address.
   pub fn to_socketaddr(&self) -> io::Result<SocketAddr> {
@@ -257,8 +256,7 @@ mod tests {
   #[test]
   fn udpl_multicast_address() {
     let listener =
-      UDPListener::new_multicast("0.0.0.0", 10002, Ipv4Addr::new(239, 255, 0, 1))
-        .unwrap();
+      UDPListener::new_multicast("0.0.0.0", 10002, Ipv4Addr::new(239, 255, 0, 1)).unwrap();
     let sender = UDPSender::new_with_random_port().unwrap();
 
     //setsockopt(sender.socket.as_raw_fd(), IpMulticastLoop, &true)
