@@ -47,25 +47,16 @@ fn run_app<B: Backend>(
 ) -> io::Result<()> {
   let mut last_tick = Instant::now();
   loop {
-    //here check if ros thread has found new data and update it to VisualizatorApp
-    loop {
-      match &mut app.receiver.try_recv() {
-        Ok(data) => {
-          match data {
-            DataUpdate::NewROSParticipantFound { participant } => {
-              &mut app.add_new_ros_participant(participant.clone())
-            }
-            DataUpdate::DiscoveredTopics { topics } => {
-              &mut app.set_discovered_topics(topics.clone())
-            }
-            DataUpdate::DiscoveredNodes { nodes } => &mut app.set_node_infos(nodes.clone()),
-          };
+    // here check if ros thread has found new data and update it to VisualizatorApp
+    // todo: handle error
+    while let Ok(data) = &mut app.receiver.try_recv() {
+      match data {
+        DataUpdate::NewROSParticipantFound { participant } => {
+          &mut app.add_new_ros_participant(participant.clone())
         }
-        //TODO HANDLE ERROR
-        Err(_e) => {
-          break;
-        }
-      }
+        DataUpdate::DiscoveredTopics { topics } => &mut app.set_discovered_topics(topics.clone()),
+        DataUpdate::DiscoveredNodes { nodes } => &mut app.set_node_infos(nodes.clone()),
+      };
     }
 
     terminal.draw(|f| app.ui(f))?;
