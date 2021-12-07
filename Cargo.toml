@@ -49,5 +49,5 @@ clap = "2.33"
 log4rs = "1"
 test-case = "1.2.0"
 # ros_visualizer
-crossterm = "0.20"
+crossterm = "0.22"
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
