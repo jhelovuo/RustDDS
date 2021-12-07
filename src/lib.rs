@@ -15,6 +15,7 @@
 //! when communicating to ROS2 components.
 
 #![deny(clippy::all)]
+#![warn(clippy::needless_pass_by_value)]
 #![allow(
   clippy::option_map_unit_fn,
   // option_map_unit_fn suggests changing option.map( ) with () return value to if let -construct,

@@ -333,10 +333,10 @@ impl MessageReceiver {
             .values_mut()
             .filter(|p| p.contains_writer(heartbeatfrag.writer_id))
           {
-            reader.handle_heartbeatfrag_msg(heartbeatfrag.clone(), mr_state.clone());
+            reader.handle_heartbeatfrag_msg(&heartbeatfrag, &mr_state);
           }
         } else if let Some(target_reader) = self.reader_mut(heartbeatfrag.reader_id) {
-          target_reader.handle_heartbeatfrag_msg(heartbeatfrag, mr_state);
+          target_reader.handle_heartbeatfrag_msg(&heartbeatfrag, &mr_state);
         }
       }
       EntitySubmessage::NackFrag(_, _) => {}

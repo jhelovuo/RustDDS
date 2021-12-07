@@ -560,6 +560,7 @@ where
 
 #[cfg(test)]
 mod tests {
+  #![allow(clippy::needless_pass_by_value)]
   use byteorder::{BigEndian, LittleEndian};
   use log::info;
   use serde::{Deserialize, Serialize};

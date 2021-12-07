@@ -841,8 +841,8 @@ impl Reader {
 
   pub fn handle_heartbeatfrag_msg(
     &mut self,
-    _heartbeatfrag: HeartbeatFrag,
-    _mr_state: MessageReceiverState,
+    _heartbeatfrag: &HeartbeatFrag,
+    _mr_state: &MessageReceiverState,
   ) {
     todo!()
   }
