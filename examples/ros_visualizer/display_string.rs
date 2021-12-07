@@ -2,7 +2,7 @@ use rustdds::{
   dds::data_types::DiscoveredTopicData,
   ros2::{
     builtin_datatypes::{NodeInfo, ROSParticipantInfo},
-    RosParticipant,
+    //RosParticipant,
   },
 };
 
@@ -86,17 +86,17 @@ pub fn get_node_view_strings(node_info: &NodeInfo) -> Vec<String> {
   strings
 }
 
-pub fn get_external_node_info_strings(participant: &RosParticipant) -> Vec<String> {
-  let node_infos = participant.get_all_discovered_external_ros_node_infos();
-  let mut strings = vec![];
-  for (_gid, info_vec) in node_infos {
-    for node_info in info_vec {
-      strings.push(format!(
-        "name: {:?} namespace {:?} ",
-        node_info.name(),
-        node_info.namespace()
-      ));
-    }
-  }
-  strings
-}
+// pub fn get_external_node_info_strings(participant: &RosParticipant) -> Vec<String> {
+//   let node_infos = participant.get_all_discovered_external_ros_node_infos();
+//   let mut strings = vec![];
+//   for (_gid, info_vec) in node_infos {
+//     for node_info in info_vec {
+//       strings.push(format!(
+//         "name: {:?} namespace {:?} ",
+//         node_info.name(),
+//         node_info.namespace()
+//       ));
+//     }
+//   }
+//   strings
+// }
