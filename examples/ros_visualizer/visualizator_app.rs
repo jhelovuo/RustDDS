@@ -288,58 +288,42 @@ impl<'a> VisualizatorApp<'a> {
   }
 
   pub fn get_selected_participant_strings(&self) -> Vec<String> {
-    match self.ros_participants_display_items.state.selected() {
-      Some(index) => match self.ros_participants.get(index) {
-        Some(item) => get_participant_view_strings(item),
-        None => {
-          vec![]
-        }
-      },
-      None => {
-        vec![]
-      }
-    }
+    self
+      .ros_participants_display_items
+      .state
+      .selected()
+      .and_then(|index| self.ros_participants.get(index))
+      .map(get_participant_view_strings)
+      .unwrap_or_default()
   }
 
   pub fn get_selected_topic_strings(&self) -> Vec<String> {
-    match self.topic_list_display_items.state.selected() {
-      Some(index) => match self.topic_list_items.get(index) {
-        Some(item) => get_topic_view_strings(item),
-        None => {
-          vec![]
-        }
-      },
-      None => {
-        vec![]
-      }
-    }
+    self
+      .topic_list_display_items
+      .state
+      .selected()
+      .and_then(|index| self.topic_list_items.get(index))
+      .map(get_topic_view_strings)
+      .unwrap_or_default()
   }
 
   pub fn get_selected_local_node_strings(&self) -> Vec<String> {
-    match self.local_nodes_display_items.state.selected() {
-      Some(index) => match self.local_nodes.get(index) {
-        Some(item) => get_node_view_strings(item),
-        None => {
-          vec![]
-        }
-      },
-      None => {
-        vec![]
-      }
-    }
+    self
+      .local_nodes_display_items
+      .state
+      .selected()
+      .and_then(|index| self.external_nodes.get(index))
+      .map(get_node_view_strings)
+      .unwrap_or_default()
   }
 
   pub fn get_selected_external_node_strings(&self) -> Vec<String> {
-    match self.external_nodes_display_items.state.selected() {
-      Some(index) => match self.external_nodes.get(index) {
-        Some(item) => get_node_view_strings(item),
-        None => {
-          vec![]
-        }
-      },
-      None => {
-        vec![]
-      }
-    }
+    self
+      .external_nodes_display_items
+      .state
+      .selected()
+      .and_then(|index| self.external_nodes.get(index))
+      .map(get_node_view_strings)
+      .unwrap_or_default()
   }
 }
