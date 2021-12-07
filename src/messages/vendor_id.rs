@@ -19,6 +19,10 @@ impl VendorId {
   };
 
   pub const THIS_IMPLEMENTATION: VendorId = VendorId::ATOSTEK;
+
+  pub fn as_bytes(&self) -> [u8; 2] {
+    self.vendor_id
+  }
 }
 
 impl Default for VendorId {

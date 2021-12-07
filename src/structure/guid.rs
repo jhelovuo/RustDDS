@@ -1,8 +1,7 @@
-use std::{hash::Hash, ops::RangeBounds};
+use std::{fmt, hash::Hash, ops::RangeBounds};
 
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use cdr_encoding_size::*;
 use mio::Token;
 use log::warn;
@@ -13,7 +12,7 @@ use crate::dds::traits::key::Key;
 
 /// DDS/RTPS Participant GuidPrefix
 #[derive(
-  Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
+  Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
 )]
 pub struct GuidPrefix {
   pub entity_key: [u8; 12],
@@ -35,8 +34,32 @@ impl GuidPrefix {
     GuidPrefix { entity_key: pr }
   }
 
+  pub fn random_for_this_participant() -> GuidPrefix {
+    let mut entity_key: [u8; 12] = rand::random(); // start with random data
+
+    // The prefix is arbitrary, but let's place our vendor id at the head
+    // for easy recognition. It seems some other RTPS implementations are doing the
+    // same.
+    let my_vendor_id_bytes = crate::messages::vendor_id::VendorId::THIS_IMPLEMENTATION.as_bytes();
+    entity_key[0] = my_vendor_id_bytes[0];
+    entity_key[1] = my_vendor_id_bytes[1];
+
+    // TODO:
+    // We could add some other identifying stuff here also, like one of
+    // our IP addresses (but which one?)
+
+    GuidPrefix { entity_key }
+  }
+
   pub fn range(&self) -> impl RangeBounds<GUID> {
     GUID::new(*self, EntityId::MIN)..=GUID::new(*self, EntityId::MAX)
+  }
+}
+
+impl fmt::Debug for GuidPrefix {
+  // This is so common that we skip all the inroductions and just print the data.
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    self.entity_key.fmt(f)
   }
 }
 
@@ -73,7 +96,7 @@ impl<C: Context> Writable<C> for GuidPrefix {
 }
 
 #[derive(
-  Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
+  Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
 )]
 pub struct EntityKind(u8);
 
@@ -144,11 +167,42 @@ impl From<EntityKind> for u8 {
     ek.0
   }
 }
+impl fmt::Debug for EntityKind {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match *self {
+      EntityKind::UNKNOWN_USER_DEFINED => f.write_str("EntityKind::UNKNOWN_USER_DEFINED"),
+      EntityKind::WRITER_WITH_KEY_USER_DEFINED => {
+        f.write_str("EntityKind::WRITER_WITH_KEY_USER_DEFINED")
+      }
+      EntityKind::WRITER_NO_KEY_USER_DEFINED => {
+        f.write_str("EntityKind::WRITER_NO_KEY_USER_DEFINED")
+      }
+      EntityKind::READER_NO_KEY_USER_DEFINED => {
+        f.write_str("EntityKind::READER_NO_KEY_USER_DEFINED")
+      }
+      EntityKind::READER_WITH_KEY_USER_DEFINED => {
+        f.write_str("EntityKind::READER_WITH_KEY_USER_DEFINED")
+      }
+      EntityKind::WRITER_GROUP_USER_DEFINED => f.write_str("EntityKind::WRITER_GROUP_USER_DEFINED"),
+      EntityKind::READER_GROUP_USER_DEFINED => f.write_str("EntityKind::READER_GROUP_USER_DEFINED"),
+
+      EntityKind::UNKNOWN_BUILT_IN => f.write_str("EntityKind::UNKNOWN_BUILT_IN"),
+      EntityKind::PARTICIPANT_BUILT_IN => f.write_str("EntityKind::PARTICIPANT_BUILT_IN"),
+      EntityKind::WRITER_WITH_KEY_BUILT_IN => f.write_str("EntityKind::WRITER_WITH_KEY_BUILT_IN"),
+      EntityKind::WRITER_NO_KEY_BUILT_IN => f.write_str("EntityKind::WRITER_NO_KEY_BUILT_IN"),
+      EntityKind::READER_NO_KEY_BUILT_IN => f.write_str("EntityKind::READER_NO_KEY_BUILT_IN"),
+      EntityKind::READER_WITH_KEY_BUILT_IN => f.write_str("EntityKind::READER_WITH_KEY_BUILT_IN"),
+      EntityKind::WRITER_GROUP_BUILT_IN => f.write_str("EntityKind::WRITER_GROUP_BUILT_IN"),
+      EntityKind::READER_GROUP_BUILT_IN => f.write_str("EntityKind::READER_GROUP_BUILT_IN"),
+      _ => f.write_fmt(format_args!("EntityKind({:x?})", self.0)),
+    }
+  }
+}
 
 /// RTPS EntityId
 /// See RTPS spec section 8.2.4 , 8.3.5.1 and 9.3.1.2
 #[derive(
-  Copy, Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
+  Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
 )]
 pub struct EntityId {
   pub entity_key: [u8; 3],
@@ -225,16 +279,21 @@ impl EntityId {
     entity_kind: EntityKind::MAX,
   };
 
-  pub fn create_custom_entity_id(entity_key: [u8; 3], entity_kind: EntityKind) -> EntityId {
+  pub fn new(entity_key: [u8; 3], entity_kind: EntityKind) -> EntityId {
     EntityId {
       entity_key,
       entity_kind,
     }
   }
 
+  #[cfg(test)]
+  pub(crate) fn create_custom_entity_id(entity_key: [u8; 3], entity_kind: EntityKind) -> EntityId {
+    Self::new(entity_key, entity_kind)
+  }
+
   fn as_usize(self) -> usize {
-    // Usize is generated like beacause there needs to be
-    // a way to tell entity kind from usize number
+    // usize is generated like this beacause there needs to be
+    // a way to tell entity kind from the result
     let u1 = self.entity_key[0] as u32;
     let u2 = self.entity_key[1] as u32;
     let u3 = self.entity_key[2] as u32;
@@ -258,7 +317,7 @@ impl EntityId {
       entity_kind: EntityKind::from(u4),
     };
 
-    // check sanity, as the result sohould be
+    // check sanity, as the result should be
     let kind_kind = u4 & (0xC0 | 0x10);
     if kind_kind == 0xC0 || kind_kind == 0x00 {
       // this is ok, all normal
@@ -306,6 +365,48 @@ impl Default for EntityId {
   }
 }
 
+impl fmt::Debug for EntityId {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match *self {
+      EntityId::UNKNOWN => f.write_str("EntityId::UNKNOWN"),
+      EntityId::PARTICIPANT => f.write_str("EntityId::PARTICIPANT"),
+      EntityId::SEDP_BUILTIN_TOPIC_WRITER => f.write_str("EntityId::SEDP_BUILTIN_TOPIC_WRITER"),
+      EntityId::SEDP_BUILTIN_TOPIC_READER => f.write_str("EntityId::SEDP_BUILTIN_TOPIC_READER"),
+      EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER => {
+        f.write_str("EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER")
+      }
+      EntityId::SEDP_BUILTIN_PUBLICATIONS_READER => {
+        f.write_str("EntityId::SEDP_BUILTIN_PUBLICATIONS_READER")
+      }
+      EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER => {
+        f.write_str("EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER")
+      }
+      EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
+        f.write_str("EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER")
+      }
+      EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER => {
+        f.write_str("EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER")
+      }
+      EntityId::SPDP_BUILTIN_PARTICIPANT_READER => {
+        f.write_str("EntityId::SPDP_BUILTIN_PARTICIPANT_READER")
+      }
+      EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER => {
+        f.write_str("EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER")
+      }
+      EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
+        f.write_str("EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER")
+      }
+      _ => {
+        f.write_str("EntityId {")?;
+        self.entity_key.fmt(f)?;
+        f.write_str(" ")?;
+        self.entity_kind.fmt(f)?;
+        f.write_str("}")
+      }
+    }
+  }
+}
+
 impl<'a, C: Context> Readable<'a, C> for EntityId {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
@@ -329,10 +430,23 @@ impl<C: Context> Writable<C> for EntityId {
 }
 
 /// DDS/RTPS GUID
+///
+/// Spec 2.5, Section 8.2.4.1 Identifying RTPS entities: the GUID
+///
+/// The GUID (Globally Unique Identifier) is an attribute of all RTPS Entities
+/// and uniquely identifies the Entity within a DDS Domain.
+///
+/// The GUID is built as a tuple <prefix, entityId> combining a GuidPrefix_t
+/// prefix and an EntityId_t entityId
+/// ...
+/// The implementation is free to choose the prefix, as long as every
+/// Participant in the Domain has a unique GUID.
+/// ...
+/// The GUIDs of all the Endpoints within a Participant have the same prefix.
+
 #[derive(
   Copy,
   Clone,
-  Debug,
   Default,
   PartialOrd,
   PartialEq,
@@ -366,9 +480,8 @@ impl GUID {
 
   /// Generates new GUID for Participant when `guid_prefix` is random
   pub fn new_particiapnt_guid() -> GUID {
-    let guid = Uuid::new_v4();
     GUID {
-      guid_prefix: GuidPrefix::new(guid.as_bytes()),
+      guid_prefix: GuidPrefix::random_for_this_participant(),
       entity_id: EntityId::PARTICIPANT,
     }
   }
@@ -405,6 +518,15 @@ impl GUID {
 }
 
 impl Key for GUID {}
+
+impl fmt::Debug for GUID {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_fmt(format_args!(
+      "GUID {{{:?} {:?}}}",
+      self.guid_prefix, self.entity_id
+    ))
+  }
+}
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct GUIDData {

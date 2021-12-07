@@ -3,7 +3,7 @@ use std::{
   collections::HashMap,
   io::ErrorKind,
   net::Ipv4Addr,
-  sync::{Arc, Mutex, RwLock, Weak},
+  sync::{atomic, Arc, Mutex, RwLock, Weak},
   thread,
   thread::JoinHandle,
   time::{Duration, Instant},
@@ -286,6 +286,10 @@ impl DomainParticipant {
       .discovery_db
       .clone()
   }
+
+  pub(crate) fn new_entity_id(&self, entity_kind: EntityKind) -> EntityId {
+    self.dpi.lock().unwrap().new_entity_id(entity_kind)
+  }
 }
 
 impl PartialEq for DomainParticipant {
@@ -385,10 +389,10 @@ impl RTPSEntity for DomainParticipantWeak {
 pub(crate) struct DomainParticipantDisc {
   dpi: Arc<Mutex<DomainParticipantInner>>,
   // Discovery control
-  //discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
-  //discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
   discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
+  // This allows deterministic generation of EntityIds for DataReader, DataWriter, etc.
+  entity_id_generator: atomic::AtomicU32,
 }
 
 impl DomainParticipantDisc {
@@ -407,11 +411,20 @@ impl DomainParticipantDisc {
 
     Ok(DomainParticipantDisc {
       dpi: Arc::new(Mutex::new(dpi)),
-      //discovery_updated_sender,
-      //discovery_command_receiver,
       discovery_command_sender,
       discovery_join_handle,
+      entity_id_generator: atomic::AtomicU32::new(0),
     })
+  }
+
+  // This generates identifiers that consist of given EntityKind and arbitrary,
+  // unique identifier.
+  pub(crate) fn new_entity_id(&self, entity_kind: EntityKind) -> EntityId {
+    let [_goldilocks, papa_byte, mama_byte, baby_byte, ] = self
+      .entity_id_generator
+      .fetch_add(1, atomic::Ordering::Relaxed)
+      .to_be_bytes();
+    EntityId::new([papa_byte, mama_byte, baby_byte], entity_kind)
   }
 
   pub fn create_publisher(

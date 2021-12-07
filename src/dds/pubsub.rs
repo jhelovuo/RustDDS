@@ -7,7 +7,6 @@ use std::{
 use mio_extras::channel as mio_channel;
 use serde::{de::DeserializeOwned, Serialize};
 use byteorder::LittleEndian;
-use rand::Rng;
 
 use crate::{
   dds::{
@@ -452,7 +451,7 @@ impl InnerPublisher {
       .modify_by(&optional_qos.unwrap_or_else(QosPolicies::qos_none));
 
     let entity_id =
-      unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
+      self.unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
     let dp = self
       .participant()
       .ok_or("upgrade fail")
@@ -504,7 +503,7 @@ impl InnerPublisher {
     SA: no_key::SerializerAdapter<D>,
   {
     let entity_id =
-      unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
+      self.unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
     let d = self.create_datawriter::<NoKeyWrapper<D>, SAWrapper<SA>>(
       outer,
       Some(entity_id),
@@ -551,6 +550,16 @@ impl InnerPublisher {
 
   pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
     self.default_datawriter_qos = q.clone();
+  }
+
+  fn unwrap_or_random_entity_id(
+    &self,
+    entity_id_opt: Option<EntityId>,
+    entity_kind: EntityKind,
+  ) -> EntityId {
+    // If the entity_id is given, then just use that. If not, then pull an arbirtaty
+    // number out of participant's hat.
+    entity_id_opt.unwrap_or_else(|| self.participant().unwrap().new_entity_id(entity_kind))
   }
 }
 
@@ -901,7 +910,7 @@ impl InnerSubscriber {
       .modify_by(&optional_qos.unwrap_or_else(QosPolicies::qos_none));
 
     let entity_id =
-      unwrap_or_random_entity_id(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
+      self.unwrap_or_random_entity_id(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
 
     let reader_id = entity_id;
     let datareader_id = entity_id;
@@ -998,7 +1007,7 @@ impl InnerSubscriber {
     }
 
     let entity_id =
-      unwrap_or_random_entity_id(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
+      self.unwrap_or_random_entity_id(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
 
     let d = self.create_datareader_internal::<NoKeyWrapper<D>, DAWrapper<SA>>(
       outer,
@@ -1013,17 +1022,16 @@ impl InnerSubscriber {
   pub fn participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
   }
-}
 
-fn unwrap_or_random_entity_id(
-  entity_id_opt: Option<EntityId>,
-  entity_kind: EntityKind,
-) -> EntityId {
-  entity_id_opt // use the given EntityId or generate new random one
-    .unwrap_or_else(|| {
-      let mut rng = rand::thread_rng();
-      EntityId::create_custom_entity_id([rng.gen(), rng.gen(), rng.gen()], entity_kind)
-    })
+  fn unwrap_or_random_entity_id(
+    &self,
+    entity_id_opt: Option<EntityId>,
+    entity_kind: EntityKind,
+  ) -> EntityId {
+    // If the entity_id is given, then just use that. If not, then pull an arbirtaty
+    // number out of participant's hat.
+    entity_id_opt.unwrap_or_else(|| self.participant().unwrap().new_entity_id(entity_kind))
+  }
 }
 
 // -------------------------------------------------------------------
