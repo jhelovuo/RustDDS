@@ -8,7 +8,10 @@ use serde::de::{
 use paste::paste;
 
 use crate::{
-  dds::traits::{key::Keyed, serde_adapters::*},
+  dds::traits::{
+    key::Keyed,
+    serde_adapters::{no_key, with_key},
+  },
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   serialization::error::{Error, Result},
 };
@@ -134,11 +137,11 @@ where
     type_octet_aligment: usize,
   ) -> Result<()> {
     let modulo = self.serialized_data_count % type_octet_aligment;
-    if modulo != 0 {
+    if modulo == 0 {
+      Ok(())
+    } else {
       let padding = type_octet_aligment - modulo;
       self.remove_bytes_from_input(padding)
-    } else {
-      Ok(())
     }
   }
 }

@@ -139,36 +139,33 @@ fn ros2_loop(
     .create_ros_topic(
       "/turtle1/cmd_vel",
       String::from("geometry_msgs::msg::dds_::Twist_"),
-      qos.clone(),
+      &qos,
       TopicKind::NoKey,
     )
     .unwrap();
 
   // The point here is to publish Twist for the turtle
   let turtle_cmd_vel_writer = ros_node
-    .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(
-      turtle_cmd_vel_topic.clone(),
-      None,
-    )
+    .create_ros_nokey_publisher::<Twist, CDRSerializerAdapter<Twist>>(&turtle_cmd_vel_topic, None)
     .unwrap();
 
   // But here is how to read it also, if anyone is interested.
   // This should show what is the turle command in case someone else is
   // also issuing commands, i.e. there are two turtla controllers running.
   let mut turtle_cmd_vel_reader = ros_node
-    .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(turtle_cmd_vel_topic, None)
+    .create_ros_nokey_subscriber::<Twist, CDRDeserializerAdapter<_>>(&turtle_cmd_vel_topic, None)
     .unwrap();
 
   let turtle_pose_topic = ros_node
     .create_ros_topic(
       "/turtle1/pose",
       String::from("turtlesim::msg::dds_::Pose_"),
-      qos.clone(),
+      &qos,
       TopicKind::NoKey,
     )
     .unwrap();
   let mut turtle_pose_reader = ros_node
-    .create_ros_nokey_subscriber::<Pose, CDRDeserializerAdapter<_>>(turtle_pose_topic, None)
+    .create_ros_nokey_subscriber::<Pose, CDRDeserializerAdapter<_>>(&turtle_pose_topic, None)
     .unwrap();
 
   let poll = Poll::new().unwrap();

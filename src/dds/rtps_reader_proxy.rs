@@ -113,16 +113,16 @@ impl RtpsReaderProxy {
 
   pub fn from_discovered_reader_data(
     discovered_reader_data: &DiscoveredReaderData,
-    default_unicast_locators: Vec<Locator>,
-    default_multicast_locators: Vec<Locator>,
+    default_unicast_locators: &[Locator],
+    default_multicast_locators: &[Locator],
   ) -> RtpsReaderProxy {
     let unicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.unicast_locator_list,
-      &default_unicast_locators,
+      default_unicast_locators,
     );
     let multicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.multicast_locator_list,
-      &default_multicast_locators,
+      default_multicast_locators,
     );
 
     RtpsReaderProxy {
@@ -205,7 +205,7 @@ impl RtpsReaderProxy {
 
       AckSubmessage::NackFrag(_nack_frag) => {
         // TODO
-        error!("NACKFRAG not implemented")
+        error!("NACKFRAG not implemented");
       }
     }
   }

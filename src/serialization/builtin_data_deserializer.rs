@@ -13,7 +13,7 @@ use crate::{
       },
       QosPolicyBuilder,
     },
-    traits::serde_adapters::no_key::*,
+    traits::serde_adapters::no_key::DeserializerAdapter,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
@@ -241,7 +241,7 @@ impl BuiltinDataDeserializer {
     let mut sbtd = SubscriptionBuiltinTopicData::new(key, topic_name, type_name, &qos);
 
     if let Some(g) = self.participant_guid {
-      sbtd.set_participant_key(g)
+      sbtd.set_participant_key(g);
     };
 
     Ok(sbtd)
@@ -643,7 +643,7 @@ impl BuiltinDataDeserializer {
           self.ownership = match self.ownership {
             Some(v) => match v {
               Ownership::Exclusive { strength: _ } => Some(Ownership::Exclusive { strength: stri }),
-              _ => Some(v),
+              Ownership::Shared => Some(v),
             },
             None => Some(Ownership::Exclusive { strength: stri }),
           }

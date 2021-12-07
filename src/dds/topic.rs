@@ -1,6 +1,11 @@
 use std::{fmt::Debug, sync::Arc};
 
-use crate::dds::{participant::*, qos::*, traits::dds_entity::DDSEntity, typedesc::*};
+use crate::dds::{
+  participant::{DomainParticipant, DomainParticipantWeak},
+  qos::{HasQoSPolicy, QosPolicies},
+  traits::dds_entity::DDSEntity,
+  typedesc::TypeDesc,
+};
 pub use crate::structure::topic_kind::TopicKind;
 
 /// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class

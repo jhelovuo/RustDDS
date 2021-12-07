@@ -36,7 +36,7 @@ use crate::{
 use super::{
   qos::{policy, QosPolicies},
   rtps_reader_proxy::RtpsReaderProxy,
-  statusevents::*,
+  statusevents::{CountWithChange, DataWriterStatus},
 };
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -179,28 +179,21 @@ impl Writer {
     udp_sender: Rc<UDPSender>,
     mut timed_event_timer: Timer<TimedEvent>,
   ) -> Writer {
-    let heartbeat_period = match &i.qos_policies.reliability {
-      Some(Reliability::Reliable { .. }) => Some(Duration::from_secs(1)), /* TODO: make */
-      // configurable
-      Some(Reliability::BestEffort) => None,
-      None => None,
-    };
-
-    let heartbeat_period = match heartbeat_period {
-      Some(hbp) => match i.qos_policies.liveliness {
-        // What is the logic here? Which spec section?
-        Some(lv) => match lv {
-          policy::Liveliness::Automatic { lease_duration: _ } => Some(hbp),
-          policy::Liveliness::ManualByParticipant { lease_duration: _ } => Some(hbp),
-          policy::Liveliness::ManualByTopic { lease_duration } => {
-            let std_dur = lease_duration;
-            Some(std_dur / 3)
-          }
-        },
-        None => Some(hbp),
-      },
-      None => None,
-    };
+    let heartbeat_period = if let Some(Reliability::Reliable { .. }) = i.qos_policies.reliability {
+      Some(Duration::from_secs(1))
+    } else {
+      None
+    }
+    .map(|hbp| {
+      // What is the logic here? Which spec section?
+      if let Some(policy::Liveliness::ManualByTopic { lease_duration }) = i.qos_policies.liveliness
+      {
+        let std_dur = lease_duration;
+        std_dur / 3
+      } else {
+        hbp
+      }
+    });
 
     // TODO: Configuration value
     let cache_cleaning_period = Duration::from_secs(2 * 60);
@@ -320,8 +313,7 @@ impl Writer {
               let delay_to_next_repair = self
                 .qos_policies
                 .deadline()
-                .map(|dl| dl.0)
-                .unwrap_or_else(|| Duration::from_millis(100))
+                .map_or_else(|| Duration::from_millis(100), |dl| dl.0)
                 / 5;
               self.timed_event_timer.set_timeout(
                 std::time::Duration::from(delay_to_next_repair),
@@ -394,8 +386,7 @@ impl Writer {
               .from_topic_get_change(&self.my_topic_name, &timestamp)
             {
               partial_message.data_msg(
-                cache_change.clone(),
-                // Now that payload contains Bytes, it is relatively cheap to clone
+                cache_change,
                 EntityId::UNKNOWN,      // reader
                 self.my_guid.entity_id, // writer
                 self.endianness,
@@ -475,7 +466,7 @@ impl Writer {
       }
 
       Some(History::KeepLast { depth }) => max(
-        self.last_change_sequence_number - SequenceNumber::from((depth - 1) as i64),
+        self.last_change_sequence_number - SequenceNumber::from(i64::from(depth - 1)),
         SequenceNumber::from(1),
       ),
     };
@@ -509,7 +500,7 @@ impl Writer {
 
     // Notify reader proxies that there is a new sample
     for reader in &mut self.readers.values_mut() {
-      reader.notify_new_cache_change(new_sequence_number)
+      reader.notify_new_cache_change(new_sequence_number);
     }
     timestamp
   }
@@ -557,7 +548,7 @@ impl Writer {
         DeliveryMode::Multicast,
         &hb_message,
         &mut self.readers.values(),
-      )
+      );
     }
   }
 
@@ -581,9 +572,8 @@ impl Writer {
 
         // sanity check requested sequence numbers
         match an.reader_sn_state.iter().next().map(i64::from) {
-          None => (), // ok
           Some(0) => warn!("Request for SN zero! : {:?}", an),
-          Some(_) => (), // ok
+          Some(_) | None => (), // ok
         }
         let my_topic = self.my_topic_name.clone(); // for debugging
         let reader_guid = GUID::new(reader_guid_prefix, an.reader_id);
@@ -644,7 +634,7 @@ impl Writer {
       }
       AckSubmessage::NackFrag(_nackfrag) => {
         // TODO
-        error!("NACKFRAG Not implemented")
+        error!("NACKFRAG Not implemented");
       }
     }
   }
@@ -661,7 +651,7 @@ impl Writer {
             aw.readers_pending.remove(&guid);
           }
           if aw.readers_pending.is_empty() {
-            // it is normal for the send to fail, because receiver may have timeouted
+            // it is normal for the send to fail, because receiver may have timed out
             let _ = aw.complete_channel.try_send(());
             completed = true;
           }
@@ -690,7 +680,7 @@ impl Writer {
         .readers
         .insert(reader_proxy.remote_reader_guid, reader_proxy);
       if reject.is_some() {
-        error!("Reader proxy was duplicated somehow??? {:?}", reject)
+        error!("Reader proxy was duplicated somehow??? {:?}", reject);
       }
     }
   }
@@ -726,7 +716,7 @@ impl Writer {
         {
           // CacheChange found, construct DATA submessage
           partial_message = partial_message.data_msg(
-            cache_change.clone(),   // TODO: We should not clone, too much copying
+            cache_change,
             reader_guid.entity_id,  // reader
             self.my_guid.entity_id, // writer
             self.endianness,
@@ -755,7 +745,7 @@ impl Writer {
     // Add GAP submessage, if some chache changes could not be found.
     if !no_longer_relevant.is_empty() {
       partial_message =
-        partial_message.gap_msg(BTreeSet::from_iter(no_longer_relevant), self, reader_guid);
+        partial_message.gap_msg(&BTreeSet::from_iter(no_longer_relevant), self, reader_guid);
     }
     let data_gap_msg = partial_message.add_header_and_build(self.my_guid.guid_prefix);
 
@@ -785,7 +775,7 @@ impl Writer {
     let acked_by_all_readers = self
       .readers
       .values()
-      .map(|r| r.acked_up_to_before())
+      .map(RtpsReaderProxy::acked_up_to_before)
       .min()
       .unwrap_or_else(SequenceNumber::zero);
     // If all readers have acked all up to before 5, and depth is 5, we need
@@ -883,12 +873,16 @@ impl Writer {
         TrySendError::Io(e) => {
           warn!("send_status - io error {:?}", e);
         }
-      })
+      });
   }
 
-  pub fn update_reader_proxy(&mut self, reader_proxy: RtpsReaderProxy, requested_qos: QosPolicies) {
+  pub fn update_reader_proxy(
+    &mut self,
+    reader_proxy: &RtpsReaderProxy,
+    requested_qos: &QosPolicies,
+  ) {
     debug!("update_reader_proxy topic={:?}", self.my_topic_name);
-    match self.qos_policies.compliance_failure_wrt(&requested_qos) {
+    match self.qos_policies.compliance_failure_wrt(requested_qos) {
       // matched QoS
       None => {
         let change = self.matched_reader_update(reader_proxy.clone());
@@ -900,7 +894,7 @@ impl Writer {
           });
           // send out hearbeat, so that new reader can catch up
           if let Some(Reliability::Reliable { .. }) = self.qos_policies.reliability {
-            self.notify_new_data_to_all_readers()
+            self.notify_new_data_to_all_readers();
           }
           info!(
             "Matched new remote reader on topic={:?} reader= {:?}",
@@ -948,7 +942,7 @@ impl Writer {
   }
 
   // internal helper. Same as above, but duplicates are an error.
-  fn matched_reader_add(&mut self, reader_proxy: RtpsReaderProxy) {
+  fn matched_reader_add(&mut self, reader_proxy: &RtpsReaderProxy) {
     let guid = reader_proxy.remote_reader_guid;
     if self
       .readers
@@ -992,7 +986,7 @@ impl Writer {
       });
     }
     // also remember to remove reader from ack_waiter
-    self.update_ack_waiters(guid, None)
+    self.update_ack_waiters(guid, None);
   }
 
   // Entire remote participant was lost.
@@ -1004,7 +998,7 @@ impl Writer {
       .map(|(g, _)| *g)
       .collect();
     for writer in lost_writers {
-      self.reader_lost(writer)
+      self.reader_lost(writer);
     }
   }
 
@@ -1086,7 +1080,7 @@ mod tests {
       .expect("Failed to create topic");
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(topic, None)
+        .create_datawriter(&topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

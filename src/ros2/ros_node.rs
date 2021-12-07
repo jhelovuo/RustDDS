@@ -18,7 +18,7 @@ use crate::{
     topic::{Topic, TopicKind},
     traits::{
       key::{Key, Keyed},
-      serde_adapters::*,
+      serde_adapters::{no_key, with_key},
     },
     values::result::Error,
     DomainParticipant,
@@ -70,7 +70,7 @@ impl RosParticipant {
   }
   /// Clears all nodes and updates our RosParticipantInfo to ROS2 network
   pub fn clear(&mut self) {
-    self.inner.lock().unwrap().clear()
+    self.inner.lock().unwrap().clear();
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -82,11 +82,11 @@ impl RosParticipant {
   }
 
   pub fn add_node_info(&mut self, node_info: NodeInfo) {
-    self.inner.lock().unwrap().add_node_info(node_info)
+    self.inner.lock().unwrap().add_node_info(node_info);
   }
 
   pub fn remove_node_info(&mut self, node_info: &NodeInfo) {
-    self.inner.lock().unwrap().remove_node_info(node_info)
+    self.inner.lock().unwrap().remove_node_info(node_info);
   }
 
   pub fn get_all_discovered_external_ros_node_infos(&self) -> HashMap<Gid, Vec<NodeInfo>> {
@@ -174,10 +174,10 @@ impl RosParticipantInner {
     )?;
 
     let node_reader =
-      ros_discovery_subscriber.create_datareader_no_key(ros_discovery_topic.clone(), None)?;
+      ros_discovery_subscriber.create_datareader_no_key(&ros_discovery_topic, None)?;
 
     let node_writer =
-      ros_discovery_publisher.create_datawriter_no_key(ros_discovery_topic.clone(), None)?;
+      ros_discovery_publisher.create_datawriter_no_key(&ros_discovery_topic, None)?;
 
     Ok(RosParticipantInner {
       nodes: HashMap::new(),
@@ -221,7 +221,7 @@ impl RosParticipantInner {
   pub fn clear(&mut self) {
     if !self.nodes.is_empty() {
       self.nodes.clear();
-      self.broadcast_node_infos()
+      self.broadcast_node_infos();
     }
   }
 
@@ -242,10 +242,10 @@ impl RosParticipantInner {
       let rpi = sample.value();
       match self.external_nodes.get_mut(&rpi.guid()) {
         Some(rpi2) => {
-          *rpi2 = rpi.nodes().to_vec();
+          *rpi2 = rpi.nodes().clone();
         }
         None => {
-          self.external_nodes.insert(rpi.guid(), rpi.nodes().to_vec());
+          self.external_nodes.insert(rpi.guid(), rpi.nodes().clone());
         }
       };
       pts.push(rpi.clone());
@@ -359,7 +359,7 @@ impl RosNode {
       Some(
         ros_participant
           .get_ros_discovery_publisher()
-          .create_datawriter_no_key(rosout_topic, None)?,
+          .create_datawriter_no_key(&rosout_topic, None)?,
       )
     } else {
       None
@@ -367,7 +367,7 @@ impl RosNode {
 
     let parameter_events_writer = ros_participant
       .get_ros_discovery_publisher()
-      .create_datawriter_no_key(paramtopic, None)?;
+      .create_datawriter_no_key(&paramtopic, None)?;
 
     Ok(RosNode {
       name: String::from(name),
@@ -384,18 +384,18 @@ impl RosNode {
 
   // Generates ROS2 node info from added readers and writers.
   fn generate_node_info(&self) -> NodeInfo {
-    let mut node_info = NodeInfo::new(self.name.to_owned(), self.namespace.to_owned());
+    let mut node_info = NodeInfo::new(self.name.clone(), self.namespace.clone());
 
     node_info.add_writer(Gid::from_guid(self.parameter_events_writer.guid()));
     if let Some(row) = &self.rosout_writer {
-      node_info.add_writer(Gid::from_guid(row.guid()))
+      node_info.add_writer(Gid::from_guid(row.guid()));
     }
 
-    for reader in self.readers.iter() {
-      node_info.add_reader(Gid::from_guid(*reader))
+    for reader in &self.readers {
+      node_info.add_reader(Gid::from_guid(*reader));
     }
 
-    for writer in self.writers.iter() {
+    for writer in &self.writers {
       node_info.add_writer(Gid::from_guid(*writer));
     }
 
@@ -495,7 +495,7 @@ impl RosNode {
     &self,
     name: &str,
     type_name: String,
-    qos: QosPolicies,
+    qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic, Error> {
     if name.is_empty() {
@@ -510,7 +510,7 @@ impl RosNode {
     let topic = self
       .ros_participant
       .domain_participant()
-      .create_topic(oname, type_name, &qos, topic_kind)?;
+      .create_topic(oname, type_name, qos, topic_kind)?;
     info!("Created topic");
     Ok(topic)
   }
@@ -527,7 +527,7 @@ impl RosNode {
     DA: no_key::DeserializerAdapter<D>,
   >(
     &mut self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<RosSubscriber<D, DA>, Error> {
     let sub = self
@@ -548,7 +548,7 @@ impl RosNode {
   ///   QOS.
   pub fn create_ros_subscriber<D, DA: with_key::DeserializerAdapter<D>>(
     &mut self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<KeyedRosSubscriber<D, DA>, Error>
   where
@@ -573,7 +573,7 @@ impl RosNode {
   ///   QOS.
   pub fn create_ros_nokey_publisher<D: Serialize, SA: no_key::SerializerAdapter<D>>(
     &mut self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<RosPublisher<D, SA>, Error> {
     let p = self
@@ -594,7 +594,7 @@ impl RosNode {
   ///   QOS.
   pub fn create_ros_publisher<D, SA: with_key::SerializerAdapter<D>>(
     &mut self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<KeyedRosPublisher<D, SA>, Error>
   where

@@ -85,10 +85,10 @@ impl<'a> Message {
   // we need to run-time decide which endianness we input. Speedy requires the
   // top level to fix that. And there seems to be no reasonable way to change
   // endianness. TODO: The error type should be something better
-  pub fn read_from_buffer(buffer: Bytes) -> io::Result<Message> {
+  pub fn read_from_buffer(buffer: &Bytes) -> io::Result<Message> {
     // The Header deserializes the same
     let rtps_header =
-      Header::read_from_buffer(&buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+      Header::read_from_buffer(buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     let mut message = Message::new(rtps_header);
     let mut submessages_left: Bytes = buffer.slice(20..); // header is 20 bytes
                                                           // submessage loop
@@ -145,7 +145,7 @@ impl<'a> Message {
           // Manually implemented deserialization for DATA. Speedy does not quite cut it.
           let f = BitFlags::<DATA_Flags>::from_bits_truncate(sub_header.flags);
           mk_e_subm(EntitySubmessage::Data(
-            Data::deserialize_data(sub_content_buffer, f)?,
+            Data::deserialize_data(&sub_content_buffer, f)?,
             f,
           ))
         }
@@ -154,7 +154,7 @@ impl<'a> Message {
           // Manually implemented deserialization for DATA. Speedy does not quite cut it.
           let f = BitFlags::<DATAFRAG_Flags>::from_bits_truncate(sub_header.flags);
           mk_e_subm(EntitySubmessage::DataFrag(
-            DataFrag::deserialize(sub_content_buffer, f)?,
+            DataFrag::deserialize(&sub_content_buffer, f)?,
             f,
           ))
         }
@@ -249,7 +249,7 @@ impl<'a> Message {
         }
       }; // match
 
-      message.submessages.push(new_submessage_result?)
+      message.submessages.push(new_submessage_result?);
     } // loop
 
     Ok(message)
@@ -357,14 +357,13 @@ impl MessageBuilder {
 
   pub fn data_msg(
     mut self,
-    cache_change: CacheChange,
+    cache_change: &CacheChange,
     reader_entity_id: EntityId,
     writer_entity_id: EntityId,
     endianness: Endianness,
   ) -> MessageBuilder {
     let inline_qos = match cache_change.data_value {
-      DDSData::Data {..} /*| DDSData::DataFrags{..}*/  => None,
-      DDSData::DisposeByKey {..} => None,
+      DDSData::Data {..} | DDSData::DisposeByKey {..}  /*| DDSData::DataFrags{..}*/  => None,
       DDSData::DisposeByKeyHash{ key_hash, .. } => {
         let mut param_list = ParameterList::new();
         let key_hash_param = Parameter {
@@ -388,14 +387,14 @@ impl MessageBuilder {
           ref serialized_payload,
         } => Some(serialized_payload.clone()), // contents is Bytes
         DDSData::DisposeByKey { ref key, .. } => Some(key.clone()),
-        _ => None,
+        DDSData::DisposeByKeyHash { .. } => None,
       },
     };
 
     // TODO: please explain this logic here:
     if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
       if let Some(sp) = data_message.serialized_payload.as_mut() {
-        sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE
+        sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE;
       }
     }
 
@@ -429,7 +428,7 @@ impl MessageBuilder {
   // irrelevant set to be represented as start_sn +
   pub fn gap_msg(
     mut self,
-    irrelevant_sns: BTreeSet<SequenceNumber>,
+    irrelevant_sns: &BTreeSet<SequenceNumber>,
     writer: &RtpsWriter,
     reader_guid: GUID,
   ) -> MessageBuilder {
@@ -438,7 +437,7 @@ impl MessageBuilder {
       irrelevant_sns.iter().next_back(),
     ) {
       (Some(&base), Some(&_top)) => {
-        let gap_list = SequenceNumberSet::from_base_and_set(base, &irrelevant_sns);
+        let gap_list = SequenceNumberSet::from_base_and_set(base, irrelevant_sns);
         let gap = Gap {
           reader_id: reader_guid.entity_id,
           writer_id: writer.entity_id(),
@@ -476,10 +475,10 @@ impl MessageBuilder {
     let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(writer.endianness);
 
     if set_final_flag {
-      flags.insert(HEARTBEAT_Flags::Final)
+      flags.insert(HEARTBEAT_Flags::Final);
     }
     if set_liveliness_flag {
-      flags.insert(HEARTBEAT_Flags::Liveliness)
+      flags.insert(HEARTBEAT_Flags::Liveliness);
     }
 
     let submessage = heartbeat.create_submessage(flags);
@@ -529,7 +528,7 @@ mod tests {
       0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00,
     ]);
-    let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     info!("{:?}", rtps);
 
     let serialized = Bytes::from(
@@ -568,7 +567,7 @@ mod tests {
       0x00,
     ]);
 
-    let rtps_data = Message::read_from_buffer(bits2.clone()).unwrap();
+    let rtps_data = Message::read_from_buffer(&bits2).unwrap();
 
     let serialized_data = Bytes::from(
       rtps_data
@@ -599,7 +598,7 @@ mod tests {
       0x70, 0x61, 0x6e, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00,
     ]);
 
-    let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     info!("{:?}", rtps);
 
     let serialized = Bytes::from(
@@ -625,7 +624,7 @@ mod tests {
       0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
     ]);
 
-    let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     info!("{:?}", rtps);
 
     let serialized = Bytes::from(
@@ -657,7 +656,7 @@ mod tests {
       0x70, 0x61, 0x6e, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00,
     ]);
 
-    let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     info!("{:?}", rtps);
 
     let serialized = Bytes::from(
@@ -701,7 +700,7 @@ mod tests {
       0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
     ]);
 
-    let rtps = Message::read_from_buffer(bits1.clone()).unwrap();
+    let rtps = Message::read_from_buffer(&bits1).unwrap();
     info!("{:?}", rtps);
 
     let data_submessage = match &rtps.submessages[2] {

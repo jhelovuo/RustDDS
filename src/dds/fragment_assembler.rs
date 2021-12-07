@@ -10,7 +10,8 @@ use log::{debug, error, info, trace, warn};
 use crate::{
   dds::ddsdata::DDSData,
   messages::submessages::{
-    submessage_elements::serialized_payload::SerializedPayload, submessages::*,
+    submessage_elements::serialized_payload::SerializedPayload,
+    submessages::{DATAFRAG_Flags, DataFrag},
   },
   structure::{cache_change::ChangeKind, sequence_number::SequenceNumber, time::Timestamp},
 };
@@ -50,7 +51,7 @@ impl AssemblyBuffer {
     }
   }
 
-  pub fn insert_frags(&mut self, datafrag: DataFrag, frag_size: u16) {
+  pub fn insert_frags(&mut self, datafrag: &DataFrag, frag_size: u16) {
     // TODO: Sanity checks? E.g. datafrag.fragment_size == frag_size
     let frag_size = usize::from(frag_size);
     let frags_in_subm = usize::from(datafrag.fragments_in_submessage);
@@ -102,7 +103,7 @@ impl FragmentAssembler {
   // Returns completed DDSData, when complete, and disposes the assembly buffer.
   pub fn new_datafrag(
     &mut self,
-    datafrag: DataFrag,
+    datafrag: &DataFrag,
     flags: BitFlags<DATAFRAG_Flags>,
   ) -> Option<DDSData> {
     let rep_id = datafrag.serialized_payload.representation_identifier;

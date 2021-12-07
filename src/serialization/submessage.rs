@@ -1,7 +1,8 @@
 use speedy::{Context, Writable, Writer};
 
 use crate::messages::submessages::{
-  submessage::EntitySubmessage, submessage_header::SubmessageHeader, submessages::*,
+  submessage::EntitySubmessage, submessage_header::SubmessageHeader,
+  submessages::InterpreterSubmessage,
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -51,7 +52,7 @@ mod tests {
     let header = SubmessageHeader::read_from_buffer(&serialized_data_submessage[0..4])
       .expect("could not create submessage header");
     let flags = BitFlags::<DATA_Flags>::from_bits_truncate(header.flags);
-    let suba = Data::deserialize_data(serialized_data_submessage.slice(4..), flags)
+    let suba = Data::deserialize_data(&serialized_data_submessage.slice(4..), flags)
       .expect("DATA deserialization failed.");
     let sub = SubMessage {
       header,

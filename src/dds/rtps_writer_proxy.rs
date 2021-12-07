@@ -148,14 +148,14 @@ impl RtpsWriterProxy {
       for (&sn, _) in self.changes.range((Excluded(&seq_num), Unbounded)) {
         if sn == s + SequenceNumber::new(1) {
           // got consecutive number from previous
-          s = s + SequenceNumber::new(1) // and continue looping
+          s = s + SequenceNumber::new(1); // and continue looping
         } else {
           break; // not consecutive
         }
       } // end for
         // Now we have received everything up to and including s. Ack base is one up
         // from that.
-      self.ack_base = s + SequenceNumber::new(1)
+      self.ack_base = s + SequenceNumber::new(1);
     }
   }
 
@@ -187,7 +187,7 @@ impl RtpsWriterProxy {
     self.changes.append(&mut after);
 
     if self.ack_base >= remove_from {
-      self.ack_base = max(remove_until_before, self.ack_base)
+      self.ack_base = max(remove_until_before, self.ack_base);
     }
 
     removed
@@ -232,7 +232,7 @@ impl RtpsWriterProxy {
 
   pub fn handle_datafrag(
     &mut self,
-    datafrag: DataFrag,
+    datafrag: &DataFrag,
     flags: BitFlags<DATAFRAG_Flags>,
   ) -> Option<DDSData> {
     if let Some(ref mut fa) = self.fragment_assembler {

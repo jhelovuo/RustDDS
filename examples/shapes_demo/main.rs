@@ -170,7 +170,7 @@ fn main() {
     debug!("Publisher");
     let publisher = domain_participant.create_publisher(&qos).unwrap();
     let mut writer = publisher
-      .create_datawriter_cdr::<Shape>(topic.clone(), None) // None = get qos policy from publisher
+      .create_datawriter_cdr::<Shape>(&topic, None) // None = get qos policy from publisher
       .unwrap();
     poll
       .register(
@@ -189,7 +189,7 @@ fn main() {
     debug!("Subscriber");
     let subscriber = domain_participant.create_subscriber(&qos).unwrap();
     let mut reader = subscriber
-      .create_datareader_cdr::<Shape>(topic.clone(), Some(qos))
+      .create_datareader_cdr::<Shape>(&topic, Some(qos))
       .unwrap();
     poll
       .register(&reader, READER_READY, Ready::readable(), PollOpt::edge())

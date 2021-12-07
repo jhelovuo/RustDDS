@@ -1,7 +1,6 @@
 use std::{
   collections::{BTreeMap, BTreeSet},
   fmt,
-  iter::FromIterator,
   rc::Rc,
   sync::{Arc, RwLock},
   time::Duration as StdDuration,
@@ -19,7 +18,7 @@ use crate::{
     message_receiver::MessageReceiverState,
     qos::{policy, HasQoSPolicy, QosPolicies},
     rtps_writer_proxy::RtpsWriterProxy,
-    statusevents::*,
+    statusevents::{CountWithChange, DataReaderStatus},
   },
   messages::{
     header::Header,
@@ -180,7 +179,7 @@ impl Reader {
         // itself. Or possibly it has lost the receiver object, which is sort of
         // sloppy, but does not necessarily mean the end of the world.
         // TODO: Implement Reader disposal.
-        info!("send_status_change - cannot send status, DataReader Disconnected.")
+        info!("send_status_change - cannot send status, DataReader Disconnected.");
       }
       Err(mio_channel::TrySendError::Io(e)) => {
         error!("send_status_change - cannot send status: {:?}", e);
@@ -313,7 +312,7 @@ impl Reader {
   }
 
   // updates or adds a new writer proxy, doesn't touch changes
-  pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy, offered_qos: QosPolicies) {
+  pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy, offered_qos: &QosPolicies) {
     debug!("update_writer_proxy topic={:?}", self.topic_name);
     match offered_qos.compliance_failure_wrt(&self.qos_policy) {
       None => {
@@ -375,7 +374,7 @@ impl Reader {
       .map(|(g, _)| *g)
       .collect();
     for reader in lost_readers {
-      self.remove_writer_proxy(reader)
+      self.remove_writer_proxy(reader);
     }
   }
 
@@ -400,7 +399,7 @@ impl Reader {
       multicast_locator_list,
       remote_group_entity_id,
     );
-    self.update_writer_proxy(proxy, QosPolicies::qos_none());
+    self.update_writer_proxy(proxy, &QosPolicies::qos_none());
   }
 
   fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
@@ -412,7 +411,7 @@ impl Reader {
     &mut self,
     data: Data,
     data_flags: BitFlags<DATA_Flags>,
-    mr_state: MessageReceiverState,
+    mr_state: &MessageReceiverState,
   ) {
     //trace!("handle_data_msg entry");
     let receive_timestamp = Timestamp::now();
@@ -446,9 +445,9 @@ impl Reader {
 
   pub fn handle_datafrag_msg(
     &mut self,
-    datafrag: DataFrag,
+    datafrag: &DataFrag,
     datafrag_flags: BitFlags<DATAFRAG_Flags>,
-    mr_state: MessageReceiverState,
+    mr_state: &MessageReceiverState,
   ) {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
     let seq_num = datafrag.writer_sn;
@@ -481,7 +480,7 @@ impl Reader {
         // not yet complete, nothing more to do
       }
     } else {
-      info!("Reader got DATAFRAG, but I have no writer proxy")
+      info!("Reader got DATAFRAG, but I have no writer proxy");
     }
   }
 
@@ -566,7 +565,7 @@ impl Reader {
       (Some(sp), false, true) => {
         // key
         Ok(DDSData::new_disposed_by_key(
-          Self::deduce_change_kind(data.inline_qos, false, representation_identifier),
+          Self::deduce_change_kind(&data.inline_qos, false, representation_identifier),
           sp,
         ))
       }
@@ -591,7 +590,7 @@ impl Reader {
         }?;
         // now, let's try to determine what is the dispose reason
         let change_kind =
-          Self::deduce_change_kind(data.inline_qos, false, representation_identifier);
+          Self::deduce_change_kind(&data.inline_qos, false, representation_identifier);
         Ok(DDSData::new_disposed_by_key_hash(change_kind, key_hash))
       }
 
@@ -619,7 +618,7 @@ impl Reader {
   // TODO: Return value seems to go unused in callers.
   pub fn handle_heartbeat_msg(
     &mut self,
-    heartbeat: Heartbeat,
+    heartbeat: &Heartbeat,
     final_flag_set: bool,
     mr_state: MessageReceiverState,
   ) -> bool {
@@ -719,12 +718,11 @@ impl Reader {
           // Limit the set to maximum that can be sent in acknack submessage..
           SequenceNumberSet::from_base_and_set(
             first_missing,
-            &BTreeSet::from_iter(
-              missing_seqnums
-                .iter()
-                .copied()
-                .take_while(|sn| sn < &(first_missing + SequenceNumber::from(256))),
-            ),
+            &missing_seqnums
+              .iter()
+              .copied()
+              .take_while(|sn| sn < &(first_missing + SequenceNumber::from(256)))
+              .collect(),
           )
         }
 
@@ -767,7 +765,7 @@ impl Reader {
     false
   } // fn
 
-  pub fn handle_gap_msg(&mut self, gap: Gap, mr_state: MessageReceiverState) {
+  pub fn handle_gap_msg(&mut self, gap: &Gap, mr_state: &MessageReceiverState) {
     // ATM all things related to groups is ignored. TODO?
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
@@ -852,14 +850,13 @@ impl Reader {
   // This is used to determine exact change kind in case we do not get a data
   // payload in DATA submessage
   fn deduce_change_kind(
-    inline_qos: Option<ParameterList>,
+    inline_qos: &Option<ParameterList>,
     no_writers: bool,
     ri: RepresentationIdentifier,
   ) -> ChangeKind {
     match inline_qos
       .as_ref()
-      .map(|iqos| InlineQos::status_info(iqos, ri).ok())
-      .flatten()
+      .and_then(|iqos| InlineQos::status_info(iqos, ri).ok())
     {
       Some(si) => si.change_kind(), // get from inline QoS
       // TODO: What if si.change_kind() gives ALIVE ??
@@ -1082,7 +1079,7 @@ mod tests {
       ..Data::default()
     };
 
-    reader.handle_data_msg(data, BitFlags::<DATA_Flags>::empty(), mr_state);
+    reader.handle_data_msg(data, BitFlags::<DATA_Flags>::empty(), &mr_state);
 
     // TODO:
     // Investaige whyt this fails. Is the test case correct?
@@ -1147,7 +1144,7 @@ mod tests {
       ..Default::default()
     };
     let d_seqnum = d.writer_sn;
-    new_reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), mr_state);
+    new_reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), &mr_state);
 
     // TODO: Investigate why this fails. Is the test case or implementation faulty?
     assert!(rec.try_recv().is_ok());
@@ -1229,7 +1226,7 @@ mod tests {
       last_sn: SequenceNumber::from(0),
       count: 1,
     };
-    assert!(!new_reader.handle_heartbeat_msg(hb_new, true, mr_state.clone())); // should be false, no ack
+    assert!(!new_reader.handle_heartbeat_msg(&hb_new, true, mr_state.clone())); // should be false, no ack
 
     let hb_one = Heartbeat {
       reader_id: new_reader.entity_id(),
@@ -1238,7 +1235,7 @@ mod tests {
       last_sn: SequenceNumber::from(1),
       count: 2,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_one, false, mr_state.clone())); // Should send an ack_nack
+    assert!(new_reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following change
     let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(1), None, d.clone());
@@ -1257,7 +1254,7 @@ mod tests {
       last_sn: SequenceNumber::from(1),
       count: 2,
     };
-    assert!(!new_reader.handle_heartbeat_msg(hb_one2, false, mr_state.clone())); // No acknack
+    assert!(!new_reader.handle_heartbeat_msg(&hb_one2, false, mr_state.clone())); // No acknack
 
     let hb_3_1 = Heartbeat {
       reader_id: new_reader.entity_id(),
@@ -1266,7 +1263,7 @@ mod tests {
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
       count: 3,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_3_1, false, mr_state.clone())); // Should send an ack_nack
+    assert!(new_reader.handle_heartbeat_msg(&hb_3_1, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(2), None, d.clone());
@@ -1292,7 +1289,7 @@ mod tests {
       last_sn: SequenceNumber::from(3),  // writer has written 3 samples
       count: 4,
     };
-    assert!(new_reader.handle_heartbeat_msg(hb_none, false, mr_state)); // Should sen acknack
+    assert!(new_reader.handle_heartbeat_msg(&hb_none, false, mr_state)); // Should sen acknack
 
     assert_eq!(new_reader.sent_ack_nack_count, 3);
   }
@@ -1361,7 +1358,7 @@ mod tests {
 
     for i in 0..n {
       d.writer_sn = SequenceNumber::from(i);
-      reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), mr_state.clone());
+      reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), &mr_state);
       changes.push(reader.history_cache_change(d.writer_sn).unwrap().clone());
     }
 
@@ -1378,7 +1375,7 @@ mod tests {
     };
 
     // Cache changee muutetaan tutkiin datan kirjoittajaa.
-    reader.handle_gap_msg(gap, mr_state);
+    reader.handle_gap_msg(&gap, &mr_state);
 
     assert_eq!(
       reader.history_cache_change(SequenceNumber::from(0)),

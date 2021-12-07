@@ -17,13 +17,13 @@ use crate::{
     participant::*,
     qos::*,
     reader::ReaderIngredients,
-    statusevents::*,
+    statusevents::DataReaderStatus,
     topic::*,
     traits::{
       key::{Key, Keyed},
-      serde_adapters::*,
+      serde_adapters::{no_key, with_key},
     },
-    values::result::*,
+    values::result::{Error, Result},
     with_key::{
       datareader::DataReader as WithKeyDataReader, datawriter::DataWriter as WithKeyDataWriter,
     },
@@ -124,11 +124,11 @@ impl Publisher {
   /// }
   ///
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None);
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None);
   /// ```
   pub fn create_datawriter<D, SA>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
   where
@@ -143,7 +143,7 @@ impl Publisher {
   /// Endian
   pub fn create_datawriter_cdr<D>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
@@ -158,7 +158,7 @@ impl Publisher {
   pub(crate) fn create_datawriter_with_entityid<D, SA>(
     &self,
     entity_id: EntityId,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
   where
@@ -174,7 +174,7 @@ impl Publisher {
   pub(crate) fn create_datawriter_cdr_with_entityid<D>(
     &self,
     entity_id: EntityId,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
@@ -213,11 +213,11 @@ impl Publisher {
   /// struct SomeType {}
   ///
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None);
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(&topic, None);
   /// ```
   pub fn create_datawriter_no_key<D, SA>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
@@ -229,7 +229,7 @@ impl Publisher {
 
   pub fn create_datawriter_no_key_cdr<D>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
@@ -243,7 +243,7 @@ impl Publisher {
   pub(crate) fn create_datawriter_no_key_with_entityid<D, SA>(
     &self,
     entity_id: EntityId,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
@@ -258,7 +258,7 @@ impl Publisher {
   pub(crate) fn create_datawriter_no_key_cdr_with_entityid<D>(
     &self,
     entity_id: EntityId,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
@@ -424,7 +424,7 @@ impl InnerPublisher {
     &self,
     outer: &Publisher,
     entity_id_opt: Option<EntityId>,
-    topic: Topic,
+    topic: &Topic,
     optional_qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
   where
@@ -484,9 +484,9 @@ impl InnerPublisher {
 
     // notify Discovery DB
     let mut db = self.discovery_db.write()?;
-    let dwd = DiscoveredWriterData::new(&data_writer, &topic, &dp);
+    let dwd = DiscoveredWriterData::new(&data_writer, topic, &dp);
     db.update_local_topic_writer(dwd);
-    db.update_topic_data_p(&topic);
+    db.update_topic_data_p(topic);
 
     Ok(data_writer)
   }
@@ -495,7 +495,7 @@ impl InnerPublisher {
     &self,
     outer: &Publisher,
     entity_id_opt: Option<EntityId>,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
@@ -672,11 +672,11 @@ impl Subscriber {
   /// }
   ///
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
+  /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
   /// ```
   pub fn create_datareader<D: 'static, SA>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
@@ -689,7 +689,7 @@ impl Subscriber {
 
   pub fn create_datareader_cdr<D: 'static>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
@@ -703,7 +703,7 @@ impl Subscriber {
 
   pub(crate) fn create_datareader_with_entityid<D: 'static, SA>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
@@ -719,7 +719,7 @@ impl Subscriber {
 
   pub(crate) fn create_datareader_cdr_with_entityid<D: 'static>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
@@ -760,11 +760,11 @@ impl Subscriber {
   /// struct SomeType {}
   ///
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
-  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
+  /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
   /// ```
   pub fn create_datareader_no_key<D: 'static, SA>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>
   where
@@ -776,7 +776,7 @@ impl Subscriber {
 
   pub fn create_datareader_no_key_cdr<D: 'static>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
@@ -787,7 +787,7 @@ impl Subscriber {
 
   pub(crate) fn create_datareader_no_key_with_entityid<D: 'static, SA>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>
@@ -802,7 +802,7 @@ impl Subscriber {
 
   pub(crate) fn create_datareader_no_key_cdr_with_entityid<D: 'static>(
     &self,
-    topic: Topic,
+    topic: &Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
@@ -886,7 +886,7 @@ impl InnerSubscriber {
     &self,
     outer: &Subscriber,
     entity_id_opt: Option<EntityId>,
-    topic: Topic,
+    topic: &Topic,
     optional_qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
@@ -936,8 +936,8 @@ impl InnerSubscriber {
         .discovery_db
         .write()
         .or_else(|e| log_and_err_internal!("Cannot lock discovery_db. {}", e))?;
-      db.update_local_topic_reader(&dp, &topic, &new_reader);
-      db.update_topic_data_p(&topic);
+      db.update_local_topic_reader(&dp, topic, &new_reader);
+      db.update_topic_data_p(topic);
     }
 
     let datareader = WithKeyDataReader::<D, SA>::new(
@@ -972,7 +972,7 @@ impl InnerSubscriber {
   pub fn create_datareader<D: 'static, SA>(
     &self,
     outer: &Subscriber,
-    topic: Topic,
+    topic: &Topic,
     entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
@@ -992,7 +992,7 @@ impl InnerSubscriber {
   pub fn create_datareader_no_key<D: 'static, SA>(
     &self,
     outer: &Subscriber,
-    topic: Topic,
+    topic: &Topic,
     entity_id_opt: Option<EntityId>,
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>

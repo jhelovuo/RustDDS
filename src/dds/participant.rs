@@ -16,8 +16,8 @@ use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{
-    data_types::*, dp_event_loop::DPEventLoop, pubsub::*, qos::*, reader::*, topic::*, typedesc::*,
-    values::result::*, writer::*,
+    data_types::*, dp_event_loop::DPEventLoop, pubsub::*, qos::*, reader::*, topic::*,
+    typedesc::TypeDesc, values::result::*, writer::WriterIngredients,
   },
   discovery::{
     data_types::topic_data::DiscoveredTopicData,
@@ -109,7 +109,7 @@ impl DomainParticipant {
           spdp_liveness_receiver,
           self_locators,
         ) {
-          discovery.discovery_event_loop() // run the event loop
+          discovery.discovery_event_loop(); // run the event loop
         }
       })?;
 
@@ -268,7 +268,7 @@ impl DomainParticipant {
   }
 
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
-    DomainParticipantWeak::new(self.clone(), self.guid())
+    DomainParticipantWeak::new(self, self.guid())
   }
 
   pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
@@ -308,7 +308,7 @@ pub struct DomainParticipantWeak {
 }
 
 impl DomainParticipantWeak {
-  pub fn new(dp: DomainParticipant, guid: GUID) -> DomainParticipantWeak {
+  pub fn new(dp: &DomainParticipant, guid: GUID) -> DomainParticipantWeak {
     DomainParticipantWeak {
       dpi: Arc::downgrade(&dp.dpi),
       guid,
@@ -752,7 +752,7 @@ impl DomainParticipantInner {
           discovery_update_notification_receiver,
           spdp_liveness_sender,
         );
-        dp_event_loop.event_loop()
+        dp_event_loop.event_loop();
       })?;
 
     info!(
@@ -1059,7 +1059,7 @@ mod tests {
       .expect("Failed to create topic");
 
     let mut _data_writer = publisher
-      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(topic, None)
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic, None)
       .expect("Failed to create datawriter");
   }
 
@@ -1085,7 +1085,7 @@ mod tests {
       .expect("Failed to create topic");
 
     let mut _data_writer = publisher
-      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(topic, None)
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic, None)
       .expect("Failed to create datawriter");
 
     let port_number: u16 = user_traffic_unicast_port(5, 0);
