@@ -179,21 +179,27 @@ impl Writer {
     udp_sender: Rc<UDPSender>,
     mut timed_event_timer: Timer<TimedEvent>,
   ) -> Writer {
-    let heartbeat_period = if let Some(Reliability::Reliable { .. }) = i.qos_policies.reliability {
-      Some(Duration::from_secs(1))
-    } else {
-      None
-    }
-    .map(|hbp| {
-      // What is the logic here? Which spec section?
-      if let Some(policy::Liveliness::ManualByTopic { lease_duration }) = i.qos_policies.liveliness
-      {
-        let std_dur = lease_duration;
-        std_dur / 3
-      } else {
-        hbp
-      }
-    });
+    let heartbeat_period = i
+      .qos_policies
+      .reliability
+      .and_then(|reliability| {
+        if matches!(reliability, Reliability::Reliable { .. }) {
+          Some(Duration::from_secs(1))
+        } else {
+          None
+        }
+      })
+      .map(|hbp| {
+        // What is the logic here? Which spec section?
+        if let Some(policy::Liveliness::ManualByTopic { lease_duration }) =
+          i.qos_policies.liveliness
+        {
+          let std_dur = lease_duration;
+          std_dur / 3
+        } else {
+          hbp
+        }
+      });
 
     // TODO: Configuration value
     let cache_cleaning_period = Duration::from_secs(2 * 60);
