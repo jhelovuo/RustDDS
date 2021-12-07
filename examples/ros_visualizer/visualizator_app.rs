@@ -48,7 +48,7 @@ pub struct VisualizatorApp<'a> {
 impl<'a> VisualizatorApp<'a> {
   pub fn new(receiver: mio_channel::Receiver<DataUpdate>) -> VisualizatorApp<'a> {
     VisualizatorApp {
-      receiver: receiver,
+      receiver,
       tab_titles: vec!["Participants", "Nodes", "Topics"],
       tab_index: 0,
 
@@ -290,7 +290,7 @@ impl<'a> VisualizatorApp<'a> {
   pub fn get_selected_participant_strings(&self) -> Vec<String> {
     match self.ros_participants_display_items.state.selected() {
       Some(index) => match self.ros_participants.get(index) {
-        Some(item) => get_participant_view_strings(&item),
+        Some(item) => get_participant_view_strings(item),
         None => {
           vec![]
         }
@@ -318,7 +318,7 @@ impl<'a> VisualizatorApp<'a> {
   pub fn get_selected_local_node_strings(&self) -> Vec<String> {
     match self.local_nodes_display_items.state.selected() {
       Some(index) => match self.local_nodes.get(index) {
-        Some(item) => get_node_view_strings(&item),
+        Some(item) => get_node_view_strings(item),
         None => {
           vec![]
         }
@@ -332,7 +332,7 @@ impl<'a> VisualizatorApp<'a> {
   pub fn get_selected_external_node_strings(&self) -> Vec<String> {
     match self.external_nodes_display_items.state.selected() {
       Some(index) => match self.external_nodes.get(index) {
-        Some(item) => get_node_view_strings(&item),
+        Some(item) => get_node_view_strings(item),
         None => {
           vec![]
         }

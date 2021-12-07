@@ -27,10 +27,10 @@ pub mod no_key {
     /// copy of all the input data in memory and then call from_bytes() .
     // In order to avoid the copy, implement also this method.
     fn from_vec_bytes(input_vec_bytes: &[Bytes], encoding: RepresentationIdentifier) -> Result<D> {
-      let total_len = input_vec_bytes.iter().map(|s| s.len()).sum();
+      let total_len = input_vec_bytes.iter().map(Bytes::len).sum();
       let mut total_payload = Vec::with_capacity(total_len);
       for iv in input_vec_bytes {
-        total_payload.extend(iv)
+        total_payload.extend(iv);
       }
       Self::from_bytes(&total_payload, encoding)
     }
@@ -52,7 +52,7 @@ pub mod with_key {
   use bytes::Bytes;
 
   use crate::{
-    dds::traits::key::*,
+    dds::traits::key::Keyed,
     messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
     serialization::error::Result,
   };

@@ -1,7 +1,7 @@
 use log::trace;
 
 use crate::{
-  dds::{traits::key::*, values::result::*},
+  dds::{traits::key::KeyHash, values::result::Result},
   messages::submessages::submessage_elements::{
     parameter_list::ParameterList, RepresentationIdentifier,
   },
@@ -450,20 +450,18 @@ pub mod policy {
 
   impl Liveliness {
     fn kind_num(&self) -> i32 {
-      use Liveliness::*;
       match self {
-        Automatic { .. } => 0,
-        ManualByParticipant { .. } => 1,
-        ManualByTopic { .. } => 2,
+        Self::Automatic { .. } => 0,
+        Self::ManualByParticipant { .. } => 1,
+        Self::ManualByTopic { .. } => 2,
       }
     }
 
     pub fn duration(&self) -> Duration {
-      use Liveliness::*;
       match self {
-        Automatic { lease_duration } => *lease_duration,
-        ManualByParticipant { lease_duration } => *lease_duration,
-        ManualByTopic { lease_duration } => *lease_duration,
+        Self::Automatic { lease_duration }
+        | Self::ManualByParticipant { lease_duration }
+        | Self::ManualByTopic { lease_duration } => *lease_duration,
       }
     }
   }
@@ -511,12 +509,12 @@ pub mod policy {
     // max_blocking_time, then Ord will say they are Ordering::Equal,
     // but Eq will say they are not equal.
     fn cmp(&self, other: &Self) -> Ordering {
-      use Reliability::*;
       match (self, other) {
-        (BestEffort, BestEffort) => Ordering::Equal,
-        (BestEffort, Reliable { .. }) => Ordering::Less,
-        (Reliable { .. }, BestEffort) => Ordering::Greater,
-        (Reliable { .. }, Reliable { .. }) => Ordering::Equal,
+        (Self::BestEffort, Self::BestEffort) | (Self::Reliable { .. }, Self::Reliable { .. }) => {
+          Ordering::Equal
+        }
+        (Self::BestEffort, Self::Reliable { .. }) => Ordering::Less,
+        (Self::Reliable { .. }, Self::BestEffort) => Ordering::Greater,
       }
     }
   }

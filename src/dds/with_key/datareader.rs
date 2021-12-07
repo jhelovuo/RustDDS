@@ -109,7 +109,7 @@ impl CurrentStatusChanges {
 ///
 /// // WithKey is important
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-/// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
+/// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
 /// ```
 pub struct DataReader<
   D: Keyed + DeserializeOwned,
@@ -242,7 +242,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -306,7 +306,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -364,7 +364,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -406,7 +406,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -452,7 +452,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -502,7 +502,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -557,7 +557,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -609,7 +609,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -861,7 +861,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -894,7 +894,7 @@ where
 
     let mut selected = self
       .datasample_cache
-      .select_instance_keys_for_access(key, read_condition);
+      .select_instance_keys_for_access(&key, read_condition);
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.read_by_keys(&selected);
@@ -934,7 +934,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// // Wait for data to arrive...
   ///
@@ -967,7 +967,7 @@ where
 
     let mut selected = self
       .datasample_cache
-      .select_instance_keys_for_access(key, read_condition);
+      .select_instance_keys_for_access(&key, read_condition);
     selected.truncate(max_samples);
 
     let result = self.datasample_cache.take_by_keys(&selected);
@@ -1330,7 +1330,7 @@ mod tests {
     );
 
     let mut matching_datareader = sub
-      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(&topic, None)
       .unwrap();
 
     let random_data = RandomData {
@@ -1372,7 +1372,7 @@ mod tests {
       ..Default::default()
     };
 
-    new_reader.handle_data_msg(data, data_flags, mr_state.clone());
+    new_reader.handle_data_msg(data, data_flags, &mr_state);
 
     matching_datareader.fill_local_datasample_cache();
     let deserialized_random_data = matching_datareader.read(1, ReadCondition::any()).unwrap()[0]
@@ -1415,8 +1415,8 @@ mod tests {
       ..Default::default()
     };
 
-    new_reader.handle_data_msg(data2, data_flags, mr_state.clone());
-    new_reader.handle_data_msg(data3, data_flags, mr_state);
+    new_reader.handle_data_msg(data2, data_flags, &mr_state);
+    new_reader.handle_data_msg(data3, data_flags, &mr_state);
 
     matching_datareader.fill_local_datasample_cache();
     let random_data_vec = matching_datareader
@@ -1470,7 +1470,7 @@ mod tests {
     );
 
     let mut datareader = sub
-      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(&topic, None)
       .unwrap();
 
     let writer_guid = GUID {
@@ -1527,8 +1527,8 @@ mod tests {
 
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
 
-    reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
-    reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
+    reader.handle_data_msg(data_msg, data_flags, &mr_state);
+    reader.handle_data_msg(data_msg2, data_flags, &mr_state);
 
     // Read the same sample two times.
     {
@@ -1633,10 +1633,10 @@ mod tests {
       }),
       ..Default::default()
     };
-    reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
-    reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
-    reader.handle_data_msg(data_msg3, data_flags, mr_state.clone());
-    reader.handle_data_msg(data_msg4, data_flags, mr_state);
+    reader.handle_data_msg(data_msg, data_flags, &mr_state);
+    reader.handle_data_msg(data_msg2, data_flags, &mr_state);
+    reader.handle_data_msg(data_msg3, data_flags, &mr_state);
+    reader.handle_data_msg(data_msg4, data_flags, &mr_state);
 
     info!("calling read with key 1 and this");
     let results =

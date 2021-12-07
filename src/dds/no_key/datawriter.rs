@@ -39,7 +39,7 @@ use super::wrappers::{NoKeyWrapper, SAWrapper};
 ///
 /// // NoKey is important
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
-/// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None);
+/// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(&topic, None);
 /// ```
 pub struct DataWriter<D: Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
   keyed_datawriter: datawriter_with_key::DataWriter<NoKeyWrapper<D>, SAWrapper<SA>>,
@@ -79,7 +79,7 @@ where
   /// #
   /// // NoKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
-  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// let some_data = SomeType {};
   /// data_writer.write(some_data, None).unwrap();
@@ -112,7 +112,7 @@ where
   /// #
   /// // NoKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
-  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// data_writer.wait_for_acknowledgments(Duration::from_millis(100));
   /// ```
@@ -270,7 +270,7 @@ where
   /// #
   /// // NoKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
-  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic.clone(), None).unwrap();
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// assert_eq!(&topic, data_writer.topic());
   /// ```
@@ -299,7 +299,7 @@ where
   /// #
   /// // NoKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
-  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// assert_eq!(&publisher, data_writer.publisher());
   /// ```
@@ -328,7 +328,7 @@ where
   /// #
   /// // NoKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
-  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// data_writer.assert_liveliness();
   /// ```
@@ -449,7 +449,7 @@ mod tests {
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter_no_key(topic, None)
+        .create_datawriter_no_key(&topic, None)
         .expect("Failed to create datawriter");
 
     let mut data = RandomData {
@@ -489,7 +489,7 @@ mod tests {
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter_no_key(topic, None)
+        .create_datawriter_no_key(&topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

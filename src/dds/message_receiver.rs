@@ -175,7 +175,7 @@ impl MessageReceiver {
   //   self.handle_user_msg(msg);
   // }
 
-  pub fn handle_received_packet(&mut self, msg_bytes: Bytes) {
+  pub fn handle_received_packet(&mut self, msg_bytes: &Bytes) {
     // Check for RTPS ping message. At least RTI implementation sends these.
     // What should we do with them? The spec does not say.
     if msg_bytes.len() < RTPS_MESSAGE_HEADER_SIZE {
@@ -195,7 +195,7 @@ impl MessageReceiver {
 
     // call Speedy reader
     // Bytes .clone() is cheap, so no worries
-    let rtps_message = match Message::read_from_buffer(msg_bytes.clone()) {
+    let rtps_message = match Message::read_from_buffer(msg_bytes) {
       Ok(m) => m,
       Err(speedy_err) => {
         warn!("RTPS deserialize error {:?}", speedy_err);
@@ -259,10 +259,10 @@ impl MessageReceiver {
               "handle_entity_submessage DATA from unknown handling in {:?}",
               &reader
             );
-            reader.handle_data_msg(data.clone(), data_flags, mr_state.clone());
+            reader.handle_data_msg(data.clone(), data_flags, &mr_state);
           }
         } else if let Some(target_reader) = self.reader_mut(data.reader_id) {
-          target_reader.handle_data_msg(data, data_flags, mr_state);
+          target_reader.handle_data_msg(data, data_flags, &mr_state);
         }
         // bypass lane fro SPDP messages
         if writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
@@ -287,14 +287,14 @@ impl MessageReceiver {
             .filter(|p| p.contains_writer(heartbeat.writer_id))
           {
             reader.handle_heartbeat_msg(
-              heartbeat.clone(),
+              &heartbeat,
               flags.contains(HEARTBEAT_Flags::Final),
               mr_state.clone(),
             );
           }
         } else if let Some(target_reader) = self.reader_mut(heartbeat.reader_id) {
           target_reader.handle_heartbeat_msg(
-            heartbeat,
+            &heartbeat,
             flags.contains(HEARTBEAT_Flags::Final),
             mr_state,
           );
@@ -302,7 +302,7 @@ impl MessageReceiver {
       }
       EntitySubmessage::Gap(gap, _flags) => {
         if let Some(target_reader) = self.reader_mut(gap.reader_id) {
-          target_reader.handle_gap_msg(gap, mr_state);
+          target_reader.handle_gap_msg(&gap, &mr_state);
         }
       }
       EntitySubmessage::AckNack(acknack, _) => {
@@ -321,7 +321,7 @@ impl MessageReceiver {
       }
       EntitySubmessage::DataFrag(datafrag, flags) => {
         if let Some(target_reader) = self.reader_mut(datafrag.reader_id) {
-          target_reader.handle_datafrag_msg(datafrag, flags, mr_state);
+          target_reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
         }
       }
       EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
@@ -516,7 +516,7 @@ mod tests {
     //new_reader.matched_writer_add(remote_writer_guid, mr_state);
     message_receiver.add_reader(new_reader);
 
-    message_receiver.handle_received_packet(udp_bits1);
+    message_receiver.handle_received_packet(&udp_bits1);
 
     assert_eq!(message_receiver.submessage_count, 4);
 
@@ -606,10 +606,10 @@ mod tests {
     let mut message_receiver =
       MessageReceiver::new(guid_new.guid_prefix, acknack_sender, spdp_liveness_sender);
 
-    message_receiver.handle_received_packet(udp_bits1);
+    message_receiver.handle_received_packet(&udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);
 
-    message_receiver.handle_received_packet(udp_bits2);
+    message_receiver.handle_received_packet(&udp_bits2);
     assert_eq!(message_receiver.submessage_count, 2);
   }
 

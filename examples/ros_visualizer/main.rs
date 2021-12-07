@@ -139,12 +139,12 @@ fn ros2_loop(
         let mut node_infos: Vec<NodeInfo> = ros_participant
           .get_all_discovered_local_ros_node_infos()
           .values()
-          .map(|x| x.clone())
+          .cloned()
           .collect();
         let node_infos_external_vec: Vec<Vec<NodeInfo>> = ros_participant
           .get_all_discovered_external_ros_node_infos()
           .values()
-          .map(|x| x.clone())
+          .cloned()
           .collect();
         let mut node_infos_external = vec![];
         for mut v in node_infos_external_vec {
@@ -155,9 +155,8 @@ fn ros2_loop(
         let _res_nodes_send = sender.send(DataUpdate::DiscoveredNodes { nodes: node_infos });
 
         for participant in new_participants {
-          let _res_participant_send = sender.send(DataUpdate::NewROSParticipantFound {
-            participant: participant,
-          });
+          let _res_participant_send =
+            sender.send(DataUpdate::NewROSParticipantFound { participant });
         }
 
         let new_topics = ros_participant.discovered_topics();
@@ -238,5 +237,5 @@ fn main() -> Result<(), Box<dyn Error>> {
   )?;
   terminal.show_cursor()?;
 
-  return Ok(());
+  Ok(())
 }

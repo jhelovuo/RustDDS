@@ -195,7 +195,7 @@ pub struct BuiltinDataSerializer<'a> {
 }
 
 impl<'a> BuiltinDataSerializer<'a> {
-  pub fn merge(mut self, other: BuiltinDataSerializer<'a>) -> BuiltinDataSerializer<'a> {
+  pub fn merge(mut self, other: &BuiltinDataSerializer<'a>) -> BuiltinDataSerializer<'a> {
     self.protocol_version = match other.protocol_version {
       Some(v) => Some(v),
       None => self.protocol_version,
@@ -447,7 +447,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     let bds_std = BuiltinDataSerializer::from_subscription_topic_data(
       &discovered_reader_data.subscription_topic_data,
     );
-    let mut bds_merged = bds_rp.merge(bds_std);
+    let mut bds_merged = bds_rp.merge(&bds_std);
     bds_merged.content_filter_property = discovered_reader_data.content_filter.as_ref();
     bds_merged
   }
@@ -459,7 +459,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     let bds_ptd = BuiltinDataSerializer::from_publication_topic_data(
       &discovered_writer_data.publication_topic_data,
     );
-    bds_wp.merge(bds_ptd)
+    bds_wp.merge(&bds_ptd)
   }
 
   // -----------------------

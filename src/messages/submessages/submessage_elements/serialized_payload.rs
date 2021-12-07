@@ -108,15 +108,15 @@ impl SerializedPayload {
   }
 
   // Implement deserialization here, because Speedy just makes it difficult.
-  pub fn from_bytes(bytes: Bytes) -> io::Result<SerializedPayload> {
+  pub fn from_bytes(bytes: &Bytes) -> io::Result<SerializedPayload> {
     let mut reader = io::Cursor::new(&bytes);
     let representation_identifier = RepresentationIdentifier {
       bytes: [reader.read_u8()?, reader.read_u8()?],
     };
     let representation_options = [reader.read_u8()?, reader.read_u8()?];
     let value = if bytes.len() >= 4 {
-      bytes.clone().split_off(4) // split_off 4 bytes at beginning: rep_id &
-                                 // rep_optins
+      bytes.slice(4..) // split_off 4 bytes at beginning: rep_id &
+                       // rep_optins
     } else {
       warn!(
         "DATA submessage was smaller than submessage header: {:?}",

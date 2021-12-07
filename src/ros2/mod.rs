@@ -30,14 +30,14 @@
 //! let some_topic = ros_node.create_ros_topic(
 //!     "some_topic_name",
 //!     "NodeInfo".to_string(),
-//!     QosPolicies::builder().build(),
+//!     &QosPolicies::builder().build(),
 //!     TopicKind::NoKey)
 //!   .unwrap();
 //!
 //! // declaring some writer that use non keyed types
 //! let some_writer = ros_node
 //!   .create_ros_nokey_publisher::<NodeInfo, CDRSerializerAdapter<_>>(
-//!     some_topic, None)
+//!     &some_topic, None)
 //!   .unwrap();
 //!
 //! // Readers and RosParticipant implement mio Evented trait and thus function the same way as

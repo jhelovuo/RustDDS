@@ -228,7 +228,7 @@ impl DPEventLoop {
       }
 
       if events.is_empty() {
-        info!("dp_event_loop idling.")
+        info!("dp_event_loop idling.");
       } else {
         for event in events.iter() {
           match EntityId::from_token(event.token()) {
@@ -249,10 +249,10 @@ impl DPEventLoop {
                       error!("No listener with token {:?}", &event.token());
                       vec![]
                     },
-                    |l| l.messages(),
+                    UDPListener::messages,
                   );
-                for packet in udp_messages.into_iter() {
-                  ev_wrapper.message_receiver.handle_received_packet(packet)
+                for packet in udp_messages {
+                  ev_wrapper.message_receiver.handle_received_packet(&packet);
                 }
               }
               ADD_READER_TOKEN | REMOVE_READER_TOKEN => {
@@ -270,7 +270,7 @@ impl DPEventLoop {
                   match dnt {
                     WriterUpdated {
                       discovered_writer_data,
-                    } => ev_wrapper.remote_writer_discovered(discovered_writer_data),
+                    } => ev_wrapper.remote_writer_discovered(&discovered_writer_data),
 
                     WriterLost { writer_guid } => ev_wrapper.remote_writer_lost(writer_guid),
 
@@ -279,19 +279,19 @@ impl DPEventLoop {
                       rtps_reader_proxy,
                       _needs_new_cache_change,
                     } => ev_wrapper.remote_reader_discovered(
-                      discovered_reader_data,
-                      rtps_reader_proxy,
+                      &discovered_reader_data,
+                      &rtps_reader_proxy,
                       _needs_new_cache_change,
                     ),
 
                     ReaderLost { reader_guid } => ev_wrapper.remote_reader_lost(reader_guid),
 
                     ParticipantUpdated { guid_prefix } => {
-                      ev_wrapper.update_participant(guid_prefix)
+                      ev_wrapper.update_participant(guid_prefix);
                     }
 
                     ParticipantLost { guid_prefix } => {
-                      ev_wrapper.remote_participant_lost(guid_prefix)
+                      ev_wrapper.remote_participant_lost(guid_prefix);
                     }
 
                     TopicsInfoUpdated => ev_wrapper.update_topics(),
@@ -325,11 +325,10 @@ impl DPEventLoop {
             // Commands/actions
             TokenDecode::Entity(eid) => {
               if eid.kind().is_reader() {
-                ev_wrapper
-                  .message_receiver
-                  .reader_mut(eid)
-                  .map(|reader| reader.process_command())
-                  .unwrap_or_else(|| error!("Event for unknown reader {:?}", eid));
+                ev_wrapper.message_receiver.reader_mut(eid).map_or_else(
+                  || error!("Event for unknown reader {:?}", eid),
+                  Reader::process_command,
+                );
               } else if eid.kind().is_writer() {
                 let local_readers = match ev_wrapper.writers.get_mut(&eid) {
                   None => {
@@ -417,7 +416,7 @@ impl DPEventLoop {
               .poll
               .deregister(&old_reader.data_reader_command_receiver)
               .unwrap_or_else(|e| {
-                error!("Cannot deregister data_reader_command_receiver: {:?}", e)
+                error!("Cannot deregister data_reader_command_receiver: {:?}", e);
               });
           } else {
             warn!("Tried to remove nonexistent Reader {:?}", old_reader_guid);
@@ -484,17 +483,17 @@ impl DPEventLoop {
   /// channel. Channel token in
   fn handle_writer_timed_event(&mut self, entity_id: EntityId) {
     if let Some(writer) = self.writers.get_mut(&entity_id) {
-      writer.handle_timed_event()
+      writer.handle_timed_event();
     } else {
-      error!("Writer was not found with {:?}", entity_id)
+      error!("Writer was not found with {:?}", entity_id);
     }
   }
 
   fn handle_reader_timed_event(&mut self, entity_id: EntityId) {
     if let Some(reader) = self.message_receiver.reader_mut(entity_id) {
-      reader.handle_timed_event()
+      reader.handle_timed_event();
     } else {
-      error!("Reader was not found with {:?}", entity_id)
+      error!("Reader was not found with {:?}", entity_id);
     }
   }
 
@@ -506,7 +505,7 @@ impl DPEventLoop {
       );
       if let Some(found_writer) = self.writers.get_mut(&writer_guid.entity_id) {
         if found_writer.is_reliable() {
-          found_writer.handle_ack_nack(acknack_sender_prefix, acknack_submessage)
+          found_writer.handle_ack_nack(acknack_sender_prefix, acknack_submessage);
         }
       } else {
         warn!(
@@ -572,8 +571,7 @@ impl DPEventLoop {
           if *reader_eid == EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
             && discovered_participant
               .builtin_endpoint_qos
-              .map(|beq| beq.is_best_effort())
-              .unwrap_or(false)
+              .map_or(false, |beq| beq.is_best_effort())
           {
             qos.reliability = Some(policy::Reliability::BestEffort);
           };
@@ -599,14 +597,14 @@ impl DPEventLoop {
               );
             }
             // common processing for SPDP and SEDP
-            writer.update_reader_proxy(reader_proxy, qos);
+            writer.update_reader_proxy(&reader_proxy, &qos);
             debug!(
               "update_discovery writer - endpoint {:?} - {:?}",
               endpoint, discovered_participant.participant_guid
             );
           }
 
-          writer.notify_new_data_to_all_readers()
+          writer.notify_new_data_to_all_readers();
         }
       }
       // update local readers.
@@ -652,7 +650,7 @@ impl DPEventLoop {
             .available_builtin_endpoints
             .contains(*endpoint)
           {
-            reader.update_writer_proxy(wp, qos);
+            reader.update_writer_proxy(wp, &qos);
             debug!(
               "update_discovery_reader - endpoint {:?} - {:?}",
               *endpoint, discovered_participant.participant_guid
@@ -677,42 +675,42 @@ impl DPEventLoop {
     // to that particiapnt, so that we do not send messages to them anymore.
 
     for writer in self.writers.values_mut() {
-      writer.participant_lost(participant_guid_prefix)
+      writer.participant_lost(participant_guid_prefix);
     }
 
     for reader in self.message_receiver.available_readers.values_mut() {
-      reader.participant_lost(participant_guid_prefix)
+      reader.participant_lost(participant_guid_prefix);
     }
   }
 
   fn remote_reader_discovered(
     &mut self,
-    drd: DiscoveredReaderData,
-    rtps_reader_proxy: RtpsReaderProxy,
+    drd: &DiscoveredReaderData,
+    rtps_reader_proxy: &RtpsReaderProxy,
     _needs_new_cache_change: bool,
   ) {
-    for (_writer_guid, writer) in self.writers.iter_mut() {
+    for writer in self.writers.values_mut() {
       if drd.subscription_topic_data.topic_name() == writer.topic_name() {
         writer.update_reader_proxy(
-          rtps_reader_proxy.clone(),
-          drd.subscription_topic_data.generate_qos(),
+          rtps_reader_proxy,
+          &drd.subscription_topic_data.generate_qos(),
         );
       }
     }
   }
 
   fn remote_reader_lost(&mut self, reader_guid: GUID) {
-    for (_writer_guid, writer) in self.writers.iter_mut() {
+    for writer in self.writers.values_mut() {
       writer.reader_lost(reader_guid);
     }
   }
 
-  fn remote_writer_discovered(&mut self, dwd: DiscoveredWriterData) {
+  fn remote_writer_discovered(&mut self, dwd: &DiscoveredWriterData) {
     for reader in self.message_receiver.available_readers.values_mut() {
       if &dwd.publication_topic_data.topic_name == reader.topic_name() {
         reader.update_writer_proxy(
-          RtpsWriterProxy::from_discovered_writer_data(&dwd),
-          dwd.publication_topic_data.qos(),
+          RtpsWriterProxy::from_discovered_writer_data(dwd),
+          &dwd.publication_topic_data.qos(),
         );
       }
     }

@@ -993,7 +993,7 @@ mod tests {
       0x00,
     ]);
 
-    let msg = Message::read_from_buffer(raw_data).unwrap();
+    let msg = Message::read_from_buffer(&raw_data).unwrap();
     info!("{:?}", msg);
   }
 

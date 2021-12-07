@@ -3,7 +3,10 @@ use std::marker::PhantomData;
 use serde::{de::DeserializeOwned, Deserializer};
 
 use crate::{
-  dds::traits::{serde_adapters::*, Keyed},
+  dds::traits::{
+    serde_adapters::{no_key, with_key},
+    Keyed,
+  },
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   serialization::error::{Error, Result},
 };

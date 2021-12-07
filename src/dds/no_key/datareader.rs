@@ -41,7 +41,7 @@ use super::wrappers::{DAWrapper, NoKeyWrapper};
 ///
 /// // NoKey is important
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
-/// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None);
+/// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
 /// ```
 pub struct DataReader<D: DeserializeOwned, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
   keyed_datareader: datareader_with_key::DataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
@@ -91,7 +91,7 @@ where
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
   /// #
-  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   /// let data = data_reader.read(10, ReadCondition::not_read());
   /// ```
   pub fn read(
@@ -139,7 +139,7 @@ where
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
   /// #
-  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   /// let data = data_reader.take(10, ReadCondition::not_read());
   /// ```
   pub fn take(
@@ -180,7 +180,7 @@ where
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
   /// #
-  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   /// while let Ok(Some(data)) = data_reader.read_next_sample() {
   ///   // Do something
   /// }
@@ -212,7 +212,7 @@ where
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
   /// #
-  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   /// while let Ok(Some(data)) = data_reader.take_next_sample() {
   ///   // Do something
   /// }
@@ -248,7 +248,7 @@ where
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
   /// #
-  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   /// for data in data_reader.iterator() {
   ///   // Do something
   /// }
@@ -287,7 +287,7 @@ where
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
   /// #
-  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   /// for data in data_reader.conditional_iterator(ReadCondition::any()) {
   ///   // Do something
   /// }
@@ -332,7 +332,7 @@ where
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
   /// #
-  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   /// for data in data_reader.into_iterator() {
   ///   // Do something
   /// }
@@ -373,7 +373,7 @@ where
   /// # #[derive(Serialize, Deserialize)]
   /// # struct SomeType {}
   /// #
-  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
+  /// let mut data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   /// for data in data_reader.into_conditional_iterator(ReadCondition::any()) {
   ///   // Do something
   /// }

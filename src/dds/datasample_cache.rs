@@ -242,10 +242,10 @@ where
 
   pub fn select_instance_keys_for_access(
     &self,
-    instance: D::K,
+    instance: &D::K,
     rc: ReadCondition,
   ) -> Vec<(Timestamp, D::K)> {
-    match self.instance_map.get(&instance) {
+    match self.instance_map.get(instance) {
       None => Vec::new(),
       Some(imd) => imd
         .instance_samples
@@ -340,13 +340,13 @@ where
 
   fn mark_instances_viewed(
     &mut self,
-    instance_generations: HashMap<D::K, NotAliveGenerationCounts>,
+    instance_generations: &HashMap<D::K, NotAliveGenerationCounts>,
   ) {
-    for (inst, gen) in instance_generations.iter() {
+    for (inst, gen) in instance_generations {
       if let Some(imd) = self.instance_map.get_mut(inst) {
         imd.last_generation_accessed = *gen;
       } else {
-        panic!("Instance disappeared!?!!1!")
+        panic!("Instance disappeared!?!!1!");
       }
     }
   }
@@ -397,7 +397,7 @@ where
     }
 
     // mark instances viewed
-    self.mark_instances_viewed(instance_generations);
+    self.mark_instances_viewed(&instance_generations);
 
     // We need to do SampleInfo construction and final result construction as
     // separate passes. This is becaue SampleInfo construction needs to mark
@@ -457,7 +457,7 @@ where
       result.push(DataSample::new(sample_info, dswm.sample));
     }
 
-    self.mark_instances_viewed(instance_generations);
+    self.mark_instances_viewed(&instance_generations);
     result
   }
 
@@ -485,7 +485,7 @@ where
       );
     }
 
-    self.mark_instances_viewed(instance_generations);
+    self.mark_instances_viewed(&instance_generations);
 
     // We need to do SampleInfo construction and final result construction as
     // separate passes. See reason in read function above.
@@ -524,7 +524,7 @@ where
       result.push(dswm.sample);
     }
 
-    self.mark_instances_viewed(instance_generations);
+    self.mark_instances_viewed(&instance_generations);
     result
   }
 
@@ -556,7 +556,7 @@ where
   }
 
   pub fn set_qos_policy(&mut self, qos: QosPolicies) {
-    self.qos = qos
+    self.qos = qos;
   }
 }
 

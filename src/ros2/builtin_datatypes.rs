@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use cdr_encoding_size::*;
+use cdr_encoding_size::CdrEncodingSize;
 
 use crate::{
   dds::traits::key::Key,
@@ -63,7 +63,7 @@ impl NodeInfo {
 
   /// Full name of the node namespace + name eg. /some_node
   pub fn get_full_name(&self) -> String {
-    let mut name = self.node_namespace.to_owned();
+    let mut name = self.node_namespace.clone();
     name.push_str(&self.node_name);
     name
   }

@@ -75,7 +75,7 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 ///
 /// // WithKey is important
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-/// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None);
+/// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None);
 /// ```
 pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
   my_publisher: Publisher,
@@ -214,7 +214,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// data_writer.refresh_manual_liveliness();
   /// ```
@@ -269,7 +269,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// let some_data = SomeType { a: 1 };
   /// data_writer.write(some_data, None).unwrap();
@@ -350,7 +350,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// let some_data = SomeType { a: 1 };
   /// data_writer.write(some_data, None).unwrap();
@@ -655,7 +655,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic.clone(), None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// assert_eq!(data_writer.topic(), &topic);
   /// ```
@@ -692,7 +692,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// assert_eq!(data_writer.publisher(), &publisher);
   pub fn publisher(&self) -> &Publisher {
@@ -728,7 +728,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// data_writer.assert_liveliness().unwrap();
   /// ```
@@ -786,7 +786,7 @@ where
   /// let topic = domain_participant.create_topic("some_topic".to_string(),
   /// "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_writer = publisher.create_datawriter::<SomeType,
-  /// CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// for sub in data_writer.get_matched_subscriptions().iter() {
   ///   // do something
@@ -830,7 +830,7 @@ where
   ///
   /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
+  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// let some_data_1_1 = SomeType { a: 1, val: 3};
   /// let some_data_1_2 = SomeType { a: 1, val: 4};
@@ -844,10 +844,10 @@ where
   /// data_writer.write(some_data_2_2, None).unwrap();
   ///
   /// // disposes both some_data_1_1 and some_data_1_2. They are no longer offered by this writer to this topic.
-  /// data_writer.dispose(1, None).unwrap();
+  /// data_writer.dispose(&1, None).unwrap();
   /// ```
-  pub fn dispose(&self, key: <D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
-    let send_buffer = SA::key_to_bytes(&key)?; // serialize key
+  pub fn dispose(&self, key: &<D as Keyed>::K, source_timestamp: Option<Timestamp>) -> Result<()> {
+    let send_buffer = SA::key_to_bytes(key)?; // serialize key
 
     let ddsdata = DDSData::new_disposed_by_key(
       ChangeKind::NotAliveDisposed,
@@ -946,7 +946,7 @@ mod tests {
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(topic, None)
+        .create_datawriter(&topic, None)
         .expect("Failed to create datawriter");
 
     let mut data = RandomData {
@@ -986,7 +986,7 @@ mod tests {
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(topic, None)
+        .create_datawriter(&topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {
@@ -1003,7 +1003,7 @@ mod tests {
 
     thread::sleep(Duration::from_millis(100));
     data_writer
-      .dispose(data.key(), None)
+      .dispose(&data.key(), None)
       .expect("Unable to dispose data");
 
     // TODO: verify that dispose is sent correctly
@@ -1027,7 +1027,7 @@ mod tests {
 
     let data_writer: DataWriter<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>> =
       publisher
-        .create_datawriter(topic, None)
+        .create_datawriter(&topic, None)
         .expect("Failed to create datawriter");
 
     let data = RandomData {

@@ -346,8 +346,8 @@ impl DiscoveryDB {
           data.clone(),
           RtpsReaderProxy::from_discovered_reader_data(
             data,
-            default_locator_lists.0,
-            default_locator_lists.1,
+            &default_locator_lists.0,
+            &default_locator_lists.1,
           ),
         ))
       }
@@ -552,7 +552,7 @@ impl DiscoveryDB {
       .collect()
   }
 
-  pub fn update_lease_duration(&mut self, data: ParticipantMessageData) {
+  pub fn update_lease_duration(&mut self, data: &ParticipantMessageData) {
     let now = Instant::now();
     let prefix = data.guid;
     self
@@ -643,10 +643,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let dw = publisher1
-      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        topic.clone(),
-        None,
-      )
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic, None)
       .unwrap();
 
     let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
@@ -659,10 +656,7 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let dw2 = publisher2
-      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
-        topic.clone(),
-        None,
-      )
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic, None)
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
     let _writer2_key = writer_data2.writer_proxy.remote_writer_guid;

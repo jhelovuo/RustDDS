@@ -244,7 +244,7 @@ impl Discovery {
 
     let dcps_participant_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<SpdpDiscoveredParticipantData,PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>>(
-        dcps_participant_topic.clone(),
+        &dcps_participant_topic,
         EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
         None,
       ) ,"Unable to create DataReader for DCPSParticipant. {:?}");
@@ -252,7 +252,7 @@ impl Discovery {
     let dcps_participant_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<SpdpDiscoveredParticipantData>(
         EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
-        dcps_participant_topic.clone(),
+        &dcps_participant_topic,
         None,
       ),
       "Unable to create DataWriter for DCPSParticipant. {:?}"
@@ -311,7 +311,7 @@ impl Discovery {
 
     let dcps_subscription_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
-        dcps_subscription_topic.clone(),
+        &dcps_subscription_topic,
         EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
         None,
       ) ,"Unable to create DataReader for DCPSSubscription. {:?}");
@@ -329,7 +329,7 @@ impl Discovery {
     let dcps_subscription_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredReaderData>(
         EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
-        dcps_subscription_topic.clone(),
+        &dcps_subscription_topic,
         None,
       ),
       "Unable to create DataWriter for DCPSSubscription. {:?}"
@@ -361,7 +361,7 @@ impl Discovery {
 
     let dcps_publication_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
-        dcps_publication_topic.clone(),
+        &dcps_publication_topic,
         EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
         None,
       ) ,"Unable to create DataReader for DCPSPublication. {:?}");
@@ -379,7 +379,7 @@ impl Discovery {
     let dcps_publication_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredWriterData>(
         EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-        dcps_publication_topic.clone(),
+        &dcps_publication_topic,
         None,
       ),
       "Unable to create DataWriter for DCPSPublication. {:?}"
@@ -411,7 +411,7 @@ impl Discovery {
 
     let dcps_topic_reader = try_construct!( discovery_subscriber
       .create_datareader_with_entityid::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
-        dcps_topic_topic.clone(),
+        &dcps_topic_topic,
         EntityId::SEDP_BUILTIN_TOPIC_READER,
         None,
       ) ,"Unable to create DataReader for DCPSTopic. {:?}");
@@ -429,7 +429,7 @@ impl Discovery {
     let dcps_topic_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredTopicData>(
         EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-        dcps_topic_topic.clone(),
+        &dcps_topic_topic,
         None,
       ),
       "Unable to create DataWriter for DCPSTopic. {:?}"
@@ -474,7 +474,7 @@ impl Discovery {
 
     let dcps_participant_message_reader = try_construct!(
       discovery_subscriber.create_datareader_cdr_with_entityid::<ParticipantMessageData>(
-        participant_message_topic.clone(),
+        &participant_message_topic,
         EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
         None,
       ),
@@ -494,7 +494,7 @@ impl Discovery {
     let dcps_participant_message_writer = try_construct!(
       discovery_publisher.create_datawriter_cdr_with_entityid::<ParticipantMessageData>(
         EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-        participant_message_topic.clone(),
+        &participant_message_topic,
         None,
       ),
       "Unable to create DCPSParticipantMessage writer. {:?}"
@@ -591,7 +591,7 @@ impl Discovery {
                     self
                       .dcps_subscription_writer
                       .dispose(
-                        DiscoveredReaderDataKey(reader.reader_proxy.remote_reader_guid),
+                        &DiscoveredReaderDataKey(reader.reader_proxy.remote_reader_guid),
                         None,
                       )
                       .unwrap_or(());
@@ -601,7 +601,7 @@ impl Discovery {
                     self
                       .dcps_publication_writer
                       .dispose(
-                        DiscoveredWriterDataKey(writer.writer_proxy.remote_writer_guid),
+                        &DiscoveredWriterDataKey(writer.writer_proxy.remote_writer_guid),
                         None,
                       )
                       .unwrap_or(());
@@ -610,7 +610,7 @@ impl Discovery {
                   self
                     .dcps_participant_writer
                     .dispose(
-                      SpdpDiscoveredParticipantDataKey(self.domain_participant.guid()),
+                      &SpdpDiscoveredParticipantDataKey(self.domain_participant.guid()),
                       None,
                     )
                     .unwrap_or(());
@@ -623,7 +623,7 @@ impl Discovery {
                   }
                   self
                     .dcps_publication_writer
-                    .dispose(DiscoveredWriterDataKey(guid), None)
+                    .dispose(&DiscoveredWriterDataKey(guid), None)
                     .unwrap_or(());
 
                   match self.discovery_db.write() {
@@ -641,7 +641,7 @@ impl Discovery {
 
                   self
                     .dcps_subscription_writer
-                    .dispose(DiscoveredReaderDataKey(guid), None)
+                    .dispose(&DiscoveredReaderDataKey(guid), None)
                     .unwrap_or(());
 
                   match self.discovery_db.write() {
@@ -874,7 +874,7 @@ impl Discovery {
     // and know to communicate with them.
     info!("Creating DCPSParticipant reader proxy.");
     self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-      rtps_reader_proxy: RtpsReaderProxy::from_discovered_reader_data(&drd, vec![], vec![]),
+      rtps_reader_proxy: RtpsReaderProxy::from_discovered_reader_data(&drd, &[], &[]),
       discovered_reader_data: drd,
       _needs_new_cache_change: true,
     });
@@ -1108,7 +1108,7 @@ impl Discovery {
 
     let mut db = self.discovery_db_write();
     for msg in msgs.into_iter() {
-      db.update_lease_duration(msg);
+      db.update_lease_duration(&msg);
     }
   }
 
@@ -1472,14 +1472,14 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter_cdr::<ShapeType>(topic.clone(), None)
+      .create_datawriter_cdr::<ShapeType>(&topic, None)
       .unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
     let _reader =
-      subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None);
+      subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(&topic, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new_unicast("127.0.0.1", 11001).unwrap();
@@ -1560,14 +1560,14 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let _writer = publisher
-      .create_datawriter_cdr::<ShapeType>(topic.clone(), None)
+      .create_datawriter_cdr::<ShapeType>(&topic, None)
       .unwrap();
 
     let subscriber = participant
       .create_subscriber(&QosPolicies::qos_none())
       .unwrap();
     let _reader =
-      subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(topic, None);
+      subscriber.create_datareader::<ShapeType, CDRDeserializerAdapter<ShapeType>>(&topic, None);
 
     let poll = Poll::new().unwrap();
     let mut udp_listener = UDPListener::new_unicast("127.0.0.1", 0).unwrap();

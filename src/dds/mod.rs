@@ -71,14 +71,14 @@
 //! // Reader needs to be mutable if any operations are used.
 //! let mut reader = subscriber
 //!   .create_datareader_no_key::<SomeType, CDRDeserializerAdapter<SomeType>>(
-//!     some_topic.clone(),
+//!     &some_topic,
 //!     None)
 //!   .unwrap();
 //!
 //! // Creating DataWriter required type and serializer adapter (which is recommended to be CDR).
 //! let writer = publisher
 //!   .create_datawriter_no_key::<SomeType, CDRSerializerAdapter<SomeType>>(
-//!     some_topic,
+//!     &some_topic,
 //!     None)
 //!   .unwrap();
 //!

@@ -5,7 +5,10 @@ use bytes::Bytes;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
 
 use crate::{
-  dds::traits::{key::Keyed, serde_adapters::*},
+  dds::traits::{
+    key::Keyed,
+    serde_adapters::{no_key, with_key},
+  },
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   serialization::error::{Error, Result},
 };
@@ -130,11 +133,11 @@ where
   }
 
   fn calculate_padding_need_and_write_padding(&mut self, type_octet_alignment: u8) -> Result<()> {
-    let modulo: u32 = self.writer.count() as u32 % type_octet_alignment as u32;
+    let modulo: u32 = self.writer.count() as u32 % u32::from(type_octet_alignment);
     if modulo != 0 {
-      let padding_need: u32 = type_octet_alignment as u32 - modulo;
+      let padding_need: u32 = u32::from(type_octet_alignment) - modulo;
       for _x in 0..padding_need {
-        self.writer.write_u8(0)?
+        self.writer.write_u8(0)?;
       }
     }
     Ok(())
