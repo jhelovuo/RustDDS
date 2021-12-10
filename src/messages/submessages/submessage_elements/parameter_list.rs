@@ -59,7 +59,7 @@ impl<'a, C: Context> Readable<'a, C> for ParameterList {
       parameters.parameters.push(Parameter {
         parameter_id,
         value: reader.read_vec(length as usize)?,
-      })
+      });
     }
   }
 }

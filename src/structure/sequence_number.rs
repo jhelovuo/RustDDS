@@ -54,7 +54,7 @@ impl From<i64> for SequenceNumber {
 
 impl From<i32> for SequenceNumber {
   fn from(value: i32) -> Self {
-    SequenceNumber(value as i64)
+    SequenceNumber(value.into())
   }
 }
 
@@ -104,7 +104,7 @@ impl RangeBounds<SequenceNumber> for SequenceNumberRange {
 }
 
 mod sequence_number_checked {
-  use super::*;
+  use super::SequenceNumber;
   checked_impl!(CheckedAdd, checked_add, SequenceNumber);
   checked_impl!(CheckedSub, checked_sub, SequenceNumber);
   checked_impl!(CheckedMul, checked_mul, SequenceNumber);
@@ -201,7 +201,7 @@ impl From<FragmentNumber> for i64 {
 }
 
 mod fragment_number_checked {
-  use super::*;
+  use super::FragmentNumber;
   checked_impl!(CheckedAdd, checked_add, FragmentNumber);
   checked_impl!(CheckedSub, checked_sub, FragmentNumber);
   checked_impl!(CheckedMul, checked_mul, FragmentNumber);
@@ -300,7 +300,7 @@ where
         let num_bits = i64::from(end - start + N::from(1));
         let mut sns = NumberSet::<N>::new(min(base, start), min(256, num_bits as u32));
         for &s in set.iter() {
-          sns.insert(s)
+          sns.insert(s);
         }
         sns
       }

@@ -1,5 +1,5 @@
 use crate::dds::{
-  no_key::wrappers::NoKeyWrapper, sampleinfo::*,
+  no_key::wrappers::NoKeyWrapper, sampleinfo::SampleInfo,
   with_key::datasample::DataSample as WithKeyDataSample,
 };
 

@@ -68,7 +68,7 @@ impl<C: Context> Writable<C> for VendorId {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     for elem in &self.vendor_id {
-      writer.write_u8(*elem)?
+      writer.write_u8(*elem)?;
     }
     Ok(())
   }

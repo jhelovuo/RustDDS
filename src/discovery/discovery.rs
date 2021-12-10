@@ -672,7 +672,7 @@ impl Discovery {
 
           DISCOVERY_PARTICIPANT_DATA_TOKEN => {
             debug!("triggered participant reader");
-            self.handle_participant_reader()
+            self.handle_participant_reader();
           }
 
           DISCOVERY_PARTICIPANT_CLEANUP_TOKEN => {
@@ -1280,7 +1280,7 @@ impl Discovery {
         .write(data.clone(), None)
         .is_err()
       {
-        error!("Unable to write new readers info.")
+        error!("Unable to write new readers info.");
       }
     }
   }

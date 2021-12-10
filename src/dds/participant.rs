@@ -420,7 +420,7 @@ impl DomainParticipantDisc {
   // This generates identifiers that consist of given EntityKind and arbitrary,
   // unique identifier.
   pub(crate) fn new_entity_id(&self, entity_kind: EntityKind) -> EntityId {
-    let [_goldilocks, papa_byte, mama_byte, baby_byte, ] = self
+    let [_goldilocks, papa_byte, mama_byte, baby_byte] = self
       .entity_id_generator
       .fetch_add(1, atomic::Ordering::Relaxed)
       .to_be_bytes();
@@ -702,7 +702,7 @@ impl DomainParticipantInner {
       mio_channel::sync_channel::<WriterIngredients>(10);
     let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
 
-    let new_guid = GUID::new_particiapnt_guid();
+    let new_guid = GUID::new_participant_guid();
     let domain_info = DomainInfo {
       domain_participant_guid: new_guid,
       domain_id,

@@ -281,8 +281,7 @@ impl Reader {
     let cc = self
       .seqnum_instant_map
       .get(&sequence_number)
-      .map(|i| dds_cache.from_topic_get_change(&self.topic_name, i))
-      .flatten();
+      .and_then(|i| dds_cache.from_topic_get_change(&self.topic_name, i));
 
     debug!("history cache !!!! {:?}", cc);
 
@@ -297,8 +296,7 @@ impl Reader {
     let cc = self
       .seqnum_instant_map
       .get(&sequence_number)
-      .map(|i| dds_cache.from_topic_get_change(&self.topic_name, i))
-      .flatten();
+      .and_then(|i| dds_cache.from_topic_get_change(&self.topic_name, i));
     debug!("history cache !!!! {:?}", cc);
     cc.cloned()
   }

@@ -3,6 +3,7 @@ use std::{
   net::{IpAddr, SocketAddr},
 };
 
+use if_addrs::Interface;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace};
 
@@ -42,7 +43,7 @@ pub fn get_local_multicast_ip_addrs() -> io::Result<Vec<IpAddr>> {
     ifs
       .iter()
       .filter(|ifaddr| !ifaddr.is_loopback())
-      .map(|ifaddr| ifaddr.ip())
+      .map(Interface::ip)
       .collect(),
   )
 }

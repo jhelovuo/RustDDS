@@ -17,7 +17,7 @@ pub enum StatusInfoEnum {
   Filtered = 0b0100,
 }
 
-/// StatusInfo is a 4 octet array
+/// [`StatusInfo`] is a 4 octet array
 /// RTPS spec v2.3, Section 9.6.3.9 StatusInfo_t
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct StatusInfo {

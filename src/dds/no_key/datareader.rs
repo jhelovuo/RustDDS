@@ -5,12 +5,12 @@ use mio::{Evented, Poll, PollOpt, Ready, Token};
 
 use crate::{
   dds::{
-    data_types::*,
+    data_types::GUID,
     no_key::datasample::DataSample,
-    qos::*,
-    readcondition::*,
-    traits::serde_adapters::no_key::*,
-    values::result::*,
+    qos::{HasQoSPolicy, QosPolicies},
+    readcondition::ReadCondition,
+    traits::serde_adapters::no_key::DeserializerAdapter,
+    values::result::Result,
     with_key::{datareader as datareader_with_key, datasample::DataSample as WithKeyDataSample},
   },
   serialization::CDRDeserializerAdapter,
@@ -104,7 +104,7 @@ where
     let mut result = Vec::with_capacity(values.len());
     for ks in values {
       if let Some(s) = DataSample::<D>::from_with_key_ref(ks) {
-        result.push(s)
+        result.push(s);
       }
     }
     Ok(result)
@@ -152,7 +152,7 @@ where
     let mut result = Vec::with_capacity(values.len());
     for ks in values {
       if let Some(s) = DataSample::<D>::from_with_key(ks) {
-        result.push(s)
+        result.push(s);
       }
     }
     Ok(result)

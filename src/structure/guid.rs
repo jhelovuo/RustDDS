@@ -294,10 +294,10 @@ impl EntityId {
   fn as_usize(self) -> usize {
     // usize is generated like this beacause there needs to be
     // a way to tell entity kind from the result
-    let u1 = self.entity_key[0] as u32;
-    let u2 = self.entity_key[1] as u32;
-    let u3 = self.entity_key[2] as u32;
-    let u4 = self.entity_kind.0 as u32;
+    let u1 = u32::from(self.entity_key[0]);
+    let u2 = u32::from(self.entity_key[1]);
+    let u3 = u32::from(self.entity_key[2]);
+    let u4 = u32::from(self.entity_kind.0);
 
     // This is essentially big-endian encoding
     // The type coercion will always succeed, because we have
@@ -322,7 +322,7 @@ impl EntityId {
     if kind_kind == 0xC0 || kind_kind == 0x00 {
       // this is ok, all normal
     } else {
-      warn!("EntityId::from_usize tried to decode 0x{:x?}", number)
+      warn!("EntityId::from_usize tried to decode 0x{:x?}", number);
     }
 
     result
@@ -423,7 +423,7 @@ impl<C: Context> Writable<C> for EntityId {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     for elem in &self.entity_key {
-      writer.write_u8(*elem)?
+      writer.write_u8(*elem)?;
     }
     writer.write_u8(self.entity_kind.0)
   }
@@ -479,7 +479,7 @@ impl GUID {
   }
 
   /// Generates new GUID for Participant when `guid_prefix` is random
-  pub fn new_particiapnt_guid() -> GUID {
+  pub fn new_participant_guid() -> GUID {
     GUID {
       guid_prefix: GuidPrefix::random_for_this_participant(),
       entity_id: EntityId::PARTICIPANT,
@@ -724,7 +724,7 @@ mod tests {
           guid_entity_id_on_the_last_position,
           GUID {
               entity_id: EntityId::PARTICIPANT,
-              ..Default::default()
+              ..GUID::default()
           },
           le = [0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,

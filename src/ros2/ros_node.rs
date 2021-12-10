@@ -36,7 +36,7 @@ use super::{
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
 
-/// [RosParticipant](struct.RosParticipant.html) sends and receives other
+/// [`RosParticipant`] sends and receives other
 /// participants information in ROS2 network
 #[derive(Clone)]
 pub struct RosParticipant {

@@ -145,7 +145,7 @@ where
     {
       Ok(_) => {}
       Err(mio_channel::SendError::Disconnected(_)) => {
-        debug!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. Maybe shutting down?")
+        debug!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. Maybe shutting down?");
       }
       Err(e) => error!(
         "Failed to send REMOVE_LOCAL_READER DiscoveryCommand. {:?}",
@@ -688,13 +688,11 @@ where
             // Check that SequenceNumber always goes forward.
             // Getting the same SN means duplicate packet, which we must drop.
             latest_sequence_number_have_already
-              .map( |latest| sequence_number > latest)
-              .unwrap_or(true))
+              .map_or(true,  |latest| sequence_number > latest))
         || (is_reliable &&
             // Check that we get all the sequence numbers in order
             latest_sequence_number_have_already
-              .map( |latest| *latest + SequenceNumber::from(1) == *sequence_number)
-              .unwrap_or(true))
+              .map_or(true, |latest| *latest + SequenceNumber::from(1) == *sequence_number))
       {
         // normal case: sequence_number not seen before
         // first, update our last-seen-pointer
@@ -748,9 +746,12 @@ where
               serialized_key.representation_identifier,
             ) {
               Ok(key) => {
-                self
-                  .datasample_cache
-                  .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
+                self.datasample_cache.add_sample(
+                  Err(key),
+                  *writer_guid,
+                  instant,
+                  *source_timestamp,
+                );
               }
               Err(e) => {
                 warn!(
@@ -771,9 +772,9 @@ where
             if let Some(key) = self.datasample_cache.key_by_hash(*key_hash) {
               self
                 .datasample_cache
-                .add_sample(Err(key), *writer_guid, instant, *source_timestamp)
+                .add_sample(Err(key), *writer_guid, instant, *source_timestamp);
             } else {
-              warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash)
+              warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash);
             }
           } /*
             DDSData::DataFrags { representation_identifier, bytes_frags } => {

@@ -22,10 +22,10 @@ macro_rules! submessageflag_impls {
 }
 
 pub fn endianness_flag(flags: u8) -> speedy::Endianness {
-  if (flags & 0x01) != 0 {
-    Endianness::LittleEndian
-  } else {
+  if (flags & 0x01) == 0 {
     Endianness::BigEndian
+  } else {
+    Endianness::LittleEndian
   }
 }
 
@@ -74,13 +74,13 @@ impl DATAFRAG_Flags {
       DATA_Flags::Data.into()
     };
     if dff.contains(DATAFRAG_Flags::Endianness) {
-      df.insert(DATA_Flags::Endianness)
+      df.insert(DATA_Flags::Endianness);
     }
     if dff.contains(DATAFRAG_Flags::InlineQos) {
-      df.insert(DATA_Flags::InlineQos)
+      df.insert(DATA_Flags::InlineQos);
     }
     if dff.contains(DATAFRAG_Flags::NonStandardPayload) {
-      df.insert(DATA_Flags::NonStandardPayload)
+      df.insert(DATA_Flags::NonStandardPayload);
     }
     df
   }

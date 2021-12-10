@@ -696,7 +696,7 @@ mod tests {
     let serialized = to_bytes::<ShapeType, LittleEndian>(&message).unwrap();
     assert_eq!(serialized, expected_serialized_result);
     let deserialized_message: ShapeType = deserialize_from_little_endian(&serialized).unwrap();
-    assert_eq!(deserialized_message, message)
+    assert_eq!(deserialized_message, message);
   }
 
   #[test]
