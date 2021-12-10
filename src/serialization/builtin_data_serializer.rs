@@ -552,10 +552,10 @@ impl<'a> BuiltinDataSerializer<'a> {
     let mut count: usize = 0;
 
     let empty_ll = Vec::default();
-    count += self.protocol_version.is_some() as usize;
-    count += self.vendor_id.is_some() as usize;
-    count += self.expects_inline_qos.is_some() as usize;
-    count += self.participant_guid.is_some() as usize;
+    count += usize::from(self.protocol_version.is_some());
+    count += usize::from(self.vendor_id.is_some());
+    count += usize::from(self.expects_inline_qos.is_some());
+    count += usize::from(self.participant_guid.is_some());
     count += self.metatraffic_unicast_locators.unwrap_or(&empty_ll).len();
     count += self
       .metatraffic_multicast_locators
@@ -563,34 +563,34 @@ impl<'a> BuiltinDataSerializer<'a> {
       .len();
     count += self.default_unicast_locators.unwrap_or(&empty_ll).len();
     count += self.default_multicast_locators.unwrap_or(&empty_ll).len();
-    count += self.available_builtin_endpoints.is_some() as usize;
-    count += self.lease_duration.is_some() as usize;
-    count += self.manual_liveliness_count.is_some() as usize;
-    count += self.builtin_endpoint_qos.is_some() as usize;
-    count += self.entity_name.is_some() as usize;
+    count += usize::from(self.available_builtin_endpoints.is_some());
+    count += usize::from(self.lease_duration.is_some());
+    count += usize::from(self.manual_liveliness_count.is_some());
+    count += usize::from(self.builtin_endpoint_qos.is_some());
+    count += usize::from(self.entity_name.is_some());
 
-    count += self.endpoint_guid.is_some() as usize;
+    count += usize::from(self.endpoint_guid.is_some());
     count += self.unicast_locator_list.unwrap_or(&empty_ll).len();
     count += self.multicast_locator_list.unwrap_or(&empty_ll).len();
 
-    count += self.data_max_size_serialized.is_some() as usize;
+    count += usize::from(self.data_max_size_serialized.is_some());
 
-    count += self.topic_name.is_some() as usize;
-    count += self.type_name.is_some() as usize;
-    count += self.durability.is_some() as usize;
-    count += self.deadline.is_some() as usize;
-    count += self.latency_budget.is_some() as usize;
-    count += self.liveliness.is_some() as usize;
-    count += self.reliability.is_some() as usize;
-    count += self.ownership.is_some() as usize;
-    count += self.destination_order.is_some() as usize;
-    count += self.time_based_filter.is_some() as usize;
-    count += self.presentation.is_some() as usize;
-    count += self.lifespan.is_some() as usize;
-    count += self.history.is_some() as usize;
-    count += self.resource_limits.is_some() as usize;
+    count += usize::from(self.topic_name.is_some());
+    count += usize::from(self.type_name.is_some());
+    count += usize::from(self.durability.is_some());
+    count += usize::from(self.deadline.is_some());
+    count += usize::from(self.latency_budget.is_some());
+    count += usize::from(self.liveliness.is_some());
+    count += usize::from(self.reliability.is_some());
+    count += usize::from(self.ownership.is_some());
+    count += usize::from(self.destination_order.is_some());
+    count += usize::from(self.time_based_filter.is_some());
+    count += usize::from(self.presentation.is_some());
+    count += usize::from(self.lifespan.is_some());
+    count += usize::from(self.history.is_some());
+    count += usize::from(self.resource_limits.is_some());
 
-    count += self.content_filter_property.is_some() as usize;
+    count += usize::from(self.content_filter_property.is_some());
 
     count
   }

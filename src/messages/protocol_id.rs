@@ -45,7 +45,7 @@ impl<C: Context> Writable<C> for ProtocolId {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     for elem in &self.protocol_id {
-      writer.write_u8(*elem as u8)?
+      writer.write_u8(*elem as u8)?;
     }
     Ok(())
   }

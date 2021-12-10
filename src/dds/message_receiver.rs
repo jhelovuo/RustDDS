@@ -110,8 +110,8 @@ impl MessageReceiver {
     let eid = new_reader.guid().entity_id;
     match self.available_readers.entry(eid) {
       Entry::Occupied(_) => warn!("Already have Reader {:?} - not adding.", eid),
-      e => {
-        e.or_insert(new_reader);
+      Entry::Vacant(e) => {
+        e.insert(new_reader);
       }
     }
   }
@@ -205,7 +205,7 @@ impl MessageReceiver {
     };
 
     // And process message
-    self.handle_parsed_message(rtps_message)
+    self.handle_parsed_message(rtps_message);
   }
 
   // This is also called directly from dp_event_loop in case of loopback messages.
@@ -273,7 +273,7 @@ impl MessageReceiver {
               debug!(
                 "spdp_liveness_sender.try_send(): {:?}. Is Discovery alive?",
                 e
-              )
+              );
             });
         }
       }
@@ -314,7 +314,7 @@ impl MessageReceiver {
         {
           Ok(_) => (),
           Err(TrySendError::Full(_)) => {
-            info!("AckNack pipe full. Looks like I am very busy. Discarding submessage.")
+            info!("AckNack pipe full. Looks like I am very busy. Discarding submessage.");
           }
           Err(e) => warn!("AckNack pipe fail: {:?}", e),
         }
@@ -392,7 +392,7 @@ impl MessageReceiver {
   // sends 0 seqnum acknacks for those writer that haven't had any action
   pub fn send_preemptive_acknacks(&mut self) {
     for reader in self.available_readers.values_mut() {
-      reader.send_preemptive_acknacks()
+      reader.send_preemptive_acknacks();
     }
   }
 } // impl messageReceiver

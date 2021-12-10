@@ -19,7 +19,7 @@ pub fn try_send_timeout<T>(
   let timeout = timeout_opt.unwrap_or(TIMEOUT_FALLBACK);
   let mut delays = Vec::with_capacity(20);
   if timeout <= TIMEOUT_EPSILON {
-    delays.push(TIMEOUT_EPSILON)
+    delays.push(TIMEOUT_EPSILON);
   } else {
     let mut to = timeout;
     while to > TIMEOUT_EPSILON {

@@ -320,8 +320,8 @@ impl MessageBuilder {
   }
 
   /// Argument Some(timestamp) means that a timestamp is sent.
-  /// Argument None means "invalidate", i.e. the previously sent InfoTimestamp
-  /// submessage no longer applies.
+  /// Argument None means "invalidate", i.e. the previously sent
+  /// [`InfoTimestamp`] submessage no longer applies.
   pub fn ts_msg(
     mut self,
     endianness: Endianness,

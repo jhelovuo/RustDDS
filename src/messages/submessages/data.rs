@@ -82,7 +82,7 @@ impl Data {
     // always zero.
     let extra_octets = octets_to_inline_qos - rtps_v23_data_header_size;
     // Nevertheless, skip over that extra data, if we are told such exists.
-    cursor.set_position(cursor.position() + extra_octets as u64);
+    cursor.set_position(cursor.position() + u64::from(extra_octets));
 
     let parameter_list = if expect_qos {
       Some(

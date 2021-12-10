@@ -61,8 +61,7 @@ impl DDSCache {
     self
       .topic_caches
       .get(topic_name)
-      .map(|tc| tc.get_change(instant))
-      .flatten()
+      .and_then(|tc| tc.get_change(instant))
   }
 
   /// Removes cacheChange permanently
@@ -193,9 +192,8 @@ impl TopicCache {
       .keys()
       .take(max(0, remove_count) as usize + 1)
       .last()
-      .map(|lim| max(lim, &instant))
-      .unwrap_or(&instant);
-    self.history_cache.remove_changes_before(split_key)
+      .map_or(&instant, |lim| max(lim, &instant));
+    self.history_cache.remove_changes_before(split_key);
   }
 }
 
@@ -219,9 +217,8 @@ impl DDSHistoryCache {
     self
       .sequence_numbers
       .get(&cc.writer_guid)
-      .map(|snm| snm.get(&cc.sequence_number))
-      .flatten()
-      .cloned()
+      .and_then(|snm| snm.get(&cc.sequence_number))
+      .copied()
   }
 
   fn insert_sn(&mut self, instant: Timestamp, cc: &CacheChange) {

@@ -104,7 +104,7 @@ where
 
       // This is fairly normal at shutdown, as the other end is down already.
       Err(SendError::Disconnected(_cmd)) => {
-        debug!("Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand: Disconnected.")
+        debug!("Failed to send REMOVE_LOCAL_WRITER DiscoveryCommand: Disconnected.");
       }
       // other errors must be taken more seriously
       Err(e) => error!(
@@ -153,16 +153,12 @@ where
 
     if let Some(lv) = topic.qos().liveliness {
       match lv {
-        Liveliness::Automatic { lease_duration: _ } => (),
-        Liveliness::ManualByParticipant { lease_duration: _ } => {
-          match discovery_command.send(DiscoveryCommand::ManualAssertLiveliness) {
-            Ok(_) => (),
-            Err(e) => {
-              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
-            }
+        Liveliness::Automatic { .. } | Liveliness::ManualByTopic { .. } => (),
+        Liveliness::ManualByParticipant { .. } => {
+          if let Err(e) = discovery_command.send(DiscoveryCommand::ManualAssertLiveliness) {
+            error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
           }
         }
-        Liveliness::ManualByTopic { lease_duration: _ } => (),
       }
     };
     let qos = topic.qos();
@@ -223,19 +219,15 @@ where
   pub fn refresh_manual_liveliness(&self) {
     if let Some(lv) = self.qos().liveliness {
       match lv {
-        Liveliness::Automatic { lease_duration: _ } => (),
-        Liveliness::ManualByParticipant { lease_duration: _ } => {
-          match self
+        Liveliness::Automatic { .. } | Liveliness::ManualByTopic { .. } => (),
+        Liveliness::ManualByParticipant { .. } => {
+          if let Err(e) = self
             .discovery_command
             .send(DiscoveryCommand::ManualAssertLiveliness)
           {
-            Ok(_) => (),
-            Err(e) => {
-              error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
-            }
+            error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
           }
         }
-        Liveliness::ManualByTopic { lease_duration: _ } => (),
       }
     };
   }
@@ -358,8 +350,7 @@ where
   /// ```
   pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<bool> {
     match &self.qos_policy.reliability {
-      None => Ok(true),
-      Some(Reliability::BestEffort) => Ok(true),
+      None | Some(Reliability::BestEffort) => Ok(true),
       Some(Reliability::Reliable { .. }) => {
         let (acked_sender, acked_receiver) = mio_channel::sync_channel::<()>(1);
         let poll = Poll::new()?;
@@ -747,7 +738,7 @@ where
             writer_guid: self.guid(),
             manual_assertion: true, // by definition of this function
           })
-          .unwrap_or_else(|e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e))
+          .unwrap_or_else(|e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e));
       }
       _other => (),
     }
@@ -1040,7 +1031,7 @@ mod tests {
     let res = data_writer
       .wait_for_acknowledgments(Duration::from_secs(2))
       .unwrap();
-    assert!(res) // we should get "true" immediately, because we have
-                 // no Reliable QoS
+    assert!(res); // we should get "true" immediately, because we have
+                  // no Reliable QoS
   }
 }

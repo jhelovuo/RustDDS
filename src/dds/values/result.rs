@@ -1,6 +1,6 @@
 use mio_extras::channel::TrySendError;
 
-/// This is a specialized Result, similar to std::io::Result
+/// This is a specialized Result, similar to [`std::io::Result`]
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// This roughly corresponds to "Return codes" in DDS spec 2.2.1.1 Format and

@@ -779,7 +779,7 @@ mod tests {
 
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
-      GUID::new_particiapnt_guid(),
+      GUID::new_participant_guid(),
       None,
     )));
 
@@ -827,7 +827,7 @@ mod tests {
           PollOpt::edge(),
         )
         .expect("Failed to register receivers.");
-      dp_event_loop.event_loop()
+      dp_event_loop.event_loop();
     });
 
     let n = 3;

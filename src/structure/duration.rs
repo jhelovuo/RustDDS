@@ -111,7 +111,7 @@ impl From<std::time::Duration> for Duration {
   fn from(duration: std::time::Duration) -> Self {
     Duration {
       seconds: duration.as_secs() as i32,
-      fraction: (((duration.subsec_nanos() as u64) << 32) / 1_000_000_000) as u32,
+      fraction: ((u64::from(duration.subsec_nanos()) << 32) / 1_000_000_000) as u32,
     }
   }
 }

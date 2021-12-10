@@ -22,6 +22,7 @@
   // but that may break code flow.
   dead_code
 )]
+#![warn(clippy::pedantic)]
 
 #[macro_use]
 mod serialization_test;

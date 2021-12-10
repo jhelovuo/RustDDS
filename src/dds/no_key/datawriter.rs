@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::{
   dds::{
-    data_types::*,
+    data_types::GUID,
     pubsub::Publisher,
     qos::{HasQoSPolicy, QosPolicies},
     topic::Topic,

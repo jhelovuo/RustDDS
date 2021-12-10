@@ -58,10 +58,11 @@ where
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
-/// This type adapts CdrSeserializer (which implements serde::Serializer) to
-/// work as a [`SerializerAdapter`]. CdrSeserializer cannot directly implement
-/// the trait itself, because CdrSeserializer has the type parameter BO open,
-/// and the adapter needs to be bi-endian.
+/// This type adapts [`CdrSeserializer`] (which implements
+/// [`serde::Serializer`]) to work as a [`SerializerAdapter`].
+/// [`CdrSeserializer`] cannot directly implement the trait itself, because
+/// [`CdrSeserializer`] has the type parameter BO open, and the adapter needs to
+/// be bi-endian.
 ///
 /// [`SerializerAdapter`]:
 /// ../dds/traits/serde_adapters/trait.SerializerAdapter.html
@@ -110,8 +111,8 @@ where
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
-/// Parameter W is an io::Write that would receive the serialization
-/// Parameter BO is byte order: LittleEndian or BigEndian
+/// Parameter W is an [`io::Write`] that would receive the serialization
+/// Parameter BO is byte order: [`LittleEndian`] or [`BigEndian`]
 pub struct CdrSeserializer<W, BO>
 where
   W: io::Write,
@@ -768,7 +769,7 @@ mod tests {
       0x01, 0xff, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x67, 0x67, 0x34, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x01,
     ];
-    assert_eq!(expected, sarjallistettu)
+    assert_eq!(expected, sarjallistettu);
   }
 
   fn cdr_serialization_char() {
@@ -786,7 +787,7 @@ mod tests {
 
     let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();
     let expected: Vec<u8> = vec![0x61, 0x62, 0xe4];
-    assert_eq!(expected, sarjallistettu)
+    assert_eq!(expected, sarjallistettu);
   }
   #[test]
   fn cdr_serialization_string() {
@@ -799,7 +800,7 @@ mod tests {
     };
     let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();
     let expected: Vec<u8> = vec![0x05, 0x00, 0x00, 0x00, 0x42, 0x4c, 0x55, 0x45, 0x00];
-    assert_eq!(expected, sarjallistettu)
+    assert_eq!(expected, sarjallistettu);
   }
 
   fn cdr_serialization_little() {
@@ -826,6 +827,6 @@ mod tests {
       0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xf3,
       0xe0, 0x01, 0x00,
     ];
-    assert_eq!(expected, sarjallistettu)
+    assert_eq!(expected, sarjallistettu);
   }
 }

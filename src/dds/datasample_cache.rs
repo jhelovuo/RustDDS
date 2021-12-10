@@ -1,6 +1,6 @@
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
-  ops::Bound::*,
+  ops::Bound,
 };
 
 use log::debug;
@@ -143,7 +143,7 @@ where
       {
         instance_metadata
           .latest_generation_available
-          .disposed_generation_count += 1
+          .disposed_generation_count += 1;
       }
 
       (InstanceState::NotAliveDisposed, _) => (), // you can only die once
@@ -153,7 +153,7 @@ where
       {
         instance_metadata
           .latest_generation_available
-          .no_writers_generation_count += 1
+          .no_writers_generation_count += 1;
       }
 
       (InstanceState::NotAliveNoWriters, _) => (), // you can only die once
@@ -180,7 +180,7 @@ where
           panic!(
             "Tried to add duplicate datasample with the same key {:?}",
             receive_timestamp
-          )
+          );
         },
       );
 
@@ -208,7 +208,7 @@ where
           .instance_samples
           .iter()
           .take(remove_count as usize)
-          .cloned()
+          .copied()
           .collect();
         for k in keys_to_remove {
           instance_metadata.instance_samples.remove(&k);
@@ -332,7 +332,7 @@ where
       .entry(instance_key.clone())
       .and_modify(|old_gens| {
         if accessed_generations.total() > old_gens.total() {
-          *old_gens = accessed_generations
+          *old_gens = accessed_generations;
         }
       })
       .or_insert(accessed_generations);
@@ -550,7 +550,7 @@ where
   pub fn next_key(&self, key: &D::K) -> Option<D::K> {
     self
       .instance_map
-      .range((Excluded(key), Unbounded))
+      .range((Bound::Excluded(key), Bound::Unbounded))
       .map(|(k, _)| k.clone())
       .next()
   }

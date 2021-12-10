@@ -132,7 +132,7 @@ impl DiscoveryDB {
       }
       *ts = now;
     } else {
-      info!("Participant alive update for unknown {:?}. This is normal, if the message does not repeat.", guid_prefix)
+      info!("Participant alive update for unknown {:?}. This is normal, if the message does not repeat.", guid_prefix);
     }
   }
 
@@ -442,7 +442,7 @@ impl DiscoveryDB {
     let topic_name = data.topic_data.name.clone();
 
     if let Some(t) = self.topics.get_mut(&data.topic_data.name) {
-      *t = data.clone()
+      *t = data.clone();
     } else {
       self.topics.insert(topic_name, data.clone());
       if let Some(c) = &self.event_sender {
@@ -590,7 +590,7 @@ mod tests {
 
   #[test]
   fn discdb_participant_operations() {
-    let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid(), None);
+    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), None);
     let mut data = spdp_participant_data().unwrap();
     data.lease_duration = Some(Duration::from(StdDuration::from_secs(1)));
 
@@ -609,7 +609,7 @@ mod tests {
 
   #[test]
   fn discdb_writer_proxies() {
-    let _discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid(), None);
+    let _discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), None);
     let topic_name = String::from("some_topic");
     let type_name = String::from("RandomData");
     let _dreader = DiscoveredReaderData::default(topic_name, type_name);
@@ -619,7 +619,7 @@ mod tests {
 
   #[test]
   fn discdb_subscription_operations() {
-    let mut discovery_db = DiscoveryDB::new(GUID::new_particiapnt_guid(), None);
+    let mut discovery_db = DiscoveryDB::new(GUID::new_participant_guid(), None);
 
     let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant
@@ -709,7 +709,7 @@ mod tests {
         TopicKind::WithKey,
       )
       .unwrap();
-    let mut discoverydb = DiscoveryDB::new(GUID::new_particiapnt_guid(), None);
+    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), None);
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
     let (status_sender, _status_receiver) =

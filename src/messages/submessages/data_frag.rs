@@ -102,7 +102,7 @@ impl<'a> DataFrag {
         "DataFrag has too low octetsToInlineQos",
       ));
     }
-    cursor.set_position(cursor.position() + extra_octets as u64);
+    cursor.set_position(cursor.position() + u64::from(extra_octets));
 
     let inline_qos = if expect_qos {
       Some(

@@ -31,7 +31,7 @@ impl Drop for UDPListener {
         .leave_multicast_v4(&mcg, &Ipv4Addr::UNSPECIFIED)
         .unwrap_or_else(|e| {
           error!("leave_multicast_group: {:?}", e);
-        })
+        });
     }
   }
 }
@@ -166,7 +166,7 @@ impl UDPListener {
       // This is safe, because we just checked that there is enough capacity.
       // We do not read undefined data, because next the recv call in messages()
       // will overwrite this space and truncate the rest away.
-      self.receive_buffer.set_len(MAX_MESSAGE_SIZE)
+      self.receive_buffer.set_len(MAX_MESSAGE_SIZE);
     }
     trace!(
       "ensure_receive_buffer_capacity - {} bytes left",

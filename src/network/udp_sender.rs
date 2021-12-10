@@ -99,7 +99,7 @@ impl UDPSender {
 
   pub fn send_to_locator_list(&self, buffer: &[u8], ll: &[Locator]) {
     for loc in ll {
-      self.send_to_locator(buffer, loc)
+      self.send_to_locator(buffer, loc);
     }
   }
 
@@ -124,7 +124,7 @@ impl UDPSender {
   pub fn send_to_locator(&self, buffer: &[u8], locator: &Locator) {
     let send = |socket_address: SocketAddr| {
       if socket_address.ip().is_multicast() {
-        for socket in self.multicast_sockets.iter() {
+        for socket in &self.multicast_sockets {
           self.send_to_udp_socket(buffer, socket, &socket_address);
         }
       } else {
@@ -136,13 +136,13 @@ impl UDPSender {
       Locator::UdpV4(socket_address) => send(SocketAddr::from(*socket_address)),
       Locator::UdpV6(socket_address) => send(SocketAddr::from(*socket_address)),
       Locator::Invalid | Locator::Reserved => {
-        error!("send_to_locator: Cannot send to {:?}", locator)
+        error!("send_to_locator: Cannot send to {:?}", locator);
       }
       Locator::Other { kind, .. } =>
       // This is normal, as other implementations can define their own kinds.
       // We get those from Discovery.
       {
-        trace!("send_to_locator: Unknown LocatorKind: {:?}", kind)
+        trace!("send_to_locator: Unknown LocatorKind: {:?}", kind);
       }
     }
   }
