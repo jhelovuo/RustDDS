@@ -464,8 +464,7 @@ impl DiscoveryDB {
 
     let reader_proxy = RtpsReaderProxy::from_reader(
       reader,
-      domain_participant.domain_id(),
-      domain_participant.participant_id(),
+      domain_participant,
     );
 
     let mut subscription_data = SubscriptionBuiltinTopicData::new(

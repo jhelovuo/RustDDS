@@ -150,8 +150,6 @@ pub mod data_types {
   pub use crate::structure::time::Timestamp as DDSTimestamp;
   // TODO: move typedesc module somewhere better
   pub use crate::dds::typedesc::TypeDesc;
-  #[doc(inline)]
-  pub use crate::structure::topic_kind::TopicKind; // AKA dds::topic::TopicKind
 }
 
 /// DDS Error
@@ -160,7 +158,7 @@ pub mod error {
 }
 
 pub use participant::DomainParticipant;
-pub use topic::Topic;
+pub use topic::{Topic,TopicKind};
 pub use pubsub::{Publisher, Subscriber};
 #[doc(inline)]
 pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
