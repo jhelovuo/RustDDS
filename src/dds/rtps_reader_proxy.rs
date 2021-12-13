@@ -8,11 +8,12 @@ use log::{debug, error, trace, warn};
 
 use crate::{
   dds::qos::QosPolicies,
+  dds::participant::DomainParticipant,
   discovery::data_types::topic_data::DiscoveredReaderData,
   messages::submessages::submessage::AckSubmessage,
   network::{
-    constant::{user_traffic_multicast_port, user_traffic_unicast_port},
-    util::{get_local_multicast_locators, get_local_unicast_locators},
+    constant::*,
+//    util::{get_local_multicast_locators, get_local_unicast_locators},
   },
   structure::{
     guid::{EntityId, EntityKind, GUID},
@@ -80,14 +81,15 @@ impl RtpsReaderProxy {
 
   pub fn from_reader(
     reader: &ReaderIngredients,
-    domain_id: u16,
-    participant_id: u16,
+    domain_participant: &DomainParticipant,
   ) -> RtpsReaderProxy {
-    let unicast_locator_list =
-      get_local_unicast_locators(user_traffic_unicast_port(domain_id, participant_id));
-
-    let multicast_locator_list =
-      get_local_multicast_locators(user_traffic_multicast_port(domain_id));
+    let mut self_locators = domain_participant.self_locators(); // This clones a map of locator lists.
+    let unicast_locator_list = 
+      self_locators.remove(&USER_TRAFFIC_LISTENER_TOKEN)
+        .unwrap_or_else(Vec::new);
+    let multicast_locator_list = 
+      self_locators.remove(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
+        .unwrap_or_else(Vec::new);
 
     RtpsReaderProxy {
       remote_reader_guid: reader.guid,

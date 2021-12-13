@@ -15,7 +15,8 @@ use log4rs::{
   Config,
 };
 use rustdds::dds::{
-  data_types::{DDSDuration, TopicKind},
+  TopicKind,
+  data_types::{DDSDuration, },
   qos::{
     policy::{Deadline, Durability, History, Reliability},
     QosPolicyBuilder,

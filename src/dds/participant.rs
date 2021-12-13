@@ -290,7 +290,11 @@ impl DomainParticipant {
   pub(crate) fn new_entity_id(&self, entity_kind: EntityKind) -> EntityId {
     self.dpi.lock().unwrap().new_entity_id(entity_kind)
   }
-}
+
+  pub(crate) fn self_locators(&self) -> HashMap<Token, Vec<Locator>> {
+    self.dpi.lock().unwrap().self_locators()
+  }
+} // end impl DomainParticipant
 
 impl PartialEq for DomainParticipant {
   fn eq(&self, other: &Self) -> bool {
@@ -376,6 +380,7 @@ impl DomainParticipantWeak {
   pub fn upgrade(self) -> Option<DomainParticipant> {
     self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
   }
+
 } // end impl
 
 impl RTPSEntity for DomainParticipantWeak {
