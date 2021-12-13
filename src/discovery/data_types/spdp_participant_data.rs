@@ -105,12 +105,12 @@ impl SpdpDiscoveredParticipantData {
       EntityId::UNKNOWN,
     );
 
-    if !is_metatraffic {
-      // TODO: possible multicast addresses
-      proxy.unicast_locator_list = self.default_unicast_locators.clone();
-    } else {
+    if is_metatraffic {
       // TODO: possible multicast addresses
       proxy.unicast_locator_list = self.metatraffic_unicast_locators.clone();
+    } else {
+      // TODO: possible multicast addresses
+      proxy.unicast_locator_list = self.default_unicast_locators.clone();
     }
 
     proxy

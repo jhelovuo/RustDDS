@@ -765,10 +765,6 @@ impl BuiltinDataDeserializer {
       return Some(0);
     }
 
-    let parameter_length_value = CDRDeserializerAdapter::from_bytes(&buffer[2..4], rep);
-    match parameter_length_value {
-      Ok(val) => Some(val),
-      _ => None,
-    }
+    CDRDeserializerAdapter::from_bytes(&buffer[2..4], rep).ok()
   }
 }

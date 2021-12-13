@@ -20,9 +20,8 @@
   clippy::option_map_unit_fn,
   // option_map_unit_fn suggests changing option.map( ) with () return value to if let -construct,
   // but that may break code flow.
-  dead_code
+  dead_code,
 )]
-#![warn(clippy::pedantic)]
 
 #[macro_use]
 mod serialization_test;

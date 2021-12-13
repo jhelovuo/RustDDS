@@ -1599,7 +1599,7 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
       }),
-      ..Default::default()
+      ..Data::default()
     };
     let data_msg2 = Data {
       reader_id: reader.entity_id(),
@@ -1610,7 +1610,7 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
       }),
-      ..Default::default()
+      ..Data::default()
     };
     let data_msg3 = Data {
       reader_id: reader.entity_id(),
@@ -1621,7 +1621,7 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
       }),
-      ..Default::default()
+      ..Data::default()
     };
     let data_msg4 = Data {
       reader_id: reader.entity_id(),
@@ -1632,7 +1632,7 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
       }),
-      ..Default::default()
+      ..Data::default()
     };
     reader.handle_data_msg(data_msg, data_flags, &mr_state);
     reader.handle_data_msg(data_msg2, data_flags, &mr_state);
