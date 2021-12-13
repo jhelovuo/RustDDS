@@ -195,135 +195,44 @@ pub struct BuiltinDataSerializer<'a> {
 }
 
 impl<'a> BuiltinDataSerializer<'a> {
-  pub fn merge(mut self, other: &BuiltinDataSerializer<'a>) -> BuiltinDataSerializer<'a> {
-    self.protocol_version = match other.protocol_version {
-      Some(v) => Some(v),
-      None => self.protocol_version,
-    };
-    self.vendor_id = match other.vendor_id {
-      Some(v) => Some(v),
-      None => self.vendor_id,
-    };
-    self.expects_inline_qos = match other.expects_inline_qos {
-      Some(v) => Some(v),
-      None => self.expects_inline_qos,
-    };
-    self.participant_guid = match other.participant_guid {
-      Some(v) => Some(v),
-      None => self.participant_guid,
-    };
-    self.metatraffic_unicast_locators = match other.metatraffic_unicast_locators {
-      Some(v) => Some(v),
-      None => self.metatraffic_unicast_locators,
-    };
-    self.metatraffic_multicast_locators = match other.metatraffic_multicast_locators {
-      Some(v) => Some(v),
-      None => self.metatraffic_multicast_locators,
-    };
-    self.default_unicast_locators = match other.default_unicast_locators {
-      Some(v) => Some(v),
-      None => self.default_unicast_locators,
-    };
-    self.default_multicast_locators = match other.default_multicast_locators {
-      Some(v) => Some(v),
-      None => self.default_multicast_locators,
-    };
-    self.available_builtin_endpoints = match other.available_builtin_endpoints {
-      Some(v) => Some(v),
-      None => self.available_builtin_endpoints,
-    };
-    self.lease_duration = match other.lease_duration {
-      Some(v) => Some(v),
-      None => self.lease_duration,
-    };
-    self.manual_liveliness_count = match other.manual_liveliness_count {
-      Some(v) => Some(v),
-      None => self.manual_liveliness_count,
-    };
-    self.builtin_endpoint_qos = match other.builtin_endpoint_qos {
-      Some(v) => Some(v),
-      None => self.builtin_endpoint_qos,
-    };
-    self.entity_name = match other.entity_name {
-      Some(v) => Some(v),
-      None => self.entity_name,
-    };
-    self.endpoint_guid = match other.endpoint_guid {
-      Some(v) => Some(v),
-      None => self.endpoint_guid,
-    };
-    self.unicast_locator_list = match other.unicast_locator_list {
-      Some(v) => Some(v),
-      None => self.unicast_locator_list,
-    };
-    self.multicast_locator_list = match other.multicast_locator_list {
-      Some(v) => Some(v),
-      None => self.multicast_locator_list,
-    };
-    self.data_max_size_serialized = match other.data_max_size_serialized {
-      Some(v) => Some(v),
-      None => self.data_max_size_serialized,
-    };
-    self.topic_name = match other.topic_name {
-      Some(v) => Some(v),
-      None => self.topic_name,
-    };
-    self.type_name = match other.type_name {
-      Some(v) => Some(v),
-      None => self.type_name,
-    };
-    self.durability = match other.durability {
-      Some(v) => Some(v),
-      None => self.durability,
-    };
-    self.deadline = match other.deadline {
-      Some(v) => Some(v),
-      None => self.deadline,
-    };
-    self.latency_budget = match other.latency_budget {
-      Some(v) => Some(v),
-      None => self.latency_budget,
-    };
-    self.liveliness = match other.liveliness {
-      Some(v) => Some(v),
-      None => self.liveliness,
-    };
-    self.reliability = match other.reliability {
-      Some(v) => Some(v),
-      None => self.reliability,
-    };
-    self.ownership = match other.ownership {
-      Some(v) => Some(v),
-      None => self.ownership,
-    };
-    self.destination_order = match other.destination_order {
-      Some(v) => Some(v),
-      None => self.destination_order,
-    };
-    self.time_based_filter = match other.time_based_filter {
-      Some(v) => Some(v),
-      None => self.time_based_filter,
-    };
-    self.presentation = match other.presentation {
-      Some(v) => Some(v),
-      None => self.presentation,
-    };
-    self.lifespan = match other.lifespan {
-      Some(v) => Some(v),
-      None => self.lifespan,
-    };
-    self.history = match other.history {
-      Some(v) => Some(v),
-      None => self.history,
-    };
-    self.resource_limits = match other.resource_limits {
-      Some(v) => Some(v),
-      None => self.resource_limits,
-    };
-    self.content_filter_property = match other.content_filter_property {
-      Some(v) => Some(v),
-      None => self.content_filter_property,
-    };
+  pub fn merge(mut self, other: &Self) -> Self {
+    macro_rules! merge_field {
+      ($field:ident) => {
+        self.$field = other.$field.or(self.$field);
+      };
+    }
+
+    merge_field!(protocol_version);
+    merge_field!(vendor_id);
+    merge_field!(expects_inline_qos);
+    merge_field!(participant_guid);
+    merge_field!(metatraffic_unicast_locators);
+    merge_field!(metatraffic_multicast_locators);
+    merge_field!(default_unicast_locators);
+    merge_field!(default_multicast_locators);
+    merge_field!(available_builtin_endpoints);
+    merge_field!(lease_duration);
+    merge_field!(manual_liveliness_count);
+    merge_field!(builtin_endpoint_qos);
+    merge_field!(entity_name);
+    merge_field!(endpoint_guid);
+    merge_field!(multicast_locator_list);
+    merge_field!(data_max_size_serialized);
+    merge_field!(topic_name);
+    merge_field!(type_name);
+    merge_field!(durability);
+    merge_field!(deadline);
+    merge_field!(latency_budget);
+    merge_field!(liveliness);
+    merge_field!(reliability);
+    merge_field!(ownership);
+    merge_field!(destination_order);
+    merge_field!(time_based_filter);
+    merge_field!(presentation);
+    merge_field!(lifespan);
+    merge_field!(history);
+    merge_field!(resource_limits);
+    merge_field!(content_filter_property);
 
     self
   }
