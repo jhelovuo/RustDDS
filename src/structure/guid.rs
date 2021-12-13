@@ -29,7 +29,7 @@ impl GuidPrefix {
       if ix >= 12 {
         break;
       }
-      pr[ix] = *data
+      pr[ix] = *data;
     }
     GuidPrefix { entity_key: pr }
   }
@@ -89,7 +89,7 @@ impl<C: Context> Writable<C> for GuidPrefix {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     for elem in &self.entity_key {
-      writer.write_u8(*elem)?
+      writer.write_u8(*elem)?;
     }
     Ok(())
   }

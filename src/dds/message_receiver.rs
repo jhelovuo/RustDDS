@@ -28,7 +28,7 @@ use crate::structure::sequence_number::SequenceNumber;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
-/// MessageReceiver is the submessage sequence interpreter described in
+/// [`MessageReceiver`] is the submessage sequence interpreter described in
 /// RTPS spec v2.3 Section 8.3.4 "The RTPS Message Receiver".
 /// It calls the message/submessage deserializers to parse the sequence of
 /// submessages. Then it processes the instructions in the Interpreter
@@ -371,10 +371,10 @@ impl MessageReceiver {
         }
       }
       InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
-        if info_dest.guid_prefix != GUID::GUID_UNKNOWN.guid_prefix {
-          self.dest_guid_prefix = info_dest.guid_prefix;
-        } else {
+        if info_dest.guid_prefix == GUID::GUID_UNKNOWN.guid_prefix {
           self.dest_guid_prefix = self.own_guid_prefix;
+        } else {
+          self.dest_guid_prefix = info_dest.guid_prefix;
         }
       }
     }
@@ -385,7 +385,7 @@ impl MessageReceiver {
       self
         .available_readers
         .get(&eid)
-        .map(|r| r.notify_cache_change());
+        .map(Reader::notify_cache_change);
     }
   }
 
