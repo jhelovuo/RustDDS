@@ -1,3 +1,6 @@
+use crate::network::util::get_local_multicast_locators;
+use crate::network::util::get_local_unicast_locators;
+use crate::structure::locator::Locator;
 use std::{
   io,
   net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -82,10 +85,15 @@ impl UDPListener {
     Ok(mio_socket)
   }
 
-  // Note that this typically does not give the local IP address, but
-  // "0.0.0.0", which means we are listening to any address.
-  pub fn to_socketaddr(&self) -> io::Result<SocketAddr> {
-    self.socket.local_addr()
+  pub fn to_locator_address(&self) -> io::Result<Vec<Locator>> {
+    let local_port = self.socket.local_addr()?.port();
+
+    match self.multicast_group {
+      Some(_ipv4_addr) => 
+        Ok(get_local_multicast_locators(local_port)),
+      None =>
+        Ok(get_local_unicast_locators(local_port)),
+    }
   }
 
   pub fn new_unicast(host: &str, port: u16) -> io::Result<UDPListener> {
