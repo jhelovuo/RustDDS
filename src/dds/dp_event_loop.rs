@@ -23,7 +23,7 @@ use crate::{
   messages::submessages::submessages::AckSubmessage,
   network::{
     constant::*, udp_listener::UDPListener, udp_sender::UDPSender,
-    util::get_local_multicast_locators,
+    //util::get_local_multicast_locators,
   },
   structure::{
     builtin_endpoint::BuiltinEndpointSet,
@@ -592,9 +592,9 @@ impl DPEventLoop {
                 EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
               );
 
-              reader_proxy.multicast_locator_list = get_local_multicast_locators(
-                spdp_well_known_multicast_port(self.domain_info.domain_id),
-              );
+              // reader_proxy.multicast_locator_list = get_local_multicast_locators(
+              //   spdp_well_known_multicast_port(self.domain_info.domain_id),
+              // );
             }
             // common processing for SPDP and SEDP
             writer.update_reader_proxy(&reader_proxy, &qos);

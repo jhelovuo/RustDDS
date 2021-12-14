@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-
 use mio::Token;
 use serde::{de::Error, Deserialize, Serialize};
 use cdr_encoding_size::*;
@@ -14,7 +13,9 @@ use crate::{
     traits::{key::Keyed, Key},
   },
   messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
-  network::constant::*,
+  network::{
+    constant::*,
+  },
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
     builtin_data_serializer::{BuiltinDataSerializer, BuiltinDataSerializerKey},
@@ -73,12 +74,10 @@ impl SpdpDiscoveredParticipantData {
     proxy.expects_in_line_qos = self.expects_inline_qos;
 
     if !is_metatraffic {
-      // TODO: possible multicast addresses
-      // proxy.multicast_locator_list = self.default_multicast_locators.clone();
+      proxy.multicast_locator_list = self.default_multicast_locators.clone();
       proxy.unicast_locator_list = self.default_unicast_locators.clone();
     } else {
-      // TODO: possible multicast addresses
-      // proxy.multicast_locator_list = self.metatraffic_multicast_locators.clone();
+      proxy.multicast_locator_list = self.metatraffic_multicast_locators.clone();
       proxy.unicast_locator_list = self.metatraffic_unicast_locators.clone();
     }
 
@@ -118,28 +117,25 @@ impl SpdpDiscoveredParticipantData {
 
   pub fn from_local_participant(
     participant: &DomainParticipant,
-    self_locators: &HashMap<Token, Vec<Locator>>,
+    self_locators: &HashMap<Token,Vec<Locator>>,
     lease_duration: Duration,
   ) -> SpdpDiscoveredParticipantData {
-    let metatraffic_multicast_locators = self_locators
-      .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-      .cloned()
-      .unwrap_or_else(Vec::new);
 
-    let metatraffic_unicast_locators = self_locators
-      .get(&DISCOVERY_LISTENER_TOKEN)
-      .cloned()
-      .unwrap_or_else(Vec::new);
+    let metatraffic_multicast_locators = self_locators.get(&DISCOVERY_MUL_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or_else(Vec::new);
 
-    let default_multicast_locators = self_locators
-      .get(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
-      .cloned()
-      .unwrap_or_else(Vec::new);
+    let metatraffic_unicast_locators = self_locators.get(&DISCOVERY_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or_else(Vec::new);
 
-    let default_unicast_locators = self_locators
-      .get(&USER_TRAFFIC_LISTENER_TOKEN)
-      .cloned()
-      .unwrap_or_else(Vec::new);
+    let default_multicast_locators = self_locators.get(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or_else(Vec::new);
+
+    let default_unicast_locators = self_locators.get(&USER_TRAFFIC_LISTENER_TOKEN)
+        .cloned()
+        .unwrap_or_else(Vec::new);
 
     let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR
@@ -252,7 +248,7 @@ mod tests {
   fn pdata_deserialize_serialize() {
     let data = spdp_participant_data_raw();
 
-    let rtpsmsg = Message::read_from_buffer(&data).unwrap();
+    let rtpsmsg = Message::read_from_buffer(data.clone()).unwrap();
     let submsgs = rtpsmsg.submessages();
 
     for submsg in submsgs.iter() {
