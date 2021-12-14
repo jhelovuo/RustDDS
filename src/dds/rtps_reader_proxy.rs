@@ -82,7 +82,7 @@ impl RtpsReaderProxy {
     let mut self_locators = domain_participant.self_locators(); // This clones a map of locator lists.
     let unicast_locator_list = self_locators
       .remove(&USER_TRAFFIC_LISTENER_TOKEN)
-      .unwrap_or_else(Vec::new);
+      .unwrap_or_default();
     let multicast_locator_list = self_locators
       .remove(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
       .unwrap_or_else(Vec::new);
