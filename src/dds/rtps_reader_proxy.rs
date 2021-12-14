@@ -85,7 +85,7 @@ impl RtpsReaderProxy {
       .unwrap_or_default();
     let multicast_locator_list = self_locators
       .remove(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
-      .unwrap_or_else(Vec::new);
+      .unwrap_or_default();
 
     RtpsReaderProxy {
       remote_reader_guid: reader.guid,
