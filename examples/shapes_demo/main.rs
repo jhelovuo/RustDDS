@@ -15,15 +15,14 @@ use log4rs::{
   Config,
 };
 use rustdds::dds::{
-  TopicKind,
-  data_types::{DDSDuration, },
+  data_types::DDSDuration,
   qos::{
     policy::{Deadline, Durability, History, Reliability},
     QosPolicyBuilder,
   },
   statusevents::StatusEvented,
   traits::{Keyed, TopicDescription},
-  DomainParticipant,
+  DomainParticipant, TopicKind,
 };
 use serde::{Deserialize, Serialize};
 use clap::{App, Arg, ArgMatches}; // command line argument processing

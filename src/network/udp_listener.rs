@@ -1,6 +1,3 @@
-use crate::network::util::get_local_multicast_locators;
-use crate::network::util::get_local_unicast_locators;
-use crate::structure::locator::Locator;
 use std::{
   io,
   net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -11,7 +8,12 @@ use log::{debug, error, info, trace};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use bytes::{Bytes, BytesMut};
 
-use crate::network::util::get_local_multicast_ip_addrs;
+use crate::{
+  network::util::{
+    get_local_multicast_ip_addrs, get_local_multicast_locators, get_local_unicast_locators,
+  },
+  structure::locator::Locator,
+};
 
 const MAX_MESSAGE_SIZE: usize = 64 * 1024; // This is max we can get from UDP.
 const MESSAGE_BUFFER_ALLOCATION_CHUNK: usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
@@ -89,10 +91,8 @@ impl UDPListener {
     let local_port = self.socket.local_addr()?.port();
 
     match self.multicast_group {
-      Some(_ipv4_addr) => 
-        Ok(get_local_multicast_locators(local_port)),
-      None =>
-        Ok(get_local_unicast_locators(local_port)),
+      Some(_ipv4_addr) => Ok(get_local_multicast_locators(local_port)),
+      None => Ok(get_local_unicast_locators(local_port)),
     }
   }
 
