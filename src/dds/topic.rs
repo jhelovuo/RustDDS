@@ -8,7 +8,10 @@ use crate::dds::{
 };
 pub use crate::structure::topic_kind::TopicKind;
 
-/// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class
+/// Trait approximation of DDS 2.2.2.3.1 TopicDescription Class
+///
+/// Now it is utterly useless, but if we ever add ContentFilteredTopic or
+/// MultiTopic, then it may turn out to be useful.
 pub trait TopicDescription {
   fn participant(&self) -> Option<DomainParticipant>;
   fn get_type(&self) -> TypeDesc; // This replaces type_name() from spec
