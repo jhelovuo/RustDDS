@@ -28,7 +28,7 @@ use crate::{
   network::{
     constant::*,
     udp_listener::UDPListener,
-    util::{get_local_multicast_locators, get_local_unicast_locators},
+    //util::{get_local_multicast_locators, get_local_unicast_locators},
   },
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::GUID, locator::Locator},
 };
@@ -681,15 +681,8 @@ impl DomainParticipantInner {
     // construct our own Locators
     let self_locators: HashMap<Token, Vec<Locator>> = listeners
       .iter()
-      .map(|(t, l)| match l.to_socketaddr() {
-        Ok(sa) => {
-          let locs = if sa.ip().is_multicast() {
-            get_local_multicast_locators(sa.port())
-          } else {
-            get_local_unicast_locators(sa.port())
-          };
-          (*t, locs)
-        }
+      .map(|(t, l)| match l.to_locator_address() {
+        Ok(locs) =>  (*t, locs),
         Err(e) => {
           error!("No local network address for token {:?}: {:?}", t, e);
           (*t, vec![])
