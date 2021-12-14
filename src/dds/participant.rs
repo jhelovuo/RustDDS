@@ -25,11 +25,7 @@ use crate::{
     discovery_db::DiscoveryDB,
   },
   log_and_err_internal,
-  network::{
-    constant::*,
-    udp_listener::UDPListener,
-    //util::{get_local_multicast_locators, get_local_unicast_locators},
-  },
+  network::{constant::*, udp_listener::UDPListener},
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::GUID, locator::Locator},
 };
 use super::dp_event_loop::DomainInfo;
@@ -380,7 +376,6 @@ impl DomainParticipantWeak {
   pub fn upgrade(self) -> Option<DomainParticipant> {
     self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
   }
-
 } // end impl
 
 impl RTPSEntity for DomainParticipantWeak {
@@ -682,7 +677,7 @@ impl DomainParticipantInner {
     let self_locators: HashMap<Token, Vec<Locator>> = listeners
       .iter()
       .map(|(t, l)| match l.to_locator_address() {
-        Ok(locs) =>  (*t, locs),
+        Ok(locs) => (*t, locs),
         Err(e) => {
           error!("No local network address for token {:?}: {:?}", t, e);
           (*t, vec![])

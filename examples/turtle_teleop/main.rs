@@ -10,11 +10,12 @@ use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 use rustdds::{
   dds::{
-    data_types::{DDSDuration, TopicKind},
+    data_types::DDSDuration,
     qos::{
       policy::{Durability, History, Liveliness, Reliability},
       QosPolicies, QosPolicyBuilder,
     },
+    TopicKind,
   },
   ros2::{NodeOptions, RosParticipant},
   serialization::{CDRDeserializerAdapter, CDRSerializerAdapter},

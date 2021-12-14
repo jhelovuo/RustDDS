@@ -21,10 +21,7 @@ use crate::{
     discovery_db::DiscoveryDB,
   },
   messages::submessages::submessages::AckSubmessage,
-  network::{
-    constant::*, udp_listener::UDPListener, udp_sender::UDPSender,
-    //util::get_local_multicast_locators,
-  },
+  network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},
   structure::{
     builtin_endpoint::BuiltinEndpointSet,
     dds_cache::DDSCache,
@@ -592,7 +589,8 @@ impl DPEventLoop {
                 EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
               );
 
-              // reader_proxy.multicast_locator_list = get_local_multicast_locators(
+              // reader_proxy.multicast_locator_list =
+              // get_local_multicast_locators(
               //   spdp_well_known_multicast_port(self.domain_info.domain_id),
               // );
             }

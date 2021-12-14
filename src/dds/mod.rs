@@ -143,7 +143,11 @@ pub mod data_types {
   };
   #[doc(inline)]
   pub use crate::structure::duration::Duration as DDSDuration;
-  pub use super::{readcondition::ReadCondition, traits::key::BuiltInTopicKey};
+  pub use super::{
+    readcondition::ReadCondition,
+    topic::{Topic, TopicKind},
+    traits::key::BuiltInTopicKey,
+  };
   #[doc(inline)]
   pub use super::with_key::datareader::SelectByKey;
   #[doc(inline)]
@@ -158,7 +162,7 @@ pub mod error {
 }
 
 pub use participant::DomainParticipant;
-pub use topic::{Topic,TopicKind};
+pub use topic::{Topic, TopicKind};
 pub use pubsub::{Publisher, Subscriber};
 #[doc(inline)]
 pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
