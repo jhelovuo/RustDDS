@@ -1,9 +1,9 @@
 //! A pure Rust implementation of Data Distribution Service (DDS).
 //!
-//! DDS is an object-oriented API [specified](https://www.omg.org/spec/DDSI-RTPS/2.3) by
+//! DDS is an object-oriented API [specified](https://www.omg.org/spec/DDS/) by
 //! the Object Management Group.
 //!
-//! DDS communicates over the network using the [RTPS](https://www.omg.org/spec/DDSI-RTPS/2.3)
+//! DDS communicates over the network using the [RTPS](https://www.omg.org/spec/DDSI-RTPS/)
 //! protocol, which by default runs over UDP/IP.
 //!
 //! This implementation does not attempt to make an accurate implementation of
@@ -28,18 +28,18 @@
 //!   [`Publisher`] and [`Topic`].
 //! * Data from `DataReader` can be read or taken. Taking removes the data
 //!   samples from the DataReader, whereas reading only marks them as read.
-//! * Topics are either WithKey or NoKey. WithKey topics are like map data
-//!   structures, containing multiple instances (map items), identified by key.
+//! * Topics are either With_Key or No_Key. With_Key topics are like map data
+//!   structures, containing multiple instances (map items), identified by a key.
 //!   The key must be something that can be extracted from the data samples.
-//!   Instances can be created (published) and deleted (disposed). NoKey topics
+//!   Instances can be created (published) and deleted (disposed). No_Key topics
 //!   have always only one instance of the data.
-//! * Data is sent and received in consecutive samples. When read, a smaple is
-//!   accompanied with metadata (SampleInfo).
+//! * Data is sent and received in consecutive samples. When read, a sample is
+//!   accompanied with metadata ([`SampleInfo`]).
 //!
 //! # Interfacing Rust data types to DDS
 //!
 //! * DDS takes care of serialization and deserialization.
-//! In order to do this, the payload data must be Serde
+//! In order for RustDDS to do this, the payload data must be [Serde](https://serde.rs/)
 //! serializable/deserializable.
 //! * If your data is to be communicated over a WithKey topic, the payload data
 //!   type must implement [`Keyed`] trait from this crate.

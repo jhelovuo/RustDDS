@@ -8,7 +8,7 @@ use log::warn;
 /// Used to identify serialization format of payload data over RTPS.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
 pub struct RepresentationIdentifier {
-  pub bytes: [u8; 2],
+  bytes: [u8; 2],
 }
 
 impl RepresentationIdentifier {
@@ -52,6 +52,7 @@ impl RepresentationIdentifier {
     bytes: [0x00, 0x04],
   };
 
+  // Reads two bytes to form a `RepresentationIdentifier`
   pub fn from_bytes(bytes: &[u8]) -> io::Result<RepresentationIdentifier> {
     let mut reader = io::Cursor::new(bytes);
     Ok(RepresentationIdentifier {

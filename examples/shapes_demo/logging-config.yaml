@@ -4,8 +4,8 @@ appenders:
   stdout:
     kind: console
 root:
-#  level: info
-  level: warn
+  level: info
+#  level: warn
   appenders:
     - stdout
 loggers:
