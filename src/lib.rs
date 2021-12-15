@@ -29,10 +29,10 @@
 //! * Data from `DataReader` can be read or taken. Taking removes the data
 //!   samples from the DataReader, whereas reading only marks them as read.
 //! * Topics are either With_Key or No_Key. With_Key topics are like map data
-//!   structures, containing multiple instances (map items), identified by a key.
-//!   The key must be something that can be extracted from the data samples.
-//!   Instances can be created (published) and deleted (disposed). No_Key topics
-//!   have always only one instance of the data.
+//!   structures, containing multiple instances (map items), identified by a
+//!   key. The key must be something that can be extracted from the data
+//!   samples. Instances can be created (published) and deleted (disposed).
+//!   No_Key topics have always only one instance of the data.
 //! * Data is sent and received in consecutive samples. When read, a sample is
 //!   accompanied with metadata ([`SampleInfo`]).
 //!
@@ -46,6 +46,12 @@
 //! * If you are using CDR serialization (DDS default), then use [`CDRSerializerAdapter`](../serialization/CdrSerializerAdapter) and [`CdrDeserializerAdapter`](../serialization/CdrDeserializerAdapter)
 //!   when such adapters are required. If you need to use another serialization format, then you should find or write
 //!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
+//!
+//! # Polling multiple DataReaders
+//!
+//! RustDDS is designed to used with [mio](mio) version 0.6.x. DataReaders
+//! implement [`Evented`](mio::event::Evented) so that they can be directly
+//! registered to a [`poll`](mio::Poll).
 //!
 //! # Usage Example
 //!
@@ -141,7 +147,7 @@ pub mod ros2;
 pub mod serialization;
 
 // Re-exports from crate root to simplify usage
-
+#[doc(inline)]
 pub use dds::{
   participant::DomainParticipant,
   pubsub::{Publisher, Subscriber},
@@ -155,21 +161,20 @@ pub use dds::{
   typedesc::TypeDesc,
   values::result::{Error, Result},
 };
-
-/// Needed to specify serialized data representation in case it is other than CDR.
+/// Needed to specify serialized data representation in case it is other than
+/// CDR.
 pub use messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
+pub use serialization::{
+  CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer,
+};
+pub use structure::{duration::Duration, guid::GUID, time::Timestamp};
 
 /// Components used to access NO_KEY Topics
 pub mod no_key {
-  pub use crate::dds::no_key::*;
-  pub use crate::dds::traits::serde_adapters::no_key::*;
+  pub use crate::dds::{no_key::*, traits::serde_adapters::no_key::*};
 }
 
 /// Components used to access WITH_KEY Topics
 pub mod with_key {
-  pub use crate::dds::with_key::*;
-  pub use crate::dds::traits::serde_adapters::with_key::*;
+  pub use crate::dds::{traits::serde_adapters::with_key::*, with_key::*};
 }
-
-pub use serialization::{CdrSerializer, CdrDeserializer, CDRSerializerAdapter, CDRDeserializerAdapter};
-pub use structure::{duration::Duration, time::Timestamp};

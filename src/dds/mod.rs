@@ -1,5 +1,6 @@
-//! DDS interface - Most commonly needed items should be re-exported directly to crate top level and modules [`no_key`](crate::no_key) and [`with_key`](crate::with_key).
-//!
+//! DDS interface - Most commonly needed items should be re-exported directly to
+//! crate top level and modules [`no_key`](crate::no_key) and
+//! [`with_key`](crate::with_key).
 
 mod datasample_cache;
 pub(crate) mod ddsdata;
@@ -34,6 +35,12 @@ pub mod qos;
 pub mod statusevents;
 
 /// Datatypes needed for overall operability with this crate
+
+#[deprecated(
+  since = "0.7.0",
+  note = "Please use re-exports directly from crate top level instead."
+)]
+#[doc(hidden)]
 pub mod data_types {
   pub use crate::{
     dds::sampleinfo::SampleInfo,

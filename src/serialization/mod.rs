@@ -13,12 +13,8 @@ pub(crate) mod submessage;
 pub(crate) use message::*;
 pub(crate) use submessage::*;
 // public exports
-pub use cdr_serializer::CDRSerializerAdapter;
-pub use cdr_deserializer::CDRDeserializerAdapter;
-
-pub use cdr_serializer::CdrSerializer;
-pub use cdr_deserializer::CdrDeserializer;
-
+pub use cdr_serializer::{CDRSerializerAdapter, CdrSerializer};
+pub use cdr_deserializer::{CDRDeserializerAdapter, CdrDeserializer};
 pub use byteorder::{BigEndian, LittleEndian};
 
 pub use crate::dds::traits::serde_adapters::{no_key, with_key};

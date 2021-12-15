@@ -317,10 +317,7 @@ mod tests {
 
   use super::DDSCache;
   use crate::{
-    dds::{
-      ddsdata::DDSData,
-      typedesc::TypeDesc,
-    },
+    dds::{ddsdata::DDSData, typedesc::TypeDesc},
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::{
       cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, topic_kind::TopicKind,
@@ -357,20 +354,22 @@ mod tests {
         None,
         DDSData::new(SerializedPayload::default()),
       );
-      pointer_to_cache_1
-        .write()
-        .unwrap()
-        .add_change(&topic_name, &crate::Timestamp::now(), cahange2);
+      pointer_to_cache_1.write().unwrap().add_change(
+        &topic_name,
+        &crate::Timestamp::now(),
+        cahange2,
+      );
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(3),
         None,
         DDSData::new(SerializedPayload::default()),
       );
-      pointer_to_cache_1
-        .write()
-        .unwrap()
-        .add_change(&topic_name, &crate::Timestamp::now(), cahange3);
+      pointer_to_cache_1.write().unwrap().add_change(
+        &topic_name,
+        &crate::Timestamp::now(),
+        cahange3,
+      );
     })
     .join()
     .unwrap();

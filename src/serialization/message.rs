@@ -7,10 +7,7 @@ use enumflags2::BitFlags;
 use bytes::Bytes;
 
 use crate::{
-  dds::{
-    ddsdata::DDSData,
-    writer::Writer as RtpsWriter,
-  },
+  dds::{ddsdata::DDSData, writer::Writer as RtpsWriter},
   messages::{
     header::Header,
     protocol_id::ProtocolId,
@@ -29,7 +26,7 @@ use crate::{
   structure::{
     cache_change::CacheChange,
     entity::RTPSEntity,
-    guid::{GUID, EntityId, EntityKind, GuidPrefix},
+    guid::{EntityId, EntityKind, GuidPrefix, GUID},
     parameter_id::ParameterId,
     sequence_number::{SequenceNumber, SequenceNumberSet},
     time::Timestamp,
@@ -321,11 +318,7 @@ impl MessageBuilder {
   /// Argument Some(timestamp) means that a timestamp is sent.
   /// Argument None means "invalidate", i.e. the previously sent
   /// [`InfoTimestamp`] submessage no longer applies.
-  pub fn ts_msg(
-    mut self,
-    endianness: Endianness,
-    timestamp: Option<Timestamp>,
-  ) -> MessageBuilder {
+  pub fn ts_msg(mut self, endianness: Endianness, timestamp: Option<Timestamp>) -> MessageBuilder {
     let mut flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(endianness);
     if timestamp.is_none() {
       flags |= INFOTIMESTAMP_Flags::Invalidate;

@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use super::duration::Duration;
 
-
-/// Representation of time instants in DDS API and RTPS protocol. Similar to [`std::time::Instant`].
+/// Representation of time instants in DDS API and RTPS protocol. Similar to
+/// [`std::time::Instant`].
 ///
 /// Quoting RTPS 2.3 spec 9.3.2.1:
 ///
@@ -24,7 +24,7 @@ use super::duration::Duration;
 /// beginning of the 20th century epoch (1900-01-01 00:00) instead. So the RTPS
 /// timestamps are not interchangeable with NTP.
 ///
-/// 
+///
 /// This type is called Time_t in the RTPS spec.
 #[derive(
   Debug, PartialEq, Eq, PartialOrd, Ord, Readable, Writable, Clone, Copy, Serialize, Deserialize,

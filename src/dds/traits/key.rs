@@ -20,8 +20,8 @@ use crate::serialization::{cdr_serializer::to_bytes, error::Error};
 /// The key is used to distinguish between different Instances of the data in a
 /// DDS Topic.
 ///
-/// A `Keyed` type has an associated type `K`, which is the corresponding key type. `K`
-/// must implement [`Key`]. Otherwise, `K` can be chosen to suit the
+/// A `Keyed` type has an associated type `K`, which is the corresponding key
+/// type. `K` must implement [`Key`]. Otherwise, `K` can be chosen to suit the
 /// application. It is advisable that `K` is something that can be cloned with
 /// reasonable effort.
 ///
@@ -60,8 +60,8 @@ impl KeyHash {
   }
 }
 
-/// Key trait for WITH_KEY Topics. The instance lookup key type must implement this. 
-/// The corresponding data sample type must implement [`Keyed`]. 
+/// Key trait for WITH_KEY Topics. The instance lookup key type must implement
+/// this. The corresponding data sample type must implement [`Keyed`].
 /// If the topic is NO_KEY, both of these can be ignored.
 ///
 /// It is a combination of traits from the standard library
