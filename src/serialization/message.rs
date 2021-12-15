@@ -8,7 +8,6 @@ use bytes::Bytes;
 
 use crate::{
   dds::{
-    data_types::{DDSTimestamp, EntityId, GUID},
     ddsdata::DDSData,
     writer::Writer as RtpsWriter,
   },
@@ -30,7 +29,7 @@ use crate::{
   structure::{
     cache_change::CacheChange,
     entity::RTPSEntity,
-    guid::{EntityKind, GuidPrefix},
+    guid::{GUID, EntityId, EntityKind, GuidPrefix},
     parameter_id::ParameterId,
     sequence_number::{SequenceNumber, SequenceNumberSet},
     time::Timestamp,
@@ -325,7 +324,7 @@ impl MessageBuilder {
   pub fn ts_msg(
     mut self,
     endianness: Endianness,
-    timestamp: Option<DDSTimestamp>,
+    timestamp: Option<Timestamp>,
   ) -> MessageBuilder {
     let mut flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(endianness);
     if timestamp.is_none() {

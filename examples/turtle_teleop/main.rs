@@ -10,7 +10,6 @@ use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 use rustdds::{
   dds::{
-    data_types::DDSDuration,
     qos::{
       policy::{Durability, History, Liveliness, Reliability},
       QosPolicies, QosPolicyBuilder,
@@ -117,10 +116,10 @@ fn ros2_loop(
     QosPolicyBuilder::new()
       .durability(Durability::Volatile)
       .liveliness(Liveliness::Automatic {
-        lease_duration: DDSDuration::DURATION_INFINITE,
+        lease_duration: rustdds::Duration::DURATION_INFINITE,
       })
       .reliability(Reliability::Reliable {
-        max_blocking_time: DDSDuration::from_millis(100),
+        max_blocking_time: rustdds::Duration::from_millis(100),
       })
       .history(History::KeepLast { depth: 10 })
       .build()

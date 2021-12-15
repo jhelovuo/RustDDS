@@ -156,6 +156,9 @@ pub use dds::{
   values::result::{Error, Result},
 };
 
+/// Needed to specify serialized data representation in case it is other than CDR.
+pub use messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
+
 /// Components used to access NO_KEY Topics
 pub mod no_key {
   pub use crate::dds::no_key::*;

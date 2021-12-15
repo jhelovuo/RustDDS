@@ -30,8 +30,18 @@ use crate::{
 };
 use super::dp_event_loop::DomainInfo;
 
-/// DDS DomainParticipant generally only one per domain per machine should be
-/// active
+/// DDS DomainParticipant
+///
+/// It is recommended that only one DomainParticipant per OS process is created, 
+/// as it allocates network sockets, creates background threads, and allocates some memory
+/// for object caches.
+///
+/// If you need to communicate to many DDS domains, 
+/// then you must create a separate DomainParticiapnt for each of them.
+/// See DDS Spec v1.4 Section "2.2.1.2.2 Overall Conceptual Model" and 
+/// "2.2.2.2.1 DomainParticipant Class" for a definition of a (DDS) domain.
+/// Domains are identified by a domain identifier, which is, in Rust terms, a `u16`.
+/// Domain identifer values are application-specific, but `0` is usually the default. 
 #[derive(Clone)]
 // This is a smart pointer for DomainParticipantInner for easier manipulation.
 pub struct DomainParticipant {
@@ -42,7 +52,7 @@ pub struct DomainParticipant {
 impl DomainParticipant {
   /// # Examples
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::DomainParticipant;
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
   pub fn new(domain_id: u16) -> Result<DomainParticipant> {

@@ -5,6 +5,7 @@ use speedy::{Context, Readable, Writable, Writer};
 use byteorder::ReadBytesExt;
 use log::warn;
 
+/// Used to identify serialization format of payload data over RTPS.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
 pub struct RepresentationIdentifier {
   pub bytes: [u8; 2],

@@ -40,8 +40,6 @@ pub mod data_types {
     discovery::data_types::topic_data::{DiscoveredTopicData, SubscriptionBuiltinTopicData},
     structure::guid::*,
   };
-  #[doc(inline)]
-  pub use crate::structure::duration::Duration as DDSDuration;
   pub use super::{
     readcondition::ReadCondition,
     topic::{Topic, TopicKind},
@@ -49,8 +47,6 @@ pub mod data_types {
   };
   #[doc(inline)]
   pub use super::with_key::datareader::SelectByKey;
-  #[doc(inline)]
-  pub use crate::structure::time::Timestamp as DDSTimestamp;
   // TODO: move typedesc module somewhere better
   pub use crate::dds::typedesc::TypeDesc;
 }

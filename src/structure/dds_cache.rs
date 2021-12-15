@@ -318,7 +318,6 @@ mod tests {
   use super::DDSCache;
   use crate::{
     dds::{
-      data_types::{DDSDuration, DDSTimestamp},
       ddsdata::DDSData,
       typedesc::TypeDesc,
     },
@@ -346,7 +345,7 @@ mod tests {
     cache
       .write()
       .unwrap()
-      .add_change(&topic_name, &DDSTimestamp::now(), change1);
+      .add_change(&topic_name, &crate::Timestamp::now(), change1);
 
     let pointer_to_cache_1 = cache.clone();
 
@@ -361,7 +360,7 @@ mod tests {
       pointer_to_cache_1
         .write()
         .unwrap()
-        .add_change(&topic_name, &DDSTimestamp::now(), cahange2);
+        .add_change(&topic_name, &crate::Timestamp::now(), cahange2);
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(3),
@@ -371,7 +370,7 @@ mod tests {
       pointer_to_cache_1
         .write()
         .unwrap()
-        .add_change(&topic_name, &DDSTimestamp::now(), cahange3);
+        .add_change(&topic_name, &crate::Timestamp::now(), cahange3);
     })
     .join()
     .unwrap();
@@ -379,15 +378,15 @@ mod tests {
     cache
       .read()
       .unwrap()
-      .from_topic_get_change(&topic_name, &DDSTimestamp::now());
+      .from_topic_get_change(&topic_name, &crate::Timestamp::now());
     assert_eq!(
       cache
         .read()
         .unwrap()
         .from_topic_get_changes_in_range(
           &topic_name,
-          &(DDSTimestamp::now() - DDSDuration::from_secs(23)),
-          &DDSTimestamp::now()
+          &(crate::Timestamp::now() - crate::Duration::from_secs(23)),
+          &crate::Timestamp::now()
         )
         .count(),
       3
@@ -396,8 +395,8 @@ mod tests {
     //   "{:?}",
     //   cache.read().unwrap().from_topic_get_changes_in_range(
     //     topic_name,
-    //     &(DDSTimestamp::now() - DDSDuration::from_secs(23)),
-    //     &DDSTimestamp::now()
+    //     &(DDSTimestamp::now() - rustdds::Duration::from_secs(23)),
+    //     &crate::Timestamp::now()
     //   )
     // );
   }
