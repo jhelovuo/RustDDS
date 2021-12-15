@@ -52,7 +52,7 @@ pub enum QosPolicyId {
   //DurabilityService, // 22
 }
 
-/// Utility for building [QosPolicies](struct.QosPolicies.html)
+/// Utility for building [QosPolicies]
 #[derive(Default)]
 pub struct QosPolicyBuilder {
   durability: Option<policy::Durability>,
@@ -161,7 +161,9 @@ impl QosPolicyBuilder {
   }
 }
 
-/// Describes single RTPS/DDS QoS policy
+/// Describes a set of RTPS/DDS QoS policies
+///
+/// QosPolicies are constructed using a [`QosPolicyBuilder`]
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct QosPolicies {
   // pub(crate) beacuse as we want to have some builtin QoS Policies as constant.
@@ -237,6 +239,10 @@ impl QosPolicies {
     self.lifespan
   }
 
+  /// Merge two QosPolicies
+  ///
+  /// Constructs a QosPolicy, where each policy is taken from `self`,
+  /// and overwritten with those policies from `other` that are defined.  
   pub fn modify_by(&self, other: &QosPolicies) -> QosPolicies {
     QosPolicies {
       durability: other.durability.or(self.durability),
@@ -254,16 +260,19 @@ impl QosPolicies {
     }
   }
 
-  // Check if policy self commplies to other.
-  //
-  // "self" is the "offered" (publisher) QoS
-  // "other" is the "requested" (subscriber) QoS
-  // yes => None (no failure, i.e. are compatible)
-  // no => Some(policyId) , where policyId is (any) one of the policies
-  // causing incompliance
-  // Compliance (comaptibility) is defined in the table in DDS spec v1.4
-  // Section "2.2.3 Supported QoS"
-  // This is not symmetric.
+  /// Check if policy commplies to another policy.
+  ///
+  /// `self` is the "offered" (publisher) QoS
+  /// `other` is the "requested" (subscriber) QoS
+  ///
+  /// * None => Policies are compatible
+  /// * Some(policyId) => Failure, where policyId is (any) one of the policies
+  /// causing incompliance
+  ///
+  /// Compliance (compatibility) is defined in the table in DDS spec v1.4
+  /// Section "2.2.3 Supported QoS"
+  ///
+  /// This is not symmetric.
   pub fn compliance_failure_wrt(&self, other: &QosPolicies) -> Option<QosPolicyId> {
     trace!(
       "QoS compatibility check - offered: {:?} - requested {:?}",
@@ -275,7 +284,7 @@ impl QosPolicies {
     result
   }
 
-  pub fn compliance_failure_wrt_impl(&self, other: &QosPolicies) -> Option<QosPolicyId> {
+  fn compliance_failure_wrt_impl(&self, other: &QosPolicies) -> Option<QosPolicyId> {
     // TODO: Check for cases where policy is requested, but not offered (None)
 
     // check Durability: Offered must be better than or equal to Requested.

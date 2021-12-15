@@ -1,21 +1,22 @@
 use crate::dds::{sampleinfo::*, traits::key::*};
 
-//use super::{interfaces::{IDataSample, IDataSampleConvert, IKeyedDataSample,
-// IKeyedDataSampleConvert}, no_key::wrappers::NoKeyWrapper};
-
-/// DDS spec 2.2.2.5.4
+/// A data sample and its associated [metadata](`SampleInfo`) received from a
+/// WITH_KEY Topic.
 ///
-/// Note that no_key::DataSample and with_key::DataSample are two different but
-/// similar structs.
+/// Note that [`no_key::DataSample`](crate::no_key::DataSample) and
+/// [`with_key::DataSample`](crate::with_key::DataSample) are two different
+/// structs.
 ///
-/// We are making a bit unorthodox use of `Result`:
-/// It replaces the use of valid_data flag, because when valid_data = false, we
-/// should not provide any data value.
-/// Now
-/// * `Ok(D)` means valid_data = true and there is a sample.
-/// * `Err(D::K)` means valid_data = false, no sample exists, but only a Key and
-///   instance_state has changed.
-
+/// We are making a bit unorthodox use of [`Result`](std::result::Result) here.
+/// It replaces the use of `valid_data` flag from the DDS spec, because when
+/// `valid_data = false`, the application should not be able to access any data.
+///
+/// Result usage:
+/// * `Ok(d)` means `valid_data == true` and there is a sample `d`.
+/// * `Err(k)` means `valid_data == false`, no sample exists, but only a Key `k`
+///   and instance_state has changed.
+///
+/// See also DDS spec v1.4 Section 2.2.2.5.4.
 #[derive(PartialEq, Debug)]
 pub struct DataSample<D: Keyed> {
   pub(crate) sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?

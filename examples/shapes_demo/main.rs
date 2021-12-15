@@ -14,16 +14,7 @@ use log4rs::{
   config::{Appender, Root},
   Config,
 };
-use rustdds::dds::{
-  data_types::DDSDuration,
-  qos::{
-    policy::{Deadline, Durability, History, Reliability},
-    QosPolicyBuilder,
-  },
-  statusevents::StatusEvented,
-  traits::{Keyed, TopicDescription},
-  DomainParticipant, TopicKind,
-};
+use rustdds::{self, *};
 use serde::{Deserialize, Serialize};
 use clap::{App, Arg, ArgMatches}; // command line argument processing
 use mio::{Events, Poll, PollOpt, Ready, Token}; // polling
@@ -73,7 +64,7 @@ fn main() {
   let mut qos_b = QosPolicyBuilder::new()
     .reliability(if matches.is_present("reliable") {
       Reliability::Reliable {
-        max_blocking_time: DDSDuration::DURATION_ZERO,
+        max_blocking_time: rustdds::Duration::DURATION_ZERO,
       }
     } else {
       Reliability::BestEffort
@@ -97,7 +88,7 @@ fn main() {
   let deadline_policy = match matches.value_of("deadline") {
     None => None,
     Some(dl) => match dl.parse::<f64>() {
-      Ok(d) => Some(Deadline(DDSDuration::from_frac_seconds(d))),
+      Ok(d) => Some(Deadline(rustdds::Duration::from_frac_seconds(d))),
       Err(e) => panic!("Expected numeric value for deadline. {:?}", e),
     },
   };

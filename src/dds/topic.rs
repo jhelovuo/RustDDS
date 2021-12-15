@@ -8,7 +8,10 @@ use crate::dds::{
 };
 pub use crate::structure::topic_kind::TopicKind;
 
-/// Trait estimate of DDS 2.2.2.3.1 TopicDescription Class
+/// Trait approximation of DDS 2.2.2.3.1 TopicDescription Class
+///
+/// Now it is utterly useless, but if we ever add ContentFilteredTopic or
+/// MultiTopic, then it may turn out to be useful.
 pub trait TopicDescription {
   fn participant(&self) -> Option<DomainParticipant>;
   fn get_type(&self) -> TypeDesc; // This replaces type_name() from spec
@@ -16,6 +19,15 @@ pub trait TopicDescription {
 }
 
 /// DDS Topic
+///
+/// DDS Specification, Section 2.2.1.2 Conceptual outline:
+/// > Topic objects conceptually fit between publications and subscriptions.
+/// > Publications must be known in such a way that
+/// > subscriptions can refer to them unambiguously. A Topic is meant to fulfill
+/// that purpose: it associates a name (unique in the > domain), a data-type,
+/// and QoS related to the data itself.
+///
+/// Topics can be created (or found) using a [`DomainParticipant`].
 ///
 /// # Examples
 ///

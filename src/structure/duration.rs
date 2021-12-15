@@ -20,8 +20,12 @@ use super::parameter_id::ParameterId;
   Clone,
 )]
 
-/// Duration for Qos and wire interoperability
-/// Specified (as Duration_t) in RTPS spec 9.3.2
+/// Duration is the DDS/RTPS representation for legths of time, such as
+/// timeouts. It is very similar to [`std::time::Duration`]. See also
+/// [`Timestamp`](crate::Timestamp).
+///
+/// The resolution of `Duration` is 2^32 ticks per second.
+/// Specified (as `Duration_t`) in RTPS spec Section 9.3.2
 pub struct Duration {
   seconds: i32,
   fraction: u32, // unit is sec/2^32

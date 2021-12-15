@@ -10,7 +10,8 @@ pub use cdr_encoding_size::*;
 
 use crate::serialization::{cdr_serializer::to_bytes, error::Error};
 
-/// A sample data type may be `Keyed` : It allows a Key to be extracted from the
+/// For use in a WITH_KEY topic, data sample must implement `Keyed`.
+/// It allows a Key to be extracted from the
 /// sample. In its simplest form, the key may be just a part of the sample data,
 /// but it can be anything computable from an immutable sample by an
 /// application-defined function. It is recommended that this function be
@@ -19,8 +20,8 @@ use crate::serialization::{cdr_serializer::to_bytes, error::Error};
 /// The key is used to distinguish between different Instances of the data in a
 /// DDS Topic.
 ///
-/// A `Keyed` type has an associated type `K`, which is the actual key type. `K`
-/// must implement [`Key`]. Otherwise, `K` can be chosen to suit the
+/// A `Keyed` type has an associated type `K`, which is the corresponding key
+/// type. `K` must implement [`Key`]. Otherwise, `K` can be chosen to suit the
 /// application. It is advisable that `K` is something that can be cloned with
 /// reasonable effort.
 ///
@@ -59,7 +60,9 @@ impl KeyHash {
   }
 }
 
-/// Key trait for Keyed Topics
+/// Key trait for WITH_KEY Topics. The instance lookup key type must implement
+/// this. The corresponding data sample type must implement [`Keyed`].
+/// If the topic is NO_KEY, both of these can be ignored.
 ///
 /// It is a combination of traits from the standard library
 /// * [PartialEq](https://doc.rust-lang.org/std/cmp/trait.PartialEq.html)

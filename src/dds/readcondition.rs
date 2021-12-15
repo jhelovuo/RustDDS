@@ -2,10 +2,12 @@ use enumflags2::BitFlags;
 
 use crate::dds::sampleinfo::*;
 
-// This is used to specify which samples are to be read or taken.
-// To be selected, the current state of the sample must be included in the
-// corresponding bitflags.
-/// DDS ReadCondition 2.2.2.5.8
+/// This is used to specify which samples are to be read or taken from
+/// a [`Datareader`](crate::with_key::DataReader)
+///
+/// To be selected, the current state of the sample must be included in the
+/// corresponding bitflags.
+/// See DDS Specification 1.4 Section "2.2.2.5.8 ReadCondition"
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ReadCondition {
   sample_state_mask: BitFlags<SampleState>,

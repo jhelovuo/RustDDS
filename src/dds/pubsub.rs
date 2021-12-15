@@ -51,6 +51,20 @@ use super::{
 
 /// DDS Publisher
 ///
+/// The Publisher and Subscriber structures are collections of DataWriters
+/// and, respectively, DataReaders. They can contain DataWriters or DataReaders
+/// of different types, and attacehd to different Topics.
+///
+/// They can act as a domain of sample ordering or atomicity, if such QoS
+/// policies are used. For example, DDS participants could agree via QoS
+/// policies that data samples must be presented to readers in the same order as
+/// writers have written them, and the ordering applies also between several
+/// writers/readers, but within one publisher/subscriber. Analogous arrangement
+/// can be set up w.r.t. coherency: All the samples in a transaction are
+/// delivered to the readers, or none are. The transaction can span several
+/// readers, writers, and topics in a single publisher/subscriber.
+///
+///
 /// # Examples
 ///
 /// ```
@@ -595,6 +609,8 @@ impl Debug for InnerPublisher {
 // -------------------------------------------------------------------
 
 /// DDS Subscriber
+///
+/// See overview at [`Publisher`].
 ///
 /// # Examples
 ///

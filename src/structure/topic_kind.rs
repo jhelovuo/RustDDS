@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-/// Type for DDS Topic (Keyed or No key)
+/// Type for DDS Topic (With Key or No key)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Readable, Writable)]
 #[repr(u32)]
 pub enum TopicKind {

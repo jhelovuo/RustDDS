@@ -3,10 +3,14 @@ use crate::dds::{
   with_key::datasample::DataSample as WithKeyDataSample,
 };
 
-/// DDS spec 2.2.2.5.4
+/// A data sample and its associated [metadata](`SampleInfo`) received from a
+/// NO_KEY Topic.
 ///
-/// Note that no_key::DataSample and with_key::DataSample are two different but
-/// similar structs.
+/// See DDS spec version 1.4 Section 2.2.2.5.4
+///
+/// Note that [`no_key::DataSample`](crate::no_key::DataSample) and
+/// [`with_key::DataSample`](crate::with_key::DataSample) are two different
+/// structs.
 #[derive(PartialEq, Debug)]
 pub struct DataSample<D> {
   pub(crate) sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
