@@ -28,17 +28,27 @@
 //!   [`Publisher`] and [`Topic`].
 //! * Data from `DataReader` can be read or taken. Taking removes the data
 //!   samples from the DataReader, whereas reading only marks them as read.
-//! * Topics are either With_Key or No_Key. With_Key topics are like map data
-//!   structures, containing multiple instances (map items), identified by a
-//!   key. The key must be something that can be extracted from the data
+//!
+//! # Concepts
+//!
+//! * Data is sent and received in consecutive *samples*. When read, a sample is
+//!   accompanied with [`SampleInfo`], which contains DDS-generated metadata.
+//! * Topics are either With_Key or No_Key.
+//!   * With_Key topics are like map data
+//!   structures, containing multiple *instances* (map entries), identified by a
+//!   *key*. The key must be something that can be extracted from the data
 //!   samples. Instances can be created (published) and deleted (disposed).
-//!   No_Key topics have always only one instance of the data.
-//! * Data is sent and received in consecutive samples. When read, a sample is
-//!   accompanied with metadata ([`SampleInfo`]).
+//!   * No_Key topics have always only one instance, which cannot be disposed.
+//!   * Many types and traits in RustDDS have both with_key and no_key versions.
+//!     This is
+//!   because with_key communication must be able to access keys from data
+//! samples, so it is required   in type signatures. Such requirement makes no
+//! sense for no_key communication, so signature   must be different.
+//!
 //!
 //! # Interfacing Rust data types to DDS
 //!
-//! * DDS takes care of serialization and deserialization.
+//! * DDS, as specified, takes care of data serialization and deserialization.
 //! In order for RustDDS to do this, the payload data must be [Serde](https://serde.rs/)
 //! serializable/deserializable.
 //! * If your data is to be communicated over a WithKey topic, the payload data
@@ -64,7 +74,7 @@
 //! let domain_participant = DomainParticipant::new(0).unwrap();
 //!
 //! let qos = QosPolicyBuilder::new()
-//!   .reliability(Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
+//!   .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
 //!   .build();
 //!
 //! // DDS Subscriber, only one is necessary for each thread (slight difference to
@@ -141,7 +151,8 @@ pub(crate) mod structure;
 mod test;
 
 // Public modules
-pub mod dds;
+#[doc(hidden)]
+pub mod dds; // this is public, but not advertised
 pub mod ros2;
 /// Helpers for (De)serialization and definitions of (De)serializer adapters
 pub mod serialization;
@@ -152,7 +163,7 @@ pub use dds::{
   participant::DomainParticipant,
   pubsub::{Publisher, Subscriber},
   qos,
-  qos::{policy::*, QosPolicies, QosPolicyBuilder},
+  qos::{policy, QosPolicies, QosPolicyBuilder},
   readcondition::ReadCondition,
   sampleinfo::{InstanceState, NotAliveGenerationCounts, SampleInfo, SampleState, ViewState},
   statusevents::StatusEvented,

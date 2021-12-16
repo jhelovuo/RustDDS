@@ -13,6 +13,8 @@ pub mod no_key {
     serialization::error::Result,
   };
 
+  /// trait for connecting Serde Deserializer implementation and DataReader
+  /// together - no_key version.
   pub trait DeserializerAdapter<D>
   where
     D: DeserializeOwned,
@@ -36,6 +38,8 @@ pub mod no_key {
     }
   }
 
+  /// trait for connecting Serde Serializer implementation and DataWriter
+  /// together - no_key version.
   pub trait SerializerAdapter<D>
   where
     D: Serialize,
@@ -58,6 +62,8 @@ pub mod with_key {
   };
   use super::no_key;
 
+  /// trait for connecting Serde Desrializer implementation and DataReader
+  /// together - with_key version.
   pub trait DeserializerAdapter<D>: no_key::DeserializerAdapter<D>
   where
     D: Keyed + DeserializeOwned,
@@ -65,6 +71,8 @@ pub mod with_key {
     fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K>;
   }
 
+  /// trait for connecting Serde Serializer implementation and DataWriter
+  /// together - with_key version.
   pub trait SerializerAdapter<D>: no_key::SerializerAdapter<D>
   where
     D: Keyed + Serialize,
