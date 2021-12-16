@@ -18,6 +18,9 @@ use crate::{
 };
 use super::wrappers::{DAWrapper, NoKeyWrapper};
 
+/// Simplified type for CDR encoding
+pub type DataReaderCdr<D> = DataReader<D, CDRDeserializerAdapter<D>>;
+
 // ----------------------------------------------------
 
 // DataReader for NO_KEY data. Does not require "D: Keyed"
@@ -29,7 +32,7 @@ use super::wrappers::{DAWrapper, NoKeyWrapper};
 /// use rustdds::dds::DomainParticipant;
 /// use rustdds::dds::qos::QosPolicyBuilder;
 /// use rustdds::dds::data_types::TopicKind;
-/// use rustdds::dds::No_Key_DataReader as DataReader;
+/// use rustdds::no_key::DataReader;
 /// use rustdds::serialization::CDRDeserializerAdapter;
 ///
 /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -77,7 +80,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// use rustdds::dds::data_types::ReadCondition;
   ///
@@ -125,7 +128,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// # use rustdds::dds::data_types::ReadCondition;
   /// #
@@ -167,7 +170,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
@@ -199,7 +202,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
@@ -235,7 +238,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
@@ -274,7 +277,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::{TopicKind, ReadCondition};
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
@@ -319,7 +322,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::{TopicKind, ReadCondition};
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
@@ -360,7 +363,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::{TopicKind, ReadCondition};
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
@@ -401,7 +404,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::{TopicKind, ReadCondition};
-  /// # use rustdds::dds::No_Key_DataReader as DataReader;
+  /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();

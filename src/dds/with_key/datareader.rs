@@ -90,7 +90,7 @@ impl CurrentStatusChanges {
 /// use rustdds::dds::qos::QosPolicyBuilder;
 /// use rustdds::dds::data_types::TopicKind;
 /// use rustdds::dds::traits::Keyed;
-/// use rustdds::dds::With_Key_DataReader as DataReader;
+/// use rustdds::with_key::DataReader;
 /// use rustdds::serialization::CDRDeserializerAdapter;
 ///
 /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -223,7 +223,7 @@ where
   /// # use rustdds::dds::data_types::TopicKind;
   /// use rustdds::dds::data_types::ReadCondition;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -287,7 +287,7 @@ where
   /// # use rustdds::dds::data_types::TopicKind;
   /// use rustdds::dds::data_types::ReadCondition;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -345,7 +345,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -387,7 +387,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -433,7 +433,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -482,7 +482,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// use rustdds::dds::data_types::ReadCondition;
   ///
@@ -538,7 +538,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -589,7 +589,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// use rustdds::dds::data_types::ReadCondition;
   ///
@@ -842,7 +842,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// use rustdds::dds::data_types::{ReadCondition,SelectByKey};
   ///
@@ -915,7 +915,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// use rustdds::dds::data_types::{ReadCondition,SelectByKey};
   ///
@@ -1125,7 +1125,7 @@ where
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
   /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::dds::With_Key_DataReader as DataReader;
+  /// # use rustdds::with_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// use rustdds::dds::qos::policy::Deadline;
   /// use rustdds::dds::data_types::DDSDuration;

@@ -18,6 +18,9 @@ use crate::{
 };
 use super::wrappers::{NoKeyWrapper, SAWrapper};
 
+/// Simplified type for CDR encoding
+pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
+
 /// DDS DataWriter for no key topics
 ///
 /// # Examples
@@ -27,7 +30,7 @@ use super::wrappers::{NoKeyWrapper, SAWrapper};
 /// use rustdds::dds::DomainParticipant;
 /// use rustdds::dds::qos::QosPolicyBuilder;
 /// use rustdds::dds::data_types::TopicKind;
-/// use rustdds::dds::No_Key_DataWriter as DataWriter;
+/// use rustdds::no_key::DataWriter;
 /// use rustdds::serialization::CDRSerializerAdapter;
 ///
 /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -67,7 +70,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -100,7 +103,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -131,7 +134,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -163,7 +166,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -195,7 +198,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -227,7 +230,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -258,7 +261,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -287,7 +290,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -316,7 +319,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -345,7 +348,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -376,7 +379,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::No_Key_DataWriter as DataWriter;
+  /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();

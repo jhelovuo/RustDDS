@@ -151,7 +151,6 @@ pub(crate) mod structure;
 mod test;
 
 // Public modules
-#[doc(hidden)]
 pub mod dds; // this is public, but not advertised
 pub mod ros2;
 /// Helpers for (De)serialization and definitions of (De)serializer adapters
@@ -168,9 +167,8 @@ pub use dds::{
   sampleinfo::{InstanceState, NotAliveGenerationCounts, SampleInfo, SampleState, ViewState},
   statusevents::StatusEvented,
   topic::{Topic, TopicDescription, TopicKind},
-  traits::{Key, Keyed},
+  traits::{Key, Keyed, RTPSEntity},
   typedesc::TypeDesc,
-  values::result::{Error, Result},
 };
 /// Needed to specify serialized data representation in case it is other than
 /// CDR.

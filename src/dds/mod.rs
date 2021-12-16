@@ -58,19 +58,13 @@ pub mod data_types {
   pub use crate::dds::typedesc::TypeDesc;
 }
 
-/// DDS Error
-pub mod error {
-  pub use super::values::result::*;
-}
+// DDS Error and Result types
+pub use crate::dds::values::result::*;
 
 pub use participant::DomainParticipant;
 pub use topic::{Topic, TopicKind};
 pub use pubsub::{Publisher, Subscriber};
-#[doc(inline)]
-pub use with_key::datawriter::DataWriter as With_Key_DataWriter;
-#[doc(inline)]
-pub use no_key::datawriter::DataWriter as No_Key_DataWriter;
-#[doc(inline)]
-pub use with_key::datareader::DataReader as With_Key_DataReader;
-#[doc(inline)]
-pub use no_key::datareader::DataReader as No_Key_DataReader;
+
+// Discovery results
+pub use crate::discovery::data_types::topic_data::{DiscoveredTopicData, SubscriptionBuiltinTopicData};
+

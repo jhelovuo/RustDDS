@@ -55,7 +55,7 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 /// use rustdds::dds::DomainParticipant;
 /// use rustdds::dds::qos::QosPolicyBuilder;
 /// use rustdds::dds::data_types::TopicKind;
-/// use rustdds::dds::With_Key_DataWriter as DataWriter;
+/// use rustdds::with_key::DataWriter;
 /// use rustdds::dds::traits::Keyed;
 /// use rustdds::serialization::CDRSerializerAdapter;
 ///
@@ -190,7 +190,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -241,7 +241,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -322,7 +322,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -390,7 +390,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -440,7 +440,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -481,7 +481,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -541,7 +541,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -583,7 +583,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -626,7 +626,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -663,7 +663,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -699,7 +699,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -755,7 +755,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -801,7 +801,7 @@ where
   /// # use rustdds::dds::DomainParticipant;
   /// # use rustdds::dds::qos::QosPolicyBuilder;
   /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::With_Key_DataWriter as DataWriter;
+  /// # use rustdds::with_key::DataWriter;
   /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
