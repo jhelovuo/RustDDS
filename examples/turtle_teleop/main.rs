@@ -8,11 +8,11 @@ use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
-
-use rustdds::*;
-use rustdds::policy::*;
-use rustdds::ros2::{NodeOptions, RosParticipant};
-
+use rustdds::{
+  policy::*,
+  ros2::{NodeOptions, RosParticipant},
+  *,
+};
 use ui::{RosCommand, UiController};
 
 // modules
