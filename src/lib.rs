@@ -178,6 +178,9 @@ pub use serialization::{
 };
 pub use structure::{duration::Duration, guid::GUID, time::Timestamp};
 
+// re-export from a helper crate
+pub use cdr_encoding_size::CdrEncodingSize;
+
 /// Components used to access NO_KEY Topics
 pub mod no_key {
   pub use crate::dds::{no_key::*, traits::serde_adapters::no_key::*};

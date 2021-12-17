@@ -15,7 +15,7 @@ use crate::dds::traits::key::Key;
   Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
 )]
 pub struct GuidPrefix {
-  pub prefix_bytes: [u8; 12],
+  pub(crate) prefix_bytes: [u8; 12],
 }
 
 impl GuidPrefix {
@@ -32,6 +32,10 @@ impl GuidPrefix {
       pr[ix] = *data;
     }
     GuidPrefix { prefix_bytes: pr }
+  }
+
+  pub fn as_slice(&self) -> &[u8] {
+    &self.prefix_bytes
   }
 
   pub fn random_for_this_participant() -> GuidPrefix {
