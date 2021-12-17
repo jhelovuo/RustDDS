@@ -15,12 +15,12 @@ use crate::dds::traits::key::Key;
   Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
 )]
 pub struct GuidPrefix {
-  pub entity_key: [u8; 12],
+  pub prefix_bytes: [u8; 12],
 }
 
 impl GuidPrefix {
   pub const UNKNOWN: GuidPrefix = GuidPrefix {
-    entity_key: [0x00; 12],
+    prefix_bytes: [0x00; 12],
   };
 
   pub fn new(prefix: &[u8]) -> GuidPrefix {
@@ -31,24 +31,24 @@ impl GuidPrefix {
       }
       pr[ix] = *data;
     }
-    GuidPrefix { entity_key: pr }
+    GuidPrefix { prefix_bytes: pr }
   }
 
   pub fn random_for_this_participant() -> GuidPrefix {
-    let mut entity_key: [u8; 12] = rand::random(); // start with random data
+    let mut prefix_bytes: [u8; 12] = rand::random(); // start with random data
 
     // The prefix is arbitrary, but let's place our vendor id at the head
     // for easy recognition. It seems some other RTPS implementations are doing the
     // same.
     let my_vendor_id_bytes = crate::messages::vendor_id::VendorId::THIS_IMPLEMENTATION.as_bytes();
-    entity_key[0] = my_vendor_id_bytes[0];
-    entity_key[1] = my_vendor_id_bytes[1];
+    prefix_bytes[0] = my_vendor_id_bytes[0];
+    prefix_bytes[1] = my_vendor_id_bytes[1];
 
     // TODO:
     // We could add some other identifying stuff here also, like one of
     // our IP addresses (but which one?)
 
-    GuidPrefix { entity_key }
+    GuidPrefix { prefix_bytes }
   }
 
   pub fn range(&self) -> impl RangeBounds<GUID> {
@@ -59,7 +59,7 @@ impl GuidPrefix {
 impl fmt::Debug for GuidPrefix {
   // This is so common that we skip all the inroductions and just print the data.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    self.entity_key.fmt(f)
+    self.prefix_bytes.fmt(f)
   }
 }
 
@@ -73,8 +73,8 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let mut guid_prefix = GuidPrefix::default();
-    for i in 0..guid_prefix.entity_key.len() {
-      guid_prefix.entity_key[i] = reader.read_u8()?;
+    for i in 0..guid_prefix.prefix_bytes.len() {
+      guid_prefix.prefix_bytes[i] = reader.read_u8()?;
     }
     Ok(guid_prefix)
   }
@@ -88,7 +88,7 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix {
 impl<C: Context> Writable<C> for GuidPrefix {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    for elem in &self.entity_key {
+    for elem in &self.prefix_bytes {
       writer.write_u8(*elem)?;
     }
     Ok(())
