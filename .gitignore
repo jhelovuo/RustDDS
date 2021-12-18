@@ -6,3 +6,4 @@ src/.vscode/launch.json
 *.bin
 /log/
 .vscode/launch.json
+.idea/
