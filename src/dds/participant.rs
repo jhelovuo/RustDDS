@@ -53,7 +53,8 @@ pub struct DomainParticipant {
 impl DomainParticipant {
   /// # Examples
   /// ```
-  /// use rustdds::DomainParticipant;
+  /// # use rustdds::DomainParticipant;
+  ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
   pub fn new(domain_id: u16) -> Result<DomainParticipant> {
@@ -168,7 +169,7 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// use rustdds::{DomainParticipant, QosPolicyBuilder};
+  /// # use rustdds::{DomainParticipant, QosPolicyBuilder};
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
@@ -192,7 +193,7 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// use rustdds::{DomainParticipant, TopicKind, QosPolicyBuilder};
+  /// # use rustdds::{DomainParticipant, TopicKind, QosPolicyBuilder};
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
@@ -222,7 +223,7 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// use rustdds::DomainParticipant;
+  /// # use rustdds::DomainParticipant;
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let domain_id = domain_participant.domain_id();
@@ -234,7 +235,7 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// use rustdds::DomainParticipant;
+  /// # use rustdds::DomainParticipant;
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let participant_id = domain_participant.participant_id();
@@ -248,7 +249,7 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// use rustdds::DomainParticipant;
+  /// # use rustdds::DomainParticipant;
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let discovered_topics = domain_participant.discovered_topics();
@@ -267,7 +268,7 @@ impl DomainParticipant {
   /// # Example
   ///
   /// ```
-  /// use rustdds::DomainParticipant;
+  /// # use rustdds::DomainParticipant;
   ///
   /// let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
   /// domain_participant.assert_liveliness();
