@@ -147,7 +147,7 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// use rustdds::{DomainParticipant, QosPolicyBuilder};
+  /// # use rustdds::{DomainParticipant, QosPolicyBuilder};
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
