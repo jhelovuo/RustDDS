@@ -260,14 +260,14 @@ impl Writer {
   }
 
   pub fn local_readers(&self) -> Vec<EntityId> {
-    let min = GUID::new_with_prefix_and_id(self.my_guid.guid_prefix, EntityId::MIN);
-    let max = GUID::new_with_prefix_and_id(self.my_guid.guid_prefix, EntityId::MAX);
+    let min = GUID::new_with_prefix_and_id(self.my_guid.prefix, EntityId::MIN);
+    let max = GUID::new_with_prefix_and_id(self.my_guid.prefix, EntityId::MAX);
 
     self
       .readers
       .range((Included(min), Included(max)))
       .filter_map(|(guid, _)| {
-        if guid.guid_prefix == self.my_guid.guid_prefix {
+        if guid.prefix == self.my_guid.prefix {
           Some(guid.entity_id)
         } else {
           None
@@ -407,7 +407,7 @@ impl Writer {
           let liveliness_flag = false;
           let data_hb_message = data_hb_message_builder
             .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
-            .add_header_and_build(self.my_guid.guid_prefix);
+            .add_header_and_build(self.my_guid.prefix);
           self.send_message_to_readers(
             DeliveryMode::Multicast,
             &data_hb_message,
@@ -543,7 +543,7 @@ impl Writer {
       let hb_message = MessageBuilder::new()
         .ts_msg(self.endianness, Some(Timestamp::now()))
         .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
-        .add_header_and_build(self.my_guid.guid_prefix);
+        .add_header_and_build(self.my_guid.prefix);
       debug!(
         "Writer {:?} topic={:} HEARTBEAT {:?}",
         self.guid().entity_id,
@@ -698,7 +698,7 @@ impl Writer {
     // Note: The reader_proxy is now removed from readers map
     let reader_guid = reader_proxy.remote_reader_guid;
     let mut partial_message = MessageBuilder::new()
-      .dst_submessage(self.endianness, reader_guid.guid_prefix)
+      .dst_submessage(self.endianness, reader_guid.prefix)
       .ts_msg(self.endianness, Some(Timestamp::now()));
     // TODO: This timestamp should probably not be
     // the current (retransmit) time, but the initial sample production timestamp,
@@ -753,7 +753,7 @@ impl Writer {
       partial_message =
         partial_message.gap_msg(&BTreeSet::from_iter(no_longer_relevant), self, reader_guid);
     }
-    let data_gap_msg = partial_message.add_header_and_build(self.my_guid.guid_prefix);
+    let data_gap_msg = partial_message.add_header_and_build(self.my_guid.prefix);
 
     self.send_message_to_readers(
       DeliveryMode::Unicast,

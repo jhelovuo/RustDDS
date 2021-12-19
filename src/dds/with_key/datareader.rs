@@ -1341,14 +1341,14 @@ mod tests {
     let data_key = random_data.key();
 
     let writer_guid = GUID {
-      guid_prefix: GuidPrefix::new(&[1; 12]),
+      prefix: GuidPrefix::new(&[1; 12]),
       entity_id: EntityId::create_custom_entity_id(
         [1; 3],
         EntityKind::WRITER_WITH_KEY_USER_DEFINED,
       ),
     };
     let mr_state = MessageReceiverState {
-      source_guid_prefix: writer_guid.guid_prefix,
+      source_guid_prefix: writer_guid.prefix,
       ..Default::default()
     };
 
@@ -1475,14 +1475,14 @@ mod tests {
       .unwrap();
 
     let writer_guid = GUID {
-      guid_prefix: GuidPrefix::new(&[1; 12]),
+      prefix: GuidPrefix::new(&[1; 12]),
       entity_id: EntityId::create_custom_entity_id(
         [1; 3],
         EntityKind::WRITER_WITH_KEY_USER_DEFINED,
       ),
     };
     let mr_state = MessageReceiverState {
-      source_guid_prefix: writer_guid.guid_prefix,
+      source_guid_prefix: writer_guid.prefix,
       ..Default::default()
     };
     reader.matched_writer_add(
@@ -1720,7 +1720,7 @@ mod tests {
       entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     };
     let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.guid_prefix;
+    mr_state.source_guid_prefix = writer_guid.prefix;
     reader.matched_writer_add(
       writer_guid.clone(),
       EntityId::UNKNOWN,

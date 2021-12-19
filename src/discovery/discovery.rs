@@ -802,7 +802,7 @@ impl Discovery {
     // This will read the participant from Discovery DB and construct
     // ReaderProxy and WriterProxy objects for built-in Readers and Writers
     self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
-      guid_prefix: dp.guid().guid_prefix,
+      guid_prefix: dp.guid().prefix,
     });
 
     // insert a (fake) reader proxy as multicast address, so discovery notifications
@@ -838,10 +838,7 @@ impl Discovery {
       content_filter: None,
     };
 
-    let writer_guid = GUID::new(
-      dp.guid().guid_prefix,
-      EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
-    );
+    let writer_guid = GUID::new(dp.guid().prefix, EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER);
 
     let writer_proxy = WriterProxy::new(
       writer_guid,
@@ -901,7 +898,7 @@ impl Discovery {
             let was_new = self
               .discovery_db_write()
               .update_participant(&participant_data);
-            let guid_prefix = participant_data.participant_guid.guid_prefix;
+            let guid_prefix = participant_data.participant_guid.prefix;
             self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
               guid_prefix,
             });
@@ -917,12 +914,12 @@ impl Discovery {
             }
           }
           // Err means that DomainParticipant was disposed
-          Err(guid) => {
+          Err(data_key) => {
             self
               .discovery_db_write()
-              .remove_participant(guid.0.guid_prefix);
+              .remove_participant(data_key.0.prefix);
             self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
-              guid_prefix: guid.0.guid_prefix,
+              guid_prefix: data_key.0.prefix,
             });
           }
         },
@@ -961,7 +958,7 @@ impl Discovery {
           let mut db = self.discovery_db_write();
           trace!("handle_subscription_reader discovered {:?}", &d);
           if read_history
-            .map(|e| e == d.reader_proxy.remote_reader_guid.guid_prefix)
+            .map(|e| e == d.reader_proxy.remote_reader_guid.prefix)
             .unwrap_or(true)
           {
             if let Some((drd, rtps_reader_proxy)) = db.update_subscription(&d) {

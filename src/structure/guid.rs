@@ -15,44 +15,38 @@ use crate::dds::traits::key::Key;
   Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize, CdrEncodingSize,
 )]
 pub struct GuidPrefix {
-  pub(crate) prefix_bytes: [u8; 12],
+  pub(crate) bytes: [u8; 12],
 }
 
 impl GuidPrefix {
-  pub const UNKNOWN: GuidPrefix = GuidPrefix {
-    prefix_bytes: [0x00; 12],
-  };
+  pub const UNKNOWN: GuidPrefix = GuidPrefix { bytes: [0x00; 12] };
 
   pub fn new(prefix: &[u8]) -> GuidPrefix {
-    let mut pr: [u8; 12] = [0; 12];
+    let mut bytes: [u8; 12] = [0; 12];
     for (ix, data) in prefix.iter().enumerate() {
       if ix >= 12 {
         break;
       }
-      pr[ix] = *data;
+      bytes[ix] = *data;
     }
-    GuidPrefix { prefix_bytes: pr }
-  }
-
-  pub fn as_slice(&self) -> &[u8] {
-    &self.prefix_bytes
+    GuidPrefix { bytes }
   }
 
   pub fn random_for_this_participant() -> GuidPrefix {
-    let mut prefix_bytes: [u8; 12] = rand::random(); // start with random data
+    let mut bytes: [u8; 12] = rand::random(); // start with random data
 
     // The prefix is arbitrary, but let's place our vendor id at the head
     // for easy recognition. It seems some other RTPS implementations are doing the
     // same.
     let my_vendor_id_bytes = crate::messages::vendor_id::VendorId::THIS_IMPLEMENTATION.as_bytes();
-    prefix_bytes[0] = my_vendor_id_bytes[0];
-    prefix_bytes[1] = my_vendor_id_bytes[1];
+    bytes[0] = my_vendor_id_bytes[0];
+    bytes[1] = my_vendor_id_bytes[1];
 
     // TODO:
     // We could add some other identifying stuff here also, like one of
     // our IP addresses (but which one?)
 
-    GuidPrefix { prefix_bytes }
+    GuidPrefix { bytes }
   }
 
   pub fn range(&self) -> impl RangeBounds<GUID> {
@@ -60,10 +54,16 @@ impl GuidPrefix {
   }
 }
 
+impl AsRef<[u8]> for GuidPrefix {
+  fn as_ref(&self) -> &[u8] {
+    &self.bytes
+  }
+}
+
 impl fmt::Debug for GuidPrefix {
   // This is so common that we skip all the inroductions and just print the data.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    self.prefix_bytes.fmt(f)
+    self.bytes.fmt(f)
   }
 }
 
@@ -77,8 +77,8 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let mut guid_prefix = GuidPrefix::default();
-    for i in 0..guid_prefix.prefix_bytes.len() {
-      guid_prefix.prefix_bytes[i] = reader.read_u8()?;
+    for i in 0..guid_prefix.bytes.len() {
+      guid_prefix.bytes[i] = reader.read_u8()?;
     }
     Ok(guid_prefix)
   }
@@ -92,7 +92,7 @@ impl<'a, C: Context> Readable<'a, C> for GuidPrefix {
 impl<C: Context> Writable<C> for GuidPrefix {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    for elem in &self.prefix_bytes {
+    for elem in &self.bytes {
       writer.write_u8(*elem)?;
     }
     Ok(())
@@ -467,13 +467,13 @@ pub struct GUID {
   // Note: It is important to have guid_prefix first, so that derive'd Ord trait
   // will produce ordering, where GUIDs with same GuidPrefix are grouped
   // together.
-  pub guid_prefix: GuidPrefix,
+  pub prefix: GuidPrefix,
   pub entity_id: EntityId,
 }
 
 impl GUID {
   pub const GUID_UNKNOWN: GUID = GUID {
-    guid_prefix: GuidPrefix::UNKNOWN,
+    prefix: GuidPrefix::UNKNOWN,
     entity_id: EntityId::UNKNOWN,
   };
 
@@ -485,14 +485,14 @@ impl GUID {
   /// Generates new GUID for Participant when `guid_prefix` is random
   pub fn new_participant_guid() -> GUID {
     GUID {
-      guid_prefix: GuidPrefix::random_for_this_participant(),
+      prefix: GuidPrefix::random_for_this_participant(),
       entity_id: EntityId::PARTICIPANT,
     }
   }
 
   pub fn dummy_test_guid(entity_kind: EntityKind) -> GUID {
     GUID {
-      guid_prefix: GuidPrefix::new(b"FakeTestGUID"),
+      prefix: GuidPrefix::new(b"FakeTestGUID"),
       entity_id: EntityId {
         entity_key: [1, 2, 3],
         entity_kind,
@@ -501,19 +501,17 @@ impl GUID {
   }
 
   /// Generates GUID for specific entity_id from current prefix
+  #[must_use]
   pub fn from_prefix(self, entity_id: EntityId) -> GUID {
     GUID {
-      guid_prefix: self.guid_prefix,
+      prefix: self.prefix,
       entity_id,
     }
   }
 
   /// Creates GUID from known values
   pub fn new_with_prefix_and_id(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
-    GUID {
-      guid_prefix: prefix,
-      entity_id,
-    }
+    GUID { prefix, entity_id }
   }
 
   pub fn as_usize(&self) -> usize {
@@ -527,7 +525,7 @@ impl fmt::Debug for GUID {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.write_fmt(format_args!(
       "GUID {{{:?} {:?}}}",
-      self.guid_prefix, self.entity_id
+      self.prefix, self.entity_id
     ))
   }
 }
@@ -610,7 +608,7 @@ mod tests {
   {
       guid_prefix_endianness_insensitive,
       GuidPrefix {
-          entity_key: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+          bytes: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
                       0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB]
       },
       le = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
@@ -705,7 +703,7 @@ mod tests {
     assert_eq!(
       GUID {
         entity_id: EntityId::UNKNOWN,
-        guid_prefix: GuidPrefix::UNKNOWN
+        prefix: GuidPrefix::UNKNOWN
       },
       GUID::GUID_UNKNOWN
     );

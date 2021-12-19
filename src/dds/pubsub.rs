@@ -471,7 +471,7 @@ impl InnerPublisher {
       .ok_or("upgrade fail")
       .or_else(|e| log_and_err_internal!("Where is my DomainParticipant? {}", e))?;
 
-    let guid = GUID::new_with_prefix_and_id(dp.guid().guid_prefix, entity_id);
+    let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
 
     let new_writer = WriterIngredients {
       guid,

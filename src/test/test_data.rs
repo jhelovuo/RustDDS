@@ -365,8 +365,8 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
   let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
 
   let mut rtps_message = Message::default();
-  let prefix = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
-  let rtps_message_header = Header::new(prefix.guid_prefix);
+  let guid = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
+  let rtps_message_header = Header::new(guid.prefix);
   rtps_message.set_header(rtps_message_header);
 
   let serialized_payload = SerializedPayload {

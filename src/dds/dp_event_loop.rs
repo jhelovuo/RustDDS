@@ -497,7 +497,7 @@ impl DPEventLoop {
   fn handle_writer_acknack_action(&mut self, _event: &Event) {
     while let Ok((acknack_sender_prefix, acknack_submessage)) = self.ack_nack_receiver.try_recv() {
       let writer_guid = GUID::new_with_prefix_and_id(
-        self.domain_info.domain_participant_guid.guid_prefix,
+        self.domain_info.domain_participant_guid.prefix,
         acknack_submessage.writer_id(),
       );
       if let Some(found_writer) = self.writers.get_mut(&writer_guid.entity_id) {
@@ -518,7 +518,7 @@ impl DPEventLoop {
     info!(
       "update_participant {:?} myself={}",
       participant_guid_prefix,
-      participant_guid_prefix == self.domain_info.domain_participant_guid.guid_prefix
+      participant_guid_prefix == self.domain_info.domain_participant_guid.prefix
     );
 
     {

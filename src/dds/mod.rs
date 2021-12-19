@@ -59,12 +59,12 @@ pub mod data_types {
 }
 
 // DDS Error and Result types
-pub use crate::dds::values::result::*;
-
 pub use participant::DomainParticipant;
 pub use topic::{Topic, TopicKind};
 pub use pubsub::{Publisher, Subscriber};
 
+pub use crate::dds::values::result::*;
 // Discovery results
-pub use crate::discovery::data_types::topic_data::{DiscoveredTopicData, SubscriptionBuiltinTopicData};
-
+pub use crate::discovery::data_types::topic_data::{
+  DiscoveredTopicData, SubscriptionBuiltinTopicData,
+};
