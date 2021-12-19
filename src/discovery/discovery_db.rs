@@ -100,7 +100,7 @@ impl DiscoveryDB {
     // }
 
     let mut new_participant = false;
-    if self.participant_proxies.get(&guid.guid_prefix).is_none() {
+    if self.participant_proxies.get(&guid.prefix).is_none() {
       info!("New remote participant: {:?}", &data);
       new_participant = true;
       if guid == self.my_guid {
@@ -112,12 +112,10 @@ impl DiscoveryDB {
       }
     }
     // actual work here:
-    self
-      .participant_proxies
-      .insert(guid.guid_prefix, data.clone());
+    self.participant_proxies.insert(guid.prefix, data.clone());
     self
       .participant_last_life_signs
-      .insert(guid.guid_prefix, Instant::now());
+      .insert(guid.prefix, Instant::now());
 
     new_participant
   }
@@ -321,7 +319,7 @@ impl DiscoveryDB {
         self.external_topic_readers.insert(guid, data.clone());
         // fill in the default locators, in case DRD did not provide any
         let default_locator_lists = self
-          .find_participant_proxy(guid.guid_prefix)
+          .find_participant_proxy(guid.prefix)
           .map(|pp| {
             debug!("Added default locators to Reader {:?}", guid);
             (
@@ -330,12 +328,12 @@ impl DiscoveryDB {
             )
           })
           .unwrap_or_else(|| {
-            if guid.guid_prefix != GuidPrefix::UNKNOWN {
+            if guid.prefix != GuidPrefix::UNKNOWN {
               // This is normal, since we might not know about the participant yet.
               debug!(
                 "No remote participant known for {:?}\nSearched with {:?} in {:?}",
                 data,
-                guid.guid_prefix,
+                guid.prefix,
                 self.participant_proxies.keys()
               );
             }

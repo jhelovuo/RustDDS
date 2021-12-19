@@ -371,7 +371,7 @@ impl MessageReceiver {
         }
       }
       InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
-        if info_dest.guid_prefix == GUID::GUID_UNKNOWN.guid_prefix {
+        if info_dest.guid_prefix == GUID::GUID_UNKNOWN.prefix {
           self.dest_guid_prefix = self.own_guid_prefix;
         } else {
           self.dest_guid_prefix = info_dest.guid_prefix;
@@ -483,7 +483,6 @@ mod tests {
       EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
     let new_guid = GUID::new_with_prefix_and_id(gui_prefix, entity);
 
-    new_guid.from_prefix(entity);
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
     let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
@@ -604,7 +603,7 @@ mod tests {
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
     let mut message_receiver =
-      MessageReceiver::new(guid_new.guid_prefix, acknack_sender, spdp_liveness_sender);
+      MessageReceiver::new(guid_new.prefix, acknack_sender, spdp_liveness_sender);
 
     message_receiver.handle_received_packet(&udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);
@@ -616,7 +615,7 @@ mod tests {
   #[test]
   fn mr_test_header() {
     let guid_new = GUID::default();
-    let header = Header::new(guid_new.guid_prefix);
+    let header = Header::new(guid_new.prefix);
 
     let bytes = header.write_to_vec().unwrap();
     let new_header = Header::read_from_buffer(&bytes).unwrap();

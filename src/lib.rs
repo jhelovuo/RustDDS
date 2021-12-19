@@ -177,7 +177,6 @@ pub use serialization::{
   CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer,
 };
 pub use structure::{duration::Duration, guid::GUID, time::Timestamp};
-
 // re-export from a helper crate
 pub use cdr_encoding_size::CdrEncodingSize;
 

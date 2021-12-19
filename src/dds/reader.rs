@@ -917,7 +917,7 @@ impl Reader {
       protocol_id: ProtocolId::default(),
       protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
       vendor_id: VendorId::THIS_IMPLEMENTATION,
-      guid_prefix: self.my_guid.guid_prefix,
+      guid_prefix: self.my_guid.prefix,
     });
 
     match info_dst.create_submessage(infodst_flags) {
@@ -952,7 +952,7 @@ impl Reader {
           count: self.sent_ack_nack_count,
         },
         InfoDestination {
-          guid_prefix: writer_proxy.remote_writer_guid.guid_prefix,
+          guid_prefix: writer_proxy.remote_writer_guid.prefix,
         },
         &writer_proxy.unicast_locator_list,
       );
@@ -1052,14 +1052,14 @@ mod tests {
     );
 
     let writer_guid = GUID {
-      guid_prefix: GuidPrefix::new(&[1; 12]),
+      prefix: GuidPrefix::new(&[1; 12]),
       entity_id: EntityId::create_custom_entity_id(
         [1; 3],
         EntityKind::WRITER_WITH_KEY_USER_DEFINED,
       ),
     };
     let mr_state = MessageReceiverState {
-      source_guid_prefix: writer_guid.guid_prefix,
+      source_guid_prefix: writer_guid.prefix,
       ..Default::default()
     };
 
@@ -1118,7 +1118,7 @@ mod tests {
     );
 
     let writer_guid = GUID {
-      guid_prefix: GuidPrefix::new(&[1; 12]),
+      prefix: GuidPrefix::new(&[1; 12]),
       entity_id: EntityId::create_custom_entity_id(
         [1; 3],
         EntityKind::WRITER_WITH_KEY_USER_DEFINED,
@@ -1126,7 +1126,7 @@ mod tests {
     };
 
     let mr_state = MessageReceiverState {
-      source_guid_prefix: writer_guid.guid_prefix,
+      source_guid_prefix: writer_guid.prefix,
       ..Default::default()
     };
 
@@ -1193,7 +1193,7 @@ mod tests {
     );
 
     let writer_guid = GUID {
-      guid_prefix: GuidPrefix::new(&[1; 12]),
+      prefix: GuidPrefix::new(&[1; 12]),
       entity_id: EntityId::create_custom_entity_id(
         [1; 3],
         EntityKind::WRITER_WITH_KEY_USER_DEFINED,
@@ -1203,7 +1203,7 @@ mod tests {
     let writer_id = writer_guid.entity_id;
 
     let mr_state = MessageReceiverState {
-      source_guid_prefix: writer_guid.guid_prefix,
+      source_guid_prefix: writer_guid.prefix,
       ..Default::default()
     };
 
@@ -1327,7 +1327,7 @@ mod tests {
     );
 
     let writer_guid = GUID {
-      guid_prefix: GuidPrefix::new(&[1; 12]),
+      prefix: GuidPrefix::new(&[1; 12]),
       entity_id: EntityId::create_custom_entity_id(
         [1; 3],
         EntityKind::WRITER_WITH_KEY_USER_DEFINED,
@@ -1336,7 +1336,7 @@ mod tests {
     let writer_id = writer_guid.entity_id;
 
     let mr_state = MessageReceiverState {
-      source_guid_prefix: writer_guid.guid_prefix,
+      source_guid_prefix: writer_guid.prefix,
       ..Default::default()
     };
 

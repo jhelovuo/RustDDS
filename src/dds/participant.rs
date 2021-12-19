@@ -735,7 +735,7 @@ impl DomainParticipantInner {
           listeners,
           dds_cache_clone,
           disc_db_clone,
-          new_guid.guid_prefix,
+          new_guid.prefix,
           TokenReceiverPair {
             token: ADD_READER_TOKEN,
             receiver: receiver_add_reader,
@@ -1120,7 +1120,7 @@ mod tests {
       protocol_id: ProtocolId::default(),
       protocol_version: ProtocolVersion { major: 2, minor: 3 },
       vendor_id: VendorId::THIS_IMPLEMENTATION,
-      guid_prefix: GUID::default().guid_prefix,
+      guid_prefix: GUID::default().prefix,
     };
     m.set_header(h);
     m.add_submessage(s);

@@ -54,6 +54,7 @@ pub enum QosPolicyId {
 
 /// Utility for building [QosPolicies]
 #[derive(Default)]
+#[must_use]
 pub struct QosPolicyBuilder {
   durability: Option<policy::Durability>,
   presentation: Option<policy::Presentation>,
@@ -243,6 +244,7 @@ impl QosPolicies {
   ///
   /// Constructs a QosPolicy, where each policy is taken from `self`,
   /// and overwritten with those policies from `other` that are defined.  
+  #[must_use]
   pub fn modify_by(&self, other: &QosPolicies) -> QosPolicies {
     QosPolicies {
       durability: other.durability.or(self.durability),

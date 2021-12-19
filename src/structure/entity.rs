@@ -13,6 +13,6 @@ pub trait RTPSEntity {
     self.guid().entity_id
   }
   fn guid_prefix(&self) -> GuidPrefix {
-    self.guid().guid_prefix
+    self.guid().prefix
   }
 }

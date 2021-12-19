@@ -59,7 +59,7 @@ impl SpdpDiscoveredParticipantData {
     entity_id: Option<EntityId>,
   ) -> RtpsReaderProxy {
     let remote_reader_guid = GUID::new_with_prefix_and_id(
-      self.participant_guid.guid_prefix,
+      self.participant_guid.prefix,
       match entity_id {
         Some(id) => id,
         None => EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
@@ -89,7 +89,7 @@ impl SpdpDiscoveredParticipantData {
     entity_id: Option<EntityId>,
   ) -> RtpsWriterProxy {
     let remote_writer_guid = GUID::new_with_prefix_and_id(
-      self.participant_guid.guid_prefix,
+      self.participant_guid.prefix,
       match entity_id {
         Some(id) => id,
         None => EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
