@@ -329,17 +329,19 @@ impl DomainParticipantWeak {
   }
 
   pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_publisher(self, qos),
-      None => Err(Error::OutOfResources),
-    }
+    self
+      .dpi
+      .upgrade()
+      .ok_or(Error::OutOfResources)
+      .and_then(|dpi| dpi.lock().unwrap().create_publisher(self, qos))
   }
 
   pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().create_subscriber(self, qos),
-      None => Err(Error::OutOfResources),
-    }
+    self
+      .dpi
+      .upgrade()
+      .ok_or(Error::OutOfResources)
+      .and_then(|dpi| dpi.lock().unwrap().create_subscriber(self, qos))
   }
 
   pub fn create_topic(
@@ -349,20 +351,24 @@ impl DomainParticipantWeak {
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Result<Topic> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi
-        .lock()
-        .unwrap()
-        .create_topic(self, name, type_desc, qos, topic_kind),
-      None => Err(Error::LockPoisoned),
-    }
+    self
+      .dpi
+      .upgrade()
+      .ok_or(Error::LockPoisoned)
+      .and_then(|dpi| {
+        dpi
+          .lock()
+          .unwrap()
+          .create_topic(self, name, type_desc, qos, topic_kind)
+      })
   }
 
   pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().find_topic(self, name, timeout),
-      None => Err(Error::LockPoisoned),
-    }
+    self
+      .dpi
+      .upgrade()
+      .ok_or(Error::LockPoisoned)
+      .and_then(|dpi| dpi.lock().unwrap().find_topic(self, name, timeout))
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -380,10 +386,11 @@ impl DomainParticipantWeak {
   }
 
   pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().discovered_topics(),
-      None => Vec::new(),
-    }
+    self
+      .dpi
+      .upgrade()
+      .map(|dpi| dpi.lock().unwrap().discovered_topics())
+      .unwrap_or_default()
   }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
@@ -660,30 +667,25 @@ impl DomainParticipantInner {
       Err(e) => warn!("Cannot get multicast user traffic listener: {:?}", e),
     }
 
-    let user_traffic_listener = match UDPListener::new_unicast(
+    let user_traffic_listener = UDPListener::new_unicast(
       "0.0.0.0",
       user_traffic_unicast_port(domain_id, participant_id),
-    ) {
-      Ok(l) => l,
-      Err(e) => match e.kind() {
-        ErrorKind::AddrInUse => {
-          // If we do not get the preferred listening port,
-          // try again, with "any" port number.
-          match UDPListener::new_unicast("0.0.0.0", 0) {
-            Ok(l) => l,
-            Err(e) => {
-              return log_and_err_internal!(
-                "Could not open unicast user traffic listener, any port number: {:?}",
-                e
-              )
-            }
-          }
-        }
-        _other_kind => {
-          return log_and_err_internal!("Could not open unicast user traffic listener: {:?}", e)
-        }
-      },
-    };
+    )
+    .or_else(|e| {
+      if matches!(e.kind(), ErrorKind::AddrInUse) {
+        // If we do not get the preferred listening port,
+        // try again, with "any" port number.
+        UDPListener::new_unicast("0.0.0.0", 0).or_else(|e| {
+          log_and_err_internal!(
+            "Could not open unicast user traffic listener, any port number: {:?}",
+            e
+          )
+        })
+      } else {
+        log_and_err_internal!("Could not open unicast user traffic listener: {:?}", e)
+      }
+    })?;
+
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     // construct our own Locators
@@ -908,10 +910,7 @@ impl DomainParticipantInner {
     domain_participant_weak: &DomainParticipantWeak,
     name: &str,
   ) -> Result<Option<Topic>> {
-    let db = match self.discovery_db.read() {
-      Ok(db) => db,
-      Err(_) => return Err(Error::LockPoisoned),
-    };
+    let db = self.discovery_db.read().map_err(|_| Error::LockPoisoned)?;
 
     let build_topic_fn = |d: &DiscoveredTopicData| {
       let qos = d.topic_data.qos();
@@ -935,8 +934,8 @@ impl DomainParticipantInner {
 
   // ignore_* operations. TODO: Do we need any of those?
 
-  // delete_contained_entities is not needed. Data structures should be designed so
-  // that lifetime of all created objects is within the lifetime of
+  // delete_contained_entities is not needed. Data structures should be designed
+  // so that lifetime of all created objects is within the lifetime of
   // DomainParticipant. Then such deletion is implicit.
 
   // The following methods are not for application use.
@@ -966,10 +965,10 @@ impl DomainParticipantInner {
   }
 
   pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    let db = match self.discovery_db.read() {
-      Ok(db) => db,
-      Err(e) => panic!("DiscoveryDB is poisoned. {:?}", e),
-    };
+    let db = self
+      .discovery_db
+      .read()
+      .unwrap_or_else(|e| panic!("DiscoveryDB is poisoned. {:?}", e));
 
     db.all_topics().cloned().collect()
   }
