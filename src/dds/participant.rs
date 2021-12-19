@@ -37,11 +37,11 @@ use super::dp_event_loop::DomainInfo;
 /// some memory for object caches.
 ///
 /// If you need to communicate to many DDS domains,
-/// then you must create a separate DomainParticiapnt for each of them.
+/// then you must create a separate DomainParticipant for each of them.
 /// See DDS Spec v1.4 Section "2.2.1.2.2 Overall Conceptual Model" and
 /// "2.2.2.2.1 DomainParticipant Class" for a definition of a (DDS) domain.
 /// Domains are identified by a domain identifier, which is, in Rust terms, a
-/// `u16`. Domain identifer values are application-specific, but `0` is usually
+/// `u16`. Domain identifier values are application-specific, but `0` is usually
 /// the default.
 #[derive(Clone)]
 // This is a smart pointer for DomainParticipantInner for easier manipulation.
@@ -53,7 +53,7 @@ pub struct DomainParticipant {
 impl DomainParticipant {
   /// # Examples
   /// ```
-  /// # use rustdds::DomainParticipant;
+  /// use rustdds::DomainParticipant;
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
   pub fn new(domain_id: u16) -> Result<DomainParticipant> {
@@ -147,8 +147,8 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// # use rustdds::{DomainParticipant, QosPolicyBuilder};
+  ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   /// let publisher = domain_participant.create_publisher(&qos);
@@ -168,8 +168,8 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
+  /// use rustdds::{DomainParticipant, QosPolicyBuilder};
+  ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   /// let subscriber = domain_participant.create_subscriber(&qos);
@@ -192,9 +192,7 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// use rustdds::dds::data_types::TopicKind;
+  /// use rustdds::{DomainParticipant, TopicKind, QosPolicyBuilder};
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
@@ -224,7 +222,8 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
+  /// use rustdds::DomainParticipant;
+  ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let domain_id = domain_participant.domain_id();
   /// ```
@@ -235,7 +234,8 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
+  /// use rustdds::DomainParticipant;
+  ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let participant_id = domain_participant.participant_id();
   /// ```
@@ -248,7 +248,8 @@ impl DomainParticipant {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
+  /// use rustdds::DomainParticipant;
+  ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let discovered_topics = domain_participant.discovered_topics();
   /// for dtopic in discovered_topics.iter() {
@@ -266,7 +267,8 @@ impl DomainParticipant {
   /// # Example
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
+  /// use rustdds::DomainParticipant;
+  ///
   /// let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
   /// domain_participant.assert_liveliness();
   /// ```
@@ -638,7 +640,7 @@ impl DomainParticipantInner {
 
     info!("ParticipantId {} selected.", participant_id);
 
-    // here discovery_listener is redefinde (shadowed)
+    // here discovery_listener is redefined (shadowed)
     let discovery_listener = match discovery_listener {
       Some(dl) => dl,
       None => return log_and_err_internal!("Could not find free ParticipantId"),
@@ -665,7 +667,7 @@ impl DomainParticipantInner {
       Ok(l) => l,
       Err(e) => match e.kind() {
         ErrorKind::AddrInUse => {
-          // If we do not get the proferred listening port,
+          // If we do not get the preferred listening port,
           // try again, with "any" port number.
           match UDPListener::new_unicast("0.0.0.0", 0) {
             Ok(l) => l,
@@ -836,7 +838,7 @@ impl DomainParticipantInner {
 
   // Topic creation. Data types should be handled as something (potentially) more
   // structured than a String. NOTE: Here we are using &str for topic name. &str
-  // is Unicode string, whereas DDS specifes topic name to be a sequence of
+  // is Unicode string, whereas DDS specifies topic name to be a sequence of
   // octets, which would be &[u8] in Rust. This may cause problems if there are
   // topic names with non-ASCII characters. On the other hand, string handling
   // with &str is easier in Rust.
@@ -860,7 +862,7 @@ impl DomainParticipantInner {
     // TODO: refine
   }
 
-  // Do not implement contentfilteredtopics or multitopics (yet)
+  // Do not implement content filtered topics or multi-topics (yet)
 
   pub fn find_topic(
     &self,
@@ -931,9 +933,9 @@ impl DomainParticipantInner {
   }
   // get_builtin_subscriber (why would we need this?)
 
-  // ignore_* operations. TODO: Do we needa any of those?
+  // ignore_* operations. TODO: Do we need any of those?
 
-  // delete_contained_entities is not needed. Data structures shoud be designed so
+  // delete_contained_entities is not needed. Data structures should be designed so
   // that lifetime of all created objects is within the lifetime of
   // DomainParticipant. Then such deletion is implicit.
 
@@ -1045,7 +1047,7 @@ mod tests {
     // TODO: get result data from Reader
   }
   #[test]
-  fn dp_writer_hearbeat_test() {
+  fn dp_writer_heartbeat_test() {
     let domain_participant = DomainParticipant::new(0).expect("Participant creation failed!");
     let qos = QosPolicies::qos_none();
     let _default_dw_qos = QosPolicies::qos_none();
