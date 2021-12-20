@@ -102,8 +102,9 @@ pub(crate) struct Discovery {
   self_locators: HashMap<Token, Vec<Locator>>,
 
   // DDS Subsciber and Publisher for Discovery
-  discovery_subscriber: Subscriber,
-  discovery_publisher: Publisher,
+  // ...but these are not actually used after initialization
+  //discovery_subscriber: Subscriber,
+  //discovery_publisher: Publisher,
 
   // Handling of "DCPSParticipant" topic. This is the mother of all topics
   // where participants announce their presence and built-in readers and writers.
@@ -524,8 +525,8 @@ impl Discovery {
 
       liveliness_state: LivelinessState::new(),
 
-      discovery_subscriber,
-      discovery_publisher,
+      // discovery_subscriber,
+      // discovery_publisher,
 
       dcps_participant_topic,
       dcps_participant_reader,

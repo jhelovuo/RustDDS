@@ -768,23 +768,25 @@ mod tests {
     assert_eq!(expected, sarjallistettu);
   }
 
+  #[test]
   fn cdr_serialization_char() {
     #[derive(Serialize)]
     struct OmaTyyppi {
-      first_value: char,
-      second: char,
-      third: char,
+      first_value: u8,
+      second: u8,
+      third: u8,
     }
     let mikki_hiiri = OmaTyyppi {
-      first_value: 'a',
-      second: 'b',
-      third: 'ä',
+      first_value: 'a' as u8,
+      second: 'b' as u8,
+      third: 'ä' as u8,
     };
 
     let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();
     let expected: Vec<u8> = vec![0x61, 0x62, 0xe4];
     assert_eq!(expected, sarjallistettu);
   }
+
   #[test]
   fn cdr_serialization_string() {
     #[derive(Serialize)]
@@ -799,6 +801,7 @@ mod tests {
     assert_eq!(expected, sarjallistettu);
   }
 
+  #[test]
   fn cdr_serialization_little() {
     let number: u16 = 60000;
     let le = to_little_endian_binary(&number).unwrap();

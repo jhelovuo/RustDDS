@@ -140,6 +140,7 @@ impl UDPListener {
     &mut self.socket
   }
 
+  #[cfg(test)]
   pub fn port(&self) -> u16 {
     match self.socket.local_addr() {
       Ok(add) => add.port(),

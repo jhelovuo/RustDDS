@@ -351,12 +351,12 @@ impl DiscoveredReaderData {
     }
   }
 
-  pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
-    self.reader_proxy.remote_reader_guid = rtps_reader_proxy.remote_reader_guid;
-    self.reader_proxy.expects_inline_qos = rtps_reader_proxy.expects_in_line_qos;
-    self.reader_proxy.unicast_locator_list = rtps_reader_proxy.unicast_locator_list.clone();
-    self.reader_proxy.multicast_locator_list = rtps_reader_proxy.multicast_locator_list.clone();
-  }
+  // pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
+  //   self.reader_proxy.remote_reader_guid = rtps_reader_proxy.remote_reader_guid;
+  //   self.reader_proxy.expects_inline_qos = rtps_reader_proxy.expects_in_line_qos;
+  //   self.reader_proxy.unicast_locator_list = rtps_reader_proxy.unicast_locator_list.clone();
+  //   self.reader_proxy.multicast_locator_list = rtps_reader_proxy.multicast_locator_list.clone();
+  // }
 }
 
 // separate type is needed to serialize correctly
@@ -641,11 +641,11 @@ impl DiscoveredWriterData {
     }
   }
 
-  pub(crate) fn update(&mut self, rtps_writer_proxy: &RtpsWriterProxy) {
-    self.writer_proxy.remote_writer_guid = rtps_writer_proxy.remote_writer_guid;
-    self.writer_proxy.unicast_locator_list = rtps_writer_proxy.unicast_locator_list.clone();
-    self.writer_proxy.multicast_locator_list = rtps_writer_proxy.multicast_locator_list.clone();
-  }
+  // pub(crate) fn update(&mut self, rtps_writer_proxy: &RtpsWriterProxy) {
+  //   self.writer_proxy.remote_writer_guid = rtps_writer_proxy.remote_writer_guid;
+  //   self.writer_proxy.unicast_locator_list = rtps_writer_proxy.unicast_locator_list.clone();
+  //   self.writer_proxy.multicast_locator_list = rtps_writer_proxy.multicast_locator_list.clone();
+  // }
 }
 
 impl<'de> Deserialize<'de> for DiscoveredWriterData {
