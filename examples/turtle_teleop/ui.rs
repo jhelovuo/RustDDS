@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::{io::Write, os::unix::io::AsRawFd};
 
 #[allow(unused_imports)]

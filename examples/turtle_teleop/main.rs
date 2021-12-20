@@ -1,7 +1,11 @@
 #![deny(clippy::all)]
 
+#[cfg(not(unix))]
+fn main() { println!("This example only works on a unix based system"); }
+
 use std::time::Duration;
 
+#[cfg(unix)]
 use termion::raw::*;
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -13,9 +17,11 @@ use rustdds::{
   ros2::{NodeOptions, RosParticipant},
   *,
 };
+#[cfg(unix)]
 use ui::{RosCommand, UiController};
 
 // modules
+#[cfg(unix)]
 mod ui;
 
 const TURTLE_CMD_VEL_READER_TOKEN: Token = Token(1);
@@ -60,6 +66,7 @@ impl Vector3 {
   };
 }
 
+#[cfg(unix)]
 fn main() {
   // Here is a fixed path, so this example must be started from
   // RustDDS main directory
@@ -99,6 +106,7 @@ fn main() {
   std::thread::sleep(Duration::from_millis(10));
 }
 
+#[cfg(unix)]
 fn ros2_loop(
   command_receiver: mio_channel::Receiver<RosCommand>,
   readback_sender: mio_channel::SyncSender<Twist>,

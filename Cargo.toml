@@ -40,14 +40,17 @@ local-ip-address = "0.4.4"
 [dev-dependencies]
 serde_repr = {version = "0.1" }
 log = "0.4"
-# shapes-demo:
-ctrlc = "3.1.6"     
-termion = "1.5.5"
-env_logger = "0.9.0"
-clap = "2.33"
-# turle_teleop
 log4rs = "1"
 test-case = "1.2.0"
+
 # ros_visualizer
 crossterm = "0.22"
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
+
+# shapes-demo
+clap = "2.33"
+ctrlc = "3.1.6"
+
+[target.'cfg(unix)'.dev-dependencies]
+# turle_teleop
+termion = "1.5.5"
