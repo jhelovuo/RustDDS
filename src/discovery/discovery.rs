@@ -1161,7 +1161,7 @@ impl Discovery {
           let pp = ParticipantMessageData {
             guid: self.domain_participant.guid_prefix(),
             kind:
-              ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE,
+              ParticipantMessageDataKind::AUTOMATIC_LIVELINESS_UPDATE,
             data: Vec::new(),
           };
           match self.dcps_participant_message_writer.write(pp, None) {
@@ -1193,7 +1193,7 @@ impl Discovery {
           let pp = ParticipantMessageData {
             guid: self.domain_participant.guid_prefix(),
             kind:
-              ParticipantMessageDataKind::PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE,
+              ParticipantMessageDataKind::MANUAL_LIVELINESS_UPDATE,
             data: Vec::new(),
           };
           match self.dcps_participant_message_writer.write(pp, None) {

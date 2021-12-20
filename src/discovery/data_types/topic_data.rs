@@ -838,15 +838,16 @@ pub struct ParticipantMessageDataKind {
 }
 
 impl ParticipantMessageDataKind {
-  pub const PARTICIPANT_MESSAGE_DATA_KIND_UNKNOWN: ParticipantMessageDataKind =
+  #[allow(dead_code)] // This is defined in the spec, but currenty unused.
+  pub const UNKNOWN: ParticipantMessageDataKind =
     ParticipantMessageDataKind {
       value: [0x00, 0x00, 0x00, 0x00],
     };
-  pub const PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE: ParticipantMessageDataKind =
+  pub const AUTOMATIC_LIVELINESS_UPDATE: ParticipantMessageDataKind =
     ParticipantMessageDataKind {
       value: [0x00, 0x00, 0x00, 0x01],
     };
-  pub const PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE: ParticipantMessageDataKind =
+  pub const MANUAL_LIVELINESS_UPDATE: ParticipantMessageDataKind =
     ParticipantMessageDataKind {
       value: [0x00, 0x00, 0x00, 0x02],
     };

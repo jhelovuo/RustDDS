@@ -154,9 +154,9 @@ where
   value.serialize(&mut CdrSerializer::<W, BO>::new(writer))
 }
 
-// This is private, for unit test cases only
 // Public interface should use to_writer() instead, as it is recommended by
 // serde documentation
+#[cfg(test)]
 pub(crate) fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
@@ -164,9 +164,9 @@ where
   to_bytes::<T, LittleEndian>(value)
 }
 
-// This is private, for unit test cases only
 // Public interface should use to_writer() instead, as it is recommended by
 // serde documentation
+#[cfg(test)]
 fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,

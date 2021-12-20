@@ -294,12 +294,12 @@ impl Publisher {
   // and .9
   /// Currently does nothing
   pub fn suspend_publications(&self) -> Result<()> {
-    Ok(())
+    self.inner.suspend_publications()
   }
 
   /// Currently does nothing
   pub fn resume_publications(&self) -> Result<()> {
-    Ok(())
+    self.inner.resume_publications()
   }
 
   // coherent change set
@@ -307,18 +307,18 @@ impl Publisher {
   // TODO: Implement these when coherent change-sets are supported.
   /// Coherent set not implemented and currently does nothing
   pub fn begin_coherent_changes(&self) -> Result<()> {
-    Ok(())
+    self.inner.begin_coherent_changes()
   }
 
   /// Coherent set not implemented and currently does nothing
   pub fn end_coherent_changes(&self) -> Result<()> {
-    Ok(())
+    self.inner.end_coherent_changes()
   }
 
   // Wait for all matched reliable DataReaders acknowledge data written so far, or
   // timeout. TODO: implement
-  pub(crate) fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
-    unimplemented!();
+  pub(crate) fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
+    self.inner.wait_for_acknowledgments(max_wait)
   }
 
   // What is the use case for this? (is it useful in Rust style of programming?

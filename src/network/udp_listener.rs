@@ -257,7 +257,7 @@ mod tests {
 
     let rec_data = listener.get_message();
 
-    assert_eq!(rec_data.len(), 5);
+    assert_eq!(rec_data.len(), 5); // It appears that this test may randomly fail.
     assert_eq!(rec_data, data);
   }
 

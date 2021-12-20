@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::marker::PhantomData;
 
 use bytes::Bytes;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
@@ -18,11 +19,11 @@ pub(crate) struct NoKeyWrapper<D> {
   pub(crate) d: D,
 }
 
-impl<D> NoKeyWrapper<D> {
-  pub fn unwrap(self) -> D {
-    self.d
-  }
-}
+// impl<D> NoKeyWrapper<D> {
+//   pub fn unwrap(self) -> D {
+//     self.d
+//   }
+// }
 
 impl<D> From<D> for NoKeyWrapper<D> {
   fn from(d: D) -> Self {
@@ -71,7 +72,7 @@ where
 // * inside is NO_KEY
 // * outside of wrapper is WITH_KEY
 pub struct SAWrapper<SA> {
-  no_key: SA,
+  no_key: PhantomData<SA>,
 }
 
 // have to implement base trait first, just trivial passthrough
@@ -101,11 +102,11 @@ where
   }
 }
 
-// wrapper for DeerializerAdapter
+// wrapper for DeserializerAdapter
 // * inside is NO_KEY
 // * outside of wrapper is WITH_KEY
 pub struct DAWrapper<DA> {
-  no_key: DA,
+  no_key: PhantomData<DA>,
 }
 
 // first, implement no_key DA
