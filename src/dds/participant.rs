@@ -373,17 +373,23 @@ impl DomainParticipantWeak {
   }
 
   pub fn domain_id(&self) -> u16 {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().domain_id(),
-      None => panic!("Unable to get original domain participant."),
-    }
+    self
+      .dpi
+      .upgrade()
+      .expect("Unable to get original domain participant.")
+      .lock()
+      .unwrap()
+      .domain_id()
   }
 
   pub fn participant_id(&self) -> u16 {
-    match self.dpi.upgrade() {
-      Some(dpi) => dpi.lock().unwrap().participant_id(),
-      None => panic!("Unable to get original domain participant."),
-    }
+    self
+      .dpi
+      .upgrade()
+      .expect("Unable to get original domain participant.")
+      .lock()
+      .unwrap()
+      .participant_id()
   }
 
   pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
