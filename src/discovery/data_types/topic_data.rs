@@ -15,7 +15,7 @@ use crate::{
       HasQoSPolicy, QosPolicies,
     },
     rtps_reader_proxy::RtpsReaderProxy,
-    rtps_writer_proxy::RtpsWriterProxy,
+    //rtps_writer_proxy::RtpsWriterProxy,
     topic::Topic,
     traits::{
       key::{Key, Keyed},

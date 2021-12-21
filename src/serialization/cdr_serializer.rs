@@ -2,7 +2,10 @@ use std::{io, io::Write, marker::PhantomData};
 
 use serde::{ser, Serialize};
 use bytes::Bytes;
-use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
+
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+#[cfg(test)]
+use byteorder::BigEndian;
 
 use crate::{
   dds::traits::{

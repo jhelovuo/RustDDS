@@ -151,9 +151,6 @@ impl DiscoveryDB {
     self.participant_proxies.get(&guid_prefix)
   }
 
-  pub fn find_remote_reader(&self, guid: GUID) -> Option<&DiscoveredReaderData> {
-    self.external_topic_readers.get(&guid)
-  }
 
   fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {
     // TODO: Implement this using .drain_filter() in BTreeMap once it lands in
@@ -525,10 +522,6 @@ impl DiscoveryDB {
 
   pub fn get_topic(&self, topic_name: &str) -> Option<&DiscoveredTopicData> {
     self.topics.get(topic_name)
-  }
-
-  pub fn new_topic_token() -> mio::Token {
-    mio::Token(0)
   }
 
   // // TODO: return iterator somehow?
