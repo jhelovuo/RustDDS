@@ -207,8 +207,8 @@ impl DiscoveryDB {
         Some(&last_life) => {
           // keep, if duration not exeeded
           let elapsed = Duration::from_std(inow.duration_since(last_life));
-          if elapsed <= lease_duration {
-            // this is a keeper
+          if elapsed <= lease_duration + PARTICIPANT_LEASE_DURATION_TOLREANCE {
+            // No timeout yet, we keep this, so do nothng.
           } else {
             info!("participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} elapsed = {:?}",
                   guid, lease_duration, elapsed);
@@ -278,9 +278,9 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
-    self.participant_proxies.values()
-  }
+  // pub fn participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
+  //   self.participant_proxies.values()
+  // }
 
   pub fn update_local_topic_writer(&mut self, writer: DiscoveredWriterData) {
     self

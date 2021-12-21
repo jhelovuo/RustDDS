@@ -28,7 +28,6 @@ use crate::{
       datareader::{DataReader, DataReaderCdr},
       datawriter::DataWriterCdr,
     },
-    Publisher, Subscriber,
   },
   discovery::{
     data_types::{
@@ -108,6 +107,7 @@ pub(crate) struct Discovery {
 
   // Handling of "DCPSParticipant" topic. This is the mother of all topics
   // where participants announce their presence and built-in readers and writers.
+  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
   dcps_participant_topic: Topic,
   dcps_participant_reader: DataReader<
     SpdpDiscoveredParticipantData,
@@ -118,6 +118,7 @@ pub(crate) struct Discovery {
   participant_send_info_timer: Timer<()>, // timer to periodically announce our presence
 
   // Topic "DCPSSubscription" - announcing and detecting Readers
+  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
   dcps_subscription_topic: Topic,
   dcps_subscription_reader:
     DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
@@ -125,6 +126,7 @@ pub(crate) struct Discovery {
   readers_send_info_timer: Timer<()>,
 
   // Topic "DCPSPublication" - announcing and detecting Writers
+  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
   dcps_publication_topic: Topic,
   dcps_publication_reader:
     DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
@@ -132,6 +134,7 @@ pub(crate) struct Discovery {
   writers_send_info_timer: Timer<()>,
 
   // Topic "DCPSTopic" - annoncing and detecting topics
+  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
   dcps_topic_topic: Topic,
   dcps_topic_reader: DataReader<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>,
   dcps_topic_writer: DataWriterCdr<DiscoveredTopicData>,
@@ -139,6 +142,7 @@ pub(crate) struct Discovery {
   topic_cleanup_timer: Timer<()>,
 
   // DCPSParticipantMessage - used by participants to communicate liveness
+  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
   participant_message_topic: Topic,
   dcps_participant_message_reader: DataReaderCdr<ParticipantMessageData>,
   dcps_participant_message_writer: DataWriterCdr<ParticipantMessageData>,
