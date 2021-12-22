@@ -275,10 +275,6 @@ impl DiscoveryDB {
     }
   }
 
-  // pub fn participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
-  //   self.participant_proxies.values()
-  // }
-
   pub fn update_local_topic_writer(&mut self, writer: DiscoveredWriterData) {
     self
       .local_topic_writers
@@ -291,13 +287,17 @@ impl DiscoveryDB {
     self.writers_updated = true;
   }
 
-  pub fn external_reader_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredReaderData> + 'a {
-    self.external_topic_readers.values()
-  }
+  // pub fn participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
+  //   self.participant_proxies.values()
+  // }
 
-  pub fn external_writer_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredWriterData> + 'a {
-    self.external_topic_writers.values()
-  }
+  // pub fn external_reader_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredReaderData> + 'a {
+  //   self.external_topic_readers.values()
+  // }
+
+  // pub fn external_writer_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredWriterData> + 'a {
+  //   self.external_topic_writers.values()
+  // }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None
   // TODO: Why are we here checking if discovery db already has this? What about

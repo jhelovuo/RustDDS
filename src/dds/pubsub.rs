@@ -1,3 +1,5 @@
+use std::sync::MutexGuard;
+use std::sync::Mutex;
 use std::{
   fmt::Debug,
   sync::{Arc, RwLock},
@@ -79,7 +81,7 @@ use super::{
 /// ```
 #[derive(Clone)]
 pub struct Publisher {
-  inner: Arc<InnerPublisher>,
+  inner: Arc<Mutex<InnerPublisher>>,
 }
 
 impl Publisher {
@@ -92,15 +94,20 @@ impl Publisher {
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Publisher {
     Publisher {
-      inner: Arc::new(InnerPublisher::new(
+      inner: Arc::new(Mutex::new(InnerPublisher::new(
         dp,
         discovery_db,
         qos,
         default_dw_qos,
         add_writer_sender,
         discovery_command,
-      )),
+      ))),
     }
+  }
+
+  fn inner_lock(&self) -> MutexGuard<'_, InnerPublisher> {
+    self.inner.lock()
+      .unwrap_or_else(|e| panic!("Inner publisher lock fail! {:?}",e))
   }
 
   /// Creates DDS [DataWriter](struct.With_Key_DataWriter.html) for Keyed topic
@@ -150,7 +157,7 @@ impl Publisher {
     <D as Keyed>::K: Key,
     SA: with_key::SerializerAdapter<D>,
   {
-    self.inner.create_datawriter(self, None, topic, qos)
+    self.inner_lock().create_datawriter(self, None, topic, qos)
   }
 
   /// Shorthand for crate_datawriter with Commaon Data Representation Little
@@ -181,7 +188,7 @@ impl Publisher {
     SA: with_key::SerializerAdapter<D>,
   {
     self
-      .inner
+      .inner_lock()
       .create_datawriter(self, Some(entity_id), topic, qos)
   }
 
@@ -238,7 +245,7 @@ impl Publisher {
     D: Serialize,
     SA: no_key::SerializerAdapter<D>,
   {
-    self.inner.create_datawriter_no_key(self, None, topic, qos)
+    self.inner_lock().create_datawriter_no_key(self, None, topic, qos)
   }
 
   pub fn create_datawriter_no_key_cdr<D>(
@@ -265,7 +272,7 @@ impl Publisher {
     SA: no_key::SerializerAdapter<D>,
   {
     self
-      .inner
+      .inner_lock()
       .create_datawriter_no_key(self, Some(entity_id), topic, qos)
   }
 
@@ -294,12 +301,12 @@ impl Publisher {
   // and .9
   /// Currently does nothing
   pub fn suspend_publications(&self) -> Result<()> {
-    self.inner.suspend_publications()
+    self.inner_lock().suspend_publications()
   }
 
   /// Currently does nothing
   pub fn resume_publications(&self) -> Result<()> {
-    self.inner.resume_publications()
+    self.inner_lock().resume_publications()
   }
 
   // coherent change set
@@ -307,18 +314,18 @@ impl Publisher {
   // TODO: Implement these when coherent change-sets are supported.
   /// Coherent set not implemented and currently does nothing
   pub fn begin_coherent_changes(&self) -> Result<()> {
-    self.inner.begin_coherent_changes()
+    self.inner_lock().begin_coherent_changes()
   }
 
   /// Coherent set not implemented and currently does nothing
   pub fn end_coherent_changes(&self) -> Result<()> {
-    self.inner.end_coherent_changes()
+    self.inner_lock().end_coherent_changes()
   }
 
   // Wait for all matched reliable DataReaders acknowledge data written so far, or
   // timeout. TODO: implement
   pub(crate) fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
-    self.inner.wait_for_acknowledgments(max_wait)
+    self.inner_lock().wait_for_acknowledgments(max_wait)
   }
 
   // What is the use case for this? (is it useful in Rust style of programming?
@@ -340,13 +347,13 @@ impl Publisher {
   /// assert_eq!(domain_participant, publisher.participant().unwrap());
   /// ```
   pub fn participant(&self) -> Option<DomainParticipant> {
-    self.inner.domain_participant.clone().upgrade()
+    self.inner_lock().domain_participant.clone().upgrade()
   }
 
   // delete_contained_entities: We should not need this. Contained DataWriters
   // should dispose themselves and notify publisher.
 
-  /// Returns default DataWriter qos. Currently default qos is not used.
+  /// Returns default DataWriter qos. 
   ///
   /// # Example
   ///
@@ -362,43 +369,43 @@ impl Publisher {
   /// assert_eq!(qos, publisher.get_default_datawriter_qos());
   /// ```
   pub fn get_default_datawriter_qos(&self) -> QosPolicies {
-    self.inner.default_datawriter_qos.clone()
+    self.inner_lock().get_default_datawriter_qos().clone()
   }
 
-  // / Sets default DataWriter qos. Currenly default qos is not used.
-  // /
-  // / # Example
-  // /
-  // / ```
-  // / # use rustdds::dds::DomainParticipant;
-  // / # use rustdds::dds::qos::{QosPolicyBuilder, policy::Durability};
-  // / # use rustdds::dds::Publisher;
-  // /
-  // / let domain_participant = DomainParticipant::new(0).unwrap();
-  // / let qos = QosPolicyBuilder::new().build();
-  // /
-  // / let mut publisher = domain_participant.create_publisher(&qos).unwrap();
-  // / let qos2 =
-  // QosPolicyBuilder::new().durability(Durability::Transient).build();
-  // / publisher.set_default_datawriter_qos(&qos2);
-  // /
-  // / assert_ne!(qos, *publisher.get_default_datawriter_qos());
-  // / assert_eq!(qos2, *publisher.get_default_datawriter_qos());
-  // / ```
-  // pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
-  //   self.inner.borrow_mut().default_datawriter_qos = q.clone();
-  // }
+  /// Sets default DataWriter qos. 
+  ///
+  /// # Example
+  ///
+  /// ```
+  /// # use rustdds::dds::DomainParticipant;
+  /// # use rustdds::dds::qos::{QosPolicyBuilder, policy::Durability};
+  /// # use rustdds::dds::Publisher;
+  ///
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
+  /// let qos = QosPolicyBuilder::new().build();
+  ///
+  /// let mut publisher = domain_participant.create_publisher(&qos).unwrap();
+  /// let qos2 =
+  //7 QosPolicyBuilder::new().durability(Durability::Transient).build();
+  /// publisher.set_default_datawriter_qos(&qos2);
+  ///
+  /// assert_ne!(qos, *publisher.get_default_datawriter_qos());
+  /// assert_eq!(qos2, *publisher.get_default_datawriter_qos());
+  /// ```
+  pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
+    self.inner_lock().set_default_datawriter_qos(q)
+  }
 } // impl
 
 impl PartialEq for Publisher {
   fn eq(&self, other: &Self) -> bool {
-    self.inner == other.inner // use Eq implementation of Rc
+    *self.inner_lock() == *other.inner_lock() // use Eq implementation of Rc
   }
 }
 
 impl Debug for Publisher {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    self.inner.fmt(f)
+    self.inner_lock().fmt(f)
   }
 }
 

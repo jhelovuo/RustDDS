@@ -15,8 +15,8 @@ pub mod no_key;
 /// Participating in WithKey topics.
 pub mod with_key;
 
-pub mod participant;
-pub mod pubsub;
+pub(crate) mod participant;
+pub(crate) mod pubsub;
 pub(crate) mod readcondition;
 pub(crate) mod reader;
 pub(crate) mod rtps_reader_proxy;

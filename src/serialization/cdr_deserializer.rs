@@ -123,15 +123,6 @@ where
     Ok(())
   }
 
-  // Look at the first byte in the input without consuming it.
-  fn peek_byte(&mut self) -> Result<u8> {
-    self.input.first().ok_or(Error::Eof).map(|b| *b)
-  }
-
-  fn check_if_bytes_left(&mut self) -> bool {
-    !self.input.is_empty()
-  }
-
   fn calculate_padding_count_from_written_bytes_and_remove(
     &mut self,
     type_octet_aligment: usize,

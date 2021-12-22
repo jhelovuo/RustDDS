@@ -19,9 +19,11 @@ use crate::{
 // This is for the assembly of a single object
 struct AssemblyBuffer {
   buffer_bytes: BytesMut,
+  #[allow(dead_code)] // This module is still WiP
   fragment_count: usize,
   received_bitmap: BitVec,
 
+  #[allow(dead_code)] // This module is still WiP
   created_time: Timestamp,
   modified_time: Timestamp,
 }
