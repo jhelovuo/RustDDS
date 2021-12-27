@@ -374,7 +374,7 @@ impl DPEventLoop {
             .poll
             .register(
               &timer,
-              new_reader_ing.guid.entity_id.as_alt_token(),
+              new_reader_ing.alt_entity_token(),
               Ready::readable(),
               PollOpt::edge(),
             )
@@ -433,7 +433,7 @@ impl DPEventLoop {
             .poll
             .register(
               &timer,
-              new_writer_ingredients.guid.entity_id.as_alt_token(),
+              new_writer_ingredients.alt_entity_token(),
               Ready::readable(),
               PollOpt::edge(),
             )

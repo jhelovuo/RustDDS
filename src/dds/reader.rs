@@ -58,6 +58,12 @@ pub(crate) struct ReaderIngredients {
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
 }
 
+impl ReaderIngredients {
+  pub fn alt_entity_token(&self) -> Token {
+    self.guid.entity_id.as_alt_token()
+  }
+}
+
 impl fmt::Debug for ReaderIngredients {
   // Need manual implementation, because channels cannot be Dubug formatted.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -142,10 +148,6 @@ impl Reader {
   /// kind
   pub fn entity_token(&self) -> Token {
     self.guid().entity_id.as_token()
-  }
-
-  pub fn reader_alt_entity_token(&self) -> Token {
-    self.guid().entity_id.as_alt_token()
   }
 
   pub fn set_requested_deadline_check_timer(&mut self) {

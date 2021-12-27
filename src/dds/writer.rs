@@ -62,6 +62,13 @@ pub(crate) struct WriterIngredients {
   pub status_sender: SyncSender<DataWriterStatus>,
 }
 
+impl WriterIngredients {
+  /// This token is used in timed event mio::channel HearbeatHandler ->
+  /// dpEventwrapper
+  pub fn alt_entity_token(&self) -> Token {
+    self.guid.entity_id.as_alt_token()
+  }
+}
 pub(crate) struct Writer {
   pub endianness: Endianness,
   pub heartbeat_message_counter: i32,
@@ -86,13 +93,16 @@ pub(crate) struct Writer {
   ///allows the RTPS Writer to delay
   ///the response to a request for data
   ///from a negative acknowledgment.
-  pub nack_respose_delay: Duration,
+  pub nack_respose_delay: std::time::Duration,
+  
   ///Protocol tuning parameter that
   ///allows the RTPS Writer to ignore
   ///requests for data from negative
   ///acknowledgments that arrive ‘too
   ///soon’ after the corresponding
   ///change is sent.
+  // TODO: use this
+  #[allow(dead_code)]
   pub nack_suppression_duration: Duration,
   ///Internal counter used to assign
   ///increasing sequence number to
@@ -108,10 +118,12 @@ pub(crate) struct Writer {
   ///the maximum size of any
   ///SerializedPayload that may be
   ///sent by the Writer
+
   // TODO: But where is it used and how is that useful? It is mentioned in RTPS Spec v2.5
   // as a field of "Writer" in Figure 8.16, but the usage is unclear.
+  #[allow(dead_code)]
   pub data_max_size_serialized: u64,
-  
+
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   ///The RTPS ReaderProxy class represents the information an RTPS
@@ -225,7 +237,7 @@ impl Writer {
       push_mode: true,
       heartbeat_period,
       cache_cleaning_period,
-      nack_respose_delay: Duration::from_millis(200),
+      nack_respose_delay: NACK_RESPONSE_DELAY, // default value
       nack_suppression_duration: Duration::from_millis(0),
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
@@ -254,11 +266,6 @@ impl Writer {
     self.guid().entity_id.as_token()
   }
 
-  /// This token is used in timed event mio::channel HearbeatHandler ->
-  /// dpEventwrapper
-  pub fn timed_event_entity_token(&self) -> Token {
-    self.guid().entity_id.as_alt_token()
-  }
 
   pub fn is_reliable(&self) -> bool {
     self.qos_policies.reliability.is_some()
@@ -635,7 +642,7 @@ impl Writer {
             reader_proxy.repair_mode = true; // TODO: Is this correct? Do we need to repair immediately?
                                              // set repair timer to fire
             self.timed_event_timer.set_timeout(
-              NACK_RESPONSE_DELAY,
+              self.nack_respose_delay,
               TimedEvent::SendRepairData {
                 to_reader: reader_guid,
               },
