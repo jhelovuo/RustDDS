@@ -43,7 +43,8 @@ impl CacheChange {
     }
   }
 
-  pub fn change_kind(&self) -> ChangeKind {
-    self.data_value.change_kind()
-  }
+  // Not needed?
+  // pub fn change_kind(&self) -> ChangeKind {
+  //   self.data_value.change_kind()
+  // }
 }

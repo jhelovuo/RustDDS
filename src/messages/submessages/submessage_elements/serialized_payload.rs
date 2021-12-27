@@ -137,9 +137,6 @@ impl SerializedPayload {
     })
   }
 
-  pub fn representation_identifier(&self) -> RepresentationIdentifier {
-    self.representation_identifier
-  }
 }
 
 impl<C: Context> Writable<C> for SerializedPayload {

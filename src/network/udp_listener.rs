@@ -211,18 +211,22 @@ impl UDPListener {
     messages
   }
 
-  pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
-    if address.is_multicast() {
-      return self
-        .socket
-        .join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
-    }
-    io::Result::Err(io::Error::new(
-      io::ErrorKind::Other,
-      "Not a multicast address",
-    ))
-  }
+  // This function seems not necessary, because multicast join is done
+  // at listener creation time.
+  //
+  // pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
+  //   if address.is_multicast() {
+  //     return self
+  //       .socket
+  //       .join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
+  //   }
+  //   io::Result::Err(io::Error::new(
+  //     io::ErrorKind::Other,
+  //     "Not a multicast address",
+  //   ))
+  // }
 
+  #[cfg(test)] // normally done in .drop()
   pub fn leave_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
     if address.is_multicast() {
       return self

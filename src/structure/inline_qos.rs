@@ -1,4 +1,3 @@
-use byteorder::ByteOrder;
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 
@@ -6,8 +5,12 @@ use super::cache_change::ChangeKind;
 use crate::{
   dds::traits::serde_adapters::no_key::*,
   messages::submessages::submessage_elements::RepresentationIdentifier,
-  serialization::{cdr_serializer::to_bytes, CDRDeserializerAdapter},
+  serialization::{CDRDeserializerAdapter},
 };
+
+#[cfg(test)] use byteorder::ByteOrder;
+#[cfg(test)] use crate::serialization::cdr_serializer::to_bytes;
+
 
 #[derive(Debug, BitFlags, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
@@ -73,6 +76,7 @@ impl StatusInfo {
     }
   }
 
+  #[cfg(test)]
   pub fn into_cdr_bytes<BO: ByteOrder>(
     self,
   ) -> Result<Vec<u8>, crate::serialization::error::Error> {

@@ -47,6 +47,9 @@ impl DDSCache {
     );
   }
 
+  // TODO: Investigate why this is not used. 
+  // When do RTPS Topics die? Never?
+  #[allow(dead_code)]
   pub fn remove_topic(&mut self, topic_name: &str) {
     if self.topic_caches.contains_key(topic_name) {
       self.topic_caches.remove(topic_name);

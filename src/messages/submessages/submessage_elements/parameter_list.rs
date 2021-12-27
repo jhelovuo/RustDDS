@@ -22,10 +22,6 @@ impl ParameterList {
   }
 }
 
-/// The PID_PAD is used to enforce alignment of the parameter
-/// that follows and its length can be anything (as long as it is a multiple of
-/// 4)
-pub const PID_PAD: u16 = 0x00;
 const SENTINEL: u32 = 0x00000001;
 
 impl<C: Context> Writable<C> for ParameterList {

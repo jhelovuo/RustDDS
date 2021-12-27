@@ -103,11 +103,15 @@ pub(crate) struct Writer {
   ///If no samples are available in the Writer, identifies the lowest
   ///sequence number that is yet to be written by the Writer
   pub first_change_sequence_number: SequenceNumber,
+
   ///Optional attribute that indicates
   ///the maximum size of any
   ///SerializedPayload that may be
   ///sent by the Writer
+  // TODO: But where is it used and how is that useful? It is mentioned in RTPS Spec v2.5
+  // as a field of "Writer" in Figure 8.16, but the usage is unclear.
   pub data_max_size_serialized: u64,
+  
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   ///The RTPS ReaderProxy class represents the information an RTPS
@@ -134,6 +138,7 @@ pub(crate) struct Writer {
 
   /// Set of disposed samples.
   /// Useful when reader requires some sample with acknack.
+  // TODO: Apparently, this is never updated.
   disposed_sequence_numbers: HashSet<SequenceNumber>,
 
   //When dataWriter sends cacheChange message with cacheKind is NotAliveDisposed
@@ -736,10 +741,22 @@ impl Writer {
           no_longer_relevant.push(unsent_sn);
         }
       } else {
-        error!(
-          "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
-          self.my_guid, unsent_sn
-        );
+        // SN did not map to an Instant. Maybe it has been removed?
+        if unsent_sn < self.first_change_sequence_number {
+          debug!("Reader {:?} requested too old data {:?}. I have only from {:?}. Topic {:?}", 
+            &reader_proxy, unsent_sn, self.first_change_sequence_number, &self.my_topic_name);
+          // noting to do
+        } else if self.disposed_sequence_numbers.contains(&unsent_sn)  {
+          debug!("Reader {:?} requested disposed {:?}. Topic {:?}", 
+            &reader_proxy, unsent_sn, &self.my_topic_name);
+          // nothing to do
+        } else {
+          // we are running out of excuses
+          error!(
+            "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
+            self.my_guid, unsent_sn
+          );
+        }
         no_longer_relevant.push(unsent_sn);
       } // match
 

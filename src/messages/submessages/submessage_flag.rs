@@ -67,6 +67,7 @@ pub enum DATAFRAG_Flags {
 submessageflag_impls!(DATAFRAG_Flags);
 
 impl DATAFRAG_Flags {
+  #[allow(dead_code)] // TODO: remove annotation when DATA_FRAG is supported
   pub fn to_data_flags(dff: BitFlags<DATAFRAG_Flags>) -> BitFlags<DATA_Flags> {
     let mut df: BitFlags<DATA_Flags> = if dff.contains(DATAFRAG_Flags::Key) {
       DATA_Flags::Key.into()

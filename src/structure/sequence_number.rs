@@ -253,6 +253,7 @@ where
     NumberSet::<N>::new(bitmap_base, 0)
   }
 
+  #[allow(dead_code)] // Is this really unneccessary?
   pub fn is_empty(&self) -> bool {
     self.num_bits == 0 || self.iter().next().is_none()
   }
