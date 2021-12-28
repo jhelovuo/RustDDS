@@ -393,11 +393,11 @@ impl Publisher {
   ///
   /// let mut publisher = domain_participant.create_publisher(&qos).unwrap();
   /// let qos2 =
-  //7 QosPolicyBuilder::new().durability(Durability::Transient).build();
+  /// QosPolicyBuilder::new().durability(Durability::Transient).build();
   /// publisher.set_default_datawriter_qos(&qos2);
   ///
-  /// assert_ne!(qos, *publisher.get_default_datawriter_qos());
-  /// assert_eq!(qos2, *publisher.get_default_datawriter_qos());
+  /// assert_ne!(qos, publisher.get_default_datawriter_qos());
+  /// assert_eq!(qos2, publisher.get_default_datawriter_qos());
   /// ```
   pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
     self.inner_lock().set_default_datawriter_qos(q)
@@ -413,7 +413,9 @@ impl Publisher {
 
 impl PartialEq for Publisher {
   fn eq(&self, other: &Self) -> bool {
-    *self.inner_lock() == *other.inner_lock() // use Eq implementation of Rc
+    let id_self = { self.inner_lock().identity() };
+    let id_other = { other.inner_lock().identity() };
+    id_self == id_other
   }
 }
 
@@ -427,6 +429,7 @@ impl Debug for Publisher {
 
 #[derive(Clone)]
 struct InnerPublisher {
+  id: EntityId,
   domain_participant: DomainParticipantWeak,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   my_qos_policies: QosPolicies,
@@ -447,7 +450,13 @@ impl InnerPublisher {
     remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> InnerPublisher {
+    // We generate an arbitrary but unique id to distiguish Publishers from each other.
+    // EntityKind is just some value, since we do not show it to anyone.
+    let id = EntityId::MAX;
+      //dp.clone().upgrade().unwrap().new_entity_id(EntityKind::UNKNOWN_BUILT_IN);
+
     InnerPublisher {
+      id,
       domain_participant: dp,
       discovery_db,
       my_qos_policies: qos,
@@ -597,15 +606,11 @@ impl InnerPublisher {
     self.remove_writer_sender.try_send(guid)
       .unwrap_or_else(|e| error!("Cannot remove Writer {:?} : {:?}",guid, e)  )
   }
-}
 
-impl PartialEq for InnerPublisher {
-  fn eq(&self, other: &Self) -> bool {
-    self.participant() == other.participant()
-      && self.my_qos_policies == other.my_qos_policies
-      && self.default_datawriter_qos == other.default_datawriter_qos
-    // TODO: publisher is DDSEntity?
+  pub (crate) fn identity(&self) -> EntityId {
+    self.id
   }
+
 }
 
 impl Debug for InnerPublisher {
