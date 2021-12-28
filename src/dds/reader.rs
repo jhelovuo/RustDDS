@@ -99,7 +99,6 @@ pub(crate) struct Reader {
   #[allow(dead_code)]
   heartbeat_supression_duration: StdDuration,
 
-  sent_ack_nack_count: i32,
   received_hearbeat_count: i32,
 
   matched_writers: BTreeMap<GUID, RtpsWriterProxy>,
@@ -134,7 +133,6 @@ impl Reader {
 
       heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
       heartbeat_supression_duration: StdDuration::new(0, 0),
-      sent_ack_nack_count: 0,
       received_hearbeat_count: 0,
       matched_writers: BTreeMap::new(),
       writer_match_count_total: 0,
@@ -689,6 +687,8 @@ impl Reader {
       }
     }
 
+    let reader_id = self.entity_id();
+
     // this is duplicate code from above, but needed, because we need another
     // mutable borrow. TODO: Maybe could be written in some sensible way.
     let writer_proxy = if let Some(wp) = self.matched_writer_lookup(writer_guid) {
@@ -734,10 +734,10 @@ impl Reader {
       };
 
       let response_ack_nack = AckNack {
-        reader_id: self.entity_id(),
+        reader_id,
         writer_id: heartbeat.writer_id,
         reader_sn_state,
-        count: self.sent_ack_nack_count,
+        count: writer_proxy.next_ack_nack_sequence_number(),
       };
 
       // Sanity check
@@ -760,7 +760,6 @@ impl Reader {
         },
         &mr_state.unicast_reply_locator_list,
       );
-      self.sent_ack_nack_count += 1;
 
       return true;
     }
@@ -947,14 +946,19 @@ impl Reader {
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness);
     // Do not set final flag --> we are requesting immediate heartbeat from writers.
 
-    for (_, writer_proxy) in self.matched_writers.iter().filter(|(_, p)| p.no_changes()) {
+    // Detach the writer proxy set. This is a way to avoid multiple &mut self
+    let mut writer_proxies = std::mem::take(&mut self.matched_writers);
+
+    let reader_id = self.entity_id();
+    for (_, writer_proxy) in writer_proxies.iter_mut().filter(|(_, p)| p.no_changes()) {
+      let acknack_count = writer_proxy.next_ack_nack_sequence_number();
       self.send_acknack_to(
         flags,
         AckNack {
-          reader_id: self.entity_id(),
+          reader_id,
           writer_id: writer_proxy.remote_writer_guid.entity_id,
           reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(1)),
-          count: self.sent_ack_nack_count,
+          count: acknack_count,
         },
         InfoDestination {
           guid_prefix: writer_proxy.remote_writer_guid.prefix,
@@ -962,8 +966,8 @@ impl Reader {
         &writer_proxy.unicast_locator_list,
       );
     }
-
-    self.sent_ack_nack_count += 1;
+    // put writer proxies back
+    self.matched_writers = writer_proxies;
   }
 
   pub fn topic_name(&self) -> &String {
@@ -983,20 +987,6 @@ impl RTPSEntity for Reader {
   }
 }
 
-// Not needed anymore
-/*impl PartialEq for Reader {
-  // Ignores registration and history cache?
-  fn eq(&self, other: &Self) -> bool {
-    //self.history_cache == other.history_cache &&
-    self.entity_attributes == other.entity_attributes
-      && self.enpoint_attributes == other.enpoint_attributes
-      && self.heartbeat_response_delay == other.heartbeat_response_delay
-      && self.heartbeat_supression_duration == other.heartbeat_supression_duration
-      && self.sent_ack_nack_count == other.sent_ack_nack_count
-      && self.received_hearbeat_count == other.received_hearbeat_count
-  }
-}*/
-
 impl fmt::Debug for Reader {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("Reader")
@@ -1004,7 +994,6 @@ impl fmt::Debug for Reader {
       .field("topic_name", &self.topic_name)
       .field("my_guid", &self.my_guid)
       .field("heartbeat_response_delay", &self.heartbeat_response_delay)
-      .field("sent_ack_nack_count", &self.sent_ack_nack_count)
       .field("received_hearbeat_count", &self.received_hearbeat_count)
       .finish()
   }
@@ -1294,7 +1283,9 @@ mod tests {
     };
     assert!(new_reader.handle_heartbeat_msg(&hb_none, false, mr_state)); // Should sen acknack
 
-    assert_eq!(new_reader.sent_ack_nack_count, 3);
+    //assert_eq!(new_reader.sent_ack_nack_count, 3);
+    // TODO: Cannot get the above count from Reader directly.
+    // How to get it from writer proxies?
   }
 
   #[test]

@@ -779,9 +779,9 @@ mod tests {
       third: u8,
     }
     let mikki_hiiri = OmaTyyppi {
-      first_value: 'a' as u8,
-      second: 'b' as u8,
-      third: 'ä' as u8,
+      first_value: b'a',
+      second: b'b',
+      third: b'\xE4', // 'ä'
     };
 
     let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();

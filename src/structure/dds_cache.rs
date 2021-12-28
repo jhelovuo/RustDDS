@@ -125,7 +125,9 @@ impl DDSCache {
 #[derive(Debug)]
 pub struct TopicCache {
   topic_name: String,
+  #[allow(dead_code)] // TODO: Which (future) feature needs this?
   topic_data_type: TypeDesc,
+  #[allow(dead_code)] // TODO: Which (future) feature needs this?
   topic_kind: TopicKind,
   topic_qos: QosPolicies,
   history_cache: DDSHistoryCache,

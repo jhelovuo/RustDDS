@@ -69,6 +69,12 @@ impl RtpsWriterProxy {
     }
   }
 
+  pub fn next_ack_nack_sequence_number(&mut self) -> i32 {
+    let c = self.sent_ack_nack_count;
+    self.sent_ack_nack_count += 1;
+    c
+  }
+
   pub fn all_ackable_before(&self) -> SequenceNumber {
     self.ack_base
   }

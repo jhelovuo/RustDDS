@@ -54,7 +54,6 @@ pub enum QosPolicyId {
 
 /// Utility for building [QosPolicies]
 #[derive(Default)]
-#[must_use]
 pub struct QosPolicyBuilder {
   durability: Option<policy::Durability>,
   presentation: Option<policy::Presentation>,
@@ -75,36 +74,43 @@ impl QosPolicyBuilder {
     Self::default()
   }
 
+  #[must_use]
   pub const fn durability(mut self, durability: policy::Durability) -> QosPolicyBuilder {
     self.durability = Some(durability);
     self
   }
 
+  #[must_use]
   pub const fn presentation(mut self, presentation: policy::Presentation) -> QosPolicyBuilder {
     self.presentation = Some(presentation);
     self
   }
 
+  #[must_use]
   pub const fn deadline(mut self, deadline: policy::Deadline) -> QosPolicyBuilder {
     self.deadline = Some(deadline);
     self
   }
 
+  #[must_use]
   pub const fn latency_budget(mut self, latency_budget: policy::LatencyBudget) -> QosPolicyBuilder {
     self.latency_budget = Some(latency_budget);
     self
   }
 
+  #[must_use]
   pub const fn ownership(mut self, ownership: policy::Ownership) -> QosPolicyBuilder {
     self.ownership = Some(ownership);
     self
   }
 
+  #[must_use]
   pub const fn liveliness(mut self, liveliness: policy::Liveliness) -> QosPolicyBuilder {
     self.liveliness = Some(liveliness);
     self
   }
 
+  #[must_use]
   pub const fn time_based_filter(
     mut self,
     time_based_filter: policy::TimeBasedFilter,
@@ -113,11 +119,13 @@ impl QosPolicyBuilder {
     self
   }
 
+  #[must_use]
   pub const fn reliability(mut self, reliability: policy::Reliability) -> QosPolicyBuilder {
     self.reliability = Some(reliability);
     self
   }
 
+  #[must_use]
   pub const fn destination_order(
     mut self,
     destination_order: policy::DestinationOrder,
@@ -126,11 +134,13 @@ impl QosPolicyBuilder {
     self
   }
 
+  #[must_use]
   pub const fn history(mut self, history: policy::History) -> QosPolicyBuilder {
     self.history = Some(history);
     self
   }
 
+  #[must_use]
   pub const fn resource_limits(
     mut self,
     resource_limits: policy::ResourceLimits,
@@ -139,6 +149,7 @@ impl QosPolicyBuilder {
     self
   }
 
+  #[must_use]
   pub const fn lifespan(mut self, lifespan: policy::Lifespan) -> QosPolicyBuilder {
     self.lifespan = Some(lifespan);
     self
