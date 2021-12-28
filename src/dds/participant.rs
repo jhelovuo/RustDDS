@@ -939,21 +939,21 @@ impl DomainParticipantInner {
 
   // The following methods are not for application use.
 
-  pub(crate) fn get_add_reader_sender(&self) -> mio_channel::SyncSender<ReaderIngredients> {
-    self.sender_add_reader.clone()
-  }
+  // pub(crate) fn get_add_reader_sender(&self) -> mio_channel::SyncSender<ReaderIngredients> {
+  //   self.sender_add_reader.clone()
+  // }
 
-  pub(crate) fn get_remove_reader_sender(&self) -> mio_channel::SyncSender<GUID> {
-    self.sender_remove_reader.clone()
-  }
+  // pub(crate) fn get_remove_reader_sender(&self) -> mio_channel::SyncSender<GUID> {
+  //   self.sender_remove_reader.clone()
+  // }
 
-  pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<WriterIngredients> {
-    self.add_writer_sender.clone()
-  }
+  // pub(crate) fn get_add_writer_sender(&self) -> mio_channel::SyncSender<WriterIngredients> {
+  //   self.add_writer_sender.clone()
+  // }
 
-  pub(crate) fn get_remove_writer_sender(&self) -> mio_channel::SyncSender<GUID> {
-    self.remove_writer_sender.clone()
-  }
+  // pub(crate) fn get_remove_writer_sender(&self) -> mio_channel::SyncSender<GUID> {
+  //   self.remove_writer_sender.clone()
+  // }
 
   pub fn domain_id(&self) -> u16 {
     self.domain_id

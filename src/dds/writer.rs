@@ -1025,20 +1025,13 @@ impl Writer {
     self.sequence_number_to_instant.get(&seqnumber).copied()
   }
 
-  pub fn find_cache_change(&self, instant: &Timestamp) -> Option<CacheChange> {
-    match self.dds_cache.read() {
-      Ok(dc) => {
-        let cc = dc.from_topic_get_change(&self.my_topic_name, instant);
-        cc.cloned()
-      }
-      Err(e) => panic!("DDSCache is poisoned {:?}", e),
-    }
-  }
-
   pub fn topic_name(&self) -> &String {
     &self.my_topic_name
   }
 
+  // TODO
+  // This is placeholder for not-yet-implemented feature.
+  //
   // pub fn reset_offered_deadline_missed_status(&mut self) {
   //   self.offered_deadline_status.reset_change();
   // }
