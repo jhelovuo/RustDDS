@@ -27,13 +27,13 @@ use crate::{
     values::result::{Error, Result},
   },
   discovery::{data_types::topic_data::SubscriptionBuiltinTopicData, discovery::DiscoveryCommand},
-  log_and_err_internal, log_and_err_precondition_not_met,
+  log_and_err_internal, //log_and_err_precondition_not_met,
   serialization::CDRSerializerAdapter,
   structure::{
     cache_change::ChangeKind,
     dds_cache::DDSCache,
     entity::RTPSEntity,
-    guid::{EntityId, GUID},
+    guid::{GUID},
     time::Timestamp,
     topic_kind::TopicKind,
   },
@@ -122,28 +122,12 @@ where
   pub(crate) fn new(
     publisher: Publisher,
     topic: Topic,
-    guid: Option<GUID>,
+    guid: GUID,
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
     status_receiver_rec: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
-    let entity_id = match guid {
-      Some(g) => g.entity_id,
-      None => EntityId::UNKNOWN,
-    };
-
-    let dp = match publisher.participant() {
-      Some(dp) => dp,
-      None => {
-        return log_and_err_precondition_not_met!(
-          "Cannot create new DataWriter, DomainParticipant doesn't exist."
-        )
-      }
-    };
-
-    let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
-
     match dds_cache.write() {
       Ok(mut cache) => cache.add_new_topic(topic.name(), TopicKind::NoKey, topic.get_type()),
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
@@ -166,7 +150,7 @@ where
       my_publisher: publisher,
       my_topic: topic,
       qos_policy: qos.clone(),
-      my_guid,
+      my_guid: guid,
       cc_upload,
       discovery_command,
       status_receiver: StatusReceiver::new(status_receiver_rec),

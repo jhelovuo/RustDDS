@@ -472,7 +472,7 @@ impl InnerPublisher {
       .modify_by(&optional_qos.unwrap_or_else(QosPolicies::qos_none));
 
     let entity_id =
-      self.unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
+      self.unwrap_or_new_entity_id(entity_id_opt, EntityKind::WRITER_WITH_KEY_USER_DEFINED);
     let dp = self
       .participant()
       .ok_or("upgrade fail")
@@ -496,7 +496,7 @@ impl InnerPublisher {
     let data_writer = WithKeyDataWriter::<D, SA>::new(
       outer.clone(),
       topic.clone(),
-      Some(guid),
+      guid,
       dwcc_upload,
       self.discovery_command.clone(),
       dp.dds_cache(),
@@ -524,7 +524,7 @@ impl InnerPublisher {
     SA: no_key::SerializerAdapter<D>,
   {
     let entity_id =
-      self.unwrap_or_random_entity_id(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
+      self.unwrap_or_new_entity_id(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
     let d = self.create_datawriter::<NoKeyWrapper<D>, SAWrapper<SA>>(
       outer,
       Some(entity_id),
@@ -573,7 +573,7 @@ impl InnerPublisher {
     self.default_datawriter_qos = q.clone();
   }
 
-  fn unwrap_or_random_entity_id(
+  fn unwrap_or_new_entity_id(
     &self,
     entity_id_opt: Option<EntityId>,
     entity_kind: EntityKind,
@@ -937,17 +937,14 @@ impl InnerSubscriber {
       .modify_by(&optional_qos.unwrap_or_else(QosPolicies::qos_none));
 
     let entity_id =
-      self.unwrap_or_random_entity_id(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
-
-    let reader_id = entity_id;
-    let datareader_id = entity_id;
+      self.unwrap_or_new_entity_id(entity_id_opt, EntityKind::READER_WITH_KEY_USER_DEFINED);
 
     let dp = match self.participant() {
       Some(dp) => dp,
       None => return log_and_err_precondition_not_met!("DomainParticipant doesn't exist anymore."),
     };
 
-    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), reader_id);
+    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
 
     let new_reader = ReaderIngredients {
       guid: reader_guid,
@@ -969,7 +966,7 @@ impl InnerSubscriber {
 
     let datareader = WithKeyDataReader::<D, SA>::new(
       outer.clone(),
-      datareader_id,
+      entity_id,
       topic.clone(),
       qos,
       rec,
@@ -1034,7 +1031,7 @@ impl InnerSubscriber {
     }
 
     let entity_id =
-      self.unwrap_or_random_entity_id(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
+      self.unwrap_or_new_entity_id(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
 
     let d = self.create_datareader_internal::<NoKeyWrapper<D>, DAWrapper<SA>>(
       outer,
@@ -1050,7 +1047,7 @@ impl InnerSubscriber {
     self.domain_participant.clone().upgrade()
   }
 
-  fn unwrap_or_random_entity_id(
+  fn unwrap_or_new_entity_id(
     &self,
     entity_id_opt: Option<EntityId>,
     entity_kind: EntityKind,
