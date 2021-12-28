@@ -147,6 +147,10 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn drop(&mut self) {
+    // Tell dp_event_loop
+    self.my_subscriber.remove_reader(self.my_guid);
+    
+    // Tell discoery
     match self
       .discovery_command
       .send(DiscoveryCommand::RemoveLocalReader { guid: self.guid() })

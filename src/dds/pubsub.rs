@@ -10,6 +10,9 @@ use mio_extras::channel as mio_channel;
 use serde::{de::DeserializeOwned, Serialize};
 use byteorder::LittleEndian;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use crate::{
   dds::{
     data_types::EntityKind,
@@ -91,6 +94,7 @@ impl Publisher {
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
     add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
+    remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Publisher {
     Publisher {
@@ -100,6 +104,7 @@ impl Publisher {
         qos,
         default_dw_qos,
         add_writer_sender,
+        remove_writer_sender,
         discovery_command,
       ))),
     }
@@ -397,6 +402,13 @@ impl Publisher {
   pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
     self.inner_lock().set_default_datawriter_qos(q)
   }
+
+
+  // This is used on DataWriter .drop()
+  pub(crate) fn remove_writer(&self, guid:GUID) {
+    self.inner_lock().remove_writer(guid) 
+  }
+
 } // impl
 
 impl PartialEq for Publisher {
@@ -420,6 +432,7 @@ struct InnerPublisher {
   my_qos_policies: QosPolicies,
   default_datawriter_qos: QosPolicies, // used when creating a new DataWriter
   add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
+  remove_writer_sender: mio_channel::SyncSender<GUID>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
@@ -431,6 +444,7 @@ impl InnerPublisher {
     qos: QosPolicies,
     default_dw_qos: QosPolicies,
     add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
+    remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> InnerPublisher {
     InnerPublisher {
@@ -439,6 +453,7 @@ impl InnerPublisher {
       my_qos_policies: qos,
       default_datawriter_qos: default_dw_qos,
       add_writer_sender,
+      remove_writer_sender,
       discovery_command,
     }
   }
@@ -576,6 +591,11 @@ impl InnerPublisher {
     // If the entity_id is given, then just use that. If not, then pull an arbirtaty
     // number out of participant's hat.
     entity_id_opt.unwrap_or_else(|| self.participant().unwrap().new_entity_id(entity_kind))
+  }
+
+  pub(crate) fn remove_writer(&self, guid:GUID) {
+    self.remove_writer_sender.try_send(guid)
+      .unwrap_or_else(|e| error!("Cannot remove Writer {:?} : {:?}",guid, e)  )
   }
 }
 
@@ -872,6 +892,10 @@ impl Subscriber {
   pub fn participant(&self) -> Option<DomainParticipant> {
     self.inner.participant()
   }
+
+  pub(crate) fn remove_reader(&self, guid:GUID) {
+    self.inner.remove_reader(guid)
+  }
 }
 
 #[derive(Clone)]
@@ -903,7 +927,6 @@ impl InnerSubscriber {
     }
   }
 
-  /* pub(super) */
   fn create_datareader_internal<D: 'static, SA>(
     &self,
     outer: &Subscriber,
@@ -1040,6 +1063,11 @@ impl InnerSubscriber {
 
   pub fn participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()
+  }
+
+  pub(crate) fn remove_reader(&self, guid:GUID) {
+    self.sender_remove_reader.try_send(guid)
+      .unwrap_or_else(|e| error!("Cannot remove Reader {:?} : {:?}",guid, e)  )
   }
 
   fn unwrap_or_new_entity_id(

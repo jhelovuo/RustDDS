@@ -817,6 +817,7 @@ impl DomainParticipantInner {
       qos.clone(),
       qos.clone(),
       self.add_writer_sender.clone(),
+      self.remove_writer_sender.clone(),
       discovery_command,
     ))
   }

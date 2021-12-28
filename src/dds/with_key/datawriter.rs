@@ -94,6 +94,10 @@ where
   SA: SerializerAdapter<D>,
 {
   fn drop(&mut self) {
+    // Tell Publisher to drop the corresponding RTPS Writer
+    self.my_publisher.remove_writer(self.my_guid);
+
+    // Notify Discovery that we are no longer
     match self
       .discovery_command
       .send(DiscoveryCommand::RemoveLocalWriter { guid: self.guid() })
