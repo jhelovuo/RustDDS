@@ -774,7 +774,6 @@ impl DomainParticipantInner {
       domain_id,
       participant_id,
       my_guid: new_guid,
-      // Adding readers
       sender_add_reader,
       sender_remove_reader,
       stop_poll_sender,
@@ -792,14 +791,14 @@ impl DomainParticipantInner {
     self.dds_cache.clone()
   }
 
-  pub fn add_reader(&self, reader: ReaderIngredients) {
-    self.sender_add_reader.send(reader).unwrap();
-  }
+  // pub fn add_reader(&self, reader: ReaderIngredients) {
+  //   self.sender_add_reader.send(reader).unwrap();
+  // }
 
-  pub fn remove_reader(&self, guid: GUID) {
-    let reader_guid = guid; // How to identify reader to be removed?
-    self.sender_remove_reader.send(reader_guid).unwrap();
-  }
+  // pub fn remove_reader(&self, guid: GUID) {
+  //   let reader_guid = guid; // How to identify reader to be removed?
+  //   self.sender_remove_reader.send(reader_guid).unwrap();
+  // }
 
   // Publisher and subscriber creation
   //

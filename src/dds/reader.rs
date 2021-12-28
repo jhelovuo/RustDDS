@@ -94,6 +94,9 @@ pub(crate) struct Reader {
   my_guid: GUID,
 
   heartbeat_response_delay: StdDuration,
+
+  // TODO: Implement (use) this
+  #[allow(dead_code)]
   heartbeat_supression_duration: StdDuration,
 
   sent_ack_nack_count: i32,

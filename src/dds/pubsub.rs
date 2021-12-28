@@ -259,36 +259,37 @@ impl Publisher {
     self.create_datawriter_no_key::<D, CDRSerializerAdapter<D, LittleEndian>>(topic, qos)
   }
 
-  // versions with callee-specified EntityId. These are for Discovery use only.
+  // Versions with callee-specified EntityId. These are for Discovery use only.
+  // ... except that Discovery has no use for no_key versions.
 
-  pub(crate) fn create_datawriter_no_key_with_entityid<D, SA>(
-    &self,
-    entity_id: EntityId,
-    topic: &Topic,
-    qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataWriter<D, SA>>
-  where
-    D: Serialize,
-    SA: no_key::SerializerAdapter<D>,
-  {
-    self
-      .inner_lock()
-      .create_datawriter_no_key(self, Some(entity_id), topic, qos)
-  }
+  // pub(crate) fn create_datawriter_no_key_with_entityid<D, SA>(
+  //   &self,
+  //   entity_id: EntityId,
+  //   topic: &Topic,
+  //   qos: Option<QosPolicies>,
+  // ) -> Result<NoKeyDataWriter<D, SA>>
+  // where
+  //   D: Serialize,
+  //   SA: no_key::SerializerAdapter<D>,
+  // {
+  //   self
+  //     .inner_lock()
+  //     .create_datawriter_no_key(self, Some(entity_id), topic, qos)
+  // }
 
-  pub(crate) fn create_datawriter_no_key_cdr_with_entityid<D>(
-    &self,
-    entity_id: EntityId,
-    topic: &Topic,
-    qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
-  where
-    D: Serialize,
-  {
-    self.create_datawriter_no_key_with_entityid::<D, CDRSerializerAdapter<D, LittleEndian>>(
-      entity_id, topic, qos,
-    )
-  }
+  // pub(crate) fn create_datawriter_no_key_cdr_with_entityid<D>(
+  //   &self,
+  //   entity_id: EntityId,
+  //   topic: &Topic,
+  //   qos: Option<QosPolicies>,
+  // ) -> Result<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
+  // where
+  //   D: Serialize,
+  // {
+  //   self.create_datawriter_no_key_with_entityid::<D, CDRSerializerAdapter<D, LittleEndian>>(
+  //     entity_id, topic, qos,
+  //   )
+  // }
 
   // delete_datawriter should not be needed. The DataWriter object itself should
   // be deleted to accomplish this.
@@ -322,9 +323,10 @@ impl Publisher {
     self.inner_lock().end_coherent_changes()
   }
 
-  // Wait for all matched reliable DataReaders acknowledge data written so far, or
-  // timeout. TODO: implement
-  pub(crate) fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
+  /// Wait for all matched reliable DataReaders acknowledge data written so far, or
+  /// timeout. 
+  /// /Not implemeted/
+  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
     self.inner_lock().wait_for_acknowledgments(max_wait)
   }
 
@@ -532,13 +534,6 @@ impl InnerPublisher {
       qos,
     )?;
     Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
-  }
-
-  fn add_writer(&self, writer: WriterIngredients) -> Result<()> {
-    match self.add_writer_sender.send(writer) {
-      Ok(_) => Ok(()),
-      _ => Err(Error::OutOfResources),
-    }
   }
 
   pub fn suspend_publications(&self) -> Result<()> {

@@ -952,9 +952,9 @@ impl Writer {
     } // match
   }
 
-  // Update the given reader. Preserve data we are tracking.
+  // Update the given reader proxy. Preserve data we are tracking.
   // return 0 if the reader already existed
-  // return 1 if it was new
+  // return 1 if it was new ( = count of added reader proxies)
   fn matched_reader_update(&mut self, reader_proxy: RtpsReaderProxy) -> i32 {
     let (to_insert, count_change) = match self.readers.remove(&reader_proxy.remote_reader_guid) {
       None => (reader_proxy, 1),
@@ -973,23 +973,6 @@ impl Writer {
     count_change
   }
 
-  // internal helper. Same as above, but duplicates are an error.
-  fn matched_reader_add(&mut self, reader_proxy: &RtpsReaderProxy) {
-    let guid = reader_proxy.remote_reader_guid;
-    if self
-      .readers
-      .insert(reader_proxy.remote_reader_guid, reader_proxy.clone())
-      .is_some()
-    {
-      error!("Reader proxy with same GUID {:?} added already", guid);
-    } else {
-      info!(
-        "Added reader proxy. topic={:?} reader={:?}",
-        self.topic_name(),
-        reader_proxy
-      );
-    }
-  }
 
   fn matched_reader_remove(&mut self, guid: GUID) -> Option<RtpsReaderProxy> {
     let removed = self.readers.remove(&guid);
