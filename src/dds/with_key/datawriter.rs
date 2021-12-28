@@ -27,20 +27,15 @@ use crate::{
     values::result::{Error, Result},
   },
   discovery::{data_types::topic_data::SubscriptionBuiltinTopicData, discovery::DiscoveryCommand},
-  log_and_err_internal, //log_and_err_precondition_not_met,
+  log_and_err_internal,
+  messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
   serialization::CDRSerializerAdapter,
   structure::{
-    cache_change::ChangeKind,
-    dds_cache::DDSCache,
-    entity::RTPSEntity,
-    guid::{GUID},
-    time::Timestamp,
+    cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID, time::Timestamp,
     topic_kind::TopicKind,
   },
 };
-
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use super::super::{ writer::WriterCommand};
+use super::super::writer::WriterCommand;
 
 /// Simplified type for CDR encoding
 pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
@@ -129,7 +124,7 @@ where
     guid: GUID,
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    dds_cache: Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
+    dds_cache: &Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
     status_receiver_rec: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
     match dds_cache.write() {
@@ -153,7 +148,7 @@ where
       ser_phantom: PhantomData,
       my_publisher: publisher,
       my_topic: topic,
-      qos_policy: qos.clone(),
+      qos_policy: qos,
       my_guid: guid,
       cc_upload,
       discovery_command,

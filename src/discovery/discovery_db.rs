@@ -151,7 +151,6 @@ impl DiscoveryDB {
     self.participant_proxies.get(&guid_prefix)
   }
 
-
   fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {
     // TODO: Implement this using .drain_filter() in BTreeMap once it lands in
     // stable.
@@ -287,16 +286,16 @@ impl DiscoveryDB {
     self.writers_updated = true;
   }
 
-  // pub fn participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
-  //   self.participant_proxies.values()
+  // pub fn participants(&self) -> impl Iterator<Item =
+  // &SpdpDiscoveredParticipantData> {   self.participant_proxies.values()
   // }
 
-  // pub fn external_reader_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredReaderData> + 'a {
-  //   self.external_topic_readers.values()
+  // pub fn external_reader_proxies<'a>(&'a self) -> impl Iterator<Item =
+  // &DiscoveredReaderData> + 'a {   self.external_topic_readers.values()
   // }
 
-  // pub fn external_writer_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredWriterData> + 'a {
-  //   self.external_topic_writers.values()
+  // pub fn external_writer_proxies<'a>(&'a self) -> impl Iterator<Item =
+  // &DiscoveredWriterData> + 'a {   self.external_topic_writers.values()
   // }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None

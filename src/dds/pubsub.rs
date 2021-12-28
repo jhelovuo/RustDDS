@@ -1,15 +1,12 @@
-use std::sync::MutexGuard;
-use std::sync::Mutex;
 use std::{
   fmt::Debug,
-  sync::{Arc, RwLock},
+  sync::{Arc, Mutex, MutexGuard, RwLock},
   time::Duration,
 };
 
 use mio_extras::channel as mio_channel;
 use serde::{de::DeserializeOwned, Serialize};
 use byteorder::LittleEndian;
-
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
@@ -111,8 +108,10 @@ impl Publisher {
   }
 
   fn inner_lock(&self) -> MutexGuard<'_, InnerPublisher> {
-    self.inner.lock()
-      .unwrap_or_else(|e| panic!("Inner publisher lock fail! {:?}",e))
+    self
+      .inner
+      .lock()
+      .unwrap_or_else(|e| panic!("Inner publisher lock fail! {:?}", e))
   }
 
   /// Creates DDS [DataWriter](struct.With_Key_DataWriter.html) for Keyed topic
@@ -250,7 +249,9 @@ impl Publisher {
     D: Serialize,
     SA: no_key::SerializerAdapter<D>,
   {
-    self.inner_lock().create_datawriter_no_key(self, None, topic, qos)
+    self
+      .inner_lock()
+      .create_datawriter_no_key(self, None, topic, qos)
   }
 
   pub fn create_datawriter_no_key_cdr<D>(
@@ -291,8 +292,8 @@ impl Publisher {
   // where
   //   D: Serialize,
   // {
-  //   self.create_datawriter_no_key_with_entityid::<D, CDRSerializerAdapter<D, LittleEndian>>(
-  //     entity_id, topic, qos,
+  //   self.create_datawriter_no_key_with_entityid::<D, CDRSerializerAdapter<D,
+  // LittleEndian>>(     entity_id, topic, qos,
   //   )
   // }
 
@@ -328,8 +329,8 @@ impl Publisher {
     self.inner_lock().end_coherent_changes()
   }
 
-  /// Wait for all matched reliable DataReaders acknowledge data written so far, or
-  /// timeout. 
+  /// Wait for all matched reliable DataReaders acknowledge data written so far,
+  /// or timeout.
   /// /Not implemeted/
   pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
     self.inner_lock().wait_for_acknowledgments(max_wait)
@@ -360,7 +361,7 @@ impl Publisher {
   // delete_contained_entities: We should not need this. Contained DataWriters
   // should dispose themselves and notify publisher.
 
-  /// Returns default DataWriter qos. 
+  /// Returns default DataWriter qos.
   ///
   /// # Example
   ///
@@ -379,7 +380,7 @@ impl Publisher {
     self.inner_lock().get_default_datawriter_qos().clone()
   }
 
-  /// Sets default DataWriter qos. 
+  /// Sets default DataWriter qos.
   ///
   /// # Example
   ///
@@ -400,15 +401,13 @@ impl Publisher {
   /// assert_eq!(qos2, publisher.get_default_datawriter_qos());
   /// ```
   pub fn set_default_datawriter_qos(&mut self, q: &QosPolicies) {
-    self.inner_lock().set_default_datawriter_qos(q)
+    self.inner_lock().set_default_datawriter_qos(q);
   }
-
 
   // This is used on DataWriter .drop()
-  pub(crate) fn remove_writer(&self, guid:GUID) {
-    self.inner_lock().remove_writer(guid) 
+  pub(crate) fn remove_writer(&self, guid: GUID) {
+    self.inner_lock().remove_writer(guid);
   }
-
 } // impl
 
 impl PartialEq for Publisher {
@@ -450,10 +449,10 @@ impl InnerPublisher {
     remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> InnerPublisher {
-    // We generate an arbitrary but unique id to distiguish Publishers from each other.
-    // EntityKind is just some value, since we do not show it to anyone.
+    // We generate an arbitrary but unique id to distiguish Publishers from each
+    // other. EntityKind is just some value, since we do not show it to anyone.
     let id = EntityId::MAX;
-      //dp.clone().upgrade().unwrap().new_entity_id(EntityKind::UNKNOWN_BUILT_IN);
+    //dp.clone().upgrade().unwrap().new_entity_id(EntityKind::UNKNOWN_BUILT_IN);
 
     InnerPublisher {
       id,
@@ -525,7 +524,7 @@ impl InnerPublisher {
       guid,
       dwcc_upload,
       self.discovery_command.clone(),
-      dp.dds_cache(),
+      &dp.dds_cache(),
       status_receiver,
     )?;
 
@@ -602,15 +601,16 @@ impl InnerPublisher {
     entity_id_opt.unwrap_or_else(|| self.participant().unwrap().new_entity_id(entity_kind))
   }
 
-  pub(crate) fn remove_writer(&self, guid:GUID) {
-    self.remove_writer_sender.try_send(guid)
-      .unwrap_or_else(|e| error!("Cannot remove Writer {:?} : {:?}",guid, e)  )
+  pub(crate) fn remove_writer(&self, guid: GUID) {
+    self
+      .remove_writer_sender
+      .try_send(guid)
+      .unwrap_or_else(|e| error!("Cannot remove Writer {:?} : {:?}", guid, e));
   }
 
-  pub (crate) fn identity(&self) -> EntityId {
+  pub(crate) fn identity(&self) -> EntityId {
     self.id
   }
-
 }
 
 impl Debug for InnerPublisher {
@@ -857,8 +857,8 @@ impl Subscriber {
   //   D: DeserializeOwned,
   // {
   //   self
-  //     .create_datareader_no_key_with_entityid::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
-  // }
+  //     .create_datareader_no_key_with_entityid::<D,
+  // CDRDeserializerAdapter<D>>(topic, entity_id, qos) }
 
   // Retrieves a previously created DataReader belonging to the Subscriber.
   // TODO: Is this even possible. Whould probably need to return reference and
@@ -898,8 +898,8 @@ impl Subscriber {
     self.inner.participant()
   }
 
-  pub(crate) fn remove_reader(&self, guid:GUID) {
-    self.inner.remove_reader(guid)
+  pub(crate) fn remove_reader(&self, guid: GUID) {
+    self.inner.remove_reader(guid);
   }
 }
 
@@ -1070,9 +1070,11 @@ impl InnerSubscriber {
     self.domain_participant.clone().upgrade()
   }
 
-  pub(crate) fn remove_reader(&self, guid:GUID) {
-    self.sender_remove_reader.try_send(guid)
-      .unwrap_or_else(|e| error!("Cannot remove Reader {:?} : {:?}",guid, e)  )
+  pub(crate) fn remove_reader(&self, guid: GUID) {
+    self
+      .sender_remove_reader
+      .try_send(guid)
+      .unwrap_or_else(|e| error!("Cannot remove Reader {:?} : {:?}", guid, e));
   }
 
   fn unwrap_or_new_entity_id(

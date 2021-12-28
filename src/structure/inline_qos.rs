@@ -1,16 +1,16 @@
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use byteorder::ByteOrder;
 
 use super::cache_change::ChangeKind;
 use crate::{
   dds::traits::serde_adapters::no_key::*,
   messages::submessages::submessage_elements::RepresentationIdentifier,
-  serialization::{CDRDeserializerAdapter},
+  serialization::CDRDeserializerAdapter,
 };
-
-#[cfg(test)] use byteorder::ByteOrder;
-#[cfg(test)] use crate::serialization::cdr_serializer::to_bytes;
-
+#[cfg(test)]
+use crate::serialization::cdr_serializer::to_bytes;
 
 #[derive(Debug, BitFlags, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]

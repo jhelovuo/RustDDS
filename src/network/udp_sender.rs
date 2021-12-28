@@ -92,7 +92,7 @@ impl UDPSender {
     info!("UDPSender::new() --> {:?}", sender);
     Ok(sender)
   }
-  
+
   #[cfg(test)]
   pub fn new_with_random_port() -> io::Result<UDPSender> {
     Self::new(0)

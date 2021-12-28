@@ -749,9 +749,9 @@ impl BuiltinDataDeserializer {
         buffer.drain(..4 + parameter_length);
         return self;
       }
-      _ => (), // TODO: Add some logging. But not much, since there may
-      // be some legitimate cases where we encounter paraneters that we do not
-      // know.
+      _ => (), /* TODO: Add some logging. But not much, since there may
+                * be some legitimate cases where we encounter paraneters that we do not
+                * know. */
     }
 
     buffer.drain(..4 + parameter_length);

@@ -18,9 +18,11 @@ use mio::Token;
 use policy::{History, Reliability};
 
 use crate::{
-  dds::{ddsdata::DDSData, 
-        dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION, }, 
-        qos::HasQoSPolicy},
+  dds::{
+    ddsdata::DDSData,
+    dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
+    qos::HasQoSPolicy,
+  },
   messages::submessages::submessages::AckSubmessage,
   network::udp_sender::UDPSender,
   serialization::{Message, MessageBuilder},
@@ -267,7 +269,6 @@ impl Writer {
   pub fn entity_token(&self) -> Token {
     self.guid().entity_id.as_token()
   }
-
 
   pub fn is_reliable(&self) -> bool {
     self.qos_policies.reliability.is_some()
@@ -752,12 +753,16 @@ impl Writer {
       } else {
         // SN did not map to an Instant. Maybe it has been removed?
         if unsent_sn < self.first_change_sequence_number {
-          debug!("Reader {:?} requested too old data {:?}. I have only from {:?}. Topic {:?}", 
-            &reader_proxy, unsent_sn, self.first_change_sequence_number, &self.my_topic_name);
+          debug!(
+            "Reader {:?} requested too old data {:?}. I have only from {:?}. Topic {:?}",
+            &reader_proxy, unsent_sn, self.first_change_sequence_number, &self.my_topic_name
+          );
           // noting to do
-        } else if self.disposed_sequence_numbers.contains(&unsent_sn)  {
-          debug!("Reader {:?} requested disposed {:?}. Topic {:?}", 
-            &reader_proxy, unsent_sn, &self.my_topic_name);
+        } else if self.disposed_sequence_numbers.contains(&unsent_sn) {
+          debug!(
+            "Reader {:?} requested disposed {:?}. Topic {:?}",
+            &reader_proxy, unsent_sn, &self.my_topic_name
+          );
           // nothing to do
         } else {
           // we are running out of excuses
@@ -972,7 +977,6 @@ impl Writer {
     self.readers.insert(to_insert.remote_reader_guid, to_insert);
     count_change
   }
-
 
   fn matched_reader_remove(&mut self, guid: GUID) -> Option<RtpsReaderProxy> {
     let removed = self.readers.remove(&guid);

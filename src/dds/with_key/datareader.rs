@@ -114,8 +114,8 @@ impl CurrentStatusChanges {
 /// ```
 pub struct DataReader<
   D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> 
-{
+  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+> {
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // any subscriber-wide QoS policies, such as ordered or coherent access.
   // Remove this attribute when/if such things are implemented.
@@ -149,7 +149,7 @@ where
   fn drop(&mut self) {
     // Tell dp_event_loop
     self.my_subscriber.remove_reader(self.my_guid);
-    
+
     // Tell discoery
     match self
       .discovery_command
@@ -471,7 +471,6 @@ where
     Ok(result)
   }
 
-
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
@@ -517,7 +516,7 @@ where
     Ok(
       self
         .read_bare(std::usize::MAX, ReadCondition::not_read())?
-        .into_iter()
+        .into_iter(),
     )
   }
 
@@ -566,11 +565,7 @@ where
   ) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
-    Ok(
-      self
-        .read_bare(std::usize::MAX, read_condition)?
-        .into_iter()
-    )
+    Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
   }
 
   /// Produces an interator over the currently available NOT_READ samples.
@@ -620,7 +615,7 @@ where
     Ok(
       self
         .take_bare(std::usize::MAX, ReadCondition::not_read())?
-        .into_iter()
+        .into_iter(),
     )
   }
 
@@ -671,11 +666,7 @@ where
   ) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
-    Ok(
-      self
-        .take_bare(std::usize::MAX, read_condition)?
-        .into_iter()
-    )
+    Ok(self.take_bare(std::usize::MAX, read_condition)?.into_iter())
   }
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes

@@ -1,5 +1,4 @@
-use std::ops::Deref;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Deref};
 
 use bytes::Bytes;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};

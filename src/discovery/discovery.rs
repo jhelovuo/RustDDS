@@ -531,7 +531,6 @@ impl Discovery {
 
       // discovery_subscriber,
       // discovery_publisher,
-
       dcps_participant_topic,
       dcps_participant_reader,
       dcps_participant_writer,
@@ -1165,8 +1164,7 @@ impl Discovery {
         if current_duration > mm {
           let pp = ParticipantMessageData {
             guid: self.domain_participant.guid_prefix(),
-            kind:
-              ParticipantMessageDataKind::AUTOMATIC_LIVELINESS_UPDATE,
+            kind: ParticipantMessageDataKind::AUTOMATIC_LIVELINESS_UPDATE,
             data: Vec::new(),
           };
           match self.dcps_participant_message_writer.write(pp, None) {
@@ -1197,8 +1195,7 @@ impl Discovery {
         if current_duration > dur {
           let pp = ParticipantMessageData {
             guid: self.domain_participant.guid_prefix(),
-            kind:
-              ParticipantMessageDataKind::MANUAL_LIVELINESS_UPDATE,
+            kind: ParticipantMessageDataKind::MANUAL_LIVELINESS_UPDATE,
             data: Vec::new(),
           };
           match self.dcps_participant_message_writer.write(pp, None) {

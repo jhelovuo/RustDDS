@@ -230,7 +230,7 @@ impl DPEventLoop {
           match EntityId::from_token(event.token()) {
             TokenDecode::FixedToken(fixed_token) => match fixed_token {
               STOP_POLL_TOKEN => {
-                let _ = ev_wrapper.stop_poll_receiver.try_recv(); 
+                let _ = ev_wrapper.stop_poll_receiver.try_recv();
                 // we are not really interested in the content
                 info!("Stopping dp_event_loop");
                 return;

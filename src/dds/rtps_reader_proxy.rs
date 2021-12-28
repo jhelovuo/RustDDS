@@ -1,6 +1,4 @@
-use std::{
-  collections::BTreeSet,
-};
+use std::collections::BTreeSet;
 
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
@@ -209,7 +207,6 @@ impl RtpsReaderProxy {
   pub fn acked_up_to_before(&self) -> SequenceNumber {
     self.all_acked_before
   }
-
 }
 
 // pub enum ChangeForReaderStatusKind {

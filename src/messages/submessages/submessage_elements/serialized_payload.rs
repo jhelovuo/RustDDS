@@ -136,7 +136,6 @@ impl SerializedPayload {
       value,
     })
   }
-
 }
 
 impl<C: Context> Writable<C> for SerializedPayload {
