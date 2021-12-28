@@ -18,7 +18,9 @@ use mio::Token;
 use policy::{History, Reliability};
 
 use crate::{
-  dds::{ddsdata::DDSData, dp_event_loop::NACK_RESPONSE_DELAY, qos::HasQoSPolicy},
+  dds::{ddsdata::DDSData, 
+        dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION, }, 
+        qos::HasQoSPolicy},
   messages::submessages::submessages::AckSubmessage,
   network::udp_sender::UDPSender,
   serialization::{Message, MessageBuilder},
@@ -94,7 +96,7 @@ pub(crate) struct Writer {
   ///the response to a request for data
   ///from a negative acknowledgment.
   pub nack_respose_delay: std::time::Duration,
-  
+
   ///Protocol tuning parameter that
   ///allows the RTPS Writer to ignore
   ///requests for data from negative
@@ -103,7 +105,7 @@ pub(crate) struct Writer {
   ///change is sent.
   // TODO: use this
   #[allow(dead_code)]
-  pub nack_suppression_duration: Duration,
+  pub nack_suppression_duration: std::time::Duration,
   ///Internal counter used to assign
   ///increasing sequence number to
   ///each change made by the Writer
@@ -237,8 +239,8 @@ impl Writer {
       push_mode: true,
       heartbeat_period,
       cache_cleaning_period,
-      nack_respose_delay: NACK_RESPONSE_DELAY, // default value
-      nack_suppression_duration: Duration::from_millis(0),
+      nack_respose_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
+      nack_suppression_duration: NACK_SUPPRESSION_DURATION,
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
       data_max_size_serialized: 999999999,                   // TODO: this is not reasonable

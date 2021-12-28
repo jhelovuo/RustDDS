@@ -808,33 +808,37 @@ impl Subscriber {
     self.create_datareader_no_key::<D, CDRDeserializerAdapter<D>>(topic, qos)
   }
 
-  pub(crate) fn create_datareader_no_key_with_entityid<D: 'static, SA>(
-    &self,
-    topic: &Topic,
-    entity_id: EntityId,
-    qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataReader<D, SA>>
-  where
-    D: DeserializeOwned,
-    SA: no_key::DeserializerAdapter<D>,
-  {
-    self
-      .inner
-      .create_datareader_no_key(self, topic, Some(entity_id), qos)
-  }
+  // Exists for symmetry, but not really neeeded,
+  // as the only user is Discovery.
+  // pub(crate) fn create_datareader_no_key_with_entityid<D: 'static, SA>(
+  //   &self,
+  //   topic: &Topic,
+  //   entity_id: EntityId,
+  //   qos: Option<QosPolicies>,
+  // ) -> Result<NoKeyDataReader<D, SA>>
+  // where
+  //   D: DeserializeOwned,
+  //   SA: no_key::DeserializerAdapter<D>,
+  // {
+  //   self
+  //     .inner
+  //     .create_datareader_no_key(self, topic, Some(entity_id), qos)
+  // }
 
-  pub(crate) fn create_datareader_no_key_cdr_with_entityid<D: 'static>(
-    &self,
-    topic: &Topic,
-    entity_id: EntityId,
-    qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
-  where
-    D: DeserializeOwned,
-  {
-    self
-      .create_datareader_no_key_with_entityid::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
-  }
+  // Exists for symmetry, but not really neeeded,
+  // as the only user is Discovery.
+  // pub(crate) fn create_datareader_no_key_cdr_with_entityid<D: 'static>(
+  //   &self,
+  //   topic: &Topic,
+  //   entity_id: EntityId,
+  //   qos: Option<QosPolicies>,
+  // ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  // where
+  //   D: DeserializeOwned,
+  // {
+  //   self
+  //     .create_datareader_no_key_with_entityid::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
+  // }
 
   // Retrieves a previously created DataReader belonging to the Subscriber.
   // TODO: Is this even possible. Whould probably need to return reference and

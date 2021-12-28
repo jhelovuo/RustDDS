@@ -38,10 +38,9 @@ use crate::{
     topic_kind::TopicKind,
   },
 };
-//use crate::dds::traits::serde_adapters::no_key::SerializerAdapter
-//  as no_key_SerializerAdapter; // needs to be visible only, no direct use
+
 use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand};
+use super::super::{ writer::WriterCommand};
 
 /// Simplified type for CDR encoding
 pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
@@ -78,15 +77,14 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None);
 /// ```
 pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
+  data_phantom: PhantomData<D>,
+  ser_phantom: PhantomData<SA>,
   my_publisher: Publisher,
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
   cc_upload: mio_channel::SyncSender<WriterCommand>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  dds_cache: Arc<RwLock<DDSCache>>,
-  datasample_cache: DataSampleCache<D>,
-  phantom: PhantomData<SA>,
   status_receiver: StatusReceiver<DataWriterStatus>,
 }
 
@@ -127,7 +125,7 @@ where
     guid: Option<GUID>,
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    dds_cache: Arc<RwLock<DDSCache>>,
+    dds_cache: Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
     status_receiver_rec: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
     let entity_id = match guid {
@@ -163,15 +161,14 @@ where
     };
     let qos = topic.qos();
     Ok(DataWriter {
+      data_phantom: PhantomData,
+      ser_phantom: PhantomData,
       my_publisher: publisher,
       my_topic: topic,
       qos_policy: qos.clone(),
       my_guid,
       cc_upload,
       discovery_command,
-      dds_cache,
-      datasample_cache: DataSampleCache::new(qos),
-      phantom: PhantomData,
       status_receiver: StatusReceiver::new(status_receiver_rec),
     })
   }

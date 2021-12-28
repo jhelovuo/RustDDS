@@ -63,7 +63,6 @@ pub struct DPEventLoop {
   // Writers
   add_writer_receiver: TokenReceiverPair<WriterIngredients>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
-  //writer_timed_event_receiver: HashMap<Token, mio_channel::Receiver<TimerMessageType>>,
   stop_poll_receiver: mio_channel::Receiver<()>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this
   // to locate RTPSReaderProxy if negative acknack.
@@ -231,6 +230,8 @@ impl DPEventLoop {
           match EntityId::from_token(event.token()) {
             TokenDecode::FixedToken(fixed_token) => match fixed_token {
               STOP_POLL_TOKEN => {
+                let _ = ev_wrapper.stop_poll_receiver.try_recv(); 
+                // we are not really interested in the content
                 info!("Stopping dp_event_loop");
                 return;
               }

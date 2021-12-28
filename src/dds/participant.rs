@@ -364,41 +364,41 @@ impl DomainParticipantWeak {
       })
   }
 
-  pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
-    self
-      .dpi
-      .upgrade()
-      .ok_or(Error::LockPoisoned)
-      .and_then(|dpi| dpi.lock().unwrap().find_topic(self, name, timeout))
-  }
+  // pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
+  //   self
+  //     .dpi
+  //     .upgrade()
+  //     .ok_or(Error::LockPoisoned)
+  //     .and_then(|dpi| dpi.lock().unwrap().find_topic(self, name, timeout))
+  // }
 
-  pub fn domain_id(&self) -> u16 {
-    self
-      .dpi
-      .upgrade()
-      .expect("Unable to get original domain participant.")
-      .lock()
-      .unwrap()
-      .domain_id()
-  }
+  // pub fn domain_id(&self) -> u16 {
+  //   self
+  //     .dpi
+  //     .upgrade()
+  //     .expect("Unable to get original domain participant.")
+  //     .lock()
+  //     .unwrap()
+  //     .domain_id()
+  // }
 
-  pub fn participant_id(&self) -> u16 {
-    self
-      .dpi
-      .upgrade()
-      .expect("Unable to get original domain participant.")
-      .lock()
-      .unwrap()
-      .participant_id()
-  }
+  // pub fn participant_id(&self) -> u16 {
+  //   self
+  //     .dpi
+  //     .upgrade()
+  //     .expect("Unable to get original domain participant.")
+  //     .lock()
+  //     .unwrap()
+  //     .participant_id()
+  // }
 
-  pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self
-      .dpi
-      .upgrade()
-      .map(|dpi| dpi.lock().unwrap().discovered_topics())
-      .unwrap_or_default()
-  }
+  // pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
+  //   self
+  //     .dpi
+  //     .upgrade()
+  //     .map(|dpi| dpi.lock().unwrap().discovered_topics())
+  //     .unwrap_or_default()
+  // }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
     self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
@@ -519,9 +519,9 @@ impl DomainParticipantDisc {
     self.dpi.lock().unwrap().dds_cache()
   }
 
-  pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
-    self.dpi.lock().unwrap().discovery_db.clone()
-  }
+  // pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
+  //   self.dpi.lock().unwrap().discovery_db.clone()
+  // }
 
   pub(crate) fn assert_liveliness(&self) -> Result<()> {
     // No point in checking for the LIVELINESS QoS of MANUAL_BY_PARTICIPANT,
@@ -570,10 +570,6 @@ pub(crate) struct DomainParticipantInner {
   // Adding Readers
   sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
   sender_remove_reader: mio_channel::SyncSender<GUID>,
-
-  // Adding DataReaders
-  sender_add_datareader_vec: Vec<mio_channel::SyncSender<()>>,
-  sender_remove_datareader_vec: Vec<mio_channel::SyncSender<GUID>>,
 
   // dp_event_loop control
   stop_poll_sender: mio_channel::Sender<()>,
@@ -781,9 +777,6 @@ impl DomainParticipantInner {
       // Adding readers
       sender_add_reader,
       sender_remove_reader,
-      // Adding datareaders
-      sender_add_datareader_vec: Vec::new(),
-      sender_remove_datareader_vec: Vec::new(),
       stop_poll_sender,
       ev_loop_handle: Some(ev_loop_handle),
       add_writer_sender,
