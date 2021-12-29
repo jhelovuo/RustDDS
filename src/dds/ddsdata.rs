@@ -52,6 +52,7 @@ impl DDSData {
     }
   }
 
+  #[allow(dead_code)] // Why is this not used?
   pub fn change_kind(&self) -> ChangeKind {
     match self {
       DDSData::Data {..} /*| DDSData::DataFrags {..}*/ => ChangeKind::Alive,

@@ -15,7 +15,6 @@ use crate::{
       HasQoSPolicy, QosPolicies,
     },
     rtps_reader_proxy::RtpsReaderProxy,
-    rtps_writer_proxy::RtpsWriterProxy,
     topic::Topic,
     traits::{
       key::{Key, Keyed},
@@ -351,12 +350,14 @@ impl DiscoveredReaderData {
     }
   }
 
-  pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
-    self.reader_proxy.remote_reader_guid = rtps_reader_proxy.remote_reader_guid;
-    self.reader_proxy.expects_inline_qos = rtps_reader_proxy.expects_in_line_qos;
-    self.reader_proxy.unicast_locator_list = rtps_reader_proxy.unicast_locator_list.clone();
-    self.reader_proxy.multicast_locator_list = rtps_reader_proxy.multicast_locator_list.clone();
-  }
+  // pub(crate) fn update(&mut self, rtps_reader_proxy: &RtpsReaderProxy) {
+  //   self.reader_proxy.remote_reader_guid =
+  // rtps_reader_proxy.remote_reader_guid;   self.reader_proxy.
+  // expects_inline_qos = rtps_reader_proxy.expects_in_line_qos;
+  //   self.reader_proxy.unicast_locator_list =
+  // rtps_reader_proxy.unicast_locator_list.clone();   self.reader_proxy.
+  // multicast_locator_list = rtps_reader_proxy.multicast_locator_list.clone();
+  // }
 }
 
 // separate type is needed to serialize correctly
@@ -641,11 +642,12 @@ impl DiscoveredWriterData {
     }
   }
 
-  pub(crate) fn update(&mut self, rtps_writer_proxy: &RtpsWriterProxy) {
-    self.writer_proxy.remote_writer_guid = rtps_writer_proxy.remote_writer_guid;
-    self.writer_proxy.unicast_locator_list = rtps_writer_proxy.unicast_locator_list.clone();
-    self.writer_proxy.multicast_locator_list = rtps_writer_proxy.multicast_locator_list.clone();
-  }
+  // pub(crate) fn update(&mut self, rtps_writer_proxy: &RtpsWriterProxy) {
+  //   self.writer_proxy.remote_writer_guid =
+  // rtps_writer_proxy.remote_writer_guid;   self.writer_proxy.
+  // unicast_locator_list = rtps_writer_proxy.unicast_locator_list.clone();
+  //   self.writer_proxy.multicast_locator_list =
+  // rtps_writer_proxy.multicast_locator_list.clone(); }
 }
 
 impl<'de> Deserialize<'de> for DiscoveredWriterData {
@@ -838,18 +840,16 @@ pub struct ParticipantMessageDataKind {
 }
 
 impl ParticipantMessageDataKind {
-  pub const PARTICIPANT_MESSAGE_DATA_KIND_UNKNOWN: ParticipantMessageDataKind =
-    ParticipantMessageDataKind {
-      value: [0x00, 0x00, 0x00, 0x00],
-    };
-  pub const PARTICIPANT_MESSAGE_DATA_KIND_AUTOMATIC_LIVELINESS_UPDATE: ParticipantMessageDataKind =
-    ParticipantMessageDataKind {
-      value: [0x00, 0x00, 0x00, 0x01],
-    };
-  pub const PARTICIPANT_MESSAGE_DATA_KIND_MANUAL_LIVELINESS_UPDATE: ParticipantMessageDataKind =
-    ParticipantMessageDataKind {
-      value: [0x00, 0x00, 0x00, 0x02],
-    };
+  #[allow(dead_code)] // This is defined in the spec, but currenty unused.
+  pub const UNKNOWN: ParticipantMessageDataKind = ParticipantMessageDataKind {
+    value: [0x00, 0x00, 0x00, 0x00],
+  };
+  pub const AUTOMATIC_LIVELINESS_UPDATE: ParticipantMessageDataKind = ParticipantMessageDataKind {
+    value: [0x00, 0x00, 0x00, 0x01],
+  };
+  pub const MANUAL_LIVELINESS_UPDATE: ParticipantMessageDataKind = ParticipantMessageDataKind {
+    value: [0x00, 0x00, 0x00, 0x02],
+  };
 }
 
 // =======================================================================

@@ -135,6 +135,7 @@ struct RosParticipantInner {
   node_writer: NoKeyDataWriter<ROSParticipantInfo>,
 
   domain_participant: DomainParticipant,
+  #[allow(dead_code)] // technically not needed after initialization
   ros_discovery_topic: Topic,
   ros_discovery_publisher: Publisher,
   ros_discovery_subscriber: Subscriber,
@@ -341,7 +342,7 @@ pub struct RosNode {
 
   // builtin writers and readers
   rosout_writer: Option<NoKeyDataWriter<Log>>,
-  rosout_reader: Option<NoKeyDataReader<Log>>,
+  //rosout_reader: Option<NoKeyDataReader<Log>>, // TODO
   parameter_events_writer: NoKeyDataWriter<ParameterEvents>,
 }
 
@@ -377,7 +378,7 @@ impl RosNode {
       readers: HashSet::new(),
       writers: HashSet::new(),
       rosout_writer,
-      rosout_reader: None,
+      //rosout_reader: None, // TODO
       parameter_events_writer,
     })
   }

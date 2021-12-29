@@ -151,10 +151,6 @@ impl DiscoveryDB {
     self.participant_proxies.get(&guid_prefix)
   }
 
-  pub fn find_remote_reader(&self, guid: GUID) -> Option<&DiscoveredReaderData> {
-    self.external_topic_readers.get(&guid)
-  }
-
   fn remove_topic_reader_with_prefix(&mut self, guid_prefix: GuidPrefix) {
     // TODO: Implement this using .drain_filter() in BTreeMap once it lands in
     // stable.
@@ -207,8 +203,8 @@ impl DiscoveryDB {
         Some(&last_life) => {
           // keep, if duration not exeeded
           let elapsed = Duration::from_std(inow.duration_since(last_life));
-          if elapsed <= lease_duration {
-            // this is a keeper
+          if elapsed <= lease_duration + PARTICIPANT_LEASE_DURATION_TOLREANCE {
+            // No timeout yet, we keep this, so do nothng.
           } else {
             info!("participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} elapsed = {:?}",
                   guid, lease_duration, elapsed);
@@ -278,10 +274,6 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn participants(&self) -> impl Iterator<Item = &SpdpDiscoveredParticipantData> {
-    self.participant_proxies.values()
-  }
-
   pub fn update_local_topic_writer(&mut self, writer: DiscoveredWriterData) {
     self
       .local_topic_writers
@@ -294,13 +286,17 @@ impl DiscoveryDB {
     self.writers_updated = true;
   }
 
-  pub fn external_reader_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredReaderData> + 'a {
-    self.external_topic_readers.values()
-  }
+  // pub fn participants(&self) -> impl Iterator<Item =
+  // &SpdpDiscoveredParticipantData> {   self.participant_proxies.values()
+  // }
 
-  pub fn external_writer_proxies<'a>(&'a self) -> impl Iterator<Item = &DiscoveredWriterData> + 'a {
-    self.external_topic_writers.values()
-  }
+  // pub fn external_reader_proxies<'a>(&'a self) -> impl Iterator<Item =
+  // &DiscoveredReaderData> + 'a {   self.external_topic_readers.values()
+  // }
+
+  // pub fn external_writer_proxies<'a>(&'a self) -> impl Iterator<Item =
+  // &DiscoveredWriterData> + 'a {   self.external_topic_writers.values()
+  // }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None
   // TODO: Why are we here checking if discovery db already has this? What about
@@ -525,10 +521,6 @@ impl DiscoveryDB {
 
   pub fn get_topic(&self, topic_name: &str) -> Option<&DiscoveredTopicData> {
     self.topics.get(topic_name)
-  }
-
-  pub fn new_topic_token() -> mio::Token {
-    mio::Token(0)
   }
 
   // // TODO: return iterator somehow?

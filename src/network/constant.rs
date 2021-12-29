@@ -11,10 +11,10 @@ const PTB: usize = EntityKind::POLL_TOKEN_BASE;
 
 pub const STOP_POLL_TOKEN: Token = Token(PTB);
 
-pub const DISCOVERY_SENDER_TOKEN: Token = Token(1 + PTB);
-pub const USER_TRAFFIC_SENDER_TOKEN: Token = Token(2 + PTB);
+// pub const DISCOVERY_SENDER_TOKEN: Token = Token(1 + PTB);
+// pub const USER_TRAFFIC_SENDER_TOKEN: Token = Token(2 + PTB);
 
-pub const DATA_SEND_TOKEN: Token = Token(5 + PTB);
+// pub const DATA_SEND_TOKEN: Token = Token(5 + PTB);
 
 pub const DISCOVERY_LISTENER_TOKEN: Token = Token(6 + PTB);
 pub const DISCOVERY_MUL_LISTENER_TOKEN: Token = Token(7 + PTB);
@@ -24,17 +24,17 @@ pub const USER_TRAFFIC_MUL_LISTENER_TOKEN: Token = Token(9 + PTB);
 pub const ADD_READER_TOKEN: Token = Token(10 + PTB);
 pub const REMOVE_READER_TOKEN: Token = Token(11 + PTB);
 
-pub const READER_CHANGE_TOKEN: Token = Token(12 + PTB);
-pub const DATAREADER_CHANGE_TOKEN: Token = Token(13 + PTB);
+// pub const READER_CHANGE_TOKEN: Token = Token(12 + PTB);
+// pub const DATAREADER_CHANGE_TOKEN: Token = Token(13 + PTB);
 
-pub const ADD_DATAREADER_TOKEN: Token = Token(14 + PTB);
-pub const REMOVE_DATAREADER_TOKEN: Token = Token(15 + PTB);
+// pub const ADD_DATAREADER_TOKEN: Token = Token(14 + PTB);
+// pub const REMOVE_DATAREADER_TOKEN: Token = Token(15 + PTB);
 
 pub const ADD_WRITER_TOKEN: Token = Token(16 + PTB);
 pub const REMOVE_WRITER_TOKEN: Token = Token(17 + PTB);
 
-pub const ADD_DATAWRITER_TOKEN: Token = Token(18 + PTB);
-pub const REMOVE_DATAWRITER_TOKEN: Token = Token(19 + PTB);
+// pub const ADD_DATAWRITER_TOKEN: Token = Token(18 + PTB);
+// pub const REMOVE_DATAWRITER_TOKEN: Token = Token(19 + PTB);
 
 pub const ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN: Token = Token(20 + PTB);
 

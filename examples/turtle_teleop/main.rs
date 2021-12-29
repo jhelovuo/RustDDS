@@ -1,7 +1,9 @@
 #![deny(clippy::all)]
 
 #[cfg(not(unix))]
-fn main() { println!("This example only works on a unix based system"); }
+fn main() {
+  println!("This example only works on a unix based system");
+}
 
 use std::time::Duration;
 

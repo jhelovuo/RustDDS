@@ -135,7 +135,6 @@
   clippy::option_map_unit_fn,
   // option_map_unit_fn suggests changing option.map( ) with () return value to if let -construct,
   // but that may break code flow.
-  dead_code,
 )]
 
 #[macro_use]

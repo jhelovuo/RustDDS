@@ -53,6 +53,7 @@ pub enum SelectByKey {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ReaderCommand {
+  #[allow(dead_code)] // TODO: Implement this (resetting) feature
   ResetRequestedDeadlineStatus,
 }
 /*
@@ -115,7 +116,11 @@ pub struct DataReader<
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > {
+  #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
+  // any subscriber-wide QoS policies, such as ordered or coherent access.
+  // Remove this attribute when/if such things are implemented.
   my_subscriber: Subscriber,
+
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
@@ -130,6 +135,9 @@ pub struct DataReader<
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   status_receiver: StatusReceiver<DataReaderStatus>,
+
+  #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
+  // resetting deadline missed status. Remove attribute when it is supported.
   reader_command: mio_channel::SyncSender<ReaderCommand>,
 }
 
@@ -139,6 +147,10 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn drop(&mut self) {
+    // Tell dp_event_loop
+    self.my_subscriber.remove_reader(self.my_guid);
+
+    // Tell discoery
     match self
       .discovery_command
       .send(DiscoveryCommand::RemoveLocalReader { guid: self.guid() })
@@ -421,6 +433,44 @@ where
 
   // Iterator interface
 
+  // Iterator helpers: _bare versions do not fetch or even construct metadata.
+  fn read_bare(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<std::result::Result<&D, D::K>>> {
+    // Clear notification buffer. This must be done first to avoid race conditions.
+    while self.notification_receiver.try_recv().is_ok() {}
+
+    self.fill_local_datasample_cache();
+
+    let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    selected.truncate(max_samples);
+
+    let result = self.datasample_cache.read_bare_by_keys(&selected);
+
+    Ok(result)
+  }
+
+  fn take_bare(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<std::result::Result<D, D::K>>> {
+    // Clear notification buffer. This must be done first to avoid race conditions.
+    while self.notification_receiver.try_recv().is_ok() {}
+
+    self.fill_local_datasample_cache();
+    let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    debug!("take bare selected count = {}", selected.len());
+    selected.truncate(max_samples);
+
+    let result = self.datasample_cache.take_bare_by_keys(&selected);
+    debug!("take bare taken count = {}", result.len());
+
+    Ok(result)
+  }
+
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
@@ -465,9 +515,8 @@ where
     // read call
     Ok(
       self
-        .read(std::usize::MAX, ReadCondition::not_read())?
-        .into_iter()
-        .map(|ds| ds.value),
+        .read_bare(std::usize::MAX, ReadCondition::not_read())?
+        .into_iter(),
     )
   }
 
@@ -516,12 +565,7 @@ where
   ) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
-    Ok(
-      self
-        .read(std::usize::MAX, read_condition)?
-        .into_iter()
-        .map(|ds| ds.value),
-    )
+    Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
   }
 
   /// Produces an interator over the currently available NOT_READ samples.
@@ -570,9 +614,8 @@ where
     // read call
     Ok(
       self
-        .take(std::usize::MAX, ReadCondition::not_read())?
-        .into_iter()
-        .map(|ds| ds.value),
+        .take_bare(std::usize::MAX, ReadCondition::not_read())?
+        .into_iter(),
     )
   }
 
@@ -623,12 +666,7 @@ where
   ) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
-    Ok(
-      self
-        .take(std::usize::MAX, read_condition)?
-        .into_iter()
-        .map(|ds| ds.value),
-    )
+    Ok(self.take_bare(std::usize::MAX, read_condition)?.into_iter())
   }
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
@@ -1238,6 +1276,7 @@ where
   // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
   //   // TODO: check liveliness of qos_policy
   //   self.qos_policy = policy.clone();
+  //   self.datasample_cache.set_qos(policy.clone());
   //   Ok(())
   // }
 

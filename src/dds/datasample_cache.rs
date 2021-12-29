@@ -555,6 +555,9 @@ where
       .next()
   }
 
+  // This is currently unused, as HasQosPolicy trait does not allow setting QoS,
+  // but a placeholder if it is ever implemented.
+  #[allow(dead_code)]
   pub fn set_qos_policy(&mut self, qos: QosPolicies) {
     self.qos = qos;
   }

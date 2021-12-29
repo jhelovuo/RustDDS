@@ -69,6 +69,12 @@ impl RtpsWriterProxy {
     }
   }
 
+  pub fn next_ack_nack_sequence_number(&mut self) -> i32 {
+    let c = self.sent_ack_nack_count;
+    self.sent_ack_nack_count += 1;
+    c
+  }
+
   pub fn all_ackable_before(&self) -> SequenceNumber {
     self.ack_base
   }
@@ -115,22 +121,22 @@ impl RtpsWriterProxy {
     missing_seqnums
   }
 
-  pub fn changes_are_missing(
-    &self,
-    hb_first_sn: SequenceNumber,
-    hb_last_sn: SequenceNumber,
-  ) -> bool {
-    if hb_last_sn < hb_first_sn {
-      // This means writer has nothing to send
-      return false;
-    }
+  // pub fn changes_are_missing(
+  //   &self,
+  //   hb_first_sn: SequenceNumber,
+  //   hb_last_sn: SequenceNumber,
+  // ) -> bool {
+  //   if hb_last_sn < hb_first_sn {
+  //     // This means writer has nothing to send
+  //     return false;
+  //   }
 
-    let we_have = self
-      .changes
-      .range(SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn))
-      .map(|e| *e.0);
-    SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn).ne(we_have)
-  }
+  //   let we_have = self
+  //     .changes
+  //     .range(SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn))
+  //     .map(|e| *e.0);
+  //   SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn).ne(we_have)
+  // }
 
   pub fn contains_change(&self, seqnum: SequenceNumber) -> bool {
     self.changes.contains_key(&seqnum)
@@ -159,17 +165,17 @@ impl RtpsWriterProxy {
     }
   }
 
-  pub fn available_changes_max(&self) -> Option<SequenceNumber> {
-    // TODO: replace this when BTreeMap function last_key_value() is in stable
-    // release
-    self.changes.keys().next_back().copied()
-  }
+  // pub fn available_changes_max(&self) -> Option<SequenceNumber> {
+  //   // TODO: replace this when BTreeMap function last_key_value() is in stable
+  //   // release
+  //   self.changes.keys().next_back().copied()
+  // }
 
-  pub fn available_changes_min(&self) -> Option<SequenceNumber> {
-    self.changes.keys().next().copied()
-    // TODO: replace this when BTreeMap function first_key_value() is in stable
-    // release
-  }
+  // pub fn available_changes_min(&self) -> Option<SequenceNumber> {
+  //   self.changes.keys().next().copied()
+  //   // TODO: replace this when BTreeMap function first_key_value() is in stable
+  //   // release
+  // }
 
   pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Timestamp> {
     self.changes.remove(&seq_num)

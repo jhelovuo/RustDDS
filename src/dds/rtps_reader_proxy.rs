@@ -1,7 +1,4 @@
-use std::{
-  collections::BTreeSet,
-  net::{Ipv4Addr, SocketAddr},
-};
+use std::collections::BTreeSet;
 
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
@@ -12,7 +9,7 @@ use crate::{
   messages::submessages::submessage::AckSubmessage,
   network::constant::*,
   structure::{
-    guid::{EntityId, EntityKind, GUID},
+    guid::{EntityId, GUID},
     locator::Locator,
     sequence_number::SequenceNumber,
   },
@@ -47,6 +44,7 @@ pub(crate) struct RtpsReaderProxy {
   pub all_acked_before: SequenceNumber,
 
   // List of SequenceNumbers to be sent to Reader. Both unsent and requested by ACKNACK.
+  // TODO: Can we make this private?
   pub unsent_changes: BTreeSet<SequenceNumber>,
 
   // true = send repair data messages due to NACKs, buffer messages by DataWriter
@@ -139,39 +137,17 @@ impl RtpsReaderProxy {
     }
   }
 
-  pub fn update(&mut self, updated: &RtpsReaderProxy) {
-    if self.remote_reader_guid == updated.remote_reader_guid {
-      self.unicast_locator_list = updated.unicast_locator_list.clone();
-      self.multicast_locator_list = updated.multicast_locator_list.clone();
-      self.expects_in_line_qos = updated.expects_in_line_qos;
-    }
-  }
+  // pub fn update(&mut self, updated: &RtpsReaderProxy) {
+  //   if self.remote_reader_guid == updated.remote_reader_guid {
+  //     self.unicast_locator_list = updated.unicast_locator_list.clone();
+  //     self.multicast_locator_list = updated.multicast_locator_list.clone();
+  //     self.expects_in_line_qos = updated.expects_in_line_qos;
+  //   }
+  // }
 
-  pub fn new_for_unit_testing(port_number: u16) -> RtpsReaderProxy {
-    let mut unicast_locators = Vec::default();
-    let locator = Locator::from(SocketAddr::new(
-      std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-      port_number,
-    ));
-    unicast_locators.push(locator);
-    RtpsReaderProxy {
-      remote_reader_guid: GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_USER_DEFINED),
-      remote_group_entity_id: EntityId::UNKNOWN,
-      unicast_locator_list: unicast_locators,
-      multicast_locator_list: Vec::default(),
-      expects_in_line_qos: false,
-
-      is_active: true,
-      all_acked_before: SequenceNumber::zero(),
-      unsent_changes: BTreeSet::new(),
-      repair_mode: false,
-      qos: QosPolicies::qos_none(),
-    }
-  }
-
-  pub fn can_send(&self) -> bool {
-    !self.unsent_changes.is_empty()
-  }
+  // pub fn have_unset_changes(&self) -> bool {
+  //   !self.unsent_changes.is_empty()
+  // }
 
   pub fn handle_ack_nack(
     &mut self,
@@ -230,15 +206,6 @@ impl RtpsReaderProxy {
 
   pub fn acked_up_to_before(&self) -> SequenceNumber {
     self.all_acked_before
-  }
-
-  pub fn content_is_equal(&self, other: &RtpsReaderProxy) -> bool {
-    self.remote_reader_guid == other.remote_reader_guid
-      && self.remote_group_entity_id == other.remote_group_entity_id
-      && self.unicast_locator_list == other.unicast_locator_list
-      && self.multicast_locator_list == other.multicast_locator_list
-      && self.expects_in_line_qos == other.expects_in_line_qos
-      && self.is_active == other.is_active
   }
 }
 

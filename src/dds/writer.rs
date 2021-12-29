@@ -18,7 +18,11 @@ use mio::Token;
 use policy::{History, Reliability};
 
 use crate::{
-  dds::{ddsdata::DDSData, dp_event_loop::NACK_RESPONSE_DELAY, qos::HasQoSPolicy},
+  dds::{
+    ddsdata::DDSData,
+    dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
+    qos::HasQoSPolicy,
+  },
   messages::submessages::submessages::AckSubmessage,
   network::udp_sender::UDPSender,
   serialization::{Message, MessageBuilder},
@@ -62,6 +66,13 @@ pub(crate) struct WriterIngredients {
   pub status_sender: SyncSender<DataWriterStatus>,
 }
 
+impl WriterIngredients {
+  /// This token is used in timed event mio::channel HearbeatHandler ->
+  /// dpEventwrapper
+  pub fn alt_entity_token(&self) -> Token {
+    self.guid.entity_id.as_alt_token()
+  }
+}
 pub(crate) struct Writer {
   pub endianness: Endianness,
   pub heartbeat_message_counter: i32,
@@ -86,14 +97,17 @@ pub(crate) struct Writer {
   ///allows the RTPS Writer to delay
   ///the response to a request for data
   ///from a negative acknowledgment.
-  pub nack_respose_delay: Duration,
+  pub nack_respose_delay: std::time::Duration,
+
   ///Protocol tuning parameter that
   ///allows the RTPS Writer to ignore
   ///requests for data from negative
   ///acknowledgments that arrive ‘too
   ///soon’ after the corresponding
   ///change is sent.
-  pub nack_suppression_duration: Duration,
+  // TODO: use this
+  #[allow(dead_code)]
+  pub nack_suppression_duration: std::time::Duration,
   ///Internal counter used to assign
   ///increasing sequence number to
   ///each change made by the Writer
@@ -103,11 +117,17 @@ pub(crate) struct Writer {
   ///If no samples are available in the Writer, identifies the lowest
   ///sequence number that is yet to be written by the Writer
   pub first_change_sequence_number: SequenceNumber,
+
   ///Optional attribute that indicates
   ///the maximum size of any
   ///SerializedPayload that may be
   ///sent by the Writer
+
+  // TODO: But where is it used and how is that useful? It is mentioned in RTPS Spec v2.5
+  // as a field of "Writer" in Figure 8.16, but the usage is unclear.
+  #[allow(dead_code)]
   pub data_max_size_serialized: u64,
+
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   ///The RTPS ReaderProxy class represents the information an RTPS
@@ -134,6 +154,7 @@ pub(crate) struct Writer {
 
   /// Set of disposed samples.
   /// Useful when reader requires some sample with acknack.
+  // TODO: Apparently, this is never updated.
   disposed_sequence_numbers: HashSet<SequenceNumber>,
 
   //When dataWriter sends cacheChange message with cacheKind is NotAliveDisposed
@@ -220,8 +241,8 @@ impl Writer {
       push_mode: true,
       heartbeat_period,
       cache_cleaning_period,
-      nack_respose_delay: Duration::from_millis(200),
-      nack_suppression_duration: Duration::from_millis(0),
+      nack_respose_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
+      nack_suppression_duration: NACK_SUPPRESSION_DURATION,
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
       data_max_size_serialized: 999999999,                   // TODO: this is not reasonable
@@ -247,12 +268,6 @@ impl Writer {
   /// kind this entity token can be used in DataWriter -> Writer mio::channel.
   pub fn entity_token(&self) -> Token {
     self.guid().entity_id.as_token()
-  }
-
-  /// This token is used in timed event mio::channel HearbeatHandler ->
-  /// dpEventwrapper
-  pub fn timed_event_entity_token(&self) -> Token {
-    self.guid().entity_id.as_alt_token()
   }
 
   pub fn is_reliable(&self) -> bool {
@@ -630,7 +645,7 @@ impl Writer {
             reader_proxy.repair_mode = true; // TODO: Is this correct? Do we need to repair immediately?
                                              // set repair timer to fire
             self.timed_event_timer.set_timeout(
-              NACK_RESPONSE_DELAY,
+              self.nack_respose_delay,
               TimedEvent::SendRepairData {
                 to_reader: reader_guid,
               },
@@ -736,10 +751,26 @@ impl Writer {
           no_longer_relevant.push(unsent_sn);
         }
       } else {
-        error!(
-          "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
-          self.my_guid, unsent_sn
-        );
+        // SN did not map to an Instant. Maybe it has been removed?
+        if unsent_sn < self.first_change_sequence_number {
+          debug!(
+            "Reader {:?} requested too old data {:?}. I have only from {:?}. Topic {:?}",
+            &reader_proxy, unsent_sn, self.first_change_sequence_number, &self.my_topic_name
+          );
+          // noting to do
+        } else if self.disposed_sequence_numbers.contains(&unsent_sn) {
+          debug!(
+            "Reader {:?} requested disposed {:?}. Topic {:?}",
+            &reader_proxy, unsent_sn, &self.my_topic_name
+          );
+          // nothing to do
+        } else {
+          // we are running out of excuses
+          error!(
+            "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
+            self.my_guid, unsent_sn
+          );
+        }
         no_longer_relevant.push(unsent_sn);
       } // match
 
@@ -926,9 +957,9 @@ impl Writer {
     } // match
   }
 
-  // Update the given reader. Preserve data we are tracking.
+  // Update the given reader proxy. Preserve data we are tracking.
   // return 0 if the reader already existed
-  // return 1 if it was new
+  // return 1 if it was new ( = count of added reader proxies)
   fn matched_reader_update(&mut self, reader_proxy: RtpsReaderProxy) -> i32 {
     let (to_insert, count_change) = match self.readers.remove(&reader_proxy.remote_reader_guid) {
       None => (reader_proxy, 1),
@@ -945,24 +976,6 @@ impl Writer {
     };
     self.readers.insert(to_insert.remote_reader_guid, to_insert);
     count_change
-  }
-
-  // internal helper. Same as above, but duplicates are an error.
-  fn matched_reader_add(&mut self, reader_proxy: &RtpsReaderProxy) {
-    let guid = reader_proxy.remote_reader_guid;
-    if self
-      .readers
-      .insert(reader_proxy.remote_reader_guid, reader_proxy.clone())
-      .is_some()
-    {
-      error!("Reader proxy with same GUID {:?} added already", guid);
-    } else {
-      info!(
-        "Added reader proxy. topic={:?} reader={:?}",
-        self.topic_name(),
-        reader_proxy
-      );
-    }
   }
 
   fn matched_reader_remove(&mut self, guid: GUID) -> Option<RtpsReaderProxy> {
@@ -1016,20 +1029,13 @@ impl Writer {
     self.sequence_number_to_instant.get(&seqnumber).copied()
   }
 
-  pub fn find_cache_change(&self, instant: &Timestamp) -> Option<CacheChange> {
-    match self.dds_cache.read() {
-      Ok(dc) => {
-        let cc = dc.from_topic_get_change(&self.my_topic_name, instant);
-        cc.cloned()
-      }
-      Err(e) => panic!("DDSCache is poisoned {:?}", e),
-    }
-  }
-
   pub fn topic_name(&self) -> &String {
     &self.my_topic_name
   }
 
+  // TODO
+  // This is placeholder for not-yet-implemented feature.
+  //
   // pub fn reset_offered_deadline_missed_status(&mut self) {
   //   self.offered_deadline_status.reset_change();
   // }

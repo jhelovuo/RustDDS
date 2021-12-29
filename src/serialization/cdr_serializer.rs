@@ -2,7 +2,9 @@ use std::{io, io::Write, marker::PhantomData};
 
 use serde::{ser, Serialize};
 use bytes::Bytes;
-use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+#[cfg(test)]
+use byteorder::BigEndian;
 
 use crate::{
   dds::traits::{
@@ -154,9 +156,9 @@ where
   value.serialize(&mut CdrSerializer::<W, BO>::new(writer))
 }
 
-// This is private, for unit test cases only
 // Public interface should use to_writer() instead, as it is recommended by
 // serde documentation
+#[cfg(test)]
 pub(crate) fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
@@ -164,9 +166,9 @@ where
   to_bytes::<T, LittleEndian>(value)
 }
 
-// This is private, for unit test cases only
 // Public interface should use to_writer() instead, as it is recommended by
 // serde documentation
+#[cfg(test)]
 fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
@@ -768,23 +770,25 @@ mod tests {
     assert_eq!(expected, sarjallistettu);
   }
 
+  #[test]
   fn cdr_serialization_char() {
     #[derive(Serialize)]
     struct OmaTyyppi {
-      first_value: char,
-      second: char,
-      third: char,
+      first_value: u8,
+      second: u8,
+      third: u8,
     }
     let mikki_hiiri = OmaTyyppi {
-      first_value: 'a',
-      second: 'b',
-      third: 'ä',
+      first_value: b'a',
+      second: b'b',
+      third: b'\xE4', // 'ä'
     };
 
     let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();
     let expected: Vec<u8> = vec![0x61, 0x62, 0xe4];
     assert_eq!(expected, sarjallistettu);
   }
+
   #[test]
   fn cdr_serialization_string() {
     #[derive(Serialize)]
@@ -799,6 +803,7 @@ mod tests {
     assert_eq!(expected, sarjallistettu);
   }
 
+  #[test]
   fn cdr_serialization_little() {
     let number: u16 = 60000;
     let le = to_little_endian_binary(&number).unwrap();

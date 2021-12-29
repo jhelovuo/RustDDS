@@ -27,21 +27,15 @@ use crate::{
     values::result::{Error, Result},
   },
   discovery::{data_types::topic_data::SubscriptionBuiltinTopicData, discovery::DiscoveryCommand},
-  log_and_err_internal, log_and_err_precondition_not_met,
+  log_and_err_internal,
+  messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
   serialization::CDRSerializerAdapter,
   structure::{
-    cache_change::ChangeKind,
-    dds_cache::DDSCache,
-    entity::RTPSEntity,
-    guid::{EntityId, GUID},
-    time::Timestamp,
+    cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID, time::Timestamp,
     topic_kind::TopicKind,
   },
 };
-//use crate::dds::traits::serde_adapters::no_key::SerializerAdapter
-//  as no_key_SerializerAdapter; // needs to be visible only, no direct use
-use crate::messages::submessages::submessage_elements::serialized_payload::SerializedPayload;
-use super::super::{datasample_cache::DataSampleCache, writer::WriterCommand};
+use super::super::writer::WriterCommand;
 
 /// Simplified type for CDR encoding
 pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
@@ -78,15 +72,14 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None);
 /// ```
 pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
+  data_phantom: PhantomData<D>,
+  ser_phantom: PhantomData<SA>,
   my_publisher: Publisher,
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
   cc_upload: mio_channel::SyncSender<WriterCommand>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  dds_cache: Arc<RwLock<DDSCache>>,
-  datasample_cache: DataSampleCache<D>,
-  phantom: PhantomData<SA>,
   status_receiver: StatusReceiver<DataWriterStatus>,
 }
 
@@ -96,6 +89,10 @@ where
   SA: SerializerAdapter<D>,
 {
   fn drop(&mut self) {
+    // Tell Publisher to drop the corresponding RTPS Writer
+    self.my_publisher.remove_writer(self.my_guid);
+
+    // Notify Discovery that we are no longer
     match self
       .discovery_command
       .send(DiscoveryCommand::RemoveLocalWriter { guid: self.guid() })
@@ -124,28 +121,12 @@ where
   pub(crate) fn new(
     publisher: Publisher,
     topic: Topic,
-    guid: Option<GUID>,
+    guid: GUID,
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    dds_cache: Arc<RwLock<DDSCache>>,
+    dds_cache: &Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
     status_receiver_rec: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
-    let entity_id = match guid {
-      Some(g) => g.entity_id,
-      None => EntityId::UNKNOWN,
-    };
-
-    let dp = match publisher.participant() {
-      Some(dp) => dp,
-      None => {
-        return log_and_err_precondition_not_met!(
-          "Cannot create new DataWriter, DomainParticipant doesn't exist."
-        )
-      }
-    };
-
-    let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
-
     match dds_cache.write() {
       Ok(mut cache) => cache.add_new_topic(topic.name(), TopicKind::NoKey, topic.get_type()),
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
@@ -163,15 +144,14 @@ where
     };
     let qos = topic.qos();
     Ok(DataWriter {
+      data_phantom: PhantomData,
+      ser_phantom: PhantomData,
       my_publisher: publisher,
       my_topic: topic,
-      qos_policy: qos.clone(),
-      my_guid,
+      qos_policy: qos,
+      my_guid: guid,
       cc_upload,
       discovery_command,
-      dds_cache,
-      datasample_cache: DataSampleCache::new(qos),
-      phantom: PhantomData,
       status_receiver: StatusReceiver::new(status_receiver_rec),
     })
   }

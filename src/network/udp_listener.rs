@@ -140,6 +140,7 @@ impl UDPListener {
     &mut self.socket
   }
 
+  #[cfg(test)]
   pub fn port(&self) -> u16 {
     match self.socket.local_addr() {
       Ok(add) => add.port(),
@@ -210,18 +211,22 @@ impl UDPListener {
     messages
   }
 
-  pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
-    if address.is_multicast() {
-      return self
-        .socket
-        .join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
-    }
-    io::Result::Err(io::Error::new(
-      io::ErrorKind::Other,
-      "Not a multicast address",
-    ))
-  }
+  // This function seems not necessary, because multicast join is done
+  // at listener creation time.
+  //
+  // pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
+  //   if address.is_multicast() {
+  //     return self
+  //       .socket
+  //       .join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
+  //   }
+  //   io::Result::Err(io::Error::new(
+  //     io::ErrorKind::Other,
+  //     "Not a multicast address",
+  //   ))
+  // }
 
+  #[cfg(test)] // normally done in .drop()
   pub fn leave_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
     if address.is_multicast() {
       return self
@@ -257,7 +262,7 @@ mod tests {
 
     let rec_data = listener.get_message();
 
-    assert_eq!(rec_data.len(), 5);
+    assert_eq!(rec_data.len(), 5); // It appears that this test may randomly fail.
     assert_eq!(rec_data, data);
   }
 
