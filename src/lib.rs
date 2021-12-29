@@ -53,7 +53,10 @@
 //! serializable/deserializable.
 //! * If your data is to be communicated over a WithKey topic, the payload data
 //!   type must implement [`Keyed`] trait from this crate.
-//! * If you are using CDR serialization (DDS default), then use [`CDRSerializerAdapter`](../serialization/CdrSerializerAdapter) and [`CdrDeserializerAdapter`](../serialization/CdrDeserializerAdapter)
+//! * If you are using [CDR serialization](https://en.wikipedia.org/wiki/Common_Data_Representation) 
+//!   ([specification, Section 15.3](https://www.omg.org/cgi-bin/doc?formal/02-06-51)) , which 
+//!   is the DDS default, then use [`CDRSerializerAdapter`] and
+//!   [`CDRDeserializerAdapter`]
 //!   when such adapters are required. If you need to use another serialization format, then you should find or write
 //!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
 //!
@@ -172,10 +175,13 @@ pub use dds::{
 /// Needed to specify serialized data representation in case it is other than
 /// CDR.
 pub use messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
+
+#[doc(inline)]
 pub use serialization::{
   CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer,
 };
 pub use structure::{duration::Duration, guid::GUID, time::Timestamp};
+
 // re-export from a helper crate
 pub use cdr_encoding_size::CdrEncodingSize;
 

@@ -61,16 +61,12 @@ where
 // ---------------------------------------------------------------------------------
 
 /// This type adapts [`CdrSerializer`] (which implements
-/// [`serde::Serializer`]) to work as a [`SerializerAdapter`].
+/// [`serde::Serializer`]) to work as a [`no_key::SerializerAdapter`] and
+/// [`with_key::SerializerAdapter`].
+///
 /// [`CdrSerializer`] cannot directly implement the trait itself, because
 /// [`CdrSerializer`] has the type parameter BO open, and the adapter needs to
 /// be bi-endian.
-///
-/// [`SerializerAdapter`]:
-/// ../dds/traits/serde_adapters/trait.SerializerAdapter.html
-
-// A struct separate from CdrSerializer is needed, because the neme to_writer
-// is already taken
 pub struct CDRSerializerAdapter<D, BO = LittleEndian>
 where
   BO: ByteOrder,
@@ -113,8 +109,10 @@ where
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
+/// a CDR deserializer implementation
+///
 /// Parameter W is an [`io::Write`] that would receive the serialization
-/// Parameter BO is byte order: [`LittleEndian`] or [`BigEndian`]
+/// Parameter BO is byte order: [`LittleEndian`] or [`BigEndian`](byteorder::BigEndian)
 pub struct CdrSerializer<W, BO>
 where
   W: io::Write,

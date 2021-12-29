@@ -1,5 +1,7 @@
 /// DeserializerAdapter is used to fit serde Deserializer implementations and
-/// DataReader together. DataReader cannot assume a specific serialization
+/// DataReader together. 
+///
+/// DataReader cannot assume a specific serialization
 /// format, so it needs to be given as a parameter.
 ///
 /// for WITH_KEY topics, we need to be able to (de)serailize the key in addition

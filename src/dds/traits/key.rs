@@ -10,7 +10,8 @@ pub use cdr_encoding_size::*;
 
 use crate::serialization::{cdr_serializer::to_bytes, error::Error};
 
-/// For use in a WITH_KEY topic, data sample must implement `Keyed`.
+/// Data sample must implement [`Keyed`] to be used in a WITH_KEY topic.
+///
 /// It allows a Key to be extracted from the
 /// sample. In its simplest form, the key may be just a part of the sample data,
 /// but it can be anything computable from an immutable sample by an
@@ -60,8 +61,9 @@ impl KeyHash {
   }
 }
 
-/// Key trait for WITH_KEY Topics. The instance lookup key type must implement
-/// this. The corresponding data sample type must implement [`Keyed`].
+/// Trait for instance lookup key in a WITH_KEY topic. 
+///
+/// The corresponding data sample type must implement [`Keyed`].
 /// If the topic is NO_KEY, both of these can be ignored.
 ///
 /// It is a combination of traits from the standard library
@@ -75,12 +77,34 @@ impl KeyHash {
 /// and Serde traits
 /// * [Serialize](https://docs.serde.rs/serde/trait.Serialize.html) and
 /// * [DeserializeOwned](https://docs.serde.rs/serde/de/trait.DeserializeOwned.html)
-///   .
+///
+/// and a RustDDS-specific trait
+/// * [CdrEncodingSize] , for which we provide a [derive macro](derive@cdr_encoding_size::CdrEncodingSize).
+///   
+/// No other methods are required, so for many types it should be possible to `#[derive]` all the
+/// prerequisite traits and implement as `impl Key for Foo {}`. 
+/// Consider also deriving [`Copy`] for your key, if the usual preconditions are satisfied.
 ///
 /// Note: When implementing Key, DeserializeOwned cannot and need not be
-/// derived, as it is a type alias. Derive (or implement) the Deserialize trait
+/// derived, as it is a type alias. Derive (or implement) the [`Deserialize`] trait
 /// instead.
+///
 
+
+/// # Example 
+/// ```
+/// use rustdds::*;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, 
+///          Serialize, Deserialize, CdrEncodingSize)]
+/// pub struct MyKey {
+///   number: u32,
+///   name: String,
+/// }
+/// 
+/// impl Key for MyKey {}
+/// ```
 pub trait Key:
   Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned + CdrEncodingSize
 {

@@ -17,12 +17,12 @@ use crate::{
 };
 
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
-/// work as a [`DeserializerAdapter`]. CdrDeserializer cannot directly implement
+/// work as a [`with_key::DeserializerAdapter`] and [`no_key::DeserializerAdapter`]. 
+///
+/// CdrDeserializer cannot directly implement
 /// the trait itself, because CdrDeserializer has the type parameter BO open,
 /// and the adapter needs to be bi-endian.
 ///
-/// [`DeserializerAdapter`]:
-/// ../dds/traits/serde_adapters/trait.DeserializerAdapter.html
 pub struct CDRDeserializerAdapter<D> {
   phantom: PhantomData<D>,
   // no-one home
@@ -75,7 +75,8 @@ where
   }
 }
 
-/// CDR deserializer.
+/// a CDR deserializer implementation.
+///
 /// Input is from &[u8], since we expect to have the data in contiguous memory
 /// buffers.
 pub struct CdrDeserializer<'de, BO> {

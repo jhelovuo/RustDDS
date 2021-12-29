@@ -4,14 +4,25 @@ use crate::structure::{guid::GUID, time::Timestamp};
 
 //use std::num::Zero; // unstable
 
-/// DDS spec 2.2.2.5.4
-/// "Read" indicates whether or not the corresponding data sample has already
-/// been read.
+/// indicates whether or not the corresponding data sample has already
+/// been read by this `DataReader`.
+///
+/// > For each sample received, the middleware internally maintains a sample_state relative to each DataReader. The sample_state
+/// > can either be READ or NOT_READ.
+///
+/// > The sample_state will, in general, be different for each sample in the collection 
+/// > returned by [`read()`](crate::with_key::DataReader::read()) or 
+/// > [`take()`](crate::with_key::DataReader::take()).
+///
+/// See DDS spec v1.4 Section 2.2.2.5.4 and Section "2.2.2.5.1.2 Interpretation of the SampleInfo sample_state".
 #[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
 #[repr(u32)] // DDS Spec 1.4 section 2.3.3 DCPS PSM : IDL defines these as "unsigned long",
              // so u32
 pub enum SampleState {
+  /// > indicates that the DataReader has already accessed that sample by means of `read()`
+  /// ... or corresponding iterator.
   Read = 0b0001,
+  /// > indicates that the DataReader has not accessed that sample before
   NotRead = 0b0010,
 }
 
@@ -22,17 +33,32 @@ impl SampleState {
   }
 }
 
-/// DDS spec 2.2.2.5.1.8
+/// Indicates if this data *instance* has been seen (viewed).
+///
+/// > For each instance (identified by the [key](crate::Key)), the middleware internally maintains a view_state relative to each DataReader. The
+/// > view_state can either be NEW or NOT_NEW.
+///
+/// > The view_state available in the SampleInfo is a snapshot of the view_state of the instance relative to the DataReader used to
+/// > access the samples at the time the collection was obtained (i.e., at the time read or take was called). The view_state is therefore
+/// > the same for all samples in the returned collection that refer to the same instance.
+/// > 
+/// > Once an instance has been detected as not having any "live" writers and all the samples associated with the instance are ‘taken’
+/// > from the DataReader, the middleware can reclaim all local resources regarding the instance. Future samples will be treated as
+/// > 'never seen'.
+///
+/// Cf. [`SampleState`]
+///
+/// See DDS spec v.14 Section 2.2.2.5.1.8 Interpretation of the SampleInfo view_state
 #[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
 #[repr(u32)]
 pub enum ViewState {
-  ///  indicates that either this is the first time that the DataReader has ever
-  /// accessed samples of that instance, or else that the DataReader has
-  /// accessed previous samples of the instance, but the instance has since
-  /// been reborn (i.e., become not-alive and then alive again).
+  /// > indicates that either this is the first time that the DataReader has ever
+  /// > accessed samples of that instance, or else that the DataReader has
+  /// > accessed previous samples of the instance, but the instance has since
+  /// > been reborn (i.e., become not-alive and then alive again).
   New = 0b0001,
-  /// indicates that the DataReader has already accessed samples of the same
-  ///instance and that the instance has not been reborn since
+  /// > indicates that the DataReader has already accessed samples of the same
+  /// > instance and that the instance has not been reborn since
   NotNew = 0b0010,
 }
 impl ViewState {
@@ -42,13 +68,27 @@ impl ViewState {
   }
 }
 
+/// Is this data instance alive or not and why.
+///
+/// > The instance_state available in the SampleInfo is a snapshot of the instance_state of the instance at the time the collection
+/// > was obtained (i.e., at the time read or take was called). The instance_state is therefore be the same for all samples in the
+/// > returned collection that refer to the same instance.
+///
+/// DDS spec v1.4 Section "2.2.2.5.1.3 Interpretation of the SampleInfo instance_state"
 #[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
 #[repr(u32)]
 pub enum InstanceState {
+  /// > indicates that (a) samples have been received for the instance, (b) there are live DataWriter entities writing the
+  /// > instance, and (c) the instance has not been explicitly disposed (or else more samples have been received after it was
+  /// > disposed).
   Alive = 0b0001,
-  /// A DataWriter has actively disposed this instance
+
+  /// > indicates the instance was explicitly disposed by a DataWriter by means of the dispose
+  /// > operation.
   NotAliveDisposed = 0b0010,
-  /// There are no writers alive.
+
+  /// > indicates the instance has been declared as not-alive by the DataReader because it
+  /// > detected that there are no live DataWriter entities writing that instance
   NotAliveNoWriters = 0b0100,
 }
 
@@ -63,6 +103,20 @@ impl InstanceState {
   }
 }
 
+/// A double counter for counting how many times an instance as become Alive.
+///
+/// > For each instance the middleware internally maintains two counts: the disposed_generation_count and
+/// > no_writers_generation_count, relative to each DataReader:
+/// > * The disposed_generation_count and no_writers_generation_count are initialized to zero when the DataReader first
+/// > detects the presence of a never-seen-before instance.
+/// > * The disposed_generation_count is incremented each time the instance_state of the corresponding instance changes
+/// > from NOT_ALIVE_DISPOSED to ALIVE.
+/// > * The no_writers_generation_count is incremented each time the instance_state of the corresponding instance changes
+/// > from NOT_ALIVE_NO_WRITERS to ALIVE.
+/// > The disposed_generation_count and no_writers_generation_count available in the SampleInfo capture a snapshot of the
+/// > corresponding counters at the time the sample was received.
+///
+/// See DDS spec v1.4 Section "2.2.2.5.1.5 Interpretation of the SampleInfo disposed_generation_count and no_writers_generation_count"
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NotAliveGenerationCounts {
   pub disposed_generation_count: i32,
@@ -115,7 +169,7 @@ pub struct SampleInfo {
   pub instance_state: InstanceState,
 
   /// For each instance the middleware internally maintains these counts
-  /// relative to each DataReader. The counts capture snapshots if the
+  /// relative to each DataReader. The counts capture snapshots of the
   /// corresponding counters at the time the sample was received.
   pub generation_counts: NotAliveGenerationCounts,
 
