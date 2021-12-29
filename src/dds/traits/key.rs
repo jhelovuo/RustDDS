@@ -61,7 +61,7 @@ impl KeyHash {
   }
 }
 
-/// Trait for instance lookup key in a WITH_KEY topic. 
+/// Trait for instance lookup key in a WITH_KEY topic.
 ///
 /// The corresponding data sample type must implement [`Keyed`].
 /// If the topic is NO_KEY, both of these can be ignored.
@@ -79,30 +79,30 @@ impl KeyHash {
 /// * [DeserializeOwned](https://docs.serde.rs/serde/de/trait.DeserializeOwned.html)
 ///
 /// and a RustDDS-specific trait
-/// * [CdrEncodingSize] , for which we provide a [derive macro](derive@cdr_encoding_size::CdrEncodingSize).
-///   
-/// No other methods are required, so for many types it should be possible to `#[derive]` all the
-/// prerequisite traits and implement as `impl Key for Foo {}`. 
-/// Consider also deriving [`Copy`] for your key, if the usual preconditions are satisfied.
+/// * [CdrEncodingSize] , for which we provide a [derive
+///   macro](derive@cdr_encoding_size::CdrEncodingSize).
+///
+/// No other methods are required, so for many types it should be possible to
+/// `#[derive]` all the prerequisite traits and implement as `impl Key for Foo
+/// {}`. Consider also deriving [`Copy`] for your key, if the usual
+/// preconditions are satisfied.
 ///
 /// Note: When implementing Key, DeserializeOwned cannot and need not be
-/// derived, as it is a type alias. Derive (or implement) the [`Deserialize`] trait
-/// instead.
-///
+/// derived, as it is a type alias. Derive (or implement) the [`Deserialize`]
+/// trait instead.
 
-
-/// # Example 
+/// # Example
 /// ```
 /// use rustdds::*;
 /// use serde::{Serialize, Deserialize};
 ///
-/// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, 
+/// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
 ///          Serialize, Deserialize, CdrEncodingSize)]
 /// pub struct MyKey {
 ///   number: u32,
 ///   name: String,
 /// }
-/// 
+///
 /// impl Key for MyKey {}
 /// ```
 pub trait Key:

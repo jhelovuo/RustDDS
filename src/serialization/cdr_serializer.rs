@@ -112,7 +112,8 @@ where
 /// a CDR deserializer implementation
 ///
 /// Parameter W is an [`io::Write`] that would receive the serialization
-/// Parameter BO is byte order: [`LittleEndian`] or [`BigEndian`](byteorder::BigEndian)
+/// Parameter BO is byte order: [`LittleEndian`] or
+/// [`BigEndian`](byteorder::BigEndian)
 pub struct CdrSerializer<W, BO>
 where
   W: io::Write,

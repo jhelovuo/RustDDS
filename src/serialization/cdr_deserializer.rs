@@ -17,12 +17,12 @@ use crate::{
 };
 
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
-/// work as a [`with_key::DeserializerAdapter`] and [`no_key::DeserializerAdapter`]. 
+/// work as a [`with_key::DeserializerAdapter`] and
+/// [`no_key::DeserializerAdapter`].
 ///
 /// CdrDeserializer cannot directly implement
 /// the trait itself, because CdrDeserializer has the type parameter BO open,
 /// and the adapter needs to be bi-endian.
-///
 pub struct CDRDeserializerAdapter<D> {
   phantom: PhantomData<D>,
   // no-one home
