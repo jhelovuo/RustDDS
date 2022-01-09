@@ -142,7 +142,7 @@ pub(crate) fn spdp_publication_msg() -> Message {
 pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
   let mut tdata: Message = spdp_participant_msg();
   let mut data;
-  for submsg in tdata.submessages.iter_mut() {
+  for submsg in &mut tdata.submessages {
     let mut submsglen = submsg.header.content_length;
     match &mut submsg.body {
       SubmessageBody::Entity(v) => match v {
@@ -184,7 +184,7 @@ pub(crate) fn spdp_participant_data() -> Option<SpdpDiscoveredParticipantData> {
   let rtpsmsg = Message::read_from_buffer(&data).unwrap();
   let submsgs = rtpsmsg.submessages();
 
-  for submsg in submsgs.iter() {
+  for submsg in &submsgs {
     match &submsg.body {
       SubmessageBody::Entity(v) => match v {
         EntitySubmessage::Data(d, _) => {

@@ -194,7 +194,7 @@ impl DiscoveryDB {
     let mut to_remove = Vec::new();
     // TODO: We are not cleaning up liast_life_signs table, but that should not be a
     // problem, except for a slight memory leak.
-    for (&guid, sp) in self.participant_proxies.iter() {
+    for (&guid, sp) in &self.participant_proxies {
       let lease_duration = sp
         .lease_duration
         .unwrap_or(DEFAULT_PARTICIPANT_LEASE_DURATION);
@@ -216,7 +216,7 @@ impl DiscoveryDB {
         }
       } // match
     } // for
-    for guid in to_remove.iter() {
+    for guid in &to_remove {
       self.remove_participant(*guid);
     }
     to_remove
@@ -269,7 +269,7 @@ impl DiscoveryDB {
       .filter(|tn| !self.topic_has_writers_or_readers(tn))
       .cloned()
       .collect();
-    for dt in dead_topics.iter() {
+    for dt in &dead_topics {
       self.topics.remove(dt);
     }
   }

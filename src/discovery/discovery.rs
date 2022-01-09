@@ -821,13 +821,11 @@ impl Discovery {
       self
         .self_locators
         .get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_else(Vec::new),
+        .cloned().unwrap_or_default(),
       self
         .self_locators
         .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_else(Vec::new),
+        .cloned().unwrap_or_default(),
     );
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
@@ -849,13 +847,11 @@ impl Discovery {
       self
         .self_locators
         .get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_else(Vec::new),
+        .cloned().unwrap_or_default(),
       self
         .self_locators
         .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_else(Vec::new),
+        .cloned().unwrap_or_default(),
     );
 
     let pub_topic_data = PublicationBuiltinTopicData::new(
@@ -1499,7 +1495,7 @@ mod tests {
 
     let mut tdata = spdp_subscription_msg();
     let mut data;
-    for submsg in tdata.submessages.iter_mut() {
+    for submsg in &mut tdata.submessages {
       match &mut submsg.body {
         SubmessageBody::Entity(v) => match v {
           EntitySubmessage::Data(d, _) => {
@@ -1586,7 +1582,7 @@ mod tests {
     )];
 
     let mut tdata = spdp_publication_msg();
-    for submsg in tdata.submessages.iter_mut() {
+    for submsg in &mut tdata.submessages {
       match &mut submsg.body {
         SubmessageBody::Interpreter(v) => match v {
           InterpreterSubmessage::InfoDestination(dst, _flags) => {
