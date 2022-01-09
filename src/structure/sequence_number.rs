@@ -196,7 +196,7 @@ impl From<i64> for FragmentNumber {
 // to make this fit into NumberSet<N>
 impl From<FragmentNumber> for i64 {
   fn from(fragment_number: FragmentNumber) -> Self {
-    fragment_number.0 as i64
+    fragment_number.0.into()
   }
 }
 
@@ -397,7 +397,7 @@ where
         self.seq.bitmap[(self.at_bit / 32) as usize] & (1 << (31 - self.at_bit % 32)) != 0;
       self.at_bit += 1;
       if have_one {
-        return Some(N::from((self.at_bit - 1) as i64) + self.seq.bitmap_base);
+        return Some(N::from(i64::from(self.at_bit - 1)) + self.seq.bitmap_base);
       }
     }
     None
@@ -414,7 +414,7 @@ where
       let have_one =
         self.seq.bitmap[(self.rev_at_bit / 32) as usize] & (1 << (31 - self.rev_at_bit % 32)) != 0;
       if have_one {
-        return Some(N::from(self.rev_at_bit as i64) + self.seq.bitmap_base);
+        return Some(N::from(i64::from(self.rev_at_bit)) + self.seq.bitmap_base);
       }
     }
     None

@@ -121,19 +121,23 @@ impl SpdpDiscoveredParticipantData {
   ) -> SpdpDiscoveredParticipantData {
     let metatraffic_multicast_locators = self_locators
       .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-      .cloned().unwrap_or_default();
+      .cloned()
+      .unwrap_or_default();
 
     let metatraffic_unicast_locators = self_locators
       .get(&DISCOVERY_LISTENER_TOKEN)
-      .cloned().unwrap_or_default();
+      .cloned()
+      .unwrap_or_default();
 
     let default_multicast_locators = self_locators
       .get(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
-      .cloned().unwrap_or_default();
+      .cloned()
+      .unwrap_or_default();
 
     let default_unicast_locators = self_locators
       .get(&USER_TRAFFIC_LISTENER_TOKEN)
-      .cloned().unwrap_or_default();
+      .cloned()
+      .unwrap_or_default();
 
     let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR

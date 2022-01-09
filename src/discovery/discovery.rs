@@ -821,11 +821,13 @@ impl Discovery {
       self
         .self_locators
         .get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned().unwrap_or_default(),
+        .cloned()
+        .unwrap_or_default(),
       self
         .self_locators
         .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned().unwrap_or_default(),
+        .cloned()
+        .unwrap_or_default(),
     );
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
@@ -847,11 +849,13 @@ impl Discovery {
       self
         .self_locators
         .get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned().unwrap_or_default(),
+        .cloned()
+        .unwrap_or_default(),
       self
         .self_locators
         .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned().unwrap_or_default(),
+        .cloned()
+        .unwrap_or_default(),
     );
 
     let pub_topic_data = PublicationBuiltinTopicData::new(
