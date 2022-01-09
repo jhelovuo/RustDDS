@@ -634,7 +634,6 @@ mod tests {
 
     let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
 
-    let _writer_key = writer_data.writer_proxy.remote_writer_guid;
     discovery_db.update_local_topic_writer(writer_data);
     assert_eq!(discovery_db.local_topic_writers.len(), 1);
 
@@ -645,7 +644,6 @@ mod tests {
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic, None)
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
-    let _writer2_key = writer_data2.writer_proxy.remote_writer_guid;
     discovery_db.update_local_topic_writer(writer_data2);
     assert_eq!(discovery_db.local_topic_writers.len(), 2);
 
