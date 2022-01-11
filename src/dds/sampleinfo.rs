@@ -12,8 +12,8 @@ use crate::structure::{guid::GUID, time::Timestamp};
 /// > READ or NOT_READ.
 ///
 /// > The sample_state will, in general, be different for each sample in the
-/// > collection > returned by [`read()`](crate::with_key::DataReader::read()) or
-/// > [`take()`](crate::with_key::DataReader::take()).
+/// > collection returned by [`read()`](crate::with_key::DataReader::read())
+/// > or [`take()`](crate::with_key::DataReader::take()).
 ///
 /// See DDS spec v1.4 Section 2.2.2.5.4 and Section "2.2.2.5.1.2 Interpretation
 /// of the SampleInfo sample_state".
@@ -45,7 +45,7 @@ impl SampleState {
 /// > of the instance relative to the DataReader used to access the samples at
 /// > the time the collection was obtained (i.e., at the time read or take was
 /// > called). The view_state is therefore the same for all samples in the
-/// > returned collection that refer to the same instance. 
+/// > returned collection that refer to the same instance.
 /// > Once an instance has been detected as not having any "live" writers and
 /// > all the samples associated with the instance are ‘taken’ from the
 /// > DataReader, the middleware can reclaim all local resources regarding the
@@ -78,9 +78,9 @@ impl ViewState {
 ///
 /// > The instance_state available in the SampleInfo is a snapshot of the
 /// > instance_state of the instance at the time the collection was obtained
-/// > (i.e., at the time read or take was called). The instance_state is therefore
-/// > be the same for all samples in the returned collection that refer to the
-/// > same instance.
+/// > (i.e., at the time read or take was called). The instance_state is
+/// > therefore be the same for all samples in the returned collection that
+/// > refer to the same instance.
 ///
 /// DDS spec v1.4 Section "2.2.2.5.1.3 Interpretation of the SampleInfo
 /// instance_state"
@@ -89,8 +89,8 @@ impl ViewState {
 pub enum InstanceState {
   /// > indicates that (a) samples have been received for the instance, (b)
   /// > there are live DataWriter entities writing the instance, and (c) the
-  /// > instance has not been explicitly disposed (or else more samples have been
-  /// > received after it was disposed).
+  /// > instance has not been explicitly disposed (or else more samples have
+  /// > been received after it was disposed).
   Alive = 0b0001,
 
   /// > indicates the instance was explicitly disposed by a DataWriter by means
@@ -118,7 +118,7 @@ impl InstanceState {
 ///
 /// > For each instance the middleware internally maintains two counts: the
 /// > disposed_generation_count and no_writers_generation_count, relative to
-/// > each DataReader: 
+/// > each DataReader:
 /// > * The disposed_generation_count and
 /// > no_writers_generation_count are initialized to zero when the DataReader
 /// > first detects the presence of a never-seen-before instance.

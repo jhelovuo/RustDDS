@@ -70,7 +70,7 @@ impl Duration {
   }
 
   pub(crate) fn to_ticks(self) -> i64 {
-    ((self.seconds as i64) << 32) + (self.fraction as i64)
+    (i64::from(self.seconds) << 32) + i64::from(self.fraction)
   }
 
   pub(crate) fn from_ticks(ticks: i64) -> Duration {
@@ -93,7 +93,7 @@ impl Duration {
   };
 
   pub fn to_nanoseconds(&self) -> i64 {
-    ((self.to_ticks() as i128 * 1_000_000_000) >> 32) as i64
+    ((i128::from(self.to_ticks()) * 1_000_000_000) >> 32) as i64
   }
 
   pub fn from_std(duration: std::time::Duration) -> Self {

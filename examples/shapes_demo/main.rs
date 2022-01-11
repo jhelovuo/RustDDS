@@ -14,8 +14,11 @@ use log4rs::{
   config::{Appender, Root},
   Config,
 };
-use rustdds::*;
-use rustdds::policy::*; // import all QoS policies directly
+use rustdds::{
+  DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented, TopicDescription, TopicKind,
+};
+use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
+                                                                     * policies directly */
 use serde::{Deserialize, Serialize};
 use clap::{App, Arg, ArgMatches}; // command line argument processing
 use mio::{Events, Poll, PollOpt, Ready, Token}; // polling

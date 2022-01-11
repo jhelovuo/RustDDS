@@ -194,7 +194,7 @@ impl DiscoveryDB {
     let mut to_remove = Vec::new();
     // TODO: We are not cleaning up liast_life_signs table, but that should not be a
     // problem, except for a slight memory leak.
-    for (&guid, sp) in self.participant_proxies.iter() {
+    for (&guid, sp) in &self.participant_proxies {
       let lease_duration = sp
         .lease_duration
         .unwrap_or(DEFAULT_PARTICIPANT_LEASE_DURATION);
@@ -216,7 +216,7 @@ impl DiscoveryDB {
         }
       } // match
     } // for
-    for guid in to_remove.iter() {
+    for guid in &to_remove {
       self.remove_participant(*guid);
     }
     to_remove
@@ -269,7 +269,7 @@ impl DiscoveryDB {
       .filter(|tn| !self.topic_has_writers_or_readers(tn))
       .cloned()
       .collect();
-    for dt in dead_topics.iter() {
+    for dt in &dead_topics {
       self.topics.remove(dt);
     }
   }
@@ -634,7 +634,6 @@ mod tests {
 
     let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
 
-    let _writer_key = writer_data.writer_proxy.remote_writer_guid;
     discovery_db.update_local_topic_writer(writer_data);
     assert_eq!(discovery_db.local_topic_writers.len(), 1);
 
@@ -645,7 +644,6 @@ mod tests {
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic, None)
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
-    let _writer2_key = writer_data2.writer_proxy.remote_writer_guid;
     discovery_db.update_local_topic_writer(writer_data2);
     assert_eq!(discovery_db.local_topic_writers.len(), 2);
 

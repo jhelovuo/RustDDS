@@ -122,22 +122,22 @@ impl SpdpDiscoveredParticipantData {
     let metatraffic_multicast_locators = self_locators
       .get(&DISCOVERY_MUL_LISTENER_TOKEN)
       .cloned()
-      .unwrap_or_else(Vec::new);
+      .unwrap_or_default();
 
     let metatraffic_unicast_locators = self_locators
       .get(&DISCOVERY_LISTENER_TOKEN)
       .cloned()
-      .unwrap_or_else(Vec::new);
+      .unwrap_or_default();
 
     let default_multicast_locators = self_locators
       .get(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
       .cloned()
-      .unwrap_or_else(Vec::new);
+      .unwrap_or_default();
 
     let default_unicast_locators = self_locators
       .get(&USER_TRAFFIC_LISTENER_TOKEN)
       .cloned()
-      .unwrap_or_else(Vec::new);
+      .unwrap_or_default();
 
     let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR
@@ -253,7 +253,7 @@ mod tests {
     let rtpsmsg = Message::read_from_buffer(&data).unwrap();
     let submsgs = rtpsmsg.submessages();
 
-    for submsg in submsgs.iter() {
+    for submsg in &submsgs {
       match &submsg.body {
         SubmessageBody::Entity(v) => match v {
           EntitySubmessage::Data(d, _) => {

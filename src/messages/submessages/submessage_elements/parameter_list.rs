@@ -27,7 +27,7 @@ const SENTINEL: u32 = 0x00000001;
 impl<C: Context> Writable<C> for ParameterList {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    for param in self.parameters.iter() {
+    for param in &self.parameters {
       writer.write_value(param)?;
     }
 
