@@ -379,18 +379,17 @@ where
     value.serialize(self)
   }
 
-  // As this is technically an enum, we treat this as union with one variat.
   fn serialize_newtype_variant<T>(
     self,
     _name: &'static str,
-    _variant_index: u32,
+    variant_index: u32,
     _variant: &'static str,
     value: &T,
   ) -> Result<()>
   where
     T: ?Sized + Serialize,
   {
-    self.serialize_u32(0)?;
+    self.serialize_u32(variant_index)?;
     value.serialize(self)
   }
 

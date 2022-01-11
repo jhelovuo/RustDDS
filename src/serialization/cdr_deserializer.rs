@@ -917,6 +917,20 @@ mod tests {
     info!("{:?}", deserialization_result);
   }
 
+  #[derive(Serialize, Deserialize, Debug, PartialEq)]
+  enum SomeTupleEnum {
+    A(i32),
+    B(i32),
+    C(i32),
+  }
+
+  #[derive(Serialize, Deserialize, Debug, PartialEq)]
+  enum MixedEnum {
+    A(i32),
+    B { value: i32 },
+    C(i32, i32),
+  }
+
   #[test_case(35_u8 ; "u8")]
   #[test_case(35_u16 ; "u16")]
   #[test_case(352323_u32 ; "u32")]
@@ -958,12 +972,18 @@ mod tests {
       kolm_tavua: [23, 0, 2].to_vec(),
     }) ; "BigEnum::Interesting")]
   #[test_case( BigEnum::Something{ x:123.0, y:-0.1 } ; "BigEnum::Something")]
-
+  #[test_case( SomeTupleEnum::A(123) ; "SomeTupleEnum::A")]
+  #[test_case( SomeTupleEnum::B(1234) ; "SomeTupleEnum::B")]
+  #[test_case( SomeTupleEnum::C(-1) ; "SomeTupleEnum::C")]
+  #[test_case( MixedEnum::A(123) ; "MixedEnum::A")]
+  #[test_case( MixedEnum::B{ value:1234 } ; "MixedEnum::B")]
+  #[test_case( MixedEnum::C(42,43) ; "MixedEnum::C")]
   fn cdr_serde_round_trip<T>(input: T)
   where
     T: PartialEq + std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,
   {
     let serialized = to_bytes::<_, LittleEndian>(&input).unwrap();
+    println!("Serialized data: {:x?}", &serialized);
     let deserialized = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(input, deserialized);
   }

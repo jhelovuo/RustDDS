@@ -477,7 +477,7 @@ impl GUID {
     entity_id: EntityId::UNKNOWN,
   };
 
-  // basic constructor from components
+  /// basic constructor from components
   pub fn new(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
     GUID::new_with_prefix_and_id(prefix, entity_id)
   }
@@ -509,7 +509,7 @@ impl GUID {
     }
   }
 
-  /// Creates GUID from known values
+  /// alias for basic constructor from components
   pub fn new_with_prefix_and_id(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
     GUID { prefix, entity_id }
   }
