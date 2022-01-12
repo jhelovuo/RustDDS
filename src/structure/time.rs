@@ -89,7 +89,7 @@ impl Sub<Duration> for Timestamp {
 
   fn sub(self, rhs: Duration) -> Self::Output {
     let lhs_ticks = self.to_ticks();
-    let rhs_ticks = rhs.to_ticks() as u64;
+    let rhs_ticks = rhs.to_ticks();
     
     let sub_ticks: u64 = if rhs_ticks >= 0 {
       lhs_ticks - rhs_ticks as u64
