@@ -7,7 +7,7 @@ pub struct ParameterId {
 }
 
 impl ParameterId {
-  #![allow(dead_code)] // since do not necessarily use all of the named constants, but that's ok
+  #![allow(dead_code)] // since we do not necessarily use all of the named constants, but that's ok
   pub const PID_PAD: ParameterId = ParameterId { value: 0x0000 };
   pub const PID_SENTINEL: ParameterId = ParameterId { value: 0x0001 };
   pub const PID_USER_DATA: ParameterId = ParameterId { value: 0x002c };
@@ -62,6 +62,13 @@ impl ParameterId {
   pub const PID_ENTITY_NAME: ParameterId = ParameterId { value: 0x0062 };
   pub const PID_KEY_HASH: ParameterId = ParameterId { value: 0x0070 };
   pub const PID_STATUS_INFO: ParameterId = ParameterId { value: 0x0071 };
+
+  // From Specification "Remote Procedure Calls over DDS v1.0"
+  // Section 7.6.2.1.1 Extended PublicationBuiltin TopicData and
+  // 7.6.2.1.2 Extended SubscriptionBuiltinTopicData
+  pub const PID_SERVICE_INSTANCE_NAME: ParameterId = ParameterId { value: 0x0080 };
+  pub const PID_RELATED_ENTITY_GUID: ParameterId = ParameterId { value: 0x0081 };
+  pub const PID_TOPIC_ALIASES: ParameterId = ParameterId { value: 0x0082 };
 }
 
 #[cfg(test)]

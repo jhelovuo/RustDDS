@@ -10,13 +10,26 @@ use std::collections::BTreeSet;
 
 use num_traits::NumOps;
 use num_derive::{FromPrimitive, NumOps, ToPrimitive};
+use serde::{Deserialize, Serialize};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use log::error;
 
 //
 /// RTPS Specification v2.3 Section "8.3.5.4 SequenceNumber"
 #[derive(
-  Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, NumOps, FromPrimitive, ToPrimitive,
+  Copy,
+  Clone,
+  Debug,
+  Hash,
+  PartialEq,
+  Eq,
+  PartialOrd,
+  Ord,
+  NumOps,
+  FromPrimitive,
+  ToPrimitive,
+  Serialize,
+  Deserialize,
 )]
 pub struct SequenceNumber(i64);
 

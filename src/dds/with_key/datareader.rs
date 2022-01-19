@@ -760,7 +760,7 @@ where
                     self.my_topic.name(),
                     self.my_topic.get_type()
                   );
-                  debug!("Bytes were {:?}", &serialized_payload.value);
+                  info!("Bytes were {:?}", &serialized_payload.value);
                   continue; // skip this sample
                 }
               }
@@ -769,7 +769,7 @@ where
                 "Unknown representation id {:?}.",
                 serialized_payload.representation_identifier
               );
-              debug!("Serialized payload was {:?}", &serialized_payload);
+              info!("Serialized payload was {:?}", &serialized_payload);
               continue; // skip this sample, as we cannot decode it
             }
           }

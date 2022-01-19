@@ -11,3 +11,5 @@ pub mod parameter_id;
 pub mod sequence_number;
 pub mod time;
 pub mod topic_kind;
+
+pub mod rpc;

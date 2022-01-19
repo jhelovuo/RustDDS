@@ -361,6 +361,23 @@ impl EntityId {
   pub fn set_kind(&mut self, entity_kind: EntityKind) {
     self.entity_kind = entity_kind;
   }
+
+  pub fn to_slice(&self) -> [u8; 4] {
+    let mut slice = [0; 4];
+    slice[0] = self.entity_key[0];
+    slice[1] = self.entity_key[1];
+    slice[2] = self.entity_key[2];
+    slice[3] = self.entity_kind.0;
+
+    slice
+  }
+
+  pub fn from_slice(bytes: [u8; 4]) -> EntityId {
+    EntityId {
+      entity_key: [bytes[0], bytes[1], bytes[2]],
+      entity_kind: EntityKind::from(bytes[3]),
+    }
+  }
 }
 
 impl Default for EntityId {
@@ -482,6 +499,19 @@ impl GUID {
     GUID::new_with_prefix_and_id(prefix, entity_id)
   }
 
+  pub fn from_bytes(bytes: [u8; 16]) -> GUID {
+    let mut prefix = GuidPrefix { bytes: [0; 12] };
+    prefix.bytes.as_mut_slice().copy_from_slice(&bytes[0..12]);
+
+    let mut eid_bytes = [0; 4];
+    eid_bytes.as_mut_slice().copy_from_slice(&bytes[12..16]);
+
+    GUID {
+      prefix,
+      entity_id: EntityId::from_slice(eid_bytes),
+    }
+  }
+
   /// Generates new GUID for Participant when `guid_prefix` is random
   pub fn new_participant_guid() -> GUID {
     GUID {
@@ -516,6 +546,13 @@ impl GUID {
 
   pub fn as_usize(&self) -> usize {
     self.entity_id.as_usize()
+  }
+
+  pub fn to_bytes(&self) -> [u8; 16] {
+    let mut bytes = [0; 16];
+    bytes.as_mut_slice()[0..12].copy_from_slice(self.prefix.as_ref());
+    bytes.as_mut_slice()[12..16].copy_from_slice(&self.entity_id.to_slice());
+    bytes
   }
 }
 

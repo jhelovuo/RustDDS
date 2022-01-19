@@ -88,6 +88,12 @@ pub struct BuiltinDataDeserializer {
   pub resource_limits: Option<ResourceLimits>,
 
   pub content_filter_property: Option<ContentFilterProperty>,
+
+  // Extension RPC over DDS:
+  // SubscriptionBuiltinTopicDataExt and PublicationBuiltinTopicDataExt
+  pub service_instance_name: Option<String>, // max size is 256 bytes
+  pub related_datareader_key: Option<GUID>,
+  pub topic_aliases: Option<Vec<String>>,
 }
 
 impl BuiltinDataDeserializer {
@@ -239,6 +245,7 @@ impl BuiltinDataDeserializer {
     };
 
     let mut sbtd = SubscriptionBuiltinTopicData::new(key, topic_name, type_name, &qos);
+    // TODO: DDS-RPC fields are not set
 
     if let Some(g) = self.participant_guid {
       sbtd.set_participant_key(g);
@@ -273,6 +280,9 @@ impl BuiltinDataDeserializer {
       ownership: self.ownership,
       destination_order: self.destination_order,
       presentation: self.presentation,
+      service_instance_name: self.service_instance_name.clone(),
+      related_datareader_key: self.related_datareader_key,
+      topic_aliases: self.topic_aliases.clone(),
     })
   }
 
@@ -740,6 +750,36 @@ impl BuiltinDataDeserializer {
           return self;
         }
       }
+
+      // The following three parameters are from spec "Remote Procedure Call over DDS, v1.0"
+      ParameterId::PID_SERVICE_INSTANCE_NAME => {
+        let service_instance_name: Result<String, Error> =
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+        if let Ok(name) = service_instance_name {
+          self.service_instance_name = Some(name);
+          buffer.drain(..4 + parameter_length);
+          return self;
+        }
+      }
+      ParameterId::PID_RELATED_ENTITY_GUID => {
+        let guid: Result<GUID, Error> =
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+        if let Ok(gg) = guid {
+          self.endpoint_guid = Some(gg);
+          buffer.drain(..4 + parameter_length);
+          return self;
+        }
+      }
+      ParameterId::PID_TOPIC_ALIASES => {
+        let topic_aliases: Result<Vec<String>, Error> =
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+        if let Ok(topic_aliases) = topic_aliases {
+          self.topic_aliases = Some(topic_aliases);
+          buffer.drain(..4 + parameter_length);
+          return self;
+        }
+      }
+
       ParameterId::PID_SENTINEL => {
         self.sentinel = Some(1);
         buffer.clear();

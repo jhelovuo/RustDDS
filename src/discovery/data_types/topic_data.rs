@@ -127,6 +127,12 @@ pub struct SubscriptionBuiltinTopicData {
   // pub group_data: Option<GroupData>,
   // pub durability_service: Option<DurabilityService>,
   lifespan: Option<Lifespan>,
+
+  // From spec Remote Procedure Call over DDS:
+  service_instance_name: Option<String>,
+  related_datawriter_key: Option<GUID>,
+  topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates if the
+                                       * parameter was present or not */
 }
 
 impl SubscriptionBuiltinTopicData {
@@ -151,6 +157,9 @@ impl SubscriptionBuiltinTopicData {
       time_based_filter: None,
       presentation: None,
       lifespan: None,
+      service_instance_name: None,
+      related_datawriter_key: None,
+      topic_aliases: None,
     };
 
     sbtd.set_qos(qos);
@@ -493,6 +502,12 @@ pub struct PublicationBuiltinTopicData {
   pub ownership: Option<Ownership>,
   pub destination_order: Option<DestinationOrder>,
   pub presentation: Option<Presentation>,
+
+  // From Remote Procedure Call over DDS:
+  pub service_instance_name: Option<String>,
+  pub related_datareader_key: Option<GUID>,
+  pub topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates
+                                           * if the parameter was present or not */
 }
 
 impl PublicationBuiltinTopicData {
@@ -517,6 +532,10 @@ impl PublicationBuiltinTopicData {
       ownership: None,
       destination_order: None,
       presentation: None,
+
+      service_instance_name: None,
+      related_datareader_key: None,
+      topic_aliases: None,
     }
   }
 
