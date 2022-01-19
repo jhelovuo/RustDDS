@@ -22,6 +22,7 @@ use crate::{
     ddsdata::DDSData,
     dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
     qos::HasQoSPolicy,
+    with_key::datawriter::WriteOptions,
   },
   messages::submessages::submessages::AckSubmessage,
   network::udp_sender::UDPSender,
@@ -179,7 +180,7 @@ pub(crate) struct Writer {
 pub(crate) enum WriterCommand {
   DDSData {
     data: DDSData,
-    source_timestamp: Option<Timestamp>,
+    write_options: WriteOptions,
   },
   WaitForAcknowledgments {
     all_acked: mio_channel::SyncSender<()>,
@@ -379,7 +380,7 @@ impl Writer {
       match cc {
         WriterCommand::DDSData {
           data,
-          source_timestamp,
+          write_options,
         } => {
           // We have a new sample here. Things to do:
           // 1. Insert it to history cache and get it sequence numbered
@@ -387,13 +388,13 @@ impl Writer {
           //    If we are pushing data, send the DATA submessage and HEARTBEAT.
           //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the
           // DATA with ACKNACK.
-          let timestamp = self.insert_to_history_cache(data, source_timestamp);
+          let timestamp = self.insert_to_history_cache(data, write_options.source_timestamp);
 
           self.increase_heartbeat_counter();
 
           let partial_message = MessageBuilder::new();
           // If DataWriter sent us a source timestamp, then add that.
-          let partial_message = if let Some(src_ts) = source_timestamp {
+          let partial_message = if let Some(src_ts) = write_options.source_timestamp {
             partial_message.ts_msg(self.endianness, Some(src_ts))
           } else {
             partial_message

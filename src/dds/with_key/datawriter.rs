@@ -32,10 +32,72 @@ use crate::{
   serialization::CDRSerializerAdapter,
   structure::{
     cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID, time::Timestamp,
-    topic_kind::TopicKind,
+    topic_kind::TopicKind, rpc::SampleIdentity,
   },
 };
 use super::super::writer::WriterCommand;
+
+
+
+// It is a bit overkill to use a builder for such a simple struct, but
+// 
+pub struct WriteOptionsBuilder {
+  related_sample_identity: Option<SampleIdentity>,
+  source_timestamp: Option<Timestamp>,
+}
+
+impl WriteOptionsBuilder {
+  pub fn new() -> WriteOptionsBuilder {
+    WriteOptionsBuilder { related_sample_identity: None , source_timestamp: None, }
+  }
+
+  pub fn build(self) -> WriteOptions {
+    WriteOptions { 
+      related_sample_identity: self.related_sample_identity,
+      source_timestamp: self.source_timestamp,
+    }
+  }
+
+  pub fn related_sample_identity(mut self, related_sample_identity: SampleIdentity) -> WriteOptionsBuilder {
+    self.related_sample_identity = Some(related_sample_identity);
+    self
+  }
+
+  pub fn source_timestamp(mut self, source_timestamp: Timestamp) -> WriteOptionsBuilder {
+    self.source_timestamp = Some(source_timestamp);
+    self
+  }
+}
+
+
+/// Type to be used with write_with_options.
+/// Use WriteOptionsBuilder to construct this.
+pub struct WriteOptions {
+  pub(crate) related_sample_identity: Option<SampleIdentity>,
+  pub(crate) source_timestamp: Option<Timestamp>,
+  // future extension room fo other fields.
+}
+
+
+
+impl Default for WriteOptions {
+  fn default() -> Self {
+    WriteOptions {
+      related_sample_identity: None,
+      source_timestamp: None,
+    }
+  }
+}
+
+impl From<Option<Timestamp>> for WriteOptions {
+  fn from(source_timestamp : Option<Timestamp>) -> WriteOptions {
+    WriteOptions {
+      related_sample_identity: None,
+      source_timestamp,
+    }
+  }
+}
+
 
 /// Simplified type for CDR encoding
 pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
@@ -247,6 +309,11 @@ where
   /// data_writer.write(some_data, None).unwrap();
   /// ```
   pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+    self.write_with_options(data, WriteOptions::from(source_timestamp))
+  }
+
+  pub fn write_with_options(&self, data: D, write_options: WriteOptions) -> Result<()> {
+
     let send_buffer = SA::to_bytes(&data)?; // serialize
 
     let ddsdata = DDSData::new(SerializedPayload::new_from_bytes(
@@ -255,7 +322,7 @@ where
     ));
     let writer_command = WriterCommand::DDSData {
       data: ddsdata,
-      source_timestamp,
+      write_options,
     };
 
     let timeout = match self.qos().reliability() {
@@ -828,7 +895,7 @@ where
       .cc_upload
       .send(WriterCommand::DDSData {
         data: ddsdata,
-        source_timestamp,
+        write_options: WriteOptions::from(source_timestamp),
       })
       .or_else(|huh| log_and_err_internal!("Cannot send dispose command: {:?}", huh))?;
 
