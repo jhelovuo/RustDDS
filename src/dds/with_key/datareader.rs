@@ -706,7 +706,7 @@ where
       CacheChange {
         writer_guid,
         sequence_number,
-        source_timestamp,
+        write_options,
         data_value,
       },
     ) in cache_changes_vec
@@ -751,7 +751,7 @@ where
                   Ok(payload),
                   *writer_guid,
                   instant,
-                  *source_timestamp,
+                  *write_options,
                 ),
                 Err(e) => {
                   error!(
@@ -788,7 +788,7 @@ where
                   Err(key),
                   *writer_guid,
                   instant,
-                  *source_timestamp,
+                  *write_options,
                 );
               }
               Err(e) => {
@@ -810,7 +810,7 @@ where
             if let Some(key) = self.datasample_cache.key_by_hash(*key_hash) {
               self
                 .datasample_cache
-                .add_sample(Err(key), *writer_guid, instant, *source_timestamp);
+                .add_sample(Err(key), *writer_guid, instant, *write_options);
             } else {
               warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash);
             }

@@ -72,6 +72,7 @@ impl WriteOptionsBuilder {
 
 /// Type to be used with write_with_options.
 /// Use WriteOptionsBuilder to construct this.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub struct WriteOptions {
   pub(crate) related_sample_identity: Option<SampleIdentity>,
   pub(crate) source_timestamp: Option<Timestamp>,

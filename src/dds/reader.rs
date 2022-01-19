@@ -1,3 +1,4 @@
+use crate::with_key::WriteOptions;
 use std::{
   collections::{BTreeMap, BTreeSet},
   fmt,
@@ -877,11 +878,11 @@ impl Reader {
     &mut self,
     data: DDSData,
     receive_timestamp: Timestamp,
-    source_timestamp: Option<Timestamp>,
+    write_options: WriteOptions,
     writer_guid: GUID,
     writer_sn: SequenceNumber,
   ) {
-    let cache_change = CacheChange::new(writer_guid, writer_sn, source_timestamp, data);
+    let cache_change = CacheChange::new(writer_guid, writer_sn, write_options, data);
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
