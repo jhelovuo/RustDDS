@@ -234,25 +234,25 @@ impl SampleInfo {
     self.sample_state
   }
 
-  pub fn set_sample_state(&mut self, sample_state: SampleState) {
-    self.sample_state = sample_state
-  }
+  // pub fn set_sample_state(&mut self, sample_state: SampleState) {
+  //   self.sample_state = sample_state
+  // }
 
   pub fn view_state(&self) -> ViewState {
     self.view_state
   }
 
-  pub fn set_view_state(&mut self, view_state: ViewState) {
-    self.view_state = view_state
-  }
+  // pub fn set_view_state(&mut self, view_state: ViewState) {
+  //   self.view_state = view_state;
+  // }
 
   pub fn instance_state(&self) -> InstanceState {
     self.instance_state
   }
 
-  pub fn set_instance_state(&mut self, instance_state: InstanceState) {
-    self.instance_state = instance_state
-  }
+  // pub fn set_instance_state(&mut self, instance_state: InstanceState) {
+  //   self.instance_state = instance_state;
+  // }
 
   pub fn disposed_generation_count(&self) -> i32 {
     self.generation_counts.disposed_generation_count

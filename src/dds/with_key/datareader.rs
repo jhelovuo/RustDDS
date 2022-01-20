@@ -751,7 +751,7 @@ where
                   Ok(payload),
                   *writer_guid,
                   instant,
-                  *write_options,
+                  write_options.clone(),
                 ),
                 Err(e) => {
                   error!(
@@ -788,7 +788,7 @@ where
                   Err(key),
                   *writer_guid,
                   instant,
-                  *write_options,
+                  write_options.clone(),
                 );
               }
               Err(e) => {
@@ -810,7 +810,7 @@ where
             if let Some(key) = self.datasample_cache.key_by_hash(*key_hash) {
               self
                 .datasample_cache
-                .add_sample(Err(key), *writer_guid, instant, *write_options);
+                .add_sample(Err(key), *writer_guid, instant, write_options.clone());
             } else {
               warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash);
             }

@@ -388,7 +388,7 @@ impl Writer {
           //    If we are pushing data, send the DATA submessage and HEARTBEAT.
           //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the
           // DATA with ACKNACK.
-          let timestamp = self.insert_to_history_cache(data, write_options);
+          let timestamp = self.insert_to_history_cache(data, write_options.clone());
 
           self.increase_heartbeat_counter();
 

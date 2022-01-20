@@ -40,7 +40,10 @@ use super::super::writer::WriterCommand;
 
 
 // It is a bit overkill to use a builder for such a simple struct, but
-// 
+// it may be expanded in future versions of RustDDS or even the spec.
+// TODO: Move the write options and the builder type to some lower-level module
+// to avoid circular dependencies.
+#[derive(Debug, Default)]
 pub struct WriteOptionsBuilder {
   related_sample_identity: Option<SampleIdentity>,
   source_timestamp: Option<Timestamp>,
@@ -48,7 +51,7 @@ pub struct WriteOptionsBuilder {
 
 impl WriteOptionsBuilder {
   pub fn new() -> WriteOptionsBuilder {
-    WriteOptionsBuilder { related_sample_identity: None , source_timestamp: None, }
+    WriteOptionsBuilder::default()
   }
 
   pub fn build(self) -> WriteOptions {
@@ -69,26 +72,15 @@ impl WriteOptionsBuilder {
   }
 }
 
-
 /// Type to be used with write_with_options.
 /// Use WriteOptionsBuilder to construct this.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default)]
 pub struct WriteOptions {
   pub(crate) related_sample_identity: Option<SampleIdentity>,
   pub(crate) source_timestamp: Option<Timestamp>,
   // future extension room fo other fields.
 }
 
-
-
-impl Default for WriteOptions {
-  fn default() -> Self {
-    WriteOptions {
-      related_sample_identity: None,
-      source_timestamp: None,
-    }
-  }
-}
 
 impl From<Option<Timestamp>> for WriteOptions {
   fn from(source_timestamp : Option<Timestamp>) -> WriteOptions {

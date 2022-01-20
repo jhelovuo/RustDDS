@@ -319,7 +319,7 @@ where
       sample_rank: sample_rank as i32, // how many samples follow this one
       generation_rank: mrsic_generations - dswm.generation_counts.total(),
       absolute_generation_rank: mrs_generations - dswm.generation_counts.total(),
-      write_options: dswm.write_options,
+      write_options: dswm.write_options.clone(),
       publication_handle: dswm.writer_guid,
     }
   }

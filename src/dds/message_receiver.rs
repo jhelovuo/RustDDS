@@ -52,7 +52,7 @@ pub(crate) struct MessageReceiver {
   pub dest_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: Vec<Locator>,
   pub multicast_reply_locator_list: Vec<Locator>,
-  pub timestamp: Option<Timestamp>,
+  pub source_timestamp: Option<Timestamp>,
 
   pos: usize,
   pub submessage_count: usize,
@@ -76,7 +76,7 @@ impl MessageReceiver {
       dest_guid_prefix: GuidPrefix::UNKNOWN,
       unicast_reply_locator_list: vec![Locator::Invalid],
       multicast_reply_locator_list: vec![Locator::Invalid],
-      timestamp: None,
+      source_timestamp: None,
 
       pos: 0,
       submessage_count: 0,
@@ -90,7 +90,7 @@ impl MessageReceiver {
     self.dest_guid_prefix = GuidPrefix::UNKNOWN;
     self.unicast_reply_locator_list.clear();
     self.multicast_reply_locator_list.clear();
-    self.timestamp = None;
+    self.source_timestamp = None;
 
     self.pos = 0;
     self.submessage_count = 0;
@@ -102,7 +102,7 @@ impl MessageReceiver {
       source_guid_prefix: self.source_guid_prefix,
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
-      timestamp: self.timestamp,
+      source_timestamp: self.source_timestamp,
     }
   }
 
@@ -349,7 +349,7 @@ impl MessageReceiver {
     match interp_subm {
       InterpreterSubmessage::InfoTimestamp(ts_struct, _flags) => {
         // flags value was used already when parsing timestamp into an Option
-        self.timestamp = ts_struct.timestamp;
+        self.source_timestamp = ts_struct.timestamp;
       }
       InterpreterSubmessage::InfoSource(info_src, _flags) => {
         self.source_guid_prefix = info_src.guid_prefix;
@@ -357,7 +357,7 @@ impl MessageReceiver {
         self.source_vendor_id = info_src.vendor_id;
         self.unicast_reply_locator_list.clear(); // Or invalid?
         self.multicast_reply_locator_list.clear(); // Or invalid?
-        self.timestamp = None;
+        self.source_timestamp = None;
       }
       InterpreterSubmessage::InfoReply(info_reply, flags) => {
         self.unicast_reply_locator_list = info_reply.unicast_locator_list;
@@ -403,7 +403,7 @@ pub struct MessageReceiverState {
   pub source_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: Vec<Locator>,
   pub multicast_reply_locator_list: Vec<Locator>,
-  pub timestamp: Option<Timestamp>,
+  pub source_timestamp: Option<Timestamp>,
 }
 
 impl Default for MessageReceiverState {
@@ -413,7 +413,7 @@ impl Default for MessageReceiverState {
       source_guid_prefix: GuidPrefix::default(),
       unicast_reply_locator_list: Vec::default(),
       multicast_reply_locator_list: Vec::default(),
-      timestamp: Some(Timestamp::TIME_INVALID),
+      source_timestamp: Some(Timestamp::TIME_INVALID),
     }
   }
 }
