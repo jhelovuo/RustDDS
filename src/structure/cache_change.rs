@@ -1,5 +1,7 @@
-use crate::structure::{guid::GUID, sequence_number::SequenceNumber, };
-use crate::dds::{ddsdata::DDSData, with_key::datawriter::WriteOptions,};
+use crate::{
+  dds::{ddsdata::DDSData, with_key::datawriter::WriteOptions},
+  structure::{guid::GUID, sequence_number::SequenceNumber},
+};
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Copy, Clone)]
 pub enum ChangeKind {

@@ -31,13 +31,11 @@ use crate::{
   messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
   serialization::CDRSerializerAdapter,
   structure::{
-    cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID, time::Timestamp,
-    topic_kind::TopicKind, rpc::SampleIdentity,
+    cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID,
+    rpc::SampleIdentity, time::Timestamp, topic_kind::TopicKind,
   },
 };
 use super::super::writer::WriterCommand;
-
-
 
 // It is a bit overkill to use a builder for such a simple struct, but
 // it may be expanded in future versions of RustDDS or even the spec.
@@ -55,13 +53,16 @@ impl WriteOptionsBuilder {
   }
 
   pub fn build(self) -> WriteOptions {
-    WriteOptions { 
+    WriteOptions {
       related_sample_identity: self.related_sample_identity,
       source_timestamp: self.source_timestamp,
     }
   }
 
-  pub fn related_sample_identity(mut self, related_sample_identity: SampleIdentity) -> WriteOptionsBuilder {
+  pub fn related_sample_identity(
+    mut self,
+    related_sample_identity: SampleIdentity,
+  ) -> WriteOptionsBuilder {
     self.related_sample_identity = Some(related_sample_identity);
     self
   }
@@ -81,16 +82,14 @@ pub struct WriteOptions {
   // future extension room fo other fields.
 }
 
-
 impl From<Option<Timestamp>> for WriteOptions {
-  fn from(source_timestamp : Option<Timestamp>) -> WriteOptions {
+  fn from(source_timestamp: Option<Timestamp>) -> WriteOptions {
     WriteOptions {
       related_sample_identity: None,
       source_timestamp,
     }
   }
 }
-
 
 /// Simplified type for CDR encoding
 pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
@@ -306,7 +305,6 @@ where
   }
 
   pub fn write_with_options(&self, data: D, write_options: WriteOptions) -> Result<()> {
-
     let send_buffer = SA::to_bytes(&data)?; // serialize
 
     let ddsdata = DDSData::new(SerializedPayload::new_from_bytes(

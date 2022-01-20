@@ -19,7 +19,7 @@ use crate::{
     qos::{policy, HasQoSPolicy, QosPolicies},
     rtps_writer_proxy::RtpsWriterProxy,
     statusevents::{CountWithChange, DataReaderStatus},
-    with_key::datawriter::{WriteOptions, WriteOptionsBuilder}
+    with_key::datawriter::{WriteOptions, WriteOptionsBuilder},
   },
   messages::{
     header::Header,
@@ -426,10 +426,11 @@ impl Reader {
     // Check if the message specifies a related_sample_identity
     let ri = DATA_Flags::cdr_representation_identifier(data_flags);
     if let Some(related_sample_identity) = data
-          .inline_qos
-          .as_ref()
-          .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
-          .flatten() {
+      .inline_qos
+      .as_ref()
+      .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
+      .flatten()
+    {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
 
@@ -461,7 +462,9 @@ impl Reader {
     // check if this submessage is expired already
     // TODO: Maybe this check is in the wrong place altogether? It should be
     // done when Datareader fetches data for the application.
-    if let (Some(source_timestamp), Some(lifespan)) = (mr_state.source_timestamp, self.qos().lifespan) {
+    if let (Some(source_timestamp), Some(lifespan)) =
+      (mr_state.source_timestamp, self.qos().lifespan)
+    {
       let elapsed = receive_timestamp.duration_since(source_timestamp);
       if lifespan.duration < elapsed {
         info!(
@@ -482,13 +485,13 @@ impl Reader {
     // Check if the message specifies a related_sample_identity
     let ri = DATAFRAG_Flags::cdr_representation_identifier(datafrag_flags);
     if let Some(related_sample_identity) = datafrag
-          .inline_qos
-          .as_ref()
-          .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
-          .flatten() {
+      .inline_qos
+      .as_ref()
+      .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
+      .flatten()
+    {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
-
 
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
     if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {

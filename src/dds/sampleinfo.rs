@@ -1,6 +1,9 @@
 use enumflags2::BitFlags;
-use crate::dds::with_key::datawriter::WriteOptions;
-use crate::structure::{guid::GUID, time::Timestamp};
+
+use crate::{
+  dds::with_key::datawriter::WriteOptions,
+  structure::{guid::GUID, time::Timestamp},
+};
 
 //use std::num::Zero; // unstable
 

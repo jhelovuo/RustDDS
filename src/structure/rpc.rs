@@ -32,7 +32,18 @@ pub struct SampleIdentity {
 }
 
 #[derive(
-  Clone, Copy, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Hash, Serialize, Deserialize,
+  Clone,
+  Copy,
+  Debug,
+  PartialOrd,
+  PartialEq,
+  Ord,
+  Eq,
+  Readable,
+  Writable,
+  Hash,
+  Serialize,
+  Deserialize,
 )]
 // TODO: Where are the binary serialization values for these specified? Nowhere?
 pub enum RemoteExceptionCode {

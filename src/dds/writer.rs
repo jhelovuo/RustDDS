@@ -467,11 +467,7 @@ impl Writer {
     }
   }
 
-  fn insert_to_history_cache(
-    &mut self,
-    data: DDSData,
-    write_options: WriteOptions,
-  ) -> Timestamp {
+  fn insert_to_history_cache(&mut self, data: DDSData, write_options: WriteOptions) -> Timestamp {
     // first increasing last SequenceNumber
     let new_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
     self.last_change_sequence_number = new_sequence_number;
@@ -496,12 +492,7 @@ impl Writer {
     assert!(self.last_change_sequence_number > SequenceNumber::zero());
 
     // create new CacheChange from DDSData
-    let new_cache_change = CacheChange::new(
-      self.guid(),
-      new_sequence_number,
-      write_options,
-      data,
-    );
+    let new_cache_change = CacheChange::new(self.guid(), new_sequence_number, write_options, data);
 
     // inserting to DDSCache
     // timestamp taken here is used as a unique(!) key in the DDSCache.

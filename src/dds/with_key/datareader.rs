@@ -808,9 +808,12 @@ where
             /* TODO: Instance to be disposed could be specified by serialized payload
              * also, not only key_hash? */
             if let Some(key) = self.datasample_cache.key_by_hash(*key_hash) {
-              self
-                .datasample_cache
-                .add_sample(Err(key), *writer_guid, instant, write_options.clone());
+              self.datasample_cache.add_sample(
+                Err(key),
+                *writer_guid,
+                instant,
+                write_options.clone(),
+              );
             } else {
               warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash);
             }

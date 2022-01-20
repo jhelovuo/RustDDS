@@ -1,4 +1,3 @@
-use crate::with_key::WriteOptions;
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
   ops::Bound,
@@ -15,6 +14,7 @@ use crate::{
     with_key::datasample::DataSample,
   },
   structure::{guid::GUID, time::Timestamp},
+  with_key::WriteOptions,
 };
 
 //use std::num::Zero; unstable
@@ -60,7 +60,7 @@ struct SampleWithMetaData<D: Keyed> {
   writer_guid: GUID,
   // timestamps
   write_options: WriteOptions, // as stamped by sender
-  sample_has_been_read: bool,          // sample_state
+  sample_has_been_read: bool,  // sample_state
 
   // the data sample (or key) itself is stored here
   sample: Result<D, D::K>,

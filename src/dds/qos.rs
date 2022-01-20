@@ -1,13 +1,15 @@
 use log::trace;
 
-use crate::dds::traits::serde_adapters::no_key::DeserializerAdapter;
-use crate::CDRDeserializerAdapter;
 use crate::{
-  dds::{traits::key::KeyHash, values::result::Result},
+  dds::{
+    traits::{key::KeyHash, serde_adapters::no_key::DeserializerAdapter},
+    values::result::Result,
+  },
   messages::submessages::submessage_elements::{
     parameter_list::ParameterList, RepresentationIdentifier,
   },
   structure::{inline_qos::StatusInfo, parameter_id::ParameterId, rpc::SampleIdentity},
+  CDRDeserializerAdapter,
 };
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber,
@@ -675,10 +677,11 @@ impl InlineQos {
       .iter()
       .find(|p| p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY);
     Ok(match rsi {
-      Some(p) => Some(CDRDeserializerAdapter::from_bytes(&p.value, representation_id)?),
+      Some(p) => Some(CDRDeserializerAdapter::from_bytes(
+        &p.value,
+        representation_id,
+      )?),
       None => None,
     })
   }
-
 }
-

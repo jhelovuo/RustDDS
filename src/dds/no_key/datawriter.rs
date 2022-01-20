@@ -93,6 +93,16 @@ where
       .write(NoKeyWrapper::<D> { d: data }, source_timestamp)
   }
 
+  pub fn write_with_options(
+    &self,
+    data: D,
+    write_options: datawriter_with_key::WriteOptions,
+  ) -> Result<()> {
+    self
+      .keyed_datawriter
+      .write_with_options(NoKeyWrapper::<D> { d: data }, write_options)
+  }
+
   /// Waits for all acknowledgements to finish
   ///
   /// # Examples
