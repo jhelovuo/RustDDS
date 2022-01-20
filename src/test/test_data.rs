@@ -305,6 +305,9 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
       coherent_access: true,
       ordered_access: false,
     }),
+    related_datareader_key: None,
+    service_instance_name: None,
+    topic_aliases: None,
   };
 
   Some(pub_topic_data)

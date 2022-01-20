@@ -322,7 +322,7 @@ mod tests {
 
   use super::DDSCache;
   use crate::{
-    dds::{ddsdata::DDSData, typedesc::TypeDesc},
+    dds::{ddsdata::DDSData, typedesc::TypeDesc, with_key::datawriter::WriteOptions},
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::{
       cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, topic_kind::TopicKind,
@@ -336,7 +336,7 @@ mod tests {
     let change1 = CacheChange::new(
       GUID::GUID_UNKNOWN,
       SequenceNumber::from(1),
-      None,
+      WriteOptions::default(),
       DDSData::new(SerializedPayload::default()),
     );
     cache.write().unwrap().add_new_topic(
@@ -356,7 +356,7 @@ mod tests {
       let cahange2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(2),
-        None,
+        WriteOptions::default(),
         DDSData::new(SerializedPayload::default()),
       );
       pointer_to_cache_1.write().unwrap().add_change(
@@ -367,7 +367,7 @@ mod tests {
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::from(3),
-        None,
+        WriteOptions::default(),
         DDSData::new(SerializedPayload::default()),
       );
       pointer_to_cache_1.write().unwrap().add_change(

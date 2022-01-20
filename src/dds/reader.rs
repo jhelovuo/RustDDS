@@ -1027,7 +1027,7 @@ impl fmt::Debug for Reader {
 mod tests {
   use super::*;
   use crate::{
-    dds::{statusevents::DataReaderStatus, typedesc::TypeDesc},
+    dds::{statusevents::DataReaderStatus, typedesc::TypeDesc, with_key::datawriter::WriteOptions},
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::{
       guid::{EntityId, EntityKind, GuidPrefix, GUID},
@@ -1168,7 +1168,7 @@ mod tests {
     let hc_locked = dds_cache.read().unwrap();
 
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
-    let cc_built_here = CacheChange::new(writer_guid, d_seqnum, None, ddsdata);
+    let cc_built_here = CacheChange::new(writer_guid, d_seqnum, WriteOptions::default(), ddsdata);
 
     let cc_from_chache = hc_locked.from_topic_get_change(
       &new_reader.topic_name,
@@ -1254,7 +1254,7 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following change
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(1), None, d.clone());
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(1), WriteOptions::default(), d.clone());
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1282,7 +1282,7 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(&hb_3_1, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following changes
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(2), None, d.clone());
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(2), WriteOptions::default(), d.clone());
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1290,7 +1290,7 @@ mod tests {
     );
     changes.push(change);
 
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(3), None, d);
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(3), WriteOptions::default(), d);
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
