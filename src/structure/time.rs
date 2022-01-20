@@ -16,14 +16,16 @@ use super::duration::Duration;
 /// > time = seconds + (fraction / 2^(32))
 ///
 /// > The time origin is represented by the reserved value TIME_ZERO and
-/// corresponds > to the UNIX prime epoch 0h, 1 January 1970.
+/// > corresponds 
+/// > to the UNIX prime epoch 0h, 1 January 1970.
 ///
 ///
 /// *Note* : While NTP uses the same time representation as RTPS, it
-/// does not use the Unix epoch (1970-01-01 00:00) but the
+/// does not use the Unix epoch (1970-01-01 00:00). NTP uses the
 /// beginning of the 20th century epoch (1900-01-01 00:00) instead. So the RTPS
 /// timestamps are not interchangeable with NTP.
-///
+/// 
+/// The timestamps will overflow in year 2106.
 ///
 /// This type is called Time_t in the RTPS spec.
 #[derive(
@@ -36,15 +38,15 @@ pub struct Timestamp {
 
 impl Timestamp {
   // Special contants reserved by the RTPS protocol, from RTPS spec section 9.3.2.
-  pub const TIME_ZERO: Timestamp = Timestamp {
+  pub const ZERO: Timestamp = Timestamp {
     seconds: 0,
     fraction: 0,
   };
-  pub const TIME_INVALID: Timestamp = Timestamp {
+  pub const INVALID: Timestamp = Timestamp {
     seconds: 0xFFFF_FFFF,
     fraction: 0xFFFF_FFFF,
   };
-  pub const TIME_INFINITE: Timestamp = Timestamp {
+  pub const INFINITE: Timestamp = Timestamp {
     seconds: 0x7FFF_FFFF,
     fraction: 0xFFFF_FFFF,
   };
@@ -92,10 +94,23 @@ impl Sub<Duration> for Timestamp {
   type Output = Timestamp;
 
   fn sub(self, rhs: Duration) -> Self::Output {
-    let lhs_ticks = self.to_ticks();
-    let rhs_ticks = rhs.to_ticks() as u64;
+    // Logic here: Timestamp::INVALID - anything == Timestamp::INVALID
+    if self == Timestamp::INVALID {
+      Timestamp::INVALID
+    } else {
+      // https://doc.rust-lang.org/1.30.0/book/first-edition/casting-between-types.html
+      // "Casting between two integers of the same size (e.g. i32 -> u32) is a no-op"
+      let stamp_ticks = self.to_ticks() as i64; // This will overflow to negative after 2038, but... 
+      let sub_ticks = rhs.to_ticks();
 
-    Timestamp::from_ticks(lhs_ticks - rhs_ticks)
+      let new_stamp_ticks = stamp_ticks.wrapping_sub(sub_ticks); 
+      // ... the subtraction will still adjust to the correct direction, and
+      // overflow without exceptions if necessary, and ...
+
+      // ... the overflow condition is restored here.
+      Timestamp::from_ticks(new_stamp_ticks as u64)
+      // All of this should compile to just a single 64-bit subtract instruction.
+    }
   }
 }
 
@@ -117,19 +132,19 @@ mod tests {
   serialization_test!( type = Timestamp,
   {
       time_zero,
-      Timestamp::TIME_ZERO,
+      Timestamp::ZERO,
       le = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   },
   {
       time_invalid,
-      Timestamp::TIME_INVALID,
+      Timestamp::INVALID,
       le = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
       be = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
   },
   {
       time_infinite,
-      Timestamp::TIME_INFINITE,
+      Timestamp::INFINITE,
       le = [0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF],
       be = [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
   },
