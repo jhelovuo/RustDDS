@@ -413,7 +413,7 @@ impl Default for MessageReceiverState {
       source_guid_prefix: GuidPrefix::default(),
       unicast_reply_locator_list: Vec::default(),
       multicast_reply_locator_list: Vec::default(),
-      source_timestamp: Some(Timestamp::TIME_INVALID),
+      source_timestamp: Some(Timestamp::INVALID),
     }
   }
 }
