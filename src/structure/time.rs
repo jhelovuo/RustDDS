@@ -16,7 +16,7 @@ use super::duration::Duration;
 /// > time = seconds + (fraction / 2^(32))
 ///
 /// > The time origin is represented by the reserved value TIME_ZERO and
-/// > corresponds 
+/// > corresponds
 /// > to the UNIX prime epoch 0h, 1 January 1970.
 ///
 ///
@@ -24,7 +24,7 @@ use super::duration::Duration;
 /// does not use the Unix epoch (1970-01-01 00:00). NTP uses the
 /// beginning of the 20th century epoch (1900-01-01 00:00) instead. So the RTPS
 /// timestamps are not interchangeable with NTP.
-/// 
+///
 /// The timestamps will overflow in year 2106.
 ///
 /// This type is called Time_t in the RTPS spec.
@@ -100,16 +100,17 @@ impl Sub<Duration> for Timestamp {
     } else {
       // https://doc.rust-lang.org/1.30.0/book/first-edition/casting-between-types.html
       // "Casting between two integers of the same size (e.g. i32 -> u32) is a no-op"
-      let stamp_ticks = self.to_ticks() as i64; // This will overflow to negative after 2038, but... 
+      let stamp_ticks = self.to_ticks() as i64; // This will overflow to negative after 2038, but...
       let sub_ticks = rhs.to_ticks();
 
-      let new_stamp_ticks = stamp_ticks.wrapping_sub(sub_ticks); 
+      let new_stamp_ticks = stamp_ticks.wrapping_sub(sub_ticks);
       // ... the subtraction will still adjust to the correct direction, and
       // overflow without exceptions if necessary, and ...
 
       // ... the overflow condition is restored here.
       Timestamp::from_ticks(new_stamp_ticks as u64)
-      // All of this should compile to just a single 64-bit subtract instruction.
+      // All of this should compile to just a single 64-bit subtract
+      // instruction.
     }
   }
 }

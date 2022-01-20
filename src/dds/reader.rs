@@ -1254,7 +1254,12 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following change
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(1), WriteOptions::default(), d.clone());
+    let change = CacheChange::new(
+      new_reader.guid(),
+      SequenceNumber::from(1),
+      WriteOptions::default(),
+      d.clone(),
+    );
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1282,7 +1287,12 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(&hb_3_1, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following changes
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(2), WriteOptions::default(), d.clone());
+    let change = CacheChange::new(
+      new_reader.guid(),
+      SequenceNumber::from(2),
+      WriteOptions::default(),
+      d.clone(),
+    );
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1290,7 +1300,12 @@ mod tests {
     );
     changes.push(change);
 
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(3), WriteOptions::default(), d);
+    let change = CacheChange::new(
+      new_reader.guid(),
+      SequenceNumber::from(3),
+      WriteOptions::default(),
+      d,
+    );
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
