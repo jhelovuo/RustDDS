@@ -14,6 +14,7 @@ use crate::{
     with_key::datasample::DataSample,
   },
   structure::{guid::GUID, time::Timestamp},
+  with_key::WriteOptions,
 };
 
 //use std::num::Zero; unstable
@@ -58,8 +59,8 @@ struct SampleWithMetaData<D: Keyed> {
   // who wrote this
   writer_guid: GUID,
   // timestamps
-  source_timestamp: Option<Timestamp>, // as stamped by sender
-  sample_has_been_read: bool,          // sample_state
+  write_options: WriteOptions, // as stamped by sender
+  sample_has_been_read: bool,  // sample_state
 
   // the data sample (or key) itself is stored here
   sample: Result<D, D::K>,
@@ -97,7 +98,7 @@ where
     new_sample: Result<D, D::K>,
     writer_guid: GUID,
     receive_timestamp: Timestamp,
-    source_timestamp: Option<Timestamp>,
+    write_options: WriteOptions,
   ) {
     let instance_key = match &new_sample {
       Ok(d) => d.key(),
@@ -168,7 +169,7 @@ where
         SampleWithMetaData {
           generation_counts: instance_metadata.latest_generation_available,
           writer_guid,
-          source_timestamp,
+          write_options,
           sample_has_been_read: false,
           sample: new_sample,
         },
@@ -318,7 +319,7 @@ where
       sample_rank: sample_rank as i32, // how many samples follow this one
       generation_rank: mrsic_generations - dswm.generation_counts.total(),
       absolute_generation_rank: mrs_generations - dswm.generation_counts.total(),
-      source_timestamp: dswm.source_timestamp,
+      write_options: dswm.write_options.clone(),
       publication_handle: dswm.writer_guid,
     }
   }

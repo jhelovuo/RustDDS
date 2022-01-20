@@ -1,11 +1,15 @@
 use log::trace;
 
 use crate::{
-  dds::{traits::key::KeyHash, values::result::Result},
+  dds::{
+    traits::{key::KeyHash, serde_adapters::no_key::DeserializerAdapter},
+    values::result::Result,
+  },
   messages::submessages::submessage_elements::{
     parameter_list::ParameterList, RepresentationIdentifier,
   },
-  structure::{inline_qos::StatusInfo, parameter_id::ParameterId},
+  structure::{inline_qos::StatusInfo, parameter_id::ParameterId, rpc::SampleIdentity},
+  CDRDeserializerAdapter,
 };
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber,
@@ -631,6 +635,7 @@ pub mod policy {
 // TODO: This does not need to be a struct, since is has no contents.
 // Maybe someone has had an overdose of object-orientation?
 // Two standalone functions should suffice.
+// TODO: Move this to module inline_qos, so someone may find it.
 pub(crate) struct InlineQos {}
 
 impl InlineQos {
@@ -662,10 +667,21 @@ impl InlineQos {
       None => None,
     })
   }
+
+  pub fn related_sample_identity(
+    params: &ParameterList,
+    representation_id: RepresentationIdentifier,
+  ) -> std::result::Result<Option<SampleIdentity>, crate::serialization::error::Error> {
+    let rsi = params
+      .parameters
+      .iter()
+      .find(|p| p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY);
+    Ok(match rsi {
+      Some(p) => Some(CDRDeserializerAdapter::from_bytes(
+        &p.value,
+        representation_id,
+      )?),
+      None => None,
+    })
+  }
 }
-
-// TODO: helper function to check is a QosPolices object is inconsistent (by
-// itself)
-
-// TODO: helper function to check if two QosPolicies: Reequested and Offered are
-// compatible, according to DDS spec 2.2.3

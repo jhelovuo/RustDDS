@@ -69,6 +69,8 @@ impl ParameterId {
   pub const PID_SERVICE_INSTANCE_NAME: ParameterId = ParameterId { value: 0x0080 };
   pub const PID_RELATED_ENTITY_GUID: ParameterId = ParameterId { value: 0x0081 };
   pub const PID_TOPIC_ALIASES: ParameterId = ParameterId { value: 0x0082 };
+  // Section "7.8.2 Request and Reply Correlation in the Enhanced Service Profile"
+  pub const PID_RELATED_SAMPLE_IDENTITY: ParameterId = ParameterId { value: 0x0083 };
 }
 
 #[cfg(test)]

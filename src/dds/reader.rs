@@ -19,6 +19,7 @@ use crate::{
     qos::{policy, HasQoSPolicy, QosPolicies},
     rtps_writer_proxy::RtpsWriterProxy,
     statusevents::{CountWithChange, DataReaderStatus},
+    with_key::datawriter::{WriteOptions, WriteOptionsBuilder},
   },
   messages::{
     header::Header,
@@ -32,7 +33,6 @@ use crate::{
   structure::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::DDSCache,
-    duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -417,16 +417,21 @@ impl Reader {
     //trace!("handle_data_msg entry");
     let receive_timestamp = Timestamp::now();
 
-    let duration = match mr_state.timestamp {
-      Some(ts) => receive_timestamp.duration_since(ts),
-      None => Duration::DURATION_ZERO,
-    };
-
-    // checking lifespan for silent dropping of message
-    if let Some(ls) = self.qos().lifespan {
-      if ls.duration < duration {
-        return;
-      }
+    // parse write_options out of the message
+    let mut write_options_b = WriteOptionsBuilder::new();
+    // Check if we have s source timestamp
+    if let Some(source_timestamp) = mr_state.source_timestamp {
+      write_options_b = write_options_b.source_timestamp(source_timestamp);
+    }
+    // Check if the message specifies a related_sample_identity
+    let ri = DATA_Flags::cdr_representation_identifier(data_flags);
+    if let Some(related_sample_identity) = data
+      .inline_qos
+      .as_ref()
+      .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
+      .flatten()
+    {
+      write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
@@ -436,7 +441,7 @@ impl Reader {
       Ok(ddsdata) => self.process_received_data(
         ddsdata,
         receive_timestamp,
-        mr_state.timestamp,
+        write_options_b.build(),
         writer_guid,
         writer_seq_num,
       ),
@@ -455,7 +460,11 @@ impl Reader {
     let receive_timestamp = Timestamp::now();
 
     // check if this submessage is expired already
-    if let (Some(source_timestamp), Some(lifespan)) = (mr_state.timestamp, self.qos().lifespan) {
+    // TODO: Maybe this check is in the wrong place altogether? It should be
+    // done when Datareader fetches data for the application.
+    if let (Some(source_timestamp), Some(lifespan)) =
+      (mr_state.source_timestamp, self.qos().lifespan)
+    {
       let elapsed = receive_timestamp.duration_since(source_timestamp);
       if lifespan.duration < elapsed {
         info!(
@@ -465,6 +474,25 @@ impl Reader {
         return;
       }
     }
+
+    // parse write_options out of the message
+    // TODO: This is almost duplicate code from DATA processing
+    let mut write_options_b = WriteOptionsBuilder::new();
+    // Check if we have s source timestamp
+    if let Some(source_timestamp) = mr_state.source_timestamp {
+      write_options_b = write_options_b.source_timestamp(source_timestamp);
+    }
+    // Check if the message specifies a related_sample_identity
+    let ri = DATAFRAG_Flags::cdr_representation_identifier(datafrag_flags);
+    if let Some(related_sample_identity) = datafrag
+      .inline_qos
+      .as_ref()
+      .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
+      .flatten()
+    {
+      write_options_b = write_options_b.related_sample_identity(related_sample_identity);
+    }
+
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
     if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
       if let Some(complete_ddsdata) = writer_proxy.handle_datafrag(datafrag, datafrag_flags) {
@@ -473,7 +501,7 @@ impl Reader {
         self.process_received_data(
           complete_ddsdata,
           receive_timestamp,
-          mr_state.timestamp,
+          write_options_b.build(),
           writer_guid,
           writer_seq_num,
         );
@@ -491,7 +519,7 @@ impl Reader {
     &mut self,
     ddsdata: DDSData,
     receive_timestamp: Timestamp,
-    source_timestamp: Option<Timestamp>,
+    write_options: WriteOptions,
     writer_guid: GUID,
     writer_sn: SequenceNumber,
   ) {
@@ -534,7 +562,7 @@ impl Reader {
     self.make_cache_change(
       ddsdata,
       receive_timestamp,
-      source_timestamp,
+      write_options,
       writer_guid,
       writer_sn,
     );
@@ -547,11 +575,7 @@ impl Reader {
   }
 
   fn data_to_ddsdata(data: Data, data_flags: BitFlags<DATA_Flags>) -> Result<DDSData, String> {
-    let representation_identifier = if data_flags.contains(DATA_Flags::Endianness) {
-      RepresentationIdentifier::CDR_LE
-    } else {
-      RepresentationIdentifier::CDR_BE
-    };
+    let representation_identifier = DATA_Flags::cdr_representation_identifier(data_flags);
 
     match (
       data.serialized_payload,
@@ -877,11 +901,11 @@ impl Reader {
     &mut self,
     data: DDSData,
     receive_timestamp: Timestamp,
-    source_timestamp: Option<Timestamp>,
+    write_options: WriteOptions,
     writer_guid: GUID,
     writer_sn: SequenceNumber,
   ) {
-    let cache_change = CacheChange::new(writer_guid, writer_sn, source_timestamp, data);
+    let cache_change = CacheChange::new(writer_guid, writer_sn, write_options, data);
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
@@ -1003,7 +1027,7 @@ impl fmt::Debug for Reader {
 mod tests {
   use super::*;
   use crate::{
-    dds::{statusevents::DataReaderStatus, typedesc::TypeDesc},
+    dds::{statusevents::DataReaderStatus, typedesc::TypeDesc, with_key::datawriter::WriteOptions},
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::{
       guid::{EntityId, EntityKind, GuidPrefix, GUID},
@@ -1144,7 +1168,7 @@ mod tests {
     let hc_locked = dds_cache.read().unwrap();
 
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
-    let cc_built_here = CacheChange::new(writer_guid, d_seqnum, None, ddsdata);
+    let cc_built_here = CacheChange::new(writer_guid, d_seqnum, WriteOptions::default(), ddsdata);
 
     let cc_from_chache = hc_locked.from_topic_get_change(
       &new_reader.topic_name,
@@ -1230,7 +1254,7 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following change
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(1), None, d.clone());
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(1), WriteOptions::default(), d.clone());
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1258,7 +1282,7 @@ mod tests {
     assert!(new_reader.handle_heartbeat_msg(&hb_3_1, false, mr_state.clone())); // Should send an ack_nack
 
     // After ack_nack, will receive the following changes
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(2), None, d.clone());
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(2), WriteOptions::default(), d.clone());
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),
@@ -1266,7 +1290,7 @@ mod tests {
     );
     changes.push(change);
 
-    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(3), None, d);
+    let change = CacheChange::new(new_reader.guid(), SequenceNumber::from(3), WriteOptions::default(), d);
     new_reader.dds_cache.write().unwrap().add_change(
       &new_reader.topic_name,
       &Timestamp::now(),

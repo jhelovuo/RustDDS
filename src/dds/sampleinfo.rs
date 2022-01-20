@@ -1,6 +1,9 @@
 use enumflags2::BitFlags;
 
-use crate::structure::{guid::GUID, time::Timestamp};
+use crate::{
+  dds::with_key::datawriter::WriteOptions,
+  structure::{guid::GUID, time::Timestamp},
+};
 
 //use std::num::Zero; // unstable
 
@@ -172,29 +175,29 @@ impl NotAliveGenerationCounts {
 pub struct SampleInfo {
   /// sample_state indicates whether or not the corresponding data sample has
   /// already been read through this DataReader.
-  pub sample_state: SampleState,
+  pub(crate) sample_state: SampleState,
 
   /// Indicates that either this is the first time that the DataReader has ever
   /// accessed samples of that instance, or else that the DataReader has
   /// accessed previous samples of the instance, but the instance has since
   /// been reborn (i.e., become not-alive and then alive again).
-  pub view_state: ViewState,
+  pub(crate) view_state: ViewState,
 
   /// Indicates whether this instance is alive or not.
   /// The instance can be not alive either because some writer has actively
   /// disposed it, or there are no writers alive.
-  pub instance_state: InstanceState,
+  pub(crate) instance_state: InstanceState,
 
   /// For each instance the middleware internally maintains these counts
   /// relative to each DataReader. The counts capture snapshots of the
   /// corresponding counters at the time the sample was received.
-  pub generation_counts: NotAliveGenerationCounts,
+  pub(crate) generation_counts: NotAliveGenerationCounts,
 
   /// The ranks are are computed based solely on the actual samples in the
   /// ordered collection returned by the read or take.
   /// The sample_rank indicates the number of samples of the same instance that
   /// follow the current one in the collection.
-  pub sample_rank: i32,
+  pub(crate) sample_rank: i32,
 
   /// The generation_rank indicates the difference in generations between the
   /// samples S and the Most Recent Sample of the same instance that appears In
@@ -204,7 +207,7 @@ pub struct SampleInfo {
   /// computed with: generation_rank =
   /// (MRSIC.disposed_generation_count + MRSIC.no_writers_generation_count)
   ///   -- (S.disposed_generation_count + S.no_writers_generation_count)
-  pub generation_rank: i32,
+  pub(crate) generation_rank: i32,
 
   /// The absolute_generation_rank indicates the difference in "generations"
   /// between sample S and the Most Recent Sample of the instance that the
@@ -213,52 +216,53 @@ pub struct SampleInfo {
   /// S to the time when the read or take was called. absolute_generation_rank =
   /// (MRS.disposed_generation_count + MRS.no_writers_generation_count)
   ///   -- (S.disposed_generation_count + S.no_writers_generation_count)
-  pub absolute_generation_rank: i32,
+  pub(crate) absolute_generation_rank: i32,
 
-  /// Source timestamp is the timestamp that was supplied by the DataWriter
-  /// that sent this sample. It is optional to timestamp samples when writing.
-  pub source_timestamp: Option<Timestamp>,
+  pub(crate) write_options: WriteOptions,
 
   /// publication_handle identifies the DataWriter that modified
   /// the instance (i.e. wrote this sample)
-  pub publication_handle: GUID,
+  pub(crate) publication_handle: GUID,
 }
 
 #[allow(clippy::new_without_default)]
 impl SampleInfo {
-  /* These accessor methods should not be needed, as the SampleInfo structure is likely
-     not about to change too much, as it is specified by the DDS spec.
+  /// Source timestamp is the timestamp that was supplied by the DataWriter
+  /// that sent this sample. It is optional to timestamp samples when writing.
+  pub fn source_timestamp(&self) -> Option<Timestamp> {
+    self.write_options.source_timestamp
+  }
 
   pub fn sample_state(&self) -> SampleState {
     self.sample_state
   }
 
-  pub fn set_sample_state(&mut self, sample_state: SampleState) {
-    self.sample_state = sample_state
-  }
+  // pub fn set_sample_state(&mut self, sample_state: SampleState) {
+  //   self.sample_state = sample_state
+  // }
 
   pub fn view_state(&self) -> ViewState {
     self.view_state
   }
 
-  pub fn set_view_state(&mut self, view_state: ViewState) {
-    self.view_state = view_state
-  }
+  // pub fn set_view_state(&mut self, view_state: ViewState) {
+  //   self.view_state = view_state;
+  // }
 
   pub fn instance_state(&self) -> InstanceState {
     self.instance_state
   }
 
-  pub fn set_instance_state(&mut self, instance_state: InstanceState) {
-    self.instance_state = instance_state
-  }
+  // pub fn set_instance_state(&mut self, instance_state: InstanceState) {
+  //   self.instance_state = instance_state;
+  // }
 
   pub fn disposed_generation_count(&self) -> i32 {
-    self.disposed_generation_count
+    self.generation_counts.disposed_generation_count
   }
 
   pub fn no_writers_generation_count(&self) -> i32 {
-    self.no_writers_generation_count
+    self.generation_counts.no_writers_generation_count
   }
 
   pub fn sample_rank(&self) -> i32 {
@@ -273,20 +277,11 @@ impl SampleInfo {
     self.absolute_generation_rank
   }
 
-  pub fn source_timestamp(&self) -> Timestamp {
-    self.source_timestamp
-  }
-
-  pub fn set_source_timestamp(&mut self, source_timestamp: Timestamp) {
-    self.source_timestamp = source_timestamp
-  }
-
   pub fn publication_handle(&self) -> GUID {
     self.publication_handle
   }
 
-  pub fn set_publication_handle(&mut self, publication_handle: GUID) {
-    self.publication_handle = publication_handle
-  }
-  */
+  // pub fn set_publication_handle(&mut self, publication_handle: GUID) {
+  //   self.publication_handle = publication_handle
+  // }
 }

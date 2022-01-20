@@ -3,6 +3,8 @@
 use speedy::{Endianness, Readable};
 use enumflags2::BitFlags;
 
+use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
+
 pub trait FromEndianness {
   fn from_endianness(end: speedy::Endianness) -> Self;
 }
@@ -15,6 +17,18 @@ macro_rules! submessageflag_impls {
           $t::Endianness.into()
         } else {
           Self::empty()
+        }
+      }
+    }
+
+    impl $t {
+      // This returns representation identifier, assuming it is ordinary CDR
+      #[allow(dead_code)] // allowing dead code, as it is auto-generated for each flag type.
+      pub fn cdr_representation_identifier(bfs: BitFlags<$t>) -> RepresentationIdentifier {
+        if bfs.contains($t::Endianness) {
+          RepresentationIdentifier::CDR_LE
+        } else {
+          RepresentationIdentifier::CDR_BE
         }
       }
     }
