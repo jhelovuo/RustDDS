@@ -2,7 +2,7 @@ use enumflags2::BitFlags;
 
 use crate::{
   dds::with_key::datawriter::WriteOptions,
-  structure::{guid::GUID, time::Timestamp},
+  structure::{guid::GUID, time::Timestamp, rpc::SampleIdentity,},
 };
 
 //use std::num::Zero; // unstable
@@ -279,6 +279,10 @@ impl SampleInfo {
 
   pub fn publication_handle(&self) -> GUID {
     self.publication_handle
+  }
+
+  pub fn related_sample_identity(&self) -> Option<SampleIdentity> {
+    self.write_options.related_sample_identity.clone()
   }
 
   // pub fn set_publication_handle(&mut self, publication_handle: GUID) {
