@@ -14,7 +14,7 @@ use crate::{
   },
   discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
   serialization::CDRSerializerAdapter,
-  structure::{entity::RTPSEntity, time::Timestamp},
+  structure::{entity::RTPSEntity, time::Timestamp, rpc::SampleIdentity,},
 };
 use super::wrappers::{NoKeyWrapper, SAWrapper};
 
@@ -97,7 +97,7 @@ where
     &self,
     data: D,
     write_options: datawriter_with_key::WriteOptions,
-  ) -> Result<()> {
+  ) -> Result<SampleIdentity> {
     self
       .keyed_datawriter
       .write_with_options(NoKeyWrapper::<D> { d: data }, write_options)

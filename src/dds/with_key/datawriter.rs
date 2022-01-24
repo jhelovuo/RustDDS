@@ -1,6 +1,6 @@
 use std::{
   marker::PhantomData,
-  sync::{Arc, RwLock},
+  sync::{Arc, RwLock,atomic::{Ordering,AtomicI64}},
   time::Duration,
 };
 
@@ -33,6 +33,7 @@ use crate::{
   structure::{
     cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID,
     rpc::SampleIdentity, time::Timestamp, topic_kind::TopicKind,
+    sequence_number::SequenceNumber,
   },
 };
 use super::super::writer::WriterCommand;
@@ -137,6 +138,7 @@ pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerial
   cc_upload: mio_channel::SyncSender<WriterCommand>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   status_receiver: StatusReceiver<DataWriterStatus>,
+  available_sequence_number: AtomicI64,
 }
 
 impl<D, SA> Drop for DataWriter<D, SA>
@@ -209,7 +211,16 @@ where
       cc_upload,
       discovery_command,
       status_receiver: StatusReceiver::new(status_receiver_rec),
+      available_sequence_number: AtomicI64::new(1), // valid numbering starts from 1
     })
+  }
+
+  fn next_sequence_number(&self) -> SequenceNumber {
+    SequenceNumber::from(self.available_sequence_number.fetch_add(1, Ordering::Relaxed))
+  }
+
+  fn undo_sequence_number(&self) {
+    self.available_sequence_number.fetch_sub(1, Ordering::Relaxed);
   }
 
   // This one function provides both get_matched_subscrptions and
@@ -303,20 +314,25 @@ where
   /// data_writer.write(some_data, None).unwrap();
   /// ```
   pub fn write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
-    self.write_with_options(data, WriteOptions::from(source_timestamp))
+    self.write_with_options(data, WriteOptions::from(source_timestamp))?;
+    Ok(())
   }
 
-  pub fn write_with_options(&self, data: D, write_options: WriteOptions) -> Result<()> {
+  pub fn write_with_options(&self, data: D, write_options: WriteOptions) -> Result<SampleIdentity> {
     let send_buffer = SA::to_bytes(&data)?; // serialize
 
     let ddsdata = DDSData::new(SerializedPayload::new_from_bytes(
       SA::output_encoding(),
       send_buffer,
     ));
+    let sequence_number = self.next_sequence_number();
     let writer_command = WriterCommand::DDSData {
       data: ddsdata,
       write_options,
+      sequence_number,
     };
+
+
 
     let timeout = match self.qos().reliability() {
       Some(Reliability::Reliable { max_blocking_time }) => Some(max_blocking_time),
@@ -326,7 +342,7 @@ where
     match try_send_timeout(&self.cc_upload, writer_command, timeout) {
       Ok(_) => {
         self.refresh_manual_liveliness();
-        Ok(())
+        Ok(SampleIdentity{ writer_guid: self.my_guid, sequence_number, })
       }
       Err(e) => {
         warn!(
@@ -335,6 +351,7 @@ where
           e,
           timeout,
         );
+        self.undo_sequence_number();
         Err(Error::OutOfResources)
       }
     }
@@ -889,8 +906,12 @@ where
       .send(WriterCommand::DDSData {
         data: ddsdata,
         write_options: WriteOptions::from(source_timestamp),
+        sequence_number: self.next_sequence_number(),
       })
-      .or_else(|huh| log_and_err_internal!("Cannot send dispose command: {:?}", huh))?;
+      .or_else(|huh| { 
+        self.undo_sequence_number();
+        log_and_err_internal!("Cannot send dispose command: {:?}", huh)
+      })?;
 
     self.refresh_manual_liveliness();
     Ok(())
