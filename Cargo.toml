@@ -45,7 +45,7 @@ test-case = "1.2.0"
 
 # ros_visualizer
 crossterm = "0.22"
-tui = { version = "0.16", default-features = false, features = ['crossterm'] }
+tui = { version = "0.17", default-features = false, features = ['crossterm'] }
 
 # shapes-demo
 clap = "2.33"
