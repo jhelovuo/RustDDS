@@ -13,7 +13,7 @@ use crate::{
     traits::key::{Key, KeyHash, Keyed},
     with_key::datasample::DataSample,
   },
-  structure::{guid::GUID, time::Timestamp, sequence_number::SequenceNumber, },
+  structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp},
   with_key::WriteOptions,
 };
 
@@ -56,10 +56,10 @@ struct SampleWithMetaData<D: Keyed> {
   // a snapshot of the instance-wide counts
   // at the time this sample was received.
   generation_counts: NotAliveGenerationCounts,
-  writer_guid: GUID, // who wrote this
+  writer_guid: GUID,               // who wrote this
   sequence_number: SequenceNumber, // as sent by the Writer
-  write_options: WriteOptions, // as stamped by Writer
-  sample_has_been_read: bool,  // sample_state
+  write_options: WriteOptions,     // as stamped by Writer
+  sample_has_been_read: bool,      // sample_state
 
   // the data sample (or key) itself is stored here
   sample: Result<D, D::K>,

@@ -46,14 +46,6 @@ impl SequenceNumber {
 }
 
 impl SequenceNumber {
-  pub fn sub(self, rhs: Self) -> SequenceNumber {
-    if self >= rhs {
-      self - rhs
-    } else {
-      SequenceNumber::from(0)
-    }
-  }
-
   pub fn range_inclusive(begin: Self, end: Self) -> SequenceNumberRange {
     SequenceNumberRange::new(begin, end)
   }

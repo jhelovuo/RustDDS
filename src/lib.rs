@@ -171,7 +171,7 @@ pub use dds::{
   topic::{Topic, TopicDescription, TopicKind},
   traits::{Key, Keyed, RTPSEntity},
   typedesc::TypeDesc,
-  with_key::{WriteOptions, WriteOptionsBuilder,}
+  with_key::{WriteOptions, WriteOptionsBuilder},
 };
 /// Needed to specify serialized data representation in case it is other than
 /// CDR.
@@ -180,7 +180,9 @@ pub use messages::submessages::submessage_elements::serialized_payload::Represen
 pub use serialization::{
   CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer,
 };
-pub use structure::{duration::Duration, guid::GUID, time::Timestamp, sequence_number::SequenceNumber};
+pub use structure::{
+  duration::Duration, guid::GUID, sequence_number::SequenceNumber, time::Timestamp,
+};
 // re-export from a helper crate
 pub use cdr_encoding_size::CdrEncodingSize;
 

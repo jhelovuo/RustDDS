@@ -247,7 +247,7 @@ impl Writer {
       nack_suppression_duration: NACK_SUPPRESSION_DURATION,
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
-      data_max_size_serialized: 999999999, // TODO: this is not reasonable
+      data_max_size_serialized: 999999999,                   // TODO: this is not reasonable
       my_guid: i.guid,
       writer_command_receiver: i.writer_command_receiver,
       readers: BTreeMap::new(),
@@ -390,10 +390,10 @@ impl Writer {
           //    If we are pushing data, send the DATA submessage and HEARTBEAT.
           //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the
           // DATA with ACKNACK.
-          let timestamp = self.insert_to_history_cache(data, write_options.clone(), sequence_number);
+          let timestamp =
+            self.insert_to_history_cache(data, write_options.clone(), sequence_number);
 
           self.increase_heartbeat_counter();
-
 
           let partial_message = MessageBuilder::new();
           // If DataWriter sent us a source timestamp, then add that.
@@ -470,7 +470,12 @@ impl Writer {
     }
   }
 
-  fn insert_to_history_cache(&mut self, data: DDSData, write_options: WriteOptions, sequence_number: SequenceNumber) -> Timestamp {
+  fn insert_to_history_cache(
+    &mut self,
+    data: DDSData,
+    write_options: WriteOptions,
+    sequence_number: SequenceNumber,
+  ) -> Timestamp {
     // first increasing last SequenceNumber
     let new_sequence_number = sequence_number;
     self.last_change_sequence_number = new_sequence_number;

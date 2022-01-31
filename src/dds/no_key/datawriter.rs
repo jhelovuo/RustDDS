@@ -14,7 +14,7 @@ use crate::{
   },
   discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
   serialization::CDRSerializerAdapter,
-  structure::{entity::RTPSEntity, time::Timestamp, rpc::SampleIdentity,},
+  structure::{entity::RTPSEntity, rpc::SampleIdentity, time::Timestamp},
 };
 use super::wrappers::{NoKeyWrapper, SAWrapper};
 

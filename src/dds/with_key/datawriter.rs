@@ -1,6 +1,9 @@
 use std::{
   marker::PhantomData,
-  sync::{Arc, RwLock,atomic::{Ordering,AtomicI64}},
+  sync::{
+    atomic::{AtomicI64, Ordering},
+    Arc, RwLock,
+  },
   time::Duration,
 };
 
@@ -32,8 +35,7 @@ use crate::{
   serialization::CDRSerializerAdapter,
   structure::{
     cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID,
-    rpc::SampleIdentity, time::Timestamp, topic_kind::TopicKind,
-    sequence_number::SequenceNumber,
+    rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp, topic_kind::TopicKind,
   },
 };
 use super::super::writer::WriterCommand;
@@ -77,7 +79,6 @@ impl WriteOptionsBuilder {
     self.related_sample_identity = related_sample_identity_opt;
     self
   }
-
 
   #[must_use]
   pub fn source_timestamp(mut self, source_timestamp: Timestamp) -> WriteOptionsBuilder {
@@ -226,11 +227,17 @@ where
   }
 
   fn next_sequence_number(&self) -> SequenceNumber {
-    SequenceNumber::from(self.available_sequence_number.fetch_add(1, Ordering::Relaxed))
+    SequenceNumber::from(
+      self
+        .available_sequence_number
+        .fetch_add(1, Ordering::Relaxed),
+    )
   }
 
   fn undo_sequence_number(&self) {
-    self.available_sequence_number.fetch_sub(1, Ordering::Relaxed);
+    self
+      .available_sequence_number
+      .fetch_sub(1, Ordering::Relaxed);
   }
 
   // This one function provides both get_matched_subscrptions and
@@ -342,8 +349,6 @@ where
       sequence_number,
     };
 
-
-
     let timeout = match self.qos().reliability() {
       Some(Reliability::Reliable { max_blocking_time }) => Some(max_blocking_time),
       _ => None,
@@ -352,7 +357,10 @@ where
     match try_send_timeout(&self.cc_upload, writer_command, timeout) {
       Ok(_) => {
         self.refresh_manual_liveliness();
-        Ok(SampleIdentity{ writer_guid: self.my_guid, sequence_number, })
+        Ok(SampleIdentity {
+          writer_guid: self.my_guid,
+          sequence_number,
+        })
       }
       Err(e) => {
         warn!(
@@ -918,7 +926,7 @@ where
         write_options: WriteOptions::from(source_timestamp),
         sequence_number: self.next_sequence_number(),
       })
-      .or_else(|huh| { 
+      .or_else(|huh| {
         self.undo_sequence_number();
         log_and_err_internal!("Cannot send dispose command: {:?}", huh)
       })?;
