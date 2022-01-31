@@ -13,7 +13,7 @@ use crate::{
     traits::key::{Key, KeyHash, Keyed},
     with_key::datasample::DataSample,
   },
-  structure::{guid::GUID, time::Timestamp},
+  structure::{guid::GUID, time::Timestamp, sequence_number::SequenceNumber, },
   with_key::WriteOptions,
 };
 
@@ -56,10 +56,9 @@ struct SampleWithMetaData<D: Keyed> {
   // a snapshot of the instance-wide counts
   // at the time this sample was received.
   generation_counts: NotAliveGenerationCounts,
-  // who wrote this
-  writer_guid: GUID,
-  // timestamps
-  write_options: WriteOptions, // as stamped by sender
+  writer_guid: GUID, // who wrote this
+  sequence_number: SequenceNumber, // as sent by the Writer
+  write_options: WriteOptions, // as stamped by Writer
   sample_has_been_read: bool,  // sample_state
 
   // the data sample (or key) itself is stored here
@@ -97,6 +96,7 @@ where
     &mut self,
     new_sample: Result<D, D::K>,
     writer_guid: GUID,
+    sequence_number: SequenceNumber,
     receive_timestamp: Timestamp,
     write_options: WriteOptions,
   ) {
@@ -169,6 +169,7 @@ where
         SampleWithMetaData {
           generation_counts: instance_metadata.latest_generation_available,
           writer_guid,
+          sequence_number,
           write_options,
           sample_has_been_read: false,
           sample: new_sample,
@@ -321,6 +322,7 @@ where
       absolute_generation_rank: mrs_generations - dswm.generation_counts.total(),
       write_options: dswm.write_options.clone(),
       publication_handle: dswm.writer_guid,
+      sequence_number: dswm.sequence_number,
     }
   }
 

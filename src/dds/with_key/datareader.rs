@@ -750,6 +750,7 @@ where
                 Ok(payload) => self.datasample_cache.add_sample(
                   Ok(payload),
                   *writer_guid,
+                  *sequence_number,
                   instant,
                   write_options.clone(),
                 ),
@@ -787,6 +788,7 @@ where
                 self.datasample_cache.add_sample(
                   Err(key),
                   *writer_guid,
+                  *sequence_number,
                   instant,
                   write_options.clone(),
                 );
@@ -811,6 +813,7 @@ where
               self.datasample_cache.add_sample(
                 Err(key),
                 *writer_guid,
+                *sequence_number,
                 instant,
                 write_options.clone(),
               );

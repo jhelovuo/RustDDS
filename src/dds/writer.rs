@@ -394,6 +394,7 @@ impl Writer {
 
           self.increase_heartbeat_counter();
 
+
           let partial_message = MessageBuilder::new();
           // If DataWriter sent us a source timestamp, then add that.
           let partial_message = if let Some(src_ts) = write_options.source_timestamp {
