@@ -277,9 +277,13 @@ impl SampleInfo {
     self.absolute_generation_rank
   }
 
+  /// publication_handle identifies the DataWriter that modified
+  /// the instance (i.e. wrote this sample)
   pub fn publication_handle(&self) -> GUID {
     self.publication_handle
   }
+
+  pub fn writer_guid(&self) -> GUID { self.publication_handle }
 
   pub fn related_sample_identity(&self) -> Option<SampleIdentity> {
     self.write_options.related_sample_identity.clone()

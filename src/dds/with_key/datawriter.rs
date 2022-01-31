@@ -70,6 +70,16 @@ impl WriteOptionsBuilder {
   }
 
   #[must_use]
+  pub fn related_sample_identity_opt(
+    mut self,
+    related_sample_identity_opt: Option<SampleIdentity>,
+  ) -> WriteOptionsBuilder {
+    self.related_sample_identity = related_sample_identity_opt;
+    self
+  }
+
+
+  #[must_use]
   pub fn source_timestamp(mut self, source_timestamp: Timestamp) -> WriteOptionsBuilder {
     self.source_timestamp = Some(source_timestamp);
     self
