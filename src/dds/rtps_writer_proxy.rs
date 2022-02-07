@@ -98,8 +98,18 @@ impl RtpsWriterProxy {
     hb_first_sn: SequenceNumber,
     hb_last_sn: SequenceNumber,
   ) -> Vec<SequenceNumber> {
-    let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
+    // Need to verify first <= last, or BTreeMap::range will crash
+    if hb_first_sn > hb_last_sn {
+      if hb_first_sn > hb_last_sn + SequenceNumber::from(1) {
+        warn!("Negative range of missing_seqnums first={:?} last={:?}", hb_first_sn, hb_last_sn);
+      } else {
+        // first == last+1
+        // This is normal. See RTPS 2.5 Spec Section "8.3.8.6.3 Validity"
+      }
+      return vec![]
+    }
 
+    let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
     let mut we_have = self
       .changes
       .range(SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn))

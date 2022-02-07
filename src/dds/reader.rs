@@ -341,6 +341,8 @@ impl Reader {
           policies: Vec::new(), // TODO. implementation missing
         });
         warn!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
+        info!("update_writer_proxy - QoS mismatch: topic={:?} requested={:?}  offered={:?}", 
+          self.topic_name, &self.qos_policy, offered_qos );
       }
     }
   }
