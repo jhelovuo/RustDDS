@@ -779,7 +779,6 @@ where
             key: serialized_key,
             ..
           } => {
-            // TODO: Should be parameterizable by DeserializerAdapter
             match DA::key_from_bytes(
               &serialized_key.value,
               serialized_key.representation_identifier,
@@ -807,8 +806,6 @@ where
           }
 
           DDSData::DisposeByKeyHash { key_hash, .. } => {
-            /* TODO: Instance to be disposed could be specified by serialized payload
-             * also, not only key_hash? */
             if let Some(key) = self.datasample_cache.key_by_hash(*key_hash) {
               self.datasample_cache.add_sample(
                 Err(key),

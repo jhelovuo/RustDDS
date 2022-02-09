@@ -993,7 +993,7 @@ impl Discovery {
           }
         }
         Err(reader_key) => {
-          debug!("Dispose Reader {:?}", reader_key);
+          info!("Dispose Reader {:?}", reader_key);
           self.discovery_db_write().remove_topic_reader(reader_key.0);
           self.send_discovery_notification(DiscoveryNotificationType::ReaderLost {
             reader_guid: reader_key.0,

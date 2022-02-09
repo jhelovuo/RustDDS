@@ -439,7 +439,7 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let writer_seq_num = data.writer_sn; // for borrow checker
 
-    match Self::data_to_ddsdata(data, data_flags) {
+    match self.data_to_ddsdata(data, data_flags) {
       Ok(ddsdata) => self.process_received_data(
         ddsdata,
         receive_timestamp,
@@ -576,7 +576,7 @@ impl Reader {
     self.notify_cache_change();
   }
 
-  fn data_to_ddsdata(data: Data, data_flags: BitFlags<DATA_Flags>) -> Result<DDSData, String> {
+  fn data_to_ddsdata(&self, data: Data, data_flags: BitFlags<DATA_Flags>) -> Result<DDSData, String> {
     let representation_identifier = DATA_Flags::cdr_representation_identifier(data_flags);
 
     match (
@@ -618,6 +618,7 @@ impl Reader {
         // now, let's try to determine what is the dispose reason
         let change_kind =
           Self::deduce_change_kind(&data.inline_qos, false, representation_identifier);
+        info!("status change by Inline QoS: topic={:?} change={:?}", self.topic_name, change_kind);
         Ok(DDSData::new_disposed_by_key_hash(change_kind, key_hash))
       }
 

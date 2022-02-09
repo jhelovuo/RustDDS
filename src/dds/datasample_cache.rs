@@ -531,12 +531,6 @@ where
     result
   }
 
-  /* this seems to be for tests only?
-  pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
-    self.datasamples.get(&key)
-  }
-  */
-
   pub fn key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
     if let Some(k) = self.hash_to_key_map.get(&key_hash) {
       Some(k.clone())
