@@ -31,10 +31,9 @@ use crate::{
   },
   discovery::{
     data_types::{
-      spdp_participant_data::{SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey},
+      spdp_participant_data::SpdpDiscoveredParticipantData,
       topic_data::{
-        DiscoveredReaderData, DiscoveredReaderDataKey, DiscoveredTopicDataKey,
-        DiscoveredWriterData, DiscoveredWriterDataKey, PublicationBuiltinTopicData, ReaderProxy,
+        DiscoveredReaderData, DiscoveredWriterData, PublicationBuiltinTopicData, ReaderProxy,
         WriterProxy,
       },
     },
@@ -594,29 +593,20 @@ impl Discovery {
                   for reader in db.get_all_local_topic_readers() {
                     self
                       .dcps_subscription_writer
-                      .dispose(
-                        &DiscoveredReaderDataKey(reader.reader_proxy.remote_reader_guid),
-                        None,
-                      )
+                      .dispose(&reader.reader_proxy.remote_reader_guid, None)
                       .unwrap_or(());
                   }
 
                   for writer in db.get_all_local_topic_writers() {
                     self
                       .dcps_publication_writer
-                      .dispose(
-                        &DiscoveredWriterDataKey(writer.writer_proxy.remote_writer_guid),
-                        None,
-                      )
+                      .dispose(&writer.writer_proxy.remote_writer_guid, None)
                       .unwrap_or(());
                   }
                   // finally disposing the participant we have
                   self
                     .dcps_participant_writer
-                    .dispose(
-                      &SpdpDiscoveredParticipantDataKey(self.domain_participant.guid()),
-                      None,
-                    )
+                    .dispose(&self.domain_participant.guid(), None)
                     .unwrap_or(());
                   info!("Stopped Discovery");
                   return; // terminate event loop
@@ -627,7 +617,7 @@ impl Discovery {
                   }
                   self
                     .dcps_publication_writer
-                    .dispose(&DiscoveredWriterDataKey(guid), None)
+                    .dispose(&guid, None)
                     .unwrap_or(());
 
                   match self.discovery_db.write() {
@@ -645,7 +635,7 @@ impl Discovery {
 
                   self
                     .dcps_subscription_writer
-                    .dispose(&DiscoveredReaderDataKey(guid), None)
+                    .dispose(&guid, None)
                     .unwrap_or(());
 
                   match self.discovery_db.write() {
@@ -918,12 +908,12 @@ impl Discovery {
             }
           }
           // Err means that DomainParticipant was disposed
-          Err(data_key) => {
+          Err(participant_guid) => {
             self
               .discovery_db_write()
-              .remove_participant(data_key.0.prefix);
+              .remove_participant(participant_guid.prefix);
             self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
-              guid_prefix: data_key.0.prefix,
+              guid_prefix: participant_guid.prefix,
             });
           }
         },
@@ -937,7 +927,7 @@ impl Discovery {
   }
 
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let drds: Vec<std::result::Result<DiscoveredReaderData, DiscoveredReaderDataKey>> =
+    let drds: Vec<std::result::Result<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription_reader.read(
         std::usize::MAX,
         if read_history.is_some() {
@@ -994,9 +984,9 @@ impl Discovery {
         }
         Err(reader_key) => {
           info!("Dispose Reader {:?}", reader_key);
-          self.discovery_db_write().remove_topic_reader(reader_key.0);
+          self.discovery_db_write().remove_topic_reader(reader_key);
           self.send_discovery_notification(DiscoveryNotificationType::ReaderLost {
-            reader_guid: reader_key.0,
+            reader_guid: reader_key,
           });
         }
       }
@@ -1004,7 +994,7 @@ impl Discovery {
   }
 
   pub fn handle_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let dwds: Vec<std::result::Result<DiscoveredWriterData, DiscoveredWriterDataKey>> =
+    let dwds: Vec<std::result::Result<DiscoveredWriterData, GUID>> =
       match self.dcps_publication_reader.read(
         std::usize::MAX,
         if read_history.is_some() {
@@ -1036,9 +1026,9 @@ impl Discovery {
           debug!("Discovered Writer {:?}", &dwd);
         }
         Err(writer_key) => {
-          self.discovery_db_write().remove_topic_writer(writer_key.0);
+          self.discovery_db_write().remove_topic_writer(writer_key);
           self.send_discovery_notification(DiscoveryNotificationType::WriterLost {
-            writer_guid: writer_key.0,
+            writer_guid: writer_key,
           });
           debug!("Disposed Writer {:?}", writer_key);
         }
@@ -1047,24 +1037,23 @@ impl Discovery {
   }
 
   pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let ts: Vec<std::result::Result<DiscoveredTopicData, DiscoveredTopicDataKey>> =
-      match self.dcps_topic_reader.read(
-        std::usize::MAX,
-        if read_history.is_some() {
-          ReadCondition::any()
-        } else {
-          ReadCondition::not_read()
-        },
-      ) {
-        // a lot of cloning here, but we must copy the data out of the
-        // reader before we can use self again, as .read() returns references to within
-        // a reader and thus self
-        Ok(ds) => ds.iter().map(|d| d.value.map(|o| o.clone())).collect(),
-        Err(e) => {
-          error!("handle_topic_reader: {:?}", e);
-          return;
-        }
-      };
+    let ts: Vec<std::result::Result<DiscoveredTopicData, GUID>> = match self.dcps_topic_reader.read(
+      std::usize::MAX,
+      if read_history.is_some() {
+        ReadCondition::any()
+      } else {
+        ReadCondition::not_read()
+      },
+    ) {
+      // a lot of cloning here, but we must copy the data out of the
+      // reader before we can use self again, as .read() returns references to within
+      // a reader and thus self
+      Ok(ds) => ds.iter().map(|d| d.value.map(|o| o.clone())).collect(),
+      Err(e) => {
+        error!("handle_topic_reader: {:?}", e);
+        return;
+      }
+    };
 
     for t in ts {
       match t {

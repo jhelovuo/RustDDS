@@ -816,6 +816,8 @@ where
               );
             } else {
               warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash);
+              // The cache should know hash -> key mapping even if the sample
+              // has been disposed or .take()n
             }
           } /*
             DDSData::DataFrags { representation_identifier, bytes_frags } => {

@@ -341,8 +341,10 @@ impl Reader {
           policies: Vec::new(), // TODO. implementation missing
         });
         warn!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
-        info!("update_writer_proxy - QoS mismatch: topic={:?} requested={:?}  offered={:?}", 
-          self.topic_name, &self.qos_policy, offered_qos );
+        info!(
+          "update_writer_proxy - QoS mismatch: topic={:?} requested={:?}  offered={:?}",
+          self.topic_name, &self.qos_policy, offered_qos
+        );
       }
     }
   }
@@ -576,7 +578,11 @@ impl Reader {
     self.notify_cache_change();
   }
 
-  fn data_to_ddsdata(&self, data: Data, data_flags: BitFlags<DATA_Flags>) -> Result<DDSData, String> {
+  fn data_to_ddsdata(
+    &self,
+    data: Data,
+    data_flags: BitFlags<DATA_Flags>,
+  ) -> Result<DDSData, String> {
     let representation_identifier = DATA_Flags::cdr_representation_identifier(data_flags);
 
     match (
@@ -618,7 +624,10 @@ impl Reader {
         // now, let's try to determine what is the dispose reason
         let change_kind =
           Self::deduce_change_kind(&data.inline_qos, false, representation_identifier);
-        info!("status change by Inline QoS: topic={:?} change={:?}", self.topic_name, change_kind);
+        info!(
+          "status change by Inline QoS: topic={:?} change={:?}",
+          self.topic_name, change_kind
+        );
         Ok(DDSData::new_disposed_by_key_hash(change_kind, key_hash))
       }
 

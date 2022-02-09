@@ -1,6 +1,3 @@
-// use crate::discovery::data_types::topic_data::PublicationBuiltinTopicDataKey;
-// use crate::discovery::data_types::topic_data::
-// SubscriptionBuiltinTopicDataKey;
 use std::time::Duration as StdDuration;
 
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
@@ -13,10 +10,9 @@ use crate::{
   discovery::{
     content_filter_property::{ContentFilterProperty, ContentFilterPropertyData},
     data_types::{
-      spdp_participant_data::{SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey},
+      spdp_participant_data::SpdpDiscoveredParticipantData,
       topic_data::{
-        DiscoveredReaderData, DiscoveredReaderDataKey, DiscoveredWriterData,
-        DiscoveredWriterDataKey, PublicationBuiltinTopicData, ReaderProxy,
+        DiscoveredReaderData, DiscoveredWriterData, PublicationBuiltinTopicData, ReaderProxy,
         SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
       },
     },
@@ -109,44 +105,6 @@ struct EntityName {
   parameter_id: ParameterId,
   parameter_length: u16,
   entity_name: String,
-}
-
-pub struct BuiltinDataSerializerKey {
-  pub participant_guid: GUID,
-}
-
-impl BuiltinDataSerializerKey {
-  pub fn from_data(participant_data: SpdpDiscoveredParticipantDataKey) -> BuiltinDataSerializerKey {
-    BuiltinDataSerializerKey {
-      participant_guid: participant_data.0,
-    }
-  }
-
-  pub fn serialize<S: Serializer>(
-    self,
-    serializer: S,
-    add_sentinel: bool,
-  ) -> Result<S::Ok, S::Error> {
-    let mut s = serializer
-      .serialize_struct("SPDPParticipantData_Key", 1)
-      .unwrap();
-
-    self.add_participant_guid::<S>(&mut s);
-
-    if add_sentinel {
-      s.serialize_field("sentinel", &1_u32).unwrap();
-    }
-
-    s.end()
-  }
-
-  fn add_participant_guid<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    s.serialize_field(
-      "participant_guid",
-      &GUIDData::from(self.participant_guid, ParameterId::PID_PARTICIPANT_GUID),
-    )
-    .unwrap();
-  }
 }
 
 #[derive(Default)]
@@ -322,13 +280,6 @@ impl<'a> BuiltinDataSerializer<'a> {
     }
   }
 
-  pub fn from_endpoint_guid(guid: &'a GUID) -> BuiltinDataSerializer<'a> {
-    BuiltinDataSerializer {
-      endpoint_guid: Some(*guid),
-      ..BuiltinDataSerializer::default()
-    }
-  }
-
   pub fn from_topic_data(topic_data: &'a TopicBuiltinTopicData) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
       endpoint_guid: topic_data.key,
@@ -372,18 +323,6 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   // -----------------------
-
-  pub fn from_discovered_reader_data_key(
-    discovered_reader_data: &'a DiscoveredReaderDataKey,
-  ) -> BuiltinDataSerializer<'a> {
-    BuiltinDataSerializer::from_endpoint_guid(&discovered_reader_data.0)
-  }
-
-  pub fn from_discovered_writer_data_key(
-    discovered_writer_data: &'a DiscoveredWriterDataKey,
-  ) -> BuiltinDataSerializer<'a> {
-    BuiltinDataSerializer::from_endpoint_guid(&discovered_writer_data.0)
-  }
 
   pub fn serialize<S: Serializer>(
     self,
@@ -430,25 +369,6 @@ impl<'a> BuiltinDataSerializer<'a> {
     self.add_resource_limits::<S>(&mut s);
 
     self.add_content_filter_property::<S>(&mut s);
-
-    if add_sentinel {
-      s.serialize_field("sentinel", &1_u32).unwrap();
-    }
-
-    s.end()
-  }
-
-  pub fn serialize_key<S: Serializer>(
-    self,
-    serializer: S,
-    add_sentinel: bool,
-  ) -> Result<S::Ok, S::Error> {
-    let mut s = serializer
-      .serialize_struct("SPDPParticipantData", self.fields_amount())
-      .unwrap();
-
-    self.add_participant_guid::<S>(&mut s);
-    self.add_endpoint_guid::<S>(&mut s);
 
     if add_sentinel {
       s.serialize_field("sentinel", &1_u32).unwrap();

@@ -18,10 +18,9 @@ use crate::{
   discovery::{
     content_filter_property::ContentFilterProperty,
     data_types::{
-      spdp_participant_data::{SpdpDiscoveredParticipantData, SpdpDiscoveredParticipantDataKey},
+      spdp_participant_data::SpdpDiscoveredParticipantData,
       topic_data::{
-        DiscoveredReaderData, DiscoveredReaderDataKey, DiscoveredWriterData,
-        DiscoveredWriterDataKey, PublicationBuiltinTopicData, ReaderProxy,
+        DiscoveredReaderData, DiscoveredWriterData, PublicationBuiltinTopicData, ReaderProxy,
         SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
       },
     },
@@ -126,16 +125,6 @@ impl BuiltinDataDeserializer {
       builtin_endpoint_qos: self.builtin_endpoint_qos,
       entity_name: self.entity_name.clone(),
     })
-  }
-
-  pub fn generate_spdp_participant_data_key(
-    &self,
-  ) -> Result<SpdpDiscoveredParticipantDataKey, Error> {
-    Ok(SpdpDiscoveredParticipantDataKey(
-      self
-        .participant_guid
-        .ok_or_else(|| log_and_err_discovery!("participant_guid missing"))?,
-    ))
   }
 
   pub fn generate_reader_proxy(&self) -> Option<ReaderProxy> {
@@ -331,18 +320,6 @@ impl BuiltinDataDeserializer {
       writer_proxy,
       publication_topic_data,
     })
-  }
-
-  pub fn generate_discovered_reader_data_key(self) -> Result<DiscoveredReaderDataKey, Error> {
-    Ok(DiscoveredReaderDataKey(self.endpoint_guid.ok_or_else(
-      || log_and_err_discovery!("generate_discovered_reader_data_key endpoint_guid missing"),
-    )?))
-  }
-
-  pub fn generate_discovered_writer_data_key(self) -> Result<DiscoveredWriterDataKey, Error> {
-    Ok(DiscoveredWriterDataKey(self.endpoint_guid.ok_or_else(
-      || log_and_err_discovery!("generate_discovered_writer_data_key endpoint_guid missing"),
-    )?))
   }
 
   pub fn parse_data_little_endian(self, buffer: &[u8]) -> BuiltinDataDeserializer {

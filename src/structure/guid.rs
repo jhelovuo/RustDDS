@@ -589,18 +589,20 @@ mod tests {
   use speedy::Endianness;
   use mio::Token;
   use log::info;
-
-  use crate::serialization::{cdr_serializer::to_bytes, cdr_deserializer::deserialize_from_big_endian};
   use byteorder::BigEndian;
-  use crate::dds::traits::key::*;
+
+  use crate::{
+    dds::traits::key::*,
+    serialization::{cdr_deserializer::deserialize_from_big_endian, cdr_serializer::to_bytes},
+  };
   use super::*;
 
   #[test]
   fn serde_test() {
-    let test_bytes = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16];
+    let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     let test_guid = GUID::from_bytes(test_bytes);
     let ser = to_bytes::<GUID, BigEndian>(&test_guid).unwrap();
-    assert_eq!(test_bytes.to_vec(),ser);
+    assert_eq!(test_bytes.to_vec(), ser);
 
     let and_back = deserialize_from_big_endian::<GUID>(&ser).unwrap();
     assert_eq!(test_guid, and_back);
@@ -608,12 +610,11 @@ mod tests {
 
   #[test]
   fn keyhash_test() {
-    let test_bytes = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16];
+    let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     let test_guid = GUID::from_bytes(test_bytes);
     let key_hash = test_guid.hash_key(); // from trait Key
     assert_eq!(key_hash.to_vec(), test_bytes.to_vec());
   }
-
 
   #[test]
   fn convert_entity_id_to_token_and_back() {
