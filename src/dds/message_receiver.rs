@@ -399,7 +399,6 @@ impl MessageReceiver {
 
 #[derive(Debug, Clone)]
 pub struct MessageReceiverState {
-  //pub own_guid_prefix: GuidPrefix,
   pub source_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: Vec<Locator>,
   pub multicast_reply_locator_list: Vec<Locator>,
@@ -409,7 +408,6 @@ pub struct MessageReceiverState {
 impl Default for MessageReceiverState {
   fn default() -> Self {
     Self {
-      //own_guid_prefix: GuidPrefix::default(),
       source_guid_prefix: GuidPrefix::default(),
       unicast_reply_locator_list: Vec::default(),
       multicast_reply_locator_list: Vec::default(),

@@ -779,8 +779,8 @@ impl Reader {
       // Sanity check
       if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn + SequenceNumber::new(1) {
         error!(
-          "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}",
-          &heartbeat, &response_ack_nack
+          "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?} missing_seqnums = {:?} all_ackable_before = {:?} writer={:?}",
+          &heartbeat, &response_ack_nack, missing_seqnums, writer_proxy.all_ackable_before(), writer_guid,
         );
       }
 
@@ -986,7 +986,7 @@ impl Reader {
     let mut writer_proxies = std::mem::take(&mut self.matched_writers);
 
     let reader_id = self.entity_id();
-    for (_, writer_proxy) in writer_proxies.iter_mut().filter(|(_, p)| p.no_changes()) {
+    for (_, writer_proxy) in writer_proxies.iter_mut().filter(|(_, p)| p.no_changes_received()) {
       let acknack_count = writer_proxy.next_ack_nack_sequence_number();
       self.send_acknack_to(
         flags,

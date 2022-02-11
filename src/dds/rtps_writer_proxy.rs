@@ -75,6 +75,8 @@ impl RtpsWriterProxy {
     c
   }
 
+  // Returns a bound, below which everything can be acknowledged, i.e.
+  // is received either as DATA or GAP
   pub fn all_ackable_before(&self) -> SequenceNumber {
     self.ack_base
   }
@@ -85,14 +87,21 @@ impl RtpsWriterProxy {
     self.remote_group_entity_id = other.remote_group_entity_id;
   }
 
+  // This is used to check for DEADLINE policy
   pub fn last_change_timestamp(&self) -> Option<Timestamp> {
     self.changes.values().next_back().copied()
   }
 
-  pub fn no_changes(&self) -> bool {
+  // Check if we no samples in the received state.
+  pub fn no_changes_received(&self) -> bool {
     self.changes.is_empty()
   }
 
+  // Given an availabilty range from a HEARTBEAT, find out what we are missing.
+  //
+  // Note: Heartbeat gives bounds only. Some samples within that range may
+  // have been received already, or not really available, i.e. there may be GAPs
+  // in the range.
   pub fn missing_sequence_numbers(
     &self,
     hb_first_sn: SequenceNumber,
@@ -101,15 +110,12 @@ impl RtpsWriterProxy {
     // Need to verify first <= last, or BTreeMap::range will crash
     if hb_first_sn > hb_last_sn {
       if hb_first_sn > hb_last_sn + SequenceNumber::from(1) {
-        warn!(
-          "Negative range of missing_seqnums first={:?} last={:?}",
-          hb_first_sn, hb_last_sn
-        );
+        warn!("Negative range of missing_seqnums first={:?} last={:?}", hb_first_sn, hb_last_sn);
       } else {
         // first == last+1
         // This is normal. See RTPS 2.5 Spec Section "8.3.8.6.3 Validity"
       }
-      return vec![];
+      return vec![]
     }
 
     let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
@@ -134,29 +140,15 @@ impl RtpsWriterProxy {
     missing_seqnums
   }
 
-  // pub fn changes_are_missing(
-  //   &self,
-  //   hb_first_sn: SequenceNumber,
-  //   hb_last_sn: SequenceNumber,
-  // ) -> bool {
-  //   if hb_last_sn < hb_first_sn {
-  //     // This means writer has nothing to send
-  //     return false;
-  //   }
-
-  //   let we_have = self
-  //     .changes
-  //     .range(SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn))
-  //     .map(|e| *e.0);
-  //   SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn).ne(we_have)
-  // }
-
+  // Check if we have already received this sequence number
   pub fn contains_change(&self, seqnum: SequenceNumber) -> bool {
     self.changes.contains_key(&seqnum)
   }
 
-  pub fn received_changes_add(&mut self, seq_num: SequenceNumber, instant: Timestamp) {
-    self.changes.insert(seq_num, instant);
+
+  // This is used to mark DATA as received.
+  pub fn received_changes_add(&mut self, seq_num: SequenceNumber, receive_timestamp: Timestamp) {
+    self.changes.insert(seq_num, receive_timestamp);
 
     // We get to advance ack_base if it was equal to seq_num
     // If ack_base < seq_num, we are still missing seq_num-1 or others below
@@ -175,20 +167,9 @@ impl RtpsWriterProxy {
         // Now we have received everything up to and including s. Ack base is one up
         // from that.
       self.ack_base = s + SequenceNumber::new(1);
+      debug!("ack_base increased to {:?} by received_changes_add {:?}", self.ack_base, seq_num);
     }
   }
-
-  // pub fn available_changes_max(&self) -> Option<SequenceNumber> {
-  //   // TODO: replace this when BTreeMap function last_key_value() is in stable
-  //   // release
-  //   self.changes.keys().next_back().copied()
-  // }
-
-  // pub fn available_changes_min(&self) -> Option<SequenceNumber> {
-  //   self.changes.keys().next().copied()
-  //   // TODO: replace this when BTreeMap function first_key_value() is in stable
-  //   // release
-  // }
 
   pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Timestamp> {
     self.changes.remove(&seq_num)
@@ -207,6 +188,8 @@ impl RtpsWriterProxy {
 
     if self.ack_base >= remove_from {
       self.ack_base = max(remove_until_before, self.ack_base);
+      debug!("ack_base increased to {:?} by irrelevant_changes_range {:?} to {:?}. writer={:?}", 
+        self.ack_base, remove_from, remove_until_before, self.remote_writer_guid);
     }
 
     removed
@@ -223,7 +206,8 @@ impl RtpsWriterProxy {
     let irrelevant = std::mem::replace(&mut self.changes, remaining_changes);
 
     self.ack_base = max(smallest_seqnum, self.ack_base);
-
+    debug!("ack_base increased to {:?} by irrelevant_changes_up_to {:?} writer={:?}", 
+      self.ack_base, smallest_seqnum, self.remote_writer_guid);
     irrelevant
   }
 

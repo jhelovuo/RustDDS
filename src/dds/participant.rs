@@ -542,6 +542,7 @@ impl DomainParticipantDisc {
 
 impl Drop for DomainParticipantDisc {
   fn drop(&mut self) {
+    info!("===== RustDDS shutting down ===== .drop() DomainParticipantDisc");
     debug!("Sending Discovery Stop signal.");
     if self
       .discovery_command_sender
