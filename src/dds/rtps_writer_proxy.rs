@@ -40,9 +40,9 @@ pub(crate) struct RtpsWriterProxy {
   // Any sequence number is at any moment in one of the following states:
   // unknown, missing, received, not_available.
   //
-  // Unknown means that we have no information of that change. This is the initial state for everyone.
-  // Missing means that writer claims to have it and reader may request it with ACKNACK.
-  // Received means that the reader has received the change via DATA (or DATAFRAGs).
+  // Unknown means that we have no information of that change. This is the initial state for
+  // everyone. Missing means that writer claims to have it and reader may request it with
+  // ACKNACK. Received means that the reader has received the change via DATA (or DATAFRAGs).
   // Not_available means that writer has informed via GAP message that change is not available.
 
   // Unknown can transition to Missing (via HEARTBEAT), Received (DATA), or not_available (GAP).
@@ -74,7 +74,7 @@ pub(crate) struct RtpsWriterProxy {
   // heartbeat(first,last) => ack_base can be increased to first.
   // GAP is treated like receiving a message.
 
-  // These are used for quick tracking of 
+  // These are used for quick tracking of
   last_received_sequence_number: SequenceNumber,
   last_received_timestamp: Timestamp,
 
@@ -98,7 +98,7 @@ impl RtpsWriterProxy {
       sent_ack_nack_count: 0,
       // Sequence numbering must start at 1.
       // Therefore, we can ACK all sequence numbers below 1 even before receiving anything.
-      ack_base: SequenceNumber::new(1), 
+      ack_base: SequenceNumber::new(1),
       last_received_sequence_number: SequenceNumber::new(0),
       last_received_timestamp: Timestamp::INVALID,
       fragment_assembler: None,
@@ -127,7 +127,9 @@ impl RtpsWriterProxy {
   pub fn last_change_timestamp(&self) -> Option<Timestamp> {
     if self.last_received_sequence_number > SequenceNumber::new(0) {
       Some(self.last_received_timestamp)
-    } else { None }
+    } else {
+      None
+    }
   }
 
   // Check if we no samples in the received state.
@@ -148,13 +150,16 @@ impl RtpsWriterProxy {
     // Need to verify first <= last, or BTreeMap::range will crash
     if hb_first_sn > hb_last_sn {
       if hb_first_sn > hb_last_sn + SequenceNumber::from(1) {
-        warn!("Negative range of missing_seqnums first={:?} last={:?}", hb_first_sn, hb_last_sn);
+        warn!(
+          "Negative range of missing_seqnums first={:?} last={:?}",
+          hb_first_sn, hb_last_sn
+        );
       } else {
         // first == last+1
         // This is normal. See RTPS 2.5 Spec Section "8.3.8.6.3 Validity"
         // It means nothing is available.
       }
-      return vec![]
+      return vec![];
     }
 
     let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
@@ -193,7 +198,6 @@ impl RtpsWriterProxy {
     self.changes.contains_key(&seqnum)
   }
 
-
   // This is used to mark DATA as received.
   pub fn received_changes_add(&mut self, seq_num: SequenceNumber, receive_timestamp: Timestamp) {
     self.changes.insert(seq_num, Some(receive_timestamp));
@@ -214,25 +218,29 @@ impl RtpsWriterProxy {
         if sn == s + SequenceNumber::new(1) {
           // got consecutive number from previous
           s = s + SequenceNumber::new(1); // and continue looping
-          debug!("received_changes_add: Already have {:?} : {:?}",sn, what);
+          debug!("received_changes_add: Already have {:?} : {:?}", sn, what);
         } else {
           break; // not consecutive
         }
       } // end for
-        // Now we have received/not_available for everything up to and including s. Ack base is one up
-        // from that.
+        // Now we have received/not_available for everything up to and including s. Ack
+        // base is one up from that.
       self.ack_base = s + SequenceNumber::new(1);
-      debug!("ack_base increased to {:?} by received_changes_add {:?} writer={:?}", 
-        self.ack_base, seq_num, self.remote_writer_guid);
+      debug!(
+        "ack_base increased to {:?} by received_changes_add {:?} writer={:?}",
+        self.ack_base, seq_num, self.remote_writer_guid
+      );
     }
   }
 
   // Used to add individual irrelevant changes from GAP message
   pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Timestamp> {
-    if seq_num >= self.ack_base { // if this is still in the relevant range
+    if seq_num >= self.ack_base {
+      // if this is still in the relevant range
       // insert not_available marker.
-      self.changes.insert(seq_num, None)
-        .flatten() // this will return the Timestamp, if there was a recived change
+      self.changes.insert(seq_num, None).flatten() // this will return the
+                                                   // Timestamp, if there was a
+                                                   // recived change
     } else {
       None
     }
@@ -248,18 +256,21 @@ impl RtpsWriterProxy {
   ) -> BTreeMap<SequenceNumber, Timestamp> {
     // check sanity
     if remove_from > remove_until_before {
-      error!("irrelevant_changes_range: negative range: remove_from={:?} remove_until_before={:?}",
-        remove_from, remove_until_before);
-      return BTreeMap::new()
+      error!(
+        "irrelevant_changes_range: negative range: remove_from={:?} remove_until_before={:?}",
+        remove_from, remove_until_before
+      );
+      return BTreeMap::new();
     }
     // now remove_from <= remove_until_before, i.e. at least zero to remove
     //
     // Two cases here:
     // If remove_from <= self.ack_base, then we may proceed by moving
     // ack_base to remove_until_before and clearing "changes" before that.
-    // 
-    // Else (remove_from > self.ack_base), which means we must insert not_available markers to "changes".
-    // 
+    //
+    // Else (remove_from > self.ack_base), which means we must insert not_available
+    // markers to "changes".
+    //
     if remove_from <= self.ack_base {
       let mut removed_and_after = self.changes.split_off(&remove_from);
       let mut after = removed_and_after.split_off(&remove_until_before);
@@ -267,21 +278,31 @@ impl RtpsWriterProxy {
       self.changes.append(&mut after);
 
       self.ack_base = max(remove_until_before, self.ack_base);
-      debug!("ack_base increased to {:?} by irrelevant_changes_range {:?} to {:?}. writer={:?}", 
-        self.ack_base, remove_from, remove_until_before, self.remote_writer_guid);
+      debug!(
+        "ack_base increased to {:?} by irrelevant_changes_range {:?} to {:?}. writer={:?}",
+        self.ack_base, remove_from, remove_until_before, self.remote_writer_guid
+      );
 
-      removed.iter().filter_map(|(k,v)| v.map( |c| (*k,c) )).collect()
+      removed
+        .iter()
+        .filter_map(|(k, v)| v.map(|c| (*k, c)))
+        .collect()
     } else {
       // TODO: This potentially generates a very large BTreeMap
       let mut removed = BTreeMap::new();
-      for na in SequenceNumber::range_inclusive(remove_from, remove_until_before-SequenceNumber::new(1)) {
-        self.changes.entry(na)
-          .and_modify( |known| {known.map( |ts| removed.insert(na,ts)); } )
+      for na in
+        SequenceNumber::range_inclusive(remove_from, remove_until_before - SequenceNumber::new(1))
+      {
+        self
+          .changes
+          .entry(na)
+          .and_modify(|known| {
+            known.map(|ts| removed.insert(na, ts));
+          })
           .or_insert(None); // add not_available marker, if not already known
       }
       removed
     }
-
   }
 
   // Used to mark messages irrelevant because of a HEARTBEAT message.
