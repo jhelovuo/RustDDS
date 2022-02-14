@@ -736,7 +736,7 @@ impl Reader {
 
     // See if ACKNACK is needed, and generate one.
     let missing_seqnums =
-      writer_proxy.missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
+      writer_proxy.missing_seqnums(heartbeat.first_sn, heartbeat.last_sn);
 
     // Interpretation of final flag in RTPS spec
     // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with
@@ -777,12 +777,21 @@ impl Reader {
       };
 
       // Sanity check
-      if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn + SequenceNumber::new(1) {
-        error!(
-          "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?} missing_seqnums = {:?} all_ackable_before = {:?} writer={:?}",
-          &heartbeat, &response_ack_nack, missing_seqnums, writer_proxy.all_ackable_before(), writer_guid,
-        );
-      }
+      //
+      // Wrong. This sanity check is invalid. The condition
+      // ack_base > heartbeat.last_sn + 1
+      // May be legitimately true, if there are some changes available, and a GAP after that.
+      // E.g. HEARTBEAT 1..8 and GAP 9..10. Then acknack_base == 11 and 11 > 8 + 1.
+      // 
+      //
+      // if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn + SequenceNumber::new(1) {
+      //   error!(
+      //     "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?} missing_seqnums = {:?} all_ackable_before = {:?} writer={:?}",
+      //     &heartbeat, &response_ack_nack, missing_seqnums, writer_proxy.all_ackable_before(), writer_guid,
+      //   );
+      // }
+
+
 
       // The acknack can be sent now or later. The rest of the RTPS message
       // needs to be constructed. p. 48
@@ -826,25 +835,9 @@ impl Reader {
       return;
     };
 
-    // Sequencenumber set in the gap is invalid: (section 8.3.5.5)
-    // Set checked to be not empty. Unwraps won't panic
-
-    // TODO: Implement SequenceNumberSet rules validation (section 8.3.5.5)
-    // Already in the SequenceNumber module.
-
+    
     // TODO: Implement GAP rules validation (Section 8.3.7.4.3) here.
 
-    // if gap.gap_list
-
-    // if gap.gap_list.set.len() != 0 {
-    //   if i64::from(gap.gap_start) < 1i64
-    //     || (gap.gap_list.set.iter().max().unwrap() -
-    // gap.gap_list.set.iter().min().unwrap()) >= 256   {
-    //     return;
-    //   }
-    // } else {
-    //   return;
-    // };
 
     // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups:
@@ -864,6 +857,9 @@ impl Reader {
     }
 
     // Remove from DDSHistoryCache
+    // TODO: Is this really correct?
+    // Is the meaning of GAP to only inform that such changes are not available from the writer?
+    // Or does it also mean that the DDSCache should remove them?
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
