@@ -591,14 +591,15 @@ mod tests {
   use log::info;
   use byteorder::BigEndian;
 
-  use crate::{
-    dds::traits::key::*,
-    serialization::{cdr_deserializer::deserialize_from_big_endian, cdr_serializer::to_bytes},
-  };
   use super::*;
 
   #[test]
   fn serde_test() {
+    use crate::{
+      //dds::traits::key::*,
+      serialization::{cdr_deserializer::deserialize_from_big_endian, cdr_serializer::to_bytes},
+    };
+
     let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     let test_guid = GUID::from_bytes(test_bytes);
     let ser = to_bytes::<GUID, BigEndian>(&test_guid).unwrap();
@@ -607,6 +608,21 @@ mod tests {
     let and_back = deserialize_from_big_endian::<GUID>(&ser).unwrap();
     assert_eq!(test_guid, and_back);
   }
+
+  // #[test]
+  // fn serde_pl_cdr_test() {
+  //   use crate::{
+  //     serialization::{pl_cdr_deserializer::PlCdrDeserializer, cdr_serializer::to_bytes},
+  //   };
+
+  //   let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+  //   let test_guid = GUID::from_bytes(test_bytes);
+  //   let ser = to_bytes::<GUID, BigEndian>(&test_guid).unwrap();
+  //   assert_eq!(test_bytes.to_vec(), ser);
+
+  //   let and_back = PlCdrDeserializer::from_big_endian_bytes::<GUID>(&ser).unwrap();
+  //   assert_eq!(test_guid, and_back);
+  // }
 
   #[test]
   fn keyhash_test() {

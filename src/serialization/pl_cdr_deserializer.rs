@@ -4,11 +4,14 @@ use serde::{de::DeserializeOwned, Deserializer};
 
 use crate::{
   dds::traits::{
-    serde_adapters::{no_key, with_key},
+    serde_adapters::{no_key, with_key, no_key::DeserializerAdapter,},
     Keyed,
   },
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
-  serialization::error::{Error, Result},
+  serialization::{
+    cdr_deserializer::CDRDeserializerAdapter,
+    error::{Error, Result}
+  },
 };
 
 pub struct PlCdrDeserializerAdapter<D> {
@@ -54,18 +57,16 @@ where
   <D as Keyed>::K: DeserializeOwned, // why is this not inferred from D:Keyed ?
 {
   fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K> {
-    match encoding {
-      RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::CDR_LE => {
-        PlCdrDeserializer::from_little_endian_bytes::<D::K>(input_bytes)
-      }
-      RepresentationIdentifier::PL_CDR_BE | RepresentationIdentifier::CDR_BE => {
-        PlCdrDeserializer::from_big_endian_bytes::<D::K>(input_bytes)
-      }
-      repr_id => Err(Error::Message(format!(
-        "Unknown representation identifier {:?}",
-        repr_id
-      ))),
-    }
+    // Horrible hack warning:
+    //
+    // Here we just change encoding without any good definitional justification.
+    // It just often happens that PL_CDR-encoded data has its Key encoded in
+    // plain CDR.
+    // 
+    // The only known use for this is in Discovery, where they Key is always a GUID, if any.
+    // And the GUID is serializes as-is, without any encoding.
+
+    CDRDeserializerAdapter::<D::K>::from_bytes(input_bytes, encoding)
   }
 }
 
@@ -88,6 +89,7 @@ impl<'de> PlCdrDeserializer<'de> {
   }
 
   pub fn from_big_endian_bytes<T: DeserializeOwned>(s: &[u8]) -> Result<T> {
+    eprintln!("from_big_endian_bytes");
     let deserializer = PlCdrDeserializer::new(s, RepresentationIdentifier::PL_CDR_BE);
     T::deserialize(deserializer)
   }
@@ -112,6 +114,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    //eprintln!("deserialize_any ");
     self.custom_deserialize_any(visitor)
   }
 
@@ -119,6 +122,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -126,6 +130,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -133,6 +138,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -140,6 +146,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -147,6 +154,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -154,6 +162,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -161,6 +170,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -168,6 +178,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -175,6 +186,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -182,6 +194,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -189,6 +202,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -196,6 +210,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -203,6 +218,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -210,6 +226,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -224,6 +241,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -231,6 +249,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -238,6 +257,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -245,6 +265,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -252,6 +273,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -259,6 +281,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -266,6 +289,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -278,6 +302,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -285,6 +310,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -309,6 +335,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -316,6 +343,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 
@@ -323,6 +351,7 @@ impl<'de> Deserializer<'de> for PlCdrDeserializer<'de> {
   where
     V: serde::de::Visitor<'de>,
   {
+    eprintln!("Hit unimplemented function: ");
     unimplemented!()
   }
 }
