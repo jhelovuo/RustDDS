@@ -354,19 +354,24 @@ impl MessageBuilder {
 
     // If we are sending related sample identity, then insert that.
     if let Some(si) = cache_change.write_options.related_sample_identity {
-      let related_sample_identity_serialized =
-        si.write_to_vec_with_ctx(endianness).unwrap();
-      eprintln!("related_sample_identity_serialized len={}: {:?}",
+      let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
+      eprintln!(
+        "related_sample_identity_serialized len={}: {:?}",
         related_sample_identity_serialized.len(),
-        related_sample_identity_serialized, );
+        related_sample_identity_serialized,
+      );
       param_list.parameters.push(Parameter {
         parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
         value: related_sample_identity_serialized,
       });
     }
 
-    let have_inline_qos = ! param_list.is_empty(); // we need this later also
-    let inline_qos = if have_inline_qos { Some(param_list) } else { None };
+    let have_inline_qos = !param_list.is_empty(); // we need this later also
+    let inline_qos = if have_inline_qos {
+      Some(param_list)
+    } else {
+      None
+    };
 
     let mut data_message = Data {
       reader_id: reader_entity_id,
@@ -402,9 +407,11 @@ impl MessageBuilder {
           BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
         }
       })
-      | ( if have_inline_qos { BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)  }
-          else { BitFlags::<DATA_Flags>::empty() }
-        );
+      | (if have_inline_qos {
+        BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
+      } else {
+        BitFlags::<DATA_Flags>::empty()
+      });
     // TODO: This is stupid. There should be an easier way to get the submessage
     // length than serializing it!
     let size = data_message
