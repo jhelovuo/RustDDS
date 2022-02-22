@@ -355,11 +355,6 @@ impl MessageBuilder {
     // If we are sending related sample identity, then insert that.
     if let Some(si) = cache_change.write_options.related_sample_identity {
       let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
-      eprintln!(
-        "related_sample_identity_serialized len={}: {:?}",
-        related_sample_identity_serialized.len(),
-        related_sample_identity_serialized,
-      );
       param_list.parameters.push(Parameter {
         parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
         value: related_sample_identity_serialized,
