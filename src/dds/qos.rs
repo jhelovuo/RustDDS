@@ -1,15 +1,18 @@
+use speedy::{Endianness, Readable,};
+use std::io;
+
 use log::trace;
 
 use crate::{
   dds::{
-    traits::{key::KeyHash, serde_adapters::no_key::DeserializerAdapter},
+    traits::{key::KeyHash, /*serde_adapters::no_key::DeserializerAdapter*/ },
     values::result::Result,
   },
   messages::submessages::submessage_elements::{
     parameter_list::ParameterList, RepresentationIdentifier,
   },
   structure::{inline_qos::StatusInfo, parameter_id::ParameterId, rpc::SampleIdentity},
-  CDRDeserializerAdapter,
+  //CDRDeserializerAdapter,
 };
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber,
@@ -676,11 +679,16 @@ impl InlineQos {
       .parameters
       .iter()
       .find(|p| p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY);
+
+    let endianness = 
+      if representation_id == RepresentationIdentifier::CDR_BE 
+          || representation_id == RepresentationIdentifier::PL_CDR_BE { Endianness::BigEndian }
+      else { Endianness::LittleEndian };
+
     Ok(match rsi {
-      Some(p) => Some(CDRDeserializerAdapter::from_bytes(
-        &p.value,
-        representation_id,
-      )?),
+      Some(p) => 
+        Some(SampleIdentity::read_from_buffer_with_ctx(endianness, &p.value)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?),
       None => None,
     })
   }

@@ -4,13 +4,13 @@ use serde::{de::DeserializeOwned, Deserializer};
 
 use crate::{
   dds::traits::{
-    serde_adapters::{no_key, with_key, no_key::DeserializerAdapter,},
+    serde_adapters::{no_key, no_key::DeserializerAdapter, with_key},
     Keyed,
   },
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   serialization::{
     cdr_deserializer::CDRDeserializerAdapter,
-    error::{Error, Result}
+    error::{Error, Result},
   },
 };
 
@@ -62,9 +62,9 @@ where
     // Here we just change encoding without any good definitional justification.
     // It just often happens that PL_CDR-encoded data has its Key encoded in
     // plain CDR.
-    // 
-    // The only known use for this is in Discovery, where they Key is always a GUID, if any.
-    // And the GUID is serializes as-is, without any encoding.
+    //
+    // The only known use for this is in Discovery, where they Key is always a GUID,
+    // if any. And the GUID is serializes as-is, without any encoding.
 
     CDRDeserializerAdapter::<D::K>::from_bytes(input_bytes, encoding)
   }

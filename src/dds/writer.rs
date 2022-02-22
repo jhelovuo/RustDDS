@@ -404,6 +404,8 @@ impl Writer {
           };
           // the beef: DATA submessage
           let data_hb_message_builder = if self.push_mode {
+            // If we are in push mode, proactively send DATA submessage along with
+            // HEARTBEAT.
             if let Some(cache_change) = self
               .dds_cache
               .read()
@@ -420,8 +422,11 @@ impl Writer {
               partial_message
             }
           } else {
+            // Not pushing: Send only HEARTBEAT. Send DATA only after readers ACKNACK asking
+            // for it.
             partial_message
           };
+          // TODO: Explain the flag logic here.
           let final_flag = false;
           let liveliness_flag = false;
           let data_hb_message = data_hb_message_builder
