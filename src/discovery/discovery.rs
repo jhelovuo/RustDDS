@@ -41,6 +41,7 @@ use crate::{
   },
   network::constant::*,
   serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter,
+  serialization::pl_cdr_serializer::PlCdrSerializerAdapter,
   structure::{
     duration::Duration,
     entity::RTPSEntity,
@@ -247,14 +248,16 @@ impl Discovery {
     );
 
     let dcps_participant_reader = try_construct!( discovery_subscriber
-      .create_datareader_with_entityid::<SpdpDiscoveredParticipantData,PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>>(
+      .create_datareader_with_entityid
+        ::<SpdpDiscoveredParticipantData,PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>>(
         &dcps_participant_topic,
         EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
         None,
       ) ,"Unable to create DataReader for DCPSParticipant. {:?}");
 
     let dcps_participant_writer = try_construct!(
-      discovery_publisher.create_datawriter_cdr_with_entityid::<SpdpDiscoveredParticipantData>(
+      discovery_publisher.create_datawriter_with_entityid
+        ::<SpdpDiscoveredParticipantData,PlCdrSerializerAdapter<SpdpDiscoveredParticipantData>>(
         EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
         &dcps_participant_topic,
         None,
@@ -331,7 +334,8 @@ impl Discovery {
     );
 
     let dcps_subscription_writer = try_construct!(
-      discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredReaderData>(
+      discovery_publisher.create_datawriter_with_entityid
+        ::<DiscoveredReaderData,PlCdrSerializerAdapter<DiscoveredReaderData>>(
         EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
         &dcps_subscription_topic,
         None,
@@ -351,7 +355,7 @@ impl Discovery {
       "Unable to register readers info sender. {:?}"
     );
 
-    // Publication : Who are thr Writers?
+    // Publication : Who are the Writers here and elsewhere
 
     let dcps_publication_topic = try_construct!(
       domain_participant.create_topic(
@@ -364,7 +368,8 @@ impl Discovery {
     );
 
     let dcps_publication_reader = try_construct!( discovery_subscriber
-      .create_datareader_with_entityid::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
+      .create_datareader_with_entityid
+        ::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
         &dcps_publication_topic,
         EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
         None,
@@ -381,7 +386,8 @@ impl Discovery {
     );
 
     let dcps_publication_writer = try_construct!(
-      discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredWriterData>(
+      discovery_publisher.create_datawriter_with_entityid
+        ::<DiscoveredWriterData,PlCdrSerializerAdapter<DiscoveredWriterData>>(
         EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
         &dcps_publication_topic,
         None,
@@ -414,7 +420,8 @@ impl Discovery {
     );
 
     let dcps_topic_reader = try_construct!( discovery_subscriber
-      .create_datareader_with_entityid::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
+      .create_datareader_with_entityid
+        ::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
         &dcps_topic_topic,
         EntityId::SEDP_BUILTIN_TOPIC_READER,
         None,
@@ -431,7 +438,8 @@ impl Discovery {
     );
 
     let dcps_topic_writer = try_construct!(
-      discovery_publisher.create_datawriter_cdr_with_entityid::<DiscoveredTopicData>(
+      discovery_publisher.create_datawriter_cdr_with_entityid
+        ::<DiscoveredTopicData,PlCdrSerializerAdapter<DiscoveredTopicData>>(
         EntityId::SEDP_BUILTIN_TOPIC_WRITER,
         &dcps_topic_topic,
         None,

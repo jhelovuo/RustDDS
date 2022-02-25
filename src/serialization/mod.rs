@@ -3,6 +3,7 @@ pub(crate) mod builtin_data_serializer;
 pub(crate) mod cdr_deserializer;
 pub(crate) mod cdr_serializer;
 pub(crate) mod error;
+pub(crate) mod pl_cdr_serializer;
 pub(crate) mod pl_cdr_deserializer;
 pub(crate) mod visitors;
 
