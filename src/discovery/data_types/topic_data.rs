@@ -262,8 +262,8 @@ impl SubscriptionBuiltinTopicData {
       time_based_filter: self.time_based_filter,
       reliability: self.reliability,
       destination_order: self.destination_order,
-      history: None,         // TODO: Check that this really does not exist in source
-      resource_limits: None, // TODO: Check that this really does not exist in source
+      history: None, // SubscriptionBuiltinTopicData does not contain History QoS
+      resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
     }
   }
@@ -487,8 +487,8 @@ impl PublicationBuiltinTopicData {
       time_based_filter: self.time_based_filter,
       reliability: self.reliability,
       destination_order: self.destination_order,
-      history: None,         // TODO: ???
-      resource_limits: None, // TODO: ???
+      history: None,         // PublicationBuiltinTopicData does not contain History QoS
+      resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
     }
   }
