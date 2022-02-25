@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use serde::{de::DeserializeOwned, Deserializer};
+//use byteorder::{ByteOrder, LittleEndian, BigEndian};
 
 use crate::{
   dds::traits::{
@@ -13,6 +14,12 @@ use crate::{
     error::{Error, Result},
   },
 };
+
+// This is to be implemented by all Discovery message types.
+// .. likely it is not useful for others.
+pub trait PlCdrDeserialize<D> {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D>;
+}
 
 pub struct PlCdrDeserializerAdapter<D> {
   phantom: PhantomData<D>,
