@@ -1,6 +1,7 @@
+use bytes::Bytes;
 use std::time::Instant;
 
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use chrono::Utc;
 use cdr_encoding_size::*;
 
@@ -24,10 +25,13 @@ use crate::{
     with_key::datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
+  messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
     builtin_data_serializer::BuiltinDataSerializer,
+    pl_cdr_deserializer::PlCdrDeserialize,
+    pl_cdr_serializer::PlCdrSerialize,
   },
   structure::{
     entity::RTPSEntity,
@@ -35,15 +39,55 @@ use crate::{
     locator::Locator,
   },
 };
+
+use crate::serialization::error as ser;
+
+use serde::{ser::Error};
+
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
+
+
+
+// We need a wrapper to distinguish between Participant and Endpoint GUIDs.
+// They need to be distinguished, because the PL_CDR serialization is different: ParameterId is different.
+#[allow(non_camel_case_types)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone,Copy, Serialize, Deserialize, CdrEncodingSize, Hash)]
+pub struct Endpoint_GUID(pub GUID);
+
+impl Key for Endpoint_GUID {}
+
+impl PlCdrDeserialize for Endpoint_GUID {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
+    -> ser::Result<Endpoint_GUID>
+  {
+    BuiltinDataDeserializer::new()
+      .parse_data(input_bytes, encoding)
+      .generate_endpoint_guid().map_err(|e| {
+          ser::Error::custom(format!(
+            "deserialize Endpoint_GUID - {:?} - data was {:?}",
+            e, &input_bytes,))
+        })
+  }
+}
+
+impl PlCdrSerialize for Endpoint_GUID {
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes>
+  {
+    BuiltinDataSerializer::from_endpoint_guid(*self)
+      .serialize_pl_cdr_to_Bytes(encoding)
+  }
+}
+
+
+
 
 // Topic data contains all topic related
 // (including reader and writer data structures for serialization and
 // deserialization)
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReaderProxy {
   pub remote_reader_guid: GUID,
   pub expects_inline_qos: bool,
@@ -76,7 +120,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
     }
   }
 }
-
+/*
 impl<'de> Deserialize<'de> for ReaderProxy {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
@@ -99,14 +143,14 @@ impl Serialize for ReaderProxy {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
-
+*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
 
 /// DDS SubscriptionBuiltinTopicData
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SubscriptionBuiltinTopicData {
   key: GUID,
   participant_key: Option<GUID>,
@@ -269,6 +313,9 @@ impl SubscriptionBuiltinTopicData {
   }
 }
 
+
+
+/*
 impl<'de> Deserialize<'de> for SubscriptionBuiltinTopicData {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
@@ -291,13 +338,13 @@ impl Serialize for SubscriptionBuiltinTopicData {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
-
+*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
@@ -325,41 +372,41 @@ impl DiscoveredReaderData {
 }
 
 impl Keyed for DiscoveredReaderData {
-  type K = GUID;
+  type K = Endpoint_GUID;
   fn key(&self) -> Self::K {
-    self.subscription_topic_data.key
+    Endpoint_GUID(self.subscription_topic_data.key)
   }
 }
 
-impl<'de> Deserialize<'de> for DiscoveredReaderData {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
+impl PlCdrDeserialize for DiscoveredReaderData {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
+    -> ser::Result<DiscoveredReaderData>
   {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_any(custom_ds)?;
-    res
-      .generate_discovered_reader_data()
-      .map_err(serde::de::Error::custom)
+    BuiltinDataDeserializer::new()
+      .parse_data(input_bytes, encoding)
+      .generate_discovered_reader_data().map_err(|e| {
+          ser::Error::custom(format!(
+            "DiscoveredReaderData::deserialize - {:?} - data was {:?}",
+            e, &input_bytes,))
+        })
   }
 }
 
-impl Serialize for DiscoveredReaderData {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
+impl PlCdrSerialize for DiscoveredReaderData {
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes>
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_reader_data(self);
-    builtin_data_serializer.serialize::<S>(serializer, true)
+    BuiltinDataSerializer::from_discovered_reader_data(self)
+      .serialize_pl_cdr_to_Bytes(encoding)
   }
 }
+
 
 // =======================================================================
 // =======================================================================
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WriterProxy {
   pub remote_writer_guid: GUID,
   pub unicast_locator_list: Vec<Locator>,
@@ -381,7 +428,7 @@ impl WriterProxy {
     }
   }
 }
-
+/*
 impl<'de> Deserialize<'de> for WriterProxy {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
@@ -404,13 +451,13 @@ impl Serialize for WriterProxy {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
-
+*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PublicationBuiltinTopicData {
   pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
@@ -493,7 +540,7 @@ impl PublicationBuiltinTopicData {
     }
   }
 }
-
+/*
 impl<'de> Deserialize<'de> for PublicationBuiltinTopicData {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
@@ -516,25 +563,26 @@ impl Serialize for PublicationBuiltinTopicData {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
-
+*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,)]
 pub struct DiscoveredWriterData {
-  // last_updated is not serialized
-  pub last_updated: Instant,
+  #[serde(skip, default = "Instant::now")] 
+  pub last_updated: Instant, // last_updated is not serialized
+
   pub writer_proxy: WriterProxy,
   pub publication_topic_data: PublicationBuiltinTopicData,
 }
 
 impl Keyed for DiscoveredWriterData {
-  type K = GUID;
+  type K = Endpoint_GUID;
 
   fn key(&self) -> Self::K {
-    self.publication_topic_data.key
+    Endpoint_GUID( self.publication_topic_data.key )
   }
 }
 
@@ -565,26 +613,25 @@ impl DiscoveredWriterData {
   }
 }
 
-impl<'de> Deserialize<'de> for DiscoveredWriterData {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
+impl PlCdrDeserialize for DiscoveredWriterData {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
+    -> ser::Result<DiscoveredWriterData>
   {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_any(custom_ds)?;
-    res
-      .generate_discovered_writer_data()
-      .map_err(de::Error::custom)
+    BuiltinDataDeserializer::new()
+      .parse_data(input_bytes, encoding)
+      .generate_discovered_writer_data().map_err(|e| {
+          ser::Error::custom(format!(
+            "DiscoveredWriterData::deserialize - {:?} - data was {:?}",
+            e, &input_bytes,))
+        })
   }
 }
 
-impl Serialize for DiscoveredWriterData {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
+impl PlCdrSerialize for DiscoveredWriterData {
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes>
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_discovered_writer_data(self);
-    builtin_data_serializer.serialize::<S>(serializer, true)
+    BuiltinDataSerializer::from_discovered_writer_data(self)
+      .serialize_pl_cdr_to_Bytes(encoding)
   }
 }
 
@@ -593,7 +640,7 @@ impl Serialize for DiscoveredWriterData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct TopicBuiltinTopicData {
   pub key: Option<GUID>,
   pub name: String,
@@ -629,7 +676,7 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
     }
   }
 }
-
+/*
 impl<'de> Deserialize<'de> for TopicBuiltinTopicData {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
@@ -650,7 +697,7 @@ impl Serialize for TopicBuiltinTopicData {
     builtin_data_serializer.serialize::<S>(serializer, false)
   }
 }
-
+*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
@@ -659,7 +706,7 @@ impl Serialize for TopicBuiltinTopicData {
 /// Practically this is gotten from
 /// [DomainParticipant](../participant/struct.DomainParticipant.html) during
 /// runtime Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize,)]
 pub struct DiscoveredTopicData {
   pub updated_time: u64,
   pub topic_data: TopicBuiltinTopicData,
@@ -682,39 +729,43 @@ impl DiscoveredTopicData {
   }
 }
 
-impl<'de> Deserialize<'de> for DiscoveredTopicData {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_any(custom_ds)?;
-    let topic_data = res.generate_topic_data().map_err(de::Error::custom)?;
-
-    Ok(DiscoveredTopicData::new(topic_data))
-  }
-}
-
-impl Serialize for DiscoveredTopicData {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    let builtin_data_serializer = BuiltinDataSerializer::from_topic_data(&self.topic_data);
-    builtin_data_serializer.serialize::<S>(serializer, true)
-  }
-}
 
 impl Keyed for DiscoveredTopicData {
-  type K = GUID;
+  type K = Endpoint_GUID;
 
   fn key(&self) -> Self::K {
     // topic should always have a name, if this crashes the problem is in the
     // overall logic (or message parsing)
-    match self.topic_data.key {
+    Endpoint_GUID(
+     match self.topic_data.key {
       Some(k) => k,
       None => GUID::GUID_UNKNOWN,
-    }
+     }
+    )
+  }
+}
+
+impl PlCdrDeserialize for DiscoveredTopicData {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
+    -> ser::Result<DiscoveredTopicData>
+  {
+    BuiltinDataDeserializer::new()
+      .parse_data(input_bytes, encoding)
+      .generate_topic_data()
+      .map_err(|e| {
+          ser::Error::custom(format!(
+            "DiscoveredTopicData::deserialize - {:?} - data was {:?}",
+            e, &input_bytes,))
+        })
+      .map( DiscoveredTopicData::new )
+  }
+}
+
+impl PlCdrSerialize for DiscoveredTopicData {
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes>
+  {
+    BuiltinDataSerializer::from_topic_data(&self.topic_data)
+      .serialize_pl_cdr_to_Bytes(encoding)
   }
 }
 

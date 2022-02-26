@@ -4,11 +4,12 @@ use mio::Token;
 use serde::{de::Error, Deserialize, Serialize};
 use chrono::Utc;
 use bytes::Bytes;
+use cdr_encoding_size::CdrEncodingSize;
 
 use crate::{
   dds::{
     participant::DomainParticipant, qos::QosPolicies, rtps_reader_proxy::RtpsReaderProxy,
-    rtps_writer_proxy::RtpsWriterProxy, traits::key::Keyed,
+    rtps_writer_proxy::RtpsWriterProxy, traits::key::{Key,Keyed},
   },
   messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
@@ -16,7 +17,6 @@ use crate::{
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
     builtin_data_serializer::BuiltinDataSerializer,
-    cdr_serializer::CdrSerializer,
     pl_cdr_deserializer::*,
     pl_cdr_serializer::*,
     error::{Result},
@@ -180,53 +180,51 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
 }
 
 impl PlCdrSerialize for SpdpDiscoveredParticipantData {
-  fn to_pl_cdr_bytes<D>(d: &D, encoding: RepresentationIdentifier) -> Result<Bytes>
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes>
   {
-    let builtin_data_serializer = BuiltinDataSerializer::from_participant_data(d);
-
-    let size_estimate = std::mem::size_of_val(d) * 2; // crude estimate
-    let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate);
-    let cdr_serializer = CdrSerializer::new(&mut buffer);
-    builtin_data_serializer.serialize(&mut cdr_serializer, true);
-    Ok(Bytes::from(buffer))
+    BuiltinDataSerializer::from_participant_data(self)
+      .serialize_pl_cdr_to_Bytes(encoding)
   }
 }
 
 
+// We need a wrapper to distinguish between Participant and Endpoint GUIDs.
+#[allow(non_camel_case_types)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Serialize, Deserialize, CdrEncodingSize, Hash)]
+pub struct Participant_GUID(pub GUID);
 
-
-// impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantData {
-//   fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-//   where
-//     D: serde::Deserializer<'de>,
-//   {
-//     let visitor = BuiltinDataDeserializer::new();
-//     let res = deserializer.deserialize_any(visitor)?;
-//     res.generate_spdp_participant_data().map_err(|e| {
-//       D::Error::custom(format!(
-//         "SpdpDiscoveredParticipantData::deserialize - {:?} - data was {:?}",
-//         e, &res
-//       ))
-//     })
-//   }
-// }
-
-// impl Serialize for SpdpDiscoveredParticipantData {
-//   fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-//   where
-//     S: serde::Serializer,
-//   {
-//     let builtin_data_serializer = BuiltinDataSerializer::from_participant_data(self);
-//     builtin_data_serializer.serialize::<S>(serializer, true)
-//   }
-// }
+impl Key for Participant_GUID {}
 
 impl Keyed for SpdpDiscoveredParticipantData {
-  type K = GUID;
+  type K = Participant_GUID;
   fn key(&self) -> Self::K {
-    self.participant_guid
+    Participant_GUID(self.participant_guid)
   }
 }
+
+impl PlCdrDeserialize for Participant_GUID {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
+    -> Result<Participant_GUID>
+  {
+    BuiltinDataDeserializer::new()
+      .parse_data(input_bytes, encoding)
+      .generate_participant_guid().map_err(|e| {
+          Error::custom(format!(
+            "deserialize Participant_GUID - {:?} - data was {:?}",
+            e, &input_bytes,))
+        })
+  }
+}
+
+impl PlCdrSerialize for Participant_GUID {
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes>
+  {
+    BuiltinDataSerializer::from_participant_guid(*self)
+      .serialize_pl_cdr_to_Bytes(encoding)
+  }
+}
+
+
 
 #[cfg(test)]
 mod tests {

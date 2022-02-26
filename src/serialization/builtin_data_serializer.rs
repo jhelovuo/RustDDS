@@ -1,5 +1,9 @@
 use std::time::Duration as StdDuration;
+use bytes::Bytes;
 
+#[allow(unused_imports)] use log::{debug, error, info, trace, warn};
+
+use byteorder::{BigEndian, LittleEndian};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use crate::{
@@ -10,17 +14,20 @@ use crate::{
   discovery::{
     content_filter_property::{ContentFilterProperty, ContentFilterPropertyData},
     data_types::{
-      spdp_participant_data::SpdpDiscoveredParticipantData,
+      spdp_participant_data::{SpdpDiscoveredParticipantData, Participant_GUID,},
       topic_data::{
         DiscoveredReaderData, DiscoveredWriterData, PublicationBuiltinTopicData, ReaderProxy,
         SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
+        Endpoint_GUID,
       },
     },
   },
   messages::{
     protocol_version::{ProtocolVersion, ProtocolVersionData},
     vendor_id::{VendorId, VendorIdData},
+    submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   },
+  serialization::{ cdr_serializer::CdrSerializer, error::Result,},
   structure::{
     builtin_endpoint::{
       BuiltinEndpointQos, BuiltinEndpointQosData, BuiltinEndpointSet, BuiltinEndpointSetData,
@@ -32,6 +39,8 @@ use crate::{
     parameter_id::ParameterId,
   },
 };
+
+use crate::serialization::error as ser;
 
 #[derive(Serialize, Deserialize)]
 struct StringData {
@@ -216,6 +225,20 @@ impl<'a> BuiltinDataSerializer<'a> {
     }
   }
 
+  pub fn from_participant_guid(guid: Participant_GUID) -> BuiltinDataSerializer<'a> {
+    BuiltinDataSerializer {
+      participant_guid: Some(guid.0),
+      ..BuiltinDataSerializer::default()
+    }
+  }
+
+  pub fn from_endpoint_guid(guid: Endpoint_GUID) -> BuiltinDataSerializer<'a> {
+    BuiltinDataSerializer {
+      endpoint_guid: Some(guid.0),
+      ..BuiltinDataSerializer::default()
+    }
+  }
+
   pub fn from_reader_proxy(reader_proxy: &'a ReaderProxy) -> BuiltinDataSerializer<'a> {
     BuiltinDataSerializer {
       expects_inline_qos: Some(reader_proxy.expects_inline_qos),
@@ -324,11 +347,38 @@ impl<'a> BuiltinDataSerializer<'a> {
 
   // -----------------------
 
-  pub fn serialize<S: Serializer>(
-    self,
+  // Bytes in the name is capitalzed, because it refers to
+  // type bytes::Bytes, not just any generic &[u8].
+  #[allow(non_snake_case)]
+  pub fn serialize_pl_cdr_to_Bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes>
+  {
+    let size_estimate = std::mem::size_of_val(self) * 2; 
+    // crude estimate. Just something that we are not likely to need a reallocation
+    // of Vec contents.
+    let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate);
+    match encoding {
+      RepresentationIdentifier::PL_CDR_LE => {
+        let mut cdr_serializer = CdrSerializer::<_,LittleEndian>::new(&mut buffer); 
+        self.serialize(&mut cdr_serializer, true)?;
+      }
+      RepresentationIdentifier::PL_CDR_BE => {
+        let mut cdr_serializer = CdrSerializer::<_,BigEndian>::new(&mut buffer); 
+        self.serialize(&mut cdr_serializer, true)?;
+      }
+      ri => error!("serialize_pl_cdr_to_Bytes: RepresentationIdentifier was {:?}", ri),
+    }
+    Ok(Bytes::from(buffer))
+  }
+
+  // -----------------------
+  // This needs a CDR serializer (not PL_CDR) to work with.
+  // It will then output PL_CDR via the CDR serializer.
+  // Someone could argue that this design is crazy and they would have a point.
+  pub fn serialize<S: Serializer<Error = ser::Error>>(
+    &self,
     serializer: S,
     add_sentinel: bool,
-  ) -> Result<S::Ok, S::Error> {
+  ) -> Result<S::Ok> {
     let mut s = serializer
       .serialize_struct("SPDPParticipantData", self.fields_amount())
       .unwrap();

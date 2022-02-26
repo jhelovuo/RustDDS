@@ -1,16 +1,15 @@
 use std::marker::PhantomData;
 
-use serde::{de::DeserializeOwned, Deserializer};
+use serde::{de::DeserializeOwned};
 //use byteorder::{ByteOrder, LittleEndian, BigEndian};
 
 use crate::{
   dds::traits::{
-    serde_adapters::{no_key, no_key::DeserializerAdapter, with_key},
+    serde_adapters::{no_key, with_key},
     Keyed,
   },
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   serialization::{
-    cdr_deserializer::CDRDeserializerAdapter,
     error::{Error, Result},
   },
 };
@@ -27,7 +26,7 @@ pub struct PlCdrDeserializerAdapter<D> {
   phantom: PhantomData<D>,
 }
 
-const REPR_IDS: [RepresentationIdentifier; 4] = [
+const REPR_IDS: [RepresentationIdentifier; 2] = [
   // PL_CDR_* are expected
   RepresentationIdentifier::PL_CDR_BE,
   RepresentationIdentifier::PL_CDR_LE,

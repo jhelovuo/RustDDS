@@ -18,10 +18,11 @@ use crate::{
   discovery::{
     content_filter_property::ContentFilterProperty,
     data_types::{
-      spdp_participant_data::SpdpDiscoveredParticipantData,
+      spdp_participant_data::{SpdpDiscoveredParticipantData, Participant_GUID},
       topic_data::{
         DiscoveredReaderData, DiscoveredWriterData, PublicationBuiltinTopicData, ReaderProxy,
         SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
+        Endpoint_GUID,
       },
     },
   },
@@ -98,6 +99,20 @@ pub struct BuiltinDataDeserializer {
 impl BuiltinDataDeserializer {
   pub fn new() -> BuiltinDataDeserializer {
     Self::default()
+  }
+
+  pub fn generate_participant_guid(&self) -> Result<Participant_GUID,Error> {
+    Ok(Participant_GUID(
+        self.participant_guid
+          .ok_or_else(|| log_and_err_discovery!("participant_guid missing"))?
+      ))
+  }
+
+  pub fn generate_endpoint_guid(&self) -> Result<Endpoint_GUID,Error> {
+    Ok(Endpoint_GUID(
+        self.endpoint_guid
+          .ok_or_else(|| log_and_err_discovery!("endpoint_guid missing"))?
+      ))
   }
 
   pub fn generate_spdp_participant_data(&self) -> Result<SpdpDiscoveredParticipantData, Error> {
