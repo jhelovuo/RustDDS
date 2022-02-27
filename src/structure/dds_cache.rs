@@ -56,11 +56,7 @@ impl DDSCache {
     }
   }
 
-  pub fn topic_get_change(
-    &self,
-    topic_name: &str,
-    instant: &Timestamp,
-  ) -> Option<&CacheChange> {
+  pub fn topic_get_change(&self, topic_name: &str, instant: &Timestamp) -> Option<&CacheChange> {
     self
       .topic_caches
       .get(topic_name)

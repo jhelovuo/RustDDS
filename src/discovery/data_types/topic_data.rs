@@ -113,30 +113,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
     }
   }
 }
-/*
-impl<'de> Deserialize<'de> for ReaderProxy {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_any(custom_ds)?;
-    res
-      .generate_reader_proxy()
-      .ok_or_else(|| de::Error::custom("proxy desrialization"))
-  }
-}
 
-impl Serialize for ReaderProxy {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    let builtin_data_serializer = BuiltinDataSerializer::from_reader_proxy(self);
-    builtin_data_serializer.serialize::<S>(serializer, false)
-  }
-}
-*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
@@ -306,30 +283,6 @@ impl SubscriptionBuiltinTopicData {
   }
 }
 
-/*
-impl<'de> Deserialize<'de> for SubscriptionBuiltinTopicData {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_any(custom_ds)?;
-    res
-      .generate_subscription_topic_data()
-      .map_err(serde::de::Error::custom)
-  }
-}
-
-impl Serialize for SubscriptionBuiltinTopicData {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    let builtin_data_serializer = BuiltinDataSerializer::from_subscription_topic_data(self);
-    builtin_data_serializer.serialize::<S>(serializer, false)
-  }
-}
-*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
@@ -419,30 +372,7 @@ impl WriterProxy {
     }
   }
 }
-/*
-impl<'de> Deserialize<'de> for WriterProxy {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_any(custom_ds)?;
-    res
-      .generate_writer_proxy()
-      .ok_or_else(|| de::Error::custom("WriterProxy deserialization"))
-  }
-}
 
-impl Serialize for WriterProxy {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    let builtin_data_serializer = BuiltinDataSerializer::from_writer_proxy(self);
-    builtin_data_serializer.serialize::<S>(serializer, false)
-  }
-}
-*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
@@ -531,30 +461,7 @@ impl PublicationBuiltinTopicData {
     }
   }
 }
-/*
-impl<'de> Deserialize<'de> for PublicationBuiltinTopicData {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_any(custom_ds)?;
-    res
-      .generate_publication_topic_data()
-      .map_err(de::Error::custom)
-  }
-}
 
-impl Serialize for PublicationBuiltinTopicData {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    let builtin_data_serializer = BuiltinDataSerializer::from_publication_topic_data(self);
-    builtin_data_serializer.serialize::<S>(serializer, false)
-  }
-}
-*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
@@ -668,28 +575,7 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
     }
   }
 }
-/*
-impl<'de> Deserialize<'de> for TopicBuiltinTopicData {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let custom_ds = BuiltinDataDeserializer::new();
-    let res = deserializer.deserialize_any(custom_ds)?;
-    res.generate_topic_data().map_err(de::Error::custom)
-  }
-}
 
-impl Serialize for TopicBuiltinTopicData {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    let builtin_data_serializer = BuiltinDataSerializer::from_topic_data(self);
-    builtin_data_serializer.serialize::<S>(serializer, false)
-  }
-}
-*/
 // =======================================================================
 // =======================================================================
 // =======================================================================
