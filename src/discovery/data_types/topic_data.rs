@@ -1,7 +1,7 @@
-use bytes::Bytes;
 use std::time::Instant;
 
-use serde::{Deserialize, Serialize};
+use bytes::Bytes;
+use serde::{ser::Error, Deserialize, Serialize};
 use chrono::Utc;
 use cdr_encoding_size::*;
 
@@ -29,9 +29,8 @@ use crate::{
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
-    builtin_data_serializer::BuiltinDataSerializer,
-    pl_cdr_deserializer::PlCdrDeserialize,
-    pl_cdr_serializer::PlCdrSerialize,
+    builtin_data_serializer::BuiltinDataSerializer, error as ser,
+    pl_cdr_deserializer::PlCdrDeserialize, pl_cdr_serializer::PlCdrSerialize,
   },
   structure::{
     entity::RTPSEntity,
@@ -39,48 +38,42 @@ use crate::{
     locator::Locator,
   },
 };
-
-use crate::serialization::error as ser;
-
-use serde::{ser::Error};
-
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
 
-
-
 // We need a wrapper to distinguish between Participant and Endpoint GUIDs.
-// They need to be distinguished, because the PL_CDR serialization is different: ParameterId is different.
+// They need to be distinguished, because the PL_CDR serialization is different:
+// ParameterId is different.
 #[allow(non_camel_case_types)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone,Copy, Serialize, Deserialize, CdrEncodingSize, Hash)]
+#[derive(
+  PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Serialize, Deserialize, CdrEncodingSize, Hash,
+)]
 pub struct Endpoint_GUID(pub GUID);
 
 impl Key for Endpoint_GUID {}
 
 impl PlCdrDeserialize for Endpoint_GUID {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
-    -> ser::Result<Endpoint_GUID>
-  {
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> ser::Result<Endpoint_GUID> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
-      .generate_endpoint_guid().map_err(|e| {
-          ser::Error::custom(format!(
-            "deserialize Endpoint_GUID - {:?} - data was {:?}",
-            e, &input_bytes,))
-        })
+      .generate_endpoint_guid()
+      .map_err(|e| {
+        ser::Error::custom(format!(
+          "deserialize Endpoint_GUID - {:?} - data was {:?}",
+          e, &input_bytes,
+        ))
+      })
   }
 }
 
 impl PlCdrSerialize for Endpoint_GUID {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes>
-  {
-    BuiltinDataSerializer::from_endpoint_guid(*self)
-      .serialize_pl_cdr_to_Bytes(encoding)
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+    BuiltinDataSerializer::from_endpoint_guid(*self).serialize_pl_cdr_to_Bytes(encoding)
   }
 }
-
-
-
 
 // Topic data contains all topic related
 // (including reader and writer data structures for serialization and
@@ -313,8 +306,6 @@ impl SubscriptionBuiltinTopicData {
   }
 }
 
-
-
 /*
 impl<'de> Deserialize<'de> for SubscriptionBuiltinTopicData {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -344,7 +335,7 @@ impl Serialize for SubscriptionBuiltinTopicData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
@@ -379,27 +370,27 @@ impl Keyed for DiscoveredReaderData {
 }
 
 impl PlCdrDeserialize for DiscoveredReaderData {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
-    -> ser::Result<DiscoveredReaderData>
-  {
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> ser::Result<DiscoveredReaderData> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
-      .generate_discovered_reader_data().map_err(|e| {
-          ser::Error::custom(format!(
-            "DiscoveredReaderData::deserialize - {:?} - data was {:?}",
-            e, &input_bytes,))
-        })
+      .generate_discovered_reader_data()
+      .map_err(|e| {
+        ser::Error::custom(format!(
+          "DiscoveredReaderData::deserialize - {:?} - data was {:?}",
+          e, &input_bytes,
+        ))
+      })
   }
 }
 
 impl PlCdrSerialize for DiscoveredReaderData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes>
-  {
-    BuiltinDataSerializer::from_discovered_reader_data(self)
-      .serialize_pl_cdr_to_Bytes(encoding)
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+    BuiltinDataSerializer::from_discovered_reader_data(self).serialize_pl_cdr_to_Bytes(encoding)
   }
 }
-
 
 // =======================================================================
 // =======================================================================
@@ -569,9 +560,9 @@ impl Serialize for PublicationBuiltinTopicData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DiscoveredWriterData {
-  #[serde(skip, default = "Instant::now")] 
+  #[serde(skip, default = "Instant::now")]
   pub last_updated: Instant, // last_updated is not serialized
 
   pub writer_proxy: WriterProxy,
@@ -582,7 +573,7 @@ impl Keyed for DiscoveredWriterData {
   type K = Endpoint_GUID;
 
   fn key(&self) -> Self::K {
-    Endpoint_GUID( self.publication_topic_data.key )
+    Endpoint_GUID(self.publication_topic_data.key)
   }
 }
 
@@ -614,24 +605,25 @@ impl DiscoveredWriterData {
 }
 
 impl PlCdrDeserialize for DiscoveredWriterData {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
-    -> ser::Result<DiscoveredWriterData>
-  {
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> ser::Result<DiscoveredWriterData> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
-      .generate_discovered_writer_data().map_err(|e| {
-          ser::Error::custom(format!(
-            "DiscoveredWriterData::deserialize - {:?} - data was {:?}",
-            e, &input_bytes,))
-        })
+      .generate_discovered_writer_data()
+      .map_err(|e| {
+        ser::Error::custom(format!(
+          "DiscoveredWriterData::deserialize - {:?} - data was {:?}",
+          e, &input_bytes,
+        ))
+      })
   }
 }
 
 impl PlCdrSerialize for DiscoveredWriterData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes>
-  {
-    BuiltinDataSerializer::from_discovered_writer_data(self)
-      .serialize_pl_cdr_to_Bytes(encoding)
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+    BuiltinDataSerializer::from_discovered_writer_data(self).serialize_pl_cdr_to_Bytes(encoding)
   }
 }
 
@@ -706,7 +698,7 @@ impl Serialize for TopicBuiltinTopicData {
 /// Practically this is gotten from
 /// [DomainParticipant](../participant/struct.DomainParticipant.html) during
 /// runtime Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize,)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct DiscoveredTopicData {
   pub updated_time: u64,
   pub topic_data: TopicBuiltinTopicData,
@@ -729,43 +721,40 @@ impl DiscoveredTopicData {
   }
 }
 
-
 impl Keyed for DiscoveredTopicData {
   type K = Endpoint_GUID;
 
   fn key(&self) -> Self::K {
     // topic should always have a name, if this crashes the problem is in the
     // overall logic (or message parsing)
-    Endpoint_GUID(
-     match self.topic_data.key {
+    Endpoint_GUID(match self.topic_data.key {
       Some(k) => k,
       None => GUID::GUID_UNKNOWN,
-     }
-    )
+    })
   }
 }
 
 impl PlCdrDeserialize for DiscoveredTopicData {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) 
-    -> ser::Result<DiscoveredTopicData>
-  {
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> ser::Result<DiscoveredTopicData> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
       .generate_topic_data()
       .map_err(|e| {
-          ser::Error::custom(format!(
-            "DiscoveredTopicData::deserialize - {:?} - data was {:?}",
-            e, &input_bytes,))
-        })
-      .map( DiscoveredTopicData::new )
+        ser::Error::custom(format!(
+          "DiscoveredTopicData::deserialize - {:?} - data was {:?}",
+          e, &input_bytes,
+        ))
+      })
+      .map(DiscoveredTopicData::new)
   }
 }
 
 impl PlCdrSerialize for DiscoveredTopicData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes>
-  {
-    BuiltinDataSerializer::from_topic_data(&self.topic_data)
-      .serialize_pl_cdr_to_Bytes(encoding)
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+    BuiltinDataSerializer::from_topic_data(&self.topic_data).serialize_pl_cdr_to_Bytes(encoding)
   }
 }
 
@@ -831,68 +820,68 @@ mod tests {
   use bytes::Bytes;
   use log::info;
 
+  use crate::dds::traits::serde_adapters::no_key::SerializerAdapter;
   use super::*;
   // use crate::serialization::cdr_serializer::to_little_endian_binary;
   use crate::{
     dds::traits::serde_adapters::no_key::DeserializerAdapter,
     messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
-    serialization::{
-      cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, Message,
-    },
+    serialization::{pl_cdr_deserializer::PlCdrDeserializerAdapter, pl_cdr_serializer::*, Message},
     test::test_data::{
       content_filter_data, publication_builtin_topic_data, reader_proxy_data,
       subscription_builtin_topic_data, topic_data, writer_proxy_data,
     },
   };
 
-  #[test]
-  fn td_reader_proxy_ser_deser() {
-    let reader_proxy = reader_proxy_data().unwrap();
+  /* do not test separate ser/deser of components, as these are never seen on wire individually
+    #[test]
+    fn td_reader_proxy_ser_deser() {
+      let reader_proxy = reader_proxy_data().unwrap();
 
-    let sdata = to_bytes::<ReaderProxy, LittleEndian>(&reader_proxy).unwrap();
-    let reader_proxy2: ReaderProxy =
-      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
-    assert_eq!(reader_proxy, reader_proxy2);
-    let sdata2 = to_bytes::<ReaderProxy, LittleEndian>(&reader_proxy2).unwrap();
-    assert_eq!(sdata, sdata2);
-  }
+      let sdata = to_bytes::<ReaderProxy, LittleEndian>(&reader_proxy).unwrap();
+      let reader_proxy2: ReaderProxy =
+        PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
+      assert_eq!(reader_proxy, reader_proxy2);
+      let sdata2 = to_bytes::<ReaderProxy, LittleEndian>(&reader_proxy2).unwrap();
+      assert_eq!(sdata, sdata2);
+    }
 
-  #[test]
-  fn td_writer_proxy_ser_deser() {
-    let writer_proxy = writer_proxy_data().unwrap();
+    #[test]
+    fn td_writer_proxy_ser_deser() {
+      let writer_proxy = writer_proxy_data().unwrap();
 
-    let sdata = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy).unwrap();
-    let writer_proxy2: WriterProxy =
-      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
-    assert_eq!(writer_proxy, writer_proxy2);
-    let sdata2 = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy2).unwrap();
-    assert_eq!(sdata, sdata2);
-  }
+      let sdata = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy).unwrap();
+      let writer_proxy2: WriterProxy =
+        PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
+      assert_eq!(writer_proxy, writer_proxy2);
+      let sdata2 = to_bytes::<WriterProxy, LittleEndian>(&writer_proxy2).unwrap();
+      assert_eq!(sdata, sdata2);
+    }
 
-  #[test]
-  fn td_subscription_builtin_topic_data_ser_deser() {
-    let sub_topic_data = subscription_builtin_topic_data().unwrap();
+    #[test]
+    fn td_subscription_builtin_topic_data_ser_deser() {
+      let sub_topic_data = subscription_builtin_topic_data().unwrap();
 
-    let sdata = to_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(&sub_topic_data).unwrap();
-    let sub_topic_data2: SubscriptionBuiltinTopicData =
-      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
-    assert_eq!(sub_topic_data, sub_topic_data2);
-    let sdata2 = to_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(&sub_topic_data2).unwrap();
-    assert_eq!(sdata, sdata2);
-  }
+      let sdata = to_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(&sub_topic_data).unwrap();
+      let sub_topic_data2: SubscriptionBuiltinTopicData =
+        PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
+      assert_eq!(sub_topic_data, sub_topic_data2);
+      let sdata2 = to_bytes::<SubscriptionBuiltinTopicData, LittleEndian>(&sub_topic_data2).unwrap();
+      assert_eq!(sdata, sdata2);
+    }
 
-  #[test]
-  fn td_publication_builtin_topic_data_ser_deser() {
-    let pub_topic_data = publication_builtin_topic_data().unwrap();
+    #[test]
+    fn td_publication_builtin_topic_data_ser_deser() {
+      let pub_topic_data = publication_builtin_topic_data().unwrap();
 
-    let sdata = to_bytes::<PublicationBuiltinTopicData, LittleEndian>(&pub_topic_data).unwrap();
-    let pub_topic_data2: PublicationBuiltinTopicData =
-      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
-    assert_eq!(pub_topic_data, pub_topic_data2);
-    let sdata2 = to_bytes::<PublicationBuiltinTopicData, LittleEndian>(&pub_topic_data2).unwrap();
-    assert_eq!(sdata, sdata2);
-  }
-
+      let sdata = to_bytes::<PublicationBuiltinTopicData, LittleEndian>(&pub_topic_data).unwrap();
+      let pub_topic_data2: PublicationBuiltinTopicData =
+        PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
+      assert_eq!(pub_topic_data, pub_topic_data2);
+      let sdata2 = to_bytes::<PublicationBuiltinTopicData, LittleEndian>(&pub_topic_data2).unwrap();
+      assert_eq!(sdata, sdata2);
+    }
+  */
   #[test]
   fn td_discovered_reader_data_ser_deser() {
     let mut reader_proxy = reader_proxy_data().unwrap();
@@ -906,11 +895,19 @@ mod tests {
       content_filter: Some(content_filter),
     };
 
-    let sdata = to_bytes::<DiscoveredReaderData, LittleEndian>(&drd).unwrap();
+    // serialize
+    let sdata = drd
+      .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+      .unwrap();
+
+    // deserialize back
     let drd2: DiscoveredReaderData =
       PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
+
+    // check objects are equal
     assert_eq!(drd, drd2);
-    let sdata2 = to_bytes::<DiscoveredReaderData, LittleEndian>(&drd2).unwrap();
+    let sdata2 =
+      PlCdrSerializerAdapter::<DiscoveredReaderData, LittleEndian>::to_bytes(&drd2).unwrap();
     assert_eq!(sdata, sdata2);
 
     let raw_data = Bytes::from_static(&[
@@ -950,28 +947,32 @@ mod tests {
       publication_topic_data: pub_topic_data,
     };
 
-    let sdata = to_bytes::<DiscoveredWriterData, LittleEndian>(&dwd).unwrap();
+    let sdata = dwd
+      .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+      .unwrap();
     let mut dwd2: DiscoveredWriterData =
       PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
     // last updated is not serialized thus copying value for correct result
     dwd2.last_updated = dwd.last_updated;
 
     assert_eq!(dwd, dwd2);
-    let sdata2 = to_bytes::<DiscoveredWriterData, LittleEndian>(&dwd2).unwrap();
+    let sdata2 =
+      PlCdrSerializerAdapter::<DiscoveredWriterData, LittleEndian>::to_bytes(&dwd2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 
-  #[test]
-  fn td_topic_data_ser_deser() {
-    let topic_data = topic_data().unwrap();
+  // Do not test ser/deser. This is never seen on the wire out of
+  // DiscoveredTopicData #[test]
+  // fn td_topic_data_ser_deser() {
+  //   let topic_data = topic_data().unwrap();
 
-    let sdata = to_bytes::<TopicBuiltinTopicData, LittleEndian>(&topic_data).unwrap();
-    let topic_data2: TopicBuiltinTopicData =
-      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
-    assert_eq!(topic_data, topic_data2);
-    let sdata2 = to_bytes::<TopicBuiltinTopicData, LittleEndian>(&topic_data2).unwrap();
-    assert_eq!(sdata, sdata2);
-  }
+  //   let sdata = to_bytes::<TopicBuiltinTopicData,
+  // LittleEndian>(&topic_data).unwrap();   let topic_data2:
+  // TopicBuiltinTopicData =     PlCdrDeserializerAdapter::from_bytes(&sdata,
+  // RepresentationIdentifier::PL_CDR_LE).unwrap();   assert_eq!(topic_data,
+  // topic_data2);   let sdata2 = to_bytes::<TopicBuiltinTopicData,
+  // LittleEndian>(&topic_data2).unwrap();   assert_eq!(sdata, sdata2);
+  // }
 
   #[test]
   fn td_discovered_topic_data_ser_deser() {
@@ -979,11 +980,14 @@ mod tests {
 
     let dtd = DiscoveredTopicData::new(topic_data);
 
-    let sdata = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd).unwrap();
+    let sdata = dtd
+      .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+      .unwrap();
     let dtd2: DiscoveredTopicData =
       PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
     assert_eq!(dtd.topic_data, dtd2.topic_data);
-    let sdata2 = to_bytes::<DiscoveredTopicData, LittleEndian>(&dtd2).unwrap();
+    let sdata2 =
+      PlCdrSerializerAdapter::<DiscoveredTopicData, LittleEndian>::to_bytes(&dtd2).unwrap();
     assert_eq!(sdata, sdata2);
   }
 

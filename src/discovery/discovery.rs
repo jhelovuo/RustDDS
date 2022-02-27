@@ -31,18 +31,18 @@ use crate::{
   },
   discovery::{
     data_types::{
-      spdp_participant_data::{SpdpDiscoveredParticipantData, Participant_GUID},
+      spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
       topic_data::{
-        DiscoveredReaderData, DiscoveredWriterData, PublicationBuiltinTopicData, ReaderProxy,
-        WriterProxy,
-        Endpoint_GUID,
+        DiscoveredReaderData, DiscoveredWriterData, Endpoint_GUID, PublicationBuiltinTopicData,
+        ReaderProxy, WriterProxy,
       },
     },
     discovery_db::DiscoveryDB,
   },
   network::constant::*,
-  serialization::pl_cdr_deserializer::PlCdrDeserializerAdapter,
-  serialization::pl_cdr_serializer::PlCdrSerializerAdapter,
+  serialization::{
+    pl_cdr_deserializer::PlCdrDeserializerAdapter, pl_cdr_serializer::PlCdrSerializerAdapter,
+  },
   structure::{
     duration::Duration,
     entity::RTPSEntity,
@@ -110,23 +110,33 @@ pub(crate) struct Discovery {
   // where participants announce their presence and built-in readers and writers.
   #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
   dcps_participant_topic: Topic,
-  dcps_participant_reader: DataReader<SpdpDiscoveredParticipantData, PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>>,
-  dcps_participant_writer: DataWriter<SpdpDiscoveredParticipantData, PlCdrSerializerAdapter<SpdpDiscoveredParticipantData>>,
+  dcps_participant_reader: DataReader<
+    SpdpDiscoveredParticipantData,
+    PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>,
+  >,
+  dcps_participant_writer: DataWriter<
+    SpdpDiscoveredParticipantData,
+    PlCdrSerializerAdapter<SpdpDiscoveredParticipantData>,
+  >,
   participant_cleanup_timer: Timer<()>, // garbage collection timer for dead remote particiapnts
   participant_send_info_timer: Timer<()>, // timer to periodically announce our presence
 
   // Topic "DCPSSubscription" - announcing and detecting Readers
   #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
   dcps_subscription_topic: Topic,
-  dcps_subscription_reader: DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
-  dcps_subscription_writer: DataWriter<DiscoveredReaderData, PlCdrSerializerAdapter<DiscoveredReaderData>>,
+  dcps_subscription_reader:
+    DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
+  dcps_subscription_writer:
+    DataWriter<DiscoveredReaderData, PlCdrSerializerAdapter<DiscoveredReaderData>>,
   readers_send_info_timer: Timer<()>,
 
   // Topic "DCPSPublication" - announcing and detecting Writers
   #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
   dcps_publication_topic: Topic,
-  dcps_publication_reader: DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
-  dcps_publication_writer: DataWriter<DiscoveredWriterData, PlCdrSerializerAdapter<DiscoveredWriterData>>,
+  dcps_publication_reader:
+    DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
+  dcps_publication_writer:
+    DataWriter<DiscoveredWriterData, PlCdrSerializerAdapter<DiscoveredWriterData>>,
   writers_send_info_timer: Timer<()>,
 
   // Topic "DCPSTopic" - annoncing and detecting topics
@@ -943,13 +953,10 @@ impl Discovery {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
-        Ok(ds) => 
-          ds.iter()
-            .map(|d| d.value
-                      .map(|o| o.clone())
-                      .map_err(|g| g.0)
-                )
-            .collect(),
+        Ok(ds) => ds
+          .iter()
+          .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+          .collect(),
         Err(e) => {
           error!("handle_subscription_reader: {:?}", e);
           return;
@@ -1016,12 +1023,10 @@ impl Discovery {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
-        Ok(ds) => 
-          ds.iter()
-            .map(|d| d.value
-                      .map(|o| o.clone())
-                      .map_err(|g| g.0) )
-            .collect(),
+        Ok(ds) => ds
+          .iter()
+          .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+          .collect(),
         Err(e) => {
           error!("handle_publication_reader: {:?}", e);
           return;
@@ -1063,7 +1068,10 @@ impl Discovery {
       // a lot of cloning here, but we must copy the data out of the
       // reader before we can use self again, as .read() returns references to within
       // a reader and thus self
-      Ok(ds) => ds.iter().map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0)).collect(),
+      Ok(ds) => ds
+        .iter()
+        .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+        .collect(),
       Err(e) => {
         error!("handle_topic_reader: {:?}", e);
         return;

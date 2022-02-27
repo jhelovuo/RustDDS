@@ -1,8 +1,8 @@
 use std::time::Duration as StdDuration;
+
 use bytes::Bytes;
-
-#[allow(unused_imports)] use log::{debug, error, info, trace, warn};
-
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 use byteorder::{BigEndian, LittleEndian};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
@@ -14,20 +14,19 @@ use crate::{
   discovery::{
     content_filter_property::{ContentFilterProperty, ContentFilterPropertyData},
     data_types::{
-      spdp_participant_data::{SpdpDiscoveredParticipantData, Participant_GUID,},
+      spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
       topic_data::{
-        DiscoveredReaderData, DiscoveredWriterData, PublicationBuiltinTopicData, ReaderProxy,
-        SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
-        Endpoint_GUID,
+        DiscoveredReaderData, DiscoveredWriterData, Endpoint_GUID, PublicationBuiltinTopicData,
+        ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
       },
     },
   },
   messages::{
     protocol_version::{ProtocolVersion, ProtocolVersionData},
-    vendor_id::{VendorId, VendorIdData},
     submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+    vendor_id::{VendorId, VendorIdData},
   },
-  serialization::{ cdr_serializer::CdrSerializer, error::Result,},
+  serialization::{cdr_serializer::CdrSerializer, error as ser, error::Result},
   structure::{
     builtin_endpoint::{
       BuiltinEndpointQos, BuiltinEndpointQosData, BuiltinEndpointSet, BuiltinEndpointSetData,
@@ -39,8 +38,6 @@ use crate::{
     parameter_id::ParameterId,
   },
 };
-
-use crate::serialization::error as ser;
 
 #[derive(Serialize, Deserialize)]
 struct StringData {
@@ -350,22 +347,24 @@ impl<'a> BuiltinDataSerializer<'a> {
   // Bytes in the name is capitalzed, because it refers to
   // type bytes::Bytes, not just any generic &[u8].
   #[allow(non_snake_case)]
-  pub fn serialize_pl_cdr_to_Bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes>
-  {
-    let size_estimate = std::mem::size_of_val(self) * 2; 
+  pub fn serialize_pl_cdr_to_Bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes> {
+    let size_estimate = std::mem::size_of_val(self) * 2;
     // crude estimate. Just something that we are not likely to need a reallocation
     // of Vec contents.
     let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate);
     match encoding {
       RepresentationIdentifier::PL_CDR_LE => {
-        let mut cdr_serializer = CdrSerializer::<_,LittleEndian>::new(&mut buffer); 
+        let mut cdr_serializer = CdrSerializer::<_, LittleEndian>::new(&mut buffer);
         self.serialize(&mut cdr_serializer, true)?;
       }
       RepresentationIdentifier::PL_CDR_BE => {
-        let mut cdr_serializer = CdrSerializer::<_,BigEndian>::new(&mut buffer); 
+        let mut cdr_serializer = CdrSerializer::<_, BigEndian>::new(&mut buffer);
         self.serialize(&mut cdr_serializer, true)?;
       }
-      ri => error!("serialize_pl_cdr_to_Bytes: RepresentationIdentifier was {:?}", ri),
+      ri => error!(
+        "serialize_pl_cdr_to_Bytes: RepresentationIdentifier was {:?}",
+        ri
+      ),
     }
     Ok(Bytes::from(buffer))
   }

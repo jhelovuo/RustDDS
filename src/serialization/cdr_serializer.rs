@@ -144,7 +144,6 @@ where
     }
     Ok(())
   }
-
 }
 
 pub fn to_writer<T, BO, W>(writer: W, value: &T) -> Result<()>
