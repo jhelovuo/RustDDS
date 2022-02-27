@@ -410,7 +410,7 @@ impl Writer {
               .dds_cache
               .read()
               .unwrap()
-              .from_topic_get_change(&self.my_topic_name, &timestamp)
+              .topic_get_change(&self.my_topic_name, &timestamp)
             {
               partial_message.data_msg(
                 cache_change,
@@ -738,7 +738,7 @@ impl Writer {
           .dds_cache
           .read()
           .unwrap()
-          .from_topic_get_change(&self.my_topic_name, &timestamp)
+          .topic_get_change(&self.my_topic_name, &timestamp)
         {
           // CacheChange found, construct DATA submessage
           partial_message = partial_message.data_msg(
@@ -834,7 +834,7 @@ impl Writer {
         .dds_cache
         .write()
         .unwrap()
-        .from_topic_remove_before(&self.my_topic_name, keep_instant);
+        .topic_remove_before(&self.my_topic_name, keep_instant);
     } else {
       warn!("{:?} missing from instant map", first_keeper);
     }

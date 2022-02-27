@@ -687,7 +687,7 @@ where
       ),
     };
 
-    let cache_changes = dds_cache.from_topic_get_changes_in_range(
+    let cache_changes = dds_cache.topic_get_changes_in_range(
       &self.my_topic.name(),
       &self.latest_instant,
       &Timestamp::now(),

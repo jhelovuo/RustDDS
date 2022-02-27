@@ -284,7 +284,7 @@ impl Reader {
     let cc = self
       .seqnum_instant_map
       .get(&sequence_number)
-      .and_then(|i| dds_cache.from_topic_get_change(&self.topic_name, i));
+      .and_then(|i| dds_cache.topic_get_change(&self.topic_name, i));
 
     debug!("history cache !!!! {:?}", cc);
 
@@ -299,7 +299,7 @@ impl Reader {
     let cc = self
       .seqnum_instant_map
       .get(&sequence_number)
-      .and_then(|i| dds_cache.from_topic_get_change(&self.topic_name, i));
+      .and_then(|i| dds_cache.topic_get_change(&self.topic_name, i));
     debug!("history cache !!!! {:?}", cc);
     cc.cloned()
   }
@@ -714,7 +714,7 @@ impl Reader {
       };
       for instant in removed_instances.values() {
         if cache
-          .from_topic_remove_change(&self.topic_name, instant)
+          .topic_remove_change(&self.topic_name, instant)
           .is_none()
         {
           debug!("WriterProxy told to remove an instant which was not present");
@@ -863,7 +863,7 @@ impl Reader {
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
     for instant in &removed_changes {
-      cache.from_topic_remove_change(&self.topic_name, instant);
+      cache.topic_remove_change(&self.topic_name, instant);
     }
 
     // Is this needed?
@@ -1178,7 +1178,7 @@ mod tests {
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
     let cc_built_here = CacheChange::new(writer_guid, d_seqnum, WriteOptions::default(), ddsdata);
 
-    let cc_from_chache = hc_locked.from_topic_get_change(
+    let cc_from_chache = hc_locked.topic_get_change(
       &new_reader.topic_name,
       new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
     );
