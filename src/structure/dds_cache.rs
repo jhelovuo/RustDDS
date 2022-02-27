@@ -56,11 +56,7 @@ impl DDSCache {
     }
   }
 
-  pub fn from_topic_get_change(
-    &self,
-    topic_name: &str,
-    instant: &Timestamp,
-  ) -> Option<&CacheChange> {
+  pub fn topic_get_change(&self, topic_name: &str, instant: &Timestamp) -> Option<&CacheChange> {
     self
       .topic_caches
       .get(topic_name)
@@ -68,7 +64,7 @@ impl DDSCache {
   }
 
   /// Removes cacheChange permanently
-  pub fn from_topic_remove_change(
+  pub fn topic_remove_change(
     &mut self,
     topic_name: &str,
     instant: &Timestamp,
@@ -77,7 +73,7 @@ impl DDSCache {
       tc.remove_change(instant)
     } else {
       error!(
-        "from_topic_remove_change: Topic {:?} is not in DDSCache",
+        "topic_remove_change: Topic {:?} is not in DDSCache",
         topic_name
       );
       None
@@ -85,19 +81,19 @@ impl DDSCache {
   }
 
   /// Removes cacheChange permanently
-  pub fn from_topic_remove_before(&mut self, topic_name: &str, instant: Timestamp) {
+  pub fn topic_remove_before(&mut self, topic_name: &str, instant: Timestamp) {
     match self.topic_caches.get_mut(topic_name) {
       Some(tc) => tc.remove_changes_before(instant),
       None => {
         error!(
-          "from_topic_remove_before: topic: {:?} is not in DDSCache",
+          "topic_remove_before: topic: {:?} is not in DDSCache",
           topic_name
         );
       }
     }
   }
 
-  pub fn from_topic_get_changes_in_range(
+  pub fn topic_get_changes_in_range(
     &self,
     topic_name: &str,
     start_instant: &Timestamp,
@@ -382,12 +378,12 @@ mod tests {
     cache
       .read()
       .unwrap()
-      .from_topic_get_change(&topic_name, &crate::Timestamp::now());
+      .topic_get_change(&topic_name, &crate::Timestamp::now());
     assert_eq!(
       cache
         .read()
         .unwrap()
-        .from_topic_get_changes_in_range(
+        .topic_get_changes_in_range(
           &topic_name,
           &(crate::Timestamp::now() - crate::Duration::from_secs(23)),
           &crate::Timestamp::now()
@@ -397,7 +393,7 @@ mod tests {
     );
     // info!(
     //   "{:?}",
-    //   cache.read().unwrap().from_topic_get_changes_in_range(
+    //   cache.read().unwrap().topic_get_changes_in_range(
     //     topic_name,
     //     &(DDSTimestamp::now() - rustdds::Duration::from_secs(23)),
     //     &crate::Timestamp::now()

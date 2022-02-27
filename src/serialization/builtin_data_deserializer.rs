@@ -18,10 +18,10 @@ use crate::{
   discovery::{
     content_filter_property::ContentFilterProperty,
     data_types::{
-      spdp_participant_data::SpdpDiscoveredParticipantData,
+      spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
       topic_data::{
-        DiscoveredReaderData, DiscoveredWriterData, PublicationBuiltinTopicData, ReaderProxy,
-        SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
+        DiscoveredReaderData, DiscoveredWriterData, Endpoint_GUID, PublicationBuiltinTopicData,
+        ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
       },
     },
   },
@@ -100,6 +100,18 @@ impl BuiltinDataDeserializer {
     Self::default()
   }
 
+  pub fn generate_participant_guid(&self) -> Result<Participant_GUID, Error> {
+    Ok(Participant_GUID(self.participant_guid.ok_or_else(
+      || log_and_err_discovery!("participant_guid missing"),
+    )?))
+  }
+
+  pub fn generate_endpoint_guid(&self) -> Result<Endpoint_GUID, Error> {
+    Ok(Endpoint_GUID(self.endpoint_guid.ok_or_else(|| {
+      log_and_err_discovery!("endpoint_guid missing")
+    })?))
+  }
+
   pub fn generate_spdp_participant_data(&self) -> Result<SpdpDiscoveredParticipantData, Error> {
     Ok(SpdpDiscoveredParticipantData {
       updated_time: Utc::now(),
@@ -145,7 +157,7 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn generate_writer_proxy(&self) -> Option<WriterProxy> {
+  pub fn generate_writer_proxy(&self) -> Result<WriterProxy, Error> {
     let remote_writer_guid = if let Some(g) = self.endpoint_guid {
       g
     } else {
@@ -153,9 +165,9 @@ impl BuiltinDataDeserializer {
         "Discovery received WriterProxy data without GUID: {:?}",
         self
       );
-      return None;
+      return Err(Error::Message("WriterProxy: No endpoint GUID.".to_string()));
     };
-    Some(WriterProxy {
+    Ok(WriterProxy {
       remote_writer_guid,
       unicast_locator_list: self.unicast_locator_list.clone(),
       multicast_locator_list: self.multicast_locator_list.clone(),
@@ -313,7 +325,7 @@ impl BuiltinDataDeserializer {
   pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData, Error> {
     let writer_proxy = self
       .generate_writer_proxy()
-      .ok_or_else(|| Error::Message("WriterProxy deserialization".to_string()))?;
+      .map_err(|e| Error::Message(format!("WriterProxy deserialization: {:?}", e)))?;
     let publication_topic_data = self.generate_publication_topic_data()?;
     Ok(DiscoveredWriterData {
       last_updated: Instant::now(),
@@ -330,7 +342,11 @@ impl BuiltinDataDeserializer {
     self.parse_data(buffer, RepresentationIdentifier::CDR_BE)
   }
 
-  fn parse_data(mut self, buffer: &[u8], rep: RepresentationIdentifier) -> BuiltinDataDeserializer {
+  pub fn parse_data(
+    mut self,
+    buffer: &[u8],
+    rep: RepresentationIdentifier,
+  ) -> BuiltinDataDeserializer {
     let mut buffer = buffer.to_vec();
     while self.sentinel.is_none() && !buffer.is_empty() {
       self = self.read_next(&mut buffer, rep);
