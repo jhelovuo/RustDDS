@@ -83,6 +83,11 @@ pub(crate) struct Reader {
 
   is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
   // Currently we support only stateful behaviour.
+  // RTPS Spec: Section 8.4.11.2 Reliable StatelessReader Behavior
+  // "This combination is not supported by the RTPS protocol."
+  // So stateful must be true whenever we are Reliable.
+ 
+  reliability: policy::Reliability, 
   dds_cache: Arc<RwLock<DDSCache>>,
 
   #[cfg(test)]
@@ -123,6 +128,10 @@ impl Reader {
       status_sender: i.status_sender,
       udp_sender,
       is_stateful: true, // Do not change this before stateless functionality is implemented.
+
+      reliability: 
+        i.qos_policy.reliability() // use qos specification
+          .unwrap_or(policy::Reliability::BestEffort), // or default to BestEffort
       dds_cache,
       topic_name: i.topic_name,
       qos_policy: i.qos_policy,
@@ -528,16 +537,17 @@ impl Reader {
     writer_sn: SequenceNumber,
   ) {
     trace!(
-      "handle_data_msg from {:?} seq={:?} topic={:?} stateful={:?}",
+      "handle_data_msg from {:?} seq={:?} topic={:?} reliability={:?} stateful={:?}",
       &writer_guid,
       writer_sn,
       self.topic_name,
+      self.reliability,
       self.is_stateful,
     );
     if self.is_stateful {
       let my_entityid = self.my_guid.entity_id; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
-        if writer_proxy.contains_change(writer_sn) {
+        if writer_proxy.should_ignore_change(writer_sn) {
           // change already present
           debug!("handle_data_msg already have this seq={:?}", writer_sn);
           if my_entityid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
@@ -662,11 +672,16 @@ impl Reader {
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
-    if !self.is_stateful {
+    if self.reliability == policy::Reliability::BestEffort {
       debug!(
-        "HEARTBEAT from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}",
+        "HEARTBEAT from {:?}, but this Reader is BestEffort. Ignoring. topic={:?} reader={:?}",
         writer_guid, self.topic_name, self.my_guid
       );
+      // BestEffort Reader reacts only to DATA and GAP
+      // See RTPS Spec Section "8.4.11 RTPS StatelessReader Behavior":
+      // Figure 8.23 - Behavior of the Best-Effort StatefulReader with respect to each matched Writer
+      // and
+      // Figure 8.22 - Behavior of the Best-Effort StatelessReader
       return false;
     }
 

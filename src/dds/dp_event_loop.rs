@@ -219,12 +219,12 @@ impl DPEventLoop {
       // liveness watchdog
       let now = Instant::now();
       if now > poll_alive + Duration::from_secs(2) {
-        info!("Poll loop alive");
+        debug!("Poll loop alive");
         poll_alive = now;
       }
 
       if events.is_empty() {
-        info!("dp_event_loop idling.");
+        debug!("dp_event_loop idling.");
       } else {
         for event in events.iter() {
           match EntityId::from_token(event.token()) {
@@ -516,7 +516,7 @@ impl DPEventLoop {
   }
 
   fn update_participant(&mut self, participant_guid_prefix: GuidPrefix) {
-    info!(
+    debug!(
       "update_participant {:?} myself={}",
       participant_guid_prefix,
       participant_guid_prefix == self.domain_info.domain_participant_guid.prefix
