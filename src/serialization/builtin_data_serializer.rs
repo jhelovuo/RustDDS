@@ -479,12 +479,13 @@ impl<'a> BuiltinDataSerializer<'a> {
         s.serialize_field("protocol_version", &ProtocolVersionData::from(pv))
           .unwrap();
       }
-      None => s
-        .serialize_field(
-          "protocol_version",
-          &ProtocolVersionData::from(ProtocolVersion::PROTOCOLVERSION_2_3),
-        )
-        .unwrap(),
+      None => (),
+      // s
+      //   .serialize_field(
+      //     "protocol_version",
+      //     &ProtocolVersionData::from(ProtocolVersion::PROTOCOLVERSION_2_3),
+      //   )
+      //   .unwrap(),
     }
   }
 
@@ -494,9 +495,10 @@ impl<'a> BuiltinDataSerializer<'a> {
         s.serialize_field("vendor_id", &VendorIdData::from(vid))
           .unwrap();
       }
-      None => s
-        .serialize_field("vendor_id", &VendorIdData::from(VendorId::VENDOR_UNKNOWN))
-        .unwrap(),
+      None => (),
+      // s
+      //   .serialize_field("vendor_id", &VendorIdData::from(VendorId::VENDOR_UNKNOWN))
+      //   .unwrap(),
     }
   }
 
