@@ -134,7 +134,8 @@ impl RtpsWriterProxy {
 
   // Check if we no samples in the received state.
   pub fn no_changes_received(&self) -> bool {
-    self.ack_base == SequenceNumber::new(0) && self.changes.is_empty()
+    self.ack_base == SequenceNumber::new(0) 
+      && self.changes.is_empty()
   }
 
   // Given an availabilty range from a HEARTBEAT, find out what we are missing.

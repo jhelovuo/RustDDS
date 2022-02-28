@@ -86,7 +86,8 @@ pub(crate) struct Reader {
   // RTPS Spec: Section 8.4.11.2 Reliable StatelessReader Behavior
   // "This combination is not supported by the RTPS protocol."
   // So stateful must be true whenever we are Reliable.
-  reliability: policy::Reliability,
+ 
+  reliability: policy::Reliability, 
   dds_cache: Arc<RwLock<DDSCache>>,
 
   #[cfg(test)]
