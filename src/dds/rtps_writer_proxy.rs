@@ -157,27 +157,26 @@ impl RtpsWriterProxy {
       } else {
         // first == last+1
         // This is normal. See RTPS 2.5 Spec Section "8.3.8.6.3 Validity"
-        // It means nothing is available. Since nothing is available, nothing is
-        // missing.
+        // It means nothing is available. Since nothing is available, nothing is missing.
       }
       return vec![];
     }
 
     let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
 
-    let relevant_interval = SequenceNumber::range_inclusive(
-      max(hb_first_sn, self.ack_base), // ignore those that we already have
-      hb_last_sn,
-    );
+    let relevant_interval = 
+      SequenceNumber::range_inclusive(
+        max(hb_first_sn, self.ack_base),  // ignore those that we already have 
+        hb_last_sn);
 
     // iterator over known Received and Not_available changes.
-    let known =
+    let known = 
       // again check for negative intervals
-      if relevant_interval.begin() <= relevant_interval.end() {
+      if relevant_interval.begin() <= relevant_interval.end() { 
         self.changes
           .range( relevant_interval )
           .map(|e| *e.0)
-          .collect()
+          .collect() 
       } else { vec![] };
     let mut known_iter = known.iter();
     let mut known_head = known_iter.next();

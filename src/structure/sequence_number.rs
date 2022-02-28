@@ -75,7 +75,7 @@ impl From<SequenceNumber> for i64 {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone,Copy,Debug,)]
 pub struct SequenceNumberRange {
   begin: SequenceNumber,
   end: SequenceNumber,
@@ -93,6 +93,7 @@ impl SequenceNumberRange {
   pub fn end(&self) -> SequenceNumber {
     self.end
   }
+
 }
 
 impl Iterator for SequenceNumberRange {
