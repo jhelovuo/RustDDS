@@ -1081,7 +1081,7 @@ impl Discovery {
     for t in ts {
       match t {
         Ok(topic_data) => {
-          trace!("handle_topic_reader discovered {:?}", &topic_data);
+          debug!("handle_topic_reader discovered {:?}", &topic_data);
           let updated = self.discovery_db_write().update_topic_data(&topic_data);
           if updated {
             self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);

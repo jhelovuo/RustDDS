@@ -501,7 +501,7 @@ impl DiscoveredWriterData {
       topic.get_type().name().to_string(),
     );
 
-    publication_topic_data.read_qos(&topic.qos());
+    publication_topic_data.read_qos(&writer.qos());
 
     DiscoveredWriterData {
       last_updated: Instant::now(),
