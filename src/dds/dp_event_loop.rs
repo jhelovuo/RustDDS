@@ -27,7 +27,6 @@ use crate::{
     dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
-    topic_kind::TopicKind,
   },
 };
 //use crate::discovery::data_types::spdp_participant_data::SpdpDiscoveredParticipantData;
@@ -726,14 +725,12 @@ impl DPEventLoop {
       Ok(db) => match self.ddscache.write() {
         Ok(mut ddsc) => {
           for topic in db.all_topics() {
-            // TODO: how do you know when topic is keyed and is not
-            let topic_kind = match &topic.topic_data.key {
-              Some(_) => TopicKind::WithKey,
-              None => TopicKind::NoKey,
-            };
+            // How do you know when topic is keyed or not?
+            // A: Apparently the Topic conversation
+            // over Discovery does not know this.
+            // The keyedness is implicit in the data type.
             ddsc.add_new_topic(
               topic.topic_data.name.clone(),
-              topic_kind,
               TypeDesc::new(topic.topic_data.type_name.clone()),
             );
           }
