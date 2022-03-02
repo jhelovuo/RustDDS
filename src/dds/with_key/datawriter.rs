@@ -994,6 +994,7 @@ mod tests {
   use crate::{
     dds::{participant::DomainParticipant, traits::key::Keyed},
     serialization::cdr_serializer::CDRSerializerAdapter,
+    structure::topic_kind::TopicKind,
     test::random_data::*,
   };
 

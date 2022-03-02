@@ -317,7 +317,7 @@ mod tests {
     dds::{ddsdata::DDSData, typedesc::TypeDesc, with_key::datawriter::WriteOptions},
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::{
-      cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, topic_kind::TopicKind,
+      cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, 
     },
   };
 
@@ -327,13 +327,12 @@ mod tests {
     let topic_name = String::from("ImJustATopic");
     let change1 = CacheChange::new(
       GUID::GUID_UNKNOWN,
-      SequenceNumber::from(1),
+      SequenceNumber::new(1),
       WriteOptions::default(),
       DDSData::new(SerializedPayload::default()),
     );
     cache.write().unwrap().add_new_topic(
       topic_name.clone(),
-      TopicKind::WithKey,
       TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
     );
     cache
@@ -347,7 +346,7 @@ mod tests {
       let topic_name = String::from("ImJustATopic");
       let cahange2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
-        SequenceNumber::from(2),
+        SequenceNumber::new(2),
         WriteOptions::default(),
         DDSData::new(SerializedPayload::default()),
       );
@@ -358,7 +357,7 @@ mod tests {
       );
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
-        SequenceNumber::from(3),
+        SequenceNumber::new(3),
         WriteOptions::default(),
         DDSData::new(SerializedPayload::default()),
       );
