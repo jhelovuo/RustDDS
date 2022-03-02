@@ -158,6 +158,14 @@ impl EntityKind {
     let e = self.0 & 0x0F;
     e == 0x02 || e == 0x03 || e == 0x08
   }
+
+  pub fn is_built_in(&self) -> bool {
+    (self.0 & 0xF0) == 0xC0
+  }
+
+  pub fn is_user_defined(&self) -> bool {
+    (self.0 & 0xF0) == 0x00
+  }
 }
 
 impl From<u8> for EntityKind {

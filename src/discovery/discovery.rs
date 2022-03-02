@@ -157,11 +157,11 @@ pub(crate) struct Discovery {
 
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(2);
-  const TOPIC_CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(10); // timer for cleaning up inactive topics
+  const TOPIC_CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(60); // timer for cleaning up inactive topics
   const SEND_PARTICIPANT_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
   const SEND_READERS_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
   const SEND_WRITERS_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
-  const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(20);
+  const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(10);
   const CHECK_PARTICIPANT_MESSAGES: StdDuration = StdDuration::from_secs(1);
 
   pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
@@ -350,7 +350,9 @@ impl Discovery {
     );
 
     let mut readers_send_info_timer: Timer<()> = Timer::default();
+
     readers_send_info_timer.set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
+
     try_construct!(
       poll.register(
         &readers_send_info_timer,
@@ -388,7 +390,7 @@ impl Discovery {
         Ready::readable(),
         PollOpt::edge(),
       ),
-      "Unable to regiser writers info sender. {:?}"
+      "Unable to register writers info sender. {:?}"
     );
 
     let dcps_publication_writer = try_construct!(
@@ -402,7 +404,9 @@ impl Discovery {
     );
 
     let mut writers_send_info_timer: Timer<()> = Timer::default();
+
     writers_send_info_timer.set_timeout(Discovery::SEND_WRITERS_INFO_PERIOD, ());
+
     try_construct!(
       poll.register(
         &writers_send_info_timer,
@@ -717,10 +721,7 @@ impl Discovery {
             self.handle_subscription_reader(None);
           }
           DISCOVERY_SEND_READERS_INFO_TOKEN => {
-            if self.read_readers_info() {
-              self.write_readers_info();
-            }
-
+            self.write_readers_info();
             self
               .readers_send_info_timer
               .set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
@@ -729,10 +730,7 @@ impl Discovery {
             self.handle_publication_reader(None);
           }
           DISCOVERY_SEND_WRITERS_INFO_TOKEN => {
-            if self.read_writers_info() {
-              self.write_writers_info();
-            }
-
+            self.write_writers_info();
             self
               .writers_send_info_timer
               .set_timeout(Discovery::SEND_WRITERS_INFO_PERIOD, ());
@@ -1081,7 +1079,7 @@ impl Discovery {
     for t in ts {
       match t {
         Ok(topic_data) => {
-          trace!("handle_topic_reader discovered {:?}", &topic_data);
+          debug!("handle_topic_reader discovered {:?}", &topic_data);
           let updated = self.discovery_db_write().update_topic_data(&topic_data);
           if updated {
             self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);
@@ -1233,67 +1231,49 @@ impl Discovery {
     self.discovery_db_write().topic_cleanup();
   }
 
-  pub fn read_readers_info(&self) -> bool {
-    let readers_info_updated = self.discovery_db_read().is_readers_updated();
-
-    if readers_info_updated {
-      self.discovery_db_write().readers_updated(false);
-    }
-
-    readers_info_updated
-  }
-
-  pub fn read_writers_info(&self) -> bool {
-    let writers_info_updated = self.discovery_db_read().is_writers_updated();
-
-    if writers_info_updated {
-      self.discovery_db_write().writers_updated(false);
-    }
-
-    writers_info_updated
-  }
-
   pub fn write_readers_info(&self) {
     let db = self.discovery_db_read();
-    let datas = db.get_all_local_topic_readers();
-    for data in datas
-      // filtering out discoveries own readers
-      .filter(|p| {
-        let eid = p.reader_proxy.remote_reader_guid.entity_id;
-        eid != EntityId::SPDP_BUILTIN_PARTICIPANT_READER
-          && eid != EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER
-          && eid != EntityId::SEDP_BUILTIN_PUBLICATIONS_READER
-          && eid != EntityId::SEDP_BUILTIN_TOPIC_READER
-          && eid != EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
-      })
-    {
+    let local_user_readers = db.get_all_local_topic_readers().filter(|p| {
+      p.reader_proxy
+        .remote_reader_guid
+        .entity_id
+        .kind()
+        .is_user_defined()
+    });
+    let mut count = 0;
+    for data in local_user_readers {
       match self.dcps_subscription_writer.write(data.clone(), None) {
-        Ok(_) => (),
+        Ok(_) => {
+          count += 1;
+        }
         Err(e) => error!("Unable to write new readers info. {:?}", e),
       }
     }
+    debug!("Announced {} readers", count);
   }
 
   pub fn write_writers_info(&self) {
     let db = self.discovery_db_read();
-    let datas = db.get_all_local_topic_writers();
-    for data in datas.filter(|p| {
-      let eid = p.writer_proxy.remote_writer_guid.entity_id;
-
-      eid != EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
-        && eid != EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER
-        && eid != EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER
-        && eid != EntityId::SEDP_BUILTIN_TOPIC_WRITER
-        && eid != EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER
-    }) {
+    let local_user_writers = db.get_all_local_topic_writers().filter(|p| {
+      p.writer_proxy
+        .remote_writer_guid
+        .entity_id
+        .kind()
+        .is_user_defined()
+    });
+    let mut count = 0;
+    for data in local_user_writers {
       if self
         .dcps_publication_writer
         .write(data.clone(), None)
         .is_err()
       {
-        error!("Unable to write new readers info.");
+        error!("Unable to write new writers info.");
+      } else {
+        count += 1;
       }
     }
+    debug!("Announced {} writers", count);
   }
 
   pub fn write_topic_info(&self) {

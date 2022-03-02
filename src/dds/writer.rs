@@ -939,10 +939,11 @@ impl Writer {
             self.notify_new_data_to_all_readers();
           }
           info!(
-            "Matched new remote reader on topic={:?} reader= {:?}",
+            "Matched new remote reader on topic={:?} reader={:?}",
             self.topic_name(),
-            &reader_proxy
+            &reader_proxy.remote_reader_guid
           );
+          debug!("Reader details: {:?}", &reader_proxy);
         }
       }
       Some(bad_policy_id) => {
@@ -985,12 +986,13 @@ impl Writer {
 
   fn matched_reader_remove(&mut self, guid: GUID) -> Option<RtpsReaderProxy> {
     let removed = self.readers.remove(&guid);
-    if removed.is_some() {
+    if let Some(ref removed_reader) = removed {
       info!(
         "Removed reader proxy. topic={:?} reader={:?}",
         self.topic_name(),
-        removed
+        removed_reader.remote_reader_guid,
       );
+      debug!("Removed reader proxy details: {:?}", removed_reader);
     }
     removed
   }

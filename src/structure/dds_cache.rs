@@ -15,7 +15,7 @@ use crate::{
   },
   structure::{sequence_number::SequenceNumber, time::Timestamp},
 };
-use super::{cache_change::CacheChange, topic_kind::TopicKind};
+use super::cache_change::CacheChange;
 
 /// DDSCache contains all cacheCahanges that are produced by participant or
 /// received by participant. Each topic that is been published or been
@@ -35,15 +35,10 @@ impl DDSCache {
     }
   }
 
-  pub fn add_new_topic(
-    &mut self,
-    topic_name: String,
-    topic_kind: TopicKind,
-    topic_data_type: TypeDesc,
-  ) {
+  pub fn add_new_topic(&mut self, topic_name: String, topic_data_type: TypeDesc) {
     self.topic_caches.insert(
       topic_name.clone(),
-      TopicCache::new(topic_name, topic_kind, topic_data_type),
+      TopicCache::new(topic_name, topic_data_type),
     );
   }
 
@@ -123,18 +118,15 @@ pub struct TopicCache {
   topic_name: String,
   #[allow(dead_code)] // TODO: Which (future) feature needs this?
   topic_data_type: TypeDesc,
-  #[allow(dead_code)] // TODO: Which (future) feature needs this?
-  topic_kind: TopicKind,
   topic_qos: QosPolicies,
   history_cache: DDSHistoryCache,
 }
 
 impl TopicCache {
-  pub fn new(topic_name: String, topic_kind: TopicKind, topic_data_type: TypeDesc) -> TopicCache {
+  pub fn new(topic_name: String, topic_data_type: TypeDesc) -> TopicCache {
     TopicCache {
       topic_name,
       topic_data_type,
-      topic_kind,
       topic_qos: QosPolicyBuilder::new().build(),
       history_cache: DDSHistoryCache::new(),
     }
@@ -320,9 +312,7 @@ mod tests {
   use crate::{
     dds::{ddsdata::DDSData, typedesc::TypeDesc, with_key::datawriter::WriteOptions},
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-    structure::{
-      cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, topic_kind::TopicKind,
-    },
+    structure::{cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber},
   };
 
   #[test]
@@ -331,13 +321,12 @@ mod tests {
     let topic_name = String::from("ImJustATopic");
     let change1 = CacheChange::new(
       GUID::GUID_UNKNOWN,
-      SequenceNumber::from(1),
+      SequenceNumber::new(1),
       WriteOptions::default(),
       DDSData::new(SerializedPayload::default()),
     );
     cache.write().unwrap().add_new_topic(
       topic_name.clone(),
-      TopicKind::WithKey,
       TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
     );
     cache
@@ -351,7 +340,7 @@ mod tests {
       let topic_name = String::from("ImJustATopic");
       let cahange2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
-        SequenceNumber::from(2),
+        SequenceNumber::new(2),
         WriteOptions::default(),
         DDSData::new(SerializedPayload::default()),
       );
@@ -362,7 +351,7 @@ mod tests {
       );
       let cahange3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
-        SequenceNumber::from(3),
+        SequenceNumber::new(3),
         WriteOptions::default(),
         DDSData::new(SerializedPayload::default()),
       );

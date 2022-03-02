@@ -50,8 +50,6 @@ pub(crate) struct DiscoveryDB {
   topics: HashMap<String, DiscoveredTopicData>,
 
   event_sender: Option<mio_extras::channel::SyncSender<()>>,
-  readers_updated: bool,
-  writers_updated: bool,
 }
 
 impl DiscoveryDB {
@@ -69,8 +67,6 @@ impl DiscoveryDB {
       external_topic_writers: BTreeMap::new(),
       topics: HashMap::new(),
       event_sender,
-      readers_updated: false,
-      writers_updated: false,
     }
   }
 
@@ -278,25 +274,11 @@ impl DiscoveryDB {
     self
       .local_topic_writers
       .insert(writer.writer_proxy.remote_writer_guid, writer);
-    self.writers_updated = true;
   }
 
   pub fn remove_local_topic_writer(&mut self, guid: GUID) {
     self.local_topic_writers.remove(&guid);
-    self.writers_updated = true;
   }
-
-  // pub fn participants(&self) -> impl Iterator<Item =
-  // &SpdpDiscoveredParticipantData> {   self.participant_proxies.values()
-  // }
-
-  // pub fn external_reader_proxies<'a>(&'a self) -> impl Iterator<Item =
-  // &DiscoveredReaderData> + 'a {   self.external_topic_readers.values()
-  // }
-
-  // pub fn external_writer_proxies<'a>(&'a self) -> impl Iterator<Item =
-  // &DiscoveredWriterData> + 'a {   self.external_topic_writers.values()
-  // }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None
   // TODO: Why are we here checking if discovery db already has this? What about
@@ -478,29 +460,10 @@ impl DiscoveryDB {
     self
       .local_topic_readers
       .insert(reader_guid, discovered_reader_data);
-
-    self.readers_updated = true;
   }
 
   pub fn remove_local_topic_reader(&mut self, guid: GUID) {
     self.local_topic_readers.remove(&guid);
-    self.readers_updated = true;
-  }
-
-  pub fn is_readers_updated(&self) -> bool {
-    self.readers_updated
-  }
-
-  pub fn readers_updated(&mut self, updated: bool) {
-    self.readers_updated = updated;
-  }
-
-  pub fn is_writers_updated(&self) -> bool {
-    self.writers_updated
-  }
-
-  pub fn writers_updated(&mut self, updated: bool) {
-    self.writers_updated = updated;
   }
 
   pub fn get_all_local_topic_readers(&self) -> impl Iterator<Item = &DiscoveredReaderData> {

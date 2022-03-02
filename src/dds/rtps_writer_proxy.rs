@@ -134,7 +134,7 @@ impl RtpsWriterProxy {
 
   // Check if we no samples in the received state.
   pub fn no_changes_received(&self) -> bool {
-    self.changes.is_empty()
+    self.ack_base == SequenceNumber::new(0) && self.changes.is_empty()
   }
 
   // Given an availabilty range from a HEARTBEAT, find out what we are missing.
@@ -157,30 +157,41 @@ impl RtpsWriterProxy {
       } else {
         // first == last+1
         // This is normal. See RTPS 2.5 Spec Section "8.3.8.6.3 Validity"
-        // It means nothing is available.
+        // It means nothing is available. Since nothing is available, nothing is
+        // missing.
       }
       return vec![];
     }
 
     let mut missing_seqnums = Vec::with_capacity(32); // out of hat value
 
+    let relevant_interval = SequenceNumber::range_inclusive(
+      max(hb_first_sn, self.ack_base), // ignore those that we already have
+      hb_last_sn,
+    );
+
     // iterator over known Received and Not_available changes.
-    let mut known = self
-      .changes
-      .range(SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn))
-      .map(|e| *e.0);
-    let mut known_head = known.next();
+    let known =
+      // again check for negative intervals
+      if relevant_interval.begin() <= relevant_interval.end() {
+        self.changes
+          .range( relevant_interval )
+          .map(|e| *e.0)
+          .collect()
+      } else { vec![] };
+    let mut known_iter = known.iter();
+    let mut known_head = known_iter.next();
 
     // Iterate over all SequenceNumbers (indices) in the advertised range.
-    for s in SequenceNumber::range_inclusive(hb_first_sn, hb_last_sn) {
+    for s in relevant_interval {
       match known_head {
         None => missing_seqnums.push(s), // no known changes left => s is missing
         Some(known_sn) => {
           // there are known changes left
-          if known_sn == s {
+          if *known_sn == s {
             // and the index sequence matches it => not missing
             // => advance to next known change and continue iteration
-            known_head = known.next();
+            known_head = known_iter.next();
           } else {
             // but it is not yet this index s => s is missing
             missing_seqnums.push(s);
@@ -194,8 +205,8 @@ impl RtpsWriterProxy {
 
   // Check if we have already received this sequence number
   // or it has been marked as not_available
-  pub fn contains_change(&self, seqnum: SequenceNumber) -> bool {
-    self.changes.contains_key(&seqnum)
+  pub fn should_ignore_change(&self, seqnum: SequenceNumber) -> bool {
+    seqnum < self.ack_base || self.changes.contains_key(&seqnum)
   }
 
   // This is used to mark DATA as received.

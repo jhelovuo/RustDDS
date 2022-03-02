@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use bytes::Bytes;
 use serde::{ser::Error, Deserialize, Serialize};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use cdr_encoding_size::*;
 
 use crate::{
@@ -501,7 +501,7 @@ impl DiscoveredWriterData {
       topic.get_type().name().to_string(),
     );
 
-    publication_topic_data.read_qos(&topic.qos());
+    publication_topic_data.read_qos(&writer.qos());
 
     DiscoveredWriterData {
       last_updated: Instant::now(),
@@ -586,14 +586,14 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
 /// runtime Type specified in RTPS v2.3 spec Figure 8.30
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct DiscoveredTopicData {
-  pub updated_time: u64,
+  updated_time: DateTime<Utc>,
   pub topic_data: TopicBuiltinTopicData,
 }
 
 impl DiscoveredTopicData {
   pub fn new(topic_data: TopicBuiltinTopicData) -> DiscoveredTopicData {
     DiscoveredTopicData {
-      updated_time: Utc::now().timestamp_nanos() as u64,
+      updated_time: Utc::now(),
       topic_data,
     }
   }

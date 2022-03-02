@@ -27,7 +27,6 @@ use crate::{
     dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
-    topic_kind::TopicKind,
   },
 };
 //use crate::discovery::data_types::spdp_participant_data::SpdpDiscoveredParticipantData;
@@ -219,12 +218,12 @@ impl DPEventLoop {
       // liveness watchdog
       let now = Instant::now();
       if now > poll_alive + Duration::from_secs(2) {
-        info!("Poll loop alive");
+        debug!("Poll loop alive");
         poll_alive = now;
       }
 
       if events.is_empty() {
-        info!("dp_event_loop idling.");
+        debug!("dp_event_loop idling.");
       } else {
         for event in events.iter() {
           match EntityId::from_token(event.token()) {
@@ -516,7 +515,7 @@ impl DPEventLoop {
   }
 
   fn update_participant(&mut self, participant_guid_prefix: GuidPrefix) {
-    info!(
+    debug!(
       "update_participant {:?} myself={}",
       participant_guid_prefix,
       participant_guid_prefix == self.domain_info.domain_participant_guid.prefix
@@ -726,14 +725,12 @@ impl DPEventLoop {
       Ok(db) => match self.ddscache.write() {
         Ok(mut ddsc) => {
           for topic in db.all_topics() {
-            // TODO: how do you know when topic is keyed and is not
-            let topic_kind = match &topic.topic_data.key {
-              Some(_) => TopicKind::WithKey,
-              None => TopicKind::NoKey,
-            };
+            // How do you know when topic is keyed or not?
+            // A: Apparently the Topic conversation
+            // over Discovery does not know this.
+            // The keyedness is implicit in the data type.
             ddsc.add_new_topic(
               topic.topic_data.name.clone(),
-              topic_kind,
               TypeDesc::new(topic.topic_data.type_name.clone()),
             );
           }
