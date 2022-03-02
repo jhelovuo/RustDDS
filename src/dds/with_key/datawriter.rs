@@ -35,7 +35,7 @@ use crate::{
   serialization::CDRSerializerAdapter,
   structure::{
     cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID,
-    rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp, 
+    rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp,
   },
 };
 use super::super::writer::WriterCommand;

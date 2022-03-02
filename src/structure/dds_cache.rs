@@ -15,7 +15,7 @@ use crate::{
   },
   structure::{sequence_number::SequenceNumber, time::Timestamp},
 };
-use super::{cache_change::CacheChange,};
+use super::cache_change::CacheChange;
 
 /// DDSCache contains all cacheCahanges that are produced by participant or
 /// received by participant. Each topic that is been published or been
@@ -35,11 +35,7 @@ impl DDSCache {
     }
   }
 
-  pub fn add_new_topic(
-    &mut self,
-    topic_name: String,
-    topic_data_type: TypeDesc,
-  ) {
+  pub fn add_new_topic(&mut self, topic_name: String, topic_data_type: TypeDesc) {
     self.topic_caches.insert(
       topic_name.clone(),
       TopicCache::new(topic_name, topic_data_type),
@@ -316,9 +312,7 @@ mod tests {
   use crate::{
     dds::{ddsdata::DDSData, typedesc::TypeDesc, with_key::datawriter::WriteOptions},
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-    structure::{
-      cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, 
-    },
+    structure::{cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber},
   };
 
   #[test]

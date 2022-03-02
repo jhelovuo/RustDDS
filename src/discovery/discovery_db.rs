@@ -460,7 +460,6 @@ impl DiscoveryDB {
     self
       .local_topic_readers
       .insert(reader_guid, discovered_reader_data);
-
   }
 
   pub fn remove_local_topic_reader(&mut self, guid: GUID) {

@@ -1424,8 +1424,7 @@ mod tests {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     matching_datareader.fill_local_datasample_cache();
-    let deserialized_random_data = 
-      matching_datareader.read(1, ReadCondition::any()).unwrap()[0]
+    let deserialized_random_data = matching_datareader.read(1, ReadCondition::any()).unwrap()[0]
       .value()
       .unwrap()
       .clone();

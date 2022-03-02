@@ -442,9 +442,7 @@ mod tests {
     messages::header::Header,
     network::udp_sender::UDPSender,
     serialization::{cdr_deserializer::deserialize_from_little_endian, cdr_serializer::to_bytes},
-    structure::{
-      dds_cache::DDSCache, guid::EntityKind, sequence_number::SequenceNumber, 
-    },
+    structure::{dds_cache::DDSCache, guid::EntityKind, sequence_number::SequenceNumber},
   };
   use super::*;
 
@@ -488,10 +486,10 @@ mod tests {
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,

@@ -990,7 +990,7 @@ impl Writer {
       info!(
         "Removed reader proxy. topic={:?} reader={:?}",
         self.topic_name(),
-        removed_reader.remote_reader_guid, 
+        removed_reader.remote_reader_guid,
       );
       debug!("Removed reader proxy details: {:?}", removed_reader);
     }

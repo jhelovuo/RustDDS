@@ -350,9 +350,9 @@ impl Discovery {
     );
 
     let mut readers_send_info_timer: Timer<()> = Timer::default();
-   
+
     readers_send_info_timer.set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
-   
+
     try_construct!(
       poll.register(
         &readers_send_info_timer,
@@ -362,7 +362,7 @@ impl Discovery {
       ),
       "Unable to register readers info sender. {:?}"
     );
-   
+
     // Publication : Who are the Writers here and elsewhere
 
     let dcps_publication_topic = try_construct!(
@@ -416,7 +416,7 @@ impl Discovery {
       ),
       "Unable to register readers info sender. {:?}"
     );
-   
+
     // Topic topic (not a typo)
 
     let dcps_topic_topic = try_construct!(
@@ -1231,33 +1231,38 @@ impl Discovery {
     self.discovery_db_write().topic_cleanup();
   }
 
-
   pub fn write_readers_info(&self) {
     let db = self.discovery_db_read();
-    let local_user_readers =
-      db.get_all_local_topic_readers()
-        .filter( |p| p.reader_proxy.remote_reader_guid
-                      .entity_id.kind().is_user_defined() );
+    let local_user_readers = db.get_all_local_topic_readers().filter(|p| {
+      p.reader_proxy
+        .remote_reader_guid
+        .entity_id
+        .kind()
+        .is_user_defined()
+    });
     let mut count = 0;
-    for data in local_user_readers
-    {
+    for data in local_user_readers {
       match self.dcps_subscription_writer.write(data.clone(), None) {
-        Ok(_) => { count+=1; }
+        Ok(_) => {
+          count += 1;
+        }
         Err(e) => error!("Unable to write new readers info. {:?}", e),
       }
     }
-    debug!("Announced {} readers",count);
+    debug!("Announced {} readers", count);
   }
 
   pub fn write_writers_info(&self) {
     let db = self.discovery_db_read();
-    let local_user_writers = 
-      db.get_all_local_topic_writers()
-        .filter( |p| p.writer_proxy.remote_writer_guid
-                      .entity_id.kind().is_user_defined() );
+    let local_user_writers = db.get_all_local_topic_writers().filter(|p| {
+      p.writer_proxy
+        .remote_writer_guid
+        .entity_id
+        .kind()
+        .is_user_defined()
+    });
     let mut count = 0;
-    for data in local_user_writers
-    {
+    for data in local_user_writers {
       if self
         .dcps_publication_writer
         .write(data.clone(), None)
@@ -1268,7 +1273,7 @@ impl Discovery {
         count += 1;
       }
     }
-    debug!("Announced {} writers",count);
+    debug!("Announced {} writers", count);
   }
 
   pub fn write_topic_info(&self) {

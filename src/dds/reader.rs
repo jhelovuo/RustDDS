@@ -86,8 +86,7 @@ pub(crate) struct Reader {
   // RTPS Spec: Section 8.4.11.2 Reliable StatelessReader Behavior
   // "This combination is not supported by the RTPS protocol."
   // So stateful must be true whenever we are Reliable.
- 
-  reliability: policy::Reliability, 
+  reliability: policy::Reliability,
   dds_cache: Arc<RwLock<DDSCache>>,
 
   #[cfg(test)]
@@ -129,9 +128,10 @@ impl Reader {
       udp_sender,
       is_stateful: true, // Do not change this before stateless functionality is implemented.
 
-      reliability: 
-        i.qos_policy.reliability() // use qos specification
-          .unwrap_or(policy::Reliability::BestEffort), // or default to BestEffort
+      reliability: i
+        .qos_policy
+        .reliability() // use qos specification
+        .unwrap_or(policy::Reliability::BestEffort), // or default to BestEffort
       dds_cache,
       topic_name: i.topic_name,
       qos_policy: i.qos_policy,
@@ -681,8 +681,8 @@ impl Reader {
       );
       // BestEffort Reader reacts only to DATA and GAP
       // See RTPS Spec Section "8.4.11 RTPS StatelessReader Behavior":
-      // Figure 8.23 - Behavior of the Best-Effort StatefulReader with respect to each matched Writer
-      // and
+      // Figure 8.23 - Behavior of the Best-Effort StatefulReader with respect to each
+      // matched Writer and
       // Figure 8.22 - Behavior of the Best-Effort StatelessReader
       return false;
     }
@@ -1050,18 +1050,16 @@ impl fmt::Debug for Reader {
 
 #[cfg(test)]
 mod tests {
-  use crate::QosPolicyBuilder;
-  use crate::Duration;
-  use super::*;
   use crate::{
-    dds::{statusevents::DataReaderStatus, typedesc::TypeDesc, 
-          with_key::datawriter::WriteOptions,
-          qos::policy::Reliability,},
-    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-    structure::{
-      guid::{EntityId, EntityKind, GuidPrefix, GUID},
+    dds::{
+      qos::policy::Reliability, statusevents::DataReaderStatus, typedesc::TypeDesc,
+      with_key::datawriter::WriteOptions,
     },
+    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+    structure::guid::{EntityId, EntityKind, GuidPrefix, GUID},
+    Duration, QosPolicyBuilder,
   };
+  use super::*;
 
   #[test]
   #[ignore]
@@ -1076,10 +1074,10 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
 
     let reader_ing = ReaderIngredients {
       guid,
@@ -1142,10 +1140,10 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
 
     let reader_ing = ReaderIngredients {
       guid: new_guid,
@@ -1219,13 +1217,15 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
     let reliable_qos = QosPolicyBuilder::new()
-         .reliability(Reliability::Reliable { max_blocking_time: Duration::from_millis(100) })
-         .build();
+      .reliability(Reliability::Reliable {
+        max_blocking_time: Duration::from_millis(100),
+      })
+      .build();
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
@@ -1372,10 +1372,10 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
 
     let reader_ing = ReaderIngredients {
       guid: new_guid,
