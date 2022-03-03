@@ -1,5 +1,5 @@
 use std::{
-  collections::{BTreeMap, HashMap},
+  collections::BTreeMap,
   time::Instant,
 };
 use chrono::Utc;
@@ -38,17 +38,18 @@ const PARTICIPANT_LEASE_DURATION_TOLREANCE: Duration = Duration::from_secs(0);
 pub(crate) struct DiscoveryDB {
   my_guid: GUID,
   participant_proxies: BTreeMap<GuidPrefix, SpdpDiscoveredParticipantData>,
-  participant_last_life_signs: HashMap<GuidPrefix, Instant>,
+  participant_last_life_signs: BTreeMap<GuidPrefix, Instant>,
+  
   // local writer proxies for topics (topic name acts as key)
-  local_topic_writers: HashMap<GUID, DiscoveredWriterData>,
+  local_topic_writers: BTreeMap<GUID, DiscoveredWriterData>,
   // local reader proxies for topics (topic name acts as key)
-  local_topic_readers: HashMap<GUID, DiscoveredReaderData>,
+  local_topic_readers: BTreeMap<GUID, DiscoveredReaderData>,
 
   // remote readers and writers (via discovery)
   external_topic_readers: BTreeMap<GUID, DiscoveredReaderData>,
   external_topic_writers: BTreeMap<GUID, DiscoveredWriterData>,
 
-  topics: HashMap<String, DiscoveredTopicData>,
+  topics: BTreeMap<String, DiscoveredTopicData>,
 
   topic_updated_sender: mio_extras::channel::SyncSender<()>,
 }
@@ -61,12 +62,12 @@ impl DiscoveryDB {
     DiscoveryDB {
       my_guid,
       participant_proxies: BTreeMap::new(),
-      participant_last_life_signs: HashMap::new(),
-      local_topic_writers: HashMap::new(),
-      local_topic_readers: HashMap::new(),
+      participant_last_life_signs: BTreeMap::new(),
+      local_topic_writers: BTreeMap::new(),
+      local_topic_readers: BTreeMap::new(),
       external_topic_readers: BTreeMap::new(),
       external_topic_writers: BTreeMap::new(),
-      topics: HashMap::new(),
+      topics: BTreeMap::new(),
       topic_updated_sender,
     }
   }
