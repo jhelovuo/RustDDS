@@ -774,9 +774,12 @@ mod tests {
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
 
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
+    let (discovery_db_event_sender, _discovery_db_event_receiver) =
+      mio_channel::sync_channel::<()>(4);
+
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       GUID::new_participant_guid(),
-      None,
+      discovery_db_event_sender,
     )));
 
     let domain_info = DomainInfo {

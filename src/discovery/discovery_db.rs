@@ -49,13 +49,13 @@ pub(crate) struct DiscoveryDB {
 
   topics: HashMap<String, DiscoveredTopicData>,
 
-  event_sender: Option<mio_extras::channel::SyncSender<()>>,
+  topic_updated_sender: mio_extras::channel::SyncSender<()>,
 }
 
 impl DiscoveryDB {
   pub fn new(
     my_guid: GUID,
-    event_sender: Option<mio_extras::channel::SyncSender<()>>,
+    topic_updated_sender: mio_extras::channel::SyncSender<()>,
   ) -> DiscoveryDB {
     DiscoveryDB {
       my_guid,
@@ -66,7 +66,7 @@ impl DiscoveryDB {
       external_topic_readers: BTreeMap::new(),
       external_topic_writers: BTreeMap::new(),
       topics: HashMap::new(),
-      event_sender,
+      topic_updated_sender,
     }
   }
 
@@ -421,9 +421,9 @@ impl DiscoveryDB {
       *t = data.clone();
     } else {
       self.topics.insert(topic_name, data.clone());
-      if let Some(c) = &self.event_sender {
-        let _ = c.try_send(());
-      }
+      self.topic_updated_sender.try_send(())
+        .unwrap_or_else( |e| 
+          warn!("update_topic_data: Notification send failed: {:?}",e));
     };
 
     true
@@ -521,7 +521,8 @@ mod tests {
   };
 
   use byteorder::LittleEndian;
-
+  use mio_extras::channel as mio_channel;
+  
   use super::*;
   use crate::{
     dds::{
@@ -539,7 +540,10 @@ mod tests {
 
   #[test]
   fn discdb_participant_operations() {
-    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), None);
+    let (discovery_db_event_sender, _discovery_db_event_receiver) =
+      mio_channel::sync_channel::<()>(4);
+
+    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
     let mut data = spdp_participant_data().unwrap();
     data.lease_duration = Some(Duration::from(StdDuration::from_secs(1)));
 
@@ -558,7 +562,9 @@ mod tests {
 
   #[test]
   fn discdb_writer_proxies() {
-    let _discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), None);
+    let (discovery_db_event_sender, _discovery_db_event_receiver) =
+      mio_channel::sync_channel::<()>(4);
+    let _discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
     let topic_name = String::from("some_topic");
     let type_name = String::from("RandomData");
     let _dreader = DiscoveredReaderData::default(topic_name, type_name);
@@ -568,7 +574,10 @@ mod tests {
 
   #[test]
   fn discdb_subscription_operations() {
-    let mut discovery_db = DiscoveryDB::new(GUID::new_participant_guid(), None);
+    let (discovery_db_event_sender, _discovery_db_event_receiver) =
+      mio_channel::sync_channel::<()>(4);
+
+    let mut discovery_db = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
 
     let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant
@@ -647,6 +656,9 @@ mod tests {
 
   #[test]
   fn discdb_local_topic_reader() {
+    let (discovery_db_event_sender, _discovery_db_event_receiver) =
+      mio_channel::sync_channel::<()>(4);
+
     let dp = DomainParticipant::new(0).expect("Failed to create participant");
     let topic = dp
       .create_topic(
@@ -656,7 +668,7 @@ mod tests {
         TopicKind::WithKey,
       )
       .unwrap();
-    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), None);
+    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
 
     let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
     let (status_sender, _status_receiver) =

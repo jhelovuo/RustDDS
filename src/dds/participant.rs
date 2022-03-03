@@ -724,10 +724,10 @@ impl DomainParticipantInner {
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
 
     let (discovery_db_event_sender, discovery_db_event_receiver) =
-      mio_channel::sync_channel::<()>(1);
+      mio_channel::sync_channel::<()>(4);
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       new_guid,
-      Some(discovery_db_event_sender),
+      discovery_db_event_sender,
     )));
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
