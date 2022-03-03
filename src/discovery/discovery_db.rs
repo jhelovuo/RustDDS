@@ -2,6 +2,7 @@ use std::{
   collections::{BTreeMap, HashMap},
   time::Instant,
 };
+use chrono::Utc;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -351,65 +352,40 @@ impl DiscoveryDB {
   }
 
   pub fn update_topic_data_drd(&mut self, drd: &DiscoveredReaderData) {
-    let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
-      key: None,
-      name: drd.subscription_topic_data.topic_name().clone(),
-      type_name: drd.subscription_topic_data.type_name().clone(),
-      durability: *drd.subscription_topic_data.durability(),
-      deadline: *drd.subscription_topic_data.deadline(),
-      latency_budget: *drd.subscription_topic_data.latency_budget(),
-      liveliness: *drd.subscription_topic_data.liveliness(),
-      reliability: *drd.subscription_topic_data.reliability(),
-      lifespan: *drd.subscription_topic_data.lifespan(),
-      destination_order: *drd.subscription_topic_data.destination_order(),
-      presentation: *drd.subscription_topic_data.presentation(),
-      history: None,
-      resource_limits: None,
-      ownership: *drd.subscription_topic_data.ownership(),
-    });
+    let topic_data = DiscoveredTopicData::new(
+      Utc::now(),
+      TopicBuiltinTopicData::new(
+        None,
+        drd.subscription_topic_data.topic_name().clone(),
+        drd.subscription_topic_data.type_name().clone(),
+        &drd.subscription_topic_data.generate_qos(),
+      ));
 
     self.update_topic_data(&topic_data);
   }
 
   pub fn update_topic_data_dwd(&mut self, dwd: &DiscoveredWriterData) {
-    let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
-      key: None,
-      name: dwd.publication_topic_data.topic_name.clone(),
-      type_name: dwd.publication_topic_data.type_name.clone(),
-      durability: dwd.publication_topic_data.durability,
-      deadline: dwd.publication_topic_data.deadline,
-      latency_budget: dwd.publication_topic_data.latency_budget,
-      liveliness: dwd.publication_topic_data.liveliness,
-      reliability: dwd.publication_topic_data.reliability,
-      lifespan: dwd.publication_topic_data.lifespan,
-      destination_order: dwd.publication_topic_data.destination_order,
-      presentation: dwd.publication_topic_data.presentation,
-      history: None,
-      resource_limits: None,
-      ownership: dwd.publication_topic_data.ownership,
-    });
+    let topic_data = DiscoveredTopicData::new(
+      Utc::now(), 
+      TopicBuiltinTopicData::new(
+        None,
+        dwd.publication_topic_data.topic_name.clone(),
+        dwd.publication_topic_data.type_name.clone(),
+        &dwd.publication_topic_data.qos(),
+      ));
 
     self.update_topic_data(&topic_data);
   }
 
   pub fn update_topic_data_p(&mut self, topic: &Topic) {
-    let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
-      key: None,
-      name: topic.name(),
-      type_name: String::from(topic.get_type().name()),
-      durability: topic.qos().durability,
-      deadline: topic.qos().deadline,
-      latency_budget: topic.qos().latency_budget,
-      liveliness: topic.qos().liveliness,
-      reliability: topic.qos().reliability,
-      lifespan: topic.qos().lifespan,
-      destination_order: topic.qos().destination_order,
-      presentation: topic.qos().presentation,
-      history: topic.qos().history,
-      resource_limits: topic.qos().resource_limits,
-      ownership: topic.qos().ownership,
-    });
-
+    let topic_data = DiscoveredTopicData::new(
+      Utc::now(), 
+      TopicBuiltinTopicData::new(
+        None,
+        topic.name(),
+        topic.get_type().name().to_owned(),
+        &topic.qos(),
+      ));
     self.update_topic_data(&topic_data);
   }
 
