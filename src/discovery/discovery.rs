@@ -912,11 +912,11 @@ impl Discovery {
               // This may be a rediscovery of a previously seen participant that
               // was temporarily lost due to network outage. Check if we already know
               // what it has (readers, writers, topics).
-              info!("Participant rediscovery start");
+              debug!("Participant rediscovery start");
               self.handle_topic_reader(Some(guid_prefix));
               self.handle_subscription_reader(Some(guid_prefix));
               self.handle_publication_reader(Some(guid_prefix));
-              info!("Participant rediscovery finished");
+              debug!("Participant rediscovery finished");
             }
           }
           // Err means that DomainParticipant was disposed
@@ -979,7 +979,7 @@ impl Discovery {
                 _needs_new_cache_change: true,
               });
             } else {
-              info!(
+              debug!(
                 "handle_subscription_reader - DiscoveryDB already knows reader {:?}",
                 d.reader_proxy.remote_reader_guid
               );
