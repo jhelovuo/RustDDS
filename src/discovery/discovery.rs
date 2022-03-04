@@ -1055,33 +1055,39 @@ impl Discovery {
   }
 
   pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let ts: Vec<std::result::Result<(DiscoveredTopicData,GUID), GUID>> = 
-    match self.dcps_topic_reader.read(
-      std::usize::MAX,
-      if read_history.is_some() {
-        ReadCondition::any()
-      } else {
-        ReadCondition::not_read()
-      },
-    ) {
-      // a lot of cloning here, but we must copy the data out of the
-      // reader before we can use self again, as .read() returns references to within
-      // a reader and thus self
-      Ok(ds) => ds
-        .iter()
-        .map(|d| d.value.map(|o| (o.clone(), d.sample_info.writer_guid()) ).map_err(|g| g.0))
-        .collect(),
-      Err(e) => {
-        error!("handle_topic_reader: {:?}", e);
-        return;
-      }
-    };
+    let ts: Vec<std::result::Result<(DiscoveredTopicData, GUID), GUID>> =
+      match self.dcps_topic_reader.read(
+        std::usize::MAX,
+        if read_history.is_some() {
+          ReadCondition::any()
+        } else {
+          ReadCondition::not_read()
+        },
+      ) {
+        // a lot of cloning here, but we must copy the data out of the
+        // reader before we can use self again, as .read() returns references to within
+        // a reader and thus self
+        Ok(ds) => ds
+          .iter()
+          .map(|d| {
+            d.value
+              .map(|o| (o.clone(), d.sample_info.writer_guid()))
+              .map_err(|g| g.0)
+          })
+          .collect(),
+        Err(e) => {
+          error!("handle_topic_reader: {:?}", e);
+          return;
+        }
+      };
 
     for t in ts {
       match t {
-        Ok((topic_data,writer)) => {
+        Ok((topic_data, writer)) => {
           debug!("handle_topic_reader discovered {:?}", &topic_data);
-          self.discovery_db_write().update_topic_data(&topic_data,writer);
+          self
+            .discovery_db_write()
+            .update_topic_data(&topic_data, writer);
         }
         // Err means disposed
         Err(key) => {

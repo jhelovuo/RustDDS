@@ -716,24 +716,18 @@ impl DPEventLoop {
     match self.ddscache.write() {
       Ok(mut ddsc) => {
         let ptd = &dwd.publication_topic_data;
-        ddsc.add_new_topic(
-          ptd.topic_name.clone(),
-          TypeDesc::new(ptd.type_name.clone())
-        );
+        ddsc.add_new_topic(ptd.topic_name.clone(), TypeDesc::new(ptd.type_name.clone()));
       }
-      
+
       _ => panic!("DDSCache is poisoned"),
     }
   }
-  
 
   fn remote_writer_lost(&mut self, writer_guid: GUID) {
     for reader in self.message_receiver.available_readers.values_mut() {
       reader.remove_writer_proxy(writer_guid);
     }
   }
-
-  
 }
 
 // -----------------------------------------------------------

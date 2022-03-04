@@ -38,9 +38,10 @@ impl DDSCache {
   // Insert new topic if it does not exist.
   // If it exists already, do nothing.
   pub fn add_new_topic(&mut self, topic_name: String, topic_data_type: TypeDesc) {
-    self.topic_caches
+    self
+      .topic_caches
       .entry(topic_name.clone())
-      .or_insert_with(|| TopicCache::new(topic_name, topic_data_type) );
+      .or_insert_with(|| TopicCache::new(topic_name, topic_data_type));
   }
 
   // TODO: Investigate why this is not used.

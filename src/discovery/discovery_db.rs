@@ -1,9 +1,6 @@
-use std::{
-  collections::BTreeMap,
-  time::Instant,
-};
-use chrono::Utc;
+use std::{collections::BTreeMap, time::Instant};
 
+use chrono::Utc;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
@@ -358,20 +355,21 @@ impl DiscoveryDB {
 
   pub fn update_topic_data_p(&mut self, topic: &Topic) {
     let topic_data = DiscoveredTopicData::new(
-      Utc::now(), 
+      Utc::now(),
       TopicBuiltinTopicData::new(
         None,
         topic.name(),
         topic.get_type().name().to_owned(),
         &topic.qos(),
-      ));
+      ),
+    );
     self.update_topic_data(&topic_data, self.my_guid);
   }
 
-  // Topic update sends notifications, in case someone was waiting to find a topic.
-  // Return value indicates whether the topic (name) was new to us. This is used to
-  // add
-  pub fn update_topic_data(&mut self, dtd: &DiscoveredTopicData, updater:GUID) {
+  // Topic update sends notifications, in case someone was waiting to find a
+  // topic. Return value indicates whether the topic (name) was new to us. This
+  // is used to add
+  pub fn update_topic_data(&mut self, dtd: &DiscoveredTopicData, updater: GUID) {
     trace!("Update topic data: {:?}", &dtd);
     let topic_name = dtd.topic_data.name.clone();
     let mut notify = false;
@@ -380,14 +378,16 @@ impl DiscoveryDB {
       if let Some(old_dtd) = t.get_mut(&updater.prefix) {
         // already have it, do some checking(?) and merging
         if dtd.topic_data.type_name == old_dtd.topic_data.type_name
-          // TODO: Check also for QoS changes, esp. policies that are immutable
+        // TODO: Check also for QoS changes, esp. policies that are immutable
         {
           *old_dtd = dtd.clone(); // update QoS
           notify = true;
         } else {
           // someone changed their mind about the type name?!?
-          error!("Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
-            updater, old_dtd.topic_data.type_name, dtd.topic_data.type_name,);
+          error!(
+            "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
+            updater, old_dtd.topic_data.type_name, dtd.topic_data.type_name,
+          );
         }
       } else {
         // We have to topic, but not from this participant
@@ -403,11 +403,12 @@ impl DiscoveryDB {
     };
 
     if notify {
-      self.topic_updated_sender.try_send(())
+      self
+        .topic_updated_sender
+        .try_send(())
         // It is quite normal for this to fail due to channel full,
         // because usually there is no-one at the other end receiving.
-        .unwrap_or_else( |e| 
-          trace!("update_topic_data: Notification send failed: {:?}",e));      
+        .unwrap_or_else(|e| trace!("update_topic_data: Notification send failed: {:?}", e));
     }
   }
 
@@ -465,28 +466,30 @@ impl DiscoveryDB {
       .topics
       .iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
-      .map(|(_, gm)| gm.iter().map(|(_,dtd)| dtd) )
-      .flatten()
+      .flat_map(|(_, gm)| gm.iter().map(|(_, dtd)| dtd))
   }
 
   // as above, but only from my GUID
   pub fn local_user_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
     let me = self.my_guid.prefix;
-    self.topics
+    self
+      .topics
       .iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
-      .map(move |(_, gm)| gm.iter().filter(move |(guid,_)| **guid == me ).map(|(_,dtd)| dtd) )
-      .flatten()
+      .flat_map(move |(_, gm)| {
+        gm.iter()
+          .filter(move |(guid, _)| **guid == me)
+          .map(|(_, dtd)| dtd)
+      })
   }
 
   // a Topic may have multiple definitions, because there may be multiple
   // participants publishing the topic information.
   // At least the QoS details may be different.
-  // This just returns the first one found in the database, which is indexed by GUID.
+  // This just returns the first one found in the database, which is indexed by
+  // GUID.
   pub fn get_topic(&self, topic_name: &str) -> Option<&DiscoveredTopicData> {
-    self.topics.get(topic_name)
-      .map(|m| m.values().next())
-      .flatten()
+    self.topics.get(topic_name).and_then(|m| m.values().next())
   }
 
   // // TODO: return iterator somehow?
@@ -525,7 +528,7 @@ mod tests {
 
   use byteorder::LittleEndian;
   use mio_extras::channel as mio_channel;
-  
+
   use super::*;
   use crate::{
     dds::{
@@ -580,7 +583,8 @@ mod tests {
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
 
-    let mut discovery_db = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+    let mut discovery_db =
+      DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
 
     let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant

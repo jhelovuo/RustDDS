@@ -558,9 +558,12 @@ pub struct TopicBuiltinTopicData {
 }
 
 impl TopicBuiltinTopicData {
-  pub fn new(key: Option<GUID>, name: String, type_name:String, qos: &QosPolicies) 
-    -> TopicBuiltinTopicData 
-  {
+  pub fn new(
+    key: Option<GUID>,
+    name: String,
+    type_name: String,
+    qos: &QosPolicies,
+  ) -> TopicBuiltinTopicData {
     TopicBuiltinTopicData {
       key,
       name,
@@ -614,7 +617,10 @@ pub struct DiscoveredTopicData {
 }
 
 impl DiscoveredTopicData {
-  pub fn new(updated_time: DateTime<Utc>, topic_data: TopicBuiltinTopicData) -> DiscoveredTopicData {
+  pub fn new(
+    updated_time: DateTime<Utc>,
+    topic_data: TopicBuiltinTopicData,
+  ) -> DiscoveredTopicData {
     DiscoveredTopicData {
       updated_time,
       topic_data,
@@ -657,7 +663,7 @@ impl PlCdrDeserialize for DiscoveredTopicData {
           e, &input_bytes,
         ))
       })
-      .map(|td| DiscoveredTopicData::new(Utc::now(),td) )
+      .map(|td| DiscoveredTopicData::new(Utc::now(), td))
   }
 }
 
