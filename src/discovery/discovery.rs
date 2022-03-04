@@ -984,7 +984,7 @@ impl Discovery {
                 d.reader_proxy.remote_reader_guid
               );
             }
-            db.update_topic_data_drd(&d);
+            //db.update_topic_data_drd(&d);
             if read_history.is_some() {
               info!(
                 "Rediscovered reader {:?} topic={:?}",
@@ -1040,7 +1040,7 @@ impl Discovery {
               discovered_writer_data,
             });
           }
-          self.discovery_db_write().update_topic_data_dwd(&dwd);
+          //self.discovery_db_write().update_topic_data_dwd(&dwd);
           debug!("Discovered Writer {:?}", &dwd);
         }
         Err(writer_key) => {
@@ -1055,7 +1055,8 @@ impl Discovery {
   }
 
   pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let ts: Vec<std::result::Result<DiscoveredTopicData, GUID>> = match self.dcps_topic_reader.read(
+    let ts: Vec<std::result::Result<(DiscoveredTopicData,GUID), GUID>> = 
+    match self.dcps_topic_reader.read(
       std::usize::MAX,
       if read_history.is_some() {
         ReadCondition::any()
@@ -1068,7 +1069,7 @@ impl Discovery {
       // a reader and thus self
       Ok(ds) => ds
         .iter()
-        .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+        .map(|d| d.value.map(|o| (o.clone(), d.sample_info.writer_guid()) ).map_err(|g| g.0))
         .collect(),
       Err(e) => {
         error!("handle_topic_reader: {:?}", e);
@@ -1078,12 +1079,9 @@ impl Discovery {
 
     for t in ts {
       match t {
-        Ok(topic_data) => {
+        Ok((topic_data,writer)) => {
           debug!("handle_topic_reader discovered {:?}", &topic_data);
-          let updated = self.discovery_db_write().update_topic_data(&topic_data);
-          if updated {
-            self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);
-          }
+          self.discovery_db_write().update_topic_data(&topic_data,writer);
         }
         // Err means disposed
         Err(key) => {
@@ -1278,7 +1276,7 @@ impl Discovery {
 
   pub fn write_topic_info(&self) {
     let db = self.discovery_db_read();
-    let datas = db.all_topics();
+    let datas = db.all_user_topics();
     for data in datas {
       if let Err(e) = self.dcps_topic_writer.write(data.clone(), None) {
         error!("Unable to write new topic info: {:?}", e);

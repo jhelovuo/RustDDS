@@ -724,7 +724,7 @@ impl DomainParticipantInner {
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
 
     let (discovery_db_event_sender, discovery_db_event_receiver) =
-      mio_channel::sync_channel::<()>(4);
+      mio_channel::sync_channel::<()>(1);
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       new_guid,
       discovery_db_event_sender,
@@ -971,7 +971,7 @@ impl DomainParticipantInner {
       .read()
       .unwrap_or_else(|e| panic!("DiscoveryDB is poisoned. {:?}", e));
 
-    db.all_topics().cloned().collect()
+    db.all_user_topics().cloned().collect()
   }
 } // impl
 

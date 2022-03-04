@@ -39,7 +39,7 @@ pub(crate) struct DiscoveryDB {
   my_guid: GUID,
   participant_proxies: BTreeMap<GuidPrefix, SpdpDiscoveredParticipantData>,
   participant_last_life_signs: BTreeMap<GuidPrefix, Instant>,
-  
+
   // local writer proxies for topics (topic name acts as key)
   local_topic_writers: BTreeMap<GUID, DiscoveredWriterData>,
   // local reader proxies for topics (topic name acts as key)
@@ -49,8 +49,12 @@ pub(crate) struct DiscoveryDB {
   external_topic_readers: BTreeMap<GUID, DiscoveredReaderData>,
   external_topic_writers: BTreeMap<GUID, DiscoveredWriterData>,
 
-  topics: BTreeMap<String, DiscoveredTopicData>,
+  // Database of topic updates:
+  // Outer level key is topic name
+  // Inner key is topic data sender.
+  topics: BTreeMap<String, BTreeMap<GuidPrefix, DiscoveredTopicData>>,
 
+  // sender for notifying (potential) waiters in participant.find_topic() call
   topic_updated_sender: mio_extras::channel::SyncSender<()>,
 }
 
@@ -352,32 +356,6 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn update_topic_data_drd(&mut self, drd: &DiscoveredReaderData) {
-    let topic_data = DiscoveredTopicData::new(
-      Utc::now(),
-      TopicBuiltinTopicData::new(
-        None,
-        drd.subscription_topic_data.topic_name().clone(),
-        drd.subscription_topic_data.type_name().clone(),
-        &drd.subscription_topic_data.generate_qos(),
-      ));
-
-    self.update_topic_data(&topic_data);
-  }
-
-  pub fn update_topic_data_dwd(&mut self, dwd: &DiscoveredWriterData) {
-    let topic_data = DiscoveredTopicData::new(
-      Utc::now(), 
-      TopicBuiltinTopicData::new(
-        None,
-        dwd.publication_topic_data.topic_name.clone(),
-        dwd.publication_topic_data.type_name.clone(),
-        &dwd.publication_topic_data.qos(),
-      ));
-
-    self.update_topic_data(&topic_data);
-  }
-
   pub fn update_topic_data_p(&mut self, topic: &Topic) {
     let topic_data = DiscoveredTopicData::new(
       Utc::now(), 
@@ -387,23 +365,48 @@ impl DiscoveryDB {
         topic.get_type().name().to_owned(),
         &topic.qos(),
       ));
-    self.update_topic_data(&topic_data);
+    self.update_topic_data(&topic_data, self.my_guid);
   }
 
-  pub fn update_topic_data(&mut self, data: &DiscoveredTopicData) -> bool {
-    trace!("Update topic data: {:?}", &data);
-    let topic_name = data.topic_data.name.clone();
+  // Topic update sends notifications, in case someone was waiting to find a topic.
+  // Return value indicates whether the topic (name) was new to us. This is used to
+  // add
+  pub fn update_topic_data(&mut self, dtd: &DiscoveredTopicData, updater:GUID) {
+    trace!("Update topic data: {:?}", &dtd);
+    let topic_name = dtd.topic_data.name.clone();
+    let mut notify = false;
 
-    if let Some(t) = self.topics.get_mut(&data.topic_data.name) {
-      *t = data.clone();
+    if let Some(t) = self.topics.get_mut(&dtd.topic_data.name) {
+      if let Some(old_dtd) = t.get_mut(&updater.prefix) {
+        // already have it, do some checking(?) and merging
+        if dtd.topic_data.type_name == old_dtd.topic_data.type_name
+          // TODO: Check also for QoS changes, esp. policies that are immutable
+        {
+          *old_dtd = dtd.clone(); // update QoS
+          notify = true;
+        } else {
+          // someone changed their mind about the type name?!?
+          error!("Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
+            updater, old_dtd.topic_data.type_name, dtd.topic_data.type_name,);
+        }
+      } else {
+        // We have to topic, but not from this participant
+        // TODO: Check that there is agreement about topic type name (at least)
+        t.insert(updater.prefix, dtd.clone()); // this should return None
+        notify = true;
+      }
     } else {
-      self.topics.insert(topic_name, data.clone());
-      self.topic_updated_sender.try_send(())
-        .unwrap_or_else( |e| 
-          warn!("update_topic_data: Notification send failed: {:?}",e));
+      // new topic to us
+      let mut b = BTreeMap::new();
+      b.insert(updater.prefix, dtd.clone());
+      self.topics.insert(topic_name, b);
     };
 
-    true
+    if notify {
+      self.topic_updated_sender.try_send(())
+        .unwrap_or_else( |e| 
+          warn!("update_topic_data: Notification send failed: {:?}",e));      
+    }
   }
 
   // local topic readers
@@ -451,16 +454,27 @@ impl DiscoveryDB {
     self.local_topic_writers.iter().map(|(_, p)| p)
   }
 
-  pub fn all_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
+  // Note:
+  // If multiple participants announce the same topic, this will
+  // return duplicates, one per announcing particiapnt.
+  // The duplicates are not necessarily identical, but may have different QoS.
+  pub fn all_user_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
     self
       .topics
       .iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
-      .map(|(_, v)| v)
+      .map(|(_, gm)| gm.iter().map(|(_,dtd)| dtd) )
+      .flatten()
   }
 
+  // a Topic may have multiple definitions, because there may be multiple
+  // participants publishing the topic information.
+  // At least the QoS details may be different.
+  // This just returns the first one found in the database, which is indexed by GUID.
   pub fn get_topic(&self, topic_name: &str) -> Option<&DiscoveredTopicData> {
     self.topics.get(topic_name)
+      .map(|m| m.values().next())
+      .flatten()
   }
 
   // // TODO: return iterator somehow?
