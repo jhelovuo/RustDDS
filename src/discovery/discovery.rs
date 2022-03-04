@@ -984,7 +984,7 @@ impl Discovery {
                 d.reader_proxy.remote_reader_guid
               );
             }
-            db.update_topic_data_drd(&d);
+            //db.update_topic_data_drd(&d);
             if read_history.is_some() {
               info!(
                 "Rediscovered reader {:?} topic={:?}",
@@ -1040,7 +1040,7 @@ impl Discovery {
               discovered_writer_data,
             });
           }
-          self.discovery_db_write().update_topic_data_dwd(&dwd);
+          //self.discovery_db_write().update_topic_data_dwd(&dwd);
           debug!("Discovered Writer {:?}", &dwd);
         }
         Err(writer_key) => {
@@ -1055,35 +1055,39 @@ impl Discovery {
   }
 
   pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let ts: Vec<std::result::Result<DiscoveredTopicData, GUID>> = match self.dcps_topic_reader.read(
-      std::usize::MAX,
-      if read_history.is_some() {
-        ReadCondition::any()
-      } else {
-        ReadCondition::not_read()
-      },
-    ) {
-      // a lot of cloning here, but we must copy the data out of the
-      // reader before we can use self again, as .read() returns references to within
-      // a reader and thus self
-      Ok(ds) => ds
-        .iter()
-        .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
-        .collect(),
-      Err(e) => {
-        error!("handle_topic_reader: {:?}", e);
-        return;
-      }
-    };
+    let ts: Vec<std::result::Result<(DiscoveredTopicData, GUID), GUID>> =
+      match self.dcps_topic_reader.read(
+        std::usize::MAX,
+        if read_history.is_some() {
+          ReadCondition::any()
+        } else {
+          ReadCondition::not_read()
+        },
+      ) {
+        // a lot of cloning here, but we must copy the data out of the
+        // reader before we can use self again, as .read() returns references to within
+        // a reader and thus self
+        Ok(ds) => ds
+          .iter()
+          .map(|d| {
+            d.value
+              .map(|o| (o.clone(), d.sample_info.writer_guid()))
+              .map_err(|g| g.0)
+          })
+          .collect(),
+        Err(e) => {
+          error!("handle_topic_reader: {:?}", e);
+          return;
+        }
+      };
 
     for t in ts {
       match t {
-        Ok(topic_data) => {
+        Ok((topic_data, writer)) => {
           debug!("handle_topic_reader discovered {:?}", &topic_data);
-          let updated = self.discovery_db_write().update_topic_data(&topic_data);
-          if updated {
-            self.send_discovery_notification(DiscoveryNotificationType::TopicsInfoUpdated);
-          }
+          self
+            .discovery_db_write()
+            .update_topic_data(&topic_data, writer);
         }
         // Err means disposed
         Err(key) => {
@@ -1278,7 +1282,7 @@ impl Discovery {
 
   pub fn write_topic_info(&self) {
     let db = self.discovery_db_read();
-    let datas = db.all_topics();
+    let datas = db.local_user_topics();
     for data in datas {
       if let Err(e) = self.dcps_topic_writer.write(data.clone(), None) {
         error!("Unable to write new topic info: {:?}", e);
@@ -1381,6 +1385,7 @@ impl Discovery {
 
 #[cfg(test)]
 mod tests {
+  use chrono::Utc;
   use std::net::SocketAddr;
 
   use bytes::Bytes;
@@ -1615,7 +1620,7 @@ mod tests {
   fn discovery_topic_data_test() {
     let _participant = DomainParticipant::new(0);
 
-    let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
+    let topic_data = DiscoveredTopicData::new(Utc::now(), TopicBuiltinTopicData {
       key: None,
       name: String::from("Square"),
       type_name: String::from("ShapeType"),

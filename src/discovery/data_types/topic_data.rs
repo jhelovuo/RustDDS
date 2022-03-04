@@ -557,6 +557,32 @@ pub struct TopicBuiltinTopicData {
   pub ownership: Option<Ownership>,
 }
 
+impl TopicBuiltinTopicData {
+  pub fn new(
+    key: Option<GUID>,
+    name: String,
+    type_name: String,
+    qos: &QosPolicies,
+  ) -> TopicBuiltinTopicData {
+    TopicBuiltinTopicData {
+      key,
+      name,
+      type_name,
+      durability: qos.durability(),
+      deadline: qos.deadline(),
+      latency_budget: qos.latency_budget(),
+      liveliness: qos.liveliness(),
+      reliability: qos.reliability(),
+      lifespan: qos.lifespan(),
+      destination_order: qos.destination_order(),
+      presentation: qos.presentation(),
+      history: qos.history(),
+      resource_limits: qos.resource_limits(),
+      ownership: qos.ownership(),
+    }
+  }
+}
+
 impl HasQoSPolicy for TopicBuiltinTopicData {
   fn qos(&self) -> QosPolicies {
     QosPolicies {
@@ -591,9 +617,12 @@ pub struct DiscoveredTopicData {
 }
 
 impl DiscoveredTopicData {
-  pub fn new(topic_data: TopicBuiltinTopicData) -> DiscoveredTopicData {
+  pub fn new(
+    updated_time: DateTime<Utc>,
+    topic_data: TopicBuiltinTopicData,
+  ) -> DiscoveredTopicData {
     DiscoveredTopicData {
-      updated_time: Utc::now(),
+      updated_time,
       topic_data,
     }
   }
@@ -634,7 +663,7 @@ impl PlCdrDeserialize for DiscoveredTopicData {
           e, &input_bytes,
         ))
       })
-      .map(DiscoveredTopicData::new)
+      .map(|td| DiscoveredTopicData::new(Utc::now(), td))
   }
 }
 
@@ -864,7 +893,7 @@ mod tests {
   fn td_discovered_topic_data_ser_deser() {
     let topic_data = topic_data().unwrap();
 
-    let dtd = DiscoveredTopicData::new(topic_data);
+    let dtd = DiscoveredTopicData::new(Utc::now(), topic_data);
 
     let sdata = dtd
       .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)

@@ -291,7 +291,6 @@ impl DPEventLoop {
                       ev_wrapper.remote_participant_lost(guid_prefix);
                     }
 
-                    TopicsInfoUpdated => ev_wrapper.update_topics(),
                     AssertTopicLiveliness {
                       writer_guid,
                       manual_assertion,
@@ -704,6 +703,7 @@ impl DPEventLoop {
   }
 
   fn remote_writer_discovered(&mut self, dwd: &DiscoveredWriterData) {
+    // update writer proxies in local readers
     for reader in self.message_receiver.available_readers.values_mut() {
       if &dwd.publication_topic_data.topic_name == reader.topic_name() {
         reader.update_writer_proxy(
@@ -712,32 +712,20 @@ impl DPEventLoop {
         );
       }
     }
+    // notify DDSCache to create topic if it does not exist yet
+    match self.ddscache.write() {
+      Ok(mut ddsc) => {
+        let ptd = &dwd.publication_topic_data;
+        ddsc.add_new_topic(ptd.topic_name.clone(), TypeDesc::new(ptd.type_name.clone()));
+      }
+
+      _ => panic!("DDSCache is poisoned"),
+    }
   }
 
   fn remote_writer_lost(&mut self, writer_guid: GUID) {
     for reader in self.message_receiver.available_readers.values_mut() {
       reader.remove_writer_proxy(writer_guid);
-    }
-  }
-
-  fn update_topics(&mut self) {
-    match self.discovery_db.read() {
-      Ok(db) => match self.ddscache.write() {
-        Ok(mut ddsc) => {
-          for topic in db.all_topics() {
-            // How do you know when topic is keyed or not?
-            // A: Apparently the Topic conversation
-            // over Discovery does not know this.
-            // The keyedness is implicit in the data type.
-            ddsc.add_new_topic(
-              topic.topic_data.name.clone(),
-              TypeDesc::new(topic.topic_data.type_name.clone()),
-            );
-          }
-        }
-        _ => panic!("DDSCache is poisoned"),
-      },
-      _ => panic!("DiscoveryDB is poisoned"),
     }
   }
 }
@@ -774,9 +762,12 @@ mod tests {
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
 
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
+    let (discovery_db_event_sender, _discovery_db_event_receiver) =
+      mio_channel::sync_channel::<()>(4);
+
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       GUID::new_participant_guid(),
-      None,
+      discovery_db_event_sender,
     )));
 
     let domain_info = DomainInfo {

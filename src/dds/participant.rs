@@ -727,7 +727,7 @@ impl DomainParticipantInner {
       mio_channel::sync_channel::<()>(1);
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       new_guid,
-      Some(discovery_db_event_sender),
+      discovery_db_event_sender,
     )));
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
@@ -971,7 +971,7 @@ impl DomainParticipantInner {
       .read()
       .unwrap_or_else(|e| panic!("DiscoveryDB is poisoned. {:?}", e));
 
-    db.all_topics().cloned().collect()
+    db.all_user_topics().cloned().collect()
   }
 } // impl
 

@@ -73,7 +73,6 @@ impl Topic {
     self.inner.participant()
   }
 
-  // TODO: Confusing combination of borrows and owns
   fn get_type(&self) -> TypeDesc {
     self.inner.get_type()
   }
