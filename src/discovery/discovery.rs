@@ -1385,6 +1385,7 @@ impl Discovery {
 
 #[cfg(test)]
 mod tests {
+  use chrono::Utc;
   use std::net::SocketAddr;
 
   use bytes::Bytes;
@@ -1619,7 +1620,7 @@ mod tests {
   fn discovery_topic_data_test() {
     let _participant = DomainParticipant::new(0);
 
-    let topic_data = DiscoveredTopicData::new(TopicBuiltinTopicData {
+    let topic_data = DiscoveredTopicData::new(Utc::now(), TopicBuiltinTopicData {
       key: None,
       name: String::from("Square"),
       type_name: String::from("ShapeType"),

@@ -893,7 +893,7 @@ mod tests {
   fn td_discovered_topic_data_ser_deser() {
     let topic_data = topic_data().unwrap();
 
-    let dtd = DiscoveredTopicData::new(topic_data);
+    let dtd = DiscoveredTopicData::new(Utc::now(), topic_data);
 
     let sdata = dtd
       .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
