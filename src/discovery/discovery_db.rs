@@ -467,6 +467,16 @@ impl DiscoveryDB {
       .flatten()
   }
 
+  // as above, but only from my GUID
+  pub fn local_user_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
+    let me = self.my_guid.prefix;
+    self.topics
+      .iter()
+      .filter(|(s, _)| !s.starts_with("DCPS"))
+      .map(move |(_, gm)| gm.iter().filter(move |(guid,_)| **guid == me ).map(|(_,dtd)| dtd) )
+      .flatten()
+  }
+
   // a Topic may have multiple definitions, because there may be multiple
   // participants publishing the topic information.
   // At least the QoS details may be different.

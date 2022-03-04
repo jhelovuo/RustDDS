@@ -1276,7 +1276,7 @@ impl Discovery {
 
   pub fn write_topic_info(&self) {
     let db = self.discovery_db_read();
-    let datas = db.all_user_topics();
+    let datas = db.local_user_topics();
     for data in datas {
       if let Err(e) = self.dcps_topic_writer.write(data.clone(), None) {
         error!("Unable to write new topic info: {:?}", e);
