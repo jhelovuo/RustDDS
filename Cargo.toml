@@ -45,7 +45,7 @@ test-case = "1.2.0"
 env_logger = "0.9"
 
 # ros_visualizer
-crossterm = "0.22"
+crossterm = "0.23"
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 
 # shapes-demo
