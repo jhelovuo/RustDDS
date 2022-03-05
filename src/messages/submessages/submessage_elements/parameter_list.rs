@@ -20,6 +20,10 @@ impl ParameterList {
       parameters: Vec::new(),
     }
   }
+
+  pub fn is_empty(&self) -> bool {
+    self.parameters.is_empty()
+  }
 }
 
 const SENTINEL: u32 = 0x00000001;

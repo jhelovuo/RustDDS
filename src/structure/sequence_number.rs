@@ -46,14 +46,6 @@ impl SequenceNumber {
 }
 
 impl SequenceNumber {
-  pub fn sub(self, rhs: Self) -> SequenceNumber {
-    if self >= rhs {
-      self - rhs
-    } else {
-      SequenceNumber::from(0)
-    }
-  }
-
   pub fn range_inclusive(begin: Self, end: Self) -> SequenceNumberRange {
     SequenceNumberRange::new(begin, end)
   }
@@ -83,6 +75,7 @@ impl From<SequenceNumber> for i64 {
   }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct SequenceNumberRange {
   begin: SequenceNumber,
   end: SequenceNumber,
@@ -91,6 +84,14 @@ pub struct SequenceNumberRange {
 impl SequenceNumberRange {
   pub fn new(begin: SequenceNumber, end: SequenceNumber) -> SequenceNumberRange {
     SequenceNumberRange { begin, end }
+  }
+
+  pub fn begin(&self) -> SequenceNumber {
+    self.begin
+  }
+
+  pub fn end(&self) -> SequenceNumber {
+    self.end
   }
 }
 

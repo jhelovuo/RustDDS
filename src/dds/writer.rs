@@ -181,6 +181,7 @@ pub(crate) enum WriterCommand {
   DDSData {
     data: DDSData,
     write_options: WriteOptions,
+    sequence_number: SequenceNumber,
   },
   WaitForAcknowledgments {
     all_acked: mio_channel::SyncSender<()>,
@@ -381,6 +382,7 @@ impl Writer {
         WriterCommand::DDSData {
           data,
           write_options,
+          sequence_number,
         } => {
           // We have a new sample here. Things to do:
           // 1. Insert it to history cache and get it sequence numbered
@@ -388,7 +390,8 @@ impl Writer {
           //    If we are pushing data, send the DATA submessage and HEARTBEAT.
           //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the
           // DATA with ACKNACK.
-          let timestamp = self.insert_to_history_cache(data, write_options.clone());
+          let timestamp =
+            self.insert_to_history_cache(data, write_options.clone(), sequence_number);
 
           self.increase_heartbeat_counter();
 
@@ -401,11 +404,13 @@ impl Writer {
           };
           // the beef: DATA submessage
           let data_hb_message_builder = if self.push_mode {
+            // If we are in push mode, proactively send DATA submessage along with
+            // HEARTBEAT.
             if let Some(cache_change) = self
               .dds_cache
               .read()
               .unwrap()
-              .from_topic_get_change(&self.my_topic_name, &timestamp)
+              .topic_get_change(&self.my_topic_name, &timestamp)
             {
               partial_message.data_msg(
                 cache_change,
@@ -417,8 +422,11 @@ impl Writer {
               partial_message
             }
           } else {
+            // Not pushing: Send only HEARTBEAT. Send DATA only after readers ACKNACK asking
+            // for it.
             partial_message
           };
+          // TODO: Explain the flag logic here.
           let final_flag = false;
           let liveliness_flag = false;
           let data_hb_message = data_hb_message_builder
@@ -467,9 +475,14 @@ impl Writer {
     }
   }
 
-  fn insert_to_history_cache(&mut self, data: DDSData, write_options: WriteOptions) -> Timestamp {
+  fn insert_to_history_cache(
+    &mut self,
+    data: DDSData,
+    write_options: WriteOptions,
+    sequence_number: SequenceNumber,
+  ) -> Timestamp {
     // first increasing last SequenceNumber
-    let new_sequence_number = self.last_change_sequence_number + SequenceNumber::from(1);
+    let new_sequence_number = sequence_number;
     self.last_change_sequence_number = new_sequence_number;
 
     // setting first change sequence number according to our qos (not offering more
@@ -725,7 +738,7 @@ impl Writer {
           .dds_cache
           .read()
           .unwrap()
-          .from_topic_get_change(&self.my_topic_name, &timestamp)
+          .topic_get_change(&self.my_topic_name, &timestamp)
         {
           // CacheChange found, construct DATA submessage
           partial_message = partial_message.data_msg(
@@ -821,7 +834,7 @@ impl Writer {
         .dds_cache
         .write()
         .unwrap()
-        .from_topic_remove_before(&self.my_topic_name, keep_instant);
+        .topic_remove_before(&self.my_topic_name, keep_instant);
     } else {
       warn!("{:?} missing from instant map", first_keeper);
     }
@@ -926,10 +939,11 @@ impl Writer {
             self.notify_new_data_to_all_readers();
           }
           info!(
-            "Matched new remote reader on topic={:?} reader= {:?}",
+            "Matched new remote reader on topic={:?} reader={:?}",
             self.topic_name(),
-            &reader_proxy
+            &reader_proxy.remote_reader_guid
           );
+          debug!("Reader details: {:?}", &reader_proxy);
         }
       }
       Some(bad_policy_id) => {
@@ -972,12 +986,13 @@ impl Writer {
 
   fn matched_reader_remove(&mut self, guid: GUID) -> Option<RtpsReaderProxy> {
     let removed = self.readers.remove(&guid);
-    if removed.is_some() {
+    if let Some(ref removed_reader) = removed {
       info!(
         "Removed reader proxy. topic={:?} reader={:?}",
         self.topic_name(),
-        removed
+        removed_reader.remote_reader_guid,
       );
+      debug!("Removed reader proxy details: {:?}", removed_reader);
     }
     removed
   }

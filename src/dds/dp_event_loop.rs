@@ -27,7 +27,6 @@ use crate::{
     dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
-    topic_kind::TopicKind,
   },
 };
 //use crate::discovery::data_types::spdp_participant_data::SpdpDiscoveredParticipantData;
@@ -219,12 +218,12 @@ impl DPEventLoop {
       // liveness watchdog
       let now = Instant::now();
       if now > poll_alive + Duration::from_secs(2) {
-        info!("Poll loop alive");
+        debug!("Poll loop alive");
         poll_alive = now;
       }
 
       if events.is_empty() {
-        info!("dp_event_loop idling.");
+        debug!("dp_event_loop idling.");
       } else {
         for event in events.iter() {
           match EntityId::from_token(event.token()) {
@@ -292,7 +291,6 @@ impl DPEventLoop {
                       ev_wrapper.remote_participant_lost(guid_prefix);
                     }
 
-                    TopicsInfoUpdated => ev_wrapper.update_topics(),
                     AssertTopicLiveliness {
                       writer_guid,
                       manual_assertion,
@@ -516,7 +514,7 @@ impl DPEventLoop {
   }
 
   fn update_participant(&mut self, participant_guid_prefix: GuidPrefix) {
-    info!(
+    debug!(
       "update_participant {:?} myself={}",
       participant_guid_prefix,
       participant_guid_prefix == self.domain_info.domain_participant_guid.prefix
@@ -705,6 +703,7 @@ impl DPEventLoop {
   }
 
   fn remote_writer_discovered(&mut self, dwd: &DiscoveredWriterData) {
+    // update writer proxies in local readers
     for reader in self.message_receiver.available_readers.values_mut() {
       if &dwd.publication_topic_data.topic_name == reader.topic_name() {
         reader.update_writer_proxy(
@@ -713,34 +712,20 @@ impl DPEventLoop {
         );
       }
     }
+    // notify DDSCache to create topic if it does not exist yet
+    match self.ddscache.write() {
+      Ok(mut ddsc) => {
+        let ptd = &dwd.publication_topic_data;
+        ddsc.add_new_topic(ptd.topic_name.clone(), TypeDesc::new(ptd.type_name.clone()));
+      }
+
+      _ => panic!("DDSCache is poisoned"),
+    }
   }
 
   fn remote_writer_lost(&mut self, writer_guid: GUID) {
     for reader in self.message_receiver.available_readers.values_mut() {
       reader.remove_writer_proxy(writer_guid);
-    }
-  }
-
-  fn update_topics(&mut self) {
-    match self.discovery_db.read() {
-      Ok(db) => match self.ddscache.write() {
-        Ok(mut ddsc) => {
-          for topic in db.all_topics() {
-            // TODO: how do you know when topic is keyed and is not
-            let topic_kind = match &topic.topic_data.key {
-              Some(_) => TopicKind::WithKey,
-              None => TopicKind::NoKey,
-            };
-            ddsc.add_new_topic(
-              topic.topic_data.name.clone(),
-              topic_kind,
-              TypeDesc::new(topic.topic_data.type_name.clone()),
-            );
-          }
-        }
-        _ => panic!("DDSCache is poisoned"),
-      },
-      _ => panic!("DiscoveryDB is poisoned"),
     }
   }
 }
@@ -777,9 +762,12 @@ mod tests {
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
 
     let ddshc = Arc::new(RwLock::new(DDSCache::new()));
+    let (discovery_db_event_sender, _discovery_db_event_receiver) =
+      mio_channel::sync_channel::<()>(4);
+
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       GUID::new_participant_guid(),
-      None,
+      discovery_db_event_sender,
     )));
 
     let domain_info = DomainInfo {

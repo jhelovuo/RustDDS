@@ -399,7 +399,6 @@ impl MessageReceiver {
 
 #[derive(Debug, Clone)]
 pub struct MessageReceiverState {
-  //pub own_guid_prefix: GuidPrefix,
   pub source_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: Vec<Locator>,
   pub multicast_reply_locator_list: Vec<Locator>,
@@ -409,7 +408,6 @@ pub struct MessageReceiverState {
 impl Default for MessageReceiverState {
   fn default() -> Self {
     Self {
-      //own_guid_prefix: GuidPrefix::default(),
       source_guid_prefix: GuidPrefix::default(),
       unicast_reply_locator_list: Vec::default(),
       multicast_reply_locator_list: Vec::default(),
@@ -444,9 +442,7 @@ mod tests {
     messages::header::Header,
     network::udp_sender::UDPSender,
     serialization::{cdr_deserializer::deserialize_from_little_endian, cdr_serializer::to_bytes},
-    structure::{
-      dds_cache::DDSCache, guid::EntityKind, sequence_number::SequenceNumber, topic_kind::TopicKind,
-    },
+    structure::{dds_cache::DDSCache, guid::EntityKind, sequence_number::SequenceNumber},
   };
   use super::*;
 
@@ -490,11 +486,10 @@ mod tests {
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TopicKind::NoKey,
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
@@ -572,7 +567,7 @@ mod tests {
       new_guid.entity_id,
       *sequence_numbers.first().unwrap(),
     );
-    change.sequence_number = SequenceNumber::from(91);
+    change.sequence_number = SequenceNumber::new(91);
   }
 
   #[test]

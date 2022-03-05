@@ -13,7 +13,7 @@ use crate::{
     traits::key::{Key, KeyHash, Keyed},
     with_key::datasample::DataSample,
   },
-  structure::{guid::GUID, time::Timestamp},
+  structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp},
   with_key::WriteOptions,
 };
 
@@ -56,11 +56,10 @@ struct SampleWithMetaData<D: Keyed> {
   // a snapshot of the instance-wide counts
   // at the time this sample was received.
   generation_counts: NotAliveGenerationCounts,
-  // who wrote this
-  writer_guid: GUID,
-  // timestamps
-  write_options: WriteOptions, // as stamped by sender
-  sample_has_been_read: bool,  // sample_state
+  writer_guid: GUID,               // who wrote this
+  sequence_number: SequenceNumber, // as sent by the Writer
+  write_options: WriteOptions,     // as stamped by Writer
+  sample_has_been_read: bool,      // sample_state
 
   // the data sample (or key) itself is stored here
   sample: Result<D, D::K>,
@@ -97,6 +96,7 @@ where
     &mut self,
     new_sample: Result<D, D::K>,
     writer_guid: GUID,
+    sequence_number: SequenceNumber,
     receive_timestamp: Timestamp,
     write_options: WriteOptions,
   ) {
@@ -169,6 +169,7 @@ where
         SampleWithMetaData {
           generation_counts: instance_metadata.latest_generation_available,
           writer_guid,
+          sequence_number,
           write_options,
           sample_has_been_read: false,
           sample: new_sample,
@@ -321,6 +322,7 @@ where
       absolute_generation_rank: mrs_generations - dswm.generation_counts.total(),
       write_options: dswm.write_options.clone(),
       publication_handle: dswm.writer_guid,
+      sequence_number: dswm.sequence_number,
     }
   }
 
@@ -528,12 +530,6 @@ where
     self.mark_instances_viewed(&instance_generations);
     result
   }
-
-  /* this seems to be for tests only?
-  pub fn get_datasample(&self, key: &D::K) -> Option<&Vec<DataSample<D>>> {
-    self.datasamples.get(&key)
-  }
-  */
 
   pub fn key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
     if let Some(k) = self.hash_to_key_map.get(&key_hash) {

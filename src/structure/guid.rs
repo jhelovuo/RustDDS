@@ -158,6 +158,14 @@ impl EntityKind {
     let e = self.0 & 0x0F;
     e == 0x02 || e == 0x03 || e == 0x08
   }
+
+  pub fn is_built_in(&self) -> bool {
+    (self.0 & 0xF0) == 0xC0
+  }
+
+  pub fn is_user_defined(&self) -> bool {
+    (self.0 & 0xF0) == 0x00
+  }
 }
 
 impl From<u8> for EntityKind {
@@ -589,8 +597,48 @@ mod tests {
   use speedy::Endianness;
   use mio::Token;
   use log::info;
+  use byteorder::BigEndian;
 
   use super::*;
+
+  #[test]
+  fn serde_test() {
+    use crate::serialization::{
+      cdr_deserializer::deserialize_from_big_endian, cdr_serializer::to_bytes,
+    };
+
+    let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    let test_guid = GUID::from_bytes(test_bytes);
+    let ser = to_bytes::<GUID, BigEndian>(&test_guid).unwrap();
+    assert_eq!(test_bytes.to_vec(), ser);
+
+    let and_back = deserialize_from_big_endian::<GUID>(&ser).unwrap();
+    assert_eq!(test_guid, and_back);
+  }
+
+  // #[test]
+  // fn serde_pl_cdr_test() {
+  //   use crate::{
+  //     serialization::{pl_cdr_deserializer::PlCdrDeserializer,
+  // cdr_serializer::to_bytes},   };
+
+  //   let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+  //   let test_guid = GUID::from_bytes(test_bytes);
+  //   let ser = to_bytes::<GUID, BigEndian>(&test_guid).unwrap();
+  //   assert_eq!(test_bytes.to_vec(), ser);
+
+  //   let and_back =
+  // PlCdrDeserializer::from_big_endian_bytes::<GUID>(&ser).unwrap();
+  //   assert_eq!(test_guid, and_back);
+  // }
+
+  #[test]
+  fn keyhash_test() {
+    let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    let test_guid = GUID::from_bytes(test_bytes);
+    let key_hash = test_guid.hash_key(); // from trait Key
+    assert_eq!(key_hash.to_vec(), test_bytes.to_vec());
+  }
 
   #[test]
   fn convert_entity_id_to_token_and_back() {

@@ -150,7 +150,7 @@ where
     // Tell dp_event_loop
     self.my_subscriber.remove_reader(self.my_guid);
 
-    // Tell discoery
+    // Tell discovery
     match self
       .discovery_command
       .send(DiscoveryCommand::RemoveLocalReader { guid: self.guid() })
@@ -687,7 +687,7 @@ where
       ),
     };
 
-    let cache_changes = dds_cache.from_topic_get_changes_in_range(
+    let cache_changes = dds_cache.topic_get_changes_in_range(
       &self.my_topic.name(),
       &self.latest_instant,
       &Timestamp::now(),
@@ -750,6 +750,7 @@ where
                 Ok(payload) => self.datasample_cache.add_sample(
                   Ok(payload),
                   *writer_guid,
+                  *sequence_number,
                   instant,
                   write_options.clone(),
                 ),
@@ -778,7 +779,6 @@ where
             key: serialized_key,
             ..
           } => {
-            // TODO: Should be parameterizable by DeserializerAdapter
             match DA::key_from_bytes(
               &serialized_key.value,
               serialized_key.representation_identifier,
@@ -787,6 +787,7 @@ where
                 self.datasample_cache.add_sample(
                   Err(key),
                   *writer_guid,
+                  *sequence_number,
                   instant,
                   write_options.clone(),
                 );
@@ -805,17 +806,18 @@ where
           }
 
           DDSData::DisposeByKeyHash { key_hash, .. } => {
-            /* TODO: Instance to be disposed could be specified by serialized payload
-             * also, not only key_hash? */
             if let Some(key) = self.datasample_cache.key_by_hash(*key_hash) {
               self.datasample_cache.add_sample(
                 Err(key),
                 *writer_guid,
+                *sequence_number,
                 instant,
                 write_options.clone(),
               );
             } else {
               warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash);
+              // The cache should know hash -> key mapping even if the sample
+              // has been disposed or .take()n
             }
           } /*
             DDSData::DataFrags { representation_identifier, bytes_frags } => {
@@ -1332,7 +1334,8 @@ mod tests {
   use crate::messages::submessages::submessage_flag::*;
 
   #[test]
-  fn dr_get_samples_from_ddschache() {
+  fn dr_get_samples_from_ddscache() {
+    //env_logger::init();
     let dp = DomainParticipant::new(0).expect("Participant creation failed");
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll);
@@ -1399,6 +1402,7 @@ mod tests {
       EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
+      &QosPolicies::qos_none(),
     );
 
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
@@ -1406,7 +1410,7 @@ mod tests {
     let data = Data {
       reader_id: EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111)),
       writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(0_i64),
+      writer_sn: SequenceNumber::from(1_i64),
       serialized_payload: Some(SerializedPayload {
         representation_identifier: RepresentationIdentifier::CDR_LE,
         representation_options: [0, 0],
@@ -1416,6 +1420,8 @@ mod tests {
     };
 
     new_reader.handle_data_msg(data, data_flags, &mr_state);
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
     matching_datareader.fill_local_datasample_cache();
     let deserialized_random_data = matching_datareader.read(1, ReadCondition::any()).unwrap()[0]
@@ -1433,7 +1439,7 @@ mod tests {
     let data2 = Data {
       reader_id: EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111)),
       writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(1),
+      writer_sn: SequenceNumber::from(2),
       serialized_payload: Some(SerializedPayload {
         representation_identifier: RepresentationIdentifier::CDR_LE,
         representation_options: [0, 0],
@@ -1449,7 +1455,7 @@ mod tests {
     let data3 = Data {
       reader_id: EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111)),
       writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(2),
+      writer_sn: SequenceNumber::from(3),
       serialized_payload: Some(SerializedPayload {
         representation_identifier: RepresentationIdentifier::CDR_LE,
         representation_options: [0, 0],
@@ -1532,6 +1538,7 @@ mod tests {
       EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
+      &QosPolicies::qos_none(),
     );
 
     // Reader and datareader ready, test with data

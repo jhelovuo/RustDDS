@@ -40,22 +40,9 @@ pub(crate) struct Message {
 }
 
 impl<'a> Message {
-  // pub fn deserialize_header(context: Endianness, buffer: &'a [u8]) -> Header {
-  //   Header::read_from_buffer_with_ctx(context, buffer).unwrap()
-  // }
-
-  // pub fn serialize_header(self) -> Vec<u8> {
-  //   let buffer = self.header.write_to_vec_with_ctx(Endianness::LittleEndian);
-  //   buffer.unwrap()
-  // }
-
   pub fn add_submessage(&mut self, submessage: SubMessage) {
     self.submessages.push(submessage);
   }
-
-  // pub fn remove_submessage(mut self, index: usize) {
-  //   self.submessages.remove(index);
-  // }
 
   #[cfg(test)]
   pub fn submessages(self) -> Vec<SubMessage> {
@@ -66,16 +53,6 @@ impl<'a> Message {
   pub fn set_header(&mut self, header: Header) {
     self.header = header;
   }
-
-  // pub fn get_data_sub_message_sequence_numbers(&self) ->
-  // HashSet<SequenceNumber> {   let mut sequence_numbers = HashSet::new();
-  //   for mes in self.submessages.iter() {
-  //     if let SubmessageBody::Entity(EntitySubmessage::Data(data_subm, _)) =
-  // &mes.body {       sequence_numbers.insert(data_subm.writer_sn);
-  //     }
-  //   }
-  //   sequence_numbers
-  // }
 
   // We implement this instead of Speedy trait Readable, because
   // we need to run-time decide which endianness we input. Speedy requires the
@@ -354,19 +331,41 @@ impl MessageBuilder {
     writer_entity_id: EntityId,
     endianness: Endianness,
   ) -> MessageBuilder {
-    let inline_qos = match cache_change.data_value {
-      DDSData::Data {..} | DDSData::DisposeByKey {..}  /*| DDSData::DataFrags{..}*/  => None,
-      DDSData::DisposeByKeyHash{ key_hash, .. } => {
-        let mut param_list = ParameterList::new();
-        let key_hash_param = Parameter {
+    let mut param_list = ParameterList::new(); // inline QoS goes here
+
+    // Check if we are disposing by key hash
+    match cache_change.data_value {
+      DDSData::Data { .. } | DDSData::DisposeByKey { .. } => (), // no
+      DDSData::DisposeByKeyHash { key_hash, .. } => {
+        // yes, insert to inline QoS
+        // insert key hash
+        param_list.parameters.push(Parameter {
           parameter_id: ParameterId::PID_KEY_HASH,
           value: key_hash.to_vec(),
-        };
-        param_list.parameters.push(key_hash_param);
-        let status_info = Parameter::create_pid_status_info_parameter(true, true, false);
+        });
+
+        // ... and tell what the key_hash means
+        let status_info = Parameter::create_pid_status_info_parameter(
+          /* disposed */ true, /* unregisterd */ true, /* filtered */ false,
+        );
         param_list.parameters.push(status_info);
-        Some(param_list)
       }
+    }
+
+    // If we are sending related sample identity, then insert that.
+    if let Some(si) = cache_change.write_options.related_sample_identity {
+      let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
+      param_list.parameters.push(Parameter {
+        parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
+        value: related_sample_identity_serialized,
+      });
+    }
+
+    let have_inline_qos = !param_list.is_empty(); // we need this later also
+    let inline_qos = if have_inline_qos {
+      Some(param_list)
+    } else {
+      None
     };
 
     let mut data_message = Data {
@@ -384,6 +383,11 @@ impl MessageBuilder {
     };
 
     // TODO: please explain this logic here:
+    //
+    // Current hypothesis:
+    // If we are writing to a built-in ( = Discovery) topic, then we mark the
+    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
+    // on a little-endian machine.
     if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
       if let Some(sp) = data_message.serialized_payload.as_mut() {
         sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE;
@@ -397,6 +401,11 @@ impl MessageBuilder {
         DDSData::DisposeByKeyHash { .. } => {
           BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
         }
+      })
+      | (if have_inline_qos {
+        BitFlags::<DATA_Flags>::from_flag(DATA_Flags::InlineQos)
+      } else {
+        BitFlags::<DATA_Flags>::empty()
       });
     // TODO: This is stupid. There should be an easier way to get the submessage
     // length than serializing it!

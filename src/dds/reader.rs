@@ -83,6 +83,10 @@ pub(crate) struct Reader {
 
   is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
   // Currently we support only stateful behaviour.
+  // RTPS Spec: Section 8.4.11.2 Reliable StatelessReader Behavior
+  // "This combination is not supported by the RTPS protocol."
+  // So stateful must be true whenever we are Reliable.
+  reliability: policy::Reliability,
   dds_cache: Arc<RwLock<DDSCache>>,
 
   #[cfg(test)]
@@ -123,6 +127,11 @@ impl Reader {
       status_sender: i.status_sender,
       udp_sender,
       is_stateful: true, // Do not change this before stateless functionality is implemented.
+
+      reliability: i
+        .qos_policy
+        .reliability() // use qos specification
+        .unwrap_or(policy::Reliability::BestEffort), // or default to BestEffort
       dds_cache,
       topic_name: i.topic_name,
       qos_policy: i.qos_policy,
@@ -284,7 +293,7 @@ impl Reader {
     let cc = self
       .seqnum_instant_map
       .get(&sequence_number)
-      .and_then(|i| dds_cache.from_topic_get_change(&self.topic_name, i));
+      .and_then(|i| dds_cache.topic_get_change(&self.topic_name, i));
 
     debug!("history cache !!!! {:?}", cc);
 
@@ -299,7 +308,7 @@ impl Reader {
     let cc = self
       .seqnum_instant_map
       .get(&sequence_number)
-      .and_then(|i| dds_cache.from_topic_get_change(&self.topic_name, i));
+      .and_then(|i| dds_cache.topic_get_change(&self.topic_name, i));
     debug!("history cache !!!! {:?}", cc);
     cc.cloned()
   }
@@ -341,6 +350,10 @@ impl Reader {
           policies: Vec::new(), // TODO. implementation missing
         });
         warn!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
+        info!(
+          "update_writer_proxy - QoS mismatch: topic={:?} requested={:?}  offered={:?}",
+          self.topic_name, &self.qos_policy, offered_qos
+        );
       }
     }
   }
@@ -393,6 +406,7 @@ impl Reader {
     remote_group_entity_id: EntityId,
     unicast_locator_list: Vec<Locator>,
     multicast_locator_list: Vec<Locator>,
+    qos: &QosPolicies,
   ) {
     let proxy = RtpsWriterProxy::new(
       remote_writer_guid,
@@ -400,7 +414,7 @@ impl Reader {
       multicast_locator_list,
       remote_group_entity_id,
     );
-    self.update_writer_proxy(proxy, &QosPolicies::qos_none());
+    self.update_writer_proxy(proxy, qos);
   }
 
   fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
@@ -437,7 +451,7 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let writer_seq_num = data.writer_sn; // for borrow checker
 
-    match Self::data_to_ddsdata(data, data_flags) {
+    match self.data_to_ddsdata(data, data_flags) {
       Ok(ddsdata) => self.process_received_data(
         ddsdata,
         receive_timestamp,
@@ -524,16 +538,17 @@ impl Reader {
     writer_sn: SequenceNumber,
   ) {
     trace!(
-      "handle_data_msg from {:?} seq={:?} topic={:?} stateful={:?}",
+      "handle_data_msg from {:?} seq={:?} topic={:?} reliability={:?} stateful={:?}",
       &writer_guid,
       writer_sn,
       self.topic_name,
+      self.reliability,
       self.is_stateful,
     );
     if self.is_stateful {
       let my_entityid = self.my_guid.entity_id; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
-        if writer_proxy.contains_change(writer_sn) {
+        if writer_proxy.should_ignore_change(writer_sn) {
           // change already present
           debug!("handle_data_msg already have this seq={:?}", writer_sn);
           if my_entityid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
@@ -574,7 +589,11 @@ impl Reader {
     self.notify_cache_change();
   }
 
-  fn data_to_ddsdata(data: Data, data_flags: BitFlags<DATA_Flags>) -> Result<DDSData, String> {
+  fn data_to_ddsdata(
+    &self,
+    data: Data,
+    data_flags: BitFlags<DATA_Flags>,
+  ) -> Result<DDSData, String> {
     let representation_identifier = DATA_Flags::cdr_representation_identifier(data_flags);
 
     match (
@@ -616,6 +635,10 @@ impl Reader {
         // now, let's try to determine what is the dispose reason
         let change_kind =
           Self::deduce_change_kind(&data.inline_qos, false, representation_identifier);
+        info!(
+          "status change by Inline QoS: topic={:?} change={:?}",
+          self.topic_name, change_kind
+        );
         Ok(DDSData::new_disposed_by_key_hash(change_kind, key_hash))
       }
 
@@ -641,6 +664,7 @@ impl Reader {
 
   // Returns if responding with ACKNACK?
   // TODO: Return value seems to go unused in callers.
+  // ...except in test cases, but not sure if this is strictly necessary to have.
   pub fn handle_heartbeat_msg(
     &mut self,
     heartbeat: &Heartbeat,
@@ -650,11 +674,16 @@ impl Reader {
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
-    if !self.is_stateful {
+    if self.reliability == policy::Reliability::BestEffort {
       debug!(
-        "HEARTBEAT from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}",
+        "HEARTBEAT from {:?}, but this Reader is BestEffort. Ignoring. topic={:?} reader={:?}",
         writer_guid, self.topic_name, self.my_guid
       );
+      // BestEffort Reader reacts only to DATA and GAP
+      // See RTPS Spec Section "8.4.11 RTPS StatelessReader Behavior":
+      // Figure 8.23 - Behavior of the Best-Effort StatefulReader with respect to each
+      // matched Writer and
+      // Figure 8.22 - Behavior of the Best-Effort StatelessReader
       return false;
     }
 
@@ -702,7 +731,7 @@ impl Reader {
       };
       for instant in removed_instances.values() {
         if cache
-          .from_topic_remove_change(&self.topic_name, instant)
+          .topic_remove_change(&self.topic_name, instant)
           .is_none()
         {
           debug!("WriterProxy told to remove an instant which was not present");
@@ -723,8 +752,7 @@ impl Reader {
     };
 
     // See if ACKNACK is needed, and generate one.
-    let missing_seqnums =
-      writer_proxy.missing_sequence_numbers(heartbeat.first_sn, heartbeat.last_sn);
+    let missing_seqnums = writer_proxy.missing_seqnums(heartbeat.first_sn, heartbeat.last_sn);
 
     // Interpretation of final flag in RTPS spec
     // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with
@@ -748,7 +776,7 @@ impl Reader {
             &missing_seqnums
               .iter()
               .copied()
-              .take_while(|sn| sn < &(first_missing + SequenceNumber::from(256)))
+              .take_while(|sn| sn < &(first_missing + SequenceNumber::new(256)))
               .collect(),
           )
         }
@@ -765,12 +793,21 @@ impl Reader {
       };
 
       // Sanity check
-      if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn + SequenceNumber::new(1) {
-        error!(
-          "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}",
-          &heartbeat, &response_ack_nack
-        );
-      }
+      //
+      // Wrong. This sanity check is invalid. The condition
+      // ack_base > heartbeat.last_sn + 1
+      // May be legitimately true, if there are some changes available, and a GAP
+      // after that. E.g. HEARTBEAT 1..8 and GAP 9..10. Then acknack_base == 11
+      // and 11 > 8 + 1.
+      //
+      //
+      // if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn +
+      // SequenceNumber::new(1) {   error!(
+      //     "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}
+      // missing_seqnums = {:?} all_ackable_before = {:?} writer={:?}",
+      //     &heartbeat, &response_ack_nack, missing_seqnums,
+      // writer_proxy.all_ackable_before(), writer_guid,   );
+      // }
 
       // The acknack can be sent now or later. The rest of the RTPS message
       // needs to be constructed. p. 48
@@ -814,25 +851,7 @@ impl Reader {
       return;
     };
 
-    // Sequencenumber set in the gap is invalid: (section 8.3.5.5)
-    // Set checked to be not empty. Unwraps won't panic
-
-    // TODO: Implement SequenceNumberSet rules validation (section 8.3.5.5)
-    // Already in the SequenceNumber module.
-
     // TODO: Implement GAP rules validation (Section 8.3.7.4.3) here.
-
-    // if gap.gap_list
-
-    // if gap.gap_list.set.len() != 0 {
-    //   if i64::from(gap.gap_start) < 1i64
-    //     || (gap.gap_list.set.iter().max().unwrap() -
-    // gap.gap_list.set.iter().min().unwrap()) >= 256   {
-    //     return;
-    //   }
-    // } else {
-    //   return;
-    // };
 
     // Irrelevant sequence numbers communicated in the Gap message are
     // composed of two groups:
@@ -852,13 +871,16 @@ impl Reader {
     }
 
     // Remove from DDSHistoryCache
+    // TODO: Is this really correct?
+    // Is the meaning of GAP to only inform that such changes are not available from
+    // the writer? Or does it also mean that the DDSCache should remove them?
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
     for instant in &removed_changes {
-      cache.from_topic_remove_change(&self.topic_name, instant);
+      cache.topic_remove_change(&self.topic_name, instant);
     }
 
     // Is this needed?
@@ -974,14 +996,17 @@ impl Reader {
     let mut writer_proxies = std::mem::take(&mut self.matched_writers);
 
     let reader_id = self.entity_id();
-    for (_, writer_proxy) in writer_proxies.iter_mut().filter(|(_, p)| p.no_changes()) {
+    for (_, writer_proxy) in writer_proxies
+      .iter_mut()
+      .filter(|(_, p)| p.no_changes_received())
+    {
       let acknack_count = writer_proxy.next_ack_nack_sequence_number();
       self.send_acknack_to(
         flags,
         AckNack {
           reader_id,
           writer_id: writer_proxy.remote_writer_guid.entity_id,
-          reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::from(1)),
+          reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::new(1)),
           count: acknack_count,
         },
         InfoDestination {
@@ -1025,15 +1050,16 @@ impl fmt::Debug for Reader {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
   use crate::{
-    dds::{statusevents::DataReaderStatus, typedesc::TypeDesc, with_key::datawriter::WriteOptions},
-    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-    structure::{
-      guid::{EntityId, EntityKind, GuidPrefix, GUID},
-      topic_kind::TopicKind,
+    dds::{
+      qos::policy::Reliability, statusevents::DataReaderStatus, typedesc::TypeDesc,
+      with_key::datawriter::WriteOptions,
     },
+    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+    structure::guid::{EntityId, EntityKind, GuidPrefix, GUID},
+    Duration, QosPolicyBuilder,
   };
+  use super::*;
 
   #[test]
   #[ignore]
@@ -1048,11 +1074,10 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TopicKind::NoKey,
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
 
     let reader_ing = ReaderIngredients {
       guid,
@@ -1086,6 +1111,7 @@ mod tests {
       EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
+      &QosPolicies::qos_none(),
     );
 
     let reader_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
@@ -1114,11 +1140,10 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TopicKind::NoKey,
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
 
     let reader_ing = ReaderIngredients {
       guid: new_guid,
@@ -1153,6 +1178,7 @@ mod tests {
       EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
+      &QosPolicies::qos_none(),
     );
 
     let d = Data {
@@ -1170,7 +1196,7 @@ mod tests {
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
     let cc_built_here = CacheChange::new(writer_guid, d_seqnum, WriteOptions::default(), ddsdata);
 
-    let cc_from_chache = hc_locked.from_topic_get_change(
+    let cc_from_chache = hc_locked.topic_get_change(
       &new_reader.topic_name,
       new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
     );
@@ -1181,6 +1207,7 @@ mod tests {
 
   #[test]
   fn rtpsreader_handle_heartbeat() {
+    env_logger::init();
     let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
 
     let (send, _rec) = mio_channel::sync_channel::<()>(100);
@@ -1190,17 +1217,21 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TopicKind::NoKey,
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
+    let reliable_qos = QosPolicyBuilder::new()
+      .reliability(Reliability::Reliable {
+        max_blocking_time: Duration::from_millis(100),
+      })
+      .build();
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
       status_sender,
       topic_name: "test".to_string(),
-      qos_policy: QosPolicies::qos_none(),
+      qos_policy: reliable_qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
     };
     let mut new_reader = Reader::new(
@@ -1230,6 +1261,7 @@ mod tests {
       EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
+      &reliable_qos,
     );
 
     let d = DDSData::new(SerializedPayload::default());
@@ -1238,8 +1270,8 @@ mod tests {
     let hb_new = Heartbeat {
       reader_id: new_reader.entity_id(),
       writer_id,
-      first_sn: SequenceNumber::from(1), // First hearbeat from a new writer
-      last_sn: SequenceNumber::from(0),
+      first_sn: SequenceNumber::new(1), // First hearbeat from a new writer
+      last_sn: SequenceNumber::new(0),
       count: 1,
     };
     assert!(!new_reader.handle_heartbeat_msg(&hb_new, true, mr_state.clone())); // should be false, no ack
@@ -1247,8 +1279,8 @@ mod tests {
     let hb_one = Heartbeat {
       reader_id: new_reader.entity_id(),
       writer_id,
-      first_sn: SequenceNumber::from(1), // Only one in writers cache
-      last_sn: SequenceNumber::from(1),
+      first_sn: SequenceNumber::new(1), // Only one in writers cache
+      last_sn: SequenceNumber::new(1),
       count: 2,
     };
     assert!(new_reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
@@ -1256,7 +1288,7 @@ mod tests {
     // After ack_nack, will receive the following change
     let change = CacheChange::new(
       new_reader.guid(),
-      SequenceNumber::from(1),
+      SequenceNumber::new(1),
       WriteOptions::default(),
       d.clone(),
     );
@@ -1271,8 +1303,8 @@ mod tests {
     let hb_one2 = Heartbeat {
       reader_id: new_reader.entity_id(),
       writer_id,
-      first_sn: SequenceNumber::from(1), // Only one in writers cache
-      last_sn: SequenceNumber::from(1),
+      first_sn: SequenceNumber::new(1), // Only one in writers cache
+      last_sn: SequenceNumber::new(1),
       count: 2,
     };
     assert!(!new_reader.handle_heartbeat_msg(&hb_one2, false, mr_state.clone())); // No acknack
@@ -1280,8 +1312,8 @@ mod tests {
     let hb_3_1 = Heartbeat {
       reader_id: new_reader.entity_id(),
       writer_id,
-      first_sn: SequenceNumber::from(1), // writer has last 2 in cache
-      last_sn: SequenceNumber::from(3),  // writer has written 3 samples
+      first_sn: SequenceNumber::new(1), // writer has last 2 in cache
+      last_sn: SequenceNumber::new(3),  // writer has written 3 samples
       count: 3,
     };
     assert!(new_reader.handle_heartbeat_msg(&hb_3_1, false, mr_state.clone())); // Should send an ack_nack
@@ -1289,7 +1321,7 @@ mod tests {
     // After ack_nack, will receive the following changes
     let change = CacheChange::new(
       new_reader.guid(),
-      SequenceNumber::from(2),
+      SequenceNumber::new(2),
       WriteOptions::default(),
       d.clone(),
     );
@@ -1302,7 +1334,7 @@ mod tests {
 
     let change = CacheChange::new(
       new_reader.guid(),
-      SequenceNumber::from(3),
+      SequenceNumber::new(3),
       WriteOptions::default(),
       d,
     );
@@ -1316,8 +1348,8 @@ mod tests {
     let hb_none = Heartbeat {
       reader_id: new_reader.entity_id(),
       writer_id,
-      first_sn: SequenceNumber::from(4), // writer has no samples available
-      last_sn: SequenceNumber::from(3),  // writer has written 3 samples
+      first_sn: SequenceNumber::new(4), // writer has no samples available
+      last_sn: SequenceNumber::new(3),  // writer has written 3 samples
       count: 4,
     };
     assert!(new_reader.handle_heartbeat_msg(&hb_none, false, mr_state)); // Should sen acknack
@@ -1340,11 +1372,10 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TopicKind::NoKey,
-      TypeDesc::new("testi".to_string()),
-    );
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
 
     let reader_ing = ReaderIngredients {
       guid: new_guid,
@@ -1380,6 +1411,7 @@ mod tests {
       EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
       mr_state.multicast_reply_locator_list.clone(),
+      &QosPolicies::qos_none(),
     );
 
     let n: i64 = 10;
@@ -1390,20 +1422,20 @@ mod tests {
     let mut changes = Vec::new();
 
     for i in 0..n {
-      d.writer_sn = SequenceNumber::from(i);
+      d.writer_sn = SequenceNumber::new(i);
       reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), &mr_state);
       changes.push(reader.history_cache_change(d.writer_sn).unwrap().clone());
     }
 
     // make sequence numbers 1-3 and 5 7 irrelevant
-    let mut gap_list = SequenceNumberSet::new(SequenceNumber::from(4), 7);
-    gap_list.insert(SequenceNumber::from(5));
-    gap_list.insert(SequenceNumber::from(7));
+    let mut gap_list = SequenceNumberSet::new(SequenceNumber::new(4), 7);
+    gap_list.insert(SequenceNumber::new(5));
+    gap_list.insert(SequenceNumber::new(7));
 
     let gap = Gap {
       reader_id: reader.entity_id(),
       writer_id,
-      gap_start: SequenceNumber::from(1),
+      gap_start: SequenceNumber::new(1),
       gap_list,
     };
 
@@ -1411,28 +1443,28 @@ mod tests {
     reader.handle_gap_msg(&gap, &mr_state);
 
     assert_eq!(
-      reader.history_cache_change(SequenceNumber::from(0)),
+      reader.history_cache_change(SequenceNumber::new(0)),
       Some(changes[0].clone())
     );
-    assert_eq!(reader.history_cache_change(SequenceNumber::from(1)), None);
-    assert_eq!(reader.history_cache_change(SequenceNumber::from(2)), None);
-    assert_eq!(reader.history_cache_change(SequenceNumber::from(3)), None);
+    assert_eq!(reader.history_cache_change(SequenceNumber::new(1)), None);
+    assert_eq!(reader.history_cache_change(SequenceNumber::new(2)), None);
+    assert_eq!(reader.history_cache_change(SequenceNumber::new(3)), None);
     assert_eq!(
-      reader.history_cache_change(SequenceNumber::from(4)),
+      reader.history_cache_change(SequenceNumber::new(4)),
       Some(changes[4].clone())
     );
-    assert_eq!(reader.history_cache_change(SequenceNumber::from(5)), None);
+    assert_eq!(reader.history_cache_change(SequenceNumber::new(5)), None);
     assert_eq!(
-      reader.history_cache_change(SequenceNumber::from(6)),
+      reader.history_cache_change(SequenceNumber::new(6)),
       Some(changes[6].clone())
     );
-    assert_eq!(reader.history_cache_change(SequenceNumber::from(7)), None);
+    assert_eq!(reader.history_cache_change(SequenceNumber::new(7)), None);
     assert_eq!(
-      reader.history_cache_change(SequenceNumber::from(8)),
+      reader.history_cache_change(SequenceNumber::new(8)),
       Some(changes[8].clone())
     );
     assert_eq!(
-      reader.history_cache_change(SequenceNumber::from(9)),
+      reader.history_cache_change(SequenceNumber::new(9)),
       Some(changes[9].clone())
     );
   }

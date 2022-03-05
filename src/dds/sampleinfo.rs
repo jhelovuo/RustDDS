@@ -2,7 +2,7 @@ use enumflags2::BitFlags;
 
 use crate::{
   dds::with_key::datawriter::WriteOptions,
-  structure::{guid::GUID, time::Timestamp, rpc::SampleIdentity,},
+  structure::{guid::GUID, rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp},
 };
 
 //use std::num::Zero; // unstable
@@ -223,6 +223,7 @@ pub struct SampleInfo {
   /// publication_handle identifies the DataWriter that modified
   /// the instance (i.e. wrote this sample)
   pub(crate) publication_handle: GUID,
+  pub(crate) sequence_number: SequenceNumber,
 }
 
 #[allow(clippy::new_without_default)]
@@ -277,12 +278,25 @@ impl SampleInfo {
     self.absolute_generation_rank
   }
 
+  /// publication_handle identifies the DataWriter that modified
+  /// the instance (i.e. wrote this sample)
   pub fn publication_handle(&self) -> GUID {
     self.publication_handle
   }
 
+  pub fn writer_guid(&self) -> GUID {
+    self.publication_handle
+  }
+
   pub fn related_sample_identity(&self) -> Option<SampleIdentity> {
-    self.write_options.related_sample_identity.clone()
+    self.write_options.related_sample_identity
+  }
+
+  pub fn sample_identity(&self) -> SampleIdentity {
+    SampleIdentity {
+      writer_guid: self.publication_handle,
+      sequence_number: self.sequence_number,
+    }
   }
 
   // pub fn set_publication_handle(&mut self, publication_handle: GUID) {

@@ -1002,7 +1002,7 @@ impl InnerSubscriber {
     // Create new topic to DDScache if one isn't present
     match dp.dds_cache().write() {
       Ok(mut dds_cache) => {
-        dds_cache.add_new_topic(topic.name(), topic.kind(), topic.get_type());
+        dds_cache.add_new_topic(topic.name(), topic.get_type());
       }
       Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
     }
