@@ -1385,9 +1385,9 @@ impl Discovery {
 
 #[cfg(test)]
 mod tests {
-  use chrono::Utc;
   use std::net::SocketAddr;
 
+  use chrono::Utc;
   use bytes::Bytes;
   use mio::Token;
   use speedy::{Endianness, Writable};
@@ -1620,22 +1620,25 @@ mod tests {
   fn discovery_topic_data_test() {
     let _participant = DomainParticipant::new(0);
 
-    let topic_data = DiscoveredTopicData::new(Utc::now(), TopicBuiltinTopicData {
-      key: None,
-      name: String::from("Square"),
-      type_name: String::from("ShapeType"),
-      durability: None,
-      deadline: None,
-      latency_budget: None,
-      liveliness: None,
-      reliability: None,
-      lifespan: None,
-      destination_order: None,
-      presentation: None,
-      history: None,
-      resource_limits: None,
-      ownership: None,
-    });
+    let topic_data = DiscoveredTopicData::new(
+      Utc::now(),
+      TopicBuiltinTopicData {
+        key: None,
+        name: String::from("Square"),
+        type_name: String::from("ShapeType"),
+        durability: None,
+        deadline: None,
+        latency_budget: None,
+        liveliness: None,
+        reliability: None,
+        lifespan: None,
+        destination_order: None,
+        presentation: None,
+        history: None,
+        resource_limits: None,
+        ownership: None,
+      },
+    );
 
     let rtps_message = create_rtps_data_message(
       topic_data,
