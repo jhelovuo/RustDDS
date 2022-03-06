@@ -35,7 +35,7 @@ use crate::{
   serialization::CDRSerializerAdapter,
   structure::{
     cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID,
-    rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp, topic_kind::TopicKind,
+    rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp,
   },
 };
 use super::super::writer::WriterCommand;
@@ -197,7 +197,7 @@ where
     status_receiver_rec: Receiver<DataWriterStatus>,
   ) -> Result<DataWriter<D, SA>> {
     match dds_cache.write() {
-      Ok(mut cache) => cache.add_new_topic(topic.name(), TopicKind::NoKey, topic.get_type()),
+      Ok(mut cache) => cache.add_new_topic(topic.name(), topic.get_type()),
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
     };
 
@@ -994,6 +994,7 @@ mod tests {
   use crate::{
     dds::{participant::DomainParticipant, traits::key::Keyed},
     serialization::cdr_serializer::CDRSerializerAdapter,
+    structure::topic_kind::TopicKind,
     test::random_data::*,
   };
 

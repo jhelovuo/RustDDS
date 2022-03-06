@@ -111,7 +111,6 @@ pub(crate) enum DiscoveryNotificationType {
   ParticipantLost {
     guid_prefix: GuidPrefix,
   },
-  TopicsInfoUpdated,
   AssertTopicLiveliness {
     writer_guid: GUID,
     manual_assertion: bool,
