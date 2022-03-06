@@ -20,7 +20,7 @@ use rustdds::{
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
 use serde::{Deserialize, Serialize};
-use clap::{App, Arg, ArgMatches}; // command line argument processing
+use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use mio::{Events, Poll, PollOpt, Ready, Token}; // polling
 use mio_extras::channel; // pollable channel
 use rand::prelude::*;
@@ -340,97 +340,97 @@ fn configure_logging() {
   });
 }
 
-fn get_matches() -> ArgMatches<'static> {
-  App::new("RustDDS-interop")
+fn get_matches() -> ArgMatches {
+  Command::new("RustDDS-interop")
     .version("0.2.2")
     .author("Juhana Helovuo <juhe@iki.fi>")
     .about("Command-line \"shapes\" interoperability test.")
     .arg(
-      Arg::with_name("domain_id")
-        .short("d")
+      Arg::new("domain_id")
+        .short('d')
         .value_name("id")
         .help("Sets the DDS domain id number")
         .takes_value(true),
     )
     .arg(
-      Arg::with_name("topic")
-        .short("t")
+      Arg::new("topic")
+        .short('t')
         .value_name("name")
         .help("Sets the topic name")
         .takes_value(true)
         .required(true),
     )
     .arg(
-      Arg::with_name("color")
-        .short("c")
+      Arg::new("color")
+        .short('c')
         .value_name("color")
         .help("Color to publish (or filter)")
         .takes_value(true),
     )
     .arg(
-      Arg::with_name("durability")
-        .short("D")
+      Arg::new("durability")
+        .short('D')
         .value_name("durability")
         .help("Set durability")
         .takes_value(true)
         .possible_values(&["v", "l", "t", "p"]),
     )
     .arg(
-      Arg::with_name("publisher")
+      Arg::new("publisher")
         .help("Act as publisher")
-        .short("P")
-        .required_unless("subscriber"),
+        .short('P')
+        .required_unless_present("subscriber"),
     )
     .arg(
-      Arg::with_name("subscriber")
+      Arg::new("subscriber")
         .help("Act as subscriber")
-        .short("S")
-        .required_unless("publisher"),
+        .short('S')
+        .required_unless_present("publisher"),
     )
     .arg(
-      Arg::with_name("best_effort")
+      Arg::new("best_effort")
         .help("BEST_EFFORT reliability")
-        .short("b")
+        .short('b')
         .conflicts_with("reliable"),
     )
     .arg(
-      Arg::with_name("reliable")
+      Arg::new("reliable")
         .help("RELIABLE reliability")
-        .short("r")
+        .short('r')
         .conflicts_with("best_effort"),
     )
     .arg(
-      Arg::with_name("history_depth")
+      Arg::new("history_depth")
         .help("Keep history depth")
-        .short("k")
+        .short('k')
         .takes_value(true)
         .value_name("depth"),
     )
     .arg(
-      Arg::with_name("deadline")
+      Arg::new("deadline")
         .help("Set a 'deadline' with interval (seconds)")
-        .short("f")
+        .short('f')
         .takes_value(true)
         .value_name("interval"),
     )
     .arg(
-      Arg::with_name("partition")
+      Arg::new("partition")
         .help("Set a 'partition' string")
-        .short("p")
+        .short('p')
         .takes_value(true)
         .value_name("partition"),
     )
     .arg(
-      Arg::with_name("interval")
+      Arg::new("interval")
         .help("Apply 'time based filter' with interval (seconds)")
-        .short("i")
+        .short('i')
         .takes_value(true)
         .value_name("interval"),
     )
     .arg(
-      Arg::with_name("ownership_strength")
+      Arg::new("ownership_strength")
         .help("Set ownership strength [-1: SHARED]")
-        .short("s")
+        .short('s')
         .takes_value(true)
         .value_name("strength"),
     )
