@@ -1,4 +1,4 @@
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 
 use crate::{
   dds::with_key::datawriter::WriteOptions,
@@ -20,7 +20,8 @@ use crate::{
 ///
 /// See DDS spec v1.4 Section 2.2.2.5.4 and Section "2.2.2.5.1.2 Interpretation
 /// of the SampleInfo sample_state".
-#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+#[bitflags]
 #[repr(u32)] // DDS Spec 1.4 section 2.3.3 DCPS PSM : IDL defines these as "unsigned long",
              // so u32
 pub enum SampleState {
@@ -58,8 +59,9 @@ impl SampleState {
 ///
 /// See DDS spec v.14 Section 2.2.2.5.1.8 Interpretation of the SampleInfo
 /// view_state
-#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u32)]
+#[bitflags]
 pub enum ViewState {
   /// > indicates that either this is the first time that the DataReader has
   /// > ever accessed samples of that instance, or else that the DataReader
@@ -87,8 +89,9 @@ impl ViewState {
 ///
 /// DDS spec v1.4 Section "2.2.2.5.1.3 Interpretation of the SampleInfo
 /// instance_state"
-#[derive(BitFlags, Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u32)]
+#[bitflags]
 pub enum InstanceState {
   /// > indicates that (a) samples have been received for the instance, (b)
   /// > there are live DataWriter entities writing the instance, and (c) the
