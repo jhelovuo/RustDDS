@@ -54,8 +54,8 @@ pub(crate) struct RtpsReaderProxy {
 }
 
 impl RtpsReaderProxy {
-  pub fn new(remote_reader_guid: GUID, qos: QosPolicies) -> RtpsReaderProxy {
-    RtpsReaderProxy {
+  pub fn new(remote_reader_guid: GUID, qos: QosPolicies) -> Self {
+    Self {
       remote_reader_guid,
       remote_group_entity_id: EntityId::UNKNOWN,
       unicast_locator_list: Vec::default(),
@@ -73,10 +73,7 @@ impl RtpsReaderProxy {
     &self.qos
   }
 
-  pub fn from_reader(
-    reader: &ReaderIngredients,
-    domain_participant: &DomainParticipant,
-  ) -> RtpsReaderProxy {
+  pub fn from_reader(reader: &ReaderIngredients, domain_participant: &DomainParticipant) -> Self {
     let mut self_locators = domain_participant.self_locators(); // This clones a map of locator lists.
     let unicast_locator_list = self_locators
       .remove(&USER_TRAFFIC_LISTENER_TOKEN)
@@ -85,7 +82,7 @@ impl RtpsReaderProxy {
       .remove(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
       .unwrap_or_default();
 
-    RtpsReaderProxy {
+    Self {
       remote_reader_guid: reader.guid,
       remote_group_entity_id: EntityId::UNKNOWN, //TODO
       unicast_locator_list,
@@ -111,7 +108,7 @@ impl RtpsReaderProxy {
     discovered_reader_data: &DiscoveredReaderData,
     default_unicast_locators: &[Locator],
     default_multicast_locators: &[Locator],
-  ) -> RtpsReaderProxy {
+  ) -> Self {
     let unicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.unicast_locator_list,
       default_unicast_locators,
@@ -121,7 +118,7 @@ impl RtpsReaderProxy {
       default_multicast_locators,
     );
 
-    RtpsReaderProxy {
+    Self {
       remote_reader_guid: discovered_reader_data.reader_proxy.remote_reader_guid,
       remote_group_entity_id: EntityId::UNKNOWN, //TODO
       unicast_locator_list,

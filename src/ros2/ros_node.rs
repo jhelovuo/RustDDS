@@ -44,15 +44,13 @@ pub struct RosParticipant {
 }
 
 impl RosParticipant {
-  pub fn new() -> Result<RosParticipant, Error> {
+  pub fn new() -> Result<Self, Error> {
     Self::from_domain_participant(DomainParticipant::new(0)?)
   }
 
-  pub fn from_domain_participant(
-    domain_participant: DomainParticipant,
-  ) -> Result<RosParticipant, Error> {
+  pub fn from_domain_participant(domain_participant: DomainParticipant) -> Result<Self, Error> {
     let i = RosParticipantInner::from_domain_participant(domain_participant)?;
-    Ok(RosParticipant {
+    Ok(Self {
       inner: Arc::new(Mutex::new(i)),
     })
   }
@@ -146,9 +144,7 @@ struct RosParticipantInner {
 
 impl RosParticipantInner {
   // "new"
-  pub fn from_domain_participant(
-    domain_participant: DomainParticipant,
-  ) -> Result<RosParticipantInner, Error> {
+  pub fn from_domain_participant(domain_participant: DomainParticipant) -> Result<Self, Error> {
     let ros_discovery_topic = domain_participant.create_topic(
       ROSDiscoveryTopic::topic_name().to_string(),
       ROSDiscoveryTopic::type_name().to_string(),
@@ -180,7 +176,7 @@ impl RosParticipantInner {
     let node_writer =
       ros_discovery_publisher.create_datawriter_no_key(&ros_discovery_topic, None)?;
 
-    Ok(RosParticipantInner {
+    Ok(Self {
       nodes: HashMap::new(),
       external_nodes: HashMap::new(),
       node_reader,
@@ -315,8 +311,8 @@ impl NodeOptions {
   /// # Arguments
   ///
   /// * `enable_rosout` -  Wheter or not ros logging is enabled (rosout writer)
-  pub fn new(/* domain_id: u16, */ enable_rosout: bool) -> NodeOptions {
-    NodeOptions { enable_rosout }
+  pub fn new(/* domain_id: u16, */ enable_rosout: bool) -> Self {
+    Self { enable_rosout }
   }
 }
 
@@ -352,7 +348,7 @@ impl RosNode {
     namespace: &str,
     options: NodeOptions,
     ros_participant: RosParticipant,
-  ) -> Result<RosNode, Error> {
+  ) -> Result<Self, Error> {
     let paramtopic = ros_participant.get_parameter_events_topic();
     let rosout_topic = ros_participant.get_rosout_topic();
 
@@ -370,7 +366,7 @@ impl RosNode {
       .get_ros_discovery_publisher()
       .create_datawriter_no_key(&paramtopic, None)?;
 
-    Ok(RosNode {
+    Ok(Self {
       name: String::from(name),
       namespace: String::from(namespace),
       options,

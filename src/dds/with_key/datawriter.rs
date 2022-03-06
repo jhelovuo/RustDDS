@@ -51,8 +51,8 @@ pub struct WriteOptionsBuilder {
 }
 
 impl WriteOptionsBuilder {
-  pub fn new() -> WriteOptionsBuilder {
-    WriteOptionsBuilder::default()
+  pub fn new() -> Self {
+    Self::default()
   }
 
   pub fn build(self) -> WriteOptions {
@@ -63,10 +63,7 @@ impl WriteOptionsBuilder {
   }
 
   #[must_use]
-  pub fn related_sample_identity(
-    mut self,
-    related_sample_identity: SampleIdentity,
-  ) -> WriteOptionsBuilder {
+  pub fn related_sample_identity(mut self, related_sample_identity: SampleIdentity) -> Self {
     self.related_sample_identity = Some(related_sample_identity);
     self
   }
@@ -75,13 +72,13 @@ impl WriteOptionsBuilder {
   pub fn related_sample_identity_opt(
     mut self,
     related_sample_identity_opt: Option<SampleIdentity>,
-  ) -> WriteOptionsBuilder {
+  ) -> Self {
     self.related_sample_identity = related_sample_identity_opt;
     self
   }
 
   #[must_use]
-  pub fn source_timestamp(mut self, source_timestamp: Timestamp) -> WriteOptionsBuilder {
+  pub fn source_timestamp(mut self, source_timestamp: Timestamp) -> Self {
     self.source_timestamp = Some(source_timestamp);
     self
   }
@@ -97,8 +94,8 @@ pub struct WriteOptions {
 }
 
 impl From<Option<Timestamp>> for WriteOptions {
-  fn from(source_timestamp: Option<Timestamp>) -> WriteOptions {
-    WriteOptions {
+  fn from(source_timestamp: Option<Timestamp>) -> Self {
+    Self {
       related_sample_identity: None,
       source_timestamp,
     }
@@ -195,7 +192,7 @@ where
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: &Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
     status_receiver_rec: Receiver<DataWriterStatus>,
-  ) -> Result<DataWriter<D, SA>> {
+  ) -> Result<Self> {
     match dds_cache.write() {
       Ok(mut cache) => cache.add_new_topic(topic.name(), topic.get_type()),
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
@@ -212,7 +209,7 @@ where
       }
     };
     let qos = topic.qos();
-    Ok(DataWriter {
+    Ok(Self {
       data_phantom: PhantomData,
       ser_phantom: PhantomData,
       my_publisher: publisher,

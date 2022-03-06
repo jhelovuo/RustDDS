@@ -118,7 +118,7 @@ impl SpdpDiscoveredParticipantData {
     participant: &DomainParticipant,
     self_locators: &HashMap<Token, Vec<Locator>>,
     lease_duration: Duration,
-  ) -> SpdpDiscoveredParticipantData {
+  ) -> Self {
     let metatraffic_multicast_locators = self_locators
       .get(&DISCOVERY_MUL_LISTENER_TOKEN)
       .cloned()
@@ -150,7 +150,7 @@ impl SpdpDiscoveredParticipantData {
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER
       | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR;
 
-    SpdpDiscoveredParticipantData {
+    Self {
       updated_time: Utc::now(),
       protocol_version: ProtocolVersion::PROTOCOLVERSION_2_3,
       vendor_id: VendorId::THIS_IMPLEMENTATION,
@@ -170,10 +170,7 @@ impl SpdpDiscoveredParticipantData {
 }
 
 impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
-  fn from_pl_cdr_bytes(
-    input_bytes: &[u8],
-    encoding: RepresentationIdentifier,
-  ) -> Result<SpdpDiscoveredParticipantData> {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<Self> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
       .generate_spdp_participant_data()
@@ -209,10 +206,7 @@ impl Keyed for SpdpDiscoveredParticipantData {
 }
 
 impl PlCdrDeserialize for Participant_GUID {
-  fn from_pl_cdr_bytes(
-    input_bytes: &[u8],
-    encoding: RepresentationIdentifier,
-  ) -> Result<Participant_GUID> {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<Self> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
       .generate_participant_guid()

@@ -34,14 +34,14 @@ use log::error;
 pub struct SequenceNumber(i64);
 
 impl SequenceNumber {
-  pub const SEQUENCENUMBER_UNKNOWN: SequenceNumber = SequenceNumber((std::u32::MAX as i64) << 32);
+  pub const SEQUENCENUMBER_UNKNOWN: Self = Self((std::u32::MAX as i64) << 32);
 
-  pub fn new(value: i64) -> SequenceNumber {
-    SequenceNumber::from(value)
+  pub fn new(value: i64) -> Self {
+    Self::from(value)
   }
   // Zero interface may be still in unstable Rust
-  pub const fn zero() -> SequenceNumber {
-    SequenceNumber(0)
+  pub const fn zero() -> Self {
+    Self(0)
   }
 }
 
@@ -53,19 +53,19 @@ impl SequenceNumber {
 
 impl From<i64> for SequenceNumber {
   fn from(value: i64) -> Self {
-    SequenceNumber(value)
+    Self(value)
   }
 }
 
 impl From<i32> for SequenceNumber {
   fn from(value: i32) -> Self {
-    SequenceNumber(value.into())
+    Self(value.into())
   }
 }
 
 impl From<usize> for SequenceNumber {
   fn from(value: usize) -> Self {
-    SequenceNumber(value as i64)
+    Self(value as i64)
   }
 }
 
@@ -82,8 +82,8 @@ pub struct SequenceNumberRange {
 }
 
 impl SequenceNumberRange {
-  pub fn new(begin: SequenceNumber, end: SequenceNumber) -> SequenceNumberRange {
-    SequenceNumberRange { begin, end }
+  pub fn new(begin: SequenceNumber, end: SequenceNumber) -> Self {
+    Self { begin, end }
   }
 
   pub fn begin(&self) -> SequenceNumber {
@@ -138,7 +138,7 @@ impl<'a, C: Context> Readable<'a, C> for SequenceNumber {
     let high: i32 = reader.read_value()?;
     let low: u32 = reader.read_value()?;
 
-    Ok(SequenceNumber(((i64::from(high)) << 32) + i64::from(low)))
+    Ok(Self(((i64::from(high)) << 32) + i64::from(low)))
   }
 
   #[inline]
@@ -157,8 +157,8 @@ impl<C: Context> Writable<C> for SequenceNumber {
 }
 
 impl Default for SequenceNumber {
-  fn default() -> SequenceNumber {
-    SequenceNumber(1)
+  fn default() -> Self {
+    Self(1)
   }
 }
 
@@ -183,14 +183,14 @@ impl Default for SequenceNumber {
 pub struct FragmentNumber(u32);
 
 impl Default for FragmentNumber {
-  fn default() -> FragmentNumber {
-    FragmentNumber(1)
+  fn default() -> Self {
+    Self(1)
   }
 }
 
 impl From<u32> for FragmentNumber {
   fn from(value: u32) -> Self {
-    FragmentNumber(value)
+    Self(value)
   }
 }
 
@@ -203,7 +203,7 @@ impl From<FragmentNumber> for u32 {
 // to make this fit into NumberSet<N>
 impl From<i64> for FragmentNumber {
   fn from(value: i64) -> Self {
-    FragmentNumber(value as u32)
+    Self(value as u32)
   }
 }
 
@@ -250,9 +250,9 @@ where
   i64: From<N>,
 {
   // Construct an empy set from given base number
-  pub fn new(bitmap_base: N, num_bits: u32) -> NumberSet<N> {
+  pub fn new(bitmap_base: N, num_bits: u32) -> Self {
     let word_count = (num_bits + 31) / 32;
-    NumberSet::<N> {
+    Self {
       bitmap_base,
       num_bits,
       bitmap: vec![0; word_count as usize],
@@ -263,8 +263,8 @@ where
     self.bitmap_base
   }
 
-  pub fn new_empty(bitmap_base: N) -> NumberSet<N> {
-    NumberSet::<N>::new(bitmap_base, 0)
+  pub fn new_empty(bitmap_base: N) -> Self {
+    Self::new(bitmap_base, 0)
   }
 
   #[allow(dead_code)] // Is this really unneccessary?
@@ -292,7 +292,7 @@ where
     }
   }
 
-  pub fn from_base_and_set(base: N, set: &BTreeSet<N>) -> NumberSet<N> {
+  pub fn from_base_and_set(base: N, set: &BTreeSet<N>) -> Self {
     match (set.iter().next(), set.iter().next_back()) {
       (Some(&start), Some(&end)) => {
         // sanity
@@ -313,13 +313,13 @@ where
            // TODO: Sanity check that (end - base) <= 256
            // work:
         let num_bits = i64::from(end - start + N::from(1));
-        let mut sns = NumberSet::<N>::new(min(base, start), min(256, num_bits as u32));
+        let mut sns = Self::new(min(base, start), min(256, num_bits as u32));
         for &s in set.iter() {
           sns.insert(s);
         }
         sns
       }
-      (_, _) => NumberSet::<N>::new_empty(base),
+      (_, _) => Self::new_empty(base),
     }
   }
 
@@ -347,7 +347,7 @@ where
     for _ in 0..word_count {
       bitmap.push(reader.read_value()?);
     }
-    Ok(NumberSet::<N> {
+    Ok(Self {
       bitmap_base,
       num_bits,
       bitmap,

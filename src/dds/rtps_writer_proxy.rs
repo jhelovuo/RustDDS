@@ -117,7 +117,7 @@ impl RtpsWriterProxy {
     self.ack_base
   }
 
-  pub fn update_contents(&mut self, other: RtpsWriterProxy) {
+  pub fn update_contents(&mut self, other: Self) {
     self.unicast_locator_list = other.unicast_locator_list;
     self.multicast_locator_list = other.multicast_locator_list;
     self.remote_group_entity_id = other.remote_group_entity_id;
@@ -326,10 +326,8 @@ impl RtpsWriterProxy {
     self.irrelevant_changes_range(SequenceNumber::new(0), smallest_seqnum)
   }
 
-  pub fn from_discovered_writer_data(
-    discovered_writer_data: &DiscoveredWriterData,
-  ) -> RtpsWriterProxy {
-    RtpsWriterProxy {
+  pub fn from_discovered_writer_data(discovered_writer_data: &DiscoveredWriterData) -> Self {
+    Self {
       remote_writer_guid: discovered_writer_data.writer_proxy.remote_writer_guid,
       remote_group_entity_id: EntityId::UNKNOWN,
       unicast_locator_list: discovered_writer_data

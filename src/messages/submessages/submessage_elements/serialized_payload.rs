@@ -13,49 +13,49 @@ pub struct RepresentationIdentifier {
 
 impl RepresentationIdentifier {
   // Numeric values are from RTPS spec v2.3 Section 10.5 , Table 10.3
-  pub const CDR_BE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const CDR_BE: Self = Self {
     bytes: [0x00, 0x00],
   };
-  pub const CDR_LE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const CDR_LE: Self = Self {
     bytes: [0x00, 0x01],
   };
 
-  pub const PL_CDR_BE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const PL_CDR_BE: Self = Self {
     bytes: [0x00, 0x02],
   };
-  pub const PL_CDR_LE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const PL_CDR_LE: Self = Self {
     bytes: [0x00, 0x03],
   };
 
-  pub const CDR2_BE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const CDR2_BE: Self = Self {
     bytes: [0x00, 0x10],
   };
-  pub const CDR2_LE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const CDR2_LE: Self = Self {
     bytes: [0x00, 0x11],
   };
 
-  pub const PL_CDR2_BE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const PL_CDR2_BE: Self = Self {
     bytes: [0x00, 0x12],
   };
-  pub const PL_CDR2_LE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const PL_CDR2_LE: Self = Self {
     bytes: [0x00, 0x13],
   };
 
-  pub const D_CDR_BE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const D_CDR_BE: Self = Self {
     bytes: [0x00, 0x14],
   };
-  pub const D_CDR_LE: RepresentationIdentifier = RepresentationIdentifier {
+  pub const D_CDR_LE: Self = Self {
     bytes: [0x00, 0x15],
   };
 
-  pub const XML: RepresentationIdentifier = RepresentationIdentifier {
+  pub const XML: Self = Self {
     bytes: [0x00, 0x04],
   };
 
   // Reads two bytes to form a `RepresentationIdentifier`
-  pub fn from_bytes(bytes: &[u8]) -> io::Result<RepresentationIdentifier> {
+  pub fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
     let mut reader = io::Cursor::new(bytes);
-    Ok(RepresentationIdentifier {
+    Ok(Self {
       bytes: [reader.read_u8()?, reader.read_u8()?],
     })
   }
@@ -93,16 +93,16 @@ pub struct SerializedPayload {
 }
 
 impl SerializedPayload {
-  pub fn new(rep_id: RepresentationIdentifier, payload: Vec<u8>) -> SerializedPayload {
-    SerializedPayload {
+  pub fn new(rep_id: RepresentationIdentifier, payload: Vec<u8>) -> Self {
+    Self {
       representation_identifier: rep_id,
       representation_options: [0, 0],
       value: Bytes::from(payload),
     }
   }
 
-  pub fn new_from_bytes(rep_id: RepresentationIdentifier, payload: Bytes) -> SerializedPayload {
-    SerializedPayload {
+  pub fn new_from_bytes(rep_id: RepresentationIdentifier, payload: Bytes) -> Self {
+    Self {
       representation_identifier: rep_id,
       representation_options: [0, 0],
       value: payload,
@@ -110,7 +110,7 @@ impl SerializedPayload {
   }
 
   // Implement deserialization here, because Speedy just makes it difficult.
-  pub fn from_bytes(bytes: &Bytes) -> io::Result<SerializedPayload> {
+  pub fn from_bytes(bytes: &Bytes) -> io::Result<Self> {
     let mut reader = io::Cursor::new(&bytes);
     let representation_identifier = RepresentationIdentifier {
       bytes: [reader.read_u8()?, reader.read_u8()?],
@@ -130,7 +130,7 @@ impl SerializedPayload {
       ));
     };
 
-    Ok(SerializedPayload {
+    Ok(Self {
       representation_identifier,
       representation_options,
       value,

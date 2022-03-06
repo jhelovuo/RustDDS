@@ -55,8 +55,8 @@ where
 {
   pub(crate) fn from_keyed(
     keyed: datawriter_with_key::DataWriter<NoKeyWrapper<D>, SAWrapper<SA>>,
-  ) -> DataWriter<D, SA> {
-    DataWriter {
+  ) -> Self {
+    Self {
       keyed_datawriter: keyed,
     }
   }

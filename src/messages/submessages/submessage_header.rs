@@ -21,7 +21,7 @@ impl<'a, C: Context> Readable<'a, C> for SubmessageHeader {
       Endianness::BigEndian => u16::from_be_bytes([reader.read_u8()?, reader.read_u8()?]),
     };
 
-    Ok(SubmessageHeader {
+    Ok(Self {
       kind,
       flags,
       content_length,

@@ -27,8 +27,8 @@ pub(crate) struct StatusReceiver<E> {
 }
 
 impl<E> StatusReceiver<E> {
-  pub fn new(channel_receiver: mio_channel::Receiver<E>) -> StatusReceiver<E> {
-    StatusReceiver::<E> {
+  pub fn new(channel_receiver: mio_channel::Receiver<E>) -> Self {
+    Self {
       channel_receiver,
       enabled: false,
     }
@@ -143,8 +143,8 @@ pub struct CountWithChange {
 }
 
 impl CountWithChange {
-  pub(crate) fn new(count: i32, count_change: i32) -> CountWithChange {
-    CountWithChange {
+  pub(crate) fn new(count: i32, count_change: i32) -> Self {
+    Self {
       count,
       count_change,
     }
@@ -152,8 +152,8 @@ impl CountWithChange {
 
   // ??
   // same as "new" ?
-  pub fn start_from(count: i32, count_change: i32) -> CountWithChange {
-    CountWithChange {
+  pub fn start_from(count: i32, count_change: i32) -> Self {
+    Self {
       count,
       count_change,
     }

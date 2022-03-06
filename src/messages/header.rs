@@ -17,8 +17,8 @@ pub struct Header {
 }
 
 impl Header {
-  pub fn new(guid: GuidPrefix) -> Header {
-    Header {
+  pub fn new(guid: GuidPrefix) -> Self {
+    Self {
       protocol_id: ProtocolId::PROTOCOL_RTPS,
       protocol_version: ProtocolVersion::THIS_IMPLEMENTATION,
       vendor_id: VendorId::THIS_IMPLEMENTATION,

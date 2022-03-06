@@ -43,8 +43,8 @@ pub trait Keyed {
 pub struct KeyHash([u8; 16]);
 
 impl KeyHash {
-  pub fn zero() -> KeyHash {
-    KeyHash([0; 16])
+  pub fn zero() -> Self {
+    Self([0; 16])
   }
 
   pub fn to_vec(self) -> Vec<u8> {
@@ -55,9 +55,9 @@ impl KeyHash {
     Ok(self.to_vec())
   }
 
-  pub fn from_cdr_bytes(bytes: Vec<u8>) -> Result<KeyHash, Error> {
+  pub fn from_cdr_bytes(bytes: Vec<u8>) -> Result<Self, Error> {
     let a = <[u8; 16]>::try_from(bytes).map_err(|_e| Error::Eof)?;
-    Ok(KeyHash(a))
+    Ok(Self(a))
   }
 }
 
@@ -200,14 +200,14 @@ pub struct BuiltInTopicKey {
 }
 
 impl BuiltInTopicKey {
-  pub fn random_key() -> BuiltInTopicKey {
+  pub fn random_key() -> Self {
     let mut rng = rand::thread_rng();
-    BuiltInTopicKey {
+    Self {
       value: [rng.gen(), rng.gen(), rng.gen()],
     }
   }
 
-  pub fn default() -> BuiltInTopicKey {
-    BuiltInTopicKey { value: [0, 0, 0] }
+  pub fn default() -> Self {
+    Self { value: [0, 0, 0] }
   }
 }

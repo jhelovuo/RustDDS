@@ -20,8 +20,8 @@ impl BuiltinEndpointSet {
   pub const DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER: u32 = 0x08000000;
   pub const DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR: u32 = 0x10000000;
 
-  pub fn from_u32(val: u32) -> BuiltinEndpointSet {
-    BuiltinEndpointSet { value: val }
+  pub fn from_u32(val: u32) -> Self {
+    Self { value: val }
   }
 
   pub fn contains(&self, other: u32) -> bool {
@@ -37,11 +37,8 @@ pub struct BuiltinEndpointSetData {
 }
 
 impl BuiltinEndpointSetData {
-  pub fn from(
-    builtin_endpoint_set: BuiltinEndpointSet,
-    parameter_id: ParameterId,
-  ) -> BuiltinEndpointSetData {
-    BuiltinEndpointSetData {
+  pub fn from(builtin_endpoint_set: BuiltinEndpointSet, parameter_id: ParameterId) -> Self {
+    Self {
       parameter_id,
       parameter_length: 4,
       builtin_endpoint_set,
@@ -58,7 +55,7 @@ impl BuiltinEndpointQos {
   pub const BEST_EFFORT_PARTICIPANT_MESSAGE_DATA_READER: u32 = 0x00000001;
 
   pub fn is_best_effort(&self) -> bool {
-    self.value == BuiltinEndpointQos::BEST_EFFORT_PARTICIPANT_MESSAGE_DATA_READER
+    self.value == Self::BEST_EFFORT_PARTICIPANT_MESSAGE_DATA_READER
   }
 }
 
@@ -70,8 +67,8 @@ pub struct BuiltinEndpointQosData {
 }
 
 impl BuiltinEndpointQosData {
-  pub fn from(builtin_endpoint_qos: BuiltinEndpointQos) -> BuiltinEndpointQosData {
-    BuiltinEndpointQosData {
+  pub fn from(builtin_endpoint_qos: BuiltinEndpointQos) -> Self {
+    Self {
       parameter_id: ParameterId::PID_BUILTIN_ENDPOINT_QOS,
       parameter_length: 4,
       builtin_endpoint_qos,

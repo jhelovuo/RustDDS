@@ -9,16 +9,14 @@ use crate::{
 /// QoS parameters that may affect the interpretation of the message.
 /// The encapsulation of the parameters follows a mechanism that allows
 /// extensions to the QoS without breaking backwards compatibility.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct ParameterList {
   pub parameters: Vec<Parameter>,
 }
 
 impl ParameterList {
-  pub fn new() -> ParameterList {
-    ParameterList {
-      parameters: Vec::new(),
-    }
+  pub fn new() -> Self {
+    Self::default()
   }
 
   pub fn is_empty(&self) -> bool {
@@ -44,7 +42,7 @@ impl<C: Context> Writable<C> for ParameterList {
 impl<'a, C: Context> Readable<'a, C> for ParameterList {
   #[inline]
   fn read_from<R: speedy::Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut parameters = ParameterList::new();
+    let mut parameters = Self::default();
 
     // loop ends in failure to read something or catching sentinel
     loop {

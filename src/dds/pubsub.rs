@@ -93,8 +93,8 @@ impl Publisher {
     add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
     remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Publisher {
-    Publisher {
+  ) -> Self {
+    Self {
       inner: Arc::new(Mutex::new(InnerPublisher::new(
         dp,
         discovery_db,
@@ -448,13 +448,13 @@ impl InnerPublisher {
     add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
     remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> InnerPublisher {
+  ) -> Self {
     // We generate an arbitrary but unique id to distiguish Publishers from each
     // other. EntityKind is just some value, since we do not show it to anyone.
     let id = EntityId::MAX;
     //dp.clone().upgrade().unwrap().new_entity_id(EntityKind::UNKNOWN_BUILT_IN);
 
-    InnerPublisher {
+    Self {
       id,
       domain_participant: dp,
       discovery_db,
@@ -664,8 +664,8 @@ impl Subscriber {
     sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
     sender_remove_reader: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Subscriber {
-    Subscriber {
+  ) -> Self {
+    Self {
       inner: Arc::new(InnerSubscriber::new(
         domain_participant,
         discovery_db,
@@ -921,8 +921,8 @@ impl InnerSubscriber {
     sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
     sender_remove_reader: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> InnerSubscriber {
-    InnerSubscriber {
+  ) -> Self {
+    Self {
       domain_participant,
       discovery_db,
       qos,

@@ -65,7 +65,7 @@ pub struct DataFrag {
 }
 
 impl<'a> DataFrag {
-  pub fn deserialize(buffer: &Bytes, flags: BitFlags<DATAFRAG_Flags>) -> io::Result<DataFrag> {
+  pub fn deserialize(buffer: &Bytes, flags: BitFlags<DATAFRAG_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
     let endianness = endianness_flag(flags.bits());
     let map_speedy_err = |p: Error| io::Error::new(io::ErrorKind::Other, p);
@@ -117,7 +117,7 @@ impl<'a> DataFrag {
     let serialized_payload =
       SerializedPayload::from_bytes(&buffer.clone().split_off(cursor.position() as usize))?;
 
-    Ok(DataFrag {
+    Ok(Self {
       reader_id,
       writer_id,
       writer_sn,

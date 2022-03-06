@@ -58,11 +58,11 @@ impl<'a> Message {
   // we need to run-time decide which endianness we input. Speedy requires the
   // top level to fix that. And there seems to be no reasonable way to change
   // endianness. TODO: The error type should be something better
-  pub fn read_from_buffer(buffer: &Bytes) -> io::Result<Message> {
+  pub fn read_from_buffer(buffer: &Bytes) -> io::Result<Self> {
     // The Header deserializes the same
     let rtps_header =
       Header::read_from_buffer(buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    let mut message = Message::new(rtps_header);
+    let mut message = Self::new(rtps_header);
     let mut submessages_left: Bytes = buffer.slice(20..); // header is 20 bytes
                                                           // submessage loop
     while !submessages_left.is_empty() {
@@ -230,8 +230,8 @@ impl<'a> Message {
 }
 
 impl Message {
-  pub fn new(header: Header) -> Message {
-    Message {
+  pub fn new(header: Header) -> Self {
+    Self {
       header,
       submessages: vec![],
     }
@@ -240,7 +240,7 @@ impl Message {
 
 impl Default for Message {
   fn default() -> Self {
-    Message {
+    Self {
       header: Header::new(GuidPrefix::UNKNOWN),
       submessages: vec![],
     }
@@ -257,22 +257,17 @@ impl<C: Context> Writable<C> for Message {
   }
 }
 
+#[derive(Default)]
 pub(crate) struct MessageBuilder {
   submessages: Vec<SubMessage>,
 }
 
 impl MessageBuilder {
-  pub fn new() -> MessageBuilder {
-    MessageBuilder {
-      submessages: Vec::new(),
-    }
+  pub fn new() -> Self {
+    Self::default()
   }
 
-  pub fn dst_submessage(
-    mut self,
-    endianness: Endianness,
-    guid_prefix: GuidPrefix,
-  ) -> MessageBuilder {
+  pub fn dst_submessage(mut self, endianness: Endianness, guid_prefix: GuidPrefix) -> Self {
     let flags = BitFlags::<INFODESTINATION_Flags>::from_endianness(endianness);
     let submessage_header = SubmessageHeader {
       kind: SubmessageKind::INFO_DST,
@@ -295,7 +290,7 @@ impl MessageBuilder {
   /// Argument Some(timestamp) means that a timestamp is sent.
   /// Argument None means "invalidate", i.e. the previously sent
   /// [`InfoTimestamp`] submessage no longer applies.
-  pub fn ts_msg(mut self, endianness: Endianness, timestamp: Option<Timestamp>) -> MessageBuilder {
+  pub fn ts_msg(mut self, endianness: Endianness, timestamp: Option<Timestamp>) -> Self {
     let mut flags = BitFlags::<INFOTIMESTAMP_Flags>::from_endianness(endianness);
     if timestamp.is_none() {
       flags |= INFOTIMESTAMP_Flags::Invalidate;
@@ -330,7 +325,7 @@ impl MessageBuilder {
     reader_entity_id: EntityId,
     writer_entity_id: EntityId,
     endianness: Endianness,
-  ) -> MessageBuilder {
+  ) -> Self {
     let mut param_list = ParameterList::new(); // inline QoS goes here
 
     // Check if we are disposing by key hash
@@ -432,7 +427,7 @@ impl MessageBuilder {
     irrelevant_sns: &BTreeSet<SequenceNumber>,
     writer: &RtpsWriter,
     reader_guid: GUID,
-  ) -> MessageBuilder {
+  ) -> Self {
     match (
       irrelevant_sns.iter().next(),
       irrelevant_sns.iter().next_back(),
@@ -461,7 +456,7 @@ impl MessageBuilder {
     reader_entityid: EntityId,
     set_final_flag: bool,
     set_liveliness_flag: bool,
-  ) -> MessageBuilder {
+  ) -> Self {
     let first = writer.first_change_sequence_number;
     let last = writer.last_change_sequence_number;
 

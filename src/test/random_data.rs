@@ -15,8 +15,8 @@ pub struct RandomKey {
 
 impl RandomKey {
   #[allow(dead_code)] // just testing
-  pub fn new(val: i64) -> RandomKey {
-    RandomKey { val }
+  pub fn new(val: i64) -> Self {
+    Self { val }
   }
 }
 

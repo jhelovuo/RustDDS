@@ -9,16 +9,16 @@ pub struct VendorId {
 }
 
 impl VendorId {
-  pub const VENDOR_UNKNOWN: VendorId = VendorId {
+  pub const VENDOR_UNKNOWN: Self = Self {
     vendor_id: [0x00; 2],
   };
 
   /// assigned by OMG DDS SIG on 2020-11-21
-  pub const ATOSTEK: VendorId = VendorId {
+  pub const ATOSTEK: Self = Self {
     vendor_id: [0x01, 0x12],
   };
 
-  pub const THIS_IMPLEMENTATION: VendorId = VendorId::ATOSTEK;
+  pub const THIS_IMPLEMENTATION: Self = Self::ATOSTEK;
 
   pub fn as_bytes(&self) -> [u8; 2] {
     self.vendor_id
@@ -27,7 +27,7 @@ impl VendorId {
 
 impl Default for VendorId {
   fn default() -> Self {
-    VendorId::VENDOR_UNKNOWN
+    Self::VENDOR_UNKNOWN
   }
 }
 
@@ -39,8 +39,8 @@ pub struct VendorIdData {
 }
 
 impl VendorIdData {
-  pub fn from(vendor_id: VendorId) -> VendorIdData {
-    VendorIdData {
+  pub fn from(vendor_id: VendorId) -> Self {
+    Self {
       parameter_id: ParameterId::PID_VENDOR_ID,
       parameter_length: 4,
       vendor_id,
@@ -51,7 +51,7 @@ impl VendorIdData {
 impl<'a, C: Context> Readable<'a, C> for VendorId {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut vendor_id = VendorId::default();
+    let mut vendor_id = Self::default();
     for i in 0..vendor_id.vendor_id.len() {
       vendor_id.vendor_id[i] = reader.read_u8()?;
     }

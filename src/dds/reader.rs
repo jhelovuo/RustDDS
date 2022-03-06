@@ -121,8 +121,8 @@ impl Reader {
     dds_cache: Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
     timed_event_timer: Timer<TimedEvent>,
-  ) -> Reader {
-    Reader {
+  ) -> Self {
+    Self {
       notification_sender: i.notification_sender,
       status_sender: i.status_sender,
       udp_sender,

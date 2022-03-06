@@ -59,8 +59,8 @@ where
 {
   pub(crate) fn from_keyed(
     keyed: datareader_with_key::DataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
-  ) -> DataReader<D, DA> {
-    DataReader {
+  ) -> Self {
+    Self {
       keyed_datareader: keyed,
     }
   }

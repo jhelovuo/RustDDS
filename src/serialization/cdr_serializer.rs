@@ -28,8 +28,8 @@ impl<W> CountingWrite<W>
 where
   W: io::Write,
 {
-  pub fn new(w: W) -> CountingWrite<W> {
-    CountingWrite {
+  pub fn new(w: W) -> Self {
+    Self {
       writer: w,
       bytes_written: 0,
     }
@@ -127,9 +127,9 @@ where
   BO: ByteOrder,
   W: io::Write,
 {
-  pub fn new(w: W) -> CdrSerializer<W, BO> {
-    CdrSerializer::<W, BO> {
-      writer: CountingWrite::<W>::new(w),
+  pub fn new(w: W) -> Self {
+    Self {
+      writer: CountingWrite::new(w),
       phantom: PhantomData,
     }
   }
@@ -611,8 +611,8 @@ mod tests {
       second: u8,
     }
     impl OmaTyyppi {
-      pub fn new(first_value: i16, second: u8) -> OmaTyyppi {
-        OmaTyyppi {
+      pub fn new(first_value: i16, second: u8) -> Self {
+        Self {
           first_value,
           second,
         }
