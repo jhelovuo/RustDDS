@@ -474,31 +474,16 @@ impl<'a> BuiltinDataSerializer<'a> {
   }
 
   fn add_protocol_version<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.protocol_version {
-      Some(pv) => {
-        s.serialize_field("protocol_version", &ProtocolVersionData::from(pv))
-          .unwrap();
-      }
-      None => (),
-      // s
-      //   .serialize_field(
-      //     "protocol_version",
-      //     &ProtocolVersionData::from(ProtocolVersion::PROTOCOLVERSION_2_3),
-      //   )
-      //   .unwrap(),
+    if let Some(pv) = self.protocol_version {
+      s.serialize_field("protocol_version", &ProtocolVersionData::from(pv))
+        .unwrap();
     }
   }
 
   fn add_vendor_id<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    match self.vendor_id {
-      Some(vid) => {
-        s.serialize_field("vendor_id", &VendorIdData::from(vid))
-          .unwrap();
-      }
-      None => (),
-      // s
-      //   .serialize_field("vendor_id", &VendorIdData::from(VendorId::VENDOR_UNKNOWN))
-      //   .unwrap(),
+    if let Some(vid) = self.vendor_id {
+      s.serialize_field("vendor_id", &VendorIdData::from(vid))
+        .unwrap();
     }
   }
 

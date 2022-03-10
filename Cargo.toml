@@ -1,6 +1,6 @@
 [package]
 name = "rustdds"
-version = "0.7.7"
+version = "0.7.8"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", "Oiva Moisio <oiva.moisio@atostek.com>", "Miska Melkinen <miska.melkinen@atostek.com>", "Lauri Eneh <lauri.eneh@atostek.com>"]
 description = "Native Rust DDS implementation with RTPS"
 readme = "README.md"
