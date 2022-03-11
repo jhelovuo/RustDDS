@@ -382,7 +382,7 @@ impl WriterProxy {
 pub struct PublicationBuiltinTopicData {
   pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
-  pub topic_name: String,
+  pub topic_name: String, // TODO: Convert to method for symmetry with SubscrptionBuiltinTopicData
   pub type_name: String,
   pub durability: Option<Durability>,
   pub deadline: Option<Deadline>,

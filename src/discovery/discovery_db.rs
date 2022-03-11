@@ -492,6 +492,34 @@ impl DiscoveryDB {
     self.topics.get(topic_name).and_then(|m| m.values().next())
   }
 
+  pub fn get_topic_for_participant(&self, topic_name: &str, participant: GuidPrefix) 
+    -> Option<&DiscoveredTopicData> 
+  {
+    self.topics.get(topic_name).and_then(|m| m.get(&participant)) 
+  }
+
+  pub fn writers_on_topic_and_participant(&self, topic_name: &str, participant: GuidPrefix)
+    -> Vec<DiscoveredWriterData>
+  {
+    self.external_topic_writers
+      .range(participant.range())
+      .map(|(_guid,dwd)| dwd)
+      .filter(|dwd| dwd.publication_topic_data.topic_name == topic_name)
+      .cloned()
+      .collect()
+  }
+
+  pub fn readers_on_topic_and_participant(&self, topic_name: &str, participant: GuidPrefix)
+    -> Vec<DiscoveredReaderData>
+  {
+    self.external_topic_readers
+      .range(participant.range())
+      .map(|(_guid,drd)| drd)
+      .filter(|drd| drd.subscription_topic_data.topic_name() == topic_name)
+      .cloned()
+      .collect()
+  }
+
   // // TODO: return iterator somehow?
   #[cfg(test)] // used only for testing
   pub fn get_local_topic_readers<'a, T: TopicDescription>(

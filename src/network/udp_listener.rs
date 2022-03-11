@@ -97,7 +97,7 @@ impl UDPListener {
   }
 
   pub fn new_unicast(host: &str, port: u16) -> io::Result<UDPListener> {
-    let mio_socket = Self::new_listening_socket(host, port, true)?;
+    let mio_socket = Self::new_listening_socket(host, port, false)?;
 
     Ok(UDPListener {
       socket: mio_socket,

@@ -879,7 +879,6 @@ impl Discovery {
     self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
       rtps_reader_proxy: RtpsReaderProxy::from_discovered_reader_data(&drd, &[], &[]),
       discovered_reader_data: drd,
-      _needs_new_cache_change: true,
     });
     info!("Creating DCPSParticipant writer proxy for self.");
     self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
@@ -976,7 +975,6 @@ impl Discovery {
               self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
                 discovered_reader_data: drd,
                 rtps_reader_proxy,
-                _needs_new_cache_change: true,
               });
             } else {
               debug!(
@@ -1088,6 +1086,27 @@ impl Discovery {
           self
             .discovery_db_write()
             .update_topic_data(&topic_data, writer);
+          // Now check if we know any readers of writers to this topic. The topic QoS could
+          // cause these to became viable matches agains local writers/readers.
+          // This is because at least RTI Connext sends QoS policies on a Topic, and then
+          // (apprently) assumes that its readers/writers inherit those policies unless
+          // specified otherwise.
+
+          let writers = self.discovery_db_read()
+                          .writers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
+          for discovered_writer_data in writers {
+            self.send_discovery_notification(
+              DiscoveryNotificationType::WriterUpdated {discovered_writer_data});
+          }
+
+          let readers = self.discovery_db_read()
+                          .readers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
+          for discovered_reader_data in readers {
+            let rtps_reader_proxy = 
+              RtpsReaderProxy::from_discovered_reader_data(&discovered_reader_data, &[], &[]);
+            self.send_discovery_notification(
+              DiscoveryNotificationType::ReaderUpdated { discovered_reader_data, rtps_reader_proxy });
+          }
         }
         // Err means disposed
         Err(key) => {
