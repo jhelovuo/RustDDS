@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use speedy::{Endianness, Readable};
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 
 use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
 
@@ -51,7 +51,8 @@ pub fn endianness_flag(flags: u8) -> speedy::Endianness {
 /// flags are interpreted differently depending on the kind
 /// of Submessage and are described separately for each Submessage.
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[bitflags]
 #[repr(u8)]
 pub enum ACKNACK_Flags {
   Endianness = 0b01,
@@ -59,8 +60,9 @@ pub enum ACKNACK_Flags {
 }
 submessageflag_impls!(ACKNACK_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum DATA_Flags {
   Endianness = 0b00001,
   InlineQos = 0b00010,
@@ -70,8 +72,9 @@ pub enum DATA_Flags {
 }
 submessageflag_impls!(DATA_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum DATAFRAG_Flags {
   Endianness = 0b00001,
   InlineQos = 0b00010,
@@ -101,15 +104,17 @@ impl DATAFRAG_Flags {
   }
 }
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum GAP_Flags {
   Endianness = 0b00001,
 }
 submessageflag_impls!(GAP_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum HEARTBEAT_Flags {
   Endianness = 0b00001,
   Final = 0b00010,
@@ -117,59 +122,67 @@ pub enum HEARTBEAT_Flags {
 }
 submessageflag_impls!(HEARTBEAT_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum HEARTBEATFRAG_Flags {
   Endianness = 0b00001,
 }
 submessageflag_impls!(HEARTBEATFRAG_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum INFODESTINATION_Flags {
   Endianness = 0b00001,
 }
 submessageflag_impls!(INFODESTINATION_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum INFOREPLY_Flags {
   Endianness = 0b01,
   Multicast = 0b10,
 }
 submessageflag_impls!(INFOREPLY_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum INFOSOURCE_Flags {
   Endianness = 0b00001,
 }
 submessageflag_impls!(INFOSOURCE_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum INFOTIMESTAMP_Flags {
   Endianness = 0b01,
   Invalidate = 0b10,
 }
 submessageflag_impls!(INFOTIMESTAMP_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum PAD_Flags {
   Endianness = 0b00001,
 }
 submessageflag_impls!(PAD_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum NACKFRAG_Flags {
   Endianness = 0b00001,
 }
 submessageflag_impls!(NACKFRAG_Flags);
 
-#[derive(BitFlags, Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
+#[bitflags]
 pub enum INFOREPLYIP4_Flags {
   Endianness = 0b01,
   Multicast = 0b10,

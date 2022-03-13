@@ -1,4 +1,4 @@
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use byteorder::ByteOrder;
@@ -12,8 +12,9 @@ use crate::{
 #[cfg(test)]
 use crate::serialization::cdr_serializer::to_bytes;
 
-#[derive(Debug, BitFlags, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
+#[bitflags]
 pub enum StatusInfoEnum {
   Disposed = 0b0001,
   Unregistered = 0b0010,
