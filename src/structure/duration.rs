@@ -19,7 +19,6 @@ use super::parameter_id::ParameterId;
   Copy,
   Clone,
 )]
-
 /// Duration is the DDS/RTPS representation for legths of time, such as
 /// timeouts. It is very similar to [`std::time::Duration`]. See also
 /// [`Timestamp`](crate::Timestamp).
