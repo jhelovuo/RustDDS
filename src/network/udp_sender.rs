@@ -23,7 +23,7 @@ pub struct UDPSender {
 }
 
 impl UDPSender {
-  pub fn new(sender_port: u16) -> io::Result<UDPSender> {
+  pub fn new(sender_port: u16) -> io::Result<Self> {
     #[cfg(not(windows))]
     let unicast_socket = {
       let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
@@ -85,7 +85,7 @@ impl UDPSender {
       multicast_sockets.push(UdpSocket::from_socket(mc_socket)?);
     } // end for
 
-    let sender = UDPSender {
+    let sender = Self {
       unicast_socket,
       multicast_sockets,
     };
@@ -94,7 +94,7 @@ impl UDPSender {
   }
 
   #[cfg(test)]
-  pub fn new_with_random_port() -> io::Result<UDPSender> {
+  pub fn new_with_random_port() -> io::Result<Self> {
     Self::new(0)
   }
 

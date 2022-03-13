@@ -29,7 +29,7 @@ struct AssemblyBuffer {
 }
 
 impl AssemblyBuffer {
-  pub fn new(data_size: u32, fragment_size: u16) -> AssemblyBuffer {
+  pub fn new(data_size: u32, fragment_size: u16) -> Self {
     // TODO: Check that fragment size <= data_size
     // TODO: Check that fragment_size is not zero
     let data_size: usize = data_size.try_into().unwrap();
@@ -44,7 +44,7 @@ impl AssemblyBuffer {
     let fragment_count = (data_size / frag_size) + (if data_size % frag_size == 0 { 0 } else { 1 });
     let now = Timestamp::now();
 
-    AssemblyBuffer {
+    Self {
       buffer_bytes,
       fragment_count,
       received_bitmap: BitVec::from_elem(fragment_count, false),
@@ -95,8 +95,8 @@ impl fmt::Debug for FragmentAssembler {
 }
 
 impl FragmentAssembler {
-  pub fn new(fragment_size: u16) -> FragmentAssembler {
-    FragmentAssembler {
+  pub fn new(fragment_size: u16) -> Self {
+    Self {
       fragment_size,
       assembly_buffers: BTreeMap::new(),
     }

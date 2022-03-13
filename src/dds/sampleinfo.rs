@@ -116,7 +116,7 @@ impl InstanceState {
   }
   /// Set that contains both not_alive states.
   pub fn not_alive() -> BitFlags<Self> {
-    InstanceState::NotAliveDisposed | InstanceState::NotAliveNoWriters
+    Self::NotAliveDisposed | Self::NotAliveNoWriters
   }
 }
 
@@ -149,7 +149,7 @@ pub struct NotAliveGenerationCounts {
 impl NotAliveGenerationCounts {
   /// Initial count value
   pub fn zero() -> Self {
-    NotAliveGenerationCounts {
+    Self {
       disposed_generation_count: 0,
       no_writers_generation_count: 0,
     }
@@ -157,7 +157,7 @@ impl NotAliveGenerationCounts {
 
   /// Marker value for "never accessed"
   pub fn sub_zero() -> Self {
-    NotAliveGenerationCounts {
+    Self {
       disposed_generation_count: -1,
       no_writers_generation_count: -1,
     }

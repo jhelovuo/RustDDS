@@ -12,26 +12,26 @@ pub struct ProtocolVersion {
 }
 
 impl ProtocolVersion {
-  pub const THIS_IMPLEMENTATION: ProtocolVersion = ProtocolVersion::PROTOCOLVERSION_2_4;
+  pub const THIS_IMPLEMENTATION: Self = Self::PROTOCOLVERSION_2_4;
 
   #[allow(dead_code)] // Specification defines this, but not necessarily used.
-  pub const PROTOCOLVERSION_1_0: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
+  pub const PROTOCOLVERSION_1_0: Self = Self { major: 1, minor: 0 };
   #[allow(dead_code)] // Specification defines this, but not necessarily used.
-  pub const PROTOCOLVERSION_1_1: ProtocolVersion = ProtocolVersion { major: 1, minor: 1 };
+  pub const PROTOCOLVERSION_1_1: Self = Self { major: 1, minor: 1 };
   #[allow(dead_code)] // Specification defines this, but not necessarily used.
-  pub const PROTOCOLVERSION_2_0: ProtocolVersion = ProtocolVersion { major: 2, minor: 0 };
+  pub const PROTOCOLVERSION_2_0: Self = Self { major: 2, minor: 0 };
   #[allow(dead_code)] // Specification defines this, but not necessarily used.
-  pub const PROTOCOLVERSION_2_1: ProtocolVersion = ProtocolVersion { major: 2, minor: 1 };
+  pub const PROTOCOLVERSION_2_1: Self = Self { major: 2, minor: 1 };
   #[allow(dead_code)] // Specification defines this, but not necessarily used.
-  pub const PROTOCOLVERSION_2_2: ProtocolVersion = ProtocolVersion { major: 2, minor: 2 };
+  pub const PROTOCOLVERSION_2_2: Self = Self { major: 2, minor: 2 };
   #[allow(dead_code)] // Specification defines this, but not necessarily used.
-  pub const PROTOCOLVERSION_2_3: ProtocolVersion = ProtocolVersion { major: 2, minor: 3 };
-  pub const PROTOCOLVERSION_2_4: ProtocolVersion = ProtocolVersion { major: 2, minor: 4 };
+  pub const PROTOCOLVERSION_2_3: Self = Self { major: 2, minor: 3 };
+  pub const PROTOCOLVERSION_2_4: Self = Self { major: 2, minor: 4 };
 }
 
 impl Default for ProtocolVersion {
   fn default() -> Self {
-    ProtocolVersion::THIS_IMPLEMENTATION
+    Self::THIS_IMPLEMENTATION
   }
 }
 
@@ -43,8 +43,8 @@ pub struct ProtocolVersionData {
 }
 
 impl ProtocolVersionData {
-  pub fn from(protocol_version: ProtocolVersion) -> ProtocolVersionData {
-    ProtocolVersionData {
+  pub fn from(protocol_version: ProtocolVersion) -> Self {
+    Self {
       parameter_id: ParameterId::PID_PROTOCOL_VERSION,
       parameter_length: 4,
       protocol_version,

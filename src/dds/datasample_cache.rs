@@ -83,8 +83,8 @@ where
   D: Keyed,
   <D as Keyed>::K: Key,
 {
-  pub fn new(qos: QosPolicies) -> DataSampleCache<D> {
-    DataSampleCache {
+  pub fn new(qos: QosPolicies) -> Self {
+    Self {
       qos,
       datasamples: BTreeMap::new(),
       instance_map: BTreeMap::new(),

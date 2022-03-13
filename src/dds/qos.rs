@@ -73,87 +73,78 @@ pub struct QosPolicyBuilder {
 }
 
 impl QosPolicyBuilder {
-  pub fn new() -> QosPolicyBuilder {
+  pub fn new() -> Self {
     Self::default()
   }
 
   #[must_use]
-  pub const fn durability(mut self, durability: policy::Durability) -> QosPolicyBuilder {
+  pub const fn durability(mut self, durability: policy::Durability) -> Self {
     self.durability = Some(durability);
     self
   }
 
   #[must_use]
-  pub const fn presentation(mut self, presentation: policy::Presentation) -> QosPolicyBuilder {
+  pub const fn presentation(mut self, presentation: policy::Presentation) -> Self {
     self.presentation = Some(presentation);
     self
   }
 
   #[must_use]
-  pub const fn deadline(mut self, deadline: policy::Deadline) -> QosPolicyBuilder {
+  pub const fn deadline(mut self, deadline: policy::Deadline) -> Self {
     self.deadline = Some(deadline);
     self
   }
 
   #[must_use]
-  pub const fn latency_budget(mut self, latency_budget: policy::LatencyBudget) -> QosPolicyBuilder {
+  pub const fn latency_budget(mut self, latency_budget: policy::LatencyBudget) -> Self {
     self.latency_budget = Some(latency_budget);
     self
   }
 
   #[must_use]
-  pub const fn ownership(mut self, ownership: policy::Ownership) -> QosPolicyBuilder {
+  pub const fn ownership(mut self, ownership: policy::Ownership) -> Self {
     self.ownership = Some(ownership);
     self
   }
 
   #[must_use]
-  pub const fn liveliness(mut self, liveliness: policy::Liveliness) -> QosPolicyBuilder {
+  pub const fn liveliness(mut self, liveliness: policy::Liveliness) -> Self {
     self.liveliness = Some(liveliness);
     self
   }
 
   #[must_use]
-  pub const fn time_based_filter(
-    mut self,
-    time_based_filter: policy::TimeBasedFilter,
-  ) -> QosPolicyBuilder {
+  pub const fn time_based_filter(mut self, time_based_filter: policy::TimeBasedFilter) -> Self {
     self.time_based_filter = Some(time_based_filter);
     self
   }
 
   #[must_use]
-  pub const fn reliability(mut self, reliability: policy::Reliability) -> QosPolicyBuilder {
+  pub const fn reliability(mut self, reliability: policy::Reliability) -> Self {
     self.reliability = Some(reliability);
     self
   }
 
   #[must_use]
-  pub const fn destination_order(
-    mut self,
-    destination_order: policy::DestinationOrder,
-  ) -> QosPolicyBuilder {
+  pub const fn destination_order(mut self, destination_order: policy::DestinationOrder) -> Self {
     self.destination_order = Some(destination_order);
     self
   }
 
   #[must_use]
-  pub const fn history(mut self, history: policy::History) -> QosPolicyBuilder {
+  pub const fn history(mut self, history: policy::History) -> Self {
     self.history = Some(history);
     self
   }
 
   #[must_use]
-  pub const fn resource_limits(
-    mut self,
-    resource_limits: policy::ResourceLimits,
-  ) -> QosPolicyBuilder {
+  pub const fn resource_limits(mut self, resource_limits: policy::ResourceLimits) -> Self {
     self.resource_limits = Some(resource_limits);
     self
   }
 
   #[must_use]
-  pub const fn lifespan(mut self, lifespan: policy::Lifespan) -> QosPolicyBuilder {
+  pub const fn lifespan(mut self, lifespan: policy::Lifespan) -> Self {
     self.lifespan = Some(lifespan);
     self
   }
@@ -198,7 +189,7 @@ pub struct QosPolicies {
 
 impl QosPolicies {
   // #[cfg(test)]
-  pub fn qos_none() -> QosPolicies {
+  pub fn qos_none() -> Self {
     Self::default()
   }
 
@@ -259,8 +250,8 @@ impl QosPolicies {
   /// Constructs a QosPolicy, where each policy is taken from `self`,
   /// and overwritten with those policies from `other` that are defined.  
   #[must_use]
-  pub fn modify_by(&self, other: &QosPolicies) -> QosPolicies {
-    QosPolicies {
+  pub fn modify_by(&self, other: &Self) -> Self {
+    Self {
       durability: other.durability.or(self.durability),
       presentation: other.presentation.or(self.presentation),
       deadline: other.deadline.or(self.deadline),
@@ -289,7 +280,7 @@ impl QosPolicies {
   /// Section "2.2.3 Supported QoS"
   ///
   /// This is not symmetric.
-  pub fn compliance_failure_wrt(&self, other: &QosPolicies) -> Option<QosPolicyId> {
+  pub fn compliance_failure_wrt(&self, other: &Self) -> Option<QosPolicyId> {
     trace!(
       "QoS compatibility check - offered: {:?} - requested {:?}",
       self,
@@ -300,7 +291,7 @@ impl QosPolicies {
     result
   }
 
-  fn compliance_failure_wrt_impl(&self, other: &QosPolicies) -> Option<QosPolicyId> {
+  fn compliance_failure_wrt_impl(&self, other: &Self) -> Option<QosPolicyId> {
     // TODO: Check for cases where policy is requested, but not offered (None)
 
     // check Durability: Offered must be better than or equal to Requested.
@@ -586,9 +577,9 @@ pub mod policy {
   where
     D: Serialize + Copy + Clone,
   {
-    pub fn new(parameter_id: ParameterId, qosparam: D) -> QosData<D> {
+    pub fn new(parameter_id: ParameterId, qosparam: D) -> Self {
       match parameter_id {
-        ParameterId::PID_DURABILITY => QosData {
+        ParameterId::PID_DURABILITY => Self {
           parameter_id,
           parameter_length: 4,
           qos_param: qosparam,
@@ -598,19 +589,19 @@ pub mod policy {
         | ParameterId::PID_TIME_BASED_FILTER
         | ParameterId::PID_PRESENTATION
         | ParameterId::PID_LIFESPAN
-        | ParameterId::PID_HISTORY => QosData {
+        | ParameterId::PID_HISTORY => Self {
           parameter_id,
           parameter_length: 8,
           qos_param: qosparam,
         },
         ParameterId::PID_LIVELINESS
         | ParameterId::PID_RELIABILITY
-        | ParameterId::PID_RESOURCE_LIMITS => QosData {
+        | ParameterId::PID_RESOURCE_LIMITS => Self {
           parameter_id,
           parameter_length: 12,
           qos_param: qosparam,
         },
-        _ => QosData {
+        _ => Self {
           parameter_id,
           parameter_length: 4,
           qos_param: qosparam,

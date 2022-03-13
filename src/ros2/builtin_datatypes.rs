@@ -15,12 +15,12 @@ pub struct Gid {
 }
 
 impl Gid {
-  pub fn from_guid(guid: GUID) -> Gid {
+  pub fn from_guid(guid: GUID) -> Self {
     let mut data: [u8; 24] = [0; 24];
     data[..12].clone_from_slice(&guid.prefix.bytes);
     data[12..15].clone_from_slice(&guid.entity_id.entity_key);
     data[15..16].clone_from_slice(&[u8::from(guid.entity_id.entity_kind)]);
-    Gid { data }
+    Self { data }
   }
 }
 
@@ -36,8 +36,8 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
-  pub fn new(name: String, namespace: String) -> NodeInfo {
-    NodeInfo {
+  pub fn new(name: String, namespace: String) -> Self {
+    Self {
       node_namespace: namespace,
       node_name: name,
       reader_guid: Vec::new(),
@@ -95,8 +95,8 @@ pub struct ROSParticipantInfo {
 }
 
 impl ROSParticipantInfo {
-  pub fn new(guid: Gid, nodes: Vec<NodeInfo>) -> ROSParticipantInfo {
-    ROSParticipantInfo { guid, nodes }
+  pub fn new(guid: Gid, nodes: Vec<NodeInfo>) -> Self {
+    Self { guid, nodes }
   }
 
   pub fn guid(&self) -> Gid {

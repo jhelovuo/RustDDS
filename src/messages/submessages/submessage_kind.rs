@@ -8,46 +8,44 @@ pub struct SubmessageKind {
 }
 
 impl From<SubmessageKind> for u8 {
-  fn from(s: SubmessageKind) -> u8 {
+  fn from(s: SubmessageKind) -> Self {
     s.value
   }
 }
 
 impl SubmessageKind {
-  pub const PAD: SubmessageKind = SubmessageKind { value: 0x01 };
-  pub const ACKNACK: SubmessageKind = SubmessageKind { value: 0x06 };
-  pub const HEARTBEAT: SubmessageKind = SubmessageKind { value: 0x07 };
-  pub const GAP: SubmessageKind = SubmessageKind { value: 0x08 };
-  pub const INFO_TS: SubmessageKind = SubmessageKind { value: 0x09 };
-  pub const INFO_SRC: SubmessageKind = SubmessageKind { value: 0x0c };
-  pub const INFO_REPLY_IP4: SubmessageKind = SubmessageKind { value: 0x0d };
-  pub const INFO_DST: SubmessageKind = SubmessageKind { value: 0x0e };
-  pub const INFO_REPLY: SubmessageKind = SubmessageKind { value: 0x0f };
-  pub const NACK_FRAG: SubmessageKind = SubmessageKind { value: 0x12 };
-  pub const HEARTBEAT_FRAG: SubmessageKind = SubmessageKind { value: 0x13 };
-  pub const DATA: SubmessageKind = SubmessageKind { value: 0x15 };
-  pub const DATA_FRAG: SubmessageKind = SubmessageKind { value: 0x16 };
+  pub const PAD: Self = Self { value: 0x01 };
+  pub const ACKNACK: Self = Self { value: 0x06 };
+  pub const HEARTBEAT: Self = Self { value: 0x07 };
+  pub const GAP: Self = Self { value: 0x08 };
+  pub const INFO_TS: Self = Self { value: 0x09 };
+  pub const INFO_SRC: Self = Self { value: 0x0c };
+  pub const INFO_REPLY_IP4: Self = Self { value: 0x0d };
+  pub const INFO_DST: Self = Self { value: 0x0e };
+  pub const INFO_REPLY: Self = Self { value: 0x0f };
+  pub const NACK_FRAG: Self = Self { value: 0x12 };
+  pub const HEARTBEAT_FRAG: Self = Self { value: 0x13 };
+  pub const DATA: Self = Self { value: 0x15 };
+  pub const DATA_FRAG: Self = Self { value: 0x16 };
 }
 
 impl Debug for SubmessageKind {
   fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
     match *self {
-      SubmessageKind::PAD => fmt.write_str("PAD"),
-      SubmessageKind::ACKNACK => fmt.write_str("ACKNACK"),
-      SubmessageKind::HEARTBEAT => fmt.write_str("HEARTBEAT"),
-      SubmessageKind::GAP => fmt.write_str("GAP"),
-      SubmessageKind::INFO_TS => fmt.write_str("INFO_TS"),
-      SubmessageKind::INFO_SRC => fmt.write_str("INFO_SRC"),
-      SubmessageKind::INFO_REPLY_IP4 => fmt.write_str("INFO_REPLY_IP4"),
-      SubmessageKind::INFO_DST => fmt.write_str("INFO_DST"),
-      SubmessageKind::INFO_REPLY => fmt.write_str("INFO_REPLY"),
-      SubmessageKind::NACK_FRAG => fmt.write_str("NACK_FRAG"),
-      SubmessageKind::HEARTBEAT_FRAG => fmt.write_str("HEARTBEAT_FRAG"),
-      SubmessageKind::DATA => fmt.write_str("DATA"),
-      SubmessageKind::DATA_FRAG => fmt.write_str("DATA_FRAG"),
-      SubmessageKind { value: other } => {
-        fmt.write_fmt(format_args!("SubmessageKind {} (UNKNOWN!)", other))
-      }
+      Self::PAD => fmt.write_str("PAD"),
+      Self::ACKNACK => fmt.write_str("ACKNACK"),
+      Self::HEARTBEAT => fmt.write_str("HEARTBEAT"),
+      Self::GAP => fmt.write_str("GAP"),
+      Self::INFO_TS => fmt.write_str("INFO_TS"),
+      Self::INFO_SRC => fmt.write_str("INFO_SRC"),
+      Self::INFO_REPLY_IP4 => fmt.write_str("INFO_REPLY_IP4"),
+      Self::INFO_DST => fmt.write_str("INFO_DST"),
+      Self::INFO_REPLY => fmt.write_str("INFO_REPLY"),
+      Self::NACK_FRAG => fmt.write_str("NACK_FRAG"),
+      Self::HEARTBEAT_FRAG => fmt.write_str("HEARTBEAT_FRAG"),
+      Self::DATA => fmt.write_str("DATA"),
+      Self::DATA_FRAG => fmt.write_str("DATA_FRAG"),
+      Self { value: other } => fmt.write_fmt(format_args!("SubmessageKind {} (UNKNOWN!)", other)),
     }
   }
 }

@@ -34,8 +34,8 @@ impl CacheChange {
     sequence_number: SequenceNumber,
     write_options: WriteOptions,
     data_value: DDSData,
-  ) -> CacheChange {
-    CacheChange {
+  ) -> Self {
+    Self {
       writer_guid,
       sequence_number,
       write_options,

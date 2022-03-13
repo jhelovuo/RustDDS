@@ -47,10 +47,10 @@ struct StringData {
 }
 
 impl StringData {
-  pub fn new(parameter_id: ParameterId, string_data: String) -> StringData {
+  pub fn new(parameter_id: ParameterId, string_data: String) -> Self {
     let parameter_length = string_data.len() as u16;
     let parameter_length = parameter_length + (4 - parameter_length % 4) + 4;
-    StringData {
+    Self {
       parameter_id,
       parameter_length,
       string_data,
@@ -66,8 +66,8 @@ struct U32Data {
 }
 
 impl U32Data {
-  pub fn new(parameter_id: ParameterId, data: u32) -> U32Data {
-    U32Data {
+  pub fn new(parameter_id: ParameterId, data: u32) -> Self {
+    Self {
       parameter_id,
       parameter_length: 4,
       data,
@@ -83,8 +83,8 @@ struct I32Data {
 }
 
 impl I32Data {
-  pub fn new(parameter_id: ParameterId, data: i32) -> I32Data {
-    I32Data {
+  pub fn new(parameter_id: ParameterId, data: i32) -> Self {
+    Self {
       parameter_id,
       parameter_length: 4,
       data,

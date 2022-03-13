@@ -19,9 +19,9 @@ pub struct GuidPrefix {
 }
 
 impl GuidPrefix {
-  pub const UNKNOWN: GuidPrefix = GuidPrefix { bytes: [0x00; 12] };
+  pub const UNKNOWN: Self = Self { bytes: [0x00; 12] };
 
-  pub fn new(prefix: &[u8]) -> GuidPrefix {
+  pub fn new(prefix: &[u8]) -> Self {
     let mut bytes: [u8; 12] = [0; 12];
     for (ix, data) in prefix.iter().enumerate() {
       if ix >= 12 {
@@ -29,10 +29,10 @@ impl GuidPrefix {
       }
       bytes[ix] = *data;
     }
-    GuidPrefix { bytes }
+    Self { bytes }
   }
 
-  pub fn random_for_this_participant() -> GuidPrefix {
+  pub fn random_for_this_participant() -> Self {
     let mut bytes: [u8; 12] = rand::random(); // start with random data
 
     // The prefix is arbitrary, but let's place our vendor id at the head
@@ -46,7 +46,7 @@ impl GuidPrefix {
     // We could add some other identifying stuff here also, like one of
     // our IP addresses (but which one?)
 
-    GuidPrefix { bytes }
+    Self { bytes }
   }
 
   pub fn range(&self) -> impl RangeBounds<GUID> {
@@ -68,15 +68,15 @@ impl fmt::Debug for GuidPrefix {
 }
 
 impl Default for GuidPrefix {
-  fn default() -> GuidPrefix {
-    GuidPrefix::UNKNOWN
+  fn default() -> Self {
+    Self::UNKNOWN
   }
 }
 
 impl<'a, C: Context> Readable<'a, C> for GuidPrefix {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut guid_prefix = GuidPrefix::default();
+    let mut guid_prefix = Self::default();
     for i in 0..guid_prefix.bytes.len() {
       guid_prefix.bytes[i] = reader.read_u8()?;
     }
@@ -106,27 +106,27 @@ pub struct EntityKind(u8);
 
 impl EntityKind {
   // constants from RTPS spec Table 9.1
-  pub const UNKNOWN_USER_DEFINED: EntityKind = EntityKind(0x00);
-  //pub const PARTICIPANT_USER_DEFINED : EntityKind = EntityKind(0x01);
+  pub const UNKNOWN_USER_DEFINED: Self = Self(0x00);
+  //pub const PARTICIPANT_USER_DEFINED : Self = Self(0x01);
   // User-defined participants do not exist by definition.
-  pub const WRITER_WITH_KEY_USER_DEFINED: EntityKind = EntityKind(0x02);
-  pub const WRITER_NO_KEY_USER_DEFINED: EntityKind = EntityKind(0x03);
-  pub const READER_NO_KEY_USER_DEFINED: EntityKind = EntityKind(0x04);
-  pub const READER_WITH_KEY_USER_DEFINED: EntityKind = EntityKind(0x07);
-  pub const WRITER_GROUP_USER_DEFINED: EntityKind = EntityKind(0x08);
-  pub const READER_GROUP_USER_DEFINED: EntityKind = EntityKind(0x09);
+  pub const WRITER_WITH_KEY_USER_DEFINED: Self = Self(0x02);
+  pub const WRITER_NO_KEY_USER_DEFINED: Self = Self(0x03);
+  pub const READER_NO_KEY_USER_DEFINED: Self = Self(0x04);
+  pub const READER_WITH_KEY_USER_DEFINED: Self = Self(0x07);
+  pub const WRITER_GROUP_USER_DEFINED: Self = Self(0x08);
+  pub const READER_GROUP_USER_DEFINED: Self = Self(0x09);
 
-  pub const UNKNOWN_BUILT_IN: EntityKind = EntityKind(0xC0);
-  pub const PARTICIPANT_BUILT_IN: EntityKind = EntityKind(0xC1);
-  pub const WRITER_WITH_KEY_BUILT_IN: EntityKind = EntityKind(0xC2);
-  pub const WRITER_NO_KEY_BUILT_IN: EntityKind = EntityKind(0xC3);
-  pub const READER_NO_KEY_BUILT_IN: EntityKind = EntityKind(0xC4);
-  pub const READER_WITH_KEY_BUILT_IN: EntityKind = EntityKind(0xC7);
-  pub const WRITER_GROUP_BUILT_IN: EntityKind = EntityKind(0xC8);
-  pub const READER_GROUP_BUILT_IN: EntityKind = EntityKind(0xC9);
+  pub const UNKNOWN_BUILT_IN: Self = Self(0xC0);
+  pub const PARTICIPANT_BUILT_IN: Self = Self(0xC1);
+  pub const WRITER_WITH_KEY_BUILT_IN: Self = Self(0xC2);
+  pub const WRITER_NO_KEY_BUILT_IN: Self = Self(0xC3);
+  pub const READER_NO_KEY_BUILT_IN: Self = Self(0xC4);
+  pub const READER_WITH_KEY_BUILT_IN: Self = Self(0xC7);
+  pub const WRITER_GROUP_BUILT_IN: Self = Self(0xC8);
+  pub const READER_GROUP_BUILT_IN: Self = Self(0xC9);
 
-  pub const MIN: EntityKind = EntityKind(0x00);
-  pub const MAX: EntityKind = EntityKind(0xFF);
+  pub const MIN: Self = Self(0x00);
+  pub const MAX: Self = Self(0xFF);
 
   // We will encode polling tokens as EntityId, containing an EntityKind
   // The upper nibble of EntityKind will distinguish between different
@@ -169,43 +169,35 @@ impl EntityKind {
 }
 
 impl From<u8> for EntityKind {
-  fn from(b: u8) -> EntityKind {
-    EntityKind(b)
+  fn from(b: u8) -> Self {
+    Self(b)
   }
 }
 
 impl From<EntityKind> for u8 {
-  fn from(ek: EntityKind) -> u8 {
+  fn from(ek: EntityKind) -> Self {
     ek.0
   }
 }
 impl fmt::Debug for EntityKind {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match *self {
-      EntityKind::UNKNOWN_USER_DEFINED => f.write_str("EntityKind::UNKNOWN_USER_DEFINED"),
-      EntityKind::WRITER_WITH_KEY_USER_DEFINED => {
-        f.write_str("EntityKind::WRITER_WITH_KEY_USER_DEFINED")
-      }
-      EntityKind::WRITER_NO_KEY_USER_DEFINED => {
-        f.write_str("EntityKind::WRITER_NO_KEY_USER_DEFINED")
-      }
-      EntityKind::READER_NO_KEY_USER_DEFINED => {
-        f.write_str("EntityKind::READER_NO_KEY_USER_DEFINED")
-      }
-      EntityKind::READER_WITH_KEY_USER_DEFINED => {
-        f.write_str("EntityKind::READER_WITH_KEY_USER_DEFINED")
-      }
-      EntityKind::WRITER_GROUP_USER_DEFINED => f.write_str("EntityKind::WRITER_GROUP_USER_DEFINED"),
-      EntityKind::READER_GROUP_USER_DEFINED => f.write_str("EntityKind::READER_GROUP_USER_DEFINED"),
+      Self::UNKNOWN_USER_DEFINED => f.write_str("EntityKind::UNKNOWN_USER_DEFINED"),
+      Self::WRITER_WITH_KEY_USER_DEFINED => f.write_str("EntityKind::WRITER_WITH_KEY_USER_DEFINED"),
+      Self::WRITER_NO_KEY_USER_DEFINED => f.write_str("EntityKind::WRITER_NO_KEY_USER_DEFINED"),
+      Self::READER_NO_KEY_USER_DEFINED => f.write_str("EntityKind::READER_NO_KEY_USER_DEFINED"),
+      Self::READER_WITH_KEY_USER_DEFINED => f.write_str("EntityKind::READER_WITH_KEY_USER_DEFINED"),
+      Self::WRITER_GROUP_USER_DEFINED => f.write_str("EntityKind::WRITER_GROUP_USER_DEFINED"),
+      Self::READER_GROUP_USER_DEFINED => f.write_str("EntityKind::READER_GROUP_USER_DEFINED"),
 
-      EntityKind::UNKNOWN_BUILT_IN => f.write_str("EntityKind::UNKNOWN_BUILT_IN"),
-      EntityKind::PARTICIPANT_BUILT_IN => f.write_str("EntityKind::PARTICIPANT_BUILT_IN"),
-      EntityKind::WRITER_WITH_KEY_BUILT_IN => f.write_str("EntityKind::WRITER_WITH_KEY_BUILT_IN"),
-      EntityKind::WRITER_NO_KEY_BUILT_IN => f.write_str("EntityKind::WRITER_NO_KEY_BUILT_IN"),
-      EntityKind::READER_NO_KEY_BUILT_IN => f.write_str("EntityKind::READER_NO_KEY_BUILT_IN"),
-      EntityKind::READER_WITH_KEY_BUILT_IN => f.write_str("EntityKind::READER_WITH_KEY_BUILT_IN"),
-      EntityKind::WRITER_GROUP_BUILT_IN => f.write_str("EntityKind::WRITER_GROUP_BUILT_IN"),
-      EntityKind::READER_GROUP_BUILT_IN => f.write_str("EntityKind::READER_GROUP_BUILT_IN"),
+      Self::UNKNOWN_BUILT_IN => f.write_str("EntityKind::UNKNOWN_BUILT_IN"),
+      Self::PARTICIPANT_BUILT_IN => f.write_str("EntityKind::PARTICIPANT_BUILT_IN"),
+      Self::WRITER_WITH_KEY_BUILT_IN => f.write_str("EntityKind::WRITER_WITH_KEY_BUILT_IN"),
+      Self::WRITER_NO_KEY_BUILT_IN => f.write_str("EntityKind::WRITER_NO_KEY_BUILT_IN"),
+      Self::READER_NO_KEY_BUILT_IN => f.write_str("EntityKind::READER_NO_KEY_BUILT_IN"),
+      Self::READER_WITH_KEY_BUILT_IN => f.write_str("EntityKind::READER_WITH_KEY_BUILT_IN"),
+      Self::WRITER_GROUP_BUILT_IN => f.write_str("EntityKind::WRITER_GROUP_BUILT_IN"),
+      Self::READER_GROUP_BUILT_IN => f.write_str("EntityKind::READER_GROUP_BUILT_IN"),
       _ => f.write_fmt(format_args!("EntityKind({:x?})", self.0)),
     }
   }
@@ -233,73 +225,73 @@ pub enum TokenDecode {
 }
 
 impl EntityId {
-  pub const UNKNOWN: EntityId = EntityId {
+  pub const UNKNOWN: Self = Self {
     entity_key: [0x00; 3],
     entity_kind: EntityKind::UNKNOWN_USER_DEFINED,
   };
-  pub const PARTICIPANT: EntityId = EntityId {
+  pub const PARTICIPANT: Self = Self {
     entity_key: [0x00, 0x00, 0x01],
     entity_kind: EntityKind::PARTICIPANT_BUILT_IN,
   };
-  pub const SEDP_BUILTIN_TOPIC_WRITER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_TOPIC_WRITER: Self = Self {
     entity_key: [0x00, 0x00, 0x02],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const SEDP_BUILTIN_TOPIC_READER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_TOPIC_READER: Self = Self {
     entity_key: [0x00, 0x00, 0x02],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
-  pub const SEDP_BUILTIN_PUBLICATIONS_WRITER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_PUBLICATIONS_WRITER: Self = Self {
     entity_key: [0x00, 0x00, 0x03],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const SEDP_BUILTIN_PUBLICATIONS_READER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_PUBLICATIONS_READER: Self = Self {
     entity_key: [0x00, 0x00, 0x03],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
-  pub const SEDP_BUILTIN_SUBSCRIPTIONS_WRITER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_SUBSCRIPTIONS_WRITER: Self = Self {
     entity_key: [0x00, 0x00, 0x04],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const SEDP_BUILTIN_SUBSCRIPTIONS_READER: EntityId = EntityId {
+  pub const SEDP_BUILTIN_SUBSCRIPTIONS_READER: Self = Self {
     entity_key: [0x00, 0x00, 0x04],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
-  pub const SPDP_BUILTIN_PARTICIPANT_WRITER: EntityId = EntityId {
+  pub const SPDP_BUILTIN_PARTICIPANT_WRITER: Self = Self {
     entity_key: [0x00, 0x01, 0x00],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const SPDP_BUILTIN_PARTICIPANT_READER: EntityId = EntityId {
+  pub const SPDP_BUILTIN_PARTICIPANT_READER: Self = Self {
     entity_key: [0x00, 0x01, 0x00],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
-  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER: EntityId = EntityId {
+  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER: Self = Self {
     entity_key: [0x00, 0x02, 0x00],
     entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
   };
-  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: EntityId = EntityId {
+  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_READER: Self = Self {
     entity_key: [0x00, 0x02, 0x00],
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
 
-  pub const MIN: EntityId = EntityId {
+  pub const MIN: Self = Self {
     entity_key: [0x00; 3],
     entity_kind: EntityKind::MIN,
   };
-  pub const MAX: EntityId = EntityId {
+  pub const MAX: Self = Self {
     entity_key: [0xFF, 0xFF, 0xFF],
     entity_kind: EntityKind::MAX,
   };
 
-  pub fn new(entity_key: [u8; 3], entity_kind: EntityKind) -> EntityId {
-    EntityId {
+  pub fn new(entity_key: [u8; 3], entity_kind: EntityKind) -> Self {
+    Self {
       entity_key,
       entity_kind,
     }
   }
 
   #[cfg(test)]
-  pub(crate) fn create_custom_entity_id(entity_key: [u8; 3], entity_kind: EntityKind) -> EntityId {
+  pub(crate) fn create_custom_entity_id(entity_key: [u8; 3], entity_kind: EntityKind) -> Self {
     Self::new(entity_key, entity_kind)
   }
 
@@ -318,13 +310,13 @@ impl EntityId {
   }
 
   /// Use this only with usize generated with EntityID::as_usize function.!!!
-  fn from_usize(number: usize) -> EntityId {
+  fn from_usize(number: usize) -> Self {
     let u4 = (number & 0xFF) as u8;
     let u3 = ((number >> 8) & 0xFF) as u8;
     let u2 = ((number >> 16) & 0xFF) as u8;
     let u1 = ((number >> 24) & 0xFF) as u8;
 
-    let result = EntityId {
+    let result = Self {
       entity_key: [u1, u2, u3],
       entity_kind: EntityKind::from(u4),
     };
@@ -352,8 +344,8 @@ impl EntityId {
 
   pub fn from_token(t: Token) -> TokenDecode {
     match (t.0 & 0xF0) as u8 {
-      0x00 | 0xC0 => TokenDecode::Entity(EntityId::from_usize(t.0)),
-      0x20 | 0xE0 => TokenDecode::AltEntity(EntityId::from_usize(t.0 & !0x20)),
+      0x00 | 0xC0 => TokenDecode::Entity(Self::from_usize(t.0)),
+      0x20 | 0xE0 => TokenDecode::AltEntity(Self::from_usize(t.0 & !0x20)),
       0x40 | 0x50 | 0x60 | 0x70 => TokenDecode::FixedToken(t),
       _other => {
         warn!("EntityId::from_token tried to decode 0x{:x?}", t.0);
@@ -380,8 +372,8 @@ impl EntityId {
     slice
   }
 
-  pub fn from_slice(bytes: [u8; 4]) -> EntityId {
-    EntityId {
+  pub fn from_slice(bytes: [u8; 4]) -> Self {
+    Self {
       entity_key: [bytes[0], bytes[1], bytes[2]],
       entity_kind: EntityKind::from(bytes[3]),
     }
@@ -389,40 +381,40 @@ impl EntityId {
 }
 
 impl Default for EntityId {
-  fn default() -> EntityId {
-    EntityId::UNKNOWN
+  fn default() -> Self {
+    Self::UNKNOWN
   }
 }
 
 impl fmt::Debug for EntityId {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match *self {
-      EntityId::UNKNOWN => f.write_str("EntityId::UNKNOWN"),
-      EntityId::PARTICIPANT => f.write_str("EntityId::PARTICIPANT"),
-      EntityId::SEDP_BUILTIN_TOPIC_WRITER => f.write_str("EntityId::SEDP_BUILTIN_TOPIC_WRITER"),
-      EntityId::SEDP_BUILTIN_TOPIC_READER => f.write_str("EntityId::SEDP_BUILTIN_TOPIC_READER"),
-      EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER => {
+      Self::UNKNOWN => f.write_str("EntityId::UNKNOWN"),
+      Self::PARTICIPANT => f.write_str("EntityId::PARTICIPANT"),
+      Self::SEDP_BUILTIN_TOPIC_WRITER => f.write_str("EntityId::SEDP_BUILTIN_TOPIC_WRITER"),
+      Self::SEDP_BUILTIN_TOPIC_READER => f.write_str("EntityId::SEDP_BUILTIN_TOPIC_READER"),
+      Self::SEDP_BUILTIN_PUBLICATIONS_WRITER => {
         f.write_str("EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER")
       }
-      EntityId::SEDP_BUILTIN_PUBLICATIONS_READER => {
+      Self::SEDP_BUILTIN_PUBLICATIONS_READER => {
         f.write_str("EntityId::SEDP_BUILTIN_PUBLICATIONS_READER")
       }
-      EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER => {
+      Self::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER => {
         f.write_str("EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER")
       }
-      EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
+      Self::SEDP_BUILTIN_SUBSCRIPTIONS_READER => {
         f.write_str("EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER")
       }
-      EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER => {
+      Self::SPDP_BUILTIN_PARTICIPANT_WRITER => {
         f.write_str("EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER")
       }
-      EntityId::SPDP_BUILTIN_PARTICIPANT_READER => {
+      Self::SPDP_BUILTIN_PARTICIPANT_READER => {
         f.write_str("EntityId::SPDP_BUILTIN_PARTICIPANT_READER")
       }
-      EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER => {
+      Self::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER => {
         f.write_str("EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER")
       }
-      EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
+      Self::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
         f.write_str("EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER")
       }
       _ => {
@@ -441,7 +433,7 @@ impl<'a, C: Context> Readable<'a, C> for EntityId {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let entity_key = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
     let entity_kind = EntityKind(reader.read_u8()?);
-    Ok(EntityId {
+    Ok(Self {
       entity_key,
       entity_kind,
     })
@@ -497,39 +489,39 @@ pub struct GUID {
 }
 
 impl GUID {
-  pub const GUID_UNKNOWN: GUID = GUID {
+  pub const GUID_UNKNOWN: Self = Self {
     prefix: GuidPrefix::UNKNOWN,
     entity_id: EntityId::UNKNOWN,
   };
 
   /// basic constructor from components
-  pub fn new(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
-    GUID::new_with_prefix_and_id(prefix, entity_id)
+  pub fn new(prefix: GuidPrefix, entity_id: EntityId) -> Self {
+    Self::new_with_prefix_and_id(prefix, entity_id)
   }
 
-  pub fn from_bytes(bytes: [u8; 16]) -> GUID {
+  pub fn from_bytes(bytes: [u8; 16]) -> Self {
     let mut prefix = GuidPrefix { bytes: [0; 12] };
     prefix.bytes.as_mut_slice().copy_from_slice(&bytes[0..12]);
 
     let mut eid_bytes = [0; 4];
     eid_bytes.as_mut_slice().copy_from_slice(&bytes[12..16]);
 
-    GUID {
+    Self {
       prefix,
       entity_id: EntityId::from_slice(eid_bytes),
     }
   }
 
   /// Generates new GUID for Participant when `guid_prefix` is random
-  pub fn new_participant_guid() -> GUID {
-    GUID {
+  pub fn new_participant_guid() -> Self {
+    Self {
       prefix: GuidPrefix::random_for_this_participant(),
       entity_id: EntityId::PARTICIPANT,
     }
   }
 
-  pub fn dummy_test_guid(entity_kind: EntityKind) -> GUID {
-    GUID {
+  pub fn dummy_test_guid(entity_kind: EntityKind) -> Self {
+    Self {
       prefix: GuidPrefix::new(b"FakeTestGUID"),
       entity_id: EntityId {
         entity_key: [1, 2, 3],
@@ -540,16 +532,16 @@ impl GUID {
 
   /// Generates GUID for specific entity_id from current prefix
   #[must_use]
-  pub fn from_prefix(self, entity_id: EntityId) -> GUID {
-    GUID {
+  pub fn from_prefix(self, entity_id: EntityId) -> Self {
+    Self {
       prefix: self.prefix,
       entity_id,
     }
   }
 
   /// alias for basic constructor from components
-  pub fn new_with_prefix_and_id(prefix: GuidPrefix, entity_id: EntityId) -> GUID {
-    GUID { prefix, entity_id }
+  pub fn new_with_prefix_and_id(prefix: GuidPrefix, entity_id: EntityId) -> Self {
+    Self { prefix, entity_id }
   }
 
   pub fn as_usize(&self) -> usize {
@@ -583,8 +575,8 @@ pub(crate) struct GUIDData {
 }
 
 impl GUIDData {
-  pub fn from(guid: GUID, parameter_id: ParameterId) -> GUIDData {
-    GUIDData {
+  pub fn from(guid: GUID, parameter_id: ParameterId) -> Self {
+    Self {
       parameter_id,
       parameter_length: 16,
       guid,

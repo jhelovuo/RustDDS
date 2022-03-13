@@ -53,8 +53,8 @@ pub struct StatusInfo {
 }
 
 impl StatusInfo {
-  pub fn empty() -> StatusInfo {
-    StatusInfo {
+  pub fn empty() -> Self {
+    Self {
       em: [0; 3],
       si: BitFlags::empty(),
     }
@@ -81,13 +81,13 @@ impl StatusInfo {
   pub fn into_cdr_bytes<BO: ByteOrder>(
     self,
   ) -> Result<Vec<u8>, crate::serialization::error::Error> {
-    to_bytes::<StatusInfo, BO>(&self)
+    to_bytes::<Self, BO>(&self)
   }
 
   pub fn from_cdr_bytes(
     bytes: &[u8],
     representation_id: RepresentationIdentifier,
-  ) -> Result<StatusInfo, crate::serialization::error::Error> {
+  ) -> Result<Self, crate::serialization::error::Error> {
     CDRDeserializerAdapter::from_bytes(bytes, representation_id)
   }
 }

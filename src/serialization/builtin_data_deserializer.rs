@@ -96,7 +96,7 @@ pub struct BuiltinDataDeserializer {
 }
 
 impl BuiltinDataDeserializer {
-  pub fn new() -> BuiltinDataDeserializer {
+  pub fn new() -> Self {
     Self::default()
   }
 
@@ -334,19 +334,15 @@ impl BuiltinDataDeserializer {
     })
   }
 
-  pub fn parse_data_little_endian(self, buffer: &[u8]) -> BuiltinDataDeserializer {
+  pub fn parse_data_little_endian(self, buffer: &[u8]) -> Self {
     self.parse_data(buffer, RepresentationIdentifier::CDR_LE)
   }
 
-  pub fn parse_data_big_endian(self, buffer: &[u8]) -> BuiltinDataDeserializer {
+  pub fn parse_data_big_endian(self, buffer: &[u8]) -> Self {
     self.parse_data(buffer, RepresentationIdentifier::CDR_BE)
   }
 
-  pub fn parse_data(
-    mut self,
-    buffer: &[u8],
-    rep: RepresentationIdentifier,
-  ) -> BuiltinDataDeserializer {
+  pub fn parse_data(mut self, buffer: &[u8], rep: RepresentationIdentifier) -> Self {
     let mut buffer = buffer.to_vec();
     while self.sentinel.is_none() && !buffer.is_empty() {
       self = self.read_next(&mut buffer, rep);
@@ -355,14 +351,9 @@ impl BuiltinDataDeserializer {
     self
   }
 
-  pub fn read_next(
-    mut self,
-    buffer: &mut Vec<u8>,
-    rep: RepresentationIdentifier,
-  ) -> BuiltinDataDeserializer {
-    let parameter_id = BuiltinDataDeserializer::read_parameter_id(buffer, rep).unwrap();
-    let mut parameter_length: usize =
-      BuiltinDataDeserializer::read_parameter_length(buffer, rep).unwrap() as usize;
+  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) -> Self {
+    let parameter_id = Self::read_parameter_id(buffer, rep).unwrap();
+    let mut parameter_length: usize = Self::read_parameter_length(buffer, rep).unwrap() as usize;
 
     if (parameter_length + 4) > buffer.len() {
       parameter_length = buffer.len() - 4;

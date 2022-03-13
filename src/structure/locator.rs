@@ -46,7 +46,7 @@ impl From<Locator> for SocketAddr {
       Locator::UdpV6(socket_address) => socket_address.into(),
       Locator::Invalid | Locator::Reserved | Locator::Other { .. } => {
         let ip = Ipv6Addr::from(INVALID_ADDRESS).into();
-        SocketAddr::new(ip, INVALID_PORT)
+        Self::new(ip, INVALID_PORT)
       }
     }
   }
@@ -86,7 +86,7 @@ pub struct Data {
 }
 
 impl Data {
-  pub fn from(locator: Locator, parameter_id: ParameterId) -> Data {
+  pub fn from(locator: Locator, parameter_id: ParameterId) -> Self {
     Self {
       parameter_id,
       parameter_length: 24,

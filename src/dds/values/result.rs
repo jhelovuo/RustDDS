@@ -79,13 +79,13 @@ pub enum Error {
 
 impl Error {
   pub fn bad_parameter<T>(reason: impl Into<String>) -> Result<T> {
-    Err(Error::BadParameter {
+    Err(Self::BadParameter {
       reason: reason.into(),
     })
   }
 
   pub fn precondition_not_met<T>(precondition: impl Into<String>) -> Result<T> {
-    Err(Error::PreconditionNotMet {
+    Err(Self::PreconditionNotMet {
       precondition: precondition.into(),
     })
   }
@@ -121,8 +121,8 @@ macro_rules! log_and_err_discovery {
 }
 
 impl<T> From<std::sync::PoisonError<T>> for Error {
-  fn from(_e: std::sync::PoisonError<T>) -> Error {
-    Error::LockPoisoned
+  fn from(_e: std::sync::PoisonError<T>) -> Self {
+    Self::LockPoisoned
   }
 }
 
@@ -130,8 +130,8 @@ impl<T> From<TrySendError<T>> for Error
 where
   TrySendError<T>: std::error::Error,
 {
-  fn from(e: TrySendError<T>) -> Error {
-    Error::Internal {
+  fn from(e: TrySendError<T>) -> Self {
+    Self::Internal {
       reason: format!("Cannot send to internal mio channel: {:?}", e),
     }
   }

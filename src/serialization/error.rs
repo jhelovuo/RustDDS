@@ -50,19 +50,19 @@ pub enum Error {
 
 impl ser::Error for Error {
   fn custom<T: Display>(msg: T) -> Self {
-    Error::Message(msg.to_string())
+    Self::Message(msg.to_string())
   }
 }
 
 impl de::Error for Error {
   fn custom<T: Display>(msg: T) -> Self {
-    Error::Message(msg.to_string())
+    Self::Message(msg.to_string())
   }
 }
 
 impl From<Error> for DDSError {
-  fn from(ser_error: Error) -> DDSError {
-    DDSError::Serialization {
+  fn from(ser_error: Error) -> Self {
+    Self::Serialization {
       reason: format!("{:?}", ser_error),
     }
   }

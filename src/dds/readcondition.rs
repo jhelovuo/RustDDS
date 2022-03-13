@@ -19,8 +19,8 @@ pub struct ReadCondition {
 
 impl ReadCondition {
   /// Condition reads all available samples
-  pub fn any() -> ReadCondition {
-    ReadCondition {
+  pub fn any() -> Self {
+    Self {
       sample_state_mask: SampleState::any(),
       view_state_mask: ViewState::any(),
       instance_state_mask: InstanceState::any(),
@@ -28,8 +28,8 @@ impl ReadCondition {
   }
 
   /// Condition reads samples that are not already read
-  pub fn not_read() -> ReadCondition {
-    ReadCondition {
+  pub fn not_read() -> Self {
+    Self {
       sample_state_mask: SampleState::NotRead.into(),
       view_state_mask: ViewState::any(),
       instance_state_mask: InstanceState::any(),

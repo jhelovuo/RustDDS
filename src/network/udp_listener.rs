@@ -96,21 +96,17 @@ impl UDPListener {
     }
   }
 
-  pub fn new_unicast(host: &str, port: u16) -> io::Result<UDPListener> {
+  pub fn new_unicast(host: &str, port: u16) -> io::Result<Self> {
     let mio_socket = Self::new_listening_socket(host, port, true)?;
 
-    Ok(UDPListener {
+    Ok(Self {
       socket: mio_socket,
       receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
       multicast_group: None,
     })
   }
 
-  pub fn new_multicast(
-    host: &str,
-    port: u16,
-    multicast_group: Ipv4Addr,
-  ) -> io::Result<UDPListener> {
+  pub fn new_multicast(host: &str, port: u16, multicast_group: Ipv4Addr) -> io::Result<Self> {
     if !multicast_group.is_multicast() {
       return io::Result::Err(io::Error::new(
         io::ErrorKind::Other,
@@ -129,7 +125,7 @@ impl UDPListener {
       }
     }
 
-    Ok(UDPListener {
+    Ok(Self {
       socket: mio_socket,
       receive_buffer: BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK),
       multicast_group: Some(multicast_group),

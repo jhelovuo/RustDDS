@@ -85,19 +85,19 @@ submessageflag_impls!(DATAFRAG_Flags);
 
 impl DATAFRAG_Flags {
   #[allow(dead_code)] // TODO: remove annotation when DATA_FRAG is supported
-  pub fn to_data_flags(dff: BitFlags<DATAFRAG_Flags>) -> BitFlags<DATA_Flags> {
-    let mut df: BitFlags<DATA_Flags> = if dff.contains(DATAFRAG_Flags::Key) {
+  pub fn to_data_flags(dff: BitFlags<Self>) -> BitFlags<DATA_Flags> {
+    let mut df: BitFlags<DATA_Flags> = if dff.contains(Self::Key) {
       DATA_Flags::Key.into()
     } else {
       DATA_Flags::Data.into()
     };
-    if dff.contains(DATAFRAG_Flags::Endianness) {
+    if dff.contains(Self::Endianness) {
       df.insert(DATA_Flags::Endianness);
     }
-    if dff.contains(DATAFRAG_Flags::InlineQos) {
+    if dff.contains(Self::InlineQos) {
       df.insert(DATA_Flags::InlineQos);
     }
-    if dff.contains(DATAFRAG_Flags::NonStandardPayload) {
+    if dff.contains(Self::NonStandardPayload) {
       df.insert(DATA_Flags::NonStandardPayload);
     }
     df

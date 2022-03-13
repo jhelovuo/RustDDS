@@ -63,8 +63,8 @@ impl MessageReceiver {
     participant_guid_prefix: GuidPrefix,
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> MessageReceiver {
-    MessageReceiver {
+  ) -> Self {
+    Self {
       available_readers: BTreeMap::new(),
       acknack_sender,
       spdp_liveness_sender,

@@ -201,7 +201,7 @@ impl Writer {
     dds_cache: Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
     mut timed_event_timer: Timer<TimedEvent>,
-  ) -> Writer {
+  ) -> Self {
     let heartbeat_period = i
       .qos_policies
       .reliability
@@ -237,7 +237,7 @@ impl Writer {
       TimedEvent::CacheCleaning,
     );
 
-    Writer {
+    Self {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
       push_mode: true,

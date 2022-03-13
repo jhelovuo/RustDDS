@@ -57,8 +57,8 @@ impl Topic {
     my_typedesc: TypeDesc,
     my_qos_policies: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Topic {
-    Topic {
+  ) -> Self {
+    Self {
       inner: Arc::new(InnerTopic::new(
         my_domainparticipant,
         my_name,
@@ -170,8 +170,8 @@ impl InnerTopic {
     my_typedesc: TypeDesc,
     my_qos_policies: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> InnerTopic {
-    InnerTopic {
+  ) -> Self {
+    Self {
       my_domainparticipant: my_domainparticipant.clone(),
       my_name,
       my_typedesc,

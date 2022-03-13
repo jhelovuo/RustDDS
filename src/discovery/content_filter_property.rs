@@ -48,7 +48,7 @@ pub struct ContentFilterPropertyData {
 }
 
 impl ContentFilterPropertyData {
-  pub fn new(content_filter_property: &ContentFilterProperty) -> ContentFilterPropertyData {
+  pub fn new(content_filter_property: &ContentFilterProperty) -> Self {
     let len_cftn = content_filter_property.content_filtered_topic_name.len();
     let len_cftn = len_cftn + (4 - len_cftn % 4) + 4;
     let len_rtn = content_filter_property.related_topic_name.len();
@@ -67,7 +67,7 @@ impl ContentFilterPropertyData {
 
     parameter_length = parameter_length + (4 - parameter_length % 4) + 4;
 
-    ContentFilterPropertyData {
+    Self {
       parameter_id: ParameterId::PID_CONTENT_FILTER_PROPERTY,
       parameter_length: parameter_length as u16,
       content_filter_property: content_filter_property.clone(),

@@ -4,8 +4,8 @@ macro_rules! checked_impl {
 
     impl $trait_name for $t {
       #[inline]
-      fn $method(&self, v: &$t) -> Option<$t> {
-        (self.0).$method(v.0).map(<$t>::from)
+      fn $method(&self, v: &Self) -> Option<Self> {
+        (self.0).$method(v.0).map(Self::from)
       }
     }
   };
