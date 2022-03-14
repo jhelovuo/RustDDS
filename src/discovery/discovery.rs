@@ -969,20 +969,13 @@ impl Discovery {
             .map(|e| e == d.reader_proxy.remote_reader_guid.prefix)
             .unwrap_or(true)
           {
-            if let Some((drd, rtps_reader_proxy)) = db.update_subscription(&d) {
-              debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
-                &drd, &rtps_reader_proxy);
-              self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-                discovered_reader_data: drd,
-                rtps_reader_proxy,
-              });
-            } else {
-              debug!(
-                "handle_subscription_reader - DiscoveryDB already knows reader {:?}",
-                d.reader_proxy.remote_reader_guid
-              );
-            }
-            //db.update_topic_data_drd(&d);
+            let (drd, rtps_reader_proxy) = db.update_subscription(&d);
+            debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
+              &drd, &rtps_reader_proxy);
+            self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
+              discovered_reader_data: drd,
+              rtps_reader_proxy,
+            });
             if read_history.is_some() {
               info!(
                 "Rediscovered reader {:?} topic={:?}",
@@ -1033,12 +1026,10 @@ impl Discovery {
       match d {
         Ok(dwd) => {
           trace!("handle_publication_reader discovered {:?}", &dwd);
-          if let Some(discovered_writer_data) = self.discovery_db_write().update_publication(&dwd) {
-            self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
-              discovered_writer_data,
-            });
-          }
-          //self.discovery_db_write().update_topic_data_dwd(&dwd);
+          let discovered_writer_data = self.discovery_db_write().update_publication(&dwd);
+          self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
+            discovered_writer_data,
+          });
           debug!("Discovered Writer {:?}", &dwd);
         }
         Err(writer_key) => {
@@ -1082,7 +1073,7 @@ impl Discovery {
     for t in ts {
       match t {
         Ok((topic_data, writer)) => {
-          debug!("handle_topic_reader discovered {:?}", &topic_data);
+          info!("handle_topic_reader discovered {:?}", &topic_data);
           self
             .discovery_db_write()
             .update_topic_data(&topic_data, writer);
@@ -1094,6 +1085,7 @@ impl Discovery {
 
           let writers = self.discovery_db_read()
                           .writers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
+          info!("writers {:?}", &writers);
           for discovered_writer_data in writers {
             self.send_discovery_notification(
               DiscoveryNotificationType::WriterUpdated {discovered_writer_data});

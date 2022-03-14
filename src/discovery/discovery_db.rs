@@ -289,68 +289,52 @@ impl DiscoveryDB {
   pub fn update_subscription(
     &mut self,
     data: &DiscoveredReaderData,
-  ) -> Option<(DiscoveredReaderData, RtpsReaderProxy)> {
+  ) -> (DiscoveredReaderData, RtpsReaderProxy) {
     let guid = data.reader_proxy.remote_reader_guid;
-    // we could return None to indicate that we already knew all about this reader
-    // To do that, we should check that the reader is the same as what we have in
-    // the DB already.
-    match self.external_topic_readers.get(&guid) {
-      Some(drd) if drd == data => None, // already have this
-      _ => {
-        self.external_topic_readers.insert(guid, data.clone());
-        // fill in the default locators, in case DRD did not provide any
-        let default_locator_lists = self
-          .find_participant_proxy(guid.prefix)
-          .map(|pp| {
-            debug!("Added default locators to Reader {:?}", guid);
-            (
-              pp.default_unicast_locators.clone(),
-              pp.default_multicast_locators.clone(),
-            )
-          })
-          .unwrap_or_else(|| {
-            if guid.prefix != GuidPrefix::UNKNOWN {
-              // This is normal, since we might not know about the participant yet.
-              debug!(
-                "No remote participant known for {:?}\nSearched with {:?} in {:?}",
-                data,
-                guid.prefix,
-                self.participant_proxies.keys()
-              );
-            }
-            (Vec::default(), Vec::default())
-          });
-        debug!("External reader: {:?}", data);
-        Some((
-          data.clone(),
-          RtpsReaderProxy::from_discovered_reader_data(
+
+    self.external_topic_readers.insert(guid, data.clone());
+    // fill in the default locators, in case DRD did not provide any
+    let default_locator_lists = self
+      .find_participant_proxy(guid.prefix)
+      .map(|pp| {
+        debug!("Added default locators to Reader {:?}", guid);
+        (
+          pp.default_unicast_locators.clone(),
+          pp.default_multicast_locators.clone(),
+        )
+      })
+      .unwrap_or_else(|| {
+        if guid.prefix != GuidPrefix::UNKNOWN {
+          // This is normal, since we might not know about the participant yet.
+          debug!(
+            "No remote participant known for {:?}\nSearched with {:?} in {:?}",
             data,
-            &default_locator_lists.0,
-            &default_locator_lists.1,
-          ),
-        ))
-      }
-    }
+            guid.prefix,
+            self.participant_proxies.keys()
+          );
+        }
+        (Vec::default(), Vec::default())
+      });
+    debug!("External reader: {:?}", data);
+    ( data.clone(),
+      RtpsReaderProxy::from_discovered_reader_data(
+        data,
+        &default_locator_lists.0,
+        &default_locator_lists.1,
+      ),
+    )
   }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None
   pub fn update_publication(
     &mut self,
     data: &DiscoveredWriterData,
-  ) -> Option<DiscoveredWriterData> {
-    match self
-      .external_topic_writers
-      .get(&data.writer_proxy.remote_writer_guid)
-    {
-      Some(dwd) if dwd == data => None, // already up to date
-      _ => {
-        self
-          .external_topic_writers
-          .insert(data.writer_proxy.remote_writer_guid, data.clone());
-        debug!("External writer: {:?}", data);
-        Some(data.clone())
-      }
-    }
+  ) -> DiscoveredWriterData {
+      self
+        .external_topic_writers
+        .insert(data.writer_proxy.remote_writer_guid, data.clone());
+      debug!("External writer: {:?}", data);
+      data.clone()
   }
 
   pub fn update_topic_data_p(&mut self, topic: &Topic) {
@@ -501,10 +485,12 @@ impl DiscoveryDB {
   pub fn writers_on_topic_and_participant(&self, topic_name: &str, participant: GuidPrefix)
     -> Vec<DiscoveredWriterData>
   {
+    let on_particiapnt =
     self.external_topic_writers
       .range(participant.range())
-      .map(|(_guid,dwd)| dwd)
-      .filter(|dwd| dwd.publication_topic_data.topic_name == topic_name)
+      .map(|(_guid,dwd)| dwd);
+    info!("Writers on participant {:?} are {:?}", participant, on_particiapnt);
+    on_particiapnt.filter(|dwd| dwd.publication_topic_data.topic_name == topic_name)
       .cloned()
       .collect()
   }
