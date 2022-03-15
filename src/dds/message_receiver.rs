@@ -417,7 +417,6 @@ impl Default for MessageReceiverState {
 }
 
 #[cfg(test)]
-
 mod tests {
   use std::{
     rc::Rc,

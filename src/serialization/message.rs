@@ -499,7 +499,6 @@ impl MessageBuilder {
 }
 
 #[cfg(test)]
-
 mod tests {
   #![allow(non_snake_case)]
   use log::info;

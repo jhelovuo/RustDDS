@@ -11,7 +11,6 @@ use crate::structure::cache_change::ChangeKind;
 // DDSData represets a serialized data sample with metadata
 
 #[derive(Debug, PartialEq, Clone)]
-
 // Contents of a DATA submessage or several DATAFRAG submessages. This is either
 // a new sample, or key, or a key hash. The latter two are used to indicate
 // dispose or unregister.
