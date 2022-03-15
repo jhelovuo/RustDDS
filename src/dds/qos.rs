@@ -367,11 +367,11 @@ impl QosPolicies {
           return Some(QosPolicyId::Reliability);
         }
       }
-      (None, Some(policy::Reliability::Reliable { .. })) =>
-      // request is reliable, but no offer at all. This is bad.
-      {
-        return Some(QosPolicyId::Reliability)
-      }
+      // (None, Some(policy::Reliability::Reliable { .. })) =>
+      // // request is reliable, but no offer at all. This is bad.
+      // {
+      //   return Some(QosPolicyId::Reliability)
+      // }
       _ => (), // otherwise, we shoudl be good to go
     }
 
