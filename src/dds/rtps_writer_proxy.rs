@@ -326,20 +326,33 @@ impl RtpsWriterProxy {
     self.irrelevant_changes_range(SequenceNumber::new(0), smallest_seqnum)
   }
 
+  fn discovered_or_default(drd: &[Locator], default: &[Locator]) -> Vec<Locator> {
+    if drd.is_empty() {
+      default.to_vec()
+    } else {
+      drd.to_vec()
+    }
+  }
+
   pub fn from_discovered_writer_data(
     discovered_writer_data: &DiscoveredWriterData,
+    default_unicast_locators: &[Locator],
+    default_multicast_locators: &[Locator],
   ) -> RtpsWriterProxy {
+    let unicast_locator_list = Self::discovered_or_default(
+      &discovered_writer_data.writer_proxy.unicast_locator_list,
+      default_unicast_locators,
+    );
+    let multicast_locator_list = Self::discovered_or_default(
+      &discovered_writer_data.writer_proxy.multicast_locator_list,
+      default_multicast_locators,
+    );
+
     RtpsWriterProxy {
       remote_writer_guid: discovered_writer_data.writer_proxy.remote_writer_guid,
       remote_group_entity_id: EntityId::UNKNOWN,
-      unicast_locator_list: discovered_writer_data
-        .writer_proxy
-        .unicast_locator_list
-        .clone(),
-      multicast_locator_list: discovered_writer_data
-        .writer_proxy
-        .multicast_locator_list
-        .clone(),
+      unicast_locator_list,
+      multicast_locator_list,
       changes: BTreeMap::new(),
       received_heartbeat_count: 0,
       sent_ack_nack_count: 0,

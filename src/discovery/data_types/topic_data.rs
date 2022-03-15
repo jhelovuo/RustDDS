@@ -16,6 +16,7 @@ use crate::{
       HasQoSPolicy, QosPolicies,
     },
     rtps_reader_proxy::RtpsReaderProxy,
+    rtps_writer_proxy::RtpsWriterProxy,
     topic::Topic,
     traits::{
       key::{Key, Keyed},
@@ -319,6 +320,17 @@ impl WriterProxy {
       remote_writer_guid: guid,
       unicast_locator_list,
       multicast_locator_list,
+      data_max_size_serialized: None,
+    }
+  }
+}
+
+impl From<RtpsWriterProxy> for WriterProxy {
+  fn from(rtps_writer_proxy: RtpsWriterProxy) -> Self {
+    WriterProxy {
+      remote_writer_guid: rtps_writer_proxy.remote_writer_guid,
+      unicast_locator_list: rtps_writer_proxy.unicast_locator_list,
+      multicast_locator_list: rtps_writer_proxy.multicast_locator_list,
       data_max_size_serialized: None,
     }
   }

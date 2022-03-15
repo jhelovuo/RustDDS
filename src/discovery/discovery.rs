@@ -21,7 +21,6 @@ use crate::{
       QosPolicies, QosPolicyBuilder,
     },
     readcondition::ReadCondition,
-    rtps_reader_proxy::RtpsReaderProxy,
     topic::*,
     values::result::{Error, Result},
     with_key::{
@@ -37,7 +36,7 @@ use crate::{
         ReaderProxy, WriterProxy,
       },
     },
-    discovery_db::DiscoveryDB,
+    discovery_db::{DiscoveryDB, DiscoveredVia,},
   },
   network::constant::*,
   serialization::{
@@ -1088,7 +1087,7 @@ impl Discovery {
           info!("handle_topic_reader discovered {:?}", &topic_data);
           self
             .discovery_db_write()
-            .update_topic_data(&topic_data, writer);
+            .update_topic_data(&topic_data, writer, DiscoveredVia::Topic);
           // Now check if we know any readers of writers to this topic. The topic QoS could
           // cause these to became viable matches agains local writers/readers.
           // This is because at least RTI Connext sends QoS policies on a Topic, and then

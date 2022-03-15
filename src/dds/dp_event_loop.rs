@@ -12,7 +12,6 @@ use mio_extras::channel as mio_channel;
 use crate::{
   dds::{
     message_receiver::MessageReceiver,
-    qos::*,
     qos::policy,
     reader::{Reader, ReaderIngredients},
     writer::{Writer, WriterIngredients},
@@ -683,15 +682,16 @@ impl DPEventLoop {
   ) {
     for writer in self.writers.values_mut() {
       if drd.subscription_topic_data.topic_name() == writer.topic_name() {
-        // see if the participant has published a QoS for the topic
-        // If yes, we take that as a basis QoS
-        let topic_qos = self.discovery_db.read().unwrap()
-          .get_topic_for_participant(&drd.subscription_topic_data.topic_name(), 
-            drd.reader_proxy.remote_reader_guid.prefix )
-          .map( |dtd| dtd.topic_data.qos() );
-        let requested_qos = topic_qos
-          .unwrap_or_else( QosPolicies::default )
-          .modify_by( &drd.subscription_topic_data.qos() );
+        // // see if the participant has published a QoS for the topic
+        // // If yes, we take that as a basis QoS
+        // let topic_qos = self.discovery_db.read().unwrap()
+        //   .get_topic_for_participant(&drd.subscription_topic_data.topic_name(), 
+        //     drd.reader_proxy.remote_reader_guid.prefix )
+        //   .map( |dtd| dtd.topic_data.qos() );
+        // let requested_qos = topic_qos
+        //   .unwrap_or_else( QosPolicies::default )
+        //   .modify_by( &drd.subscription_topic_data.qos() );
+        let requested_qos = drd.subscription_topic_data.qos();
         writer.update_reader_proxy(
           &RtpsReaderProxy::from_discovered_reader_data(drd, &[], &[] ),
           &requested_qos,
@@ -710,18 +710,19 @@ impl DPEventLoop {
     // update writer proxies in local readers
     for reader in self.message_receiver.available_readers.values_mut() {
       if &dwd.publication_topic_data.topic_name == reader.topic_name() {
-        // see if the participant has published a QoS for the topic
-        // If yes, we take that as a basis QoS
-        let topic_qos = self.discovery_db.read().unwrap()
-          .get_topic_for_participant(&dwd.publication_topic_data.topic_name, 
-            dwd.writer_proxy.remote_writer_guid.prefix )
-          .map( |dtd| dtd.topic_data.qos() );
-        let offered_qos = topic_qos
-          .unwrap_or_else( QosPolicies::default )
-          .modify_by( &dwd.publication_topic_data.qos() );
+        let offered_qos = dwd.publication_topic_data.qos();
+        // // see if the participant has published a QoS for the topic
+        // // If yes, we take that as a basis QoS
+        // let topic_qos = self.discovery_db.read().unwrap()
+        //   .get_topic_for_participant(&dwd.publication_topic_data.topic_name, 
+        //     dwd.writer_proxy.remote_writer_guid.prefix )
+        //   .map( |dtd| dtd.topic_data.qos() );
+        // let offered_qos = topic_qos
+        //   .unwrap_or_else( QosPolicies::default )
+        //   .modify_by( &dwd.publication_topic_data.qos() );
 
         reader.update_writer_proxy(
-          RtpsWriterProxy::from_discovered_writer_data(dwd),
+          RtpsWriterProxy::from_discovered_writer_data(dwd, &[], &[]),
           &offered_qos);
       }
     }
