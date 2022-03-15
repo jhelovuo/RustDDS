@@ -694,7 +694,7 @@ impl DPEventLoop {
           .map( |dtd| dtd.topic_data.qos() );
         let requested_qos = topic_qos
           .unwrap_or_else( QosPolicies::default )
-          .modify_by( &drd.subscription_topic_data.generate_qos() );
+          .modify_by( &drd.subscription_topic_data.qos() );
         writer.update_reader_proxy(
           rtps_reader_proxy,
           &requested_qos,

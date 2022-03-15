@@ -245,14 +245,9 @@ impl BuiltinDataDeserializer {
       None => return Err(Error::Message("Failed to parse type name.".to_string())),
     };
 
-    let mut sbtd = SubscriptionBuiltinTopicData::new(key, topic_name, type_name, &qos);
     // TODO: DDS-RPC fields are not set
 
-    if let Some(g) = self.participant_guid {
-      sbtd.set_participant_key(g);
-    };
-
-    Ok(sbtd)
+    Ok(SubscriptionBuiltinTopicData::new(key, self.participant_guid, topic_name, type_name, &qos))
   }
 
   pub fn generate_publication_topic_data(&self) -> Result<PublicationBuiltinTopicData, Error> {

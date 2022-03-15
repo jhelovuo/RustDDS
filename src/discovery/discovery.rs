@@ -834,6 +834,7 @@ impl Discovery {
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
+      Some(dp.guid()),
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
       &Discovery::create_spdp_patricipant_qos(),
@@ -937,6 +938,7 @@ impl Discovery {
     } // loop
   }
 
+  // Check if there are messages about new Readers
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let drds: Vec<std::result::Result<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription_reader.read(
@@ -953,6 +955,16 @@ impl Discovery {
         Ok(ds) => ds
           .iter()
           .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+          .filter(|d| 
+              // If a particiapnt was specified, we must match its GUID prefix.
+              match (read_history, d) {
+                (None, _) => true, // Not asked to filter by participant
+                (Some(participant_to_update), Ok(drd)) =>
+                  drd.reader_proxy.remote_reader_guid.prefix == participant_to_update,
+                (Some(participant_to_update), Err(guid)) =>
+                  guid.prefix == participant_to_update, 
+              }
+            )
           .collect(),
         Err(e) => {
           error!("handle_subscription_reader: {:?}", e);
@@ -964,28 +976,19 @@ impl Discovery {
       match d {
         Ok(d) => {
           let mut db = self.discovery_db_write();
-          trace!("handle_subscription_reader discovered {:?}", &d);
-          if read_history
-            .map(|e| e == d.reader_proxy.remote_reader_guid.prefix)
-            .unwrap_or(true)
-          {
-            let (drd, rtps_reader_proxy) = db.update_subscription(&d);
-            debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
-              &drd, &rtps_reader_proxy);
-            self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-              discovered_reader_data: drd,
-              rtps_reader_proxy,
-            });
-            if read_history.is_some() {
-              info!(
-                "Rediscovered reader {:?} topic={:?}",
-                d.reader_proxy.remote_reader_guid,
-                d.subscription_topic_data.topic_name()
-              );
-            }
-          } else {
-            // Skip, because we were asked to look for specific
-            // GuidPrefx, but it did not match.
+          let (drd, rtps_reader_proxy) = db.update_subscription(&d);
+          debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
+            &drd, &rtps_reader_proxy);
+          self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
+            discovered_reader_data: drd,
+            rtps_reader_proxy,
+          });
+          if read_history.is_some() {
+            info!(
+              "Rediscovered reader {:?} topic={:?}",
+              d.reader_proxy.remote_reader_guid,
+              d.subscription_topic_data.topic_name()
+            );
           }
         }
         Err(reader_key) => {
@@ -1015,6 +1018,16 @@ impl Discovery {
         Ok(ds) => ds
           .iter()
           .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+          // If a particiapnt was specified, we must match its GUID prefix.
+          .filter(|d| 
+              match (read_history, d) {
+                (None, _) => true, // Not asked to filter by participant
+                (Some(participant_to_update), Ok(dwd)) =>
+                  dwd.writer_proxy.remote_writer_guid.prefix == participant_to_update,
+                (Some(participant_to_update), Err(guid)) =>
+                  guid.prefix == participant_to_update, 
+              }
+            )
           .collect(),
         Err(e) => {
           error!("handle_publication_reader: {:?}", e);

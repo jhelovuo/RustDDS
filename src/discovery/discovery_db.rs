@@ -55,6 +55,13 @@ pub(crate) struct DiscoveryDB {
   topic_updated_sender: mio_extras::channel::SyncSender<()>,
 }
 
+// How did we discover this topic
+pub(crate) enum DiscoveredVia {
+  Topic, // excplicitly, via the topic topic (does this actually occur?)
+  Publication, // we discovered there is a writer on this topic
+  Subscription, // we discovered a reader on this topic
+}
+
 impl DiscoveryDB {
   pub fn new(
     my_guid: GUID,
@@ -407,13 +414,13 @@ impl DiscoveryDB {
 
     let reader_proxy = RtpsReaderProxy::from_reader(reader, domain_participant);
 
-    let mut subscription_data = SubscriptionBuiltinTopicData::new(
+    let subscription_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
+      Some(domain_participant.guid()),
       topic.name(),
       topic.get_type().name().to_string(),
       &topic.qos(),
     );
-    subscription_data.set_participant_key(domain_participant.guid());
 
     // TODO: possibly change content filter to dynamic value
     let content_filter = None;
@@ -642,9 +649,9 @@ mod tests {
 
     // creating data
     let reader1 = reader_proxy_data().unwrap();
-    let mut reader1sub = subscription_builtin_topic_data().unwrap();
-    reader1sub.set_key(reader1.remote_reader_guid);
-    reader1sub.set_topic_name(&topic.name());
+    let reader1sub = subscription_builtin_topic_data().unwrap();
+    //reader1sub.set_key(reader1.remote_reader_guid);
+    //reader1sub.set_topic_name(&topic.name());
     let dreader1 = DiscoveredReaderData {
       reader_proxy: reader1.clone(),
       subscription_topic_data: reader1sub.clone(),
@@ -653,9 +660,9 @@ mod tests {
     discovery_db.update_subscription(&dreader1);
 
     let reader2 = reader_proxy_data().unwrap();
-    let mut reader2sub = subscription_builtin_topic_data().unwrap();
-    reader2sub.set_key(reader2.remote_reader_guid);
-    reader2sub.set_topic_name(&topic2.name());
+    let reader2sub = subscription_builtin_topic_data().unwrap();
+    //reader2sub.set_key(reader2.remote_reader_guid);
+    //reader2sub.set_topic_name(&topic2.name());
     let dreader2 = DiscoveredReaderData {
       reader_proxy: reader2,
       subscription_topic_data: reader2sub,
