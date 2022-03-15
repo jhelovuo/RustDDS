@@ -274,10 +274,8 @@ impl DPEventLoop {
 
                     ReaderUpdated {
                       discovered_reader_data,
-                      rtps_reader_proxy,
                     } => ev_wrapper.remote_reader_discovered(
                       &discovered_reader_data,
-                      &rtps_reader_proxy,
                     ),
 
                     ReaderLost { reader_guid } => ev_wrapper.remote_reader_lost(reader_guid),
@@ -682,7 +680,6 @@ impl DPEventLoop {
   fn remote_reader_discovered(
     &mut self,
     drd: &DiscoveredReaderData,
-    rtps_reader_proxy: &RtpsReaderProxy,
   ) {
     for writer in self.writers.values_mut() {
       if drd.subscription_topic_data.topic_name() == writer.topic_name() {
@@ -696,7 +693,7 @@ impl DPEventLoop {
           .unwrap_or_else( QosPolicies::default )
           .modify_by( &drd.subscription_topic_data.qos() );
         writer.update_reader_proxy(
-          rtps_reader_proxy,
+          &RtpsReaderProxy::from_discovered_reader_data(drd, &[], &[] ),
           &requested_qos,
         );
       }

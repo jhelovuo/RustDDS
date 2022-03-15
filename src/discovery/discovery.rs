@@ -878,7 +878,6 @@ impl Discovery {
     // and know to communicate with them.
     info!("Creating DCPSParticipant reader proxy.");
     self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-      rtps_reader_proxy: RtpsReaderProxy::from_discovered_reader_data(&drd, &[], &[]),
       discovered_reader_data: drd,
     });
     info!("Creating DCPSParticipant writer proxy for self.");
@@ -975,13 +974,13 @@ impl Discovery {
     for d in drds {
       match d {
         Ok(d) => {
-          let mut db = self.discovery_db_write();
-          let (drd, rtps_reader_proxy) = db.update_subscription(&d);
-          debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
-            &drd, &rtps_reader_proxy);
+          let drd = 
+            self.discovery_db_write()
+              .update_subscription(&d);
+          debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated  {:?}",
+            &drd);
           self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
             discovered_reader_data: drd,
-            rtps_reader_proxy,
           });
           if read_history.is_some() {
             info!(
@@ -1107,10 +1106,8 @@ impl Discovery {
           let readers = self.discovery_db_read()
                           .readers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
           for discovered_reader_data in readers {
-            let rtps_reader_proxy = 
-              RtpsReaderProxy::from_discovered_reader_data(&discovered_reader_data, &[], &[]);
             self.send_discovery_notification(
-              DiscoveryNotificationType::ReaderUpdated { discovered_reader_data, rtps_reader_proxy });
+              DiscoveryNotificationType::ReaderUpdated { discovered_reader_data });
           }
         }
         // Err means disposed

@@ -92,7 +92,6 @@ pub fn user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum DiscoveryNotificationType {
   ReaderUpdated {
-    rtps_reader_proxy: RtpsReaderProxy,
     discovered_reader_data: DiscoveredReaderData,
   },
   ReaderLost {

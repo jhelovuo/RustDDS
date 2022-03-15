@@ -226,6 +226,11 @@ impl SubscriptionBuiltinTopicData {
       lifespan: self.lifespan,
     }
   }
+
+  pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
+    todo!()
+  }
+
 }
 
 // =======================================================================
@@ -405,6 +410,10 @@ impl PublicationBuiltinTopicData {
       resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
     }
+  }
+
+  pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
+    todo!()
   }
 }
 

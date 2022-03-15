@@ -49,7 +49,7 @@ pub(crate) struct DiscoveryDB {
   // Database of topic updates:
   // Outer level key is topic name
   // Inner key is topic data sender.
-  topics: BTreeMap<String, BTreeMap<GuidPrefix, DiscoveredTopicData>>,
+  topics: BTreeMap<String, BTreeMap<GuidPrefix, (DiscoveredVia, DiscoveredTopicData)>>,
 
   // sender for notifying (potential) waiters in participant.find_topic() call
   topic_updated_sender: mio_extras::channel::SyncSender<()>,
@@ -296,7 +296,7 @@ impl DiscoveryDB {
   pub fn update_subscription(
     &mut self,
     data: &DiscoveredReaderData,
-  ) -> (DiscoveredReaderData, RtpsReaderProxy) {
+  ) -> DiscoveredReaderData {
     let guid = data.reader_proxy.remote_reader_guid;
 
     self.external_topic_readers.insert(guid, data.clone());
@@ -323,13 +323,13 @@ impl DiscoveryDB {
         (Vec::default(), Vec::default())
       });
     debug!("External reader: {:?}", data);
-    ( data.clone(),
-      RtpsReaderProxy::from_discovered_reader_data(
-        data,
-        &default_locator_lists.0,
-        &default_locator_lists.1,
-      ),
-    )
+
+    DiscoveredReaderData { reader_proxy: 
+            ReaderProxy::from(RtpsReaderProxy::from_discovered_reader_data(data,
+              &default_locator_lists.0,
+              &default_locator_lists.1,
+            )), 
+      .. data.clone() }
   }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None
@@ -368,29 +368,29 @@ impl DiscoveryDB {
     if let Some(t) = self.topics.get_mut(&dtd.topic_data.name) {
       if let Some(old_dtd) = t.get_mut(&updater.prefix) {
         // already have it, do some checking(?) and merging
-        if dtd.topic_data.type_name == old_dtd.topic_data.type_name
+        if dtd.topic_data.type_name == old_dtd.1.topic_data.type_name
         // TODO: Check also for QoS changes, esp. policies that are immutable
         {
-          *old_dtd = dtd.clone(); // update QoS
+          *old_dtd = (DiscoveredVia::Topic , dtd.clone()); // update QoS
           notify = true;
         } else {
           // someone changed their mind about the type name?!?
           error!(
             "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
-            updater, old_dtd.topic_data.type_name, dtd.topic_data.type_name,
+            updater, old_dtd.1.topic_data.type_name, dtd.topic_data.type_name,
           );
         }
       } else {
         // We have to topic, but not from this participant
         // TODO: Check that there is agreement about topic type name (at least)
-        t.insert(updater.prefix, dtd.clone()); // this should return None
+        t.insert(updater.prefix, (DiscoveredVia::Topic , dtd.clone())); // this should return None
         notify = true;
       }
     } else {
       // new topic to us
       let mut b = BTreeMap::new();
-      b.insert(updater.prefix, dtd.clone());
-      self.topics.insert(topic_name, b);
+      b.insert(updater.prefix, (DiscoveredVia::Topic , dtd.clone()) );
+      self.topics.insert(topic_name,  b);
     };
 
     if notify {
@@ -457,7 +457,7 @@ impl DiscoveryDB {
       .topics
       .iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
-      .flat_map(|(_, gm)| gm.iter().map(|(_, dtd)| dtd))
+      .flat_map(|(_, gm)| gm.iter().map(|(_, dtd)| &dtd.1))
   }
 
   // as above, but only from my GUID
@@ -470,7 +470,7 @@ impl DiscoveryDB {
       .flat_map(move |(_, gm)| {
         gm.iter()
           .filter(move |(guid, _)| **guid == me)
-          .map(|(_, dtd)| dtd)
+          .map(|(_, dtd)| &dtd.1)
       })
   }
 
@@ -480,13 +480,13 @@ impl DiscoveryDB {
   // This just returns the first one found in the database, which is indexed by
   // GUID.
   pub fn get_topic(&self, topic_name: &str) -> Option<&DiscoveredTopicData> {
-    self.topics.get(topic_name).and_then(|m| m.values().next())
+    self.topics.get(topic_name).and_then(|m| m.values().next().map(|t| &t.1))
   }
 
   pub fn get_topic_for_participant(&self, topic_name: &str, participant: GuidPrefix) 
     -> Option<&DiscoveredTopicData> 
   {
-    self.topics.get(topic_name).and_then(|m| m.get(&participant)) 
+    self.topics.get(topic_name).and_then(|m| m.get(&participant).map(|t| &t.1)) 
   }
 
   pub fn writers_on_topic_and_participant(&self, topic_name: &str, participant: GuidPrefix)
