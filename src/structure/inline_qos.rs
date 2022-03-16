@@ -1,4 +1,4 @@
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use byteorder::ByteOrder;
@@ -12,8 +12,9 @@ use crate::{
 #[cfg(test)]
 use crate::serialization::cdr_serializer::to_bytes;
 
-#[derive(Debug, BitFlags, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
+#[bitflags]
 pub enum StatusInfoEnum {
   Disposed = 0b0001,
   Unregistered = 0b0010,
@@ -52,8 +53,8 @@ pub struct StatusInfo {
 }
 
 impl StatusInfo {
-  pub fn empty() -> StatusInfo {
-    StatusInfo {
+  pub fn empty() -> Self {
+    Self {
       em: [0; 3],
       si: BitFlags::empty(),
     }
@@ -80,13 +81,13 @@ impl StatusInfo {
   pub fn into_cdr_bytes<BO: ByteOrder>(
     self,
   ) -> Result<Vec<u8>, crate::serialization::error::Error> {
-    to_bytes::<StatusInfo, BO>(&self)
+    to_bytes::<Self, BO>(&self)
   }
 
   pub fn from_cdr_bytes(
     bytes: &[u8],
     representation_id: RepresentationIdentifier,
-  ) -> Result<StatusInfo, crate::serialization::error::Error> {
+  ) -> Result<Self, crate::serialization::error::Error> {
     CDRDeserializerAdapter::from_bytes(bytes, representation_id)
   }
 }

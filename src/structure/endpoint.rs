@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 pub struct ReliabilityKind(u32);
 
 impl ReliabilityKind {
-  pub const BEST_EFFORT: ReliabilityKind = ReliabilityKind(1);
-  pub const RELIABLE: ReliabilityKind = ReliabilityKind(2);
+  pub const BEST_EFFORT: Self = Self(1);
+  pub const RELIABLE: Self = Self(2);
 }
 
 #[cfg(test)]

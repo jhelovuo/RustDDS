@@ -117,7 +117,7 @@ impl RtpsWriterProxy {
     self.ack_base
   }
 
-  pub fn update_contents(&mut self, other: RtpsWriterProxy) {
+  pub fn update_contents(&mut self, other: Self) {
     self.unicast_locator_list = other.unicast_locator_list;
     self.multicast_locator_list = other.multicast_locator_list;
     self.remote_group_entity_id = other.remote_group_entity_id;

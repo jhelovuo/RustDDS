@@ -26,7 +26,7 @@ pub(crate) struct NoKeyWrapper<D> {
 
 impl<D> From<D> for NoKeyWrapper<D> {
   fn from(d: D) -> Self {
-    NoKeyWrapper { d }
+    Self { d }
   }
 }
 
@@ -47,11 +47,11 @@ impl<'de, D> Deserialize<'de> for NoKeyWrapper<D>
 where
   D: Deserialize<'de>,
 {
-  fn deserialize<R>(deserializer: R) -> std::result::Result<NoKeyWrapper<D>, R::Error>
+  fn deserialize<R>(deserializer: R) -> std::result::Result<Self, R::Error>
   where
     R: Deserializer<'de>,
   {
-    D::deserialize(deserializer).map(|d| NoKeyWrapper::<D> { d })
+    D::deserialize(deserializer).map(|d| Self { d })
   }
 }
 

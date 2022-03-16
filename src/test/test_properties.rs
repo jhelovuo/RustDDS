@@ -18,14 +18,14 @@ use serde::de::DeserializeOwned;
 // testing easier.
 
 impl Default for SerializedPayload {
-  fn default() -> SerializedPayload {
-    SerializedPayload::new(RepresentationIdentifier::CDR_LE, b"fake data".to_vec())
+  fn default() -> Self {
+    Self::new(RepresentationIdentifier::CDR_LE, b"fake data".to_vec())
   }
 }
 
 impl Default for Data {
   fn default() -> Self {
-    Data {
+    Self {
       reader_id: EntityId::default(),
       writer_id: EntityId::default(),
       writer_sn: SequenceNumber::default(),

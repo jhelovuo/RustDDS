@@ -38,42 +38,42 @@ pub struct Timestamp {
 
 impl Timestamp {
   // Special contants reserved by the RTPS protocol, from RTPS spec section 9.3.2.
-  pub const ZERO: Timestamp = Timestamp {
+  pub const ZERO: Self = Self {
     seconds: 0,
     fraction: 0,
   };
-  pub const INVALID: Timestamp = Timestamp {
+  pub const INVALID: Self = Self {
     seconds: 0xFFFF_FFFF,
     fraction: 0xFFFF_FFFF,
   };
-  pub const INFINITE: Timestamp = Timestamp {
+  pub const INFINITE: Self = Self {
     seconds: 0x7FFF_FFFF,
     fraction: 0xFFFF_FFFF,
   };
 
-  pub fn now() -> Timestamp {
-    Timestamp::from_nanos(chrono::Utc::now().timestamp_nanos() as u64)
+  pub fn now() -> Self {
+    Self::from_nanos(chrono::Utc::now().timestamp_nanos() as u64)
   }
 
   fn to_ticks(self) -> u64 {
     (u64::from(self.seconds) << 32) + u64::from(self.fraction)
   }
 
-  fn from_ticks(ticks: u64) -> Timestamp {
-    Timestamp {
+  fn from_ticks(ticks: u64) -> Self {
+    Self {
       seconds: (ticks >> 32) as u32,
       fraction: ticks as u32,
     }
   }
 
-  fn from_nanos(nanos_since_unix_epoch: u64) -> Timestamp {
-    Timestamp {
+  fn from_nanos(nanos_since_unix_epoch: u64) -> Self {
+    Self {
       seconds: (nanos_since_unix_epoch / 1_000_000_000) as u32,
       fraction: (((nanos_since_unix_epoch % 1_000_000_000) << 32) / 1_000_000_000) as u32,
     }
   }
 
-  pub fn duration_since(&self, since: Timestamp) -> Duration {
+  pub fn duration_since(&self, since: Self) -> Duration {
     *self - since
   }
 }
@@ -81,7 +81,7 @@ impl Timestamp {
 impl Sub for Timestamp {
   type Output = Duration;
 
-  fn sub(self, other: Timestamp) -> Duration {
+  fn sub(self, other: Self) -> Duration {
     let a = self.to_ticks();
     let b = other.to_ticks();
     // https://doc.rust-lang.org/1.30.0/book/first-edition/casting-between-types.html
@@ -91,12 +91,12 @@ impl Sub for Timestamp {
 }
 
 impl Sub<Duration> for Timestamp {
-  type Output = Timestamp;
+  type Output = Self;
 
   fn sub(self, rhs: Duration) -> Self::Output {
     // Logic here: Timestamp::INVALID - anything == Timestamp::INVALID
-    if self == Timestamp::INVALID {
-      Timestamp::INVALID
+    if self == Self::INVALID {
+      Self::INVALID
     } else {
       // https://doc.rust-lang.org/1.30.0/book/first-edition/casting-between-types.html
       // "Casting between two integers of the same size (e.g. i32 -> u32) is a no-op"
@@ -108,7 +108,7 @@ impl Sub<Duration> for Timestamp {
       // overflow without exceptions if necessary, and ...
 
       // ... the overflow condition is restored here.
-      Timestamp::from_ticks(new_stamp_ticks as u64)
+      Self::from_ticks(new_stamp_ticks as u64)
       // All of this should compile to just a single 64-bit subtract
       // instruction.
     }
@@ -116,13 +116,13 @@ impl Sub<Duration> for Timestamp {
 }
 
 impl Add<Duration> for Timestamp {
-  type Output = Timestamp;
+  type Output = Self;
 
   fn add(self, rhs: Duration) -> Self::Output {
     let lhs_ticks = self.to_ticks();
     let rhs_ticks = rhs.to_ticks() as u64;
 
-    Timestamp::from_ticks(lhs_ticks + rhs_ticks)
+    Self::from_ticks(lhs_ticks + rhs_ticks)
   }
 }
 

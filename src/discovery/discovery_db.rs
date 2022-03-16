@@ -65,11 +65,8 @@ pub(crate) enum DiscoveredVia {
 }
 
 impl DiscoveryDB {
-  pub fn new(
-    my_guid: GUID,
-    topic_updated_sender: mio_extras::channel::SyncSender<()>,
-  ) -> DiscoveryDB {
-    DiscoveryDB {
+  pub fn new(my_guid: GUID, topic_updated_sender: mio_extras::channel::SyncSender<()>) -> Self {
+    Self {
       my_guid,
       participant_proxies: BTreeMap::new(),
       participant_last_life_signs: BTreeMap::new(),
@@ -625,7 +622,6 @@ impl DiscoveryDB {
 }
 
 #[cfg(test)]
-
 mod tests {
   use std::{
     rc::Rc,

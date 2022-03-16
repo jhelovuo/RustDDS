@@ -76,8 +76,8 @@ pub struct LivelinessState {
 }
 
 impl LivelinessState {
-  pub fn new() -> LivelinessState {
-    LivelinessState {
+  pub fn new() -> Self {
+    Self {
       last_auto_update: Timestamp::now(),
       last_manual_participant_update: Timestamp::now(),
     }
@@ -188,7 +188,7 @@ impl Discovery {
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
     spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
     self_locators: HashMap<Token, Vec<Locator>>,
-  ) -> Result<Discovery> {
+  ) -> Result<Self> {
     // helper macro to handle initialization failures.
     macro_rules! try_construct {
       ($constructor:expr, $msg:literal) => {
@@ -227,8 +227,8 @@ impl Discovery {
       "Failed to register Discovery poll. {:?}"
     );
 
-    let discovery_subscriber_qos = Discovery::subscriber_qos();
-    let discovery_publisher_qos = Discovery::publisher_qos();
+    let discovery_subscriber_qos = Self::subscriber_qos();
+    let discovery_publisher_qos = Self::publisher_qos();
 
     // Create DDS Publisher and Subscriber for Discovery.
     // These are needed to create DataWriter and DataReader objects
@@ -246,7 +246,7 @@ impl Discovery {
       domain_participant.create_topic(
         "DCPSParticipant".to_string(),
         "SPDPDiscoveredParticipantData".to_string(),
-        &Discovery::create_spdp_patricipant_qos(),
+        &Self::create_spdp_patricipant_qos(),
         TopicKind::WithKey,
       ),
       "Unable to create DCPSParticipant topic. {:?}"
@@ -283,7 +283,7 @@ impl Discovery {
 
     // create lease duration check timer
     let mut participant_cleanup_timer: Timer<()> = Timer::default();
-    participant_cleanup_timer.set_timeout(Discovery::PARTICIPANT_CLEANUP_PERIOD, ());
+    participant_cleanup_timer.set_timeout(Self::PARTICIPANT_CLEANUP_PERIOD, ());
     try_construct!(
       poll.register(
         &participant_cleanup_timer,
@@ -296,7 +296,7 @@ impl Discovery {
 
     // creating timer for sending out own participant data
     let mut participant_send_info_timer: Timer<()> = Timer::default();
-    participant_send_info_timer.set_timeout(Discovery::SEND_PARTICIPANT_INFO_PERIOD, ());
+    participant_send_info_timer.set_timeout(Self::SEND_PARTICIPANT_INFO_PERIOD, ());
 
     try_construct!(
       poll.register(
@@ -350,7 +350,7 @@ impl Discovery {
 
     let mut readers_send_info_timer: Timer<()> = Timer::default();
 
-    readers_send_info_timer.set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
+    readers_send_info_timer.set_timeout(Self::SEND_READERS_INFO_PERIOD, ());
 
     try_construct!(
       poll.register(
@@ -404,7 +404,7 @@ impl Discovery {
 
     let mut writers_send_info_timer: Timer<()> = Timer::default();
 
-    writers_send_info_timer.set_timeout(Discovery::SEND_WRITERS_INFO_PERIOD, ());
+    writers_send_info_timer.set_timeout(Self::SEND_WRITERS_INFO_PERIOD, ());
 
     try_construct!(
       poll.register(
@@ -457,7 +457,7 @@ impl Discovery {
     );
 
     let mut topic_info_send_timer: Timer<()> = Timer::default();
-    topic_info_send_timer.set_timeout(Discovery::SEND_TOPIC_INFO_PERIOD, ());
+    topic_info_send_timer.set_timeout(Self::SEND_TOPIC_INFO_PERIOD, ());
     try_construct!(
       poll.register(
         &topic_info_send_timer,
@@ -470,7 +470,7 @@ impl Discovery {
 
     // create lease duration check timer
     let mut topic_cleanup_timer: Timer<()> = Timer::default();
-    topic_cleanup_timer.set_timeout(Discovery::TOPIC_CLEANUP_PERIOD, ());
+    topic_cleanup_timer.set_timeout(Self::TOPIC_CLEANUP_PERIOD, ());
     try_construct!(
       poll.register(
         &topic_cleanup_timer,
@@ -487,7 +487,7 @@ impl Discovery {
       domain_participant.create_topic(
         "DCPSParticipantMessage".to_string(),
         "ParticipantMessageData".to_string(),
-        &Discovery::PARTICIPANT_MESSAGE_QOS,
+        &Self::PARTICIPANT_MESSAGE_QOS,
         TopicKind::WithKey,
       ),
       "Unable to create DCPSParticipantMessage topic. {:?}"
@@ -522,7 +522,7 @@ impl Discovery {
     );
 
     let mut dcps_participant_message_timer = mio_extras::timer::Timer::default();
-    dcps_participant_message_timer.set_timeout(Discovery::CHECK_PARTICIPANT_MESSAGES, ());
+    dcps_participant_message_timer.set_timeout(Self::CHECK_PARTICIPANT_MESSAGES, ());
     try_construct!(
       poll.register(
         &dcps_participant_message_timer,
@@ -533,7 +533,7 @@ impl Discovery {
       "Unable to register DCPSParticipantMessage timer. {:?}"
     );
 
-    Ok(Discovery {
+    Ok(Self {
       poll,
       domain_participant,
       discovery_db,
@@ -691,7 +691,7 @@ impl Discovery {
             // setting next cleanup timeout
             self
               .participant_cleanup_timer
-              .set_timeout(Discovery::PARTICIPANT_CLEANUP_PERIOD, ());
+              .set_timeout(Self::PARTICIPANT_CLEANUP_PERIOD, ());
           }
 
           DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN => {
@@ -707,14 +707,14 @@ impl Discovery {
             let data = SpdpDiscoveredParticipantData::from_local_participant(
               &strong_dp,
               &self.self_locators,
-              5.0 * Duration::from(Discovery::SEND_PARTICIPANT_INFO_PERIOD),
+              5.0 * Duration::from(Self::SEND_PARTICIPANT_INFO_PERIOD),
             );
 
             self.dcps_participant_writer.write(data, None).unwrap_or(());
             // reschedule timer
             self
               .participant_send_info_timer
-              .set_timeout(Discovery::SEND_PARTICIPANT_INFO_PERIOD, ());
+              .set_timeout(Self::SEND_PARTICIPANT_INFO_PERIOD, ());
           }
           DISCOVERY_READER_DATA_TOKEN => {
             self.handle_subscription_reader(None);
@@ -723,7 +723,7 @@ impl Discovery {
             self.write_readers_info();
             self
               .readers_send_info_timer
-              .set_timeout(Discovery::SEND_READERS_INFO_PERIOD, ());
+              .set_timeout(Self::SEND_READERS_INFO_PERIOD, ());
           }
           DISCOVERY_WRITER_DATA_TOKEN => {
             self.handle_publication_reader(None);
@@ -732,7 +732,7 @@ impl Discovery {
             self.write_writers_info();
             self
               .writers_send_info_timer
-              .set_timeout(Discovery::SEND_WRITERS_INFO_PERIOD, ());
+              .set_timeout(Self::SEND_WRITERS_INFO_PERIOD, ());
           }
           DISCOVERY_TOPIC_DATA_TOKEN => {
             self.handle_topic_reader(None);
@@ -742,13 +742,13 @@ impl Discovery {
 
             self
               .topic_cleanup_timer
-              .set_timeout(Discovery::TOPIC_CLEANUP_PERIOD, ());
+              .set_timeout(Self::TOPIC_CLEANUP_PERIOD, ());
           }
           DISCOVERY_SEND_TOPIC_INFO_TOKEN => {
             self.write_topic_info();
             self
               .topic_info_send_timer
-              .set_timeout(Discovery::SEND_TOPIC_INFO_PERIOD, ());
+              .set_timeout(Self::SEND_TOPIC_INFO_PERIOD, ());
           }
           DISCOVERY_PARTICIPANT_MESSAGE_TOKEN => {
             self.handle_participant_message_reader();
@@ -757,7 +757,7 @@ impl Discovery {
             self.write_participant_message();
             self
               .dcps_participant_message_timer
-              .set_timeout(Discovery::CHECK_PARTICIPANT_MESSAGES, ());
+              .set_timeout(Self::CHECK_PARTICIPANT_MESSAGES, ());
           }
           SPDP_LIVENESS_TOKEN => {
             while let Ok(guid_prefix) = self.spdp_liveness_receiver.try_recv() {
@@ -836,7 +836,7 @@ impl Discovery {
       Some(dp.guid()),
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
-      &Discovery::create_spdp_patricipant_qos(),
+      &Self::create_spdp_patricipant_qos(),
     );
     let drd = DiscoveredReaderData {
       reader_proxy,

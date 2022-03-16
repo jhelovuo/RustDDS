@@ -8,27 +8,27 @@ pub struct ProtocolId {
 }
 
 impl ProtocolId {
-  pub const PROTOCOL_RTPS: ProtocolId = ProtocolId {
+  pub const PROTOCOL_RTPS: Self = Self {
     protocol_id: ['R', 'T', 'P', 'S'],
   };
 }
 
 impl Default for ProtocolId {
   fn default() -> Self {
-    ProtocolId::PROTOCOL_RTPS
+    Self::PROTOCOL_RTPS
   }
 }
 
 impl Validity for ProtocolId {
   fn valid(&self) -> bool {
-    *self == ProtocolId::PROTOCOL_RTPS
+    *self == Self::PROTOCOL_RTPS
   }
 }
 
 impl<'a, C: Context> Readable<'a, C> for ProtocolId {
   #[inline]
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-    let mut protocol_id = ProtocolId::default();
+    let mut protocol_id = Self::default();
     for i in 0..protocol_id.protocol_id.len() {
       protocol_id.protocol_id[i] = reader.read_u8()? as char;
     }

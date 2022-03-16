@@ -23,16 +23,14 @@ use super::cache_change::CacheChange;
 /// only DDSCacheChanges of one serialized IDL datatype. -> all cachechanges in
 /// same TopicCache can be serialized/deserialized same way. Topic/TopicCache is
 /// identified by its name, which must be unique in the whole Domain.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DDSCache {
   topic_caches: HashMap<String, TopicCache>,
 }
 
 impl DDSCache {
-  pub fn new() -> DDSCache {
-    DDSCache {
-      topic_caches: HashMap::new(),
-    }
+  pub fn new() -> Self {
+    Self::default()
   }
 
   // Insert new topic if it does not exist.
@@ -125,8 +123,8 @@ pub struct TopicCache {
 }
 
 impl TopicCache {
-  pub fn new(topic_name: String, topic_data_type: TypeDesc) -> TopicCache {
-    TopicCache {
+  pub fn new(topic_name: String, topic_data_type: TypeDesc) -> Self {
+    Self {
       topic_name,
       topic_data_type,
       topic_qos: QosPolicyBuilder::new().build(),
@@ -193,7 +191,7 @@ impl TopicCache {
 }
 
 // This is contained in a TopicCache
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DDSHistoryCache {
   pub(crate) changes: BTreeMap<Timestamp, CacheChange>,
   // sequence_numbers is an index to "changes" by GUID and SN
@@ -201,11 +199,8 @@ pub struct DDSHistoryCache {
 }
 
 impl DDSHistoryCache {
-  pub fn new() -> DDSHistoryCache {
-    DDSHistoryCache {
-      changes: BTreeMap::new(),
-      sequence_numbers: BTreeMap::new(),
-    }
+  pub fn new() -> Self {
+    Self::default()
   }
 
   fn find_by_sn(&self, cc: &CacheChange) -> Option<Timestamp> {

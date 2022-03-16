@@ -89,7 +89,7 @@ impl DPEventLoop {
     stop_poll_receiver: mio_channel::Receiver<()>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> DPEventLoop {
+  ) -> Self {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(100);
@@ -170,7 +170,7 @@ impl DPEventLoop {
     // port number 0 means OS chooses an available port number.
     let udp_sender = UDPSender::new(0).expect("UDPSender construction fail"); // TODO
 
-    DPEventLoop {
+    Self {
       domain_info,
       poll,
       ddscache,

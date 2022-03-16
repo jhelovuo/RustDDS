@@ -57,7 +57,7 @@ pub enum RemoteExceptionCode {
 
 impl Default for RemoteExceptionCode {
   fn default() -> Self {
-    RemoteExceptionCode::UnknownException
+    Self::UnknownException
   }
 }
 

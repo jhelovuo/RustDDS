@@ -57,7 +57,7 @@ impl DomainParticipant {
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
-  pub fn new(domain_id: u16) -> Result<DomainParticipant> {
+  pub fn new(domain_id: u16) -> Result<Self> {
     trace!("DomainParticipant construct start");
 
     // Discovery join channel is used to just send a join handle into the inner
@@ -95,7 +95,7 @@ impl DomainParticipant {
     let self_locators = dp.self_locators();
 
     // outer DP wrapper
-    let dp = DomainParticipant {
+    let dp = Self {
       dpi: Arc::new(Mutex::new(dp)),
     };
 
@@ -322,8 +322,8 @@ pub struct DomainParticipantWeak {
 }
 
 impl DomainParticipantWeak {
-  pub fn new(dp: &DomainParticipant, guid: GUID) -> DomainParticipantWeak {
-    DomainParticipantWeak {
+  pub fn new(dp: &DomainParticipant, guid: GUID) -> Self {
+    Self {
       dpi: Arc::downgrade(&dp.dpi),
       guid,
     }
@@ -429,14 +429,14 @@ impl DomainParticipantDisc {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> Result<DomainParticipantDisc> {
+  ) -> Result<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
       discovery_update_notification_receiver,
       spdp_liveness_sender,
     )?;
 
-    Ok(DomainParticipantDisc {
+    Ok(Self {
       dpi: Arc::new(Mutex::new(dpi)),
       discovery_command_sender,
       discovery_join_handle,
@@ -618,7 +618,7 @@ impl DomainParticipantInner {
     domain_id: u16,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> Result<DomainParticipantInner> {
+  ) -> Result<Self> {
     let mut listeners = HashMap::new();
 
     match UDPListener::new_multicast(
@@ -771,7 +771,7 @@ impl DomainParticipantInner {
       "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
       domain_id, participant_id, new_guid
     );
-    Ok(DomainParticipantInner {
+    Ok(Self {
       domain_id,
       participant_id,
       my_guid: new_guid,

@@ -21,7 +21,7 @@ pub struct DataSample<D> {
 impl<D> DataSample<D> {
   pub(crate) fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> {
     match keyed.value {
-      Ok(kv) => Some(DataSample::<D> {
+      Ok(kv) => Some(Self {
         sample_info: keyed.sample_info,
         value: kv.d,
       }),

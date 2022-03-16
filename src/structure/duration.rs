@@ -19,7 +19,6 @@ use super::parameter_id::ParameterId;
   Copy,
   Clone,
 )]
-
 /// Duration is the DDS/RTPS representation for legths of time, such as
 /// timeouts. It is very similar to [`std::time::Duration`]. See also
 /// [`Timestamp`](crate::Timestamp).
@@ -32,38 +31,38 @@ pub struct Duration {
 }
 
 impl Duration {
-  pub const DURATION_ZERO: Duration = Duration {
+  pub const DURATION_ZERO: Self = Self {
     seconds: 0,
     fraction: 0,
   };
 
-  pub const fn from_secs(secs: i32) -> Duration {
-    Duration {
+  pub const fn from_secs(secs: i32) -> Self {
+    Self {
       seconds: secs, // loss of range here
       fraction: 0,
     }
   }
 
-  pub fn from_frac_seconds(secs: f64) -> Duration {
-    Duration {
+  pub fn from_frac_seconds(secs: f64) -> Self {
+    Self {
       seconds: secs.trunc() as i32,
       fraction: (secs.fract().abs() * 32.0_f64.exp2()) as u32,
     }
   }
 
-  pub const fn from_millis(millis: i64) -> Duration {
+  pub const fn from_millis(millis: i64) -> Self {
     let fraction = (((millis % 1000) << 32) / 1000) as u32;
 
-    Duration {
+    Self {
       seconds: (millis / 1000) as i32,
       fraction,
     }
   }
 
-  pub const fn from_nanos(nanos: i64) -> Duration {
+  pub const fn from_nanos(nanos: i64) -> Self {
     let fraction = (((nanos % 1_000_000_000) << 32) / 1_000_000_000) as u32;
 
-    Duration {
+    Self {
       seconds: (nanos / 1_000_000_000) as i32,
       fraction,
     }
@@ -73,8 +72,8 @@ impl Duration {
     (i64::from(self.seconds) << 32) + i64::from(self.fraction)
   }
 
-  pub(crate) fn from_ticks(ticks: i64) -> Duration {
-    Duration {
+  pub(crate) fn from_ticks(ticks: i64) -> Self {
+    Self {
       seconds: (ticks >> 32) as i32,
       fraction: ticks as u32,
     }
@@ -82,12 +81,12 @@ impl Duration {
 
   /* DURATION_INVALID is not part of the spec. And it is also dangerous, as it is plausible someone could
   legitimately measure such an interval, and others would interpret it as "invalid".
-  pub const DURATION_INVALID: Duration = Duration {
+  pub const DURATION_INVALID: Self = Self {
     seconds: -1,
     fraction: 0xFFFFFFFF,
   };*/
 
-  pub const DURATION_INFINITE: Duration = Duration {
+  pub const DURATION_INFINITE: Self = Self {
     seconds: 0x7FFFFFFF,
     fraction: 0xFFFFFFFF,
   };
@@ -97,7 +96,7 @@ impl Duration {
   }
 
   pub fn from_std(duration: std::time::Duration) -> Self {
-    Duration::from(duration)
+    Self::from(duration)
   }
 
   pub fn to_std(&self) -> std::time::Duration {
@@ -106,14 +105,14 @@ impl Duration {
 }
 
 impl From<Duration> for chrono::Duration {
-  fn from(d: Duration) -> chrono::Duration {
-    chrono::Duration::nanoseconds(d.to_nanoseconds())
+  fn from(d: Duration) -> Self {
+    Self::nanoseconds(d.to_nanoseconds())
   }
 }
 
 impl From<std::time::Duration> for Duration {
   fn from(duration: std::time::Duration) -> Self {
-    Duration {
+    Self {
       seconds: duration.as_secs() as i32,
       fraction: ((u64::from(duration.subsec_nanos()) << 32) / 1_000_000_000) as u32,
     }
@@ -121,8 +120,8 @@ impl From<std::time::Duration> for Duration {
 }
 
 impl From<Duration> for std::time::Duration {
-  fn from(d: Duration) -> std::time::Duration {
-    std::time::Duration::from_nanos(
+  fn from(d: Duration) -> Self {
+    Self::from_nanos(
       u64::try_from(d.to_nanoseconds()).unwrap_or(0), /* saturate to zero, becaues
                                                        * std::time::Duraiton is unsigned */
     )
@@ -132,22 +131,22 @@ impl From<Duration> for std::time::Duration {
 impl Div<i64> for Duration {
   type Output = Self;
 
-  fn div(self, rhs: i64) -> Duration {
-    Duration::from_ticks(self.to_ticks() / rhs)
+  fn div(self, rhs: i64) -> Self {
+    Self::from_ticks(self.to_ticks() / rhs)
   }
 }
 
 impl std::ops::Add for Duration {
   type Output = Self;
   fn add(self, other: Self) -> Self {
-    Duration::from_ticks(self.to_ticks() + other.to_ticks())
+    Self::from_ticks(self.to_ticks() + other.to_ticks())
   }
 }
 
 impl std::ops::Mul<Duration> for f64 {
   type Output = Duration;
   fn mul(self, rhs: Duration) -> Duration {
-    Duration::from_ticks((self * (rhs.to_ticks() as f64)) as i64)
+    Duration::from_ticks((self * (rhs.to_ticks() as Self)) as i64)
   }
 }
 
@@ -159,8 +158,8 @@ pub struct DurationData {
 }
 
 impl DurationData {
-  pub fn from(duration: Duration) -> DurationData {
-    DurationData {
+  pub fn from(duration: Duration) -> Self {
+    Self {
       parameter_id: ParameterId::PID_PARTICIPANT_LEASE_DURATION,
       parameter_length: 8,
       duration,

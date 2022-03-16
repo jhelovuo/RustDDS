@@ -39,15 +39,15 @@ impl ROSDiscoveryTopic {
   const TYPE_NAME: &'static str = "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_";
 
   pub fn topic_name() -> &'static str {
-    ROSDiscoveryTopic::TOPIC_NAME
+    Self::TOPIC_NAME
   }
 
   pub fn type_name() -> &'static str {
-    ROSDiscoveryTopic::TYPE_NAME
+    Self::TYPE_NAME
   }
 
   pub const fn qos() -> QosPolicies {
-    ROSDiscoveryTopic::QOS
+    Self::QOS
   }
 }
 
@@ -75,15 +75,15 @@ impl ParameterEventsTopic {
   const TYPE_NAME: &'static str = "rcl_interfaces::msg::dds_::ParameterEvent_";
 
   pub fn topic_name() -> &'static str {
-    ParameterEventsTopic::TOPIC_NAME
+    Self::TOPIC_NAME
   }
 
   pub fn type_name() -> &'static str {
-    ParameterEventsTopic::TYPE_NAME
+    Self::TYPE_NAME
   }
 
   pub fn qos() -> QosPolicies {
-    ParameterEventsTopic::QOS
+    Self::QOS
   }
 }
 
@@ -117,14 +117,14 @@ impl RosOutTopic {
   const TYPE_NAME: &'static str = "rcl_interfaces::msg::dds_::Log_";
 
   pub fn topic_name() -> &'static str {
-    RosOutTopic::TOPIC_NAME
+    Self::TOPIC_NAME
   }
 
   pub fn type_name() -> &'static str {
-    RosOutTopic::TYPE_NAME
+    Self::TYPE_NAME
   }
 
   pub fn qos() -> QosPolicies {
-    RosOutTopic::QOS
+    Self::QOS
   }
 }

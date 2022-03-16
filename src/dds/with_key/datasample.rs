@@ -29,7 +29,7 @@ where
   D: Keyed,
 {
   pub(crate) fn new(sample_info: SampleInfo, value: std::result::Result<D, D::K>) -> Self {
-    DataSample { sample_info, value }
+    Self { sample_info, value }
   }
 
   // convenience shorthand to get the key directly, without digging out the

@@ -11,7 +11,6 @@ use crate::structure::cache_change::ChangeKind;
 // DDSData represets a serialized data sample with metadata
 
 #[derive(Debug, PartialEq, Clone)]
-
 // Contents of a DATA submessage or several DATAFRAG submessages. This is either
 // a new sample, or key, or a key hash. The latter two are used to indicate
 // dispose or unregister.
@@ -38,15 +37,15 @@ pub enum DDSData {
 }
 
 impl DDSData {
-  pub fn new(serialized_payload: SerializedPayload) -> DDSData {
-    DDSData::Data { serialized_payload }
+  pub fn new(serialized_payload: SerializedPayload) -> Self {
+    Self::Data { serialized_payload }
   }
-  pub fn new_disposed_by_key(change_kind: ChangeKind, key: SerializedPayload) -> DDSData {
-    DDSData::DisposeByKey { change_kind, key }
+  pub fn new_disposed_by_key(change_kind: ChangeKind, key: SerializedPayload) -> Self {
+    Self::DisposeByKey { change_kind, key }
   }
 
-  pub fn new_disposed_by_key_hash(change_kind: ChangeKind, key_hash: KeyHash) -> DDSData {
-    DDSData::DisposeByKeyHash {
+  pub fn new_disposed_by_key_hash(change_kind: ChangeKind, key_hash: KeyHash) -> Self {
+    Self::DisposeByKeyHash {
       change_kind,
       key_hash,
     }

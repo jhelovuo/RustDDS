@@ -28,7 +28,7 @@ impl Parameter {
     is_disposed: bool,
     is_unregistered: bool,
     is_filtered: bool,
-  ) -> Parameter {
+  ) -> Self {
     //0...2..........8...............16..............24..............32
     //+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     //|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|F|U|D|
@@ -44,7 +44,7 @@ impl Parameter {
     bit_vec.set(5, is_filtered);
     let bytes = bit_vec.to_bytes();
     let last_byte = bytes[0];
-    Parameter {
+    Self {
       parameter_id: ParameterId::PID_STATUS_INFO,
       value: vec![0, 0, 0, last_byte],
     }
@@ -65,7 +65,7 @@ impl<'a, C: Context> Readable<'a, C> for Parameter {
       value.push(byte);
     }
 
-    Ok(Parameter {
+    Ok(Self {
       parameter_id,
       value,
     })

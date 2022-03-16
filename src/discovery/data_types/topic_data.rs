@@ -57,7 +57,7 @@ impl PlCdrDeserialize for Endpoint_GUID {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Endpoint_GUID> {
+  ) -> ser::Result<Self> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
       .generate_endpoint_guid()
@@ -94,8 +94,8 @@ impl ReaderProxy {
     guid: GUID,
     unicast_locator_list: Vec<Locator>,
     multicast_locator_list: Vec<Locator>,
-  ) -> ReaderProxy {
-    ReaderProxy {
+  ) -> Self {
+    Self {
       remote_reader_guid: guid,
       expects_inline_qos: false,
       unicast_locator_list,
@@ -106,7 +106,7 @@ impl ReaderProxy {
 
 impl From<RtpsReaderProxy> for ReaderProxy {
   fn from(rtps_reader_proxy: RtpsReaderProxy) -> Self {
-    ReaderProxy {
+    Self {
       remote_reader_guid: rtps_reader_proxy.remote_reader_guid,
       expects_inline_qos: rtps_reader_proxy.expects_in_line_qos,
       unicast_locator_list: rtps_reader_proxy.unicast_locator_list,
@@ -157,8 +157,8 @@ impl SubscriptionBuiltinTopicData {
     topic_name: String,
     type_name: String,
     qos: &QosPolicies,
-  ) -> SubscriptionBuiltinTopicData {
-    let mut sbtd = SubscriptionBuiltinTopicData {
+  ) -> Self {
+    let mut sbtd = Self {
       key,
       participant_key,
       topic_name,
@@ -254,7 +254,7 @@ pub struct DiscoveredReaderData {
 impl DiscoveredReaderData {
   // This is for generating test data only
   #[cfg(test)]
-  pub fn default(topic_name: String, type_name: String) -> DiscoveredReaderData {
+  pub fn default(topic_name: String, type_name: String) -> Self {
     let rguid = GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_BUILT_IN);
     let reader_proxy = ReaderProxy::new(rguid, vec![], vec![]);
     let subscription_topic_data = SubscriptionBuiltinTopicData::new(
@@ -264,7 +264,7 @@ impl DiscoveredReaderData {
       type_name,
       &QosPolicies::builder().build(),
     );
-    DiscoveredReaderData {
+    Self {
       reader_proxy,
       subscription_topic_data,
       content_filter: None,
@@ -283,7 +283,7 @@ impl PlCdrDeserialize for DiscoveredReaderData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<DiscoveredReaderData> {
+  ) -> ser::Result<Self> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
       .generate_discovered_reader_data()
@@ -320,8 +320,8 @@ impl WriterProxy {
     guid: GUID,
     multicast_locator_list: Vec<Locator>,
     unicast_locator_list: Vec<Locator>,
-  ) -> WriterProxy {
-    WriterProxy {
+  ) -> Self {
+    Self {
       remote_writer_guid: guid,
       unicast_locator_list,
       multicast_locator_list,
@@ -371,13 +371,8 @@ pub struct PublicationBuiltinTopicData {
 }
 
 impl PublicationBuiltinTopicData {
-  pub fn new(
-    guid: GUID,
-    participant_guid: GUID,
-    topic_name: String,
-    type_name: String,
-  ) -> PublicationBuiltinTopicData {
-    PublicationBuiltinTopicData {
+  pub fn new(guid: GUID, participant_guid: GUID, topic_name: String, type_name: String) -> Self {
+    Self {
       key: guid,
       participant_key: Some(participant_guid),
       topic_name,
@@ -469,7 +464,7 @@ impl DiscoveredWriterData {
     writer: &DataWriter<D, SA>,
     topic: &Topic,
     dp: &DomainParticipant,
-  ) -> DiscoveredWriterData {
+  ) -> Self {
     let unicast_port = user_traffic_unicast_port(dp.domain_id(), dp.participant_id());
     let unicast_addresses = get_local_unicast_locators(unicast_port);
 
@@ -483,7 +478,7 @@ impl DiscoveredWriterData {
 
     publication_topic_data.set_qos(&writer.qos());
 
-    DiscoveredWriterData {
+    Self {
       last_updated: Instant::now(),
       writer_proxy,
       publication_topic_data,
@@ -495,7 +490,7 @@ impl PlCdrDeserialize for DiscoveredWriterData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<DiscoveredWriterData> {
+  ) -> ser::Result<Self> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
       .generate_discovered_writer_data()
@@ -538,13 +533,8 @@ pub struct TopicBuiltinTopicData {
 }
 
 impl TopicBuiltinTopicData {
-  pub fn new(
-    key: Option<GUID>,
-    name: String,
-    type_name: String,
-    qos: &QosPolicies,
-  ) -> TopicBuiltinTopicData {
-    TopicBuiltinTopicData {
+  pub fn new(key: Option<GUID>, name: String, type_name: String, qos: &QosPolicies) -> Self {
+    Self {
       key,
       name,
       type_name,
@@ -597,11 +587,8 @@ pub struct DiscoveredTopicData {
 }
 
 impl DiscoveredTopicData {
-  pub fn new(
-    updated_time: DateTime<Utc>,
-    topic_data: TopicBuiltinTopicData,
-  ) -> DiscoveredTopicData {
-    DiscoveredTopicData {
+  pub fn new(updated_time: DateTime<Utc>, topic_data: TopicBuiltinTopicData) -> Self {
+    Self {
       updated_time,
       topic_data,
     }
@@ -633,7 +620,7 @@ impl PlCdrDeserialize for DiscoveredTopicData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<DiscoveredTopicData> {
+  ) -> ser::Result<Self> {
     BuiltinDataDeserializer::new()
       .parse_data(input_bytes, encoding)
       .generate_topic_data()
@@ -643,7 +630,7 @@ impl PlCdrDeserialize for DiscoveredTopicData {
           e, &input_bytes,
         ))
       })
-      .map(|td| DiscoveredTopicData::new(Utc::now(), td))
+      .map(|td| Self::new(Utc::now(), td))
   }
 }
 
@@ -666,13 +653,13 @@ pub struct ParticipantMessageDataKind {
 
 impl ParticipantMessageDataKind {
   #[allow(dead_code)] // This is defined in the spec, but currenty unused.
-  pub const UNKNOWN: ParticipantMessageDataKind = ParticipantMessageDataKind {
+  pub const UNKNOWN: Self = Self {
     value: [0x00, 0x00, 0x00, 0x00],
   };
-  pub const AUTOMATIC_LIVELINESS_UPDATE: ParticipantMessageDataKind = ParticipantMessageDataKind {
+  pub const AUTOMATIC_LIVELINESS_UPDATE: Self = Self {
     value: [0x00, 0x00, 0x00, 0x01],
   };
-  pub const MANUAL_LIVELINESS_UPDATE: ParticipantMessageDataKind = ParticipantMessageDataKind {
+  pub const MANUAL_LIVELINESS_UPDATE: Self = Self {
     value: [0x00, 0x00, 0x00, 0x02],
   };
 }
