@@ -2,7 +2,7 @@ use mio::Token;
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{data_types::GuidPrefix, rtps_reader_proxy::RtpsReaderProxy},
+  dds::{data_types::GuidPrefix,},
   discovery::data_types::topic_data::{DiscoveredReaderData, DiscoveredWriterData},
   structure::guid::{EntityKind, GUID},
 };

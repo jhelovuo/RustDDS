@@ -229,7 +229,13 @@ impl SubscriptionBuiltinTopicData {
   }
 
   pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
-    todo!()
+    // TODO: See the corresponding function in PublicationBuiltinTopicData
+    TopicBuiltinTopicData::new(
+      None, 
+      self.topic_name.clone(),
+      self.type_name.clone(),
+      &self.qos(),
+      )
   }
 
 }
@@ -425,7 +431,15 @@ impl PublicationBuiltinTopicData {
   }
 
   pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
-    todo!()
+    TopicBuiltinTopicData::new(
+      None, // This would be topic GUID or BuiltinInTopicKey_t. What is it and who defines it?
+      // According to various googled sources, it is either 3x u32 or 4x u32
+      // or a GUID or a GuidPrefx. Does it even matter?
+      // TODO: Find out.
+      self.topic_name.clone(),
+      self.type_name.clone(),
+      &self.qos(),
+      )
   }
 }
 
