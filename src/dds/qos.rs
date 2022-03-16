@@ -361,18 +361,10 @@ impl QosPolicies {
     // check Reliability
     // offered kind >= requested kind
     // kind ranking: BEST_EFFORT < RELIABLE
-    match (self.reliability, other.reliability) {
-      (Some(off), Some(req)) => {
-        if off < req {
-          return Some(QosPolicyId::Reliability);
-        }
+    if let (Some(off), Some(req)) = (self.reliability, other.reliability) {
+      if off < req {
+        return Some(QosPolicyId::Reliability);
       }
-      // (None, Some(policy::Reliability::Reliable { .. })) =>
-      // // request is reliable, but no offer at all. This is bad.
-      // {
-      //   return Some(QosPolicyId::Reliability)
-      // }
-      _ => (), // otherwise, we shoudl be good to go
     }
 
     // check Destination Order

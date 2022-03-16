@@ -2,7 +2,7 @@ use mio::Token;
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{data_types::GuidPrefix,},
+  dds::data_types::GuidPrefix,
   discovery::data_types::topic_data::{DiscoveredReaderData, DiscoveredWriterData},
   structure::guid::{EntityKind, GUID},
 };

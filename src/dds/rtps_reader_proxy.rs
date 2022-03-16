@@ -131,9 +131,7 @@ impl RtpsReaderProxy {
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
-      qos: discovered_reader_data
-        .subscription_topic_data
-        .qos(),
+      qos: discovered_reader_data.subscription_topic_data.qos(),
     }
   }
 

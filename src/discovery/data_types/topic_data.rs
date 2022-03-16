@@ -181,7 +181,7 @@ impl SubscriptionBuiltinTopicData {
     sbtd.set_qos(qos);
     sbtd
   }
-  
+
   pub fn key(&self) -> GUID {
     self.key
   }
@@ -231,13 +231,12 @@ impl SubscriptionBuiltinTopicData {
   pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
     // TODO: See the corresponding function in PublicationBuiltinTopicData
     TopicBuiltinTopicData::new(
-      None, 
+      None,
       self.topic_name.clone(),
       self.type_name.clone(),
       &self.qos(),
-      )
+    )
   }
-
 }
 
 // =======================================================================
@@ -439,7 +438,7 @@ impl PublicationBuiltinTopicData {
       self.topic_name.clone(),
       self.type_name.clone(),
       &self.qos(),
-      )
+    )
   }
 }
 

@@ -247,7 +247,13 @@ impl BuiltinDataDeserializer {
 
     // TODO: DDS-RPC fields are not set
 
-    Ok(SubscriptionBuiltinTopicData::new(key, self.participant_guid, topic_name, type_name, &qos))
+    Ok(SubscriptionBuiltinTopicData::new(
+      key,
+      self.participant_guid,
+      topic_name,
+      type_name,
+      &qos,
+    ))
   }
 
   pub fn generate_publication_topic_data(&self) -> Result<PublicationBuiltinTopicData, Error> {

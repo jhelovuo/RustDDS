@@ -273,9 +273,7 @@ impl DPEventLoop {
 
                     ReaderUpdated {
                       discovered_reader_data,
-                    } => ev_wrapper.remote_reader_discovered(
-                      &discovered_reader_data,
-                    ),
+                    } => ev_wrapper.remote_reader_discovered(&discovered_reader_data),
 
                     ReaderLost { reader_guid } => ev_wrapper.remote_reader_lost(reader_guid),
 
@@ -676,16 +674,13 @@ impl DPEventLoop {
     }
   }
 
-  fn remote_reader_discovered(
-    &mut self,
-    drd: &DiscoveredReaderData,
-  ) {
+  fn remote_reader_discovered(&mut self, drd: &DiscoveredReaderData) {
     for writer in self.writers.values_mut() {
       if drd.subscription_topic_data.topic_name() == writer.topic_name() {
         // // see if the participant has published a QoS for the topic
         // // If yes, we take that as a basis QoS
         // let topic_qos = self.discovery_db.read().unwrap()
-        //   .get_topic_for_participant(&drd.subscription_topic_data.topic_name(), 
+        //   .get_topic_for_participant(&drd.subscription_topic_data.topic_name(),
         //     drd.reader_proxy.remote_reader_guid.prefix )
         //   .map( |dtd| dtd.topic_data.qos() );
         // let requested_qos = topic_qos
@@ -693,7 +688,7 @@ impl DPEventLoop {
         //   .modify_by( &drd.subscription_topic_data.qos() );
         let requested_qos = drd.subscription_topic_data.qos();
         writer.update_reader_proxy(
-          &RtpsReaderProxy::from_discovered_reader_data(drd, &[], &[] ),
+          &RtpsReaderProxy::from_discovered_reader_data(drd, &[], &[]),
           &requested_qos,
         );
       }
@@ -714,7 +709,7 @@ impl DPEventLoop {
         // // see if the participant has published a QoS for the topic
         // // If yes, we take that as a basis QoS
         // let topic_qos = self.discovery_db.read().unwrap()
-        //   .get_topic_for_participant(&dwd.publication_topic_data.topic_name, 
+        //   .get_topic_for_participant(&dwd.publication_topic_data.topic_name,
         //     dwd.writer_proxy.remote_writer_guid.prefix )
         //   .map( |dtd| dtd.topic_data.qos() );
         // let offered_qos = topic_qos
@@ -723,7 +718,8 @@ impl DPEventLoop {
 
         reader.update_writer_proxy(
           RtpsWriterProxy::from_discovered_writer_data(dwd, &[], &[]),
-          &offered_qos);
+          &offered_qos,
+        );
       }
     }
     // notify DDSCache to create topic if it does not exist yet
