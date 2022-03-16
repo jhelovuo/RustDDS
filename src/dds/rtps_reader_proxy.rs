@@ -133,7 +133,7 @@ impl RtpsReaderProxy {
       repair_mode: false,
       qos: discovered_reader_data
         .subscription_topic_data
-        .generate_qos(),
+        .qos(),
     }
   }
 

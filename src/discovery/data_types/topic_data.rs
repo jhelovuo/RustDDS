@@ -16,6 +16,7 @@ use crate::{
       HasQoSPolicy, QosPolicies,
     },
     rtps_reader_proxy::RtpsReaderProxy,
+    rtps_writer_proxy::RtpsWriterProxy,
     topic::Topic,
     traits::{
       key::{Key, Keyed},
@@ -152,13 +153,14 @@ pub struct SubscriptionBuiltinTopicData {
 impl SubscriptionBuiltinTopicData {
   pub fn new(
     key: GUID,
+    participant_key: Option<GUID>,
     topic_name: String,
     type_name: String,
     qos: &QosPolicies,
   ) -> SubscriptionBuiltinTopicData {
     let mut sbtd = SubscriptionBuiltinTopicData {
       key,
-      participant_key: None,
+      participant_key,
       topic_name,
       type_name,
       durability: None,
@@ -179,77 +181,21 @@ impl SubscriptionBuiltinTopicData {
     sbtd.set_qos(qos);
     sbtd
   }
-
+  
   pub fn key(&self) -> GUID {
     self.key
-  }
-
-  pub fn set_key(&mut self, key: GUID) {
-    self.key = key;
   }
 
   pub fn participant_key(&self) -> &Option<GUID> {
     &self.participant_key
   }
 
-  pub fn set_participant_key(&mut self, participant_key: GUID) {
-    self.participant_key = Some(participant_key);
-  }
-
   pub fn topic_name(&self) -> &String {
     &self.topic_name
   }
 
-  pub fn set_topic_name(&mut self, topic_name: &str) {
-    self.topic_name = String::from(topic_name);
-  }
-
   pub fn type_name(&self) -> &String {
     &self.type_name
-  }
-
-  pub fn set_type_name(&mut self, type_name: &str) {
-    self.type_name = String::from(type_name);
-  }
-
-  pub fn durability(&self) -> &Option<Durability> {
-    &self.durability
-  }
-
-  pub fn deadline(&self) -> &Option<Deadline> {
-    &self.deadline
-  }
-
-  pub fn latency_budget(&self) -> &Option<LatencyBudget> {
-    &self.latency_budget
-  }
-
-  pub fn liveliness(&self) -> &Option<Liveliness> {
-    &self.liveliness
-  }
-
-  pub fn reliability(&self) -> &Option<Reliability> {
-    &self.reliability
-  }
-
-  pub fn ownership(&self) -> &Option<Ownership> {
-    &self.ownership
-  }
-
-  pub fn destination_order(&self) -> &Option<DestinationOrder> {
-    &self.destination_order
-  }
-
-  pub fn time_based_filter(&self) -> &Option<TimeBasedFilter> {
-    &self.time_based_filter
-  }
-
-  pub fn presentation(&self) -> &Option<Presentation> {
-    &self.presentation
-  }
-
-  pub fn lifespan(&self) -> &Option<Lifespan> {
-    &self.lifespan
   }
 
   pub fn set_qos(&mut self, qos: &QosPolicies) {
@@ -265,7 +211,7 @@ impl SubscriptionBuiltinTopicData {
     self.lifespan = qos.lifespan;
   }
 
-  pub fn generate_qos(&self) -> QosPolicies {
+  pub fn qos(&self) -> QosPolicies {
     QosPolicies {
       durability: self.durability,
       presentation: self.presentation,
@@ -281,6 +227,17 @@ impl SubscriptionBuiltinTopicData {
       lifespan: self.lifespan,
     }
   }
+
+  pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
+    // TODO: See the corresponding function in PublicationBuiltinTopicData
+    TopicBuiltinTopicData::new(
+      None, 
+      self.topic_name.clone(),
+      self.type_name.clone(),
+      &self.qos(),
+      )
+  }
+
 }
 
 // =======================================================================
@@ -303,6 +260,7 @@ impl DiscoveredReaderData {
     let reader_proxy = ReaderProxy::new(rguid, vec![], vec![]);
     let subscription_topic_data = SubscriptionBuiltinTopicData::new(
       rguid,
+      None,
       topic_name,
       type_name,
       &QosPolicies::builder().build(),
@@ -373,6 +331,17 @@ impl WriterProxy {
   }
 }
 
+impl From<RtpsWriterProxy> for WriterProxy {
+  fn from(rtps_writer_proxy: RtpsWriterProxy) -> Self {
+    WriterProxy {
+      remote_writer_guid: rtps_writer_proxy.remote_writer_guid,
+      unicast_locator_list: rtps_writer_proxy.unicast_locator_list,
+      multicast_locator_list: rtps_writer_proxy.multicast_locator_list,
+      data_max_size_serialized: None,
+    }
+  }
+}
+
 // =======================================================================
 // =======================================================================
 // =======================================================================
@@ -382,7 +351,7 @@ impl WriterProxy {
 pub struct PublicationBuiltinTopicData {
   pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
-  pub topic_name: String,
+  pub topic_name: String, // TODO: Convert to method for symmetry with SubscrptionBuiltinTopicData
   pub type_name: String,
   pub durability: Option<Durability>,
   pub deadline: Option<Deadline>,
@@ -431,7 +400,7 @@ impl PublicationBuiltinTopicData {
     }
   }
 
-  pub fn read_qos(&mut self, qos: &QosPolicies) {
+  pub fn set_qos(&mut self, qos: &QosPolicies) {
     self.durability = qos.durability;
     self.deadline = qos.deadline;
     self.latency_budget = qos.latency_budget;
@@ -459,6 +428,18 @@ impl PublicationBuiltinTopicData {
       resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
     }
+  }
+
+  pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
+    TopicBuiltinTopicData::new(
+      None, // This would be topic GUID or BuiltinInTopicKey_t. What is it and who defines it?
+      // According to various googled sources, it is either 3x u32 or 4x u32
+      // or a GUID or a GuidPrefx. Does it even matter?
+      // TODO: Find out.
+      self.topic_name.clone(),
+      self.type_name.clone(),
+      &self.qos(),
+      )
   }
 }
 
@@ -501,7 +482,7 @@ impl DiscoveredWriterData {
       topic.get_type().name().to_string(),
     );
 
-    publication_topic_data.read_qos(&writer.qos());
+    publication_topic_data.set_qos(&writer.qos());
 
     DiscoveredWriterData {
       last_updated: Instant::now(),

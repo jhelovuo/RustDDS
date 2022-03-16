@@ -269,6 +269,7 @@ pub(crate) fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTop
 
   let sub_topic_data = SubscriptionBuiltinTopicData::new(
     GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED),
+    None,
     "some topic name".to_string(),
     "RandomData".to_string(),
     &qos,

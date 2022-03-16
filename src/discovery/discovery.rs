@@ -21,7 +21,6 @@ use crate::{
       QosPolicies, QosPolicyBuilder,
     },
     readcondition::ReadCondition,
-    rtps_reader_proxy::RtpsReaderProxy,
     topic::*,
     values::result::{Error, Result},
     with_key::{
@@ -37,7 +36,7 @@ use crate::{
         ReaderProxy, WriterProxy,
       },
     },
-    discovery_db::DiscoveryDB,
+    discovery_db::{DiscoveryDB, DiscoveredVia,},
   },
   network::constant::*,
   serialization::{
@@ -834,6 +833,7 @@ impl Discovery {
 
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
+      Some(dp.guid()),
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
       &Discovery::create_spdp_patricipant_qos(),
@@ -877,9 +877,7 @@ impl Discovery {
     // and know to communicate with them.
     info!("Creating DCPSParticipant reader proxy.");
     self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-      rtps_reader_proxy: RtpsReaderProxy::from_discovered_reader_data(&drd, &[], &[]),
       discovered_reader_data: drd,
-      _needs_new_cache_change: true,
     });
     info!("Creating DCPSParticipant writer proxy for self.");
     self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
@@ -938,6 +936,7 @@ impl Discovery {
     } // loop
   }
 
+  // Check if there are messages about new Readers
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let drds: Vec<std::result::Result<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription_reader.read(
@@ -954,6 +953,16 @@ impl Discovery {
         Ok(ds) => ds
           .iter()
           .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+          .filter(|d| 
+              // If a particiapnt was specified, we must match its GUID prefix.
+              match (read_history, d) {
+                (None, _) => true, // Not asked to filter by participant
+                (Some(participant_to_update), Ok(drd)) =>
+                  drd.reader_proxy.remote_reader_guid.prefix == participant_to_update,
+                (Some(participant_to_update), Err(guid)) =>
+                  guid.prefix == participant_to_update, 
+              }
+            )
           .collect(),
         Err(e) => {
           error!("handle_subscription_reader: {:?}", e);
@@ -964,37 +973,20 @@ impl Discovery {
     for d in drds {
       match d {
         Ok(d) => {
-          let mut db = self.discovery_db_write();
-          trace!("handle_subscription_reader discovered {:?}", &d);
-          if read_history
-            .map(|e| e == d.reader_proxy.remote_reader_guid.prefix)
-            .unwrap_or(true)
-          {
-            if let Some((drd, rtps_reader_proxy)) = db.update_subscription(&d) {
-              debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated {:?} -- {:?}",
-                &drd, &rtps_reader_proxy);
-              self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-                discovered_reader_data: drd,
-                rtps_reader_proxy,
-                _needs_new_cache_change: true,
-              });
-            } else {
-              debug!(
-                "handle_subscription_reader - DiscoveryDB already knows reader {:?}",
-                d.reader_proxy.remote_reader_guid
-              );
-            }
-            //db.update_topic_data_drd(&d);
-            if read_history.is_some() {
-              info!(
-                "Rediscovered reader {:?} topic={:?}",
-                d.reader_proxy.remote_reader_guid,
-                d.subscription_topic_data.topic_name()
-              );
-            }
-          } else {
-            // Skip, because we were asked to look for specific
-            // GuidPrefx, but it did not match.
+          let drd = 
+            self.discovery_db_write()
+              .update_subscription(&d);
+          debug!("handle_subscription_reader - send_discovery_notification ReaderUpdated  {:?}",
+            &drd);
+          self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
+            discovered_reader_data: drd,
+          });
+          if read_history.is_some() {
+            info!(
+              "Rediscovered reader {:?} topic={:?}",
+              d.reader_proxy.remote_reader_guid,
+              d.subscription_topic_data.topic_name()
+            );
           }
         }
         Err(reader_key) => {
@@ -1024,6 +1016,16 @@ impl Discovery {
         Ok(ds) => ds
           .iter()
           .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+          // If a particiapnt was specified, we must match its GUID prefix.
+          .filter(|d| 
+              match (read_history, d) {
+                (None, _) => true, // Not asked to filter by participant
+                (Some(participant_to_update), Ok(dwd)) =>
+                  dwd.writer_proxy.remote_writer_guid.prefix == participant_to_update,
+                (Some(participant_to_update), Err(guid)) =>
+                  guid.prefix == participant_to_update, 
+              }
+            )
           .collect(),
         Err(e) => {
           error!("handle_publication_reader: {:?}", e);
@@ -1035,12 +1037,10 @@ impl Discovery {
       match d {
         Ok(dwd) => {
           trace!("handle_publication_reader discovered {:?}", &dwd);
-          if let Some(discovered_writer_data) = self.discovery_db_write().update_publication(&dwd) {
-            self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
-              discovered_writer_data,
-            });
-          }
-          //self.discovery_db_write().update_topic_data_dwd(&dwd);
+          let discovered_writer_data = self.discovery_db_write().update_publication(&dwd);
+          self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
+            discovered_writer_data,
+          });
           debug!("Discovered Writer {:?}", &dwd);
         }
         Err(writer_key) => {
@@ -1084,10 +1084,30 @@ impl Discovery {
     for t in ts {
       match t {
         Ok((topic_data, writer)) => {
-          debug!("handle_topic_reader discovered {:?}", &topic_data);
+          info!("handle_topic_reader discovered {:?}", &topic_data);
           self
             .discovery_db_write()
-            .update_topic_data(&topic_data, writer);
+            .update_topic_data(&topic_data, writer, DiscoveredVia::Topic);
+          // Now check if we know any readers of writers to this topic. The topic QoS could
+          // cause these to became viable matches agains local writers/readers.
+          // This is because at least RTI Connext sends QoS policies on a Topic, and then
+          // (apprently) assumes that its readers/writers inherit those policies unless
+          // specified otherwise.
+
+          let writers = self.discovery_db_read()
+                          .writers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
+          info!("writers {:?}", &writers);
+          for discovered_writer_data in writers {
+            self.send_discovery_notification(
+              DiscoveryNotificationType::WriterUpdated {discovered_writer_data});
+          }
+
+          let readers = self.discovery_db_read()
+                          .readers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
+          for discovered_reader_data in readers {
+            self.send_discovery_notification(
+              DiscoveryNotificationType::ReaderUpdated { discovered_reader_data });
+          }
         }
         // Err means disposed
         Err(key) => {

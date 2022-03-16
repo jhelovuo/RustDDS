@@ -8,6 +8,7 @@ use crate::{
   dds::{
     participant::DomainParticipant, qos::HasQoSPolicy, reader::ReaderIngredients,
     rtps_reader_proxy::RtpsReaderProxy, topic::Topic, traits::TopicDescription,
+    rtps_writer_proxy::RtpsWriterProxy,
   },
   structure::{
     duration::Duration,
@@ -19,7 +20,8 @@ use super::data_types::{
   spdp_participant_data::SpdpDiscoveredParticipantData,
   topic_data::{
     DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
-    ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
+    ReaderProxy, WriterProxy,
+    SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
   },
 };
 
@@ -49,10 +51,18 @@ pub(crate) struct DiscoveryDB {
   // Database of topic updates:
   // Outer level key is topic name
   // Inner key is topic data sender.
-  topics: BTreeMap<String, BTreeMap<GuidPrefix, DiscoveredTopicData>>,
+  topics: BTreeMap<String, BTreeMap<GuidPrefix, (DiscoveredVia, DiscoveredTopicData)>>,
 
   // sender for notifying (potential) waiters in participant.find_topic() call
   topic_updated_sender: mio_extras::channel::SyncSender<()>,
+}
+
+// How did we discover this topic
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub(crate) enum DiscoveredVia {
+  Topic, // excplicitly, via the topic topic (does this actually occur?)
+  Publication, // we discovered there is a writer on this topic
+  Subscription, // we discovered a reader on this topic
 }
 
 impl DiscoveryDB {
@@ -286,73 +296,113 @@ impl DiscoveryDB {
   // TODO: This is silly. Returns one of the paramters cloned, or None
   // TODO: Why are we here checking if discovery db already has this? What about
   // reader proxies in writers?
+
+  // Here we make updates when a new Reader is found via Discovery.
+  // * It may be one of our own.
+  // * We may have seen it before.
+  //
+  // In case DiscoveredReaderData does not have locators, we try to get
+  // them from the remote participant.
+  //
+  // The topic is updated to the topics table.
   pub fn update_subscription(
     &mut self,
     data: &DiscoveredReaderData,
-  ) -> Option<(DiscoveredReaderData, RtpsReaderProxy)> {
+  ) -> DiscoveredReaderData {
     let guid = data.reader_proxy.remote_reader_guid;
-    // we could return None to indicate that we already knew all about this reader
-    // To do that, we should check that the reader is the same as what we have in
-    // the DB already.
-    match self.external_topic_readers.get(&guid) {
-      Some(drd) if drd == data => None, // already have this
-      _ => {
-        self.external_topic_readers.insert(guid, data.clone());
-        // fill in the default locators, in case DRD did not provide any
-        let default_locator_lists = self
-          .find_participant_proxy(guid.prefix)
-          .map(|pp| {
-            debug!("Added default locators to Reader {:?}", guid);
-            (
-              pp.default_unicast_locators.clone(),
-              pp.default_multicast_locators.clone(),
-            )
-          })
-          .unwrap_or_else(|| {
-            if guid.prefix != GuidPrefix::UNKNOWN {
-              // This is normal, since we might not know about the participant yet.
-              debug!(
-                "No remote participant known for {:?}\nSearched with {:?} in {:?}",
-                data,
-                guid.prefix,
-                self.participant_proxies.keys()
-              );
-            }
-            (Vec::default(), Vec::default())
-          });
-        debug!("External reader: {:?}", data);
-        Some((
-          data.clone(),
-          RtpsReaderProxy::from_discovered_reader_data(
+
+    self.external_topic_readers.insert(guid, data.clone());
+
+    // fill in the default locators from participant, in case DRD did not provide any
+    let default_locator_lists = self
+      .find_participant_proxy(guid.prefix)
+      .map(|pp| {
+        debug!("Added participant locators to Reader {:?}", guid);
+        (
+          pp.default_unicast_locators.clone(),
+          pp.default_multicast_locators.clone(),
+        )
+      })
+      .unwrap_or_else(|| {
+        if guid.prefix != GuidPrefix::UNKNOWN {
+          // This is normal, since we might not know about the participant yet.
+          debug!(
+            "No remote participant known for {:?}\nSearched with {:?} in {:?}",
             data,
-            &default_locator_lists.0,
-            &default_locator_lists.1,
-          ),
-        ))
-      }
-    }
+            guid.prefix,
+            self.participant_proxies.keys()
+          );
+        }
+        (Vec::default(), Vec::default())
+      });
+    debug!("External reader: {:?}", data);
+
+    // Now the topic update:
+    let dtd = data.subscription_topic_data.to_topic_data();
+    self.update_topic_data(&DiscoveredTopicData::new(Utc::now(), dtd) , guid, DiscoveredVia::Subscription);
+
+    // TODO: Lookup the topic in DB, data sent by the same participant that sent the reader update.
+    // If there is a DiscoveredVia::Topic record, use QosPolicies from that record and modify by
+    // QoS given in the DRD.
+
+    // Return DiscoveredReaderData with possibly updated locators.
+    DiscoveredReaderData { reader_proxy: 
+            ReaderProxy::from(RtpsReaderProxy::from_discovered_reader_data(data,
+              &default_locator_lists.0,
+              &default_locator_lists.1,
+            )), 
+      .. data.clone() }
   }
 
   // TODO: This is silly. Returns one of the paramters cloned, or None
   pub fn update_publication(
     &mut self,
     data: &DiscoveredWriterData,
-  ) -> Option<DiscoveredWriterData> {
-    match self
+  ) -> DiscoveredWriterData {
+    let guid = data.writer_proxy.remote_writer_guid;
+
+    self
       .external_topic_writers
-      .get(&data.writer_proxy.remote_writer_guid)
-    {
-      Some(dwd) if dwd == data => None, // already up to date
-      _ => {
-        self
-          .external_topic_writers
-          .insert(data.writer_proxy.remote_writer_guid, data.clone());
-        debug!("External writer: {:?}", data);
-        Some(data.clone())
-      }
-    }
+      .insert(data.writer_proxy.remote_writer_guid, data.clone());
+
+    // fill in the default locators from participant, in case DRD did not provide any
+    let default_locator_lists = self
+      .find_participant_proxy(guid.prefix)
+      .map(|pp| {
+        debug!("Added participant locators to Reader {:?}", guid);
+        (
+          pp.default_unicast_locators.clone(),
+          pp.default_multicast_locators.clone(),
+        )
+      })
+      .unwrap_or_else(|| {
+        if guid.prefix != GuidPrefix::UNKNOWN {
+          // This is normal, since we might not know about the participant yet.
+          debug!(
+            "No remote participant known for {:?}\nSearched with {:?} in {:?}",
+            data,
+            guid.prefix,
+            self.participant_proxies.keys()
+          );
+        }
+        (Vec::default(), Vec::default())
+      });
+
+    debug!("External writer: {:?}", data);
+
+    // Now the topic update:
+    let dtd = data.publication_topic_data.to_topic_data();
+    self.update_topic_data(&DiscoveredTopicData::new(Utc::now(), dtd) , guid, DiscoveredVia::Publication);
+
+    DiscoveredWriterData { writer_proxy: 
+            WriterProxy::from(RtpsWriterProxy::from_discovered_writer_data(data,
+              &default_locator_lists.0,
+              &default_locator_lists.1,
+            )), 
+      .. data.clone() }
   }
 
+  // This is for local participant updating the topic table
   pub fn update_topic_data_p(&mut self, topic: &Topic) {
     let topic_data = DiscoveredTopicData::new(
       Utc::now(),
@@ -363,43 +413,49 @@ impl DiscoveryDB {
         &topic.qos(),
       ),
     );
-    self.update_topic_data(&topic_data, self.my_guid);
+    self.update_topic_data(&topic_data, self.my_guid, DiscoveredVia::Topic);
   }
 
   // Topic update sends notifications, in case someone was waiting to find a
   // topic. Return value indicates whether the topic (name) was new to us. This
   // is used to add
-  pub fn update_topic_data(&mut self, dtd: &DiscoveredTopicData, updater: GUID) {
+  pub fn update_topic_data(&mut self, dtd: &DiscoveredTopicData, updater: GUID, discovered_via: DiscoveredVia) {
     trace!("Update topic data: {:?}", &dtd);
     let topic_name = dtd.topic_data.name.clone();
     let mut notify = false;
 
     if let Some(t) = self.topics.get_mut(&dtd.topic_data.name) {
       if let Some(old_dtd) = t.get_mut(&updater.prefix) {
-        // already have it, do some checking(?) and merging
-        if dtd.topic_data.type_name == old_dtd.topic_data.type_name
+        // already have it from the same source, do some checking(?) and merging
+        if dtd.topic_data.type_name == old_dtd.1.topic_data.type_name
         // TODO: Check also for QoS changes, esp. policies that are immutable
         {
-          *old_dtd = dtd.clone(); // update QoS
-          notify = true;
+          // If this discovery was from Topic topic and the old was not, then update
+          if discovered_via == DiscoveredVia::Topic  {
+            *old_dtd = (discovered_via , dtd.clone()); // update QoS
+            notify = true;
+          } else {
+            info!("Topic {:?} update ignored from {:?}. Already have this.", &topic_name, &updater);
+            // TODO: Here we could warn about QoS changes.
+          }
         } else {
           // someone changed their mind about the type name?!?
           error!(
             "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
-            updater, old_dtd.topic_data.type_name, dtd.topic_data.type_name,
+            updater, old_dtd.1.topic_data.type_name, dtd.topic_data.type_name,
           );
         }
       } else {
         // We have to topic, but not from this participant
         // TODO: Check that there is agreement about topic type name (at least)
-        t.insert(updater.prefix, dtd.clone()); // this should return None
+        t.insert(updater.prefix, (discovered_via , dtd.clone())); // this should return None
         notify = true;
       }
     } else {
       // new topic to us
       let mut b = BTreeMap::new();
-      b.insert(updater.prefix, dtd.clone());
-      self.topics.insert(topic_name, b);
+      b.insert(updater.prefix, (discovered_via , dtd.clone()) );
+      self.topics.insert(topic_name,  b);
     };
 
     if notify {
@@ -423,13 +479,13 @@ impl DiscoveryDB {
 
     let reader_proxy = RtpsReaderProxy::from_reader(reader, domain_participant);
 
-    let mut subscription_data = SubscriptionBuiltinTopicData::new(
+    let subscription_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
+      Some(domain_participant.guid()),
       topic.name(),
       topic.get_type().name().to_string(),
       &topic.qos(),
     );
-    subscription_data.set_participant_key(domain_participant.guid());
 
     // TODO: possibly change content filter to dynamic value
     let content_filter = None;
@@ -466,7 +522,7 @@ impl DiscoveryDB {
       .topics
       .iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
-      .flat_map(|(_, gm)| gm.iter().map(|(_, dtd)| dtd))
+      .flat_map(|(_, gm)| gm.iter().map(|(_, dtd)| &dtd.1))
   }
 
   // as above, but only from my GUID
@@ -479,7 +535,7 @@ impl DiscoveryDB {
       .flat_map(move |(_, gm)| {
         gm.iter()
           .filter(move |(guid, _)| **guid == me)
-          .map(|(_, dtd)| dtd)
+          .map(|(_, dtd)| &dtd.1)
       })
   }
 
@@ -489,7 +545,37 @@ impl DiscoveryDB {
   // This just returns the first one found in the database, which is indexed by
   // GUID.
   pub fn get_topic(&self, topic_name: &str) -> Option<&DiscoveredTopicData> {
-    self.topics.get(topic_name).and_then(|m| m.values().next())
+    self.topics.get(topic_name).and_then(|m| m.values().next().map(|t| &t.1))
+  }
+
+  pub fn get_topic_for_participant(&self, topic_name: &str, participant: GuidPrefix) 
+    -> Option<&DiscoveredTopicData> 
+  {
+    self.topics.get(topic_name).and_then(|m| m.get(&participant).map(|t| &t.1)) 
+  }
+
+  pub fn writers_on_topic_and_participant(&self, topic_name: &str, participant: GuidPrefix)
+    -> Vec<DiscoveredWriterData>
+  {
+    let on_particiapnt =
+    self.external_topic_writers
+      .range(participant.range())
+      .map(|(_guid,dwd)| dwd);
+    info!("Writers on participant {:?} are {:?}", participant, on_particiapnt);
+    on_particiapnt.filter(|dwd| dwd.publication_topic_data.topic_name == topic_name)
+      .cloned()
+      .collect()
+  }
+
+  pub fn readers_on_topic_and_participant(&self, topic_name: &str, participant: GuidPrefix)
+    -> Vec<DiscoveredReaderData>
+  {
+    self.external_topic_readers
+      .range(participant.range())
+      .map(|(_guid,drd)| drd)
+      .filter(|drd| drd.subscription_topic_data.topic_name() == topic_name)
+      .cloned()
+      .collect()
   }
 
   // // TODO: return iterator somehow?
@@ -628,9 +714,9 @@ mod tests {
 
     // creating data
     let reader1 = reader_proxy_data().unwrap();
-    let mut reader1sub = subscription_builtin_topic_data().unwrap();
-    reader1sub.set_key(reader1.remote_reader_guid);
-    reader1sub.set_topic_name(&topic.name());
+    let reader1sub = subscription_builtin_topic_data().unwrap();
+    //reader1sub.set_key(reader1.remote_reader_guid);
+    //reader1sub.set_topic_name(&topic.name());
     let dreader1 = DiscoveredReaderData {
       reader_proxy: reader1.clone(),
       subscription_topic_data: reader1sub.clone(),
@@ -639,9 +725,9 @@ mod tests {
     discovery_db.update_subscription(&dreader1);
 
     let reader2 = reader_proxy_data().unwrap();
-    let mut reader2sub = subscription_builtin_topic_data().unwrap();
-    reader2sub.set_key(reader2.remote_reader_guid);
-    reader2sub.set_topic_name(&topic2.name());
+    let reader2sub = subscription_builtin_topic_data().unwrap();
+    //reader2sub.set_key(reader2.remote_reader_guid);
+    //reader2sub.set_topic_name(&topic2.name());
     let dreader2 = DiscoveredReaderData {
       reader_proxy: reader2,
       subscription_topic_data: reader2sub,

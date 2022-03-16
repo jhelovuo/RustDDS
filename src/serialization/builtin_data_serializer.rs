@@ -259,21 +259,22 @@ impl<'a> BuiltinDataSerializer<'a> {
   pub fn from_subscription_topic_data(
     subscription_topic_data: &'a SubscriptionBuiltinTopicData,
   ) -> BuiltinDataSerializer<'a> {
+    let qos = subscription_topic_data.qos();
     BuiltinDataSerializer {
       participant_guid: *subscription_topic_data.participant_key(),
       endpoint_guid: Some(subscription_topic_data.key()),
       topic_name: Some(subscription_topic_data.topic_name()),
       type_name: Some(subscription_topic_data.type_name()),
-      durability: *subscription_topic_data.durability(),
-      deadline: *subscription_topic_data.deadline(),
-      latency_budget: *subscription_topic_data.latency_budget(),
-      liveliness: *subscription_topic_data.liveliness(),
-      reliability: *subscription_topic_data.reliability(),
-      ownership: *subscription_topic_data.ownership(),
-      destination_order: *subscription_topic_data.destination_order(),
-      time_based_filter: *subscription_topic_data.time_based_filter(),
-      presentation: *subscription_topic_data.presentation(),
-      lifespan: *subscription_topic_data.lifespan(),
+      durability: qos.durability(),
+      deadline: qos.deadline(),
+      latency_budget: qos.latency_budget(),
+      liveliness: qos.liveliness(),
+      reliability: qos.reliability(),
+      ownership: qos.ownership(),
+      destination_order: qos.destination_order(),
+      time_based_filter: qos.time_based_filter(),
+      presentation: qos.presentation(),
+      lifespan: qos.lifespan(),
       ..BuiltinDataSerializer::default()
     }
   }
