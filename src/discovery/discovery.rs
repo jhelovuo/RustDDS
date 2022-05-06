@@ -11,7 +11,7 @@ use mio_extras::{channel as mio_channel, timer::Timer};
 
 use crate::{
   dds::{
-    data_types::SubscriptionBuiltinTopicData,
+    SubscriptionBuiltinTopicData,
     participant::DomainParticipantWeak,
     qos::{
       policy::{
@@ -521,7 +521,7 @@ impl Discovery {
       "Unable to create DCPSParticipantMessage writer. {:?}"
     );
 
-    let mut dcps_participant_message_timer = mio_extras::timer::Timer::default();
+    let mut dcps_participant_message_timer = Timer::default();
     dcps_participant_message_timer.set_timeout(Self::CHECK_PARTICIPANT_MESSAGES, ());
     try_construct!(
       poll.register(
@@ -940,7 +940,7 @@ impl Discovery {
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let drds: Vec<std::result::Result<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription_reader.read(
-        std::usize::MAX,
+        usize::MAX,
         if read_history.is_some() {
           ReadCondition::any()
         } else {
@@ -1002,7 +1002,7 @@ impl Discovery {
   pub fn handle_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
     let dwds: Vec<std::result::Result<DiscoveredWriterData, GUID>> =
       match self.dcps_publication_reader.read(
-        std::usize::MAX,
+        usize::MAX,
         if read_history.is_some() {
           ReadCondition::any()
         } else {
@@ -1054,7 +1054,7 @@ impl Discovery {
   pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
     let ts: Vec<std::result::Result<(DiscoveredTopicData, GUID), GUID>> =
       match self.dcps_topic_reader.read(
-        std::usize::MAX,
+        usize::MAX,
         if read_history.is_some() {
           ReadCondition::any()
         } else {
@@ -1130,8 +1130,7 @@ impl Discovery {
       Ok(msgs) => Some(
         msgs
           .into_iter()
-          .map(|p| p.value().clone())
-          .filter_map(std::result::Result::ok)
+          .filter_map(|p| p.value().clone().ok())
           .collect(),
       ),
       _ => None,

@@ -657,10 +657,10 @@ mod tests {
     data.lease_duration = Some(Duration::from(StdDuration::from_secs(1)));
 
     discoverydb.update_participant(&data);
-    assert!(discoverydb.participant_proxies.len() == 1);
+    assert_eq!(discoverydb.participant_proxies.len(), 1);
 
     discoverydb.update_participant(&data);
-    assert!(discoverydb.participant_proxies.len() == 1);
+    assert_eq!(discoverydb.participant_proxies.len(), 1);
 
     std::thread::sleep(StdDuration::from_secs(2));
     discoverydb.participant_cleanup();
@@ -723,9 +723,9 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let dw2 = publisher2
-      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic, None)
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic2, None)
       .unwrap();
-    let writer_data2 = DiscoveredWriterData::new(&dw2, &topic, &domain_participant);
+    let writer_data2 = DiscoveredWriterData::new(&dw2, &topic2, &domain_participant);
     discovery_db.update_local_topic_writer(writer_data2);
     assert_eq!(discovery_db.local_topic_writers.len(), 2);
 
@@ -753,7 +753,7 @@ mod tests {
     discovery_db.update_subscription(&dreader2);
 
     let reader3 = reader1;
-    let reader3sub = reader1sub.clone();
+    let reader3sub = reader1sub;
     let dreader3 = DiscoveredReaderData {
       reader_proxy: reader3,
       subscription_topic_data: reader3sub,
