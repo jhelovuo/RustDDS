@@ -698,7 +698,7 @@ mod tests {
         TopicKind::WithKey,
       )
       .unwrap();
-    let _topic2 = domain_participant
+    let topic2 = domain_participant
       .create_topic(
         "Barfoo".to_string(),
         "RandomData".to_string(),
