@@ -11,7 +11,6 @@ use mio_extras::{channel as mio_channel, timer::Timer};
 
 use crate::{
   dds::{
-    SubscriptionBuiltinTopicData,
     participant::DomainParticipantWeak,
     qos::{
       policy::{
@@ -27,6 +26,7 @@ use crate::{
       datareader::{DataReader, DataReaderCdr},
       datawriter::{DataWriter, DataWriterCdr},
     },
+    SubscriptionBuiltinTopicData,
   },
   discovery::{
     data_types::{

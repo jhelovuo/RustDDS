@@ -723,7 +723,9 @@ mod tests {
       .create_publisher(&QosPolicies::qos_none())
       .unwrap();
     let dw2 = publisher2
-      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic2, None)
+      .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(
+        &topic2, None,
+      )
       .unwrap();
     let writer_data2 = DiscoveredWriterData::new(&dw2, &topic2, &domain_participant);
     discovery_db.update_local_topic_writer(writer_data2);
