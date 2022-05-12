@@ -58,9 +58,10 @@ impl AssemblyBuffer {
     let payload_header = 4; // RepresentationIdentifier + RepresentationOptions
     let frag_size = usize::from(frag_size) - payload_header;
     let frags_in_subm = usize::from(datafrag.fragments_in_submessage);
-    let start_frag_from_0: usize = u32::from(datafrag.fragment_starting_num)
+    let fragment_starting_num: usize = u32::from(datafrag.fragment_starting_num)
       .try_into()
       .unwrap();
+    let start_frag_from_0 = fragment_starting_num - 1;
 
     debug!(
       "insert_frags: datafrag.writer_sn = {:?}, frag_size = {:?}, datafrag.fragment_size = {:?}, datafrag.fragment_starting_num = {:?}, \
@@ -86,8 +87,8 @@ impl AssemblyBuffer {
     self.buffer_bytes.as_mut()[from_byte..to_before_byte]
       .copy_from_slice(&datafrag.serialized_payload.value);
 
-    for f in start_frag_from_0..frags_in_subm {
-      self.received_bitmap.set(f, true);
+    for f in 0..frags_in_subm {
+      self.received_bitmap.set(start_frag_from_0 + f, true);
     }
     self.modified_time = Timestamp::now();
   }
