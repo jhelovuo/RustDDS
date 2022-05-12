@@ -71,9 +71,15 @@ impl AssemblyBuffer {
     );
 
     // unwrap: u32 should fit into usize
-    let from_byte = (start_frag_from_0 - 1) * frag_size;
-    let to_before_byte: usize = from_byte + (frags_in_subm * frag_size);
-    
+    let from_byte = start_frag_from_0 * frag_size;
+    // Last fragment might be smaller than fragment size
+    let to_before_byte = if fragment_starting_num < self.fragment_count {
+      from_byte + (frags_in_subm * frag_size)
+    } else {
+      from_byte + datafrag.serialized_payload.value.len()
+    };
+
+
     debug!(
       "insert_frags: from_byte = {:?}, to_before_byte = {:?}",
       from_byte, to_before_byte
