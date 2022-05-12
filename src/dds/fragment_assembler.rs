@@ -138,6 +138,7 @@ impl FragmentAssembler {
     abuf.insert_frags(datafrag, frag_size);
 
     if abuf.is_complete() {
+      debug!("new_datafrag: COMPLETED FRAGMENT");
       if let Some(abuf) = self.assembly_buffers.remove(&writer_sn) {
         // Return what we have assembled.
         let ser_data_or_key = SerializedPayload::new(rep_id, abuf.buffer_bytes.to_vec());
@@ -153,6 +154,7 @@ impl FragmentAssembler {
         None
       }
     } else {
+      debug!("new_dataFrag: FRAGMENT NOT COMPLETED YET");
       None
     }
   }
