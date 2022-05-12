@@ -55,20 +55,38 @@ impl AssemblyBuffer {
 
   pub fn insert_frags(&mut self, datafrag: &DataFrag, frag_size: u16) {
     // TODO: Sanity checks? E.g. datafrag.fragment_size == frag_size
-    let frag_size = usize::from(frag_size);
+    let payload_header = 4; // RepresentationIdentifier + RepresentationOptions
+    let frag_size = usize::from(frag_size) - payload_header;
     let frags_in_subm = usize::from(datafrag.fragments_in_submessage);
     let start_frag_from_0: usize = u32::from(datafrag.fragment_starting_num)
       .try_into()
       .unwrap();
 
+    debug!(
+      "insert_frags: datafrag.writer_sn = {:?}, frag_size = {:?}, datafrag.fragment_size = {:?}, datafrag.fragment_starting_num = {:?}, \
+      datafrag.fragments_in_submessage = {:?}, datafrag.data_size = {:?}",
+      datafrag.writer_sn, frag_size, datafrag.fragment_size, datafrag.fragment_starting_num,
+      datafrag.fragments_in_submessage, datafrag.data_size
+    );
+
     // unwrap: u32 should fit into usize
     let from_byte = (start_frag_from_0 - 1) * frag_size;
     let to_before_byte: usize = from_byte + (frags_in_subm * frag_size);
+    
+    debug!(
+      "insert_frags: from_byte = {:?}, to_before_byte = {:?}",
+      from_byte, to_before_byte
+    );
+
+    debug!(
+      "insert_frags: dataFrag.serializedPayload.value.len = {:?}",
+      datafrag.serialized_payload.value.len()
+    );
 
     self.buffer_bytes.as_mut()[from_byte..to_before_byte]
       .copy_from_slice(&datafrag.serialized_payload.value);
 
-    for f in from_byte..to_before_byte {
+    for f in start_frag_from_0..frags_in_subm {
       self.received_bitmap.set(f, true);
     }
     self.modified_time = Timestamp::now();
@@ -110,13 +128,14 @@ impl FragmentAssembler {
   ) -> Option<DDSData> {
     let rep_id = datafrag.serialized_payload.representation_identifier;
     let writer_sn = datafrag.writer_sn;
+    let frag_size = self.fragment_size;
 
     let abuf = self
       .assembly_buffers
       .entry(datafrag.writer_sn)
-      .or_insert_with(|| AssemblyBuffer::new(datafrag.data_size, datafrag.fragment_size));
+      .or_insert_with(|| AssemblyBuffer::new(datafrag.data_size, frag_size));
 
-    abuf.insert_frags(datafrag, self.fragment_size);
+    abuf.insert_frags(datafrag, frag_size);
 
     if abuf.is_complete() {
       if let Some(abuf) = self.assembly_buffers.remove(&writer_sn) {
