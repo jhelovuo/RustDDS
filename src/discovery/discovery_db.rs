@@ -698,7 +698,7 @@ mod tests {
         TopicKind::WithKey,
       )
       .unwrap();
-    let topic2 = domain_participant
+    let _topic2 = domain_participant
       .create_topic(
         "Barfoo".to_string(),
         "RandomData".to_string(),
@@ -753,7 +753,7 @@ mod tests {
     discovery_db.update_subscription(&dreader2);
 
     let reader3 = reader1;
-    let reader3sub = reader1sub.clone();
+    let reader3sub = reader1sub;
     let dreader3 = DiscoveredReaderData {
       reader_proxy: reader3,
       subscription_topic_data: reader3sub,
