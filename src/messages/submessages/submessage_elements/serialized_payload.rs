@@ -93,6 +93,7 @@ pub struct SerializedPayload {
 }
 
 impl SerializedPayload {
+  #[cfg(test)]
   pub fn new(rep_id: RepresentationIdentifier, payload: Vec<u8>) -> Self {
     Self {
       representation_identifier: rep_id,

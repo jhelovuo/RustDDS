@@ -6,10 +6,7 @@ use enumflags2::BitFlags;
 use bytes::Bytes;
 
 use crate::{
-  messages::submessages::{
-    submessage_elements::{parameter_list::ParameterList, serialized_payload::SerializedPayload},
-    submessages::*,
-  },
+  messages::submessages::{submessage_elements::parameter_list::ParameterList, submessages::*},
   structure::{
     guid::EntityId,
     sequence_number::{FragmentNumber, SequenceNumber},
@@ -61,10 +58,16 @@ pub struct DataFrag {
   /// Represents part of the new value of the data-object
   /// after the change. Present only if either the DataFlag or the KeyFlag are
   /// set in the header. Present only if DataFlag is set in the header.
-  pub serialized_payload: SerializedPayload,
+  ///
+  /// Note: RTPS spec says the serialized_payload is of type SerializedPayload,
+  /// but that is technically incorrect. It is a fragment of
+  /// SerializedPayload. The headers at the beginning of SerializedPayload
+  /// appear only at the first fragment. The fragmentation mechanism here
+  /// should treat serialized_payload as an opaque stream of bytes.
+  pub serialized_payload: Bytes,
 }
 
-impl<'a> DataFrag {
+impl DataFrag {
   pub fn deserialize(buffer: &Bytes, flags: BitFlags<DATAFRAG_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
     let endianness = endianness_flag(flags.bits());
@@ -114,8 +117,7 @@ impl<'a> DataFrag {
     };
 
     // Payload should be always present, be it data or key fragments.
-    let serialized_payload =
-      SerializedPayload::from_bytes(&buffer.clone().split_off(cursor.position() as usize))?;
+    let serialized_payload = buffer.clone().split_off(cursor.position() as usize);
 
     Ok(Self {
       reader_id,
@@ -152,7 +154,7 @@ impl<C: Context> Writable<C> for DataFrag {
     if self.inline_qos.is_some() && !self.inline_qos.as_ref().unwrap().parameters.is_empty() {
       writer.write_value(&self.inline_qos)?;
     }
-    writer.write_value(&self.serialized_payload)?;
+    writer.write_bytes(&self.serialized_payload)?;
     Ok(())
   }
 }

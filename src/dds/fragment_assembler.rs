@@ -30,6 +30,10 @@ struct AssemblyBuffer {
 
 impl AssemblyBuffer {
   pub fn new(data_size: u32, fragment_size: u16) -> Self {
+    debug!(
+      "new AssemblyBuffer data_size={} frag_size={}",
+      data_size, fragment_size
+    );
     // TODO: Check that fragment size <= data_size
     // TODO: Check that fragment_size is not zero
     let data_size: usize = data_size.try_into().unwrap();
@@ -55,21 +59,57 @@ impl AssemblyBuffer {
 
   pub fn insert_frags(&mut self, datafrag: &DataFrag, frag_size: u16) {
     // TODO: Sanity checks? E.g. datafrag.fragment_size == frag_size
-    let frag_size = usize::from(frag_size);
+    let frag_size = usize::from(frag_size); // - payload_header;
     let frags_in_subm = usize::from(datafrag.fragments_in_submessage);
-    let start_frag_from_0: usize = u32::from(datafrag.fragment_starting_num)
+    let fragment_starting_num: usize = u32::from(datafrag.fragment_starting_num)
       .try_into()
       .unwrap();
+    let start_frag_from_0 = fragment_starting_num - 1; // number of first fragment in this DataFrag, indexing from 0
+
+    debug!(
+      "insert_frags: datafrag.writer_sn = {:?}, frag_size = {:?}, datafrag.fragment_size = {:?}, datafrag.fragment_starting_num = {:?}, \
+      datafrag.fragments_in_submessage = {:?}, datafrag.data_size = {:?}",
+      datafrag.writer_sn, frag_size, datafrag.fragment_size, datafrag.fragment_starting_num,
+      datafrag.fragments_in_submessage, datafrag.data_size
+    );
 
     // unwrap: u32 should fit into usize
-    let from_byte = (start_frag_from_0 - 1) * frag_size;
-    let to_before_byte: usize = from_byte + (frags_in_subm * frag_size);
+    let from_byte = start_frag_from_0 * frag_size;
+
+    // Last fragment might be smaller than fragment size
+    // Copy reported number of fragments, or as much data as there is, whichever
+    // ends first.
+    // And clamp to assembly buffer length to avoid buffer overrun.
+    let to_before_byte = std::cmp::min(
+      from_byte + std::cmp::min(frags_in_subm * frag_size, datafrag.serialized_payload.len()),
+      self.buffer_bytes.len(),
+    );
+    let payload_size = to_before_byte - from_byte;
+
+    // sanity check data size
+    // Last fragment may be smaller than frags_in_subm * frag_size
+    if fragment_starting_num < self.fragment_count
+      && datafrag.serialized_payload.len() < frags_in_subm * frag_size
+    {
+      error!("Received DATAFRAG too small. fragment_starting_num={} out of fragment_count={}, frags_in_subm={}, frag_size={} but payload length ={}",
+        fragment_starting_num, self.fragment_count, frags_in_subm, frag_size, datafrag.serialized_payload.len(), );
+    }
+
+    debug!(
+      "insert_frags: from_byte = {:?}, to_before_byte = {:?}",
+      from_byte, to_before_byte
+    );
+
+    debug!(
+      "insert_frags: dataFrag.serializedPayload.len = {:?}",
+      datafrag.serialized_payload.len()
+    );
 
     self.buffer_bytes.as_mut()[from_byte..to_before_byte]
-      .copy_from_slice(&datafrag.serialized_payload.value);
+      .copy_from_slice(&datafrag.serialized_payload[..payload_size]);
 
-    for f in from_byte..to_before_byte {
-      self.received_bitmap.set(f, true);
+    for f in 0..frags_in_subm {
+      self.received_bitmap.set(start_frag_from_0 + f, true);
     }
     self.modified_time = Timestamp::now();
   }
@@ -96,6 +136,7 @@ impl fmt::Debug for FragmentAssembler {
 
 impl FragmentAssembler {
   pub fn new(fragment_size: u16) -> Self {
+    debug!("new FragmentAssember. frag_size = {}", fragment_size);
     Self {
       fragment_size,
       assembly_buffers: BTreeMap::new(),
@@ -108,20 +149,26 @@ impl FragmentAssembler {
     datafrag: &DataFrag,
     flags: BitFlags<DATAFRAG_Flags>,
   ) -> Option<DDSData> {
-    let rep_id = datafrag.serialized_payload.representation_identifier;
     let writer_sn = datafrag.writer_sn;
+    let frag_size = self.fragment_size;
 
     let abuf = self
       .assembly_buffers
       .entry(datafrag.writer_sn)
-      .or_insert_with(|| AssemblyBuffer::new(datafrag.data_size, datafrag.fragment_size));
+      .or_insert_with(|| AssemblyBuffer::new(datafrag.data_size, frag_size));
 
-    abuf.insert_frags(datafrag, self.fragment_size);
+    abuf.insert_frags(datafrag, frag_size);
 
     if abuf.is_complete() {
+      debug!("new_datafrag: COMPLETED FRAGMENT");
       if let Some(abuf) = self.assembly_buffers.remove(&writer_sn) {
         // Return what we have assembled.
-        let ser_data_or_key = SerializedPayload::new(rep_id, abuf.buffer_bytes.to_vec());
+        let ser_data_or_key = SerializedPayload::from_bytes(&abuf.buffer_bytes.freeze())
+          .map_err(|e| {
+            error!("Deserializing SeralizedPayload from DATAFRAG: {:?}", &e);
+            e
+          })
+          .ok()?;
         let ddsdata = if flags.contains(DATAFRAG_Flags::Key) {
           DDSData::new_disposed_by_key(ChangeKind::NotAliveDisposed, ser_data_or_key)
         } else {
@@ -134,6 +181,7 @@ impl FragmentAssembler {
         None
       }
     } else {
+      debug!("new_dataFrag: FRAGMENT NOT COMPLETED YET");
       None
     }
   }

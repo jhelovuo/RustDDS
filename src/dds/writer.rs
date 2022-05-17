@@ -1117,17 +1117,15 @@ mod tests {
       b: "Fobar".to_string(),
     };
 
-    let write_result = data_writer.write(data, None).expect("Unable to write data");
-
+    let write_result = data_writer.write(data, None);
     info!("writerResult:  {:?}", write_result);
-    let write_result = data_writer
+
+    data_writer
       .write(data2, None)
       .expect("Unable to write data");
 
     info!("writerResult:  {:?}", write_result);
-    let write_result = data_writer
-      .write(data3, None)
-      .expect("Unable to write data");
+    let write_result = data_writer.write(data3, None);
 
     thread::sleep(std::time::Duration::from_millis(100));
     info!("writerResult:  {:?}", write_result);

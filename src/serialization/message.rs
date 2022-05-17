@@ -39,7 +39,7 @@ pub(crate) struct Message {
   pub submessages: Vec<SubMessage>,
 }
 
-impl<'a> Message {
+impl Message {
   pub fn add_submessage(&mut self, submessage: SubMessage) {
     self.submessages.push(submessage);
   }
