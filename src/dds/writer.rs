@@ -1125,8 +1125,7 @@ mod tests {
       .expect("Unable to write data");
 
     info!("writerResult:  {:?}", write_result);
-    let write_result = data_writer
-      .write(data3, None);
+    let write_result = data_writer.write(data3, None);
 
     thread::sleep(std::time::Duration::from_millis(100));
     info!("writerResult:  {:?}", write_result);

@@ -93,13 +93,13 @@ pub struct SerializedPayload {
 }
 
 impl SerializedPayload {
-  pub fn new(rep_id: RepresentationIdentifier, payload: Vec<u8>) -> Self {
-    Self {
-      representation_identifier: rep_id,
-      representation_options: [0, 0],
-      value: Bytes::from(payload),
-    }
-  }
+  // pub fn new(rep_id: RepresentationIdentifier, payload: Vec<u8>) -> Self {
+  //   Self {
+  //     representation_identifier: rep_id,
+  //     representation_options: [0, 0],
+  //     value: Bytes::from(payload),
+  //   }
+  // }
 
   pub fn new_from_bytes(rep_id: RepresentationIdentifier, payload: Bytes) -> Self {
     Self {
