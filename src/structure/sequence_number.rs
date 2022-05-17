@@ -395,7 +395,7 @@ where
   rev_at_bit: u32,
 }
 
-impl<'a, N> Iterator for NumberSetIter<'_, N>
+impl<N> Iterator for NumberSetIter<'_, N>
 where
   N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd,
 {
@@ -417,7 +417,8 @@ where
     None
   }
 }
-impl<'a, N> DoubleEndedIterator for NumberSetIter<'_, N>
+
+impl<N> DoubleEndedIterator for NumberSetIter<'_, N>
 where
   N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd,
 {

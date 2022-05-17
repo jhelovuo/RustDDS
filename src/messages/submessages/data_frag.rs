@@ -64,7 +64,7 @@ pub struct DataFrag {
   pub serialized_payload: SerializedPayload,
 }
 
-impl<'a> DataFrag {
+impl DataFrag {
   pub fn deserialize(buffer: &Bytes, flags: BitFlags<DATAFRAG_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
     let endianness = endianness_flag(flags.bits());

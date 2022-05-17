@@ -31,7 +31,10 @@ struct AssemblyBuffer {
 
 impl AssemblyBuffer {
   pub fn new(data_size: u32, fragment_size: u16) -> Self {
-    debug!("new AssemblyBuffer data_size={} frag_size={}", data_size, fragment_size);
+    debug!(
+      "new AssemblyBuffer data_size={} frag_size={}",
+      data_size, fragment_size
+    );
     // TODO: Check that fragment size <= data_size
     // TODO: Check that fragment_size is not zero
     let data_size: usize = data_size.try_into().unwrap();
@@ -73,9 +76,7 @@ impl AssemblyBuffer {
     );
 
     let room_for_sp_header = // account for header fields inside serializedPayload
-      if start_frag_from_0 == 0 {
-        4 
-      } else { 0 };
+      if start_frag_from_0 == 0 { 4 } else { 0 };
 
     // unwrap: u32 should fit into usize
     let mut from_byte = start_frag_from_0 * frag_size;
@@ -97,11 +98,16 @@ impl AssemblyBuffer {
       datafrag.serialized_payload.value.len()
     );
 
-
     if start_frag_from_0 == 0 {
       debug!("Filling bytes 0..4 from serialized_payload header");
-      self.buffer_bytes.as_mut()[0..2].copy_from_slice(&datafrag.serialized_payload.representation_identifier.to_bytes());
-      self.buffer_bytes.as_mut()[2..4].copy_from_slice(&datafrag.serialized_payload.representation_options);
+      self.buffer_bytes.as_mut()[0..2].copy_from_slice(
+        &datafrag
+          .serialized_payload
+          .representation_identifier
+          .to_bytes(),
+      );
+      self.buffer_bytes.as_mut()[2..4]
+        .copy_from_slice(&datafrag.serialized_payload.representation_options);
     }
 
     self.buffer_bytes.as_mut()[from_byte..to_before_byte]
