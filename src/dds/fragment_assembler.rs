@@ -14,6 +14,7 @@ use crate::{
     submessages::{DATAFRAG_Flags, DataFrag},
   },
   structure::{cache_change::ChangeKind, sequence_number::SequenceNumber, time::Timestamp},
+  RepresentationIdentifier,
 };
 
 // This is for the assembly of a single object
@@ -30,6 +31,7 @@ struct AssemblyBuffer {
 
 impl AssemblyBuffer {
   pub fn new(data_size: u32, fragment_size: u16) -> Self {
+    debug!("new AssemblyBuffer data_size={} frag_size={}", data_size, fragment_size);
     // TODO: Check that fragment size <= data_size
     // TODO: Check that fragment_size is not zero
     let data_size: usize = data_size.try_into().unwrap();
@@ -55,13 +57,13 @@ impl AssemblyBuffer {
 
   pub fn insert_frags(&mut self, datafrag: &DataFrag, frag_size: u16) {
     // TODO: Sanity checks? E.g. datafrag.fragment_size == frag_size
-    let payload_header = 4; // RepresentationIdentifier + RepresentationOptions
-    let frag_size = usize::from(frag_size) - payload_header;
+    //let payload_header = 4; // RepresentationIdentifier + RepresentationOptions
+    let frag_size = usize::from(frag_size); // - payload_header;
     let frags_in_subm = usize::from(datafrag.fragments_in_submessage);
     let fragment_starting_num: usize = u32::from(datafrag.fragment_starting_num)
       .try_into()
       .unwrap();
-    let start_frag_from_0 = fragment_starting_num - 1;
+    let start_frag_from_0 = fragment_starting_num - 1; // number of first fragment in this DataFrag, indexing from 0
 
     debug!(
       "insert_frags: datafrag.writer_sn = {:?}, frag_size = {:?}, datafrag.fragment_size = {:?}, datafrag.fragment_starting_num = {:?}, \
@@ -70,15 +72,20 @@ impl AssemblyBuffer {
       datafrag.fragments_in_submessage, datafrag.data_size
     );
 
+    let room_for_sp_header = // account for header fields inside serializedPayload
+      if start_frag_from_0 == 0 {
+        4 
+      } else { 0 };
+
     // unwrap: u32 should fit into usize
-    let from_byte = start_frag_from_0 * frag_size;
+    let mut from_byte = start_frag_from_0 * frag_size;
     // Last fragment might be smaller than fragment size
     let to_before_byte = if fragment_starting_num < self.fragment_count {
       from_byte + (frags_in_subm * frag_size)
     } else {
       from_byte + datafrag.serialized_payload.value.len()
     };
-
+    from_byte += room_for_sp_header; // modify from_byte to account for header
 
     debug!(
       "insert_frags: from_byte = {:?}, to_before_byte = {:?}",
@@ -89,6 +96,13 @@ impl AssemblyBuffer {
       "insert_frags: dataFrag.serializedPayload.value.len = {:?}",
       datafrag.serialized_payload.value.len()
     );
+
+
+    if start_frag_from_0 == 0 {
+      debug!("Filling bytes 0..4 from serialized_payload header");
+      self.buffer_bytes.as_mut()[0..2].copy_from_slice(&datafrag.serialized_payload.representation_identifier.to_bytes());
+      self.buffer_bytes.as_mut()[2..4].copy_from_slice(&datafrag.serialized_payload.representation_options);
+    }
 
     self.buffer_bytes.as_mut()[from_byte..to_before_byte]
       .copy_from_slice(&datafrag.serialized_payload.value);
@@ -121,6 +135,7 @@ impl fmt::Debug for FragmentAssembler {
 
 impl FragmentAssembler {
   pub fn new(fragment_size: u16) -> Self {
+    debug!("new FragmentAssember. frag_size = {}", fragment_size);
     Self {
       fragment_size,
       assembly_buffers: BTreeMap::new(),
@@ -133,7 +148,7 @@ impl FragmentAssembler {
     datafrag: &DataFrag,
     flags: BitFlags<DATAFRAG_Flags>,
   ) -> Option<DDSData> {
-    let rep_id = datafrag.serialized_payload.representation_identifier;
+    //let rep_id = datafrag.serialized_payload.representation_identifier;
     let writer_sn = datafrag.writer_sn;
     let frag_size = self.fragment_size;
 
@@ -148,7 +163,8 @@ impl FragmentAssembler {
       debug!("new_datafrag: COMPLETED FRAGMENT");
       if let Some(abuf) = self.assembly_buffers.remove(&writer_sn) {
         // Return what we have assembled.
-        let ser_data_or_key = SerializedPayload::new(rep_id, abuf.buffer_bytes.to_vec());
+        let rep_id = RepresentationIdentifier::from_bytes(&abuf.buffer_bytes[0..2]).ok()?;
+        let ser_data_or_key = SerializedPayload::new(rep_id, abuf.buffer_bytes[4..].to_vec());
         let ddsdata = if flags.contains(DATAFRAG_Flags::Key) {
           DDSData::new_disposed_by_key(ChangeKind::NotAliveDisposed, ser_data_or_key)
         } else {
