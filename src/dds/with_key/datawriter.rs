@@ -341,7 +341,7 @@ where
     ));
     let sequence_number = self.next_sequence_number();
     let writer_command = WriterCommand::DDSData {
-      data: ddsdata,
+      ddsdata,
       write_options,
       sequence_number,
     };
@@ -919,7 +919,7 @@ where
     self
       .cc_upload
       .send(WriterCommand::DDSData {
-        data: ddsdata,
+        ddsdata,
         write_options: WriteOptions::from(source_timestamp),
         sequence_number: self.next_sequence_number(),
       })

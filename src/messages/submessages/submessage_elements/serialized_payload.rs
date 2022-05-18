@@ -110,6 +110,11 @@ impl SerializedPayload {
     }
   }
 
+  /// serialized size in bytes
+  pub fn len(&self) -> usize {
+    4 + self.value.len()
+  }
+
   // Implement deserialization here, because Speedy just makes it difficult.
   pub fn from_bytes(bytes: &Bytes) -> io::Result<Self> {
     let mut reader = io::Cursor::new(&bytes);

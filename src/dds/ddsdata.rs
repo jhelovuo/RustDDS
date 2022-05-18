@@ -67,6 +67,17 @@ impl DDSData {
   //   }
   // }
 
+  // What is the serialized size of this?
+  pub fn payload_size(&self) -> usize {
+    match self {
+      DDSData::Data { serialized_payload } => serialized_payload.len(),
+      DDSData::DisposeByKey { key, .. } => key.len(),
+      DDSData::DisposeByKeyHash { .. } => 16,
+      // This is a fundamental constant of the RTPS
+      // specification v2.5 Section 9.6.4.8 KeyHash (PID_KEY_HASH)
+    }
+  }
+
   #[cfg(test)]
   pub fn data(&self) -> Option<Bytes> {
     match &self {

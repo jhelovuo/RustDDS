@@ -119,15 +119,15 @@ pub(crate) struct Writer {
   ///sequence number that is yet to be written by the Writer
   pub first_change_sequence_number: SequenceNumber,
 
-  ///Optional attribute that indicates
-  ///the maximum size of any
-  ///SerializedPayload that may be
-  ///sent by the Writer
-
-  // TODO: But where is it used and how is that useful? It is mentioned in RTPS Spec v2.5
-  // as a field of "Writer" in Figure 8.16, but the usage is unclear.
-  #[allow(dead_code)]
-  pub data_max_size_serialized: u64,
+  /// The maximum size of any
+  /// SerializedPayload that may be sent by the Writer.
+  /// This is used to decide when to send DATA or DATAFRAG.
+  /// Supposeddly "fragment size" limitations apply here, so must be <= 64k.
+  /// RTPS spec v2.5 Section "8.4.14.1 Large Data"
+  // Note: Writer can choose the max size at initialization, but is not allowed to change it later.
+  // RTPS spec v2.5 Section 8.4.14.1.1:
+  // "The fragment size must be fixed for a given Writer and is identical for all remote Readers"
+  pub data_max_size_serialized: usize,
 
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
@@ -179,7 +179,7 @@ pub(crate) struct Writer {
 
 pub(crate) enum WriterCommand {
   DDSData {
-    data: DDSData,
+    ddsdata: DDSData,
     write_options: WriteOptions,
     sequence_number: SequenceNumber,
   },
@@ -247,7 +247,9 @@ impl Writer {
       nack_suppression_duration: NACK_SUPPRESSION_DURATION,
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
-      data_max_size_serialized: 999999999,                   // TODO: this is not reasonable
+      data_max_size_serialized: 1024,
+      // ^^ TODO: Maybe a smarter selection would be in order.
+      // We should get the minimum over all outgoing interfaces.
       my_guid: i.guid,
       writer_command_receiver: i.writer_command_receiver,
       readers: BTreeMap::new(),
@@ -380,7 +382,7 @@ impl Writer {
     while let Ok(cc) = self.writer_command_receiver.try_recv() {
       match cc {
         WriterCommand::DDSData {
-          data,
+          ddsdata,
           write_options,
           sequence_number,
         } => {
@@ -388,55 +390,65 @@ impl Writer {
           // 1. Insert it to history cache and get it sequence numbered
           // 2. Send out data.
           //    If we are pushing data, send the DATA submessage and HEARTBEAT.
-          //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the
-          // DATA with ACKNACK.
+          //    If we are not pushing, send out HEARTBEAT only. Readers will then ask for
+          // the DATA with ACKNACK, if they are interested.
+          let fragmentation_needed = ddsdata.payload_size() > self.data_max_size_serialized;
           let timestamp =
-            self.insert_to_history_cache(data, write_options.clone(), sequence_number);
+            self.insert_to_history_cache(ddsdata, write_options.clone(), sequence_number);
 
           self.increase_heartbeat_counter();
 
-          let partial_message = MessageBuilder::new();
-          // If DataWriter sent us a source timestamp, then add that.
-          let partial_message = if let Some(src_ts) = write_options.source_timestamp {
-            partial_message.ts_msg(self.endianness, Some(src_ts))
-          } else {
-            partial_message
-          };
-          // the beef: DATA submessage
-          let data_hb_message_builder = if self.push_mode {
-            // If we are in push mode, proactively send DATA submessage along with
-            // HEARTBEAT.
-            if let Some(cache_change) = self
-              .dds_cache
-              .read()
-              .unwrap()
-              .topic_get_change(&self.my_topic_name, &timestamp)
-            {
-              partial_message.data_msg(
-                cache_change,
-                EntityId::UNKNOWN,      // reader
-                self.my_guid.entity_id, // writer
-                self.endianness,
-              )
+          if !fragmentation_needed {
+            let mut message_builder = MessageBuilder::new();
+            // the beef: DATA submessage
+            if self.push_mode {
+              // If we are in push mode, proactively send DATA submessage along with
+              // HEARTBEAT.
+              if let Some(cache_change) = self
+                .dds_cache
+                .read()
+                .unwrap()
+                .topic_get_change(&self.my_topic_name, &timestamp)
+              {
+                // If DataWriter sent us a source timestamp, then add that.
+                // Timestamp has to go before Data to have effect on Data.
+                if let Some(src_ts) = cache_change.write_options.source_timestamp {
+                  message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
+                }
+                message_builder = message_builder.data_msg(
+                  cache_change,
+                  EntityId::UNKNOWN,      // reader
+                  self.my_guid.entity_id, // writer
+                  self.endianness,
+                );
+              } else {
+                // We just did .insert_to_history_cache but nothing was found?
+                error!(
+                  "process_writer_command: The dog ate my CacheChange {:?} topic={:?}",
+                  sequence_number,
+                  self.topic_name(),
+                );
+              }
             } else {
-              partial_message
-            }
+              // Not pushing: Send only HEARTBEAT. Send DATA only after readers
+              // ACKNACK asking for it.
+            };
+
+            // TODO: Explain the flag logic here.
+            let final_flag = false; // false = request that readers acknowledge with ACKNACK.
+            let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
+                                         // writing new data.
+            let data_hb_message = message_builder
+              .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
+              .add_header_and_build(self.my_guid.prefix);
+            self.send_message_to_readers(
+              DeliveryMode::Multicast,
+              &data_hb_message,
+              &mut self.readers.values(),
+            );
           } else {
-            // Not pushing: Send only HEARTBEAT. Send DATA only after readers ACKNACK asking
-            // for it.
-            partial_message
-          };
-          // TODO: Explain the flag logic here.
-          let final_flag = false;
-          let liveliness_flag = false;
-          let data_hb_message = data_hb_message_builder
-            .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
-            .add_header_and_build(self.my_guid.prefix);
-          self.send_message_to_readers(
-            DeliveryMode::Multicast,
-            &data_hb_message,
-            &mut self.readers.values(),
-          );
+            // Large payload, must fragment.
+          }
         }
 
         // WriterCommand::ResetOfferedDeadlineMissedStatus { writer_guid: _, } => {
@@ -452,11 +464,11 @@ impl Writer {
                 if rp.all_acked_before <= wait_until {
                   Some(*guid)
                 } else {
-                  None
-                } // already acked
+                  None // already acked
+                }
               } else {
-                None
-              } // not reliable reader
+                None // not reliable reader => not supposed to ack at all
+              }
             })
             .collect();
           if readers_pending.is_empty() {
