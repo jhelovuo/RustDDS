@@ -34,7 +34,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
-    sequence_number::SequenceNumber,
+    sequence_number::{SequenceNumber, FragmentNumber,},
     time::Timestamp,
   },
 };
@@ -434,7 +434,6 @@ impl Writer {
               // ACKNACK asking for it.
             };
 
-            // TODO: Explain the flag logic here.
             let final_flag = false; // false = request that readers acknowledge with ACKNACK.
             let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
                                          // writing new data.
@@ -448,7 +447,61 @@ impl Writer {
             );
           } else {
             // Large payload, must fragment.
-          }
+            if let Some(cache_change) = self
+                .dds_cache
+                .read()
+                .unwrap()
+                .topic_get_change(&self.my_topic_name, &timestamp)
+            {
+              let fragment_size :u32 = self.data_max_size_serialized as u32; //TODO: overflow check
+              let data_size :u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
+              // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
+              let num_frags = (data_size / fragment_size) + (if data_size % fragment_size != 0 {1} else {0});
+              if self.push_mode {
+                // loop over fragments
+                for frag_num in FragmentNumber::range_inclusive(FragmentNumber::new(1) , FragmentNumber::new(num_frags)) {
+                  let mut message_builder = MessageBuilder::new();
+                  if let Some(src_ts) = cache_change.write_options.source_timestamp {
+                    message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
+                  }
+
+                  message_builder = message_builder.data_frag_msg( 
+                    cache_change,
+                    EntityId::UNKNOWN,      // reader
+                    self.my_guid.entity_id, // writer
+                    frag_num,
+                    fragment_size as u16, // TODO: overflow check
+                    data_size,
+                    self.endianness);
+
+                  // TODO: some sort of queuing is needed
+                  self.send_message_to_readers(
+                    DeliveryMode::Multicast,
+                    &message_builder.add_header_and_build(self.my_guid.prefix),
+                    &mut self.readers.values(),
+                  );
+                } // end for
+              } 
+              // Regardless of push mode, we send a Heartbeat
+              let final_flag = false; // false = request that readers acknowledge with ACKNACK.
+              let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
+              let hb_message = MessageBuilder::new()
+                .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
+                .add_header_and_build(self.my_guid.prefix);
+              self.send_message_to_readers(
+                DeliveryMode::Multicast,
+                &hb_message,
+                &mut self.readers.values(),);
+            } else {
+              // We just did .insert_to_history_cache but nothing was found?
+              error!(
+                "process_writer_command (frag): The dog ate my CacheChange {:?} topic={:?}",
+                sequence_number,
+                self.topic_name(),
+              );
+            }
+
+          } // end if large payload
         }
 
         // WriterCommand::ResetOfferedDeadlineMissedStatus { writer_guid: _, } => {

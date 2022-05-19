@@ -182,6 +182,16 @@ impl Default for SequenceNumber {
 )]
 pub struct FragmentNumber(u32);
 
+impl FragmentNumber {
+  pub fn new(value: u32) -> Self {
+    FragmentNumber(value)
+  }
+  pub fn range_inclusive(begin: Self, end: Self) -> FragmentNumberRange {
+    FragmentNumberRange::new(begin, end)
+  }
+
+}
+
 impl Default for FragmentNumber {
   fn default() -> Self {
     Self(1)
@@ -200,6 +210,12 @@ impl From<FragmentNumber> for u32 {
   }
 }
 
+impl From<FragmentNumber> for usize {
+  fn from(fragment_number: FragmentNumber) -> Self {
+    fragment_number.0 as usize
+  }
+}
+
 // to make this fit into NumberSet<N>
 impl From<i64> for FragmentNumber {
   fn from(value: i64) -> Self {
@@ -211,6 +227,48 @@ impl From<i64> for FragmentNumber {
 impl From<FragmentNumber> for i64 {
   fn from(fragment_number: FragmentNumber) -> Self {
     fragment_number.0.into()
+  }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FragmentNumberRange {
+  begin: FragmentNumber,
+  end: FragmentNumber,
+}
+
+impl FragmentNumberRange {
+  pub fn new(begin: FragmentNumber, end: FragmentNumber) -> Self {
+    Self { begin, end }
+  }
+
+  pub fn begin(&self) -> FragmentNumber {
+    self.begin
+  }
+
+  pub fn end(&self) -> FragmentNumber {
+    self.end
+  }
+}
+
+impl Iterator for FragmentNumberRange {
+  type Item = FragmentNumber;
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.begin > self.end {
+      None
+    } else {
+      let b = self.begin;
+      self.begin = b + FragmentNumber::new(1);
+      Some(b)
+    }
+  }
+}
+
+impl RangeBounds<FragmentNumber> for FragmentNumberRange {
+  fn start_bound(&self) -> Bound<&FragmentNumber> {
+    Bound::Included(&self.begin)
+  }
+  fn end_bound(&self) -> Bound<&FragmentNumber> {
+    Bound::Included(&self.end)
   }
 }
 

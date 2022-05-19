@@ -49,6 +49,20 @@ impl Parameter {
       value: vec![0, 0, 0, last_byte],
     }
   }
+
+
+  pub fn len_serialized(&self) -> usize {
+    // Serialization aligns parameters to 4-byte boundaries
+    // by padding at the end if necessary.
+    // RTPS spec v2.5 section "9.4.2.11 ParameterList"
+    let unaligned_length = self.value.len();
+    let pad = if unaligned_length % 4 != 0 { 4 - (unaligned_length % 4)} else {0}; 
+
+    2 + // parameter_id 
+    2 + // length field
+    unaligned_length + // payload
+    pad 
+  }
 }
 
 impl<'a, C: Context> Readable<'a, C> for Parameter {

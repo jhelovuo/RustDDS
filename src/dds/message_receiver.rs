@@ -535,7 +535,7 @@ mod tests {
     }
 
     let deserialized_shape_type: ShapeType =
-      deserialize_from_little_endian(&a.data().unwrap()).unwrap();
+      deserialize_from_little_endian(&a.data()).unwrap();
     info!("deserialized shapeType: {:?}", deserialized_shape_type);
     assert_eq!(deserialized_shape_type.color, "RED");
 

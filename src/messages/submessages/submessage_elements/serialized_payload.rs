@@ -1,6 +1,7 @@
 use std::io;
+use std::cmp::min;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use speedy::{Context, Readable, Writable, Writer};
 use byteorder::ReadBytesExt;
 use log::warn;
@@ -111,8 +112,29 @@ impl SerializedPayload {
   }
 
   /// serialized size in bytes
-  pub fn len(&self) -> usize {
+  pub fn len_serialized(&self) -> usize {
     4 + self.value.len()
+  }
+
+  // a slice of serialized data
+  pub fn bytes_slice(&self, from:usize, to_before:usize) -> Bytes {
+    // sanitize inputs. These are unsigned values.
+    let to_before = min( to_before, self.value.len() + 4);
+    let from = min( from, to_before );
+
+    if from >= 4 {
+      // no need to copy, can return a slice
+      self.value.slice(from-4 .. to_before-4)
+    } else {
+      // We need to copy the payload on order to prefix with header
+      let mut b = BytesMut::with_capacity(to_before);
+      b.extend_from_slice( &self.representation_identifier.bytes);
+      b.extend_from_slice( &self.representation_options);
+      if to_before > 4 {
+        b.extend_from_slice( &self.value.slice(4 .. to_before-4));
+      }
+      b.freeze().slice(from..to_before)
+    }
   }
 
   // Implement deserialization here, because Speedy just makes it difficult.
