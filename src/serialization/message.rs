@@ -449,7 +449,7 @@ impl MessageBuilder {
 
     let have_inline_qos = !param_list.is_empty(); // we need this later also
 
-
+    // fragments are numbered starting from 1, not 0.
     let from_byte :usize = (usize::from(fragment_number)-1)*usize::from(fragment_size);
     let up_to_before_byte :usize = min( usize::from(fragment_number)*usize::from(fragment_size) , sample_size.try_into().unwrap() );
 
