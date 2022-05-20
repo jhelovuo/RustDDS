@@ -55,6 +55,7 @@ pub(crate) enum TimedEvent {
   Heartbeat,
   CacheCleaning,
   SendRepairData { to_reader: GUID },
+  SendRepairFrags { to_reader: GUID },
 }
 
 // This is used to construct an actual Writer.
@@ -98,7 +99,8 @@ pub(crate) struct Writer {
   ///allows the RTPS Writer to delay
   ///the response to a request for data
   ///from a negative acknowledgment.
-  pub nack_respose_delay: std::time::Duration,
+  pub nack_response_delay: std::time::Duration,
+  pub nackfrag_response_delay: std::time::Duration,
 
   ///Protocol tuning parameter that
   ///allows the RTPS Writer to ignore
@@ -243,7 +245,8 @@ impl Writer {
       push_mode: true,
       heartbeat_period,
       cache_cleaning_period,
-      nack_respose_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
+      nack_response_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
+      nackfrag_response_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
       nack_suppression_duration: NACK_SUPPRESSION_DURATION,
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
@@ -349,9 +352,24 @@ impl Writer {
             }
           }
         }
-      }
-    }
-  }
+        TimedEvent::SendRepairFrags {
+          to_reader: reader_guid,
+        } => {
+          self.handle_repair_frags_send(reader_guid);
+          if let Some(rp) = self.lookup_readerproxy_mut(reader_guid) {
+            if rp.repair_frags_requested(reader_guid) { // more repair needed?
+              self.timed_event_timer.set_timeout(
+                self.nackfrag_response_delay,
+                TimedEvent::SendRepairFrags {
+                  to_reader: reader_guid,
+                },
+              );
+            } // if 
+          } // if let
+        } // SendRepairFrags
+      } // match
+    } // while
+  } // fn
 
   /// This is called by dp_wrapper everytime cacheCleaning message is received.
   fn handle_cache_cleaning(&mut self) {
@@ -648,16 +666,17 @@ impl Writer {
   /// samples, sending a GAP message when the sample is not relevant, or
   /// sending a HEARTBEAT message when the sample is no longer available
   pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, ack_submessage: AckSubmessage) {
+    // sanity check
+    if !self.is_reliable() {
+      warn!(
+        "Writer {:x?} is best effort! It should not handle acknack messages!",
+        self.entity_id()
+      );
+      return;
+    }
+
     match ack_submessage {
       AckSubmessage::AckNack(ref an) => {
-        // sanity check
-        if !self.is_reliable() {
-          warn!(
-            "Writer {:x?} is best effort! It should not handle acknack messages!",
-            self.entity_id()
-          );
-          return;
-        }
         // Update the ReaderProxy
         let last_seq = self.last_change_sequence_number; // to avoid borrow problems
 
@@ -715,7 +734,7 @@ impl Writer {
             reader_proxy.repair_mode = true; // TODO: Is this correct? Do we need to repair immediately?
                                              // set repair timer to fire
             self.timed_event_timer.set_timeout(
-              self.nack_respose_delay,
+              self.nack_response_delay,
               TimedEvent::SendRepairData {
                 to_reader: reader_guid,
               },
@@ -723,9 +742,19 @@ impl Writer {
           }
         }
       }
-      AckSubmessage::NackFrag(_nackfrag) => {
-        // TODO
-        error!("NACKFRAG Not implemented");
+      AckSubmessage::NackFrag(ref nackfrag) => {
+        // NackFrag is negative acknowledgement only, i.e. requesting missing fragments.
+
+        let reader_guid = GUID::new(reader_guid_prefix, nackfrag.reader_id);
+        if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid) {
+          reader_proxy.mark_frags_requested(reader_guid , nackfrag.writer_sn, &nackfrag.fragment_number_state );
+        }
+        self.timed_event_timer.set_timeout(
+          self.nackfrag_response_delay,
+          TimedEvent::SendRepairFrags {
+            to_reader: reader_guid,
+          },
+        );        
       }
     }
   }
@@ -761,25 +790,35 @@ impl Writer {
     // Note: here we remove the reader from our reader map temporarily.
     // Then we can mutate both the reader and other fields in self.
     // Doing a .get_mut() on the reader map would make self immutable.
-    if let Some(reader_proxy) = self.readers.remove(&to_reader) {
+    if let Some(mut reader_proxy) = self.readers.remove(&to_reader) {
       // We use a worker function to ensure that afterwards we can insert the
       // reader_proxy back. This technique ensures that all return paths lead to
       // re-insertion.
-      let reader_proxy = self.handle_repair_data_send_worker(reader_proxy);
+      self.handle_repair_data_send_worker(&mut reader_proxy);
       // insert reader back
-      let reject = self
-        .readers
-        .insert(reader_proxy.remote_reader_guid, reader_proxy);
-      if reject.is_some() {
-        error!("Reader proxy was duplicated somehow??? {:?}", reject);
+      if let Some(rp) = self.readers
+        .insert(reader_proxy.remote_reader_guid, reader_proxy) {
+        error!("Reader proxy was duplicated somehow??? {:?}", rp);
+      }
+    }
+  }
+
+  fn handle_repair_frags_send(&mut self, to_reader: GUID) {
+    // see similar function above
+    if let Some(mut reader_proxy) = self.readers.remove(&to_reader) {
+      self.handle_repair_frags_send_worker(&mut reader_proxy);
+      if let Some(rp) = self.readers
+          .insert(reader_proxy.remote_reader_guid, reader_proxy) {
+        // this is an internal logic error, or maybe out of memory
+        error!("Reader proxy was duplicated somehow??? (frags) {:?}", rp);
       }
     }
   }
 
   fn handle_repair_data_send_worker(
     &mut self,
-    mut reader_proxy: RtpsReaderProxy,
-  ) -> RtpsReaderProxy {
+    reader_proxy: &mut RtpsReaderProxy,
+  ) {
     // Note: The reader_proxy is now removed from readers map
     let reader_guid = reader_proxy.remote_reader_guid;
     let mut partial_message = MessageBuilder::new()
@@ -859,7 +898,7 @@ impl Writer {
     self.send_message_to_readers(
       DeliveryMode::Unicast,
       &data_gap_msg,
-      &mut std::iter::once(&reader_proxy),
+      &mut std::iter::once(&*reader_proxy),
     );
 
     if found_data {
@@ -868,9 +907,15 @@ impl Writer {
       // Unset list is empty. Switch off repair mode.
       reader_proxy.repair_mode = false;
     }
-
-    reader_proxy
   } // fn
+
+  fn handle_repair_frags_send_worker(
+    &mut self,
+    reader_proxy: &mut RtpsReaderProxy,
+  ) {
+    //TODO: Implementation missing
+  } // fn
+
 
   /// Removes permanently cacheChanges from DDSCache.
   /// CacheChanges can be safely removed only if they are acked by all readers.

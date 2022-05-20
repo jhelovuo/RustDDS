@@ -11,7 +11,7 @@ use crate::{
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
-    sequence_number::SequenceNumber,
+    sequence_number::{SequenceNumber, FragmentNumber, FragmentNumberSet,},
   },
 };
 use super::reader::ReaderIngredients;
@@ -132,18 +132,6 @@ impl RtpsReaderProxy {
     }
   }
 
-  // pub fn update(&mut self, updated: &RtpsReaderProxy) {
-  //   if self.remote_reader_guid == updated.remote_reader_guid {
-  //     self.unicast_locator_list = updated.unicast_locator_list.clone();
-  //     self.multicast_locator_list = updated.multicast_locator_list.clone();
-  //     self.expects_in_line_qos = updated.expects_in_line_qos;
-  //   }
-  // }
-
-  // pub fn have_unset_changes(&self) -> bool {
-  //   !self.unsent_changes.is_empty()
-  // }
-
   pub fn handle_ack_nack(
     &mut self,
     ack_submessage: &AckSubmessage,
@@ -191,16 +179,16 @@ impl RtpsReaderProxy {
     self.unsent_changes.insert(sequence_number);
   }
 
-  // pub fn remove_unsent_cache_change(&mut self, sequence_number: SequenceNumber)
-  // {   self.unsent_changes.remove(&sequence_number);
-  // }
-
-  // pub fn sequence_is_acked(&self, sequence_number: SequenceNumber) -> bool {
-  //   sequence_number < self.all_acked_before
-  // }
-
   pub fn acked_up_to_before(&self) -> SequenceNumber {
     self.all_acked_before
+  }
+
+  pub fn mark_frags_requested(&mut self, reader_id: GUID , seq_num: SequenceNumber, frag_num: &FragmentNumberSet ) {
+    todo!();
+  }
+
+  pub fn repair_frags_requested(&self, reader_guid: GUID) -> bool {
+    todo!();
   }
 }
 
