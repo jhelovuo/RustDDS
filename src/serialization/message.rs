@@ -500,7 +500,7 @@ impl MessageBuilder {
 
     self.submessages.push(SubMessage {
       header: SubmessageHeader {
-        kind: SubmessageKind::DATA,
+        kind: SubmessageKind::DATA_FRAG,
         flags: flags.bits(),
         content_length: data_message.len_serialized() as u16, //TODO: Handle overflow
       },
