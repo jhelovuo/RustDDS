@@ -1,4 +1,5 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet,BTreeMap};
+use bit_vec::BitVec;
 
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
@@ -51,6 +52,7 @@ pub(crate) struct RtpsReaderProxy {
   // false = send data messages directly from DataWriter
   pub repair_mode: bool,
   pub qos: QosPolicies,
+  pub frags_requested: BTreeMap<GUID,BTreeMap<SequenceNumber,BitVec>>,
 }
 
 impl RtpsReaderProxy {
@@ -66,6 +68,7 @@ impl RtpsReaderProxy {
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
       qos,
+      frags_requested: BTreeMap::new(),
     }
   }
 
@@ -93,6 +96,7 @@ impl RtpsReaderProxy {
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
       qos: reader.qos_policy.clone(),
+      frags_requested: BTreeMap::new(),
     }
   }
 
@@ -129,6 +133,7 @@ impl RtpsReaderProxy {
       unsent_changes: BTreeSet::new(),
       repair_mode: false,
       qos: discovered_reader_data.subscription_topic_data.qos(),
+      frags_requested: BTreeMap::new(),
     }
   }
 
@@ -183,12 +188,57 @@ impl RtpsReaderProxy {
     self.all_acked_before
   }
 
-  pub fn mark_frags_requested(&mut self, reader_id: GUID , seq_num: SequenceNumber, frag_num: &FragmentNumberSet ) {
-    todo!();
+  pub fn mark_frags_requested(&mut self, reader_id: GUID , seq_num: SequenceNumber, frag_nums: &FragmentNumberSet ) {
+    let req_set =
+      self.frags_requested
+        .entry(reader_id)
+        .or_insert_with(BTreeMap::new)
+        .entry(seq_num)
+        .or_insert_with(|| BitVec::with_capacity(64));  // default capacity out of hat
+
+    if let Some(max_fn_requested) = req_set.iter().next_back() {
+      // allocate more space if needed
+      let max_fn_requested = usize::from(max_fn_requested);
+      if max_fn_requested > req_set.len() {
+        let growth_need = max_fn_requested - req_set.len();
+        req_set.grow(growth_need , false);
+      }
+      for f in frag_nums.iter() {
+        // -1 because FragmentNumbers start at 1
+        req_set.set( usize::from(f) - 1, true )
+      }
+    } else {
+      warn!("mark_frags_requested: Empty set in NackFrag??? reader={:?} SN={:?}", reader_id, seq_num);
+    }
+  }
+
+  // This just removes the FragmentNumber entry from the set.
+  // Looks convoluted, because we want to remove outer map 
+  pub fn mark_frag_sent(&mut self, reader_id: GUID , seq_num: SequenceNumber, frag_num: &FragmentNumber ) {
+    let mut sn_map_emptied = false;
+    if let Some(sn_map) = self.frags_requested.get_mut(&reader_id) {
+      let mut frag_map_emptied = false;
+      if let Some(frag_map) = sn_map.get_mut(&seq_num) {
+        // -1 because FragmentNumbers start at 1
+        frag_map.set(usize::from(*frag_num) - 1, false);
+        frag_map_emptied = frag_map.none();
+      }
+      if frag_map_emptied {
+        sn_map.remove(&seq_num);
+      }
+      sn_map_emptied = sn_map.is_empty();
+    }
+    if sn_map_emptied {
+      self.frags_requested.remove(&reader_id);
+    }
   }
 
   pub fn repair_frags_requested(&self, reader_guid: GUID) -> bool {
-    todo!();
+    self.frags_requested
+      .get(&reader_guid)
+      .unwrap_or(&BTreeMap::new())
+      .values()
+      .any( |rf| rf.any())
   }
 }
 

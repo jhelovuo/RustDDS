@@ -911,9 +911,11 @@ impl Writer {
 
   fn handle_repair_frags_send_worker(
     &mut self,
-    reader_proxy: &mut RtpsReaderProxy,
+    reader_proxy: &mut RtpsReaderProxy, // This is mutable proxy temporarily detached from the set of reader proxies
   ) {
     //TODO: Implementation missing
+
+    // 
   } // fn
 
 
