@@ -52,7 +52,7 @@ pub(crate) struct RtpsReaderProxy {
   // false = send data messages directly from DataWriter
   pub repair_mode: bool,
   pub qos: QosPolicies,
-  pub frags_requested: BTreeMap<GUID,BTreeMap<SequenceNumber,BitVec>>,
+  pub frags_requested: BTreeMap<SequenceNumber,BitVec>,
 }
 
 impl RtpsReaderProxy {
@@ -188,11 +188,9 @@ impl RtpsReaderProxy {
     self.all_acked_before
   }
 
-  pub fn mark_frags_requested(&mut self, reader_id: GUID , seq_num: SequenceNumber, frag_nums: &FragmentNumberSet ) {
+  pub fn mark_frags_requested(&mut self, seq_num: SequenceNumber, frag_nums: &FragmentNumberSet ) {
     let req_set =
       self.frags_requested
-        .entry(reader_id)
-        .or_insert_with(BTreeMap::new)
         .entry(seq_num)
         .or_insert_with(|| BitVec::with_capacity(64));  // default capacity out of hat
 
@@ -208,39 +206,66 @@ impl RtpsReaderProxy {
         req_set.set( usize::from(f) - 1, true )
       }
     } else {
-      warn!("mark_frags_requested: Empty set in NackFrag??? reader={:?} SN={:?}", reader_id, seq_num);
+      warn!("mark_frags_requested: Empty set in NackFrag??? reader={:?} SN={:?}", self.remote_reader_guid, seq_num);
     }
   }
 
   // This just removes the FragmentNumber entry from the set.
-  // Looks convoluted, because we want to remove outer map 
-  pub fn mark_frag_sent(&mut self, reader_id: GUID , seq_num: SequenceNumber, frag_num: &FragmentNumber ) {
-    let mut sn_map_emptied = false;
-    if let Some(sn_map) = self.frags_requested.get_mut(&reader_id) {
-      let mut frag_map_emptied = false;
-      if let Some(frag_map) = sn_map.get_mut(&seq_num) {
-        // -1 because FragmentNumbers start at 1
-        frag_map.set(usize::from(*frag_num) - 1, false);
-        frag_map_emptied = frag_map.none();
-      }
-      if frag_map_emptied {
-        sn_map.remove(&seq_num);
-      }
-      sn_map_emptied = sn_map.is_empty();
+  pub fn mark_frag_sent(&mut self, seq_num: SequenceNumber, frag_num: &FragmentNumber ) {
+    let mut frag_map_emptied = false;
+    if let Some(frag_map) = self.frags_requested.get_mut(&seq_num) {
+      // -1 because FragmentNumbers start at 1
+      frag_map.set(usize::from(*frag_num) - 1, false);
+      frag_map_emptied = frag_map.none();
     }
-    if sn_map_emptied {
-      self.frags_requested.remove(&reader_id);
+    if frag_map_emptied {
+      self.frags_requested.remove(&seq_num);
     }
   }
 
+  // pub fn frags_requested_iterator(&self) -> FragBitVecIterator {
+  //   self.
+  // }
+
+
   pub fn repair_frags_requested(&self, reader_guid: GUID) -> bool {
     self.frags_requested
-      .get(&reader_guid)
-      .unwrap_or(&BTreeMap::new())
       .values()
       .any( |rf| rf.any())
   }
 }
+
+pub struct FragBitVecIterator {
+  frag_count: FragmentNumber,
+  bitvec: BitVec,
+}
+
+impl FragBitVecIterator {
+  pub fn new(bv:BitVec) -> FragBitVecIterator {
+    FragBitVecIterator {
+      frag_count: FragmentNumber::new(1), 
+      bitvec: bv.clone(),
+    }
+  }
+}
+
+impl Iterator for FragBitVecIterator {
+  type Item = FragmentNumber;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    // f indexes from 1, like FragmentNumber
+    let mut f = u32::from(self.frag_count);
+    while (f as usize) <= self.bitvec.len() && self.bitvec.get( (f - 1) as usize ) == Some(false) {
+      f = f + 1;
+    }
+    if (f as usize) > self.bitvec.len() { None }
+    else { 
+      self.frag_count = FragmentNumber::new( f + 1 );
+      Some(FragmentNumber::new( f ))
+    }
+  }
+}
+
 
 // pub enum ChangeForReaderStatusKind {
 //   UNSENT,

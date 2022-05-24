@@ -707,7 +707,7 @@ impl Writer {
             }
           }
           // Sanity Check
-          if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) {
+          if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1i64) {
             // more sanity
             warn!(
               "ACKNACK from {:?} acks {:?}, but I have only up to {:?} count={:?} topic={:?}",
@@ -747,7 +747,7 @@ impl Writer {
 
         let reader_guid = GUID::new(reader_guid_prefix, nackfrag.reader_id);
         if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid) {
-          reader_proxy.mark_frags_requested(reader_guid , nackfrag.writer_sn, &nackfrag.fragment_number_state );
+          reader_proxy.mark_frags_requested(nackfrag.writer_sn, &nackfrag.fragment_number_state );
         }
         self.timed_event_timer.set_timeout(
           self.nackfrag_response_delay,
@@ -913,9 +913,19 @@ impl Writer {
     &mut self,
     reader_proxy: &mut RtpsReaderProxy, // This is mutable proxy temporarily detached from the set of reader proxies
   ) {
-    //TODO: Implementation missing
 
-    // 
+    // Decide the (max) number of frags to be sent
+    let max_send_count = 8;
+
+    // Get (an iterator to) frags requested but not yet sent
+    //reader_proxy.
+
+    // Iterate over frags to be sent
+    //   Sanity check request
+    //   Generate datafrag message
+    //   Send message
+    //   Mark frag as sent (not requested anymore)
+
   } // fn
 
 
