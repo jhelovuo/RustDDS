@@ -357,7 +357,7 @@ impl Writer {
         } => {
           self.handle_repair_frags_send(reader_guid);
           if let Some(rp) = self.lookup_readerproxy_mut(reader_guid) {
-            if rp.repair_frags_requested(reader_guid) { // more repair needed?
+            if rp.repair_frags_requested() { // more repair needed?
               self.timed_event_timer.set_timeout(
                 self.nackfrag_response_delay,
                 TimedEvent::SendRepairFrags {
@@ -919,12 +919,53 @@ impl Writer {
 
     // Get (an iterator to) frags requested but not yet sent
     //reader_proxy.
-
     // Iterate over frags to be sent
-    //   Sanity check request
-    //   Generate datafrag message
-    //   Send message
-    //   Mark frag as sent (not requested anymore)
+    for (seq_num,frag_num) in reader_proxy.frags_requested_iterator().take(max_send_count) {
+      // Sanity check request
+      // ^^^ TODO
+
+      if let Some(timestamp) = self.sequence_number_to_instant(seq_num) {
+        // Try to find the cache change from DDSCache
+        if let Some(cache_change) = self
+            .dds_cache
+            .read()
+            .unwrap()
+            .topic_get_change(&self.my_topic_name, &timestamp) {
+          // Generate datafrag message
+          let mut message_builder = MessageBuilder::new();
+          if let Some(src_ts) = cache_change.write_options.source_timestamp {
+            message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
+          }
+
+          let fragment_size :u32 = self.data_max_size_serialized as u32; //TODO: overflow check
+          let data_size :u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
+
+          message_builder = message_builder.data_frag_msg( 
+            cache_change,
+            reader_proxy.remote_reader_guid.entity_id,      // reader
+            self.my_guid.entity_id, // writer
+            frag_num,
+            fragment_size as u16, // TODO: overflow check
+            data_size,
+            self.endianness);
+
+          // TODO: some sort of queuing is needed
+          self.send_message_to_readers(
+            DeliveryMode::Unicast,
+            &message_builder.add_header_and_build(self.my_guid.prefix),
+            &mut self.readers.values(),
+          );
+        } else {
+          error!("handle_repair_frags_send_worker: {:?} missing from DDSCache. topic={:?}", seq_num, self.my_topic_name);  
+          // TODO: Should we send a GAP message then?
+        }
+      } else {
+        error!("handle_repair_frags_send_worker: {:?} missing from instant map. topic={:?}", seq_num, self.my_topic_name);
+      }
+
+      reader_proxy.mark_frag_sent(seq_num, &frag_num);
+    } // for
+
 
   } // fn
 

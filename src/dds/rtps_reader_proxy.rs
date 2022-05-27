@@ -223,12 +223,19 @@ impl RtpsReaderProxy {
     }
   }
 
-  // pub fn frags_requested_iterator(&self) -> FragBitVecIterator {
-  //   self.
-  // }
+  // Note: The current implementation produces an iterator that iterates only
+  // over one fragmented sample, but the upper layer should detect that
+  // there are still other fragmented samples requested (if any)
+  // and continue sending.
+  pub fn frags_requested_iterator(&self) -> FragBitVecIterator {
+    match self.frags_requested.iter().next() {
+      None => FragBitVecIterator::new(SequenceNumber::default(), BitVec::new()), // empty iterator
+      Some((sn,bv)) => FragBitVecIterator::new(*sn,bv.clone()),
+    }
+  }
 
 
-  pub fn repair_frags_requested(&self, reader_guid: GUID) -> bool {
+  pub fn repair_frags_requested(&self) -> bool {
     self.frags_requested
       .values()
       .any( |rf| rf.any())
@@ -236,21 +243,23 @@ impl RtpsReaderProxy {
 }
 
 pub struct FragBitVecIterator {
+  sequence_number: SequenceNumber,
   frag_count: FragmentNumber,
   bitvec: BitVec,
 }
 
 impl FragBitVecIterator {
-  pub fn new(bv:BitVec) -> FragBitVecIterator {
+  pub fn new(sequence_number:SequenceNumber, bv:BitVec) -> FragBitVecIterator {
     FragBitVecIterator {
+      sequence_number,
       frag_count: FragmentNumber::new(1), 
-      bitvec: bv.clone(),
+      bitvec: bv,
     }
   }
 }
 
 impl Iterator for FragBitVecIterator {
-  type Item = FragmentNumber;
+  type Item = (SequenceNumber, FragmentNumber);
 
   fn next(&mut self) -> Option<Self::Item> {
     // f indexes from 1, like FragmentNumber
@@ -261,7 +270,7 @@ impl Iterator for FragBitVecIterator {
     if (f as usize) > self.bitvec.len() { None }
     else { 
       self.frag_count = FragmentNumber::new( f + 1 );
-      Some(FragmentNumber::new( f ))
+      Some(( self.sequence_number, FragmentNumber::new( f ) ))
     }
   }
 }
