@@ -388,6 +388,12 @@ where
       rev_at_bit: self.num_bits,
     }
   }
+
+  pub fn len_serialized(&self) -> usize {
+    size_of::<N>() // base
+    + 4 // num_bits
+    + ((self.num_bits as usize +31)/32)  // bitmap
+  }
 }
 
 impl<'a, C: Context, N> Readable<'a, C> for NumberSet<N>
@@ -436,6 +442,8 @@ where
         word_count
       );
     }
+    //TODO: If the sanity check above fails, we may write the wrong number of words.
+    // This is highly suspicious.
     for i in 0..min(word_count, bitmap_len) {
       writer.write_u32(self.bitmap[i as usize])?;
     }

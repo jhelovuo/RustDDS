@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use enumflags2::BitFlags;
 use log::error;
 use speedy::{Readable, Writable};
@@ -45,26 +47,23 @@ pub struct AckNack {
 }
 
 impl AckNack {
-  pub fn create_submessage(self, flags: BitFlags<ACKNACK_Flags>) -> Option<SubMessage> {
-    let submessage_len = match self.write_to_vec() {
-      Ok(bytes) => bytes.len() as u16,
-      Err(e) => {
-        error!("Reader couldn't write acknack to bytes. Error: {}", e);
-        return None;
-      }
-    };
-
-    let acknack_header = SubmessageHeader {
-      kind: SubmessageKind::ACKNACK,
-      flags: flags.bits(),
-      content_length: submessage_len,
-    };
-
-    Some(SubMessage {
-      header: acknack_header,
+  pub fn create_submessage(self, flags: BitFlags<ACKNACK_Flags>) -> SubMessage {
+    SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::ACKNACK,
+        flags: flags.bits(),
+        content_length: self.len_serialized() as u16,
+      },
       body: SubmessageBody::Entity(EntitySubmessage::AckNack(self, flags)),
-    })
+    }
   }
+
+  pub fn len_serialized(&self) -> usize {
+    size_of::<EntityId>() * 2
+    + self.reader_sn_state.len_serialized()
+    + size_of::<i32>()
+  }
+
 }
 
 #[cfg(test)]

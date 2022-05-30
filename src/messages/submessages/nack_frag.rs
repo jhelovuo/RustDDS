@@ -1,6 +1,19 @@
+use log::error;
+use std::mem::size_of;
+use enumflags2::BitFlags;
+
+use crate::{
+  messages::submessages::submessages::SubmessageHeader,
+  serialization::{SubMessage, SubmessageBody},
+  structure::{guid::EntityId, sequence_number::{FragmentNumberSet, SequenceNumber}
+  },
+};
+use super::{
+  submessage::EntitySubmessage, submessage_flag::NACKFRAG_Flags, submessage_kind::SubmessageKind,
+};
+
 use speedy::{Readable, Writable};
 
-use crate::structure::{guid::EntityId, sequence_number::*};
 
 /// The NackFrag Submessage is used to communicate the state of a Reader to a
 /// Writer. When a data change is sent as a series of fragments, the NackFrag
@@ -33,6 +46,27 @@ pub struct NackFrag {
   /// Provides the means for a Writer to detect duplicate NackFrag messages
   /// that can result from the presence of redundant communication paths.
   pub count: i32,
+}
+
+impl NackFrag {
+    pub fn create_submessage(self, flags: BitFlags<NACKFRAG_Flags>) -> SubMessage {
+    SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::ACKNACK,
+        flags: flags.bits(),
+        content_length: self.len_serialized() as u16,
+      },
+      body: SubmessageBody::Entity(EntitySubmessage::NackFrag(self, flags)),
+    }
+  }
+
+  pub fn len_serialized(&self) -> usize {
+    size_of::<EntityId>() * 2
+    + size_of::<SequenceNumber>()
+    + self.fragment_number_state.len_serialized()
+    + size_of::<i32>()
+  }
+
 }
 
 #[cfg(test)]
