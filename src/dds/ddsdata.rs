@@ -1,4 +1,3 @@
-#[cfg(test)]
 use bytes::Bytes;
 
 use crate::{
@@ -10,7 +9,7 @@ use crate::structure::cache_change::ChangeKind;
 
 // DDSData represets a serialized data sample with metadata
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 // Contents of a DATA submessage or several DATAFRAG submessages. This is either
 // a new sample, or key, or a key hash. The latter two are used to indicate
 // dispose or unregister.
@@ -59,22 +58,38 @@ impl DDSData {
     }
   }
 
-  // pub fn serialized_payload(&self) -> Option<&SerializedPayload> {
-  //   match &self {
-  //     DDSData::Data { serialized_payload } => Some( serialized_payload ),
-  //     DDSData::DisposeByKey { key , ..} => Some( key ),
-  //     DDSData::DisposeByKeyHash {..} => None,
-  //   }
-  // }
+  // What is the serialized size of this?
+  pub fn payload_size(&self) -> usize {
+    match self {
+      DDSData::Data { serialized_payload } => serialized_payload.len_serialized(),
+      DDSData::DisposeByKey { key, .. } => key.len_serialized(),
+      DDSData::DisposeByKeyHash { .. } => 16,
+      // This is a fundamental constant of the RTPS
+      // specification v2.5 Section 9.6.4.8 KeyHash (PID_KEY_HASH)
+    }
+  }
 
   #[cfg(test)]
-  pub fn data(&self) -> Option<Bytes> {
+  pub fn data(&self) -> Bytes {
+    self.payload_bytes()
+  }
+
+  #[cfg(test)]
+  fn payload_bytes(&self) -> Bytes {
     match &self {
-      DDSData::Data { serialized_payload } => Some(serialized_payload.value.clone()),
-      // DDSData::DataFrags { _representation_identifier, bytes_frags } =>
-      //   Some(   ) ,
-      DDSData::DisposeByKey { key, .. } => Some(key.value.clone()),
-      DDSData::DisposeByKeyHash { .. } => None,
+      DDSData::Data { serialized_payload } => serialized_payload.value.clone(),
+      DDSData::DisposeByKey { key, .. } => key.value.clone(),
+      DDSData::DisposeByKeyHash { key_hash, .. } => Bytes::from(key_hash.to_vec()),
+    }
+  }
+
+  pub fn bytes_slice(&self, from: usize, to: usize) -> Bytes {
+    match &self {
+      DDSData::Data { serialized_payload } => serialized_payload.bytes_slice(from, to),
+      DDSData::DisposeByKey { key, .. } => key.bytes_slice(from, to),
+      DDSData::DisposeByKeyHash { key_hash, .. } => {
+        Bytes::from(key_hash.to_vec().into_boxed_slice()).slice(from..to)
+      } // TODO: No bounds checkings, may crash. But this should not be used.
     }
   }
 }

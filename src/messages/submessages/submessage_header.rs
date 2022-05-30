@@ -2,7 +2,7 @@ use speedy::{Context, Endianness, Readable, Reader, Writable, Writer};
 
 use crate::messages::submessages::{submessage_flag::*, submessage_kind::SubmessageKind};
 
-#[derive(Debug, PartialEq, Clone, Copy)] // This is only 32 bits, so better Copy
+#[derive(Debug, PartialEq, Eq, Clone, Copy)] // This is only 32 bits, so better Copy
 pub struct SubmessageHeader {
   pub kind: SubmessageKind,
   pub flags: u8, // This must be able to contain anything combination of any flags.

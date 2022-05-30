@@ -1,6 +1,9 @@
+use std::mem::size_of;
+
 use enumflags2::BitFlags;
-use log::error;
 use speedy::{Readable, Writable};
+#[allow(unused_imports)]
+use log::error;
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
@@ -18,7 +21,7 @@ use super::{
 /// the sequence numbers it has received and which ones it is still
 /// missing. This Submessage can be used to do both positive
 /// and negative acknowledgments
-#[derive(Debug, PartialEq, Clone, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct AckNack {
   /// Identifies the Reader entity that acknowledges receipt of certain
   /// sequence numbers and/or requests to receive certain sequence numbers.
@@ -45,25 +48,19 @@ pub struct AckNack {
 }
 
 impl AckNack {
-  pub fn create_submessage(self, flags: BitFlags<ACKNACK_Flags>) -> Option<SubMessage> {
-    let submessage_len = match self.write_to_vec() {
-      Ok(bytes) => bytes.len() as u16,
-      Err(e) => {
-        error!("Reader couldn't write acknack to bytes. Error: {}", e);
-        return None;
-      }
-    };
-
-    let acknack_header = SubmessageHeader {
-      kind: SubmessageKind::ACKNACK,
-      flags: flags.bits(),
-      content_length: submessage_len,
-    };
-
-    Some(SubMessage {
-      header: acknack_header,
+  pub fn create_submessage(self, flags: BitFlags<ACKNACK_Flags>) -> SubMessage {
+    SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::ACKNACK,
+        flags: flags.bits(),
+        content_length: self.len_serialized() as u16,
+      },
       body: SubmessageBody::Entity(EntitySubmessage::AckNack(self, flags)),
-    })
+    }
+  }
+
+  pub fn len_serialized(&self) -> usize {
+    size_of::<EntityId>() * 2 + self.reader_sn_state.len_serialized() + size_of::<i32>()
   }
 }
 

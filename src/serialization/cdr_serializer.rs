@@ -720,7 +720,7 @@ mod tests {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.2/PDF
     // 10.2.2 Example
 
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct Example {
       a: u32,
       b: [u8; 4],

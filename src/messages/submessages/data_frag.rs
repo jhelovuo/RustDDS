@@ -17,7 +17,7 @@ use crate::{
 /// serializedData to be fragmented and sent as multiple DataFrag Submessages.
 /// The fragments contained in the DataFrag Submessages are then re-assembled by
 /// the RTPS Reader.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(test, derive(Default))]
 pub struct DataFrag {
   /// Identifies the RTPS Reader entity that is being informed of the change
@@ -68,6 +68,24 @@ pub struct DataFrag {
 }
 
 impl DataFrag {
+  // Serialized length of DataFrag submessage without submessage header.
+  // This is compatible with the definition of the definition of
+  // "octetsToNextHeader" field in RTPS spec v2.5 Section "9.4.5.1 Submessage
+  // Header".
+  pub fn len_serialized(&self) -> usize {
+    2 + // extraFlags (unused in RTPS v2.5)
+    2 + // octetsToInlineSos
+    4 + // readerId
+    4 + // writerId
+    8 + // writerSN
+    4 + // fragmentStartingNum
+    2 + // fragmentsInSubmessage
+    2 + // fragmentSize
+    4 + // sampleSize
+    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
+    self.serialized_payload.len()
+  }
+
   pub fn deserialize(buffer: &Bytes, flags: BitFlags<DATAFRAG_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
     let endianness = endianness_flag(flags.bits());

@@ -1,6 +1,6 @@
-use std::io;
+use std::{cmp::min, io};
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use speedy::{Context, Readable, Writable, Writer};
 use byteorder::ReadBytesExt;
 use log::warn;
@@ -85,12 +85,17 @@ impl<'a, C: Context> Readable<'a, C> for RepresentationIdentifier {
 /// protocol does not use the representation_options: The sender shall set the
 /// representation_options to zero. The receiver shall ignore the value of the
 /// representation_options."
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SerializedPayload {
   pub representation_identifier: RepresentationIdentifier,
   pub representation_options: [u8; 2], // Not used. Send as zero, ignore on receive.
   pub value: Bytes,
 }
+
+// header length
+// 2 bytes for representation identifier
+// + 2 bytes for representation options
+const H_LEN: usize = 2 + 2;
 
 impl SerializedPayload {
   #[cfg(test)]
@@ -110,6 +115,35 @@ impl SerializedPayload {
     }
   }
 
+  /// serialized size in bytes
+  pub fn len_serialized(&self) -> usize {
+    H_LEN + self.value.len()
+  }
+
+  // a slice of serialized data
+  // This has a lot of H_LEN offsets, because the data to be sliced
+  // is header + value
+  pub fn bytes_slice(&self, from: usize, to_before: usize) -> Bytes {
+    // sanitize inputs. These are unsigned values, so always at least zero.
+    let to_before = min(to_before, self.value.len() + H_LEN);
+    let from = min(from, to_before);
+
+    if from >= H_LEN {
+      // no need to copy, can return a slice
+      self.value.slice(from - H_LEN..to_before - H_LEN)
+    } else {
+      // We need to copy the payload on order to prefix with header
+      let mut b = BytesMut::with_capacity(to_before);
+      b.extend_from_slice(&self.representation_identifier.bytes);
+      b.extend_from_slice(&self.representation_options);
+      assert_eq!(b.len(), H_LEN);
+      if to_before > H_LEN {
+        b.extend_from_slice(&self.value.slice(..to_before - H_LEN));
+      }
+      b.freeze().slice(from..to_before)
+    }
+  }
+
   // Implement deserialization here, because Speedy just makes it difficult.
   pub fn from_bytes(bytes: &Bytes) -> io::Result<Self> {
     let mut reader = io::Cursor::new(&bytes);
@@ -117,9 +151,8 @@ impl SerializedPayload {
       bytes: [reader.read_u8()?, reader.read_u8()?],
     };
     let representation_options = [reader.read_u8()?, reader.read_u8()?];
-    let value = if bytes.len() >= 4 {
-      bytes.slice(4..) // split_off 4 bytes at beginning: rep_id &
-                       // rep_optins
+    let value = if bytes.len() >= H_LEN {
+      bytes.slice(H_LEN..)
     } else {
       warn!(
         "DATA submessage was smaller than submessage header: {:?}",

@@ -1,6 +1,21 @@
+use std::mem::size_of;
+
+use enumflags2::BitFlags;
+#[allow(unused_imports)]
+use log::error;
 use speedy::{Readable, Writable};
 
-use crate::structure::{guid::EntityId, sequence_number::*};
+use crate::{
+  messages::submessages::submessages::SubmessageHeader,
+  serialization::{SubMessage, SubmessageBody},
+  structure::{
+    guid::EntityId,
+    sequence_number::{FragmentNumberSet, SequenceNumber},
+  },
+};
+use super::{
+  submessage::EntitySubmessage, submessage_flag::NACKFRAG_Flags, submessage_kind::SubmessageKind,
+};
 
 /// The NackFrag Submessage is used to communicate the state of a Reader to a
 /// Writer. When a data change is sent as a series of fragments, the NackFrag
@@ -10,7 +25,7 @@ use crate::structure::{guid::EntityId, sequence_number::*};
 /// This Submessage can only contain negative acknowledgements. Note this
 /// differs from an AckNack Submessage, which includes both positive and
 /// negative acknowledgements.
-#[derive(Debug, PartialEq, Clone, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct NackFrag {
   ///  Identifies the Reader entity that requests to receive certain
   /// fragments.
@@ -33,6 +48,26 @@ pub struct NackFrag {
   /// Provides the means for a Writer to detect duplicate NackFrag messages
   /// that can result from the presence of redundant communication paths.
   pub count: i32,
+}
+
+impl NackFrag {
+  pub fn create_submessage(self, flags: BitFlags<NACKFRAG_Flags>) -> SubMessage {
+    SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::NACK_FRAG,
+        flags: flags.bits(),
+        content_length: self.len_serialized() as u16,
+      },
+      body: SubmessageBody::Entity(EntitySubmessage::NackFrag(self, flags)),
+    }
+  }
+
+  pub fn len_serialized(&self) -> usize {
+    size_of::<EntityId>() * 2
+      + size_of::<SequenceNumber>()
+      + self.fragment_number_state.len_serialized()
+      + size_of::<i32>()
+  }
 }
 
 #[cfg(test)]

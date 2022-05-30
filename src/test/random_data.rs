@@ -8,7 +8,7 @@ use crate::{
   serialization::cdr_serializer::to_bytes,
 };
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Hash)]
+#[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Clone, Hash)]
 pub struct RandomKey {
   val: i64,
 }
@@ -23,7 +23,7 @@ impl RandomKey {
 //impl Key for RandomKey {
 //}
 
-#[derive(Serialize, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct RandomData {
   pub a: i64,
   pub b: String,

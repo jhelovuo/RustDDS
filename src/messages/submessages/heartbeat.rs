@@ -15,7 +15,7 @@ use super::{
 /// indicates to the RTPS Reader that a range of sequence numbers
 /// is no longer relevant. The set may be a contiguous range of
 /// sequence numbers or a specific set of sequence numbers.
-#[derive(Debug, PartialEq, Clone, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct Heartbeat {
   /// Identifies the Reader Entity that is being informed of the
   /// availability of a set of sequence numbers.

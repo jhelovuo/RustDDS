@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, io};
+use std::{cmp::min, collections::BTreeSet, convert::TryInto, io};
 
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
@@ -28,7 +28,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, EntityKind, GuidPrefix, GUID},
     parameter_id::ParameterId,
-    sequence_number::{SequenceNumber, SequenceNumberSet},
+    sequence_number::{FragmentNumber, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
 };
@@ -402,20 +402,124 @@ impl MessageBuilder {
       } else {
         BitFlags::<DATA_Flags>::empty()
       });
-    // TODO: This is stupid. There should be an easier way to get the submessage
-    // length than serializing it!
-    let size = data_message
-      .write_to_vec_with_ctx(endianness)
-      .unwrap()
-      .len() as u16;
 
     self.submessages.push(SubMessage {
       header: SubmessageHeader {
         kind: SubmessageKind::DATA,
         flags: flags.bits(),
-        content_length: size,
+        content_length: data_message.len_serialized() as u16, // TODO: Handle overflow?
       },
       body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, flags)),
+    });
+    self
+  }
+
+  // This whole MessageBuilder structure should be refactored into something more
+  // coherent. Now it just looks messy.
+  #[allow(clippy::too_many_arguments)]
+  pub fn data_frag_msg(
+    mut self,
+    cache_change: &CacheChange,
+    reader_entity_id: EntityId,
+    writer_entity_id: EntityId,
+    fragment_number: FragmentNumber, // We support only submessages with one fragment
+    fragment_size: u16,
+    sample_size: u32, // all fragments together
+    endianness: Endianness,
+  ) -> Self {
+    let mut param_list = ParameterList::new(); // inline QoS goes here
+
+    // Check if we are disposing by key hash
+    match cache_change.data_value {
+      DDSData::Data { .. } | DDSData::DisposeByKey { .. } => (), // no => ok
+      DDSData::DisposeByKeyHash { .. } => {
+        error!(
+          "data_frag_msg: Called with DDSData::DisposeByKeyHash. This is not legit! Discarding."
+        );
+        // DataFrag must contain either data or key payload, disposing by key hash
+        // sent in inline QoS (without key or data) is not possible like in Data
+        // submessages. See e.g. RTPS spec v2.5 Table 8.42 in Section "8.3.8.3
+        // DataFrag"
+        return self;
+      }
+    }
+
+    // If we are sending related sample identity, then insert that.
+    if let Some(si) = cache_change.write_options.related_sample_identity {
+      let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
+      param_list.parameters.push(Parameter {
+        parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
+        value: related_sample_identity_serialized,
+      });
+    }
+
+    let have_inline_qos = !param_list.is_empty(); // we need this later also
+
+    // fragments are numbered starting from 1, not 0.
+    let from_byte: usize = (usize::from(fragment_number) - 1) * usize::from(fragment_size);
+    let up_to_before_byte: usize = min(
+      usize::from(fragment_number) * usize::from(fragment_size),
+      sample_size.try_into().unwrap(),
+    );
+
+    let serialized_payload = cache_change
+      .data_value
+      .bytes_slice(from_byte, up_to_before_byte);
+
+    let data_message = DataFrag {
+      reader_id: reader_entity_id,
+      writer_id: writer_entity_id,
+      writer_sn: cache_change.sequence_number,
+      fragment_starting_num: fragment_number,
+      fragments_in_submessage: 1,
+      data_size: sample_size, // total, assembled data (SerializedPayload) size
+      fragment_size,
+      inline_qos: if have_inline_qos {
+        Some(param_list)
+      } else {
+        None
+      },
+      serialized_payload,
+    };
+
+    // TODO: please explain this logic here:
+    //
+    // Current hypothesis:
+    // If we are writing to a built-in ( = Discovery) topic, then we mark the
+    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
+    // on a little-endian machine.
+
+    // Is this ever necessary for fragmented data?
+
+    // if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
+    //   if let Some(sp) = data_message.serialized_payload.as_mut() {
+    //     sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE;
+    //   }
+    // }
+
+    let flags: BitFlags<DATAFRAG_Flags> =
+      // endinness flag
+      BitFlags::<DATAFRAG_Flags>::from_endianness(endianness)
+      // key flag
+      | (match cache_change.data_value {
+        DDSData::Data { .. } => BitFlags::<DATAFRAG_Flags>::empty(),
+        DDSData::DisposeByKey { .. } => BitFlags::<DATAFRAG_Flags>::from_flag(DATAFRAG_Flags::Key),
+        DDSData::DisposeByKeyHash { .. } => unreachable!(),
+      })
+      // inline QoS flag
+      | (if have_inline_qos {
+        BitFlags::<DATAFRAG_Flags>::from_flag(DATAFRAG_Flags::InlineQos)
+      } else {
+        BitFlags::<DATAFRAG_Flags>::empty()
+      });
+
+    self.submessages.push(SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::DATA_FRAG,
+        flags: flags.bits(),
+        content_length: data_message.len_serialized() as u16, //TODO: Handle overflow
+      },
+      body: SubmessageBody::Entity(EntitySubmessage::DataFrag(data_message, flags)),
     });
     self
   }

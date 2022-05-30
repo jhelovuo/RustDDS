@@ -20,7 +20,7 @@ use crate::{
 /// a data-object belonging to the RTPS Writer. The possible changes
 /// include both changes in value as well as changes to the lifecycle
 /// of the data-object.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Data {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.
@@ -49,8 +49,8 @@ pub struct Data {
 
 impl Data {
   /// DATA submessage cannot be speedy Readable because deserializing this
-  /// requires info from submessage header. Required iformation is  expect_qos
-  /// and expect_payload whish are told on submessage headerflags.
+  /// requires info from submessage header. Required information is  expect_qos
+  /// and expect_payload, which are told on submessage headerflags.
 
   pub fn deserialize_data(buffer: &Bytes, flags: BitFlags<DATA_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
@@ -107,6 +107,20 @@ impl Data {
       inline_qos: parameter_list,
       serialized_payload: payload,
     })
+  }
+
+  // Serialized length of Data submessage without submessage header.
+  // This is compatible with the definition of the definition of
+  // "octetsToNextHeader" field in RTPS spec v2.5 Section "9.4.5.1 Submessage
+  // Header".
+  pub fn len_serialized(&self) -> usize {
+    2 + // extraFlags
+    2 + // octetsToInlineSos
+    4 + // readerId
+    4 + // writerId
+    8 + // writerSN
+    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
+    self.serialized_payload.as_ref().map(|q| q.len_serialized()).unwrap_or(0)
   }
 }
 

@@ -665,7 +665,7 @@ mod tests {
   fn cdr_deserialization_user_defined_data() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
     //10.7 Example for User-defined Topic Data
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct ShapeType {
       color: String,
       x: i32,
@@ -724,7 +724,7 @@ mod tests {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.2/PDF
     // 10.2.2 Example
 
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct Example {
       a: u32,
       b: [u8; 4],
@@ -766,7 +766,7 @@ mod tests {
   fn cdr_deserialization_serialization_payload_shapes() {
     // This test uses wireshark captured shapes demo part of serialized message as
     // received_message.
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct ShapeType {
       color: String,
       x: i32,
@@ -917,14 +917,14 @@ mod tests {
     info!("{:?}", deserialization_result);
   }
 
-  #[derive(Serialize, Deserialize, Debug, PartialEq)]
+  #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
   enum SomeTupleEnum {
     A(i32),
     B(i32),
     C(i32),
   }
 
-  #[derive(Serialize, Deserialize, Debug, PartialEq)]
+  #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
   enum MixedEnum {
     A(i32),
     B { value: i32 },

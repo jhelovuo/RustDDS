@@ -526,7 +526,7 @@ mod tests {
       .unwrap();
     info!("reader history chache DATA: {:?}", a.data());
 
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct ShapeType {
       color: String,
       x: i32,
@@ -534,8 +534,7 @@ mod tests {
       size: i32,
     }
 
-    let deserialized_shape_type: ShapeType =
-      deserialize_from_little_endian(&a.data().unwrap()).unwrap();
+    let deserialized_shape_type: ShapeType = deserialize_from_little_endian(&a.data()).unwrap();
     info!("deserialized shapeType: {:?}", deserialized_shape_type);
     assert_eq!(deserialized_shape_type.color, "RED");
 

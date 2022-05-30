@@ -9,7 +9,7 @@ use crate::{
 /// QoS parameters that may affect the interpretation of the message.
 /// The encapsulation of the parameters follows a mechanism that allows
 /// extensions to the QoS without breaking backwards compatibility.
-#[derive(Debug, PartialEq, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct ParameterList {
   pub parameters: Vec<Parameter>,
 }
@@ -21,6 +21,10 @@ impl ParameterList {
 
   pub fn is_empty(&self) -> bool {
     self.parameters.is_empty()
+  }
+
+  pub fn len_serialized(&self) -> usize {
+    self.parameters.iter().map(|p| p.len_serialized()).sum()
   }
 }
 

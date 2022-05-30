@@ -34,7 +34,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
-    sequence_number::SequenceNumber,
+    sequence_number::{FragmentNumber, SequenceNumber},
     time::Timestamp,
   },
 };
@@ -55,6 +55,7 @@ pub(crate) enum TimedEvent {
   Heartbeat,
   CacheCleaning,
   SendRepairData { to_reader: GUID },
+  SendRepairFrags { to_reader: GUID },
 }
 
 // This is used to construct an actual Writer.
@@ -98,7 +99,8 @@ pub(crate) struct Writer {
   ///allows the RTPS Writer to delay
   ///the response to a request for data
   ///from a negative acknowledgment.
-  pub nack_respose_delay: std::time::Duration,
+  pub nack_response_delay: std::time::Duration,
+  pub nackfrag_response_delay: std::time::Duration,
 
   ///Protocol tuning parameter that
   ///allows the RTPS Writer to ignore
@@ -119,15 +121,15 @@ pub(crate) struct Writer {
   ///sequence number that is yet to be written by the Writer
   pub first_change_sequence_number: SequenceNumber,
 
-  ///Optional attribute that indicates
-  ///the maximum size of any
-  ///SerializedPayload that may be
-  ///sent by the Writer
-
-  // TODO: But where is it used and how is that useful? It is mentioned in RTPS Spec v2.5
-  // as a field of "Writer" in Figure 8.16, but the usage is unclear.
-  #[allow(dead_code)]
-  pub data_max_size_serialized: u64,
+  /// The maximum size of any
+  /// SerializedPayload that may be sent by the Writer.
+  /// This is used to decide when to send DATA or DATAFRAG.
+  /// Supposeddly "fragment size" limitations apply here, so must be <= 64k.
+  /// RTPS spec v2.5 Section "8.4.14.1 Large Data"
+  // Note: Writer can choose the max size at initialization, but is not allowed to change it later.
+  // RTPS spec v2.5 Section 8.4.14.1.1:
+  // "The fragment size must be fixed for a given Writer and is identical for all remote Readers"
+  pub data_max_size_serialized: usize,
 
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
@@ -179,7 +181,7 @@ pub(crate) struct Writer {
 
 pub(crate) enum WriterCommand {
   DDSData {
-    data: DDSData,
+    ddsdata: DDSData,
     write_options: WriteOptions,
     sequence_number: SequenceNumber,
   },
@@ -243,11 +245,14 @@ impl Writer {
       push_mode: true,
       heartbeat_period,
       cache_cleaning_period,
-      nack_respose_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
+      nack_response_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
+      nackfrag_response_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
       nack_suppression_duration: NACK_SUPPRESSION_DURATION,
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
-      data_max_size_serialized: 999999999,                   // TODO: this is not reasonable
+      data_max_size_serialized: 1024,
+      // ^^ TODO: Maybe a smarter selection would be in order.
+      // We should get the minimum over all outgoing interfaces.
       my_guid: i.guid,
       writer_command_receiver: i.writer_command_receiver,
       readers: BTreeMap::new(),
@@ -347,9 +352,25 @@ impl Writer {
             }
           }
         }
-      }
-    }
-  }
+        TimedEvent::SendRepairFrags {
+          to_reader: reader_guid,
+        } => {
+          self.handle_repair_frags_send(reader_guid);
+          if let Some(rp) = self.lookup_readerproxy_mut(reader_guid) {
+            if rp.repair_frags_requested() {
+              // more repair needed?
+              self.timed_event_timer.set_timeout(
+                self.nackfrag_response_delay,
+                TimedEvent::SendRepairFrags {
+                  to_reader: reader_guid,
+                },
+              );
+            } // if
+          } // if let
+        } // SendRepairFrags
+      } // match
+    } // while
+  } // fn
 
   /// This is called by dp_wrapper everytime cacheCleaning message is received.
   fn handle_cache_cleaning(&mut self) {
@@ -380,7 +401,7 @@ impl Writer {
     while let Ok(cc) = self.writer_command_receiver.try_recv() {
       match cc {
         WriterCommand::DDSData {
-          data,
+          ddsdata,
           write_options,
           sequence_number,
         } => {
@@ -388,55 +409,123 @@ impl Writer {
           // 1. Insert it to history cache and get it sequence numbered
           // 2. Send out data.
           //    If we are pushing data, send the DATA submessage and HEARTBEAT.
-          //    If we are not pushing, send out HEARTBEAT only. Readers will then ask the
-          // DATA with ACKNACK.
+          //    If we are not pushing, send out HEARTBEAT only. Readers will then ask for
+          // the DATA with ACKNACK, if they are interested.
+          let fragmentation_needed = ddsdata.payload_size() > self.data_max_size_serialized;
           let timestamp =
-            self.insert_to_history_cache(data, write_options.clone(), sequence_number);
+            self.insert_to_history_cache(ddsdata, write_options.clone(), sequence_number);
 
           self.increase_heartbeat_counter();
 
-          let partial_message = MessageBuilder::new();
-          // If DataWriter sent us a source timestamp, then add that.
-          let partial_message = if let Some(src_ts) = write_options.source_timestamp {
-            partial_message.ts_msg(self.endianness, Some(src_ts))
+          if !fragmentation_needed {
+            let mut message_builder = MessageBuilder::new();
+            // the beef: DATA submessage
+            if self.push_mode {
+              // If we are in push mode, proactively send DATA submessage along with
+              // HEARTBEAT.
+              if let Some(cache_change) = self
+                .dds_cache
+                .read()
+                .unwrap()
+                .topic_get_change(&self.my_topic_name, &timestamp)
+              {
+                // If DataWriter sent us a source timestamp, then add that.
+                // Timestamp has to go before Data to have effect on Data.
+                if let Some(src_ts) = cache_change.write_options.source_timestamp {
+                  message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
+                }
+                message_builder = message_builder.data_msg(
+                  cache_change,
+                  EntityId::UNKNOWN,      // reader
+                  self.my_guid.entity_id, // writer
+                  self.endianness,
+                );
+              } else {
+                // We just did .insert_to_history_cache but nothing was found?
+                error!(
+                  "process_writer_command: The dog ate my CacheChange {:?} topic={:?}",
+                  sequence_number,
+                  self.topic_name(),
+                );
+              }
+            } else {
+              // Not pushing: Send only HEARTBEAT. Send DATA only after readers
+              // ACKNACK asking for it.
+            };
+
+            let final_flag = false; // false = request that readers acknowledge with ACKNACK.
+            let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
+                                         // writing new data.
+            let data_hb_message = message_builder
+              .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
+              .add_header_and_build(self.my_guid.prefix);
+            self.send_message_to_readers(
+              DeliveryMode::Multicast,
+              &data_hb_message,
+              &mut self.readers.values(),
+            );
           } else {
-            partial_message
-          };
-          // the beef: DATA submessage
-          let data_hb_message_builder = if self.push_mode {
-            // If we are in push mode, proactively send DATA submessage along with
-            // HEARTBEAT.
+            // Large payload, must fragment.
             if let Some(cache_change) = self
               .dds_cache
               .read()
               .unwrap()
               .topic_get_change(&self.my_topic_name, &timestamp)
             {
-              partial_message.data_msg(
-                cache_change,
-                EntityId::UNKNOWN,      // reader
-                self.my_guid.entity_id, // writer
-                self.endianness,
-              )
+              let fragment_size: u32 = self.data_max_size_serialized as u32; //TODO: overflow check
+              let data_size: u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
+                                                                                  // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
+              let num_frags =
+                (data_size / fragment_size) + (if data_size % fragment_size != 0 { 1 } else { 0 });
+              if self.push_mode {
+                // loop over fragments
+                for frag_num in FragmentNumber::range_inclusive(
+                  FragmentNumber::new(1),
+                  FragmentNumber::new(num_frags),
+                ) {
+                  let mut message_builder = MessageBuilder::new();
+                  if let Some(src_ts) = cache_change.write_options.source_timestamp {
+                    message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
+                  }
+
+                  message_builder = message_builder.data_frag_msg(
+                    cache_change,
+                    EntityId::UNKNOWN,      // reader
+                    self.my_guid.entity_id, // writer
+                    frag_num,
+                    fragment_size as u16, // TODO: overflow check
+                    data_size,
+                    self.endianness,
+                  );
+
+                  // TODO: some sort of queuing is needed
+                  self.send_message_to_readers(
+                    DeliveryMode::Multicast,
+                    &message_builder.add_header_and_build(self.my_guid.prefix),
+                    &mut self.readers.values(),
+                  );
+                } // end for
+              }
+              // Regardless of push mode, we send a Heartbeat
+              let final_flag = false; // false = request that readers acknowledge with ACKNACK.
+              let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
+              let hb_message = MessageBuilder::new()
+                .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
+                .add_header_and_build(self.my_guid.prefix);
+              self.send_message_to_readers(
+                DeliveryMode::Multicast,
+                &hb_message,
+                &mut self.readers.values(),
+              );
             } else {
-              partial_message
+              // We just did .insert_to_history_cache but nothing was found?
+              error!(
+                "process_writer_command (frag): The dog ate my CacheChange {:?} topic={:?}",
+                sequence_number,
+                self.topic_name(),
+              );
             }
-          } else {
-            // Not pushing: Send only HEARTBEAT. Send DATA only after readers ACKNACK asking
-            // for it.
-            partial_message
-          };
-          // TODO: Explain the flag logic here.
-          let final_flag = false;
-          let liveliness_flag = false;
-          let data_hb_message = data_hb_message_builder
-            .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
-            .add_header_and_build(self.my_guid.prefix);
-          self.send_message_to_readers(
-            DeliveryMode::Multicast,
-            &data_hb_message,
-            &mut self.readers.values(),
-          );
+          } // end if large payload
         }
 
         // WriterCommand::ResetOfferedDeadlineMissedStatus { writer_guid: _, } => {
@@ -452,11 +541,11 @@ impl Writer {
                 if rp.all_acked_before <= wait_until {
                   Some(*guid)
                 } else {
-                  None
-                } // already acked
+                  None // already acked
+                }
               } else {
-                None
-              } // not reliable reader
+                None // not reliable reader => not supposed to ack at all
+              }
             })
             .collect();
           if readers_pending.is_empty() {
@@ -582,17 +671,22 @@ impl Writer {
   /// samples, the Writer must respond by either sending the missing data
   /// samples, sending a GAP message when the sample is not relevant, or
   /// sending a HEARTBEAT message when the sample is no longer available
-  pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, ack_submessage: AckSubmessage) {
+  pub fn handle_ack_nack(
+    &mut self,
+    reader_guid_prefix: GuidPrefix,
+    ack_submessage: &AckSubmessage,
+  ) {
+    // sanity check
+    if !self.is_reliable() {
+      warn!(
+        "Writer {:x?} is best effort! It should not handle acknack messages!",
+        self.entity_id()
+      );
+      return;
+    }
+
     match ack_submessage {
       AckSubmessage::AckNack(ref an) => {
-        // sanity check
-        if !self.is_reliable() {
-          warn!(
-            "Writer {:x?} is best effort! It should not handle acknack messages!",
-            self.entity_id()
-          );
-          return;
-        }
         // Update the ReaderProxy
         let last_seq = self.last_change_sequence_number; // to avoid borrow problems
 
@@ -608,7 +702,7 @@ impl Writer {
 
         if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid) {
           // Mark requested SNs as "unsent changes"
-          reader_proxy.handle_ack_nack(&ack_submessage, last_seq);
+          reader_proxy.handle_ack_nack(ack_submessage, last_seq);
 
           let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow
                                                              // Sanity Check: if the reader asked for something we did not even advertise
@@ -623,7 +717,7 @@ impl Writer {
             }
           }
           // Sanity Check
-          if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1) {
+          if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1i64) {
             // more sanity
             warn!(
               "ACKNACK from {:?} acks {:?}, but I have only up to {:?} count={:?} topic={:?}",
@@ -650,7 +744,7 @@ impl Writer {
             reader_proxy.repair_mode = true; // TODO: Is this correct? Do we need to repair immediately?
                                              // set repair timer to fire
             self.timed_event_timer.set_timeout(
-              self.nack_respose_delay,
+              self.nack_response_delay,
               TimedEvent::SendRepairData {
                 to_reader: reader_guid,
               },
@@ -658,9 +752,19 @@ impl Writer {
           }
         }
       }
-      AckSubmessage::NackFrag(_nackfrag) => {
-        // TODO
-        error!("NACKFRAG Not implemented");
+      AckSubmessage::NackFrag(ref nackfrag) => {
+        // NackFrag is negative acknowledgement only, i.e. requesting missing fragments.
+
+        let reader_guid = GUID::new(reader_guid_prefix, nackfrag.reader_id);
+        if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid) {
+          reader_proxy.mark_frags_requested(nackfrag.writer_sn, &nackfrag.fragment_number_state);
+        }
+        self.timed_event_timer.set_timeout(
+          self.nackfrag_response_delay,
+          TimedEvent::SendRepairFrags {
+            to_reader: reader_guid,
+          },
+        );
       }
     }
   }
@@ -696,25 +800,36 @@ impl Writer {
     // Note: here we remove the reader from our reader map temporarily.
     // Then we can mutate both the reader and other fields in self.
     // Doing a .get_mut() on the reader map would make self immutable.
-    if let Some(reader_proxy) = self.readers.remove(&to_reader) {
+    if let Some(mut reader_proxy) = self.readers.remove(&to_reader) {
       // We use a worker function to ensure that afterwards we can insert the
       // reader_proxy back. This technique ensures that all return paths lead to
       // re-insertion.
-      let reader_proxy = self.handle_repair_data_send_worker(reader_proxy);
+      self.handle_repair_data_send_worker(&mut reader_proxy);
       // insert reader back
-      let reject = self
+      if let Some(rp) = self
         .readers
-        .insert(reader_proxy.remote_reader_guid, reader_proxy);
-      if reject.is_some() {
-        error!("Reader proxy was duplicated somehow??? {:?}", reject);
+        .insert(reader_proxy.remote_reader_guid, reader_proxy)
+      {
+        error!("Reader proxy was duplicated somehow??? {:?}", rp);
       }
     }
   }
 
-  fn handle_repair_data_send_worker(
-    &mut self,
-    mut reader_proxy: RtpsReaderProxy,
-  ) -> RtpsReaderProxy {
+  fn handle_repair_frags_send(&mut self, to_reader: GUID) {
+    // see similar function above
+    if let Some(mut reader_proxy) = self.readers.remove(&to_reader) {
+      self.handle_repair_frags_send_worker(&mut reader_proxy);
+      if let Some(rp) = self
+        .readers
+        .insert(reader_proxy.remote_reader_guid, reader_proxy)
+      {
+        // this is an internal logic error, or maybe out of memory
+        error!("Reader proxy was duplicated somehow??? (frags) {:?}", rp);
+      }
+    }
+  }
+
+  fn handle_repair_data_send_worker(&mut self, reader_proxy: &mut RtpsReaderProxy) {
     // Note: The reader_proxy is now removed from readers map
     let reader_guid = reader_proxy.remote_reader_guid;
     let mut partial_message = MessageBuilder::new()
@@ -794,7 +909,7 @@ impl Writer {
     self.send_message_to_readers(
       DeliveryMode::Unicast,
       &data_gap_msg,
-      &mut std::iter::once(&reader_proxy),
+      &mut std::iter::once(&*reader_proxy),
     );
 
     if found_data {
@@ -803,8 +918,72 @@ impl Writer {
       // Unset list is empty. Switch off repair mode.
       reader_proxy.repair_mode = false;
     }
+  } // fn
 
-    reader_proxy
+  fn handle_repair_frags_send_worker(
+    &mut self,
+    reader_proxy: &mut RtpsReaderProxy, /* This is mutable proxy temporarily detached from the
+                                         * set of reader proxies */
+  ) {
+    // Decide the (max) number of frags to be sent
+    let max_send_count = 8;
+
+    // Get (an iterator to) frags requested but not yet sent
+    //reader_proxy.
+    // Iterate over frags to be sent
+    for (seq_num, frag_num) in reader_proxy.frags_requested_iterator().take(max_send_count) {
+      // Sanity check request
+      // ^^^ TODO
+
+      if let Some(timestamp) = self.sequence_number_to_instant(seq_num) {
+        // Try to find the cache change from DDSCache
+        if let Some(cache_change) = self
+          .dds_cache
+          .read()
+          .unwrap()
+          .topic_get_change(&self.my_topic_name, &timestamp)
+        {
+          // Generate datafrag message
+          let mut message_builder = MessageBuilder::new();
+          if let Some(src_ts) = cache_change.write_options.source_timestamp {
+            message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
+          }
+
+          let fragment_size: u32 = self.data_max_size_serialized as u32; //TODO: overflow check
+          let data_size: u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
+
+          message_builder = message_builder.data_frag_msg(
+            cache_change,
+            reader_proxy.remote_reader_guid.entity_id, // reader
+            self.my_guid.entity_id,                    // writer
+            frag_num,
+            fragment_size as u16, // TODO: overflow check
+            data_size,
+            self.endianness,
+          );
+
+          // TODO: some sort of queuing is needed
+          self.send_message_to_readers(
+            DeliveryMode::Unicast,
+            &message_builder.add_header_and_build(self.my_guid.prefix),
+            &mut self.readers.values(),
+          );
+        } else {
+          error!(
+            "handle_repair_frags_send_worker: {:?} missing from DDSCache. topic={:?}",
+            seq_num, self.my_topic_name
+          );
+          // TODO: Should we send a GAP message then?
+        }
+      } else {
+        error!(
+          "handle_repair_frags_send_worker: {:?} missing from instant map. topic={:?}",
+          seq_num, self.my_topic_name
+        );
+      }
+
+      reader_proxy.mark_frag_sent(seq_num, &frag_num);
+    } // for
   } // fn
 
   /// Removes permanently cacheChanges from DDSCache.

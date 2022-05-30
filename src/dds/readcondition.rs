@@ -8,7 +8,7 @@ use crate::dds::sampleinfo::*;
 /// To be selected, the current state of the sample must be included in the
 /// corresponding bitflags.
 /// See DDS Specification 1.4 Section "2.2.2.5.8 ReadCondition"
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ReadCondition {
   sample_state_mask: BitFlags<SampleState>,
   view_state_mask: BitFlags<ViewState>,

@@ -3,7 +3,7 @@ use bit_vec::BitVec;
 
 use crate::structure::parameter_id::ParameterId;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Parameter {
   /// Uniquely identifies the type of parameter
   pub parameter_id: ParameterId,
@@ -49,6 +49,23 @@ impl Parameter {
       value: vec![0, 0, 0, last_byte],
     }
   }
+
+  pub fn len_serialized(&self) -> usize {
+    // Serialization aligns parameters to 4-byte boundaries
+    // by padding at the end if necessary.
+    // RTPS spec v2.5 section "9.4.2.11 ParameterList"
+    let unaligned_length = self.value.len();
+    let pad = if unaligned_length % 4 != 0 {
+      4 - (unaligned_length % 4)
+    } else {
+      0
+    };
+
+    2 + // parameter_id 
+    2 + // length field
+    unaligned_length + // payload
+    pad
+  }
 }
 
 impl<'a, C: Context> Readable<'a, C> for Parameter {
@@ -56,14 +73,9 @@ impl<'a, C: Context> Readable<'a, C> for Parameter {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let parameter_id: ParameterId = reader.read_value()?;
     let length = reader.read_u16()?;
-    let alignment = length % 4;
 
-    let mut value = Vec::with_capacity((length + alignment) as usize);
-
-    for _ in 0..(length + alignment) {
-      let byte = reader.read_u8()?;
-      value.push(byte);
-    }
+    let mut value = vec![0; length as usize];
+    reader.read_bytes(&mut value)?;
 
     Ok(Self {
       parameter_id,
@@ -80,17 +92,14 @@ impl<'a, C: Context> Readable<'a, C> for Parameter {
 impl<C: Context> Writable<C> for Parameter {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    writer.write_value(&self.parameter_id)?;
-
     let length = self.value.len();
-    let alignment = length % 4;
-    writer.write_u16((length + alignment) as u16)?;
+    let pad = if length % 4 != 0 { 4 - (length % 4) } else { 0 };
 
-    for byte in &self.value {
-      writer.write_u8(*byte)?;
-    }
+    writer.write_value(&self.parameter_id)?;
+    writer.write_u16((length + pad) as u16)?;
+    writer.write_bytes(&self.value)?;
 
-    for _ in 0..alignment {
+    for _ in 0..pad {
       writer.write_u8(0x00)?;
     }
 

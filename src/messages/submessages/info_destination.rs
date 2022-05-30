@@ -1,6 +1,7 @@
 use enumflags2::BitFlags;
-use log::error;
 use speedy::{Readable, Writable};
+#[allow(unused_imports)]
+use log::error;
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
@@ -15,7 +16,7 @@ use super::{
 /// This message is sent from an RTPS Writer to an RTPS Reader
 /// to modify the GuidPrefix used to interpret the Reader entity_ids
 /// appearing in the Submessages that follow it.
-#[derive(Debug, PartialEq, Clone, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct InfoDestination {
   /// Provides the GuidPrefix that should be used to reconstruct the GUIDs
   /// of all the RTPS Reader entities whose EntityIds appears
@@ -24,28 +25,19 @@ pub struct InfoDestination {
 }
 
 impl InfoDestination {
-  pub fn create_submessage(self, flags: BitFlags<INFODESTINATION_Flags>) -> Option<SubMessage> {
-    let submessage_len = match self.write_to_vec() {
-      Ok(bytes) => bytes.len() as u16,
-      Err(e) => {
-        error!(
-          "Reader couldn't write info destination to bytes. Error: {}",
-          e
-        );
-        return None;
-      }
-    };
+  pub fn len_serialized(&self) -> usize {
+    std::mem::size_of::<GuidPrefix>()
+  }
 
-    let infodst_header = SubmessageHeader {
-      kind: SubmessageKind::INFO_DST,
-      flags: flags.bits(),
-      content_length: submessage_len,
-    };
-
-    Some(SubMessage {
-      header: infodst_header,
+  pub fn create_submessage(self, flags: BitFlags<INFODESTINATION_Flags>) -> SubMessage {
+    SubMessage {
+      header: SubmessageHeader {
+        kind: SubmessageKind::INFO_DST,
+        flags: flags.bits(),
+        content_length: self.len_serialized() as u16,
+      },
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(self, flags)),
-    })
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 use core::ops::Bound::{Excluded, Unbounded};
-use std::{cmp::max, collections::BTreeMap};
+use std::{cmp::max, collections::BTreeMap, iter};
 
 use enumflags2::BitFlags;
 #[allow(unused_imports)]
@@ -12,7 +12,7 @@ use crate::{
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
-    sequence_number::SequenceNumber,
+    sequence_number::{FragmentNumber, SequenceNumber},
     time::Timestamp,
   },
 };
@@ -378,4 +378,22 @@ impl RtpsWriterProxy {
       ret
     }
   } // fn
+
+  pub fn missing_frags_for<'a>(
+    &'a self,
+    seq: SequenceNumber,
+  ) -> Box<dyn 'a + Iterator<Item = FragmentNumber>> {
+    if let Some(ref fa) = self.fragment_assembler {
+      fa.missing_frags_for(seq)
+    } else {
+      Box::new(iter::empty())
+    }
+  }
+  pub fn is_partially_received(&self, seq: SequenceNumber) -> bool {
+    if let Some(ref fa) = self.fragment_assembler {
+      fa.is_partially_received(seq)
+    } else {
+      false
+    }
+  }
 } // impl
