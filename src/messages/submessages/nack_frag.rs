@@ -54,7 +54,7 @@ impl NackFrag {
   pub fn create_submessage(self, flags: BitFlags<NACKFRAG_Flags>) -> SubMessage {
     SubMessage {
       header: SubmessageHeader {
-        kind: SubmessageKind::ACKNACK,
+        kind: SubmessageKind::NACK_FRAG,
         flags: flags.bits(),
         content_length: self.len_serialized() as u16,
       },

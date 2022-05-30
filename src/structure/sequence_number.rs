@@ -391,7 +391,7 @@ where
   pub fn len_serialized(&self) -> usize {
     size_of::<N>() // base
     + 4 // num_bits
-    + ((self.num_bits as usize +31)/32) // bitmap
+    + 4 * ((self.num_bits as usize +31)/32) // bitmap
   }
 }
 
