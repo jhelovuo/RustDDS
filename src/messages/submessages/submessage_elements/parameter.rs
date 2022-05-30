@@ -50,18 +50,21 @@ impl Parameter {
     }
   }
 
-
   pub fn len_serialized(&self) -> usize {
     // Serialization aligns parameters to 4-byte boundaries
     // by padding at the end if necessary.
     // RTPS spec v2.5 section "9.4.2.11 ParameterList"
     let unaligned_length = self.value.len();
-    let pad = if unaligned_length % 4 != 0 { 4 - (unaligned_length % 4)} else {0}; 
+    let pad = if unaligned_length % 4 != 0 {
+      4 - (unaligned_length % 4)
+    } else {
+      0
+    };
 
     2 + // parameter_id 
     2 + // length field
     unaligned_length + // payload
-    pad 
+    pad
   }
 }
 
@@ -71,11 +74,13 @@ impl<'a, C: Context> Readable<'a, C> for Parameter {
     let parameter_id: ParameterId = reader.read_value()?;
     let length = reader.read_u16()?;
 
-    let mut value = Vec::with_capacity(length as usize);
-    value.resize(length as usize, 0); // set size so that we read the correct number of bytes
+    let mut value = vec![0; length as usize];
     reader.read_bytes(&mut value)?;
 
-    Ok(Self { parameter_id, value, })
+    Ok(Self {
+      parameter_id,
+      value,
+    })
   }
 
   #[inline]
@@ -88,7 +93,7 @@ impl<C: Context> Writable<C> for Parameter {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     let length = self.value.len();
-    let pad = if length % 4 != 0 { 4 - (length % 4)} else {0}; 
+    let pad = if length % 4 != 0 { 4 - (length % 4) } else { 0 };
 
     writer.write_value(&self.parameter_id)?;
     writer.write_u16((length + pad) as u16)?;

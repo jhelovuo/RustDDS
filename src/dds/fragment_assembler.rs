@@ -13,7 +13,11 @@ use crate::{
     submessage_elements::serialized_payload::SerializedPayload,
     submessages::{DATAFRAG_Flags, DataFrag},
   },
-  structure::{cache_change::ChangeKind, sequence_number::SequenceNumber, time::Timestamp, sequence_number::FragmentNumber},
+  structure::{
+    cache_change::ChangeKind,
+    sequence_number::{FragmentNumber, SequenceNumber},
+    time::Timestamp,
+  },
 };
 
 // This is for the assembly of a single object
@@ -186,25 +190,29 @@ impl FragmentAssembler {
     }
   }
 
-  // pub fn partially_received_sequence_numbers_iterator(&self) -> Box<dyn Iterator<Item=SequenceNumber>> {
-  //   // Since we should only know about SNs via DATAFRAG messages
-  //   // and AssemblyBuffers are removed immediately on completion,
-  //   // the list should be just the list of current AssemblyBuffers
-  //   self.assembly_buffers.keys()
+  // pub fn partially_received_sequence_numbers_iterator(&self) -> Box<dyn
+  // Iterator<Item=SequenceNumber>> {   // Since we should only know about SNs
+  // via DATAFRAG messages   // and AssemblyBuffers are removed immediately on
+  // completion,   // the list should be just the list of current
+  // AssemblyBuffers   self.assembly_buffers.keys()
   // }
 
-  pub fn is_partially_received(&self, sn:SequenceNumber) -> bool {
+  pub fn is_partially_received(&self, sn: SequenceNumber) -> bool {
     self.assembly_buffers.contains_key(&sn)
+    // assembly buffers map contains a key (SN) if and only if we have some
+    // frags but not all
   }
 
-  pub fn missing_frags_for(&self, seq:SequenceNumber) -> Box<dyn '_ + Iterator<Item=FragmentNumber>> {
+  pub fn missing_frags_for(
+    &self,
+    seq: SequenceNumber,
+  ) -> Box<dyn '_ + Iterator<Item = FragmentNumber>> {
     match self.assembly_buffers.get(&seq) {
       None => Box::new(iter::empty()),
       Some(ab) => {
-        let iter =
-          (0..ab.fragment_count)
-            .filter( move |f| !ab.received_bitmap.get(*f).unwrap_or(true) )
-            .map(|f| FragmentNumber::new((f+1).try_into().unwrap() ) );
+        let iter = (0..ab.fragment_count)
+          .filter(move |f| !ab.received_bitmap.get(*f).unwrap_or(true))
+          .map(|f| FragmentNumber::new((f + 1).try_into().unwrap()));
         Box::new(iter)
       }
     }

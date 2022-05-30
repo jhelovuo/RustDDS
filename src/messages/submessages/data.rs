@@ -111,7 +111,8 @@ impl Data {
 
   // Serialized length of Data submessage without submessage header.
   // This is compatible with the definition of the definition of
-  // "octetsToNextHeader" field in RTPS spec v2.5 Section "9.4.5.1 Submessage Header".
+  // "octetsToNextHeader" field in RTPS spec v2.5 Section "9.4.5.1 Submessage
+  // Header".
   pub fn len_serialized(&self) -> usize {
     2 + // extraFlags
     2 + // octetsToInlineSos

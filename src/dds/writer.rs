@@ -34,7 +34,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
-    sequence_number::{SequenceNumber, FragmentNumber,},
+    sequence_number::{FragmentNumber, SequenceNumber},
     time::Timestamp,
   },
 };
@@ -357,14 +357,15 @@ impl Writer {
         } => {
           self.handle_repair_frags_send(reader_guid);
           if let Some(rp) = self.lookup_readerproxy_mut(reader_guid) {
-            if rp.repair_frags_requested() { // more repair needed?
+            if rp.repair_frags_requested() {
+              // more repair needed?
               self.timed_event_timer.set_timeout(
                 self.nackfrag_response_delay,
                 TimedEvent::SendRepairFrags {
                   to_reader: reader_guid,
                 },
               );
-            } // if 
+            } // if
           } // if let
         } // SendRepairFrags
       } // match
@@ -466,31 +467,36 @@ impl Writer {
           } else {
             // Large payload, must fragment.
             if let Some(cache_change) = self
-                .dds_cache
-                .read()
-                .unwrap()
-                .topic_get_change(&self.my_topic_name, &timestamp)
+              .dds_cache
+              .read()
+              .unwrap()
+              .topic_get_change(&self.my_topic_name, &timestamp)
             {
-              let fragment_size :u32 = self.data_max_size_serialized as u32; //TODO: overflow check
-              let data_size :u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
-              // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
-              let num_frags = (data_size / fragment_size) + (if data_size % fragment_size != 0 {1} else {0});
+              let fragment_size: u32 = self.data_max_size_serialized as u32; //TODO: overflow check
+              let data_size: u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
+                                                                                  // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
+              let num_frags =
+                (data_size / fragment_size) + (if data_size % fragment_size != 0 { 1 } else { 0 });
               if self.push_mode {
                 // loop over fragments
-                for frag_num in FragmentNumber::range_inclusive(FragmentNumber::new(1) , FragmentNumber::new(num_frags)) {
+                for frag_num in FragmentNumber::range_inclusive(
+                  FragmentNumber::new(1),
+                  FragmentNumber::new(num_frags),
+                ) {
                   let mut message_builder = MessageBuilder::new();
                   if let Some(src_ts) = cache_change.write_options.source_timestamp {
                     message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
                   }
 
-                  message_builder = message_builder.data_frag_msg( 
+                  message_builder = message_builder.data_frag_msg(
                     cache_change,
                     EntityId::UNKNOWN,      // reader
                     self.my_guid.entity_id, // writer
                     frag_num,
                     fragment_size as u16, // TODO: overflow check
                     data_size,
-                    self.endianness);
+                    self.endianness,
+                  );
 
                   // TODO: some sort of queuing is needed
                   self.send_message_to_readers(
@@ -499,7 +505,7 @@ impl Writer {
                     &mut self.readers.values(),
                   );
                 } // end for
-              } 
+              }
               // Regardless of push mode, we send a Heartbeat
               let final_flag = false; // false = request that readers acknowledge with ACKNACK.
               let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
@@ -509,7 +515,8 @@ impl Writer {
               self.send_message_to_readers(
                 DeliveryMode::Multicast,
                 &hb_message,
-                &mut self.readers.values(),);
+                &mut self.readers.values(),
+              );
             } else {
               // We just did .insert_to_history_cache but nothing was found?
               error!(
@@ -518,7 +525,6 @@ impl Writer {
                 self.topic_name(),
               );
             }
-
           } // end if large payload
         }
 
@@ -665,7 +671,11 @@ impl Writer {
   /// samples, the Writer must respond by either sending the missing data
   /// samples, sending a GAP message when the sample is not relevant, or
   /// sending a HEARTBEAT message when the sample is no longer available
-  pub fn handle_ack_nack(&mut self, reader_guid_prefix: GuidPrefix, ack_submessage: AckSubmessage) {
+  pub fn handle_ack_nack(
+    &mut self,
+    reader_guid_prefix: GuidPrefix,
+    ack_submessage: &AckSubmessage,
+  ) {
     // sanity check
     if !self.is_reliable() {
       warn!(
@@ -692,7 +702,7 @@ impl Writer {
 
         if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid) {
           // Mark requested SNs as "unsent changes"
-          reader_proxy.handle_ack_nack(&ack_submessage, last_seq);
+          reader_proxy.handle_ack_nack(ack_submessage, last_seq);
 
           let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow
                                                              // Sanity Check: if the reader asked for something we did not even advertise
@@ -747,14 +757,14 @@ impl Writer {
 
         let reader_guid = GUID::new(reader_guid_prefix, nackfrag.reader_id);
         if let Some(reader_proxy) = self.lookup_readerproxy_mut(reader_guid) {
-          reader_proxy.mark_frags_requested(nackfrag.writer_sn, &nackfrag.fragment_number_state );
+          reader_proxy.mark_frags_requested(nackfrag.writer_sn, &nackfrag.fragment_number_state);
         }
         self.timed_event_timer.set_timeout(
           self.nackfrag_response_delay,
           TimedEvent::SendRepairFrags {
             to_reader: reader_guid,
           },
-        );        
+        );
       }
     }
   }
@@ -796,8 +806,10 @@ impl Writer {
       // re-insertion.
       self.handle_repair_data_send_worker(&mut reader_proxy);
       // insert reader back
-      if let Some(rp) = self.readers
-        .insert(reader_proxy.remote_reader_guid, reader_proxy) {
+      if let Some(rp) = self
+        .readers
+        .insert(reader_proxy.remote_reader_guid, reader_proxy)
+      {
         error!("Reader proxy was duplicated somehow??? {:?}", rp);
       }
     }
@@ -807,18 +819,17 @@ impl Writer {
     // see similar function above
     if let Some(mut reader_proxy) = self.readers.remove(&to_reader) {
       self.handle_repair_frags_send_worker(&mut reader_proxy);
-      if let Some(rp) = self.readers
-          .insert(reader_proxy.remote_reader_guid, reader_proxy) {
+      if let Some(rp) = self
+        .readers
+        .insert(reader_proxy.remote_reader_guid, reader_proxy)
+      {
         // this is an internal logic error, or maybe out of memory
         error!("Reader proxy was duplicated somehow??? (frags) {:?}", rp);
       }
     }
   }
 
-  fn handle_repair_data_send_worker(
-    &mut self,
-    reader_proxy: &mut RtpsReaderProxy,
-  ) {
+  fn handle_repair_data_send_worker(&mut self, reader_proxy: &mut RtpsReaderProxy) {
     // Note: The reader_proxy is now removed from readers map
     let reader_guid = reader_proxy.remote_reader_guid;
     let mut partial_message = MessageBuilder::new()
@@ -911,43 +922,45 @@ impl Writer {
 
   fn handle_repair_frags_send_worker(
     &mut self,
-    reader_proxy: &mut RtpsReaderProxy, // This is mutable proxy temporarily detached from the set of reader proxies
+    reader_proxy: &mut RtpsReaderProxy, /* This is mutable proxy temporarily detached from the
+                                         * set of reader proxies */
   ) {
-
     // Decide the (max) number of frags to be sent
     let max_send_count = 8;
 
     // Get (an iterator to) frags requested but not yet sent
     //reader_proxy.
     // Iterate over frags to be sent
-    for (seq_num,frag_num) in reader_proxy.frags_requested_iterator().take(max_send_count) {
+    for (seq_num, frag_num) in reader_proxy.frags_requested_iterator().take(max_send_count) {
       // Sanity check request
       // ^^^ TODO
 
       if let Some(timestamp) = self.sequence_number_to_instant(seq_num) {
         // Try to find the cache change from DDSCache
         if let Some(cache_change) = self
-            .dds_cache
-            .read()
-            .unwrap()
-            .topic_get_change(&self.my_topic_name, &timestamp) {
+          .dds_cache
+          .read()
+          .unwrap()
+          .topic_get_change(&self.my_topic_name, &timestamp)
+        {
           // Generate datafrag message
           let mut message_builder = MessageBuilder::new();
           if let Some(src_ts) = cache_change.write_options.source_timestamp {
             message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
           }
 
-          let fragment_size :u32 = self.data_max_size_serialized as u32; //TODO: overflow check
-          let data_size :u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
+          let fragment_size: u32 = self.data_max_size_serialized as u32; //TODO: overflow check
+          let data_size: u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
 
-          message_builder = message_builder.data_frag_msg( 
+          message_builder = message_builder.data_frag_msg(
             cache_change,
-            reader_proxy.remote_reader_guid.entity_id,      // reader
-            self.my_guid.entity_id, // writer
+            reader_proxy.remote_reader_guid.entity_id, // reader
+            self.my_guid.entity_id,                    // writer
             frag_num,
             fragment_size as u16, // TODO: overflow check
             data_size,
-            self.endianness);
+            self.endianness,
+          );
 
           // TODO: some sort of queuing is needed
           self.send_message_to_readers(
@@ -956,19 +969,22 @@ impl Writer {
             &mut self.readers.values(),
           );
         } else {
-          error!("handle_repair_frags_send_worker: {:?} missing from DDSCache. topic={:?}", seq_num, self.my_topic_name);  
+          error!(
+            "handle_repair_frags_send_worker: {:?} missing from DDSCache. topic={:?}",
+            seq_num, self.my_topic_name
+          );
           // TODO: Should we send a GAP message then?
         }
       } else {
-        error!("handle_repair_frags_send_worker: {:?} missing from instant map. topic={:?}", seq_num, self.my_topic_name);
+        error!(
+          "handle_repair_frags_send_worker: {:?} missing from instant map. topic={:?}",
+          seq_num, self.my_topic_name
+        );
       }
 
       reader_proxy.mark_frag_sent(seq_num, &frag_num);
     } // for
-
-
   } // fn
-
 
   /// Removes permanently cacheChanges from DDSCache.
   /// CacheChanges can be safely removed only if they are acked by all readers.

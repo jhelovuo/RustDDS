@@ -70,8 +70,9 @@ impl DDSData {
   }
 
   #[cfg(test)]
-  pub fn data(&self) -> Bytes { self.payload_bytes() }
-
+  pub fn data(&self) -> Bytes {
+    self.payload_bytes()
+  }
 
   #[cfg(test)]
   fn payload_bytes(&self) -> Bytes {
@@ -82,14 +83,13 @@ impl DDSData {
     }
   }
 
-  pub fn bytes_slice(&self, from:usize, to:usize) -> Bytes {
+  pub fn bytes_slice(&self, from: usize, to: usize) -> Bytes {
     match &self {
-      DDSData::Data { serialized_payload } => serialized_payload.bytes_slice(from,to),
-      DDSData::DisposeByKey { key, .. } => key.bytes_slice(from,to),
-      DDSData::DisposeByKeyHash { key_hash, .. } => 
-        Bytes::from(key_hash.to_vec().into_boxed_slice()).slice(from..to), 
-        // TODO: No bounds checkings, may crash. But this should not be used.
+      DDSData::Data { serialized_payload } => serialized_payload.bytes_slice(from, to),
+      DDSData::DisposeByKey { key, .. } => key.bytes_slice(from, to),
+      DDSData::DisposeByKeyHash { key_hash, .. } => {
+        Bytes::from(key_hash.to_vec().into_boxed_slice()).slice(from..to)
+      } // TODO: No bounds checkings, may crash. But this should not be used.
     }
-
   }
 }

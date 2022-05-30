@@ -495,7 +495,7 @@ impl DPEventLoop {
       );
       if let Some(found_writer) = self.writers.get_mut(&writer_guid.entity_id) {
         if found_writer.is_reliable() {
-          found_writer.handle_ack_nack(acknack_sender_prefix, acknack_submessage);
+          found_writer.handle_ack_nack(acknack_sender_prefix, &acknack_submessage);
         }
       } else {
         warn!(

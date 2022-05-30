@@ -1,8 +1,9 @@
 use std::mem::size_of;
 
 use enumflags2::BitFlags;
-use log::error;
 use speedy::{Readable, Writable};
+#[allow(unused_imports)]
+use log::error;
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
@@ -59,11 +60,8 @@ impl AckNack {
   }
 
   pub fn len_serialized(&self) -> usize {
-    size_of::<EntityId>() * 2
-    + self.reader_sn_state.len_serialized()
-    + size_of::<i32>()
+    size_of::<EntityId>() * 2 + self.reader_sn_state.len_serialized() + size_of::<i32>()
   }
-
 }
 
 #[cfg(test)]

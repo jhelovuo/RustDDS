@@ -1,6 +1,6 @@
 use std::{
   collections::{BTreeMap, BTreeSet},
-  fmt,
+  fmt, iter,
   rc::Rc,
   sync::{Arc, RwLock},
   time::Duration as StdDuration,
@@ -36,7 +36,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
-    sequence_number::{SequenceNumber, SequenceNumberSet, FragmentNumberSet, FragmentNumber},
+    sequence_number::{FragmentNumberSet, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
 };
@@ -779,7 +779,14 @@ impl Reader {
               .iter()
               .copied()
               .take_while(|sn| sn < &(first_missing + SequenceNumber::new(256)))
-              .filter( |sn| { if writer_proxy.is_partially_received(*sn) {partially_received.push(*sn); false } else {true}} )
+              .filter(|sn| {
+                if writer_proxy.is_partially_received(*sn) {
+                  partially_received.push(*sn);
+                  false
+                } else {
+                  true
+                }
+              })
               .collect(),
           )
         }
@@ -822,23 +829,35 @@ impl Reader {
       // send NackFrags, if any
       let mut nackfrags = Vec::new();
       for sn in partially_received {
-        let first_missing = writer_proxy.missing_frags_for(sn).next();
+        let count = writer_proxy.next_ack_nack_sequence_number();
+        let mut missing_frags = writer_proxy.missing_frags_for(sn);
+        let first_missing = missing_frags.next();
         if let Some(first) = first_missing {
-          let missing_frags_set = writer_proxy.missing_frags_for(sn).collect();
+          let missing_frags_set = iter::once(first).chain(missing_frags).collect(); // "undo" the .next() above
           let nf = NackFrag {
             reader_id,
             writer_id: writer_proxy.remote_writer_guid.entity_id,
             writer_sn: sn,
             fragment_number_state: FragmentNumberSet::from_base_and_set(first, &missing_frags_set),
-            count: writer_proxy.next_ack_nack_sequence_number(),
+            count,
           };
           nackfrags.push(nf);
+        } else {
+          error!("The dog ate my missing fragments.");
+          // Really, this should not happen, as we are above checking
+          // that this SN is really partially (and not fully) received.
         }
       }
 
       if !nackfrags.is_empty() {
-
-        self.send_nackfrags_to(fflags, nackfrags, &mr_state.unicast_reply_locator_list);
+        self.send_nackfrags_to(
+          fflags,
+          nackfrags,
+          InfoDestination {
+            guid_prefix: mr_state.source_guid_prefix,
+          },
+          &mr_state.unicast_reply_locator_list,
+        );
       }
 
       self.send_acknack_to(
@@ -999,7 +1018,7 @@ impl Reader {
     });
 
     message.add_submessage(info_dst.create_submessage(infodst_flags));
- 
+
     message.add_submessage(acknack.create_submessage(flags));
 
     let bytes = message
@@ -1014,6 +1033,7 @@ impl Reader {
     &self,
     flags: BitFlags<NACKFRAG_Flags>,
     nackfrags: Vec<NackFrag>,
+    info_dst: InfoDestination,
     dst_locator_list: &[Locator],
   ) {
     let infodst_flags =
@@ -1026,6 +1046,8 @@ impl Reader {
       guid_prefix: self.my_guid.prefix,
     });
 
+    message.add_submessage(info_dst.create_submessage(infodst_flags));
+
     for nf in nackfrags {
       message.add_submessage(nf.create_submessage(flags));
     }
@@ -1037,8 +1059,6 @@ impl Reader {
       .udp_sender
       .send_to_locator_list(&bytes, dst_locator_list);
   }
-
-
 
   pub fn send_preemptive_acknacks(&mut self) {
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness);

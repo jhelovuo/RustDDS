@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, io, cmp::min, convert::TryInto,};
+use std::{cmp::min, collections::BTreeSet, convert::TryInto, io};
 
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
@@ -28,7 +28,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, EntityKind, GuidPrefix, GUID},
     parameter_id::ParameterId,
-    sequence_number::{SequenceNumber, SequenceNumberSet, FragmentNumber,},
+    sequence_number::{FragmentNumber, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
 };
@@ -414,6 +414,9 @@ impl MessageBuilder {
     self
   }
 
+  // This whole MessageBuilder structure should be refactored into something more
+  // coherent. Now it just looks messy.
+  #[allow(clippy::too_many_arguments)]
   pub fn data_frag_msg(
     mut self,
     cache_change: &CacheChange,
@@ -429,11 +432,14 @@ impl MessageBuilder {
     // Check if we are disposing by key hash
     match cache_change.data_value {
       DDSData::Data { .. } | DDSData::DisposeByKey { .. } => (), // no => ok
-      DDSData::DisposeByKeyHash {  .. } => {
-        error!("data_frag_msg: Called with DDSData::DisposeByKeyHash. This is not legit! Discarding.");
+      DDSData::DisposeByKeyHash { .. } => {
+        error!(
+          "data_frag_msg: Called with DDSData::DisposeByKeyHash. This is not legit! Discarding."
+        );
         // DataFrag must contain either data or key payload, disposing by key hash
-        // sent in inline QoS (without key or data) is not possible like in Data submessages.
-        // See e.g. RTPS spec v2.5 Table 8.42 in Section "8.3.8.3 DataFrag"
+        // sent in inline QoS (without key or data) is not possible like in Data
+        // submessages. See e.g. RTPS spec v2.5 Table 8.42 in Section "8.3.8.3
+        // DataFrag"
         return self;
       }
     }
@@ -450,10 +456,15 @@ impl MessageBuilder {
     let have_inline_qos = !param_list.is_empty(); // we need this later also
 
     // fragments are numbered starting from 1, not 0.
-    let from_byte :usize = (usize::from(fragment_number)-1)*usize::from(fragment_size);
-    let up_to_before_byte :usize = min( usize::from(fragment_number)*usize::from(fragment_size) , sample_size.try_into().unwrap() );
+    let from_byte: usize = (usize::from(fragment_number) - 1) * usize::from(fragment_size);
+    let up_to_before_byte: usize = min(
+      usize::from(fragment_number) * usize::from(fragment_size),
+      sample_size.try_into().unwrap(),
+    );
 
-    let serialized_payload = cache_change.data_value.bytes_slice(from_byte,up_to_before_byte);
+    let serialized_payload = cache_change
+      .data_value
+      .bytes_slice(from_byte, up_to_before_byte);
 
     let data_message = DataFrag {
       reader_id: reader_entity_id,
@@ -462,8 +473,12 @@ impl MessageBuilder {
       fragment_starting_num: fragment_number,
       fragments_in_submessage: 1,
       data_size: sample_size, // total, assembled data (SerializedPayload) size
-      fragment_size: fragment_size, 
-      inline_qos: if have_inline_qos { Some(param_list) } else { None },
+      fragment_size,
+      inline_qos: if have_inline_qos {
+        Some(param_list)
+      } else {
+        None
+      },
       serialized_payload,
     };
 
@@ -482,7 +497,7 @@ impl MessageBuilder {
     //   }
     // }
 
-    let flags: BitFlags<DATAFRAG_Flags> = 
+    let flags: BitFlags<DATAFRAG_Flags> =
       // endinness flag
       BitFlags::<DATAFRAG_Flags>::from_endianness(endianness)
       // key flag
@@ -508,7 +523,6 @@ impl MessageBuilder {
     });
     self
   }
-
 
   // TODO: We should optimize this entire thing to allow long contiguous
   // irrelevant set to be represented as start_sn +

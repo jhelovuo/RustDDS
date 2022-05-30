@@ -1,6 +1,6 @@
-use std::collections::{BTreeSet,BTreeMap};
-use bit_vec::BitVec;
+use std::collections::{BTreeMap, BTreeSet};
 
+use bit_vec::BitVec;
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
 
@@ -12,7 +12,7 @@ use crate::{
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
-    sequence_number::{SequenceNumber, FragmentNumber, FragmentNumberSet,},
+    sequence_number::{FragmentNumber, FragmentNumberSet, SequenceNumber},
   },
 };
 use super::reader::ReaderIngredients;
@@ -52,7 +52,7 @@ pub(crate) struct RtpsReaderProxy {
   // false = send data messages directly from DataWriter
   pub repair_mode: bool,
   pub qos: QosPolicies,
-  pub frags_requested: BTreeMap<SequenceNumber,BitVec>,
+  pub frags_requested: BTreeMap<SequenceNumber, BitVec>,
 }
 
 impl RtpsReaderProxy {
@@ -188,30 +188,33 @@ impl RtpsReaderProxy {
     self.all_acked_before
   }
 
-  pub fn mark_frags_requested(&mut self, seq_num: SequenceNumber, frag_nums: &FragmentNumberSet ) {
-    let req_set =
-      self.frags_requested
-        .entry(seq_num)
-        .or_insert_with(|| BitVec::with_capacity(64));  // default capacity out of hat
+  pub fn mark_frags_requested(&mut self, seq_num: SequenceNumber, frag_nums: &FragmentNumberSet) {
+    let req_set = self
+      .frags_requested
+      .entry(seq_num)
+      .or_insert_with(|| BitVec::with_capacity(64)); // default capacity out of hat
 
     if let Some(max_fn_requested) = req_set.iter().next_back() {
       // allocate more space if needed
       let max_fn_requested = usize::from(max_fn_requested);
       if max_fn_requested > req_set.len() {
         let growth_need = max_fn_requested - req_set.len();
-        req_set.grow(growth_need , false);
+        req_set.grow(growth_need, false);
       }
       for f in frag_nums.iter() {
         // -1 because FragmentNumbers start at 1
-        req_set.set( usize::from(f) - 1, true )
+        req_set.set(usize::from(f) - 1, true);
       }
     } else {
-      warn!("mark_frags_requested: Empty set in NackFrag??? reader={:?} SN={:?}", self.remote_reader_guid, seq_num);
+      warn!(
+        "mark_frags_requested: Empty set in NackFrag??? reader={:?} SN={:?}",
+        self.remote_reader_guid, seq_num
+      );
     }
   }
 
   // This just removes the FragmentNumber entry from the set.
-  pub fn mark_frag_sent(&mut self, seq_num: SequenceNumber, frag_num: &FragmentNumber ) {
+  pub fn mark_frag_sent(&mut self, seq_num: SequenceNumber, frag_num: &FragmentNumber) {
     let mut frag_map_emptied = false;
     if let Some(frag_map) = self.frags_requested.get_mut(&seq_num) {
       // -1 because FragmentNumbers start at 1
@@ -230,15 +233,12 @@ impl RtpsReaderProxy {
   pub fn frags_requested_iterator(&self) -> FragBitVecIterator {
     match self.frags_requested.iter().next() {
       None => FragBitVecIterator::new(SequenceNumber::default(), BitVec::new()), // empty iterator
-      Some((sn,bv)) => FragBitVecIterator::new(*sn,bv.clone()),
+      Some((sn, bv)) => FragBitVecIterator::new(*sn, bv.clone()),
     }
   }
 
-
   pub fn repair_frags_requested(&self) -> bool {
-    self.frags_requested
-      .values()
-      .any( |rf| rf.any())
+    self.frags_requested.values().any(|rf| rf.any())
   }
 }
 
@@ -249,10 +249,10 @@ pub struct FragBitVecIterator {
 }
 
 impl FragBitVecIterator {
-  pub fn new(sequence_number:SequenceNumber, bv:BitVec) -> FragBitVecIterator {
+  pub fn new(sequence_number: SequenceNumber, bv: BitVec) -> FragBitVecIterator {
     FragBitVecIterator {
       sequence_number,
-      frag_count: FragmentNumber::new(1), 
+      frag_count: FragmentNumber::new(1),
       bitvec: bv,
     }
   }
@@ -264,17 +264,17 @@ impl Iterator for FragBitVecIterator {
   fn next(&mut self) -> Option<Self::Item> {
     // f indexes from 1, like FragmentNumber
     let mut f = u32::from(self.frag_count);
-    while (f as usize) <= self.bitvec.len() && self.bitvec.get( (f - 1) as usize ) == Some(false) {
-      f = f + 1;
+    while (f as usize) <= self.bitvec.len() && self.bitvec.get((f - 1) as usize) == Some(false) {
+      f += 1;
     }
-    if (f as usize) > self.bitvec.len() { None }
-    else { 
-      self.frag_count = FragmentNumber::new( f + 1 );
-      Some(( self.sequence_number, FragmentNumber::new( f ) ))
+    if (f as usize) > self.bitvec.len() {
+      None
+    } else {
+      self.frag_count = FragmentNumber::new(f + 1);
+      Some((self.sequence_number, FragmentNumber::new(f)))
     }
   }
 }
-
 
 // pub enum ChangeForReaderStatusKind {
 //   UNSENT,

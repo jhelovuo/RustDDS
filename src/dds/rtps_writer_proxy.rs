@@ -12,7 +12,7 @@ use crate::{
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
-    sequence_number::{SequenceNumber,FragmentNumber,},
+    sequence_number::{FragmentNumber, SequenceNumber},
     time::Timestamp,
   },
 };
@@ -379,19 +379,21 @@ impl RtpsWriterProxy {
     }
   } // fn
 
-  pub fn missing_frags_for<'a>(& 'a self, seq:SequenceNumber) -> Box<dyn 'a + Iterator<Item=FragmentNumber>> {
+  pub fn missing_frags_for<'a>(
+    &'a self,
+    seq: SequenceNumber,
+  ) -> Box<dyn 'a + Iterator<Item = FragmentNumber>> {
     if let Some(ref fa) = self.fragment_assembler {
       fa.missing_frags_for(seq)
     } else {
       Box::new(iter::empty())
     }
-  } 
-  pub fn is_partially_received(&self, seq:SequenceNumber) -> bool {
+  }
+  pub fn is_partially_received(&self, seq: SequenceNumber) -> bool {
     if let Some(ref fa) = self.fragment_assembler {
       fa.is_partially_received(seq)
     } else {
       false
     }
   }
-
 } // impl

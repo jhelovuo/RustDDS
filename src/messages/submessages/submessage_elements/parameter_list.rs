@@ -26,7 +26,6 @@ impl ParameterList {
   pub fn len_serialized(&self) -> usize {
     self.parameters.iter().map(|p| p.len_serialized()).sum()
   }
-
 }
 
 const SENTINEL: u32 = 0x00000001;

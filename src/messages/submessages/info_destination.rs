@@ -1,6 +1,7 @@
 use enumflags2::BitFlags;
-use log::error;
 use speedy::{Readable, Writable};
+#[allow(unused_imports)]
+use log::error;
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,

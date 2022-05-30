@@ -70,7 +70,8 @@ pub struct DataFrag {
 impl DataFrag {
   // Serialized length of DataFrag submessage without submessage header.
   // This is compatible with the definition of the definition of
-  // "octetsToNextHeader" field in RTPS spec v2.5 Section "9.4.5.1 Submessage Header".
+  // "octetsToNextHeader" field in RTPS spec v2.5 Section "9.4.5.1 Submessage
+  // Header".
   pub fn len_serialized(&self) -> usize {
     2 + // extraFlags (unused in RTPS v2.5)
     2 + // octetsToInlineSos
@@ -84,7 +85,6 @@ impl DataFrag {
     self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
     self.serialized_payload.len()
   }
-
 
   pub fn deserialize(buffer: &Bytes, flags: BitFlags<DATAFRAG_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
