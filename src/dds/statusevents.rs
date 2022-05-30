@@ -135,7 +135,7 @@ pub enum DataWriterStatus {
 }
 
 /// Helper to contain same count actions across statuses
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CountWithChange {
   // 2.3. Platform Specific Model defines these as "long", which appears to be 32-bit signed.
   count: i32,
@@ -175,7 +175,7 @@ impl CountWithChange {
 }
 
 // sample rejection reasons
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleRejectedStatusKind {
   NotRejected,
   ByInstancesLimit,
@@ -183,7 +183,7 @@ pub enum SampleRejectedStatusKind {
   BySamplesPerInstanceLimit,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QosPolicyCount {
   policy_id: QosPolicyId,
   count: i32,

@@ -12,7 +12,7 @@ use crate::{
 #[cfg(test)]
 use crate::serialization::cdr_serializer::to_bytes;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 #[bitflags]
 pub enum StatusInfoEnum {
@@ -23,7 +23,7 @@ pub enum StatusInfoEnum {
 
 /// [`StatusInfo`] is a 4 octet array
 /// RTPS spec v2.3, Section 9.6.3.9 StatusInfo_t
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatusInfo {
   em: [u8; 3],
   si: BitFlags<StatusInfoEnum>, /* This is now a bit set of StatusInfoEnum

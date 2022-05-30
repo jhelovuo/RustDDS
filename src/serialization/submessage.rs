@@ -5,7 +5,7 @@ use crate::messages::submessages::{
   submessages::InterpreterSubmessage,
 };
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SubMessage {
   pub header: SubmessageHeader,
   pub body: SubmessageBody,
@@ -13,7 +13,7 @@ pub struct SubMessage {
 
 // TODO: Submessages should implement some Length trait that returns the length
 // of Submessage in bytes. This is needed for Submessage construction.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SubmessageBody {
   Entity(EntitySubmessage),
   Interpreter(InterpreterSubmessage),

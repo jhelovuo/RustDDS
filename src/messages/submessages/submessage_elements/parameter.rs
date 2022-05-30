@@ -3,7 +3,7 @@ use bit_vec::BitVec;
 
 use crate::structure::parameter_id::ParameterId;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Parameter {
   /// Uniquely identifies the type of parameter
   pub parameter_id: ParameterId,

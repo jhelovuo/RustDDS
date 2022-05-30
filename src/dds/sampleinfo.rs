@@ -20,7 +20,7 @@ use crate::{
 ///
 /// See DDS spec v1.4 Section 2.2.2.5.4 and Section "2.2.2.5.1.2 Interpretation
 /// of the SampleInfo sample_state".
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[bitflags]
 #[repr(u32)] // DDS Spec 1.4 section 2.3.3 DCPS PSM : IDL defines these as "unsigned long",
              // so u32
@@ -59,7 +59,7 @@ impl SampleState {
 ///
 /// See DDS spec v.14 Section 2.2.2.5.1.8 Interpretation of the SampleInfo
 /// view_state
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u32)]
 #[bitflags]
 pub enum ViewState {
@@ -89,7 +89,7 @@ impl ViewState {
 ///
 /// DDS spec v1.4 Section "2.2.2.5.1.3 Interpretation of the SampleInfo
 /// instance_state"
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u32)]
 #[bitflags]
 pub enum InstanceState {
@@ -140,7 +140,7 @@ impl InstanceState {
 ///
 /// See DDS spec v1.4 Section "2.2.2.5.1.5 Interpretation of the SampleInfo
 /// disposed_generation_count and no_writers_generation_count"
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NotAliveGenerationCounts {
   pub disposed_generation_count: i32,
   pub no_writers_generation_count: i32,
@@ -174,7 +174,7 @@ impl NotAliveGenerationCounts {
 ///
 /// Some of the SampleInfo field description texts are quoted from the DDS
 /// Specification.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SampleInfo {
   /// sample_state indicates whether or not the corresponding data sample has
   /// already been read through this DataReader.

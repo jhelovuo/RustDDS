@@ -8,7 +8,7 @@ use crate::{
   structure::guid::GuidPrefix,
 };
 
-#[derive(Debug, Clone, Readable, Writable, PartialEq)]
+#[derive(Debug, Clone, Readable, Writable, PartialEq, Eq)]
 pub struct Header {
   pub protocol_id: ProtocolId,
   pub protocol_version: ProtocolVersion,

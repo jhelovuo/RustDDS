@@ -14,7 +14,7 @@ use crate::{
 //TODO: These messages are structured a bit oddly. Why is flags separate from
 // the submessage proper?
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EntitySubmessage {
   AckNack(AckNack, BitFlags<ACKNACK_Flags>),
   Data(Data, BitFlags<DATA_Flags>),
@@ -44,7 +44,7 @@ impl<C: Context> Writable<C> for EntitySubmessage {
   }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::enum_variant_names)]
 pub enum InterpreterSubmessage {
   InfoSource(InfoSource, BitFlags<INFOSOURCE_Flags>),

@@ -17,7 +17,7 @@ use crate::{
 /// serializedData to be fragmented and sent as multiple DataFrag Submessages.
 /// The fragments contained in the DataFrag Submessages are then re-assembled by
 /// the RTPS Reader.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(test, derive(Default))]
 pub struct DataFrag {
   /// Identifies the RTPS Reader entity that is being informed of the change

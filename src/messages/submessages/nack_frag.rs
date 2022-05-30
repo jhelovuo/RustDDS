@@ -25,7 +25,7 @@ use super::{
 /// This Submessage can only contain negative acknowledgements. Note this
 /// differs from an AckNack Submessage, which includes both positive and
 /// negative acknowledgements.
-#[derive(Debug, PartialEq, Clone, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct NackFrag {
   ///  Identifies the Reader entity that requests to receive certain
   /// fragments.

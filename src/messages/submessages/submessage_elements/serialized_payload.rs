@@ -85,7 +85,7 @@ impl<'a, C: Context> Readable<'a, C> for RepresentationIdentifier {
 /// protocol does not use the representation_options: The sender shall set the
 /// representation_options to zero. The receiver shall ignore the value of the
 /// representation_options."
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SerializedPayload {
   pub representation_identifier: RepresentationIdentifier,
   pub representation_options: [u8; 2], // Not used. Send as zero, ignore on receive.

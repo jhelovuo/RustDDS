@@ -17,7 +17,7 @@ use crate::{
 };
 use super::reader::ReaderIngredients;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 /// ReaderProxy class represents the information an RTPS StatefulWriter
 /// maintains on each matched RTPS Reader
 pub(crate) struct RtpsReaderProxy {

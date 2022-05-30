@@ -20,7 +20,7 @@ use crate::{
 /// a data-object belonging to the RTPS Writer. The possible changes
 /// include both changes in value as well as changes to the lifecycle
 /// of the data-object.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Data {
   /// Identifies the RTPS Reader entity that is being informed of the change
   /// to the data-object.

@@ -514,7 +514,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct TopicBuiltinTopicData {
   pub key: Option<GUID>,
   pub name: String,
@@ -580,7 +580,7 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
 /// Practically this is gotten from
 /// [DomainParticipant](../participant/struct.DomainParticipant.html) during
 /// runtime Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct DiscoveredTopicData {
   updated_time: DateTime<Utc>,
   pub topic_data: TopicBuiltinTopicData,
@@ -668,7 +668,7 @@ impl ParticipantMessageDataKind {
 // =======================================================================
 // =======================================================================
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct ParticipantMessageData {
   pub guid: GuidPrefix,
   pub kind: ParticipantMessageDataKind,

@@ -16,7 +16,7 @@ use super::{
 /// This message is sent from an RTPS Writer to an RTPS Reader
 /// to modify the GuidPrefix used to interpret the Reader entity_ids
 /// appearing in the Submessages that follow it.
-#[derive(Debug, PartialEq, Clone, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct InfoDestination {
   /// Provides the GuidPrefix that should be used to reconstruct the GUIDs
   /// of all the RTPS Reader entities whose EntityIds appears
