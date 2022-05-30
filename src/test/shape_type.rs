@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::dds::traits::key::Keyed;
 
-#[derive(Serialize, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ShapeType {
   a: i32,
 }

@@ -526,7 +526,7 @@ mod tests {
       .unwrap();
     info!("reader history chache DATA: {:?}", a.data());
 
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct ShapeType {
       color: String,
       x: i32,
