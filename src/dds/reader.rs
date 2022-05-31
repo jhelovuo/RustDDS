@@ -936,10 +936,13 @@ impl Reader {
 
   pub fn handle_heartbeatfrag_msg(
     &mut self,
-    _heartbeatfrag: &HeartbeatFrag,
+    heartbeatfrag: &HeartbeatFrag,
     _mr_state: &MessageReceiverState,
   ) {
-    todo!()
+    info!(
+      "HeartbeatFrag handling not implemented. topic={:?}   {:?}",
+      self.topic_name, heartbeatfrag
+    );
   }
 
   // This is used to determine exact change kind in case we do not get a data
