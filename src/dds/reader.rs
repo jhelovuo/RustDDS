@@ -523,7 +523,10 @@ impl Reader {
         // not yet complete, nothing more to do
       }
     } else {
-      info!("Reader got DATAFRAG, but I have no writer proxy");
+      info!(
+        "handle_datafrag_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
+        self.my_guid.entity_id, writer_guid, self.topic_name,
+      );
     }
   }
 
