@@ -1501,8 +1501,8 @@ mod tests {
 
     // make sequence numbers 1-3 and 5 7 irrelevant
     let mut gap_list = SequenceNumberSet::new(SequenceNumber::new(4), 7);
-    gap_list.insert(SequenceNumber::new(5));
-    gap_list.insert(SequenceNumber::new(7));
+    gap_list.test_insert(SequenceNumber::new(5));
+    gap_list.test_insert(SequenceNumber::new(7));
 
     let gap = Gap {
       reader_id: reader.entity_id(),

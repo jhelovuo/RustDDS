@@ -45,7 +45,7 @@ This release breaks compatibility with 0.4.0. Differences are
 * Ownership QoS
 * Presentation QoS: Coherent/atomic sample sets and ordering
 * Deadline and Latency budget QoS
-* Sample fragmentation (large object exchange) (partial ✅)
+* Sample fragmentation (large object exchange) ✅
 * `wait_for_acknowledgments`
 * Listener (or equivalent) for DomainPrticiapnts
 * Listerer (or equivalent) for Topics

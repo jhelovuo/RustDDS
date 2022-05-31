@@ -329,7 +329,12 @@ where
     self.num_bits == 0 || self.iter().next().is_none()
   }
 
-  pub fn insert(&mut self, sn: N) {
+  #[cfg(test)]
+  pub fn test_insert(&mut self, sn: N) {
+    self.insert(sn)
+  }
+
+  fn insert(&mut self, sn: N) {
     if sn < self.bitmap_base
       || self.num_bits == 0
       || sn >= self.bitmap_base + N::from(self.num_bits as i64)
@@ -349,30 +354,48 @@ where
     }
   }
 
+  /// Construct a new Numberset from base and set
+  /// base is the index of the first element of the bitmap
+  /// set is the set if Numbers that will be contained in the set.
+  /// Highest possible number in set is base+255.
   pub fn from_base_and_set(base: N, set: &BTreeSet<N>) -> Self {
     match (set.iter().next(), set.iter().next_back()) {
       (Some(&start), Some(&end)) => {
         // sanity
-        if start < base {
+        let base = if start < base {
           error!(
             "from_base_and_set : need base <= set start: base={:?} and set {:?}",
             base, set
           );
+          start
+        } else {
+          base
+        };
+        if base < N::from(1) {
+          // RTPS v2.5 spec Section "8.3.5.5 SequenceNumberSet":
+          // minimum(SequenceNumberSet) >= 1
+          error!(
+            "from_base_and_set : minimum possible set element is 1, got base={:?}",
+            base
+          );
+          return Self::new_empty(N::from(1));
         }
-        let end = if i64::from(end - start) > 256 {
-          let truncated_end = start + N::from(256);
-          error!("from_base_and_set : max size (256) exceeded, start = {:?} end = {:?}. Truncating end to {:?}",
-              start, end, truncated_end );
+        // start <= end, because BTreeSet properties.
+        let end = if i64::from(end) - i64::from(base) >= 256 {
+          // RTPS v2.5 spec Section "8.3.5.5 SequenceNumberSet":
+          // maximum(SequenceNumberSet) - minimum(SequenceNumberSet) < 256
+          let truncated_end = base + N::from(255);
+          error!("from_base_and_set : max size (256) exceeded, base = {:?}, start = {:?} end = {:?}. Truncating end to {:?}",
+              base, start, end, truncated_end );
           truncated_end
         } else {
           end
-        }; // sanity ok.
-           // TODO: Sanity check that (end - base) <= 256
-           // work:
-        let num_bits = i64::from(end - start + N::from(1));
-        let mut sns = Self::new(min(base, start), min(256, num_bits as u32));
-        for &s in set.iter() {
-          sns.insert(s);
+        };
+        // sanity ok. Now do the actual work.
+        //let num_bits = i64::from( end - base + N::from(1) );
+        let mut sns = Self::new(base, i64::from(end) as u32);
+        for s in set.iter().filter(|s| base <= **s && **s <= end) {
+          sns.insert(*s);
         }
         sns
       }
