@@ -119,7 +119,12 @@ impl UDPListener {
     for multicast_if_ipaddr in get_local_multicast_ip_addrs()? {
       match multicast_if_ipaddr {
         IpAddr::V4(a) => {
-          mio_socket.join_multicast_v4(&multicast_group, &a)?;
+          if let Err(e) = mio_socket.join_multicast_v4(&multicast_group, &a) {
+            warn!(
+              "join_multicast_v4 failed-{:?}. multicast_group [{:?}] interface [{:?}]",
+              e, multicast_group, a
+            );
+          }
         }
         IpAddr::V6(_a) => error!("UDPListener::new_multicast() not implemented for IpV6"), // TODO
       }
