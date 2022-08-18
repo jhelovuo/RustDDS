@@ -4,7 +4,7 @@ use std::{
 };
 
 use mio::net::UdpSocket;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, warn, trace};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use bytes::{Bytes, BytesMut};
 
@@ -118,14 +118,11 @@ impl UDPListener {
 
     for multicast_if_ipaddr in get_local_multicast_ip_addrs()? {
       match multicast_if_ipaddr {
-        IpAddr::V4(a) => {
-          if let Err(e) = mio_socket.join_multicast_v4(&multicast_group, &a) {
-            warn!(
-              "join_multicast_v4 failed-{:?}. multicast_group [{:?}] interface [{:?}]",
-              e, multicast_group, a
-            );
-          }
-        }
+        IpAddr::V4(a) => 
+          mio_socket.join_multicast_v4(&multicast_group, &a)
+            .unwrap_or_else( |e| warn!("join_multicast_v4 failed: {:?}. multicast_group [{:?}] interface [{:?}]",
+                                        e, multicast_group, a
+                            )),
         IpAddr::V6(_a) => error!("UDPListener::new_multicast() not implemented for IpV6"), // TODO
       }
     }
