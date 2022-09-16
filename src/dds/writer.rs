@@ -476,7 +476,7 @@ impl Writer {
               let data_size: u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
                                                                                   // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
               let num_frags =
-                (data_size / fragment_size) + (if data_size % fragment_size != 0 { 1 } else { 0 });
+                (data_size / fragment_size) + u32::from(data_size % fragment_size != 0); // rounding up
               if self.push_mode {
                 // loop over fragments
                 for frag_num in FragmentNumber::range_inclusive(

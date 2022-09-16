@@ -318,7 +318,7 @@ impl Reader {
   pub fn history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
     let start = self.seqnum_instant_map.iter().min().unwrap().0;
     let end = self.seqnum_instant_map.iter().max().unwrap().0;
-    return vec![*start, *end];
+    vec![*start, *end]
   }
 
   // updates or adds a new writer proxy, doesn't touch changes

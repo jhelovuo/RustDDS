@@ -11,7 +11,7 @@ use crate::dds::{
 /// Note that [`no_key::DataSample`](crate::no_key::DataSample) and
 /// [`with_key::DataSample`](crate::with_key::DataSample) are two different
 /// structs.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct DataSample<D> {
   pub(crate) sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
 

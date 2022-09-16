@@ -331,7 +331,7 @@ where
 
   #[cfg(test)]
   pub fn test_insert(&mut self, sn: N) {
-    self.insert(sn)
+    self.insert(sn);
   }
 
   fn insert(&mut self, sn: N) {
