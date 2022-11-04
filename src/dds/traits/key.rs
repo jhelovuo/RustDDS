@@ -192,7 +192,9 @@ impl Key for u128 {}
 
 impl Key for String {}
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, CdrEncodingSize)]
+#[derive(
+  Debug, Default, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, CdrEncodingSize,
+)]
 /// Key type to identicy data instances in builtin topics
 pub struct BuiltInTopicKey {
   /// IDL PSM (2.3.3, pg 138) uses array of 3x long to implement this
@@ -205,9 +207,5 @@ impl BuiltInTopicKey {
     Self {
       value: [rng.gen(), rng.gen(), rng.gen()],
     }
-  }
-
-  pub fn default() -> Self {
-    Self { value: [0, 0, 0] }
   }
 }

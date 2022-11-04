@@ -195,7 +195,7 @@ impl RosParticipantInner {
   pub fn get_ros_participant_info(&self) -> ROSParticipantInfo {
     ROSParticipantInfo::new(
       Gid::from_guid(self.domain_participant.guid()),
-      self.nodes.iter().map(|(_, p)| p.clone()).collect(),
+      self.nodes.values().cloned().collect(),
     )
   }
 

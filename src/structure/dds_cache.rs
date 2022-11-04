@@ -178,7 +178,7 @@ impl TopicCache {
       .max_samples;
     // TODO: We cannot currently keep track of instance counts, because TopicCache
     // or DDSCache below do not know about instances.
-    let remove_count = self.history_cache.changes.len() as i32 - max_keep_samples as i32;
+    let remove_count = self.history_cache.changes.len() as i32 - max_keep_samples;
     let split_key = *self
       .history_cache
       .changes

@@ -49,7 +49,7 @@ impl AssemblyBuffer {
 
     let frag_size = usize::from(fragment_size);
     // fragment count formula from RTPS spec v2.5 Section 8.3.8.3.5
-    let fragment_count = (data_size / frag_size) + (if data_size % frag_size == 0 { 0 } else { 1 });
+    let fragment_count = (data_size / frag_size) + usize::from(data_size % frag_size != 0);
     let now = Timestamp::now();
 
     Self {
