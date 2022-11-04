@@ -1,4 +1,4 @@
-edition = "2018"
+edition = "2021"
 wrap_comments = true
 tab_spaces = 2
 reorder_imports = false
