@@ -6,10 +6,11 @@ description = "Native Rust DDS implementation with RTPS"
 readme = "README.md"
 keywords = ["network","protocol","dds","rtps"]
 license = "Apache-2.0"
-edition = "2018"
+edition = "2021"
 homepage = "https://atostek.com/en/products/rustdds/"  
 repository = "https://github.com/jhelovuo/RustDDS"
 categories = ["network-programming", "science::robotics"] 
+rust-version = "1.57.0"
 # the science-robotics category is because of ROS2
 
 [dependencies]
