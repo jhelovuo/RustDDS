@@ -33,23 +33,25 @@ struct AssemblyBuffer {
 }
 
 impl AssemblyBuffer {
-  pub fn new(data_size: u32, fragment_size: u16) -> Self {
+  pub fn new(datafrag: &DataFrag) -> Self {
+    let data_size: usize = datafrag.data_size.try_into().unwrap();
+    // We have unwrap here, but it will succeed as long as usize >= u32.
+    let fragment_size: u16 = datafrag.fragment_size;
     debug!(
       "new AssemblyBuffer data_size={} frag_size={}",
       data_size, fragment_size
     );
-    // TODO: Check that fragment size <= data_size
-    // TODO: Check that fragment_size is not zero
-    let data_size: usize = data_size.try_into().unwrap();
-    // we have unwrap here, but it will succeed as long as usize >= u32
+
+    assert!(fragment_size as usize <= data_size); // This is validated at DataFrag deserializer
+    assert!(fragment_size > 0); // This is validated at DataFrag deserializer
+                                // Note: Technically RTPS spec allows fragment_size == 0.
 
     let mut buffer_bytes = BytesMut::with_capacity(data_size);
     buffer_bytes.resize(data_size, 0); //TODO: Can we replace this with faster (and unsafer) .set_len and live with
                                        // uninitialized data?
 
-    let frag_size = usize::from(fragment_size);
-    // fragment count formula from RTPS spec v2.5 Section 8.3.8.3.5
-    let fragment_count = (data_size / frag_size) + usize::from(data_size % frag_size != 0);
+    let fragment_count = usize::from(datafrag.total_number_of_fragments());
+
     let now = Timestamp::now();
 
     Self {
@@ -159,7 +161,7 @@ impl FragmentAssembler {
     let abuf = self
       .assembly_buffers
       .entry(datafrag.writer_sn)
-      .or_insert_with(|| AssemblyBuffer::new(datafrag.data_size, frag_size));
+      .or_insert_with(|| AssemblyBuffer::new(datafrag));
 
     abuf.insert_frags(datafrag, frag_size);
 
