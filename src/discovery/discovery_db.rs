@@ -269,8 +269,7 @@ impl DiscoveryDB {
     // removing topics that have no readers or writers
     let dead_topics: Vec<_> = self
       .topics
-      .iter()
-      .map(|(tn, _)| tn)
+      .keys()
       .filter(|tn| !self.topic_has_writers_or_readers(tn))
       .cloned()
       .collect();
@@ -518,11 +517,11 @@ impl DiscoveryDB {
   }
 
   pub fn get_all_local_topic_readers(&self) -> impl Iterator<Item = &DiscoveredReaderData> {
-    self.local_topic_readers.iter().map(|(_, p)| p)
+    self.local_topic_readers.values()
   }
 
   pub fn get_all_local_topic_writers(&self) -> impl Iterator<Item = &DiscoveredWriterData> {
-    self.local_topic_writers.iter().map(|(_, p)| p)
+    self.local_topic_writers.values()
   }
 
   // Note:

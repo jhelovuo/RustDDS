@@ -86,6 +86,33 @@ impl DataFrag {
     self.serialized_payload.len()
   }
 
+  /// Spec talks about (expected) total number of fragments.
+  /// This is technically the last (Expected) fragment number, which should be
+  /// the same value.
+  pub fn total_number_of_fragments(&self) -> FragmentNumber {
+    // RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation" defines this as
+    // follows "The total number of fragments to expect equals:
+    // (dataSize / fragmentSize) + ((dataSize % fragmentSize) ? 1 : 0) "
+    //
+    // Note: The above formula is a bit suspect, since fragmentSize == 0 seems to
+    // be allowed by the spec.
+
+    // This is a integer division with rounding up.
+    let frag_size = self.fragment_size as u32;
+    if frag_size < 1 {
+      FragmentNumber::INVALID
+    } else {
+      FragmentNumber::new((self.data_size / frag_size) + u32::from(self.data_size % frag_size > 0))
+      // TODO: Use self.data_size.div_ceil(frag_size) from core::num
+      // instead of the above when it is available in stable Rust.
+      //
+      // Note: Alternative solution
+      // (data_size + frag_size - 1) / frag_size
+      // will overflow for large values of data_size and frag_size, unless
+      // promoted to u64 arithmetic
+    }
+  }
+
   pub fn deserialize(buffer: &Bytes, flags: BitFlags<DATAFRAG_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
     let endianness = endianness_flag(flags.bits());
@@ -134,10 +161,34 @@ impl DataFrag {
       None
     };
 
+    // Validity checks from RTPS spec v2.5 Section 8.3.8.3.3 "Validity"
+
+    // writer_sn strictly positive
+    if writer_sn < SequenceNumber::new(1) {
+      return Err(io::Error::new(
+        io::ErrorKind::Other,
+        "DataFrag SequenceNumber < 1. Discarding as invalid.",
+      ));
+    }
+
+    // Fragment size == 0 is not strictly forbidden in the RTPS spec, but
+    // it smells so fishy that we just drop it to avoid confusion later.
+    // TODO:
+    // Is there any valid use case for sending zero-sized fragments?
+    // Sending zero-sized data may be ok, but it could be sent as zero fragments of
+    // some positive size, or preferably as non-fragmented DATA submessage.
+    if fragment_size < 1 || (fragment_size as u32) > data_size {
+      return Err(io::Error::new(
+        io::ErrorKind::Other,
+        format!("Invalid DataFrag. fragment_size={} data_size={}  Expected 1 <= fragment_size <= data_size.",
+          fragment_size, data_size),
+      ));
+    }
+
     // Payload should be always present, be it data or key fragments.
     let serialized_payload = buffer.clone().split_off(cursor.position() as usize);
 
-    Ok(Self {
+    let datafrag = Self {
       reader_id,
       writer_id,
       writer_sn,
@@ -147,7 +198,31 @@ impl DataFrag {
       fragment_size,
       inline_qos,
       serialized_payload,
-    })
+    };
+
+    // fragment_starting_num strictly positive and must not exceed total number of
+    // fragments
+
+    let expected_total = datafrag.total_number_of_fragments();
+    if fragment_starting_num < FragmentNumber::new(1) || fragment_starting_num > expected_total {
+      return Err(io::Error::new(
+        io::ErrorKind::Other,
+        format!("DataFrag fragmentStartingNum={:?} expected_total={:?}.  Expected 1 <= fragmentStartingNum <= expeceted_total.  Discarding as invalid.",
+          fragment_starting_num,expected_total)
+      ));
+    }
+
+    if datafrag.serialized_payload.len()
+      > (fragments_in_submessage as usize) * (fragment_size as usize)
+    {
+      return Err(io::Error::new(
+        io::ErrorKind::Other,
+        format!("Invalid DataFrag. serializedData length={} should be less than or equal to (fragments_in_submessage={}) x (fragment_size={})",
+          datafrag.serialized_payload.len(), fragments_in_submessage, fragment_size)
+      ));
+    }
+
+    Ok(datafrag)
   }
 }
 

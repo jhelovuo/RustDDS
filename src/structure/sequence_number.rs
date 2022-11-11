@@ -183,6 +183,8 @@ impl Default for SequenceNumber {
 pub struct FragmentNumber(u32);
 
 impl FragmentNumber {
+  pub const INVALID: Self = Self(0); // Valid FragmentNumbers start at 1.
+
   pub fn new(value: u32) -> Self {
     FragmentNumber(value)
   }
