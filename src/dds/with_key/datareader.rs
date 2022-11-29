@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use mio::{Evented, Poll, PollOpt, Ready, Token};
+use mio_06::{Evented, Poll, PollOpt, Ready, Token};
 
 use crate::{
   dds::{

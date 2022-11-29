@@ -14,7 +14,7 @@ use mio_extras::{
   channel::{self as mio_channel, SyncSender, TrySendError},
   timer::Timer,
 };
-use mio::Token;
+use mio_06::Token;
 use policy::{History, Reliability};
 
 use crate::{

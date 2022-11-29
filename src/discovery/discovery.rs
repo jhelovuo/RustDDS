@@ -6,7 +6,7 @@ use std::{
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio::{Events, Poll, PollOpt, Ready, Token};
+use mio_06::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{channel as mio_channel, timer::Timer};
 
 use crate::{
@@ -205,7 +205,7 @@ impl Discovery {
       };
     }
 
-    let poll = try_construct!(mio::Poll::new(), "Failed to allocate discovery poll. {:?}");
+    let poll = try_construct!(mio_06::Poll::new(), "Failed to allocate discovery poll. {:?}");
 
     try_construct!(
       poll.register(
@@ -1409,7 +1409,7 @@ mod tests {
 
   use chrono::Utc;
   use bytes::Bytes;
-  use mio::Token;
+  use mio_06::Token;
   use speedy::{Endianness, Writable};
 
   use super::*;

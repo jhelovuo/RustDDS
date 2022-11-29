@@ -4,7 +4,7 @@ use std::{
 };
 
 use log::{error, info};
-use mio::Evented;
+use mio_06::Evented;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -260,6 +260,8 @@ impl RosParticipantInner {
   }
   */
 }
+
+use mio_06 as mio;
 
 impl Evented for RosParticipant {
   fn register(

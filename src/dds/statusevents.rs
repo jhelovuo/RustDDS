@@ -7,7 +7,7 @@
 // Communcation statues are detailed in Figure 2.13 and tables in Section
 // 2.2.4.1 in DDS Specification v1.4
 
-use mio::Evented;
+use mio_06::Evented;
 use mio_extras::channel as mio_channel;
 
 use crate::dds::qos::QosPolicyId;

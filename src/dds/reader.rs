@@ -6,7 +6,7 @@ use std::{
   time::Duration as StdDuration,
 };
 
-use mio::Token;
+use mio_06::Token;
 use mio_extras::{channel as mio_channel, timer::Timer};
 use log::{debug, error, info, trace, warn};
 use enumflags2::BitFlags;

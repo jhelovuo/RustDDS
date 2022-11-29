@@ -21,7 +21,7 @@ use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all
                                                                      * policies directly */
 use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
-use mio::{Events, Poll, PollOpt, Ready, Token}; // polling
+use mio_06::{Events, Poll, PollOpt, Ready, Token}; // polling
 use mio_extras::channel; // pollable channel
 use rand::prelude::*;
 

@@ -1,7 +1,7 @@
 use std::io;
 
 use serde::de::DeserializeOwned;
-use mio::{Evented, Poll, PollOpt, Ready, Token};
+use mio_06::{Evented, Poll, PollOpt, Ready, Token};
 
 use crate::{
   dds::{

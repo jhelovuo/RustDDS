@@ -3,7 +3,7 @@ use std::{
   net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 
-use mio::net::UdpSocket;
+use mio_06;
 use log::{debug, error, info, trace, warn};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use bytes::{Bytes, BytesMut};
@@ -23,7 +23,7 @@ const MESSAGE_BUFFER_ALLOCATION_CHUNK: usize = 256 * 1024; // must be >= MAX_MES
 /// called.
 #[derive(Debug)]
 pub struct UDPListener {
-  socket: UdpSocket,
+  socket: mio_06::net::UdpSocket,
   receive_buffer: BytesMut,
   multicast_group: Option<Ipv4Addr>,
 }
@@ -42,7 +42,7 @@ impl Drop for UDPListener {
 }
 
 impl UDPListener {
-  fn new_listening_socket(host: &str, port: u16, reuse_addr: bool) -> io::Result<UdpSocket> {
+  fn new_listening_socket(host: &str, port: u16, reuse_addr: bool) -> io::Result<mio_06::net::UdpSocket> {
     let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
 
     // We set ReuseAddr so that other DomainParticipants on this host can
@@ -78,7 +78,7 @@ impl UDPListener {
       .set_nonblocking(true)
       .expect("Failed to set std socket to non blocking.");
 
-    let mio_socket = UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
+    let mio_socket = mio_06::net::UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
     info!(
       "UDPListener: new socket with address {:?}",
       mio_socket.local_addr()
@@ -137,7 +137,7 @@ impl UDPListener {
     })
   }
 
-  pub fn mio_socket(&mut self) -> &mut UdpSocket {
+  pub fn mio_socket(&mut self) -> &mut mio_06::net::UdpSocket {
     &mut self.socket
   }
 

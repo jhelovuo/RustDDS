@@ -4,7 +4,7 @@ use std::{io::Write, os::unix::io::AsRawFd};
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use mio::{unix::EventedFd, Events, Poll, PollOpt, Ready, Token};
+use mio_06::{unix::EventedFd, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 use termion::{event::Key, input::TermRead, AsyncReader};
 

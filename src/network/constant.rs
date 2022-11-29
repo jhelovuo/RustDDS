@@ -1,4 +1,4 @@
-use mio::Token;
+use mio_06::Token;
 use mio_extras::channel as mio_channel;
 
 use crate::{

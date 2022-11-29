@@ -6,7 +6,7 @@ use std::{
 };
 
 use log::{debug, error, info, trace, warn};
-use mio::{Event, Events, Poll, PollOpt, Ready, Token};
+use mio_06::{Event, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
@@ -748,7 +748,7 @@ impl DPEventLoop {
 mod tests {
   use std::{thread, time::Duration};
 
-  use mio::{PollOpt, Ready};
+  use mio_06::{PollOpt, Ready};
 
   use super::*;
   use crate::{

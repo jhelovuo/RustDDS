@@ -7,7 +7,7 @@ use std::{
   time::Duration,
 };
 
-use mio::{Evented, Events, Poll, PollOpt, Ready, Token};
+use mio_06::{Evented, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel::{self as mio_channel, Receiver, SendError};
 use serde::Serialize;
 #[allow(unused_imports)]

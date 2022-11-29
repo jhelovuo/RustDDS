@@ -10,7 +10,7 @@ use std::{
 };
 
 use mio_extras::channel as mio_channel;
-use mio::Token;
+use mio_06::Token;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
@@ -873,6 +873,8 @@ impl DomainParticipantInner {
     name: &str,
     timeout: Duration,
   ) -> Result<Option<Topic>> {
+    use mio_06 as mio;
+    
     let poll = mio::Poll::new()?;
     let mut events = mio::Events::with_capacity(1);
     // Should be register before the check and use level trigger to avoid missing
