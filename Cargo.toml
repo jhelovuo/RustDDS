@@ -38,6 +38,7 @@ bytes = "1"
 static_assertions = "1.1"
 thiserror = "1.0.29"
 cdr-encoding-size = { version="^0.5" }
+futures = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 local-ip-address = "0.4.4"

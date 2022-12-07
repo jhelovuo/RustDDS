@@ -11,7 +11,8 @@ use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use mio_06::{Evented, Poll, PollOpt, Ready, Token};
+use mio_06::{Evented, PollOpt, Ready, Token};
+use mio_06;
 
 use crate::{
   dds::{
@@ -520,7 +521,7 @@ where
     )
   }
 
-  /// Produces an interator over the samples filtered b ygiven condition.
+  /// Produces an interator over the samples filtered by a given condition.
   /// Yields only payload data, not SampleInfo metadata
   ///
   /// # Examples
@@ -1236,7 +1237,7 @@ where
 {
   // We just delegate all the operations to notification_receiver, since it
   // already implements Evented
-  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+  fn register(&self, poll: &mio_06::Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
       .notification_receiver
       .register(poll, token, interest, opts)
@@ -1244,7 +1245,7 @@ where
 
   fn reregister(
     &self,
-    poll: &Poll,
+    poll: &mio_06::Poll,
     token: Token,
     interest: Ready,
     opts: PollOpt,
@@ -1254,7 +1255,7 @@ where
       .reregister(poll, token, interest, opts)
   }
 
-  fn deregister(&self, poll: &Poll) -> io::Result<()> {
+  fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
     self.notification_receiver.deregister(poll)
   }
 }
@@ -1299,6 +1300,61 @@ where
     self.my_guid
   }
 }
+
+// ----------------------------------------------
+// ----------------------------------------------
+
+
+pub struct DataReaderStream<
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+> {
+  datareader: DataReader<D,DA>,
+}
+
+use futures::stream::Stream;
+use std::pin::Pin;
+use std::task::{Poll, Context};
+
+// https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
+impl <D,DA> Unpin for DataReaderStream<D,DA> 
+where
+  D: Keyed + DeserializeOwned + 'static,
+  <D as Keyed>::K: Key,
+  DA: DeserializerAdapter<D>,
+{}
+
+impl<D,DA> Stream for DataReaderStream<D,DA> 
+where
+  D: Keyed + DeserializeOwned + 'static,
+  <D as Keyed>::K: Key,
+  DA: DeserializerAdapter<D>,
+{
+  type Item = Result<std::result::Result<D, D::K>>;
+
+  fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    let d = self.datareader
+      .take_bare(1, ReadCondition::not_read());
+    match d {
+      // DDS fails
+      Err(e) => Poll::Ready(Some(Err(e))),
+      Ok(mut v) => {
+        match v.pop() {
+          None => { 
+            // Did not get any data. 
+            //TODO: Store waker. 
+
+            Poll::Pending
+          }
+          Some(d) => Poll::Ready(Some(Ok(d))),
+        }
+      }
+    }
+  }
+}
+
+// ----------------------------------------------
+// ----------------------------------------------
 
 #[cfg(test)]
 mod tests {
