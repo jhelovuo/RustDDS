@@ -887,14 +887,11 @@ impl Discovery {
 
   pub fn handle_participant_reader(&mut self) {
     loop {
-      let s = self.dcps_participant_reader.read_next_sample();
+      let s = self.dcps_participant_reader.take_next_sample();
       debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(d)) => match d.value {
           Ok(participant_data) => {
-            let participant_data = participant_data.clone(); // .clone() is necessary, because .read
-                                                             // returns references to within Reader, so we cannot operate on self until we
-                                                             // clone.
             debug!(
               "handle_participant_reader discovered {:?}",
               &participant_data
@@ -939,23 +936,11 @@ impl Discovery {
   // Check if there are messages about new Readers
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let drds: Vec<std::result::Result<DiscoveredReaderData, GUID>> =
-      match self.dcps_subscription_reader.read(
-        usize::MAX,
-        if read_history.is_some() {
-          ReadCondition::any()
-        } else {
-          ReadCondition::not_read()
-        },
-      ) {
-        // a lot of cloning here, but we must copy the data out of the
-        // reader before we can use self again, as .read() returns references to within
-        // a reader and thus self
-        Ok(ds) => ds
-          .iter()
-          .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+      match self.dcps_subscription_reader.into_iterator() {
+        Ok(ds) => ds.map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
           .filter(|d|
               // If a particiapnt was specified, we must match its GUID prefix.
-              match (read_history, d) {
+              match (read_history, d) { 
                 (None, _) => true, // Not asked to filter by participant
                 (Some(participant_to_update), Ok(drd)) =>
                   drd.reader_proxy.remote_reader_guid.prefix == participant_to_update,
@@ -1001,20 +986,11 @@ impl Discovery {
 
   pub fn handle_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
     let dwds: Vec<std::result::Result<DiscoveredWriterData, GUID>> =
-      match self.dcps_publication_reader.read(
-        usize::MAX,
-        if read_history.is_some() {
-          ReadCondition::any()
-        } else {
-          ReadCondition::not_read()
-        },
-      ) {
+      match self.dcps_publication_reader.into_iterator() {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
-        Ok(ds) => ds
-          .iter()
-          .map(|d| d.value.map(|o| o.clone()).map_err(|g| g.0))
+        Ok(ds) => ds.map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
           // If a particiapnt was specified, we must match its GUID prefix.
           .filter(|d| match (read_history, d) {
             (None, _) => true, // Not asked to filter by participant
@@ -1053,24 +1029,11 @@ impl Discovery {
 
   pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
     let ts: Vec<std::result::Result<(DiscoveredTopicData, GUID), GUID>> =
-      match self.dcps_topic_reader.read(
-        usize::MAX,
-        if read_history.is_some() {
-          ReadCondition::any()
-        } else {
-          ReadCondition::not_read()
-        },
-      ) {
-        // a lot of cloning here, but we must copy the data out of the
-        // reader before we can use self again, as .read() returns references to within
-        // a reader and thus self
-        Ok(ds) => ds
-          .iter()
-          .map(|d| {
-            d.value
-              .map(|o| (o.clone(), d.sample_info.writer_guid()))
-              .map_err(|g| g.0)
-          })
+      match self.dcps_topic_reader.take(usize::MAX, ReadCondition::any()) {
+        Ok(ds) => ds.iter()
+          .map(|d| d.value.clone()
+            .map( |o| (o, d.sample_info.writer_guid()))
+            .map_err(|g| g.0))
           .collect(),
         Err(e) => {
           error!("handle_topic_reader: {:?}", e);

@@ -1,12 +1,10 @@
 use std::{
-  cmp::max,
-  collections::BTreeMap,
   io,
   marker::PhantomData,
-  sync::{Arc, RwLock},
+  sync::{Arc, RwLock, Mutex,},
+  ops::{Deref, DerefMut},
 };
 
-//use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
@@ -17,13 +15,12 @@ use mio_06;
 use crate::{
   dds::{
     datasample_cache::DataSampleCache,
-    ddsdata::DDSData,
     pubsub::Subscriber,
     qos::*,
     readcondition::*,
     statusevents::*,
     topic::Topic,
-    traits::{key::*, serde_adapters::with_key::*, TopicDescription},
+    traits::{key::*, serde_adapters::with_key::*, },
     values::result::*,
     with_key::datasample::*,
   },
@@ -31,13 +28,10 @@ use crate::{
   log_and_err_precondition_not_met,
   serialization::CDRDeserializerAdapter,
   structure::{
-    cache_change::CacheChange,
     dds_cache::DDSCache,
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
-    sequence_number::SequenceNumber,
-    time::Timestamp,
   },
 };
 
@@ -127,11 +121,10 @@ pub struct DataReader<
   my_guid: GUID,
   pub(crate) notification_receiver: mio_channel::Receiver<()>,
 
-  dds_cache: Arc<RwLock<DDSCache>>,
+  dds_cache: Arc<RwLock<DDSCache>>, // global cache
 
-  datasample_cache: DataSampleCache<D>,
-  latest_instant: Timestamp,
-  latest_sequence_number: BTreeMap<GUID, SequenceNumber>,
+  datasample_cache: Mutex<DataSampleCache<D>>, // DataReader-local cache of deserialized samples
+  
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
@@ -204,13 +197,8 @@ where
       my_guid,
       notification_receiver,
       dds_cache,
-      datasample_cache: DataSampleCache::new(topic.qos()),
-      // The reader is created before the datareader, hence initializing the
-      // latest_instant to now should be fine. There should be no smaller instants
-      // added by the reader.
+      datasample_cache: Mutex::new(DataSampleCache::new(topic.qos())),
       my_topic: topic,
-      latest_instant: Timestamp::now(),
-      latest_sequence_number: BTreeMap::new(),
       deserializer_type: PhantomData,
       discovery_command,
       status_receiver: StatusReceiver::new(status_channel_rec),
@@ -218,7 +206,7 @@ where
       reader_command,
     })
   }
-
+  /*
   /// Reads amount of samples found with `max_samples` and `read_condition`
   /// parameters.
   ///
@@ -265,24 +253,25 @@ where
   ///   }
   /// }
   /// ```
+  
   pub fn read(
-    &mut self,
+    &self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<&D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     while self.notification_receiver.try_recv().is_ok() {}
 
-    self.fill_local_datasample_cache();
+    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
 
-    let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    let mut selected = datasample_cache.select_keys_for_access(read_condition);
     selected.truncate(max_samples);
 
-    let result = self.datasample_cache.read_by_keys(&selected);
+    let result = datasample_cache.read_by_keys(&selected);
 
     Ok(result)
   }
-
+  */
   /// Takes amount of sample found with `max_samples` and `read_condition`
   /// parameters.
   ///
@@ -330,24 +319,24 @@ where
   /// }
   /// ```
   pub fn take(
-    &mut self,
+    &self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     while self.notification_receiver.try_recv().is_ok() {}
 
-    self.fill_local_datasample_cache();
-    let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
+    let mut selected = datasample_cache.select_keys_for_access(read_condition);
     debug!("take selected count = {}", selected.len());
     selected.truncate(max_samples);
 
-    let result = self.datasample_cache.take_by_keys(&selected);
+    let result = datasample_cache.take_by_keys(&selected);
     debug!("take taken count = {}", result.len());
 
     Ok(result)
   }
-
+  /*
   /// Reads next unread sample
   ///
   /// # Examples
@@ -385,10 +374,11 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
+  pub fn read_next_sample(&self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
+  */
 
   /// Takes next unread sample
   ///
@@ -427,51 +417,53 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
+  pub fn take_next_sample(&self) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 
   // Iterator interface
 
+  /*
   // Iterator helpers: _bare versions do not fetch or even construct metadata.
   fn read_bare(
-    &mut self,
+    &self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<std::result::Result<&D, D::K>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     while self.notification_receiver.try_recv().is_ok() {}
 
-    self.fill_local_datasample_cache();
+    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
 
-    let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    let mut selected = datasample_cache.select_keys_for_access(read_condition);
     selected.truncate(max_samples);
 
-    let result = self.datasample_cache.read_bare_by_keys(&selected);
+    let result = datasample_cache.read_bare_by_keys(&selected,);
 
     Ok(result)
   }
-
+  */
   fn take_bare(
-    &mut self,
+    &self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<std::result::Result<D, D::K>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     while self.notification_receiver.try_recv().is_ok() {}
 
-    self.fill_local_datasample_cache();
-    let mut selected = self.datasample_cache.select_keys_for_access(read_condition);
+    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
+    let mut selected = datasample_cache.select_keys_for_access(read_condition);
     debug!("take bare selected count = {}", selected.len());
     selected.truncate(max_samples);
 
-    let result = self.datasample_cache.take_bare_by_keys(&selected);
+    let result = datasample_cache.take_bare_by_keys(&selected);
     debug!("take bare taken count = {}", result.len());
 
     Ok(result)
   }
 
+  /*
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
@@ -511,7 +503,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
+  pub fn iterator(&self) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(
@@ -520,7 +512,8 @@ where
         .into_iter(),
     )
   }
-
+  */
+  /*
   /// Produces an interator over the samples filtered by a given condition.
   /// Yields only payload data, not SampleInfo metadata
   ///
@@ -561,13 +554,14 @@ where
   /// }
   /// ```
   pub fn conditional_iterator(
-    &mut self,
+    &self,
     read_condition: ReadCondition,
   ) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
   }
+  */
 
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
@@ -610,9 +604,9 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
+  pub fn into_iterator(&self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
-    // read call
+    // take call
     Ok(
       self
         .take_bare(std::usize::MAX, ReadCondition::not_read())?
@@ -620,7 +614,7 @@ where
     )
   }
 
-  /// Produces an interator over the samples filtered b ygiven condition.
+  /// Produces an interator over the samples filtered by the given condition.
   /// Yields only payload data, not SampleInfo metadata
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the
   /// samples it could have provided are still removed from the `Datareader`.
@@ -662,22 +656,32 @@ where
   /// }
   /// ```
   pub fn into_conditional_iterator(
-    &mut self,
+    &self,
     read_condition: ReadCondition,
   ) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
-    // read call
+    // take call
     Ok(self.take_bare(std::usize::MAX, read_condition)?.into_iter())
   }
+
+
+  // ----------------------------------------------------------------------------
+  // ----------------------------------------------------------------------------
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
-  fn fill_local_datasample_cache(&mut self) {
+  fn fill_and_lock_local_datasample_cache(&self) -> impl DerefMut<Target = DataSampleCache<D> > + '_ {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
       Some(policy::Reliability::Reliable { .. })
     );
+
+    let mut local_cache /*:MutexGuard<'_, DataSampleCache<D>> */ = self.datasample_cache.lock()
+      .unwrap_or_else(|e| panic!("Cannot lock local DataSampleCache. Error: {}", e));
+      // This error will occur only if there are multiple threads accessing the DataReader
+      // and one of them dies while holding the lock. With single thread this should not
+      // be possible.
 
     let dds_cache = match self.dds_cache.read() {
       Ok(rwlock) => rwlock,
@@ -688,186 +692,28 @@ where
       ),
     };
 
-    let cache_changes = dds_cache.topic_get_changes_in_range(
-      &self.my_topic.name(),
-      &self.latest_instant,
-      &Timestamp::now(),
-    );
+    local_cache.fill_from_dds_cache::<DA>(is_reliable, dds_cache, self.my_topic.clone() );
 
-    let mut cache_changes_vec: Vec<(Timestamp, &CacheChange)> = cache_changes.collect();
+    local_cache
+  } 
 
-    // We sort by sequence number so that earlier SNs (from the same writer) are
-    // forced to appear earlier. This way we do not lose any CacheChanges even if
-    // they were received out of order.
-    // The next loop will discard any CacheChanges that appear out of sequence.
-    cache_changes_vec.sort_by_key(|(_ts, cc)| cc.sequence_number);
 
-    for (
-      instant,
-      CacheChange {
-        writer_guid,
-        sequence_number,
-        write_options,
-        data_value,
-      },
-    ) in cache_changes_vec
-    {
-      self.latest_instant = max(self.latest_instant, instant); // update our time pointer
-                                                               // what was the latest
-      let latest_sequence_number_have_already = self.latest_sequence_number.get(writer_guid);
-
-      // Check that the sequence numbers proceed in correct order.
-      // The reliable mode gets stuck if DDSCache is not able to produce
-      // all the SNs withot gaps. (TODO: Ensure that DDSCache satisfies this.)
-      //
-      // If no previous SN is known, then any SN is acceptable, as we may be
-      // joining the data stream at any time.
-      //
-      if (! is_reliable &&
-            // Check that SequenceNumber always goes forward.
-            // Getting the same SN means duplicate packet, which we must drop.
-            latest_sequence_number_have_already
-              .map_or(true,  |latest| sequence_number > latest))
-        || (is_reliable &&
-            // Check that we get all the sequence numbers in order
-            latest_sequence_number_have_already
-              .map_or(true, |latest| *latest + SequenceNumber::from(1) == *sequence_number))
-      {
-        // normal case: sequence_number not seen before
-        // first, update our last-seen-pointer
-        self
-          .latest_sequence_number
-          .insert(*writer_guid, *sequence_number);
-
-        // deserialize into datasample cache
-        match data_value {
-          DDSData::Data { serialized_payload } => {
-            // what is our data serialization format (representation identifier) ?
-            if let Some(recognized_rep_id) = DA::supported_encodings()
-              .iter()
-              .find(|r| **r == serialized_payload.representation_identifier)
-            {
-              match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
-                Ok(payload) => self.datasample_cache.add_sample(
-                  Ok(payload),
-                  *writer_guid,
-                  *sequence_number,
-                  instant,
-                  write_options.clone(),
-                ),
-                Err(e) => {
-                  error!(
-                    "Failed to deserialize bytes: {}, Topic = {}, Type = {:?}",
-                    e,
-                    self.my_topic.name(),
-                    self.my_topic.get_type()
-                  );
-                  info!("Bytes were {:?}", &serialized_payload.value);
-                  continue; // skip this sample
-                }
-              }
-            } else {
-              warn!(
-                "Unknown representation id {:?}.",
-                serialized_payload.representation_identifier
-              );
-              info!("Serialized payload was {:?}", &serialized_payload);
-              continue; // skip this sample, as we cannot decode it
-            }
-          }
-
-          DDSData::DisposeByKey {
-            key: serialized_key,
-            ..
-          } => {
-            match DA::key_from_bytes(
-              &serialized_key.value,
-              serialized_key.representation_identifier,
-            ) {
-              Ok(key) => {
-                self.datasample_cache.add_sample(
-                  Err(key),
-                  *writer_guid,
-                  *sequence_number,
-                  instant,
-                  write_options.clone(),
-                );
-              }
-              Err(e) => {
-                warn!(
-                  "Failed to deserialize key {}, Topic = {}, Type = {:?}",
-                  e,
-                  self.my_topic.name(),
-                  self.my_topic.get_type()
-                );
-                debug!("Bytes were {:?}", &serialized_key.value);
-                continue; // skip this sample
-              }
-            }
-          }
-
-          DDSData::DisposeByKeyHash { key_hash, .. } => {
-            if let Some(key) = self.datasample_cache.key_by_hash(*key_hash) {
-              self.datasample_cache.add_sample(
-                Err(key),
-                *writer_guid,
-                *sequence_number,
-                instant,
-                write_options.clone(),
-              );
-            } else {
-              warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash);
-              // The cache should know hash -> key mapping even if the sample
-              // has been disposed or .take()n
-            }
-          } /*
-            DDSData::DataFrags { representation_identifier, bytes_frags } => {
-              // what is our data serialization format (representation identifier) ?
-              if let Some(recognized_rep_id) =
-                  DA::supported_encodings().iter().find(|r| *r == representation_identifier)
-              {
-                match DA::from_vec_bytes(bytes_frags, *recognized_rep_id) {
-                  Ok(payload) => {
-                    self
-                    .datasample_cache
-                    .add_sample(Ok(payload), *writer_guid, instant, None)
-                  }
-                  Err(e) => {
-                    error!("Failed to deserialize (DATAFRAG) bytes: {}, Topic = {}, Type = {:?}",
-                            e, self.my_topic.name(), self.my_topic.get_type() );
-                    //debug!("Bytes were {:?}",&serialized_payload.value);
-                    continue // skip this sample
-                  }
-                }
-              } else {
-                  warn!("Unknown representation id {:?}.", representation_identifier);
-                  //debug!("Serialized payload was {:?}", &serialized_payload);
-                  continue // skip this sample, as we cannot decode it
-              }
-            } */
-        } // match
-      }
-      // if (acceptable SN)
-      else {
-        // sequence naumber is not acceptable
-      }
-    } // for loop
-  } // fn
 
   fn infer_key(
-    &self,
+    datasample_cache: &impl Deref<Target = DataSampleCache<D> >,
     instance_key: Option<<D as Keyed>::K>,
     this_or_next: SelectByKey,
   ) -> Option<<D as Keyed>::K> {
     match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => Some(k),
-        SelectByKey::Next => self.datasample_cache.next_key(&k),
+        SelectByKey::Next => datasample_cache.next_key(&k),
       },
-      None => self.datasample_cache.instance_map.keys().next().cloned(),
+      None => datasample_cache.instance_map.keys().next().cloned(),
     }
   }
 
+  /*
   /// Works similarly to read(), but will return only samples from a specific
   /// instance. The instance is specified by an optional key. In case the key
   /// is not specified, the smallest (in key order) instance is selected.
@@ -917,7 +763,7 @@ where
   /// }
   /// ```
   pub fn read_instance(
-    &mut self,
+    &self,
     max_samples: usize,
     read_condition: ReadCondition,
     // Select only samples from instance specified by key. In case of None, select the
@@ -930,22 +776,22 @@ where
     // Clear notification buffer. This must be done first to avoid race conditions.
     while self.notification_receiver.try_recv().is_ok() {}
 
-    self.fill_local_datasample_cache();
+    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
 
-    let key = match self.infer_key(instance_key, this_or_next) {
+    let key = match Self::infer_key(&datasample_cache, instance_key, this_or_next) {
       Some(k) => k,
       None => return Ok(Vec::new()),
     };
 
-    let mut selected = self
-      .datasample_cache
+    let mut selected = datasample_cache
       .select_instance_keys_for_access(&key, read_condition);
     selected.truncate(max_samples);
 
-    let result = self.datasample_cache.read_by_keys(&selected);
+    let result = datasample_cache.read_by_keys(&selected);
 
     Ok(result)
   }
+  */
 
   /// Similar to read_instance, but will return owned datasamples
   /// This should cover DDS DataReader methods take_instance,
@@ -990,7 +836,7 @@ where
   /// }
   /// ```
   pub fn take_instance(
-    &mut self,
+    &self,
     max_samples: usize,
     read_condition: ReadCondition,
     // Select only samples from instance specified by key. In case of None, select the
@@ -1003,19 +849,18 @@ where
     // Clear notification buffer. This must be done first to avoid race conditions.
     while self.notification_receiver.try_recv().is_ok() {}
 
-    self.fill_local_datasample_cache();
+    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
 
-    let key = match self.infer_key(instance_key, this_or_next) {
+    let key = match Self::infer_key(&datasample_cache, instance_key, this_or_next) {
       Some(k) => k,
       None => return Ok(Vec::new()),
     };
 
-    let mut selected = self
-      .datasample_cache
+    let mut selected = datasample_cache
       .select_instance_keys_for_access(&key, read_condition);
     selected.truncate(max_samples);
 
-    let result = self.datasample_cache.take_by_keys(&selected);
+    let result = datasample_cache.take_by_keys(&selected);
 
     Ok(result)
   }
@@ -1332,7 +1177,7 @@ where
 {
   type Item = Result<std::result::Result<D, D::K>>;
 
-  fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     let d = self.datareader
       .take_bare(1, ReadCondition::not_read());
     match d {
@@ -1479,9 +1324,9 @@ mod tests {
 
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    matching_datareader.fill_local_datasample_cache();
-    let deserialized_random_data = matching_datareader.read(1, ReadCondition::any()).unwrap()[0]
-      .value()
+    //matching_datareader.fill_local_datasample_cache();
+    let deserialized_random_data = matching_datareader.take(1, ReadCondition::any()).unwrap()[0]
+      .value().as_ref()
       .unwrap()
       .clone();
 
@@ -1523,11 +1368,11 @@ mod tests {
     new_reader.handle_data_msg(data2, data_flags, &mr_state);
     new_reader.handle_data_msg(data3, data_flags, &mr_state);
 
-    matching_datareader.fill_local_datasample_cache();
+    //matching_datareader.fill_local_datasample_cache();
     let random_data_vec = matching_datareader
-      .read_instance(100, ReadCondition::any(), Some(data_key), SelectByKey::This)
+      .take_instance(100, ReadCondition::any(), Some(data_key), SelectByKey::This)
       .unwrap();
-    assert_eq!(random_data_vec.len(), 3);
+    assert_eq!(random_data_vec.len(), 2);
   }
 
   #[test]
@@ -1637,6 +1482,7 @@ mod tests {
     reader.handle_data_msg(data_msg2, data_flags, &mr_state);
 
     // Read the same sample two times.
+    /*
     {
       let result_vec = datareader.read(100, ReadCondition::any()).unwrap();
       assert_eq!(result_vec.len(), 2);
@@ -1654,7 +1500,7 @@ mod tests {
       let d3 = result_vec3[0].value().unwrap();
       assert_eq!(&test_data, d3);
     }
-
+    */
     // Take
     let mut result_vec = datareader.take(100, ReadCondition::any()).unwrap();
     let result_vec2 = datareader.take(100, ReadCondition::any());
@@ -1744,21 +1590,21 @@ mod tests {
     reader.handle_data_msg(data_msg3, data_flags, &mr_state);
     reader.handle_data_msg(data_msg4, data_flags, &mr_state);
 
-    info!("calling read with key 1 and this");
+    info!("calling take with key 1 and this");
     let results =
-      datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::This);
-    assert_eq!(data_key1, results.unwrap()[0].value().unwrap().clone());
+      datareader.take_instance(100, ReadCondition::any(), Some(key1), SelectByKey::This);
+    assert_eq!(data_key1, results.unwrap()[0].value().as_ref().unwrap().clone());
 
-    info!("calling read with None and this");
+    info!("calling take with None and this");
     // Takes the samllest key, 1 in this case.
-    let results = datareader.read_instance(100, ReadCondition::any(), None, SelectByKey::This);
-    assert_eq!(data_key1, results.unwrap()[0].value().unwrap().clone());
+    let results = datareader.take_instance(100, ReadCondition::any(), None, SelectByKey::This);
+    assert_eq!(data_key1, results.unwrap()[0].value().as_ref().unwrap().clone());
 
-    info!("calling read with key 1 and next");
+    info!("calling take with key 1 and next");
     let results =
-      datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::Next);
+      datareader.take_instance(100, ReadCondition::any(), Some(key1), SelectByKey::Next);
     assert_eq!(results.as_ref().unwrap().len(), 3);
-    assert_eq!(data_key2_2, results.unwrap()[1].value().unwrap().clone());
+    assert_eq!(data_key2_2, results.unwrap()[1].value().as_ref().unwrap().clone());
 
     info!("calling take with key 2 and this");
     let results =

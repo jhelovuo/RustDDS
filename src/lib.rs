@@ -122,7 +122,7 @@
 //! writer.write(some_data, None).unwrap();
 //!
 //! // ... Some data has arrived at some point for the reader
-//! let data_sample = if let Ok(Some(value)) = reader.read_next_sample() {
+//! let data_sample = if let Ok(Some(value)) = reader.take_next_sample() {
 //!   value
 //! } else {
 //!   // no data has arrived

@@ -69,14 +69,17 @@ impl Topic {
     }
   }
 
+  // This is private, because it is made public via the TopicDescription trait
   fn participant(&self) -> Option<DomainParticipant> {
     self.inner.participant()
   }
 
+  // This is private, because it is made public via the TopicDescription trait
   fn get_type(&self) -> TypeDesc {
     self.inner.get_type()
   }
 
+  // This is private, because it is made public via the TopicDescription trait
   fn name(&self) -> String {
     self.inner.name()
   }
