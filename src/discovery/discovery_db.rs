@@ -47,6 +47,12 @@ pub(crate) struct DiscoveryDB {
   external_topic_readers: BTreeMap<GUID, DiscoveredReaderData>,
   external_topic_writers: BTreeMap<GUID, DiscoveredWriterData>,
 
+  // These are "attic" storages for readers and writers whose participant
+  // was lost due to time-out. If we have a 
+  external_topic_readers_attic: BTreeMap<GUID, DiscoveredReaderData>,
+  external_topic_writers_attic: BTreeMap<GUID, DiscoveredWriterData>,
+
+
   // Database of topic updates:
   // Outer level key is topic name
   // Inner key is topic data sender.
@@ -64,6 +70,17 @@ pub(crate) enum DiscoveredVia {
   Subscription, // we discovered a reader on this topic
 }
 
+fn move_by_guid_prefix<D>(guid_prefix: GuidPrefix, from: &mut BTreeMap<GUID,D>, to: &mut BTreeMap<GUID,D> ) {
+  let to_move: Vec<GUID> = from
+    .range(guid_prefix.range())
+    .map(|(g, _)| *g)
+    .collect();
+  for guid in to_move {
+    from.remove(&guid).map(|d| to.insert(guid,d));
+  }
+
+}
+
 impl DiscoveryDB {
   pub fn new(my_guid: GUID, topic_updated_sender: mio_extras::channel::SyncSender<()>) -> Self {
     Self {
@@ -74,6 +91,8 @@ impl DiscoveryDB {
       local_topic_readers: BTreeMap::new(),
       external_topic_readers: BTreeMap::new(),
       external_topic_writers: BTreeMap::new(),
+      external_topic_readers_attic: BTreeMap::new(),
+      external_topic_writers_attic: BTreeMap::new(),
       topics: BTreeMap::new(),
       topic_updated_sender,
     }
@@ -115,6 +134,9 @@ impl DiscoveryDB {
         );
         new_participant = false;
       }
+
+      move_by_guid_prefix(guid.prefix, &mut self.external_topic_readers_attic, &mut self.external_topic_readers);
+      move_by_guid_prefix(guid.prefix, &mut self.external_topic_writers_attic, &mut self.external_topic_writers);
     }
     // actual work here:
     self.participant_proxies.insert(guid.prefix, data.clone());
@@ -124,6 +146,7 @@ impl DiscoveryDB {
 
     new_participant
   }
+
   pub fn participant_is_alive(&mut self, guid_prefix: GuidPrefix) {
     if let Some(ts) = self.participant_last_life_signs.get_mut(&guid_prefix) {
       let now = Instant::now();
@@ -139,14 +162,21 @@ impl DiscoveryDB {
     }
   }
 
-  pub fn remove_participant(&mut self, guid_prefix: GuidPrefix) {
+  // active_disposal means that we received a discovery message announcing the disposal of
+  // the participant. active_disposal=false means that the participant timed out.
+  pub fn remove_participant(&mut self, guid_prefix: GuidPrefix, active_disposal: bool) {
     info!("removing participant {:?}", guid_prefix);
     self.participant_proxies.remove(&guid_prefix);
     self.participant_last_life_signs.remove(&guid_prefix);
-
-    self.remove_topic_reader_with_prefix(guid_prefix);
-
-    self.remove_topic_writer_with_prefix(guid_prefix);
+    
+    if active_disposal {
+      self.remove_topic_reader_with_prefix(guid_prefix);
+      self.remove_topic_writer_with_prefix(guid_prefix);
+    } else {
+      // move to attic
+      move_by_guid_prefix(guid_prefix, &mut self.external_topic_readers, &mut self.external_topic_readers_attic);
+      move_by_guid_prefix(guid_prefix, &mut self.external_topic_writers, &mut self.external_topic_writers_attic);
+    }
   }
 
   pub fn find_participant_proxy(
@@ -222,7 +252,7 @@ impl DiscoveryDB {
       } // match
     } // for
     for guid in &to_remove {
-      self.remove_participant(*guid);
+      self.remove_participant(*guid, false); // false = removed due to timeout
     }
     to_remove
   }

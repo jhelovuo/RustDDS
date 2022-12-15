@@ -918,7 +918,7 @@ impl Discovery {
           Err(participant_guid) => {
             self
               .discovery_db_write()
-              .remove_participant(participant_guid.0.prefix);
+              .remove_participant(participant_guid.0.prefix, true); // true = actively removed
             self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
               guid_prefix: participant_guid.0.prefix,
             });

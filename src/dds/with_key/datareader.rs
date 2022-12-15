@@ -1157,6 +1157,23 @@ pub struct DataReaderStream<
   datareader: DataReader<D,DA>,
 }
 
+impl <D,DA> DataReaderStream<D,DA>
+where
+  D: Keyed + DeserializeOwned + 'static,
+  <D as Keyed>::K: Key,
+  DA: DeserializerAdapter<D>,
+{
+  pub fn new(datareader: DataReader<D,DA>) -> Self {
+    DataReaderStream{ datareader }
+  }
+
+  pub fn into_datareader(self) -> DataReader<D,DA> {
+    self.datareader
+  }
+
+}
+
+
 use futures::stream::Stream;
 use std::pin::Pin;
 use std::task::{Poll, Context};
@@ -1216,7 +1233,7 @@ mod tests {
       message_receiver::*,
       participant::DomainParticipant,
       reader::{Reader, ReaderIngredients},
-      topic::TopicKind,
+      topic::{TopicKind, TopicDescription,},
       traits::key::Keyed,
     },
     messages::submessages::{
@@ -1276,7 +1293,7 @@ mod tests {
       mio_extras::timer::Builder::default().build(),
     );
 
-    let mut matching_datareader = sub
+    let matching_datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(&topic, None)
       .unwrap();
 
@@ -1419,7 +1436,7 @@ mod tests {
       mio_extras::timer::Builder::default().build(),
     );
 
-    let mut datareader = sub
+    let datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(&topic, None)
       .unwrap();
 
