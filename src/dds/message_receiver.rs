@@ -380,11 +380,11 @@ impl MessageReceiver {
     }
   }
 
-  pub fn notify_data_to_readers(&self, readers: Vec<EntityId>) {
+  pub fn notify_data_to_readers(&mut self, readers: Vec<EntityId>) {
     for eid in readers {
       self
         .available_readers
-        .get(&eid)
+        .get_mut(&eid)
         .map(Reader::notify_cache_change);
     }
   }

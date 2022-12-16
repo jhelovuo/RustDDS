@@ -948,9 +948,13 @@ impl InnerSubscriber {
     let (send, rec) = mio_channel::sync_channel::<()>(4);
     // status change channel from Reader to DataReader
     let (status_sender, status_receiver) = mio_channel::sync_channel::<DataReaderStatus>(4);
+
     // reader command channel from Datareader to Reader
     let (reader_command_sender, reader_command_receiver) =
-      mio_channel::sync_channel::<ReaderCommand>(4);
+      mio_channel::sync_channel::<ReaderCommand>(0);
+    // The buffer length is zero, i.e. sender and receiver must rendezvous at send/receive.
+    // This is needed to synchronize sending of wakers from DataReader to Reader.
+    // If the capacity is increased, then some data available for reading notifications may be missed.
 
     // Use subscriber QoS as basis, modify by Topic settings, and modify by
     // specified QoS.

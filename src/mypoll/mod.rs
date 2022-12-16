@@ -52,6 +52,10 @@ impl MyPoll {
   }
 
   pub fn new_sync_channel<T>(&self, capacity:usize, notification_token: Token) -> (SyncSender<T>, Receiver<T>) {
+    if notification_token == self.waker_token {
+      panic!("new_sync_channel: {:?} overlaps with poll-wide waker Token.", notification_token);
+    }
+
     let notify_id =  token_to_notification_id(notification_token);
     let q = Arc::clone(&self.notify_queue); // Why cannot we just do this directly as function argument below?? (rustc 1.65.0)
     // channel::sync_channel(Arc::clone(&self.notify_queue), notify_id, capacity, )
@@ -73,6 +77,10 @@ impl MyPoll {
   }
 
   pub fn new_timer(&self, token: Token) -> Timer {
+    if token == self.waker_token {
+      panic!("new_timer: {:?} overlaps with poll-wide waker Token.", token);
+    }
+
     Timer { 
       scheduler: Arc::clone(&self.scheduler),
       token, 

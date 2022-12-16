@@ -8,9 +8,17 @@ use std::{
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
-use log::{debug, error, info, warn};
+use log::{debug, error, info, warn, trace};
 use mio_06::{Evented, PollOpt, Ready, Token};
 use mio_06;
+
+use mio_08;
+use mio_misc;
+
+use futures::stream::Stream;
+use std::pin::Pin;
+use std::task::{Poll, Context, Waker};
+
 
 use crate::{
   dds::{
@@ -19,10 +27,11 @@ use crate::{
     qos::*,
     readcondition::*,
     statusevents::*,
-    topic::Topic,
+    topic::{Topic, TopicDescription,},
     traits::{key::*, serde_adapters::with_key::*, },
     values::result::*,
     with_key::datasample::*,
+  
   },
   discovery::{data_types::topic_data::PublicationBuiltinTopicData, discovery::DiscoveryCommand},
   log_and_err_precondition_not_met,
@@ -33,6 +42,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GUID},
   },
+  mypoll::token_to_notification_id,
 };
 
 /// Simplified type for CDR encoding
@@ -46,10 +56,34 @@ pub enum SelectByKey {
   Next,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug,)]
+pub(crate) enum DataReaderWaker {
+  Mio08Token{ token: mio_08::Token, notifier: Arc<dyn mio_misc::queue::Notifier>, },
+  FutureWaker(Waker),
+  NoWaker,
+}
+
+impl DataReaderWaker {
+  pub fn wake(&mut self) {
+    use DataReaderWaker::*;
+    match self {
+      NoWaker => (),
+      Mio08Token{ token, notifier } => 
+        notifier.notify(token_to_notification_id(token.clone()))
+          .unwrap_or_else(|e| error!("Reader cannot notify Datareader: {:?}",e)),
+      FutureWaker(fut_waker) => {
+        fut_waker.wake_by_ref();
+        *self = NoWaker;
+      }
+    }
+  }
+}
+
+#[derive(Clone, Debug,)]
 pub(crate) enum ReaderCommand {
   #[allow(dead_code)] // TODO: Implement this (resetting) feature
   ResetRequestedDeadlineStatus,
+  InstallWaker(DataReaderWaker),
 }
 /*
 struct CurrentStatusChanges {
@@ -191,6 +225,10 @@ where
 
     let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), my_id);
 
+    // DEBUG:
+    reader_command.send(ReaderCommand::InstallWaker(DataReaderWaker::NoWaker)).unwrap();
+    // DEBUG
+
     Ok(Self {
       my_subscriber: subscriber,
       qos_policy,
@@ -328,11 +366,11 @@ where
 
     let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
     let mut selected = datasample_cache.select_keys_for_access(read_condition);
-    debug!("take selected count = {}", selected.len());
+    trace!("take selected count = {}", selected.len());
     selected.truncate(max_samples);
 
     let result = datasample_cache.take_by_keys(&selected);
-    debug!("take taken count = {}", result.len());
+    trace!("take taken count = {}", result.len());
 
     Ok(result)
   }
@@ -454,11 +492,11 @@ where
 
     let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
     let mut selected = datasample_cache.select_keys_for_access(read_condition);
-    debug!("take bare selected count = {}", selected.len());
+    trace!("take bare selected count = {}", selected.len());
     selected.truncate(max_samples);
 
     let result = datasample_cache.take_bare_by_keys(&selected);
-    debug!("take bare taken count = {}", result.len());
+    trace!("take bare taken count = {}", result.len());
 
     Ok(result)
   }
@@ -1174,9 +1212,6 @@ where
 }
 
 
-use futures::stream::Stream;
-use std::pin::Pin;
-use std::task::{Poll, Context};
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
 impl <D,DA> Unpin for DataReaderStream<D,DA> 
@@ -1195,20 +1230,38 @@ where
   type Item = Result<std::result::Result<D, D::K>>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    debug!("poll_next");
     let d = self.datareader
       .take_bare(1, ReadCondition::not_read());
     match d {
-      // DDS fails
-      Err(e) => Poll::Ready(Some(Err(e))),
+      Err(e) => // DDS fails
+        Poll::Ready(Some(Err(e))),  
+
       Ok(mut v) => {
         match v.pop() {
+          Some(d) => Poll::Ready(Some(Ok(d))),
           None => { 
             // Did not get any data. 
-            //TODO: Store waker. 
-
-            Poll::Pending
+            // --> Store waker.
+            // 1. synchronously store waker to background thread (must rendezvous)
+            // 2. try take_bare again, in case something arrived just now
+            // 3. if nothing still, return pending.
+            debug!("poll_next: setting up waker...");
+            self.datareader.reader_command
+              .send(ReaderCommand::InstallWaker(DataReaderWaker::FutureWaker(cx.waker().clone())))
+              .unwrap_or_else(|_| error!("reader_command channel disconnected! topic={:?}", 
+                self.datareader.my_topic.name() ));
+            debug!("poll_next: set up waker");
+            match self.datareader.take_bare(1, ReadCondition::not_read()) {
+              Err(e) => Poll::Ready(Some(Err(e))),  
+              Ok(mut v) => {
+                match v.pop() {
+                  None => Poll::Pending,
+                  Some(d) => Poll::Ready(Some(Ok(d))),         
+                }
+              }
+            }
           }
-          Some(d) => Poll::Ready(Some(Ok(d))),
         }
       }
     }

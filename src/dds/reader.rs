@@ -40,7 +40,10 @@ use crate::{
     time::Timestamp,
   },
 };
-use super::{qos::InlineQos, with_key::datareader::ReaderCommand};
+use super::{
+  qos::InlineQos, 
+  with_key::datareader::{ReaderCommand, DataReaderWaker,}
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {
@@ -113,6 +116,7 @@ pub(crate) struct Reader {
 
   pub(crate) timed_event_timer: Timer<TimedEvent>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
+  data_reader_waker: DataReaderWaker,
 }
 
 impl Reader {
@@ -149,6 +153,7 @@ impl Reader {
       offered_incompatible_qos_count: 0,
       timed_event_timer,
       data_reader_command_receiver: i.data_reader_command_receiver,
+      data_reader_waker: DataReaderWaker::NoWaker,
     }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
@@ -265,7 +270,10 @@ impl Reader {
           warn!("RESET_REQUESTED_DEADLINE_STATUS not implemented!");
           //TODO: This should be implemented.
         }
-
+        Ok(ReaderCommand::InstallWaker(waker)) => {
+          warn!("Installing waker");
+          self.data_reader_waker = waker;
+        }
         // Disconnected is normal when terminating
         Err(TryRecvError::Disconnected) => {
           trace!("DataReader disconnected");
@@ -991,11 +999,15 @@ impl Reader {
 
   // notifies DataReaders (or any listeners that history cache has changed for
   // this reader) likely use of mio channel
-  pub fn notify_cache_change(&self) {
+  pub fn notify_cache_change(&mut self) {
+    
+    self.data_reader_waker.wake();
+
     match self.notification_sender.try_send(()) {
       Ok(()) => (),
-      Err(mio_channel::TrySendError::Full(_)) => (), /* This is harmless. There is a */
-      // notification in already.
+      Err(mio_channel::TrySendError::Full(_)) => (), 
+        // This is harmless. There is a notification in already.
+
       Err(mio_channel::TrySendError::Disconnected(_)) => {
         // If we get here, our DataReader has died. The Reader should now
         // dispose itself. TODO: Implement Reader disposal.
