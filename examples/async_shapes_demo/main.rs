@@ -30,6 +30,7 @@ use rand::prelude::*;
 
 use smol::{prelude::*, Async};
 use futures::FutureExt;
+use futures::stream::StreamExt;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Shape {
@@ -163,16 +164,14 @@ fn main() -> std::io::Result<()> {
   let mut datareader_stream = DataReaderStream::new(reader);
 
   smol::block_on(async {
-    println!("async started");
     let mut run = true;
     let mut stop = stop_receiver.recv().fuse();
-    let mut ds = datareader_stream.next().fuse();
     while run {
       futures::select! {
         _ = stop => run = false,
-        r = ds => {
+        r = datareader_stream.select_next_some() => {
           match r {
-            Some(Ok(v)) =>
+            Ok(v) =>
               match v {
                   Ok(sample) => println!(
                       "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
@@ -184,11 +183,10 @@ fn main() -> std::io::Result<()> {
                     ),
                   Err(key) => println!("Disposed key {:?}", key),
               }
-            Some(Err(e)) => {
+            Err(e) => {
               error!("{:?}",e);
               break;
             }
-            None => run = false,
           }
         }      
       }

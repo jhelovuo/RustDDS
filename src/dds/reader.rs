@@ -2,7 +2,7 @@ use std::{
   collections::{BTreeMap, BTreeSet},
   fmt, iter,
   rc::Rc,
-  sync::{Arc, RwLock},
+  sync::{Arc, RwLock, Mutex, },
   time::Duration as StdDuration,
 };
 
@@ -59,6 +59,7 @@ pub(crate) struct ReaderIngredients {
   pub topic_name: String,
   pub qos_policy: QosPolicies,
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
+  pub (crate) data_reader_waker: Arc<Mutex<DataReaderWaker>>,
 }
 
 impl ReaderIngredients {
@@ -116,7 +117,7 @@ pub(crate) struct Reader {
 
   pub(crate) timed_event_timer: Timer<TimedEvent>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
-  data_reader_waker: DataReaderWaker,
+  data_reader_waker: Arc<Mutex<DataReaderWaker>>,
 }
 
 impl Reader {
@@ -153,7 +154,7 @@ impl Reader {
       offered_incompatible_qos_count: 0,
       timed_event_timer,
       data_reader_command_receiver: i.data_reader_command_receiver,
-      data_reader_waker: DataReaderWaker::NoWaker,
+      data_reader_waker: i.data_reader_waker,
     }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
@@ -269,10 +270,6 @@ impl Reader {
         Ok(ReaderCommand::ResetRequestedDeadlineStatus) => {
           warn!("RESET_REQUESTED_DEADLINE_STATUS not implemented!");
           //TODO: This should be implemented.
-        }
-        Ok(ReaderCommand::InstallWaker(waker)) => {
-          warn!("Installing waker");
-          self.data_reader_waker = waker;
         }
         // Disconnected is normal when terminating
         Err(TryRecvError::Disconnected) => {
@@ -1001,7 +998,8 @@ impl Reader {
   // this reader) likely use of mio channel
   pub fn notify_cache_change(&mut self) {
     
-    self.data_reader_waker.wake();
+    self.data_reader_waker.lock().unwrap() // TODO: unwrap
+      .wake();
 
     match self.notification_sender.try_send(()) {
       Ok(()) => (),

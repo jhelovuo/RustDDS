@@ -15,7 +15,8 @@ use mio_06;
 use mio_08;
 use mio_misc;
 
-use futures::stream::Stream;
+use futures::stream::{Stream, FusedStream,};
+use futures::future::FusedFuture;
 use std::pin::Pin;
 use std::task::{Poll, Context, Waker};
 
@@ -83,7 +84,6 @@ impl DataReaderWaker {
 pub(crate) enum ReaderCommand {
   #[allow(dead_code)] // TODO: Implement this (resetting) feature
   ResetRequestedDeadlineStatus,
-  InstallWaker(DataReaderWaker),
 }
 /*
 struct CurrentStatusChanges {
@@ -167,6 +167,7 @@ pub struct DataReader<
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // resetting deadline missed status. Remove attribute when it is supported.
   reader_command: mio_channel::SyncSender<ReaderCommand>,
+  data_reader_waker: Arc<Mutex<DataReaderWaker>>,
 }
 
 impl<D, DA> Drop for DataReader<D, DA>
@@ -213,6 +214,7 @@ where
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     status_channel_rec: mio_channel::Receiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
+    data_reader_waker: Arc<Mutex<DataReaderWaker>>,
   ) -> Result<Self> {
     let dp = match subscriber.participant() {
       Some(dp) => dp,
@@ -224,10 +226,6 @@ where
     };
 
     let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), my_id);
-
-    // DEBUG:
-    reader_command.send(ReaderCommand::InstallWaker(DataReaderWaker::NoWaker)).unwrap();
-    // DEBUG
 
     Ok(Self {
       my_subscriber: subscriber,
@@ -242,6 +240,7 @@ where
       status_receiver: StatusReceiver::new(status_channel_rec),
       //current_status: CurrentStatusChanges::new(),
       reader_command,
+      data_reader_waker,
     })
   }
   /*
@@ -1247,10 +1246,8 @@ where
             // 2. try take_bare again, in case something arrived just now
             // 3. if nothing still, return pending.
             debug!("poll_next: setting up waker...");
-            self.datareader.reader_command
-              .send(ReaderCommand::InstallWaker(DataReaderWaker::FutureWaker(cx.waker().clone())))
-              .unwrap_or_else(|_| error!("reader_command channel disconnected! topic={:?}", 
-                self.datareader.my_topic.name() ));
+            *self.datareader.data_reader_waker.lock().unwrap() // TODO: remove unwrap
+              = DataReaderWaker::FutureWaker(cx.waker().clone());
             debug!("poll_next: set up waker");
             match self.datareader.take_bare(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),  
@@ -1265,6 +1262,17 @@ where
         }
       }
     }
+  }
+}
+
+impl<D,DA> FusedStream for DataReaderStream<D,DA> 
+where
+  D: Keyed + DeserializeOwned + 'static,
+  <D as Keyed>::K: Key,
+  DA: DeserializerAdapter<D>,
+{
+  fn is_terminated(&self) -> bool {
+    false // Never terminate. Or it is always valid to call poll_next().
   }
 }
 

@@ -112,14 +112,14 @@ impl UDPSender {
         if bytes_sent == buffer.len() { // ok
         } else {
           error!(
-            "send_to_locator - send_to tried {} bytes, sent only {}",
+            "send_to_udp_socket - send_to tried {} bytes, sent only {}",
             buffer.len(),
             bytes_sent
           );
         }
       }
       Err(e) => {
-        warn!("send_to_locator - send_to {} : {:?}", addr, e);
+        warn!("send_to_udp_socket - send_to {} : {:?} len={}", addr, e, buffer.len());
       }
     }
   }

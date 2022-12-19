@@ -28,6 +28,7 @@ use crate::{
     values::result::{Error, Result},
     with_key::{
       datareader::DataReader as WithKeyDataReader, datawriter::DataWriter as WithKeyDataWriter,
+      DataReaderWaker,
     },
     writer::WriterIngredients,
   },
@@ -973,6 +974,8 @@ impl InnerSubscriber {
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
 
+    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+
     let new_reader = ReaderIngredients {
       guid: reader_guid,
       notification_sender: send,
@@ -980,6 +983,7 @@ impl InnerSubscriber {
       topic_name: topic.name(),
       qos_policy: qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker: data_reader_waker.clone(),
     };
 
     {
@@ -1001,6 +1005,7 @@ impl InnerSubscriber {
       self.discovery_command.clone(),
       status_receiver,
       reader_command_sender,
+      data_reader_waker,
     )?;
 
     // Create new topic to DDScache if one isn't present
