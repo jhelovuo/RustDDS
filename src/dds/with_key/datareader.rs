@@ -1186,6 +1186,7 @@ where
 // ----------------------------------------------
 // ----------------------------------------------
 
+// Async interface to the DataReader
 
 pub struct DataReaderStream<
   D: Keyed + DeserializeOwned,

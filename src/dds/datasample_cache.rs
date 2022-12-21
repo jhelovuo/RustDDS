@@ -120,7 +120,17 @@ where
     // forced to appear earlier. This way we do not lose any CacheChanges even if
     // they were received out of order.
     // The next loop will discard any CacheChanges that appear out of sequence.
-    cache_changes_vec.sort_by_key(|(_ts, cc)| cc.sequence_number);
+
+    if cache_changes_vec.len() > 1 &&
+      // Check if the sequence is already sorted, as we expect this to be really common.
+      ! cache_changes_vec.iter().zip(cache_changes_vec.iter().skip(1))
+        .all(|((_,a),(_,b))| a.sequence_number <= b.sequence_number)
+      // TODO: We can change this to .is_sorted_by_key( ) when it lands in stable std library.
+    {  
+      cache_changes_vec.sort_by_key(|(_ts, cc)| cc.sequence_number);
+      // .sort_by_key function documentation says it is optimized for almost-sorted case,
+      // which is good here.
+    }
 
     for (
       instant,
