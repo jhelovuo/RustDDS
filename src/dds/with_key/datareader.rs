@@ -1108,6 +1108,11 @@ where
   pub fn get_matched_publications(&self) -> impl Iterator<Item = PublicationBuiltinTopicData> {
     vec![].into_iter()
   }
+
+  pub fn async_sample_stream(&self) -> DataReaderStream<D,DA> {
+    DataReaderStream{ datareader: self }
+  }
+
 } // impl
 
 // This is  not part of DDS spec. We implement mio Eventd so that the
@@ -1188,40 +1193,40 @@ where
 
 // Async interface to the DataReader
 
-pub struct DataReaderStream<
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+pub struct DataReaderStream<'a,
+  D: Keyed + DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
-  datareader: DataReader<D,DA>,
+  datareader: &'a DataReader<D,DA>,
 }
 
-impl <D,DA> DataReaderStream<D,DA>
+impl <'a, D,DA> DataReaderStream<'a, D,DA>
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  pub fn new(datareader: DataReader<D,DA>) -> Self {
-    DataReaderStream{ datareader }
-  }
+  // pub fn new(datareader: &DataReader<D,DA>) -> Self {
+  //   DataReaderStream{ datareader }
+  // }
 
-  pub fn into_datareader(self) -> DataReader<D,DA> {
-    self.datareader
-  }
+  // pub fn into_datareader(self) -> DataReader<D,DA> {
+  //   self.datareader
+  // }
 
 }
 
 
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
-impl <D,DA> Unpin for DataReaderStream<D,DA> 
+impl <'a, D,DA> Unpin for DataReaderStream<'a, D,DA> 
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {}
 
-impl<D,DA> Stream for DataReaderStream<D,DA> 
+impl<'a, D,DA> Stream for DataReaderStream<'a, D,DA> 
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
@@ -1246,10 +1251,8 @@ where
             // 1. synchronously store waker to background thread (must rendezvous)
             // 2. try take_bare again, in case something arrived just now
             // 3. if nothing still, return pending.
-            debug!("poll_next: setting up waker...");
             *self.datareader.data_reader_waker.lock().unwrap() // TODO: remove unwrap
               = DataReaderWaker::FutureWaker(cx.waker().clone());
-            debug!("poll_next: set up waker");
             match self.datareader.take_bare(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),  
               Ok(mut v) => {
@@ -1266,7 +1269,7 @@ where
   }
 }
 
-impl<D,DA> FusedStream for DataReaderStream<D,DA> 
+impl<'a, D,DA> FusedStream for DataReaderStream<'a, D,DA> 
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,

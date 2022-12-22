@@ -256,31 +256,7 @@ where
               // The cache should know hash -> key mapping even if the sample
               // has been disposed or .take()n
             }
-          } /*
-            DDSData::DataFrags { representation_identifier, bytes_frags } => {
-              // what is our data serialization format (representation identifier) ?
-              if let Some(recognized_rep_id) =
-                  DA::supported_encodings().iter().find(|r| *r == representation_identifier)
-              {
-                match DA::from_vec_bytes(bytes_frags, *recognized_rep_id) {
-                  Ok(payload) => {
-                    self
-                    .datasample_cache
-                    .add_sample(Ok(payload), *writer_guid, instant, None)
-                  }
-                  Err(e) => {
-                    error!("Failed to deserialize (DATAFRAG) bytes: {}, Topic = {}, Type = {:?}",
-                            e, self.my_topic.name(), self.my_topic.get_type() );
-                    //debug!("Bytes were {:?}",&serialized_payload.value);
-                    continue // skip this sample
-                  }
-                }
-              } else {
-                  warn!("Unknown representation id {:?}.", representation_identifier);
-                  //debug!("Serialized payload was {:?}", &serialized_payload);
-                  continue // skip this sample, as we cannot decode it
-              }
-            } */
+          } 
         } // match
       }
       // if (acceptable SN)

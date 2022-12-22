@@ -147,25 +147,22 @@ fn main() -> std::io::Result<()> {
   // Set Ctrl-C handler
   let (stop_sender, stop_receiver) = smol::channel::bounded(1);
   ctrlc::set_handler(move || {
-    smol::block_on( async {
-      stop_sender.send(()).await.unwrap_or(());
-      // ignore errors, as we are quitting anyway
-    })
+    stop_sender.send_blocking(()).unwrap_or(());
+    // ignore errors, as we are quitting anyway
   })
   .expect("Error setting Ctrl-C handler");
   println!("Press Ctrl-C to quit.");
 
 
   let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  let mut reader = subscriber
+  let mut datareader = subscriber
       .create_datareader_cdr::<Shape>(&topic, Some(qos))
       .unwrap();
-
-  let mut datareader_stream = DataReaderStream::new(reader);
 
   smol::block_on(async {
     let mut run = true;
     let mut stop = stop_receiver.recv().fuse();
+    let mut datareader_stream = datareader.async_sample_stream();
     while run {
       futures::select! {
         _ = stop => run = false,
