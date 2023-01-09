@@ -571,6 +571,10 @@ impl Reader {
           "handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
           my_entityid, writer_guid, self.topic_name,
         );
+        // This is normal if the DATA was broadcast, but it was from another topic.
+        // We just ignore the data in such a case
+        // ... unless it is Discovery traffic.
+        if writer_guid.entity_id.entity_kind.is_user_defined() { return; }
       }
     } else {
       // stateless reader
