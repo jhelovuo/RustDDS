@@ -47,7 +47,7 @@ jobs:
           override: true
           profile: minimal
           components: clippy
-      - uses: actions-rs/clippy-check@v1
+      - uses: giraffate/clippy-action@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all --all-features --tests
+          clippy_flags: --all --all-targets
+          filter_mode: nofilter
