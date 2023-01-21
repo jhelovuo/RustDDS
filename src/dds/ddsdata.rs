@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use std::cmp::min;
 
 use crate::{
   dds::traits::key::KeyHash,
@@ -79,8 +80,16 @@ impl DDSData {
       DDSData::Data { serialized_payload } => serialized_payload.bytes_slice(from, to),
       DDSData::DisposeByKey { key, .. } => key.bytes_slice(from, to),
       DDSData::DisposeByKeyHash { key_hash, .. } => {
-        Bytes::from(key_hash.to_vec().into_boxed_slice()).slice(from..to)
-      } // TODO: No bounds checkings, may crash. But this should not be used.
+        // This may be a bit of overengineering, since this
+        // branch is likely never called, as KeyHash is not sent as Data
+        // or DataFrag submessage. But in case it is later needed, and it makes
+        // the compiler happy.
+        let hash_vec = key_hash.to_vec();
+        let hash_len = hash_vec.len(); // Should be always 16
+        let end = min(to,hash_len);
+        let start = min(from,end);
+        Bytes::from(hash_vec).slice(start..end)
+      } 
     }
   }
 }
