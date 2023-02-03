@@ -213,8 +213,8 @@ impl UDPListener {
       // with. This is because RTPS data is optimized to align to 4-byte boundaries.
       let unalign = self.receive_buffer.len() % 4;
       if unalign != 0 {
-        self.receive_buffer.extend_from_slice(&[0xCC,0xCC,0xCC, 0xCC][..unalign] ); 
-        // Funny value 0xCC encourages fast crashin case these bytes
+        self.receive_buffer.extend_from_slice(&[0xCC,0xCC,0xCC, 0xCC][..(4-unalign)] );
+        // Funny value 0xCC encourages a fast crash in case these bytes
         // are ever accessed, as they should not.
       }
 
@@ -225,6 +225,7 @@ impl UDPListener {
     } // loop
 
     //unreachable!(); // But why does this cause a warning? (rustc 1.66.0)
+    // Answer: https://github.com/rust-lang/rust/issues/46500
   }
 
   #[cfg(test)] // normally done in .drop()
