@@ -85,66 +85,12 @@ pub(crate) enum ReaderCommand {
   #[allow(dead_code)] // TODO: Implement this (resetting) feature
   ResetRequestedDeadlineStatus,
 }
-/*
-struct CurrentStatusChanges {
-  pub livelinessLost: Option<LivelinessLostStatus>,
-  pub offeredDeadlineMissed: Option<OfferedDeadlineMissedStatus>,
-  pub offeredIncompatibleQos: Option<OfferedIncompatibleQosStatus>,
-  pub requestedDeadlineMissed: Option<RequestedDeadlineMissedStatus>,
-  pub requestedIncompatibleQos: Option<RequestedIncompatibleQosStatus>,
-  pub publicationMatched: Option<PublicationMatchedStatus>,
-  pub subscriptionMatched: Option<SubscriptionMatchedStatus>,
-}
 
-impl CurrentStatusChanges {
-  pub fn new() -> CurrentStatusChanges {
-    CurrentStatusChanges {
-      livelinessLost: None,
-      offeredDeadlineMissed: None,
-      offeredIncompatibleQos: None,
-      requestedDeadlineMissed: None,
-      requestedIncompatibleQos: None,
-      publicationMatched: None,
-      subscriptionMatched: None,
-    }
-  }
-}
-*/
-/// DDS DataReader for with_key topics.
-///
-/// # Examples
-///
-/// ```
-/// use serde::{Serialize, Deserialize};
-/// use rustdds::dds::DomainParticipant;
-/// use rustdds::dds::qos::QosPolicyBuilder;
-/// use rustdds::dds::data_types::TopicKind;
-/// use rustdds::dds::traits::Keyed;
-/// use rustdds::with_key::DataReader;
-/// use rustdds::serialization::CDRDeserializerAdapter;
-///
-/// let domain_participant = DomainParticipant::new(0).unwrap();
-/// let qos = QosPolicyBuilder::new().build();
-/// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-///
-/// #[derive(Serialize, Deserialize)]
-/// struct SomeType { a: i32 }
-/// impl Keyed for SomeType {
-///   type K = i32;
-///
-///   fn key(&self) -> Self::K {
-///     self.a
-///   }
-/// }
-///
-/// // WithKey is important
-/// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-/// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
-/// ```
-pub struct DataReader<
+pub struct SimpleDataReader<
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> {
+> 
+{
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // any subscriber-wide QoS policies, such as ordered or coherent access.
   // Remove this attribute when/if such things are implemented.
@@ -156,9 +102,9 @@ pub struct DataReader<
   pub(crate) notification_receiver: mio_channel::Receiver<()>,
 
   dds_cache: Arc<RwLock<DDSCache>>, // global cache
+  latest_instant: Mutex<Timestamp>,
 
-  datasample_cache: Mutex<DataSampleCache<D>>, // DataReader-local cache of deserialized samples
-  
+
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
@@ -170,7 +116,8 @@ pub struct DataReader<
   data_reader_waker: Arc<Mutex<DataReaderWaker>>,
 }
 
-impl<D, DA> Drop for DataReader<D, DA>
+
+impl<D, DA> Drop for SimpleDataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -186,10 +133,10 @@ where
     {
       Ok(_) => {}
       Err(mio_channel::SendError::Disconnected(_)) => {
-        debug!("Failed to send REMOVE_LOCAL_READER DiscoveryCommand. Maybe shutting down?");
+        debug!("Failed to send DiscoveryCommand::RemoveLocalReader . Maybe shutting down?");
       }
       Err(e) => error!(
-        "Failed to send REMOVE_LOCAL_READER DiscoveryCommand. {:?}",
+        "Failed to send DiscoveryCommand::RemoveLocalReader. {:?}",
         e
       ),
     }
@@ -233,17 +180,153 @@ where
       my_guid,
       notification_receiver,
       dds_cache,
-      datasample_cache: Mutex::new(DataSampleCache::new(topic.qos())),
+      latest_instant: Mutex::new(Timestamp::ZERO),
       my_topic: topic,
       deserializer_type: PhantomData,
       discovery_command,
       status_receiver: StatusReceiver::new(status_channel_rec),
-      //current_status: CurrentStatusChanges::new(),
       reader_command,
       data_reader_waker,
     })
   }
-  /*
+
+  fn try_take_undecoded(&self) -> Option<(Timestamp, CacheChange)> {
+      let dds_cache = match self.dds_cache.read() {
+      Ok(rwlock) => rwlock,
+      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
+      Err(e) => panic!(
+        "The DDSCache of domain participant is poisoned. Error: {}",
+        e
+      ),
+    };
+    // get an iterator into DDS Cache, so this is in constant space, not a large data structure
+    let latest = self.latest_instant.lock().unwrap();
+    let cache_changes = dds_cache.topic_get_changes_in_range(
+      &my_topic.name(),
+      &self.latest_instant,
+      &Timestamp::now(),
+    );
+    match cache_changes.next() {
+      None => None,
+      Some(ts, ref cc) => {
+        *self.latest_instant.lock.unwrap() = ts;
+      }
+    }
+  }
+
+  pub fn try_take(&self) -> Result<Option<DataSample<D>>> {
+    let (timestamp, cc) = 
+      match self.try_take_undecoded() {
+        None => return Ok(None),
+        Some(ts,cc) => (ts,cc),
+      };
+    
+
+  }
+
+  pub fn try_take_bare(&self) -> Result<Option<std::result::Result<D, D::K>>> {
+  }
+
+}
+/// DDS DataReader for with_key topics.
+///
+/// # Examples
+///
+/// ```
+/// use serde::{Serialize, Deserialize};
+/// use rustdds::dds::DomainParticipant;
+/// use rustdds::dds::qos::QosPolicyBuilder;
+/// use rustdds::dds::data_types::TopicKind;
+/// use rustdds::dds::traits::Keyed;
+/// use rustdds::with_key::DataReader;
+/// use rustdds::serialization::CDRDeserializerAdapter;
+///
+/// let domain_participant = DomainParticipant::new(0).unwrap();
+/// let qos = QosPolicyBuilder::new().build();
+/// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct SomeType { a: i32 }
+/// impl Keyed for SomeType {
+///   type K = i32;
+///
+///   fn key(&self) -> Self::K {
+///     self.a
+///   }
+/// }
+///
+/// // WithKey is important
+/// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
+/// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
+/// ```
+pub struct DataReader<
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+> {
+  simpleDataReader: SimpleDataReader<D,DA>,
+  datasample_cache: Mutex<DataSampleCache<D>>, // DataReader-local cache of deserialized samples
+}
+
+
+impl<D: 'static, DA> DataReader<D, DA>
+where
+  D: DeserializeOwned + Keyed,
+  <D as Keyed>::K: Key,
+  DA: DeserializerAdapter<D>,
+{
+  #[allow(clippy::too_many_arguments)]
+  pub(crate) fn new(
+    subscriber: Subscriber,
+    my_id: EntityId,
+    topic: Topic,
+    qos_policy: QosPolicies,
+    // Each notification sent to this channel must be try_recv'd
+    notification_receiver: mio_channel::Receiver<()>,
+    dds_cache: Arc<RwLock<DDSCache>>,
+    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    status_channel_rec: mio_channel::Receiver<DataReaderStatus>,
+    reader_command: mio_channel::SyncSender<ReaderCommand>,
+    data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+  ) -> Result<Self> {
+
+    let simple = SimpleDataReader::<D,DA>::new(subscriber, my_id, topic, qos_policy, notification_receiver, dds_cache, discovery_command, status_channel_rec, reader_command, data_reader_waker )?;
+
+    Ok(Self {
+      simpleDataReader,
+      datasample_cache: Mutex::new(DataSampleCache::new(topic.qos())),
+    })
+  }
+
+  // Gets all unseen cache_changes from the TopicCache. Deserializes
+  // the serialized payload and stores the DataSamples (the actual data and the
+  // samplestate) to local container, datasample_cache.
+  fn fill_and_lock_local_datasample_cache(&self) -> impl DerefMut<Target = DataSampleCache<D> > + '_ {
+    let is_reliable = matches!(
+      self.qos_policy.reliability(),
+      Some(policy::Reliability::Reliable { .. })
+    );
+
+    let mut local_cache /*:MutexGuard<'_, DataSampleCache<D>> */ = self.datasample_cache.lock()
+      .unwrap_or_else(|e| panic!("Cannot lock local DataSampleCache. Error: {}", e));
+      // This error will occur only if there are multiple threads accessing the DataReader
+      // and one of them dies while holding the lock. With single thread this should not
+      // be possible.
+
+    let dds_cache = match self.dds_cache.read() {
+      Ok(rwlock) => rwlock,
+      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
+      Err(e) => panic!(
+        "The DDSCache of domain participant is poisoned. Error: {}",
+        e
+      ),
+    };
+
+    local_cache.fill_from_dds_cache::<DA>(is_reliable, dds_cache, self.my_topic.clone() );
+
+    local_cache
+  } 
+
+
   /// Reads amount of samples found with `max_samples` and `read_condition`
   /// parameters.
   ///
@@ -308,7 +391,7 @@ where
 
     Ok(result)
   }
-  */
+  
   /// Takes amount of sample found with `max_samples` and `read_condition`
   /// parameters.
   ///
@@ -705,35 +788,6 @@ where
   // ----------------------------------------------------------------------------
   // ----------------------------------------------------------------------------
 
-  // Gets all unseen cache_changes from the TopicCache. Deserializes
-  // the serialized payload and stores the DataSamples (the actual data and the
-  // samplestate) to local container, datasample_cache.
-  fn fill_and_lock_local_datasample_cache(&self) -> impl DerefMut<Target = DataSampleCache<D> > + '_ {
-    let is_reliable = matches!(
-      self.qos_policy.reliability(),
-      Some(policy::Reliability::Reliable { .. })
-    );
-
-    let mut local_cache /*:MutexGuard<'_, DataSampleCache<D>> */ = self.datasample_cache.lock()
-      .unwrap_or_else(|e| panic!("Cannot lock local DataSampleCache. Error: {}", e));
-      // This error will occur only if there are multiple threads accessing the DataReader
-      // and one of them dies while holding the lock. With single thread this should not
-      // be possible.
-
-    let dds_cache = match self.dds_cache.read() {
-      Ok(rwlock) => rwlock,
-      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-      Err(e) => panic!(
-        "The DDSCache of domain participant is poisoned. Error: {}",
-        e
-      ),
-    };
-
-    local_cache.fill_from_dds_cache::<DA>(is_reliable, dds_cache, self.my_topic.clone() );
-
-    local_cache
-  } 
-
 
 
   fn infer_key(
@@ -902,193 +956,6 @@ where
     Ok(result)
   }
 
-  // status queries
-  /*
-  fn reset_local_requested_deadline_status_change(&mut self) {
-    info!(
-      "reset_local_requested_deadline_status_change current {:?}",
-      self.current_status.requestedDeadlineMissed
-    );
-    match self.current_status.requestedDeadlineMissed {
-      Some(_s) => {
-        self
-          .current_status
-          .requestedDeadlineMissed
-          .as_mut()
-          .unwrap()
-          .reset_change();
-      }
-      None => {}
-    }
-  }
-
-  fn fetch_readers_current_status(&mut self) -> Result<()> {
-    //self.TEST_FUNCTION_get_requested_deadline_missed_status();
-    let mut received_requested_deadline_status_change: bool = false;
-    loop {
-      let received_status = self.status_receiver.try_recv();
-      match received_status {
-        Ok(s) => match s {
-          StatusChange::LivelinessLostStatus(status) => {
-            self.current_status.livelinessLost = Some(status);
-          }
-          StatusChange::OfferedDeadlineMissedStatus(status) => {
-            self.current_status.offeredDeadlineMissed = Some(status);
-          }
-          StatusChange::OfferedIncompatibleQosStatus(status) => {
-            self.current_status.offeredIncompatibleQos = Some(status);
-          }
-          StatusChange::RequestedDeadlineMissedStatus(status) => {
-            self.current_status.requestedDeadlineMissed = Some(status);
-            received_requested_deadline_status_change = true;
-          }
-          StatusChange::RequestedIncompatibleQosStatus(status) => {
-            self.current_status.requestedIncompatibleQos = Some(status);
-          }
-          StatusChange::PublicationMatchedStatus(status) => {
-            self.current_status.publicationMatched = Some(status);
-          }
-          StatusChange::SubscriptionMatchedStatus(status) => {
-            self.current_status.subscriptionMatched = Some(status);
-          }
-        },
-        Err(e) => {
-          match e {
-            std::sync::mpsc::TryRecvError::Empty => {
-              break;
-            }
-            std::sync::mpsc::TryRecvError::Disconnected => {
-              error!(
-                " Reader disconnected, could not fetch status change: {:?}",
-                e
-              );
-              // return disconnect status!!!
-              return Err(Error::OutOfResources);
-            }
-          }
-        }
-      }
-    }
-    // after looping set command to reset requested deadeline status if needed. Also reset local status.
-    match received_requested_deadline_status_change {
-      true => {
-        self
-          .current_status
-          .requestedDeadlineMissed
-          .unwrap()
-          .reset_change();
-        match self
-          .reader_command
-          .try_send(ReaderCommand::RESET_REQUESTED_DEADLINE_STATUS)
-        {
-          Ok(()) => {
-            return Ok(());
-          }
-          Err(e) => {
-            error!("Unable to send RESET_REQUESTED_DEADLINE_STATUS: {:?}", e);
-            return Err(Error::OutOfResources);
-          }
-        }
-      }
-      false => {
-        return Ok(());
-      }
-    }
-  }
-  */
-  /*
-  pub fn register_status_change_notificator(&self, poll: & Poll, token: Token, interest: Ready, opts: PollOpt) -> Result<()>{
-    todo!();
-    // let res = poll.register(&self.status_receiver, token, interest, opts);
-
-    //self.TEST_FUNCTION_get_requested_deadline_missed_status();
-    //info!("register datareader status receiver to poll with token {:?}", token );
-    //return res;
-  }
-  */
-
-  // Helper functions
-  /*
-  fn matches_conditions(rcondition: &ReadCondition, dsample: &DataSample<D>) -> bool {
-    if !rcondition
-      .sample_state_mask()
-      .contains(dsample.sample_info().sample_state)
-    {
-      return false;
-    }
-    if !rcondition
-      .view_state_mask()
-      .contains(dsample.sample_info().view_state)
-    {
-      return false;
-    }
-    if !rcondition
-      .instance_state_mask()
-      .contains(dsample.sample_info().instance_state)
-    {
-      return false;
-    }
-    true
-  }
-
-  fn change_kind_to_instance_state(c_k: &ChangeKind) -> InstanceState {
-    match c_k {
-      ChangeKind::Alive => InstanceState::Alive,
-      ChangeKind::NotAliveDisposed => InstanceState::NotAliveDisposed,
-      // TODO check this..?
-      ChangeKind::NotAliveUnregistered => InstanceState::NotAliveNoWriters,
-    }
-  }
-  */
-  /*
-  /// Gets RequestedDeadlineMissedStatus
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::with_key::DataReader;
-  /// # use rustdds::serialization::CDRDeserializerAdapter;
-  /// use rustdds::dds::qos::policy::Deadline;
-  /// use rustdds::dds::data_types::DDSDuration;
-  ///
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let qos = QosPolicyBuilder::new().deadline(Deadline(DDSDuration::from_millis(1))).build();
-  /// let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  /// #
-  /// # #[derive(Serialize, Deserialize)]
-  /// # struct SomeType { a: i32 }
-  /// # impl Keyed for SomeType {
-  /// #   type K = i32;
-  /// #
-  /// #   fn key(&self) -> Self::K {
-  /// #     self.a
-  /// #   }
-  /// # }
-  ///
-  /// // WithKey is important
-  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(topic, None).unwrap();
-  ///
-  /// // Wait for some deadline to be missed...
-  /// if let Ok(Some(rqdl)) = data_reader.get_requested_deadline_missed_status() {
-  ///   // do something
-  /// }
-  ///
-  /// ```
-
-  pub fn get_requested_deadline_missed_status(
-    &mut self,
-  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
-    self.fetch_readers_current_status()?;
-    let value_before_reset = self.current_status.requestedDeadlineMissed.clone();
-    self.reset_local_requested_deadline_status_change();
-    return Ok(value_before_reset);
-  } */
 
   /// Return values:
   /// true - got all historical data
@@ -1106,6 +973,7 @@ where
   // we got.
 
   pub fn get_matched_publications(&self) -> impl Iterator<Item = PublicationBuiltinTopicData> {
+    //TODO: Obviously not implemented
     vec![].into_iter()
   }
 
@@ -1206,14 +1074,7 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  // pub fn new(datareader: &DataReader<D,DA>) -> Self {
-  //   DataReaderStream{ datareader }
-  // }
-
-  // pub fn into_datareader(self) -> DataReader<D,DA> {
-  //   self.datareader
-  // }
-
+  // maybe this block shoud be removed
 }
 
 
@@ -1276,7 +1137,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
-    false // Never terminate. Or it is always valid to call poll_next().
+    false // Never terminate. This means it is always valid to call poll_next().
   }
 }
 
