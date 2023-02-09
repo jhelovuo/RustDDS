@@ -89,6 +89,13 @@ impl Error {
       precondition: precondition.into(),
     })
   }
+
+  pub fn serialization_error<T>(reason: impl Into<String>) -> Result<T> {
+    Err(Self::Serialization {
+      reason: reason.into(),
+    })
+  }
+
 }
 
 #[doc(hidden)]

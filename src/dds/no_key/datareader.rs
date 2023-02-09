@@ -449,7 +449,6 @@ where
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
       .keyed_datareader
-      .notification_receiver
       .register(poll, token, interest, opts)
   }
 
@@ -462,12 +461,11 @@ where
   ) -> io::Result<()> {
     self
       .keyed_datareader
-      .notification_receiver
       .reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
-    self.keyed_datareader.notification_receiver.deregister(poll)
+    self.keyed_datareader.deregister(poll)
   }
 }
 

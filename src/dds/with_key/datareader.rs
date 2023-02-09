@@ -1,8 +1,10 @@
 use std::{
+  cmp::max,
   io,
   marker::PhantomData,
   sync::{Arc, RwLock, Mutex,},
   ops::{Deref, DerefMut},
+  collections::{BTreeMap},
 };
 
 use serde::de::DeserializeOwned;
@@ -32,16 +34,18 @@ use crate::{
     traits::{key::*, serde_adapters::with_key::*, },
     values::result::*,
     with_key::datasample::*,
-  
+    ddsdata::*,
   },
   discovery::{data_types::topic_data::PublicationBuiltinTopicData, discovery::DiscoveryCommand},
   log_and_err_precondition_not_met,
   serialization::CDRDeserializerAdapter,
   structure::{
     dds_cache::DDSCache,
+    cache_change::{CacheChange, DeserializedCacheChange},
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
+    time::Timestamp,
   },
   mypoll::token_to_notification_id,
 };
@@ -102,8 +106,9 @@ pub struct SimpleDataReader<
   pub(crate) notification_receiver: mio_channel::Receiver<()>,
 
   dds_cache: Arc<RwLock<DDSCache>>, // global cache
-  latest_instant: Mutex<Timestamp>,
 
+  latest_instant: Mutex<Timestamp>,
+  hash_to_key_map: Mutex<BTreeMap<KeyHash, D::K>>, // TODO: garbage collect this somehow
 
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
@@ -117,6 +122,8 @@ pub struct SimpleDataReader<
 }
 
 
+// SimpleDataReaders can only do "take" semantics and does not have any deduplication or other DataSampleCache functionality.
+
 impl<D, DA> Drop for SimpleDataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
@@ -129,7 +136,7 @@ where
     // Tell discovery
     match self
       .discovery_command
-      .send(DiscoveryCommand::RemoveLocalReader { guid: self.guid() })
+      .send(DiscoveryCommand::RemoveLocalReader { guid: self.my_guid })
     {
       Ok(_) => {}
       Err(mio_channel::SendError::Disconnected(_)) => {
@@ -143,7 +150,7 @@ where
   }
 }
 
-impl<D: 'static, DA> DataReader<D, DA>
+impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
   D: DeserializeOwned + Keyed,
   <D as Keyed>::K: Key,
@@ -181,6 +188,7 @@ where
       notification_receiver,
       dds_cache,
       latest_instant: Mutex::new(Timestamp::ZERO),
+      hash_to_key_map: Mutex::new(BTreeMap::new()),
       my_topic: topic,
       deserializer_type: PhantomData,
       discovery_command,
@@ -200,31 +208,120 @@ where
       ),
     };
     // get an iterator into DDS Cache, so this is in constant space, not a large data structure
-    let latest = self.latest_instant.lock().unwrap();
-    let cache_changes = dds_cache.topic_get_changes_in_range(
-      &my_topic.name(),
-      &self.latest_instant,
+    let latest:Timestamp = *self.latest_instant.lock().unwrap();
+    let mut cache_changes = dds_cache.topic_get_changes_in_range(
+      &self.my_topic.name(),
+      &latest,
       &Timestamp::now(),
     );
     match cache_changes.next() {
       None => None,
-      Some(ts, ref cc) => {
-        *self.latest_instant.lock.unwrap() = ts;
+      Some((ts, cc)) => {
+        *self.latest_instant.lock().unwrap() = max(latest, ts);
+        Some(( ts, cc.clone() ))  //TODO: Can we somehow avoid this clone here? (Clones metadata only, payload is still Bytes)
       }
     }
   }
 
-  pub fn try_take(&self) -> Result<Option<DataSample<D>>> {
+  fn update_hash_to_key_map(&self, deserialized: &std::result::Result<D, D::K>) {
+    let instance_key = match deserialized {
+      Ok(d) => d.key(),
+      Err(k) => k.clone(),
+    };
+    self
+      .hash_to_key_map
+      .lock().unwrap()
+      .insert(instance_key.hash_key(), instance_key.clone());
+  }
+
+  pub(crate) fn try_take(&self) -> Result<Option<DeserializedCacheChange<D>>> {
     let (timestamp, cc) = 
       match self.try_take_undecoded() {
         None => return Ok(None),
-        Some(ts,cc) => (ts,cc),
+        Some((ts,cc)) => (ts,cc),
       };
-    
 
-  }
+    match cc.data_value {
+      DDSData::Data { ref serialized_payload } => {
+        // what is our data serialization format (representation identifier) ?
+        if let Some(recognized_rep_id) = DA::supported_encodings()
+          .iter()
+          .find(|r| **r == serialized_payload.representation_identifier)
+        {
+          match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
+            // Data update, decoded ok
+            Ok(payload) => {
+              let p = Ok(payload);
+              self.update_hash_to_key_map(&p);
+              Ok(Some(DeserializedCacheChange::new(timestamp,&cc,p)))
+            }
 
-  pub fn try_take_bare(&self) -> Result<Option<std::result::Result<D, D::K>>> {
+            Err(e) => {
+              let error_message =
+                format!(
+                  "Failed to deserialize sample bytes: {}, Topic = {}, Type = {:?}",
+                  e,
+                  self.my_topic.name(),
+                  self.my_topic.get_type()
+                );
+              error!("{}",error_message);
+              info!("Bytes were {:?}", &serialized_payload.value);
+              Error::serialization_error(error_message)
+            }
+          }
+        } else {
+          let error_message =
+            format!(
+              "Unknown representation id {:?}. Topic = {}, Type = {:?}",
+              serialized_payload.representation_identifier, self.my_topic.name(), self.my_topic.get_type()
+            );
+          warn!("{}",error_message);
+          info!("Serialized payload was {:?}", &serialized_payload);
+          Error::serialization_error(error_message)
+        }
+      }
+
+      DDSData::DisposeByKey {
+        key: ref serialized_key,
+        ..
+      } => {
+        match DA::key_from_bytes(
+          &serialized_key.value,
+          serialized_key.representation_identifier,
+        ) {
+          Ok(key) => {
+            let k = Err(key);
+            self.update_hash_to_key_map(&k);
+            Ok(Some(DeserializedCacheChange::new(timestamp,&cc,k)))
+          }
+          Err(e) => {
+            let error_message =
+                format!(
+              "Failed to deserialize key {}, Topic = {}, Type = {:?}",
+              e,
+              self.my_topic.name(),
+              self.my_topic.get_type()
+            );
+            warn!("{}",error_message);
+            debug!("Bytes were {:?}", &serialized_key.value);
+            Error::serialization_error(error_message)
+          }
+        }
+      }
+
+      DDSData::DisposeByKeyHash { key_hash, .. } => {
+        // The cache should know hash -> key mapping even if the sample
+        // has been disposed or .take()n
+        if let Some(key) = self.hash_to_key_map.lock().unwrap().get(&key_hash) {
+          Ok(Some(DeserializedCacheChange::new(timestamp, &cc,Err(key.clone()))))
+        } else {
+          let error_message =
+                format!("Tried to dispose with unknown key hash: {:x?}", key_hash);
+          warn!("{}",error_message);          
+          Error::serialization_error(error_message)
+        }
+      } 
+    } // match
   }
 
 }
@@ -289,44 +386,73 @@ where
     data_reader_waker: Arc<Mutex<DataReaderWaker>>,
   ) -> Result<Self> {
 
-    let simple = SimpleDataReader::<D,DA>::new(subscriber, my_id, topic, qos_policy, notification_receiver, dds_cache, discovery_command, status_channel_rec, reader_command, data_reader_waker )?;
+    let dsc = DataSampleCache::new(topic.qos());
+
+    let simpleDataReader = 
+      SimpleDataReader::<D,DA>::new(
+        subscriber, 
+        my_id, 
+        topic, 
+        qos_policy, 
+        notification_receiver, 
+        dds_cache, discovery_command, status_channel_rec, 
+        reader_command, data_reader_waker )?;
 
     Ok(Self {
       simpleDataReader,
-      datasample_cache: Mutex::new(DataSampleCache::new(topic.qos())),
+      datasample_cache: Mutex::new(dsc),
     })
+  }
+
+  fn my_guid(&self) -> GUID {
+    self.simpleDataReader.my_guid
   }
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
-  fn fill_and_lock_local_datasample_cache(&self) -> impl DerefMut<Target = DataSampleCache<D> > + '_ {
+  fn fill_and_lock_local_datasample_cache(&self)  {
     let is_reliable = matches!(
-      self.qos_policy.reliability(),
+      self.simpleDataReader.qos_policy.reliability(),
       Some(policy::Reliability::Reliable { .. })
     );
 
-    let mut local_cache /*:MutexGuard<'_, DataSampleCache<D>> */ = self.datasample_cache.lock()
-      .unwrap_or_else(|e| panic!("Cannot lock local DataSampleCache. Error: {}", e));
-      // This error will occur only if there are multiple threads accessing the DataReader
-      // and one of them dies while holding the lock. With single thread this should not
-      // be possible.
-
-    let dds_cache = match self.dds_cache.read() {
-      Ok(rwlock) => rwlock,
-      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-      Err(e) => panic!(
-        "The DDSCache of domain participant is poisoned. Error: {}",
-        e
-      ),
-    };
-
-    local_cache.fill_from_dds_cache::<DA>(is_reliable, dds_cache, self.my_topic.clone() );
-
-    local_cache
+    loop {
+      match self.simpleDataReader.try_take() {
+        Ok(None) => break,
+        Ok(Some(dcc)) => {
+          self.datasample_cache.lock().unwrap().fill_from_deserialized_cache_change(is_reliable, dcc )
+        }
+        Err(e) => {
+          // error is logged already at lower level.
+          // Should we try to continue or stop here?
+          // Or maybe report an error?
+        }
+      }
+    }
   } 
 
+  fn drain_read_notifications(&self) {
+    while self.simpleDataReader.notification_receiver.try_recv().is_ok() {}
+  }
 
+  fn select_keys_for_access(&self, read_condition: ReadCondition) -> Vec<(Timestamp, D::K)> {
+    self.datasample_cache.lock().unwrap().select_keys_for_access(read_condition)
+  }
+
+  fn take_by_keys(&self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<D>> {
+    self.datasample_cache.lock().unwrap().take_by_keys(keys)
+  }
+
+  fn take_bare_by_keys(&self, keys: &[(Timestamp, D::K)]) -> Vec<std::result::Result<D,D::K>> {
+    self.datasample_cache.lock().unwrap().take_bare_by_keys(keys)
+  }
+
+  fn select_instance_keys_for_access(&self, instance: &D::K, rc: ReadCondition,) -> Vec<(Timestamp, D::K)> {
+    self.datasample_cache.lock().unwrap().select_instance_keys_for_access(instance, rc)
+  }
+
+  /*
   /// Reads amount of samples found with `max_samples` and `read_condition`
   /// parameters.
   ///
@@ -380,18 +506,19 @@ where
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<&D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
-    while self.notification_receiver.try_recv().is_ok() {}
+    self.drain_read_notifications();
 
-    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
+    self.fill_and_lock_local_datasample_cache();
 
-    let mut selected = datasample_cache.select_keys_for_access(read_condition);
+    let mut selected = self.select_keys_for_access(read_condition);
     selected.truncate(max_samples);
 
-    let result = datasample_cache.read_by_keys(&selected);
+    let result = self.read_by_keys(&selected);
 
     Ok(result)
   }
-  
+  */
+
   /// Takes amount of sample found with `max_samples` and `read_condition`
   /// parameters.
   ///
@@ -444,14 +571,14 @@ where
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
-    while self.notification_receiver.try_recv().is_ok() {}
+    self.drain_read_notifications();
 
-    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
-    let mut selected = datasample_cache.select_keys_for_access(read_condition);
+    self.fill_and_lock_local_datasample_cache();
+    let mut selected = self.select_keys_for_access(read_condition);
     trace!("take selected count = {}", selected.len());
     selected.truncate(max_samples);
 
-    let result = datasample_cache.take_by_keys(&selected);
+    let result = self.take_by_keys(&selected);
     trace!("take taken count = {}", result.len());
 
     Ok(result)
@@ -570,14 +697,14 @@ where
     read_condition: ReadCondition,
   ) -> Result<Vec<std::result::Result<D, D::K>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
-    while self.notification_receiver.try_recv().is_ok() {}
+    self.drain_read_notifications();
 
-    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
-    let mut selected = datasample_cache.select_keys_for_access(read_condition);
+    self.fill_and_lock_local_datasample_cache();
+    let mut selected = self.select_keys_for_access(read_condition);
     trace!("take bare selected count = {}", selected.len());
     selected.truncate(max_samples);
 
-    let result = datasample_cache.take_bare_by_keys(&selected);
+    let result = self.take_bare_by_keys(&selected);
     trace!("take bare taken count = {}", result.len());
 
     Ok(result)
@@ -790,11 +917,11 @@ where
 
 
 
-  fn infer_key(
-    datasample_cache: &impl Deref<Target = DataSampleCache<D> >,
+  fn infer_key(&self,
     instance_key: Option<<D as Keyed>::K>,
     this_or_next: SelectByKey,
   ) -> Option<<D as Keyed>::K> {
+    let datasample_cache = self.datasample_cache.lock().unwrap();
     match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => Some(k),
@@ -938,20 +1065,20 @@ where
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
-    while self.notification_receiver.try_recv().is_ok() {}
+    self.drain_read_notifications();
 
-    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
+    self.fill_and_lock_local_datasample_cache();
 
-    let key = match Self::infer_key(&datasample_cache, instance_key, this_or_next) {
+    let key = match self.infer_key(instance_key, this_or_next) {
       Some(k) => k,
       None => return Ok(Vec::new()),
     };
 
-    let mut selected = datasample_cache
+    let mut selected = self
       .select_instance_keys_for_access(&key, read_condition);
     selected.truncate(max_samples);
 
-    let result = datasample_cache.take_by_keys(&selected);
+    let result = self.take_by_keys(&selected);
 
     Ok(result)
   }
@@ -985,7 +1112,7 @@ where
 
 // This is  not part of DDS spec. We implement mio Eventd so that the
 // application can asynchronously poll DataReader(s).
-impl<D, DA> Evented for DataReader<D, DA>
+impl<D, DA> Evented for SimpleDataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -1015,7 +1142,37 @@ where
   }
 }
 
-impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
+impl<D, DA> Evented for DataReader<D, DA>
+where
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
+  // We just delegate all the operations to notification_receiver, since it alrady
+  // implements Evented
+  fn register(&self, poll: &mio_06::Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+    self
+      .simpleDataReader
+      .register(poll, token, interest, opts)
+  }
+
+  fn reregister(
+    &self,
+    poll: &mio_06::Poll,
+    token: Token,
+    interest: Ready,
+    opts: PollOpt,
+  ) -> io::Result<()> {
+    self
+      .simpleDataReader
+      .reregister(poll, token, interest, opts)
+  }
+
+  fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
+    self.simpleDataReader.deregister(poll)
+  }
+}
+
+impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D>,
@@ -1042,7 +1199,7 @@ where
   // }
 
   fn qos(&self) -> QosPolicies {
-    self.qos_policy.clone()
+    self.simpleDataReader.qos_policy.clone()
   }
 }
 
@@ -1052,7 +1209,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
-    self.my_guid
+    self.simpleDataReader.my_guid
   }
 }
 
@@ -1112,7 +1269,7 @@ where
             // 1. synchronously store waker to background thread (must rendezvous)
             // 2. try take_bare again, in case something arrived just now
             // 3. if nothing still, return pending.
-            *self.datareader.data_reader_waker.lock().unwrap() // TODO: remove unwrap
+            *self.datareader.simpleDataReader.data_reader_waker.lock().unwrap() // TODO: remove unwrap
               = DataReaderWaker::FutureWaker(cx.waker().clone());
             match self.datareader.take_bare(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),  

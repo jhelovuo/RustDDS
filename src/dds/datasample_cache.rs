@@ -22,7 +22,7 @@ use crate::{
     with_key::datasample::DataSample,
   },
   structure::{
-    cache_change::CacheChange,
+    cache_change::{CacheChange, DeserializedCacheChange, },
     guid::GUID,
     sequence_number::SequenceNumber,
     time::Timestamp,
@@ -46,10 +46,10 @@ pub struct DataSampleCache<D: Keyed> {
   datasamples: BTreeMap<Timestamp, SampleWithMetaData<D>>, /* ordered storage for deserialized
                                                             * samples */
   pub(crate) instance_map: BTreeMap<D::K, InstanceMetaData>, // ordered storage for instances
-  hash_to_key_map: BTreeMap<KeyHash, D::K>,
+  //hash_to_key_map: BTreeMap<KeyHash, D::K>,
 
-  latest_instant: Timestamp, // how far we already have samples.
-  latest_sequence_number: BTreeMap<GUID, SequenceNumber>, // latest SN pointer for each writer in our Topic
+  //latest_instant: Timestamp, // how far we already have samples.
+  //latest_sequence_number: BTreeMap<GUID, SequenceNumber>, // latest SN pointer for each writer in our Topic
 }
 
 pub(crate) struct InstanceMetaData {
@@ -95,13 +95,27 @@ where
       qos,
       datasamples: BTreeMap::new(),
       instance_map: BTreeMap::new(),
-      hash_to_key_map: BTreeMap::new(),
-      latest_instant: Timestamp::ZERO, 
-      latest_sequence_number: BTreeMap::new(),
+      //hash_to_key_map: BTreeMap::new(),
+      //latest_instant: Timestamp::ZERO, 
+      //latest_sequence_number: BTreeMap::new(),
     }
   }
 
 
+  pub(crate) fn fill_from_deserialized_cache_change(&mut self, is_reliable: bool, deserialized_cc : DeserializedCacheChange<D>)
+  {
+    // TODO list.
+
+
+    self.add_sample(
+      deserialized_cc.sample,
+      deserialized_cc.writer_guid,
+      deserialized_cc.sequence_number,
+      deserialized_cc.receive_instant,
+      deserialized_cc.write_options);
+  }
+
+  /*
   pub fn fill_from_dds_cache<DA>(&mut self, is_reliable: bool, dds_cache:impl Deref<Target=DDSCache>, my_topic:Topic)
   where
     DA: DeserializerAdapter<D>,
@@ -266,7 +280,7 @@ where
     } // for loop
 
   }
-
+*/
   fn add_sample(
     &mut self,
     new_sample: Result<D, D::K>,
@@ -298,9 +312,9 @@ where
         last_generation_accessed: NotAliveGenerationCounts::sub_zero(), // never accessed
       };
       self.instance_map.insert(instance_key.clone(), imd);
-      self
-        .hash_to_key_map
-        .insert(instance_key.hash_key(), instance_key.clone());
+      // self
+      //   .hash_to_key_map
+      //   .insert(instance_key.hash_key(), instance_key.clone());
       self
         .instance_map
         .get_mut(&instance_key)
@@ -353,6 +367,8 @@ where
       .map_or_else(
         /* None: ok */ || (),
         /* Some: key was there already! */
+        // TODO: We should not outright panic here, but rather raise a serious error.
+        // This is a symption that the receive timestamps are not unique identifiers like they are supposed to be.
         |_already_existed| {
           panic!(
             "Tried to add duplicate datasample with the same key {:?}",
@@ -707,18 +723,18 @@ where
     result
   }
 
-  pub fn key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
-    if let Some(k) = self.hash_to_key_map.get(&key_hash) {
-      Some(k.clone())
-    } else {
-      debug!(
-        "key_by_hash: requested KeyHash {:?}, but not found. I have {:?}",
-        key_hash,
-        self.hash_to_key_map.keys()
-      );
-      None
-    }
-  }
+  // pub fn key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
+  //   if let Some(k) = self.hash_to_key_map.get(&key_hash) {
+  //     Some(k.clone())
+  //   } else {
+  //     debug!(
+  //       "key_by_hash: requested KeyHash {:?}, but not found. I have {:?}",
+  //       key_hash,
+  //       self.hash_to_key_map.keys()
+  //     );
+  //     None
+  //   }
+  // }
 
   pub fn next_key(&self, key: &D::K) -> Option<D::K> {
     self
@@ -730,10 +746,10 @@ where
 
   // This is currently unused, as HasQosPolicy trait does not allow setting QoS,
   // but a placeholder if it is ever implemented.
-  #[allow(dead_code)]
-  pub fn set_qos_policy(&mut self, qos: QosPolicies) {
-    self.qos = qos;
-  }
+  // #[allow(dead_code)]
+  // pub fn set_qos_policy(&mut self, qos: QosPolicies) {
+  //   self.qos = qos;
+  // }
 }
 
 #[cfg(test)]
