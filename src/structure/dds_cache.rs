@@ -32,7 +32,10 @@ impl DDSCache {
   pub fn new() -> Self {
     Self::default()
   }
-
+  pub fn mark_reliably_received_before(&mut self, topic_name: &str, writer: GUID, sn:SequenceNumber) {
+    self.topic_caches.get_mut(topic_name)
+      .and_then(|tc| Some(tc.mark_reliably_received_before(writer,sn)) );
+  }
   // Insert new topic if it does not exist.
   // If it exists already, do nothing.
   pub fn add_new_topic(&mut self, topic_name: String, topic_data_type: TypeDesc) {
@@ -113,6 +116,10 @@ impl DDSCache {
   }
 }
 
+
+// TODO: Why do this (TopicCache) and level below (DDSHistoryCache)
+// exist separately? If there is no reason, they should be merged.
+
 #[derive(Debug)]
 pub struct TopicCache {
   topic_name: String,
@@ -130,6 +137,10 @@ impl TopicCache {
       topic_qos: QosPolicyBuilder::new().build(),
       history_cache: DDSHistoryCache::new(),
     }
+  }
+
+  pub fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
+    self.history_cache.received_reliably_before.insert(writer,sn);
   }
 
   pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
@@ -196,11 +207,22 @@ pub struct DDSHistoryCache {
   pub(crate) changes: BTreeMap<Timestamp, CacheChange>,
   // sequence_numbers is an index to "changes" by GUID and SN
   sequence_numbers: BTreeMap<GUID, BTreeMap<SequenceNumber, Timestamp>>,
+
+  // Keep track of how far we have "reliably" received samples from each Writer
+  // This means that all data up to this point has either been received, or
+  // we have been notified (GAP or HEARTBEAT) that is not available and never will.
+  // Therefore, data before the marker SN can be handed off to a Reliable DataReader.
+  // Initially, we consider the marker for each Writer (GUID) to be SequenceNumber::new(1)
+  received_reliably_before: BTreeMap<GUID, SequenceNumber>
 }
 
 impl DDSHistoryCache {
   pub fn new() -> Self {
     Self::default()
+  }
+
+  pub fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
+    self.received_reliably_before.insert(writer,sn);
   }
 
   fn find_by_sn(&self, cc: &CacheChange) -> Option<Timestamp> {

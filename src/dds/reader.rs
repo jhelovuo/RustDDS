@@ -365,7 +365,7 @@ impl Reader {
 
   // return value counts how many new proxies were added
   fn matched_writer_update(&mut self, proxy: RtpsWriterProxy) -> i32 {
-    if let Some(op) = self.matched_writer_lookup(proxy.remote_writer_guid) {
+    if let Some(op) = self.matched_writer_mut(proxy.remote_writer_guid) {
       op.update_contents(proxy);
       0
     } else {
@@ -422,7 +422,13 @@ impl Reader {
     self.update_writer_proxy(proxy, qos);
   }
 
-  fn matched_writer_lookup(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
+
+
+  fn matched_writer(&self, remote_writer_guid: GUID) -> Option<&RtpsWriterProxy> {
+    self.matched_writers.get(&remote_writer_guid)
+  }
+
+  fn matched_writer_mut(&mut self, remote_writer_guid: GUID) -> Option<&mut RtpsWriterProxy> {
     self.matched_writers.get_mut(&remote_writer_guid)
   }
 
@@ -513,7 +519,7 @@ impl Reader {
     }
 
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
-    if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
+    if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
       if let Some(complete_ddsdata) = writer_proxy.handle_datafrag(datafrag, datafrag_flags) {
         // Source timestamp (if any) will be the timestamp of the last fragment (that
         // completes the sample).
@@ -555,7 +561,7 @@ impl Reader {
     );
     if self.is_stateful {
       let my_entityid = self.my_guid.entity_id; // to please borrow checker
-      if let Some(writer_proxy) = self.matched_writer_lookup(writer_guid) {
+      if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
         if writer_proxy.should_ignore_change(writer_sn) {
           // change already present
           debug!("handle_data_msg already have this seq={:?}", writer_sn);
@@ -710,7 +716,7 @@ impl Reader {
       );
     }
 
-    let writer_proxy = if let Some(wp) = self.matched_writer_lookup(writer_guid) {
+    let writer_proxy = if let Some(wp) = self.matched_writer_mut(writer_guid) {
       wp
     } else {
       error!("Writer proxy disappeared 1!");
@@ -729,7 +735,15 @@ impl Reader {
     // remove fragmented changes until first_sn.
     let removed_instances = writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
+
+    let received_before = writer_proxy.all_ackable_before();
     // Remove instances from DDSHistoryCache
+    //
+    // TODO: Whay are we removing from our own cache here?
+    // Heartbeat means that the Writer no longer has those samples available, but
+    // we could still keep then in our cache for local DataReaders until
+    // some QoS policy forces us to remove them, or all current DataReaders have
+    // read the samples.
     {
       // Create local scope so that dds_cache write lock is dropped ASAP
       let mut cache = match self.dds_cache.write() {
@@ -746,13 +760,17 @@ impl Reader {
           /* This may be normal? */
         }
       }
+
+      // Note: Even if the above sample deletion is removed, we should still keep this
+      // updating of ackabe number.
+      cache.mark_reliably_received_before(&self.topic_name, writer_guid, received_before);
     }
 
     let reader_id = self.entity_id();
 
     // this is duplicate code from above, but needed, because we need another
     // mutable borrow. TODO: Maybe could be written in some sensible way.
-    let writer_proxy = if let Some(wp) = self.matched_writer_lookup(writer_guid) {
+    let writer_proxy = if let Some(wp) = self.matched_writer_mut(writer_guid) {
       wp
     } else {
       error!("Writer proxy disappeared 2!");
@@ -895,49 +913,56 @@ impl Reader {
       );
       return;
     }
+    let all_ackable_before;
+    {
+      let writer_proxy = if let Some(wp) = self.matched_writer_mut(writer_guid) {
+        wp
+      } else {
+        info!(
+          "GAP from {:?}, but no writer proxy available. topic={:?} reader={:?}",
+          writer_guid, self.topic_name, self.my_guid
+        );
+        return;
+      };
 
-    let writer_proxy = if let Some(wp) = self.matched_writer_lookup(writer_guid) {
-      wp
-    } else {
-      info!(
-        "GAP from {:?}, but no writer proxy available. topic={:?} reader={:?}",
-        writer_guid, self.topic_name, self.my_guid
-      );
-      return;
-    };
+      // TODO: Implement GAP rules validation (Section 8.3.7.4.3) here.
 
-    // TODO: Implement GAP rules validation (Section 8.3.7.4.3) here.
+      // Irrelevant sequence numbers communicated in the Gap message are
+      // composed of two groups:
+      //   1. All sequence numbers in the range gapStart <= sequence_number <
+      // gapList.base
+      let mut removed_changes: BTreeSet<Timestamp> = writer_proxy
+        .irrelevant_changes_range(gap.gap_start, gap.gap_list.base())
+        .values()
+        .copied()
+        .collect();
 
-    // Irrelevant sequence numbers communicated in the Gap message are
-    // composed of two groups:
-    //   1. All sequence numbers in the range gapStart <= sequence_number <
-    // gapList.base
-    let mut removed_changes: BTreeSet<Timestamp> = writer_proxy
-      .irrelevant_changes_range(gap.gap_start, gap.gap_list.base())
-      .values()
-      .copied()
-      .collect();
-
-    //   2. All the sequence numbers that appear explicitly listed in the gapList.
-    for seq_num in gap.gap_list.iter() {
-      writer_proxy
-        .set_irrelevant_change(seq_num)
-        .map(|t| removed_changes.insert(t));
+      //   2. All the sequence numbers that appear explicitly listed in the gapList.
+      for seq_num in gap.gap_list.iter() {
+        writer_proxy
+          .set_irrelevant_change(seq_num)
+          .map(|t| removed_changes.insert(t));
+      }
+      all_ackable_before = writer_proxy.all_ackable_before();
     }
-
-    // Remove from DDSHistoryCache
-    // TODO: Is this really correct?
-    // Is the meaning of GAP to only inform that such changes are not available from
-    // the writer? Or does it also mean that the DDSCache should remove them?
     let mut cache = match self.dds_cache.write() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
+
+    (*cache).mark_reliably_received_before(&self.topic_name, writer_guid, all_ackable_before);
+
+
+    /*
+    // Remove from DDSHistoryCache
+    // TODO: Is this really correct?
+    // Is the meaning of GAP to only inform that such changes are not available from
+    // the writer? Or does it also mean that the DDSCache should remove them?
     for instant in &removed_changes {
       cache.topic_remove_change(&self.topic_name, instant);
     }
-
+    */
     // Is this needed?
     // self.notify_cache_change();
   }
@@ -992,6 +1017,9 @@ impl Reader {
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
     cache.add_change(&self.topic_name, &receive_timestamp, cache_change);
+    self.matched_writer(writer_guid)
+      .map(|wp| cache.mark_reliably_received_before(&self.topic_name, writer_guid, wp.all_ackable_before() ));
+    
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for
