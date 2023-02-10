@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+use num_traits::Zero;
 use serde::de::{
   self, DeserializeOwned, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess,
   VariantAccess, Visitor,
@@ -255,7 +256,16 @@ where
 
     let bytes = self.next_bytes(bytes_len)?; // length includes null terminator
 
-    let bytes_without_null = &bytes[0..bytes.len() - 1];
+
+    /*
+    This is a hacky "Fix" for IntercomDDS version 01.05 protocol version 2.1.
+    Where IntercomDDS sends an empty string with no NULL terminator.
+    */
+    if bytes.len().is_zero() {
+      bytes_without_null = bytes;
+    } else {
+      bytes_without_null = &bytes[0..bytes.len() - 1];
+    }
 
     match std::str::from_utf8(bytes_without_null) {
       Ok(s) => visitor.visit_str(s),
