@@ -94,11 +94,12 @@ impl DDSCache {
   pub fn topic_get_changes_in_range(
     &self,
     topic_name: &str,
+    reliable: bool, 
     start_instant: &Timestamp,
     end_instant: &Timestamp,
   ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
     match self.topic_caches.get(topic_name) {
-      Some(tc) => Box::new(tc.get_changes_in_range(start_instant, end_instant)),
+      Some(tc) => Box::new(tc.get_changes_in_range(reliable, start_instant, end_instant)),
       None => Box::new(vec![].into_iter()),
     }
   }
@@ -161,12 +162,13 @@ impl TopicCache {
 
   pub fn get_changes_in_range(
     &self,
+    reliable: bool,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
   ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
     self
       .history_cache
-      .get_range_of_changes(start_instant, end_instant)
+      .get_range_of_changes(reliable, start_instant, end_instant)
   }
 
   ///Removes and returns value if it was found
@@ -223,6 +225,15 @@ impl DDSHistoryCache {
 
   pub fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
     self.received_reliably_before.insert(writer,sn);
+  }
+
+  fn reliable_before(&self, writer:GUID) -> SequenceNumber {
+    self.received_reliably_before
+      .get(&writer)
+      .cloned()
+      .unwrap_or( SequenceNumber::default() )
+      // Sequence numbering starts at default(), so anything before that is always received
+      // reliably, since no such samples exist.
   }
 
   fn find_by_sn(&self, cc: &CacheChange) -> Option<Timestamp> {
@@ -288,6 +299,7 @@ impl DDSHistoryCache {
 
   pub fn get_range_of_changes(
     &self,
+    limit_by_reliability: bool,
     start_instant: &Timestamp,
     end_instant: &Timestamp,
   ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
@@ -295,7 +307,11 @@ impl DDSHistoryCache {
       self
         .changes
         .range((Excluded(start_instant), Included(end_instant)))
-        .map(|(i, c)| (*i, c)),
+        .filter(move |(_,cc)| ! limit_by_reliability || cc.sequence_number < self.reliable_before(cc.writer_guid) )
+        .map(|(i, c)| (*i, c))
+
+        // The .filter( ) above limits handing out CacheChanges that are not yet ready to be delivered realiably.
+        // This means that some samples from before are missing, but still available.
     )
   }
 

@@ -199,7 +199,11 @@ where
   }
 
   fn try_take_undecoded(&self) -> Option<(Timestamp, CacheChange)> {
-      let dds_cache = match self.dds_cache.read() {
+    let is_reliable = matches!(
+      self.qos_policy.reliability(),
+      Some(policy::Reliability::Reliable { .. })
+    );
+    let dds_cache = match self.dds_cache.read() {
       Ok(rwlock) => rwlock,
       // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
       Err(e) => panic!(
@@ -211,6 +215,7 @@ where
     let latest:Timestamp = *self.latest_instant.lock().unwrap();
     let mut cache_changes = dds_cache.topic_get_changes_in_range(
       &self.my_topic.name(),
+      is_reliable,
       &latest,
       &Timestamp::now(),
     );
