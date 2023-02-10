@@ -19,7 +19,7 @@ use super::cache_change::CacheChange;
 
 /// DDSCache contains all cacheCahanges that are produced by participant or
 /// received by participant. Each topic that is been published or been
-/// subscribed are contained in separate TopicCaches. One TopicCache cotains
+/// subscribed are contained in separate TopicCaches. One TopicCache contains
 /// only DDSCacheChanges of one serialized IDL datatype. -> all cachechanges in
 /// same TopicCache can be serialized/deserialized same way. Topic/TopicCache is
 /// identified by its name, which must be unique in the whole Domain.
@@ -91,17 +91,26 @@ impl DDSCache {
     }
   }
 
-  pub fn topic_get_changes_in_range(
+  pub fn get_changes_in_range_best_effort(
     &self,
     topic_name: &str,
-    reliable: bool, 
-    start_instant: &Timestamp,
-    end_instant: &Timestamp,
+    start_instant: Timestamp,
+    end_instant: Timestamp,
   ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
+    todo!();
+    /*
     match self.topic_caches.get(topic_name) {
       Some(tc) => Box::new(tc.get_changes_in_range(reliable, start_instant, end_instant)),
       None => Box::new(vec![].into_iter()),
-    }
+    }*/
+  }
+
+  pub fn get_changes_in_range_reliable(
+    &self,
+    topic_name: &str,
+    last_read_sn: &BTreeMap<GUID,SequenceNumber>,
+  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
+    todo!()
   }
 
   pub fn add_change(&mut self, topic_name: &str, instant: &Timestamp, cache_change: CacheChange) {
@@ -122,7 +131,7 @@ impl DDSCache {
 // exist separately? If there is no reason, they should be merged.
 
 #[derive(Debug)]
-pub struct TopicCache {
+struct TopicCache {
   topic_name: String,
   #[allow(dead_code)] // TODO: Which (future) feature needs this?
   topic_data_type: TypeDesc,
@@ -205,8 +214,8 @@ impl TopicCache {
 
 // This is contained in a TopicCache
 #[derive(Debug, Default)]
-pub struct DDSHistoryCache {
-  pub(crate) changes: BTreeMap<Timestamp, CacheChange>,
+struct DDSHistoryCache {
+  changes: BTreeMap<Timestamp, CacheChange>,
   // sequence_numbers is an index to "changes" by GUID and SN
   sequence_numbers: BTreeMap<GUID, BTreeMap<SequenceNumber, Timestamp>>,
 
@@ -219,11 +228,11 @@ pub struct DDSHistoryCache {
 }
 
 impl DDSHistoryCache {
-  pub fn new() -> Self {
+  fn new() -> Self {
     Self::default()
   }
 
-  pub fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
+  fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
     self.received_reliably_before.insert(writer,sn);
   }
 
@@ -264,7 +273,7 @@ impl DDSHistoryCache {
     }
   }
 
-  pub fn add_change(
+  fn add_change(
     &mut self,
     instant: &Timestamp,
     cache_change: CacheChange,
@@ -293,11 +302,11 @@ impl DDSHistoryCache {
     }
   }
 
-  pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
+  fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
     self.changes.get(instant)
   }
 
-  pub fn get_range_of_changes(
+  fn get_range_of_changes(
     &self,
     limit_by_reliability: bool,
     start_instant: &Timestamp,
@@ -316,14 +325,14 @@ impl DDSHistoryCache {
   }
 
   /// Removes and returns value if it was found
-  pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
+  fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
     self.changes.remove(instant).map(|cc| {
       self.remove_sn(&cc);
       cc
     })
   }
 
-  pub fn remove_changes_before(&mut self, instant: Timestamp) {
+  fn remove_changes_before(&mut self, instant: Timestamp) {
     let to_retain = self.changes.split_off(&instant);
     let to_remove = std::mem::replace(&mut self.changes, to_retain);
     for r in to_remove.values() {

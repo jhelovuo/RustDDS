@@ -46,6 +46,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GUID},
     time::Timestamp,
+    sequence_number::SequenceNumber,
   },
   mypoll::token_to_notification_id,
 };
@@ -90,6 +91,20 @@ pub(crate) enum ReaderCommand {
   ResetRequestedDeadlineStatus,
 }
 
+struct ReadPointers {
+  latest_instant: Timestamp, // This is used as a read pointer from dds_cache for BEST_EFFORT reading
+  last_read_sn : BTreeMap<GUID,SequenceNumber>, // collection of read pointers for RELIABLE reading
+}
+
+impl ReadPointers {
+  fn new() -> Self {
+    ReadPointers {
+      latest_instant: Timestamp::ZERO,
+      last_read_sn: BTreeMap::new(),
+    }
+  }
+}
+
 pub struct SimpleDataReader<
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
@@ -107,7 +122,10 @@ pub struct SimpleDataReader<
 
   dds_cache: Arc<RwLock<DDSCache>>, // global cache
 
-  latest_instant: Mutex<Timestamp>,
+  read_pointers: Mutex<ReadPointers>,
+
+  /// hask_to_key_map is used for decoding received key hashes back to original key values.
+  /// This is needed when we receive a dispose message via hash only.
   hash_to_key_map: Mutex<BTreeMap<KeyHash, D::K>>, // TODO: garbage collect this somehow
 
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
@@ -187,7 +205,7 @@ where
       my_guid,
       notification_receiver,
       dds_cache,
-      latest_instant: Mutex::new(Timestamp::ZERO),
+      read_pointers: Mutex::new(ReadPointers::new()),
       hash_to_key_map: Mutex::new(BTreeMap::new()),
       my_topic: topic,
       deserializer_type: PhantomData,
@@ -212,17 +230,29 @@ where
       ),
     };
     // get an iterator into DDS Cache, so this is in constant space, not a large data structure
-    let latest:Timestamp = *self.latest_instant.lock().unwrap();
-    let mut cache_changes = dds_cache.topic_get_changes_in_range(
-      &self.my_topic.name(),
-      is_reliable,
-      &latest,
-      &Timestamp::now(),
-    );
+    let read_ptr = self.read_pointers.lock().unwrap();
+    let mut cache_changes = 
+      if is_reliable {
+        dds_cache.get_changes_in_range_reliable(
+          &self.my_topic.name(),
+          &read_ptr.last_read_sn,
+        )
+      } else {
+        dds_cache.get_changes_in_range_best_effort(
+          &self.my_topic.name(),
+          read_ptr.latest_instant,
+          Timestamp::now(),
+        )
+      };
     match cache_changes.next() {
       None => None,
       Some((ts, cc)) => {
-        *self.latest_instant.lock().unwrap() = max(latest, ts);
+        { // update read pointers
+          let mut r = self.read_pointers.lock().unwrap();
+          let latest = r.latest_instant;
+          r.latest_instant = max(latest, ts);
+          r.last_read_sn.insert(cc.writer_guid, cc.sequence_number);
+        }
         Some(( ts, cc.clone() ))  //TODO: Can we somehow avoid this clone here? (Clones metadata only, payload is still Bytes)
       }
     }
@@ -365,7 +395,7 @@ pub struct DataReader<
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > {
-  simpleDataReader: SimpleDataReader<D,DA>,
+  simple_data_reader: SimpleDataReader<D,DA>,
   datasample_cache: Mutex<DataSampleCache<D>>, // DataReader-local cache of deserialized samples
 }
 
@@ -393,7 +423,7 @@ where
 
     let dsc = DataSampleCache::new(topic.qos());
 
-    let simpleDataReader = 
+    let simple_data_reader = 
       SimpleDataReader::<D,DA>::new(
         subscriber, 
         my_id, 
@@ -404,13 +434,13 @@ where
         reader_command, data_reader_waker )?;
 
     Ok(Self {
-      simpleDataReader,
+      simple_data_reader,
       datasample_cache: Mutex::new(dsc),
     })
   }
 
   fn my_guid(&self) -> GUID {
-    self.simpleDataReader.my_guid
+    self.simple_data_reader.my_guid
   }
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
@@ -418,12 +448,12 @@ where
   // samplestate) to local container, datasample_cache.
   fn fill_and_lock_local_datasample_cache(&self)  {
     let is_reliable = matches!(
-      self.simpleDataReader.qos_policy.reliability(),
+      self.simple_data_reader.qos_policy.reliability(),
       Some(policy::Reliability::Reliable { .. })
     );
 
     loop {
-      match self.simpleDataReader.try_take() {
+      match self.simple_data_reader.try_take() {
         Ok(None) => break,
         Ok(Some(dcc)) => {
           self.datasample_cache.lock().unwrap().fill_from_deserialized_cache_change(is_reliable, dcc )
@@ -438,7 +468,7 @@ where
   } 
 
   fn drain_read_notifications(&self) {
-    while self.simpleDataReader.notification_receiver.try_recv().is_ok() {}
+    while self.simple_data_reader.notification_receiver.try_recv().is_ok() {}
   }
 
   fn select_keys_for_access(&self, read_condition: ReadCondition) -> Vec<(Timestamp, D::K)> {
@@ -1156,7 +1186,7 @@ where
   // implements Evented
   fn register(&self, poll: &mio_06::Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self
-      .simpleDataReader
+      .simple_data_reader
       .register(poll, token, interest, opts)
   }
 
@@ -1168,12 +1198,12 @@ where
     opts: PollOpt,
   ) -> io::Result<()> {
     self
-      .simpleDataReader
+      .simple_data_reader
       .reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self.simpleDataReader.deregister(poll)
+    self.simple_data_reader.deregister(poll)
   }
 }
 
@@ -1204,7 +1234,7 @@ where
   // }
 
   fn qos(&self) -> QosPolicies {
-    self.simpleDataReader.qos_policy.clone()
+    self.simple_data_reader.qos_policy.clone()
   }
 }
 
@@ -1214,7 +1244,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
-    self.simpleDataReader.my_guid
+    self.simple_data_reader.my_guid
   }
 }
 
@@ -1274,7 +1304,7 @@ where
             // 1. synchronously store waker to background thread (must rendezvous)
             // 2. try take_bare again, in case something arrived just now
             // 3. if nothing still, return pending.
-            *self.datareader.simpleDataReader.data_reader_waker.lock().unwrap() // TODO: remove unwrap
+            *self.datareader.simple_data_reader.data_reader_waker.lock().unwrap() // TODO: remove unwrap
               = DataReaderWaker::FutureWaker(cx.waker().clone());
             match self.datareader.take_bare(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),  
