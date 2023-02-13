@@ -97,20 +97,21 @@ impl DDSCache {
     start_instant: Timestamp,
     end_instant: Timestamp,
   ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
-    todo!();
-    /*
     match self.topic_caches.get(topic_name) {
-      Some(tc) => Box::new(tc.get_changes_in_range(reliable, start_instant, end_instant)),
+      Some(tc) => Box::new(tc.get_changes_in_range_best_effort(start_instant, end_instant)),
       None => Box::new(vec![].into_iter()),
-    }*/
+    }
   }
 
-  pub fn get_changes_in_range_reliable(
-    &self,
+  pub fn get_changes_in_range_reliable<'a>(
+    &'a self,
     topic_name: &str,
-    last_read_sn: &BTreeMap<GUID,SequenceNumber>,
-  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
-    todo!()
+    last_read_sn: &'a BTreeMap<GUID,SequenceNumber>,
+  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + 'a> {
+    match self.topic_caches.get(topic_name) {
+      Some(tc) => Box::new(tc.get_changes_in_range_reliable(last_read_sn)),
+      None => Box::new(vec![].into_iter()),
+    }
   }
 
   pub fn add_change(&mut self, topic_name: &str, instant: &Timestamp, cache_change: CacheChange) {
@@ -169,15 +170,23 @@ impl TopicCache {
       });
   }
 
-  pub fn get_changes_in_range(
+  pub fn get_changes_in_range_best_effort(
     &self,
-    reliable: bool,
-    start_instant: &Timestamp,
-    end_instant: &Timestamp,
+    start_instant: Timestamp,
+    end_instant: Timestamp,
   ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
     self
       .history_cache
-      .get_range_of_changes(reliable, start_instant, end_instant)
+      .get_range_of_changes_best_effort(start_instant, end_instant)
+  }
+
+  pub fn get_changes_in_range_reliable<'a>(
+    &'a self,
+    last_read_sn: &'a BTreeMap<GUID,SequenceNumber>,
+  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + 'a> {
+    self
+      .history_cache
+      .get_range_of_changes_reliable(last_read_sn)
   }
 
   ///Removes and returns value if it was found
@@ -306,23 +315,38 @@ impl DDSHistoryCache {
     self.changes.get(instant)
   }
 
-  fn get_range_of_changes(
+  fn get_range_of_changes_best_effort(
     &self,
-    limit_by_reliability: bool,
-    start_instant: &Timestamp,
-    end_instant: &Timestamp,
+    start_instant: Timestamp,
+    end_instant: Timestamp,
   ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
     Box::new(
       self
         .changes
         .range((Excluded(start_instant), Included(end_instant)))
-        .filter(move |(_,cc)| ! limit_by_reliability || cc.sequence_number < self.reliable_before(cc.writer_guid) )
+        // .filter(move |(_,cc)| ! limit_by_reliability || cc.sequence_number < self.reliable_before(cc.writer_guid) )
         .map(|(i, c)| (*i, c))
-
-        // The .filter( ) above limits handing out CacheChanges that are not yet ready to be delivered realiably.
-        // This means that some samples from before are missing, but still available.
     )
   }
+
+  fn get_range_of_changes_reliable<'a>(
+    &'a self,
+    last_read_sn: &'a BTreeMap<GUID,SequenceNumber>,
+  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + 'a > {
+    Box::new(
+      self
+        .sequence_numbers
+        .iter()
+        .flat_map(|(guid, sn_map)| 
+          {
+            let lower_bound_exc = last_read_sn.get(&guid).cloned().unwrap_or(SequenceNumber::zero());
+            let upper_bound_exc = self.reliable_before(*guid);
+            sn_map.range(( Excluded(lower_bound_exc), Excluded(upper_bound_exc) ))
+          }) // we get iterator of Timestamp
+        .filter_map(|(_sn,t)| self.get_change(t).map(|cc| (*t,cc) ) )
+    )
+  }
+
 
   /// Removes and returns value if it was found
   fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
