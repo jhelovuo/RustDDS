@@ -261,6 +261,7 @@ where
     This is a hacky "Fix" for IntercomDDS version 01.05 protocol version 2.1.
     Where IntercomDDS sends an empty string with no NULL terminator.
     */
+    let bytes_without_null;
     if bytes.len().is_zero() {
       bytes_without_null = bytes;
     } else {
