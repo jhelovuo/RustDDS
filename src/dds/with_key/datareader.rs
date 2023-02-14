@@ -3,7 +3,7 @@ use std::{
   io,
   marker::PhantomData,
   sync::{Arc, RwLock, Mutex,},
-  ops::{Deref, DerefMut},
+  //ops::{Deref, DerefMut},
   collections::{BTreeMap},
 };
 
@@ -14,11 +14,11 @@ use log::{debug, error, info, warn, trace};
 use mio_06::{Evented, PollOpt, Ready, Token};
 use mio_06;
 
-use mio_08;
-use mio_misc;
+//use mio_08;
+//use mio_misc;
 
 use futures::stream::{Stream, FusedStream,};
-use futures::future::FusedFuture;
+//use futures::future::FusedFuture;
 use std::pin::Pin;
 use std::task::{Poll, Context, Waker};
 
@@ -48,7 +48,7 @@ use crate::{
     time::Timestamp,
     sequence_number::SequenceNumber,
   },
-  mypoll::token_to_notification_id,
+  //mypoll::token_to_notification_id,
 };
 
 /// Simplified type for CDR encoding
@@ -64,7 +64,7 @@ pub enum SelectByKey {
 
 #[derive(Clone, Debug,)]
 pub(crate) enum DataReaderWaker {
-  Mio08Token{ token: mio_08::Token, notifier: Arc<dyn mio_misc::queue::Notifier>, },
+  //Mio08Token{ token: mio_08::Token, notifier: Arc<dyn mio_misc::queue::Notifier>, },
   FutureWaker(Waker),
   NoWaker,
 }
@@ -74,9 +74,9 @@ impl DataReaderWaker {
     use DataReaderWaker::*;
     match self {
       NoWaker => (),
-      Mio08Token{ token, notifier } => 
-        notifier.notify(token_to_notification_id(token.clone()))
-          .unwrap_or_else(|e| error!("Reader cannot notify Datareader: {:?}",e)),
+      // Mio08Token{ token, notifier } => 
+      //   notifier.notify(token_to_notification_id(token.clone()))
+      //     .unwrap_or_else(|e| error!("Reader cannot notify Datareader: {:?}",e)),
       FutureWaker(fut_waker) => {
         fut_waker.wake_by_ref();
         *self = NoWaker;
@@ -442,26 +442,22 @@ where
     })
   }
 
-  fn my_guid(&self) -> GUID {
-    self.simple_data_reader.my_guid
-  }
-
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
   fn fill_and_lock_local_datasample_cache(&self)  {
-    let is_reliable = matches!(
-      self.simple_data_reader.qos_policy.reliability(),
-      Some(policy::Reliability::Reliable { .. })
-    );
+    // let is_reliable = matches!(
+    //   self.simple_data_reader.qos_policy.reliability(),
+    //   Some(policy::Reliability::Reliable { .. })
+    // );
 
     loop {
       match self.simple_data_reader.try_take() {
         Ok(None) => break,
         Ok(Some(dcc)) => {
-          self.datasample_cache.lock().unwrap().fill_from_deserialized_cache_change(is_reliable, dcc )
+          self.datasample_cache.lock().unwrap().fill_from_deserialized_cache_change( dcc )
         }
-        Err(e) => {
+        Err(_e) => {
           // error is logged already at lower level.
           // Should we try to continue or stop here?
           // Or maybe report an error?
@@ -1142,6 +1138,7 @@ where
     vec![].into_iter()
   }
 
+  /// An async stream for reading the (bare) data samples
   pub fn async_sample_stream(&self) -> DataReaderStream<D,DA> {
     DataReaderStream{ datareader: self }
   }
@@ -1256,6 +1253,16 @@ where
   }
 }
 
+impl<D, DA> RTPSEntity for SimpleDataReader<D, DA>
+where
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
+  fn guid(&self) -> GUID {
+    self.my_guid
+  }
+}
+
 impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
@@ -1351,8 +1358,16 @@ where
   }
 }
 
-// ----------------------------------------------
-// ----------------------------------------------
+
+
+
+
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

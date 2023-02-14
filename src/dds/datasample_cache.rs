@@ -1,32 +1,32 @@
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap, },
   ops::Bound,
-  ops::Deref,
-  cmp::max,
+  //ops::Deref,
+  //cmp::max,
 };
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 
-use serde::de::DeserializeOwned;
+//use serde::de::DeserializeOwned;
 
 use crate::{
   dds::{
-    ddsdata::DDSData,
+    //ddsdata::DDSData,
     qos::{policy, QosPolicies},
     readcondition::ReadCondition,
     sampleinfo::*,
-    topic::{Topic, TopicDescription,},
-    traits::key::{Key, KeyHash, Keyed, },
-    traits::serde_adapters::with_key::*,
+    //topic::{Topic, TopicDescription,},
+    traits::key::{Key, Keyed, },
+    //traits::serde_adapters::with_key::*,
     with_key::datasample::DataSample,
   },
   structure::{
-    cache_change::{CacheChange, DeserializedCacheChange, },
+    cache_change::DeserializedCacheChange, 
     guid::GUID,
     sequence_number::SequenceNumber,
     time::Timestamp,
-    dds_cache::DDSCache,
+    //dds_cache::DDSCache,
   },
   with_key::WriteOptions,
 };
@@ -102,7 +102,7 @@ where
   }
 
 
-  pub(crate) fn fill_from_deserialized_cache_change(&mut self, is_reliable: bool, deserialized_cc : DeserializedCacheChange<D>)
+  pub(crate) fn fill_from_deserialized_cache_change(&mut self, deserialized_cc : DeserializedCacheChange<D>)
   {
     // TODO list.
 
