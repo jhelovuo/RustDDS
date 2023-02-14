@@ -578,9 +578,9 @@ impl Reader {
         // This is normal if the DATA was broadcast, but it was from another topic.
         // We just ignore the data in such a case
         // ... unless it is Discovery traffic.
-        if writer_guid.entity_id.entity_kind.is_user_defined() {
-          return;
-        }
+        // if writer_guid.entity_id.entity_kind.is_user_defined() {
+        //   return;
+        // }
       }
     } else {
       // stateless reader
