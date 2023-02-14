@@ -128,103 +128,17 @@ impl DDSCache {
 }
 
 
-// TODO: Why do this (TopicCache) and level below (DDSHistoryCache)
-// exist separately? If there is no reason, they should be merged.
-
 #[derive(Debug)]
 struct TopicCache {
   topic_name: String,
   #[allow(dead_code)] // TODO: Which (future) feature needs this?
   topic_data_type: TypeDesc,
   topic_qos: QosPolicies,
-  history_cache: DDSHistoryCache,
-}
 
-impl TopicCache {
-  pub fn new(topic_name: String, topic_data_type: TypeDesc) -> Self {
-    Self {
-      topic_name,
-      topic_data_type,
-      topic_qos: QosPolicyBuilder::new().build(),
-      history_cache: DDSHistoryCache::new(),
-    }
-  }
-
-  pub fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
-    self.history_cache.received_reliably_before.insert(writer,sn);
-  }
-
-  pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
-    self.history_cache.get_change(instant)
-  }
-
-  pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
-    self
-      .history_cache
-      .add_change(instant, cache_change)
-      .map(|cc_back| {
-        debug!(
-          "DDSCache insert failed topic={:?} cache_change={:?}",
-          self.topic_name, cc_back
-        );
-      });
-  }
-
-  pub fn get_changes_in_range_best_effort(
-    &self,
-    start_instant: Timestamp,
-    end_instant: Timestamp,
-  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
-    self
-      .history_cache
-      .get_range_of_changes_best_effort(start_instant, end_instant)
-  }
-
-  pub fn get_changes_in_range_reliable<'a>(
-    &'a self,
-    last_read_sn: &'a BTreeMap<GUID,SequenceNumber>,
-  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + 'a> {
-    self
-      .history_cache
-      .get_range_of_changes_reliable(last_read_sn)
-  }
-
-  ///Removes and returns value if it was found
-  pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
-    self.history_cache.remove_change(instant)
-  }
-
-  pub fn remove_changes_before(&mut self, instant: Timestamp) {
-    // Look up some Topic-specific resource limit
-    // and remove earliest samples until we are within limit.
-    // This prevents cache from groving indefinetly.
-    let max_keep_samples = self
-      .topic_qos
-      .resource_limits()
-      .unwrap_or(ResourceLimits {
-        max_samples: 1024,
-        max_instances: 1024,
-        max_samples_per_instance: 64,
-      })
-      .max_samples;
-    // TODO: We cannot currently keep track of instance counts, because TopicCache
-    // or DDSCache below do not know about instances.
-    let remove_count = self.history_cache.changes.len() as i32 - max_keep_samples;
-    let split_key = *self
-      .history_cache
-      .changes
-      .keys()
-      .take(max(0, remove_count) as usize + 1)
-      .last()
-      .map_or(&instant, |lim| max(lim, &instant));
-    self.history_cache.remove_changes_before(split_key);
-  }
-}
-
-// This is contained in a TopicCache
-#[derive(Debug, Default)]
-struct DDSHistoryCache {
+  // Tha main content of the cache is in this map.
+  // Timestamp is assumed to be unique id over all the ChacheChanges.
   changes: BTreeMap<Timestamp, CacheChange>,
+
   // sequence_numbers is an index to "changes" by GUID and SN
   sequence_numbers: BTreeMap<GUID, BTreeMap<SequenceNumber, Timestamp>>,
 
@@ -234,55 +148,41 @@ struct DDSHistoryCache {
   // Therefore, data before the marker SN can be handed off to a Reliable DataReader.
   // Initially, we consider the marker for each Writer (GUID) to be SequenceNumber::new(1)
   received_reliably_before: BTreeMap<GUID, SequenceNumber>
+
 }
 
-impl DDSHistoryCache {
-  fn new() -> Self {
-    Self::default()
-  }
-
-  fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
-    self.received_reliably_before.insert(writer,sn);
-  }
-
-  fn reliable_before(&self, writer:GUID) -> SequenceNumber {
-    self.received_reliably_before
-      .get(&writer)
-      .cloned()
-      .unwrap_or( SequenceNumber::default() )
-      // Sequence numbering starts at default(), so anything before that is always received
-      // reliably, since no such samples exist.
-  }
-
-  fn find_by_sn(&self, cc: &CacheChange) -> Option<Timestamp> {
-    self
-      .sequence_numbers
-      .get(&cc.writer_guid)
-      .and_then(|snm| snm.get(&cc.sequence_number))
-      .copied()
-  }
-
-  fn insert_sn(&mut self, instant: Timestamp, cc: &CacheChange) {
-    self
-      .sequence_numbers
-      .entry(cc.writer_guid)
-      .or_insert_with(BTreeMap::new)
-      .insert(cc.sequence_number, instant);
-  }
-
-  fn remove_sn(&mut self, cc: &CacheChange) {
-    let mut emptied = false;
-
-    self.sequence_numbers.entry(cc.writer_guid).and_modify(|s| {
-      s.remove(&cc.sequence_number);
-      emptied = s.is_empty();
-    });
-    if emptied {
-      self.sequence_numbers.remove(&cc.writer_guid);
+impl TopicCache {
+  pub fn new(topic_name: String, topic_data_type: TypeDesc) -> Self {
+    Self {
+      topic_name,
+      topic_data_type,
+      topic_qos: QosPolicyBuilder::new().build(),
+      changes: BTreeMap::new(),
+      sequence_numbers: BTreeMap::new(),
+      received_reliably_before: BTreeMap::new(),
     }
   }
 
-  fn add_change(
+  pub fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
+    self.received_reliably_before.insert(writer,sn);
+  }
+
+  pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
+    self.changes.get(instant)
+  }
+
+  pub fn add_change(&mut self, instant: &Timestamp, cache_change: CacheChange) {
+    self
+      .add_change_internal(instant, cache_change)
+      .map(|cc_back| {
+        debug!(
+          "DDSCache insert failed topic={:?} cache_change={:?}",
+          self.topic_name, cc_back
+        );
+      });
+  }
+
+  fn add_change_internal(
     &mut self,
     instant: &Timestamp,
     cache_change: CacheChange,
@@ -311,11 +211,23 @@ impl DDSHistoryCache {
     }
   }
 
-  fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {
-    self.changes.get(instant)
+  fn find_by_sn(&self, cc: &CacheChange) -> Option<Timestamp> {
+    self
+      .sequence_numbers
+      .get(&cc.writer_guid)
+      .and_then(|snm| snm.get(&cc.sequence_number))
+      .copied()
   }
 
-  fn get_range_of_changes_best_effort(
+  fn insert_sn(&mut self, instant: Timestamp, cc: &CacheChange) {
+    self
+      .sequence_numbers
+      .entry(cc.writer_guid)
+      .or_insert_with(BTreeMap::new)
+      .insert(cc.sequence_number, instant);
+  }
+
+  pub fn get_changes_in_range_best_effort(
     &self,
     start_instant: Timestamp,
     end_instant: Timestamp,
@@ -329,7 +241,7 @@ impl DDSHistoryCache {
     )
   }
 
-  fn get_range_of_changes_reliable<'a>(
+  pub fn get_changes_in_range_reliable<'a>(
     &'a self,
     last_read_sn: &'a BTreeMap<GUID,SequenceNumber>,
   ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + 'a > {
@@ -347,17 +259,59 @@ impl DDSHistoryCache {
     )
   }
 
+  fn reliable_before(&self, writer:GUID) -> SequenceNumber {
+    self.received_reliably_before
+      .get(&writer)
+      .cloned()
+      .unwrap_or( SequenceNumber::default() )
+      // Sequence numbering starts at default(), so anything before that is always received
+      // reliably, since no such samples exist.
+  }
 
   /// Removes and returns value if it was found
-  fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
+  pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
     self.changes.remove(instant).map(|cc| {
       self.remove_sn(&cc);
       cc
     })
   }
 
-  fn remove_changes_before(&mut self, instant: Timestamp) {
-    let to_retain = self.changes.split_off(&instant);
+  fn remove_sn(&mut self, cc: &CacheChange) {
+    let mut emptied = false;
+
+    self.sequence_numbers.entry(cc.writer_guid).and_modify(|s| {
+      s.remove(&cc.sequence_number);
+      emptied = s.is_empty();
+    });
+    if emptied {
+      self.sequence_numbers.remove(&cc.writer_guid);
+    }
+  }
+
+  pub fn remove_changes_before(&mut self, instant: Timestamp) {
+    // Look up some Topic-specific resource limit
+    // and remove earliest samples until we are within limit.
+    // This prevents cache from groving indefinetly.
+    let max_keep_samples = self
+      .topic_qos
+      .resource_limits()
+      .unwrap_or(ResourceLimits {
+        max_samples: 1024,
+        max_instances: 1024,
+        max_samples_per_instance: 64,
+      })
+      .max_samples;
+    // TODO: We cannot currently keep track of instance counts, because TopicCache
+    // or DDSCache below do not know about instances.
+    let remove_count = self.changes.len() as i32 - max_keep_samples;
+    let split_key = *self
+      .changes
+      .keys()
+      .take(max(0, remove_count) as usize + 1)
+      .last()
+      .map_or(&instant, |lim| max(lim, &instant));
+
+    let to_retain = self.changes.split_off(&split_key);
     let to_remove = std::mem::replace(&mut self.changes, to_retain);
     for r in to_remove.values() {
       self.remove_sn(r);

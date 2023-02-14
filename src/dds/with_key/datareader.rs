@@ -230,21 +230,24 @@ where
       ),
     };
     // get an iterator into DDS Cache, so this is in constant space, not a large data structure
-    let read_ptr = self.read_pointers.lock().unwrap();
-    let mut cache_changes = 
-      if is_reliable {
-        dds_cache.get_changes_in_range_reliable(
-          &self.my_topic.name(),
-          &read_ptr.last_read_sn,
-        )
-      } else {
-        dds_cache.get_changes_in_range_best_effort(
-          &self.my_topic.name(),
-          read_ptr.latest_instant,
-          Timestamp::now(),
-        )
-      };
-    match cache_changes.next() {
+    let next_cc = {
+      let read_ptr = self.read_pointers.lock().unwrap();
+      let mut cache_changes = 
+        if is_reliable {
+          dds_cache.get_changes_in_range_reliable(
+            &self.my_topic.name(),
+            &read_ptr.last_read_sn,
+          )
+        } else {
+          dds_cache.get_changes_in_range_best_effort(
+            &self.my_topic.name(),
+            read_ptr.latest_instant,
+            Timestamp::now(),
+          )
+        };
+        cache_changes.next().map(|(ts,cc)| (ts,cc.clone())) // TODO: cloned!!
+    };
+    match next_cc {
       None => None,
       Some((ts, cc)) => {
         { // update read pointers
@@ -253,7 +256,7 @@ where
           r.latest_instant = max(latest, ts);
           r.last_read_sn.insert(cc.writer_guid, cc.sequence_number);
         }
-        Some(( ts, cc.clone() ))  //TODO: Can we somehow avoid this clone here? (Clones metadata only, payload is still Bytes)
+        Some(( ts, cc ))
       }
     }
   }
@@ -1220,6 +1223,21 @@ where
     self.status_receiver.try_recv_status()
   }
 }
+
+impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
+where
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
+  fn as_status_evented(&mut self) -> &dyn Evented {
+    self.simple_data_reader.as_status_evented()
+  }
+
+  fn try_recv_status(&self) -> Option<DataReaderStatus> {
+    self.simple_data_reader.try_recv_status()
+  }
+}
+
 
 impl<D, DA> HasQoSPolicy for DataReader<D, DA>
 where
