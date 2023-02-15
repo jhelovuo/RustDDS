@@ -11,11 +11,11 @@ use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{debug, error, info, warn, trace};
-use mio_06::{Evented, PollOpt, Ready, Token};
+
+use mio_06::Evented;
 use mio_06;
 
-//use mio_08;
-//use mio_misc;
+use mio_08;
 
 use futures::stream::{Stream, FusedStream,};
 //use futures::future::FusedFuture;
@@ -48,7 +48,7 @@ use crate::{
     time::Timestamp,
     sequence_number::SequenceNumber,
   },
-  //mypoll::token_to_notification_id,
+  mio_source::PollEventSource,
 };
 
 /// Simplified type for CDR encoding
@@ -137,6 +137,8 @@ pub struct SimpleDataReader<
   // resetting deadline missed status. Remove attribute when it is supported.
   reader_command: mio_channel::SyncSender<ReaderCommand>,
   data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+
+  event_source: PollEventSource,
 }
 
 
@@ -187,6 +189,7 @@ where
     status_channel_rec: mio_channel::Receiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
     data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+    event_source: PollEventSource,
   ) -> Result<Self> {
     let dp = match subscriber.participant() {
       Some(dp) => dp,
@@ -213,6 +216,7 @@ where
       status_receiver: StatusReceiver::new(status_channel_rec),
       reader_command,
       data_reader_waker,
+      event_source,
     })
   }
 
@@ -422,6 +426,7 @@ where
     status_channel_rec: mio_channel::Receiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
     data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+    event_source: PollEventSource,
   ) -> Result<Self> {
 
     let dsc = DataSampleCache::new(topic.qos());
@@ -434,7 +439,7 @@ where
         qos_policy, 
         notification_receiver, 
         dds_cache, discovery_command, status_channel_rec, 
-        reader_command, data_reader_waker )?;
+        reader_command, data_reader_waker, event_source )?;
 
     Ok(Self {
       simple_data_reader,
@@ -468,6 +473,7 @@ where
 
   fn drain_read_notifications(&self) {
     while self.simple_data_reader.notification_receiver.try_recv().is_ok() {}
+    self.simple_data_reader.event_source.drain();
   }
 
   fn select_keys_for_access(&self, read_condition: ReadCondition) -> Vec<(Timestamp, D::K)> {
@@ -1145,6 +1151,8 @@ where
 
 } // impl
 
+// -------------------
+
 // This is  not part of DDS spec. We implement mio Eventd so that the
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for SimpleDataReader<D, DA>
@@ -1154,7 +1162,7 @@ where
 {
   // We just delegate all the operations to notification_receiver, since it
   // already implements Evented
-  fn register(&self, poll: &mio_06::Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+  fn register(&self, poll: &mio_06::Poll, token: mio_06::Token, interest: mio_06::Ready, opts: mio_06::PollOpt) -> io::Result<()> {
     self
       .notification_receiver
       .register(poll, token, interest, opts)
@@ -1163,9 +1171,9 @@ where
   fn reregister(
     &self,
     poll: &mio_06::Poll,
-    token: Token,
-    interest: Ready,
-    opts: PollOpt,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
       .notification_receiver
@@ -1184,7 +1192,7 @@ where
 {
   // We just delegate all the operations to notification_receiver, since it alrady
   // implements Evented
-  fn register(&self, poll: &mio_06::Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+  fn register(&self, poll: &mio_06::Poll, token: mio_06::Token, interest: mio_06::Ready, opts: mio_06::PollOpt) -> io::Result<()> {
     self
       .simple_data_reader
       .register(poll, token, interest, opts)
@@ -1193,9 +1201,9 @@ where
   fn reregister(
     &self,
     poll: &mio_06::Poll,
-    token: Token,
-    interest: Ready,
-    opts: PollOpt,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
       .simple_data_reader
@@ -1206,6 +1214,57 @@ where
     self.simple_data_reader.deregister(poll)
   }
 }
+
+
+impl<D, DA> mio_08::event::Source for SimpleDataReader<D, DA>
+where
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
+  fn register(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
+  {
+    self.event_source.register(registry,token, interests)
+  }
+
+  fn reregister(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
+  {
+    self.event_source.reregister(registry, token, interests)
+  }
+
+  fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()>
+  {
+    self.event_source.deregister(registry)
+  }
+
+}
+
+impl<D, DA> mio_08::event::Source for DataReader<D, DA>
+where
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
+  fn register(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
+  {
+    // SimpleDataReader implements .register() for two traits, so need to
+    // use disambiguation syntax to call .register() here.
+    <SimpleDataReader<D,DA> as mio_08::event::Source>
+      ::register(&mut self.simple_data_reader, registry, token, interests)
+  }
+
+  fn reregister(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
+  {
+    <SimpleDataReader<D,DA> as mio_08::event::Source>
+      ::reregister(&mut self.simple_data_reader,registry, token, interests)
+  }
+
+  fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()>
+  {
+    <SimpleDataReader<D,DA> as mio_08::event::Source>
+      ::deregister(&mut self.simple_data_reader, registry)
+  }
+
+}
+
 
 impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
 where

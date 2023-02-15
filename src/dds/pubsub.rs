@@ -43,6 +43,7 @@ use crate::{
     guid::{EntityId, GUID},
     topic_kind::TopicKind,
   },
+  mio_source,
 };
 use super::{
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
@@ -976,6 +977,9 @@ impl InnerSubscriber {
 
     let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
 
+    let (poll_event_source, poll_event_sender) =
+      mio_source::make_poll_channel()?;
+
     let new_reader = ReaderIngredients {
       guid: reader_guid,
       notification_sender: send,
@@ -984,6 +988,7 @@ impl InnerSubscriber {
       qos_policy: qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
+      poll_event_sender,
     };
 
     {
@@ -1006,6 +1011,7 @@ impl InnerSubscriber {
       status_receiver,
       reader_command_sender,
       data_reader_waker,
+      poll_event_source,
     )?;
 
     // Create new topic to DDScache if one isn't present

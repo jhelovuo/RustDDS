@@ -39,6 +39,7 @@ use crate::{
     sequence_number::{FragmentNumberSet, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
+  mio_source,
 };
 use super::{
   qos::InlineQos, 
@@ -59,7 +60,8 @@ pub(crate) struct ReaderIngredients {
   pub topic_name: String,
   pub qos_policy: QosPolicies,
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
-  pub (crate) data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+  pub(crate) data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+  pub(crate) poll_event_sender: mio_source::PollEventSender,
 }
 
 impl ReaderIngredients {
@@ -118,6 +120,7 @@ pub(crate) struct Reader {
   pub(crate) timed_event_timer: Timer<TimedEvent>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
   data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+  poll_event_sender: mio_source::PollEventSender,
 }
 
 impl Reader {
@@ -155,6 +158,7 @@ impl Reader {
       timed_event_timer,
       data_reader_command_receiver: i.data_reader_command_receiver,
       data_reader_waker: i.data_reader_waker,
+      poll_event_sender: i.poll_event_sender,
     }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
@@ -1026,9 +1030,14 @@ impl Reader {
   // this reader) likely use of mio channel
   pub fn notify_cache_change(&mut self) {
     
+    // async notify mechanism
     self.data_reader_waker.lock().unwrap() // TODO: unwrap
       .wake();
 
+    // mio-0.8 notify
+    self.poll_event_sender.send();
+
+    // mio-0.6 notify
     match self.notification_sender.try_send(()) {
       Ok(()) => (),
       Err(mio_channel::TrySendError::Full(_)) => (), 
