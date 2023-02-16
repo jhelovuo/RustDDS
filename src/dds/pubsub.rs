@@ -19,7 +19,7 @@ use crate::{
     participant::*,
     qos::*,
     reader::ReaderIngredients,
-    statusevents::DataReaderStatus,
+    statusevents::{DataReaderStatus, sync_status_channel},
     topic::*,
     traits::{
       key::{Key, Keyed},
@@ -484,7 +484,7 @@ impl InnerPublisher {
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(16);
 
     // Status reports back from Writer to DataWriter.
-    let (status_sender, status_receiver) = mio_channel::sync_channel(4);
+    let (status_sender, status_receiver) = sync_status_channel(4)?;
 
     // DDS Spec 2.2.2.4.1.5 create_datawriter:
     // If no QoS is specified, we should take the Publisher default
@@ -949,7 +949,7 @@ impl InnerSubscriber {
     // incoming data notification channel from Reader to DataReader
     let (send, rec) = mio_channel::sync_channel::<()>(4);
     // status change channel from Reader to DataReader
-    let (status_sender, status_receiver) = mio_channel::sync_channel::<DataReaderStatus>(4);
+    let (status_sender, status_receiver) = sync_status_channel::<DataReaderStatus>(4)?;
 
     // reader command channel from Datareader to Reader
     let (reader_command_sender, reader_command_receiver) =

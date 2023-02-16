@@ -186,7 +186,7 @@ where
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_channel_rec: mio_channel::Receiver<DataReaderStatus>,
+    status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
     data_reader_waker: Arc<Mutex<DataReaderWaker>>,
     event_source: PollEventSource,
@@ -423,7 +423,7 @@ where
     notification_receiver: mio_channel::Receiver<()>,
     dds_cache: Arc<RwLock<DDSCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_channel_rec: mio_channel::Receiver<DataReaderStatus>,
+    status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
     data_reader_waker: Arc<Mutex<DataReaderWaker>>,
     event_source: PollEventSource,
@@ -1275,6 +1275,10 @@ where
     self.status_receiver.as_status_evented()
   }
 
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self.status_receiver.as_status_source()
+  }
+
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
     self.status_receiver.try_recv_status()
   }
@@ -1287,6 +1291,10 @@ where
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
     self.simple_data_reader.as_status_evented()
+  }
+
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self.simple_data_reader.as_status_source()
   }
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {

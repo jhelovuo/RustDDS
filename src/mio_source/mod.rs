@@ -83,8 +83,11 @@ impl PollEventSource {
     let mut buf = Vec::with_capacity(16);
     match self.rec_mio_socket.lock().unwrap().read_to_end(&mut buf) {
       Ok(_) => (),
-      Err(e) => {
-        info!("PollEventSource.drain(): {e}");
+      Err(err) => {
+        match err.kind() {
+          io::ErrorKind::WouldBlock => {} // This is the expected case
+          other_kind => { info!("PollEventSource.drain(): {other_kind}"); }
+        }
         ()
       }
     }

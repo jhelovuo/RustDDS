@@ -41,7 +41,7 @@ use crate::{
 use super::{
   qos::{policy, QosPolicies},
   rtps_reader_proxy::RtpsReaderProxy,
-  statusevents::{CountWithChange, DataWriterStatus},
+  statusevents::{CountWithChange, DataWriterStatus, StatusChannelSender},
 };
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -65,7 +65,7 @@ pub(crate) struct WriterIngredients {
   pub writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   pub topic_name: String,
   pub qos_policies: QosPolicies,
-  pub status_sender: SyncSender<DataWriterStatus>,
+  pub status_sender: StatusChannelSender<DataWriterStatus>,
 }
 
 impl WriterIngredients {
@@ -174,7 +174,7 @@ pub(crate) struct Writer {
   qos_policies: QosPolicies,
 
   // Used for sending status info about messages sent
-  status_sender: SyncSender<DataWriterStatus>,
+  status_sender: StatusChannelSender<DataWriterStatus>,
   //offered_deadline_status: OfferedDeadlineMissedStatus,
   ack_waiter: Option<AckWaiter>,
 }

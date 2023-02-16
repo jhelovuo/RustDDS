@@ -191,7 +191,7 @@ where
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: &Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
-    status_receiver_rec: Receiver<DataWriterStatus>,
+    status_receiver_rec: StatusChannelReceiver<DataWriterStatus>,
   ) -> Result<Self> {
     match dds_cache.write() {
       Ok(mut cache) => cache.add_new_topic(topic.name(), topic.get_type()),
@@ -940,6 +940,10 @@ where
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
     self.status_receiver.as_status_evented()
+  }
+
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self.status_receiver.as_status_source()
   }
 
   fn try_recv_status(&self) -> Option<DataWriterStatus> {

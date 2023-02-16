@@ -6,9 +6,17 @@
 //
 // Communcation statues are detailed in Figure 2.13 and tables in Section
 // 2.2.4.1 in DDS Specification v1.4
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
+use std::io;
 
 use mio_06::Evented;
 use mio_extras::channel as mio_channel;
+
+use mio_08;
+use mio_08::{Registry, Token, Interest, event,};
+use crate::mio_source::*;
 
 use crate::dds::qos::QosPolicyId;
 
@@ -16,18 +24,21 @@ use crate::dds::qos::QosPolicyId;
 /// Types implementing this trait can be registered to a poll and
 /// polled for status events.
 pub trait StatusEvented<E> {
-  fn as_status_evented(&mut self) -> &dyn Evented;
+  fn as_status_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source; // This is for polling with mio-0.8.x
+
   fn try_recv_status(&self) -> Option<E>;
 }
 
 // Helper object for various DDS Entities
 pub(crate) struct StatusReceiver<E> {
-  channel_receiver: mio_channel::Receiver<E>,
+  channel_receiver: StatusChannelReceiver<E>,
   enabled: bool, // if not enabled, we should forward status to parent Entity
+  // TODO: enabling not implemented
 }
 
 impl<E> StatusReceiver<E> {
-  pub fn new(channel_receiver: mio_channel::Receiver<E>) -> Self {
+  pub fn new(channel_receiver: StatusChannelReceiver<E>) -> Self {
     Self {
       channel_receiver,
       enabled: false,
@@ -38,7 +49,12 @@ impl<E> StatusReceiver<E> {
 impl<E> StatusEvented<E> for StatusReceiver<E> {
   fn as_status_evented(&mut self) -> &dyn Evented {
     self.enabled = true;
-    &self.channel_receiver
+    &self.channel_receiver.actual_receiver
+  }
+
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self.enabled = true;
+    &mut self.channel_receiver
   }
 
   fn try_recv_status(&self) -> Option<E> {
@@ -49,6 +65,82 @@ impl<E> StatusEvented<E> for StatusReceiver<E> {
     }
   }
 }
+
+// a wrapper(s) for mio_channel augmented with
+// poll channel, so that it can be used together with mio-0.8
+// This is only used so that a mio-0.6 channel can pose as a
+// mio-0.8 event::Source.
+
+pub(crate) fn sync_status_channel<T>(capacity :usize) 
+  -> io::Result<(StatusChannelSender<T>, StatusChannelReceiver<T>)>
+{
+  let (signal_receiver, signal_sender) = make_poll_channel()?;
+  let (actual_sender, actual_receiver) = mio_channel::sync_channel(capacity);
+  Ok((
+    StatusChannelSender{ actual_sender, signal_sender },
+    StatusChannelReceiver{ actual_receiver, signal_receiver }
+  ))
+}
+
+pub(crate) struct StatusChannelSender<T> {
+  actual_sender: mio_channel::SyncSender<T>,
+  signal_sender: PollEventSender,
+}
+
+pub(crate) struct StatusChannelReceiver<T> {
+  actual_receiver: mio_channel::Receiver<T>,
+  signal_receiver: PollEventSource,
+}
+
+impl<T> StatusChannelSender<T> {
+  pub fn try_send(&self, t: T) -> Result<(), mio_channel::TrySendError<T>> {
+    match self.actual_sender.try_send(t) {
+      Ok(()) => {
+        self.signal_sender.send();
+        Ok(())
+      }, 
+      Err(mio_channel::TrySendError::Full(tt)) => {
+        trace!("StatusChannelSender cannot send new status changes, channel is full.");
+        // It is perfectly normal to fail due to full channel, because
+        // no-one is required to be listening to these.
+        self.signal_sender.send(); // kick the receiver anyway
+        Err(mio_channel::TrySendError::Full(tt))
+      }
+      Err(other_fail) => Err(other_fail),
+    }
+  }
+}
+
+impl<T> StatusChannelReceiver<T> {
+  pub fn try_recv(&self) -> Result<T, std::sync::mpsc::TryRecvError> {
+    self.signal_receiver.drain();
+    self.actual_receiver.try_recv()
+  }
+}
+
+
+
+impl<T> event::Source for StatusChannelReceiver<T>
+{
+  fn register(&mut self, registry: &Registry, token: Token, interests: Interest) -> io::Result<()>
+  {
+    self.signal_receiver.register(registry,token,interests)
+  }
+
+  fn reregister(&mut self, registry: &Registry, token: Token, interests: Interest) -> io::Result<()>
+  {
+    self.signal_receiver.reregister(registry, token, interests)
+  }
+
+  fn deregister(&mut self, registry: &Registry) -> io::Result<()>
+  {
+    self.signal_receiver.deregister(registry)
+  }
+
+}
+
+
+
 
 #[derive(Debug, Clone)]
 pub enum DomainParticipantStatus {

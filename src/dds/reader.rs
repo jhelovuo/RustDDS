@@ -18,7 +18,7 @@ use crate::{
     message_receiver::MessageReceiverState,
     qos::{policy, HasQoSPolicy, QosPolicies},
     rtps_writer_proxy::RtpsWriterProxy,
-    statusevents::{CountWithChange, DataReaderStatus},
+    statusevents::{CountWithChange, DataReaderStatus, StatusChannelSender},
     with_key::datawriter::{WriteOptions, WriteOptionsBuilder},
   },
   messages::{
@@ -56,7 +56,7 @@ pub(crate) enum TimedEvent {
 pub(crate) struct ReaderIngredients {
   pub guid: GUID,
   pub notification_sender: mio_channel::SyncSender<()>,
-  pub status_sender: mio_channel::SyncSender<DataReaderStatus>,
+  pub status_sender: StatusChannelSender<DataReaderStatus>,
   pub topic_name: String,
   pub qos_policy: QosPolicies,
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
@@ -84,7 +84,7 @@ impl fmt::Debug for ReaderIngredients {
 pub(crate) struct Reader {
   // Should the instant be sent?
   notification_sender: mio_channel::SyncSender<()>,
-  status_sender: mio_channel::SyncSender<DataReaderStatus>,
+  status_sender: StatusChannelSender<DataReaderStatus>,
   udp_sender: Rc<UDPSender>,
 
   is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
