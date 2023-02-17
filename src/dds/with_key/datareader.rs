@@ -122,11 +122,11 @@ pub struct SimpleDataReader<
 
   dds_cache: Arc<RwLock<DDSCache>>, // global cache
 
-  read_pointers: Mutex<ReadPointers>,
+  read_pointers: ReadPointers,
 
   /// hask_to_key_map is used for decoding received key hashes back to original key values.
   /// This is needed when we receive a dispose message via hash only.
-  hash_to_key_map: Mutex<BTreeMap<KeyHash, D::K>>, // TODO: garbage collect this somehow
+  hash_to_key_map: BTreeMap<KeyHash, D::K>, // TODO: garbage collect this somehow
 
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
@@ -208,8 +208,8 @@ where
       my_guid,
       notification_receiver,
       dds_cache,
-      read_pointers: Mutex::new(ReadPointers::new()),
-      hash_to_key_map: Mutex::new(BTreeMap::new()),
+      read_pointers: ReadPointers::new(),
+      hash_to_key_map: BTreeMap::new(),
       my_topic: topic,
       deserializer_type: PhantomData,
       discovery_command,
@@ -220,69 +220,41 @@ where
     })
   }
 
-  fn try_take_undecoded(&self) -> Option<(Timestamp, CacheChange)> {
-    let is_reliable = matches!(
-      self.qos_policy.reliability(),
-      Some(policy::Reliability::Reliable { .. })
-    );
-    let dds_cache = match self.dds_cache.read() {
-      Ok(rwlock) => rwlock,
-      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-      Err(e) => panic!(
-        "The DDSCache of domain participant is poisoned. Error: {}",
-        e
-      ),
-    };
-    // get an iterator into DDS Cache, so this is in constant space, not a large data structure
-    let next_cc = {
-      let read_ptr = self.read_pointers.lock().unwrap();
-      let mut cache_changes = 
-        if is_reliable {
-          dds_cache.get_changes_in_range_reliable(
-            &self.my_topic.name(),
-            &read_ptr.last_read_sn,
-          )
-        } else {
-          dds_cache.get_changes_in_range_best_effort(
-            &self.my_topic.name(),
-            read_ptr.latest_instant,
-            Timestamp::now(),
-          )
-        };
-        cache_changes.next().map(|(ts,cc)| (ts,cc.clone())) // TODO: cloned!!
-    };
-    match next_cc {
-      None => None,
-      Some((ts, cc)) => {
-        { // update read pointers
-          let mut r = self.read_pointers.lock().unwrap();
-          let latest = r.latest_instant;
-          r.latest_instant = max(latest, ts);
-          r.last_read_sn.insert(cc.writer_guid, cc.sequence_number);
-        }
-        Some(( ts, cc ))
-      }
+  // get an iterator into DDS Cache, so this is in constant space, not a large data structure
+  fn try_take_undecoded<'a>(is_reliable: bool, dds_cache: &'a DDSCache, 
+      topic_name:&str, read_pointers: &'a ReadPointers ) 
+    -> Box<dyn Iterator<Item = (Timestamp, &'a CacheChange)> + 'a>
+  {
+    if is_reliable {
+      dds_cache.get_changes_in_range_reliable(
+        topic_name,
+        &read_pointers.last_read_sn,
+      )
+    } else {
+      dds_cache.get_changes_in_range_best_effort(
+        topic_name,
+        read_pointers.latest_instant,
+        Timestamp::now(),
+      )
     }
   }
 
-  fn update_hash_to_key_map(&self, deserialized: &std::result::Result<D, D::K>) {
+
+  fn update_hash_to_key_map(
+      hash_to_key_map: &mut BTreeMap<KeyHash, D::K>, 
+      deserialized: &std::result::Result<D, D::K>) 
+  {
     let instance_key = match deserialized {
       Ok(d) => d.key(),
       Err(k) => k.clone(),
     };
-    self
-      .hash_to_key_map
-      .lock().unwrap()
+    hash_to_key_map
       .insert(instance_key.hash_key(), instance_key.clone());
   }
 
-  pub(crate) fn try_take(&self) -> Result<Option<DeserializedCacheChange<D>>> {
-    let (timestamp, cc) = 
-      match self.try_take_undecoded() {
-        None => return Ok(None),
-        Some((ts,cc)) => (ts,cc),
-      };
-
+  fn deserialize(timestamp: Timestamp, cc: &CacheChange, hash_to_key_map: &mut BTreeMap<KeyHash, D::K>) -> 
+    std::result::Result<DeserializedCacheChange<D>,String>
+  {
     match cc.data_value {
       DDSData::Data { ref serialized_payload } => {
         // what is our data serialization format (representation identifier) ?
@@ -294,32 +266,14 @@ where
             // Data update, decoded ok
             Ok(payload) => {
               let p = Ok(payload);
-              self.update_hash_to_key_map(&p);
-              Ok(Some(DeserializedCacheChange::new(timestamp,&cc,p)))
+              Self::update_hash_to_key_map(hash_to_key_map,  &p);
+              Ok(DeserializedCacheChange::new(timestamp,&cc,p))
             }
-
-            Err(e) => {
-              let error_message =
-                format!(
-                  "Failed to deserialize sample bytes: {}, Topic = {}, Type = {:?}",
-                  e,
-                  self.my_topic.name(),
-                  self.my_topic.get_type()
-                );
-              error!("{}",error_message);
-              info!("Bytes were {:?}", &serialized_payload.value);
-              Error::serialization_error(error_message)
-            }
+            Err(e) => Err(format!("Failed to deserialize sample bytes: {e}, ")),
           }
         } else {
-          let error_message =
-            format!(
-              "Unknown representation id {:?}. Topic = {}, Type = {:?}",
-              serialized_payload.representation_identifier, self.my_topic.name(), self.my_topic.get_type()
-            );
-          warn!("{}",error_message);
-          info!("Serialized payload was {:?}", &serialized_payload);
-          Error::serialization_error(error_message)
+          Err( format!("Unknown representation id {:?}.", 
+                serialized_payload.representation_identifier))
         }
       }
 
@@ -333,37 +287,62 @@ where
         ) {
           Ok(key) => {
             let k = Err(key);
-            self.update_hash_to_key_map(&k);
-            Ok(Some(DeserializedCacheChange::new(timestamp,&cc,k)))
+            Self::update_hash_to_key_map(hash_to_key_map,  &k);
+            Ok(DeserializedCacheChange::new(timestamp,&cc,k))
           }
-          Err(e) => {
-            let error_message =
-                format!(
-              "Failed to deserialize key {}, Topic = {}, Type = {:?}",
-              e,
-              self.my_topic.name(),
-              self.my_topic.get_type()
-            );
-            warn!("{}",error_message);
-            debug!("Bytes were {:?}", &serialized_key.value);
-            Error::serialization_error(error_message)
-          }
+          Err(e) => Err( format!("Failed to deserialize key {}", e)),
         }
       }
 
       DDSData::DisposeByKeyHash { key_hash, .. } => {
         // The cache should know hash -> key mapping even if the sample
         // has been disposed or .take()n
-        if let Some(key) = self.hash_to_key_map.lock().unwrap().get(&key_hash) {
-          Ok(Some(DeserializedCacheChange::new(timestamp, &cc,Err(key.clone()))))
+        if let Some(key) = hash_to_key_map.get(&key_hash) {
+          Ok(DeserializedCacheChange::new(timestamp, &cc,Err(key.clone())))
         } else {
-          let error_message =
-                format!("Tried to dispose with unknown key hash: {:x?}", key_hash);
-          warn!("{}",error_message);          
-          Error::serialization_error(error_message)
+          Err( format!("Tried to dispose with unknown key hash: {:x?}", key_hash) )
         }
       } 
-    } // match
+    } // match    
+  }
+
+  pub(crate) fn try_take_one(&mut self) -> Result<Option<DeserializedCacheChange<D>>> {
+    let is_reliable = matches!(
+      self.qos_policy.reliability(),
+      Some(policy::Reliability::Reliable { .. })
+    );
+    let dds_cache = match self.dds_cache.read() {
+      Ok(rwlock) => rwlock,
+      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
+      Err(e) => panic!(
+        "The DDSCache of domain participant is poisoned. Error: {}",
+        e
+      ),
+    };
+    let (timestamp, cc) = 
+      match Self::try_take_undecoded(is_reliable, &dds_cache, &self.my_topic.name(), &self.read_pointers)
+              .next() {
+        None => return Ok(None),
+        Some((ts,cc)) => (ts,cc),
+      };
+
+    match Self::deserialize(timestamp, cc, &mut self.hash_to_key_map ) {
+      Ok(dcc) => {
+        self.read_pointers.latest_instant = max(self.read_pointers.latest_instant , timestamp);
+        self.read_pointers.last_read_sn.insert(dcc.writer_guid, dcc.sequence_number);
+        Ok(Some(dcc))
+      } 
+      Err(string) => {        
+        Error::serialization_error(
+          format!("{} Topic = {}, Type = {:?}",string,self.my_topic.name(), self.my_topic.get_type()))
+      }
+    }
+    // update read pointers on the way out
+    // Box::new(cache_changes.map(|(ts,cc)| {
+    //   self.read_pointers.latest_instant = max(self.read_pointers.latest_instant , ts);
+    //   self.read_pointers.last_read_sn.insert(cc.writer_guid, cc.sequence_number);
+    //   (ts,cc.clone())
+    // }))
   }
 
 }
@@ -402,7 +381,7 @@ pub struct DataReader<
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > {
-  simple_data_reader: SimpleDataReader<D,DA>,
+  simple_data_reader: Mutex<SimpleDataReader<D,DA>>,
   datasample_cache: Mutex<DataSampleCache<D>>, // DataReader-local cache of deserialized samples
 }
 
@@ -442,7 +421,7 @@ where
         reader_command, data_reader_waker, event_source )?;
 
     Ok(Self {
-      simple_data_reader,
+      simple_data_reader: Mutex::new(simple_data_reader),
       datasample_cache: Mutex::new(dsc),
     })
   }
@@ -457,7 +436,7 @@ where
     // );
 
     loop {
-      match self.simple_data_reader.try_take() {
+      match self.simple_data_reader.lock().unwrap().try_take_one() {
         Ok(None) => break,
         Ok(Some(dcc)) => {
           self.datasample_cache.lock().unwrap().fill_from_deserialized_cache_change( dcc )
@@ -472,8 +451,9 @@ where
   } 
 
   fn drain_read_notifications(&self) {
-    while self.simple_data_reader.notification_receiver.try_recv().is_ok() {}
-    self.simple_data_reader.event_source.drain();
+    let ref s = self.simple_data_reader.lock().unwrap();
+    while s.notification_receiver.try_recv().is_ok() {}
+    s.event_source.drain();
   }
 
   fn select_keys_for_access(&self, read_condition: ReadCondition) -> Vec<(Timestamp, D::K)> {
@@ -1194,7 +1174,7 @@ where
   // implements Evented
   fn register(&self, poll: &mio_06::Poll, token: mio_06::Token, interest: mio_06::Ready, opts: mio_06::PollOpt) -> io::Result<()> {
     self
-      .simple_data_reader
+      .simple_data_reader.lock().unwrap()
       .register(poll, token, interest, opts)
   }
 
@@ -1206,12 +1186,12 @@ where
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
-      .simple_data_reader
+      .simple_data_reader.lock().unwrap()
       .reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self.simple_data_reader.deregister(poll)
+    self.simple_data_reader.lock().unwrap().deregister(poll)
   }
 }
 
@@ -1248,19 +1228,19 @@ where
     // SimpleDataReader implements .register() for two traits, so need to
     // use disambiguation syntax to call .register() here.
     <SimpleDataReader<D,DA> as mio_08::event::Source>
-      ::register(&mut self.simple_data_reader, registry, token, interests)
+      ::register(&mut self.simple_data_reader.lock().unwrap(), registry, token, interests)
   }
 
   fn reregister(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
   {
     <SimpleDataReader<D,DA> as mio_08::event::Source>
-      ::reregister(&mut self.simple_data_reader,registry, token, interests)
+      ::reregister(&mut self.simple_data_reader.lock().unwrap(), registry, token, interests)
   }
 
   fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()>
   {
     <SimpleDataReader<D,DA> as mio_08::event::Source>
-      ::deregister(&mut self.simple_data_reader, registry)
+      ::deregister(&mut self.simple_data_reader.lock().unwrap(), registry)
   }
 
 }
@@ -1290,15 +1270,15 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
-    self.simple_data_reader.as_status_evented()
+    self.simple_data_reader.get_mut().unwrap().as_status_evented()
   }
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
-    self.simple_data_reader.as_status_source()
+    self.simple_data_reader.get_mut().unwrap().as_status_source()
   }
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
-    self.simple_data_reader.try_recv_status()
+    self.simple_data_reader.lock().unwrap().try_recv_status()
   }
 }
 
@@ -1316,7 +1296,7 @@ where
   // }
 
   fn qos(&self) -> QosPolicies {
-    self.simple_data_reader.qos_policy.clone()
+    self.simple_data_reader.lock().unwrap().qos_policy.clone()
   }
 }
 
@@ -1336,7 +1316,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
-    self.simple_data_reader.my_guid
+    self.simple_data_reader.lock().unwrap().my_guid
   }
 }
 
@@ -1396,8 +1376,9 @@ where
             // 1. synchronously store waker to background thread (must rendezvous)
             // 2. try take_bare again, in case something arrived just now
             // 3. if nothing still, return pending.
-            *self.datareader.simple_data_reader.data_reader_waker.lock().unwrap() // TODO: remove unwrap
-              = DataReaderWaker::FutureWaker(cx.waker().clone());
+            *self.datareader.simple_data_reader.lock().unwrap()
+              .data_reader_waker.lock().unwrap() // TODO: remove unwrap
+                = DataReaderWaker::FutureWaker(cx.waker().clone());
             match self.datareader.take_bare(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),  
               Ok(mut v) => {
