@@ -6,7 +6,10 @@ use enumflags2::BitFlags;
 use bytes::Bytes;
 
 use crate::{
-  messages::submessages::{submessage_elements::parameter_list::ParameterList, submessages::*},
+  messages::submessages::{
+    submessage_elements::parameter_list::ParameterList,
+    submessages::{endianness_flag, DATAFRAG_Flags},
+  },
   structure::{
     guid::EntityId,
     sequence_number::{FragmentNumber, SequenceNumber},
@@ -82,7 +85,7 @@ impl DataFrag {
     2 + // fragmentsInSubmessage
     2 + // fragmentSize
     4 + // sampleSize
-    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
+    self.inline_qos.as_ref().map_or(0, |q| q.len_serialized() ) + // QoS ParamterList
     self.serialized_payload.len()
   }
 
@@ -98,7 +101,7 @@ impl DataFrag {
     // be allowed by the spec.
 
     // This is a integer division with rounding up.
-    let frag_size = self.fragment_size as u32;
+    let frag_size = u32::from(self.fragment_size);
     if frag_size < 1 {
       FragmentNumber::INVALID
     } else {

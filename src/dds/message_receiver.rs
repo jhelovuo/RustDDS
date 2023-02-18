@@ -424,29 +424,21 @@ mod tests {
   };
 
   use speedy::{Readable, Writable};
-  use byteorder::LittleEndian;
   use log::info;
-  use serde::{Deserialize, Serialize};
   use mio_extras::channel as mio_channel;
 
   use crate::{
     dds::{
-      qos::QosPolicies,
-      reader::ReaderIngredients,
-      statusevents::DataReaderStatus,
-      typedesc::TypeDesc,
-      with_key::datareader::ReaderCommand,
-      writer::{Writer, WriterCommand, WriterIngredients},
+      qos::QosPolicies, reader::ReaderIngredients, statusevents::DataReaderStatus,
+      typedesc::TypeDesc, with_key::datareader::ReaderCommand,
     },
     messages::header::Header,
     network::udp_sender::UDPSender,
-    serialization::{cdr_deserializer::deserialize_from_little_endian, cdr_serializer::to_bytes},
-    structure::{dds_cache::DDSCache, guid::EntityKind, sequence_number::SequenceNumber},
+    structure::{dds_cache::DDSCache, guid::EntityKind},
   };
   use super::*;
 
   #[test]
-
   fn test_shapes_demo_message_deserialization() {
     // Data message should contain Shapetype values.
     // caprured with wireshark from shapes demo.

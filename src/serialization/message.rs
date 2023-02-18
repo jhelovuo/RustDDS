@@ -611,7 +611,6 @@ mod tests {
   use super::*;
 
   #[test]
-
   fn rtps_message_test_shapes_demo_message_deserialization() {
     // Data message should contain Shapetype values.
     // caprured with wireshark from shapes demo.

@@ -661,7 +661,6 @@ mod tests {
   }
 
   #[test]
-
   fn cdr_deserialization_user_defined_data() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
     //10.7 Example for User-defined Topic Data
@@ -692,7 +691,6 @@ mod tests {
   }
 
   #[test]
-
   fn cdr_deserialization_serialization_topic_name() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
     //10.6 Example for Built-in Endpoint Data
@@ -762,7 +760,6 @@ mod tests {
   }
 
   #[test]
-
   fn cdr_deserialization_serialization_payload_shapes() {
     // This test uses wireshark captured shapes demo part of serialized message as
     // received_message.
@@ -795,7 +792,6 @@ mod tests {
   }
 
   #[test]
-
   fn cdr_deserialization_custom_data_message_from_ros_and_wireshark() {
     // IDL of messsage
     //float64 x

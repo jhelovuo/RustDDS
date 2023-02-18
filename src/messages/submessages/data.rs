@@ -7,7 +7,7 @@ use enumflags2::BitFlags;
 use crate::{
   messages::submessages::{
     submessage_elements::{parameter_list::ParameterList, serialized_payload::SerializedPayload},
-    submessages::*,
+    submessages::{endianness_flag, DATA_Flags},
   },
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
@@ -120,7 +120,7 @@ impl Data {
     4 + // writerId
     8 + // writerSN
     self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
-    self.serialized_payload.as_ref().map(|q| q.len_serialized()).unwrap_or(0)
+    self.serialized_payload.as_ref().map_or(0, |q| q.len_serialized())
   }
 }
 

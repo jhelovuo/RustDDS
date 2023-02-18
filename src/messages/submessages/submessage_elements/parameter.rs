@@ -55,10 +55,10 @@ impl Parameter {
     // by padding at the end if necessary.
     // RTPS spec v2.5 section "9.4.2.11 ParameterList"
     let unaligned_length = self.value.len();
-    let pad = if unaligned_length % 4 != 0 {
-      4 - (unaligned_length % 4)
-    } else {
+    let pad = if unaligned_length % 4 == 0 {
       0
+    } else {
+      4 - (unaligned_length % 4)
     };
 
     2 + // parameter_id 
@@ -93,7 +93,7 @@ impl<C: Context> Writable<C> for Parameter {
   #[inline]
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     let length = self.value.len();
-    let pad = if length % 4 != 0 { 4 - (length % 4) } else { 0 };
+    let pad = if length % 4 == 0 { 0 } else { 4 - (length % 4) };
 
     writer.write_value(&self.parameter_id)?;
     writer.write_u16((length + pad) as u16)?;

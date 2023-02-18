@@ -33,13 +33,13 @@ pub enum EntitySubmessage {
 impl<C: Context> Writable<C> for EntitySubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      EntitySubmessage::AckNack(s, _f) => writer.write_value(s),
-      EntitySubmessage::Data(s, _f) => writer.write_value(s),
-      EntitySubmessage::DataFrag(s, _f) => writer.write_value(s),
-      EntitySubmessage::Gap(s, _f) => writer.write_value(s),
-      EntitySubmessage::Heartbeat(s, _f) => writer.write_value(s),
-      EntitySubmessage::HeartbeatFrag(s, _f) => writer.write_value(s),
-      EntitySubmessage::NackFrag(s, _f) => writer.write_value(s),
+      Self::AckNack(s, _f) => writer.write_value(s),
+      Self::Data(s, _f) => writer.write_value(s),
+      Self::DataFrag(s, _f) => writer.write_value(s),
+      Self::Gap(s, _f) => writer.write_value(s),
+      Self::Heartbeat(s, _f) => writer.write_value(s),
+      Self::HeartbeatFrag(s, _f) => writer.write_value(s),
+      Self::NackFrag(s, _f) => writer.write_value(s),
     }
   }
 }
@@ -58,10 +58,10 @@ pub enum InterpreterSubmessage {
 impl<C: Context> Writable<C> for InterpreterSubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      InterpreterSubmessage::InfoSource(s, _f) => writer.write_value(s),
-      InterpreterSubmessage::InfoDestination(s, _f) => writer.write_value(s),
-      InterpreterSubmessage::InfoReply(s, _f) => writer.write_value(s),
-      InterpreterSubmessage::InfoTimestamp(s, _f) => match s {
+      Self::InfoSource(s, _f) => writer.write_value(s),
+      Self::InfoDestination(s, _f) => writer.write_value(s),
+      Self::InfoReply(s, _f) => writer.write_value(s),
+      Self::InfoTimestamp(s, _f) => match s {
         InfoTimestamp { timestamp: None } => Ok(()), // serialization is empty string
         InfoTimestamp {
           timestamp: Some(ts),
@@ -81,8 +81,8 @@ pub enum AckSubmessage {
 impl AckSubmessage {
   pub fn writer_id(&self) -> EntityId {
     match self {
-      AckSubmessage::AckNack(a) => a.writer_id,
-      AckSubmessage::NackFrag(a) => a.writer_id,
+      Self::AckNack(a) => a.writer_id,
+      Self::NackFrag(a) => a.writer_id,
     }
   }
 }

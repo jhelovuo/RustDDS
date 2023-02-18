@@ -602,7 +602,6 @@ mod tests {
   };
 
   #[test]
-
   fn cdr_serialize_and_deserializesequence_of_structs() {
     // this length is not dividable by 4 so paddings are necessary???
     #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
