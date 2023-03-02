@@ -511,7 +511,7 @@ impl InnerPublisher {
       guid,
       writer_command_receiver: hccc_download,
       topic_name: topic.name(),
-      qos_policies: writer_qos,
+      qos_policies: writer_qos.clone(),
       status_sender,
     };
 
@@ -523,6 +523,7 @@ impl InnerPublisher {
     let data_writer = WithKeyDataWriter::<D, SA>::new(
       outer.clone(),
       topic.clone(),
+      writer_qos,
       guid,
       dwcc_upload,
       self.discovery_command.clone(),
@@ -1000,6 +1001,14 @@ impl InnerSubscriber {
       db.update_topic_data_p(topic);
     }
 
+    // Create new topic to DDScache if one isn't present
+    match dp.dds_cache().write() {
+      Ok(mut dds_cache) => {
+        dds_cache.add_new_topic(topic.name(), topic.get_type(), &qos);
+      }
+      Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
+    }
+
     let datareader = WithKeyDataReader::<D, SA>::new(
       outer.clone(),
       entity_id,
@@ -1014,13 +1023,6 @@ impl InnerSubscriber {
       poll_event_source,
     )?;
 
-    // Create new topic to DDScache if one isn't present
-    match dp.dds_cache().write() {
-      Ok(mut dds_cache) => {
-        dds_cache.add_new_topic(topic.name(), topic.get_type());
-      }
-      Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
-    }
 
     // Return the DataReader Reader pairs to where they are used
     self

@@ -372,6 +372,12 @@ impl QosPolicies {
   }
 }
 
+// DDS spec v1.4 p.139
+// TODO: Replace this with Option construct so that
+// None means no limit and Some(limit) gives the limit when defined.
+// Use is in resource_limits.
+pub const LENGTH_UNLIMITED : i32 = -1;
+
 // put these into a submodule to avoid repeating the word "policy" or
 // "qospolicy"
 /// Contains all available QoSPolicies
@@ -541,13 +547,22 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.18 HISTORY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
   pub enum History {
-    KeepLast { depth: i32 },
+    // Variants must be in this order ot derive Ord correctly.
+    KeepLast { depth: i32 }, 
     KeepAll,
   }
 
   /// DDS 2.2.3.19 RESOURCE_LIMITS
+  /// DDS Spec v1.4 p.147 "struct ResourceLimitsQosPolicy" defines the
+  /// fields as "long". The "long" type of OMG IDL is defined to have
+  /// 32-bit (signed, 2's complement) range in the OMG IDL spec v4.2, Table 7-13: Integer Types.
+  /// 
+  /// But it does not make sense to have negative limits, so these should be unsigned.
+  ///
+  /// Negative values are needed, because DDS spec defines the special value
+  /// const long LENGTH_UNLIMITED = -1;
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
   pub struct ResourceLimits {
     pub max_samples: i32,

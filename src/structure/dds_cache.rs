@@ -10,7 +10,7 @@ use log::{debug, error, info, trace};
 use crate::{
   dds::{
     data_types::GUID,
-    qos::{policy::ResourceLimits, QosPolicies, QosPolicyBuilder},
+    qos::{policy::ResourceLimits, policy::History, QosPolicies, },
     typedesc::TypeDesc,
   },
   structure::{sequence_number::SequenceNumber, time::Timestamp},
@@ -37,12 +37,15 @@ impl DDSCache {
       .and_then(|tc| Some(tc.mark_reliably_received_before(writer,sn)) );
   }
   // Insert new topic if it does not exist.
-  // If it exists already, do nothing.
-  pub fn add_new_topic(&mut self, topic_name: String, topic_data_type: TypeDesc) {
+  // If it exists already, update cache size limits.
+  // TODO: If we pick up a topic from Discovery, can someone DoS us by
+  // sending super large limits in Topic QoS?
+  pub fn add_new_topic(&mut self, topic_name: String, topic_data_type: TypeDesc, qos: &QosPolicies) {
     self
       .topic_caches
       .entry(topic_name.clone())
-      .or_insert_with(|| TopicCache::new(topic_name, topic_data_type));
+      .and_modify(|t| t.update_keep_limits(qos) )
+      .or_insert_with(|| TopicCache::new(topic_name, topic_data_type, qos));
   }
 
   // TODO: Investigate why this is not used.
@@ -133,7 +136,11 @@ struct TopicCache {
   topic_name: String,
   #[allow(dead_code)] // TODO: Which (future) feature needs this?
   topic_data_type: TypeDesc,
+  #[allow(dead_code)] // TODO: The relevant data here is in min/max keep_samples. Is this still relevant?
   topic_qos: QosPolicies,
+  min_keep_samples: History, 
+  max_keep_samples: i32, // from QoS, for quick, repeated access
+  //TODO: Change this to Option<u32>, where None means "no limit". 
 
   // Tha main content of the cache is in this map.
   // Timestamp is assumed to be unique id over all the ChacheChanges.
@@ -152,15 +159,54 @@ struct TopicCache {
 }
 
 impl TopicCache {
-  pub fn new(topic_name: String, topic_data_type: TypeDesc) -> Self {
-    Self {
+  pub fn new(topic_name: String, topic_data_type: TypeDesc, topic_qos: &QosPolicies) -> Self {
+    let mut  new_self = Self {
       topic_name,
       topic_data_type,
-      topic_qos: QosPolicyBuilder::new().build(),
+      topic_qos: topic_qos.clone(),
+      min_keep_samples: History::KeepLast{ depth: 1 }, // dummy value, next call will overwrite this
+      max_keep_samples: 1, // dummy value, next call will overwrite this
       changes: BTreeMap::new(),
       sequence_numbers: BTreeMap::new(),
       received_reliably_before: BTreeMap::new(),
-    }
+    };
+
+    new_self.update_keep_limits(topic_qos);
+
+    new_self
+  }
+
+  fn update_keep_limits(&mut self, qos: &QosPolicies) {
+    let min_keep_samples = qos.history()
+      // default history setting from DDS spec v1.4 Section 2.2.3 "Supported QoS",
+      // Table at p.99
+      .unwrap_or( History::KeepLast{ depth: 1 } );
+
+    // Look up some Topic-specific resource limit
+    // and remove earliest samples until we are within limit.
+    // This prevents cache from groving indefinetly.
+    let max_keep_samples = qos
+      .resource_limits()
+      .unwrap_or(ResourceLimits {
+        max_samples: 1024,
+        max_instances: 1024,
+        max_samples_per_instance: 64,
+      })
+      .max_samples;
+    // TODO: We cannot currently keep track of instance counts, because TopicCache
+    // or DDSCache below do not know about instances.
+
+
+    // If a definite minimum is apecified, increase resource limit to at least that.
+    let max_keep_samples =
+      match min_keep_samples {
+        History::KeepLast{depth: n} if n > max_keep_samples => n,
+        _ => max_keep_samples
+      };
+
+    // actual update. This is will only ever increase cache size.
+    self.min_keep_samples = max(min_keep_samples , self.min_keep_samples);
+    self.max_keep_samples = max(max_keep_samples , self.max_keep_samples);
   }
 
   pub fn mark_reliably_received_before(&mut self, writer: GUID, sn:SequenceNumber) {
@@ -269,7 +315,7 @@ impl TopicCache {
   }
 
   /// Removes and returns value if it was found
-  pub fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
+  fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
     self.changes.remove(instant).map(|cc| {
       self.remove_sn(&cc);
       cc
@@ -288,31 +334,34 @@ impl TopicCache {
     }
   }
 
-  pub fn remove_changes_before(&mut self, instant: Timestamp) {
-    // Look up some Topic-specific resource limit
-    // and remove earliest samples until we are within limit.
-    // This prevents cache from groving indefinetly.
-    let max_keep_samples = self
-      .topic_qos
-      .resource_limits()
-      .unwrap_or(ResourceLimits {
-        max_samples: 1024,
-        max_instances: 1024,
-        max_samples_per_instance: 64,
-      })
-      .max_samples;
-    // TODO: We cannot currently keep track of instance counts, because TopicCache
-    // or DDSCache below do not know about instances.
-    let remove_count = self.changes.len() as i32 - max_keep_samples;
+  /// remove changes before given Timestamp, but keep at least
+  /// min_keep_samples.
+  /// We must always keep below max_keep_samples.
+  fn remove_changes_before(&mut self, remove_before: Timestamp) {
+    let min_remove_count = max(0, self.changes.len() - self.max_keep_samples as usize) ;
+
+    let max_remove_count = match self.min_keep_samples {
+      History::KeepLast{depth} => max(min_remove_count, self.changes.len() - depth as usize ),
+      History::KeepAll => min_remove_count,
+    };
+
+    // Find the first key that is to be retained, i.e. enumerate
+    // one past the items to be removed.
     let split_key = *self
       .changes
       .keys()
-      .take(max(0, remove_count) as usize + 1)
-      .last()
-      .map_or(&instant, |lim| max(lim, &instant));
+      .take(max_remove_count)
+      .enumerate()
+      .skip_while(|(i,ts)| *i < min_remove_count || (**ts < remove_before && *i < max_remove_count))
+      .map(|(_,ts)| ts) // un-enumerate
+      .next() // the next element would be the first to retain
+      .unwrap_or( &Timestamp::ZERO ); // if there is no next, then everything from ZERO onwards
 
+    // split_off: Returns everything after the given key, including the key.
     let to_retain = self.changes.split_off(&split_key);
     let to_remove = std::mem::replace(&mut self.changes, to_retain);
+
+    // update also SequeceNumber map
     for r in to_remove.values() {
       self.remove_sn(r);
     }

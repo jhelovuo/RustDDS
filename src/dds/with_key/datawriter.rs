@@ -8,7 +8,7 @@ use std::{
 };
 
 use mio_06::{Evented, Events, Poll, PollOpt, Ready, Token};
-use mio_extras::channel::{self as mio_channel, Receiver, SendError};
+use mio_extras::channel::{self as mio_channel, SendError};
 use serde::Serialize;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -187,6 +187,7 @@ where
   pub(crate) fn new(
     publisher: Publisher,
     topic: Topic,
+    qos: QosPolicies,
     guid: GUID,
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
@@ -194,11 +195,11 @@ where
     status_receiver_rec: StatusChannelReceiver<DataWriterStatus>,
   ) -> Result<Self> {
     match dds_cache.write() {
-      Ok(mut cache) => cache.add_new_topic(topic.name(), topic.get_type()),
+      Ok(mut cache) => cache.add_new_topic(topic.name(), topic.get_type(), &qos),
       Err(e) => panic!("DDSCache is poisoned. {:?}", e),
     };
 
-    if let Some(lv) = topic.qos().liveliness {
+    if let Some(lv) = qos.liveliness {
       match lv {
         Liveliness::Automatic { .. } | Liveliness::ManualByTopic { .. } => (),
         Liveliness::ManualByParticipant { .. } => {
@@ -208,7 +209,6 @@ where
         }
       }
     };
-    let qos = topic.qos();
     Ok(Self {
       data_phantom: PhantomData,
       ser_phantom: PhantomData,
