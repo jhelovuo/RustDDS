@@ -64,22 +64,6 @@ impl DDSCache {
       .and_then(|tc| tc.get_change(instant))
   }
 
-  /// Removes cacheChange permanently
-  pub fn topic_remove_change(
-    &mut self,
-    topic_name: &str,
-    instant: &Timestamp,
-  ) -> Option<CacheChange> {
-    if let Some(tc) = self.topic_caches.get_mut(topic_name) {
-      tc.remove_change(instant)
-    } else {
-      error!(
-        "topic_remove_change: Topic {:?} is not in DDSCache",
-        topic_name
-      );
-      None
-    }
-  }
 
   /// Removes cacheChange permanently
   pub fn topic_remove_before(&mut self, topic_name: &str, instant: Timestamp) {
@@ -233,6 +217,21 @@ impl TopicCache {
     instant: &Timestamp,
     cache_change: CacheChange,
   ) -> Option<CacheChange> {
+    // First, do garbage collection.
+    // But not at everey insert, just to save time and effort.
+    // Some heuristic to decide if we should collect now.
+    let payload_size = max(1, cache_change.data_value.payload_size());
+    let semi_random_number = i64::from(cache_change.sequence_number) as usize;
+    let fairly_large_constant = 0xffff;
+    let modulus = fairly_large_constant / payload_size;
+    if modulus == 0 || semi_random_number % modulus == 0 {
+      debug!("Garbage collecting topic {}", self.topic_name);
+      self.remove_changes_before(Timestamp::ZERO);
+      // remove limit is so low that it has no effect.
+      // We actually only remove to keep cache size between min and max limits.
+    }
+
+    // Now to the actual adding business.
     if let Some(old_instant) = self.find_by_sn(&cache_change) {
       // Got duplicate DATA for a SN that we already have. It should be discarded.
       debug!(
@@ -314,14 +313,7 @@ impl TopicCache {
       // reliably, since no such samples exist.
   }
 
-  /// Removes and returns value if it was found
-  fn remove_change(&mut self, instant: &Timestamp) -> Option<CacheChange> {
-    self.changes.remove(instant).map(|cc| {
-      self.remove_sn(&cc);
-      cc
-    })
-  }
-
+  
   fn remove_sn(&mut self, cc: &CacheChange) {
     let mut emptied = false;
 
@@ -338,10 +330,12 @@ impl TopicCache {
   /// min_keep_samples.
   /// We must always keep below max_keep_samples.
   fn remove_changes_before(&mut self, remove_before: Timestamp) {
-    let min_remove_count = max(0, self.changes.len() - self.max_keep_samples as usize) ;
+    let min_remove_count = 
+      max(0, self.changes.len().wrapping_sub(self.max_keep_samples as usize) );
 
     let max_remove_count = match self.min_keep_samples {
-      History::KeepLast{depth} => max(min_remove_count, self.changes.len() - depth as usize ),
+      History::KeepLast{depth} => 
+        max(min_remove_count, self.changes.len().wrapping_sub(depth as usize) ),
       History::KeepAll => min_remove_count,
     };
 

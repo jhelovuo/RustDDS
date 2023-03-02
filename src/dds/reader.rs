@@ -1,5 +1,5 @@
 use std::{
-  collections::{BTreeMap, BTreeSet},
+  collections::{BTreeMap, },
   fmt, iter,
   rc::Rc,
   sync::{Arc, RwLock, Mutex, },
@@ -737,41 +737,10 @@ impl Reader {
     writer_proxy.received_heartbeat_count = heartbeat.count;
 
     // remove fragmented changes until first_sn.
-    let removed_instances = writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
+    writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
-
-    let received_before = writer_proxy.all_ackable_before();
-    // Remove instances from DDSHistoryCache
-    //
-    // TODO: Whay are we removing from our own cache here?
-    // Heartbeat means that the Writer no longer has those samples available, but
-    // we could still keep then in our cache for local DataReaders until
-    // some QoS policy forces us to remove them, or all current DataReaders have
-    // read the samples.
-    {
-      // Create local scope so that dds_cache write lock is dropped ASAP
-      let mut cache = match self.dds_cache.write() {
-        Ok(rwlock) => rwlock,
-        // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-        Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
-      };
-      for instant in removed_instances.values() {
-        if cache
-          .topic_remove_change(&self.topic_name, instant)
-          .is_none()
-        {
-          debug!("WriterProxy told to remove an instant which was not present");
-          /* This may be normal? */
-        }
-      }
-
-      // Note: Even if the above sample deletion is removed, we should still keep this
-      // updating of ackabe number.
-      cache.mark_reliably_received_before(&self.topic_name, writer_guid, received_before);
-    }
-
+    //let received_before = writer_proxy.all_ackable_before();
     let reader_id = self.entity_id();
-
     // this is duplicate code from above, but needed, because we need another
     // mutable borrow. TODO: Maybe could be written in some sensible way.
     let writer_proxy = if let Some(wp) = self.matched_writer_mut(writer_guid) {
@@ -935,17 +904,13 @@ impl Reader {
       // composed of two groups:
       //   1. All sequence numbers in the range gapStart <= sequence_number <
       // gapList.base
-      let mut removed_changes: BTreeSet<Timestamp> = writer_proxy
-        .irrelevant_changes_range(gap.gap_start, gap.gap_list.base())
-        .values()
-        .copied()
-        .collect();
+      writer_proxy
+        .irrelevant_changes_range(gap.gap_start, gap.gap_list.base());
 
       //   2. All the sequence numbers that appear explicitly listed in the gapList.
       for seq_num in gap.gap_list.iter() {
         writer_proxy
-          .set_irrelevant_change(seq_num)
-          .map(|t| removed_changes.insert(t));
+          .set_irrelevant_change(seq_num);
       }
       all_ackable_before = writer_proxy.all_ackable_before();
     }

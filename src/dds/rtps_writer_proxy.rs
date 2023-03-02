@@ -264,14 +264,14 @@ impl RtpsWriterProxy {
     &mut self,
     remove_from: SequenceNumber,
     remove_until_before: SequenceNumber,
-  ) -> BTreeMap<SequenceNumber, Timestamp> {
+  )  {
     // check sanity
     if remove_from > remove_until_before {
       error!(
         "irrelevant_changes_range: negative range: remove_from={:?} remove_until_before={:?}",
         remove_from, remove_until_before
       );
-      return BTreeMap::new();
+      return; 
     }
     // now remove_from <= remove_until_before, i.e. at least zero to remove
     //
@@ -285,7 +285,7 @@ impl RtpsWriterProxy {
     if remove_from <= self.ack_base {
       let mut removed_and_after = self.changes.split_off(&remove_from);
       let mut after = removed_and_after.split_off(&remove_until_before);
-      let removed = removed_and_after;
+      //let removed = removed_and_after;
       self.changes.append(&mut after);
 
       self.ack_base = max(remove_until_before, self.ack_base);
@@ -294,25 +294,13 @@ impl RtpsWriterProxy {
         self.ack_base, remove_from, remove_until_before, self.remote_writer_guid
       );
 
-      removed
-        .iter()
-        .filter_map(|(k, v)| v.map(|c| (*k, c)))
-        .collect()
     } else {
       // TODO: This potentially generates a very large BTreeMap
-      let mut removed = BTreeMap::new();
       for na in
         SequenceNumber::range_inclusive(remove_from, remove_until_before - SequenceNumber::new(1))
       {
-        self
-          .changes
-          .entry(na)
-          .and_modify(|known| {
-            known.map(|ts| removed.insert(na, ts));
-          })
-          .or_insert(None); // add not_available marker, if not already known
+        self.changes.insert(na,None);
       }
-      removed
     }
   }
 
@@ -322,7 +310,7 @@ impl RtpsWriterProxy {
   pub fn irrelevant_changes_up_to(
     &mut self,
     smallest_seqnum: SequenceNumber,
-  ) -> BTreeMap<SequenceNumber, Timestamp> {
+  ) /*-> BTreeMap<SequenceNumber, Timestamp>*/ {
     self.irrelevant_changes_range(SequenceNumber::new(0), smallest_seqnum)
   }
 
