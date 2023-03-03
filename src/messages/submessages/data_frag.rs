@@ -141,15 +141,26 @@ impl DataFrag {
     let expect_qos = flags.contains(DATAFRAG_Flags::InlineQos);
     //let expect_key = flags.contains(DATAFRAG_Flags::Key);
 
+    // Size of header after "octets_to_inline_qos" field:
+    // reader_id: 4
+    // writer_id: 4
+    // writer_sn: 8
+    // fragment_starting_num: 4
+    // fragments_in_submessage: 2
+    // fragment_size: 2
+    // data_size: 4
+    //
+    // Total: 28
+
     // Skip any possible fields we do not know about.
-    let rtps_v23_header_size: u16 = 7 * 4;
-    let extra_octets = octets_to_inline_qos - rtps_v23_header_size;
-    if octets_to_inline_qos < rtps_v23_header_size {
+    let rtps_v25_header_size: u16 = 28;
+    if octets_to_inline_qos < rtps_v25_header_size {
       return Err(io::Error::new(
         io::ErrorKind::Other,
-        "DataFrag has too low octetsToInlineQos",
+        format!("DataFrag has too low octetsToInlineQos = {}", octets_to_inline_qos),
       ));
     }
+    let extra_octets = octets_to_inline_qos - rtps_v25_header_size;
     cursor.set_position(cursor.position() + u64::from(extra_octets));
 
     let inline_qos = if expect_qos {
@@ -228,15 +239,11 @@ impl DataFrag {
 
 impl<C: Context> Writable<C> for DataFrag {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    writer.write_u16(0)?;
-    if self.inline_qos.is_some() && !self.inline_qos.as_ref().unwrap().parameters.is_empty() {
-      debug!("self.inline_qos {:?}", self.inline_qos);
-      todo!()
-    } else if self.inline_qos.is_some() && self.inline_qos.as_ref().unwrap().parameters.is_empty()
-      || self.inline_qos.is_none()
-    {
-      writer.write_u16(24)?;
-    }
+    writer.write_u16(0)?; // extraflags
+    writer.write_u16(28)?; // See calculation of this value in deserialization above.
+    // We always write constant 28 here, because this implementation does not (yet)
+    // write any fields between sampleSize ( = data_size)
+    // and inline QoS. If some future protocol version adds fields there, then this must be changed.
     writer.write_value(&self.reader_id)?;
     writer.write_value(&self.writer_id)?;
     writer.write_value(&self.writer_sn)?;
