@@ -1,10 +1,6 @@
 use std::{
-  cmp::max,
   io,
-  marker::PhantomData,
   sync::{Arc, RwLock, Mutex,},
-  //ops::{Deref, DerefMut},
-  collections::{BTreeMap},
 };
 
 use serde::de::DeserializeOwned;
@@ -18,9 +14,8 @@ use mio_06;
 use mio_08;
 
 use futures::stream::{Stream, FusedStream,};
-//use futures::future::FusedFuture;
 use std::pin::Pin;
-use std::task::{Poll, Context, Waker};
+use std::task::{Poll, Context,};
 
 
 use crate::{
@@ -30,26 +25,23 @@ use crate::{
     qos::*,
     readcondition::*,
     statusevents::*,
-    topic::{Topic, TopicDescription,},
+    topic::{Topic, },
     traits::{key::*, serde_adapters::with_key::*, },
     values::result::*,
-    with_key::datasample::*,
-    ddsdata::*,
+    with_key::datasample::*, with_key::simpledatareader::*,
   },
   discovery::{data_types::topic_data::PublicationBuiltinTopicData, discovery::DiscoveryCommand},
-  log_and_err_precondition_not_met,
   serialization::CDRDeserializerAdapter,
   structure::{
     dds_cache::DDSCache,
-    cache_change::{CacheChange, DeserializedCacheChange},
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
     time::Timestamp,
-    sequence_number::SequenceNumber,
   },
   mio_source::PollEventSource,
 };
+
 
 /// Simplified type for CDR encoding
 pub type DataReaderCdr<D> = DataReader<D, CDRDeserializerAdapter<D>>;
@@ -62,290 +54,7 @@ pub enum SelectByKey {
   Next,
 }
 
-#[derive(Clone, Debug,)]
-pub(crate) enum DataReaderWaker {
-  //Mio08Token{ token: mio_08::Token, notifier: Arc<dyn mio_misc::queue::Notifier>, },
-  FutureWaker(Waker),
-  NoWaker,
-}
 
-impl DataReaderWaker {
-  pub fn wake(&mut self) {
-    use DataReaderWaker::*;
-    match self {
-      NoWaker => (),
-      // Mio08Token{ token, notifier } => 
-      //   notifier.notify(token_to_notification_id(token.clone()))
-      //     .unwrap_or_else(|e| error!("Reader cannot notify Datareader: {:?}",e)),
-      FutureWaker(fut_waker) => {
-        fut_waker.wake_by_ref();
-        *self = NoWaker;
-      }
-    }
-  }
-}
-
-#[derive(Clone, Debug,)]
-pub(crate) enum ReaderCommand {
-  #[allow(dead_code)] // TODO: Implement this (resetting) feature
-  ResetRequestedDeadlineStatus,
-}
-
-struct ReadPointers {
-  latest_instant: Timestamp, // This is used as a read pointer from dds_cache for BEST_EFFORT reading
-  last_read_sn : BTreeMap<GUID,SequenceNumber>, // collection of read pointers for RELIABLE reading
-}
-
-impl ReadPointers {
-  fn new() -> Self {
-    ReadPointers {
-      latest_instant: Timestamp::ZERO,
-      last_read_sn: BTreeMap::new(),
-    }
-  }
-}
-
-pub struct SimpleDataReader<
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> 
-{
-  #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
-  // any subscriber-wide QoS policies, such as ordered or coherent access.
-  // Remove this attribute when/if such things are implemented.
-  my_subscriber: Subscriber,
-
-  my_topic: Topic,
-  qos_policy: QosPolicies,
-  my_guid: GUID,
-  pub(crate) notification_receiver: mio_channel::Receiver<()>,
-
-  dds_cache: Arc<RwLock<DDSCache>>, // global cache
-
-  read_pointers: ReadPointers,
-
-  /// hask_to_key_map is used for decoding received key hashes back to original key values.
-  /// This is needed when we receive a dispose message via hash only.
-  hash_to_key_map: BTreeMap<KeyHash, D::K>, // TODO: garbage collect this somehow
-
-  deserializer_type: PhantomData<DA>, // This is to provide use for DA
-
-  discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  status_receiver: StatusReceiver<DataReaderStatus>,
-
-  #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
-  // resetting deadline missed status. Remove attribute when it is supported.
-  reader_command: mio_channel::SyncSender<ReaderCommand>,
-  data_reader_waker: Arc<Mutex<DataReaderWaker>>,
-
-  event_source: PollEventSource,
-}
-
-
-// SimpleDataReaders can only do "take" semantics and does not have any deduplication or other DataSampleCache functionality.
-
-impl<D, DA> Drop for SimpleDataReader<D, DA>
-where
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D>,
-{
-  fn drop(&mut self) {
-    // Tell dp_event_loop
-    self.my_subscriber.remove_reader(self.my_guid);
-
-    // Tell discovery
-    match self
-      .discovery_command
-      .send(DiscoveryCommand::RemoveLocalReader { guid: self.my_guid })
-    {
-      Ok(_) => {}
-      Err(mio_channel::SendError::Disconnected(_)) => {
-        debug!("Failed to send DiscoveryCommand::RemoveLocalReader . Maybe shutting down?");
-      }
-      Err(e) => error!(
-        "Failed to send DiscoveryCommand::RemoveLocalReader. {:?}",
-        e
-      ),
-    }
-  }
-}
-
-impl<D: 'static, DA> SimpleDataReader<D, DA>
-where
-  D: DeserializeOwned + Keyed,
-  <D as Keyed>::K: Key,
-  DA: DeserializerAdapter<D>,
-{
-  #[allow(clippy::too_many_arguments)]
-  pub(crate) fn new(
-    subscriber: Subscriber,
-    my_id: EntityId,
-    topic: Topic,
-    qos_policy: QosPolicies,
-    // Each notification sent to this channel must be try_recv'd
-    notification_receiver: mio_channel::Receiver<()>,
-    dds_cache: Arc<RwLock<DDSCache>>,
-    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
-    reader_command: mio_channel::SyncSender<ReaderCommand>,
-    data_reader_waker: Arc<Mutex<DataReaderWaker>>,
-    event_source: PollEventSource,
-  ) -> Result<Self> {
-    let dp = match subscriber.participant() {
-      Some(dp) => dp,
-      None => {
-        return log_and_err_precondition_not_met!(
-          "Cannot create new DataReader, DomainParticipant doesn't exist."
-        )
-      }
-    };
-
-    let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), my_id);
-
-    Ok(Self {
-      my_subscriber: subscriber,
-      qos_policy,
-      my_guid,
-      notification_receiver,
-      dds_cache,
-      read_pointers: ReadPointers::new(),
-      hash_to_key_map: BTreeMap::new(),
-      my_topic: topic,
-      deserializer_type: PhantomData,
-      discovery_command,
-      status_receiver: StatusReceiver::new(status_channel_rec),
-      reader_command,
-      data_reader_waker,
-      event_source,
-    })
-  }
-
-  // get an iterator into DDS Cache, so this is in constant space, not a large data structure
-  fn try_take_undecoded<'a>(is_reliable: bool, dds_cache: &'a DDSCache, 
-      topic_name:&str, read_pointers: &'a ReadPointers ) 
-    -> Box<dyn Iterator<Item = (Timestamp, &'a CacheChange)> + 'a>
-  {
-    if is_reliable {
-      dds_cache.get_changes_in_range_reliable(
-        topic_name,
-        &read_pointers.last_read_sn,
-      )
-    } else {
-      dds_cache.get_changes_in_range_best_effort(
-        topic_name,
-        read_pointers.latest_instant,
-        Timestamp::now(),
-      )
-    }
-  }
-
-
-  fn update_hash_to_key_map(
-      hash_to_key_map: &mut BTreeMap<KeyHash, D::K>, 
-      deserialized: &std::result::Result<D, D::K>) 
-  {
-    let instance_key = match deserialized {
-      Ok(d) => d.key(),
-      Err(k) => k.clone(),
-    };
-    hash_to_key_map
-      .insert(instance_key.hash_key(), instance_key.clone());
-  }
-
-  fn deserialize(timestamp: Timestamp, cc: &CacheChange, hash_to_key_map: &mut BTreeMap<KeyHash, D::K>) -> 
-    std::result::Result<DeserializedCacheChange<D>,String>
-  {
-    match cc.data_value {
-      DDSData::Data { ref serialized_payload } => {
-        // what is our data serialization format (representation identifier) ?
-        if let Some(recognized_rep_id) = DA::supported_encodings()
-          .iter()
-          .find(|r| **r == serialized_payload.representation_identifier)
-        {
-          match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
-            // Data update, decoded ok
-            Ok(payload) => {
-              let p = Ok(payload);
-              Self::update_hash_to_key_map(hash_to_key_map,  &p);
-              Ok(DeserializedCacheChange::new(timestamp,&cc,p))
-            }
-            Err(e) => Err(format!("Failed to deserialize sample bytes: {e}, ")),
-          }
-        } else {
-          Err( format!("Unknown representation id {:?}.", 
-                serialized_payload.representation_identifier))
-        }
-      }
-
-      DDSData::DisposeByKey {
-        key: ref serialized_key,
-        ..
-      } => {
-        match DA::key_from_bytes(
-          &serialized_key.value,
-          serialized_key.representation_identifier,
-        ) {
-          Ok(key) => {
-            let k = Err(key);
-            Self::update_hash_to_key_map(hash_to_key_map,  &k);
-            Ok(DeserializedCacheChange::new(timestamp,&cc,k))
-          }
-          Err(e) => Err( format!("Failed to deserialize key {}", e)),
-        }
-      }
-
-      DDSData::DisposeByKeyHash { key_hash, .. } => {
-        // The cache should know hash -> key mapping even if the sample
-        // has been disposed or .take()n
-        if let Some(key) = hash_to_key_map.get(&key_hash) {
-          Ok(DeserializedCacheChange::new(timestamp, &cc,Err(key.clone())))
-        } else {
-          Err( format!("Tried to dispose with unknown key hash: {:x?}", key_hash) )
-        }
-      } 
-    } // match    
-  }
-
-  pub(crate) fn try_take_one(&mut self) -> Result<Option<DeserializedCacheChange<D>>> {
-    let is_reliable = matches!(
-      self.qos_policy.reliability(),
-      Some(policy::Reliability::Reliable { .. })
-    );
-    let dds_cache = match self.dds_cache.read() {
-      Ok(rwlock) => rwlock,
-      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-      Err(e) => panic!(
-        "The DDSCache of domain participant is poisoned. Error: {}",
-        e
-      ),
-    };
-    let (timestamp, cc) = 
-      match Self::try_take_undecoded(is_reliable, &dds_cache, &self.my_topic.name(), &self.read_pointers)
-              .next() {
-        None => return Ok(None),
-        Some((ts,cc)) => (ts,cc),
-      };
-
-    match Self::deserialize(timestamp, cc, &mut self.hash_to_key_map ) {
-      Ok(dcc) => {
-        self.read_pointers.latest_instant = max(self.read_pointers.latest_instant , timestamp);
-        self.read_pointers.last_read_sn.insert(dcc.writer_guid, dcc.sequence_number);
-        Ok(Some(dcc))
-      } 
-      Err(string) => {        
-        Error::serialization_error(
-          format!("{} Topic = {}, Type = {:?}",string,self.my_topic.name(), self.my_topic.get_type()))
-      }
-    }
-    // update read pointers on the way out
-    // Box::new(cache_changes.map(|(ts,cc)| {
-    //   self.read_pointers.latest_instant = max(self.read_pointers.latest_instant , ts);
-    //   self.read_pointers.last_read_sn.insert(cc.writer_guid, cc.sequence_number);
-    //   (ts,cc.clone())
-    // }))
-  }
-
-}
 /// DDS DataReader for with_key topics.
 ///
 /// # Examples
@@ -377,12 +86,15 @@ where
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
 /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
 /// ```
+///
+/// *Note:* Many DataReader methods require mutable access to `self`, because they need to
+/// mutate the datasample ceche, which is an essential content of this struct.
 pub struct DataReader<
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > {
-  simple_data_reader: Mutex<SimpleDataReader<D,DA>>,
-  datasample_cache: Mutex<DataSampleCache<D>>, // DataReader-local cache of deserialized samples
+  simple_data_reader: SimpleDataReader<D,DA>,
+  datasample_cache: DataSampleCache<D>, // DataReader-local cache of deserialized samples
 }
 
 
@@ -421,25 +133,20 @@ where
         reader_command, data_reader_waker, event_source )?;
 
     Ok(Self {
-      simple_data_reader: Mutex::new(simple_data_reader),
-      datasample_cache: Mutex::new(dsc),
+      simple_data_reader: simple_data_reader,
+      datasample_cache: dsc,
     })
   }
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
-  fn fill_and_lock_local_datasample_cache(&self)  {
-    // let is_reliable = matches!(
-    //   self.simple_data_reader.qos_policy.reliability(),
-    //   Some(policy::Reliability::Reliable { .. })
-    // );
-
+  fn fill_and_lock_local_datasample_cache(&mut self)  {
     loop {
-      match self.simple_data_reader.lock().unwrap().try_take_one() {
+      match self.simple_data_reader.try_take_one() {
         Ok(None) => break,
         Ok(Some(dcc)) => {
-          self.datasample_cache.lock().unwrap().fill_from_deserialized_cache_change( dcc )
+          self.datasample_cache.fill_from_deserialized_cache_change( dcc )
         }
         Err(_e) => {
           // error is logged already at lower level.
@@ -451,28 +158,26 @@ where
   } 
 
   fn drain_read_notifications(&self) {
-    let ref s = self.simple_data_reader.lock().unwrap();
-    while s.notification_receiver.try_recv().is_ok() {}
-    s.event_source.drain();
+    self.simple_data_reader.drain_read_notifications()
   }
 
   fn select_keys_for_access(&self, read_condition: ReadCondition) -> Vec<(Timestamp, D::K)> {
-    self.datasample_cache.lock().unwrap().select_keys_for_access(read_condition)
+    self.datasample_cache.select_keys_for_access(read_condition)
   }
 
-  fn take_by_keys(&self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<D>> {
-    self.datasample_cache.lock().unwrap().take_by_keys(keys)
+  fn take_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<D>> {
+    self.datasample_cache.take_by_keys(keys)
   }
 
-  fn take_bare_by_keys(&self, keys: &[(Timestamp, D::K)]) -> Vec<std::result::Result<D,D::K>> {
-    self.datasample_cache.lock().unwrap().take_bare_by_keys(keys)
+  fn take_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<std::result::Result<D,D::K>> {
+    self.datasample_cache.take_bare_by_keys(keys)
   }
 
   fn select_instance_keys_for_access(&self, instance: &D::K, rc: ReadCondition,) -> Vec<(Timestamp, D::K)> {
-    self.datasample_cache.lock().unwrap().select_instance_keys_for_access(instance, rc)
+    self.datasample_cache.select_instance_keys_for_access(instance, rc)
   }
 
-  /*
+  
   /// Reads amount of samples found with `max_samples` and `read_condition`
   /// parameters.
   ///
@@ -520,24 +225,23 @@ where
   /// }
   /// ```
   
-  pub fn read(
-    &self,
-    max_samples: usize,
-    read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<&D>>> {
-    // Clear notification buffer. This must be done first to avoid race conditions.
-    self.drain_read_notifications();
+  // pub fn read(
+  //   &self,
+  //   max_samples: usize,
+  //   read_condition: ReadCondition,
+  // ) -> Result<Vec<DataSample<&D>>> {
+  //   // Clear notification buffer. This must be done first to avoid race conditions.
+  //   self.drain_read_notifications();
+  //   self.fill_and_lock_local_datasample_cache();
 
-    self.fill_and_lock_local_datasample_cache();
+  //   let mut selected = self.select_keys_for_access(read_condition);
+  //   selected.truncate(max_samples);
 
-    let mut selected = self.select_keys_for_access(read_condition);
-    selected.truncate(max_samples);
+  //   let result = self.read_by_keys(&selected);
 
-    let result = self.read_by_keys(&selected);
-
-    Ok(result)
-  }
-  */
+  //   Ok(result)
+  // }
+  
 
   /// Takes amount of sample found with `max_samples` and `read_condition`
   /// parameters.
@@ -586,7 +290,7 @@ where
   /// }
   /// ```
   pub fn take(
-    &self,
+    &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<DataSample<D>>> {
@@ -684,35 +388,32 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn take_next_sample(&self) -> Result<Option<DataSample<D>>> {
+  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
 
   // Iterator interface
 
-  /*
-  // Iterator helpers: _bare versions do not fetch or even construct metadata.
+  /*  
   fn read_bare(
     &self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<std::result::Result<&D, D::K>>> {
-    // Clear notification buffer. This must be done first to avoid race conditions.
-    while self.notification_receiver.try_recv().is_ok() {}
+    self.drain_read_notifications();
+    self.fill_and_lock_local_datasample_cache();
 
-    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
-
-    let mut selected = datasample_cache.select_keys_for_access(read_condition);
+    let mut selected = self.select_keys_for_access(read_condition);
     selected.truncate(max_samples);
 
-    let result = datasample_cache.read_bare_by_keys(&selected,);
+    let result = self.read_bare_by_keys(&selected,);
 
     Ok(result)
   }
   */
   fn take_bare(
-    &self,
+    &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<std::result::Result<D, D::K>>> {
@@ -871,7 +572,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn into_iterator(&self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
+  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // take call
     Ok(
@@ -923,7 +624,7 @@ where
   /// }
   /// ```
   pub fn into_conditional_iterator(
-    &self,
+    &mut self,
     read_condition: ReadCondition,
   ) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
@@ -935,19 +636,16 @@ where
   // ----------------------------------------------------------------------------
   // ----------------------------------------------------------------------------
 
-
-
   fn infer_key(&self,
     instance_key: Option<<D as Keyed>::K>,
     this_or_next: SelectByKey,
   ) -> Option<<D as Keyed>::K> {
-    let datasample_cache = self.datasample_cache.lock().unwrap();
     match instance_key {
       Some(k) => match this_or_next {
         SelectByKey::This => Some(k),
-        SelectByKey::Next => datasample_cache.next_key(&k),
+        SelectByKey::Next => self.datasample_cache.next_key(&k),
       },
-      None => datasample_cache.instance_map.keys().next().cloned(),
+      None => self.datasample_cache.instance_map.keys().next().cloned(),
     }
   }
 
@@ -1074,7 +772,7 @@ where
   /// }
   /// ```
   pub fn take_instance(
-    &self,
+    &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
     // Select only samples from instance specified by key. In case of None, select the
@@ -1107,7 +805,7 @@ where
   /// Return values:
   /// true - got all historical data
   /// false - timeout before all historical data was received
-  pub fn wait_for_historical_data(&self, _max_wait: Duration) -> bool {
+  pub fn wait_for_historical_data(&mut self, _max_wait: Duration) -> bool {
     todo!()
   }
 
@@ -1125,45 +823,13 @@ where
   }
 
   /// An async stream for reading the (bare) data samples
-  pub fn async_sample_stream(&self) -> DataReaderStream<D,DA> {
+  pub fn async_sample_stream(&mut self) -> DataReaderStream<D,DA> {
     DataReaderStream{ datareader: self }
   }
 
 } // impl
 
 // -------------------
-
-// This is  not part of DDS spec. We implement mio Eventd so that the
-// application can asynchronously poll DataReader(s).
-impl<D, DA> Evented for SimpleDataReader<D, DA>
-where
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D>,
-{
-  // We just delegate all the operations to notification_receiver, since it
-  // already implements Evented
-  fn register(&self, poll: &mio_06::Poll, token: mio_06::Token, interest: mio_06::Ready, opts: mio_06::PollOpt) -> io::Result<()> {
-    self
-      .notification_receiver
-      .register(poll, token, interest, opts)
-  }
-
-  fn reregister(
-    &self,
-    poll: &mio_06::Poll,
-    token: mio_06::Token,
-    interest: mio_06::Ready,
-    opts: mio_06::PollOpt,
-  ) -> io::Result<()> {
-    self
-      .notification_receiver
-      .reregister(poll, token, interest, opts)
-  }
-
-  fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self.notification_receiver.deregister(poll)
-  }
-}
 
 impl<D, DA> Evented for DataReader<D, DA>
 where
@@ -1174,7 +840,7 @@ where
   // implements Evented
   fn register(&self, poll: &mio_06::Poll, token: mio_06::Token, interest: mio_06::Ready, opts: mio_06::PollOpt) -> io::Result<()> {
     self
-      .simple_data_reader.lock().unwrap()
+      .simple_data_reader
       .register(poll, token, interest, opts)
   }
 
@@ -1186,37 +852,15 @@ where
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
-      .simple_data_reader.lock().unwrap()
+      .simple_data_reader
       .reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self.simple_data_reader.lock().unwrap().deregister(poll)
+    self.simple_data_reader.deregister(poll)
   }
 }
 
-
-impl<D, DA> mio_08::event::Source for SimpleDataReader<D, DA>
-where
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D>,
-{
-  fn register(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
-  {
-    self.event_source.register(registry,token, interests)
-  }
-
-  fn reregister(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
-  {
-    self.event_source.reregister(registry, token, interests)
-  }
-
-  fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()>
-  {
-    self.event_source.deregister(registry)
-  }
-
-}
 
 impl<D, DA> mio_08::event::Source for DataReader<D, DA>
 where
@@ -1228,41 +872,23 @@ where
     // SimpleDataReader implements .register() for two traits, so need to
     // use disambiguation syntax to call .register() here.
     <SimpleDataReader<D,DA> as mio_08::event::Source>
-      ::register(&mut self.simple_data_reader.lock().unwrap(), registry, token, interests)
+      ::register(&mut self.simple_data_reader, registry, token, interests)
   }
 
   fn reregister(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
   {
     <SimpleDataReader<D,DA> as mio_08::event::Source>
-      ::reregister(&mut self.simple_data_reader.lock().unwrap(), registry, token, interests)
+      ::reregister(&mut self.simple_data_reader, registry, token, interests)
   }
 
   fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()>
   {
     <SimpleDataReader<D,DA> as mio_08::event::Source>
-      ::deregister(&mut self.simple_data_reader.lock().unwrap(), registry)
+      ::deregister(&mut self.simple_data_reader, registry)
   }
 
 }
 
-
-impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
-where
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D>,
-{
-  fn as_status_evented(&mut self) -> &dyn Evented {
-    self.status_receiver.as_status_evented()
-  }
-
-  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
-    self.status_receiver.as_status_source()
-  }
-
-  fn try_recv_status(&self) -> Option<DataReaderStatus> {
-    self.status_receiver.try_recv_status()
-  }
-}
 
 impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
 where
@@ -1270,45 +896,30 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
-    self.simple_data_reader.get_mut().unwrap().as_status_evented()
+    self.simple_data_reader.as_status_evented()
   }
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
-    self.simple_data_reader.get_mut().unwrap().as_status_source()
+    self.simple_data_reader.as_status_source()
   }
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
-    self.simple_data_reader.lock().unwrap().try_recv_status()
+    self.simple_data_reader.try_recv_status()
   }
 }
 
 
 impl<D, DA> HasQoSPolicy for DataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed + DeserializeOwned + 'static,
   DA: DeserializerAdapter<D>,
+  <D as Keyed>::K: Key,
 {
-  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-  //   // TODO: check liveliness of qos_policy
-  //   self.qos_policy = policy.clone();
-  //   self.datasample_cache.set_qos(policy.clone());
-  //   Ok(())
-  // }
-
   fn qos(&self) -> QosPolicies {
-    self.simple_data_reader.lock().unwrap().qos_policy.clone()
+    self.simple_data_reader.qos().clone()
   }
 }
 
-impl<D, DA> RTPSEntity for SimpleDataReader<D, DA>
-where
-  D: Keyed + DeserializeOwned,
-  DA: DeserializerAdapter<D>,
-{
-  fn guid(&self) -> GUID {
-    self.my_guid
-  }
-}
 
 impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
@@ -1316,7 +927,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
-    self.simple_data_reader.lock().unwrap().my_guid
+    self.simple_data_reader.guid()
   }
 }
 
@@ -1329,7 +940,7 @@ pub struct DataReaderStream<'a,
   D: Keyed + DeserializeOwned + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
-  datareader: &'a DataReader<D,DA>,
+  datareader: &'a mut DataReader<D,DA>,
 }
 
 impl <'a, D,DA> DataReaderStream<'a, D,DA>
@@ -1359,11 +970,9 @@ where
 {
   type Item = Result<std::result::Result<D, D::K>>;
 
-  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+  fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
-    let d = self.datareader
-      .take_bare(1, ReadCondition::not_read());
-    match d {
+    match self.datareader.take_bare(1, ReadCondition::not_read()) {
       Err(e) => // DDS fails
         Poll::Ready(Some(Err(e))),  
 
@@ -1376,9 +985,8 @@ where
             // 1. synchronously store waker to background thread (must rendezvous)
             // 2. try take_bare again, in case something arrived just now
             // 3. if nothing still, return pending.
-            *self.datareader.simple_data_reader.lock().unwrap()
-              .data_reader_waker.lock().unwrap() // TODO: remove unwrap
-                = DataReaderWaker::FutureWaker(cx.waker().clone());
+            self.datareader.simple_data_reader
+              .set_waker(DataReaderWaker::FutureWaker(cx.waker().clone()) );
             match self.datareader.take_bare(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),  
               Ok(mut v) => {

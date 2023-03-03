@@ -471,13 +471,9 @@ where
 
 impl<D, DA> HasQoSPolicy for DataReader<D, DA>
 where
-  D: DeserializeOwned,
+  D: DeserializeOwned + 'static,
   DA: DeserializerAdapter<D>,
 {
-  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-  //   self.keyed_datareader.set_qos(policy)
-  // }
-
   fn qos(&self) -> QosPolicies {
     self.keyed_datareader.qos()
   }

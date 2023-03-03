@@ -54,7 +54,7 @@ impl CacheChange {
 // This structure is used to communicate just deserialized samples
 // from SimpleDatareader to DataReader
 #[derive(Debug, Clone)]
-pub(crate) struct DeserializedCacheChange<D: Keyed> {
+pub struct DeserializedCacheChange<D: Keyed> {
   pub(crate) receive_instant: Timestamp,  // to be used as unique key in internal data structures
   pub(crate) writer_guid: GUID,
   pub(crate) sequence_number: SequenceNumber,

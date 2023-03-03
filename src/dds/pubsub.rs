@@ -47,7 +47,7 @@ use crate::{
 };
 use super::{
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
-  with_key::datareader::ReaderCommand,
+  with_key::simpledatareader::ReaderCommand,
   writer::WriterCommand,
 };
 

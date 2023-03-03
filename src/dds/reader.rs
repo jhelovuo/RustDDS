@@ -43,7 +43,7 @@ use crate::{
 };
 use super::{
   qos::InlineQos, 
-  with_key::datareader::{ReaderCommand, DataReaderWaker,}
+  with_key::simpledatareader::{ReaderCommand, DataReaderWaker,}
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
