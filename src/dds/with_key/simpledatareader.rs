@@ -52,9 +52,6 @@ impl DataReaderWaker {
     use DataReaderWaker::*;
     match self {
       NoWaker => (),
-      // Mio08Token{ token, notifier } => 
-      //   notifier.notify(token_to_notification_id(token.clone()))
-      //     .unwrap_or_else(|e| error!("Reader cannot notify Datareader: {:?}",e)),
       FutureWaker(fut_waker) => {
         fut_waker.wake_by_ref();
         *self = NoWaker;

@@ -225,22 +225,22 @@ where
   /// }
   /// ```
   
-  // pub fn read(
-  //   &self,
-  //   max_samples: usize,
-  //   read_condition: ReadCondition,
-  // ) -> Result<Vec<DataSample<&D>>> {
-  //   // Clear notification buffer. This must be done first to avoid race conditions.
-  //   self.drain_read_notifications();
-  //   self.fill_and_lock_local_datasample_cache();
+  pub fn read(
+    &mut self,
+    max_samples: usize,
+    read_condition: ReadCondition,
+  ) -> Result<Vec<DataSample<&D>>> {
+    // Clear notification buffer. This must be done first to avoid race conditions.
+    self.drain_read_notifications();
+    self.fill_and_lock_local_datasample_cache();
 
-  //   let mut selected = self.select_keys_for_access(read_condition);
-  //   selected.truncate(max_samples);
+    let mut selected = self.select_keys_for_access(read_condition);
+    selected.truncate(max_samples);
 
-  //   let result = self.read_by_keys(&selected);
+    let result = self.datasample_cache.read_by_keys(&selected);
 
-  //   Ok(result)
-  // }
+    Ok(result)
+  }
   
 
   /// Takes amount of sample found with `max_samples` and `read_condition`
@@ -307,7 +307,7 @@ where
 
     Ok(result)
   }
-  /*
+  
   /// Reads next unread sample
   ///
   /// # Examples
@@ -345,11 +345,11 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn read_next_sample(&self) -> Result<Option<DataSample<&D>>> {
+  pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
-  */
+  
 
   /// Takes next unread sample
   ///
@@ -395,9 +395,9 @@ where
 
   // Iterator interface
 
-  /*  
+    
   fn read_bare(
-    &self,
+    &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
   ) -> Result<Vec<std::result::Result<&D, D::K>>> {
@@ -407,11 +407,11 @@ where
     let mut selected = self.select_keys_for_access(read_condition);
     selected.truncate(max_samples);
 
-    let result = self.read_bare_by_keys(&selected,);
+    let result = self.datasample_cache.read_bare_by_keys(&selected,);
 
     Ok(result)
   }
-  */
+  
   fn take_bare(
     &mut self,
     max_samples: usize,
@@ -419,8 +419,8 @@ where
   ) -> Result<Vec<std::result::Result<D, D::K>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
-
     self.fill_and_lock_local_datasample_cache();
+
     let mut selected = self.select_keys_for_access(read_condition);
     trace!("take bare selected count = {}", selected.len());
     selected.truncate(max_samples);
@@ -431,7 +431,7 @@ where
     Ok(result)
   }
 
-  /*
+  
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
@@ -471,7 +471,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn iterator(&self) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
+  pub fn iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(
@@ -480,8 +480,8 @@ where
         .into_iter(),
     )
   }
-  */
-  /*
+  
+  
   /// Produces an interator over the samples filtered by a given condition.
   /// Yields only payload data, not SampleInfo metadata
   ///
@@ -522,14 +522,14 @@ where
   /// }
   /// ```
   pub fn conditional_iterator(
-    &self,
+    &mut self,
     read_condition: ReadCondition,
   ) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
   }
-  */
+  
 
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
@@ -572,6 +572,7 @@ where
   ///   // do something
   /// }
   /// ```
+
   pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // take call
@@ -649,7 +650,7 @@ where
     }
   }
 
-  /*
+  
   /// Works similarly to read(), but will return only samples from a specific
   /// instance. The instance is specified by an optional key. In case the key
   /// is not specified, the smallest (in key order) instance is selected.
@@ -699,7 +700,7 @@ where
   /// }
   /// ```
   pub fn read_instance(
-    &self,
+    &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
     // Select only samples from instance specified by key. In case of None, select the
@@ -709,25 +710,23 @@ where
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<&D>>> {
-    // Clear notification buffer. This must be done first to avoid race conditions.
-    while self.notification_receiver.try_recv().is_ok() {}
+    self.drain_read_notifications();
+    self.fill_and_lock_local_datasample_cache();
 
-    let mut datasample_cache = self.fill_and_lock_local_datasample_cache();
-
-    let key = match Self::infer_key(&datasample_cache, instance_key, this_or_next) {
+    let key = match Self::infer_key(self, instance_key, this_or_next) {
       Some(k) => k,
       None => return Ok(Vec::new()),
     };
 
-    let mut selected = datasample_cache
+    let mut selected = self.datasample_cache
       .select_instance_keys_for_access(&key, read_condition);
     selected.truncate(max_samples);
 
-    let result = datasample_cache.read_by_keys(&selected);
+    let result = self.datasample_cache.read_by_keys(&selected);
 
     Ok(result)
   }
-  */
+  
 
   /// Similar to read_instance, but will return owned datasamples
   /// This should cover DDS DataReader methods take_instance,

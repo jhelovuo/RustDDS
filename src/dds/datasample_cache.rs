@@ -1,24 +1,17 @@
 use std::{
-  collections::{BTreeMap, BTreeSet, HashMap, },
+  collections::{BTreeMap, BTreeSet, HashMap, VecDeque, },
   ops::Bound,
-  //ops::Deref,
-  //cmp::max,
 };
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 
-//use serde::de::DeserializeOwned;
-
 use crate::{
   dds::{
-    //ddsdata::DDSData,
     qos::{policy, QosPolicies},
     readcondition::ReadCondition,
     sampleinfo::*,
-    //topic::{Topic, TopicDescription,},
     traits::key::{Key, Keyed, },
-    //traits::serde_adapters::with_key::*,
     with_key::datasample::DataSample,
   },
   structure::{
@@ -26,7 +19,6 @@ use crate::{
     guid::GUID,
     sequence_number::SequenceNumber,
     time::Timestamp,
-    //dds_cache::DDSCache,
   },
   with_key::WriteOptions,
 };
@@ -46,10 +38,6 @@ pub struct DataSampleCache<D: Keyed> {
   datasamples: BTreeMap<Timestamp, SampleWithMetaData<D>>, /* ordered storage for deserialized
                                                             * samples */
   pub(crate) instance_map: BTreeMap<D::K, InstanceMetaData>, // ordered storage for instances
-  //hash_to_key_map: BTreeMap<KeyHash, D::K>,
-
-  //latest_instant: Timestamp, // how far we already have samples.
-  //latest_sequence_number: BTreeMap<GUID, SequenceNumber>, // latest SN pointer for each writer in our Topic
 }
 
 pub(crate) struct InstanceMetaData {
@@ -95,9 +83,6 @@ where
       qos,
       datasamples: BTreeMap::new(),
       instance_map: BTreeMap::new(),
-      //hash_to_key_map: BTreeMap::new(),
-      //latest_instant: Timestamp::ZERO, 
-      //latest_sequence_number: BTreeMap::new(),
     }
   }
 
@@ -115,172 +100,6 @@ where
       deserialized_cc.write_options);
   }
 
-  /*
-  pub fn fill_from_dds_cache<DA>(&mut self, is_reliable: bool, dds_cache:impl Deref<Target=DDSCache>, my_topic:Topic)
-  where
-    DA: DeserializerAdapter<D>,
-    D: DeserializeOwned,
-  {
-
-    let cache_changes = dds_cache.topic_get_changes_in_range(
-      &my_topic.name(),
-      &self.latest_instant,
-      &Timestamp::now(),
-    );
-
-    let mut cache_changes_vec: Vec<(Timestamp, &CacheChange)> = cache_changes.collect();
-
-    // We sort by sequence number so that earlier SNs (from the same writer) are
-    // forced to appear earlier. This way we do not lose any CacheChanges even if
-    // they were received out of order.
-    // The next loop will discard any CacheChanges that appear out of sequence.
-
-    if cache_changes_vec.len() > 1 &&
-      // Check if the sequence is already sorted, as we expect this to be really common.
-      ! cache_changes_vec.iter().zip(cache_changes_vec.iter().skip(1))
-        .all(|((_,a),(_,b))| a.sequence_number <= b.sequence_number)
-      // TODO: We can change this to .is_sorted_by_key( ) when it lands in stable std library.
-    {  
-      cache_changes_vec.sort_by_key(|(_ts, cc)| cc.sequence_number);
-      // .sort_by_key function documentation says it is optimized for almost-sorted case,
-      // which is good here.
-    }
-
-    for (
-      instant,
-      CacheChange {
-        writer_guid,
-        sequence_number,
-        write_options,
-        data_value,
-      },
-    ) in cache_changes_vec
-    {
-      self.latest_instant = max(self.latest_instant, instant); // update our time pointer
-                                                               // what was the latest
-      let latest_sequence_number_have_already = self.latest_sequence_number.get(writer_guid);
-
-      // Check that the sequence numbers proceed in correct order.
-      // The reliable mode gets stuck if DDSCache is not able to produce
-      // all the SNs withot gaps. (TODO: Ensure that DDSCache satisfies this.)
-      //
-      // TODO: This does not work if there are gaps in the SequenceNumber sequence.
-      // This can happen if the Writer at the other end of the wire informs our Reader
-      // that some SNs are not available, either by a Heartbeat or a Gap submessage.
-      // 
-      // The current implementation may get stuck if there is a gap in a reliable topic. 
-      //
-      // If no previous SN is known, then any SN is acceptable, as we may be
-      // joining the data stream at any time.
-      //
-      if (! is_reliable &&
-            // Check that SequenceNumber always goes forward.
-            // Getting the same SN means duplicate packet, which we must drop.
-            latest_sequence_number_have_already
-              .map_or(true,  |latest| sequence_number > latest))
-        || (is_reliable &&
-            // Check that we get all the sequence numbers in order
-            latest_sequence_number_have_already
-              .map_or(true, |latest| *latest + SequenceNumber::from(1) == *sequence_number))
-      {
-        // normal case: sequence_number not seen before
-        // first, update our last-seen-pointer
-        self
-          .latest_sequence_number
-          .insert(*writer_guid, *sequence_number);
-
-        // deserialize into datasample cache
-        match data_value {
-          DDSData::Data { serialized_payload } => {
-            // what is our data serialization format (representation identifier) ?
-            if let Some(recognized_rep_id) = DA::supported_encodings()
-              .iter()
-              .find(|r| **r == serialized_payload.representation_identifier)
-            {
-              match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
-                Ok(payload) => self.add_sample(
-                  Ok(payload),
-                  *writer_guid,
-                  *sequence_number,
-                  instant,
-                  write_options.clone(),
-                ),
-                Err(e) => {
-                  error!(
-                    "Failed to deserialize bytes: {}, Topic = {}, Type = {:?}",
-                    e,
-                    my_topic.name(),
-                    my_topic.get_type()
-                  );
-                  info!("Bytes were {:?}", &serialized_payload.value);
-                  continue; // skip this sample
-                }
-              }
-            } else {
-              warn!(
-                "Unknown representation id {:?}.",
-                serialized_payload.representation_identifier
-              );
-              info!("Serialized payload was {:?}", &serialized_payload);
-              continue; // skip this sample, as we cannot decode it
-            }
-          }
-
-          DDSData::DisposeByKey {
-            key: serialized_key,
-            ..
-          } => {
-            match DA::key_from_bytes(
-              &serialized_key.value,
-              serialized_key.representation_identifier,
-            ) {
-              Ok(key) => {
-                self.add_sample(
-                  Err(key),
-                  *writer_guid,
-                  *sequence_number,
-                  instant,
-                  write_options.clone(),
-                );
-              }
-              Err(e) => {
-                warn!(
-                  "Failed to deserialize key {}, Topic = {}, Type = {:?}",
-                  e,
-                  my_topic.name(),
-                  my_topic.get_type()
-                );
-                debug!("Bytes were {:?}", &serialized_key.value);
-                continue; // skip this sample
-              }
-            }
-          }
-
-          DDSData::DisposeByKeyHash { key_hash, .. } => {
-            if let Some(key) = self.key_by_hash(*key_hash) {
-              self.add_sample(
-                Err(key),
-                *writer_guid,
-                *sequence_number,
-                instant,
-                write_options.clone(),
-              );
-            } else {
-              warn!("Tried to dispose with unkonwn key hash: {:x?}", key_hash);
-              // The cache should know hash -> key mapping even if the sample
-              // has been disposed or .take()n
-            }
-          } 
-        } // match
-      }
-      // if (acceptable SN)
-      else {
-        // sequence naumber is not acceptable
-      }
-    } // for loop
-
-  }
-*/
   fn add_sample(
     &mut self,
     new_sample: Result<D, D::K>,
@@ -312,9 +131,6 @@ where
         last_generation_accessed: NotAliveGenerationCounts::sub_zero(), // never accessed
       };
       self.instance_map.insert(instance_key.clone(), imd);
-      // self
-      //   .hash_to_key_map
-      //   .insert(instance_key.hash_key(), instance_key.clone());
       self
         .instance_map
         .get_mut(&instance_key)
@@ -551,7 +367,7 @@ where
   //
   // Therea are two versions of both read and take: Return DataSample<D> (incl.
   // metadata) and "bare" versions without metadata.
-  /*
+  
   pub fn read_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<&D>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
@@ -613,7 +429,7 @@ where
 
     result
   }
-  */
+  
   pub fn take_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<D>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
@@ -655,7 +471,7 @@ where
     self.mark_instances_viewed(&instance_generations);
     result
   }
-  /*
+  
   pub fn read_bare_by_keys(
     &mut self,
     keys: &[(Timestamp, D::K)],
@@ -693,7 +509,7 @@ where
     }
     result
   }
-  */
+  
   pub fn take_bare_by_keys(
     &mut self,
     keys: &[(Timestamp, D::K)],
@@ -723,19 +539,6 @@ where
     result
   }
 
-  // pub fn key_by_hash(&self, key_hash: KeyHash) -> Option<D::K> {
-  //   if let Some(k) = self.hash_to_key_map.get(&key_hash) {
-  //     Some(k.clone())
-  //   } else {
-  //     debug!(
-  //       "key_by_hash: requested KeyHash {:?}, but not found. I have {:?}",
-  //       key_hash,
-  //       self.hash_to_key_map.keys()
-  //     );
-  //     None
-  //   }
-  // }
-
   pub fn next_key(&self, key: &D::K) -> Option<D::K> {
     self
       .instance_map
@@ -744,13 +547,20 @@ where
       .next()
   }
 
-  // This is currently unused, as HasQosPolicy trait does not allow setting QoS,
-  // but a placeholder if it is ever implemented.
-  // #[allow(dead_code)]
-  // pub fn set_qos_policy(&mut self, qos: QosPolicies) {
-  //   self.qos = qos;
-  // }
 }
+
+// helper function
+// somewhat like result.as_ref() , but one-sided only
+pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(r: &std::result::Result<T, E>) 
+  -> std::result::Result<&T, E> 
+{
+  match *r {
+    Ok(ref x) => Ok(x),
+    Err(ref x) => Err(x.clone()),
+  }
+}
+
+
 
 #[cfg(test)]
 mod tests {

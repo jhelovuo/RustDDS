@@ -29,17 +29,17 @@ impl<D> DataSample<D> {
     }
   }
 
-  // pub(crate) fn from_with_key_ref(
-  //   keyed: WithKeyDataSample<&NoKeyWrapper<D>>,
-  // ) -> Option<DataSample<&D>> {
-  //   match keyed.value {
-  //     Ok(kv) => Some(DataSample::<&D> {
-  //       sample_info: keyed.sample_info,
-  //       value: &kv.d,
-  //     }),
-  //     Err(_) => None,
-  //   }
-  // }
+  pub(crate) fn from_with_key_ref(
+    keyed: WithKeyDataSample<&NoKeyWrapper<D>>,
+  ) -> Option<DataSample<&D>> {
+    match keyed.value {
+      Ok(kv) => Some(DataSample::<&D> {
+        sample_info: keyed.sample_info,
+        value: &kv.d,
+      }),
+      Err(_) => None,
+    }
+  }
 
   pub fn value(&self) -> &D {
     &self.value

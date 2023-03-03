@@ -4,7 +4,6 @@ use crate::{
   dds::traits::key::KeyHash,
   messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
 };
-//use crate::messages::submessages::submessages::RepresentationIdentifier;
 use crate::structure::cache_change::ChangeKind;
 
 // DDSData represets a serialized data sample with metadata
@@ -17,14 +16,6 @@ pub enum DDSData {
   Data {
     serialized_payload: SerializedPayload,
   },
-  // DataFrags {
-  //   // Each DATAFRAG specifies RepresentationIdentifier, but we assume they are the same.
-  //   // Otherwise, decoding would be exceedingly confusing.
-  //   representation_identifier: RepresentationIdentifier,
-  //   // The payload is stored as a Vec of Bytes buffers.
-  //   // Deserializer should concateneate these and deserialize.
-  //   bytes_frags: Vec<Bytes>,
-  // },
   DisposeByKey {
     change_kind: ChangeKind,
     key: SerializedPayload,
