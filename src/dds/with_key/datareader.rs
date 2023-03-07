@@ -92,7 +92,7 @@ pub enum SelectByKey {
 pub struct DataReader<
   D: Keyed + DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> {
+> where  <D as Keyed>::K: Key {
   simple_data_reader: SimpleDataReader<D,DA>,
   datasample_cache: DataSampleCache<D>, // DataReader-local cache of deserialized samples
 }
@@ -833,6 +833,7 @@ where
 impl<D, DA> Evented for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
+  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it alrady
@@ -864,6 +865,7 @@ where
 impl<D, DA> mio_08::event::Source for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
+  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn register(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
@@ -892,6 +894,7 @@ where
 impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
+  <D as Keyed>::K: Key ,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -922,7 +925,8 @@ where
 
 impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed + DeserializeOwned + 'static,
+  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
@@ -938,20 +942,16 @@ where
 pub struct DataReaderStream<'a,
   D: Keyed + DeserializeOwned + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> {
+> where <D as Keyed>::K: Key, {
   datareader: &'a mut DataReader<D,DA>,
+  //eventstream: DataReaderEventStream<D,DA>,
 }
 
-impl <'a, D,DA> DataReaderStream<'a, D,DA>
-where
-  D: Keyed + DeserializeOwned + 'static,
-  <D as Keyed>::K: Key,
-  DA: DeserializerAdapter<D>,
-{
-  // maybe this block shoud be removed
-}
-
-
+// pub struct DataReaderEventStream<'a,
+//   D: Keyed + DeserializeOwned + 'static,
+//   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
+// > { 
+//   }
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
 impl <'a, D,DA> Unpin for DataReaderStream<'a, D,DA> 

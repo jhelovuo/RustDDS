@@ -55,10 +55,10 @@ impl CacheChange {
 // from SimpleDatareader to DataReader
 #[derive(Debug, Clone)]
 pub struct DeserializedCacheChange<D: Keyed> {
-  pub(crate) receive_instant: Timestamp,  // to be used as unique key in internal data structures
-  pub(crate) writer_guid: GUID,
-  pub(crate) sequence_number: SequenceNumber,
-  pub(crate) write_options: WriteOptions,
+  pub(crate) receive_instant: Timestamp,  // 8 bytes, to be used as unique key in internal data structures
+  pub(crate) writer_guid: GUID, // 8 bytes
+  pub(crate) sequence_number: SequenceNumber, // 8 bytes
+  pub(crate) write_options: WriteOptions, // 16 bytes
 
   // the data sample (or key) itself is stored here
   pub(crate) sample: Result<D, D::K>,  // TODO: make this a Box<> for easier detaching an reattaching to somewhere else

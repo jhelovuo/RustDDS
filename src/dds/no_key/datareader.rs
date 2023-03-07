@@ -482,7 +482,7 @@ where
 
 impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
-  D: DeserializeOwned,
+  D: DeserializeOwned + 'static,
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {

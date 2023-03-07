@@ -188,11 +188,18 @@ pub enum DataReaderStatus {
     last_policy_id: QosPolicyId,
     policies: Vec<QosPolicyCount>,
   },
-  // DataAvailable is not implemented, as it seems to bring little additional value,
-  // because the normal data waiting mechanism already uses the same mio::poll structure,
-  // so repeating the functionality here would bring little additional value.
+
+  // DataAvailable variant is not implemented, as it seems to bring little additional value,
+  // because the normal data waiting mechanism already uses the same mio::poll structure.
+  
   /// A sample has been lost (never received).
-  /// (Whtever this means?)
+  /// TODO: Implement this.
+  /// * Check that the following interpretation is correct:
+  /// * For a BEST_EFFORT reader: Whenever we skip ahead in SequenceNumber, possibly because a message is lost,
+  ///   or messages arrive out of order.
+  /// * For a RELIABLE reader: Whenever we skip ahead in SequenceNumbers taht are delivered via DataReader. 
+  ///   The reason may be that we receive a HEARTBEAT or GAP submessage indicating that some samples we are 
+  ///   expecting are not available.
   SampleLost { count: CountWithChange },
 
   /// The DataReader has found a DataWriter that matches the Topic and has
