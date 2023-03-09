@@ -4,8 +4,11 @@ use std::{
   marker::PhantomData,
   sync::{Arc, RwLock, Mutex,},
   collections::{BTreeMap},
-  task::Waker,
 };
+
+use futures::stream::{Stream, FusedStream,};
+use std::pin::Pin;
+use std::task::{Poll, Context, Waker,};
 
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
@@ -420,6 +423,10 @@ where
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
     self.status_receiver.try_recv_status()
   }
+
+  // fn as_async_receiver(&self) -> dyn Stream<DataReaderStatus> {
+  //   SimpleDataReaderEventStream{ simple_datareader: self }
+  // }
 }
 
 impl<D, DA> RTPSEntity for SimpleDataReader<D, DA>
@@ -438,10 +445,6 @@ where
 
 // Async interface to the SimpleDataReader
 
-use futures::stream::{Stream, FusedStream,};
-use std::pin::Pin;
-use std::task::{Poll, Context,};
-
 
 pub struct SimpleDataReaderStream<'a,
   D: Keyed + DeserializeOwned + 'static,
@@ -449,13 +452,6 @@ pub struct SimpleDataReaderStream<'a,
 > where <D as Keyed>::K: Key {
   simple_datareader: &'a SimpleDataReader<D,DA>,
 }
-
-pub struct SimpleDataReaderEventStream<'a,
-  D: Keyed + DeserializeOwned + 'static,
-  DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where <D as Keyed>::K: Key { 
-    simple_datareader: &'a SimpleDataReader<D,DA>,
-  }
 
 // ----------------------------------------------
 // ----------------------------------------------
@@ -526,6 +522,13 @@ where
 // ----------------------------------------------
 // ----------------------------------------------
 
+pub struct SimpleDataReaderEventStream<'a,
+  D: Keyed + DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
+> where <D as Keyed>::K: Key { 
+    simple_datareader: &'a SimpleDataReader<D,DA>,
+  }
+
 
 impl<'a, D,DA> Stream for SimpleDataReaderEventStream<'a, D,DA> 
 where
@@ -533,10 +536,10 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = DataReaderStatus;
-  
+  type Item = std::result::Result<DataReaderStatus,std::sync::mpsc::RecvError>;
+
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    debug!("poll_next");
-    todo!()
+    Pin::new(&mut self.simple_datareader.status_receiver.as_async_stream()).poll_next(cx)
+    
   } // fn 
 } // impl

@@ -11,6 +11,11 @@ use log::{debug, error, info, trace, warn};
 
 use std::io;
 
+use futures::stream::{Stream, FusedStream,};
+use std::pin::Pin;
+use std::task::{Poll, Context, Waker,};
+use std::sync::{Arc,Mutex,};
+
 use mio_06::Evented;
 use mio_extras::channel as mio_channel;
 
@@ -26,15 +31,19 @@ use crate::dds::qos::QosPolicyId;
 pub trait StatusEvented<E> {
   fn as_status_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source; // This is for polling with mio-0.8.x
+  //fn as_async_receiver(&self) -> dyn Stream<E>;
 
   fn try_recv_status(&self) -> Option<E>;
 }
 
 // Helper object for various DDS Entities
+// This is now a wrapper around StatusChannelReceiver with enabled-flag
+// TODO: Do we really need this or should we replace this with StatusChannelReceiver
 pub(crate) struct StatusReceiver<E> {
   channel_receiver: StatusChannelReceiver<E>,
   enabled: bool, // if not enabled, we should forward status to parent Entity
   // TODO: enabling not implemented
+
 }
 
 impl<E> StatusReceiver<E> {
@@ -43,6 +52,10 @@ impl<E> StatusReceiver<E> {
       channel_receiver,
       enabled: false,
     }
+  }
+
+  pub fn as_async_stream(&self) -> StatusReceiverStream<E> {
+    self.channel_receiver.as_async_stream()
   }
 }
 
@@ -64,7 +77,12 @@ impl<E> StatusEvented<E> for StatusReceiver<E> {
       None
     }
   }
+
 }
+
+// -------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------
 
 // a wrapper(s) for mio_channel augmented with
 // poll channel, so that it can be used together with mio-0.8
@@ -76,27 +94,34 @@ pub(crate) fn sync_status_channel<T>(capacity :usize)
 {
   let (signal_receiver, signal_sender) = make_poll_channel()?;
   let (actual_sender, actual_receiver) = mio_channel::sync_channel(capacity);
+  let waker = Arc::new(Mutex::new(None));
   Ok((
-    StatusChannelSender{ actual_sender, signal_sender },
-    StatusChannelReceiver{ actual_receiver, signal_receiver }
+    StatusChannelSender{ actual_sender, signal_sender , waker: Arc::clone(&waker) },
+    StatusChannelReceiver{ actual_receiver, signal_receiver, waker }
   ))
 }
 
 pub(crate) struct StatusChannelSender<T> {
   actual_sender: mio_channel::SyncSender<T>,
   signal_sender: PollEventSender,
+  waker: Arc<Mutex<Option<Waker>>>,
 }
 
 pub(crate) struct StatusChannelReceiver<T> {
   actual_receiver: mio_channel::Receiver<T>,
   signal_receiver: PollEventSource,
+  waker: Arc<Mutex<Option<Waker>>>,
 }
+
 
 impl<T> StatusChannelSender<T> {
   pub fn try_send(&self, t: T) -> Result<(), mio_channel::TrySendError<T>> {
+    let mut w = self.waker.lock().unwrap(); // lock already at the beginning
     match self.actual_sender.try_send(t) {
       Ok(()) => {
         self.signal_sender.send();
+        w.as_ref().map(|w| w.wake_by_ref());
+        *w = None;
         Ok(())
       }, 
       Err(mio_channel::TrySendError::Full(tt)) => {
@@ -104,6 +129,8 @@ impl<T> StatusChannelSender<T> {
         // It is perfectly normal to fail due to full channel, because
         // no-one is required to be listening to these.
         self.signal_sender.send(); // kick the receiver anyway
+        w.as_ref().map(|w| w.wake_by_ref());
+        *w = None;
         Err(mio_channel::TrySendError::Full(tt))
       }
       Err(other_fail) => Err(other_fail),
@@ -113,11 +140,16 @@ impl<T> StatusChannelSender<T> {
 
 impl<T> StatusChannelReceiver<T> {
   pub fn try_recv(&self) -> Result<T, std::sync::mpsc::TryRecvError> {
+    // We do not manipulate waker here, because the
+    // synchronous and asynchronous receiving are not supposed to be mixed.
     self.signal_receiver.drain();
     self.actual_receiver.try_recv()
   }
-}
 
+  pub fn as_async_stream(&self) -> StatusReceiverStream<T> {
+    StatusReceiverStream{ sync_receiver: self }
+  }
+}
 
 
 impl<T> event::Source for StatusChannelReceiver<T>
@@ -139,7 +171,43 @@ impl<T> event::Source for StatusChannelReceiver<T>
 
 }
 
+// -------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------
 
+pub(crate) struct StatusReceiverStream<'a,T> {
+  sync_receiver: &'a StatusChannelReceiver<T>,
+}
+
+
+impl<'a,T> Stream for StatusReceiverStream<'a,T> {
+  type Item = Result<T, std::sync::mpsc::RecvError>;
+
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    //debug!("poll_next");
+    let mut w = self.sync_receiver.waker.lock().unwrap(); 
+    // lock already at the beginning, before try_recv
+    match self.sync_receiver.try_recv() {
+      Err(std::sync::mpsc::TryRecvError::Empty) => { // nothing available
+        *w = Some(cx.waker().clone());
+        Poll::Pending
+      } 
+      Err(std::sync::mpsc::TryRecvError::Disconnected) => 
+        Poll::Ready(Some(Err(std::sync::mpsc::RecvError))), 
+      Ok(t) => Poll::Ready(Some(Ok(t))), // got date
+    }
+  } // fn 
+}
+
+impl<'a,T> FusedStream for StatusReceiverStream<'a,T> {
+  fn is_terminated(&self) -> bool {
+    false 
+  }
+}
+
+// -------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------
 
 
 #[derive(Debug, Clone)]
