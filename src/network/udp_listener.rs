@@ -17,7 +17,7 @@ use crate::{
 
 const MAX_MESSAGE_SIZE: usize = 64 * 1024; // This is max we can get from UDP.
 const MESSAGE_BUFFER_ALLOCATION_CHUNK: usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
-static_assertions::const_assert!( MESSAGE_BUFFER_ALLOCATION_CHUNK > MAX_MESSAGE_SIZE);
+static_assertions::const_assert!(MESSAGE_BUFFER_ALLOCATION_CHUNK > MAX_MESSAGE_SIZE);
 
 /// Listens to messages coming to specified host port combination.
 /// Only messages from added listen addressed are read when get_all_messages is
@@ -174,7 +174,7 @@ impl UDPListener {
 
     loop {
       // Loop invariant. Note that capacity() may be large, but .len() == 0.
-      assert_eq!(self.receive_buffer.len(), 0); 
+      assert_eq!(self.receive_buffer.len(), 0);
 
       // Ensure that receive buffer has enough capacity for a message
       if self.receive_buffer.capacity() < MAX_MESSAGE_SIZE {
@@ -182,7 +182,7 @@ impl UDPListener {
         debug!("ensure_receive_buffer_capacity - reallocated receive_buffer");
       }
       unsafe {
-        // This is safe, because we just checked that there is enough capacity, 
+        // This is safe, because we just checked that there is enough capacity,
         // or allocated more.
         // We do not read undefined data, because the recv()
         // will overwrite this space and truncate the rest away.
@@ -192,20 +192,19 @@ impl UDPListener {
         "ensure_receive_buffer_capacity - {} bytes left",
         self.receive_buffer.capacity()
       );
-      let nbytes = 
-        match self.socket.recv(&mut self.receive_buffer) {
-          Ok(n) => n,
-          Err(e) => {
-            self.receive_buffer.clear(); // since nothing was received
-            if e.kind() == io::ErrorKind::WouldBlock {
-              // This is the normal case.
-            } else {
-              warn!("socket recv() error: {:?}",e);
-            }
-            // In any case, we stop trying and return.
-            return messages;
+      let nbytes = match self.socket.recv(&mut self.receive_buffer) {
+        Ok(n) => n,
+        Err(e) => {
+          self.receive_buffer.clear(); // since nothing was received
+          if e.kind() == io::ErrorKind::WouldBlock {
+            // This is the normal case.
+          } else {
+            warn!("socket recv() error: {:?}", e);
           }
-        };
+          // In any case, we stop trying and return.
+          return messages;
+        }
+      };
       // Something was received.
 
       // Now, append some extra data to align the buffer end, so the next piece will
@@ -213,7 +212,9 @@ impl UDPListener {
       // with. This is because RTPS data is optimized to align to 4-byte boundaries.
       let unalign = self.receive_buffer.len() % 4;
       if unalign != 0 {
-        self.receive_buffer.extend_from_slice(&[0xCC,0xCC,0xCC, 0xCC][..(4-unalign)] );
+        self
+          .receive_buffer
+          .extend_from_slice(&[0xCC, 0xCC, 0xCC, 0xCC][..(4 - unalign)]);
         // Funny value 0xCC encourages a fast crash in case these bytes
         // are ever accessed, as they should not.
       }
