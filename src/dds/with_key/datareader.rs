@@ -822,8 +822,8 @@ where
   }
 
   /// An async stream for reading the (bare) data samples
-  pub fn async_sample_stream(&mut self) -> DataReaderStream<D,DA> {
-    DataReaderStream{ datareader: self }
+  pub fn async_sample_stream(self) -> DataReaderStream<D,DA> {
+    DataReaderStream{ datareader: Arc::new(Mutex::new(self)) }
   }
 
 } // impl
@@ -939,29 +939,35 @@ where
 
 // Async interface to the DataReader
 
-pub struct DataReaderStream<'a,
+pub struct DataReaderStream<
   D: Keyed + DeserializeOwned + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > where <D as Keyed>::K: Key, {
-  datareader: &'a mut DataReader<D,DA>,
-  //eventstream: DataReaderEventStream<D,DA>,
+  datareader: Arc<Mutex<DataReader<D,DA>>>,
 }
 
-// pub struct DataReaderEventStream<'a,
-//   D: Keyed + DeserializeOwned + 'static,
-//   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-// > { 
-//   }
+impl<D,DA> DataReaderStream<D,DA> 
+where
+  D: Keyed + DeserializeOwned + 'static,
+  <D as Keyed>::K: Key,
+  DA: DeserializerAdapter<D>, 
+{
+  pub fn async_event_stream(&self) -> DataReaderEventStream<D,DA>
+  {
+    DataReaderEventStream{ datareader: Arc::clone(&self.datareader) }
+  }
+}
+
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
-impl <'a, D,DA> Unpin for DataReaderStream<'a, D,DA> 
+impl <D,DA> Unpin for DataReaderStream<D,DA> 
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {}
 
-impl<'a, D,DA> Stream for DataReaderStream<'a, D,DA> 
+impl<D,DA> Stream for DataReaderStream<D,DA> 
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
@@ -969,9 +975,10 @@ where
 {
   type Item = Result<std::result::Result<D, D::K>>;
 
-  fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
-    match self.datareader.take_bare(1, ReadCondition::not_read()) {
+    let mut datareader = self.datareader.lock().unwrap();
+    match datareader.take_bare(1, ReadCondition::not_read()) {
       Err(e) => // DDS fails
         Poll::Ready(Some(Err(e))),  
 
@@ -984,9 +991,9 @@ where
             // 1. synchronously store waker to background thread (must rendezvous)
             // 2. try take_bare again, in case something arrived just now
             // 3. if nothing still, return pending.
-            self.datareader.simple_data_reader
+            datareader.simple_data_reader
               .set_waker(DataReaderWaker::FutureWaker(cx.waker().clone()) );
-            match self.datareader.take_bare(1, ReadCondition::not_read()) {
+            match datareader.take_bare(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),  
               Ok(mut v) => {
                 match v.pop() {
@@ -1002,7 +1009,7 @@ where
   }
 }
 
-impl<'a, D,DA> FusedStream for DataReaderStream<'a, D,DA> 
+impl<D,DA> FusedStream for DataReaderStream<D,DA> 
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
@@ -1013,8 +1020,44 @@ where
   }
 }
 
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+
+pub struct DataReaderEventStream<
+  D: Keyed + DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>, > 
+where <D as Keyed>::K: Key,
+{
+    datareader: Arc<Mutex<DataReader<D,DA>>>,
+  }
 
 
+impl<D,DA> Stream for DataReaderEventStream<D,DA> 
+where
+  D: Keyed + DeserializeOwned + 'static,
+  <D as Keyed>::K: Key,
+  DA: DeserializerAdapter<D>,
+{
+  type Item = std::result::Result<DataReaderStatus,std::sync::mpsc::RecvError>;
+
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    let datareader = self.datareader.lock().unwrap();
+    Pin::new(&mut datareader.simple_data_reader.as_simple_data_reader_event_stream()).poll_next(cx)
+  }
+
+}
+
+
+impl<D,DA> FusedStream for DataReaderEventStream<D,DA> 
+where
+  D: Keyed + DeserializeOwned + 'static,
+  <D as Keyed>::K: Key,
+  DA: DeserializerAdapter<D>,
+{
+  fn is_terminated(&self) -> bool {
+    false // Never terminate. This means it is always valid to call poll_next().
+  }
+}
 
 
 // ----------------------------------------------------------------------------------------------------

@@ -345,6 +345,10 @@ where
   pub fn guid(&self) -> GUID {
     self.my_guid
   }
+
+  pub fn as_simple_data_reader_event_stream(&self) -> SimpleDataReaderEventStream<D,DA> {
+    SimpleDataReaderEventStream{ simple_datareader: self }
+  }
 }
 
 
@@ -424,9 +428,6 @@ where
     self.status_receiver.try_recv_status()
   }
 
-  // fn as_async_receiver(&self) -> dyn Stream<DataReaderStatus> {
-  //   SimpleDataReaderEventStream{ simple_datareader: self }
-  // }
 }
 
 impl<D, DA> RTPSEntity for SimpleDataReader<D, DA>

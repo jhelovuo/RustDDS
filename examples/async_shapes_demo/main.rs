@@ -163,6 +163,7 @@ fn main() -> std::io::Result<()> {
     let mut run = true;
     let mut stop = stop_receiver.recv().fuse();
     let mut datareader_stream = datareader.async_sample_stream();
+    let mut datareader_event_stream = datareader_stream.async_event_stream();
     while run {
       futures::select! {
         _ = stop => run = false,
@@ -185,7 +186,10 @@ fn main() -> std::io::Result<()> {
               break;
             }
           }
-        }      
+        }
+        e = datareader_event_stream.select_next_some() => {
+          println!("DataReader event: {:?}", e);
+        }
       }
     }
 
