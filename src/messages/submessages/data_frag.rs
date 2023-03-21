@@ -1,6 +1,8 @@
 use std::io;
 
-use log::debug;
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use speedy::{Context, Error, Readable, Writable, Writer};
 use enumflags2::BitFlags;
 use bytes::Bytes;

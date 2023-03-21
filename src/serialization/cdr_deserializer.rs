@@ -1,7 +1,9 @@
 use std::marker::PhantomData;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
-use num_traits::Zero;
 use serde::de::{
   self, DeserializeOwned, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess,
   VariantAccess, Visitor,
@@ -256,17 +258,21 @@ where
 
     let bytes = self.next_bytes(bytes_len)?; // length includes null terminator
 
-
-    /*
-    This is a hacky "Fix" for IntercomDDS version 01.05 protocol version 2.1.
-    Where IntercomDDS sends an empty string with no NULL terminator.
-    */
-    let bytes_without_null;
-    if bytes.len().is_zero() {
-      bytes_without_null = bytes;
-    } else {
-      bytes_without_null = &bytes[0..bytes.len() - 1];
-    }
+    // Remove the null terminating character
+    let bytes_without_null = match bytes.split_last() {
+      None => {
+        //  This is a hacky "Fix" for IntercomDDS version 01.05 protocol version 2.1.
+        // Where IntercomDDS sends an empty string with no NULL terminator.
+        info!("deserialize_str: Received string with not even a null terminator.");
+        bytes
+      }
+      Some((null_char, contents)) => {
+        if *null_char != 0 {
+          warn!("deserialize_str: Expected string null terminator, got {:#x} instead.",null_char);
+        }
+        contents
+      }
+    };
 
     match std::str::from_utf8(bytes_without_null) {
       Ok(s) => visitor.visit_str(s),
