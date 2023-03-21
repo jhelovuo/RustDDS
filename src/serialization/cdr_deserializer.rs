@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use serde::de::{
   self, DeserializeOwned, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess,
@@ -268,7 +267,10 @@ where
       }
       Some((null_char, contents)) => {
         if *null_char != 0 {
-          warn!("deserialize_str: Expected string null terminator, got {:#x} instead.",null_char);
+          warn!(
+            "deserialize_str: Expected string null terminator, got {:#x} instead.",
+            null_char
+          );
         }
         contents
       }

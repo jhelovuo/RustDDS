@@ -2,7 +2,6 @@ use std::io;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-
 use speedy::{Context, Error, Readable, Writable, Writer};
 use enumflags2::BitFlags;
 use bytes::Bytes;
@@ -159,7 +158,10 @@ impl DataFrag {
     if octets_to_inline_qos < rtps_v25_header_size {
       return Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("DataFrag has too low octetsToInlineQos = {}", octets_to_inline_qos),
+        format!(
+          "DataFrag has too low octetsToInlineQos = {}",
+          octets_to_inline_qos
+        ),
       ));
     }
     let extra_octets = octets_to_inline_qos - rtps_v25_header_size;
@@ -243,9 +245,10 @@ impl<C: Context> Writable<C> for DataFrag {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_u16(0)?; // extraflags
     writer.write_u16(28)?; // See calculation of this value in deserialization above.
-    // We always write constant 28 here, because this implementation does not (yet)
-    // write any fields between sampleSize ( = data_size)
-    // and inline QoS. If some future protocol version adds fields there, then this must be changed.
+                           // We always write constant 28 here, because this implementation does not (yet)
+                           // write any fields between sampleSize ( = data_size)
+                           // and inline QoS. If some future protocol version adds fields there, then this
+                           // must be changed.
     writer.write_value(&self.reader_id)?;
     writer.write_value(&self.writer_id)?;
     writer.write_value(&self.writer_sn)?;

@@ -345,7 +345,7 @@ impl MessageReceiver {
             reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
           }
         } else if let Some(target_reader) = self.reader_mut(datafrag.reader_id) {
-            target_reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
+          target_reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
         }
       }
       EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
