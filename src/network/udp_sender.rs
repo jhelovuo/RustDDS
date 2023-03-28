@@ -1,13 +1,12 @@
 use std::{
   io,
-  net::{IpAddr, SocketAddr},
+  net::{IpAddr, SocketAddr, UdpSocket},
 };
 #[cfg(test)]
 use std::net::Ipv4Addr;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use std::net::UdpSocket;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 #[cfg(windows)]
 use local_ip_address::list_afinet_netifas;
@@ -27,7 +26,7 @@ impl UDPSender {
     #[cfg(not(windows))]
     let unicast_socket = {
       let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
-      UdpSocket::bind(&saddr)?
+      UdpSocket::bind(saddr)?
     };
 
     #[cfg(windows)]
@@ -163,7 +162,7 @@ impl UDPSender {
       let address = SocketAddr::new(IpAddr::V4(address), port);
       let mut size = 0;
       for s in self.multicast_sockets {
-        size = s.send_to(buffer, &address)?;
+        size = s.send_to(buffer, address)?;
       }
       Ok(size)
     } else {
