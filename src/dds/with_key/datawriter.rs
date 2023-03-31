@@ -4,10 +4,10 @@ use std::{
     atomic::{AtomicI64, Ordering},
     Arc, RwLock,
   },
-  time::Duration,
+  time::{Duration, Instant},
 };
 
-use futures::{Future, stream::{Stream, FusedStream,}};
+use futures::Future;
 use std::pin::Pin;
 use std::task::{Poll, Context,};
 
@@ -1010,8 +1010,7 @@ where
     writer_command: WriterCommand,
     sequence_number: SequenceNumber,
     timeout: Option<duration::Duration>,
-    timeout_instant: std::time::Instant,
-    //phantom: PhantomData<SA>,
+    timeout_instant: Instant,
   },
   Done(SampleIdentity),
 }
@@ -1024,14 +1023,19 @@ where
 {
   type Output = Result<SampleIdentity>;
 
-  fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+  fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
     match *self {
       WriteWithOptions::Done(sample_identity) => Poll::Ready(Ok(sample_identity)),
 
-      WriteWithOptions::Fail(e) => Poll::Ready(Err(e.clone())),
+      WriteWithOptions::Fail(ref mut e) => {
+        let mut dummy = Error::Unsupported;
+        core::mem::swap( e , &mut dummy);
+        Poll::Ready(Err(dummy))
+      }
 
-      WriteWithOptions::InProgress{ writer, writer_command, sequence_number, timeout, timeout_instant , .. } => {
-        match writer.cc_upload.try_send(writer_command) {
+      WriteWithOptions::InProgress{ writer, ref writer_command, sequence_number, timeout, timeout_instant , .. } => {
+        match writer.cc_upload.try_send(writer_command.clone()) {
+          //TODO: can we remove .clone() above?
           Ok(()) => {
             writer.refresh_manual_liveliness();
             Poll::Ready(Ok(SampleIdentity {
@@ -1039,10 +1043,15 @@ where
               sequence_number,
             }))
           }
-          Err(TrySendError::Full(tt)) => {
+          Err(TrySendError::Full(_tt)) => {
             //TODO! Set waker
-            // TODO handle timeout
-            Poll::Pending
+            if Instant::now() < timeout_instant {
+              Poll::Pending 
+            } else {
+              // TODO: Error should also return unsent sample to
+              // the application, as this is the Rust way.
+              Poll::Ready(Err(Error::MustBlock))
+            }
           }
           Err(other_err) => {
             warn!("Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
@@ -1108,7 +1117,7 @@ where
           sequence_number,
         })
       }
-      Err(TrySendError::Full(tt)) => {
+      Err(TrySendError::Full(writer_command)) => {
         //TODO! Set waker
         WriteWithOptions::InProgress { 
           writer: self, writer_command,
@@ -1121,7 +1130,7 @@ where
               .unwrap_or(crate::dds::helpers::TIMEOUT_FALLBACK.to_std()),
         }
       }
-      Err(other_err) => {
+      Err(_other_err) => {
         //TODO: Undo(?) sequence number
         // write warn! log
         //TODO: Wrong error kind

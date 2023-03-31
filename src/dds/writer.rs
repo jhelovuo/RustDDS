@@ -178,8 +178,9 @@ pub(crate) struct Writer {
   //offered_deadline_status: OfferedDeadlineMissedStatus,
   ack_waiter: Option<AckWaiter>,
 }
-
-pub(crate) enum WriterCommand {
+#[derive(Clone)]
+pub enum WriterCommand {
+//TODO: try to make this more private, like pub(crate)
   DDSData {
     ddsdata: DDSData,
     write_options: WriteOptions,
