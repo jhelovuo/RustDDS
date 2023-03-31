@@ -44,6 +44,8 @@ use crate::{
   mio_source::PollEventSource,
 };
 
+// TODO: This is redundant, as is is the same as
+// Option<Waker>. Replace.
 #[derive(Clone, Debug,)]
 pub enum DataReaderWaker {
   FutureWaker(Waker),

@@ -64,11 +64,9 @@ impl PollEventSender {
   pub fn send(&self)  {
     match self.send_mio_socket.lock().unwrap().write(&[0xcc]) {
       Ok(_b) => { // presumably wrote something
-        ()
       }
       Err(e) => {
         info!("PollEventSender.send: {e}");
-        ()
       }
     }
   }
@@ -88,7 +86,6 @@ impl PollEventSource {
           io::ErrorKind::WouldBlock => {} // This is the expected case
           other_kind => { info!("PollEventSource.drain(): {other_kind}"); }
         }
-        ()
       }
     }
   }

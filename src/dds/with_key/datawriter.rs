@@ -2,14 +2,14 @@ use std::{
   marker::PhantomData,
   sync::{
     atomic::{AtomicI64, Ordering},
-    Arc, RwLock,
+    Arc, RwLock, Mutex,
   },
   time::{Duration, Instant},
 };
 
 use futures::Future;
 use std::pin::Pin;
-use std::task::{Poll, Context,};
+use std::task::{Poll, Context, Waker,};
 
 
 use mio_06;
@@ -153,6 +153,7 @@ pub struct DataWriter<D: Keyed + Serialize, SA: SerializerAdapter<D> = CDRSerial
   qos_policy: QosPolicies,
   my_guid: GUID,
   cc_upload: mio_channel::SyncSender<WriterCommand>,
+  cc_upload_waker: Arc<Mutex<Option<Waker>>>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   status_receiver: StatusReceiver<DataWriterStatus>,
   available_sequence_number: AtomicI64,
@@ -199,6 +200,7 @@ where
     qos: QosPolicies,
     guid: GUID,
     cc_upload: mio_channel::SyncSender<WriterCommand>,
+    cc_upload_waker: Arc<Mutex<Option<Waker>>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     dds_cache: &Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
     status_receiver_rec: StatusChannelReceiver<DataWriterStatus>,
@@ -226,6 +228,7 @@ where
       qos_policy: qos,
       my_guid: guid,
       cc_upload,
+      cc_upload_waker,
       discovery_command,
       status_receiver: StatusReceiver::new(status_receiver_rec),
       available_sequence_number: AtomicI64::new(1), // valid numbering starts from 1
@@ -1044,11 +1047,12 @@ where
             }))
           }
           Err(TrySendError::Full(_tt)) => {
-            //TODO! Set waker
+            *writer.cc_upload_waker.lock().unwrap() =
+              Some(cx.waker().clone());
             if Instant::now() < timeout_instant {
               Poll::Pending 
             } else {
-              // TODO: Error should also return unsent sample to
+              // TODO: Error should also return unsent sample (_tt) to
               // the application, as this is the Rust way.
               Poll::Ready(Err(Error::MustBlock))
             }
@@ -1118,7 +1122,9 @@ where
         })
       }
       Err(TrySendError::Full(writer_command)) => {
-        //TODO! Set waker
+        // We do not set waker yet, because (1) we do not have it
+        // and (2) the call is not expected to complete until
+        // the future is polled anyway.
         WriteWithOptions::InProgress { 
           writer: self, writer_command,
           sequence_number,

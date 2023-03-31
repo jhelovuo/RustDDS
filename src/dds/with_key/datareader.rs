@@ -133,7 +133,7 @@ where
         reader_command, data_reader_waker, event_source )?;
 
     Ok(Self {
-      simple_data_reader: simple_data_reader,
+      simple_data_reader,
       datasample_cache: dsc,
     })
   }

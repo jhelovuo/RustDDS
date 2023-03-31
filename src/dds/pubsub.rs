@@ -482,7 +482,7 @@ impl InnerPublisher {
   {
     // Data samples from DataWriter to HistoryCache
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(16);
-
+    let writer_waker = Arc::new( Mutex::new( None ));
     // Status reports back from Writer to DataWriter.
     let (status_sender, status_receiver) = sync_status_channel(4)?;
 
@@ -510,6 +510,7 @@ impl InnerPublisher {
     let new_writer = WriterIngredients {
       guid,
       writer_command_receiver: hccc_download,
+      writer_command_receiver_waker: Arc::clone(&writer_waker),
       topic_name: topic.name(),
       qos_policies: writer_qos.clone(),
       status_sender,
@@ -526,6 +527,7 @@ impl InnerPublisher {
       writer_qos,
       guid,
       dwcc_upload,
+      writer_waker,
       self.discovery_command.clone(),
       &dp.dds_cache(),
       status_receiver,

@@ -4,8 +4,10 @@ use std::{
   iter::FromIterator,
   ops::Bound::Included,
   rc::Rc,
-  sync::{Arc, RwLock},
+  sync::{Arc, RwLock, Mutex, },
 };
+
+use core::task::Waker;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -63,6 +65,7 @@ pub(crate) enum TimedEvent {
 pub(crate) struct WriterIngredients {
   pub guid: GUID,
   pub writer_command_receiver: mio_channel::Receiver<WriterCommand>,
+  pub writer_command_receiver_waker: Arc<Mutex<Option<Waker>>>,
   pub topic_name: String,
   pub qos_policies: QosPolicies,
   pub status_sender: StatusChannelSender<DataWriterStatus>,
@@ -133,6 +136,7 @@ pub(crate) struct Writer {
 
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
+  writer_command_receiver_waker: Arc<Mutex<Option<Waker>>>,
   ///The RTPS ReaderProxy class represents the information an RTPS
   /// StatefulWriter maintains on each matched RTPS Reader
   readers: BTreeMap<GUID, RtpsReaderProxy>, // TODO: Convert to BTreeMap for faster finds.
@@ -256,6 +260,7 @@ impl Writer {
       // We should get the minimum over all outgoing interfaces.
       my_guid: i.guid,
       writer_command_receiver: i.writer_command_receiver,
+      writer_command_receiver_waker: i.writer_command_receiver_waker,
       readers: BTreeMap::new(),
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
@@ -406,6 +411,12 @@ impl Writer {
           write_options,
           sequence_number,
         } => {
+          // Signal that there is now space in the queue
+          { self.writer_command_receiver_waker
+              .lock().unwrap().as_ref()
+              .map(|w| w.wake_by_ref());
+          }
+
           // We have a new sample here. Things to do:
           // 1. Insert it to history cache and get it sequence numbered
           // 2. Send out data.
