@@ -7,7 +7,7 @@ use crate::structure::duration::Duration;
 const TIMEOUT_EPSILON: Duration = Duration::from_nanos(1000);
 
 // Always give background thread 1 ms to react
-const TIMEOUT_FALLBACK: Duration = Duration::from_nanos(1_000_000);
+pub const TIMEOUT_FALLBACK: Duration = Duration::from_nanos(1_000_000);
 
 pub fn try_send_timeout<T>(
   sender: &SyncSender<T>,

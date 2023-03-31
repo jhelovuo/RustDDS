@@ -9,6 +9,7 @@ use crate::{
     parameter_list::ParameterList, RepresentationIdentifier,
   },
   structure::{inline_qos::StatusInfo, parameter_id::ParameterId, rpc::SampleIdentity},
+  structure::duration::Duration,
 };
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber,
@@ -227,6 +228,14 @@ impl QosPolicies {
 
   pub const fn reliability(&self) -> Option<policy::Reliability> {
     self.reliability
+  }
+
+  pub const fn reliable_max_blocking_time(&self) -> Option<Duration> {
+    if let Some(policy::Reliability::Reliable{ max_blocking_time }) = self.reliability {
+      Some(max_blocking_time)
+    } else {
+      None
+    }
   }
 
   pub const fn destination_order(&self) -> Option<policy::DestinationOrder> {

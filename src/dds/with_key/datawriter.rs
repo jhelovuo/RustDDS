@@ -7,8 +7,15 @@ use std::{
   time::Duration,
 };
 
-use mio_06::{Evented, Events, Poll, PollOpt, Ready, Token};
-use mio_extras::channel::{self as mio_channel, SendError};
+use futures::{Future, stream::{Stream, FusedStream,}};
+use std::pin::Pin;
+use std::task::{Poll, Context,};
+
+
+use mio_06;
+use mio_06::{Evented, Events, PollOpt, Ready, Token};
+use mio_extras::channel::{self as mio_channel, SendError, TrySendError};
+
 use serde::Serialize;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -26,6 +33,7 @@ use crate::{
     topic::Topic,
     traits::{
       dds_entity::DDSEntity, key::*, serde_adapters::with_key::SerializerAdapter, TopicDescription,
+      key,
     },
     values::result::{Error, Result},
   },
@@ -36,6 +44,7 @@ use crate::{
   structure::{
     cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID,
     rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp,
+    duration,
   },
 };
 use super::super::writer::WriterCommand;
@@ -346,10 +355,7 @@ where
       sequence_number,
     };
 
-    let timeout = match self.qos().reliability() {
-      Some(Reliability::Reliable { max_blocking_time }) => Some(max_blocking_time),
-      _ => None,
-    };
+    let timeout = self.qos().reliable_max_blocking_time();
 
     match try_send_timeout(&self.cc_upload, writer_command, timeout) {
       Ok(_) => {
@@ -425,7 +431,7 @@ where
       None | Some(Reliability::BestEffort) => Ok(true),
       Some(Reliability::Reliable { .. }) => {
         let (acked_sender, acked_receiver) = mio_channel::sync_channel::<()>(1);
-        let poll = Poll::new()?;
+        let poll = mio_06::Poll::new()?;
         poll.register(
           &acked_receiver,
           Token(0),
@@ -452,6 +458,8 @@ where
       }
     } // match
   }
+
+
   /*
   /// Gets mio Receiver for all status changes
   ///
@@ -983,6 +991,150 @@ where
   SA: SerializerAdapter<D>,
 {
 }
+
+
+//-------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------
+// async writing implementation
+//
+
+pub enum WriteWithOptions<'a, D,SA>
+where
+  D : Keyed + Serialize, 
+  <D as key::Keyed>::K: Key + Serialize,
+  SA: SerializerAdapter<D>,
+{
+  Fail(crate::dds::values::result::Error),
+  InProgress {
+    writer: &'a DataWriter<D,SA>,
+    writer_command: WriterCommand,
+    sequence_number: SequenceNumber,
+    timeout: Option<duration::Duration>,
+    timeout_instant: std::time::Instant,
+    //phantom: PhantomData<SA>,
+  },
+  Done(SampleIdentity),
+}
+
+impl<'a,D,SA> Future for WriteWithOptions<'a,D,SA> 
+where
+  D : Keyed + Serialize, 
+  <D as key::Keyed>::K: Key + Serialize,
+  SA: SerializerAdapter<D>,
+{
+  type Output = Result<SampleIdentity>;
+
+  fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    match *self {
+      WriteWithOptions::Done(sample_identity) => Poll::Ready(Ok(sample_identity)),
+
+      WriteWithOptions::Fail(e) => Poll::Ready(Err(e.clone())),
+
+      WriteWithOptions::InProgress{ writer, writer_command, sequence_number, timeout, timeout_instant , .. } => {
+        match writer.cc_upload.try_send(writer_command) {
+          Ok(()) => {
+            writer.refresh_manual_liveliness();
+            Poll::Ready(Ok(SampleIdentity {
+              writer_guid: writer.my_guid,
+              sequence_number,
+            }))
+          }
+          Err(TrySendError::Full(tt)) => {
+            //TODO! Set waker
+            // TODO handle timeout
+            Poll::Pending
+          }
+          Err(other_err) => {
+            warn!("Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
+              writer.my_topic.name(), other_err, timeout);
+            // TODO: Is this (undo) the right thing to do, if there are
+            // several futures in progress? (Can this result in confused numbering?)
+            writer.undo_sequence_number();
+            Poll::Ready(Err(Error::OutOfResources))
+          }
+
+        }
+      }
+    }
+  }
+}
+
+// pub struct WaitForAcknowledgments<'a,D,SA>
+// where
+//   D : Keyed + Serialize, 
+//   <D as key::Keyed>::K: Serialize,
+//   SA: SerializerAdapter<D>,
+// {
+//   writer: &'a DataWriter<D,SA>,
+// }
+
+impl<D, SA> DataWriter<D, SA>
+where
+  D: Keyed + Serialize,
+  <D as Keyed>::K: Key,
+  SA: SerializerAdapter<D>,
+{
+
+  // pub async fn async_write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+  //   self.async_write_with_options(data, WriteOptions::from(source_timestamp))?;
+  //   Ok(())
+  // }
+
+  pub fn async_write_with_options(&self, data: D, write_options: WriteOptions) 
+    -> WriteWithOptions<D,SA> {
+    let send_buffer = match SA::to_bytes(&data) {
+      Ok(s) => s,
+      Err(e) => return WriteWithOptions::Fail(e.into()),
+    };
+
+    let dds_data = DDSData::new(SerializedPayload::new_from_bytes(
+      SA::output_encoding(),
+      send_buffer,
+    ));
+    let sequence_number = self.next_sequence_number();
+    let writer_command = WriterCommand::DDSData {
+      ddsdata: dds_data,
+      write_options,
+      sequence_number,
+    };
+
+    let timeout = self.qos().reliable_max_blocking_time();
+
+    match self.cc_upload.try_send(writer_command) {
+      Ok(()) => {
+        self.refresh_manual_liveliness();
+        WriteWithOptions::Done(SampleIdentity {
+          writer_guid: self.my_guid,
+          sequence_number,
+        })
+      }
+      Err(TrySendError::Full(tt)) => {
+        //TODO! Set waker
+        WriteWithOptions::InProgress { 
+          writer: self, writer_command,
+          sequence_number,
+          timeout,
+          timeout_instant: 
+            std::time::Instant::now() 
+            + timeout
+              .map(|t| t.to_std())
+              .unwrap_or(crate::dds::helpers::TIMEOUT_FALLBACK.to_std()),
+        }
+      }
+      Err(other_err) => {
+        //TODO: Undo(?) sequence number
+        // write warn! log
+        //TODO: Wrong error kind
+        WriteWithOptions::Fail(Error::OutOfResources)
+      },
+    }
+  }
+
+  // pub async fn async_wait_for_acknowledgments(&self, max_wait: Duration) -> WaitForAcknowledgments<D,SA> {
+  //   todo!()
+  // }
+} // impl
+
 
 #[cfg(test)]
 mod tests {
