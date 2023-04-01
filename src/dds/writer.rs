@@ -78,6 +78,36 @@ impl WriterIngredients {
     self.guid.entity_id.as_alt_token()
   }
 }
+
+struct AckWaiter {
+  wait_until: SequenceNumber,
+  complete_channel: SyncSender<()>,
+  readers_pending: BTreeSet<GUID>,
+}
+
+impl AckWaiter {
+  pub fn notify_wait_complete(&self) {
+    // it is normal for the send to fail, because receiver may have timed out
+    let _ = self.complete_channel.try_send(());
+            
+  }
+  pub fn reader_acked_or_lost(&mut self, guid:GUID, acked_before: Option<SequenceNumber>)
+    -> bool // true = waiting complete
+  {
+    match acked_before {
+      None => { self.readers_pending.remove(&guid); }
+      Some(acked_before) if self.wait_until < acked_before => 
+        { self.readers_pending.remove(&guid); }
+      Some(_) => (), 
+    }
+
+    // if the set of waiters is empty, then wait is complete
+    self.readers_pending.is_empty()
+  }
+}
+
+
+
 pub(crate) struct Writer {
   pub endianness: Endianness,
   pub heartbeat_message_counter: i32,
@@ -196,11 +226,6 @@ pub enum WriterCommand {
   //ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }
 
-struct AckWaiter {
-  wait_until: SequenceNumber,
-  complete_channel: SyncSender<()>,
-  readers_pending: BTreeSet<GUID>,
-}
 
 impl Writer {
   pub fn new(
@@ -782,26 +807,12 @@ impl Writer {
   }
 
   fn update_ack_waiters(&mut self, guid: GUID, acked_before: Option<SequenceNumber>) {
-    let mut completed = false;
-    match &mut self.ack_waiter {
-      Some(aw) => match acked_before {
-        None => {
-          aw.readers_pending.remove(&guid);
-        }
-        Some(acked_before) => {
-          if aw.wait_until < acked_before {
-            aw.readers_pending.remove(&guid);
-          }
-          if aw.readers_pending.is_empty() {
-            // it is normal for the send to fail, because receiver may have timed out
-            let _ = aw.complete_channel.try_send(());
-            completed = true;
-          }
-        }
-      },
-      None => (),
-    }
+    let completed = 
+      self.ack_waiter.as_mut().map_or( 
+        false, 
+        |aw| aw.reader_acked_or_lost(guid, acked_before));
     if completed {
+      self.ack_waiter.as_ref().map( AckWaiter::notify_wait_complete );
       self.ack_waiter = None;
     }
   }
