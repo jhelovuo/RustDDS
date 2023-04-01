@@ -1001,6 +1001,15 @@ where
 // async writing implementation
 //
 
+pub struct AsyncWrite<'a,D,SA>
+where
+  D : Keyed + Serialize, 
+  <D as key::Keyed>::K: Key + Serialize,
+  SA: SerializerAdapter<D>,
+{
+  write_with_options: WriteWithOptions<'a,D,SA>,
+}
+
 pub enum WriteWithOptions<'a, D,SA>
 where
   D : Keyed + Serialize, 
@@ -1016,6 +1025,23 @@ where
     timeout_instant: Instant,
   },
   Done(SampleIdentity),
+}
+
+impl<'a,D,SA> Future for AsyncWrite<'a,D,SA> 
+where
+  D : Keyed + Serialize, 
+  <D as key::Keyed>::K: Key + Serialize,
+  SA: SerializerAdapter<D>,
+{
+  type Output = Result<()>;
+
+  fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    match Pin::new(&mut self.write_with_options).poll( cx ) {
+      Poll::Ready(Ok(_sample_identity)) => Poll::Ready(Ok(())),
+      Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+      Poll::Pending => Poll::Pending,
+    }
+  }
 }
 
 impl<'a,D,SA> Future for WriteWithOptions<'a,D,SA> 
@@ -1088,10 +1114,11 @@ where
   SA: SerializerAdapter<D>,
 {
 
-  // pub async fn async_write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
-  //   self.async_write_with_options(data, WriteOptions::from(source_timestamp))?;
-  //   Ok(())
-  // }
+  pub async fn async_write(&self, data: D, source_timestamp: Option<Timestamp>) -> AsyncWrite<D,SA> {
+    AsyncWrite{ write_with_options:
+      self.async_write_with_options(data, WriteOptions::from(source_timestamp)),
+    }
+  }
 
   pub fn async_write_with_options(&self, data: D, write_options: WriteOptions) 
     -> WriteWithOptions<D,SA> {
