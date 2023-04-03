@@ -1,8 +1,8 @@
 use std::{
-  collections::{BTreeMap, },
+  collections::BTreeMap,
   fmt, iter,
   rc::Rc,
-  sync::{Arc, RwLock, Mutex, },
+  sync::{Arc, Mutex, RwLock},
   time::Duration as StdDuration,
 };
 
@@ -28,6 +28,7 @@ use crate::{
     submessages::{submessage_elements::parameter_list::ParameterList, submessages::*},
     vendor_id::VendorId,
   },
+  mio_source,
   network::udp_sender::UDPSender,
   serialization::message::Message,
   structure::{
@@ -39,11 +40,10 @@ use crate::{
     sequence_number::{FragmentNumberSet, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
-  mio_source,
 };
 use super::{
-  qos::InlineQos, 
-  with_key::simpledatareader::{ReaderCommand, DataReaderWaker,}
+  qos::InlineQos,
+  with_key::simpledatareader::{DataReaderWaker, ReaderCommand},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -425,8 +425,6 @@ impl Reader {
     );
     self.update_writer_proxy(proxy, qos);
   }
-
-
 
   fn matched_writer(&self, remote_writer_guid: GUID) -> Option<&RtpsWriterProxy> {
     self.matched_writers.get(&remote_writer_guid)
@@ -904,13 +902,11 @@ impl Reader {
       // composed of two groups:
       //   1. All sequence numbers in the range gapStart <= sequence_number <
       // gapList.base
-      writer_proxy
-        .irrelevant_changes_range(gap.gap_start, gap.gap_list.base());
+      writer_proxy.irrelevant_changes_range(gap.gap_start, gap.gap_list.base());
 
       //   2. All the sequence numbers that appear explicitly listed in the gapList.
       for seq_num in gap.gap_list.iter() {
-        writer_proxy
-          .set_irrelevant_change(seq_num);
+        writer_proxy.set_irrelevant_change(seq_num);
       }
       all_ackable_before = writer_proxy.all_ackable_before();
     }
@@ -921,7 +917,6 @@ impl Reader {
     };
 
     (*cache).mark_reliably_received_before(&self.topic_name, writer_guid, all_ackable_before);
-
 
     /*
     // Remove from DDSHistoryCache
@@ -986,17 +981,19 @@ impl Reader {
       Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
     };
     cache.add_change(&self.topic_name, &receive_timestamp, cache_change);
-    self.matched_writer(writer_guid)
-      .map(|wp| cache.mark_reliably_received_before(&self.topic_name, writer_guid, wp.all_ackable_before() ));
-    
+    self.matched_writer(writer_guid).map(|wp| {
+      cache.mark_reliably_received_before(&self.topic_name, writer_guid, wp.all_ackable_before())
+    });
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for
   // this reader) likely use of mio channel
   pub fn notify_cache_change(&mut self) {
-    
     // async notify mechanism
-    self.data_reader_waker.lock().unwrap() // TODO: unwrap
+    self
+      .data_reader_waker
+      .lock()
+      .unwrap() // TODO: unwrap
       .wake();
 
     // mio-0.8 notify
@@ -1005,9 +1002,8 @@ impl Reader {
     // mio-0.6 notify
     match self.notification_sender.try_send(()) {
       Ok(()) => (),
-      Err(mio_channel::TrySendError::Full(_)) => (), 
-        // This is harmless. There is a notification in already.
-
+      Err(mio_channel::TrySendError::Full(_)) => (),
+      // This is harmless. There is a notification in already.
       Err(mio_channel::TrySendError::Disconnected(_)) => {
         // If we get here, our DataReader has died. The Reader should now
         // dispose itself. TODO: Implement Reader disposal.

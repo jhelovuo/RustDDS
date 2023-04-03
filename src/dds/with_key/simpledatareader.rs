@@ -1,52 +1,48 @@
 use std::{
   cmp::max,
+  collections::BTreeMap,
   io,
   marker::PhantomData,
-  sync::{Arc, RwLock, Mutex,},
-  collections::{BTreeMap},
+  pin::Pin,
+  sync::{Arc, Mutex, RwLock},
+  task::{Context, Poll, Waker},
 };
 
-use futures::stream::{Stream, FusedStream,};
-use std::pin::Pin;
-use std::task::{Poll, Context, Waker,};
-
+use futures::stream::{FusedStream, Stream};
 use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
-use log::{debug, error, info, warn, trace};
-
-use mio_06::Evented;
-use mio_06;
-
+use log::{debug, error, info, trace, warn};
+use mio_06::{self, Evented};
 use mio_08;
 
 use crate::{
   dds::{
+    ddsdata::*,
     pubsub::Subscriber,
     qos::*,
     statusevents::*,
-    topic::{Topic, TopicDescription,},
-    traits::{key::*, serde_adapters::with_key::*, },
+    topic::{Topic, TopicDescription},
+    traits::{key::*, serde_adapters::with_key::*},
     values::result::*,
-    ddsdata::*,
   },
-  discovery::{ discovery::DiscoveryCommand},
+  discovery::discovery::DiscoveryCommand,
   log_and_err_precondition_not_met,
+  mio_source::PollEventSource,
   serialization::CDRDeserializerAdapter,
   structure::{
-    dds_cache::DDSCache,
     cache_change::{CacheChange, DeserializedCacheChange},
+    dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
-    time::Timestamp,
     sequence_number::SequenceNumber,
+    time::Timestamp,
   },
-  mio_source::PollEventSource,
 };
 
 // TODO: This is redundant, as is is the same as
 // Option<Waker>. Replace.
-#[derive(Clone, Debug,)]
+#[derive(Clone, Debug)]
 pub enum DataReaderWaker {
   FutureWaker(Waker),
   NoWaker,
@@ -65,7 +61,7 @@ impl DataReaderWaker {
   }
 }
 
-#[derive(Clone, Debug,)]
+#[derive(Clone, Debug)]
 pub(crate) enum ReaderCommand {
   #[allow(dead_code)] // TODO: Implement this (resetting) feature
   ResetRequestedDeadlineStatus,
@@ -73,36 +69,50 @@ pub(crate) enum ReaderCommand {
 
 // This is helper struct.
 // All mutable state needed for reading should go here.
-struct ReadState<K:Key> {
-  latest_instant: Timestamp, // This is used as a read pointer from dds_cache for BEST_EFFORT reading
-  last_read_sn : BTreeMap<GUID,SequenceNumber>, // collection of read pointers for RELIABLE reading
-  /// hash_to_key_map is used for decoding received key hashes back to original key values.
-  /// This is needed when we receive a dispose message via hash only.
+struct ReadState<K: Key> {
+  latest_instant: Timestamp, /* This is used as a read pointer from dds_cache for BEST_EFFORT
+                              * reading */
+  last_read_sn: BTreeMap<GUID, SequenceNumber>, // collection of read pointers for RELIABLE reading
+  /// hash_to_key_map is used for decoding received key hashes back to original
+  /// key values. This is needed when we receive a dispose message via hash
+  /// only.
   hash_to_key_map: BTreeMap<KeyHash, K>, // TODO: garbage collect this somehow
 }
 
-impl<K:Key> ReadState<K> {
+impl<K: Key> ReadState<K> {
   fn new() -> Self {
     ReadState {
       latest_instant: Timestamp::ZERO,
       last_read_sn: BTreeMap::new(),
-      hash_to_key_map: BTreeMap::<KeyHash,K>::new(),
+      hash_to_key_map: BTreeMap::<KeyHash, K>::new(),
     }
   }
 
   // This is a helper function so that borrow checker understands
   // that we are splitting one mutable borrow into two _disjoint_ mutable
   // borrows.
-  fn get_sn_map_and_hash_map<'a>(&'a mut self) -> (&'a mut BTreeMap<GUID,SequenceNumber>, &'a mut BTreeMap<KeyHash, K>) {
-    let ReadState{ last_read_sn, hash_to_key_map, .. } = self;
+  fn get_sn_map_and_hash_map<'a>(
+    &'a mut self,
+  ) -> (
+    &'a mut BTreeMap<GUID, SequenceNumber>,
+    &'a mut BTreeMap<KeyHash, K>,
+  ) {
+    let ReadState {
+      last_read_sn,
+      hash_to_key_map,
+      ..
+    } = self;
     (last_read_sn, hash_to_key_map)
   }
-
 }
 
-/// SimpleDataReaders can only do "take" semantics and does not have 
+/// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
-pub struct SimpleDataReader<D: Keyed + DeserializeOwned,DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,> where <D as Keyed>::K: Key
+pub struct SimpleDataReader<
+  D: Keyed + DeserializeOwned,
+  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
+> where
+  <D as Keyed>::K: Key,
 {
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // any subscriber-wide QoS policies, such as ordered or coherent access.
@@ -130,7 +140,6 @@ pub struct SimpleDataReader<D: Keyed + DeserializeOwned,DA: DeserializerAdapter<
 
   event_source: PollEventSource,
 }
-
 
 impl<D, DA> Drop for SimpleDataReader<D, DA>
 where
@@ -216,44 +225,42 @@ where
     self.event_source.drain();
   }
 
-  // get an iterator into DDS Cache, so this is in constant space, not a large data structure
-  fn try_take_undecoded<'a>(is_reliable: bool, dds_cache: &'a DDSCache, 
-      topic_name:&str, latest_instant: Timestamp, 
-      last_read_sn: &'a BTreeMap<GUID,SequenceNumber>) 
-    -> Box<dyn Iterator<Item = (Timestamp, &'a CacheChange)> + 'a>
-  {
+  // get an iterator into DDS Cache, so this is in constant space, not a large
+  // data structure
+  fn try_take_undecoded<'a>(
+    is_reliable: bool,
+    dds_cache: &'a DDSCache,
+    topic_name: &str,
+    latest_instant: Timestamp,
+    last_read_sn: &'a BTreeMap<GUID, SequenceNumber>,
+  ) -> Box<dyn Iterator<Item = (Timestamp, &'a CacheChange)> + 'a> {
     if is_reliable {
-      dds_cache.get_changes_in_range_reliable(
-        topic_name,
-        last_read_sn,
-      )
+      dds_cache.get_changes_in_range_reliable(topic_name, last_read_sn)
     } else {
-      dds_cache.get_changes_in_range_best_effort(
-        topic_name,
-        latest_instant,
-        Timestamp::now(),
-      )
+      dds_cache.get_changes_in_range_best_effort(topic_name, latest_instant, Timestamp::now())
     }
   }
 
-
   fn update_hash_to_key_map(
-      hash_to_key_map: &mut BTreeMap<KeyHash, D::K>, 
-      deserialized: &std::result::Result<D, D::K>) 
-  {
+    hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
+    deserialized: &std::result::Result<D, D::K>,
+  ) {
     let instance_key = match deserialized {
       Ok(d) => d.key(),
       Err(k) => k.clone(),
     };
-    hash_to_key_map
-      .insert(instance_key.hash_key(), instance_key.clone());
+    hash_to_key_map.insert(instance_key.hash_key(), instance_key.clone());
   }
 
-  fn deserialize(timestamp: Timestamp, cc: &CacheChange, hash_to_key_map: &mut BTreeMap<KeyHash, D::K>) -> 
-    std::result::Result<DeserializedCacheChange<D>,String>
-  {
+  fn deserialize(
+    timestamp: Timestamp,
+    cc: &CacheChange,
+    hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
+  ) -> std::result::Result<DeserializedCacheChange<D>, String> {
     match cc.data_value {
-      DDSData::Data { ref serialized_payload } => {
+      DDSData::Data {
+        ref serialized_payload,
+      } => {
         // what is our data serialization format (representation identifier) ?
         if let Some(recognized_rep_id) = DA::supported_encodings()
           .iter()
@@ -263,14 +270,16 @@ where
             // Data update, decoded ok
             Ok(payload) => {
               let p = Ok(payload);
-              Self::update_hash_to_key_map(hash_to_key_map,  &p);
-              Ok(DeserializedCacheChange::new(timestamp,&cc,p))
+              Self::update_hash_to_key_map(hash_to_key_map, &p);
+              Ok(DeserializedCacheChange::new(timestamp, &cc, p))
             }
             Err(e) => Err(format!("Failed to deserialize sample bytes: {e}, ")),
           }
         } else {
-          Err( format!("Unknown representation id {:?}.", 
-                serialized_payload.representation_identifier))
+          Err(format!(
+            "Unknown representation id {:?}.",
+            serialized_payload.representation_identifier
+          ))
         }
       }
 
@@ -284,10 +293,10 @@ where
         ) {
           Ok(key) => {
             let k = Err(key);
-            Self::update_hash_to_key_map(hash_to_key_map,  &k);
-            Ok(DeserializedCacheChange::new(timestamp,&cc,k))
+            Self::update_hash_to_key_map(hash_to_key_map, &k);
+            Ok(DeserializedCacheChange::new(timestamp, &cc, k))
           }
-          Err(e) => Err( format!("Failed to deserialize key {}", e)),
+          Err(e) => Err(format!("Failed to deserialize key {}", e)),
         }
       }
 
@@ -295,12 +304,19 @@ where
         // The cache should know hash -> key mapping even if the sample
         // has been disposed or .take()n
         if let Some(key) = hash_to_key_map.get(&key_hash) {
-          Ok(DeserializedCacheChange::new(timestamp, &cc,Err(key.clone())))
+          Ok(DeserializedCacheChange::new(
+            timestamp,
+            &cc,
+            Err(key.clone()),
+          ))
         } else {
-          Err( format!("Tried to dispose with unknown key hash: {:x?}", key_hash) )
+          Err(format!(
+            "Tried to dispose with unknown key hash: {:x?}",
+            key_hash
+          ))
         }
-      } 
-    } // match    
+      }
+    } // match
   }
 
   pub fn try_take_one(&self) -> Result<Option<DeserializedCacheChange<D>>> {
@@ -319,24 +335,33 @@ where
     let mut read_state_ref = self.read_state.lock().unwrap();
     let latest_instant = read_state_ref.latest_instant;
     let (last_read_sn, hash_to_key_map) = read_state_ref.get_sn_map_and_hash_map();
-    let (timestamp, cc) = 
-      match Self::try_take_undecoded(
-        is_reliable, &dds_cache, &self.my_topic.name(),latest_instant, last_read_sn )
-              .next() {
-        None => return Ok(None),
-        Some((ts,cc)) => (ts,cc),
-      };
+    let (timestamp, cc) = match Self::try_take_undecoded(
+      is_reliable,
+      &dds_cache,
+      &self.my_topic.name(),
+      latest_instant,
+      last_read_sn,
+    )
+    .next()
+    {
+      None => return Ok(None),
+      Some((ts, cc)) => (ts, cc),
+    };
 
-    match Self::deserialize(timestamp, cc, hash_to_key_map ) {
+    match Self::deserialize(timestamp, cc, hash_to_key_map) {
       Ok(dcc) => {
-        read_state_ref.latest_instant = max(read_state_ref.latest_instant , timestamp);
-        read_state_ref.last_read_sn.insert(dcc.writer_guid, dcc.sequence_number);
+        read_state_ref.latest_instant = max(read_state_ref.latest_instant, timestamp);
+        read_state_ref
+          .last_read_sn
+          .insert(dcc.writer_guid, dcc.sequence_number);
         Ok(Some(dcc))
-      } 
-      Err(string) => {        
-        Error::serialization_error(
-          format!("{} Topic = {}, Type = {:?}",string,self.my_topic.name(), self.my_topic.get_type()))
       }
+      Err(string) => Error::serialization_error(format!(
+        "{} Topic = {}, Type = {:?}",
+        string,
+        self.my_topic.name(),
+        self.my_topic.get_type()
+      )),
     }
   }
 
@@ -348,11 +373,12 @@ where
     self.my_guid
   }
 
-  pub fn as_simple_data_reader_event_stream(&self) -> SimpleDataReaderEventStream<D,DA> {
-    SimpleDataReaderEventStream{ simple_datareader: self }
+  pub fn as_simple_data_reader_event_stream(&self) -> SimpleDataReaderEventStream<D, DA> {
+    SimpleDataReaderEventStream {
+      simple_datareader: self,
+    }
   }
 }
-
 
 // This is  not part of DDS spec. We implement mio Eventd so that the
 // application can asynchronously poll DataReader(s).
@@ -364,7 +390,13 @@ where
 {
   // We just delegate all the operations to notification_receiver, since it
   // already implements Evented
-  fn register(&self, poll: &mio_06::Poll, token: mio_06::Token, interest: mio_06::Ready, opts: mio_06::PollOpt) -> io::Result<()> {
+  fn register(
+    &self,
+    poll: &mio_06::Poll,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
+  ) -> io::Result<()> {
     self
       .notification_receiver
       .register(poll, token, interest, opts)
@@ -387,30 +419,34 @@ where
   }
 }
 
-
 impl<D, DA> mio_08::event::Source for SimpleDataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  fn register(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
-  {
-    self.event_source.register(registry,token, interests)
+  fn register(
+    &mut self,
+    registry: &mio_08::Registry,
+    token: mio_08::Token,
+    interests: mio_08::Interest,
+  ) -> io::Result<()> {
+    self.event_source.register(registry, token, interests)
   }
 
-  fn reregister(&mut self, registry: &mio_08::Registry, token: mio_08::Token, interests: mio_08::Interest) -> io::Result<()>
-  {
+  fn reregister(
+    &mut self,
+    registry: &mio_08::Registry,
+    token: mio_08::Token,
+    interests: mio_08::Interest,
+  ) -> io::Result<()> {
     self.event_source.reregister(registry, token, interests)
   }
 
-  fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()>
-  {
+  fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()> {
     self.event_source.deregister(registry)
   }
-
 }
-
 
 impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
 where
@@ -429,7 +465,6 @@ where
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
     self.status_receiver.try_recv_status()
   }
-
 }
 
 impl<D, DA> RTPSEntity for SimpleDataReader<D, DA>
@@ -448,26 +483,29 @@ where
 
 // Async interface to the SimpleDataReader
 
-
-pub struct SimpleDataReaderStream<'a,
+pub struct SimpleDataReaderStream<
+  'a,
   D: Keyed + DeserializeOwned + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where <D as Keyed>::K: Key {
-  simple_datareader: &'a SimpleDataReader<D,DA>,
+> where
+  <D as Keyed>::K: Key,
+{
+  simple_datareader: &'a SimpleDataReader<D, DA>,
 }
 
 // ----------------------------------------------
 // ----------------------------------------------
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
-impl <'a, D,DA> Unpin for SimpleDataReaderStream<'a, D,DA> 
+impl<'a, D, DA> Unpin for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
-{}
+{
+}
 
-impl<'a, D,DA> Stream for SimpleDataReaderStream<'a, D,DA> 
+impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
@@ -478,40 +516,43 @@ where
   // The full return type is now
   // Poll<Option<Result<DeserializedCacheChange<D>>>
   // Poll -> Ready or Pending
-  // Option -> Some = stream produces a value, None = stream has ended (does not occur)
-  // Result -> Ok = No DDS error, Err = DDS processing error
+  // Option -> Some = stream produces a value, None = stream has ended (does not
+  // occur) Result -> Ok = No DDS error, Err = DDS processing error
   // (inner Option -> Some = there is new value/key, None = no new data yet)
-
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
     match self.simple_datareader.try_take_one() {
-      Err(e) => // DDS fails
-        Poll::Ready(Some(Err(e))),  
+      Err(e) =>
+      // DDS fails
+      {
+        Poll::Ready(Some(Err(e)))
+      }
 
       // ok, got something
       Ok(Some(d)) => Poll::Ready(Some(Ok(d))),
 
       // No new data (yet)
-      Ok(None) => { 
-        // Did not get any data. 
+      Ok(None) => {
+        // Did not get any data.
         // --> Store waker.
         // 1. synchronously store waker to background thread (must rendezvous)
         // 2. try take_bare again, in case something arrived just now
         // 3. if nothing still, return pending.
-        self.simple_datareader
-          .set_waker(DataReaderWaker::FutureWaker(cx.waker().clone()) );
+        self
+          .simple_datareader
+          .set_waker(DataReaderWaker::FutureWaker(cx.waker().clone()));
         match self.simple_datareader.try_take_one() {
-          Err(e) => Poll::Ready(Some(Err(e))),  
+          Err(e) => Poll::Ready(Some(Err(e))),
           Ok(Some(d)) => Poll::Ready(Some(Ok(d))),
           Ok(None) => Poll::Pending,
         }
       }
     } // match
-  } // fn 
+  } // fn
 } // impl
 
-impl<'a, D,DA> FusedStream for SimpleDataReaderStream<'a, D,DA> 
+impl<'a, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
@@ -525,24 +566,25 @@ where
 // ----------------------------------------------
 // ----------------------------------------------
 
-pub struct SimpleDataReaderEventStream<'a,
+pub struct SimpleDataReaderEventStream<
+  'a,
   D: Keyed + DeserializeOwned + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where <D as Keyed>::K: Key { 
-    simple_datareader: &'a SimpleDataReader<D,DA>,
-  }
+> where
+  <D as Keyed>::K: Key,
+{
+  simple_datareader: &'a SimpleDataReader<D, DA>,
+}
 
-
-impl<'a, D,DA> Stream for SimpleDataReaderEventStream<'a, D,DA> 
+impl<'a, D, DA> Stream for SimpleDataReaderEventStream<'a, D, DA>
 where
   D: Keyed + DeserializeOwned + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = std::result::Result<DataReaderStatus,std::sync::mpsc::RecvError>;
+  type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     Pin::new(&mut self.simple_datareader.status_receiver.as_async_stream()).poll_next(cx)
-    
-  } // fn 
+  } // fn
 } // impl

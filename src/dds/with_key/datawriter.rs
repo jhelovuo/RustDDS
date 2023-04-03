@@ -1,21 +1,17 @@
 use std::{
   marker::PhantomData,
+  pin::Pin,
   sync::{
     atomic::{AtomicI64, Ordering},
-    Arc, RwLock, Mutex,
+    Arc, Mutex, RwLock,
   },
+  task::{Context, Poll, Waker},
   time::{Duration, Instant},
 };
 
 use futures::Future;
-use std::pin::Pin;
-use std::task::{Poll, Context, Waker,};
-
-
-use mio_06;
-use mio_06::{Evented, Events, PollOpt, Ready, Token};
+use mio_06::{self, Evented, Events, PollOpt, Ready, Token};
 use mio_extras::channel::{self as mio_channel, SendError, TrySendError};
-
 use serde::Serialize;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -32,8 +28,8 @@ use crate::{
     statusevents::*,
     topic::Topic,
     traits::{
-      dds_entity::DDSEntity, key::*, serde_adapters::with_key::SerializerAdapter, TopicDescription,
-      key,
+      dds_entity::DDSEntity, key, key::*, serde_adapters::with_key::SerializerAdapter,
+      TopicDescription,
     },
     values::result::{Error, Result},
   },
@@ -42,9 +38,8 @@ use crate::{
   messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
   serialization::CDRSerializerAdapter,
   structure::{
-    cache_change::ChangeKind, dds_cache::DDSCache, entity::RTPSEntity, guid::GUID,
+    cache_change::ChangeKind, dds_cache::DDSCache, duration, entity::RTPSEntity, guid::GUID,
     rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp,
-    duration,
   },
 };
 use super::super::writer::WriterCommand;
@@ -461,7 +456,6 @@ where
       }
     } // match
   }
-
 
   /*
   /// Gets mio Receiver for all status changes
@@ -995,30 +989,28 @@ where
 {
 }
 
-
-//-------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------
 // async writing implementation
 //
 
-pub struct AsyncWrite<'a,D,SA>
+pub struct AsyncWrite<'a, D, SA>
 where
-  D : Keyed + Serialize, 
+  D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
   SA: SerializerAdapter<D>,
 {
-  write_with_options: WriteWithOptions<'a,D,SA>,
+  write_with_options: WriteWithOptions<'a, D, SA>,
 }
 
-pub enum WriteWithOptions<'a, D,SA>
+pub enum WriteWithOptions<'a, D, SA>
 where
-  D : Keyed + Serialize, 
+  D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
   SA: SerializerAdapter<D>,
 {
   Fail(crate::dds::values::result::Error),
   InProgress {
-    writer: &'a DataWriter<D,SA>,
+    writer: &'a DataWriter<D, SA>,
     writer_command: WriterCommand,
     sequence_number: SequenceNumber,
     timeout: Option<duration::Duration>,
@@ -1027,16 +1019,16 @@ where
   Done(SampleIdentity),
 }
 
-impl<'a,D,SA> Future for AsyncWrite<'a,D,SA> 
+impl<'a, D, SA> Future for AsyncWrite<'a, D, SA>
 where
-  D : Keyed + Serialize, 
+  D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
   SA: SerializerAdapter<D>,
 {
   type Output = Result<()>;
 
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-    match Pin::new(&mut self.write_with_options).poll( cx ) {
+    match Pin::new(&mut self.write_with_options).poll(cx) {
       Poll::Ready(Ok(_sample_identity)) => Poll::Ready(Ok(())),
       Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
       Poll::Pending => Poll::Pending,
@@ -1044,9 +1036,9 @@ where
   }
 }
 
-impl<'a,D,SA> Future for WriteWithOptions<'a,D,SA> 
+impl<'a, D, SA> Future for WriteWithOptions<'a, D, SA>
 where
-  D : Keyed + Serialize, 
+  D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
   SA: SerializerAdapter<D>,
 {
@@ -1058,11 +1050,18 @@ where
 
       WriteWithOptions::Fail(ref mut e) => {
         let mut dummy = Error::Unsupported;
-        core::mem::swap( e , &mut dummy);
+        core::mem::swap(e, &mut dummy);
         Poll::Ready(Err(dummy))
       }
 
-      WriteWithOptions::InProgress{ writer, ref writer_command, sequence_number, timeout, timeout_instant , .. } => {
+      WriteWithOptions::InProgress {
+        writer,
+        ref writer_command,
+        sequence_number,
+        timeout,
+        timeout_instant,
+        ..
+      } => {
         match writer.cc_upload.try_send(writer_command.clone()) {
           //TODO: can we remove .clone() above?
           Ok(()) => {
@@ -1073,10 +1072,9 @@ where
             }))
           }
           Err(TrySendError::Full(_tt)) => {
-            *writer.cc_upload_waker.lock().unwrap() =
-              Some(cx.waker().clone());
+            *writer.cc_upload_waker.lock().unwrap() = Some(cx.waker().clone());
             if Instant::now() < timeout_instant {
-              Poll::Pending 
+              Poll::Pending
             } else {
               // TODO: Error should also return unsent sample (_tt) to
               // the application, as this is the Rust way.
@@ -1084,14 +1082,17 @@ where
             }
           }
           Err(other_err) => {
-            warn!("Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
-              writer.my_topic.name(), other_err, timeout);
+            warn!(
+              "Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
+              writer.my_topic.name(),
+              other_err,
+              timeout
+            );
             // TODO: Is this (undo) the right thing to do, if there are
             // several futures in progress? (Can this result in confused numbering?)
             writer.undo_sequence_number();
             Poll::Ready(Err(Error::OutOfResources))
           }
-
         }
       }
     }
@@ -1100,7 +1101,7 @@ where
 
 // pub struct WaitForAcknowledgments<'a,D,SA>
 // where
-//   D : Keyed + Serialize, 
+//   D : Keyed + Serialize,
 //   <D as key::Keyed>::K: Serialize,
 //   SA: SerializerAdapter<D>,
 // {
@@ -1113,15 +1114,21 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
-
-  pub async fn async_write(&self, data: D, source_timestamp: Option<Timestamp>) -> AsyncWrite<D,SA> {
-    AsyncWrite{ write_with_options:
-      self.async_write_with_options(data, WriteOptions::from(source_timestamp)),
+  pub async fn async_write(
+    &self,
+    data: D,
+    source_timestamp: Option<Timestamp>,
+  ) -> AsyncWrite<D, SA> {
+    AsyncWrite {
+      write_with_options: self.async_write_with_options(data, WriteOptions::from(source_timestamp)),
     }
   }
 
-  pub fn async_write_with_options(&self, data: D, write_options: WriteOptions) 
-    -> WriteWithOptions<D,SA> {
+  pub fn async_write_with_options(
+    &self,
+    data: D,
+    write_options: WriteOptions,
+  ) -> WriteWithOptions<D, SA> {
     let send_buffer = match SA::to_bytes(&data) {
       Ok(s) => s,
       Err(e) => return WriteWithOptions::Fail(e.into()),
@@ -1152,12 +1159,12 @@ where
         // We do not set waker yet, because (1) we do not have it
         // and (2) the call is not expected to complete until
         // the future is polled anyway.
-        WriteWithOptions::InProgress { 
-          writer: self, writer_command,
+        WriteWithOptions::InProgress {
+          writer: self,
+          writer_command,
           sequence_number,
           timeout,
-          timeout_instant: 
-            std::time::Instant::now() 
+          timeout_instant: std::time::Instant::now()
             + timeout
               .map(|t| t.to_std())
               .unwrap_or(crate::dds::helpers::TIMEOUT_FALLBACK.to_std()),
@@ -1168,15 +1175,14 @@ where
         // write warn! log
         //TODO: Wrong error kind
         WriteWithOptions::Fail(Error::OutOfResources)
-      },
+      }
     }
   }
 
-  // pub async fn async_wait_for_acknowledgments(&self, max_wait: Duration) -> WaitForAcknowledgments<D,SA> {
-  //   todo!()
+  // pub async fn async_wait_for_acknowledgments(&self, max_wait: Duration) ->
+  // WaitForAcknowledgments<D,SA> {   todo!()
   // }
 } // impl
-
 
 #[cfg(test)]
 mod tests {

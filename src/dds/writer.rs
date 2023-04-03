@@ -4,9 +4,8 @@ use std::{
   iter::FromIterator,
   ops::Bound::Included,
   rc::Rc,
-  sync::{Arc, RwLock, Mutex, },
+  sync::{Arc, Mutex, RwLock},
 };
-
 use core::task::Waker;
 
 #[allow(unused_imports)]
@@ -89,24 +88,23 @@ impl AckWaiter {
   pub fn notify_wait_complete(&self) {
     // it is normal for the send to fail, because receiver may have timed out
     let _ = self.complete_channel.try_send(());
-            
   }
-  pub fn reader_acked_or_lost(&mut self, guid:GUID, acked_before: Option<SequenceNumber>)
-    -> bool // true = waiting complete
+  pub fn reader_acked_or_lost(&mut self, guid: GUID, acked_before: Option<SequenceNumber>) -> bool // true = waiting complete
   {
     match acked_before {
-      None => { self.readers_pending.remove(&guid); }
-      Some(acked_before) if self.wait_until < acked_before => 
-        { self.readers_pending.remove(&guid); }
-      Some(_) => (), 
+      None => {
+        self.readers_pending.remove(&guid);
+      }
+      Some(acked_before) if self.wait_until < acked_before => {
+        self.readers_pending.remove(&guid);
+      }
+      Some(_) => (),
     }
 
     // if the set of waiters is empty, then wait is complete
     self.readers_pending.is_empty()
   }
 }
-
-
 
 pub(crate) struct Writer {
   pub endianness: Endianness,
@@ -214,7 +212,7 @@ pub(crate) struct Writer {
 }
 #[derive(Clone)]
 pub enum WriterCommand {
-//TODO: try to make this more private, like pub(crate)
+  //TODO: try to make this more private, like pub(crate)
   DDSData {
     ddsdata: DDSData,
     write_options: WriteOptions,
@@ -225,7 +223,6 @@ pub enum WriterCommand {
   },
   //ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }
-
 
 impl Writer {
   pub fn new(
@@ -437,8 +434,12 @@ impl Writer {
           sequence_number,
         } => {
           // Signal that there is now space in the queue
-          { self.writer_command_receiver_waker
-              .lock().unwrap().as_ref()
+          {
+            self
+              .writer_command_receiver_waker
+              .lock()
+              .unwrap()
+              .as_ref()
               .map(|w| w.wake_by_ref());
           }
 
@@ -807,12 +808,15 @@ impl Writer {
   }
 
   fn update_ack_waiters(&mut self, guid: GUID, acked_before: Option<SequenceNumber>) {
-    let completed = 
-      self.ack_waiter.as_mut().map_or( 
-        false, 
-        |aw| aw.reader_acked_or_lost(guid, acked_before));
+    let completed = self
+      .ack_waiter
+      .as_mut()
+      .map_or(false, |aw| aw.reader_acked_or_lost(guid, acked_before));
     if completed {
-      self.ack_waiter.as_ref().map( AckWaiter::notify_wait_complete );
+      self
+        .ack_waiter
+        .as_ref()
+        .map(AckWaiter::notify_wait_complete);
       self.ack_waiter = None;
     }
   }
