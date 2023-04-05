@@ -836,9 +836,10 @@ mod tests {
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let _reader = Reader::new(
       reader_ing,
-      Arc::new(RwLock::new(DDSCache::new())),
+      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -864,7 +865,7 @@ mod tests {
 
     let _reader = Reader::new(
       reader_ing,
-      Arc::new(RwLock::new(DDSCache::new())),
+      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );

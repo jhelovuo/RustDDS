@@ -312,11 +312,11 @@ impl Reader {
   // TODO Used for test/debugging purposes
   #[cfg(test)]
   pub fn history_cache_change_data(&self, sequence_number: SequenceNumber) -> Option<DDSData> {
-    let dds_cache = self.dds_cache.read().unwrap();
+    let topic_cache = self.acquire_the_topic_cache_guard();
     let cc = self
       .seqnum_instant_map
       .get(&sequence_number)
-      .and_then(|i| dds_cache.topic_get_change(&self.topic_name, i));
+      .and_then(|i| topic_cache.get_change(i));
 
     debug!("history cache !!!! {:?}", cc);
 
@@ -327,11 +327,11 @@ impl Reader {
   #[cfg(test)]
   pub fn history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
     debug!("{:?}", sequence_number);
-    let dds_cache = self.dds_cache.read().unwrap();
+    let topic_cache = self.acquire_the_topic_cache_guard();
     let cc = self
       .seqnum_instant_map
       .get(&sequence_number)
-      .and_then(|i| dds_cache.topic_get_change(&self.topic_name, i));
+      .and_then(|i| topic_cache.get_change(i));
     debug!("history cache !!!! {:?}", cc);
     cc.cloned()
   }
@@ -1179,22 +1179,23 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let qos_policy = QosPolicies::qos_none();
     dds_cache
       .write()
       .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()), &qos_policy);
 
     let reader_ing = ReaderIngredients {
       guid,
       notification_sender: send,
       status_sender,
       topic_name: "test".to_string(),
-      qos_policy: QosPolicies::qos_none(),
+      qos_policy,
       data_reader_command_receiver: reader_command_receiver,
     };
     let mut reader = Reader::new(
       reader_ing,
-      dds_cache,
+      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1245,22 +1246,23 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let qos_policy = QosPolicies::qos_none();
     dds_cache
       .write()
       .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()), &qos_policy);
 
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
       status_sender,
       topic_name: "test".to_string(),
-      qos_policy: QosPolicies::qos_none(),
+      qos_policy,
       data_reader_command_receiver: reader_command_receiver,
     };
     let mut new_reader = Reader::new(
       reader_ing,
-      dds_cache.clone(),
+      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1296,15 +1298,19 @@ mod tests {
     // TODO: Investigate why this fails. Is the test case or implementation faulty?
     assert!(rec.try_recv().is_ok());
 
-    let hc_locked = dds_cache.read().unwrap();
+    let topic_cache = dds_cache
+      .read()
+      .unwrap()
+      .get_existing_topic_cache(&new_reader.topic_name);
 
     let ddsdata = DDSData::new(d.serialized_payload.unwrap());
     let cc_built_here = CacheChange::new(writer_guid, d_seqnum, WriteOptions::default(), ddsdata);
 
-    let cc_from_chache = hc_locked.topic_get_change(
-      &new_reader.topic_name,
-      new_reader.seqnum_instant_map.get(&d_seqnum).unwrap(),
-    );
+    let cc_from_chache = topic_cache
+      .lock()
+      .unwrap()
+      .get_change(new_reader.seqnum_instant_map.get(&d_seqnum).unwrap());
+    
     // TODO: Investigate why this fails. Is the test case or implementation
     // faulty?
     assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
@@ -1321,16 +1327,24 @@ mod tests {
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
 
-    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache
-      .write()
-      .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
+    let topic_name = "test";
     let reliable_qos = QosPolicyBuilder::new()
       .reliability(Reliability::Reliable {
         max_blocking_time: Duration::from_millis(100),
       })
       .build();
+
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    dds_cache
+      .write()
+      .unwrap()
+      .add_new_topic(topic_name.to_string(), TypeDesc::new(topic_name.to_string()), &reliable_qos);
+    
+    let topic_cache = dds_cache
+      .read()
+      .unwrap()
+      .get_existing_topic_cache(topic_name);
+    
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
@@ -1341,7 +1355,7 @@ mod tests {
     };
     let mut new_reader = Reader::new(
       reader_ing,
-      dds_cache,
+      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1397,10 +1411,9 @@ mod tests {
       WriteOptions::default(),
       d.clone(),
     );
-    new_reader.dds_cache.write().unwrap().add_change(
-      &new_reader.topic_name,
+    topic_cache.lock().unwrap().add_change(
       &Timestamp::now(),
-      change.clone(),
+      change.clone()
     );
     changes.push(change);
 
@@ -1430,10 +1443,9 @@ mod tests {
       WriteOptions::default(),
       d.clone(),
     );
-    new_reader.dds_cache.write().unwrap().add_change(
-      &new_reader.topic_name,
+    topic_cache.lock().unwrap().add_change(
       &Timestamp::now(),
-      change.clone(),
+      change.clone()
     );
     changes.push(change);
 
@@ -1443,10 +1455,9 @@ mod tests {
       WriteOptions::default(),
       d,
     );
-    new_reader.dds_cache.write().unwrap().add_change(
-      &new_reader.topic_name,
+    topic_cache.lock().unwrap().add_change(
       &Timestamp::now(),
-      change.clone(),
+      change.clone()
     );
     changes.push(change);
 
@@ -1477,22 +1488,23 @@ mod tests {
       mio_channel::sync_channel::<ReaderCommand>(10);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let qos_policy = QosPolicies::qos_none();
     dds_cache
       .write()
       .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()), &qos_policy);
 
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
       status_sender,
       topic_name: "test".to_string(),
-      qos_policy: QosPolicies::qos_none(),
+      qos_policy,
       data_reader_command_receiver: reader_command_receiver,
     };
     let mut reader = Reader::new(
       reader_ing,
-      dds_cache,
+      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );

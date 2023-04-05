@@ -1157,7 +1157,7 @@ mod tests {
 
     let mut new_reader = Reader::new(
       reader_ing,
-      dp.dds_cache(),
+      &dp.dds_cache(),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1301,7 +1301,7 @@ mod tests {
 
     let mut reader = Reader::new(
       reader_ing,
-      dp.dds_cache(),
+      &dp.dds_cache(),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );

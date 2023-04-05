@@ -484,23 +484,26 @@ mod tests {
     let (_reader_commander, reader_command_receiver) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
+    let qos_policy = QosPolicies::qos_none();
+    
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+
     dds_cache
       .write()
       .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()));
+      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()), &qos_policy);
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
       status_sender,
       topic_name: "test".to_string(),
-      qos_policy: QosPolicies::qos_none(),
+      qos_policy,
       data_reader_command_receiver: reader_command_receiver,
     };
 
     let new_reader = Reader::new(
       reader_ing,
-      dds_cache,
+      &dds_cache,
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -557,7 +560,7 @@ mod tests {
 
     let mut _writer_object = Writer::new(
       writer_ing,
-      Arc::new(RwLock::new(DDSCache::new())),
+      &Arc::new(RwLock::new(DDSCache::new())),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );

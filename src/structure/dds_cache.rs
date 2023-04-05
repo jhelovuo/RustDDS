@@ -359,83 +359,89 @@ mod tests {
 
   use super::DDSCache;
   use crate::{
-    dds::{ddsdata::DDSData, typedesc::TypeDesc, with_key::datawriter::WriteOptions},
+    dds::{
+      ddsdata::DDSData, qos::QosPolicies, typedesc::TypeDesc, with_key::datawriter::WriteOptions,
+    },
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::{cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber},
   };
 
   #[test]
-  fn create_dds_cache() {
-    let cache = Arc::new(RwLock::new(DDSCache::new()));
+  fn create_dds_cache_and_topic_cache() {
+    // Create DDS cache
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    // Set a topic name and some QoS policies
     let topic_name = String::from("ImJustATopic");
+    let qos = QosPolicies::qos_none();
+
+    // Add the new topic to DDS cache
+    dds_cache.write().unwrap().add_new_topic(
+      topic_name.clone(),
+      TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
+      &qos,
+    );
+    // Get the topic cache
+    let topic_cache = dds_cache
+      .read()
+      .unwrap()
+      .get_existing_topic_cache(&topic_name);
+
+    // Create a cache change and add it to the topic cache
     let change1 = CacheChange::new(
       GUID::GUID_UNKNOWN,
       SequenceNumber::new(1),
       WriteOptions::default(),
       DDSData::new(SerializedPayload::default()),
     );
-    cache.write().unwrap().add_new_topic(
-      topic_name.clone(),
-      TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
-    );
-    cache
-      .write()
+    topic_cache
+      .lock()
       .unwrap()
-      .add_change(&topic_name, &crate::Timestamp::now(), change1);
-
-    let pointer_to_cache_1 = cache.clone();
+      .add_change(&crate::Timestamp::now(), change1);
 
     thread::spawn(move || {
-      let topic_name = String::from("ImJustATopic");
-      let cahange2 = CacheChange::new(
+      // Get a new pointer to the topic cache in the other thread
+      let topic_cache = dds_cache
+        .read()
+        .unwrap()
+        .get_existing_topic_cache(&topic_name);
+
+      // Create two new cache changes and add them to topic cache
+      let change2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::new(2),
         WriteOptions::default(),
         DDSData::new(SerializedPayload::default()),
       );
-      pointer_to_cache_1.write().unwrap().add_change(
-        &topic_name,
-        &crate::Timestamp::now(),
-        cahange2,
-      );
-      let cahange3 = CacheChange::new(
+      let change3 = CacheChange::new(
         GUID::GUID_UNKNOWN,
         SequenceNumber::new(3),
         WriteOptions::default(),
         DDSData::new(SerializedPayload::default()),
       );
-      pointer_to_cache_1.write().unwrap().add_change(
-        &topic_name,
-        &crate::Timestamp::now(),
-        cahange3,
-      );
+
+      topic_cache
+        .lock()
+        .unwrap()
+        .add_change(&crate::Timestamp::now(), change2);
+      topic_cache
+        .lock()
+        .unwrap()
+        .add_change(&crate::Timestamp::now(), change3);
     })
     .join()
     .unwrap();
 
-    cache
-      .read()
-      .unwrap()
-      .topic_get_change(&topic_name, &crate::Timestamp::now());
+    // Verify that there are 3 cache changes in the topic cache
     assert_eq!(
-      cache
-        .read()
+      topic_cache
+        .lock()
         .unwrap()
-        .topic_get_changes_in_range(
-          &topic_name,
-          &(crate::Timestamp::now() - crate::Duration::from_secs(23)),
-          &crate::Timestamp::now()
+        .get_changes_in_range_best_effort(
+          crate::Timestamp::now() - crate::Duration::from_secs(23),
+          crate::Timestamp::now()
         )
         .count(),
       3
     );
-    // info!(
-    //   "{:?}",
-    //   cache.read().unwrap().topic_get_changes_in_range(
-    //     topic_name,
-    //     &(DDSTimestamp::now() - rustdds::Duration::from_secs(23)),
-    //     &crate::Timestamp::now()
-    //   )
-    // );
   }
 }
