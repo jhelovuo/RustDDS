@@ -2,6 +2,7 @@ use std::{
   cmp::max,
   collections::{BTreeMap, HashMap},
   ops::Bound::{Excluded, Included},
+  sync::{Arc, Mutex},
 };
 
 #[allow(unused_imports)]
@@ -20,31 +21,25 @@ use crate::{
 };
 use super::cache_change::CacheChange;
 
-/// DDSCache contains all cacheCahanges that are produced by participant or
-/// received by participant. Each topic that is been published or been
-/// subscribed are contained in separate TopicCaches. One TopicCache contains
+/// DDSCache contains all cacheChanges that are produced by participant or
+/// received by participant. Each topic that has been published or subscribed to
+/// is contained in a separate TopicCache. One TopicCache contains
 /// only DDSCacheChanges of one serialized IDL datatype. -> all cachechanges in
 /// same TopicCache can be serialized/deserialized same way. Topic/TopicCache is
 /// identified by its name, which must be unique in the whole Domain.
+///
+/// More specifically, the DDSCache stores handles (Arcs) to mutexes protecting
+/// the actual TopicCaches. For a given topic, the Reader/Writer and
+/// DataReader/DataWriter get a clone of the handle from the DDSCache and
+/// interact with the TopicCache through this handle.
 #[derive(Debug, Default)]
 pub struct DDSCache {
-  topic_caches: HashMap<String, TopicCache>,
+  topic_caches: HashMap<String, Arc<Mutex<TopicCache>>>,
 }
 
 impl DDSCache {
   pub fn new() -> Self {
     Self::default()
-  }
-  pub fn mark_reliably_received_before(
-    &mut self,
-    topic_name: &str,
-    writer: GUID,
-    sn: SequenceNumber,
-  ) {
-    self
-      .topic_caches
-      .get_mut(topic_name)
-      .and_then(|tc| Some(tc.mark_reliably_received_before(writer, sn)));
   }
   // Insert new topic if it does not exist.
   // If it exists already, update cache size limits.
@@ -59,8 +54,27 @@ impl DDSCache {
     self
       .topic_caches
       .entry(topic_name.clone())
-      .and_modify(|t| t.update_keep_limits(qos))
-      .or_insert_with(|| TopicCache::new(topic_name, topic_data_type, qos));
+      .and_modify(|tc| tc.lock().unwrap().update_keep_limits(qos))
+      .or_insert(Arc::new(Mutex::new(TopicCache::new(
+        topic_name,
+        topic_data_type,
+        qos,
+      ))));
+  }
+
+  pub(crate) fn get_existing_topic_cache(&self, topic_name: &str) -> Arc<Mutex<TopicCache>> {
+    // Return a clone of the pointer to the mutex on an existing topic cache
+    // The program panics if the topic cache does not exist
+    self
+      .topic_caches
+      .get(topic_name)
+      .unwrap_or_else(|| {
+        panic!(
+          "Topic cache for topic {} does not exist in DDS cache",
+          topic_name
+        )
+      })
+      .clone()
   }
 
   // TODO: Investigate why this is not used.
@@ -71,65 +85,10 @@ impl DDSCache {
       self.topic_caches.remove(topic_name);
     }
   }
-
-  pub fn topic_get_change(&self, topic_name: &str, instant: &Timestamp) -> Option<&CacheChange> {
-    self
-      .topic_caches
-      .get(topic_name)
-      .and_then(|tc| tc.get_change(instant))
-  }
-
-  /// Removes cacheChange permanently
-  pub fn topic_remove_before(&mut self, topic_name: &str, instant: Timestamp) {
-    match self.topic_caches.get_mut(topic_name) {
-      Some(tc) => tc.remove_changes_before(instant),
-      None => {
-        error!(
-          "topic_remove_before: topic: {:?} is not in DDSCache",
-          topic_name
-        );
-      }
-    }
-  }
-
-  pub fn get_changes_in_range_best_effort(
-    &self,
-    topic_name: &str,
-    start_instant: Timestamp,
-    end_instant: Timestamp,
-  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + '_> {
-    match self.topic_caches.get(topic_name) {
-      Some(tc) => Box::new(tc.get_changes_in_range_best_effort(start_instant, end_instant)),
-      None => Box::new(vec![].into_iter()),
-    }
-  }
-
-  pub fn get_changes_in_range_reliable<'a>(
-    &'a self,
-    topic_name: &str,
-    last_read_sn: &'a BTreeMap<GUID, SequenceNumber>,
-  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + 'a> {
-    match self.topic_caches.get(topic_name) {
-      Some(tc) => Box::new(tc.get_changes_in_range_reliable(last_read_sn)),
-      None => Box::new(vec![].into_iter()),
-    }
-  }
-
-  pub fn add_change(&mut self, topic_name: &str, instant: &Timestamp, cache_change: CacheChange) {
-    match self.topic_caches.get_mut(topic_name) {
-      Some(tc) => tc.add_change(instant, cache_change),
-      None => {
-        error!(
-          "to_topic_add_change: Topic: {:?} is not in DDSCache",
-          topic_name
-        );
-      }
-    }
-  }
 }
 
 #[derive(Debug)]
-struct TopicCache {
+pub(crate) struct TopicCache {
   topic_name: String,
   #[allow(dead_code)] // TODO: Which (future) feature needs this?
   topic_data_type: TypeDesc,
@@ -345,7 +304,7 @@ impl TopicCache {
   /// remove changes before given Timestamp, but keep at least
   /// min_keep_samples.
   /// We must always keep below max_keep_samples.
-  fn remove_changes_before(&mut self, remove_before: Timestamp) {
+  pub fn remove_changes_before(&mut self, remove_before: Timestamp) {
     let min_remove_count = max(
       0,
       self

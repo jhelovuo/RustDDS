@@ -4,7 +4,7 @@ use std::{
   iter::FromIterator,
   ops::Bound::Included,
   rc::Rc,
-  sync::{Arc, Mutex, RwLock},
+  sync::{Arc, Mutex, MutexGuard, RwLock},
 };
 use core::task::Waker;
 
@@ -30,7 +30,7 @@ use crate::{
   serialization::{Message, MessageBuilder},
   structure::{
     cache_change::CacheChange,
-    dds_cache::DDSCache,
+    dds_cache::{DDSCache, TopicCache},
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
@@ -173,9 +173,8 @@ pub(crate) struct Writer {
   //message: Option<Message>,
   udp_sender: Rc<UDPSender>,
 
-  // This writer can read/write to only one of this DDSCache topic caches identified with
-  // my_topic_name
-  dds_cache: Arc<RwLock<DDSCache>>,
+  // Writer can read/write to one topic only, and it stores a pointer to a mutex on the topic cache
+  topic_cache: Arc<Mutex<TopicCache>>,
   /// Writer can only read/write to this topic DDSHistoryCache.
   my_topic_name: String,
 
@@ -227,7 +226,7 @@ pub enum WriterCommand {
 impl Writer {
   pub fn new(
     i: WriterIngredients,
-    dds_cache: Arc<RwLock<DDSCache>>,
+    dds_cache: &Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
     mut timed_event_timer: Timer<TimedEvent>,
   ) -> Self {
@@ -266,6 +265,19 @@ impl Writer {
       TimedEvent::CacheCleaning,
     );
 
+    // Get the topic cache from DDS cache
+    let topic_cache = dds_cache
+      .read()
+      .unwrap_or_else(|e| {
+        // TODO: Should we panic here? Are we allowed to continue with poisoned
+        // DDSCache?
+        panic!(
+          "The DDSCache of domain participant is poisoned. Error: {}",
+          e
+        )
+      })
+      .get_existing_topic_cache(&i.topic_name);
+
     Self {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
@@ -287,7 +299,7 @@ impl Writer {
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
       udp_sender,
-      dds_cache,
+      topic_cache,
       my_topic_name: i.topic_name,
       sequence_number_to_instant: BTreeMap::new(),
       disposed_sequence_numbers: HashSet::new(),
@@ -461,11 +473,8 @@ impl Writer {
             if self.push_mode {
               // If we are in push mode, proactively send DATA submessage along with
               // HEARTBEAT.
-              if let Some(cache_change) = self
-                .dds_cache
-                .read()
-                .unwrap()
-                .topic_get_change(&self.my_topic_name, &timestamp)
+              if let Some(cache_change) =
+                self.acquire_the_topic_cache_guard().get_change(&timestamp)
               {
                 // If DataWriter sent us a source timestamp, then add that.
                 // Timestamp has to go before Data to have effect on Data.
@@ -504,11 +513,7 @@ impl Writer {
             );
           } else {
             // Large payload, must fragment.
-            if let Some(cache_change) = self
-              .dds_cache
-              .read()
-              .unwrap()
-              .topic_get_change(&self.my_topic_name, &timestamp)
+            if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp)
             {
               let fragment_size: u32 = self.data_max_size_serialized as u32; //TODO: overflow check
               let data_size: u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
@@ -634,14 +639,12 @@ impl Writer {
     // create new CacheChange from DDSData
     let new_cache_change = CacheChange::new(self.guid(), new_sequence_number, write_options, data);
 
-    // inserting to DDSCache
+    // Insert to topic cache
     // timestamp taken here is used as a unique(!) key in the DDSCache.
     let timestamp = Timestamp::now();
     self
-      .dds_cache
-      .write()
-      .unwrap()
-      .add_change(&self.my_topic_name, &timestamp, new_cache_change);
+      .acquire_the_topic_cache_guard()
+      .add_change(&timestamp, new_cache_change);
 
     // keeping table of instant sequence number pairs
     self
@@ -875,13 +878,8 @@ impl Writer {
     if let Some(&unsent_sn) = reader_proxy.unsent_changes.iter().next() {
       // There are unsent changes.
       if let Some(timestamp) = self.sequence_number_to_instant(unsent_sn) {
-        // Try to find the cache change from DDSCache
-        if let Some(cache_change) = self
-          .dds_cache
-          .read()
-          .unwrap()
-          .topic_get_change(&self.my_topic_name, &timestamp)
-        {
+        // Try to find the cache change from topic cache
+        if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
           // CacheChange found, construct DATA submessage
           partial_message = partial_message.data_msg(
             cache_change,
@@ -963,13 +961,8 @@ impl Writer {
       // ^^^ TODO
 
       if let Some(timestamp) = self.sequence_number_to_instant(seq_num) {
-        // Try to find the cache change from DDSCache
-        if let Some(cache_change) = self
-          .dds_cache
-          .read()
-          .unwrap()
-          .topic_get_change(&self.my_topic_name, &timestamp)
-        {
+        // Try to find the cache change from topic cache
+        if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
           // Generate datafrag message
           let mut message_builder = MessageBuilder::new();
           if let Some(src_ts) = cache_change.write_options.source_timestamp {
@@ -1033,14 +1026,12 @@ impl Writer {
       self.first_change_sequence_number,
     );
 
-    // We notify the DDSCache that it can release older samples
-    // as far as this Writer is concenrned.
+    // We notify the topic cache that it can release older samples
+    // as far as this Writer is concerned.
     if let Some(&keep_instant) = self.sequence_number_to_instant.get(&first_keeper) {
       self
-        .dds_cache
-        .write()
-        .unwrap()
-        .topic_remove_before(&self.my_topic_name, keep_instant);
+        .acquire_the_topic_cache_guard()
+        .remove_changes_before(keep_instant);
     } else {
       warn!("{:?} missing from instant map", first_keeper);
     }
@@ -1244,6 +1235,15 @@ impl Writer {
 
   pub fn topic_name(&self) -> &String {
     &self.my_topic_name
+  }
+
+  fn acquire_the_topic_cache_guard(&self) -> MutexGuard<TopicCache> {
+    self.topic_cache.lock().unwrap_or_else(|e| {
+      panic!(
+        "The topic cache of topic {} is poisoned. Error: {}",
+        &self.my_topic_name, e
+      )
+    })
   }
 
   // TODO

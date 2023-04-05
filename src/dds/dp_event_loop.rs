@@ -374,7 +374,7 @@ impl DPEventLoop {
             .expect("Reader timer channel registeration failed!");
           let mut new_reader = Reader::new(
             new_reader_ing,
-            self.ddscache.clone(),
+            &self.ddscache,
             self.udp_sender.clone(),
             timer,
           );
@@ -433,7 +433,7 @@ impl DPEventLoop {
             .expect("Writer heartbeat timer channel registration failed!!");
           let new_writer = Writer::new(
             new_writer_ingredients,
-            self.ddscache.clone(),
+            &self.ddscache,
             self.udp_sender.clone(),
             timer,
           );

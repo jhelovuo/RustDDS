@@ -107,7 +107,7 @@ where
     qos_policy: QosPolicies,
     // Each notification sent to this channel must be try_recv'd
     notification_receiver: mio_channel::Receiver<()>,
-    dds_cache: Arc<RwLock<DDSCache>>,
+    dds_cache: &Arc<RwLock<DDSCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,

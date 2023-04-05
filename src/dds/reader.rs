@@ -2,7 +2,7 @@ use std::{
   collections::BTreeMap,
   fmt, iter,
   rc::Rc,
-  sync::{Arc, Mutex, RwLock},
+  sync::{Arc, Mutex, MutexGuard, RwLock},
   time::Duration as StdDuration,
 };
 
@@ -33,7 +33,7 @@ use crate::{
   serialization::message::Message,
   structure::{
     cache_change::{CacheChange, ChangeKind},
-    dds_cache::DDSCache,
+    dds_cache::{DDSCache, TopicCache},
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -93,7 +93,8 @@ pub(crate) struct Reader {
   // "This combination is not supported by the RTPS protocol."
   // So stateful must be true whenever we are Reliable.
   reliability: policy::Reliability,
-  dds_cache: Arc<RwLock<DDSCache>>,
+  // Reader stores a pointer to a mutex on the topic cache
+  topic_cache: Arc<Mutex<TopicCache>>,
 
   #[cfg(test)]
   seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
@@ -126,10 +127,23 @@ pub(crate) struct Reader {
 impl Reader {
   pub fn new(
     i: ReaderIngredients,
-    dds_cache: Arc<RwLock<DDSCache>>,
+    dds_cache: &Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
     timed_event_timer: Timer<TimedEvent>,
   ) -> Self {
+    // Get the topic cache from DDS cache
+    let topic_cache = dds_cache
+      .read()
+      .unwrap_or_else(|e| {
+        // TODO: Should we panic here? Are we allowed to continue with poisoned
+        // DDSCache?
+        panic!(
+          "The DDSCache of domain participant is poisoned. Error: {}",
+          e
+        )
+      })
+      .get_existing_topic_cache(&i.topic_name);
+
     Self {
       notification_sender: i.notification_sender,
       status_sender: i.status_sender,
@@ -140,7 +154,7 @@ impl Reader {
         .qos_policy
         .reliability() // use qos specification
         .unwrap_or(policy::Reliability::BestEffort), // or default to BestEffort
-      dds_cache,
+      topic_cache,
       topic_name: i.topic_name,
       qos_policy: i.qos_policy,
 
@@ -910,13 +924,10 @@ impl Reader {
       }
       all_ackable_before = writer_proxy.all_ackable_before();
     }
-    let mut cache = match self.dds_cache.write() {
-      Ok(rwlock) => rwlock,
-      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-      Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
-    };
 
-    (*cache).mark_reliably_received_before(&self.topic_name, writer_guid, all_ackable_before);
+    // Get the topic cache
+    let mut tc = self.acquire_the_topic_cache_guard();
+    tc.mark_reliably_received_before(writer_guid, all_ackable_before);
 
     /*
     // Remove from DDSHistoryCache
@@ -975,14 +986,13 @@ impl Reader {
     writer_sn: SequenceNumber,
   ) {
     let cache_change = CacheChange::new(writer_guid, writer_sn, write_options, data);
-    let mut cache = match self.dds_cache.write() {
-      Ok(rwlock) => rwlock,
-      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-      Err(e) => panic!("The DDSCache of is poisoned. Error: {}", e),
-    };
-    cache.add_change(&self.topic_name, &receive_timestamp, cache_change);
+
+    // Get the topic cache
+    let mut tc = self.acquire_the_topic_cache_guard();
+
+    tc.add_change(&receive_timestamp, cache_change);
     self.matched_writer(writer_guid).map(|wp| {
-      cache.mark_reliably_received_before(&self.topic_name, writer_guid, wp.all_ackable_before())
+      tc.mark_reliably_received_before(writer_guid, wp.all_ackable_before());
     });
   }
 
@@ -1107,6 +1117,15 @@ impl Reader {
 
   pub fn topic_name(&self) -> &String {
     &self.topic_name
+  }
+
+  fn acquire_the_topic_cache_guard(&self) -> MutexGuard<TopicCache> {
+    self.topic_cache.lock().unwrap_or_else(|e| {
+      panic!(
+        "The topic cache of topic {} is poisoned. Error: {}",
+        &self.topic_name, e
+      )
+    })
   }
 } // impl
 

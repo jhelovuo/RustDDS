@@ -4,7 +4,7 @@ use std::{
   io,
   marker::PhantomData,
   pin::Pin,
-  sync::{Arc, Mutex, RwLock},
+  sync::{Arc, Mutex, MutexGuard, RwLock},
   task::{Context, Poll, Waker},
 };
 
@@ -32,7 +32,7 @@ use crate::{
   serialization::CDRDeserializerAdapter,
   structure::{
     cache_change::{CacheChange, DeserializedCacheChange},
-    dds_cache::DDSCache,
+    dds_cache::{DDSCache, TopicCache},
     entity::RTPSEntity,
     guid::{EntityId, GUID},
     sequence_number::SequenceNumber,
@@ -124,7 +124,8 @@ pub struct SimpleDataReader<
   my_guid: GUID,
   pub(crate) notification_receiver: mio_channel::Receiver<()>,
 
-  dds_cache: Arc<RwLock<DDSCache>>, // global cache
+  // SimpleDataReader stores a pointer to a mutex on the topic cache
+  topic_cache: Arc<Mutex<TopicCache>>,
 
   read_state: Mutex<ReadState<<D as Keyed>::K>>,
 
@@ -182,7 +183,7 @@ where
     qos_policy: QosPolicies,
     // Each notification sent to this channel must be try_recv'd
     notification_receiver: mio_channel::Receiver<()>,
-    dds_cache: Arc<RwLock<DDSCache>>,
+    dds_cache: &Arc<RwLock<DDSCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
@@ -200,12 +201,25 @@ where
 
     let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), my_id);
 
+    // Get the topic cache from DDS cache
+    let topic_cache = dds_cache
+      .read()
+      .unwrap_or_else(|e| {
+        // TODO: Should we panic here? Are we allowed to continue with poisoned
+        // DDSCache?
+        panic!(
+          "The DDSCache of domain participant is poisoned. Error: {}",
+          e
+        )
+      })
+      .get_existing_topic_cache(&topic.name());
+
     Ok(Self {
       my_subscriber: subscriber,
       qos_policy,
       my_guid,
       notification_receiver,
-      dds_cache,
+      topic_cache,
       read_state: Mutex::new(ReadState::new()),
       my_topic: topic,
       deserializer_type: PhantomData,
@@ -225,19 +239,16 @@ where
     self.event_source.drain();
   }
 
-  // get an iterator into DDS Cache, so this is in constant space, not a large
-  // data structure
   fn try_take_undecoded<'a>(
     is_reliable: bool,
-    dds_cache: &'a DDSCache,
-    topic_name: &str,
+    topic_cache: &'a TopicCache,
     latest_instant: Timestamp,
     last_read_sn: &'a BTreeMap<GUID, SequenceNumber>,
   ) -> Box<dyn Iterator<Item = (Timestamp, &'a CacheChange)> + 'a> {
     if is_reliable {
-      dds_cache.get_changes_in_range_reliable(topic_name, last_read_sn)
+      topic_cache.get_changes_in_range_reliable(last_read_sn)
     } else {
-      dds_cache.get_changes_in_range_best_effort(topic_name, latest_instant, Timestamp::now())
+      topic_cache.get_changes_in_range_best_effort(latest_instant, Timestamp::now())
     }
   }
 
@@ -324,21 +335,15 @@ where
       self.qos_policy.reliability(),
       Some(policy::Reliability::Reliable { .. })
     );
-    let dds_cache = match self.dds_cache.read() {
-      Ok(rwlock) => rwlock,
-      // TODO: Should we panic here? Are we allowed to continue with poisoned DDSCache?
-      Err(e) => panic!(
-        "The DDSCache of domain participant is poisoned. Error: {}",
-        e
-      ),
-    };
+
+    let topic_cache = self.acquire_the_topic_cache_guard();
+
     let mut read_state_ref = self.read_state.lock().unwrap();
     let latest_instant = read_state_ref.latest_instant;
     let (last_read_sn, hash_to_key_map) = read_state_ref.get_sn_map_and_hash_map();
     let (timestamp, cc) = match Self::try_take_undecoded(
       is_reliable,
-      &dds_cache,
-      &self.my_topic.name(),
+      &topic_cache,
       latest_instant,
       last_read_sn,
     )
@@ -377,6 +382,16 @@ where
     SimpleDataReaderEventStream {
       simple_datareader: self,
     }
+  }
+
+  fn acquire_the_topic_cache_guard(&self) -> MutexGuard<TopicCache> {
+    self.topic_cache.lock().unwrap_or_else(|e| {
+      panic!(
+        "The topic cache of topic {} is poisoned. Error: {}",
+        &self.my_topic.name(),
+        e
+      )
+    })
   }
 }
 

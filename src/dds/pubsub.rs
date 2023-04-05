@@ -1017,7 +1017,7 @@ impl InnerSubscriber {
       topic.clone(),
       qos,
       rec,
-      dp.dds_cache(),
+      &dp.dds_cache(),
       self.discovery_command.clone(),
       status_receiver,
       reader_command_sender,
