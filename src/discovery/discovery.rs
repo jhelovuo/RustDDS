@@ -940,7 +940,7 @@ impl Discovery {
         Ok(ds) => ds.map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
           .filter(|d|
               // If a particiapnt was specified, we must match its GUID prefix.
-              match (read_history, d) { 
+              match (read_history, d) {
                 (None, _) => true, // Not asked to filter by participant
                 (Some(participant_to_update), Ok(drd)) =>
                   drd.reader_proxy.remote_reader_guid.prefix == participant_to_update,
