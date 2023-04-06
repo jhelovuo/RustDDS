@@ -101,13 +101,14 @@ pub(crate) fn sync_status_channel<T>(capacity :usize)
   ))
 }
 
-pub(crate) struct StatusChannelSender<T> {
+// TODO: try to make this (and the Receiver) private types
+pub struct StatusChannelSender<T> {
   actual_sender: mio_channel::SyncSender<T>,
   signal_sender: PollEventSender,
   waker: Arc<Mutex<Option<Waker>>>,
 }
 
-pub(crate) struct StatusChannelReceiver<T> {
+pub struct StatusChannelReceiver<T> {
   actual_receiver: mio_channel::Receiver<T>,
   signal_receiver: PollEventSource,
   waker: Arc<Mutex<Option<Waker>>>,
@@ -145,7 +146,9 @@ impl<T> StatusChannelReceiver<T> {
     self.signal_receiver.drain();
     self.actual_receiver.try_recv()
   }
-
+  pub fn as_evented(&self) -> &dyn Evented {
+    &self.actual_receiver
+  }
   pub fn as_async_stream(&self) -> StatusReceiverStream<T> {
     StatusReceiverStream{ sync_receiver: self }
   }
@@ -175,7 +178,8 @@ impl<T> event::Source for StatusChannelReceiver<T>
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 
-pub(crate) struct StatusReceiverStream<'a,T> {
+//TODO: try to make private
+pub struct StatusReceiverStream<'a,T> {
   sync_receiver: &'a StatusChannelReceiver<T>,
 }
 

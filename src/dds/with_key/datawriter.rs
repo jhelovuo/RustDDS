@@ -7,7 +7,7 @@ use std::{
   time::{Duration, Instant},
 };
 
-use futures::Future;
+use futures::{Future,Stream,};
 use std::pin::Pin;
 use std::task::{Poll, Context, Waker,};
 
@@ -433,10 +433,10 @@ where
     match &self.qos_policy.reliability {
       None | Some(Reliability::BestEffort) => Ok(true),
       Some(Reliability::Reliable { .. }) => {
-        let (acked_sender, acked_receiver) = mio_channel::sync_channel::<()>(1);
+        let (acked_sender, acked_receiver) = sync_status_channel::<()>(1)?;
         let poll = mio_06::Poll::new()?;
         poll.register(
-          &acked_receiver,
+          acked_receiver.as_evented(),
           Token(0),
           Ready::readable(),
           PollOpt::edge(),
@@ -1019,7 +1019,7 @@ where
   Fail(crate::dds::values::result::Error),
   InProgress {
     writer: &'a DataWriter<D,SA>,
-    writer_command: WriterCommand,
+    writer_command: Option<WriterCommand>,
     sequence_number: SequenceNumber,
     timeout: Option<duration::Duration>,
     timeout_instant: Instant,
@@ -1062,50 +1062,143 @@ where
         Poll::Ready(Err(dummy))
       }
 
-      WriteWithOptions::InProgress{ writer, ref writer_command, sequence_number, timeout, timeout_instant , .. } => {
-        match writer.cc_upload.try_send(writer_command.clone()) {
-          //TODO: can we remove .clone() above?
-          Ok(()) => {
-            writer.refresh_manual_liveliness();
-            Poll::Ready(Ok(SampleIdentity {
-              writer_guid: writer.my_guid,
-              sequence_number,
-            }))
-          }
-          Err(TrySendError::Full(_tt)) => {
-            *writer.cc_upload_waker.lock().unwrap() =
-              Some(cx.waker().clone());
-            if Instant::now() < timeout_instant {
-              Poll::Pending 
-            } else {
-              // TODO: Error should also return unsent sample (_tt) to
-              // the application, as this is the Rust way.
-              Poll::Ready(Err(Error::MustBlock))
+      WriteWithOptions::InProgress{ writer, ref mut writer_command, sequence_number, timeout, timeout_instant , .. } => {
+        
+        match writer_command.take() {
+          Some(wc) => {
+            match writer.cc_upload.try_send(wc) {
+              //TODO: can we remove .clone() above?
+              Ok(()) => {
+                writer.refresh_manual_liveliness();
+                Poll::Ready(Ok(SampleIdentity {
+                  writer_guid: writer.my_guid,
+                  sequence_number,
+                }))
+              }
+              Err(TrySendError::Full(wc)) => {
+                *writer.cc_upload_waker.lock().unwrap() =
+                  Some(cx.waker().clone());
+                if Instant::now() < timeout_instant {
+                  // Put our command back
+                  *writer_command = Some(wc);
+                  Poll::Pending 
+                } else {
+                  // TODO: Error should also return unsent sample (_tt) to
+                  // the application, as this is the Rust way.
+                  Poll::Ready(Err(Error::MustBlock))
+                }
+              }
+              Err(other_err) => {
+                warn!("Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
+                  writer.my_topic.name(), other_err, timeout);
+                // TODO: Is this (undo) the right thing to do, if there are
+                // several futures in progress? (Can this result in confused numbering?)
+                writer.undo_sequence_number();
+                Poll::Ready(Err(Error::OutOfResources))
+              }
             }
+          }      
+          None => {
+            // the dog ate my homework
+            // this should not happen
+            Poll::Ready(Err(Error::Internal{reason: "someone stole my WriterCommand".to_owned() }))          
           }
-          Err(other_err) => {
-            warn!("Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
-              writer.my_topic.name(), other_err, timeout);
-            // TODO: Is this (undo) the right thing to do, if there are
-            // several futures in progress? (Can this result in confused numbering?)
-            writer.undo_sequence_number();
-            Poll::Ready(Err(Error::OutOfResources))
-          }
-
         }
       }
     }
   }
 }
 
-// pub struct WaitForAcknowledgments<'a,D,SA>
-// where
-//   D : Keyed + Serialize, 
-//   <D as key::Keyed>::K: Serialize,
-//   SA: SerializerAdapter<D>,
-// {
-//   writer: &'a DataWriter<D,SA>,
-// }
+pub enum WaitForAcknowledgments<'a,D,SA>
+where
+  D : Keyed + Serialize, 
+  <D as key::Keyed>::K: Serialize,
+  SA: SerializerAdapter<D>,
+{
+  Waiting {
+    writer: &'a DataWriter<D,SA>,
+    ack_wait_receiver: StatusChannelReceiver<()>,
+  },
+  Done,
+  WaitingSendCommand {
+    writer: &'a DataWriter<D,SA>,
+    ack_wait_receiver: StatusChannelReceiver<()>,
+    ack_wait_sender: StatusChannelSender<()>,
+  },
+  Fail(Error),
+}
+
+impl<'a,D,SA> Future for WaitForAcknowledgments<'a,D,SA> 
+where
+  D : Keyed + Serialize, 
+  <D as key::Keyed>::K: Key + Serialize,
+  SA: SerializerAdapter<D>,
+{
+  type Output = Result<bool>;
+
+  fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    match *self {
+      WaitForAcknowledgments::Done => Poll::Ready(Ok(true)),
+      WaitForAcknowledgments::Fail(_) => {
+        let mut dummy = WaitForAcknowledgments::Done;
+        core::mem::swap(&mut dummy, &mut self);
+        match dummy {
+          WaitForAcknowledgments::Fail(e) => Poll::Ready(Err(e)),
+          _ => unreachable!(),
+        }
+      }
+      WaitForAcknowledgments::Waiting { writer, ref ack_wait_receiver} => { 
+        match Pin::new(&mut ack_wait_receiver.as_async_stream()).poll_next(cx) {
+          Poll::Pending => Poll::Pending,
+          Poll::Ready(None) => // this should not really happen, but let's judge that as a "no"
+            Poll::Ready(Ok(false)),
+          // TODO: Reconsider Error return value
+          Poll::Ready(Some(Err(e))) => Poll::Ready(Err(Error::LockPoisoned)),
+          Poll::Ready(Some(Ok(()))) => Poll::Ready(Ok(true)),
+          // There is no timeout support here, so we never really
+          // return Ok(false)
+        }
+      }
+      WaitForAcknowledgments::WaitingSendCommand { .. } => {
+        let mut dummy = WaitForAcknowledgments::Done;
+        core::mem::swap(&mut dummy, &mut self);
+        let (writer, ack_wait_receiver, ack_wait_sender)  = 
+          match dummy {
+            WaitForAcknowledgments::WaitingSendCommand { writer, ack_wait_receiver, ack_wait_sender } =>
+              (writer,ack_wait_receiver, ack_wait_sender),
+            _ => unreachable!(),
+          };
+
+        match writer.cc_upload
+          .try_send(WriterCommand::WaitForAcknowledgments {
+            all_acked: ack_wait_sender})
+        {
+          Ok(()) => {
+            *self = 
+              WaitForAcknowledgments::Waiting {
+                writer,
+                ack_wait_receiver,
+              };
+            Poll::Pending
+          }
+          Err(TrySendError::Full(WriterCommand::WaitForAcknowledgments { all_acked: ack_wait_sender })) => {
+            *self = WaitForAcknowledgments::WaitingSendCommand {
+              writer,
+              ack_wait_receiver,
+              ack_wait_sender,
+            };
+            Poll::Pending
+          }
+          Err(TrySendError::Full(otherwritercommand)) =>
+            unreachable!(), // we are sending WaitForAcknowledgments
+          Err(e) => {
+            Poll::Ready(Err(e.into()))
+          }
+        }
+      }
+    }
+  }
+}
 
 impl<D, SA> DataWriter<D, SA>
 where
@@ -1153,7 +1246,8 @@ where
         // and (2) the call is not expected to complete until
         // the future is polled anyway.
         WriteWithOptions::InProgress { 
-          writer: self, writer_command,
+          writer: self, 
+          writer_command: Some(writer_command),
           sequence_number,
           timeout,
           timeout_instant: 
@@ -1172,9 +1266,43 @@ where
     }
   }
 
-  // pub async fn async_wait_for_acknowledgments(&self, max_wait: Duration) -> WaitForAcknowledgments<D,SA> {
-  //   todo!()
-  // }
+  /// Liike the synchronous version.
+  /// But there is no timeout. Use asyncs to bring your own timeout.
+  pub fn async_wait_for_acknowledgments(&self) -> WaitForAcknowledgments<D,SA> {
+    match &self.qos_policy.reliability {
+      None | Some(Reliability::BestEffort) => WaitForAcknowledgments::Done,
+      Some(Reliability::Reliable { .. }) => {
+        let (acked_sender, ack_wait_receiver) = sync_status_channel::<()>(1)
+          .unwrap(); // TODO: remove unwrap
+        match self
+          .cc_upload
+          .try_send(WriterCommand::WaitForAcknowledgments {
+            all_acked: acked_sender}) {
+          Ok(()) => {
+            // Now just return a future. It makes no sense to try to immediately
+            // try_recv, as the Writer will make progrss regardless of the DataWriter.
+            WaitForAcknowledgments::Waiting {
+              writer: self,
+              ack_wait_receiver,
+            }            
+          }
+          Err(TrySendError::Full(WriterCommand::WaitForAcknowledgments { all_acked: ack_wait_sender })) =>
+            WaitForAcknowledgments::WaitingSendCommand {
+              writer: self,
+              ack_wait_receiver,
+              ack_wait_sender,
+            },
+          Err(TrySendError::Full(otherwritercommand)) =>
+            unreachable!(), // we are sending WaitForAcknowledgments above
+          Err(e) => {
+             WaitForAcknowledgments::Fail(e.into())
+          }
+
+        }
+      }
+    } // match
+  }
+
 } // impl
 
 

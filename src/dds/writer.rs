@@ -81,7 +81,7 @@ impl WriterIngredients {
 
 struct AckWaiter {
   wait_until: SequenceNumber,
-  complete_channel: SyncSender<()>,
+  complete_channel: StatusChannelSender<()>,
   readers_pending: BTreeSet<GUID>,
 }
 
@@ -212,7 +212,7 @@ pub(crate) struct Writer {
   //offered_deadline_status: OfferedDeadlineMissedStatus,
   ack_waiter: Option<AckWaiter>,
 }
-#[derive(Clone)]
+//#[derive(Clone)]
 pub enum WriterCommand {
 //TODO: try to make this more private, like pub(crate)
   DDSData {
@@ -221,7 +221,7 @@ pub enum WriterCommand {
     sequence_number: SequenceNumber,
   },
   WaitForAcknowledgments {
-    all_acked: mio_channel::SyncSender<()>,
+    all_acked: StatusChannelSender<()>,
   },
   //ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }
@@ -585,17 +585,21 @@ impl Writer {
               }
             })
             .collect();
-          if readers_pending.is_empty() {
-            // all acked already
-            let _ = all_acked.try_send(()); // may fail, if receiver has timeouted
-            self.ack_waiter = None;
-          } else {
-            self.ack_waiter = Some(AckWaiter {
-              wait_until,
-              complete_channel: all_acked,
-              readers_pending,
-            });
-          }
+          self.ack_waiter =
+            if readers_pending.is_empty() {
+              // all acked already: try to signal app waiting at DataWriter
+              let _ = all_acked.try_send(());
+              // but we ignore any failure to signal, if no-one is listening
+              // since that is normal. They may have timeouted and stopped waiting.
+              None
+            } else {
+              // Someone still needs to ack. Wait for them.
+              Some(AckWaiter {
+                wait_until,
+                complete_channel: all_acked,
+                readers_pending,
+              })
+            };
         }
       }
     }
