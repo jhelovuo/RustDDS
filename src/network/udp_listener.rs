@@ -42,7 +42,11 @@ impl Drop for UDPListener {
 }
 
 impl UDPListener {
-  fn new_listening_socket(host: &str, port: u16, reuse_addr: bool) -> io::Result<mio_06::net::UdpSocket> {
+  fn new_listening_socket(
+    host: &str,
+    port: u16,
+    reuse_addr: bool,
+  ) -> io::Result<mio_06::net::UdpSocket> {
     let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
 
     // We set ReuseAddr so that other DomainParticipants on this host can
@@ -78,7 +82,8 @@ impl UDPListener {
       .set_nonblocking(true)
       .expect("Failed to set std socket to non blocking.");
 
-    let mio_socket = mio_06::net::UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
+    let mio_socket =
+      mio_06::net::UdpSocket::from_socket(std_socket).expect("Unable to create mio socket");
     info!(
       "UDPListener: new socket with address {:?}",
       mio_socket.local_addr()

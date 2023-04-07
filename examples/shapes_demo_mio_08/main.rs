@@ -6,8 +6,11 @@
 
 use std::{
   io,
+  sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+  },
   time::{Duration, Instant},
-  sync::{Arc,atomic::{AtomicBool, Ordering}},
 };
 
 use log::{debug, error, trace, LevelFilter};
@@ -23,7 +26,7 @@ use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all
                                                                      * policies directly */
 use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
-use mio_08::{Events, Poll, Interest, Token}; // non-blocking i/o polling
+use mio_08::{Events, Interest, Poll, Token}; // non-blocking i/o polling
 use rand::prelude::*;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -140,16 +143,12 @@ fn main() {
   // Set Ctrl-C handler
   let stop_program = Arc::new(AtomicBool::new(false));
   let stop_program_signaller = stop_program.clone();
-  ctrlc::set_handler(move || {
-    stop_program_signaller.store(true, Ordering::Relaxed)
-  })
+  ctrlc::set_handler(move || stop_program_signaller.store(true, Ordering::Relaxed))
     .expect("Error setting Ctrl-C handler");
   println!("Press Ctrl-C to quit.");
 
-
   let mut poll = Poll::new().unwrap();
   let mut events = Events::with_capacity(4);
-
 
   let is_publisher = matches.is_present("publisher");
   let is_subscriber = matches.is_present("subscriber");
@@ -160,11 +159,12 @@ fn main() {
     let mut writer = publisher
       .create_datawriter_cdr::<Shape>(&topic, None) // None = get qos policy from publisher
       .unwrap();
-    poll.registry()
+    poll
+      .registry()
       .register(
         writer.as_status_source(),
         WRITER_STATUS_READY,
-        Interest::READABLE
+        Interest::READABLE,
       )
       .unwrap();
     Some(writer)
@@ -178,14 +178,16 @@ fn main() {
     let mut reader = subscriber
       .create_datareader_cdr::<Shape>(&topic, Some(qos))
       .unwrap();
-    poll.registry()
+    poll
+      .registry()
       .register(&mut reader, READER_READY, Interest::READABLE)
       .unwrap();
-    poll.registry()
+    poll
+      .registry()
       .register(
         reader.as_status_source(),
         READER_STATUS_READY,
-        Interest::READABLE
+        Interest::READABLE,
       )
       .unwrap();
     debug!("Created DataReader");
@@ -215,12 +217,15 @@ fn main() {
 
   let mut last_write = Instant::now();
 
-  while ! stop_program.load(Ordering::Relaxed) {
+  while !stop_program.load(Ordering::Relaxed) {
     match poll.poll(&mut events, Some(loop_delay)) {
-      Err(e) => { println!("Poll error {e}", ); return }
+      Err(e) => {
+        println!("Poll error {e}",);
+        return;
+      }
       _ => (),
     }
-      
+
     for event in &events {
       match event.token() {
         READER_READY => {

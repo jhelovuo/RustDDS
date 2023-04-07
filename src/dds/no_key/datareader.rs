@@ -112,7 +112,6 @@ where
     }
     Ok(result)
   }
-  
 
   /// Takes amount of sample found with `max_samples` and `read_condition`
   /// parameters.
@@ -162,7 +161,6 @@ where
     Ok(result)
   }
 
-  
   /// Reads next unread sample
   ///
   /// # Examples
@@ -194,7 +192,6 @@ where
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
-  
 
   /// Takes next unread sample
   ///
@@ -230,7 +227,6 @@ where
 
   // Iterator interface
 
-  
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
@@ -270,8 +266,7 @@ where
         .map(|ds| ds.value),
     )
   }
-  
-  
+
   /// Produces an interator over the samples filtered b ygiven condition.
   /// Yields only payload data, not SampleInfo metadata
   ///
@@ -313,8 +308,7 @@ where
         .map(|ds| ds.value),
     )
   }
-  
-  
+
   /// Produces an interator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// Removes samples from `DataReader`.
@@ -429,7 +423,7 @@ where
   /// }
   /// ```
 
-  
+
   pub fn get_requested_deadline_missed_status(
     &mut self,
   ) -> Result<Option<RequestedDeadlineMissedStatus>> {
@@ -448,9 +442,7 @@ where
   // We just delegate all the operations to notification_receiver, since it alrady
   // implements Evented
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
-    self
-      .keyed_datareader
-      .register(poll, token, interest, opts)
+    self.keyed_datareader.register(poll, token, interest, opts)
   }
 
   fn reregister(

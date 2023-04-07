@@ -8,8 +8,9 @@ use crate::{
   messages::submessages::submessage_elements::{
     parameter_list::ParameterList, RepresentationIdentifier,
   },
-  structure::{inline_qos::StatusInfo, parameter_id::ParameterId, rpc::SampleIdentity},
-  structure::duration::Duration,
+  structure::{
+    duration::Duration, inline_qos::StatusInfo, parameter_id::ParameterId, rpc::SampleIdentity,
+  },
 };
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber,
@@ -231,7 +232,7 @@ impl QosPolicies {
   }
 
   pub const fn reliable_max_blocking_time(&self) -> Option<Duration> {
-    if let Some(policy::Reliability::Reliable{ max_blocking_time }) = self.reliability {
+    if let Some(policy::Reliability::Reliable { max_blocking_time }) = self.reliability {
       Some(max_blocking_time)
     } else {
       None
@@ -385,7 +386,7 @@ impl QosPolicies {
 // TODO: Replace this with Option construct so that
 // None means no limit and Some(limit) gives the limit when defined.
 // Use is in resource_limits.
-pub const LENGTH_UNLIMITED : i32 = -1;
+pub const LENGTH_UNLIMITED: i32 = -1;
 
 // put these into a submodule to avoid repeating the word "policy" or
 // "qospolicy"
@@ -559,16 +560,18 @@ pub mod policy {
   #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
   pub enum History {
     // Variants must be in this order ot derive Ord correctly.
-    KeepLast { depth: i32 }, 
+    KeepLast { depth: i32 },
     KeepAll,
   }
 
   /// DDS 2.2.3.19 RESOURCE_LIMITS
   /// DDS Spec v1.4 p.147 "struct ResourceLimitsQosPolicy" defines the
   /// fields as "long". The "long" type of OMG IDL is defined to have
-  /// 32-bit (signed, 2's complement) range in the OMG IDL spec v4.2, Table 7-13: Integer Types.
-  /// 
-  /// But it does not make sense to have negative limits, so these should be unsigned.
+  /// 32-bit (signed, 2's complement) range in the OMG IDL spec v4.2, Table
+  /// 7-13: Integer Types.
+  ///
+  /// But it does not make sense to have negative limits, so these should be
+  /// unsigned.
   ///
   /// Negative values are needed, because DDS spec defines the special value
   /// const long LENGTH_UNLIMITED = -1;

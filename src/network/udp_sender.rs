@@ -9,7 +9,6 @@ use std::net::Ipv4Addr;
 use log::{debug, error, info, trace, warn};
 use mio_06;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-
 #[cfg(windows)]
 use local_ip_address::list_afinet_netifas;
 
@@ -25,7 +24,6 @@ pub struct UDPSender {
 
 impl UDPSender {
   pub fn new(sender_port: u16) -> io::Result<Self> {
-    
     #[cfg(not(windows))]
     let unicast_socket = {
       let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
@@ -119,7 +117,12 @@ impl UDPSender {
         }
       }
       Err(e) => {
-        warn!("send_to_udp_socket - send_to {} : {:?} len={}", addr, e, buffer.len());
+        warn!(
+          "send_to_udp_socket - send_to {} : {:?} len={}",
+          addr,
+          e,
+          buffer.len()
+        );
       }
     }
   }

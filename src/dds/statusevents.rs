@@ -6,24 +6,21 @@
 //
 // Communcation statues are detailed in Figure 2.13 and tables in Section
 // 2.2.4.1 in DDS Specification v1.4
+use std::{
+  io,
+  pin::Pin,
+  sync::{Arc, Mutex},
+  task::{Context, Poll, Waker},
+};
+
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-
-use std::io;
-
-use futures::stream::{Stream, FusedStream,};
-use std::pin::Pin;
-use std::task::{Poll, Context, Waker,};
-use std::sync::{Arc,Mutex,};
-
+use futures::stream::{FusedStream, Stream};
 use mio_06::Evented;
 use mio_extras::channel as mio_channel;
+use mio_08::{self, event, Interest, Registry, Token};
 
-use mio_08;
-use mio_08::{Registry, Token, Interest, event,};
-use crate::mio_source::*;
-
-use crate::dds::qos::QosPolicyId;
+use crate::{dds::qos::QosPolicyId, mio_source::*};
 
 /// This trait corresponds to set_listener() of the Entity class in DDS spec.
 /// Types implementing this trait can be registered to a poll and
@@ -31,19 +28,19 @@ use crate::dds::qos::QosPolicyId;
 pub trait StatusEvented<E> {
   fn as_status_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source; // This is for polling with mio-0.8.x
-  //fn as_async_receiver(&self) -> dyn Stream<E>;
+                                                                    //fn as_async_receiver(&self) -> dyn Stream<E>;
 
   fn try_recv_status(&self) -> Option<E>;
 }
 
 // Helper object for various DDS Entities
 // This is now a wrapper around StatusChannelReceiver with enabled-flag
-// TODO: Do we really need this or should we replace this with StatusChannelReceiver
+// TODO: Do we really need this or should we replace this with
+// StatusChannelReceiver
 pub(crate) struct StatusReceiver<E> {
   channel_receiver: StatusChannelReceiver<E>,
-  enabled: bool, // if not enabled, we should forward status to parent Entity
-  // TODO: enabling not implemented
-
+  enabled: bool, /* if not enabled, we should forward status to parent Entity
+                  * TODO: enabling not implemented */
 }
 
 impl<E> StatusReceiver<E> {
@@ -77,7 +74,6 @@ impl<E> StatusEvented<E> for StatusReceiver<E> {
       None
     }
   }
-
 }
 
 // -------------------------------------------------------------------------------
@@ -89,30 +85,38 @@ impl<E> StatusEvented<E> for StatusReceiver<E> {
 // This is only used so that a mio-0.6 channel can pose as a
 // mio-0.8 event::Source.
 
-pub(crate) fn sync_status_channel<T>(capacity :usize) 
-  -> io::Result<(StatusChannelSender<T>, StatusChannelReceiver<T>)>
-{
+pub(crate) fn sync_status_channel<T>(
+  capacity: usize,
+) -> io::Result<(StatusChannelSender<T>, StatusChannelReceiver<T>)> {
   let (signal_receiver, signal_sender) = make_poll_channel()?;
   let (actual_sender, actual_receiver) = mio_channel::sync_channel(capacity);
   let waker = Arc::new(Mutex::new(None));
   Ok((
-    StatusChannelSender{ actual_sender, signal_sender , waker: Arc::clone(&waker) },
-    StatusChannelReceiver{ actual_receiver, signal_receiver, waker }
+    StatusChannelSender {
+      actual_sender,
+      signal_sender,
+      waker: Arc::clone(&waker),
+    },
+    StatusChannelReceiver {
+      actual_receiver,
+      signal_receiver,
+      waker,
+    },
   ))
 }
 
-pub(crate) struct StatusChannelSender<T> {
+// TODO: try to make this (and the Receiver) private types
+pub struct StatusChannelSender<T> {
   actual_sender: mio_channel::SyncSender<T>,
   signal_sender: PollEventSender,
   waker: Arc<Mutex<Option<Waker>>>,
 }
 
-pub(crate) struct StatusChannelReceiver<T> {
+pub struct StatusChannelReceiver<T> {
   actual_receiver: mio_channel::Receiver<T>,
   signal_receiver: PollEventSource,
   waker: Arc<Mutex<Option<Waker>>>,
 }
-
 
 impl<T> StatusChannelSender<T> {
   pub fn try_send(&self, t: T) -> Result<(), mio_channel::TrySendError<T>> {
@@ -123,7 +127,7 @@ impl<T> StatusChannelSender<T> {
         w.as_ref().map(|w| w.wake_by_ref());
         *w = None;
         Ok(())
-      }, 
+      }
       Err(mio_channel::TrySendError::Full(tt)) => {
         trace!("StatusChannelSender cannot send new status changes, channel is full.");
         // It is perfectly normal to fail due to full channel, because
@@ -145,70 +149,74 @@ impl<T> StatusChannelReceiver<T> {
     self.signal_receiver.drain();
     self.actual_receiver.try_recv()
   }
-
+  pub fn as_evented(&self) -> &dyn Evented {
+    &self.actual_receiver
+  }
   pub fn as_async_stream(&self) -> StatusReceiverStream<T> {
-    StatusReceiverStream{ sync_receiver: self }
+    StatusReceiverStream {
+      sync_receiver: self,
+    }
   }
 }
 
-
-impl<T> event::Source for StatusChannelReceiver<T>
-{
-  fn register(&mut self, registry: &Registry, token: Token, interests: Interest) -> io::Result<()>
-  {
-    self.signal_receiver.register(registry,token,interests)
+impl<T> event::Source for StatusChannelReceiver<T> {
+  fn register(&mut self, registry: &Registry, token: Token, interests: Interest) -> io::Result<()> {
+    self.signal_receiver.register(registry, token, interests)
   }
 
-  fn reregister(&mut self, registry: &Registry, token: Token, interests: Interest) -> io::Result<()>
-  {
+  fn reregister(
+    &mut self,
+    registry: &Registry,
+    token: Token,
+    interests: Interest,
+  ) -> io::Result<()> {
     self.signal_receiver.reregister(registry, token, interests)
   }
 
-  fn deregister(&mut self, registry: &Registry) -> io::Result<()>
-  {
+  fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
     self.signal_receiver.deregister(registry)
   }
-
 }
 
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 
-pub(crate) struct StatusReceiverStream<'a,T> {
+//TODO: try to make private
+pub struct StatusReceiverStream<'a, T> {
   sync_receiver: &'a StatusChannelReceiver<T>,
 }
 
-
-impl<'a,T> Stream for StatusReceiverStream<'a,T> {
+impl<'a, T> Stream for StatusReceiverStream<'a, T> {
   type Item = Result<T, std::sync::mpsc::RecvError>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     //debug!("poll_next");
-    let mut w = self.sync_receiver.waker.lock().unwrap(); 
+    let mut w = self.sync_receiver.waker.lock().unwrap();
     // lock already at the beginning, before try_recv
     match self.sync_receiver.try_recv() {
-      Err(std::sync::mpsc::TryRecvError::Empty) => { // nothing available
+      Err(std::sync::mpsc::TryRecvError::Empty) => {
+        // nothing available
         *w = Some(cx.waker().clone());
         Poll::Pending
-      } 
-      Err(std::sync::mpsc::TryRecvError::Disconnected) => 
-        Poll::Ready(Some(Err(std::sync::mpsc::RecvError))), 
+      }
+      Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+        Poll::Ready(Some(Err(std::sync::mpsc::RecvError)))
+      }
       Ok(t) => Poll::Ready(Some(Ok(t))), // got date
     }
-  } // fn 
+  } // fn
 }
 
-impl<'a,T> FusedStream for StatusReceiverStream<'a,T> {
+impl<'a, T> FusedStream for StatusReceiverStream<'a, T> {
   fn is_terminated(&self) -> bool {
-    false 
+    false
   }
 }
 
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
-
 
 #[derive(Debug, Clone)]
 pub enum DomainParticipantStatus {
@@ -259,14 +267,14 @@ pub enum DataReaderStatus {
 
   // DataAvailable variant is not implemented, as it seems to bring little additional value,
   // because the normal data waiting mechanism already uses the same mio::poll structure.
-  
   /// A sample has been lost (never received).
   /// TODO: Implement this.
   /// * Check that the following interpretation is correct:
-  /// * For a BEST_EFFORT reader: Whenever we skip ahead in SequenceNumber, possibly because a message is lost,
-  ///   or messages arrive out of order.
-  /// * For a RELIABLE reader: Whenever we skip ahead in SequenceNumbers taht are delivered via DataReader. 
-  ///   The reason may be that we receive a HEARTBEAT or GAP submessage indicating that some samples we are 
+  /// * For a BEST_EFFORT reader: Whenever we skip ahead in SequenceNumber,
+  ///   possibly because a message is lost, or messages arrive out of order.
+  /// * For a RELIABLE reader: Whenever we skip ahead in SequenceNumbers taht
+  ///   are delivered via DataReader. The reason may be that we receive a
+  ///   HEARTBEAT or GAP submessage indicating that some samples we are
   ///   expecting are not available.
   SampleLost { count: CountWithChange },
 

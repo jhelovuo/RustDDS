@@ -1180,10 +1180,11 @@ mod tests {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let qos_policy = QosPolicies::qos_none();
-    dds_cache
-      .write()
-      .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()), &qos_policy);
+    dds_cache.write().unwrap().add_new_topic(
+      "test".to_string(),
+      TypeDesc::new("testi".to_string()),
+      &qos_policy,
+    );
 
     let reader_ing = ReaderIngredients {
       guid,
@@ -1247,10 +1248,11 @@ mod tests {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let qos_policy = QosPolicies::qos_none();
-    dds_cache
-      .write()
-      .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()), &qos_policy);
+    dds_cache.write().unwrap().add_new_topic(
+      "test".to_string(),
+      TypeDesc::new("testi".to_string()),
+      &qos_policy,
+    );
 
     let reader_ing = ReaderIngredients {
       guid: new_guid,
@@ -1310,7 +1312,7 @@ mod tests {
       .lock()
       .unwrap()
       .get_change(new_reader.seqnum_instant_map.get(&d_seqnum).unwrap());
-    
+
     // TODO: Investigate why this fails. Is the test case or implementation
     // faulty?
     assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
@@ -1335,16 +1337,17 @@ mod tests {
       .build();
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
-    dds_cache
-      .write()
-      .unwrap()
-      .add_new_topic(topic_name.to_string(), TypeDesc::new(topic_name.to_string()), &reliable_qos);
-    
+    dds_cache.write().unwrap().add_new_topic(
+      topic_name.to_string(),
+      TypeDesc::new(topic_name.to_string()),
+      &reliable_qos,
+    );
+
     let topic_cache = dds_cache
       .read()
       .unwrap()
       .get_existing_topic_cache(topic_name);
-    
+
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,
@@ -1411,10 +1414,10 @@ mod tests {
       WriteOptions::default(),
       d.clone(),
     );
-    topic_cache.lock().unwrap().add_change(
-      &Timestamp::now(),
-      change.clone()
-    );
+    topic_cache
+      .lock()
+      .unwrap()
+      .add_change(&Timestamp::now(), change.clone());
     changes.push(change);
 
     // Duplicate
@@ -1443,10 +1446,10 @@ mod tests {
       WriteOptions::default(),
       d.clone(),
     );
-    topic_cache.lock().unwrap().add_change(
-      &Timestamp::now(),
-      change.clone()
-    );
+    topic_cache
+      .lock()
+      .unwrap()
+      .add_change(&Timestamp::now(), change.clone());
     changes.push(change);
 
     let change = CacheChange::new(
@@ -1455,10 +1458,10 @@ mod tests {
       WriteOptions::default(),
       d,
     );
-    topic_cache.lock().unwrap().add_change(
-      &Timestamp::now(),
-      change.clone()
-    );
+    topic_cache
+      .lock()
+      .unwrap()
+      .add_change(&Timestamp::now(), change.clone());
     changes.push(change);
 
     let hb_none = Heartbeat {
@@ -1489,10 +1492,11 @@ mod tests {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let qos_policy = QosPolicies::qos_none();
-    dds_cache
-      .write()
-      .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()), &qos_policy);
+    dds_cache.write().unwrap().add_new_topic(
+      "test".to_string(),
+      TypeDesc::new("testi".to_string()),
+      &qos_policy,
+    );
 
     let reader_ing = ReaderIngredients {
       guid: new_guid,

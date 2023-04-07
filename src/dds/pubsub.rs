@@ -19,7 +19,7 @@ use crate::{
     participant::*,
     qos::*,
     reader::ReaderIngredients,
-    statusevents::{DataReaderStatus, sync_status_channel},
+    statusevents::{sync_status_channel, DataReaderStatus},
     topic::*,
     traits::{
       key::{Key, Keyed},
@@ -36,14 +36,13 @@ use crate::{
     data_types::topic_data::DiscoveredWriterData, discovery::DiscoveryCommand,
     discovery_db::DiscoveryDB,
   },
-  log_and_err_internal, log_and_err_precondition_not_met,
+  log_and_err_internal, log_and_err_precondition_not_met, mio_source,
   serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter},
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GUID},
     topic_kind::TopicKind,
   },
-  mio_source,
 };
 use super::{
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
@@ -482,7 +481,7 @@ impl InnerPublisher {
   {
     // Data samples from DataWriter to HistoryCache
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(16);
-    let writer_waker = Arc::new( Mutex::new( None ));
+    let writer_waker = Arc::new(Mutex::new(None));
     // Status reports back from Writer to DataWriter.
     let (status_sender, status_receiver) = sync_status_channel(4)?;
 
@@ -957,9 +956,10 @@ impl InnerSubscriber {
     // reader command channel from Datareader to Reader
     let (reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(0);
-    // The buffer length is zero, i.e. sender and receiver must rendezvous at send/receive.
-    // This is needed to synchronize sending of wakers from DataReader to Reader.
-    // If the capacity is increased, then some data available for reading notifications may be missed.
+    // The buffer length is zero, i.e. sender and receiver must rendezvous at
+    // send/receive. This is needed to synchronize sending of wakers from
+    // DataReader to Reader. If the capacity is increased, then some data
+    // available for reading notifications may be missed.
 
     // Use subscriber QoS as basis, modify by Topic settings, and modify by
     // specified QoS.
@@ -980,8 +980,7 @@ impl InnerSubscriber {
 
     let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
 
-    let (poll_event_source, poll_event_sender) =
-      mio_source::make_poll_channel()?;
+    let (poll_event_source, poll_event_sender) = mio_source::make_poll_channel()?;
 
     let new_reader = ReaderIngredients {
       guid: reader_guid,
@@ -1024,7 +1023,6 @@ impl InnerSubscriber {
       data_reader_waker,
       poll_event_source,
     )?;
-
 
     // Return the DataReader Reader pairs to where they are used
     self

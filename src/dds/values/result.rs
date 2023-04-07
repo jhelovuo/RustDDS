@@ -18,10 +18,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
   /// This is out of the DDS spec.
-  /// If DataWriter with Reliability == RELIABLE cannot send within the QoS-specified
-  /// timeout, this error will occur. This can be caused by writing data
-  /// faster than can be written to network, or some of the matched reliable
-  /// DataReaders cannot keep up, i.e. acknowledge samples fast enough.
+  /// If DataWriter with Reliability == RELIABLE cannot send within the
+  /// QoS-specified timeout, this error will occur. This can be caused by
+  /// writing data faster than can be written to network, or some of the
+  /// matched reliable DataReaders cannot keep up, i.e. acknowledge samples
+  /// fast enough.
   #[error("Write must wait for network or reliable DataReaders")]
   MustBlock,
   /// Illegal parameter value.
@@ -102,7 +103,6 @@ impl Error {
       reason: reason.into(),
     })
   }
-
 }
 
 #[doc(hidden)]

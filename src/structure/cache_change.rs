@@ -1,7 +1,6 @@
 use crate::{
-  dds::{ddsdata::DDSData, with_key::datawriter::WriteOptions},
-  dds::traits::key::*,
-  structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp,},
+  dds::{ddsdata::DDSData, traits::key::*, with_key::datawriter::WriteOptions},
+  structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp},
 };
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Copy, Clone)]
@@ -50,22 +49,23 @@ impl CacheChange {
   // }
 }
 
-
 // This structure is used to communicate just deserialized samples
 // from SimpleDatareader to DataReader
 #[derive(Debug, Clone)]
 pub struct DeserializedCacheChange<D: Keyed> {
-  pub(crate) receive_instant: Timestamp,  // 8 bytes, to be used as unique key in internal data structures
-  pub(crate) writer_guid: GUID, // 8 bytes
+  pub(crate) receive_instant: Timestamp, /* 8 bytes, to be used as unique key in internal data
+                                          * structures */
+  pub(crate) writer_guid: GUID,               // 8 bytes
   pub(crate) sequence_number: SequenceNumber, // 8 bytes
-  pub(crate) write_options: WriteOptions, // 16 bytes
+  pub(crate) write_options: WriteOptions,     // 16 bytes
 
   // the data sample (or key) itself is stored here
-  pub(crate) sample: Result<D, D::K>,  // TODO: make this a Box<> for easier detaching an reattaching to somewhere else
+  pub(crate) sample: Result<D, D::K>, /* TODO: make this a Box<> for easier detaching an
+                                       * reattaching to somewhere else */
 }
 
-impl<D:Keyed> DeserializedCacheChange<D> {
-  pub fn new(receive_instant: Timestamp, cc: &CacheChange, deserialized: Result<D,D::K>, ) -> Self {
+impl<D: Keyed> DeserializedCacheChange<D> {
+  pub fn new(receive_instant: Timestamp, cc: &CacheChange, deserialized: Result<D, D::K>) -> Self {
     DeserializedCacheChange {
       receive_instant,
       writer_guid: cc.writer_guid,

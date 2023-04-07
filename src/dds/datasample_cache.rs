@@ -1,5 +1,5 @@
 use std::{
-  collections::{BTreeMap, BTreeSet, HashMap, VecDeque, },
+  collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
   ops::Bound,
 };
 
@@ -11,13 +11,11 @@ use crate::{
     qos::{policy, QosPolicies},
     readcondition::ReadCondition,
     sampleinfo::*,
-    traits::key::{Key, Keyed, },
+    traits::key::{Key, Keyed},
     with_key::datasample::DataSample,
   },
   structure::{
-    cache_change::DeserializedCacheChange, 
-    guid::GUID,
-    sequence_number::SequenceNumber,
+    cache_change::DeserializedCacheChange, guid::GUID, sequence_number::SequenceNumber,
     time::Timestamp,
   },
   with_key::WriteOptions,
@@ -28,7 +26,6 @@ use crate::{
 // DataSampleCache is a structure local to DataReader and DataWriter. It acts as
 // a buffer between e.g. RTPS Reader and the application-facing DataReader. It
 // keeps track of what each DataReader has "read" or "taken".
-
 
 // Data samples are here ordered and indexed by Timestamp, which must be a
 // unique key. RTPS Timestamp has sub-nanosecond resolution, so it could be
@@ -86,18 +83,19 @@ where
     }
   }
 
-
-  pub(crate) fn fill_from_deserialized_cache_change(&mut self, deserialized_cc : DeserializedCacheChange<D>)
-  {
+  pub(crate) fn fill_from_deserialized_cache_change(
+    &mut self,
+    deserialized_cc: DeserializedCacheChange<D>,
+  ) {
     // TODO list.
-
 
     self.add_sample(
       deserialized_cc.sample,
       deserialized_cc.writer_guid,
       deserialized_cc.sequence_number,
       deserialized_cc.receive_instant,
-      deserialized_cc.write_options);
+      deserialized_cc.write_options,
+    );
   }
 
   fn add_sample(
@@ -184,7 +182,8 @@ where
         /* None: ok */ || (),
         /* Some: key was there already! */
         // TODO: We should not outright panic here, but rather raise a serious error.
-        // This is a symption that the receive timestamps are not unique identifiers like they are supposed to be.
+        // This is a symption that the receive timestamps are not unique identifiers like they are
+        // supposed to be.
         |_already_existed| {
           panic!(
             "Tried to add duplicate datasample with the same key {:?}",
@@ -367,7 +366,7 @@ where
   //
   // Therea are two versions of both read and take: Return DataSample<D> (incl.
   // metadata) and "bare" versions without metadata.
-  
+
   pub fn read_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<&D>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
@@ -429,7 +428,7 @@ where
 
     result
   }
-  
+
   pub fn take_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<D>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
@@ -471,7 +470,7 @@ where
     self.mark_instances_viewed(&instance_generations);
     result
   }
-  
+
   pub fn read_bare_by_keys(
     &mut self,
     keys: &[(Timestamp, D::K)],
@@ -509,7 +508,7 @@ where
     }
     result
   }
-  
+
   pub fn take_bare_by_keys(
     &mut self,
     keys: &[(Timestamp, D::K)],
@@ -546,21 +545,18 @@ where
       .map(|(k, _)| k.clone())
       .next()
   }
-
 }
 
 // helper function
 // somewhat like result.as_ref() , but one-sided only
-pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(r: &std::result::Result<T, E>) 
-  -> std::result::Result<&T, E> 
-{
+pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(
+  r: &std::result::Result<T, E>,
+) -> std::result::Result<&T, E> {
   match *r {
     Ok(ref x) => Ok(x),
     Err(ref x) => Err(x.clone()),
   }
 }
-
-
 
 #[cfg(test)]
 mod tests {

@@ -17,7 +17,7 @@ use crate::{
     },
     rtps_reader_proxy::RtpsReaderProxy,
     rtps_writer_proxy::RtpsWriterProxy,
-    topic::{Topic, TopicDescription,},
+    topic::{Topic, TopicDescription},
     traits::{
       key::{Key, Keyed},
       serde_adapters::with_key::SerializerAdapter,

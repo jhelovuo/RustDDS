@@ -1,11 +1,12 @@
-use bytes::Bytes;
 use std::cmp::min;
+
+use bytes::Bytes;
 
 use crate::{
   dds::traits::key::KeyHash,
   messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+  structure::cache_change::ChangeKind,
 };
-use crate::structure::cache_change::ChangeKind;
 
 // DDSData represets a serialized data sample with metadata
 
@@ -86,10 +87,10 @@ impl DDSData {
         // the compiler happy.
         let hash_vec = key_hash.to_vec();
         let hash_len = hash_vec.len(); // Should be always 16
-        let end = min(to,hash_len);
-        let start = min(from,end);
+        let end = min(to, hash_len);
+        let start = min(from, end);
         Bytes::from(hash_vec).slice(start..end)
-      } 
+      }
     }
   }
 }

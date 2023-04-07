@@ -15,22 +15,18 @@ use log4rs::{
   Config,
 };
 use rustdds::{
-  DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented, TopicDescription, TopicKind,
+  with_key::DataReaderStream, DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented,
+  TopicDescription, TopicKind,
 };
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
-
-use rustdds::with_key::DataReaderStream;
-
 use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use mio_06::{Events, Poll, PollOpt, Ready, Token}; // polling
 use mio_extras::channel; // pollable channel
 use rand::prelude::*;
-
 use smol::{prelude::*, Async};
-use futures::FutureExt;
-use futures::stream::StreamExt;
+use futures::{stream::StreamExt, FutureExt};
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Shape {
@@ -153,11 +149,10 @@ fn main() -> std::io::Result<()> {
   .expect("Error setting Ctrl-C handler");
   println!("Press Ctrl-C to quit.");
 
-
   let subscriber = domain_participant.create_subscriber(&qos).unwrap();
   let mut datareader = subscriber
-      .create_datareader_cdr::<Shape>(&topic, Some(qos))
-      .unwrap();
+    .create_datareader_cdr::<Shape>(&topic, Some(qos))
+    .unwrap();
 
   smol::block_on(async {
     let mut run = true;
@@ -195,7 +190,6 @@ fn main() -> std::io::Result<()> {
 
     Ok(())
   })
-
 }
 
 fn configure_logging() {

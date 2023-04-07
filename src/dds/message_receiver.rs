@@ -485,13 +485,14 @@ mod tests {
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let qos_policy = QosPolicies::qos_none();
-    
+
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
 
-    dds_cache
-      .write()
-      .unwrap()
-      .add_new_topic("test".to_string(), TypeDesc::new("testi".to_string()), &qos_policy);
+    dds_cache.write().unwrap().add_new_topic(
+      "test".to_string(),
+      TypeDesc::new("testi".to_string()),
+      &qos_policy,
+    );
     let reader_ing = ReaderIngredients {
       guid: new_guid,
       notification_sender: send,

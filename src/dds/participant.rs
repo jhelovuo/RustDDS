@@ -874,7 +874,7 @@ impl DomainParticipantInner {
     timeout: Duration,
   ) -> Result<Option<Topic>> {
     use mio_06 as mio;
-    
+
     let poll = mio::Poll::new()?;
     let mut events = mio::Events::with_capacity(1);
     // Should be register before the check and use level trigger to avoid missing

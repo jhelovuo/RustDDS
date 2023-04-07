@@ -726,8 +726,11 @@ impl DPEventLoop {
     match self.ddscache.write() {
       Ok(mut ddsc) => {
         let ptd = &dwd.publication_topic_data;
-        ddsc.add_new_topic(ptd.topic_name.clone(), TypeDesc::new(ptd.type_name.clone()),
-          &ptd.qos());
+        ddsc.add_new_topic(
+          ptd.topic_name.clone(),
+          TypeDesc::new(ptd.type_name.clone()),
+          &ptd.qos(),
+        );
       }
 
       _ => panic!("DDSCache is poisoned"),

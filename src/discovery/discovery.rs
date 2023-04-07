@@ -205,7 +205,10 @@ impl Discovery {
       };
     }
 
-    let poll = try_construct!(mio_06::Poll::new(), "Failed to allocate discovery poll. {:?}");
+    let poll = try_construct!(
+      mio_06::Poll::new(),
+      "Failed to allocate discovery poll. {:?}"
+    );
 
     try_construct!(
       poll.register(
@@ -937,7 +940,8 @@ impl Discovery {
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let drds: Vec<std::result::Result<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription_reader.into_iterator() {
-        Ok(ds) => ds.map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
+        Ok(ds) => ds
+          .map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
           .filter(|d|
               // If a particiapnt was specified, we must match its GUID prefix.
               match (read_history, d) {
@@ -990,7 +994,8 @@ impl Discovery {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
-        Ok(ds) => ds.map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
+        Ok(ds) => ds
+          .map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
           // If a particiapnt was specified, we must match its GUID prefix.
           .filter(|d| match (read_history, d) {
             (None, _) => true, // Not asked to filter by participant
@@ -1028,18 +1033,24 @@ impl Discovery {
   }
 
   pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let ts: Vec<std::result::Result<(DiscoveredTopicData, GUID), GUID>> =
-      match self.dcps_topic_reader.take(usize::MAX, ReadCondition::any()) {
-        Ok(ds) => ds.iter()
-          .map(|d| d.value.clone()
-            .map( |o| (o, d.sample_info.writer_guid()))
-            .map_err(|g| g.0))
-          .collect(),
-        Err(e) => {
-          error!("handle_topic_reader: {:?}", e);
-          return;
-        }
-      };
+    let ts: Vec<std::result::Result<(DiscoveredTopicData, GUID), GUID>> = match self
+      .dcps_topic_reader
+      .take(usize::MAX, ReadCondition::any())
+    {
+      Ok(ds) => ds
+        .iter()
+        .map(|d| {
+          d.value
+            .clone()
+            .map(|o| (o, d.sample_info.writer_guid()))
+            .map_err(|g| g.0)
+        })
+        .collect(),
+      Err(e) => {
+        error!("handle_topic_reader: {:?}", e);
+        return;
+      }
+    };
 
     for t in ts {
       match t {

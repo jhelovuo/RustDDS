@@ -264,14 +264,14 @@ impl RtpsWriterProxy {
     &mut self,
     remove_from: SequenceNumber,
     remove_until_before: SequenceNumber,
-  )  {
+  ) {
     // check sanity
     if remove_from > remove_until_before {
       error!(
         "irrelevant_changes_range: negative range: remove_from={:?} remove_until_before={:?}",
         remove_from, remove_until_before
       );
-      return; 
+      return;
     }
     // now remove_from <= remove_until_before, i.e. at least zero to remove
     //
@@ -293,13 +293,12 @@ impl RtpsWriterProxy {
         "ack_base increased to {:?} by irrelevant_changes_range {:?} to {:?}. writer={:?}",
         self.ack_base, remove_from, remove_until_before, self.remote_writer_guid
       );
-
     } else {
       // TODO: This potentially generates a very large BTreeMap
       for na in
         SequenceNumber::range_inclusive(remove_from, remove_until_before - SequenceNumber::new(1))
       {
-        self.changes.insert(na,None);
+        self.changes.insert(na, None);
       }
     }
   }
@@ -307,10 +306,9 @@ impl RtpsWriterProxy {
   // Used to mark messages irrelevant because of a HEARTBEAT message.
   //
   // smallest_seqnum is the lowest key to be retained
-  pub fn irrelevant_changes_up_to(
-    &mut self,
-    smallest_seqnum: SequenceNumber,
-  ) /*-> BTreeMap<SequenceNumber, Timestamp>*/ {
+  pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber)
+  /* -> BTreeMap<SequenceNumber, Timestamp> */
+  {
     self.irrelevant_changes_range(SequenceNumber::new(0), smallest_seqnum)
   }
 
