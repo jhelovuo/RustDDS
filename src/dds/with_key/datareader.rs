@@ -156,7 +156,7 @@ where
   }
 
   fn drain_read_notifications(&self) {
-    self.simple_data_reader.drain_read_notifications()
+    self.simple_data_reader.drain_read_notifications();
   }
 
   fn select_keys_for_access(&self, read_condition: ReadCondition) -> Vec<(Timestamp, D::K)> {

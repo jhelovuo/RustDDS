@@ -189,6 +189,8 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
+  
+  #[allow(clippy::too_many_arguments)]
   pub(crate) fn new(
     publisher: Publisher,
     topic: Topic,

@@ -269,7 +269,7 @@ impl TopicCache {
         .iter()
         .flat_map(|(guid, sn_map)| {
           let lower_bound_exc = last_read_sn
-            .get(&guid)
+            .get(guid)
             .cloned()
             .unwrap_or(SequenceNumber::zero());
           let upper_bound_exc = self.reliable_before(*guid);

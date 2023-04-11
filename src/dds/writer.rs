@@ -12,7 +12,7 @@ use core::task::Waker;
 use log::{debug, error, info, trace, warn};
 use speedy::{Endianness, Writable};
 use mio_extras::{
-  channel::{self as mio_channel, SyncSender, TrySendError},
+  channel::{self as mio_channel, TrySendError},
   timer::Timer,
 };
 use mio_06::Token;

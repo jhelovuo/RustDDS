@@ -307,9 +307,8 @@ impl RtpsWriterProxy {
   //
   // smallest_seqnum is the lowest key to be retained
   pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber)
-  /* -> BTreeMap<SequenceNumber, Timestamp> */
   {
-    self.irrelevant_changes_range(SequenceNumber::new(0), smallest_seqnum)
+    self.irrelevant_changes_range(SequenceNumber::new(0), smallest_seqnum);
   }
 
   fn discovered_or_default(drd: &[Locator], default: &[Locator]) -> Vec<Locator> {

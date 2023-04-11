@@ -140,6 +140,11 @@
   // but that may break code flow.
 )]
 
+// Tell clippy to shut up about this, because using (deriving) Readable from the speedy
+// library triggers this error.
+// TODO: Remove this allow-attribute once speedy has been fixed (or replaced).
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 #[macro_use]
 mod serialization_test;
 #[macro_use]

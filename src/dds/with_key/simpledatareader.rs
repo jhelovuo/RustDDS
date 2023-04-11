@@ -91,12 +91,9 @@ impl<K: Key> ReadState<K> {
   // This is a helper function so that borrow checker understands
   // that we are splitting one mutable borrow into two _disjoint_ mutable
   // borrows.
-  fn get_sn_map_and_hash_map<'a>(
-    &'a mut self,
-  ) -> (
-    &'a mut BTreeMap<GUID, SequenceNumber>,
-    &'a mut BTreeMap<KeyHash, K>,
-  ) {
+  fn get_sn_map_and_hash_map(&mut self) 
+    -> ( &mut BTreeMap<GUID, SequenceNumber>, &mut BTreeMap<KeyHash, K>) 
+  {
     let ReadState {
       last_read_sn,
       hash_to_key_map,
@@ -260,7 +257,7 @@ where
       Ok(d) => d.key(),
       Err(k) => k.clone(),
     };
-    hash_to_key_map.insert(instance_key.hash_key(), instance_key.clone());
+    hash_to_key_map.insert(instance_key.hash_key(), instance_key);
   }
 
   fn deserialize(
@@ -282,7 +279,7 @@ where
             Ok(payload) => {
               let p = Ok(payload);
               Self::update_hash_to_key_map(hash_to_key_map, &p);
-              Ok(DeserializedCacheChange::new(timestamp, &cc, p))
+              Ok(DeserializedCacheChange::new(timestamp, cc, p))
             }
             Err(e) => Err(format!("Failed to deserialize sample bytes: {e}, ")),
           }
@@ -305,7 +302,7 @@ where
           Ok(key) => {
             let k = Err(key);
             Self::update_hash_to_key_map(hash_to_key_map, &k);
-            Ok(DeserializedCacheChange::new(timestamp, &cc, k))
+            Ok(DeserializedCacheChange::new(timestamp, cc, k))
           }
           Err(e) => Err(format!("Failed to deserialize key {}", e)),
         }
@@ -317,7 +314,7 @@ where
         if let Some(key) = hash_to_key_map.get(&key_hash) {
           Ok(DeserializedCacheChange::new(
             timestamp,
-            &cc,
+            cc,
             Err(key.clone()),
           ))
         } else {
