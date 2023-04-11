@@ -339,9 +339,13 @@ impl Reader {
   // TODO Used for test/debugging purposes
   #[cfg(test)]
   pub fn history_cache_sequence_start_and_end_numbers(&self) -> Vec<SequenceNumber> {
-    let start = self.seqnum_instant_map.iter().min().unwrap().0;
-    let end = self.seqnum_instant_map.iter().max().unwrap().0;
-    vec![*start, *end]
+    if self.seqnum_instant_map.is_empty() {
+      vec![]
+    } else {
+      let start = self.seqnum_instant_map.iter().min().unwrap().0;
+      let end = self.seqnum_instant_map.iter().max().unwrap().0;
+      vec![*start, *end]
+    }
   }
 
   // updates or adds a new writer proxy, doesn't touch changes
@@ -598,6 +602,12 @@ impl Reader {
           "handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
           my_entityid, writer_guid, self.topic_name,
         );
+        // This is normal if the DATA was broadcast, but it was from another topic.
+        // We just ignore the data in such a case
+        // ... unless it is Discovery traffic.
+        if writer_guid.entity_id.entity_kind.is_user_defined() {
+          return;
+        }
       }
     } else {
       // stateless reader

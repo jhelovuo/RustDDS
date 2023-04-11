@@ -17,6 +17,7 @@ use crate::{
 
 const MAX_MESSAGE_SIZE: usize = 64 * 1024; // This is max we can get from UDP.
 const MESSAGE_BUFFER_ALLOCATION_CHUNK: usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
+static_assertions::const_assert!( MESSAGE_BUFFER_ALLOCATION_CHUNK > MAX_MESSAGE_SIZE);
 
 /// Listens to messages coming to specified host port combination.
 /// Only messages from added listen addressed are read when get_all_messages is
@@ -172,65 +173,65 @@ impl UDPListener {
     message
   }
 
-  fn ensure_receive_buffer_capacity(&mut self) {
-    if self.receive_buffer.capacity() < MAX_MESSAGE_SIZE {
-      self.receive_buffer = BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK);
-      debug!("ensure_receive_buffer_capacity - reallocated receive_buffer");
-    }
-    unsafe {
-      // This is safe, because we just checked that there is enough capacity.
-      // We do not read undefined data, because next the recv call in messages()
-      // will overwrite this space and truncate the rest away.
-      self.receive_buffer.set_len(MAX_MESSAGE_SIZE);
-    }
-    trace!(
-      "ensure_receive_buffer_capacity - {} bytes left",
-      self.receive_buffer.capacity()
-    );
-  }
-
   /// Get all messages waiting in the socket.
   pub fn messages(&mut self) -> Vec<Bytes> {
-    // This code may seem slighlty non-sensical, if you do not know
-    // how BytesMut works.
-    let mut messages = Vec::with_capacity(4); // just a guess, should cover most cases
-    self.ensure_receive_buffer_capacity();
-    while let Ok(nbytes) = self.socket.recv(&mut self.receive_buffer) {
-      self.receive_buffer.truncate(nbytes);
-      // Now append some extra data to align the buffer end, so the next piece will
-      // be aligned also. This assumes that the initial buffer was aligned to begin
-      // with.
-      while self.receive_buffer.len() % 4 != 0 {
-        self.receive_buffer.extend_from_slice(&[0xCC]); // add some funny
-                                                        // padding bytes
-                                                        // Funny value
-                                                        // encourages fast crash
-                                                        // in case these bytes
-                                                        // are ever accessed,
-                                                        // as they should not.
-      }
-      let mut message = self.receive_buffer.split_to(self.receive_buffer.len());
-      self.ensure_receive_buffer_capacity();
-      message.truncate(nbytes); // discard (hide) padding
-      messages.push(Bytes::from(message)); // freeze and push
-    }
-    messages
-  }
+    let mut messages = Vec::with_capacity(4);
 
-  // This function seems not necessary, because multicast join is done
-  // at listener creation time.
-  //
-  // pub fn join_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
-  //   if address.is_multicast() {
-  //     return self
-  //       .socket
-  //       .join_multicast_v4(address, &Ipv4Addr::UNSPECIFIED);
-  //   }
-  //   io::Result::Err(io::Error::new(
-  //     io::ErrorKind::Other,
-  //     "Not a multicast address",
-  //   ))
-  // }
+    loop {
+      // Loop invariant. Note that capacity() may be large, but .len() == 0.
+      assert_eq!(self.receive_buffer.len(), 0); 
+
+      // Ensure that receive buffer has enough capacity for a message
+      if self.receive_buffer.capacity() < MAX_MESSAGE_SIZE {
+        self.receive_buffer = BytesMut::with_capacity(MESSAGE_BUFFER_ALLOCATION_CHUNK);
+        debug!("ensure_receive_buffer_capacity - reallocated receive_buffer");
+      }
+      unsafe {
+        // This is safe, because we just checked that there is enough capacity, 
+        // or allocated more.
+        // We do not read undefined data, because the recv()
+        // will overwrite this space and truncate the rest away.
+        self.receive_buffer.set_len(MAX_MESSAGE_SIZE);
+      }
+      trace!(
+        "ensure_receive_buffer_capacity - {} bytes left",
+        self.receive_buffer.capacity()
+      );
+      let nbytes = 
+        match self.socket.recv(&mut self.receive_buffer) {
+          Ok(n) => n,
+          Err(e) => {
+            self.receive_buffer.clear(); // since nothing was received
+            if e.kind() == io::ErrorKind::WouldBlock {
+              // This is the normal case.
+            } else {
+              warn!("socket recv() error: {:?}",e);
+            }
+            // In any case, we stop trying and return.
+            return messages;
+          }
+        };
+      // Something was received.
+
+      // Now, append some extra data to align the buffer end, so the next piece will
+      // be aligned also. This assumes that the initial buffer was aligned to begin
+      // with. This is because RTPS data is optimized to align to 4-byte boundaries.
+      let unalign = self.receive_buffer.len() % 4;
+      if unalign != 0 {
+        self.receive_buffer.extend_from_slice(&[0xCC,0xCC,0xCC, 0xCC][..(4-unalign)] );
+        // Funny value 0xCC encourages a fast crash in case these bytes
+        // are ever accessed, as they should not.
+      }
+
+      // Now split away the used portion.
+      let mut message = self.receive_buffer.split_to(self.receive_buffer.len());
+      message.truncate(nbytes); // discard (hide) padding
+      messages.push(Bytes::from(message)); // freeze bytes and push
+    } // loop
+
+    //unreachable!(); // But why does this cause a warning? (rustc 1.66.0)
+    // Answer: https://github.com/rust-lang/rust/issues/46500
+  }
 
   #[cfg(test)] // normally done in .drop()
   pub fn leave_multicast(&self, address: &Ipv4Addr) -> io::Result<()> {
