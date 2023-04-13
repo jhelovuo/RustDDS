@@ -5,28 +5,28 @@
 
 use std::{
   io,
-  time::{Duration, Instant},
+  time::{Duration},
 };
 
-use log::{debug, error, trace, LevelFilter};
+#[allow(unused_imports)]
+use log::{debug, error, trace, LevelFilter, info};
+
 use log4rs::{
   append::console::ConsoleAppender,
   config::{Appender, Root},
   Config,
 };
 use rustdds::{
-  with_key::DataReaderStream, DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented,
-  TopicDescription, TopicKind,
+  DomainParticipant, Keyed, QosPolicyBuilder, TopicDescription, TopicKind,
 };
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
 use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
-use mio_06::{Events, Poll, PollOpt, Ready, Token}; // polling
-use mio_extras::channel; // pollable channel
 use rand::prelude::*;
-use smol::{prelude::*, Async};
-use futures::{stream::StreamExt, FutureExt};
+
+use smol::{Timer, };
+use futures::{stream::StreamExt, FutureExt, TryFutureExt, };
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Shape {
@@ -45,11 +45,6 @@ impl Keyed for Shape {
 
 const DA_WIDTH: i32 = 240;
 const DA_HEIGHT: i32 = 270;
-
-const STOP_PROGRAM: Token = Token(0);
-const READER_READY: Token = Token(1);
-const READER_STATUS_READY: Token = Token(2);
-const WRITER_STATUS_READY: Token = Token(3);
 
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
@@ -121,7 +116,7 @@ fn main() -> std::io::Result<()> {
 
   let qos = qos_b.build();
 
-  let loop_delay: Duration = match deadline_policy {
+  let write_interval: Duration = match deadline_policy {
     None => Duration::from_millis(200), // This is the default rate
     Some(Deadline(dd)) => Duration::from(dd).mul_f32(0.8), // slightly faster than dealine
   };
@@ -141,56 +136,146 @@ fn main() -> std::io::Result<()> {
   );
 
   // Set Ctrl-C handler
-  let (stop_sender, stop_receiver) = smol::channel::bounded(1);
+  let (stop_sender, read_stop_receiver) = smol::channel::bounded(2);
   ctrlc::set_handler(move || {
+    // We will send two stop coammnds, one for reader, the other for writer.
+    stop_sender.send_blocking(()).unwrap_or(());
     stop_sender.send_blocking(()).unwrap_or(());
     // ignore errors, as we are quitting anyway
   })
-  .expect("Error setting Ctrl-C handler");
+    .expect("Error setting Ctrl-C handler");
+  let write_stop_receiver = read_stop_receiver.clone();
   println!("Press Ctrl-C to quit.");
 
-  let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-  let mut datareader = subscriber
-    .create_datareader_cdr::<Shape>(&topic, Some(qos))
-    .unwrap();
+  let is_publisher = matches.is_present("publisher");
+  let is_subscriber = matches.is_present("subscriber");
 
-  smol::block_on(async {
-    let mut run = true;
-    let mut stop = stop_receiver.recv().fuse();
-    let mut datareader_stream = datareader.async_sample_stream();
-    let mut datareader_event_stream = datareader_stream.async_event_stream();
-    while run {
-      futures::select! {
-        _ = stop => run = false,
-        r = datareader_stream.select_next_some() => {
-          match r {
-            Ok(v) =>
-              match v {
-                  Ok(sample) => println!(
-                      "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
-                      topic.name(),
-                      sample.color,
-                      sample.x,
-                      sample.y,
-                      sample.shapesize,
-                    ),
-                  Err(key) => println!("Disposed key {:?}", key),
+  let writer_opt = if is_publisher {
+    debug!("Publisher");
+    let publisher = domain_participant.create_publisher(&qos).unwrap();
+    let writer = publisher
+      .create_datawriter_cdr::<Shape>(&topic, None) // None = get qos policy from publisher
+      .unwrap();
+    Some(writer)
+  } else {
+    None
+  };
+
+  let reader_opt = if is_subscriber {
+    debug!("Subscriber");
+    let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+    let reader = subscriber
+      .create_datareader_cdr::<Shape>(&topic, Some(qos))
+      .unwrap();
+    debug!("Created DataReader");
+    Some(reader)
+  } else {
+    None
+  };
+
+  let mut shape_sample = Shape {
+    color: color.to_string(),
+    x: 0,
+    y: 0,
+    shapesize: 21,
+  };
+
+  let mut random_gen = thread_rng();
+  // A bit complicated lottery to ensure we do not end up with zero velocity,
+  // because that would make a boring demo.
+  let mut x_vel = if random() {
+    random_gen.gen_range(1..5)
+  } else {
+    random_gen.gen_range(-5..-1)
+  };
+  let mut y_vel = if random() {
+    random_gen.gen_range(1..5)
+  } else {
+    random_gen.gen_range(-5..-1)
+  };
+
+  let read_loop = async { 
+    match reader_opt {
+      None => () ,
+      Some(datareader) => {
+        let mut run = true;
+        let mut stop = read_stop_receiver.recv().fuse();
+        let mut datareader_stream = datareader.async_sample_stream();
+        let mut datareader_event_stream = datareader_stream.async_event_stream();
+        while run {
+          futures::select! {
+            _ = stop => run = false,
+            r = datareader_stream.select_next_some() => {
+              match r {
+                Ok(v) =>
+                  match v {
+                      Ok(sample) => println!(
+                          "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
+                          topic.name(),
+                          sample.color,
+                          sample.x,
+                          sample.y,
+                          sample.shapesize,
+                        ),
+                      Err(key) => println!("Disposed key {:?}", key),
+                  }
+                Err(e) => {
+                  error!("{:?}",e);
+                  break;
+                }
               }
-            Err(e) => {
-              error!("{:?}",e);
-              break;
             }
-          }
-        }
-        e = datareader_event_stream.select_next_some() => {
-          println!("DataReader event: {:?}", e);
-        }
+            e = datareader_event_stream.select_next_some() => {
+              println!("DataReader event: {:?}", e);
+            }
+          } // select!
+        } // while
+        println!("Reader task done.")
       }
     }
+  };
+  
+  let write_loop = async {
+    match writer_opt {
+      None => (),
+      Some(datawriter) => {
+        let mut run = true;
+        let mut stop = write_stop_receiver.recv().fuse();
+        let mut tick_stream = 
+          futures::StreamExt::fuse(Timer::interval(write_interval));
 
-    Ok(())
-  })
+        // let mut writer_event_stream = writer.
+        //TODO: write event tmplementation is missing
+
+        while run {
+          futures::select! {
+            _ = stop => run = false,
+            _ = tick_stream.select_next_some() => {
+              let r = move_shape(shape_sample, x_vel, y_vel);
+              shape_sample = r.0;
+              x_vel = r.1;
+              y_vel = r.2;
+
+              datawriter.async_write(shape_sample.clone(), None)
+                .await
+                .unwrap_or_else(|e| error!("DataWriter write failed: {:?}", e))
+                .await;
+            }
+          } // select!
+        } // while
+        println!("Writer task done.");
+      }
+    }
+  };
+
+  // Run both read and write concurrently, until both are done.
+  smol::block_on( async { 
+    futures::join!( read_loop, write_loop ) 
+  } );
+
+  Ok(())
 }
+
 
 fn configure_logging() {
   // initialize logging, preferably from config file
