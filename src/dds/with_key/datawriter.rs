@@ -189,7 +189,7 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
-  
+
   #[allow(clippy::too_many_arguments)]
   pub(crate) fn new(
     publisher: Publisher,
@@ -1220,11 +1220,11 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
-  pub async fn async_write(
+  pub fn async_write(
     &self,
     data: D,
     source_timestamp: Option<Timestamp>,
-  ) -> AsyncWrite<D, SA> {
+  ) -> impl Future<Output = Result<()> > + '_ {
     AsyncWrite {
       write_with_options: self.async_write_with_options(data, WriteOptions::from(source_timestamp)),
     }

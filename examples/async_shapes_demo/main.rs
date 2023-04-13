@@ -257,7 +257,6 @@ fn main() -> std::io::Result<()> {
               y_vel = r.2;
 
               datawriter.async_write(shape_sample.clone(), None)
-                .await
                 .unwrap_or_else(|e| error!("DataWriter write failed: {:?}", e))
                 .await;
             }
