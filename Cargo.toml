@@ -50,7 +50,7 @@ crossterm = "0.26"
 tui = { version = "0.19", default-features = false, features = ['crossterm'] }
 
 # shapes-demo
-clap = "3.1"
+clap = "4.2"
 ctrlc = "3.1.6"
 
 [target.'cfg(unix)'.dev-dependencies]
