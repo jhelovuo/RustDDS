@@ -47,7 +47,7 @@ env_logger = "0.9"
 
 # ros_visualizer
 crossterm = "0.23"
-tui = { version = "0.17", default-features = false, features = ['crossterm'] }
+tui = { version = "0.19", default-features = false, features = ['crossterm'] }
 
 # shapes-demo
 clap = "3.1"
