@@ -938,6 +938,11 @@ where
     self.refresh_manual_liveliness();
     Ok(())
   }
+
+  pub fn as_async_event_stream(&self) -> StatusReceiverStream<DataWriterStatus> {
+    self.status_receiver.as_async_stream()
+  }
+
 }
 
 impl<D, SA> StatusEvented<DataWriterStatus> for DataWriter<D, SA>

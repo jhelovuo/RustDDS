@@ -244,8 +244,7 @@ fn main() -> std::io::Result<()> {
         let mut tick_stream = 
           futures::StreamExt::fuse(Timer::interval(write_interval));
 
-        // let mut writer_event_stream = writer.
-        //TODO: write event tmplementation is missing
+        let mut datawriter_event_stream = datawriter.as_async_event_stream();
 
         while run {
           futures::select! {
@@ -259,6 +258,9 @@ fn main() -> std::io::Result<()> {
               datawriter.async_write(shape_sample.clone(), None)
                 .unwrap_or_else(|e| error!("DataWriter write failed: {:?}", e))
                 .await;
+            }
+            e = datawriter_event_stream.select_next_some() => {
+              println!("DataWriter event: {:?}", e);
             }
           } // select!
         } // while
