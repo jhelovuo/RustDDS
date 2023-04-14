@@ -139,7 +139,6 @@
   // option_map_unit_fn suggests changing option.map( ) with () return value to if let -construct,
   // but that may break code flow.
 )]
-
 // Tell clippy to shut up about this, because using (deriving) Readable from the speedy
 // library triggers this error.
 // TODO: Remove this allow-attribute once speedy has been fixed (or replaced).

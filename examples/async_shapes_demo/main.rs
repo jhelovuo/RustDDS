@@ -3,30 +3,23 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-use std::{
-  io,
-  time::{Duration},
-};
+use std::{io, time::Duration};
 
 #[allow(unused_imports)]
-use log::{debug, error, trace, LevelFilter, info};
-
+use log::{debug, error, info, trace, LevelFilter};
 use log4rs::{
   append::console::ConsoleAppender,
   config::{Appender, Root},
   Config,
 };
-use rustdds::{
-  DomainParticipant, Keyed, QosPolicyBuilder, TopicDescription, TopicKind,
-};
+use rustdds::{DomainParticipant, Keyed, QosPolicyBuilder, TopicDescription, TopicKind};
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
 use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use rand::prelude::*;
-
-use smol::{Timer, };
-use futures::{stream::StreamExt, FutureExt, TryFutureExt, };
+use smol::Timer;
+use futures::{stream::StreamExt, FutureExt, TryFutureExt};
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Shape {
@@ -47,7 +40,7 @@ const DA_WIDTH: i32 = 240;
 const DA_HEIGHT: i32 = 270;
 
 #[allow(clippy::too_many_lines)]
-fn main() -> std::io::Result<()> {
+fn main() {
   configure_logging();
   let matches = get_matches();
 
@@ -136,15 +129,14 @@ fn main() -> std::io::Result<()> {
   );
 
   // Set Ctrl-C handler
-  let (stop_sender, read_stop_receiver) = smol::channel::bounded(2);
+  let (stop_sender, stop_receiver) = smol::channel::bounded(2);
   ctrlc::set_handler(move || {
     // We will send two stop coammnds, one for reader, the other for writer.
     stop_sender.send_blocking(()).unwrap_or(());
     stop_sender.send_blocking(()).unwrap_or(());
     // ignore errors, as we are quitting anyway
   })
-    .expect("Error setting Ctrl-C handler");
-  let write_stop_receiver = read_stop_receiver.clone();
+  .expect("Error setting Ctrl-C handler");
   println!("Press Ctrl-C to quit.");
 
   let is_publisher = matches.is_present("publisher");
@@ -194,12 +186,12 @@ fn main() -> std::io::Result<()> {
     random_gen.gen_range(-5..-1)
   };
 
-  let read_loop = async { 
+  let read_loop = async {
     match reader_opt {
-      None => () ,
+      None => (),
       Some(datareader) => {
         let mut run = true;
-        let mut stop = read_stop_receiver.recv().fuse();
+        let mut stop = stop_receiver.recv().fuse();
         let mut datareader_stream = datareader.async_sample_stream();
         let mut datareader_event_stream = datareader_stream.async_event_stream();
         while run {
@@ -230,19 +222,18 @@ fn main() -> std::io::Result<()> {
             }
           } // select!
         } // while
-        println!("Reader task done.")
+        println!("Reader task done.");
       }
     }
   };
-  
+
   let write_loop = async {
     match writer_opt {
       None => (),
       Some(datawriter) => {
         let mut run = true;
-        let mut stop = write_stop_receiver.recv().fuse();
-        let mut tick_stream = 
-          futures::StreamExt::fuse(Timer::interval(write_interval));
+        let mut stop = stop_receiver.recv().fuse();
+        let mut tick_stream = futures::StreamExt::fuse(Timer::interval(write_interval));
 
         let mut datawriter_event_stream = datawriter.as_async_event_stream();
 
@@ -270,13 +261,8 @@ fn main() -> std::io::Result<()> {
   };
 
   // Run both read and write concurrently, until both are done.
-  smol::block_on( async { 
-    futures::join!( read_loop, write_loop ) 
-  } );
-
-  Ok(())
+  smol::block_on(async { futures::join!(read_loop, write_loop) });
 }
-
 
 fn configure_logging() {
   // initialize logging, preferably from config file
@@ -336,7 +322,7 @@ fn get_matches() -> ArgMatches {
         .value_name("durability")
         .help("Set durability")
         .takes_value(true)
-        .possible_values(&["v", "l", "t", "p"]),
+        .possible_values(["v", "l", "t", "p"]),
     )
     .arg(
       Arg::new("publisher")

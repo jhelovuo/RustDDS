@@ -91,9 +91,12 @@ impl<K: Key> ReadState<K> {
   // This is a helper function so that borrow checker understands
   // that we are splitting one mutable borrow into two _disjoint_ mutable
   // borrows.
-  fn get_sn_map_and_hash_map(&mut self) 
-    -> ( &mut BTreeMap<GUID, SequenceNumber>, &mut BTreeMap<KeyHash, K>) 
-  {
+  fn get_sn_map_and_hash_map(
+    &mut self,
+  ) -> (
+    &mut BTreeMap<GUID, SequenceNumber>,
+    &mut BTreeMap<KeyHash, K>,
+  ) {
     let ReadState {
       last_read_sn,
       hash_to_key_map,

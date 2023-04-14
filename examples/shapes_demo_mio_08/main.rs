@@ -218,12 +218,9 @@ fn main() {
   let mut last_write = Instant::now();
 
   while !stop_program.load(Ordering::Relaxed) {
-    match poll.poll(&mut events, Some(loop_delay)) {
-      Err(e) => {
-        println!("Poll error {e}",);
-        return;
-      }
-      _ => (),
+    if let Err(e) = poll.poll(&mut events, Some(loop_delay)) {
+      println!("Poll error {e}",);
+      return;
     }
 
     for event in &events {
@@ -368,7 +365,7 @@ fn get_matches() -> ArgMatches {
         .value_name("durability")
         .help("Set durability")
         .takes_value(true)
-        .possible_values(&["v", "l", "t", "p"]),
+        .possible_values(["v", "l", "t", "p"]),
     )
     .arg(
       Arg::new("publisher")

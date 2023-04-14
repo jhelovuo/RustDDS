@@ -373,7 +373,7 @@ fn get_matches() -> ArgMatches {
         .value_name("durability")
         .help("Set durability")
         .takes_value(true)
-        .possible_values(&["v", "l", "t", "p"]),
+        .possible_values(["v", "l", "t", "p"]),
     )
     .arg(
       Arg::new("publisher")

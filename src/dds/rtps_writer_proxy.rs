@@ -306,8 +306,7 @@ impl RtpsWriterProxy {
   // Used to mark messages irrelevant because of a HEARTBEAT message.
   //
   // smallest_seqnum is the lowest key to be retained
-  pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber)
-  {
+  pub fn irrelevant_changes_up_to(&mut self, smallest_seqnum: SequenceNumber) {
     self.irrelevant_changes_range(SequenceNumber::new(0), smallest_seqnum);
   }
 

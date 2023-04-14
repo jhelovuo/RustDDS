@@ -189,7 +189,6 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
-
   #[allow(clippy::too_many_arguments)]
   pub(crate) fn new(
     publisher: Publisher,
@@ -942,7 +941,6 @@ where
   pub fn as_async_event_stream(&self) -> StatusReceiverStream<DataWriterStatus> {
     self.status_receiver.as_async_stream()
   }
-
 }
 
 impl<D, SA> StatusEvented<DataWriterStatus> for DataWriter<D, SA>
@@ -1192,9 +1190,7 @@ where
             all_acked: ack_wait_sender,
           }) {
           Ok(()) => {
-            *self = WaitForAcknowledgments::Waiting {
-              ack_wait_receiver,
-            };
+            *self = WaitForAcknowledgments::Waiting { ack_wait_receiver };
             Poll::Pending
           }
 
@@ -1209,9 +1205,11 @@ where
             Poll::Pending
           }
           Err(TrySendError::Full(_otherwritercommand)) =>
-            // We are sending WaitForAcknowledgments, so the channel
-            // should return only that, if any.
-            unreachable!(), 
+          // We are sending WaitForAcknowledgments, so the channel
+          // should return only that, if any.
+          {
+            unreachable!()
+          }
           Err(e) => Poll::Ready(Err(e.into())),
         }
       }
@@ -1229,7 +1227,7 @@ where
     &self,
     data: D,
     source_timestamp: Option<Timestamp>,
-  ) -> impl Future<Output = Result<()> > + '_ {
+  ) -> impl Future<Output = Result<()>> + '_ {
     AsyncWrite {
       write_with_options: self.async_write_with_options(data, WriteOptions::from(source_timestamp)),
     }
@@ -1305,9 +1303,7 @@ where
           Ok(()) => {
             // Now just return a future. It makes no sense to try to immediately
             // try_recv, as the Writer will make progrss regardless of the DataWriter.
-            WaitForAcknowledgments::Waiting {
-              ack_wait_receiver,
-            }
+            WaitForAcknowledgments::Waiting { ack_wait_receiver }
           }
           Err(TrySendError::Full(WriterCommand::WaitForAcknowledgments {
             all_acked: ack_wait_sender,
@@ -1317,9 +1313,11 @@ where
             ack_wait_sender,
           },
           Err(TrySendError::Full(_otherwritercommand)) =>
-            // We are sending WaitForAcknowledgments, so the channel
-            // should return only that, if any.
-            unreachable!(), 
+          // We are sending WaitForAcknowledgments, so the channel
+          // should return only that, if any.
+          {
+            unreachable!()
+          }
           Err(e) => WaitForAcknowledgments::Fail(e.into()),
         }
       }
