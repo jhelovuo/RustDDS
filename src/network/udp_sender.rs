@@ -1,13 +1,12 @@
 use std::{
   io,
-  net::{IpAddr, SocketAddr},
+  net::{IpAddr, SocketAddr, UdpSocket},
 };
 #[cfg(test)]
 use std::net::Ipv4Addr;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio::net::UdpSocket;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 #[cfg(windows)]
 use local_ip_address::list_afinet_netifas;
@@ -27,7 +26,7 @@ impl UDPSender {
     #[cfg(not(windows))]
     let unicast_socket = {
       let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
-      UdpSocket::bind(&saddr)?
+      UdpSocket::bind(saddr)?
     };
 
     #[cfg(windows)]
@@ -48,7 +47,7 @@ impl UDPSender {
             )
           });
       }
-      UdpSocket::from_socket(std::net::UdpSocket::from(raw_socket))?
+      std::net::UdpSocket::from(raw_socket)
     };
 
     // We set multicasting loop on so that we can hear other DomainParticipant
@@ -82,7 +81,7 @@ impl UDPSender {
       mc_socket.set_multicast_loop_v4(true).unwrap_or_else(|e| {
         error!("Cannot set multicast loop on: {:?}", e);
       });
-      multicast_sockets.push(UdpSocket::from_socket(mc_socket)?);
+      multicast_sockets.push(mc_socket);
     } // end for
 
     let sender = Self {
@@ -163,7 +162,7 @@ impl UDPSender {
       let address = SocketAddr::new(IpAddr::V4(address), port);
       let mut size = 0;
       for s in self.multicast_sockets {
-        size = s.send_to(buffer, &address)?;
+        size = s.send_to(buffer, address)?;
       }
       Ok(size)
     } else {
