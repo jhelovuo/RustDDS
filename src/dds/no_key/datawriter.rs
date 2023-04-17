@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use futures::Future;
 use serde::Serialize;
 
 use crate::{
@@ -431,6 +432,66 @@ impl<D: Serialize, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<D, SA> 
 }
 
 impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<D, SA> {}
+
+//-------------------------------------------------------------------------------
+// async writing implementation
+//
+
+impl<D, SA> DataWriter<D, SA>
+where
+  D: Serialize,
+  SA: SerializerAdapter<D>,
+{
+  pub fn async_write(
+    &self,
+    data: D,
+    source_timestamp: Option<Timestamp>,
+  ) -> impl Future<Output = Result<()>> + '_ {
+    self
+      .keyed_datawriter
+      .async_write(NoKeyWrapper::<D> { d: data }, source_timestamp)
+  }
+
+  /* pub async fn async_write(
+    &self,
+    data: D,
+    source_timestamp: Option<Timestamp>,
+  ) -> Result<()> {
+    self
+    .keyed_datawriter
+    .async_write(NoKeyWrapper::<D> { d: data }, source_timestamp)
+    .await
+  } */
+
+  pub fn async_write_with_options(
+    &self,
+    data: D,
+    write_options: datawriter_with_key::WriteOptions,
+  ) -> impl Future<Output = Result<SampleIdentity>> + '_ {
+    self
+      .keyed_datawriter
+      .async_write_with_options(NoKeyWrapper::<D> { d: data }, write_options)
+  }
+
+  /*  pub async fn async_write_with_options(
+    &self,
+    data: D,
+    write_options: datawriter_with_key::WriteOptions,
+  ) -> Result<SampleIdentity>{
+    self
+    .keyed_datawriter
+    .async_write_with_options(NoKeyWrapper::<D> { d: data }, write_options)
+    .await
+  } */
+
+  pub async fn async_wait_for_acknowledgments(&self) -> impl Future<Output = Result<bool>> + '_ {
+    self.keyed_datawriter.async_wait_for_acknowledgments()
+  }
+
+  /* pub async fn async_wait_for_acknowledgments(&self) -> Result<bool> {
+    self.keyed_datawriter.async_wait_for_acknowledgments().await
+  } // fn */
+} // impl
 
 #[cfg(test)]
 mod tests {

@@ -1288,7 +1288,7 @@ where
     }
   }
 
-  /// Liike the synchronous version.
+  /// Like the synchronous version.
   /// But there is no timeout. Use asyncs to bring your own timeout.
   pub fn async_wait_for_acknowledgments(&self) -> WaitForAcknowledgments<D, SA> {
     match &self.qos_policy.reliability {
