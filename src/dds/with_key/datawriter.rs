@@ -998,8 +998,8 @@ where
 // async writing implementation
 //
 
-// This struct represents a write call which has not yet finished
-pub struct AsyncWriteInProgress<'a, D, SA>
+// A future for an asynchronous write operation
+pub struct AsyncWrite<'a, D, SA>
 where
   D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
@@ -1012,7 +1012,7 @@ where
   timeout_instant: Instant,
 }
 
-impl<'a, D, SA> Future for AsyncWriteInProgress<'a, D, SA>
+impl<'a, D, SA> Future for AsyncWrite<'a, D, SA>
 where
   D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
@@ -1024,7 +1024,6 @@ where
     match self.writer_command.take() {
       Some(wc) => {
         match self.writer.cc_upload.try_send(wc) {
-          //TODO: can we remove .clone() above?
           Ok(()) => {
             self.writer.refresh_manual_liveliness();
             Poll::Ready(Ok(SampleIdentity {
@@ -1069,10 +1068,10 @@ where
   }
 }
 
-// This struct represents a call to wait for acknowldegement which has not yet
-// finished.
-// Could the 'Done' and 'Fail' states be refactored away?
-pub enum AsyncWaitForAckInProgress<'a, D, SA>
+// A future for an asynchronous operation of waiting for acknowledgements.
+// Handles both the sending of the WaitForAcknowledgments command and
+// the waiting for the acknowledgements.
+pub enum AsyncWaitForAcknowledgments<'a, D, SA>
 where
   D: Keyed + Serialize,
   <D as key::Keyed>::K: Serialize,
@@ -1090,7 +1089,7 @@ where
   Fail(Error),
 }
 
-impl<'a, D, SA> Future for AsyncWaitForAckInProgress<'a, D, SA>
+impl<'a, D, SA> Future for AsyncWaitForAcknowledgments<'a, D, SA>
 where
   D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
@@ -1100,16 +1099,16 @@ where
 
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
     match *self {
-      AsyncWaitForAckInProgress::Done => Poll::Ready(Ok(true)),
-      AsyncWaitForAckInProgress::Fail(_) => {
-        let mut dummy = AsyncWaitForAckInProgress::Done;
+      AsyncWaitForAcknowledgments::Done => Poll::Ready(Ok(true)),
+      AsyncWaitForAcknowledgments::Fail(_) => {
+        let mut dummy = AsyncWaitForAcknowledgments::Done;
         core::mem::swap(&mut dummy, &mut self);
         match dummy {
-          AsyncWaitForAckInProgress::Fail(e) => Poll::Ready(Err(e)),
+          AsyncWaitForAcknowledgments::Fail(e) => Poll::Ready(Err(e)),
           _ => unreachable!(),
         }
       }
-      AsyncWaitForAckInProgress::Waiting {
+      AsyncWaitForAcknowledgments::Waiting {
         ref ack_wait_receiver,
       } => {
         match Pin::new(&mut ack_wait_receiver.as_async_stream()).poll_next(cx) {
@@ -1127,11 +1126,11 @@ where
           // return Ok(false)
         }
       }
-      AsyncWaitForAckInProgress::WaitingSendCommand { .. } => {
-        let mut dummy = AsyncWaitForAckInProgress::Done;
+      AsyncWaitForAcknowledgments::WaitingSendCommand { .. } => {
+        let mut dummy = AsyncWaitForAcknowledgments::Done;
         core::mem::swap(&mut dummy, &mut self);
         let (writer, ack_wait_receiver, ack_wait_sender) = match dummy {
-          AsyncWaitForAckInProgress::WaitingSendCommand {
+          AsyncWaitForAcknowledgments::WaitingSendCommand {
             writer,
             ack_wait_receiver,
             ack_wait_sender,
@@ -1145,14 +1144,14 @@ where
             all_acked: ack_wait_sender,
           }) {
           Ok(()) => {
-            *self = AsyncWaitForAckInProgress::Waiting { ack_wait_receiver };
+            *self = AsyncWaitForAcknowledgments::Waiting { ack_wait_receiver };
             Poll::Pending
           }
 
           Err(TrySendError::Full(WriterCommand::WaitForAcknowledgments {
             all_acked: ack_wait_sender,
           })) => {
-            *self = AsyncWaitForAckInProgress::WaitingSendCommand {
+            *self = AsyncWaitForAcknowledgments::WaitingSendCommand {
               writer,
               ack_wait_receiver,
               ack_wait_sender,
@@ -1160,7 +1159,7 @@ where
             Poll::Pending
           }
           Err(TrySendError::Full(_otherwritercommand)) =>
-          // We are sending AsyncWaitForAckInProgress, so the channel
+          // We are sending WaitForAcknowledgments, so the channel
           // should return only that, if any.
           {
             unreachable!()
@@ -1193,6 +1192,8 @@ where
     data: D,
     write_options: WriteOptions,
   ) -> Result<SampleIdentity> {
+    // Construct a future for an async write operation and await for its completion
+
     let send_buffer = match SA::to_bytes(&data) {
       Ok(s) => s,
       Err(e) => return Err(e.into()),
@@ -1211,38 +1212,18 @@ where
 
     let timeout = self.qos().reliable_max_blocking_time();
 
-    match self.cc_upload.try_send(writer_command) {
-      Ok(()) => {
-        self.refresh_manual_liveliness();
-        Ok(SampleIdentity {
-          writer_guid: self.my_guid,
-          sequence_number,
-        })
-      }
-      Err(TrySendError::Full(writer_command)) => {
-        // The write command channel is full
-        // -> create an AsyncWriteInProgress future and asynchronously wait for it to
-        // finish
-        let write_in_progress = AsyncWriteInProgress {
-          writer: self,
-          writer_command: Some(writer_command),
-          sequence_number,
-          timeout,
-          timeout_instant: std::time::Instant::now()
-            + timeout
-              .map(|t| t.to_std())
-              .unwrap_or(crate::dds::helpers::TIMEOUT_FALLBACK.to_std()),
-        };
-        write_in_progress.await
-      }
-      Err(_other_err) => {
-        //TODO: Undo(?) sequence number
-        // write warn! log
-        //TODO: Wrong error kind
-        Err(Error::OutOfResources)
-      }
-    }
-  } // fn
+    let write_future = AsyncWrite {
+      writer: self,
+      writer_command: Some(writer_command),
+      sequence_number,
+      timeout,
+      timeout_instant: std::time::Instant::now()
+        + timeout
+          .map(|t| t.to_std())
+          .unwrap_or(crate::dds::helpers::TIMEOUT_FALLBACK.to_std()),
+    };
+    write_future.await
+  }
 
   /// Like the synchronous version.
   /// But there is no timeout. Use asyncs to bring your own timeout.
@@ -1250,42 +1231,21 @@ where
     match &self.qos_policy.reliability {
       None | Some(Reliability::BestEffort) => Ok(true),
       Some(Reliability::Reliable { .. }) => {
-        let (acked_sender, ack_wait_receiver) = sync_status_channel::<()>(1).unwrap(); // TODO: remove unwrap
-        match self
-          .cc_upload
-          .try_send(WriterCommand::WaitForAcknowledgments {
-            all_acked: acked_sender,
-          }) {
-          Ok(()) => {
-            // The command was sent. Asychronously wait for the acknowledgement
-            // The compiler seems to need type annotatios for this
-            let ack_wait_in_progress: AsyncWaitForAckInProgress<'_, D, SA> =
-              AsyncWaitForAckInProgress::Waiting { ack_wait_receiver };
-            ack_wait_in_progress.await
-          }
-          Err(TrySendError::Full(WriterCommand::WaitForAcknowledgments {
-            all_acked: ack_wait_sender,
-          })) => {
-            // The command channel was full. Asychronously wait for sending +
-            // acknowledgement
-            let ack_wait_in_progress = AsyncWaitForAckInProgress::WaitingSendCommand {
-              writer: self,
-              ack_wait_receiver,
-              ack_wait_sender,
-            };
-            ack_wait_in_progress.await
-          }
-          Err(TrySendError::Full(_otherwritercommand)) =>
-          // We are sending AsyncWaitForAckInProgress, so the channel
-          // should return only that, if any.
-          {
-            unreachable!()
-          }
-          Err(e) => Err(e.into()),
-        }
+        // Construct a future for an async operation to first send the
+        // WaitForAcknowledgments command and then wait for the
+        // acknowledgements. Await for this future to complete.
+
+        let (ack_wait_sender, ack_wait_receiver) = sync_status_channel::<()>(1).unwrap(); // TODO: remove unwrap
+
+        let async_ack_wait = AsyncWaitForAcknowledgments::WaitingSendCommand {
+          writer: self,
+          ack_wait_receiver,
+          ack_wait_sender,
+        };
+        async_ack_wait.await
       }
-    } // match
-  } // fn
+    }
+  }
 } // impl
 
 #[cfg(test)]
