@@ -24,6 +24,7 @@ use crate::{
     values::result::{Error, Result},
     with_key::{
       datareader::{DataReader, DataReaderCdr},
+      datasample::Sample,
       datawriter::{DataWriter, DataWriterCdr},
     },
     SubscriptionBuiltinTopicData,
@@ -894,7 +895,7 @@ impl Discovery {
       debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(d)) => match d.value {
-          Ok(participant_data) => {
+          Sample::Value(participant_data) => {
             debug!(
               "handle_participant_reader discovered {:?}",
               &participant_data
@@ -918,7 +919,7 @@ impl Discovery {
             }
           }
           // Err means that DomainParticipant was disposed
-          Err(participant_guid) => {
+          Sample::Dispose(participant_guid) => {
             self
               .discovery_db_write()
               .remove_participant(participant_guid.0.prefix, true); // true = actively removed
@@ -938,17 +939,17 @@ impl Discovery {
 
   // Check if there are messages about new Readers
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let drds: Vec<std::result::Result<DiscoveredReaderData, GUID>> =
+    let drds: Vec<Sample<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription_reader.into_iterator() {
         Ok(ds) => ds
-          .map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
+          .map(|d| d.map_dispose(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
           .filter(|d|
               // If a particiapnt was specified, we must match its GUID prefix.
               match (read_history, d) {
                 (None, _) => true, // Not asked to filter by participant
-                (Some(participant_to_update), Ok(drd)) =>
+                (Some(participant_to_update), Sample::Value(drd)) =>
                   drd.reader_proxy.remote_reader_guid.prefix == participant_to_update,
-                (Some(participant_to_update), Err(guid)) =>
+                (Some(participant_to_update), Sample::Dispose(guid)) =>
                   guid.prefix == participant_to_update,
               })
           .collect(),
@@ -960,7 +961,7 @@ impl Discovery {
 
     for d in drds {
       match d {
-        Ok(d) => {
+        Sample::Value(d) => {
           let drd = self.discovery_db_write().update_subscription(&d);
           debug!(
             "handle_subscription_reader - send_discovery_notification ReaderUpdated  {:?}",
@@ -977,7 +978,7 @@ impl Discovery {
             );
           }
         }
-        Err(reader_key) => {
+        Sample::Dispose(reader_key) => {
           info!("Dispose Reader {:?}", reader_key);
           self.discovery_db_write().remove_topic_reader(reader_key);
           self.send_discovery_notification(DiscoveryNotificationType::ReaderLost {
@@ -989,20 +990,22 @@ impl Discovery {
   }
 
   pub fn handle_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let dwds: Vec<std::result::Result<DiscoveredWriterData, GUID>> =
+    let dwds: Vec<Sample<DiscoveredWriterData, GUID>> =
       match self.dcps_publication_reader.into_iterator() {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
         Ok(ds) => ds
-          .map(|d| d.map_err(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
+          .map(|d| d.map_dispose(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
           // If a particiapnt was specified, we must match its GUID prefix.
           .filter(|d| match (read_history, d) {
             (None, _) => true, // Not asked to filter by participant
-            (Some(participant_to_update), Ok(dwd)) => {
+            (Some(participant_to_update), Sample::Value(dwd)) => {
               dwd.writer_proxy.remote_writer_guid.prefix == participant_to_update
             }
-            (Some(participant_to_update), Err(guid)) => guid.prefix == participant_to_update,
+            (Some(participant_to_update), Sample::Dispose(guid)) => {
+              guid.prefix == participant_to_update
+            }
           })
           .collect(),
         Err(e) => {
@@ -1013,7 +1016,7 @@ impl Discovery {
 
     for d in dwds {
       match d {
-        Ok(dwd) => {
+        Sample::Value(dwd) => {
           trace!("handle_publication_reader discovered {:?}", &dwd);
           let discovered_writer_data = self.discovery_db_write().update_publication(&dwd);
           self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
@@ -1021,7 +1024,7 @@ impl Discovery {
           });
           debug!("Discovered Writer {:?}", &dwd);
         }
-        Err(writer_key) => {
+        Sample::Dispose(writer_key) => {
           self.discovery_db_write().remove_topic_writer(writer_key);
           self.send_discovery_notification(DiscoveryNotificationType::WriterLost {
             writer_guid: writer_key,
@@ -1033,7 +1036,7 @@ impl Discovery {
   }
 
   pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let ts: Vec<std::result::Result<(DiscoveredTopicData, GUID), GUID>> = match self
+    let ts: Vec<Sample<(DiscoveredTopicData, GUID), GUID>> = match self
       .dcps_topic_reader
       .take(usize::MAX, ReadCondition::any())
     {
@@ -1042,8 +1045,8 @@ impl Discovery {
         .map(|d| {
           d.value
             .clone()
-            .map(|o| (o, d.sample_info.writer_guid()))
-            .map_err(|g| g.0)
+            .map_value(|o| (o, d.sample_info.writer_guid()))
+            .map_dispose(|g| g.0)
         })
         .collect(),
       Err(e) => {
@@ -1054,7 +1057,7 @@ impl Discovery {
 
     for t in ts {
       match t {
-        Ok((topic_data, writer)) => {
+        Sample::Value((topic_data, writer)) => {
           info!("handle_topic_reader discovered {:?}", &topic_data);
           self
             .discovery_db_write()
@@ -1085,7 +1088,7 @@ impl Discovery {
           }
         }
         // Err means disposed
-        Err(key) => {
+        Sample::Dispose(key) => {
           warn!("not implemented - Topic was disposed: {:?}", &key);
         }
       }
@@ -1104,7 +1107,7 @@ impl Discovery {
       Ok(msgs) => Some(
         msgs
           .into_iter()
-          .filter_map(|p| p.value().clone().ok())
+          .filter_map(|p| p.value().clone().value())
           .collect(),
       ),
       _ => None,

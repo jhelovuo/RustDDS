@@ -25,6 +25,7 @@ use crate::{
     topic::{Topic, TopicDescription},
     traits::{key::*, serde_adapters::with_key::*},
     values::result::*,
+    with_key::datasample::Sample,
   },
   discovery::discovery::DiscoveryCommand,
   log_and_err_precondition_not_met,
@@ -254,11 +255,11 @@ where
 
   fn update_hash_to_key_map(
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
-    deserialized: &std::result::Result<D, D::K>,
+    deserialized: &Sample<D, D::K>,
   ) {
     let instance_key = match deserialized {
-      Ok(d) => d.key(),
-      Err(k) => k.clone(),
+      Sample::Value(d) => d.key(),
+      Sample::Dispose(k) => k.clone(),
     };
     hash_to_key_map.insert(instance_key.hash_key(), instance_key);
   }
@@ -280,7 +281,7 @@ where
           match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
             // Data update, decoded ok
             Ok(payload) => {
-              let p = Ok(payload);
+              let p = Sample::Value(payload);
               Self::update_hash_to_key_map(hash_to_key_map, &p);
               Ok(DeserializedCacheChange::new(timestamp, cc, p))
             }
@@ -303,7 +304,7 @@ where
           serialized_key.representation_identifier,
         ) {
           Ok(key) => {
-            let k = Err(key);
+            let k = Sample::Dispose(key);
             Self::update_hash_to_key_map(hash_to_key_map, &k);
             Ok(DeserializedCacheChange::new(timestamp, cc, k))
           }
@@ -318,7 +319,7 @@ where
           Ok(DeserializedCacheChange::new(
             timestamp,
             cc,
-            Err(key.clone()),
+            Sample::Dispose(key.clone()),
           ))
         } else {
           Err(format!(

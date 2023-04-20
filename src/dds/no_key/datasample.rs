@@ -1,6 +1,7 @@
 use crate::dds::{
-  no_key::wrappers::NoKeyWrapper, sampleinfo::SampleInfo,
-  with_key::datasample::DataSample as WithKeyDataSample,
+  no_key::wrappers::NoKeyWrapper,
+  sampleinfo::SampleInfo,
+  with_key::datasample::{DataSample as WithKeyDataSample, Sample},
 };
 
 /// A data sample and its associated [metadata](`SampleInfo`) received from a
@@ -21,11 +22,11 @@ pub struct DataSample<D> {
 impl<D> DataSample<D> {
   pub(crate) fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> {
     match keyed.value {
-      Ok(kv) => Some(Self {
+      Sample::Value(kv) => Some(Self {
         sample_info: keyed.sample_info,
         value: kv.d,
       }),
-      Err(_) => None,
+      Sample::Dispose(_) => None,
     }
   }
 
@@ -33,11 +34,11 @@ impl<D> DataSample<D> {
     keyed: WithKeyDataSample<&NoKeyWrapper<D>>,
   ) -> Option<DataSample<&D>> {
     match keyed.value {
-      Ok(kv) => Some(DataSample::<&D> {
+      Sample::Value(kv) => Some(DataSample::<&D> {
         sample_info: keyed.sample_info,
         value: &kv.d,
       }),
-      Err(_) => None,
+      Sample::Dispose(_) => None,
     }
   }
 

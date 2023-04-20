@@ -1,5 +1,9 @@
 use crate::{
-  dds::{ddsdata::DDSData, traits::key::*, with_key::datawriter::WriteOptions},
+  dds::{
+    ddsdata::DDSData,
+    traits::key::*,
+    with_key::{datasample::Sample, datawriter::WriteOptions},
+  },
   structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp},
 };
 
@@ -60,12 +64,12 @@ pub struct DeserializedCacheChange<D: Keyed> {
   pub(crate) write_options: WriteOptions,     // 16 bytes
 
   // the data sample (or key) itself is stored here
-  pub(crate) sample: Result<D, D::K>, /* TODO: make this a Box<> for easier detaching an
+  pub(crate) sample: Sample<D, D::K>, /* TODO: make this a Box<> for easier detaching an
                                        * reattaching to somewhere else */
 }
 
 impl<D: Keyed> DeserializedCacheChange<D> {
-  pub fn new(receive_instant: Timestamp, cc: &CacheChange, deserialized: Result<D, D::K>) -> Self {
+  pub fn new(receive_instant: Timestamp, cc: &CacheChange, deserialized: Sample<D, D::K>) -> Self {
     DeserializedCacheChange {
       receive_instant,
       writer_guid: cc.writer_guid,

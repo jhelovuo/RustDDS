@@ -167,7 +167,7 @@ where
     self.datasample_cache.take_by_keys(keys)
   }
 
-  fn take_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<std::result::Result<D, D::K>> {
+  fn take_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<Sample<D, D::K>> {
     self.datasample_cache.take_bare_by_keys(keys)
   }
 
@@ -400,7 +400,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<std::result::Result<&D, D::K>>> {
+  ) -> Result<Vec<Sample<&D, D::K>>> {
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache();
 
@@ -416,7 +416,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<std::result::Result<D, D::K>>> {
+  ) -> Result<Vec<Sample<D, D::K>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache();
@@ -470,7 +470,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
+  pub fn iterator(&mut self) -> Result<impl Iterator<Item = Sample<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(
@@ -522,7 +522,7 @@ where
   pub fn conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
-  ) -> Result<impl Iterator<Item = std::result::Result<&D, D::K>>> {
+  ) -> Result<impl Iterator<Item = Sample<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
@@ -570,7 +570,7 @@ where
   /// }
   /// ```
 
-  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
+  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = Sample<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // take call
     Ok(
@@ -624,7 +624,7 @@ where
   pub fn into_conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
-  ) -> Result<impl Iterator<Item = std::result::Result<D, D::K>>> {
+  ) -> Result<impl Iterator<Item = Sample<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // take call
     Ok(self.take_bare(std::usize::MAX, read_condition)?.into_iter())
@@ -989,7 +989,7 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = Result<std::result::Result<D, D::K>>;
+  type Item = Result<Sample<D, D::K>>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");

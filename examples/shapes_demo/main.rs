@@ -16,9 +16,10 @@ use log4rs::{
 };
 use rustdds::{
   DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented, TopicDescription, TopicKind,
+  with_key::Sample,
 };
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
-                                                                     * policies directly */
+                                                                    * policies directly */
 use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use mio_06::{Events, Poll, PollOpt, Ready, Token}; // polling
@@ -241,7 +242,7 @@ fn main() {
                 trace!("DataReader triggered");
                 match reader.take_next_sample() {
                   Ok(Some(sample)) => match sample.into_value() {
-                    Ok(sample) => println!(
+                    Sample::Value(sample) => println!(
                       "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
                       topic.name(),
                       sample.color,
@@ -249,7 +250,7 @@ fn main() {
                       sample.y,
                       sample.shapesize,
                     ),
-                    Err(key) => println!("Disposed key {:?}", key),
+                    Sample::Dispose(key) => println!("Disposed key {:?}", key),
                   },
                   Ok(None) => break, // no more data
                   Err(e) => println!("DataReader error {:?}", e),
