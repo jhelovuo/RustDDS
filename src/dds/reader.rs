@@ -1178,7 +1178,6 @@ mod tests {
   use super::*;
 
   #[test]
-  #[ignore]
   fn rtpsreader_notification() {
     let mut guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     guid.entity_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
@@ -1246,10 +1245,9 @@ mod tests {
       ..Data::default()
     };
 
-    reader.handle_data_msg(data, BitFlags::<DATA_Flags>::empty(), &mr_state);
+    let data_flags = BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
+    reader.handle_data_msg(data, data_flags, &mr_state);
 
-    // TODO:
-    // Investaige whyt this fails. Is the test case correct?
     assert!(rec.try_recv().is_ok());
   }
 
