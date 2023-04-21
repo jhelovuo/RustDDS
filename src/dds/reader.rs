@@ -1178,38 +1178,46 @@ mod tests {
   use super::*;
 
   #[test]
-  fn rtpsreader_notification() {
-    let mut guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
-    guid.entity_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
-
-    // Create communication channels for the reader
-    let (send, rec) = mio_channel::sync_channel::<()>(100);
-    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
-    let (poll_event_source, poll_event_sender) = mio_source::make_poll_channel().unwrap();
-    
-    let (status_sender, status_receiver) =
-      sync_status_channel::<DataReaderStatus>(4).unwrap();
-    
-    let (_reader_command_sender, reader_command_receiver) =
-      mio_channel::sync_channel::<ReaderCommand>(10);
-
+  fn reader_sends_notification_when_receiving_data() {
+    // 1. Create a reader
+    // Create the DDS cache and a topic
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let topic_name = "test_name";
     let qos_policy = QosPolicies::qos_none();
+
     dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TypeDesc::new("testi".to_string()),
+      topic_name.to_string(),
+      TypeDesc::new("test_type".to_string()),
       &qos_policy,
     );
 
+    // Create notification mechanisms
+    // mio-0.6 channel:
+    let (notification_sender, notification_receiver) = mio_channel::sync_channel::<()>(100);
+    // mio-0.8 event source and sender:
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    // async notification waker
+    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+
+    // Create status channel
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+    // Create reader command channel
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
+    // Then finally create the reader
+    let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let reader_ing = ReaderIngredients {
-      guid,
-      notification_sender: send,
+      guid: reader_guid,
+      notification_sender: notification_sender,
       status_sender,
-      topic_name: "test".to_string(),
+      topic_name: topic_name.to_string(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
-      poll_event_sender,
+      poll_event_sender: notification_event_sender,
     };
     let mut reader = Reader::new(
       reader_ing,
@@ -1218,13 +1226,9 @@ mod tests {
       mio_extras::timer::Builder::default().build(),
     );
 
-    let writer_guid = GUID {
-      prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id(
-        [1; 3],
-        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
-      ),
-    };
+    // 2. Add info of a matched writer to the reader
+    let writer_guid = GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED);
+
     let mr_state = MessageReceiverState {
       source_guid_prefix: writer_guid.prefix,
       ..Default::default()
@@ -1238,17 +1242,24 @@ mod tests {
       &QosPolicies::qos_none(),
     );
 
-    let reader_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
+    // 3. Create data that the matched writer supposedly sent to the reader
     let data = Data {
-      reader_id,
+      reader_id: reader_guid.entity_id,
       writer_id: writer_guid.entity_id,
       ..Data::default()
     };
-
     let data_flags = BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
+
+    // 4. Feed the data for the reader to handle
     reader.handle_data_msg(data, data_flags, &mr_state);
 
-    assert!(rec.try_recv().is_ok());
+    // 5. Verify that the reader sends a notification about the new data
+    assert!(
+      notification_receiver.try_recv().is_ok(),
+      "Reader did not send a notification through the mio-0.6 channel"
+    );
+    // TODO: Should the other notification mechanisms (mio-0.8 & async) be also
+    // checked?
   }
 
   #[test]
