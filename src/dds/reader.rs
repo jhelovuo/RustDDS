@@ -1167,8 +1167,9 @@ impl fmt::Debug for Reader {
 mod tests {
   use crate::{
     dds::{
-      qos::policy::Reliability, statusevents::DataReaderStatus, typedesc::TypeDesc,
+      qos::policy::Reliability, typedesc::TypeDesc,
       with_key::datawriter::WriteOptions,
+      statusevents::{sync_status_channel, DataReaderStatus},
     },
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::guid::{EntityId, EntityKind, GuidPrefix, GUID},
@@ -1182,9 +1183,14 @@ mod tests {
     let mut guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     guid.entity_id = EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111));
 
+    // Create communication channels for the reader
     let (send, rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
+    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+    let (poll_event_source, poll_event_sender) = mio_source::make_poll_channel().unwrap();
+    
+    let (status_sender, status_receiver) =
+      sync_status_channel::<DataReaderStatus>(4).unwrap();
+    
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
 
@@ -1203,6 +1209,8 @@ mod tests {
       topic_name: "test".to_string(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker: data_reader_waker.clone(),
+      poll_event_sender,
     };
     let mut reader = Reader::new(
       reader_ing,
