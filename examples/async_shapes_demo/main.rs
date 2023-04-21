@@ -12,7 +12,9 @@ use log4rs::{
   config::{Appender, Root},
   Config,
 };
-use rustdds::{DomainParticipant, Keyed, QosPolicyBuilder, TopicDescription, TopicKind};
+use rustdds::{
+  with_key::Sample, DomainParticipant, Keyed, QosPolicyBuilder, TopicDescription, TopicKind,
+};
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
 use serde::{Deserialize, Serialize};
@@ -201,15 +203,15 @@ fn main() {
               match r {
                 Ok(v) =>
                   match v {
-                      Ok(sample) => println!(
-                          "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
-                          topic.name(),
-                          sample.color,
-                          sample.x,
-                          sample.y,
-                          sample.shapesize,
-                        ),
-                      Err(key) => println!("Disposed key {:?}", key),
+                    Sample::Value(sample) => println!(
+                      "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
+                      topic.name(),
+                      sample.color,
+                      sample.x,
+                      sample.y,
+                      sample.shapesize,
+                    ),
+                    Sample::Dispose(key) => println!("Disposed key {:?}", key),
                   }
                 Err(e) => {
                   error!("{:?}",e);
