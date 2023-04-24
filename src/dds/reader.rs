@@ -1164,8 +1164,7 @@ mod tests {
       typedesc::TypeDesc,
       with_key::datawriter::WriteOptions,
     },
-    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
-    structure::guid::{EntityId, EntityKind, GuidPrefix, GUID},
+    structure::guid::{EntityId, EntityKind, GUID},
     Duration, QosPolicyBuilder,
   };
   use super::*;
@@ -1466,32 +1465,41 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
-  fn rtpsreader_handle_gap() {
-    // TODO: investiage why this fails. Does the test case even make sense with
-    // current code?
-    let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
-    let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
-    let (_reader_command_sender, reader_command_receiver) =
-      mio_channel::sync_channel::<ReaderCommand>(10);
-
+  fn reader_handles_gaps() {
+    // 1. Create a reader
+    // Create the DDS cache and a topic
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let topic_name = "test_name";
     let qos_policy = QosPolicies::qos_none();
+
     dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TypeDesc::new("testi".to_string()),
+      topic_name.to_string(),
+      TypeDesc::new("test_type".to_string()),
       &qos_policy,
     );
 
+    // Create mechanisms for notifications, statuses & commands
+    let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
+    // Then create the reader
+    let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let reader_ing = ReaderIngredients {
-      guid: new_guid,
-      notification_sender: send,
+      guid: reader_guid,
+      notification_sender: notification_sender,
       status_sender,
-      topic_name: "test".to_string(),
+      topic_name: topic_name.to_string(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker: data_reader_waker.clone(),
+      poll_event_sender: notification_event_sender,
     };
     let mut reader = Reader::new(
       reader_ing,
@@ -1500,14 +1508,8 @@ mod tests {
       mio_extras::timer::Builder::default().build(),
     );
 
-    let writer_guid = GUID {
-      prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id(
-        [1; 3],
-        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
-      ),
-    };
-    let writer_id = writer_guid.entity_id;
+    // 2. Add info of a matched writer to the reader
+    let writer_guid = GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED);
 
     let mr_state = MessageReceiverState {
       source_guid_prefix: writer_guid.prefix,
@@ -1522,58 +1524,74 @@ mod tests {
       &QosPolicies::qos_none(),
     );
 
-    let n: i64 = 10;
-    let mut d = Data {
-      writer_id,
-      ..Default::default()
-    };
-    let mut changes = Vec::new();
-
-    for i in 0..n {
-      d.writer_sn = SequenceNumber::new(i);
-      reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), &mr_state);
-      changes.push(reader.history_cache_change(d.writer_sn).unwrap().clone());
-    }
-
-    // make sequence numbers 1-3 and 5 7 irrelevant
-    let mut gap_list = SequenceNumberSet::new(SequenceNumber::new(4), 7);
-    gap_list.test_insert(SequenceNumber::new(5));
-    gap_list.test_insert(SequenceNumber::new(7));
+    // 3. Feed the reader a gap message which marks sequence numbers 1-2 & 4 as
+    // irrelevant
+    let gap_start = SequenceNumber::new(1);
+    let gap_list_base = SequenceNumber::new(3);
+    let mut gap_list = SequenceNumberSet::new(gap_list_base, 7);
+    gap_list.test_insert(SequenceNumber::new(4));
 
     let gap = Gap {
       reader_id: reader.entity_id(),
-      writer_id,
-      gap_start: SequenceNumber::new(1),
+      writer_id: writer_guid.entity_id,
+      gap_start,
       gap_list,
     };
-
-    // Cache changee muutetaan tutkiin datan kirjoittajaa.
     reader.handle_gap_msg(&gap, &mr_state);
 
+    // 4. Verify that the writer proxy reports seqnums below 3 as ackable
+    // This should be the case since seqnums 1-2 were marked as irrelevant
     assert_eq!(
-      reader.history_cache_change(SequenceNumber::new(0)),
-      Some(changes[0].clone())
+      reader
+        .matched_writer(writer_guid)
+        .unwrap()
+        .all_ackable_before(),
+      SequenceNumber::new(3)
     );
-    assert_eq!(reader.history_cache_change(SequenceNumber::new(1)), None);
-    assert_eq!(reader.history_cache_change(SequenceNumber::new(2)), None);
-    assert_eq!(reader.history_cache_change(SequenceNumber::new(3)), None);
+
+    // 5. Feed the reader a data message with sequence number 3
+    let data = Data {
+      writer_id: writer_guid.entity_id,
+      writer_sn: SequenceNumber::new(3),
+      ..Default::default()
+    };
+    let data_flags = BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
+
+    reader.handle_data_msg(data, data_flags, &mr_state);
+
+    // 6. Verify that the writer proxy reports seqnums below 5 as ackable
+    // This should be the case since reader received data with seqnum 3 and seqnum 4
+    // was marked irrelevant before
     assert_eq!(
-      reader.history_cache_change(SequenceNumber::new(4)),
-      Some(changes[4].clone())
+      reader
+        .matched_writer(writer_guid)
+        .unwrap()
+        .all_ackable_before(),
+      SequenceNumber::new(5)
     );
-    assert_eq!(reader.history_cache_change(SequenceNumber::new(5)), None);
+
+    // 7. Feed the reader a gap message which marks the sequence number 5 as
+    // irrelevant
+    let gap_start = SequenceNumber::new(5);
+    let gap_list_base = SequenceNumber::new(5);
+    let mut gap_list = SequenceNumberSet::new(gap_list_base, 7);
+    gap_list.test_insert(SequenceNumber::new(5));
+
+    let gap = Gap {
+      reader_id: reader.entity_id(),
+      writer_id: writer_guid.entity_id,
+      gap_start,
+      gap_list,
+    };
+    reader.handle_gap_msg(&gap, &mr_state);
+
+    // 8. Verify that the writer proxy reports seqnums below 6 as ackable
     assert_eq!(
-      reader.history_cache_change(SequenceNumber::new(6)),
-      Some(changes[6].clone())
-    );
-    assert_eq!(reader.history_cache_change(SequenceNumber::new(7)), None);
-    assert_eq!(
-      reader.history_cache_change(SequenceNumber::new(8)),
-      Some(changes[8].clone())
-    );
-    assert_eq!(
-      reader.history_cache_change(SequenceNumber::new(9)),
-      Some(changes[9].clone())
+      reader
+        .matched_writer(writer_guid)
+        .unwrap()
+        .all_ackable_before(),
+      SequenceNumber::new(6)
     );
   }
 }
