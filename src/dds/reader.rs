@@ -1358,66 +1358,62 @@ mod tests {
   }
 
   #[test]
-  fn rtpsreader_handle_heartbeat() {
-    env_logger::init();
-    let new_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
-
-    let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
-    let (_reader_command_sender, reader_command_receiver) =
-      mio_channel::sync_channel::<ReaderCommand>(10);
-
-    let topic_name = "test";
+  fn reader_handles_heartbeats() {
+    // 1. Create a reader for a topic with Reliable QoS
+    // Create the DDS cache and the topic
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let topic_name = "test_name";
     let reliable_qos = QosPolicyBuilder::new()
       .reliability(Reliability::Reliable {
         max_blocking_time: Duration::from_millis(100),
       })
       .build();
 
-    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     dds_cache.write().unwrap().add_new_topic(
       topic_name.to_string(),
-      TypeDesc::new(topic_name.to_string()),
+      TypeDesc::new("test_type".to_string()),
       &reliable_qos,
     );
 
-    let topic_cache = dds_cache
-      .read()
-      .unwrap()
-      .get_existing_topic_cache(topic_name);
+    // Create mechanisms for notifications, statuses & commands
+    let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
 
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
+    // Then create the reader
+    let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let reader_ing = ReaderIngredients {
-      guid: new_guid,
-      notification_sender: send,
+      guid: reader_guid,
+      notification_sender: notification_sender,
       status_sender,
-      topic_name: "test".to_string(),
+      topic_name: topic_name.to_string(),
       qos_policy: reliable_qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker: data_reader_waker.clone(),
+      poll_event_sender: notification_event_sender,
     };
-    let mut new_reader = Reader::new(
+    let mut reader = Reader::new(
       reader_ing,
       &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
 
-    let writer_guid = GUID {
-      prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id(
-        [1; 3],
-        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
-      ),
-    };
-
-    let writer_id = writer_guid.entity_id;
+    // 2. Add info of a matched writer to the reader
+    let writer_guid = GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED);
 
     let mr_state = MessageReceiverState {
       source_guid_prefix: writer_guid.prefix,
       ..Default::default()
     };
 
-    new_reader.matched_writer_add(
+    reader.matched_writer_add(
       writer_guid,
       EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
@@ -1425,96 +1421,48 @@ mod tests {
       &reliable_qos,
     );
 
-    let d = DDSData::new(SerializedPayload::default());
-    let mut changes = Vec::new();
-
+    // 3. Send an initial heartbeat from the new writer, reader should not respond
+    // with acknack first_sn: 1, last_sn: 0 to indicate no samples available
     let hb_new = Heartbeat {
-      reader_id: new_reader.entity_id(),
-      writer_id,
-      first_sn: SequenceNumber::new(1), // First hearbeat from a new writer
+      reader_id: reader.entity_id(),
+      writer_id: writer_guid.entity_id,
+      first_sn: SequenceNumber::new(1),
       last_sn: SequenceNumber::new(0),
       count: 1,
     };
-    assert!(!new_reader.handle_heartbeat_msg(&hb_new, true, mr_state.clone())); // should be false, no ack
+    assert!(!reader.handle_heartbeat_msg(&hb_new, true, mr_state.clone())); // should be false, no ack
 
+    // 4. Send the first proper heartbeat, reader should respond with acknack
     let hb_one = Heartbeat {
-      reader_id: new_reader.entity_id(),
-      writer_id,
+      reader_id: reader.entity_id(),
+      writer_id: writer_guid.entity_id,
       first_sn: SequenceNumber::new(1), // Only one in writers cache
       last_sn: SequenceNumber::new(1),
       count: 2,
     };
-    assert!(new_reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
+    assert!(reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
 
-    // After ack_nack, will receive the following change
-    let change = CacheChange::new(
-      new_reader.guid(),
-      SequenceNumber::new(1),
-      WriteOptions::default(),
-      d.clone(),
-    );
-    topic_cache
-      .lock()
-      .unwrap()
-      .add_change(&Timestamp::now(), change.clone());
-    changes.push(change);
+    // 5. Send a duplicate of the first heartbeat, reader should not respond with
+    // acknack
+    let hb_one2 = hb_one.clone();
+    assert!(!reader.handle_heartbeat_msg(&hb_one2, false, mr_state.clone())); // No acknack
 
-    // Duplicate
-    let hb_one2 = Heartbeat {
-      reader_id: new_reader.entity_id(),
-      writer_id,
-      first_sn: SequenceNumber::new(1), // Only one in writers cache
-      last_sn: SequenceNumber::new(1),
-      count: 2,
-    };
-    assert!(!new_reader.handle_heartbeat_msg(&hb_one2, false, mr_state.clone())); // No acknack
-
-    let hb_3_1 = Heartbeat {
-      reader_id: new_reader.entity_id(),
-      writer_id,
+    // 6. Send a second proper heartbeat, reader should respond with acknack
+    let hb_2 = Heartbeat {
+      reader_id: reader.entity_id(),
+      writer_id: writer_guid.entity_id,
       first_sn: SequenceNumber::new(1), // writer has last 2 in cache
       last_sn: SequenceNumber::new(3),  // writer has written 3 samples
       count: 3,
     };
-    assert!(new_reader.handle_heartbeat_msg(&hb_3_1, false, mr_state.clone())); // Should send an ack_nack
+    assert!(reader.handle_heartbeat_msg(&hb_2, false, mr_state.clone())); // Should send an ack_nack
 
-    // After ack_nack, will receive the following changes
-    let change = CacheChange::new(
-      new_reader.guid(),
-      SequenceNumber::new(2),
-      WriteOptions::default(),
-      d.clone(),
-    );
-    topic_cache
-      .lock()
-      .unwrap()
-      .add_change(&Timestamp::now(), change.clone());
-    changes.push(change);
-
-    let change = CacheChange::new(
-      new_reader.guid(),
-      SequenceNumber::new(3),
-      WriteOptions::default(),
-      d,
-    );
-    topic_cache
-      .lock()
-      .unwrap()
-      .add_change(&Timestamp::now(), change.clone());
-    changes.push(change);
-
-    let hb_none = Heartbeat {
-      reader_id: new_reader.entity_id(),
-      writer_id,
-      first_sn: SequenceNumber::new(4), // writer has no samples available
-      last_sn: SequenceNumber::new(3),  // writer has written 3 samples
-      count: 4,
-    };
-    assert!(new_reader.handle_heartbeat_msg(&hb_none, false, mr_state)); // Should sen acknack
-
-    //assert_eq!(new_reader.sent_ack_nack_count, 3);
-    // TODO: Cannot get the above count from Reader directly.
-    // How to get it from writer proxies?
+    // 7. Count of acknack sent should be 2
+    // The count is verified from the writer proxy
+    let writer_proxy = reader
+      .matched_writer(writer_guid)
+      .expect("Did not find a matched writer");
+    assert_eq!(writer_proxy.sent_ack_nack_count, 2);
   }
 
   #[test]
