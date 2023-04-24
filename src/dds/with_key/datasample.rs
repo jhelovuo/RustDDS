@@ -4,6 +4,39 @@ use crate::{
   structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp, 
     cache_change::CacheChange,},
 };
+//TODO: Fix documentation
+#[derive(Clone, PartialEq, Debug)]
+pub enum Sample<D, K> {
+  Value(D),
+  Dispose(K),
+}
+
+impl<D, K> Sample<D, K> {
+  //From the Result<D,K> implementations
+  pub fn value(self) -> Option<D> {
+    match self {
+      Sample::Value(d) => Some(d),
+      Sample::Dispose(_) => None,
+    }
+  }
+
+  //From the Result<D,K> implementations
+  pub fn map_value<D2, F: FnOnce(D) -> D2>(self, op: F) -> Sample<D2, K> {
+    match self {
+      Sample::Value(d) => Sample::Value(op(d)),
+      Sample::Dispose(k) => Sample::Dispose(k),
+    }
+  }
+
+  //From the Result<D,K> implementations
+  pub fn map_dispose<K2, F: FnOnce(K) -> K2>(self, op: F) -> Sample<D, K2> {
+    match self {
+      Sample::Value(d) => Sample::Value(d),
+      Sample::Dispose(k) => Sample::Dispose(op(k)),
+    }
+  }
+}
+
 /// A data sample and its associated [metadata](`SampleInfo`) received from a
 /// WITH_KEY Topic.
 ///
@@ -25,14 +58,14 @@ use crate::{
 pub struct DataSample<D: Keyed> {
   pub(crate) sample_info: SampleInfo, // TODO: Can we somehow make this lazily evaluated?
 
-  pub(crate) value: std::result::Result<D, D::K>,
+  pub(crate) value: Sample<D, D::K>,
 }
 
 impl<D> DataSample<D>
 where
   D: Keyed,
 {
-  pub(crate) fn new(sample_info: SampleInfo, value: std::result::Result<D, D::K>) -> Self {
+  pub(crate) fn new(sample_info: SampleInfo, value: Sample<D, D::K>) -> Self {
     Self { sample_info, value }
   }
 
@@ -43,16 +76,16 @@ where
     <D as Keyed>::K: Key,
   {
     match &self.value {
-      Ok(d) => d.key(),
-      Err(k) => k.clone(),
+      Sample::Value(d) => d.key(),
+      Sample::Dispose(k) => k.clone(),
     }
   } // fn
 
-  pub fn value(&self) -> &Result<D, D::K> {
+  pub fn value(&self) -> &Sample<D, D::K> {
     &self.value
   }
 
-  pub fn into_value(self) -> Result<D, D::K> {
+  pub fn into_value(self) -> Sample<D, D::K> {
     self.value
   }
 
@@ -76,12 +109,12 @@ pub struct DeserializedCacheChange<D: Keyed> {
   pub(crate) write_options: WriteOptions,     // 16 bytes
 
   // the data sample (or key) itself is stored here
-  pub(crate) sample: Result<D, D::K>, /* TODO: make this a Box<> for easier detaching an
+  pub(crate) sample: Sample<D, D::K>, /* TODO: make this a Box<> for easier detaching an
                                        * reattaching to somewhere else */
 }
 
 impl<D: Keyed> DeserializedCacheChange<D> {
-  pub fn new(receive_instant: Timestamp, cc: &CacheChange, deserialized: Result<D, D::K>) -> Self {
+  pub fn new(receive_instant: Timestamp, cc: &CacheChange, deserialized: Sample<D, D::K>) -> Self {
     DeserializedCacheChange {
       receive_instant,
       writer_guid: cc.writer_guid,

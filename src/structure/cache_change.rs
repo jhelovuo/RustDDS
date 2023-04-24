@@ -1,6 +1,9 @@
 use crate::{
-  dds::{ddsdata::DDSData, with_key::datawriter::WriteOptions},
-  structure::{guid::GUID, sequence_number::SequenceNumber,},
+  dds::{
+    ddsdata::DDSData,
+    with_key::{datasample::Sample, datawriter::WriteOptions},
+  },
+  structure::{guid::GUID, sequence_number::SequenceNumber, },
 };
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Copy, Clone)]

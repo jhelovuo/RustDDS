@@ -1,6 +1,7 @@
 use crate::dds::{
-  no_key::wrappers::NoKeyWrapper, sampleinfo::SampleInfo,
-  with_key::datasample::DataSample as WithKeyDataSample,
+  no_key::wrappers::NoKeyWrapper,
+  sampleinfo::SampleInfo,
+  with_key::datasample::{DataSample as WithKeyDataSample, Sample},
   with_key,
 };
 use crate::{
@@ -29,11 +30,11 @@ pub struct DataSample<D> {
 impl<D> DataSample<D> {
   pub(crate) fn from_with_key(keyed: WithKeyDataSample<NoKeyWrapper<D>>) -> Option<Self> {
     match keyed.value {
-      Ok(kv) => Some(Self {
+      Sample::Value(kv) => Some(Self {
         sample_info: keyed.sample_info,
         value: kv.d,
       }),
-      Err(_) => None,
+      Sample::Dispose(_) => None,
     }
   }
 
@@ -41,11 +42,11 @@ impl<D> DataSample<D> {
     keyed: WithKeyDataSample<&NoKeyWrapper<D>>,
   ) -> Option<DataSample<&D>> {
     match keyed.value {
-      Ok(kv) => Some(DataSample::<&D> {
+      Sample::Value(kv) => Some(DataSample::<&D> {
         sample_info: keyed.sample_info,
         value: &kv.d,
       }),
-      Err(_) => None,
+      Sample::Dispose(_) => None,
     }
   }
 
@@ -97,7 +98,7 @@ impl<D> DeserializedCacheChange<D> {
     -> Option<Self>
   {
     match kdcc.sample {
-      Ok(sample) =>
+      Sample::Value(sample) =>
         Some(DeserializedCacheChange {
           receive_instant: kdcc.receive_instant,
           writer_guid: kdcc.writer_guid,
@@ -105,7 +106,7 @@ impl<D> DeserializedCacheChange<D> {
           write_options: kdcc.write_options,
           sample: sample.d,
         }),
-      Err(_key) => None,
+      Sample::Dispose(_key) => None,
     }
   }
 

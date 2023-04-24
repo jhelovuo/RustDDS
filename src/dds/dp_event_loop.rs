@@ -498,7 +498,14 @@ impl DPEventLoop {
           found_writer.handle_ack_nack(acknack_sender_prefix, &acknack_submessage);
         }
       } else {
-        warn!(
+        // Note: when testing against FastDDS Shapes demo, this else branch is
+        // repeatedly triggered. The resulting log entry contains the following
+        // EntityId: {[0, 3, 0] EntityKind::WRITER_NO_KEY_BUILT_IN}.
+        // In this case a writer cannot be found, because FastDDS sends
+        // pre-emptive acknacks about a built-in topic defined in DDS Xtypes
+        // specification, which RustDDS does not implement. So even though the acknack
+        // cannot be handled, it is not a problem in this case.
+        debug!(
           "Couldn't handle acknack/nackfrag! Did not find local RTPS writer with GUID: {:x?}",
           writer_guid
         );

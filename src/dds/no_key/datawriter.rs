@@ -432,6 +432,38 @@ impl<D: Serialize, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<D, SA> 
 
 impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<D, SA> {}
 
+//-------------------------------------------------------------------------------
+// async writing implementation
+//
+
+impl<D, SA> DataWriter<D, SA>
+where
+  D: Serialize,
+  SA: SerializerAdapter<D>,
+{
+  pub async fn async_write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+    self
+      .keyed_datawriter
+      .async_write(NoKeyWrapper::<D> { d: data }, source_timestamp)
+      .await
+  }
+
+  pub async fn async_write_with_options(
+    &self,
+    data: D,
+    write_options: datawriter_with_key::WriteOptions,
+  ) -> Result<SampleIdentity> {
+    self
+      .keyed_datawriter
+      .async_write_with_options(NoKeyWrapper::<D> { d: data }, write_options)
+      .await
+  }
+
+  pub async fn async_wait_for_acknowledgments(&self) -> Result<bool> {
+    self.keyed_datawriter.async_wait_for_acknowledgments().await
+  } // fn
+} // impl
+
 #[cfg(test)]
 mod tests {
   use byteorder::LittleEndian;

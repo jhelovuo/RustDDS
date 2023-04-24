@@ -998,30 +998,18 @@ where
 // async writing implementation
 //
 
+// A future for an asynchronous write operation
 pub struct AsyncWrite<'a, D, SA>
 where
   D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
   SA: SerializerAdapter<D>,
 {
-  write_with_options: WriteWithOptions<'a, D, SA>,
-}
-
-pub enum WriteWithOptions<'a, D, SA>
-where
-  D: Keyed + Serialize,
-  <D as key::Keyed>::K: Key + Serialize,
-  SA: SerializerAdapter<D>,
-{
-  Fail(crate::dds::values::result::Error),
-  InProgress {
-    writer: &'a DataWriter<D, SA>,
-    writer_command: Option<WriterCommand>,
-    sequence_number: SequenceNumber,
-    timeout: Option<duration::Duration>,
-    timeout_instant: Instant,
-  },
-  Done(SampleIdentity),
+  writer: &'a DataWriter<D, SA>,
+  writer_command: Option<WriterCommand>,
+  sequence_number: SequenceNumber,
+  timeout: Option<duration::Duration>,
+  timeout_instant: Instant,
 }
 
 impl<'a, D, SA> Future for AsyncWrite<'a, D, SA>
@@ -1030,94 +1018,60 @@ where
   <D as key::Keyed>::K: Key + Serialize,
   SA: SerializerAdapter<D>,
 {
-  type Output = Result<()>;
-
-  fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-    match Pin::new(&mut self.write_with_options).poll(cx) {
-      Poll::Ready(Ok(_sample_identity)) => Poll::Ready(Ok(())),
-      Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-      Poll::Pending => Poll::Pending,
-    }
-  }
-}
-
-impl<'a, D, SA> Future for WriteWithOptions<'a, D, SA>
-where
-  D: Keyed + Serialize,
-  <D as key::Keyed>::K: Key + Serialize,
-  SA: SerializerAdapter<D>,
-{
   type Output = Result<SampleIdentity>;
 
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-    match *self {
-      WriteWithOptions::Done(sample_identity) => Poll::Ready(Ok(sample_identity)),
-
-      WriteWithOptions::Fail(ref mut e) => {
-        let mut dummy = Error::Unsupported;
-        core::mem::swap(e, &mut dummy);
-        Poll::Ready(Err(dummy))
-      }
-
-      WriteWithOptions::InProgress {
-        writer,
-        ref mut writer_command,
-        sequence_number,
-        timeout,
-        timeout_instant,
-        ..
-      } => {
-        match writer_command.take() {
-          Some(wc) => {
-            match writer.cc_upload.try_send(wc) {
-              //TODO: can we remove .clone() above?
-              Ok(()) => {
-                writer.refresh_manual_liveliness();
-                Poll::Ready(Ok(SampleIdentity {
-                  writer_guid: writer.my_guid,
-                  sequence_number,
-                }))
-              }
-              Err(TrySendError::Full(wc)) => {
-                *writer.cc_upload_waker.lock().unwrap() = Some(cx.waker().clone());
-                if Instant::now() < timeout_instant {
-                  // Put our command back
-                  *writer_command = Some(wc);
-                  Poll::Pending
-                } else {
-                  // TODO: Error should also return unsent sample (_tt) to
-                  // the application, as this is the Rust way.
-                  Poll::Ready(Err(Error::MustBlock))
-                }
-              }
-              Err(other_err) => {
-                warn!(
-                  "Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
-                  writer.my_topic.name(),
-                  other_err,
-                  timeout
-                );
-                // TODO: Is this (undo) the right thing to do, if there are
-                // several futures in progress? (Can this result in confused numbering?)
-                writer.undo_sequence_number();
-                Poll::Ready(Err(Error::OutOfResources))
-              }
-            }
-          }
-          None => {
-            // the dog ate my homework
-            // this should not happen
-            Poll::Ready(Err(Error::Internal {
-              reason: "someone stole my WriterCommand".to_owned(),
+    match self.writer_command.take() {
+      Some(wc) => {
+        match self.writer.cc_upload.try_send(wc) {
+          Ok(()) => {
+            self.writer.refresh_manual_liveliness();
+            Poll::Ready(Ok(SampleIdentity {
+              writer_guid: self.writer.my_guid,
+              sequence_number: self.sequence_number,
             }))
           }
+          Err(TrySendError::Full(wc)) => {
+            *self.writer.cc_upload_waker.lock().unwrap() = Some(cx.waker().clone());
+            if Instant::now() < self.timeout_instant {
+              // Put our command back
+              self.writer_command = Some(wc);
+              Poll::Pending
+            } else {
+              // TODO: Error should also return unsent sample (_tt) to
+              // the application, as this is the Rust way.
+              Poll::Ready(Err(Error::MustBlock))
+            }
+          }
+          Err(other_err) => {
+            warn!(
+              "Failed to write new data: topic={:?}  reason={:?}  timeout={:?}",
+              self.writer.my_topic.name(),
+              other_err,
+              self.timeout
+            );
+            // TODO: Is this (undo) the right thing to do, if there are
+            // several futures in progress? (Can this result in confused numbering?)
+            self.writer.undo_sequence_number();
+            Poll::Ready(Err(Error::OutOfResources))
+          }
         }
+      }
+      None => {
+        // the dog ate my homework
+        // this should not happen
+        Poll::Ready(Err(Error::Internal {
+          reason: "someone stole my WriterCommand".to_owned(),
+        }))
       }
     }
   }
 }
 
-pub enum WaitForAcknowledgments<'a, D, SA>
+// A future for an asynchronous operation of waiting for acknowledgements.
+// Handles both the sending of the WaitForAcknowledgments command and
+// the waiting for the acknowledgements.
+pub enum AsyncWaitForAcknowledgments<'a, D, SA>
 where
   D: Keyed + Serialize,
   <D as key::Keyed>::K: Serialize,
@@ -1135,7 +1089,7 @@ where
   Fail(Error),
 }
 
-impl<'a, D, SA> Future for WaitForAcknowledgments<'a, D, SA>
+impl<'a, D, SA> Future for AsyncWaitForAcknowledgments<'a, D, SA>
 where
   D: Keyed + Serialize,
   <D as key::Keyed>::K: Key + Serialize,
@@ -1145,16 +1099,16 @@ where
 
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
     match *self {
-      WaitForAcknowledgments::Done => Poll::Ready(Ok(true)),
-      WaitForAcknowledgments::Fail(_) => {
-        let mut dummy = WaitForAcknowledgments::Done;
+      AsyncWaitForAcknowledgments::Done => Poll::Ready(Ok(true)),
+      AsyncWaitForAcknowledgments::Fail(_) => {
+        let mut dummy = AsyncWaitForAcknowledgments::Done;
         core::mem::swap(&mut dummy, &mut self);
         match dummy {
-          WaitForAcknowledgments::Fail(e) => Poll::Ready(Err(e)),
+          AsyncWaitForAcknowledgments::Fail(e) => Poll::Ready(Err(e)),
           _ => unreachable!(),
         }
       }
-      WaitForAcknowledgments::Waiting {
+      AsyncWaitForAcknowledgments::Waiting {
         ref ack_wait_receiver,
       } => {
         match Pin::new(&mut ack_wait_receiver.as_async_stream()).poll_next(cx) {
@@ -1172,11 +1126,11 @@ where
           // return Ok(false)
         }
       }
-      WaitForAcknowledgments::WaitingSendCommand { .. } => {
-        let mut dummy = WaitForAcknowledgments::Done;
+      AsyncWaitForAcknowledgments::WaitingSendCommand { .. } => {
+        let mut dummy = AsyncWaitForAcknowledgments::Done;
         core::mem::swap(&mut dummy, &mut self);
         let (writer, ack_wait_receiver, ack_wait_sender) = match dummy {
-          WaitForAcknowledgments::WaitingSendCommand {
+          AsyncWaitForAcknowledgments::WaitingSendCommand {
             writer,
             ack_wait_receiver,
             ack_wait_sender,
@@ -1190,14 +1144,14 @@ where
             all_acked: ack_wait_sender,
           }) {
           Ok(()) => {
-            *self = WaitForAcknowledgments::Waiting { ack_wait_receiver };
+            *self = AsyncWaitForAcknowledgments::Waiting { ack_wait_receiver };
             Poll::Pending
           }
 
           Err(TrySendError::Full(WriterCommand::WaitForAcknowledgments {
             all_acked: ack_wait_sender,
           })) => {
-            *self = WaitForAcknowledgments::WaitingSendCommand {
+            *self = AsyncWaitForAcknowledgments::WaitingSendCommand {
               writer,
               ack_wait_receiver,
               ack_wait_sender,
@@ -1223,24 +1177,26 @@ where
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
-  pub fn async_write(
-    &self,
-    data: D,
-    source_timestamp: Option<Timestamp>,
-  ) -> impl Future<Output = Result<()>> + '_ {
-    AsyncWrite {
-      write_with_options: self.async_write_with_options(data, WriteOptions::from(source_timestamp)),
+  pub async fn async_write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {
+    match self
+      .async_write_with_options(data, WriteOptions::from(source_timestamp))
+      .await
+    {
+      Ok(_sample_identity) => Ok(()),
+      Err(e) => Err(e),
     }
   }
 
-  pub fn async_write_with_options(
+  pub async fn async_write_with_options(
     &self,
     data: D,
     write_options: WriteOptions,
-  ) -> WriteWithOptions<D, SA> {
+  ) -> Result<SampleIdentity> {
+    // Construct a future for an async write operation and await for its completion
+
     let send_buffer = match SA::to_bytes(&data) {
       Ok(s) => s,
-      Err(e) => return WriteWithOptions::Fail(e.into()),
+      Err(e) => return Err(e.into()),
     };
 
     let dds_data = DDSData::new(SerializedPayload::new_from_bytes(
@@ -1256,73 +1212,40 @@ where
 
     let timeout = self.qos().reliable_max_blocking_time();
 
-    match self.cc_upload.try_send(writer_command) {
-      Ok(()) => {
-        self.refresh_manual_liveliness();
-        WriteWithOptions::Done(SampleIdentity {
-          writer_guid: self.my_guid,
-          sequence_number,
-        })
-      }
-      Err(TrySendError::Full(writer_command)) => {
-        // We do not set waker yet, because (1) we do not have it
-        // and (2) the call is not expected to complete until
-        // the future is polled anyway.
-        WriteWithOptions::InProgress {
+    let write_future = AsyncWrite {
+      writer: self,
+      writer_command: Some(writer_command),
+      sequence_number,
+      timeout,
+      timeout_instant: std::time::Instant::now()
+        + timeout
+          .map(|t| t.to_std())
+          .unwrap_or(crate::dds::helpers::TIMEOUT_FALLBACK.to_std()),
+    };
+    write_future.await
+  }
+
+  /// Like the synchronous version.
+  /// But there is no timeout. Use asyncs to bring your own timeout.
+  pub async fn async_wait_for_acknowledgments(&self) -> Result<bool> {
+    match &self.qos_policy.reliability {
+      None | Some(Reliability::BestEffort) => Ok(true),
+      Some(Reliability::Reliable { .. }) => {
+        // Construct a future for an async operation to first send the
+        // WaitForAcknowledgments command and then wait for the
+        // acknowledgements. Await for this future to complete.
+
+        let (ack_wait_sender, ack_wait_receiver) = sync_status_channel::<()>(1).unwrap(); // TODO: remove unwrap
+
+        let async_ack_wait = AsyncWaitForAcknowledgments::WaitingSendCommand {
           writer: self,
-          writer_command: Some(writer_command),
-          sequence_number,
-          timeout,
-          timeout_instant: std::time::Instant::now()
-            + timeout
-              .map(|t| t.to_std())
-              .unwrap_or(crate::dds::helpers::TIMEOUT_FALLBACK.to_std()),
-        }
-      }
-      Err(_other_err) => {
-        //TODO: Undo(?) sequence number
-        // write warn! log
-        //TODO: Wrong error kind
-        WriteWithOptions::Fail(Error::OutOfResources)
+          ack_wait_receiver,
+          ack_wait_sender,
+        };
+        async_ack_wait.await
       }
     }
   }
-
-  /// Liike the synchronous version.
-  /// But there is no timeout. Use asyncs to bring your own timeout.
-  pub fn async_wait_for_acknowledgments(&self) -> WaitForAcknowledgments<D, SA> {
-    match &self.qos_policy.reliability {
-      None | Some(Reliability::BestEffort) => WaitForAcknowledgments::Done,
-      Some(Reliability::Reliable { .. }) => {
-        let (acked_sender, ack_wait_receiver) = sync_status_channel::<()>(1).unwrap(); // TODO: remove unwrap
-        match self
-          .cc_upload
-          .try_send(WriterCommand::WaitForAcknowledgments {
-            all_acked: acked_sender,
-          }) {
-          Ok(()) => {
-            // Now just return a future. It makes no sense to try to immediately
-            // try_recv, as the Writer will make progrss regardless of the DataWriter.
-            WaitForAcknowledgments::Waiting { ack_wait_receiver }
-          }
-          Err(TrySendError::Full(WriterCommand::WaitForAcknowledgments {
-            all_acked: ack_wait_sender,
-          })) => WaitForAcknowledgments::WaitingSendCommand {
-            writer: self,
-            ack_wait_receiver,
-            ack_wait_sender,
-          },
-          Err(TrySendError::Full(_otherwritercommand)) =>
-          // We are sending WaitForAcknowledgments, so the channel
-          // should return only that, if any.
-          {
-            unreachable!()
-          }
-          Err(e) => WaitForAcknowledgments::Fail(e.into()),
-        }
-      }
-    } // match
-  } // fn
 } // impl
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ use crate::{
     readcondition::ReadCondition,
     sampleinfo::*,
     traits::key::{Key, Keyed},
-    with_key::datasample::{DataSample, DeserializedCacheChange},
+    with_key::datasample::{DataSample, Sample, DeserializedCacheChange},
   },
   structure::{
     guid::GUID, sequence_number::SequenceNumber,
@@ -54,7 +54,7 @@ struct SampleWithMetaData<D: Keyed> {
   sample_has_been_read: bool,      // sample_state
 
   // the data sample (or key) itself is stored here
-  sample: Result<D, D::K>,
+  sample: Sample<D, D::K>,
 }
 
 impl<D> SampleWithMetaData<D>
@@ -64,8 +64,8 @@ where
 {
   pub fn key(&self) -> D::K {
     match &self.sample {
-      Ok(d) => d.key(),
-      Err(k) => k.clone(),
+      Sample::Value(d) => d.key(),
+      Sample::Dispose(k) => k.clone(),
     }
   }
 }
@@ -100,20 +100,20 @@ where
 
   fn add_sample(
     &mut self,
-    new_sample: Result<D, D::K>,
+    new_sample: Sample<D, D::K>,
     writer_guid: GUID,
     sequence_number: SequenceNumber,
     receive_timestamp: Timestamp,
     write_options: WriteOptions,
   ) {
     let instance_key = match &new_sample {
-      Ok(d) => d.key(),
-      Err(k) => k.clone(),
+      Sample::Value(d) => d.key(),
+      Sample::Dispose(k) => k.clone(),
     };
 
     let new_instance_state = match new_sample {
-      Ok(_) => InstanceState::Alive,
-      Err(_) => InstanceState::NotAliveDisposed,
+      Sample::Value(_) => InstanceState::Alive,
+      Sample::Dispose(_) => InstanceState::NotAliveDisposed,
     };
 
     // find or create metadata record
@@ -419,7 +419,7 @@ where
     // construct results
     for (ts, _key) in keys.iter() {
       let sample_info = sample_infos.pop_front().unwrap();
-      let sample: &std::result::Result<D, D::K> = &self.datasamples.get(ts).unwrap().sample;
+      let sample: &Sample<D, D::K> = &self.datasamples.get(ts).unwrap().sample;
       result.push(DataSample::new(
         sample_info,
         result_ok_as_ref_err_clone(sample),
@@ -471,10 +471,7 @@ where
     result
   }
 
-  pub fn read_bare_by_keys(
-    &mut self,
-    keys: &[(Timestamp, D::K)],
-  ) -> Vec<std::result::Result<&D, D::K>> {
+  pub fn read_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<Sample<&D, D::K>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
 
@@ -509,10 +506,7 @@ where
     result
   }
 
-  pub fn take_bare_by_keys(
-    &mut self,
-    keys: &[(Timestamp, D::K)],
-  ) -> Vec<std::result::Result<D, D::K>> {
+  pub fn take_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<Sample<D, D::K>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
 
@@ -549,12 +543,10 @@ where
 
 // helper function
 // somewhat like result.as_ref() , but one-sided only
-pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(
-  r: &std::result::Result<T, E>,
-) -> std::result::Result<&T, E> {
+pub(crate) fn result_ok_as_ref_err_clone<T, E: Clone>(r: &Sample<T, E>) -> Sample<&T, E> {
   match *r {
-    Ok(ref x) => Ok(x),
-    Err(ref x) => Err(x.clone()),
+    Sample::Value(ref x) => Sample::Value(x),
+    Sample::Dispose(ref x) => Sample::Dispose(x.clone()),
   }
 }
 
