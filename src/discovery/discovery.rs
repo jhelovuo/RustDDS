@@ -918,7 +918,7 @@ impl Discovery {
               debug!("Participant rediscovery finished");
             }
           }
-          // Err means that DomainParticipant was disposed
+          // Sample::Dispose means that DomainParticipant was disposed
           Sample::Dispose(participant_guid) => {
             self
               .discovery_db_write()
@@ -942,7 +942,7 @@ impl Discovery {
     let drds: Vec<Sample<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription_reader.into_iterator() {
         Ok(ds) => ds
-          .map(|d| d.map_dispose(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
+          .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           .filter(|d|
               // If a particiapnt was specified, we must match its GUID prefix.
               match (read_history, d) {
@@ -996,7 +996,7 @@ impl Discovery {
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
         Ok(ds) => ds
-          .map(|d| d.map_dispose(|g| g.0)) // map_err removes Endpoint_GUID wrapper around GUID
+          .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           // If a particiapnt was specified, we must match its GUID prefix.
           .filter(|d| match (read_history, d) {
             (None, _) => true, // Not asked to filter by participant
@@ -1087,7 +1087,7 @@ impl Discovery {
             });
           }
         }
-        // Err means disposed
+        // Sample::Dispose means disposed
         Sample::Dispose(key) => {
           warn!("not implemented - Topic was disposed: {:?}", &key);
         }

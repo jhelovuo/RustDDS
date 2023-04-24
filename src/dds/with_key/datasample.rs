@@ -1,6 +1,14 @@
 use crate::dds::{sampleinfo::*, traits::key::*};
 
-//TODO: Fix documentation
+/// A data sample received from a WITH_KEY Topic without the associated
+/// metadata.
+///
+/// Replaces the use of `valid_data` flag in SampleInfo of DataSample from the
+/// DDS spec.
+///
+/// Implements the methods `value`, `map_value` and `map_dispose` that
+/// correspond to methods of [`Result`](std::result::Result), which had been
+/// previously used for this purpose.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Sample<D, K> {
   Value(D),
@@ -8,7 +16,6 @@ pub enum Sample<D, K> {
 }
 
 impl<D, K> Sample<D, K> {
-  //From the Result<D,K> implementations
   pub fn value(self) -> Option<D> {
     match self {
       Sample::Value(d) => Some(d),
@@ -16,7 +23,6 @@ impl<D, K> Sample<D, K> {
     }
   }
 
-  //From the Result<D,K> implementations
   pub fn map_value<D2, F: FnOnce(D) -> D2>(self, op: F) -> Sample<D2, K> {
     match self {
       Sample::Value(d) => Sample::Value(op(d)),
@@ -24,7 +30,6 @@ impl<D, K> Sample<D, K> {
     }
   }
 
-  //From the Result<D,K> implementations
   pub fn map_dispose<K2, F: FnOnce(K) -> K2>(self, op: F) -> Sample<D, K2> {
     match self {
       Sample::Value(d) => Sample::Value(d),
@@ -40,14 +45,14 @@ impl<D, K> Sample<D, K> {
 /// [`with_key::DataSample`](crate::with_key::DataSample) are two different
 /// structs.
 ///
-/// We are making a bit unorthodox use of [`Result`](std::result::Result) here.
-/// It replaces the use of `valid_data` flag from the DDS spec, because when
-/// `valid_data = false`, the application should not be able to access any data.
+/// We are using [`Sample`](crate::with_key::Sample) to replace the `valid_data`
+/// flag from the DDS spec, because when `valid_data = false`, the application
+/// should not be able to access any data.
 ///
-/// Result usage:
-/// * `Ok(d)` means `valid_data == true` and there is a sample `d`.
-/// * `Err(k)` means `valid_data == false`, no sample exists, but only a Key `k`
-///   and instance_state has changed.
+/// Sample usage:
+/// * `Sample::Value(d)` means `valid_data == true` and there is a sample `d`.
+/// * `Sample::Dispose(k)` means `valid_data == false`, no sample exists, but
+///   only a Key `k` and instance_state has changed.
 ///
 /// See also DDS spec v1.4 Section 2.2.2.5.4.
 #[derive(PartialEq, Debug)]
