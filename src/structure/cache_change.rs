@@ -1,7 +1,7 @@
 use crate::{
   dds::{
     ddsdata::DDSData,
-    with_key::{datasample::Sample, datawriter::WriteOptions},
+    with_key::{datawriter::WriteOptions},
   },
   structure::{guid::GUID, sequence_number::SequenceNumber, },
 };
