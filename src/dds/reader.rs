@@ -939,17 +939,10 @@ impl Reader {
     let mut tc = self.acquire_the_topic_cache_guard();
     tc.mark_reliably_received_before(writer_guid, all_ackable_before);
 
-    /*
-    // Remove from DDSHistoryCache
-    // TODO: Is this really correct?
-    // Is the meaning of GAP to only inform that such changes are not available from
-    // the writer? Or does it also mean that the DDSCache should remove them?
-    for instant in &removed_changes {
-      cache.topic_remove_change(&self.topic_name, instant);
-    }
-    */
-    // Is this needed?
-    // self.notify_cache_change();
+    // TODO: If receiving GAP actually moved the reliably received mark forward 
+    // in the Topic Cache, then we should generate a SAMPLE_LOST status event
+    // from our Datareader (DDS Spec Section 2.2.4.1)
+
   }
 
   pub fn handle_heartbeatfrag_msg(

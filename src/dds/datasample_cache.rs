@@ -12,10 +12,10 @@ use crate::{
     readcondition::ReadCondition,
     sampleinfo::*,
     traits::key::{Key, Keyed},
-    with_key::datasample::DataSample,
+    with_key::datasample::{DataSample, DeserializedCacheChange},
   },
   structure::{
-    cache_change::DeserializedCacheChange, guid::GUID, sequence_number::SequenceNumber,
+    guid::GUID, sequence_number::SequenceNumber,
     time::Timestamp,
   },
   with_key::WriteOptions,
