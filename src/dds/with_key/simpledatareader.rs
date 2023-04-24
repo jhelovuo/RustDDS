@@ -25,14 +25,14 @@ use crate::{
     topic::{Topic, TopicDescription},
     traits::{key::*, serde_adapters::with_key::*},
     values::result::*,
-    with_key::datasample::Sample,
+    with_key::datasample::{DeserializedCacheChange, Sample},
   },
   discovery::discovery::DiscoveryCommand,
   log_and_err_precondition_not_met,
   mio_source::PollEventSource,
   serialization::CDRDeserializerAdapter,
   structure::{
-    cache_change::{CacheChange, DeserializedCacheChange},
+    cache_change::CacheChange,
     dds_cache::{DDSCache, TopicCache},
     entity::RTPSEntity,
     guid::{EntityId, GUID},
@@ -70,7 +70,7 @@ pub(crate) enum ReaderCommand {
 
 // This is helper struct.
 // All mutable state needed for reading should go here.
-struct ReadState<K: Key> {
+pub(crate) struct ReadState<K: Key> {
   latest_instant: Timestamp, /* This is used as a read pointer from dds_cache for BEST_EFFORT
                               * reading */
   last_read_sn: BTreeMap<GUID, SequenceNumber>, // collection of read pointers for RELIABLE reading
@@ -377,6 +377,12 @@ where
 
   pub fn guid(&self) -> GUID {
     self.my_guid
+  }
+
+  pub fn as_async_stream(&self) -> SimpleDataReaderStream<D, DA> {
+    SimpleDataReaderStream {
+      simple_datareader: self,
+    }
   }
 
   pub fn as_simple_data_reader_event_stream(&self) -> SimpleDataReaderEventStream<D, DA> {

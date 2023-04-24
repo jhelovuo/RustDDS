@@ -1,10 +1,6 @@
 use crate::{
-  dds::{
-    ddsdata::DDSData,
-    traits::key::*,
-    with_key::{datasample::Sample, datawriter::WriteOptions},
-  },
-  structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp},
+  dds::{ddsdata::DDSData, with_key::datawriter::WriteOptions},
+  structure::{guid::GUID, sequence_number::SequenceNumber},
 };
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Copy, Clone)]
@@ -51,31 +47,4 @@ impl CacheChange {
   // pub fn change_kind(&self) -> ChangeKind {
   //   self.data_value.change_kind()
   // }
-}
-
-// This structure is used to communicate just deserialized samples
-// from SimpleDatareader to DataReader
-#[derive(Debug, Clone)]
-pub struct DeserializedCacheChange<D: Keyed> {
-  pub(crate) receive_instant: Timestamp, /* 8 bytes, to be used as unique key in internal data
-                                          * structures */
-  pub(crate) writer_guid: GUID,               // 8 bytes
-  pub(crate) sequence_number: SequenceNumber, // 8 bytes
-  pub(crate) write_options: WriteOptions,     // 16 bytes
-
-  // the data sample (or key) itself is stored here
-  pub(crate) sample: Sample<D, D::K>, /* TODO: make this a Box<> for easier detaching an
-                                       * reattaching to somewhere else */
-}
-
-impl<D: Keyed> DeserializedCacheChange<D> {
-  pub fn new(receive_instant: Timestamp, cc: &CacheChange, deserialized: Sample<D, D::K>) -> Self {
-    DeserializedCacheChange {
-      receive_instant,
-      writer_guid: cc.writer_guid,
-      sequence_number: cc.sequence_number,
-      write_options: cc.write_options.clone(),
-      sample: deserialized,
-    }
-  }
 }

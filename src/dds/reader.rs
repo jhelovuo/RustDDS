@@ -939,17 +939,9 @@ impl Reader {
     let mut tc = self.acquire_the_topic_cache_guard();
     tc.mark_reliably_received_before(writer_guid, all_ackable_before);
 
-    /*
-    // Remove from DDSHistoryCache
-    // TODO: Is this really correct?
-    // Is the meaning of GAP to only inform that such changes are not available from
-    // the writer? Or does it also mean that the DDSCache should remove them?
-    for instant in &removed_changes {
-      cache.topic_remove_change(&self.topic_name, instant);
-    }
-    */
-    // Is this needed?
-    // self.notify_cache_change();
+    // TODO: If receiving GAP actually moved the reliably received mark forward
+    // in the Topic Cache, then we should generate a SAMPLE_LOST status event
+    // from our Datareader (DDS Spec Section 2.2.4.1)
   }
 
   pub fn handle_heartbeatfrag_msg(
@@ -1167,9 +1159,10 @@ impl fmt::Debug for Reader {
 mod tests {
   use crate::{
     dds::{
-      qos::policy::Reliability, typedesc::TypeDesc,
-      with_key::datawriter::WriteOptions,
+      qos::policy::Reliability,
       statusevents::{sync_status_channel, DataReaderStatus},
+      typedesc::TypeDesc,
+      with_key::datawriter::WriteOptions,
     },
     messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
     structure::guid::{EntityId, EntityKind, GuidPrefix, GUID},
@@ -1263,53 +1256,60 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
-  fn rtpsreader_handle_data() {
-    let new_guid = GUID::default();
-
-    let (send, rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
-    let (_reader_command_sender, reader_command_receiver) =
-      mio_channel::sync_channel::<ReaderCommand>(10);
-
+  fn reader_sends_data_to_topic_cache() {
+    // 1. Create a reader
+    // Create the DDS cache and a topic
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let topic_name = "test_name";
     let qos_policy = QosPolicies::qos_none();
+
     dds_cache.write().unwrap().add_new_topic(
-      "test".to_string(),
-      TypeDesc::new("testi".to_string()),
+      topic_name.to_string(),
+      TypeDesc::new("test_type".to_string()),
       &qos_policy,
     );
 
+    // Create mechanisms for notifications, statuses & commands
+    let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
+    // Then create the reader
+    let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let reader_ing = ReaderIngredients {
-      guid: new_guid,
-      notification_sender: send,
+      guid: reader_guid,
+      notification_sender: notification_sender,
       status_sender,
-      topic_name: "test".to_string(),
+      topic_name: topic_name.to_string(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker: data_reader_waker.clone(),
+      poll_event_sender: notification_event_sender,
     };
-    let mut new_reader = Reader::new(
+    let mut reader = Reader::new(
       reader_ing,
       &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
 
-    let writer_guid = GUID {
-      prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id(
-        [1; 3],
-        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
-      ),
-    };
+    // 2. Add info of a matched writer to the reader
+    let writer_guid = GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED);
 
+    let source_timestamp = Timestamp::INVALID;
     let mr_state = MessageReceiverState {
       source_guid_prefix: writer_guid.prefix,
+      source_timestamp: Some(source_timestamp),
       ..Default::default()
     };
 
-    new_reader.matched_writer_add(
+    reader.matched_writer_add(
       writer_guid,
       EntityId::UNKNOWN,
       mr_state.unicast_reply_locator_list.clone(),
@@ -1317,32 +1317,44 @@ mod tests {
       &QosPolicies::qos_none(),
     );
 
-    let d = Data {
+    // 3. Create data that the matched writer supposedly sent to the reader
+    let data = Data {
+      reader_id: reader_guid.entity_id,
       writer_id: writer_guid.entity_id,
-      ..Default::default()
+      ..Data::default()
     };
-    let d_seqnum = d.writer_sn;
-    new_reader.handle_data_msg(d.clone(), BitFlags::<DATA_Flags>::empty(), &mr_state);
+    let data_flags = BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
+    let sequence_num = data.writer_sn;
 
-    // TODO: Investigate why this fails. Is the test case or implementation faulty?
-    assert!(rec.try_recv().is_ok());
+    // 4. Feed the data for the reader to handle
+    reader.handle_data_msg(data.clone(), data_flags, &mr_state);
 
-    let topic_cache = dds_cache
+    // 5. Verify that the reader sent the data to the topic cache
+    let topic_cache_mtx = dds_cache
       .read()
       .unwrap()
-      .get_existing_topic_cache(&new_reader.topic_name);
+      .get_existing_topic_cache(topic_name);
 
-    let ddsdata = DDSData::new(d.serialized_payload.unwrap());
-    let cc_built_here = CacheChange::new(writer_guid, d_seqnum, WriteOptions::default(), ddsdata);
+    let topic_cache = topic_cache_mtx.lock().unwrap();
 
     let cc_from_chache = topic_cache
-      .lock()
-      .unwrap()
-      .get_change(new_reader.seqnum_instant_map.get(&d_seqnum).unwrap());
+      .get_change(reader.seqnum_instant_map.get(&sequence_num).unwrap())
+      .expect("No cache change in topic cache");
 
-    // TODO: Investigate why this fails. Is the test case or implementation
-    // faulty?
-    assert_eq!(cc_from_chache.unwrap(), &cc_built_here);
+    // 6. Verify that the content of the cache change is as expected
+    // Construct a cache change with the expected content
+    let ddsdata = DDSData::new(data.serialized_payload.unwrap());
+    let cc_locally_built = CacheChange::new(
+      writer_guid,
+      sequence_num,
+      WriteOptions::from(Some(source_timestamp)),
+      ddsdata,
+    );
+
+    assert_eq!(
+      cc_from_chache, &cc_locally_built,
+      "The content of the cache change in the topic cache not as expected"
+    );
   }
 
   #[test]
