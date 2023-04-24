@@ -1,4 +1,4 @@
-use core::ops::Bound::{Excluded, Unbounded};
+use core::ops::Bound::{Included, Unbounded};
 use std::{cmp::max, collections::BTreeMap, iter};
 
 use enumflags2::BitFlags;
@@ -224,39 +224,22 @@ impl RtpsWriterProxy {
     // If ack_base > seq_num, this is either a duplicate or ack_base was wrong.
     // Remember, ack_base is the SN one past the last received/irrelevant SN.
     if seq_num == self.ack_base {
-      let mut s = seq_num;
-      for (&sn, what) in self.changes.range((Excluded(&seq_num), Unbounded)) {
-        if sn == s + SequenceNumber::new(1) {
-          // got consecutive number from previous
-          s = s + SequenceNumber::new(1); // and continue looping
-          debug!("received_changes_add: Already have {:?} : {:?}", sn, what);
-        } else {
-          break; // not consecutive
-        }
-      } // end for
-        // Now we have received/not_available for everything up to and including s. Ack
-        // base is one up from that.
-      self.ack_base = s + SequenceNumber::new(1);
-      debug!(
-        "ack_base increased to {:?} by received_changes_add {:?} writer={:?}",
-        self.ack_base, seq_num, self.remote_writer_guid
-      );
+      self.advance_ack_base();
     }
   }
 
   // Used to add individual irrelevant changes from GAP message
-  pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) -> Option<Timestamp> {
+  pub fn set_irrelevant_change(&mut self, seq_num: SequenceNumber) {
+    // If sequence number is still in the relevant range,
+    // insert not_available marker
     if seq_num >= self.ack_base {
-      // if this is still in the relevant range
-      // insert not_available marker.
-      self.changes.insert(seq_num, None).flatten() // this will return the
-                                                   // Timestamp, if there was a
-                                                   // recived change
-    } else {
-      None
+      self.changes.insert(seq_num, None);
     }
 
-    // TODO: Update ack_base
+    if seq_num == self.ack_base {
+      // ack_base can be advanced
+      self.advance_ack_base();
+    }
   }
 
   // Used to add range of irrelevant changes from GAP message
@@ -378,6 +361,29 @@ impl RtpsWriterProxy {
       fa.is_partially_received(seq)
     } else {
       false
+    }
+  }
+
+  // Advance ack_base as far as possible
+  // This function should be called after the writer proxy has modified its
+  // changes cache (for instance added a new received change) such that ack_base
+  // could be advanced
+  fn advance_ack_base(&mut self) {
+    // Start searching from current ack_base
+    let mut test_sn = self.ack_base;
+
+    for (&sn, _what) in self.changes.range((Included(&self.ack_base), Unbounded)) {
+      if sn == test_sn {
+        // test_sn found from changes, ack_base can be set to test_sn + 1
+        test_sn = test_sn + SequenceNumber::new(1);
+      } else {
+        // test_sn not found from changes, stop here
+        break;
+      }
+
+      // The changes cache contains a string of consecutive sequence numbers from
+      // ack_base-1 up to test_sn (excluded), so ack_base can be set to test_sn
+      self.ack_base = test_sn;
     }
   }
 } // impl
