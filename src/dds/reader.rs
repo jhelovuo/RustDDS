@@ -2,7 +2,7 @@ use std::{
   collections::BTreeMap,
   fmt, iter,
   rc::Rc,
-  sync::{Arc, Mutex, MutexGuard, RwLock},
+  sync::{Arc, Mutex, MutexGuard},
   task::Waker,
   time::Duration as StdDuration,
 };
@@ -34,7 +34,7 @@ use crate::{
   serialization::message::Message,
   structure::{
     cache_change::{CacheChange, ChangeKind},
-    dds_cache::{DDSCache, TopicCache},
+    dds_cache::TopicCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -56,6 +56,8 @@ pub(crate) struct ReaderIngredients {
   pub notification_sender: mio_channel::SyncSender<()>,
   pub status_sender: StatusChannelSender<DataReaderStatus>,
   pub topic_name: String,
+  pub(crate) topic_cache_handle: Arc<Mutex<TopicCache>>, /* A handle to the topic cache in DDS
+                                                          * cache */
   pub qos_policy: QosPolicies,
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
   pub(crate) data_reader_waker: Arc<Mutex<Option<Waker>>>,
@@ -125,22 +127,17 @@ pub(crate) struct Reader {
 impl Reader {
   pub fn new(
     i: ReaderIngredients,
-    dds_cache: &Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
     timed_event_timer: Timer<TimedEvent>,
   ) -> Self {
-    // Get the topic cache from DDS cache
-    let topic_cache = dds_cache
-      .read()
-      .unwrap_or_else(|e| {
-        // TODO: Should we panic here? Are we allowed to continue with poisoned
-        // DDSCache?
-        panic!(
-          "The DDSCache of domain participant is poisoned. Error: {}",
-          e
-        )
-      })
-      .get_existing_topic_cache(&i.topic_name);
+    // Verify that the topic and the topic cache have the same name
+    let topic_cache_name = i.topic_cache_handle.lock().unwrap().topic_name();
+    if i.topic_name != topic_cache_name {
+      panic!(
+        "Topic name = {} and topic cache name = {} not equal when creating a Reader",
+        i.topic_name, topic_cache_name
+      );
+    }
 
     Self {
       notification_sender: i.notification_sender,
@@ -152,7 +149,7 @@ impl Reader {
         .qos_policy
         .reliability() // use qos specification
         .unwrap_or(policy::Reliability::BestEffort), // or default to BestEffort
-      topic_cache,
+      topic_cache: i.topic_cache_handle,
       topic_name: i.topic_name,
       qos_policy: i.qos_policy,
 
@@ -1171,6 +1168,8 @@ impl fmt::Debug for Reader {
 
 #[cfg(test)]
 mod tests {
+  use std::sync::RwLock;
+
   use crate::{
     dds::{
       qos::policy::Reliability,
@@ -1178,7 +1177,10 @@ mod tests {
       typedesc::TypeDesc,
       with_key::datawriter::WriteOptions,
     },
-    structure::guid::{EntityId, EntityKind, GUID},
+    structure::{
+      dds_cache::DDSCache,
+      guid::{EntityId, EntityKind, GUID},
+    },
     Duration, QosPolicyBuilder,
   };
   use super::*;
@@ -1191,7 +1193,7 @@ mod tests {
     let topic_name = "test_name";
     let qos_policy = QosPolicies::qos_none();
 
-    dds_cache.write().unwrap().add_new_topic(
+    let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
       topic_name.to_string(),
       TypeDesc::new("test_type".to_string()),
       &qos_policy,
@@ -1220,6 +1222,7 @@ mod tests {
       notification_sender: notification_sender,
       status_sender,
       topic_name: topic_name.to_string(),
+      topic_cache_handle: topic_cache_handle.clone(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
@@ -1227,7 +1230,6 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1276,7 +1278,7 @@ mod tests {
     let topic_name = "test_name";
     let qos_policy = QosPolicies::qos_none();
 
-    dds_cache.write().unwrap().add_new_topic(
+    let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
       topic_name.to_string(),
       TypeDesc::new("test_type".to_string()),
       &qos_policy,
@@ -1300,6 +1302,7 @@ mod tests {
       notification_sender: notification_sender,
       status_sender,
       topic_name: topic_name.to_string(),
+      topic_cache_handle: topic_cache_handle.clone(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
@@ -1307,7 +1310,6 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1343,12 +1345,7 @@ mod tests {
     reader.handle_data_msg(data.clone(), data_flags, &mr_state);
 
     // 5. Verify that the reader sent the data to the topic cache
-    let topic_cache_mtx = dds_cache
-      .read()
-      .unwrap()
-      .get_existing_topic_cache(topic_name);
-
-    let topic_cache = topic_cache_mtx.lock().unwrap();
+    let topic_cache = topic_cache_handle.lock().unwrap();
 
     let cc_from_chache = topic_cache
       .get_change(reader.seqnum_instant_map.get(&sequence_num).unwrap())
@@ -1382,7 +1379,7 @@ mod tests {
       })
       .build();
 
-    dds_cache.write().unwrap().add_new_topic(
+    let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
       topic_name.to_string(),
       TypeDesc::new("test_type".to_string()),
       &reliable_qos,
@@ -1406,6 +1403,7 @@ mod tests {
       notification_sender: notification_sender,
       status_sender,
       topic_name: topic_name.to_string(),
+      topic_cache_handle: topic_cache_handle.clone(),
       qos_policy: reliable_qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
@@ -1413,7 +1411,6 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1486,7 +1483,7 @@ mod tests {
     let topic_name = "test_name";
     let qos_policy = QosPolicies::qos_none();
 
-    dds_cache.write().unwrap().add_new_topic(
+    let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
       topic_name.to_string(),
       TypeDesc::new("test_type".to_string()),
       &qos_policy,
@@ -1510,6 +1507,7 @@ mod tests {
       notification_sender: notification_sender,
       status_sender,
       topic_name: topic_name.to_string(),
+      topic_cache_handle: topic_cache_handle.clone(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
@@ -1517,7 +1515,6 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );

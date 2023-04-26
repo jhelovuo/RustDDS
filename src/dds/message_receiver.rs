@@ -488,7 +488,7 @@ mod tests {
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
 
-    dds_cache.write().unwrap().add_new_topic(
+    let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
       "test".to_string(),
       TypeDesc::new("testi".to_string()),
       &qos_policy,
@@ -498,13 +498,13 @@ mod tests {
       notification_sender: send,
       status_sender,
       topic_name: "test".to_string(),
+      topic_cache_handle: topic_cache_handle.clone(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
     };
 
     let mut new_reader = Reader::new(
       reader_ing,
-      &dds_cache,
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );

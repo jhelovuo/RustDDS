@@ -835,11 +835,18 @@ mod tests {
     let (_reader_commander2, reader_command_receiver2) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
+    let topic_cache =
+      dp.dds_cache()
+        .write()
+        .unwrap()
+        .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
+
     let reader_ing = ReaderIngredients {
       guid: GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
       notification_sender: notification_sender.clone(),
       status_sender: status_sender.clone(),
       topic_name: topic.name(),
+      topic_cache_handle: topic_cache.clone(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver1,
     };
@@ -852,10 +859,8 @@ mod tests {
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
-    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let _reader = Reader::new(
       reader_ing,
-      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -871,6 +876,7 @@ mod tests {
       notification_sender,
       status_sender,
       topic_name: topic.name(),
+      topic_cache_handle: topic_cache.clone(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
     };
@@ -881,7 +887,6 @@ mod tests {
 
     let _reader = Reader::new(
       reader_ing,
-      &dds_cache,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
     );

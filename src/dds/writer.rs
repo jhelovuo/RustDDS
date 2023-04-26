@@ -4,7 +4,7 @@ use std::{
   iter::FromIterator,
   ops::Bound::Included,
   rc::Rc,
-  sync::{Arc, Mutex, MutexGuard, RwLock},
+  sync::{Arc, Mutex, MutexGuard},
 };
 use core::task::Waker;
 
@@ -30,7 +30,7 @@ use crate::{
   serialization::{Message, MessageBuilder},
   structure::{
     cache_change::CacheChange,
-    dds_cache::{DDSCache, TopicCache},
+    dds_cache::TopicCache,
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
@@ -66,6 +66,8 @@ pub(crate) struct WriterIngredients {
   pub writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   pub writer_command_receiver_waker: Arc<Mutex<Option<Waker>>>,
   pub topic_name: String,
+  pub(crate) topic_cache_handle: Arc<Mutex<TopicCache>>, /* A handle to the topic cache in DDS
+                                                          * cache */
   pub qos_policies: QosPolicies,
   pub status_sender: StatusChannelSender<DataWriterStatus>,
 }
@@ -226,10 +228,18 @@ pub enum WriterCommand {
 impl Writer {
   pub fn new(
     i: WriterIngredients,
-    dds_cache: &Arc<RwLock<DDSCache>>,
     udp_sender: Rc<UDPSender>,
     mut timed_event_timer: Timer<TimedEvent>,
   ) -> Self {
+    // Verify that the topic and the topic cache have the same name
+    let topic_cache_name = i.topic_cache_handle.lock().unwrap().topic_name();
+    if i.topic_name != topic_cache_name {
+      panic!(
+        "Topic name = {} and topic cache name = {} not equal when creating a Writer",
+        i.topic_name, topic_cache_name
+      );
+    }
+
     let heartbeat_period = i
       .qos_policies
       .reliability
@@ -265,19 +275,6 @@ impl Writer {
       TimedEvent::CacheCleaning,
     );
 
-    // Get the topic cache from DDS cache
-    let topic_cache = dds_cache
-      .read()
-      .unwrap_or_else(|e| {
-        // TODO: Should we panic here? Are we allowed to continue with poisoned
-        // DDSCache?
-        panic!(
-          "The DDSCache of domain participant is poisoned. Error: {}",
-          e
-        )
-      })
-      .get_existing_topic_cache(&i.topic_name);
-
     Self {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
@@ -299,7 +296,7 @@ impl Writer {
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
       udp_sender,
-      topic_cache,
+      topic_cache: i.topic_cache_handle,
       my_topic_name: i.topic_name,
       sequence_number_to_instant: BTreeMap::new(),
       disposed_sequence_numbers: HashSet::new(),

@@ -30,7 +30,7 @@ use super::cache_change::CacheChange;
 ///
 /// More specifically, the DDSCache stores handles (Arcs) to mutexes protecting
 /// the actual TopicCaches. For a given topic, the Reader/Writer and
-/// DataReader/DataWriter get a clone of the handle from the DDSCache and
+/// DataReader/DataWriter get a clone of the handle and
 /// interact with the TopicCache through this handle.
 #[derive(Debug, Default)]
 pub struct DDSCache {
@@ -43,15 +43,16 @@ impl DDSCache {
   }
   // Insert new topic if it does not exist.
   // If it exists already, update cache size limits.
+  // Return a handle to the cache topic.
   // TODO: If we pick up a topic from Discovery, can someone DoS us by
   // sending super large limits in Topic QoS?
-  pub fn add_new_topic(
+  pub(crate) fn add_new_topic(
     &mut self,
     topic_name: String,
     topic_data_type: TypeDesc,
     qos: &QosPolicies,
-  ) {
-    self
+  ) -> Arc<Mutex<TopicCache>> {
+    let topic_cache_handle = self
       .topic_caches
       .entry(topic_name.clone())
       .and_modify(|tc| tc.lock().unwrap().update_keep_limits(qos))
@@ -60,8 +61,12 @@ impl DDSCache {
         topic_data_type,
         qos,
       ))));
+
+    topic_cache_handle.clone()
   }
 
+  // This function is currently not used
+  #[allow(dead_code)]
   pub(crate) fn get_existing_topic_cache(&self, topic_name: &str) -> Arc<Mutex<TopicCache>> {
     // Return a clone of the pointer to the mutex on an existing topic cache
     // The program panics if the topic cache does not exist
@@ -344,6 +349,10 @@ impl TopicCache {
       self.remove_sn(r);
     }
   }
+
+  pub fn topic_name(&self) -> String {
+    self.topic_name.clone()
+  }
 }
 
 // -----------------------------------------------------------------------
@@ -375,16 +384,11 @@ mod tests {
     let qos = QosPolicies::qos_none();
 
     // Add the new topic to DDS cache
-    dds_cache.write().unwrap().add_new_topic(
+    let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
       topic_name.clone(),
       TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
       &qos,
     );
-    // Get the topic cache
-    let topic_cache = dds_cache
-      .read()
-      .unwrap()
-      .get_existing_topic_cache(&topic_name);
 
     // Create a cache change and add it to the topic cache
     let change1 = CacheChange::new(
@@ -393,18 +397,13 @@ mod tests {
       WriteOptions::default(),
       DDSData::new(SerializedPayload::default()),
     );
-    topic_cache
+    topic_cache_handle
       .lock()
       .unwrap()
       .add_change(&crate::Timestamp::now(), change1);
 
+    let topic_cache_handle2 = topic_cache_handle.clone();
     thread::spawn(move || {
-      // Get a new pointer to the topic cache in the other thread
-      let topic_cache = dds_cache
-        .read()
-        .unwrap()
-        .get_existing_topic_cache(&topic_name);
-
       // Create two new cache changes and add them to topic cache
       let change2 = CacheChange::new(
         GUID::GUID_UNKNOWN,
@@ -419,11 +418,11 @@ mod tests {
         DDSData::new(SerializedPayload::default()),
       );
 
-      topic_cache
+      topic_cache_handle2
         .lock()
         .unwrap()
         .add_change(&crate::Timestamp::now(), change2);
-      topic_cache
+      topic_cache_handle2
         .lock()
         .unwrap()
         .add_change(&crate::Timestamp::now(), change3);
@@ -433,7 +432,7 @@ mod tests {
 
     // Verify that there are 3 cache changes in the topic cache
     assert_eq!(
-      topic_cache
+      topic_cache_handle
         .lock()
         .unwrap()
         .get_changes_in_range_best_effort(

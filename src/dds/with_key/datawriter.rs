@@ -3,7 +3,7 @@ use std::{
   pin::Pin,
   sync::{
     atomic::{AtomicI64, Ordering},
-    Arc, Mutex, RwLock,
+    Arc, Mutex,
   },
   task::{Context, Poll, Waker},
   time::{Duration, Instant},
@@ -38,8 +38,8 @@ use crate::{
   messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
   serialization::CDRSerializerAdapter,
   structure::{
-    cache_change::ChangeKind, dds_cache::DDSCache, duration, entity::RTPSEntity, guid::GUID,
-    rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp,
+    cache_change::ChangeKind, duration, entity::RTPSEntity, guid::GUID, rpc::SampleIdentity,
+    sequence_number::SequenceNumber, time::Timestamp,
   },
 };
 use super::super::writer::WriterCommand;
@@ -198,14 +198,8 @@ where
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     cc_upload_waker: Arc<Mutex<Option<Waker>>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    dds_cache: &Arc<RwLock<DDSCache>>, // Apparently, this is only needed for our Topic creation
     status_receiver_rec: StatusChannelReceiver<DataWriterStatus>,
   ) -> Result<Self> {
-    match dds_cache.write() {
-      Ok(mut cache) => cache.add_new_topic(topic.name(), topic.get_type(), &qos),
-      Err(e) => panic!("DDSCache is poisoned. {:?}", e),
-    };
-
     if let Some(lv) = qos.liveliness {
       match lv {
         Liveliness::Automatic { .. } | Liveliness::ManualByTopic { .. } => (),

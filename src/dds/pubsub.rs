@@ -505,6 +505,12 @@ impl InnerPublisher {
       .ok_or("upgrade fail")
       .or_else(|e| log_and_err_internal!("Where is my DomainParticipant? {}", e))?;
 
+    // Create a new topic to DDScache if it doesn't exist and get a handle to it
+    let topic_cache_handle = match dp.dds_cache().write() {
+      Ok(mut dds_cache) => dds_cache.add_new_topic(topic.name(), topic.get_type(), &writer_qos),
+      Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
+    };
+
     let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
 
     let new_writer = WriterIngredients {
@@ -512,6 +518,7 @@ impl InnerPublisher {
       writer_command_receiver: hccc_download,
       writer_command_receiver_waker: Arc::clone(&writer_waker),
       topic_name: topic.name(),
+      topic_cache_handle,
       qos_policies: writer_qos.clone(),
       status_sender,
     };
@@ -529,7 +536,6 @@ impl InnerPublisher {
       dwcc_upload,
       writer_waker,
       self.discovery_command.clone(),
-      &dp.dds_cache(),
       status_receiver,
     )?;
 
@@ -1008,6 +1014,12 @@ impl InnerSubscriber {
       None => return log_and_err_precondition_not_met!("DomainParticipant doesn't exist anymore."),
     };
 
+    // Create a new topic to DDScache if it doesn't exist and get a handle to it
+    let topic_cache_handle = match dp.dds_cache().write() {
+      Ok(mut dds_cache) => dds_cache.add_new_topic(topic.name(), topic.get_type(), &qos),
+      Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
+    };
+
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
 
     let data_reader_waker = Arc::new(Mutex::new(None));
@@ -1019,6 +1031,7 @@ impl InnerSubscriber {
       notification_sender: send,
       status_sender,
       topic_name: topic.name(),
+      topic_cache_handle: topic_cache_handle.clone(),
       qos_policy: qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
@@ -1034,21 +1047,13 @@ impl InnerSubscriber {
       db.update_topic_data_p(topic);
     }
 
-    // Create new topic to DDScache if one isn't present
-    match dp.dds_cache().write() {
-      Ok(mut dds_cache) => {
-        dds_cache.add_new_topic(topic.name(), topic.get_type(), &qos);
-      }
-      Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
-    }
-
     let datareader = with_key::SimpleDataReader::<D, SA>::new(
       outer.clone(),
       entity_id,
       topic.clone(),
       qos,
       rec,
-      &dp.dds_cache(),
+      topic_cache_handle,
       self.discovery_command.clone(),
       status_receiver,
       reader_command_sender,

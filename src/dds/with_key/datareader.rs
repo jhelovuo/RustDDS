@@ -1,8 +1,8 @@
 use std::{
   io,
   pin::Pin,
-  sync::{Arc, Mutex, },
-  task::{Context, Poll,},
+  sync::{Arc, Mutex},
+  task::{Context, Poll},
 };
 
 use serde::de::DeserializeOwned;
@@ -1108,6 +1108,12 @@ mod tests {
       )
       .unwrap();
 
+    let topic_cache =
+      dp.dds_cache()
+        .write()
+        .unwrap()
+        .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
+
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
     let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
@@ -1122,13 +1128,13 @@ mod tests {
       notification_sender: send,
       status_sender,
       topic_name: topic.name(),
+      topic_cache_handle: topic_cache.clone(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
     };
 
     let mut new_reader = Reader::new(
       reader_ing,
-      &dp.dds_cache(),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );
@@ -1252,6 +1258,12 @@ mod tests {
       )
       .unwrap();
 
+    let topic_cache =
+      dp.dds_cache()
+        .write()
+        .unwrap()
+        .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
+
     let (send, _rec) = mio_channel::sync_channel::<()>(10);
     let (status_sender, _status_receiver) =
       mio_extras::channel::sync_channel::<DataReaderStatus>(100);
@@ -1265,6 +1277,7 @@ mod tests {
       guid: reader_guid,
       notification_sender: send,
       status_sender,
+      topic_cache_handle: topic_cache.clone(),
       topic_name: topic.name(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
@@ -1272,7 +1285,6 @@ mod tests {
 
     let mut reader = Reader::new(
       reader_ing,
-      &dp.dds_cache(),
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
     );

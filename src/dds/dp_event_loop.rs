@@ -372,12 +372,7 @@ impl DPEventLoop {
               PollOpt::edge(),
             )
             .expect("Reader timer channel registeration failed!");
-          let mut new_reader = Reader::new(
-            new_reader_ing,
-            &self.ddscache,
-            self.udp_sender.clone(),
-            timer,
-          );
+          let mut new_reader = Reader::new(new_reader_ing, self.udp_sender.clone(), timer);
 
           // Non-timed action polling
           self
@@ -431,12 +426,7 @@ impl DPEventLoop {
               PollOpt::edge(),
             )
             .expect("Writer heartbeat timer channel registration failed!!");
-          let new_writer = Writer::new(
-            new_writer_ingredients,
-            &self.ddscache,
-            self.udp_sender.clone(),
-            timer,
-          );
+          let new_writer = Writer::new(new_writer_ingredients, self.udp_sender.clone(), timer);
 
           self
             .poll
@@ -763,7 +753,10 @@ mod tests {
 
   use super::*;
   use crate::{
-    dds::{qos::QosPolicies, statusevents::DataReaderStatus, with_key::datareader::ReaderCommand},
+    dds::{
+      qos::QosPolicies, statusevents::DataReaderStatus, typedesc::TypeDesc,
+      with_key::datareader::ReaderCommand,
+    },
     structure::dds_cache::DDSCache,
   };
 
@@ -838,6 +831,12 @@ mod tests {
       dp_event_loop.event_loop();
     });
 
+    let topic_cache = ddshc.write().unwrap().add_new_topic(
+      "test".to_string(),
+      TypeDesc::new("test_type".to_string()),
+      &QosPolicies::qos_none(),
+    );
+
     let n = 3;
 
     let mut reader_guids = Vec::new();
@@ -854,6 +853,7 @@ mod tests {
         guid: new_guid,
         notification_sender: send,
         status_sender,
+        topic_cache_handle: topic_cache.clone(),
         topic_name: "test".to_string(),
         qos_policy: QosPolicies::qos_none(),
         data_reader_command_receiver: reader_command_receiver,

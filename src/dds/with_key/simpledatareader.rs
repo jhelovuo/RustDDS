@@ -4,7 +4,7 @@ use std::{
   io,
   marker::PhantomData,
   pin::Pin,
-  sync::{Arc, Mutex, MutexGuard, RwLock},
+  sync::{Arc, Mutex, MutexGuard},
   task::{Context, Poll, Waker},
 };
 
@@ -28,12 +28,12 @@ use crate::{
     with_key::datasample::{DeserializedCacheChange, Sample},
   },
   discovery::discovery::DiscoveryCommand,
-  log_and_err_precondition_not_met,
+  log_and_err_internal, log_and_err_precondition_not_met,
   mio_source::PollEventSource,
   serialization::CDRDeserializerAdapter,
   structure::{
     cache_change::CacheChange,
-    dds_cache::{DDSCache, TopicCache},
+    dds_cache::TopicCache,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
     sequence_number::SequenceNumber,
@@ -163,7 +163,7 @@ where
     qos_policy: QosPolicies,
     // Each notification sent to this channel must be try_recv'd
     notification_receiver: mio_channel::Receiver<()>,
-    dds_cache: &Arc<RwLock<DDSCache>>,
+    topic_cache: Arc<Mutex<TopicCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
@@ -181,18 +181,15 @@ where
 
     let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), my_id);
 
-    // Get the topic cache from DDS cache
-    let topic_cache = dds_cache
-      .read()
-      .unwrap_or_else(|e| {
-        // TODO: Should we panic here? Are we allowed to continue with poisoned
-        // DDSCache?
-        panic!(
-          "The DDSCache of domain participant is poisoned. Error: {}",
-          e
-        )
-      })
-      .get_existing_topic_cache(&topic.name());
+    // Verify that the topic and the topic cache have the same name
+    let topic_cache_name = topic_cache.lock().unwrap().topic_name();
+    if topic.name() != topic_cache_name {
+      return log_and_err_internal!(
+        "Topic name = {} and topic cache name = {} not equal when creating a SimpleDataReader",
+        topic.name(),
+        topic_cache_name
+      );
+    }
 
     Ok(Self {
       my_subscriber: subscriber,
