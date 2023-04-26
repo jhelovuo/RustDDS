@@ -11,9 +11,9 @@ use crate::{
 /// Replaces the use of `valid_data` flag in SampleInfo of DataSample from the
 /// DDS spec.
 ///
-/// Implements the methods `value`, `map_value` and `map_dispose` that
-/// correspond to methods of [`Result`](std::result::Result), which had been
-/// previously used for this purpose.
+/// Implements the methods `value`, `map_value`, `map_dispose` `unwrap` and
+/// `as_ref` that correspond to methods of [`Result`](std::result::Result),
+/// which had been previously used for this purpose.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Sample<D, K> {
   Value(D),
@@ -39,6 +39,20 @@ impl<D, K> Sample<D, K> {
     match self {
       Sample::Value(d) => Sample::Value(d),
       Sample::Dispose(k) => Sample::Dispose(op(k)),
+    }
+  }
+
+  pub fn unwrap(self) -> D {
+    match self {
+      Sample::Value(d) => d,
+      Sample::Dispose(_k) => panic!("Unwrap called on a Sample with no data"),
+    }
+  }
+
+  pub const fn as_ref(&self) -> Sample<&D, &K> {
+    match *self {
+      Sample::Value(ref d) => Sample::Value(d),
+      Sample::Dispose(ref k) => Sample::Dispose(k),
     }
   }
 }
