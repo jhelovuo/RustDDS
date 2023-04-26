@@ -1,7 +1,12 @@
-use std::io;
+use std::{
+  io,
+  pin::Pin,
+  task::{Context, Poll},
+};
 
 use serde::de::DeserializeOwned;
-use mio_06::{Evented, Poll, PollOpt, Ready, Token};
+use mio_06::{self, Evented};
+use futures::stream::{FusedStream, Stream};
 
 use crate::{
   dds::{
@@ -9,12 +14,19 @@ use crate::{
     no_key::datasample::DataSample,
     qos::{HasQoSPolicy, QosPolicies},
     readcondition::ReadCondition,
+    statusevents::DataReaderStatus,
     traits::serde_adapters::no_key::DeserializerAdapter,
     values::result::Result,
-    with_key::{datareader as datareader_with_key, datasample::DataSample as WithKeyDataSample},
+    with_key::{
+      datareader as datareader_with_key,
+      datasample::{DataSample as WithKeyDataSample, Sample},
+      DataReader as WithKeyDataReader, DataReaderEventStream as WithKeyDataReaderEventStream,
+      DataReaderStream as WithKeyDataReaderStream,
+    },
   },
   serialization::CDRDeserializerAdapter,
   structure::entity::RTPSEntity,
+  StatusEvented,
 };
 use super::wrappers::{DAWrapper, NoKeyWrapper};
 
@@ -430,8 +442,17 @@ where
     self.keyed_datareader.get_requested_deadline_missed_status()
   }
   */
+
+  /// An async stream for reading the (bare) data samples
+  pub fn async_sample_stream(self) -> DataReaderStream<D, DA> {
+    DataReaderStream {
+      keyed_stream: self.keyed_datareader.async_sample_stream(),
+    }
+  }
 }
 
+/// WARNING! UNTESTED
+//  TODO: test
 // This is  not part of DDS spec. We implement mio Eventd so that the
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for DataReader<D, DA>
@@ -441,24 +462,95 @@ where
 {
   // We just delegate all the operations to notification_receiver, since it alrady
   // implements Evented
-  fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
+  fn register(
+    &self,
+    poll: &mio_06::Poll,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
+  ) -> io::Result<()> {
     self.keyed_datareader.register(poll, token, interest, opts)
   }
 
   fn reregister(
     &self,
-    poll: &Poll,
-    token: Token,
-    interest: Ready,
-    opts: PollOpt,
+    poll: &mio_06::Poll,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
       .keyed_datareader
       .reregister(poll, token, interest, opts)
   }
 
-  fn deregister(&self, poll: &Poll) -> io::Result<()> {
+  fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
     self.keyed_datareader.deregister(poll)
+  }
+}
+
+/// WARNING! UNTESTED
+//  TODO: test
+impl<D, DA> mio_08::event::Source for DataReader<D, DA>
+where
+  D: DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
+  fn register(
+    &mut self,
+    registry: &mio_08::Registry,
+    token: mio_08::Token,
+    interests: mio_08::Interest,
+  ) -> io::Result<()> {
+    // with_key::DataReader implements .register() for two traits, so need to
+    // use disambiguation syntax to call .register() here.
+    <WithKeyDataReader<NoKeyWrapper<D>, DAWrapper<DA>> as mio_08::event::Source>::register(
+      &mut self.keyed_datareader,
+      registry,
+      token,
+      interests,
+    )
+  }
+
+  fn reregister(
+    &mut self,
+    registry: &mio_08::Registry,
+    token: mio_08::Token,
+    interests: mio_08::Interest,
+  ) -> io::Result<()> {
+    <WithKeyDataReader<NoKeyWrapper<D>, DAWrapper<DA>> as mio_08::event::Source>::reregister(
+      &mut self.keyed_datareader,
+      registry,
+      token,
+      interests,
+    )
+  }
+
+  fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()> {
+    <WithKeyDataReader<NoKeyWrapper<D>, DAWrapper<DA>> as mio_08::event::Source>::deregister(
+      &mut self.keyed_datareader,
+      registry,
+    )
+  }
+}
+
+/// WARNING! UNTESTED
+//  TODO: test
+impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
+where
+  D: DeserializeOwned,
+  DA: DeserializerAdapter<D>,
+{
+  fn as_status_evented(&mut self) -> &dyn Evented {
+    self.keyed_datareader.as_status_evented()
+  }
+
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self.keyed_datareader.as_status_source()
+  }
+
+  fn try_recv_status(&self) -> Option<DataReaderStatus> {
+    self.keyed_datareader.try_recv_status()
   }
 }
 
@@ -479,5 +571,102 @@ where
 {
   fn guid(&self) -> GUID {
     self.keyed_datareader.guid()
+  }
+}
+
+// ----------------------------------------------
+// ----------------------------------------------
+
+// Async interface for the DataReader
+
+/// Wraps [`with_key::DataReaderStream`](crate::with_key::DataReaderStream) and
+/// unwraps [`Sample`](crate::with_key::Sample) and `NoKeyWrapper` on
+/// `poll_next`.
+pub struct DataReaderStream<
+  D: DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
+> {
+  keyed_stream: WithKeyDataReaderStream<NoKeyWrapper<D>, DAWrapper<DA>>,
+}
+
+impl<D, DA> DataReaderStream<D, DA>
+where
+  D: DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D>,
+{
+  pub fn async_event_stream(&self) -> DataReaderEventStream<D, DA> {
+    DataReaderEventStream {
+      keyed_stream: self.keyed_stream.async_event_stream(),
+    }
+  }
+}
+
+// https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
+impl<D, DA> Unpin for DataReaderStream<D, DA>
+where
+  D: DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D>,
+{
+}
+
+impl<D, DA> Stream for DataReaderStream<D, DA>
+where
+  D: DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D>,
+{
+  type Item = Result<D>;
+
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    match Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx) {
+      Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+      Poll::Ready(Some(Ok(Sample::Value(d)))) => Poll::Ready(Some(Ok(d.d))), /* Unwraps Sample and NoKeyWrapper */
+      Poll::Ready(Some(Ok(Sample::Dispose(_)))) => Poll::Pending,            /* Disposed data is */
+      // ignored
+      Poll::Ready(None) => Poll::Ready(None), // This should never happen
+      Poll::Pending => Poll::Pending,
+    }
+  }
+}
+
+impl<D, DA> FusedStream for DataReaderStream<D, DA>
+where
+  D: DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D>,
+{
+  fn is_terminated(&self) -> bool {
+    false // Never terminate. This means it is always valid to call poll_next().
+  }
+}
+
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
+
+/// Wraps [`with_key::DataReaderEventStream`](crate::with_key::DataReaderEventStream).
+pub struct DataReaderEventStream<
+  D: DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
+> {
+  keyed_stream: WithKeyDataReaderEventStream<NoKeyWrapper<D>, DAWrapper<DA>>,
+}
+
+impl<D, DA> Stream for DataReaderEventStream<D, DA>
+where
+  D: DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D>,
+{
+  type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
+
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx)
+  }
+}
+
+impl<D, DA> FusedStream for DataReaderEventStream<D, DA>
+where
+  D: DeserializeOwned + 'static,
+  DA: DeserializerAdapter<D>,
+{
+  fn is_terminated(&self) -> bool {
+    false // Never terminate. This means it is always valid to call poll_next().
   }
 }

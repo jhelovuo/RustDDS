@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use mio_06::Evented;
 use serde::Serialize;
 
 use crate::{
@@ -7,6 +8,7 @@ use crate::{
     data_types::GUID,
     pubsub::Publisher,
     qos::{HasQoSPolicy, QosPolicies},
+    statusevents::{DataWriterStatus, StatusReceiverStream},
     topic::Topic,
     traits::{dds_entity::DDSEntity, serde_adapters::no_key::SerializerAdapter},
     values::result::Result,
@@ -15,6 +17,7 @@ use crate::{
   discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
   serialization::CDRSerializerAdapter,
   structure::{entity::RTPSEntity, rpc::SampleIdentity, time::Timestamp},
+  StatusEvented,
 };
 use super::wrappers::{NoKeyWrapper, SAWrapper};
 
@@ -412,6 +415,30 @@ where
   pub fn get_status_listener(&self) -> &Receiver<DataWriterStatus> {
     self.keyed_datawriter.get_status_listener()
   } */
+
+  pub fn as_async_event_stream(&self) -> StatusReceiverStream<DataWriterStatus> {
+    self.keyed_datawriter.as_async_event_stream()
+  }
+}
+
+/// WARNING! UNTESTED
+//  TODO: test
+impl<D, SA> StatusEvented<DataWriterStatus> for DataWriter<D, SA>
+where
+  D: Serialize,
+  SA: SerializerAdapter<D>,
+{
+  fn as_status_evented(&mut self) -> &dyn Evented {
+    self.keyed_datawriter.as_status_evented()
+  }
+
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self.keyed_datawriter.as_status_source()
+  }
+
+  fn try_recv_status(&self) -> Option<DataWriterStatus> {
+    self.keyed_datawriter.try_recv_status()
+  }
 }
 
 impl<D: Serialize, SA: SerializerAdapter<D>> RTPSEntity for DataWriter<D, SA> {
