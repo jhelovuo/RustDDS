@@ -920,7 +920,22 @@ impl Reader {
         return;
       };
 
-      // TODO: Implement GAP rules validation (Section 8.3.7.4.3) here.
+      // Check validity of the GAP message (Section 8.3.8.4.3)
+      if gap.gap_start <= SequenceNumber::new(0) {
+        debug!(
+          "Invalid GAP from {:?}: gap_start={:?} is zero or negative. topic={:?} reader={:?}",
+          writer_guid, gap.gap_start, self.topic_name, self.my_guid
+        );
+        return;
+      }
+      if gap.gap_list.base() <= SequenceNumber::new(0) {
+        debug!(
+          "Invalid GAP from {:?}: minimum of gap_list (={:?}) is zero or negative. topic={:?} reader={:?}",
+          writer_guid, gap.gap_list.base(), self.topic_name, self.my_guid
+        );
+        return;
+      }
+      // TODO: check that maximum(gap_list) - minimum(gap_list) < 256 ?
 
       // Irrelevant sequence numbers communicated in the Gap message are
       // composed of two groups:
