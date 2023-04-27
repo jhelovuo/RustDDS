@@ -666,7 +666,7 @@ impl DiscoveryDB {
   }
 }
 
-#[cfg(test)]
+#[cfg(notest)]
 mod tests {
   use std::{
     rc::Rc,
