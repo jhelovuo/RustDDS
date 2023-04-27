@@ -28,7 +28,6 @@ use crate::{
     values::result::{Error, Result},
     with_key::{
       datareader::DataReader as WithKeyDataReader, datawriter::DataWriter as WithKeyDataWriter,
-      DataReaderWaker,
     },
     writer::WriterIngredients,
   },
@@ -978,7 +977,7 @@ impl InnerSubscriber {
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
 
-    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+    let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (poll_event_source, poll_event_sender) = mio_source::make_poll_channel()?;
 

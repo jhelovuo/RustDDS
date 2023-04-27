@@ -3,6 +3,7 @@ use std::{
   fmt, iter,
   rc::Rc,
   sync::{Arc, Mutex, MutexGuard, RwLock},
+  task::Waker,
   time::Duration as StdDuration,
 };
 
@@ -41,10 +42,7 @@ use crate::{
     time::Timestamp,
   },
 };
-use super::{
-  qos::InlineQos,
-  with_key::simpledatareader::{DataReaderWaker, ReaderCommand},
-};
+use super::{qos::InlineQos, with_key::simpledatareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {
@@ -60,7 +58,7 @@ pub(crate) struct ReaderIngredients {
   pub topic_name: String,
   pub qos_policy: QosPolicies,
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
-  pub(crate) data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+  pub(crate) data_reader_waker: Arc<Mutex<Option<Waker>>>,
   pub(crate) poll_event_sender: mio_source::PollEventSender,
 }
 
@@ -120,7 +118,7 @@ pub(crate) struct Reader {
 
   pub(crate) timed_event_timer: Timer<TimedEvent>,
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
-  data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+  data_reader_waker: Arc<Mutex<Option<Waker>>>,
   poll_event_sender: mio_source::PollEventSender,
 }
 
@@ -1021,7 +1019,8 @@ impl Reader {
       .data_reader_waker
       .lock()
       .unwrap() // TODO: unwrap
-      .wake();
+      .take() // Take to nullify the reference
+      .map(|w| w.wake_by_ref()); //If Some, call wake_by_ref
 
     // mio-0.8 notify
     self.poll_event_sender.send();
@@ -1205,7 +1204,7 @@ mod tests {
     let (_notification_event_source, notification_event_sender) =
       mio_source::make_poll_channel().unwrap();
     // async notification waker
-    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+    let data_reader_waker = Arc::new(Mutex::new(None));
 
     // Create status channel
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
@@ -1287,7 +1286,7 @@ mod tests {
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
       mio_source::make_poll_channel().unwrap();
-    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+    let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
 
@@ -1393,7 +1392,7 @@ mod tests {
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
       mio_source::make_poll_channel().unwrap();
-    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+    let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
 
@@ -1497,7 +1496,7 @@ mod tests {
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
       mio_source::make_poll_channel().unwrap();
-    let data_reader_waker = Arc::new(Mutex::new(DataReaderWaker::NoWaker));
+    let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
 

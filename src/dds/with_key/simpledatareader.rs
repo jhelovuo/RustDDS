@@ -41,27 +41,6 @@ use crate::{
   },
 };
 
-// TODO: This is redundant, as is is the same as
-// Option<Waker>. Replace.
-#[derive(Clone, Debug)]
-pub enum DataReaderWaker {
-  FutureWaker(Waker),
-  NoWaker,
-}
-
-impl DataReaderWaker {
-  pub fn wake(&mut self) {
-    use DataReaderWaker::*;
-    match self {
-      NoWaker => (),
-      FutureWaker(fut_waker) => {
-        fut_waker.wake_by_ref();
-        *self = NoWaker;
-      }
-    }
-  }
-}
-
 #[derive(Clone, Debug)]
 pub(crate) enum ReaderCommand {
   #[allow(dead_code)] // TODO: Implement this (resetting) feature
@@ -138,7 +117,7 @@ pub struct SimpleDataReader<
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // resetting deadline missed status. Remove attribute when it is supported.
   reader_command: mio_channel::SyncSender<ReaderCommand>,
-  data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+  data_reader_waker: Arc<Mutex<Option<Waker>>>,
 
   event_source: PollEventSource,
 }
@@ -188,7 +167,7 @@ where
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
-    data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+    data_reader_waker: Arc<Mutex<Option<Waker>>>,
     event_source: PollEventSource,
   ) -> Result<Self> {
     let dp = match subscriber.participant() {
@@ -231,7 +210,7 @@ where
       event_source,
     })
   }
-  pub fn set_waker(&self, w: DataReaderWaker) {
+  pub fn set_waker(&self, w: Option<Waker>) {
     *self.data_reader_waker.lock().unwrap() = w;
   }
 
@@ -561,9 +540,7 @@ where
         // 1. synchronously store waker to background thread (must rendezvous)
         // 2. try take_bare again, in case something arrived just now
         // 3. if nothing still, return pending.
-        self
-          .simple_datareader
-          .set_waker(DataReaderWaker::FutureWaker(cx.waker().clone()));
+        self.simple_datareader.set_waker(Some(cx.waker().clone()));
         match self.simple_datareader.try_take_one() {
           Err(e) => Poll::Ready(Some(Err(e))),
           Ok(Some(d)) => Poll::Ready(Some(Ok(d))),

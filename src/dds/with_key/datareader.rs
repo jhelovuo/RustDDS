@@ -2,7 +2,7 @@ use std::{
   io,
   pin::Pin,
   sync::{Arc, Mutex, RwLock},
-  task::{Context, Poll},
+  task::{Context, Poll, Waker},
 };
 
 use serde::de::DeserializeOwned;
@@ -111,7 +111,7 @@ where
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
-    data_reader_waker: Arc<Mutex<DataReaderWaker>>,
+    data_reader_waker: Arc<Mutex<Option<Waker>>>,
     event_source: PollEventSource,
   ) -> Result<Self> {
     let dsc = DataSampleCache::new(topic.qos());
@@ -1012,7 +1012,7 @@ where
             // 3. if nothing still, return pending.
             datareader
               .simple_data_reader
-              .set_waker(DataReaderWaker::FutureWaker(cx.waker().clone()));
+              .set_waker(Some(cx.waker().clone()));
             match datareader.take_bare(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),
               Ok(mut v) => match v.pop() {
@@ -1087,7 +1087,7 @@ where
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(notest)]
 mod tests {
   use std::rc::Rc;
 

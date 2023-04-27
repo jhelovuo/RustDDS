@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, task::Waker};
 
 use futures::stream::{Stream, StreamExt};
 use serde::de::DeserializeOwned;
@@ -15,7 +15,6 @@ use crate::{
     traits::{key::*, serde_adapters::with_key::*},
     values::result::*,
     with_key,
-    with_key::simpledatareader::DataReaderWaker,
   },
   serialization::CDRDeserializerAdapter,
   structure::{entity::RTPSEntity, guid::GUID},
@@ -47,7 +46,7 @@ where
     }
   }
 
-  pub fn set_waker(&self, w: DataReaderWaker) {
+  pub fn set_waker(&self, w: Option<Waker>) {
     self.keyed_simpledatareader.set_waker(w);
   }
 
