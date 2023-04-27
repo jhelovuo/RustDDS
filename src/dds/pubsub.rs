@@ -13,6 +13,7 @@ use log::{debug, error, info, trace, warn};
 use crate::{
   dds::{
     data_types::EntityKind,
+    no_key,
     no_key::{
       datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
     },
@@ -23,9 +24,10 @@ use crate::{
     topic::*,
     traits::{
       key::{Key, Keyed},
-      serde_adapters::{no_key, with_key},
+      serde_adapters,
     },
     values::result::{Error, Result},
+    with_key,
     with_key::{
       datareader::DataReader as WithKeyDataReader, datawriter::DataWriter as WithKeyDataWriter,
     },
@@ -159,7 +161,7 @@ impl Publisher {
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
-    SA: with_key::SerializerAdapter<D>,
+    SA: serde_adapters::with_key::SerializerAdapter<D>,
   {
     self.inner_lock().create_datawriter(self, None, topic, qos)
   }
@@ -189,7 +191,7 @@ impl Publisher {
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
-    SA: with_key::SerializerAdapter<D>,
+    SA: serde_adapters::with_key::SerializerAdapter<D>,
   {
     self
       .inner_lock()
@@ -247,7 +249,7 @@ impl Publisher {
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
     D: Serialize,
-    SA: no_key::SerializerAdapter<D>,
+    SA: serde_adapters::no_key::SerializerAdapter<D>,
   {
     self
       .inner_lock()
@@ -476,7 +478,7 @@ impl InnerPublisher {
   where
     D: Keyed + Serialize,
     <D as Keyed>::K: Key,
-    SA: with_key::SerializerAdapter<D>,
+    SA: serde_adapters::with_key::SerializerAdapter<D>,
   {
     // Data samples from DataWriter to HistoryCache
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(16);
@@ -549,7 +551,7 @@ impl InnerPublisher {
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
     D: Serialize,
-    SA: no_key::SerializerAdapter<D>,
+    SA: serde_adapters::no_key::SerializerAdapter<D>,
   {
     let entity_id =
       self.unwrap_or_new_entity_id(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
@@ -728,7 +730,7 @@ impl Subscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: with_key::DeserializerAdapter<D>,
+    SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
     self.inner.create_datareader(self, topic, None, qos)
   }
@@ -756,7 +758,7 @@ impl Subscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: with_key::DeserializerAdapter<D>,
+    SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
     self
       .inner
@@ -815,10 +817,23 @@ impl Subscriber {
   ) -> Result<NoKeyDataReader<D, SA>>
   where
     D: DeserializeOwned,
-    SA: no_key::DeserializerAdapter<D>,
+    SA: serde_adapters::no_key::DeserializerAdapter<D>,
   {
     self.inner.create_datareader_no_key(self, topic, None, qos)
   }
+
+  pub fn create_simple_datareader_no_key<D: 'static, SA: 'static>(
+    &self,
+    topic: &Topic,
+    qos: Option<QosPolicies>,
+  ) -> Result<no_key::SimpleDataReader<D, SA>>
+  where
+    D: DeserializeOwned,
+    SA: serde_adapters::no_key::DeserializerAdapter<D>,
+  {
+    self.inner.create_simple_datareader_no_key(self, topic, None, qos)
+  }
+
 
   pub fn create_datareader_no_key_cdr<D: 'static>(
     &self,
@@ -945,7 +960,25 @@ impl InnerSubscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: with_key::DeserializerAdapter<D>,
+    SA: serde_adapters::with_key::DeserializerAdapter<D>,
+  {
+    let simple_dr = 
+      self.create_simple_datareader_internal(outer, entity_id_opt, topic, optional_qos)?;
+    Ok(with_key::DataReader::<D, SA>::from_simple_data_reader(simple_dr))
+  }
+
+
+  fn create_simple_datareader_internal<D: 'static, SA>(
+    &self,
+    outer: &Subscriber,
+    entity_id_opt: Option<EntityId>,
+    topic: &Topic,
+    optional_qos: Option<QosPolicies>,
+  ) -> Result<with_key::SimpleDataReader<D, SA>>
+  where
+    D: DeserializeOwned + Keyed,
+    <D as Keyed>::K: Key,
+    SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
     // incoming data notification channel from Reader to DataReader
     let (send, rec) = mio_channel::sync_channel::<()>(4);
@@ -1009,7 +1042,7 @@ impl InnerSubscriber {
       Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
     }
 
-    let datareader = WithKeyDataReader::<D, SA>::new(
+    let datareader = with_key::SimpleDataReader::<D, SA>::new(
       outer.clone(),
       entity_id,
       topic.clone(),
@@ -1042,7 +1075,7 @@ impl InnerSubscriber {
   where
     D: DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
-    SA: with_key::DeserializerAdapter<D>,
+    SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::WithKey {
       return Error::precondition_not_met(
@@ -1061,7 +1094,7 @@ impl InnerSubscriber {
   ) -> Result<NoKeyDataReader<D, SA>>
   where
     D: DeserializeOwned,
-    SA: no_key::DeserializerAdapter<D>,
+    SA: serde_adapters::no_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::NoKey {
       return Error::precondition_not_met(
@@ -1081,6 +1114,37 @@ impl InnerSubscriber {
 
     Ok(NoKeyDataReader::<D, SA>::from_keyed(d))
   }
+
+  pub fn create_simple_datareader_no_key<D: 'static, SA>(
+    &self,
+    outer: &Subscriber,
+    topic: &Topic,
+    entity_id_opt: Option<EntityId>,
+    qos: Option<QosPolicies>,
+  ) -> Result<no_key::SimpleDataReader<D, SA>>
+  where
+    D: DeserializeOwned,
+    SA: serde_adapters::no_key::DeserializerAdapter<D> + 'static,
+  {
+    if topic.kind() != TopicKind::NoKey {
+      return Error::precondition_not_met(
+        "Topic is WITH_KEY, but attempted to create NO_KEY Datareader",
+      );
+    }
+
+    let entity_id =
+      self.unwrap_or_new_entity_id(entity_id_opt, EntityKind::READER_NO_KEY_USER_DEFINED);
+
+    let d = self.create_simple_datareader_internal::<NoKeyWrapper<D>, DAWrapper<SA>>(
+      outer,
+      Some(entity_id),
+      topic,
+      qos,
+    )?;
+
+    Ok(no_key::SimpleDataReader::<D, SA>::from_keyed(d))
+  }
+
 
   pub fn participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()

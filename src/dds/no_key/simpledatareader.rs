@@ -12,7 +12,7 @@ use crate::{
     no_key::datasample::DeserializedCacheChange,
     qos::*,
     statusevents::*,
-    traits::{key::*, serde_adapters::with_key::*},
+    traits::{key::*, serde_adapters::no_key::*},
     values::result::*,
     with_key,
   },
@@ -24,20 +24,21 @@ use super::wrappers::{DAWrapper, NoKeyWrapper};
 /// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
 pub struct SimpleDataReader<
-  D: Keyed + DeserializeOwned,
+  D: DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > where
-  <D as Keyed>::K: Key,
 {
   keyed_simpledatareader: with_key::SimpleDataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
 }
 
 impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
-  D: DeserializeOwned + Keyed,
-  <D as Keyed>::K: Key,
+  D: DeserializeOwned ,
   DA: DeserializerAdapter<D> + 'static,
 {
+  // TODO: Make it possible to construct SimpleDataReader (particualrly, no_key version)
+  // from the public API. That is, From a Subscriber object like a normal Datareader.
+  // This is to be then used from the ros2-client package.
   pub(crate) fn from_keyed(
     keyed_simpledatareader: with_key::SimpleDataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
   ) -> Self {

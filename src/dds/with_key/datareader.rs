@@ -1,12 +1,12 @@
 use std::{
   io,
   pin::Pin,
-  sync::{Arc, Mutex, RwLock},
-  task::{Context, Poll, Waker},
+  sync::{Arc, Mutex, },
+  task::{Context, Poll,},
 };
 
 use serde::de::DeserializeOwned;
-use mio_extras::channel as mio_channel;
+
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
@@ -16,23 +16,19 @@ use futures::stream::{FusedStream, Stream};
 use crate::{
   dds::{
     datasample_cache::DataSampleCache,
-    pubsub::Subscriber,
     qos::*,
     readcondition::*,
     statusevents::*,
-    topic::Topic,
     traits::{key::*, serde_adapters::with_key::*},
     values::result::*,
     with_key::{datasample::*, simpledatareader::*},
   },
-  discovery::{data_types::topic_data::PublicationBuiltinTopicData, discovery::DiscoveryCommand},
-  mio_source::PollEventSource,
+  discovery::{data_types::topic_data::PublicationBuiltinTopicData,},
   serialization::CDRDeserializerAdapter,
   structure::{
-    dds_cache::DDSCache,
     duration::Duration,
     entity::RTPSEntity,
-    guid::{EntityId, GUID},
+    guid::GUID,
     time::Timestamp,
   },
 };
@@ -99,41 +95,16 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  #[allow(clippy::too_many_arguments)]
-  pub(crate) fn new(
-    subscriber: Subscriber,
-    my_id: EntityId,
-    topic: Topic,
-    qos_policy: QosPolicies,
-    // Each notification sent to this channel must be try_recv'd
-    notification_receiver: mio_channel::Receiver<()>,
-    dds_cache: &Arc<RwLock<DDSCache>>,
-    discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
-    reader_command: mio_channel::SyncSender<ReaderCommand>,
-    data_reader_waker: Arc<Mutex<Option<Waker>>>,
-    event_source: PollEventSource,
-  ) -> Result<Self> {
-    let dsc = DataSampleCache::new(topic.qos());
-
-    let simple_data_reader = SimpleDataReader::<D, DA>::new(
-      subscriber,
-      my_id,
-      topic,
-      qos_policy,
-      notification_receiver,
-      dds_cache,
-      discovery_command,
-      status_channel_rec,
-      reader_command,
-      data_reader_waker,
-      event_source,
-    )?;
-
-    Ok(Self {
+  
+  pub(crate) fn from_simple_data_reader(
+    simple_data_reader: SimpleDataReader<D, DA>,
+  ) -> Self {
+    let dsc = DataSampleCache::new(simple_data_reader.topic().qos());
+    
+    Self {
       simple_data_reader,
       datasample_cache: dsc,
-    })
+    }
   }
 
   // Gets all unseen cache_changes from the TopicCache. Deserializes

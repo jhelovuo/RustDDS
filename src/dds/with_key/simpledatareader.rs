@@ -358,6 +358,10 @@ where
     self.my_guid
   }
 
+  pub fn topic(&self) -> &Topic {
+    &self.my_topic
+  }
+
   pub fn as_async_stream(&self) -> SimpleDataReaderStream<D, DA> {
     SimpleDataReaderStream {
       simple_datareader: self,
