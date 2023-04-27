@@ -130,7 +130,7 @@ impl Reader {
     udp_sender: Rc<UDPSender>,
     timed_event_timer: Timer<TimedEvent>,
   ) -> Self {
-    // Verify that the topic and the topic cache have the same name
+    // Verify that the topic cache corresponds to the topic of the Reader
     let topic_cache_name = i.topic_cache_handle.lock().unwrap().topic_name();
     if i.topic_name != topic_cache_name {
       panic!(

@@ -181,7 +181,7 @@ where
 
     let my_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), my_id);
 
-    // Verify that the topic and the topic cache have the same name
+    // Verify that the topic cache corresponds to the topic of the Reader
     let topic_cache_name = topic_cache.lock().unwrap().topic_name();
     if topic.name() != topic_cache_name {
       return log_and_err_internal!(
