@@ -43,16 +43,16 @@ serde_repr = {version = "0.1" }
 log = "0.4"
 log4rs = "1"
 test-case = "2.0.0"
-env_logger = "0.9"
+env_logger = "0.10"
 
 # ros_visualizer
-crossterm = "0.23"
-tui = { version = "0.17", default-features = false, features = ['crossterm'] }
+crossterm = "0.26"
+tui = { version = "0.19", default-features = false, features = ['crossterm'] }
 
 # shapes-demo
-clap = "3.1"
+clap = "4.2"
 ctrlc = "3.1.6"
 
 [target.'cfg(unix)'.dev-dependencies]
 # turle_teleop
-termion = "1.5.5"
+termion = "2.0.1"
