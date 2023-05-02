@@ -31,6 +31,9 @@ pub struct SimpleDataReader<
   keyed_simpledatareader: with_key::SimpleDataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
 }
 
+/// Simplified type for CDR encoding
+pub type SimpleDataReaderCdr<D> = SimpleDataReader<D, CDRDeserializerAdapter<D>>;
+
 impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
   D: DeserializeOwned ,
@@ -107,8 +110,7 @@ where
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for SimpleDataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
-  <D as Keyed>::K: Key,
+  D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it

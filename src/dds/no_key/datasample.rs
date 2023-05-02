@@ -8,6 +8,7 @@ use crate::{
       datawriter::WriteOptions,
     },
   },
+  rpc::SampleIdentity,
   structure::{
     cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, time::Timestamp,
   },
@@ -107,5 +108,21 @@ impl<D> DeserializedCacheChange<D> {
       }),
       Sample::Dispose(_key) => None,
     }
+  }
+
+  pub fn into_value(self) -> D {
+    self.sample
+  }
+
+  pub fn source_timestamp(&self) -> Option<Timestamp> {
+    self.write_options.source_timestamp
+  }
+
+  pub fn writer_guid(&self) -> GUID { 
+    self.writer_guid
+  }
+
+  pub fn related_sample_identity(&self) -> Option<SampleIdentity> {
+    self.write_options.related_sample_identity
   }
 }
