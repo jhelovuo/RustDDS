@@ -777,7 +777,8 @@ where
     vec![].into_iter()
   }
 
-  /// An async stream for reading the (bare) data samples
+  /// An async stream for reading the (bare) data samples.
+  /// The resulting Stream can be used to get another stream of status events.
   pub fn async_sample_stream(self) -> DataReaderStream<D, DA> {
     DataReaderStream {
       datareader: Arc::new(Mutex::new(self)),
@@ -929,6 +930,7 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
+  /// Get a stream of status events
   pub fn async_event_stream(&self) -> DataReaderEventStream<D, DA> {
     DataReaderEventStream {
       datareader: Arc::clone(&self.datareader),

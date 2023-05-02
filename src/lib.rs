@@ -12,7 +12,8 @@
 //! Rust techniques and conventions.
 //!
 //! Additionally, there is a [ROS2](https://index.ros.org/doc/ros2/) interface, that is simpler to use than DDS
-//! when communicating to ROS2 components.
+//! when communicating to ROS2 components. See package [ros2-client](https://crates.io/ros2-client).
+//! Note: Do not use module [`ros2`] contained within RustDDS. It is no longer being developed.
 //!
 //! # DDS usage summary
 //!
@@ -42,8 +43,8 @@
 //!   * Many types and traits in RustDDS have both with_key and no_key versions.
 //!     This is
 //!   because with_key communication must be able to access keys from data
-//! samples, so it is required   in type signatures. Such requirement makes no
-//! sense for no_key communication, so signature   must be different.
+//! samples, so it is required in type signatures. Such requirement makes no
+//! sense for no_key communication, so signature must be different.
 //!
 //!
 //! # Interfacing Rust data types to DDS
@@ -61,10 +62,29 @@
 //!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
 //!
 //! # Polling multiple DataReaders
+//! 
+//! There are three alternative methods to poll DataReaders (and DataWriters): 
+//! mio-0.6, mio-0.8, and async. Use only one of these!
 //!
-//! RustDDS is designed to used with [mio](mio) version 0.6.x. DataReaders
-//! implement [`Evented`](mio::event::Evented) so that they can be directly
-//! registered to a [`poll`](mio::Poll).
+//! ## `mio-0.6`
+//!
+//! RustDDS is designed to used with [mio](mio_06) version 0.6.x. DataReaders
+//! implement [`Evented`](mio_06::event::Evented) so that they can be directly
+//! registered to a [`poll`](mio_06::Poll). See example `shapes_demo`.
+//!
+//! ## `mio-0.8`
+//! 
+//! RustDDS DataReaders implement [`mio_08::event::Source`] for registering with mio-0.8.
+//! See example `shapes_demo_mio_08`
+//! 
+//!
+//! ## `async`
+//!
+//! DataReader and DataWriter can do Rust async I/O by converting themselves to [`futures::stream::Stream`]s.
+//! * [`crate::dds::with_key::DataReader::async_sample_stream`] to get data
+//! * [`crate::dds::with_key::DataReaderStream::async_event_stream`] to get status events
+//!
+//! See exampe `async_shapes_demo`.
 //!
 //! # Usage Example
 //!
