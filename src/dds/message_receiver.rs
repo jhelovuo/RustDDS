@@ -320,7 +320,31 @@ impl MessageReceiver {
         }
       }
       EntitySubmessage::DataFrag(datafrag, flags) => {
-        if let Some(target_reader) = self.reader_mut(datafrag.reader_id) {
+        // If reader_id == UNKNOWN, message should be sent to all matched readers
+        if datafrag.reader_id == EntityId::UNKNOWN {
+          trace!(
+            "handle_entity_submessage DATA from unknown. writer_id = {:?}",
+            &datafrag.writer_id
+          );
+          for reader in self
+            .available_readers
+            .values_mut()
+            // exception: discovery prococol reader must read from unkonwn discovery protocol
+            // writers TODO: This logic here is uglyish. Can we just inject a
+            // presupposed writer (proxy) to the built-in reader as it is created?
+            .filter(|r| {
+              r.contains_writer(datafrag.writer_id)
+                || (datafrag.writer_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
+                  && r.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
+            })
+          {
+            debug!(
+              "handle_entity_submessage DATA from unknown handling in {:?}",
+              &reader
+            );
+            reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
+          }
+        } else if let Some(target_reader) = self.reader_mut(datafrag.reader_id) {
           target_reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
         }
       }

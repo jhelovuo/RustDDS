@@ -55,42 +55,46 @@ fn main() {
   let matches = get_matches();
 
   // Process command line arguments
-  let topic_name = matches.value_of("topic").unwrap_or("Square");
-  let domain_id = matches
-    .value_of("domain_id")
-    .unwrap_or("0")
-    .parse::<u16>()
-    .unwrap_or(0);
-  let color = matches.value_of("color").unwrap_or("BLUE");
+  let topic_name = matches
+    .get_one::<String>("topic")
+    .cloned()
+    .unwrap_or("Square".to_owned());
+  let domain_id = matches.get_one::<u16>("domain_id").unwrap();
+  let color = matches
+    .get_one::<String>("color")
+    .cloned()
+    .unwrap_or("BLUE".to_owned());
 
-  let domain_participant = DomainParticipant::new(domain_id)
+  let domain_participant = DomainParticipant::new(*domain_id)
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {:?}", e));
 
   let mut qos_b = QosPolicyBuilder::new()
-    .reliability(if matches.is_present("reliable") {
+    .reliability(if matches.get_flag("reliable") {
       Reliability::Reliable {
         max_blocking_time: rustdds::Duration::DURATION_ZERO,
       }
     } else {
       Reliability::BestEffort
     })
-    .durability(match matches.value_of("durability") {
-      Some("l") => Durability::TransientLocal,
-      Some("t") => Durability::Transient,
-      Some("p") => Durability::Persistent,
-      _ => Durability::Volatile,
-    })
-    .history(match matches.value_of("history_depth").map(str::parse) {
-      None | Some(Err(_)) => History::KeepAll,
-      Some(Ok(d)) => {
-        if d < 0 {
+    .durability(
+      match matches.get_one::<String>("durability").map(|s| s.as_str()) {
+        Some("l") => Durability::TransientLocal,
+        Some("t") => Durability::Transient,
+        Some("p") => Durability::Persistent,
+        _ => Durability::Volatile,
+      },
+    )
+    .history(match matches.get_one::<i32>("history_depth") {
+      None => History::KeepAll,
+      Some(d) => {
+        if *d < 0 {
           History::KeepAll
         } else {
-          History::KeepLast { depth: d }
+          History::KeepLast { depth: *d }
         }
       }
     });
-  let deadline_policy = match matches.value_of("deadline") {
+  let deadline_policy = match matches.get_one::<String>("deadline") {
     None => None,
     Some(dl) => match dl.parse::<f64>() {
       Ok(d) => Some(Deadline(rustdds::Duration::from_frac_seconds(d))),
@@ -103,17 +107,17 @@ fn main() {
   }
 
   assert!(
-    !matches.is_present("partition"),
+    !matches.contains_id("partition"),
     "QoS policy Partition is not yet implemented."
   );
 
   assert!(
-    !matches.is_present("interval"),
+    !matches.contains_id("interval"),
     "QoS policy Time Based Filter is not yet implemented."
   );
 
   assert!(
-    !matches.is_present("ownership_strength"),
+    !matches.contains_id("ownership_strength"),
     "QoS policy Ownership Strength is not yet implemented."
   );
 
@@ -159,8 +163,8 @@ fn main() {
     )
     .unwrap();
 
-  let is_publisher = matches.is_present("publisher");
-  let is_subscriber = matches.is_present("subscriber");
+  let is_publisher = matches.get_flag("publisher");
+  let is_subscriber = matches.get_flag("subscriber");
 
   let mut writer_opt = if is_publisher {
     debug!("Publisher");
@@ -350,89 +354,89 @@ fn get_matches() -> ArgMatches {
       Arg::new("domain_id")
         .short('d')
         .value_name("id")
-        .help("Sets the DDS domain id number")
-        .takes_value(true),
+        .value_parser(clap::value_parser!(u16))
+        .default_value("0")
+        .help("Sets the DDS domain id number"),
     )
     .arg(
       Arg::new("topic")
         .short('t')
         .value_name("name")
         .help("Sets the topic name")
-        .takes_value(true)
         .required(true),
     )
     .arg(
       Arg::new("color")
         .short('c')
         .value_name("color")
-        .help("Color to publish (or filter)")
-        .takes_value(true),
+        .default_value("BLUE")
+        .help("Color to publish (or filter)"),
     )
     .arg(
       Arg::new("durability")
         .short('D')
         .value_name("durability")
         .help("Set durability")
-        .takes_value(true)
-        .possible_values(["v", "l", "t", "p"]),
+        .value_parser(["v", "l", "t", "p"]),
     )
     .arg(
       Arg::new("publisher")
         .help("Act as publisher")
         .short('P')
+        .action(clap::ArgAction::SetTrue)
         .required_unless_present("subscriber"),
     )
     .arg(
       Arg::new("subscriber")
         .help("Act as subscriber")
         .short('S')
+        .action(clap::ArgAction::SetTrue)
         .required_unless_present("publisher"),
     )
     .arg(
       Arg::new("best_effort")
         .help("BEST_EFFORT reliability")
         .short('b')
+        .action(clap::ArgAction::SetTrue)
         .conflicts_with("reliable"),
     )
     .arg(
       Arg::new("reliable")
         .help("RELIABLE reliability")
         .short('r')
+        .action(clap::ArgAction::SetTrue)
         .conflicts_with("best_effort"),
     )
     .arg(
       Arg::new("history_depth")
         .help("Keep history depth")
         .short('k')
-        .takes_value(true)
+        .value_parser(clap::value_parser!(i32))
+        .default_value("1")
         .value_name("depth"),
     )
     .arg(
       Arg::new("deadline")
         .help("Set a 'deadline' with interval (seconds)")
         .short('f')
-        .takes_value(true)
         .value_name("interval"),
     )
     .arg(
       Arg::new("partition")
         .help("Set a 'partition' string")
         .short('p')
-        .takes_value(true)
         .value_name("partition"),
     )
     .arg(
       Arg::new("interval")
         .help("Apply 'time based filter' with interval (seconds)")
         .short('i')
-        .takes_value(true)
         .value_name("interval"),
     )
     .arg(
       Arg::new("ownership_strength")
         .help("Set ownership strength [-1: SHARED]")
         .short('s')
-        .takes_value(true)
         .value_name("strength"),
     )
     .get_matches()
