@@ -24,13 +24,20 @@ New features:
 
 * Async API is available.
 * Polling using either mio-0.6 or mio-0.8.
-* Simplified DataReader `SimpleDataReader` is available. It supports only `.take()` calls, but should be lighter and faster than regular DataReader. It is designed to have just enough functionality to implement a ROS2 Subscrber.
+* Simplified DataReader `SimpleDataReader` is available. It supports only `.take()` calls, but
+should be lighter and faster than regular DataReader. It is designed to have just enough
+functionality to implement a ROS2 Subscrber.
 
 This release breaks compatibility:
 
-* Naming of data returned from `read()` / `.take()` calls has been changed from `Result` to `Sample`. This was done to reduce confusing naming, because in the previous usage the `Err` variant of `Result` did not mean an actual error condition, but a data instance disposal operation.
-* Error types are reworked to better reflect what errors can actually result, rather than having one complex error type for the entire API. This is an intentional deviation from the DDS Specification to make the implementation more Rust-like.
-* 
+* Naming of data returned from `read()` / `.take()` calls has been changed from `Result` to 
+`Sample`. This was done to reduce confusing naming, because in the previous usage the `Err`
+ variant of `Result` did not mean an actual error condition, but a data instance disposal 
+ operation.
+* Error types are reworked to better reflect what errors can actually result, rather than having
+ one complex error type for the entire API. This is an intentional deviation from the DDS
+ Specification to make the implementation more Rust-like.
+
 
 ## Version 0.6
 
