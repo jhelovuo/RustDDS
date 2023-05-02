@@ -118,7 +118,7 @@ impl<D> DeserializedCacheChange<D> {
     self.write_options.source_timestamp
   }
 
-  pub fn writer_guid(&self) -> GUID { 
+  pub fn writer_guid(&self) -> GUID {
     self.writer_guid
   }
 

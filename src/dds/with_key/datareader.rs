@@ -6,7 +6,6 @@ use std::{
 };
 
 use serde::de::DeserializeOwned;
-
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
@@ -23,14 +22,9 @@ use crate::{
     values::result::*,
     with_key::{datasample::*, simpledatareader::*},
   },
-  discovery::{data_types::topic_data::PublicationBuiltinTopicData,},
+  discovery::data_types::topic_data::PublicationBuiltinTopicData,
   serialization::CDRDeserializerAdapter,
-  structure::{
-    duration::Duration,
-    entity::RTPSEntity,
-    guid::GUID,
-    time::Timestamp,
-  },
+  structure::{duration::Duration, entity::RTPSEntity, guid::GUID, time::Timestamp},
 };
 
 /// Simplified type for CDR encoding
@@ -95,12 +89,9 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  
-  pub(crate) fn from_simple_data_reader(
-    simple_data_reader: SimpleDataReader<D, DA>,
-  ) -> Self {
+  pub(crate) fn from_simple_data_reader(simple_data_reader: SimpleDataReader<D, DA>) -> Self {
     let dsc = DataSampleCache::new(simple_data_reader.topic().qos());
-    
+
     Self {
       simple_data_reader,
       datasample_cache: dsc,

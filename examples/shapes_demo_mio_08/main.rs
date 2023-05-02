@@ -79,12 +79,14 @@ fn main() {
     } else {
       Reliability::BestEffort
     })
-    .durability(match matches.get_one::<String>("durability").map(|s| s.as_str()) {
-      Some("l") => Durability::TransientLocal,
-      Some("t") => Durability::Transient,
-      Some("p") => Durability::Persistent,
-      _ => Durability::Volatile,
-    })
+    .durability(
+      match matches.get_one::<String>("durability").map(|s| s.as_str()) {
+        Some("l") => Durability::TransientLocal,
+        Some("t") => Durability::Transient,
+        Some("p") => Durability::Persistent,
+        _ => Durability::Volatile,
+      },
+    )
     .history(match matches.get_one::<i32>("history_depth") {
       None => History::KeepAll,
       Some(d) => {

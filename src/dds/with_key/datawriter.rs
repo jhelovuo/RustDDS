@@ -105,10 +105,7 @@ impl WriteOptions {
   pub fn source_timestamp(&self) -> Option<Timestamp> {
     self.source_timestamp
   }
-
 }
-
-
 
 impl From<Option<Timestamp>> for WriteOptions {
   fn from(source_timestamp: Option<Timestamp>) -> Self {

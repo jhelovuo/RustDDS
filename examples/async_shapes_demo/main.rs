@@ -68,14 +68,16 @@ fn main() {
     } else {
       Reliability::BestEffort
     })
-    .durability(match matches.get_one::<String>("durability").map(|s| s.as_str()) {
-      Some("l") => Durability::TransientLocal,
-      Some("t") => Durability::Transient,
-      Some("p") => Durability::Persistent,
-      _ => Durability::Volatile,
-    })
+    .durability(
+      match matches.get_one::<String>("durability").map(|s| s.as_str()) {
+        Some("l") => Durability::TransientLocal,
+        Some("t") => Durability::Transient,
+        Some("p") => Durability::Persistent,
+        _ => Durability::Volatile,
+      },
+    )
     .history(match matches.get_one::<i32>("history_depth") {
-      None  => History::KeepAll,
+      None => History::KeepAll,
       Some(d) => {
         if *d < 0 {
           History::KeepAll
@@ -389,7 +391,6 @@ fn get_matches() -> ArgMatches {
     )
     .get_matches()
 }
-
 
 #[allow(clippy::similar_names)]
 fn move_shape(shape: Shape, xv: i32, yv: i32) -> (Shape, i32, i32) {

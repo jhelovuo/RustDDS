@@ -837,9 +837,10 @@ impl Subscriber {
     D: DeserializeOwned,
     SA: serde_adapters::no_key::DeserializerAdapter<D>,
   {
-    self.inner.create_simple_datareader_no_key(self, topic, None, qos)
+    self
+      .inner
+      .create_simple_datareader_no_key(self, topic, None, qos)
   }
-
 
   pub fn create_datareader_no_key_cdr<D: 'static>(
     &self,
@@ -968,11 +969,12 @@ impl InnerSubscriber {
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
-    let simple_dr = 
+    let simple_dr =
       self.create_simple_datareader_internal(outer, entity_id_opt, topic, optional_qos)?;
-    Ok(with_key::DataReader::<D, SA>::from_simple_data_reader(simple_dr))
+    Ok(with_key::DataReader::<D, SA>::from_simple_data_reader(
+      simple_dr,
+    ))
   }
-
 
   fn create_simple_datareader_internal<D: 'static, SA>(
     &self,
@@ -1149,7 +1151,6 @@ impl InnerSubscriber {
 
     Ok(no_key::SimpleDataReader::<D, SA>::from_keyed(d))
   }
-
 
   pub fn participant(&self) -> Option<DomainParticipant> {
     self.domain_participant.clone().upgrade()

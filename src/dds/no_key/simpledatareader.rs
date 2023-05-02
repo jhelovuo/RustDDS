@@ -26,8 +26,7 @@ use super::wrappers::{DAWrapper, NoKeyWrapper};
 pub struct SimpleDataReader<
   D: DeserializeOwned,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> where
-{
+> {
   keyed_simpledatareader: with_key::SimpleDataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
 }
 
@@ -36,12 +35,12 @@ pub type SimpleDataReaderCdr<D> = SimpleDataReader<D, CDRDeserializerAdapter<D>>
 
 impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
-  D: DeserializeOwned ,
+  D: DeserializeOwned,
   DA: DeserializerAdapter<D> + 'static,
 {
-  // TODO: Make it possible to construct SimpleDataReader (particualrly, no_key version)
-  // from the public API. That is, From a Subscriber object like a normal Datareader.
-  // This is to be then used from the ros2-client package.
+  // TODO: Make it possible to construct SimpleDataReader (particualrly, no_key
+  // version) from the public API. That is, From a Subscriber object like a
+  // normal Datareader. This is to be then used from the ros2-client package.
   pub(crate) fn from_keyed(
     keyed_simpledatareader: with_key::SimpleDataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
   ) -> Self {

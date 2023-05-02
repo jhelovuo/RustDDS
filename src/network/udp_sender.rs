@@ -1,6 +1,6 @@
 use std::{
   io,
-  net::{IpAddr, SocketAddr,},
+  net::{IpAddr, SocketAddr},
 };
 #[cfg(test)]
 use std::net::Ipv4Addr;
