@@ -54,11 +54,15 @@ fn main() {
   let matches = get_matches();
 
   // Process command line arguments
-  let topic_name = matches.get_one::<String>("topic").cloned().unwrap_or("Square".to_owned());
-  let domain_id = matches
-    .get_one::<u16>("domain_id")
-    .unwrap();
-  let color = matches.get_one::<String>("color").cloned().unwrap_or("BLUE".to_owned());
+  let topic_name = matches
+    .get_one::<String>("topic")
+    .cloned()
+    .unwrap_or("Square".to_owned());
+  let domain_id = matches.get_one::<u16>("domain_id").unwrap();
+  let color = matches
+    .get_one::<String>("color")
+    .cloned()
+    .unwrap_or("BLUE".to_owned());
 
   let domain_participant = DomainParticipant::new(*domain_id)
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {:?}", e));
@@ -71,14 +75,16 @@ fn main() {
     } else {
       Reliability::BestEffort
     })
-    .durability(match matches.get_one::<String>("durability").map(|s| s.as_str() ) {
-      Some("l") => Durability::TransientLocal,
-      Some("t") => Durability::Transient,
-      Some("p") => Durability::Persistent,
-      _ => Durability::Volatile,
-    })
+    .durability(
+      match matches.get_one::<String>("durability").map(|s| s.as_str()) {
+        Some("l") => Durability::TransientLocal,
+        Some("t") => Durability::Transient,
+        Some("p") => Durability::Persistent,
+        _ => Durability::Volatile,
+      },
+    )
     .history(match matches.get_one::<i32>("history_depth") {
-      None  => History::KeepAll,
+      None => History::KeepAll,
       Some(d) => {
         if *d < 0 {
           History::KeepAll
@@ -349,7 +355,7 @@ fn get_matches() -> ArgMatches {
         .value_name("id")
         .value_parser(clap::value_parser!(u16))
         .default_value("0")
-        .help("Sets the DDS domain id number")
+        .help("Sets the DDS domain id number"),
     )
     .arg(
       Arg::new("topic")
@@ -363,7 +369,7 @@ fn get_matches() -> ArgMatches {
         .short('c')
         .value_name("color")
         .default_value("BLUE")
-        .help("Color to publish (or filter)")
+        .help("Color to publish (or filter)"),
     )
     .arg(
       Arg::new("durability")
