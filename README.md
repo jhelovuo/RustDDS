@@ -14,7 +14,23 @@ The Data Distribution Service for real-time systems (DDS) is an Object Managemen
 
 # Current implementation status
 
-This is still work-in-progress. Currently, the implementation is complete enough to do data exchange with [ROS2][ros2-url] software.
+Currently, the implementation is complete enough to do data exchange with [ROS2][ros2-url] software. 
+
+The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
+
+## Version 0.8
+
+New features:
+
+* Async API is available.
+* Polling using either mio-0.6 or mio-0.8.
+* Simplified DataReader `SimpleDataReader` is available. It supports only `.take()` calls, but should be lighter and faster than regular DataReader. It is designed to have just enough functionality to implement a ROS2 Subscrber.
+
+This release breaks compatibility:
+
+* Naming of data returned from `read()` / `.take()` calls has been changed from `Result` to `Sample`. This was done to reduce confusing naming, because in the previous usage the `Err` variant of `Result` did not mean an actual error condition, but a data instance disposal operation.
+* Error types are reworked to better reflect what errors can actually result, rather than having one complex error type for the entire API. This is an intentional deviation from the DDS Specification to make the implementation more Rust-like.
+* 
 
 ## Version 0.6
 
@@ -46,10 +62,10 @@ This release breaks compatibility with 0.4.0. Differences are
 * Presentation QoS: Coherent/atomic sample sets and ordering
 * Deadline and Latency budget QoS
 * Sample fragmentation (large object exchange) ✅
-* `wait_for_acknowledgments`
-* Listener (or equivalent) for DomainPrticiapnts
+* `wait_for_acknowledgments` ✅
+* Listener (or equivalent) for DomainParticiapnts
 * Listerer (or equivalent) for Topics
-* Alternative API using Rust `async` tasks
+* Alternative API using Rust `async` tasks ✅
 * Shared-memory transport for local connections
 
 ## Interoperability
