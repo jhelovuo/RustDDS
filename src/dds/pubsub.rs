@@ -309,11 +309,13 @@ impl Publisher {
   // The minimal correct implementation is to do nothing. See DDS spec 2.2.2.4.1.8
   // and .9
   /// **NOT IMPLEMENTED. DO NOT USE**
+  #[deprecated(note = "unimplemented")]
   pub fn suspend_publications(&self) -> Result<()> {
     self.inner_lock().suspend_publications()
   }
 
   /// **NOT IMPLEMENTED. DO NOT USE**
+  #[deprecated(note = "unimplemented")]
   pub fn resume_publications(&self) -> Result<()> {
     self.inner_lock().resume_publications()
   }
@@ -323,12 +325,14 @@ impl Publisher {
   // TODO: Implement these when coherent change-sets are supported.
   // Coherent set not implemented and currently does nothing
   /// **NOT IMPLEMENTED. DO NOT USE**
+  #[deprecated(note = "unimplemented")]
   pub fn begin_coherent_changes(&self) -> Result<()> {
     self.inner_lock().begin_coherent_changes()
   }
 
   // Coherent set not implemented and currently does nothing
   /// **NOT IMPLEMENTED. DO NOT USE**
+  #[deprecated(note = "unimplemented")]
   pub fn end_coherent_changes(&self) -> Result<()> {
     self.inner_lock().end_coherent_changes()
   }
@@ -336,6 +340,7 @@ impl Publisher {
   // Wait for all matched reliable DataReaders acknowledge data written so far,
   // or timeout.
   /// **NOT IMPLEMENTED. DO NOT USE**
+  #[deprecated(note = "unimplemented")]
   pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
     self.inner_lock().wait_for_acknowledgments(max_wait)
   }
@@ -573,26 +578,31 @@ impl InnerPublisher {
   }
 
   // TODO
+  #[deprecated(note = "unimplemented")]
   pub fn suspend_publications(&self) -> Result<()> {
     Ok(())
   }
 
   // TODO
+  #[deprecated(note = "unimplemented")]
   pub fn resume_publications(&self) -> Result<()> {
     Ok(())
   }
 
   // TODO
+  #[deprecated(note = "unimplemented")]
   pub fn begin_coherent_changes(&self) -> Result<()> {
     Ok(())
   }
 
   // TODO
+  #[deprecated(note = "unimplemented")]
   pub fn end_coherent_changes(&self) -> Result<()> {
     Ok(())
   }
 
   // TODO
+  #[deprecated(note = "unimplemented")]
   pub(crate) fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     unimplemented!();
   }
