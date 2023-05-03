@@ -440,15 +440,14 @@ impl Default for MessageReceiverState {
   }
 }
 
-#[cfg(notest)]
+#[cfg(test)]
 mod tests {
   use std::{
     rc::Rc,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
   };
 
   use speedy::{Readable, Writable};
-  use byteorder::LittleEndian;
   use log::info;
   use serde::{Deserialize, Serialize};
   use mio_extras::channel as mio_channel;
@@ -457,24 +456,24 @@ mod tests {
     dds::{
       qos::QosPolicies,
       reader::ReaderIngredients,
-      statusevents::DataReaderStatus,
+      statusevents::{sync_status_channel, DataReaderStatus},
       typedesc::TypeDesc,
-      with_key::datareader::ReaderCommand,
-      writer::{Writer, WriterCommand, WriterIngredients},
+      with_key::simpledatareader::ReaderCommand,
     },
     messages::header::Header,
+    mio_source,
     network::udp_sender::UDPSender,
-    serialization::{cdr_deserializer::deserialize_from_little_endian, cdr_serializer::to_bytes},
-    structure::{dds_cache::DDSCache, guid::EntityKind, sequence_number::SequenceNumber},
+    serialization::cdr_deserializer::deserialize_from_little_endian,
+    structure::{dds_cache::DDSCache, guid::EntityKind},
   };
   use super::*;
 
   #[test]
 
   fn test_shapes_demo_message_deserialization() {
-    // Data message should contain Shapetype values.
-    // caprured with wireshark from shapes demo.
-    // Udp packet with INFO_DST, INFO_TS, DATA, HEARTBEAT
+    // The following message bytes contain serialized INFO_DST, INFO_TS, DATA &
+    // HEARTBEAT submessages. The DATA submessage contains a ShapeType value.
+    // The bytes have been captured from WireShark.
     let udp_bits1 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
       0x00, 0x01, 0x00, 0x00, 0x00, 0x0e, 0x01, 0x0c, 0x00, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d,
@@ -487,26 +486,40 @@ mod tests {
       0x5b, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00,
     ]);
 
-    // this guid prefix is set here because exaple message target is this.
-    let gui_prefix = GuidPrefix::new(&[
-      0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x8,
+    // The message bytes contain the following guid prefix as the message target.
+    let target_gui_prefix = GuidPrefix::new(&[
+      0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31, 0xa2, 0x28, 0x20, 0x02, 0x08,
     ]);
 
+    // The message bytes contain the following guid as the message source
+    let remote_writer_guid = GUID::new(
+      GuidPrefix::new(&[
+        0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+      ]),
+      EntityId::create_custom_entity_id([0, 0, 1], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
+    );
+
+    // Create a message receiver
     let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
     let mut message_receiver =
-      MessageReceiver::new(gui_prefix, acknack_sender, spdp_liveness_sender);
+      MessageReceiver::new(target_gui_prefix, acknack_sender, spdp_liveness_sender);
 
+    // Create a reader to process the message
     let entity =
       EntityId::create_custom_entity_id([0, 0, 0], EntityKind::READER_WITH_KEY_USER_DEFINED);
-    let new_guid = GUID::new_with_prefix_and_id(gui_prefix, entity);
+    let reader_guid = GUID::new_with_prefix_and_id(target_gui_prefix, entity);
 
-    let (send, _rec) = mio_channel::sync_channel::<()>(100);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
-    let (_reader_commander, reader_command_receiver) =
-      mio_extras::channel::sync_channel::<ReaderCommand>(100);
+    let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker = Arc::new(Mutex::new(None));
+
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
 
     let qos_policy = QosPolicies::qos_none();
 
@@ -518,13 +531,15 @@ mod tests {
       &qos_policy,
     );
     let reader_ing = ReaderIngredients {
-      guid: new_guid,
-      notification_sender: send,
+      guid: reader_guid,
+      notification_sender,
       status_sender,
       topic_name: "test".to_string(),
       topic_cache_handle: topic_cache_handle.clone(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker: data_reader_waker.clone(),
+      poll_event_sender: notification_event_sender,
     };
 
     let mut new_reader = Reader::new(
@@ -533,13 +548,7 @@ mod tests {
       mio_extras::timer::Builder::default().build(),
     );
 
-    let remote_writer_guid = GUID::new(
-      GuidPrefix::new(&[
-        0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-      ]),
-      EntityId::create_custom_entity_id([0, 0, 0], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
-    );
-
+    // Add info of the writer to the reader
     new_reader.matched_writer_add(
       remote_writer_guid,
       EntityId::UNKNOWN,
@@ -547,27 +556,33 @@ mod tests {
       vec![],
       &QosPolicies::qos_none(),
     );
+
+    // Add reader to message reader and process the bytes message
     message_receiver.add_reader(new_reader);
 
     message_receiver.handle_received_packet(&udp_bits1);
 
+    // Verify the message reader has recorded the right amount of submessages
     assert_eq!(message_receiver.submessage_count, 4);
 
-    // this is not correct way to read history cache values but it serves as a test
+    // This is not correct way to read history cache values but it serves as a test
     let sequence_numbers =
-      message_receiver.get_reader_history_cache_start_and_end_seq_num(new_guid.entity_id);
+      message_receiver.get_reader_history_cache_start_and_end_seq_num(reader_guid.entity_id);
     info!(
       "history change sequence number range: {:?}",
       sequence_numbers
     );
-    /*
-    TODO: What goes wrong here?
+
+    // Get the DDSData (serialized) from the topic cache / history cache
     let a = message_receiver
-      .get_reader_and_history_cache_change(new_guid.entity_id, *sequence_numbers.first().unwrap())
+      .get_reader_and_history_cache_change(
+        reader_guid.entity_id,
+        *sequence_numbers.first().unwrap(),
+      )
       .unwrap();
     info!("reader history chache DATA: {:?}", a.data());
 
-
+    // Deserialize the ShapesType value from the data
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct ShapeType {
       color: String,
@@ -575,40 +590,11 @@ mod tests {
       y: i32,
       size: i32,
     }
-
     let deserialized_shape_type: ShapeType = deserialize_from_little_endian(&a.data()).unwrap();
     info!("deserialized shapeType: {:?}", deserialized_shape_type);
+
+    // Verify the color in the deserialized value is correct
     assert_eq!(deserialized_shape_type.color, "RED");
-
-    // now try to serialize same message
-
-    let _serialized_payload = to_bytes::<ShapeType, LittleEndian>(&deserialized_shape_type);
-    let (_dwcc_upload, hccc_download) = mio_channel::channel::<WriterCommand>();
-    let (status_sender, _status_receiver) = mio_channel::sync_channel(10);
-
-    let writer_ing = WriterIngredients {
-      guid: GUID::new_with_prefix_and_id(
-        gui_prefix,
-        EntityId::create_custom_entity_id([0, 0, 2], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
-      ),
-      writer_command_receiver: hccc_download,
-      topic_name: String::from("topicName1"),
-      qos_policies: QosPolicies::qos_none(),
-      status_sender,
-    };
-
-    let mut _writer_object = Writer::new(
-      writer_ing,
-      &Arc::new(RwLock::new(DDSCache::new())),
-      Rc::new(UDPSender::new_with_random_port().unwrap()),
-      mio_extras::timer::Builder::default().build(),
-    );
-    let mut change = message_receiver.get_reader_and_history_cache_change_object(
-      new_guid.entity_id,
-      *sequence_numbers.first().unwrap(),
-    );
-    change.sequence_number = SequenceNumber::new(91);
-    */
   }
 
   #[test]
