@@ -579,7 +579,7 @@ mod tests {
         reader_guid.entity_id,
         *sequence_numbers.first().unwrap(),
       )
-      .unwrap();
+      .expect("No data in topic cache");
     info!("reader history chache DATA: {:?}", a.data());
 
     // Deserialize the ShapesType value from the data
