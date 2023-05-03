@@ -308,12 +308,12 @@ impl Publisher {
   // Suspend and resume publications are preformance optimization methods.
   // The minimal correct implementation is to do nothing. See DDS spec 2.2.2.4.1.8
   // and .9
-  /// Currently does nothing
+  /// **NOT IMPLEMENTED. DO NOT USE**
   pub fn suspend_publications(&self) -> Result<()> {
     self.inner_lock().suspend_publications()
   }
 
-  /// Currently does nothing
+  /// **NOT IMPLEMENTED. DO NOT USE**
   pub fn resume_publications(&self) -> Result<()> {
     self.inner_lock().resume_publications()
   }
@@ -321,19 +321,21 @@ impl Publisher {
   // coherent change set
   // In case such QoS is not supported, these should be no-ops.
   // TODO: Implement these when coherent change-sets are supported.
-  /// Coherent set not implemented and currently does nothing
+  // Coherent set not implemented and currently does nothing
+  /// **NOT IMPLEMENTED. DO NOT USE**
   pub fn begin_coherent_changes(&self) -> Result<()> {
     self.inner_lock().begin_coherent_changes()
   }
 
-  /// Coherent set not implemented and currently does nothing
+  // Coherent set not implemented and currently does nothing
+  /// **NOT IMPLEMENTED. DO NOT USE**
   pub fn end_coherent_changes(&self) -> Result<()> {
     self.inner_lock().end_coherent_changes()
   }
 
-  /// Wait for all matched reliable DataReaders acknowledge data written so far,
-  /// or timeout.
-  /// /Not implemeted/
+  // Wait for all matched reliable DataReaders acknowledge data written so far,
+  // or timeout.
+  /// **NOT IMPLEMENTED. DO NOT USE**
   pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
     self.inner_lock().wait_for_acknowledgments(max_wait)
   }
@@ -570,22 +572,27 @@ impl InnerPublisher {
     Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
   }
 
+  // TODO
   pub fn suspend_publications(&self) -> Result<()> {
     Ok(())
   }
 
+  // TODO
   pub fn resume_publications(&self) -> Result<()> {
     Ok(())
   }
 
+  // TODO
   pub fn begin_coherent_changes(&self) -> Result<()> {
     Ok(())
   }
 
+  // TODO
   pub fn end_coherent_changes(&self) -> Result<()> {
     Ok(())
   }
 
+  // TODO
   pub(crate) fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
     unimplemented!();
   }
