@@ -12,7 +12,7 @@
 //! Rust techniques and conventions.
 //!
 //! Additionally, there is a [ROS2](https://index.ros.org/doc/ros2/) interface, that is simpler to use than DDS
-//! when communicating to ROS2 components. See package [ros2-client](https://crates.io/ros2-client).
+//! when communicating to ROS2 components. See package [ros2-client](https://crates.io/crates/ros2-client).
 //! Note: Do not use module [`ros2`] contained within RustDDS. It is no longer
 //! being developed.
 //!
@@ -213,7 +213,9 @@ pub use serialization::{
 pub use structure::{
   duration::Duration, guid::GUID, sequence_number::SequenceNumber, time::Timestamp,
 };
+
 // re-export from a helper crate
+/// Helper trait to compute the CDR-serialized size of data
 pub use cdr_encoding_size::CdrEncodingSize;
 
 /// Components used to access NO_KEY Topics

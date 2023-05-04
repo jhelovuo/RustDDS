@@ -1,7 +1,6 @@
-//
-// Structures for Remote Procedure Call over DDS, v1.0
-//
-// See OMG Specification
+//! Structures for Remote Procedure Call over DDS, v1.0
+//!
+//! See the OMG Specification
 //
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
