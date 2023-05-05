@@ -1121,7 +1121,7 @@ where
           // this should not really happen, but let's judge that as a "no"
           Poll::Ready(None) => Poll::Ready(Ok(false)),
 
-          Poll::Ready(Some(Err(std::sync::mpsc::RecvError))) 
+          Poll::Ready(Some(Err(std::sync::mpsc::RecvError)))
             // RecvError means the sending side has disconnected.
             // We assume this would only be because the event loop thread is dead.
             => Poll::Ready(Err(Error::LockPoisoned)),

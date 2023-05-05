@@ -213,7 +213,6 @@ pub use serialization::{
 pub use structure::{
   duration::Duration, guid::GUID, sequence_number::SequenceNumber, time::Timestamp,
 };
-
 // re-export from a helper crate
 /// Helper trait to compute the CDR-serialized size of data
 pub use cdr_encoding_size::CdrEncodingSize;
