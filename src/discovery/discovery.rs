@@ -1035,7 +1035,12 @@ impl Discovery {
     } // loop
   }
 
-  pub fn handle_topic_reader(&mut self, read_history: Option<GuidPrefix>) {
+  // TODO: Try to remember why the read_history parameter below was introduced
+  // in the first place. Git history should help here.
+  // Likely it is something to do with an unreliable network and
+  // DomainParticipants timing out and then coming back. The read_history was
+  // supposed to help in recovering from that.
+  pub fn handle_topic_reader(&mut self, _read_history: Option<GuidPrefix>) {
     let ts: Vec<Sample<(DiscoveredTopicData, GUID), GUID>> = match self
       .dcps_topic_reader
       .take(usize::MAX, ReadCondition::any())

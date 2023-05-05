@@ -745,24 +745,36 @@ impl DPEventLoop {
 // -----------------------------------------------------------
 // -----------------------------------------------------------
 
-#[cfg(notest)]
+#[cfg(test)]
 mod tests {
-  use std::{thread, time::Duration};
+  use std::{
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+  };
 
   use mio_06::{PollOpt, Ready};
+  use mio_extras::channel as mio_channel;
 
   use super::*;
   use crate::{
     dds::{
-      qos::QosPolicies, statusevents::DataReaderStatus, typedesc::TypeDesc,
-      with_key::datareader::ReaderCommand,
+      qos::QosPolicies,
+      statusevents::{sync_status_channel, DataReaderStatus},
+      typedesc::TypeDesc,
+      with_key::simpledatareader::ReaderCommand,
     },
+    mio_source,
     structure::dds_cache::DDSCache,
   };
 
   #[test]
   fn dpew_add_and_remove_readers() {
-    // Adding readers
+    // Test sending 'add reader' and 'remove reader' commands to DP event loop
+    // TODO: There are no assertions in this test case. Does in actually test
+    // anything?
+
+    // Create DP communication channels
     let (sender_add_reader, receiver_add) = mio_channel::channel::<ReaderIngredients>();
     let (sender_remove_reader, receiver_remove) = mio_channel::channel::<GUID>();
 
@@ -775,7 +787,7 @@ mod tests {
       mio_channel::channel();
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
 
-    let ddshc = Arc::new(RwLock::new(DDSCache::new()));
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
 
@@ -792,11 +804,13 @@ mod tests {
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
 
+    let dds_cache_clone = dds_cache.clone();
+    // Start event loop
     let child = thread::spawn(move || {
       let dp_event_loop = DPEventLoop::new(
         domain_info,
         HashMap::new(),
-        ddshc,
+        dds_cache_clone,
         discovery_db,
         GuidPrefix::default(),
         TokenReceiverPair {
@@ -831,38 +845,42 @@ mod tests {
       dp_event_loop.event_loop();
     });
 
-    let topic_cache = ddshc.write().unwrap().add_new_topic(
+    // Create a topic cache
+    let topic_cache = dds_cache.write().unwrap().add_new_topic(
       "test".to_string(),
       TypeDesc::new("test_type".to_string()),
       &QosPolicies::qos_none(),
     );
 
-    let n = 3;
+    let num_of_readers = 3;
 
+    // Send some 'add reader' commands
     let mut reader_guids = Vec::new();
-    for i in 0..n {
+    for i in 0..num_of_readers {
       let new_guid = GUID::default();
 
-      let (send, _rec) = mio_channel::sync_channel::<()>(100);
-      let (status_sender, _status_receiver) =
-        mio_extras::channel::sync_channel::<DataReaderStatus>(100);
-      let (_reader_commander, reader_command_receiver) =
-        mio_extras::channel::sync_channel::<ReaderCommand>(100);
+      // Create mechanisms for notifications, statuses & commands
+      let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+      let (_notification_event_source, notification_event_sender) =
+        mio_source::make_poll_channel().unwrap();
+      let data_reader_waker = Arc::new(Mutex::new(None));
+
+      let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+      let (_reader_command_sender, reader_command_receiver) =
+        mio_channel::sync_channel::<ReaderCommand>(10);
 
       let new_reader_ing = ReaderIngredients {
         guid: new_guid,
-        notification_sender: send,
+        notification_sender,
         status_sender,
         topic_cache_handle: topic_cache.clone(),
         topic_name: "test".to_string(),
         qos_policy: QosPolicies::qos_none(),
         data_reader_command_receiver: reader_command_receiver,
+        data_reader_waker: data_reader_waker.clone(),
+        poll_event_sender: notification_event_sender,
       };
-
-      // let new_reader = Reader::new(
-      //   new_reader_ing,
-      //   Arc::new(RwLock::new(DDSCache::new())),
-      //   Rc::new(UDPSender::new_with_random_port()), );
 
       reader_guids.push(new_reader_ing.guid);
       info!("\nSent reader number {}: {:?}\n", i, &new_reader_ing);
@@ -870,6 +888,7 @@ mod tests {
       std::thread::sleep(Duration::new(0, 100));
     }
 
+    // Send a command to remove the second reader
     info!("\npoistetaan toka\n");
     let some_guid = reader_guids[1];
     sender_remove_reader.send(some_guid).unwrap();

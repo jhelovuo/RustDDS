@@ -1,4 +1,4 @@
-//! ROS2 interface using DDS module
+//! ROS2 interface using DDS module - DO NOT USE - Use [ros2-client](https://crates.io/crates/ros2-client) instead.
 //!
 //! # Examples
 //!

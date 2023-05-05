@@ -1117,14 +1117,15 @@ where
       } => {
         match Pin::new(&mut ack_wait_receiver.as_async_stream()).poll_next(cx) {
           Poll::Pending => Poll::Pending,
-          Poll::Ready(None) =>
+
           // this should not really happen, but let's judge that as a "no"
-          {
-            Poll::Ready(Ok(false))
-          }
-          // TODO: Reconsider Error return value.
-          // Return something derived from "e"
-          Poll::Ready(Some(Err(e))) => Poll::Ready(Err(Error::LockPoisoned)),
+          Poll::Ready(None) => Poll::Ready(Ok(false)),
+
+          Poll::Ready(Some(Err(std::sync::mpsc::RecvError)))
+            // RecvError means the sending side has disconnected.
+            // We assume this would only be because the event loop thread is dead.
+            => Poll::Ready(Err(Error::LockPoisoned)),
+
           Poll::Ready(Some(Ok(()))) => Poll::Ready(Ok(true)),
           // There is no timeout support here, so we never really
           // return Ok(false)

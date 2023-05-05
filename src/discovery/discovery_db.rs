@@ -666,11 +666,10 @@ impl DiscoveryDB {
   }
 }
 
-#[cfg(notest)]
+#[cfg(test)]
 mod tests {
   use std::{
-    rc::Rc,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex},
     time::Duration as StdDuration,
   };
 
@@ -680,12 +679,14 @@ mod tests {
   use super::*;
   use crate::{
     dds::{
-      qos::QosPolicies, reader::Reader, statusevents::DataReaderStatus, topic::TopicKind,
-      with_key::datareader::ReaderCommand,
+      qos::QosPolicies,
+      statusevents::{sync_status_channel, DataReaderStatus},
+      topic::TopicKind,
+      with_key::simpledatareader::ReaderCommand,
     },
-    network::udp_sender::UDPSender,
+    mio_source,
     serialization::cdr_serializer::CDRSerializerAdapter,
-    structure::{dds_cache::DDSCache, guid::*},
+    structure::guid::*,
     test::{
       random_data::RandomData,
       test_data::{reader_proxy_data, spdp_participant_data, subscription_builtin_topic_data},
@@ -827,12 +828,14 @@ mod tests {
       .unwrap();
     let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
 
-    let (notification_sender, _notification_receiver) = mio_extras::channel::sync_channel(100);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
+    // Create reader ingredients
+    let (notification_sender1, _notification_receiver1) = mio_extras::channel::sync_channel(100);
+    let (_notification_event_source1, notification_event_sender1) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker1 = Arc::new(Mutex::new(None));
+
+    let (status_sender1, _status_receiver1) = sync_status_channel::<DataReaderStatus>(4).unwrap();
     let (_reader_commander1, reader_command_receiver1) =
-      mio_extras::channel::sync_channel::<ReaderCommand>(100);
-    let (_reader_commander2, reader_command_receiver2) =
       mio_extras::channel::sync_channel::<ReaderCommand>(100);
 
     let topic_cache =
@@ -841,54 +844,56 @@ mod tests {
         .unwrap()
         .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
 
-    let reader_ing = ReaderIngredients {
+    let reader1_ing = ReaderIngredients {
       guid: GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
-      notification_sender: notification_sender.clone(),
-      status_sender: status_sender.clone(),
+      notification_sender: notification_sender1,
+      status_sender: status_sender1,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache.clone(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver1,
+      data_reader_waker: data_reader_waker1,
+      poll_event_sender: notification_event_sender1,
     };
 
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
+    // Add the reader to the database and verify the info is updated
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader1_ing);
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
+    // Verify that the info does not change if the reader is added a second time
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader1_ing);
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
-    let _reader = Reader::new(
-      reader_ing,
-      Rc::new(UDPSender::new(0).unwrap()),
-      mio_extras::timer::Builder::default().build(),
-    );
+    // Create second reader ingredients for the same topic
+    let (notification_sender2, _notification_receiver2) = mio_extras::channel::sync_channel(100);
+    let (_notification_event_source2, notification_event_sender2) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker2 = Arc::new(Mutex::new(None));
 
-    let reader_ing = ReaderIngredients {
-      guid: GUID::new_with_prefix_and_id(
-        GuidPrefix::new(b"Another fake"),
-        EntityId {
-          entity_key: [1, 2, 3],
-          entity_kind: EntityKind::READER_NO_KEY_USER_DEFINED,
-        },
-      ), // GUID needs to be different in order to be added
-      notification_sender,
-      status_sender,
+    let (status_sender2, _status_receiver2) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (_reader_commander2, reader_command_receiver2) =
+      mio_extras::channel::sync_channel::<ReaderCommand>(100);
+
+    let mut guid2 = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
+    guid2.prefix = GuidPrefix::new(b"Another fake"); // GUID needs to be different in order to be added
+
+    let reader2_ing = ReaderIngredients {
+      guid: guid2,
+      notification_sender: notification_sender2,
+      status_sender: status_sender2,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache.clone(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
+      data_reader_waker: data_reader_waker2,
+      poll_event_sender: notification_event_sender2,
     };
 
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader_ing);
+    // Add the second reader to the database and verify the info is updated
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader2_ing);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 2);
     assert_eq!(discoverydb.get_all_local_topic_readers().count(), 2);
-
-    let _reader = Reader::new(
-      reader_ing,
-      Rc::new(UDPSender::new(0).unwrap()),
-      mio_extras::timer::Builder::default().build(),
-    );
   }
 }

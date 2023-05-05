@@ -1051,7 +1051,7 @@ where
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
 
-#[cfg(notest)]
+#[cfg(test)]
 mod tests {
   use std::rc::Rc;
 
@@ -1072,170 +1072,22 @@ mod tests {
     messages::submessages::{
       data::Data,
       submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload},
+      submessage_flag::*,
     },
+    mio_source,
     network::udp_sender::UDPSender,
     serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes},
     structure::{
-      guid::{EntityKind, GuidPrefix},
+      guid::{EntityId, EntityKind, GuidPrefix},
       sequence_number::SequenceNumber,
     },
     test::random_data::*,
   };
-  //use mio::{Events};
-  use crate::messages::submessages::submessage_flag::*;
 
   #[test]
-  fn dr_get_samples_from_ddscache() {
-    //env_logger::init();
-    let dp = DomainParticipant::new(0).expect("Participant creation failed");
-    let mut qos = QosPolicies::qos_none();
-    qos.history = Some(policy::History::KeepAll);
+  fn read_and_take() {
+    // Test the read and take methods of the DataReader
 
-    let sub = dp.create_subscriber(&qos).unwrap();
-    let topic = dp
-      .create_topic(
-        "dr".to_string(),
-        "drtest?".to_string(),
-        &qos,
-        TopicKind::WithKey,
-      )
-      .unwrap();
-
-    let topic_cache =
-      dp.dds_cache()
-        .write()
-        .unwrap()
-        .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
-
-    let (send, _rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
-    let (_reader_commander, reader_command_receiver) =
-      mio_extras::channel::sync_channel::<ReaderCommand>(100);
-
-    let reader_id = EntityId::default();
-    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), reader_id);
-
-    let reader_ing = ReaderIngredients {
-      guid: reader_guid,
-      notification_sender: send,
-      status_sender,
-      topic_name: topic.name(),
-      topic_cache_handle: topic_cache.clone(),
-      qos_policy: QosPolicies::qos_none(),
-      data_reader_command_receiver: reader_command_receiver,
-    };
-
-    let mut new_reader = Reader::new(
-      reader_ing,
-      Rc::new(UDPSender::new_with_random_port().unwrap()),
-      mio_extras::timer::Builder::default().build(),
-    );
-
-    let matching_datareader = sub
-      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(&topic, None)
-      .unwrap();
-
-    let random_data = RandomData {
-      a: 1,
-      b: "somedata".to_string(),
-    };
-    let data_key = random_data.key();
-
-    let writer_guid = GUID {
-      prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id(
-        [1; 3],
-        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
-      ),
-    };
-    let mr_state = MessageReceiverState {
-      source_guid_prefix: writer_guid.prefix,
-      ..Default::default()
-    };
-
-    new_reader.matched_writer_add(
-      writer_guid,
-      EntityId::UNKNOWN,
-      mr_state.unicast_reply_locator_list.clone(),
-      mr_state.multicast_reply_locator_list.clone(),
-      &QosPolicies::qos_none(),
-    );
-
-    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
-
-    let data = Data {
-      reader_id: EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111)),
-      writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(1_i64),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data).unwrap()), /* TODO: Can RandomData be transformed to bytes directly? */
-      }),
-      ..Default::default()
-    };
-
-    new_reader.handle_data_msg(data, data_flags, &mr_state);
-
-    std::thread::sleep(std::time::Duration::from_millis(100));
-
-    //matching_datareader.fill_local_datasample_cache();
-    let deserialized_random_data = matching_datareader.take(1, ReadCondition::any()).unwrap()[0]
-      .value()
-      .as_ref()
-      .unwrap()
-      .clone();
-
-    assert_eq!(deserialized_random_data, random_data);
-
-    // Test getting of next samples.
-    let random_data2 = RandomData {
-      a: 1,
-      b: "somedata number 2".to_string(),
-    };
-    let data2 = Data {
-      reader_id: EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111)),
-      writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(2),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data2).unwrap()),
-      }),
-      ..Default::default()
-    };
-
-    let random_data3 = RandomData {
-      a: 1,
-      b: "third somedata".to_string(),
-    };
-    let data3 = Data {
-      reader_id: EntityId::create_custom_entity_id([1, 2, 3], EntityKind::from(111)),
-      writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(3),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&random_data3).unwrap()),
-      }),
-      ..Default::default()
-    };
-
-    new_reader.handle_data_msg(data2, data_flags, &mr_state);
-    new_reader.handle_data_msg(data3, data_flags, &mr_state);
-
-    //matching_datareader.fill_local_datasample_cache();
-    let random_data_vec = matching_datareader
-      .take_instance(100, ReadCondition::any(), Some(data_key), SelectByKey::This)
-      .unwrap();
-    assert_eq!(random_data_vec.len(), 2);
-  }
-
-  #[test]
-  #[ignore]
-  fn dr_read_and_take() {
-    // TODO: Find out why this does not work, fix, and re-enable.
     let dp = DomainParticipant::new(0).expect("Particpant creation failed!");
 
     let mut qos = QosPolicies::qos_none();
@@ -1257,23 +1109,30 @@ mod tests {
         .unwrap()
         .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
 
-    let (send, _rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
-    let (_reader_commander, reader_command_receiver) =
-      mio_extras::channel::sync_channel::<ReaderCommand>(100);
+    // Create a Reader
+    let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker = Arc::new(Mutex::new(None));
+
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
 
     let default_id = EntityId::default();
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), default_id);
 
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
-      notification_sender: send,
+      notification_sender: notification_sender,
       status_sender,
-      topic_cache_handle: topic_cache.clone(),
       topic_name: topic.name(),
+      topic_cache_handle: topic_cache.clone(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker: data_reader_waker.clone(),
+      poll_event_sender: notification_event_sender,
     };
 
     let mut reader = Reader::new(
@@ -1282,7 +1141,8 @@ mod tests {
       mio_extras::timer::Builder::default().build(),
     );
 
-    let datareader = sub
+    // Create the corresponding matching DataReader
+    let mut datareader = sub
       .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(&topic, None)
       .unwrap();
 
@@ -1305,7 +1165,7 @@ mod tests {
       &QosPolicies::qos_none(),
     );
 
-    // Reader and datareader ready, test with data
+    // Reader and datareader ready, feed reader some data
     let test_data = RandomData {
       a: 10,
       b: ":DDD".to_string(),
@@ -1344,43 +1204,122 @@ mod tests {
     reader.handle_data_msg(data_msg, data_flags, &mr_state);
     reader.handle_data_msg(data_msg2, data_flags, &mr_state);
 
-    // Read the same sample two times.
-    /*
+    // Test that reading does not consume data samples, i.e. they can be read
+    // multiple times
     {
       let result_vec = datareader.read(100, ReadCondition::any()).unwrap();
       assert_eq!(result_vec.len(), 2);
-      let d = result_vec[0].value().unwrap();
+      let d = result_vec[0].value().clone().unwrap();
       assert_eq!(&test_data, d);
     }
     {
       let result_vec2 = datareader.read(100, ReadCondition::any()).unwrap();
       assert_eq!(result_vec2.len(), 2);
-      let d2 = result_vec2[1].value().unwrap();
+      let d2 = result_vec2[1].value().clone().unwrap();
       assert_eq!(&test_data2, d2);
     }
     {
       let result_vec3 = datareader.read(100, ReadCondition::any()).unwrap();
-      let d3 = result_vec3[0].value().unwrap();
+      let d3 = result_vec3[0].value().clone().unwrap();
       assert_eq!(&test_data, d3);
     }
-    */
-    // Take
-    let mut result_vec = datareader.take(100, ReadCondition::any()).unwrap();
-    let result_vec2 = datareader.take(100, ReadCondition::any());
 
-    let d2 = result_vec.pop().unwrap();
-    let d2 = d2.value().as_ref().unwrap().clone();
-    let d1 = result_vec.pop().unwrap();
-    let d1 = d1.value().as_ref().unwrap().clone();
-    assert_eq!(test_data2, d2);
-    assert_eq!(test_data, d1);
+    // Test that taking consumes the data samples
+    let mut result_vec = datareader.take(100, ReadCondition::any()).unwrap();
+    let datasample2 = result_vec.pop().unwrap();
+    let datasample1 = result_vec.pop().unwrap();
+    let data2 = datasample2.into_value().unwrap();
+    let data1 = datasample1.into_value().unwrap();
+    assert_eq!(test_data2, data2);
+    assert_eq!(test_data, data1);
+
+    let result_vec2 = datareader.take(100, ReadCondition::any());
     assert!(result_vec2.is_ok());
     assert_eq!(result_vec2.unwrap().len(), 0);
+  }
 
-    // datareader.
+  #[test]
+  fn read_and_take_with_instance() {
+    // Test the methods read_instance and take_instance of the DataReader
 
-    // Read and take tests with instant
+    let dp = DomainParticipant::new(0).expect("Particpant creation failed!");
 
+    let mut qos = QosPolicies::qos_none();
+    qos.history = Some(policy::History::KeepAll); // Just for testing
+
+    let sub = dp.create_subscriber(&qos).unwrap();
+    let topic = dp
+      .create_topic(
+        "dr read".to_string(),
+        "read fn test?".to_string(),
+        &qos,
+        TopicKind::WithKey,
+      )
+      .unwrap();
+
+    let topic_cache =
+      dp.dds_cache()
+        .write()
+        .unwrap()
+        .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
+
+    // Create a Reader
+    let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker = Arc::new(Mutex::new(None));
+
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
+    let default_id = EntityId::default();
+    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), default_id);
+
+    let reader_ing = ReaderIngredients {
+      guid: reader_guid,
+      notification_sender: notification_sender,
+      status_sender,
+      topic_name: topic.name(),
+      topic_cache_handle: topic_cache.clone(),
+      qos_policy: QosPolicies::qos_none(),
+      data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker: data_reader_waker.clone(),
+      poll_event_sender: notification_event_sender,
+    };
+
+    let mut reader = Reader::new(
+      reader_ing,
+      Rc::new(UDPSender::new_with_random_port().unwrap()),
+      mio_extras::timer::Builder::default().build(),
+    );
+
+    // Create the corresponding matching DataReader
+    let mut datareader = sub
+      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(&topic, None)
+      .unwrap();
+
+    let writer_guid = GUID {
+      prefix: GuidPrefix::new(&[1; 12]),
+      entity_id: EntityId::create_custom_entity_id(
+        [1; 3],
+        EntityKind::WRITER_WITH_KEY_USER_DEFINED,
+      ),
+    };
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.prefix,
+      ..Default::default()
+    };
+    reader.matched_writer_add(
+      writer_guid,
+      EntityId::UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+      &QosPolicies::qos_none(),
+    );
+
+    // Create 4 data items, 3 of which have the same key
     let data_key1 = RandomData {
       a: 1,
       b: ":D".to_string(),
@@ -1404,10 +1343,12 @@ mod tests {
     assert!(data_key2_1.key() == data_key2_2.key());
     assert!(data_key2_3.key() == key2);
 
+    // Create data messages from the data items
+    // Note that sequence numbering needs to continue as expected
     let data_msg = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(2),
+      writer_sn: SequenceNumber::from(1),
       serialized_payload: Some(SerializedPayload {
         representation_identifier: RepresentationIdentifier::CDR_LE,
         representation_options: [0, 0],
@@ -1418,7 +1359,7 @@ mod tests {
     let data_msg2 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(3),
+      writer_sn: SequenceNumber::from(2),
       serialized_payload: Some(SerializedPayload {
         representation_identifier: RepresentationIdentifier::CDR_LE,
         representation_options: [0, 0],
@@ -1429,7 +1370,7 @@ mod tests {
     let data_msg3 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(4),
+      writer_sn: SequenceNumber::from(3),
       serialized_payload: Some(SerializedPayload {
         representation_identifier: RepresentationIdentifier::CDR_LE,
         representation_options: [0, 0],
@@ -1440,7 +1381,7 @@ mod tests {
     let data_msg4 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
-      writer_sn: SequenceNumber::from(5),
+      writer_sn: SequenceNumber::from(4),
       serialized_payload: Some(SerializedPayload {
         representation_identifier: RepresentationIdentifier::CDR_LE,
         representation_options: [0, 0],
@@ -1448,36 +1389,35 @@ mod tests {
       }),
       ..Data::default()
     };
+
+    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
+
+    // Feed the data messages to the reader
     reader.handle_data_msg(data_msg, data_flags, &mr_state);
     reader.handle_data_msg(data_msg2, data_flags, &mr_state);
     reader.handle_data_msg(data_msg3, data_flags, &mr_state);
     reader.handle_data_msg(data_msg4, data_flags, &mr_state);
 
-    info!("calling take with key 1 and this");
-    let results =
-      datareader.take_instance(100, ReadCondition::any(), Some(key1), SelectByKey::This);
-    assert_eq!(
-      data_key1,
-      results.unwrap()[0].value().as_ref().unwrap().clone()
-    );
+    // Check that calling read_instance with different keys and SelectByKey options
+    // works as expected
 
-    info!("calling take with None and this");
-    // Takes the samllest key, 1 in this case.
-    let results = datareader.take_instance(100, ReadCondition::any(), None, SelectByKey::This);
-    assert_eq!(
-      data_key1,
-      results.unwrap()[0].value().as_ref().unwrap().clone()
-    );
-
-    info!("calling take with key 1 and next");
+    info!("calling read with key 1 and this");
     let results =
-      datareader.take_instance(100, ReadCondition::any(), Some(key1), SelectByKey::Next);
+      datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::This);
+    assert_eq!(&data_key1, results.unwrap()[0].value().clone().unwrap());
+
+    info!("calling read with None and this");
+    // Takes the smallest key, 1 in this case.
+    let results = datareader.read_instance(100, ReadCondition::any(), None, SelectByKey::This);
+    assert_eq!(&data_key1, results.unwrap()[0].value().clone().unwrap());
+
+    info!("calling read with key 1 and next");
+    let results =
+      datareader.read_instance(100, ReadCondition::any(), Some(key1), SelectByKey::Next);
     assert_eq!(results.as_ref().unwrap().len(), 3);
-    assert_eq!(
-      data_key2_2,
-      results.unwrap()[1].value().as_ref().unwrap().clone()
-    );
+    assert_eq!(&data_key2_1, results.unwrap()[0].value().clone().unwrap());
 
+    // Check that calling take_instance returns all 3 samples with the same key
     info!("calling take with key 2 and this");
     let results =
       datareader.take_instance(100, ReadCondition::any(), Some(key2), SelectByKey::This);
@@ -1493,156 +1433,12 @@ mod tests {
     assert_eq!(data_key2_2, d2);
     assert_eq!(data_key2_1, d1);
 
+    // Check that calling take_instance again returns nothing because all samples
+    // have been consumed
     info!("calling take with key 2 and this");
     let results =
       datareader.take_instance(100, ReadCondition::any(), Some(key2), SelectByKey::This);
     assert!(results.is_ok());
     assert!(results.unwrap().is_empty());
   }
-
-  /* removing this test case, because UDPSender cannot be moved across threads.
-  #[test]
-  fn dr_wake_up() {
-    let dp = DomainParticipant::new(0).expect("Publisher creation failed!");
-
-    let mut qos = QosPolicies::qos_none();
-    qos.history = Some(policy::History::KeepAll); // Just for testing
-
-    let sub = dp.create_subscriber(&qos).unwrap();
-    let topic = dp
-      .create_topic("wakeup".to_string(), "Wake up!".to_string(), &qos, TopicKind::WithKey)
-      .unwrap();
-
-    let (send, rec) = mio_channel::sync_channel::<()>(10);
-    let (status_sender, _status_receiver) =
-      mio_extras::channel::sync_channel::<DataReaderStatus>(100);
-    let (_reader_commander, reader_command_receiver) =
-      mio_extras::channel::sync_channel::<ReaderCommand>(100);
-
-    let default_id = EntityId::default();
-    let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), default_id);
-
-    let mut reader_ing = ReaderIngredients {
-      guid: reader_guid,
-      notification_sender: send,
-      status_sender,
-      topic_name: topic.name().to_string(),
-      qos_policy: QosPolicies::qos_none(),
-      data_reader_command_receiver: reader_command_receiver,
-    };
-
-    let reader = Reader::new(reader_ing, dp.dds_cache(), Rc::new(UDPSender::new_with_random_port().unwrap()));
-
-    let mut datareader = sub
-      .create_datareader::<RandomData, CDRDeserializerAdapter<RandomData>>(topic, None)
-      .unwrap();
-    datareader.notification_receiver = rec;
-
-    let writer_guid = GUID {
-      guid_prefix: GuidPrefix::new(&[1; 12]),
-      entity_id: EntityId::create_custom_entity_id([1; 3], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
-    };
-    let mut mr_state = MessageReceiverState::default();
-    mr_state.source_guid_prefix = writer_guid.prefix;
-    reader.matched_writer_add(
-      writer_guid.clone(),
-      EntityId::UNKNOWN,
-      mr_state.unicast_reply_locator_list.clone(),
-      mr_state.multicast_reply_locator_list.clone(),
-    );
-
-    let test_data1 = RandomData {
-      a: 1,
-      b: "Testing 1".to_string(),
-    };
-
-    let test_data2 = RandomData {
-      a: 2,
-      b: "Testing 2".to_string(),
-    };
-
-    let test_data3 = RandomData {
-      a: 2,
-      b: "Testing 3".to_string(),
-    };
-
-    let mut data_msg = Data::default();
-    data_msg.reader_id = reader.entity_id();
-    data_msg.writer_id = writer_guid.entity_id;
-    data_msg.writer_sn = SequenceNumber::from(0);
-    let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
-
-    data_msg.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE,
-      representation_options: [0, 0],
-      value: Bytes::from(to_bytes::<RandomData, byteorder::LittleEndian>(&test_data1).unwrap()),
-    });
-
-    let mut data_msg2 = Data::default();
-    data_msg2.reader_id = reader.entity_id();
-    data_msg2.writer_id = writer_guid.entity_id;
-    data_msg2.writer_sn = SequenceNumber::from(1);
-
-    data_msg2.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE,
-      representation_options: [0, 0],
-      value: Bytes::from(to_bytes::<RandomData, byteorder::LittleEndian>(&test_data2).unwrap()),
-    });
-
-    let mut data_msg3 = Data::default();
-    data_msg3.reader_id = reader.entity_id();
-    data_msg3.writer_id = writer_guid.entity_id;
-    data_msg3.writer_sn = SequenceNumber::from(2);
-
-    data_msg3.serialized_payload = Some(SerializedPayload {
-      representation_identifier: RepresentationIdentifier::CDR_LE,
-      representation_options: [0, 0],
-      value: Bytes::from(to_bytes::<RandomData, byteorder::LittleEndian>(&test_data3).unwrap()),
-    });
-
-    let handle = std::thread::spawn(move || {
-      reader.handle_data_msg(data_msg, data_flags, mr_state.clone());
-      thread::sleep(time::Duration::from_millis(100));
-      info!("I'll send the second now..");
-      reader.handle_data_msg(data_msg2, data_flags, mr_state.clone());
-      thread::sleep(time::Duration::from_millis(100));
-      info!("I'll send the third now..");
-      reader.handle_data_msg(data_msg3, data_flags, mr_state.clone());
-    });
-
-    let poll = Poll::new().unwrap();
-    poll
-      .register(&datareader, Token(100), Ready::readable(), PollOpt::edge())
-      .unwrap();
-
-    let mut count_to_stop = 0;
-    'l: loop {
-      let mut events = Events::with_capacity(1024);
-      info!("Going to poll");
-      poll.poll(&mut events, None).unwrap();
-
-      for event in events.into_iter() {
-        info!("Handling events");
-        if event.token() == Token(100) {
-          let data = datareader.take(100, ReadCondition::any());
-          let len = data.as_ref().unwrap().len();
-          info!("There were {} samples available.", len);
-          info!("Their strings:");
-          for d in data.unwrap().into_iter() {
-            // Remove one notification for each data
-            info!("{}", d.value().as_ref().unwrap().b);
-          }
-          count_to_stop += len;
-        }
-        if count_to_stop >= 3 {
-          info!("I'll stop now with count {}", count_to_stop);
-          break 'l;
-        }
-      } // for
-    } // loop
-
-    handle.join().unwrap();
-    assert_eq!(count_to_stop, 3);
-  }
-  */
 }

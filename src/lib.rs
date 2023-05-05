@@ -12,8 +12,9 @@
 //! Rust techniques and conventions.
 //!
 //! Additionally, there is a [ROS2](https://index.ros.org/doc/ros2/) interface, that is simpler to use than DDS
-//! when communicating to ROS2 components. See package [ros2-client](https://crates.io/ros2-client).
-//! Note: Do not use module [`ros2`] contained within RustDDS. It is no longer being developed.
+//! when communicating to ROS2 components. See package [ros2-client](https://crates.io/crates/ros2-client).
+//! Note: Do not use module [`ros2`] contained within RustDDS. It is no longer
+//! being developed.
 //!
 //! # DDS usage summary
 //!
@@ -62,8 +63,8 @@
 //!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
 //!
 //! # Polling multiple DataReaders
-//! 
-//! There are three alternative methods to poll DataReaders (and DataWriters): 
+//!
+//! There are three alternative methods to poll DataReaders (and DataWriters):
 //! mio-0.6, mio-0.8, and async. Use only one of these!
 //!
 //! ## `mio-0.6`
@@ -73,16 +74,18 @@
 //! registered to a [`poll`](mio_06::Poll). See example `shapes_demo`.
 //!
 //! ## `mio-0.8`
-//! 
-//! RustDDS DataReaders implement [`mio_08::event::Source`] for registering with mio-0.8.
-//! See example `shapes_demo_mio_08`
-//! 
+//!
+//! RustDDS DataReaders implement [`mio_08::event::Source`] for registering with
+//! mio-0.8. See example `shapes_demo_mio_08`
+//!
 //!
 //! ## `async`
 //!
-//! DataReader and DataWriter can do Rust async I/O by converting themselves to [`futures::stream::Stream`]s.
+//! DataReader and DataWriter can do Rust async I/O by converting themselves to
+//! [`futures::stream::Stream`]s.
 //! * [`crate::dds::with_key::DataReader::async_sample_stream`] to get data
-//! * [`crate::dds::with_key::DataReaderStream::async_event_stream`] to get status events
+//! * [`crate::dds::with_key::DataReaderStream::async_event_stream`] to get
+//!   status events
 //!
 //! See exampe `async_shapes_demo`.
 //!
@@ -211,6 +214,7 @@ pub use structure::{
   duration::Duration, guid::GUID, sequence_number::SequenceNumber, time::Timestamp,
 };
 // re-export from a helper crate
+/// Helper trait to compute the CDR-serialized size of data
 pub use cdr_encoding_size::CdrEncodingSize;
 
 /// Components used to access NO_KEY Topics
