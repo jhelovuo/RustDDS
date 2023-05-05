@@ -311,13 +311,13 @@ impl Publisher {
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
   pub fn suspend_publications(&self) -> Result<()> {
-    self.inner_lock().suspend_publications()
+    unimplemented!();
   }
 
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
   pub fn resume_publications(&self) -> Result<()> {
-    self.inner_lock().resume_publications()
+    unimplemented!();
   }
 
   // coherent change set
@@ -327,22 +327,22 @@ impl Publisher {
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
   pub fn begin_coherent_changes(&self) -> Result<()> {
-    self.inner_lock().begin_coherent_changes()
+    unimplemented!();
   }
 
   // Coherent set not implemented and currently does nothing
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
   pub fn end_coherent_changes(&self) -> Result<()> {
-    self.inner_lock().end_coherent_changes()
+    unimplemented!();
   }
 
   // Wait for all matched reliable DataReaders acknowledge data written so far,
   // or timeout.
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
-  pub fn wait_for_acknowledgments(&self, max_wait: Duration) -> Result<()> {
-    self.inner_lock().wait_for_acknowledgments(max_wait)
+  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
+    unimplemented!();
   }
 
   // What is the use case for this? (is it useful in Rust style of programming?
@@ -575,36 +575,6 @@ impl InnerPublisher {
       qos,
     )?;
     Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
-  }
-
-  // TODO
-  #[deprecated(note = "unimplemented")]
-  pub fn suspend_publications(&self) -> Result<()> {
-    Ok(())
-  }
-
-  // TODO
-  #[deprecated(note = "unimplemented")]
-  pub fn resume_publications(&self) -> Result<()> {
-    Ok(())
-  }
-
-  // TODO
-  #[deprecated(note = "unimplemented")]
-  pub fn begin_coherent_changes(&self) -> Result<()> {
-    Ok(())
-  }
-
-  // TODO
-  #[deprecated(note = "unimplemented")]
-  pub fn end_coherent_changes(&self) -> Result<()> {
-    Ok(())
-  }
-
-  // TODO
-  #[deprecated(note = "unimplemented")]
-  pub(crate) fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
-    unimplemented!();
   }
 
   pub fn participant(&self) -> Option<DomainParticipant> {
