@@ -45,16 +45,7 @@ where
   }
 
   fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
-    match encoding {
-      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
-        deserialize_from_little_endian(input_bytes)
-      }
-      RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
-      repr_id => Err(Error::Message(format!(
-        "Unknown representaiton identifier {:?}.",
-        repr_id
-      ))),
-    }
+    deserialize_from_cdr(input_bytes, encoding)
   }
 }
 
@@ -64,16 +55,7 @@ where
   <D as Keyed>::K: DeserializeOwned, // Key should do this already?
 {
   fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K> {
-    match encoding {
-      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
-        deserialize_from_little_endian(input_bytes)
-      }
-      RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
-      repr_id => Err(Error::Message(format!(
-        "Unknown representaiton identifier {:?}.",
-        repr_id
-      ))),
-    }
+    deserialize_from_cdr(input_bytes, encoding)
   }
 }
 
@@ -138,6 +120,26 @@ where
       self.remove_bytes_from_input(padding)
     }
   }
+}
+
+pub fn deserialize_from_cdr<T>(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<T>
+where
+  T: DeserializeOwned,
+{
+  match encoding {
+    RepresentationIdentifier::CDR_LE | 
+    RepresentationIdentifier::PL_CDR_LE => 
+      deserialize_from_little_endian(input_bytes),
+
+    RepresentationIdentifier::CDR_BE | 
+    RepresentationIdentifier::PL_CDR_BE => 
+      deserialize_from_big_endian(input_bytes),
+
+    repr_id => Err(Error::Message(format!(
+      "Unknown representaiton identifier {:?}.",
+      repr_id
+    ))),
+  }  
 }
 
 pub fn deserialize_from_little_endian<T>(s: &[u8]) -> Result<T>
