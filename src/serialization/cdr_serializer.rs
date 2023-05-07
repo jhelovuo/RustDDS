@@ -2,9 +2,7 @@ use std::{io, io::Write, marker::PhantomData};
 
 use serde::{ser, Serialize};
 use bytes::Bytes;
-use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-#[cfg(test)]
-use byteorder::BigEndian;
+use byteorder::{ByteOrder, LittleEndian, BigEndian, WriteBytesExt};
 
 use crate::{
   dds::traits::{
@@ -154,6 +152,21 @@ where
 {
   value.serialize(&mut CdrSerializer::<W, BO>::new(writer))
 }
+
+pub fn to_writer_endian<T, W>(writer: W, value: &T, encoding: RepresentationIdentifier) 
+  -> Result<()>
+where
+  T: Serialize,
+  W: io::Write,
+{
+  match encoding {
+    RepresentationIdentifier::CDR_LE =>
+      value.serialize(&mut CdrSerializer::<W, LittleEndian>::new(writer)),
+    _ => 
+      value.serialize(&mut CdrSerializer::<W, BigEndian>::new(writer)),
+  }
+}
+
 
 // Public interface should use to_writer() instead, as it is recommended by
 // serde documentation

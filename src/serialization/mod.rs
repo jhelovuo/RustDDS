@@ -14,7 +14,7 @@ pub(crate) mod submessage;
 pub(crate) use message::*;
 pub(crate) use submessage::*;
 // public exports
-pub use cdr_serializer::{CDRSerializerAdapter, CdrSerializer};
+pub use cdr_serializer::{CDRSerializerAdapter, CdrSerializer, to_writer_endian};
 pub use cdr_deserializer::{CDRDeserializerAdapter, CdrDeserializer, deserialize_from_cdr};
 pub use byteorder::{BigEndian, LittleEndian};
 
