@@ -23,6 +23,9 @@ pub struct DataHolder {
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
 pub type Token = DataHolder;
 
+// Result type with generic OK type. Error type is SecurityError.
+pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
+
 // Something like the SecurityException of the specification
 #[derive(Debug, thiserror::Error)]
 #[error("Security exception: {msg}")]

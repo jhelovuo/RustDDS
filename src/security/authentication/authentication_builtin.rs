@@ -1,3 +1,5 @@
+use crate::security::SecurityResult;
+
 use crate::{dds::qos::QosPolicies, structure::guid::GUID};
 use super::*;
 
@@ -15,7 +17,7 @@ impl AuthenticationBuiltIn {
     domain_id: u16,
     participant_qos: &QosPolicies,
     candidate_participant_guid: GUID,
-  ) -> ValidationResult {
+  ) -> SecurityResult<ValidationOutcome> {
     todo!();
   }
 }
