@@ -1,5 +1,10 @@
-/// TODO: CryptoToken: section 8.5.1.1 of the Security specification (v. 1.1)
-pub struct CryptoToken {}
+use crate::security::types::Token;
+/// CryptoToken: sections 7.2.4.2 and 8.5.1.1 of the Security specification (v.
+/// 1.1)
+pub type CryptoToken = Token;
+pub type ParticipantCryptoToken = CryptoToken;
+pub type DatawriterCryptoToken = CryptoToken;
+pub type DatareaderCryptoToken = CryptoToken;
 
 /// TODO: ParticipantCryptoHandle: section 8.5.1.2 of the Security specification
 /// (v. 1.1)
