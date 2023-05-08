@@ -1,4 +1,1 @@
-use crate::security::{
-     authentication::types::*,
-     cryptographic::types::*
-};
+use crate::security::{authentication::types::*, cryptographic::types::*};

@@ -1,6 +1,4 @@
-use crate::security::SecurityResult;
-
-use crate::{dds::qos::QosPolicies, structure::guid::GUID};
+use crate::{dds::qos::QosPolicies, security::SecurityResult, structure::guid::GUID};
 use super::*;
 
 // A struct implementing the built-in Authentication plugin
