@@ -1,1 +1,1 @@
-pub(crate) mod cryptographic_builtin;
+pub mod cryptographic_builtin;

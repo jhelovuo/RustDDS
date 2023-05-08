@@ -1,1 +1,1 @@
-pub(crate) mod authentication_builtin;
+pub mod authentication_builtin;
