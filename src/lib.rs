@@ -176,6 +176,7 @@ mod discovery;
 mod messages;
 mod network;
 pub(crate) mod structure;
+mod security;
 
 #[cfg(test)]
 mod test;
