@@ -6,7 +6,7 @@ use crate::{
 use super::*;
 
 /// Authentication plugin interface: section 8.3.2.11 of the Security
-/// specification (v. 1.1)
+/// specification (v. 1.1).
 ///
 /// To make use of Rust's features, the trait functions deviate a bit from the
 /// specification. The main difference is that the functions return a Result
