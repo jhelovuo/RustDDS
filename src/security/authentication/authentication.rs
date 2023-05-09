@@ -7,6 +7,16 @@ use super::*;
 
 /// Authentication plugin interface: section 8.3.2.11 of the Security
 /// specification (v. 1.1)
+///
+/// To make use of Rust's features, the trait functions deviate a bit from the
+/// specification. The main difference is that the functions return a Result
+/// type. With this, there is no need to provide a pointer to a
+/// SecurityException type which the function would fill in case of a failure.
+/// Instead, the Err-variant of the result contains the error informaton. Also,
+/// if a function has a single return value, it is returned inside the
+/// Ok-variant. When a function returns a boolean according to the
+/// specification, the Ok-variant is interpreted as true and Err-variant as
+/// false.
 pub trait Authentication {
   /// validate_local_identity: section 8.3.2.11.2 of the Security
   /// specification
