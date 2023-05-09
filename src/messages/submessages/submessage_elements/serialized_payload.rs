@@ -2,11 +2,12 @@ use std::{cmp::min, io};
 
 use bytes::{Bytes, BytesMut};
 use speedy::{Context, Readable, Writable, Writer};
+use serde::{Deserialize, Serialize};
 use byteorder::ReadBytesExt;
 use log::warn;
 
 /// Used to identify serialization format of payload data over RTPS.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable, Serialize, Deserialize)]
 pub struct RepresentationIdentifier {
   bytes: [u8; 2],
 }

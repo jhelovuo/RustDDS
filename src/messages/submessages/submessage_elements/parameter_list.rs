@@ -24,11 +24,19 @@ impl ParameterList {
   }
 
   pub fn len_serialized(&self) -> usize {
-    self.parameters.iter().map(|p| p.len_serialized()).sum()
+    self
+      .parameters
+      .iter()
+      .map(|p| p.len_serialized())
+      .sum::<usize>()
+      + SENTINEL.len_serialized()
   }
 }
 
-const SENTINEL: u32 = 0x00000001;
+const SENTINEL: Parameter = Parameter {
+  parameter_id: ParameterId::PID_SENTINEL,
+  value: vec![],
+};
 
 impl<C: Context> Writable<C> for ParameterList {
   #[inline]
@@ -36,8 +44,8 @@ impl<C: Context> Writable<C> for ParameterList {
     for param in &self.parameters {
       writer.write_value(param)?;
     }
-
-    writer.write_u32(SENTINEL)?;
+    // finally, write end marker.
+    writer.write_value(&SENTINEL)?;
 
     Ok(())
   }
@@ -54,7 +62,9 @@ impl<'a, C: Context> Readable<'a, C> for ParameterList {
       let length = u16::read_from(reader)?;
 
       if parameter_id == ParameterId::PID_SENTINEL {
-        // This is paramter list end marker.
+        // This is parameter list end marker.
+        // We do not read its Parameter contetns ("value"),
+        // because it is of size zero by definition.
         return Ok(parameters);
       }
 

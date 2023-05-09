@@ -45,16 +45,7 @@ where
   }
 
   fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
-    match encoding {
-      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
-        deserialize_from_little_endian(input_bytes)
-      }
-      RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
-      repr_id => Err(Error::Message(format!(
-        "Unknown representaiton identifier {:?}.",
-        repr_id
-      ))),
-    }
+    deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
   }
 }
 
@@ -64,16 +55,7 @@ where
   <D as Keyed>::K: DeserializeOwned, // Key should do this already?
 {
   fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K> {
-    match encoding {
-      RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
-        deserialize_from_little_endian(input_bytes)
-      }
-      RepresentationIdentifier::CDR_BE => deserialize_from_big_endian(input_bytes),
-      repr_id => Err(Error::Message(format!(
-        "Unknown representaiton identifier {:?}.",
-        repr_id
-      ))),
-    }
+    deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
   }
 }
 
@@ -140,6 +122,35 @@ where
   }
 }
 
+/// return deserialized object + count of bytes consumed
+pub fn deserialize_from_cdr<T>(
+  input_bytes: &[u8],
+  encoding: RepresentationIdentifier,
+) -> Result<(T, usize)>
+where
+  T: DeserializeOwned,
+{
+  match encoding {
+    RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
+      let mut deserializer = CdrDeserializer::<LittleEndian>::new(input_bytes);
+      let t = T::deserialize(&mut deserializer)?;
+      Ok((t, deserializer.serialized_data_count))
+    }
+
+    RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => {
+      let mut deserializer = CdrDeserializer::<BigEndian>::new(input_bytes);
+      let t = T::deserialize(&mut deserializer)?;
+      Ok((t, deserializer.serialized_data_count))
+    }
+
+    repr_id => Err(Error::Message(format!(
+      "Unknown representaiton identifier {:?}.",
+      repr_id
+    ))),
+  }
+}
+
+#[cfg(test)]
 pub fn deserialize_from_little_endian<T>(s: &[u8]) -> Result<T>
 where
   T: DeserializeOwned,
@@ -148,6 +159,7 @@ where
   T::deserialize(&mut deserializer)
 }
 
+#[cfg(test)]
 pub fn deserialize_from_big_endian<T>(s: &[u8]) -> Result<T>
 where
   T: DeserializeOwned,
