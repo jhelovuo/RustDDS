@@ -24,15 +24,18 @@ impl ParameterList {
   }
 
   pub fn len_serialized(&self) -> usize {
-    self.parameters.iter().map(|p| p.len_serialized()).sum::<usize>()
-    +
-    SENTINEL.len_serialized()
+    self
+      .parameters
+      .iter()
+      .map(|p| p.len_serialized())
+      .sum::<usize>()
+      + SENTINEL.len_serialized()
   }
 }
 
 const SENTINEL: Parameter = Parameter {
-  parameter_id: ParameterId::PID_SENTINEL, 
-  value: vec![] 
+  parameter_id: ParameterId::PID_SENTINEL,
+  value: vec![],
 };
 
 impl<C: Context> Writable<C> for ParameterList {
@@ -63,7 +66,7 @@ impl<'a, C: Context> Readable<'a, C> for ParameterList {
         // We do not read its Parameter contetns ("value"),
         // because it is of size zero by definition.
         return Ok(parameters);
-      } 
+      }
 
       parameters.parameters.push(Parameter {
         parameter_id,
