@@ -12,6 +12,7 @@ pub struct AuthenticationBuiltIn {
 }
 
 impl Authentication for AuthenticationBuiltIn {
+  // Currently only mocked
   fn validate_local_identity(
     &mut self,
     local_indentity_handle: &mut IdentityHandle,
@@ -20,29 +21,44 @@ impl Authentication for AuthenticationBuiltIn {
     participant_qos: &QosPolicies,
     candidate_participant_guid: GUID,
   ) -> SecurityResult<ValidationOutcome> {
-    todo!();
+    // TODO: actual implementation
+
+    *local_indentity_handle = IdentityHandle::MOCK;
+    *adjusted_participant_guid = candidate_participant_guid;
+
+    Ok(ValidationOutcome::ValidationOk)
   }
 
+  // Currently only mocked
   fn get_identity_token(&self, handle: IdentityHandle) -> SecurityResult<IdentityToken> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(IdentityToken::MOCK)
   }
 
+  // Currently only mocked
   fn get_identity_status_token(
     &self,
     handle: IdentityHandle,
   ) -> SecurityResult<IdentityStatusToken> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(IdentityStatusToken::MOCK)
   }
 
+  // Currently only mocked
   fn set_permissions_credential_and_token(
     &self,
     handle: IdentityHandle,
     permissions_credential_token: PermissionsCredentialToken,
     permissions_token: PermissionsToken,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn validate_remote_identity(
     &self,
     remote_identity_handle: &mut IdentityHandle,
@@ -52,7 +68,11 @@ impl Authentication for AuthenticationBuiltIn {
     remote_identity_token: IdentityToken,
     remote_participant_guid: GUID,
   ) -> SecurityResult<ValidationOutcome> {
-    todo!();
+    // TODO: actual implementation
+    *remote_identity_handle = IdentityHandle::MOCK;
+    *local_auth_request_token = AuthRequestMessageToken::MOCK;
+
+    Ok(ValidationOutcome::ValidationOk)
   }
 
   fn begin_handshake_request(
@@ -87,18 +107,24 @@ impl Authentication for AuthenticationBuiltIn {
     todo!();
   }
 
+  // Currently only mocked
   fn get_shared_secret(
     &self,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<SharedSecretHandle> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(SharedSecretHandle::MOCK)
   }
 
+  // Currently only mocked
   fn get_authenticated_peer_credential_token(
     &self,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(AuthenticatedPeerCredentialToken::MOCK)
   }
 
   fn set_listener(&self) -> SecurityResult<()> {

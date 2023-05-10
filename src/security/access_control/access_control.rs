@@ -212,7 +212,7 @@ pub trait AccessControl {
     &self,
     permissions_handle: PermissionsHandle,
     topic_name: String,
-  ) -> SecurityResult<EndpointSecurityAttributes>;
+  ) -> SecurityResult<TopicSecurityAttributes>;
 
   /// get_datawriter_sec_attributes: section 8.4.2.9.24 of the Security
   /// specification.

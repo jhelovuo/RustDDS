@@ -12,6 +12,7 @@ pub struct AccessControlBuiltIn {
 }
 
 impl AccessControl for AccessControlBuiltIn {
+  // Currently only mocked
   fn validate_local_permissions(
     &self,
     auth_plugin: &impl Authentication,
@@ -19,9 +20,12 @@ impl AccessControl for AccessControlBuiltIn {
     domain_id: u16,
     participant_qos: &QosPolicies,
   ) -> SecurityResult<PermissionsHandle> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(PermissionsHandle::MOCK)
   }
 
+  // Currently only mocked
   fn validate_remote_permissions(
     &self,
     auth_plugin: &impl Authentication,
@@ -30,18 +34,24 @@ impl AccessControl for AccessControlBuiltIn {
     remote_permissions_token: PermissionsToken,
     remote_credential_token: AuthenticatedPeerCredentialToken,
   ) -> SecurityResult<PermissionsHandle> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(PermissionsHandle::MOCK)
   }
 
+  // Currently only mocked
   fn check_create_participant(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn check_create_datawriter(
     &self,
     permissions_handle: PermissionsHandle,
@@ -49,9 +59,12 @@ impl AccessControl for AccessControlBuiltIn {
     topic_name: String,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn check_create_datareader(
     &self,
     permissions_handle: PermissionsHandle,
@@ -59,9 +72,12 @@ impl AccessControl for AccessControlBuiltIn {
     topic_name: String,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn check_create_topic(
     &self,
     permissions_handle: PermissionsHandle,
@@ -69,7 +85,9 @@ impl AccessControl for AccessControlBuiltIn {
     topic_name: String,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
   fn check_local_datawriter_register_instance(
@@ -90,24 +108,31 @@ impl AccessControl for AccessControlBuiltIn {
     todo!();
   }
 
+  // Currently only mocked
   fn check_remote_participant(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     participant_data: &ParticipantBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn check_remote_datawriter(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     publication_data: &PublicationBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn check_remote_datareader(
     &self,
     permissions_handle: PermissionsHandle,
@@ -115,18 +140,24 @@ impl AccessControl for AccessControlBuiltIn {
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
     relay_only: &mut bool,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn check_remote_topic(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_data: &TopicBuiltinTopicData,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn check_local_datawriter_match(
     &self,
     writer_permissions_handle: PermissionsHandle,
@@ -134,9 +165,12 @@ impl AccessControl for AccessControlBuiltIn {
     publication_data: &PublicationBuiltinTopicDataSecure,
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
+  // Currently only mocked
   fn check_local_datareader_match(
     &self,
     reader_permissions_handle: PermissionsHandle,
@@ -144,7 +178,9 @@ impl AccessControl for AccessControlBuiltIn {
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
     publication_data: &PublicationBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(())
   }
 
   fn check_remote_datawriter_register_instance(
@@ -168,49 +204,67 @@ impl AccessControl for AccessControlBuiltIn {
     todo!();
   }
 
+  // Currently only mocked
   fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(PermissionsToken::MOCK)
   }
 
+  // Currently only mocked
   fn get_permissions_credential_token(
     &self,
     handle: PermissionsHandle,
   ) -> SecurityResult<PermissionsCredentialToken> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(PermissionsCredentialToken::MOCK)
   }
 
   fn set_listener(&self) -> SecurityResult<()> {
     todo!();
   }
 
+  // Currently only mocked
   fn get_participant_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
   ) -> SecurityResult<ParticipantSecurityAttributes> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(ParticipantSecurityAttributes::MOCK)
   }
 
+  // Currently only mocked
   fn get_topic_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
     topic_name: String,
-  ) -> SecurityResult<EndpointSecurityAttributes> {
-    todo!();
+  ) -> SecurityResult<TopicSecurityAttributes> {
+    // TODO: actual implementation
+
+    Ok(TopicSecurityAttributes::MOCK)
   }
 
+  // Currently only mocked
   fn get_datawriter_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
     topic_name: String,
   ) -> SecurityResult<EndpointSecurityAttributes> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(EndpointSecurityAttributes::MOCK)
   }
 
+  // Currently only mocked
   fn get_datareader_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
     topic_name: String,
   ) -> SecurityResult<EndpointSecurityAttributes> {
-    todo!();
+    // TODO: actual implementation
+
+    Ok(EndpointSecurityAttributes::MOCK)
   }
 }
