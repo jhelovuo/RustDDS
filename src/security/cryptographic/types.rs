@@ -29,6 +29,7 @@ pub struct CryptoTransformIdentifier {
 
 /// SecureSubmessageCategory_t: section 8.5.1.6 of the Security specification
 /// (v. 1.1)
+#[allow(clippy::enum_variant_names)] // We are using variant names from the spec
 pub enum SecureSubmessageCategory {
   InfoSubmessage,
   DatawriterSubmessage,

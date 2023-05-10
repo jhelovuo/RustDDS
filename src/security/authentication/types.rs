@@ -2,6 +2,7 @@
 // specification v.1.1 (section 8.3.2.11.1), but does not contain
 // VALIDATION_FAILED. Failure is handled as an error in the result type
 // ValidationResult
+#[allow(clippy::enum_variant_names)] // We are using variant names from the spec
 pub enum ValidationOutcome {
   ValidationOk,
   ValidationPendingRetry,
