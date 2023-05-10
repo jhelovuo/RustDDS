@@ -122,3 +122,92 @@ pub trait CryptoKeyExchange {
   /// 1.1)
   fn return_crypto_tokens(crypto_tokens: Vec<CryptoToken>) -> SecurityResult<()>;
 }
+
+/// CryptoTransform: section 8.5.1.9 of the Security specification (v. 1.1)
+pub trait CryptoTransform {
+  /// encode_serialized_payload: section 8.5.1.9.1 of the Security specification
+  /// (v. 1.1)
+  fn encode_serialized_payload(
+    encoded_buffer: &mut Vec<u8>,
+    extra_inline_qos: &mut Vec<u8>,
+    plain_buffer: Vec<u8>,
+    sending_datawriter_crypto: DatawriterCryptoHandle,
+  ) -> SecurityResult<()>;
+
+  /// encode_datawriter_submessage: section 8.5.1.9.2 of the Security
+  /// specification (v. 1.1)
+  fn encode_datawriter_submessage(
+    encoded_rtps_submessage: &mut Vec<u8>,
+    plain_rtps_submessage: Vec<u8>,
+    sending_datawriter_crypto: DatawriterCryptoHandle,
+    receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
+    receiving_datareader_crypto_list_index: &mut u32, // long
+  ) -> SecurityResult<()>;
+
+  /// encode_datareader_submessage: section 8.5.1.9.3 of the Security
+  /// specification (v. 1.1)
+  fn encode_datareader_submessage(
+    encoded_rtps_submessage: &mut Vec<u8>,
+    plain_rtps_submessage: Vec<u8>,
+    sending_datareader_crypto: DatareaderCryptoHandle,
+    receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
+  ) -> SecurityResult<()>;
+
+  /// encode_rtps_message: section 8.5.1.9.4 of the Security specification (v.
+  /// 1.1)
+  fn encode_rtps_message(
+    encoded_rtps_message: &mut Vec<u8>,
+    plain_rtps_message: Vec<u8>,
+    sending_participant_crypto: ParticipantCryptoHandle,
+    receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
+    receiving_participant_crypto_list_index: &mut u32, // long
+  ) -> SecurityResult<()>;
+
+  /// decode_rtps_message: section 8.5.1.9.5 of the Security specification (v.
+  /// 1.1)
+  fn decode_rtps_message(
+    plain_buffer: &mut Vec<u8>,
+    encoded_buffer: Vec<u8>,
+    receiving_participant_crypto: ParticipantCryptoHandle,
+    sending_participant_crypto: ParticipantCryptoHandle,
+  ) -> SecurityResult<()>;
+
+  /// preprocess_secure_submsg: section 8.5.1.9.6 of the Security specification
+  /// (v. 1.1)
+  fn preprocess_secure_submsg(
+    datawriter_crypto: &mut DatawriterCryptoHandle,
+    datareader_crypto: &mut DatareaderCryptoHandle,
+    secure_submessage_category: &mut SecureSubmessageCategory,
+    encoded_rtps_submessage: Vec<u8>,
+    receiving_participant_crypto: ParticipantCryptoHandle,
+    sending_participant_crypto: ParticipantCryptoHandle,
+  ) -> SecurityResult<()>;
+
+  /// decode_datawriter_submessage: section 8.5.1.9.7 of the Security
+  /// specification (v. 1.1)
+  fn decode_datawriter_submessage(
+    plain_rtps_submessage: &mut Vec<u8>,
+    encoded_rtps_submessage: Vec<u8>,
+    receiving_datareader_crypto: DatareaderCryptoHandle,
+    sending_datawriter_crypto: DatawriterCryptoHandle,
+  ) -> SecurityResult<()>;
+
+  /// decode_datareader_submessage: section 8.5.1.9.8 of the Security
+  /// specification (v. 1.1)
+  fn decode_datareader_submessage(
+    plain_rtps_submessage: &mut Vec<u8>,
+    encoded_rtps_submessage: Vec<u8>,
+    receiving_datawriter_crypto: DatawriterCryptoHandle,
+    sending_datareader_crypto: DatareaderCryptoHandle,
+  ) -> SecurityResult<()>;
+
+  /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
+  /// (v. 1.1)
+  fn decode_serialized_payload(
+    plain_buffer: &mut Vec<u8>,
+    encoded_buffer: Vec<u8>,
+    inline_qos: Vec<u8>,
+    receiving_datareader_crypto: DatareaderCryptoHandle,
+    sending_datawriter_crypto: DatawriterCryptoHandle,
+  ) -> SecurityResult<()>;
+}
