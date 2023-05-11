@@ -11,7 +11,7 @@ use crate::{
   structure::{guid::EntityId, sequence_number::SequenceNumberSet},
 };
 use super::{
-  submessage::EntitySubmessage, submessage_flag::ACKNACK_Flags, submessage_kind::SubmessageKind,
+  submessage::ReaderSubmessage, submessage_flag::ACKNACK_Flags, submessage_kind::SubmessageKind,
 };
 
 /// This Submessage is used to communicate the state of a Reader to a
@@ -55,7 +55,7 @@ impl AckNack {
         flags: flags.bits(),
         content_length: self.len_serialized() as u16,
       },
-      body: SubmessageBody::Entity(EntitySubmessage::AckNack(self, flags)),
+      body: SubmessageBody::Reader(ReaderSubmessage::AckNack(self, flags)),
     }
   }
 

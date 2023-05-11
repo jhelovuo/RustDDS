@@ -1,3 +1,5 @@
+use speedy::{Readable, Writable};
+
 use crate::security::types::Token;
 /// CryptoToken: sections 7.2.4.2 and 8.5.1.1 of the Security specification (v.
 /// 1.1)
@@ -20,12 +22,17 @@ pub struct DatareaderCryptoHandle {}
 
 /// CryptoTransformIdentifier: section 8.5.1.5 of the Security specification (v.
 /// 1.1)
-type CryptoTransformKind = [u8; 4];
-type CryptoTransformKeyId = [u8; 4];
+#[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct CryptoTransformIdentifier {
   pub transformation_kind: CryptoTransformKind,
   pub transformation_key_id: CryptoTransformKeyId,
 }
+/// transformation_kind: section 8.5.1.5.1 of the Security specification (v.
+/// 1.1)
+type CryptoTransformKind = [u8; 4];
+/// transformation_key_id: section 8.5.1.5.2 of the Security specification (v.
+/// 1.1)
+type CryptoTransformKeyId = [u8; 4];
 
 /// SecureSubmessageCategory_t: section 8.5.1.6 of the Security specification
 /// (v. 1.1)

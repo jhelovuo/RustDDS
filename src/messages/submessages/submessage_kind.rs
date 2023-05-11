@@ -27,6 +27,11 @@ impl SubmessageKind {
   pub const HEARTBEAT_FRAG: Self = Self { value: 0x13 };
   pub const DATA: Self = Self { value: 0x15 };
   pub const DATA_FRAG: Self = Self { value: 0x16 };
+  pub const SEC_BODY: Self = Self { value: 0x30 };
+  pub const SEC_PREFIX: Self = Self { value: 0x31 };
+  pub const SEC_POSTFIX: Self = Self { value: 0x32 };
+  pub const SRTPS_PREFIX: Self = Self { value: 0x33 };
+  pub const SRTPS_POSTFIX: Self = Self { value: 0x34 };
 }
 
 impl Debug for SubmessageKind {
@@ -45,6 +50,11 @@ impl Debug for SubmessageKind {
       Self::HEARTBEAT_FRAG => fmt.write_str("HEARTBEAT_FRAG"),
       Self::DATA => fmt.write_str("DATA"),
       Self::DATA_FRAG => fmt.write_str("DATA_FRAG"),
+      Self::SEC_BODY => fmt.write_str("SEC_BODY"),
+      Self::SEC_PREFIX => fmt.write_str("SEC_PREFIX"),
+      Self::SEC_POSTFIX => fmt.write_str("SEC_POSTFIX"),
+      Self::SRTPS_PREFIX => fmt.write_str("SRTPS_PREFIX"),
+      Self::SRTPS_POSTFIX => fmt.write_str("SRTPS_POSTFIX"),
       Self { value: other } => fmt.write_fmt(format_args!("SubmessageKind {} (UNKNOWN!)", other)),
     }
   }

@@ -11,7 +11,7 @@ use crate::{
   },
 };
 use super::{
-  submessage::EntitySubmessage, submessage_flag::GAP_Flags, submessage_kind::SubmessageKind,
+  submessage::WriterSubmessage, submessage_flag::GAP_Flags, submessage_kind::SubmessageKind,
 };
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers
@@ -55,7 +55,7 @@ impl Gap {
         flags: flags.bits(),
         content_length: submessage_len,
       },
-      body: SubmessageBody::Entity(EntitySubmessage::Gap(self, flags)),
+      body: SubmessageBody::Writer(WriterSubmessage::Gap(self, flags)),
     })
   }
 }

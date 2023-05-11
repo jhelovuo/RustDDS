@@ -13,7 +13,12 @@ use crate::{
     protocol_id::ProtocolId,
     protocol_version::ProtocolVersion,
     submessages::{
-      submessage::EntitySubmessage,
+      secure_body::SecureBody,
+      secure_postfix::SecurePostfix,
+      secure_prefix::SecurePrefix,
+      secure_rtps_postfix::SecureRTPSPostfix,
+      secure_rtps_prefix::SecureRTPSPrefix,
+      submessage::WriterSubmessage,
       submessage_elements::{
         parameter::Parameter, parameter_list::ParameterList,
         serialized_payload::RepresentationIdentifier,
@@ -100,10 +105,22 @@ impl Message {
       let sub_content_buffer = sub_buffer.split_off(sub_header_length);
 
       let e = endianness_flag(sub_header.flags);
-      let mk_e_subm = move |s: EntitySubmessage| {
+      let mk_w_subm = move |s: WriterSubmessage| {
         Ok(Submessage {
           header: sub_header,
-          body: SubmessageBody::Entity(s),
+          body: SubmessageBody::Writer(s),
+        })
+      };
+      let mk_r_subm = move |s: ReaderSubmessage| {
+        Ok(Submessage {
+          header: sub_header,
+          body: SubmessageBody::Reader(s),
+        })
+      };
+      let mk_s_subm = move |s: SecuritySubmessage| {
+        Ok(Submessage {
+          header: sub_header,
+          body: SubmessageBody::Security(s),
         })
       };
       let mk_i_subm = move |s: InterpreterSubmessage| {
@@ -117,7 +134,7 @@ impl Message {
         SubmessageKind::DATA => {
           // Manually implemented deserialization for DATA. Speedy does not quite cut it.
           let f = BitFlags::<DATA_Flags>::from_bits_truncate(sub_header.flags);
-          mk_e_subm(EntitySubmessage::Data(
+          mk_w_subm(WriterSubmessage::Data(
             Data::deserialize_data(&sub_content_buffer, f)?,
             f,
           ))
@@ -126,7 +143,7 @@ impl Message {
         SubmessageKind::DATA_FRAG => {
           // Manually implemented deserialization for DATA. Speedy does not quite cut it.
           let f = BitFlags::<DATAFRAG_Flags>::from_bits_truncate(sub_header.flags);
-          mk_e_subm(EntitySubmessage::DataFrag(
+          mk_w_subm(WriterSubmessage::DataFrag(
             DataFrag::deserialize(&sub_content_buffer, f)?,
             f,
           ))
@@ -134,7 +151,7 @@ impl Message {
 
         SubmessageKind::GAP => {
           let f = BitFlags::<GAP_Flags>::from_bits_truncate(sub_header.flags);
-          mk_e_subm(EntitySubmessage::Gap(
+          mk_w_subm(WriterSubmessage::Gap(
             Gap::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
@@ -142,7 +159,7 @@ impl Message {
 
         SubmessageKind::ACKNACK => {
           let f = BitFlags::<ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
-          mk_e_subm(EntitySubmessage::AckNack(
+          mk_r_subm(ReaderSubmessage::AckNack(
             AckNack::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
@@ -150,7 +167,7 @@ impl Message {
 
         SubmessageKind::NACK_FRAG => {
           let f = BitFlags::<NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
-          mk_e_subm(EntitySubmessage::NackFrag(
+          mk_r_subm(ReaderSubmessage::NackFrag(
             NackFrag::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
@@ -158,7 +175,7 @@ impl Message {
 
         SubmessageKind::HEARTBEAT => {
           let f = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
-          mk_e_subm(EntitySubmessage::Heartbeat(
+          mk_w_subm(WriterSubmessage::Heartbeat(
             Heartbeat::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
             f,
           ))
@@ -203,6 +220,41 @@ impl Message {
         }
         SubmessageKind::PAD => {
           continue; // nothing to do here
+        }
+        SubmessageKind::SEC_BODY => {
+          let f = BitFlags::<SECUREBODY_Flags>::from_bits_truncate(sub_header.flags);
+          mk_s_subm(SecuritySubmessage::SecureBody(
+            SecureBody::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+            f,
+          ))
+        }
+        SubmessageKind::SEC_PREFIX => {
+          let f = BitFlags::<SECUREPREFIX_Flags>::from_bits_truncate(sub_header.flags);
+          mk_s_subm(SecuritySubmessage::SecurePrefix(
+            SecurePrefix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+            f,
+          ))
+        }
+        SubmessageKind::SEC_POSTFIX => {
+          let f = BitFlags::<SECUREPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
+          mk_s_subm(SecuritySubmessage::SecurePostfix(
+            SecurePostfix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+            f,
+          ))
+        }
+        SubmessageKind::SRTPS_PREFIX => {
+          let f = BitFlags::<SECURERTPSPREFIX_Flags>::from_bits_truncate(sub_header.flags);
+          mk_s_subm(SecuritySubmessage::SecureRTPSPrefix(
+            SecureRTPSPrefix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+            f,
+          ))
+        }
+        SubmessageKind::SRTPS_POSTFIX => {
+          let f = BitFlags::<SECURERTPSPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
+          mk_s_subm(SecuritySubmessage::SecureRTPSPostfix(
+            SecureRTPSPostfix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+            f,
+          ))
         }
         unknown_kind => {
           let kind = u8::from(unknown_kind);
@@ -409,7 +461,7 @@ impl MessageBuilder {
         flags: flags.bits(),
         content_length: data_message.len_serialized() as u16, // TODO: Handle overflow?
       },
-      body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, flags)),
+      body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, flags)),
     });
     self
   }
@@ -519,7 +571,7 @@ impl MessageBuilder {
         flags: flags.bits(),
         content_length: data_message.len_serialized() as u16, //TODO: Handle overflow
       },
-      body: SubmessageBody::Entity(EntitySubmessage::DataFrag(data_message, flags)),
+      body: SubmessageBody::Writer(WriterSubmessage::DataFrag(data_message, flags)),
     });
     self
   }
@@ -805,7 +857,7 @@ mod tests {
     let data_submessage = match &rtps.submessages[2] {
       Submessage {
         header: _,
-        body: SubmessageBody::Entity(EntitySubmessage::Data(d, _flags)),
+        body: SubmessageBody::Writer(WriterSubmessage::Data(d, _flags)),
       } => d,
       wtf => panic!("Unexpected message structure {:?}", wtf),
     };

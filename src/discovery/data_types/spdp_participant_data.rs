@@ -234,7 +234,7 @@ mod tests {
     dds::traits::serde_adapters::no_key::DeserializerAdapter,
     messages::submessages::{
       submessage_elements::serialized_payload::RepresentationIdentifier,
-      submessages::EntitySubmessage,
+      submessages::WriterSubmessage,
     },
     serialization::{
       cdr_serializer::to_bytes, message::Message, pl_cdr_deserializer::PlCdrDeserializerAdapter,
@@ -252,8 +252,8 @@ mod tests {
 
     for submsg in &submsgs {
       match &submsg.body {
-        SubmessageBody::Entity(v) => match v {
-          EntitySubmessage::Data(d, _) => {
+        SubmessageBody::Writer(v) => match v {
+          WriterSubmessage::Data(d, _) => {
             let participant_data: SpdpDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(
                 &d.serialized_payload.as_ref().unwrap().value,
@@ -293,6 +293,7 @@ mod tests {
           _ => continue,
         },
         SubmessageBody::Interpreter(_) => (),
+        _ => continue,
       }
     }
   }

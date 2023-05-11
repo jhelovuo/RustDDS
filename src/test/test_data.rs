@@ -106,7 +106,7 @@ use crate::{
     header::Header,
     submessages::{
       submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload},
-      submessages::{Data, EntitySubmessage, SubmessageHeader, SubmessageKind, *},
+      submessages::{Data, SubmessageHeader, SubmessageKind, WriterSubmessage, *},
     },
   },
   serialization::{
@@ -145,8 +145,8 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
   for submsg in &mut tdata.submessages {
     let mut submsglen = submsg.header.content_length;
     match &mut submsg.body {
-      SubmessageBody::Entity(v) => match v {
-        EntitySubmessage::Data(d, _) => {
+      SubmessageBody::Writer(v) => match v {
+        WriterSubmessage::Data(d, _) => {
           let mut participant_data: SpdpDiscoveredParticipantData =
             PlCdrDeserializerAdapter::<SpdpDiscoveredParticipantData>::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
@@ -171,6 +171,7 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
         _ => continue,
       },
       SubmessageBody::Interpreter(_) => (),
+      _ => continue,
     }
     submsg.header.content_length = submsglen;
   }
@@ -186,8 +187,8 @@ pub(crate) fn spdp_participant_data() -> Option<SpdpDiscoveredParticipantData> {
 
   for submsg in &submsgs {
     match &submsg.body {
-      SubmessageBody::Entity(v) => match v {
-        EntitySubmessage::Data(d, _) => {
+      SubmessageBody::Writer(v) => match v {
+        WriterSubmessage::Data(d, _) => {
           let particiapant_data: SpdpDiscoveredParticipantData =
             PlCdrDeserializerAdapter::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
@@ -200,6 +201,7 @@ pub(crate) fn spdp_participant_data() -> Option<SpdpDiscoveredParticipantData> {
         _ => continue,
       },
       SubmessageBody::Interpreter(_) => (),
+      _ => continue,
     }
   }
   None
@@ -402,7 +404,7 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
 
   let submessage: Submessage = Submessage {
     header: submessage_header,
-    body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, sub_flags)),
+    body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, sub_flags)),
   };
   rtps_message.add_submessage(submessage);
 

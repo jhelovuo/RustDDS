@@ -1400,7 +1400,7 @@ mod tests {
     discovery::data_types::topic_data::TopicBuiltinTopicData,
     messages::submessages::{
       submessage_elements::serialized_payload::RepresentationIdentifier,
-      submessages::{EntitySubmessage, InterpreterSubmessage},
+      submessages::{InterpreterSubmessage, WriterSubmessage},
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
     serialization::{
@@ -1500,8 +1500,8 @@ mod tests {
     let mut data;
     for submsg in &mut tdata.submessages {
       match &mut submsg.body {
-        SubmessageBody::Entity(v) => match v {
-          EntitySubmessage::Data(d, _) => {
+        SubmessageBody::Writer(v) => match v {
+          WriterSubmessage::Data(d, _) => {
             let mut drd: DiscoveredReaderData = PlCdrDeserializerAdapter::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
               RepresentationIdentifier::PL_CDR_LE,
@@ -1524,6 +1524,7 @@ mod tests {
           _ => continue,
         },
         SubmessageBody::Interpreter(_) => (),
+        _ => continue,
       }
     }
 
@@ -1593,7 +1594,9 @@ mod tests {
           }
           _ => continue,
         },
-        SubmessageBody::Entity(_) => (),
+        SubmessageBody::Writer(_) => (),
+        SubmessageBody::Reader(_) => (),
+        SubmessageBody::Security(_) => (),
       }
     }
 

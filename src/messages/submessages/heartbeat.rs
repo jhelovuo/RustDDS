@@ -8,7 +8,7 @@ use crate::{
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
 use super::{
-  submessage::EntitySubmessage, submessage_flag::HEARTBEAT_Flags, submessage_kind::SubmessageKind,
+  submessage::WriterSubmessage, submessage_flag::HEARTBEAT_Flags, submessage_kind::SubmessageKind,
 };
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
@@ -62,7 +62,7 @@ impl Heartbeat {
         flags: flags.bits(),
         content_length: submessage_len,
       },
-      body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(self, flags)),
+      body: SubmessageBody::Writer(WriterSubmessage::Heartbeat(self, flags)),
     })
   }
 }

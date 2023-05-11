@@ -189,6 +189,46 @@ pub enum INFOREPLYIP4_Flags {
 }
 submessageflag_impls!(INFOREPLYIP4_Flags);
 
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[repr(u8)]
+#[bitflags]
+pub enum SECUREBODY_Flags {
+  Endianness = 0b1,
+}
+submessageflag_impls!(SECUREBODY_Flags);
+
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[repr(u8)]
+#[bitflags]
+pub enum SECUREPREFIX_Flags {
+  Endianness = 0b1,
+}
+submessageflag_impls!(SECUREPREFIX_Flags);
+
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[repr(u8)]
+#[bitflags]
+pub enum SECUREPOSTFIX_Flags {
+  Endianness = 0b1,
+}
+submessageflag_impls!(SECUREPOSTFIX_Flags);
+
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[repr(u8)]
+#[bitflags]
+pub enum SECURERTPSPREFIX_Flags {
+  Endianness = 0b1,
+}
+submessageflag_impls!(SECURERTPSPREFIX_Flags);
+
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[repr(u8)]
+#[bitflags]
+pub enum SECURERTPSPOSTFIX_Flags {
+  Endianness = 0b1,
+}
+submessageflag_impls!(SECURERTPSPOSTFIX_Flags);
+
 #[cfg(test)]
 mod tests {
   use super::*;
