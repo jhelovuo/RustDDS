@@ -110,7 +110,7 @@ use crate::{
     },
   },
   serialization::{
-    cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, Message, SubMessage,
+    cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, Message, Submessage,
     SubmessageBody,
   },
   structure::{
@@ -400,7 +400,7 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
     content_length: data_size as u16,
   };
 
-  let submessage: SubMessage = SubMessage {
+  let submessage: Submessage = Submessage {
     header: submessage_header,
     body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, sub_flags)),
   };

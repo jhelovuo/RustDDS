@@ -6,7 +6,7 @@ use crate::messages::submessages::{
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct SubMessage {
+pub struct Submessage {
   pub header: SubmessageHeader,
   pub body: SubmessageBody,
 }
@@ -19,7 +19,7 @@ pub enum SubmessageBody {
   Interpreter(InterpreterSubmessage),
 }
 
-impl<C: Context> Writable<C> for SubMessage {
+impl<C: Context> Writable<C> for Submessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_value(&self.header)?;
     match &self.body {
@@ -36,7 +36,7 @@ mod tests {
   use log::info;
   use speedy::{Readable, Writable};
 
-  use super::SubMessage;
+  use super::Submessage;
   use crate::{messages::submessages::submessages::*, serialization::submessage::*};
 
   #[test]
@@ -54,7 +54,7 @@ mod tests {
     let flags = BitFlags::<DATA_Flags>::from_bits_truncate(header.flags);
     let suba = Data::deserialize_data(&serialized_data_submessage.slice(4..), flags)
       .expect("DATA deserialization failed.");
-    let sub = SubMessage {
+    let sub = Submessage {
       header,
       body: SubmessageBody::Entity(EntitySubmessage::Data(suba, flags)),
     };
@@ -79,7 +79,7 @@ mod tests {
     let e = endianness_flag(header.flags);
     let suba = Heartbeat::read_from_buffer_with_ctx(e, &serialized_heartbeat_message[4..])
       .expect("deserialization failed.");
-    let sub = SubMessage {
+    let sub = Submessage {
       header,
       body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(suba, flags)),
     };
@@ -103,7 +103,7 @@ mod tests {
     let e = endianness_flag(header.flags);
     let suba = InfoDestination::read_from_buffer_with_ctx(e, &serialized_info_dst_message[4..])
       .expect("deserialization failed.");
-    let sub = SubMessage {
+    let sub = Submessage {
       header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(suba, flags)),
     };

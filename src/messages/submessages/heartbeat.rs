@@ -4,7 +4,7 @@ use speedy::{Readable, Writable};
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{SubMessage, SubmessageBody},
+  serialization::{Submessage, SubmessageBody},
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
 use super::{
@@ -47,7 +47,7 @@ pub struct Heartbeat {
 }
 
 impl Heartbeat {
-  pub fn create_submessage(self, flags: BitFlags<HEARTBEAT_Flags>) -> Option<SubMessage> {
+  pub fn create_submessage(self, flags: BitFlags<HEARTBEAT_Flags>) -> Option<Submessage> {
     let submessage_len = match self.write_to_vec() {
       Ok(bytes) => bytes.len() as u16,
       Err(e) => {
@@ -56,7 +56,7 @@ impl Heartbeat {
       }
     };
 
-    Some(SubMessage {
+    Some(Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::HEARTBEAT,
         flags: flags.bits(),

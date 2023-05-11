@@ -4,7 +4,7 @@ use speedy::{Readable, Writable};
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{SubMessage, SubmessageBody},
+  serialization::{Submessage, SubmessageBody},
   structure::{
     guid::EntityId,
     sequence_number::{SequenceNumber, SequenceNumberSet},
@@ -40,7 +40,7 @@ pub struct Gap {
 }
 
 impl Gap {
-  pub fn create_submessage(self, flags: BitFlags<GAP_Flags>) -> Option<SubMessage> {
+  pub fn create_submessage(self, flags: BitFlags<GAP_Flags>) -> Option<Submessage> {
     let submessage_len = match self.write_to_vec() {
       Ok(bytes) => bytes.len() as u16,
       Err(e) => {
@@ -49,7 +49,7 @@ impl Gap {
       }
     };
 
-    Some(SubMessage {
+    Some(Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::GAP,
         flags: flags.bits(),

@@ -7,7 +7,7 @@ use speedy::{Readable, Writable};
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{SubMessage, SubmessageBody},
+  serialization::{Submessage, SubmessageBody},
   structure::{
     guid::EntityId,
     sequence_number::{FragmentNumberSet, SequenceNumber},
@@ -51,8 +51,8 @@ pub struct NackFrag {
 }
 
 impl NackFrag {
-  pub fn create_submessage(self, flags: BitFlags<NACKFRAG_Flags>) -> SubMessage {
-    SubMessage {
+  pub fn create_submessage(self, flags: BitFlags<NACKFRAG_Flags>) -> Submessage {
+    Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::NACK_FRAG,
         flags: flags.bits(),

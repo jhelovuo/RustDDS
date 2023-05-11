@@ -22,7 +22,7 @@ use crate::{
     },
     vendor_id::VendorId,
   },
-  serialization::submessage::{SubMessage, SubmessageBody},
+  serialization::submessage::{Submessage, SubmessageBody},
   structure::{
     cache_change::CacheChange,
     entity::RTPSEntity,
@@ -36,16 +36,16 @@ use crate::{
 #[derive(Debug, Clone)]
 pub(crate) struct Message {
   pub header: Header,
-  pub submessages: Vec<SubMessage>,
+  pub submessages: Vec<Submessage>,
 }
 
 impl Message {
-  pub fn add_submessage(&mut self, submessage: SubMessage) {
+  pub fn add_submessage(&mut self, submessage: Submessage) {
     self.submessages.push(submessage);
   }
 
   #[cfg(test)]
-  pub fn submessages(self) -> Vec<SubMessage> {
+  pub fn submessages(self) -> Vec<Submessage> {
     self.submessages
   }
 
@@ -101,19 +101,19 @@ impl Message {
 
       let e = endianness_flag(sub_header.flags);
       let mk_e_subm = move |s: EntitySubmessage| {
-        Ok(SubMessage {
+        Ok(Submessage {
           header: sub_header,
           body: SubmessageBody::Entity(s),
         })
       };
       let mk_i_subm = move |s: InterpreterSubmessage| {
-        Ok(SubMessage {
+        Ok(Submessage {
           header: sub_header,
           body: SubmessageBody::Interpreter(s),
         })
       };
 
-      let new_submessage_result: io::Result<SubMessage> = match sub_header.kind {
+      let new_submessage_result: io::Result<Submessage> = match sub_header.kind {
         SubmessageKind::DATA => {
           // Manually implemented deserialization for DATA. Speedy does not quite cut it.
           let f = BitFlags::<DATA_Flags>::from_bits_truncate(sub_header.flags);
@@ -259,7 +259,7 @@ impl<C: Context> Writable<C> for Message {
 
 #[derive(Default)]
 pub(crate) struct MessageBuilder {
-  submessages: Vec<SubMessage>,
+  submessages: Vec<Submessage>,
 }
 
 impl MessageBuilder {
@@ -275,7 +275,7 @@ impl MessageBuilder {
       content_length: 12u16,
       //InfoDST length is always 12 because message contains only GuidPrefix
     };
-    let dst_submessage = SubMessage {
+    let dst_submessage = Submessage {
       header: submessage_header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(
         InfoDestination { guid_prefix },
@@ -307,7 +307,7 @@ impl MessageBuilder {
       content_length,
     };
 
-    let submsg = SubMessage {
+    let submsg = Submessage {
       header: submessage_header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(
         InfoTimestamp { timestamp },
@@ -403,7 +403,7 @@ impl MessageBuilder {
         BitFlags::<DATA_Flags>::empty()
       });
 
-    self.submessages.push(SubMessage {
+    self.submessages.push(Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::DATA,
         flags: flags.bits(),
@@ -513,7 +513,7 @@ impl MessageBuilder {
         BitFlags::<DATAFRAG_Flags>::empty()
       });
 
-    self.submessages.push(SubMessage {
+    self.submessages.push(Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::DATA_FRAG,
         flags: flags.bits(),
@@ -803,7 +803,7 @@ mod tests {
     info!("{:?}", rtps);
 
     let data_submessage = match &rtps.submessages[2] {
-      SubMessage {
+      Submessage {
         header: _,
         body: SubmessageBody::Entity(EntitySubmessage::Data(d, _flags)),
       } => d,

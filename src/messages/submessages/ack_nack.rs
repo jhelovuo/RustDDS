@@ -7,7 +7,7 @@ use log::error;
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{SubMessage, SubmessageBody},
+  serialization::{Submessage, SubmessageBody},
   structure::{guid::EntityId, sequence_number::SequenceNumberSet},
 };
 use super::{
@@ -48,8 +48,8 @@ pub struct AckNack {
 }
 
 impl AckNack {
-  pub fn create_submessage(self, flags: BitFlags<ACKNACK_Flags>) -> SubMessage {
-    SubMessage {
+  pub fn create_submessage(self, flags: BitFlags<ACKNACK_Flags>) -> Submessage {
+    Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::ACKNACK,
         flags: flags.bits(),
