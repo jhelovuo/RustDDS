@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use bytes::Bytes;
-use serde::{ser::Error, Deserialize, Serialize};
+use serde::{ser::Error, Deserialize, Serialize, Serializer, Deserializer};
 use chrono::{DateTime, Utc};
 use cdr_encoding_size::*;
 
@@ -27,6 +27,7 @@ use crate::{
   discovery::content_filter_property::ContentFilterProperty,
   messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
+  security::EndpointSecurityInfo,
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
     builtin_data_serializer::BuiltinDataSerializer, error as ser,
@@ -80,7 +81,7 @@ impl PlCdrSerialize for Endpoint_GUID {
 // deserialization)
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReaderProxy {
   pub remote_reader_guid: GUID,
   pub expects_inline_qos: bool,
@@ -120,7 +121,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
 
 /// DDS SubscriptionBuiltinTopicData
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubscriptionBuiltinTopicData {
   key: GUID,
   participant_key: Option<GUID>,
@@ -147,6 +148,8 @@ pub struct SubscriptionBuiltinTopicData {
   related_datawriter_key: Option<GUID>,
   topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates if the
                                        * parameter was present or not */
+  // DDS Security:
+  //security_info: Option<EndpointSecurityInfo>,
 }
 
 impl SubscriptionBuiltinTopicData {
@@ -243,12 +246,13 @@ impl SubscriptionBuiltinTopicData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash,)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
   pub content_filter: Option<ContentFilterProperty>,
 }
+
 
 impl DiscoveredReaderData {
   // This is for generating test data only
@@ -275,6 +279,26 @@ impl Keyed for DiscoveredReaderData {
   type K = Endpoint_GUID;
   fn key(&self) -> Self::K {
     Endpoint_GUID(self.subscription_topic_data.key)
+  }
+}
+
+// Fake implementation so that DiscoveredreaderData is a valid thing to
+// put into a DataWriter. But the actual serialization is done by
+// PlCdrDeserialize below. We do not just derive Serialize in order
+// not to force it on all the fields and their types.
+impl Serialize for DiscoveredReaderData {
+  fn serialize<S: Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+  { 
+    unimplemented!() 
+  }
+}
+// As Serialize above.
+impl<'de> Deserialize<'de> for DiscoveredReaderData {
+  fn deserialize<D>(_deserializer: D) -> Result<DiscoveredReaderData, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    unimplemented!()
   }
 }
 
@@ -306,7 +330,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash,)]
 pub struct WriterProxy {
   pub remote_writer_guid: GUID,
   pub unicast_locator_list: Vec<Locator>,
@@ -345,7 +369,7 @@ impl From<RtpsWriterProxy> for WriterProxy {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PublicationBuiltinTopicData {
   pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
@@ -367,6 +391,8 @@ pub struct PublicationBuiltinTopicData {
   pub related_datareader_key: Option<GUID>,
   pub topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates
                                            * if the parameter was present or not */
+  // DDS Security:
+  //security_info: Option<EndpointSecurityInfo>,
 }
 
 impl PublicationBuiltinTopicData {
@@ -441,9 +467,8 @@ impl PublicationBuiltinTopicData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredWriterData {
-  #[serde(skip, default = "Instant::now")]
   pub last_updated: Instant, // last_updated is not serialized
 
   pub writer_proxy: WriterProxy,
@@ -482,6 +507,26 @@ impl DiscoveredWriterData {
       writer_proxy,
       publication_topic_data,
     }
+  }
+}
+
+// Fake implementation so that DiscoveredWriterData is a valid thing to
+// put into a DataWriter. But the actual serialization is done by
+// PlCdrDeserialize below. We do not just derive Serialize in order
+// not to force it on all the fields and their types.
+impl Serialize for DiscoveredWriterData {
+  fn serialize<S: Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+  { 
+    unimplemented!() 
+  }
+}
+// As Serialize above.
+impl<'de> Deserialize<'de> for DiscoveredWriterData {
+  fn deserialize<D>(_deserializer: D) -> Result<DiscoveredWriterData, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    unimplemented!()
   }
 }
 

@@ -1,3 +1,6 @@
+use speedy::{Readable};
+use enumflags2::{bitflags};
+
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
 pub struct Property {
   name: String,
@@ -43,4 +46,27 @@ pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
 #[error("Security exception: {msg}")]
 pub struct SecurityError {
   msg: String,
+}
+
+// DDS Security spec v1.1 Section 7.2.8 EndpointSecurityInfo
+// This is communicated over Discovery
+
+#[derive(Debug, Readable, Clone, PartialEq, Eq, )]
+pub struct EndpointSecurityInfo {
+  endpoint_security_attributes: EndpointSecurityAttributesMask,
+  plugin_endpoint_security_attributes: PluginEndpointSecurityAttributesMask,
+}
+
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[bitflags]
+#[repr(u32)]
+pub enum EndpointSecurityAttributesMask {
+  IsValid = 0x8000_0000, // (0x1 << 31)
+}
+
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
+#[bitflags]
+#[repr(u32)]
+pub enum PluginEndpointSecurityAttributesMask {
+  IsValid = 0x8000_0000, // (0x1 << 31)
 }
