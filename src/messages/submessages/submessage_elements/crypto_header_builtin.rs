@@ -14,5 +14,5 @@ pub struct CryptoHeader {
 //Enumerate on possible values of `transformation_id`.
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub enum PluginCryptoHeaderExtra {
-  // TODO
+  Dummy, //TODO. This variant is here just to suppress compiler warning.
 }

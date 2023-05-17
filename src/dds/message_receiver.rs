@@ -363,7 +363,7 @@ impl MessageReceiver {
       return;
     }
 
-    let mr_state = self.give_message_receiver_info();
+    //let _mr_state = self.give_message_receiver_info();
     match submessage {
       ReaderSubmessage::AckNack(acknack, _) => {
         // Note: This must not block, because the receiving end is the same thread,
@@ -392,21 +392,21 @@ impl MessageReceiver {
       return;
     }
 
-    let mr_state = self.give_message_receiver_info();
+    let _mr_state = self.give_message_receiver_info();
     match submessage {
-      SecuritySubmessage::SecureBody(secBody, secBody_flags) => {
+      SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
         todo!()
       }
-      SecuritySubmessage::SecurePrefix(secPrefix, secPrefix_flags) => {
+      SecuritySubmessage::SecurePrefix(_sec_prefix, _sec_prefix_flags) => {
         todo!()
       }
-      SecuritySubmessage::SecurePostfix(secPostfix, secPostfix_flags) => {
+      SecuritySubmessage::SecurePostfix(_sec_postfix, _sec_postfix_flags) => {
         todo!()
       }
-      SecuritySubmessage::SecureRTPSPrefix(secRTPSPrefix, secRTPSPrefix_flags) => {
+      SecuritySubmessage::SecureRTPSPrefix(_sec_rtps_prefix, _sec_rtps_prefix_flags) => {
         todo!()
       }
-      SecuritySubmessage::SecureRTPSPostfix(secRTPSPostfix, secRTPSPostfix_flags) => {
+      SecuritySubmessage::SecureRTPSPostfix(_sec_rtps_postfix, _sec_rtps_postfix_flags) => {
         todo!()
       }
     }

@@ -5,5 +5,6 @@ use speedy::{Readable, Writable};
 //Enumerate on possible values of `transformation_id`.
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub enum CryptoFooter {
-  //TODO
+  Dummy, //TODO. This variant is here just to suppress compiler warning.
+  
 }

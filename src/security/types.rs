@@ -10,7 +10,7 @@ pub struct Property {
 pub struct BinaryProperty {
   name: String,
   value: Vec<u8>,
-  propagate: bool,
+  propagate: bool, // propagate field is not serialized
 }
 
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
