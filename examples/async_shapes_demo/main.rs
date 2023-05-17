@@ -86,30 +86,26 @@ fn main() {
         }
       }
     });
-  let deadline_policy = match matches.get_one::<String>("deadline") {
-    None => None,
-    Some(dl) => match dl.parse::<f64>() {
-      Ok(d) => Some(Deadline(rustdds::Duration::from_frac_seconds(d))),
-      Err(e) => panic!("Expected numeric value for deadline. {:?}", e),
-    },
-  };
+  let deadline_policy = 
+    matches.get_one::<f64>("deadline")
+      .map( |dl| Deadline(rustdds::Duration::from_frac_seconds(*dl)) );
 
   if let Some(dl) = deadline_policy {
     qos_b = qos_b.deadline(dl);
   }
 
   assert!(
-    !matches.get_flag("partition"),
+    !matches.contains_id("partition"),
     "QoS policy Partition is not yet implemented."
   );
 
   assert!(
-    !matches.get_flag("interval"),
+    !matches.contains_id("interval"),
     "QoS policy Time Based Filter is not yet implemented."
   );
 
   assert!(
-    !matches.get_flag("ownership_strength"),
+    !matches.contains_id("ownership_strength"),
     "QoS policy Ownership Strength is not yet implemented."
   );
 
@@ -369,24 +365,28 @@ fn get_matches() -> ArgMatches {
       Arg::new("deadline")
         .help("Set a 'deadline' with interval (seconds)")
         .short('f')
-        .value_name("interval"),
+        .value_parser(clap::value_parser!(f64))
+        .value_name("deadline"),
     )
     .arg(
       Arg::new("partition")
         .help("Set a 'partition' string")
         .short('p')
+        .value_parser(clap::value_parser!(String))
         .value_name("partition"),
     )
     .arg(
       Arg::new("interval")
         .help("Apply 'time based filter' with interval (seconds)")
         .short('i')
+        .value_parser(clap::value_parser!(f64))
         .value_name("interval"),
     )
     .arg(
       Arg::new("ownership_strength")
         .help("Set ownership strength [-1: SHARED]")
         .short('s')
+        .value_parser(clap::value_parser!(i32))
         .value_name("strength"),
     )
     .get_matches()

@@ -94,13 +94,9 @@ fn main() {
         }
       }
     });
-  let deadline_policy = match matches.get_one::<String>("deadline") {
-    None => None,
-    Some(dl) => match dl.parse::<f64>() {
-      Ok(d) => Some(Deadline(rustdds::Duration::from_frac_seconds(d))),
-      Err(e) => panic!("Expected numeric value for deadline. {:?}", e),
-    },
-  };
+  let deadline_policy = 
+    matches.get_one::<f64>("deadline")
+      .map( |dl| Deadline(rustdds::Duration::from_frac_seconds(*dl)) );
 
   if let Some(dl) = deadline_policy {
     qos_b = qos_b.deadline(dl);
