@@ -1,5 +1,17 @@
-use crate::security::{
-  access_control::types::*, authentication::types::*, cryptographic::types::*, types::*,
+use crate::{
+  messages::submessages::submessage_elements::{
+    crypto_content_builtin::CryptoContent, parameter_list::ParameterList,
+    serialized_payload::SerializedPayload,
+  },
+  security::{
+    access_control::types::*, authentication::types::*, cryptographic::types::*, types::*,
+  },
+  serialization::{Message, Submessage},
+};
+// Imports for doc references
+#[cfg(doc)]
+use crate::{
+  messages::submessages::submessage::SecuritySubmessage, serialization::submessage::SubmessageBody,
 };
 
 /// CryptoKeyFactory: section 8.5.1.7 of the Security specification (v. 1.1)
@@ -72,11 +84,13 @@ pub trait CryptoKeyFactory {
 pub trait CryptoKeyExchange {
   /// create_local_participant_crypto_tokens: section 8.5.1.8.1 of the Security
   /// specification (v. 1.1)
+  ///
+  /// In a vector, return the tokens that would be written in
+  /// `local_participant_crypto_tokens`.
   fn create_local_participant_crypto_tokens(
-    local_participant_crypto_tokens: &mut Vec<ParticipantCryptoToken>,
     local_participant_crypto: ParticipantCryptoHandle,
     remote_participant_crypto: ParticipantCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<Vec<ParticipantCryptoToken>>;
 
   /// set_remote_participant_crypto_tokens: section 8.5.1.8.2 of the Security
   /// specification (v. 1.1)
@@ -88,11 +102,13 @@ pub trait CryptoKeyExchange {
 
   /// create_local_datawriter_crypto_tokens: section 8.5.1.8.3 of the Security
   /// specification (v. 1.1)
+  ///
+  /// In a vector, return the tokens that would be written in
+  /// `local_datawriter_crypto_tokens`.
   fn create_local_datawriter_crypto_tokens(
-    local_datawriter_crypto_tokens: &mut Vec<DatawriterCryptoToken>,
     local_datawriter_crypto: DatawriterCryptoHandle,
     remote_datareader_crypto: DatareaderCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<Vec<DatawriterCryptoToken>>;
 
   /// set_remote_datawriter_crypto_tokens: section 8.5.1.8.4 of the Security
   /// specification (v. 1.1)
@@ -104,11 +120,13 @@ pub trait CryptoKeyExchange {
 
   /// create_local_datareader_crypto_tokens: section 8.5.1.8.5 of the Security
   /// specification (v. 1.1)
+  ///
+  /// In a vector, return the tokens that would be written in
+  /// `local_datareader_crypto_tokens`.
   fn create_local_datareader_crypto_tokens(
-    local_datareader_crypto_tokens: &mut Vec<DatareaderCryptoToken>,
     local_datareader_crypto: DatareaderCryptoHandle,
     remote_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<Vec<DatareaderCryptoToken>>;
 
   /// set_remote_datareader_crypto_tokens: section 8.5.1.8.6 of the Security
   /// specification (v. 1.1)
@@ -124,90 +142,148 @@ pub trait CryptoKeyExchange {
 }
 
 /// CryptoTransform: section 8.5.1.9 of the Security specification (v. 1.1)
+///
+/// Differs from the specification by returning the results instead of writing
+/// them to provided buffers.
 pub trait CryptoTransform {
   /// encode_serialized_payload: section 8.5.1.9.1 of the Security specification
   /// (v. 1.1)
+  ///
+  /// In a tuple, return the results that would be written in `encoded_buffer`
+  /// and `extra_inline_qos`.
   fn encode_serialized_payload(
-    encoded_buffer: &mut Vec<u8>,
-    extra_inline_qos: &mut Vec<u8>,
-    plain_buffer: Vec<u8>,
+    plain_buffer: SerializedPayload,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<(CryptoContent, ParameterList)>;
 
   /// encode_datawriter_submessage: section 8.5.1.9.2 of the Security
   /// specification (v. 1.1)
+  ///
+  /// In an [EncodeResult], return the submessages that would be written in
+  /// `encoded_rtps_submessage`.
+  /// In case of [EncodeResult::One], the same result will be use for all
+  /// receivers, while [EncodeResult::Many] shall contain a result for each
+  /// receiving datareader in `receiving_datareader_crypto_list`.
+  /// `receiving_datareader_crypto_list_index` is dropped.
+  ///
+  /// # Panics
+  /// The function will panic if `plain_rtps_submessage.body` is not
+  /// [SubmessageBody::Writer].
   fn encode_datawriter_submessage(
-    encoded_rtps_submessage: &mut Vec<u8>,
-    plain_rtps_submessage: Vec<u8>,
+    plain_rtps_submessage: Submessage,
     sending_datawriter_crypto: DatawriterCryptoHandle,
     receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
-    receiving_datareader_crypto_list_index: &mut u32, // long
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<EncodeResult<EncodedSubmessage>>;
 
   /// encode_datareader_submessage: section 8.5.1.9.3 of the Security
   /// specification (v. 1.1)
+  ///
+  /// In an [EncodeResult], return the submessages that would be written in
+  /// `encoded_rtps_submessage`.
+  /// In case of [EncodeResult::One], the same result will be use for all
+  /// receivers, while [EncodeResult::Many] shall contain a result for each
+  /// receiving datawriter in `receiving_datawriter_crypto_list`.
+  ///
+  /// # Panics
+  /// The function will panic if `plain_rtps_submessage.body` is not
+  /// [SubmessageBody::Reader].
   fn encode_datareader_submessage(
-    encoded_rtps_submessage: &mut Vec<u8>,
-    plain_rtps_submessage: Vec<u8>,
+    plain_rtps_submessage: Submessage,
     sending_datareader_crypto: DatareaderCryptoHandle,
     receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<EncodeResult<EncodedSubmessage>>;
 
   /// encode_rtps_message: section 8.5.1.9.4 of the Security specification (v.
   /// 1.1)
+  ///
+  /// In an [EncodeResult], return the messge that would be written in
+  /// `encoded_rtps_message`.
+  /// In case of [EncodeResult::One], the same result will be use for all
+  /// receivers, while [EncodeResult::Many] shall contain a result for each
+  /// receiving participant in `receiving_participant_crypto_list`.
+  /// in the case that no transformation is performed and the plain message
+  /// should be sent, the plain message shall be returned in
+  /// [EncodeResult::One] (instead of returning false, see the spec).
+  /// `receiving_participant_crypto_list_index` is dropped.
   fn encode_rtps_message(
-    encoded_rtps_message: &mut Vec<u8>,
-    plain_rtps_message: Vec<u8>,
+    plain_rtps_message: Message,
     sending_participant_crypto: ParticipantCryptoHandle,
     receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
-    receiving_participant_crypto_list_index: &mut u32, // long
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<EncodeResult<Message>>;
 
   /// decode_rtps_message: section 8.5.1.9.5 of the Security specification (v.
   /// 1.1)
+  ///
+  /// Return the message that would be written in `plain_buffer`.
   fn decode_rtps_message(
-    plain_buffer: &mut Vec<u8>,
-    encoded_buffer: Vec<u8>,
+    encoded_buffer: Message,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<Message>;
 
   /// preprocess_secure_submsg: section 8.5.1.9.6 of the Security specification
   /// (v. 1.1)
+  ///
+  /// Return the secure submessage category that would be written in
+  /// `secure_submessage_category`. The [DatawriterCryptoHandle] and
+  /// [DatareaderCryptoHandle] that would be written in `datawriter_crypto` and
+  /// `datareader_crypto` shall be returned in
+  /// [SecureSubmessageCategory::DatawriterSubmessage] or
+  /// [SecureSubmessageCategory::DatareaderSubmessage] in the order
+  /// (sender,receiver). In the case `INFO_SUBMESSAGE`,
+  /// [SecureSubmessageCategory::InfoSubmessage] is returned instead of `false`.
+  ///
+  /// # Panics
+  /// The function will panic if `encoded_rtps_submessage.body` is not
+  /// [SubmessageBody::Security] wrapping [SecuritySubmessage::SecurePrefix].
   fn preprocess_secure_submsg(
-    datawriter_crypto: &mut DatawriterCryptoHandle,
-    datareader_crypto: &mut DatareaderCryptoHandle,
-    secure_submessage_category: &mut SecureSubmessageCategory,
-    encoded_rtps_submessage: Vec<u8>,
+    encoded_rtps_submessage: Submessage,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<SecureSubmessageCategory>;
 
   /// decode_datawriter_submessage: section 8.5.1.9.7 of the Security
   /// specification (v. 1.1)
+  ///
+  /// Return the writer submessage that would be written in
+  /// `plain_rtps_submessage`.
+  ///
+  /// # Panics
+  /// The function will panic if `encoded_rtps_submessage.0.body` and
+  /// `encoded_rtps_submessage.2.body`  are not [SubmessageBody::Security]
+  /// wrapping [SecuritySubmessage::SecurePrefix] and
+  /// [SecuritySubmessage::SecurePostfix] respectively.
   fn decode_datawriter_submessage(
-    plain_rtps_submessage: &mut Vec<u8>,
-    encoded_rtps_submessage: Vec<u8>,
+    encoded_rtps_submessage: (Submessage, Submessage, Submessage),
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<Submessage>;
 
   /// decode_datareader_submessage: section 8.5.1.9.8 of the Security
   /// specification (v. 1.1)
+  ///
+  /// Return the reader submessage that would be written in
+  /// `plain_rtps_submessage`.
+  ///
+  /// # Panics
+  /// The function will panic if `encoded_rtps_submessage.0.body` and
+  /// `encoded_rtps_submessage.2.body`  are not [SubmessageBody::Security]
+  /// wrapping [SecuritySubmessage::SecurePrefix] and
+  /// [SecuritySubmessage::SecurePostfix] respectively.
   fn decode_datareader_submessage(
-    plain_rtps_submessage: &mut Vec<u8>,
-    encoded_rtps_submessage: Vec<u8>,
+    encoded_rtps_submessage: (Submessage, Submessage, Submessage),
     receiving_datawriter_crypto: DatawriterCryptoHandle,
     sending_datareader_crypto: DatareaderCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<Submessage>;
 
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
   /// (v. 1.1)
+  ///
+  /// Return the serialized payload that would be written in `plain_buffer`
   fn decode_serialized_payload(
-    plain_buffer: &mut Vec<u8>,
-    encoded_buffer: Vec<u8>,
-    inline_qos: Vec<u8>,
+    encoded_buffer: CryptoContent,
+    inline_qos: ParameterList,
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<SerializedPayload>;
 }

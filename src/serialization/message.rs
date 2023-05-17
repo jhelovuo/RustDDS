@@ -39,7 +39,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct Message {
+pub struct Message {
   pub header: Header,
   pub submessages: Vec<Submessage>,
 }
