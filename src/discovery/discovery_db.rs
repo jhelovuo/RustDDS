@@ -542,6 +542,7 @@ impl DiscoveryDB {
       topic.name(),
       topic.get_type().name().to_string(),
       &topic.qos(),
+      None, // <<---------------TODO: None here means we have no EndpointSecurityInfo
     );
 
     // TODO: possibly change content filter to dynamic value

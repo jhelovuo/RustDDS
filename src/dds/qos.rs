@@ -582,6 +582,7 @@ pub mod policy {
     pub max_samples_per_instance: i32,
   }
 
+  // This is a serialization helper struct
   #[derive(Serialize, Deserialize)]
   pub(crate) struct QosData<D>
   where

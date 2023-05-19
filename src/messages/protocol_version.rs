@@ -1,5 +1,7 @@
 use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace};
 
 use crate::structure::parameter_id::ParameterId;
 
@@ -35,6 +37,7 @@ impl Default for ProtocolVersion {
   }
 }
 
+// serialization helper
 #[derive(Serialize, Deserialize)]
 pub struct ProtocolVersionData {
   parameter_id: ParameterId,

@@ -94,9 +94,9 @@ fn main() {
         }
       }
     });
-  let deadline_policy = 
-    matches.get_one::<f64>("deadline")
-      .map( |dl| Deadline(rustdds::Duration::from_frac_seconds(*dl)) );
+  let deadline_policy = matches
+    .get_one::<f64>("deadline")
+    .map(|dl| Deadline(rustdds::Duration::from_frac_seconds(*dl)));
 
   if let Some(dl) = deadline_policy {
     qos_b = qos_b.deadline(dl);

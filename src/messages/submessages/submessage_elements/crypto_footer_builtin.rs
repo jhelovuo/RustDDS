@@ -6,5 +6,4 @@ use speedy::{Readable, Writable};
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub enum CryptoFooter {
   Dummy, //TODO. This variant is here just to suppress compiler warning.
-  
 }

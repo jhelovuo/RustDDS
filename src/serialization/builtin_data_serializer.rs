@@ -26,6 +26,7 @@ use crate::{
     submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
     vendor_id::{VendorId, VendorIdData},
   },
+  security::{EndpointSecurityInfo, EndpointSecurityInfoData},
   serialization::{cdr_serializer::CdrSerializer, error as ser, error::Result},
   structure::{
     builtin_endpoint::{
@@ -156,6 +157,9 @@ pub struct BuiltinDataSerializer<'a> {
   pub resource_limits: Option<ResourceLimits>,
 
   pub content_filter_property: Option<&'a ContentFilterProperty>,
+
+  // DDS Security
+  pub security_info: Option<&'a EndpointSecurityInfo>,
 }
 
 impl<'a> BuiltinDataSerializer<'a> {
@@ -197,6 +201,7 @@ impl<'a> BuiltinDataSerializer<'a> {
     merge_field!(history);
     merge_field!(resource_limits);
     merge_field!(content_filter_property);
+    merge_field!(security_info);
 
     self
   }
@@ -275,6 +280,8 @@ impl<'a> BuiltinDataSerializer<'a> {
       time_based_filter: qos.time_based_filter(),
       presentation: qos.presentation(),
       lifespan: qos.lifespan(),
+
+      security_info: subscription_topic_data.security_info().as_ref(),
       ..BuiltinDataSerializer::default()
     }
   }
@@ -297,6 +304,8 @@ impl<'a> BuiltinDataSerializer<'a> {
       time_based_filter: publication_topic_data.time_based_filter,
       presentation: publication_topic_data.presentation,
       lifespan: publication_topic_data.lifespan,
+
+      security_info: publication_topic_data.security_info.as_ref(),
       ..BuiltinDataSerializer::default()
     }
   }
@@ -420,6 +429,8 @@ impl<'a> BuiltinDataSerializer<'a> {
 
     self.add_content_filter_property::<S>(&mut s);
 
+    self.add_security_info::<S>(&mut s);
+
     if add_sentinel {
       s.serialize_field("sentinel", &1_u32).unwrap();
     }
@@ -470,6 +481,8 @@ impl<'a> BuiltinDataSerializer<'a> {
     count += usize::from(self.resource_limits.is_some());
 
     count += usize::from(self.content_filter_property.is_some());
+
+    count += usize::from(self.security_info.is_some());
 
     count
   }
@@ -919,6 +932,13 @@ impl<'a> BuiltinDataSerializer<'a> {
         &ContentFilterPropertyData::new(cfp),
       )
       .unwrap();
+    }
+  }
+
+  fn add_security_info<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    if let Some(si) = self.security_info {
+      s.serialize_field("security_info", &EndpointSecurityInfoData::new(si.clone()))
+        .unwrap();
     }
   }
 

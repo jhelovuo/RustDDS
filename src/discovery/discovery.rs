@@ -841,6 +841,7 @@ impl Discovery {
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
       &Self::create_spdp_patricipant_qos(),
+      None, // <<---------------TODO: None here means we advertise no EndpointSecurityInfo
     );
     let drd = DiscoveredReaderData {
       reader_proxy,

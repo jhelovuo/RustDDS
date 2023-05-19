@@ -1,8 +1,9 @@
 use std::time::Instant;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 use chrono::Utc;
-use log::{error, warn};
 
 use crate::{
   dds::{
@@ -31,6 +32,7 @@ use crate::{
     submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
     vendor_id::VendorId,
   },
+  security::EndpointSecurityInfo,
   serialization::error::Error,
   structure::{
     builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
@@ -93,6 +95,9 @@ pub struct BuiltinDataDeserializer {
   pub service_instance_name: Option<String>, // max size is 256 bytes
   pub related_datareader_key: Option<GUID>,
   pub topic_aliases: Option<Vec<String>>,
+
+  // DDS Security
+  pub security_info: Option<EndpointSecurityInfo>,
 }
 
 impl BuiltinDataDeserializer {
@@ -246,6 +251,7 @@ impl BuiltinDataDeserializer {
     };
 
     // TODO: DDS-RPC fields are not set
+    // TODO: Does DDS-RPC for ROS2 work even without these?
 
     Ok(SubscriptionBuiltinTopicData::new(
       key,
@@ -253,6 +259,7 @@ impl BuiltinDataDeserializer {
       topic_name,
       type_name,
       &qos,
+      self.security_info.clone(),
     ))
   }
 
@@ -285,6 +292,7 @@ impl BuiltinDataDeserializer {
       service_instance_name: self.service_instance_name.clone(),
       related_datareader_key: self.related_datareader_key,
       topic_aliases: self.topic_aliases.clone(),
+      security_info: self.security_info.clone(),
     })
   }
 
@@ -357,6 +365,7 @@ impl BuiltinDataDeserializer {
     let mut parameter_length: usize = Self::read_parameter_length(buffer, rep).unwrap() as usize;
 
     if (parameter_length + 4) > buffer.len() {
+      //TODO: Isn't this a decoding error? Or something fishy? Should we log this?
       parameter_length = buffer.len() - 4;
     }
 
@@ -765,6 +774,16 @@ impl BuiltinDataDeserializer {
         }
       }
 
+      ParameterId::PID_ENDPOINT_SECURITY_INFO => {
+        let sec_info: Result<EndpointSecurityInfo, Error> =
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+        if let Ok(security_info) = sec_info {
+          self.security_info = Some(security_info);
+          buffer.drain(..4 + parameter_length);
+          return self;
+        }
+      }
+
       ParameterId::PID_SENTINEL => {
         self.sentinel = Some(1);
         buffer.clear();
@@ -774,9 +793,12 @@ impl BuiltinDataDeserializer {
         buffer.drain(..4 + parameter_length);
         return self;
       }
-      _ => (), /* TODO: Add some logging. But not much, since there may
-                * be some legitimate cases where we encounter paraneters that we do not
-                * know. */
+      pid => {
+        info!(
+          "ParameterList deserialization: Unknown {:?} , skipping.",
+          pid
+        );
+      }
     }
 
     buffer.drain(..4 + parameter_length);

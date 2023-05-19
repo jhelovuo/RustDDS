@@ -78,6 +78,18 @@ impl ParameterId {
   // 0x0083 commented out.
   // Wireshark calls this "PID_RELATED_ORIGINAL_WRITER_INFO".
   pub const PID_RELATED_SAMPLE_IDENTITY: Self = Self { value: /*0x0083*/ 0x800f };
+
+  // DDS Security spec v1.1:
+  // Section 7.4.1.7 New DCPSPublicationsSecure Builtin Topic
+  // Table 14 & 15
+  pub const PID_DATA_TAGS: Self = Self { value: 0x1003 };
+  // Section 7.4.1.5
+  // "Extension to RTPS Standard DCPSPublications and DCPSSubscriptions Builtin
+  // Topics" Table 12
+  pub const PID_ENDPOINT_SECURITY_INFO: Self = Self { value: 0x1004 };
+  // Section 7.4.1.6 "New DCPSParticipantSecure Builtin Topic"
+  // Table 13
+  pub const PID_IDENTITY_STATUS_TOKEN: Self = Self { value: 0x1006 };
 }
 
 #[cfg(test)]
