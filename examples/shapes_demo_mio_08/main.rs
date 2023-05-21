@@ -80,7 +80,7 @@ fn main() {
       Reliability::BestEffort
     })
     .durability(
-      match matches.get_one::<String>("durability").map(|s| s.as_str()) {
+      match matches.get_one::<String>("durability").map(String::as_str) {
         Some("l") => Durability::TransientLocal,
         Some("t") => Durability::Transient,
         Some("p") => Durability::Persistent,
@@ -133,7 +133,7 @@ fn main() {
 
   let topic = domain_participant
     .create_topic(
-      topic_name.to_string(),
+      topic_name,
       "ShapeType".to_string(),
       &qos,
       TopicKind::WithKey,

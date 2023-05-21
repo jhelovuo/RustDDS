@@ -535,10 +535,10 @@ mod tests {
       notification_sender,
       status_sender,
       topic_name: "test".to_string(),
-      topic_cache_handle: topic_cache_handle.clone(),
+      topic_cache_handle,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
-      data_reader_waker: data_reader_waker.clone(),
+      data_reader_waker,
       poll_event_sender: notification_event_sender,
     };
 

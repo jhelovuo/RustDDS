@@ -884,7 +884,7 @@ mod tests {
       notification_sender: notification_sender2,
       status_sender: status_sender2,
       topic_name: topic.name(),
-      topic_cache_handle: topic_cache.clone(),
+      topic_cache_handle: topic_cache,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
       data_reader_waker: data_reader_waker2,
