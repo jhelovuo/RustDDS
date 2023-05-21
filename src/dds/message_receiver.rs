@@ -22,8 +22,6 @@ use crate::{
 #[cfg(test)]
 use crate::dds::ddsdata::DDSData;
 #[cfg(test)]
-use crate::structure::cache_change::CacheChange;
-#[cfg(test)]
 use crate::structure::sequence_number::SequenceNumber;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
@@ -139,21 +137,6 @@ impl MessageReceiver {
         .history_cache_change_data(sequence_number)
         .unwrap(),
     )
-  }
-
-  // use for test and debugging only
-  #[cfg(test)]
-  fn get_reader_and_history_cache_change_object(
-    &self,
-    reader_id: EntityId,
-    sequence_number: SequenceNumber,
-  ) -> CacheChange {
-    self
-      .available_readers
-      .get(&reader_id)
-      .unwrap()
-      .history_cache_change(sequence_number)
-      .unwrap()
   }
 
   #[cfg(test)]
