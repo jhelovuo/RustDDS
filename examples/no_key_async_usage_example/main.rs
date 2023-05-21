@@ -73,13 +73,13 @@ fn main() {
             match r{
               Ok(d)=>{println!("{}",d.a)},
               Err(e)=> {
-                println!("{:?}",e);
+                println!("{:?}", e);
                 break;
               }
             }
           }
           e=datareader_event_stream.select_next_some()=>{
-            println!("DataReader event: {:?}", e);
+            println!("DataReader event: {e:?}");
           }
         }
       }
@@ -103,10 +103,10 @@ fn main() {
           _= tick_stream.select_next_some()=>{
             let some_data = SomeType { a: i };
             i += 1;
-            writer.async_write(some_data,None).await.unwrap_or_else(|e| println!("DataWriter write failed: {:?}", e));
+            writer.async_write(some_data,None).await.unwrap_or_else(|e| println!("DataWriter write failed: {e:?}"));
           }
           e= datawriter_event_stream.select_next_some()=>{
-            println!("DataWriter event: {:?}", e);
+            println!("DataWriter event: {e:?}");
           }
         }
       }

@@ -299,7 +299,7 @@ impl MessageReceiver {
           Err(TrySendError::Full(_)) => {
             info!("AckNack pipe full. Looks like I am very busy. Discarding submessage.");
           }
-          Err(e) => warn!("AckNack pipe fail: {:?}", e),
+          Err(e) => warn!("AckNack pipe fail: {e:?}"),
         }
       }
       EntitySubmessage::DataFrag(datafrag, flags) => {

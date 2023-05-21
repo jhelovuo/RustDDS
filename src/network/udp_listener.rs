@@ -36,7 +36,7 @@ impl Drop for UDPListener {
         .socket
         .leave_multicast_v4(&mcg, &Ipv4Addr::UNSPECIFIED)
         .unwrap_or_else(|e| {
-          error!("leave_multicast_group: {:?}", e);
+          error!("leave_multicast_group: {e:?}");
         });
     }
   }
@@ -74,7 +74,7 @@ impl UDPListener {
     );
 
     if let Err(e) = raw_socket.bind(&SockAddr::from(address)) {
-      info!("new_socket - cannot bind socket: {:?}", e);
+      info!("new_socket - cannot bind socket: {e:?}");
       return Err(e);
     }
 
@@ -167,7 +167,7 @@ impl UDPListener {
         return message;
       }
       Err(e) => {
-        debug!("UDPListener::get_message failed: {:?}", e);
+        debug!("UDPListener::get_message failed: {e:?}");
       }
     };
     message
@@ -204,7 +204,7 @@ impl UDPListener {
           if e.kind() == io::ErrorKind::WouldBlock {
             // This is the normal case.
           } else {
-            warn!("socket recv() error: {:?}", e);
+            warn!("socket recv() error: {e:?}");
           }
           // In any case, we stop trying and return.
           return messages;

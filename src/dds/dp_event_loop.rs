@@ -316,13 +316,13 @@ impl DPEventLoop {
             TokenDecode::Entity(eid) => {
               if eid.kind().is_reader() {
                 ev_wrapper.message_receiver.reader_mut(eid).map_or_else(
-                  || error!("Event for unknown reader {:?}", eid),
+                  || error!("Event for unknown reader {eid:?}"),
                   Reader::process_command,
                 );
               } else if eid.kind().is_writer() {
                 let local_readers = match ev_wrapper.writers.get_mut(&eid) {
                   None => {
-                    error!("Event for unknown writer {:?}", eid);
+                    error!("Event for unknown writer {eid:?}");
                     vec![]
                   }
                   Some(writer) => {
@@ -337,7 +337,7 @@ impl DPEventLoop {
                   .message_receiver
                   .notify_data_to_readers(local_readers);
               } else {
-                error!("Entity Event for unknown EntityKind {:?}", eid);
+                error!("Entity Event for unknown EntityKind {eid:?}");
               }
             }
 
@@ -348,7 +348,7 @@ impl DPEventLoop {
               } else if eid.kind().is_writer() {
                 ev_wrapper.handle_writer_timed_event(eid);
               } else {
-                error!("AltEntity Event for unknown EntityKind {:?}", eid);
+                error!("AltEntity Event for unknown EntityKind {eid:?}");
               }
             }
           }
@@ -396,15 +396,15 @@ impl DPEventLoop {
             self
               .poll
               .deregister(&old_reader.timed_event_timer)
-              .unwrap_or_else(|e| error!("Cannot deregister Reader timed_event_timer: {:?}", e));
+              .unwrap_or_else(|e| error!("Cannot deregister Reader timed_event_timer: {e:?}"));
             self
               .poll
               .deregister(&old_reader.data_reader_command_receiver)
               .unwrap_or_else(|e| {
-                error!("Cannot deregister data_reader_command_receiver: {:?}", e);
+                error!("Cannot deregister data_reader_command_receiver: {e:?}");
               });
           } else {
-            warn!("Tried to remove nonexistent Reader {:?}", old_reader_guid);
+            warn!("Tried to remove nonexistent Reader {old_reader_guid:?}");
           }
         }
       }
@@ -446,11 +446,11 @@ impl DPEventLoop {
             self
               .poll
               .deregister(&w.writer_command_receiver)
-              .unwrap_or_else(|e| error!("Deregister fail (writer command rec) {:?}", e));
+              .unwrap_or_else(|e| error!("Deregister fail (writer command rec) {e:?}"));
             self
               .poll
               .deregister(&w.timed_event_timer)
-              .unwrap_or_else(|e| error!("Deregister fail (writer timer) {:?}", e));
+              .unwrap_or_else(|e| error!("Deregister fail (writer timer) {e:?}"));
           }
         }
       }

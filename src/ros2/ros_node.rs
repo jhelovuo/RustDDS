@@ -228,7 +228,7 @@ impl RosParticipantInner {
       .write(self.get_ros_participant_info(), None)
     {
       Ok(_) => (),
-      Err(e) => error!("Failed to write into node_writer {:?}", e),
+      Err(e) => error!("Failed to write into node_writer {e:?}"),
     }
   }
 

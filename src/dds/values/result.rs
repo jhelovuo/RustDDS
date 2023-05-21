@@ -146,7 +146,7 @@ where
 {
   fn from(e: TrySendError<T>) -> Self {
     Self::Internal {
-      reason: format!("Cannot send to internal mio channel: {:?}", e),
+      reason: format!("Cannot send to internal mio channel: {e:?}"),
     }
   }
 }

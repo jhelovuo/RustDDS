@@ -157,16 +157,11 @@
 //! ```
 #![deny(clippy::all)]
 #![warn(clippy::needless_pass_by_value, clippy::semicolon_if_nothing_returned)]
-#![warn(clippy::not_unsafe_ptr_arg_deref)] // Until Speedy Readable macro is fixed
 #![allow(
-  clippy::option_map_unit_fn,
   // option_map_unit_fn suggests changing option.map( ) with () return value to if let -construct,
   // but that may break code flow.
+  clippy::option_map_unit_fn,
 )]
-// Tell clippy to shut up about this, because using (deriving) Readable from the speedy
-// library triggers this error.
-// TODO: Remove this allow-attribute once speedy has been fixed (or replaced).
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 #[macro_use]
 mod serialization_test;

@@ -213,7 +213,7 @@ impl Reader {
         info!("send_status_change - cannot send status, DataReader Disconnected.");
       }
       Err(mio_channel::TrySendError::Io(e)) => {
-        error!("send_status_change - cannot send status: {:?}", e);
+        error!("send_status_change - cannot send status: {e:?}");
       }
     }
   }

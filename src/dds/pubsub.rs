@@ -113,7 +113,7 @@ impl Publisher {
     self
       .inner
       .lock()
-      .unwrap_or_else(|e| panic!("Inner publisher lock fail! {:?}", e))
+      .unwrap_or_else(|e| panic!("Inner publisher lock fail! {e:?}"))
   }
 
   /// Creates DDS [DataWriter](struct.With_Key_DataWriter.html) for Keyed topic
