@@ -2,9 +2,8 @@ use std::time::Instant;
 
 use serde::Deserialize;
 use chrono::Utc;
-
 #[allow(unused_imports)]
-use log::{error, warn, info, debug, trace};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{
@@ -354,9 +353,7 @@ impl BuiltinDataDeserializer {
     self
   }
 
-  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) 
-    -> Self
-  {
+  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) -> Self {
     let parameter_id = Self::read_parameter_id(buffer, rep).unwrap();
     let mut parameter_length: usize = Self::read_parameter_length(buffer, rep).unwrap() as usize;
 
@@ -684,11 +681,15 @@ impl BuiltinDataDeserializer {
           Ok(ls) => {
             self.lifespan = Some(ls);
             buffer.drain(..4 + parameter_length);
-            return self
+            return self;
           }
           Err(e) => {
-            error!("Lifespan parse failure {:?} from {:x?}", e, &buffer[4..4 + parameter_length]);
-          }  
+            error!(
+              "Lifespan parse failure {:?} from {:x?}",
+              e,
+              &buffer[4..4 + parameter_length]
+            );
+          }
         }
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
@@ -784,10 +785,14 @@ impl BuiltinDataDeserializer {
         return self;
       }
       _ => {
-        // This is not very seriaous error, because there may 
+        // This is not very seriaous error, because there may
         // be ParameterIds we just do not know.
-        info!("Unknown {:?} length={} in ParameterList: {:x?} ", 
-          parameter_id, parameter_length, &buffer[4..4 + parameter_length]);
+        info!(
+          "Unknown {:?} length={} in ParameterList: {:x?} ",
+          parameter_id,
+          parameter_length,
+          &buffer[4..4 + parameter_length]
+        );
       }
     }
 

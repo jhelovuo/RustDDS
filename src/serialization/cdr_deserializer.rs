@@ -584,18 +584,20 @@ where
 #[cfg(test)]
 mod tests {
   #![allow(clippy::needless_pass_by_value)]
-  use crate::serialization::deserialize_from_cdr;
-use byteorder::{BigEndian, LittleEndian};
+  use byteorder::{BigEndian, LittleEndian};
   use log::info;
   use serde::{Deserialize, Serialize};
   use test_case::test_case;
-
-  use crate::serialization::{
-    cdr_deserializer::{deserialize_from_big_endian, deserialize_from_little_endian},
-    cdr_serializer::to_bytes,
-  };
-  use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
   use serde_repr::{Deserialize_repr, Serialize_repr};
+
+  use crate::{
+    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+    serialization::{
+      cdr_deserializer::{deserialize_from_big_endian, deserialize_from_little_endian},
+      cdr_serializer::to_bytes,
+      deserialize_from_cdr,
+    },
+  };
 
   #[test]
   fn cdr_deserialization_struct() {
@@ -979,10 +981,9 @@ use byteorder::{BigEndian, LittleEndian};
 
   #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
   struct AlignMe {
-    some_bytes: [u8;4],
+    some_bytes: [u8; 4],
     status: i8,
   }
-
 
   #[test_case(35_u8 ; "u8")]
   #[test_case(35_u16 ; "u16")]
@@ -1032,7 +1033,7 @@ use byteorder::{BigEndian, LittleEndian};
   #[test_case( MixedEnum::B{ value:1234 } ; "MixedEnum::B")]
   #[test_case( MixedEnum::C(42,43) ; "MixedEnum::C")]
   #[test_case( GoalStatusEnum::Accepted ; "GoalStatusEnum::Accepted")]
-  #[test_case( [AlignMe{some_bytes: [1,2,3,4], status:10 } , 
+  #[test_case( [AlignMe{some_bytes: [1,2,3,4], status:10 } ,
                 AlignMe{some_bytes: [5,6,7,8], status:11 } ]  ; "AlignMeArray")]
   fn cdr_serde_round_trip<T>(input: T)
   where
@@ -1040,7 +1041,7 @@ use byteorder::{BigEndian, LittleEndian};
   {
     let serialized = to_bytes::<_, LittleEndian>(&input).unwrap();
     println!("Serialized data: {:x?}", &serialized);
-    let (deserialized, bytes_consumed): (T, usize) = 
+    let (deserialized, bytes_consumed): (T, usize) =
       deserialize_from_cdr(&serialized, RepresentationIdentifier::CDR_LE).unwrap();
     //let deserialized = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(input, deserialized);

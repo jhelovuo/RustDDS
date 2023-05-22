@@ -104,13 +104,12 @@ where
   }
 }
 
-
 pub trait AligningSerializer {
-  fn align(&mut self, alignment:usize) -> Result<()>;
+  fn align(&mut self, alignment: usize) -> Result<()>;
 }
 
-impl<S:AligningSerializer> AligningSerializer for &mut S {
-  fn align(&mut self, alignment:usize) -> Result<()> {
+impl<S: AligningSerializer> AligningSerializer for &mut S {
+  fn align(&mut self, alignment: usize) -> Result<()> {
     (*self).align(alignment)
   }
 }
@@ -143,7 +142,7 @@ where
   }
 
   fn calculate_padding_need_and_write_padding(&mut self, alignment: usize) -> Result<()> {
-    let modulo = self.writer.count()  % alignment;
+    let modulo = self.writer.count() % alignment;
     if modulo != 0 {
       let padding_need: usize = alignment - modulo;
       for _x in 0..padding_need {
@@ -154,7 +153,7 @@ where
   }
 } // impl
 
-impl<W,BO> AligningSerializer for CdrSerializer<W,BO> 
+impl<W, BO> AligningSerializer for CdrSerializer<W, BO>
 where
   BO: ByteOrder,
   W: io::Write,

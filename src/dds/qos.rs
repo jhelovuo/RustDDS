@@ -582,8 +582,6 @@ pub mod policy {
     pub max_samples_per_instance: i32,
   }
 
-
-
   // This is a serialization helper struct
   #[derive(Serialize)]
   pub(crate) struct QosData<D>
@@ -637,7 +635,6 @@ pub mod policy {
       }
     }
   }
-
 }
 
 // Utility for parsing RTPS inlineQoS parameters

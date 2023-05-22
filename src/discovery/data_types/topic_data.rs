@@ -700,7 +700,6 @@ mod tests {
   use byteorder::LittleEndian;
   use bytes::Bytes;
   use log::info;
-
   use test_log::test; // to capture logigng macros run by test cases
 
   use crate::dds::traits::serde_adapters::no_key::SerializerAdapter;
@@ -782,7 +781,10 @@ mod tests {
     let sdata = drd
       .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
       .unwrap();
-    info!("td_discovered_reader_data_ser_deser serialized data is {:x?}", sdata);
+    info!(
+      "td_discovered_reader_data_ser_deser serialized data is {:x?}",
+      sdata
+    );
     // deserialize back
     let drd2: DiscoveredReaderData =
       PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
@@ -838,7 +840,10 @@ mod tests {
     // last updated is not serialized thus copying value for correct result
     dwd2.last_updated = dwd.last_updated;
 
-    info!("td_discovered_writer_data_ser_deser serialized data is {:x?}", sdata);
+    info!(
+      "td_discovered_writer_data_ser_deser serialized data is {:x?}",
+      sdata
+    );
 
     assert_eq!(dwd, dwd2);
     let sdata2 =

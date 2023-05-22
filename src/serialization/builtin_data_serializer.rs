@@ -27,8 +27,9 @@ use crate::{
     vendor_id::{VendorId, VendorIdData},
   },
   serialization::{
-    cdr_serializer::{ CdrSerializer, AligningSerializer }, 
-    error as ser, error::Result, 
+    cdr_serializer::{AligningSerializer, CdrSerializer},
+    error as ser,
+    error::Result,
   },
   structure::{
     builtin_endpoint::{
@@ -377,14 +378,10 @@ impl<'a> BuiltinDataSerializer<'a> {
   // This needs a CDR serializer (not PL_CDR) to work with.
   // It will then output PL_CDR via the CDR serializer.
   // Someone could argue that this design is crazy and they would have a point.
-  pub fn serialize<S>(
-    &self,
-    serializer: S,
-    add_sentinel: bool,
-  ) -> Result<S::Ok> 
+  pub fn serialize<S>(&self, serializer: S, add_sentinel: bool) -> Result<S::Ok>
   where
-    S: Serializer<Error = ser::Error> ,
-    S::SerializeStruct: AligningSerializer
+    S: Serializer<Error = ser::Error>,
+    S::SerializeStruct: AligningSerializer,
   {
     let mut s = serializer
       .serialize_struct("SPDPParticipantData", self.fields_amount())
