@@ -1,6 +1,6 @@
 use crate::{
   messages::submessages::submessage_elements::{
-    crypto_content_builtin::CryptoContent, parameter_list::ParameterList,
+    crypto_content::CryptoContent, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
   security::{
@@ -196,7 +196,7 @@ pub trait CryptoTransform {
   /// encode_rtps_message: section 8.5.1.9.4 of the Security specification (v.
   /// 1.1)
   ///
-  /// In an [EncodeResult], return the messge that would be written in
+  /// In an [EncodeResult], return the message that would be written in
   /// `encoded_rtps_message`.
   /// In case of [EncodeResult::One], the same result will be use for all
   /// receivers, while [EncodeResult::Many] shall contain a result for each

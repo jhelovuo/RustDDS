@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-use super::submessage_elements::crypto_content_builtin::CryptoContent;
+use super::submessage_elements::crypto_content::CryptoContent;
 
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct SecureBody {

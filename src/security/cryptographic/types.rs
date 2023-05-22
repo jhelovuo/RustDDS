@@ -1,9 +1,18 @@
+use std::convert::From;
+
 use speedy::{Readable, Writable};
 
-use crate::{security::types::Token, serialization::Submessage};
+use crate::{security::types::DataHolder, serialization::Submessage};
 /// CryptoToken: sections 7.2.4.2 and 8.5.1.1 of the Security specification (v.
 /// 1.1)
-pub type CryptoToken = Token;
+pub struct CryptoToken {
+  pub data_holder: DataHolder,
+}
+impl From<DataHolder> for CryptoToken {
+  fn from(value: DataHolder) -> Self {
+    CryptoToken { data_holder: value }
+  }
+}
 pub type ParticipantCryptoToken = CryptoToken;
 pub type DatawriterCryptoToken = CryptoToken;
 pub type DatareaderCryptoToken = CryptoToken;
@@ -29,10 +38,10 @@ pub struct CryptoTransformIdentifier {
 }
 /// transformation_kind: section 8.5.1.5.1 of the Security specification (v.
 /// 1.1)
-type CryptoTransformKind = [u8; 4];
+pub type CryptoTransformKind = [u8; 4];
 /// transformation_key_id: section 8.5.1.5.2 of the Security specification (v.
 /// 1.1)
-type CryptoTransformKeyId = [u8; 4];
+pub type CryptoTransformKeyId = [u8; 4];
 
 /// SecureSubmessageCategory_t: section 8.5.1.6 of the Security specification
 /// (v. 1.1)

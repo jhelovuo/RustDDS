@@ -1,6 +1,6 @@
 use crate::{
   messages::submessages::submessage_elements::{
-    crypto_content_builtin::CryptoContent, parameter_list::ParameterList,
+    crypto_content::CryptoContent, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
   security::{

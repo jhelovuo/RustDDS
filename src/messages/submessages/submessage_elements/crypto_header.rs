@@ -7,12 +7,12 @@ use crate::security::cryptographic::types::CryptoTransformIdentifier;
 /// See section 7.3.7.3
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct CryptoHeader {
-  transformation_id: CryptoTransformIdentifier,
-  plugin_crypto_header_extra: PluginCryptoHeaderExtra,
+  pub transformation_id: CryptoTransformIdentifier,
+  pub plugin_crypto_header_extra: PluginCryptoHeaderExtra,
 }
 
-//Enumerate on possible values of `transformation_id`.
+/// Should be interpreted by the plugin based on `transformation_id`
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
-pub enum PluginCryptoHeaderExtra {
-  Dummy, //TODO. This variant is here just to suppress compiler warning.
+pub struct PluginCryptoHeaderExtra {
+  pub data: Vec<u8>,
 }

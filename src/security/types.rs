@@ -3,31 +3,36 @@ use enumflags2::bitflags;
 use serde::{Deserialize, Serialize};
 
 use crate::structure::parameter_id::ParameterId;
+use super::cryptographic::types::CryptoToken;
 
-// Property_t type from section 7.2.1 of the Security specification (v. 1.1)
+/// Property_t type from section 7.2.1 of the Security specification (v. 1.1)
 pub struct Property {
-  name: String,
-  value: String,
-  propagate: bool,
+  pub name: String,
+  pub value: String,
+  pub propagate: bool,
 }
 
-// BinaryProperty_t type from section 7.2.2 of the Security specification (v.
-// 1.1)
+/// BinaryProperty_t type from section 7.2.2 of the Security specification (v.
+/// 1.1)
 pub struct BinaryProperty {
-  name: String,
-  value: Vec<u8>,
-  propagate: bool, // propagate field is not serialized
+  pub name: String,
+  pub value: Vec<u8>,
+  pub propagate: bool, // propagate field is not serialized
 }
 
-// DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
+/// DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
+/// We omit the Token type from section 7.2.4 as an unnecessary abstraction
+/// level
 pub struct DataHolder {
-  class_id: String,
-  properties: Vec<Property>,
-  binary_properties: Vec<BinaryProperty>,
+  pub class_id: String,
+  pub properties: Vec<Property>,
+  pub binary_properties: Vec<BinaryProperty>,
 }
-
-// Token type from section 7.2.4 of the Security specification (v. 1.1)
-pub type Token = DataHolder;
+impl From<CryptoToken> for DataHolder {
+  fn from(value: CryptoToken) -> Self {
+    value.data_holder
+  }
+}
 
 // ParticipantBuiltinTopicDataSecure from section 7.4.1.6 of the Security
 // specification
@@ -48,7 +53,7 @@ pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
 #[derive(Debug, thiserror::Error)]
 #[error("Security exception: {msg}")]
 pub struct SecurityError {
-  msg: String,
+  pub msg: String,
 }
 
 // DDS Security spec v1.1 Section 7.2.8 EndpointSecurityInfo
@@ -67,7 +72,7 @@ pub struct EndpointSecurityInfo {
 // Clippy complains, because all variant names have the same prefix "Is",
 // but we blame the DDS Security spec for naming.
 pub enum EndpointSecurityAttributesMask {
-  IsValid = 0x8000_0000, // (0x1 << 31) -- only this bit is understood ouside security plugins
+  IsValid = 0x8000_0000, // (0x1 << 31) -- only this bit is understood outside security plugins
 
   // DDS Security specification v1.1
   // Section 8.4.2.8 Definition of the EndpointSecurityAttributesMask
