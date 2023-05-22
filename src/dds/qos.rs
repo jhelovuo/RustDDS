@@ -599,6 +599,12 @@ pub mod policy {
   where
     D: Serialize + Copy + Clone,
   {
+    // TODO: This design is just horribly wrong.
+    // It is true that declared length of Parameter in RTPS
+    // must have length aligned to multiple of 4, and contents tail
+    // padded to match declared length.
+    // But now nothing ensures that declared length given here
+    // matches the serialized length of "qos_param".
     pub fn new(parameter_id: ParameterId, qosparam: D) -> Self {
       match parameter_id {
         ParameterId::PID_DURABILITY => Self {

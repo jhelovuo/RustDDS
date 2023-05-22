@@ -19,7 +19,7 @@ use crate::{
 // implementation.
 struct CountingWrite<W: io::Write> {
   writer: W,
-  bytes_written: u64,
+  bytes_written: usize,
 }
 
 impl<W> CountingWrite<W>
@@ -32,7 +32,7 @@ where
       bytes_written: 0,
     }
   }
-  pub fn count(&self) -> u64 {
+  pub fn count(&self) -> usize {
     self.bytes_written
   }
 }
@@ -44,7 +44,7 @@ where
   fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
     match self.writer.write(buf) {
       Ok(c) => {
-        self.bytes_written += c as u64;
+        self.bytes_written += c;
         Ok(c)
       }
       e => e,
@@ -104,6 +104,16 @@ where
   }
 }
 
+
+pub trait AligningSerializer {
+  fn align(&mut self, alignment:usize) -> Result<()>;
+}
+
+impl<S:AligningSerializer> AligningSerializer for &mut S {
+  fn align(&mut self, alignment:usize) -> Result<()> {
+    (*self).align(alignment)
+  }
+}
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
@@ -132,15 +142,25 @@ where
     }
   }
 
-  fn calculate_padding_need_and_write_padding(&mut self, type_octet_alignment: u8) -> Result<()> {
-    let modulo: u32 = self.writer.count() as u32 % u32::from(type_octet_alignment);
+  fn calculate_padding_need_and_write_padding(&mut self, alignment: usize) -> Result<()> {
+    let modulo = self.writer.count()  % alignment;
     if modulo != 0 {
-      let padding_need: u32 = u32::from(type_octet_alignment) - modulo;
+      let padding_need: usize = alignment - modulo;
       for _x in 0..padding_need {
         self.writer.write_u8(0)?;
       }
     }
     Ok(())
+  }
+} // impl
+
+impl<W,BO> AligningSerializer for CdrSerializer<W,BO> 
+where
+  BO: ByteOrder,
+  W: io::Write,
+{
+  fn align(&mut self, alignment: usize) -> Result<()> {
+    self.calculate_padding_need_and_write_padding(alignment)
   }
 }
 
@@ -467,7 +487,9 @@ where
 
   // Similar to tuple. No need to mark the beginning.
   fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-    self.calculate_padding_need_and_write_padding(4)?;
+    //self.calculate_padding_need_and_write_padding(4)?;
+    // No! There is no "align to 4 before struct"-rule in CDR!
+
     // nothing to be done.
     Ok(self)
   }
