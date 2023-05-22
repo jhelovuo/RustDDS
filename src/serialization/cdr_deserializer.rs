@@ -977,6 +977,13 @@ use byteorder::{BigEndian, LittleEndian};
     Aborted = 6,
   }
 
+  #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+  struct AlignMe {
+    some_bytes: [u8;4],
+    status: i8,
+  }
+
+
   #[test_case(35_u8 ; "u8")]
   #[test_case(35_u16 ; "u16")]
   #[test_case(352323_u32 ; "u32")]
@@ -1025,6 +1032,8 @@ use byteorder::{BigEndian, LittleEndian};
   #[test_case( MixedEnum::B{ value:1234 } ; "MixedEnum::B")]
   #[test_case( MixedEnum::C(42,43) ; "MixedEnum::C")]
   #[test_case( GoalStatusEnum::Accepted ; "GoalStatusEnum::Accepted")]
+  #[test_case( [AlignMe{some_bytes: [1,2,3,4], status:10 } , 
+                AlignMe{some_bytes: [5,6,7,8], status:11 } ]  ; "AlignMeArray")]
   fn cdr_serde_round_trip<T>(input: T)
   where
     T: PartialEq + std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,

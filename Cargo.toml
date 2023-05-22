@@ -50,6 +50,7 @@ log = "0.4"
 log4rs = "1"
 test-case = "2.0.0"
 env_logger = "0.10"
+test-log = "0.2"
 
 # ros_visualizer
 crossterm = "0.26"

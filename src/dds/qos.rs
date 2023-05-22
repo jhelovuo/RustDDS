@@ -582,7 +582,10 @@ pub mod policy {
     pub max_samples_per_instance: i32,
   }
 
-  #[derive(Serialize, Deserialize)]
+
+
+  // This is a serialization helper struct
+  #[derive(Serialize)]
   pub(crate) struct QosData<D>
   where
     D: Serialize,
@@ -629,15 +632,6 @@ pub mod policy {
     }
   }
 
-  /*
-  pub struct EntityFactory {
-    autoenable_created_entities: bool,
-  }
-  */
-  // WriterDataLifecycle
-  // ReaderDataLifeCycle
-
-  // DurabilityService
 }
 
 // Utility for parsing RTPS inlineQoS parameters

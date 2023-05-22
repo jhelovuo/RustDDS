@@ -2,7 +2,9 @@ use std::time::Instant;
 
 use serde::Deserialize;
 use chrono::Utc;
-use log::{error, warn};
+
+#[allow(unused_imports)]
+use log::{error, warn, info, debug, trace};
 
 use crate::{
   dds::{
@@ -352,7 +354,9 @@ impl BuiltinDataDeserializer {
     self
   }
 
-  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) -> Self {
+  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) 
+    -> Self
+  {
     let parameter_id = Self::read_parameter_id(buffer, rep).unwrap();
     let mut parameter_length: usize = Self::read_parameter_length(buffer, rep).unwrap() as usize;
 
@@ -676,10 +680,15 @@ impl BuiltinDataDeserializer {
       ParameterId::PID_LIFESPAN => {
         let lifespan: Result<Lifespan, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        if let Ok(ls) = lifespan {
-          self.lifespan = Some(ls);
-          buffer.drain(..4 + parameter_length);
-          return self;
+        match lifespan {
+          Ok(ls) => {
+            self.lifespan = Some(ls);
+            buffer.drain(..4 + parameter_length);
+            return self
+          }
+          Err(e) => {
+            error!("Lifespan parse failure {:?} from {:x?}", e, &buffer[4..4 + parameter_length]);
+          }  
         }
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
@@ -774,9 +783,12 @@ impl BuiltinDataDeserializer {
         buffer.drain(..4 + parameter_length);
         return self;
       }
-      _ => (), /* TODO: Add some logging. But not much, since there may
-                * be some legitimate cases where we encounter paraneters that we do not
-                * know. */
+      _ => {
+        // This is not very seriaous error, because there may 
+        // be ParameterIds we just do not know.
+        info!("Unknown {:?} length={} in ParameterList: {:x?} ", 
+          parameter_id, parameter_length, &buffer[4..4 + parameter_length]);
+      }
     }
 
     buffer.drain(..4 + parameter_length);
