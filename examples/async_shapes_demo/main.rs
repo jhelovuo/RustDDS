@@ -58,7 +58,7 @@ fn main() {
     .unwrap_or("BLUE".to_owned());
 
   let domain_participant = DomainParticipant::new(*domain_id)
-    .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {:?}", e));
+    .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {e:?}"));
 
   let mut qos_b = QosPolicyBuilder::new()
     .reliability(if matches.get_flag("reliable") {
@@ -69,7 +69,7 @@ fn main() {
       Reliability::BestEffort
     })
     .durability(
-      match matches.get_one::<String>("durability").map(|s| s.as_str()) {
+      match matches.get_one::<String>("durability").map(String::as_str) {
         Some("l") => Durability::TransientLocal,
         Some("t") => Durability::Transient,
         Some("p") => Durability::Persistent,
@@ -90,7 +90,7 @@ fn main() {
     None => None,
     Some(dl) => match dl.parse::<f64>() {
       Ok(d) => Some(Deadline(rustdds::Duration::from_frac_seconds(d))),
-      Err(e) => panic!("Expected numeric value for deadline. {:?}", e),
+      Err(e) => panic!("Expected numeric value for deadline. {e:?}"),
     },
   };
 
@@ -122,12 +122,12 @@ fn main() {
 
   let topic = domain_participant
     .create_topic(
-      topic_name.to_string(),
+      topic_name,
       "ShapeType".to_string(),
       &qos,
       TopicKind::WithKey,
     )
-    .unwrap_or_else(|e| panic!("create_topic failed: {:?}", e));
+    .unwrap_or_else(|e| panic!("create_topic failed: {e:?}"));
   println!(
     "Topic name is {}. Type is {}.",
     topic.name(),
@@ -172,7 +172,7 @@ fn main() {
   };
 
   let mut shape_sample = Shape {
-    color: color.to_string(),
+    color,
     x: 0,
     y: 0,
     shapesize: 21,
@@ -215,16 +215,16 @@ fn main() {
                       sample.y,
                       sample.shapesize,
                     ),
-                    Sample::Dispose(key) => println!("Disposed key {:?}", key),
+                    Sample::Dispose(key) => println!("Disposed key {key:?}"),
                   }
                 Err(e) => {
-                  error!("{:?}",e);
+                  error!("{:?}", e);
                   break;
                 }
               }
             }
             e = datareader_event_stream.select_next_some() => {
-              println!("DataReader event: {:?}", e);
+              println!("DataReader event: {e:?}");
             }
           } // select!
         } // while
@@ -253,11 +253,11 @@ fn main() {
               y_vel = r.2;
 
               datawriter.async_write(shape_sample.clone(), None)
-                .unwrap_or_else(|e| error!("DataWriter write failed: {:?}", e))
+                .unwrap_or_else(|e| error!("DataWriter write failed: {e:?}"))
                 .await;
             }
             e = datawriter_event_stream.select_next_some() => {
-              println!("DataWriter event: {:?}", e);
+              println!("DataWriter event: {e:?}");
             }
           } // select!
         } // while
@@ -290,7 +290,7 @@ fn configure_logging() {
         log4rs::init_config(conf).unwrap();
       }
       // Give up.
-      other_error => panic!("Config problem: {:?}", other_error),
+      other_error => panic!("Config problem: {other_error:?}"),
     }
   });
 }

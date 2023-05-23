@@ -56,7 +56,7 @@ impl UDPSender {
     unicast_socket
       .set_multicast_loop_v4(true)
       .unwrap_or_else(|e| {
-        error!("Cannot set multicast loop on: {:?}", e);
+        error!("Cannot set multicast loop on: {e:?}");
       });
 
     let mut multicast_sockets = Vec::with_capacity(1);
@@ -80,7 +80,7 @@ impl UDPSender {
 
       let mc_socket = std::net::UdpSocket::from(raw_socket);
       mc_socket.set_multicast_loop_v4(true).unwrap_or_else(|e| {
-        error!("Cannot set multicast loop on: {:?}", e);
+        error!("Cannot set multicast loop on: {e:?}");
       });
       multicast_sockets.push(mio_06::net::UdpSocket::from_socket(mc_socket)?);
     } // end for

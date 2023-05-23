@@ -10,7 +10,7 @@ edition = "2021"
 homepage = "https://atostek.com/en/products/rustdds/"  
 repository = "https://github.com/jhelovuo/RustDDS"
 categories = ["network-programming", "science::robotics"] 
-rust-version = "1.57.0"
+rust-version = "1.66.1"
 # the science-robotics category is because of ROS2
 
 [dependencies]

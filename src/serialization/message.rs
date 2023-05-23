@@ -807,7 +807,7 @@ mod tests {
         header: _,
         body: SubmessageBody::Entity(EntitySubmessage::Data(d, _flags)),
       } => d,
-      wtf => panic!("Unexpected message structure {:?}", wtf),
+      wtf => panic!("Unexpected message structure {wtf:?}"),
     };
     let serialized_payload = data_submessage
       .serialized_payload

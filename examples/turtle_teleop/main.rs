@@ -221,7 +221,7 @@ fn ros2_loop(
                     info!("Wrote to ROS2 {:?}", twist);
                   }
                   Err(e) => {
-                    error!("Failed to write to turtle writer. {:?}", e);
+                    error!("Failed to write to turtle writer. {e:?}");
                     ros_node.clear_node();
                     return;
                   }

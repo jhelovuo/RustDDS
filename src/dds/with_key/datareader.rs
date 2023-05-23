@@ -1125,13 +1125,13 @@ mod tests {
 
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
-      notification_sender: notification_sender,
+      notification_sender,
       status_sender,
       topic_name: topic.name(),
-      topic_cache_handle: topic_cache.clone(),
+      topic_cache_handle: topic_cache,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
-      data_reader_waker: data_reader_waker.clone(),
+      data_reader_waker,
       poll_event_sender: notification_event_sender,
     };
 
@@ -1279,13 +1279,13 @@ mod tests {
 
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
-      notification_sender: notification_sender,
+      notification_sender,
       status_sender,
       topic_name: topic.name(),
-      topic_cache_handle: topic_cache.clone(),
+      topic_cache_handle: topic_cache,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
-      data_reader_waker: data_reader_waker.clone(),
+      data_reader_waker,
       poll_event_sender: notification_event_sender,
     };
 

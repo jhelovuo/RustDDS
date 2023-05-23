@@ -215,7 +215,7 @@ where
         Liveliness::Automatic { .. } | Liveliness::ManualByTopic { .. } => (),
         Liveliness::ManualByParticipant { .. } => {
           if let Err(e) = discovery_command.send(DiscoveryCommand::ManualAssertLiveliness) {
-            error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+            error!("Failed to send DiscoveryCommand - Refresh. {e:?}");
           }
         }
       }
@@ -298,7 +298,7 @@ where
             .discovery_command
             .send(DiscoveryCommand::ManualAssertLiveliness)
           {
-            error!("Failed to send DiscoveryCommand - Refresh. {:?}", e);
+            error!("Failed to send DiscoveryCommand - Refresh. {e:?}");
           }
         }
       }
@@ -507,7 +507,7 @@ where
         writer_guid: self.guid(),
       }) {
       Ok(_) => (),
-      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
+      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {e:?}"),
     };
     &self.status_receiver
   }
@@ -607,7 +607,7 @@ where
         writer_guid: self.guid(),
       }) {
       Ok(_) => (),
-      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {:?}", e),
+      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {e:?}"),
     };
 
     Ok(fstatus)
@@ -820,7 +820,7 @@ where
             writer_guid: self.guid(),
             manual_assertion: true, // by definition of this function
           })
-          .unwrap_or_else(|e| error!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e));
+          .unwrap_or_else(|e| error!("assert_liveness - Failed to send DiscoveryCommand. {e:?}"));
       }
       _other => (),
     }

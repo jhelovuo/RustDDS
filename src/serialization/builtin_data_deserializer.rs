@@ -327,7 +327,7 @@ impl BuiltinDataDeserializer {
   pub fn generate_discovered_writer_data(self) -> Result<DiscoveredWriterData, Error> {
     let writer_proxy = self
       .generate_writer_proxy()
-      .map_err(|e| Error::Message(format!("WriterProxy deserialization: {:?}", e)))?;
+      .map_err(|e| Error::Message(format!("WriterProxy deserialization: {e:?}")))?;
     let publication_topic_data = self.generate_publication_topic_data()?;
     Ok(DiscoveredWriterData {
       last_updated: Instant::now(),

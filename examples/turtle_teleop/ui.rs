@@ -210,7 +210,7 @@ impl UiController {
     self
       .command_sender
       .try_send(command)
-      .unwrap_or_else(|e| error!("UI: Failed to send command {:?}", e))
+      .unwrap_or_else(|e| error!("UI: Failed to send command {e:?}"))
   }
 
   fn print_sent_turtle_cmd_vel(&mut self, twist: &Twist) {
