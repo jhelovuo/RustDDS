@@ -80,6 +80,13 @@ impl ParameterId {
   pub const PID_RELATED_SAMPLE_IDENTITY: Self = Self { value: /*0x0083*/ 0x800f };
 
   // DDS Security spec v1.1:
+
+  // Section 7.4.1.4 Extension to RTPS Standard DCPSParticipants Builtin Topic
+  // Table 10
+  pub const PID_IDENTITY_TOKEN : Self = Self { value: 0x1001 };
+  pub const PID_PERMISSIONS_TOKEN : Self = Self { value: 0x1002 };
+
+
   // Section 7.4.1.7 New DCPSPublicationsSecure Builtin Topic
   // Table 14 & 15
   pub const PID_DATA_TAGS: Self = Self { value: 0x1003 };
@@ -87,6 +94,10 @@ impl ParameterId {
   // "Extension to RTPS Standard DCPSPublications and DCPSSubscriptions Builtin
   // Topics" Table 12
   pub const PID_ENDPOINT_SECURITY_INFO: Self = Self { value: 0x1004 };
+
+  // Table 10:
+  pub const PID_PARTICIPANT_SECURITY_INFO : Self = Self { value: 0x1005 };
+
   // Section 7.4.1.6 "New DCPSParticipantSecure Builtin Topic"
   // Table 13
   pub const PID_IDENTITY_STATUS_TOKEN: Self = Self { value: 0x1006 };
@@ -375,7 +386,7 @@ mod tests {
   },
   {
       pid_builtin_endpoint_set,
-      ParameterId::PID_BUILTIN_ENDPOINT_SET,
+      ParameterId::PID_SET,
       le = [0x58, 0x00],
       be = [0x00, 0x58]
   },

@@ -1,5 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 // TODO: PermissionsToken: section 8.4.2.1 of the Security specification (v.
 // 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PermissionsToken {}
 
 impl PermissionsToken {

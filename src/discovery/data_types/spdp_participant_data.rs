@@ -25,6 +25,13 @@ use crate::{
     builtin_data_serializer::BuiltinDataSerializer, error::Result, pl_cdr_deserializer::*,
     pl_cdr_serializer::*,
   },
+  security::{
+    authentication::IdentityToken, 
+    access_control::PermissionsToken, 
+    Property,
+    ParticipantSecurityInfo,
+
+  },
   structure::{
     builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
     duration::Duration,
@@ -34,6 +41,9 @@ use crate::{
   },
 };
 
+// This type is used by Discovery to communicate the presence and properties
+// of DomainParticipants. It is sent over topic "DCPSParticipant".
+// The type is called "ParticipantBuiltinTopicData" in DDS-Security Spec, e.g. Section 7.4.1.4.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpdpDiscoveredParticipantData {
   pub updated_time: chrono::DateTime<Utc>,
@@ -50,6 +60,13 @@ pub struct SpdpDiscoveredParticipantData {
   pub manual_liveliness_count: i32,
   pub builtin_endpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<String>,
+
+  // security
+  pub identity_token: Option<IdentityToken>,
+  pub permissions_token: Option<PermissionsToken>,
+  pub property: Option<Property>,
+  pub security_info: Option<ParticipantSecurityInfo>,
+
 }
 
 impl SpdpDiscoveredParticipantData {
@@ -139,16 +156,16 @@ impl SpdpDiscoveredParticipantData {
       .cloned()
       .unwrap_or_default();
 
-    let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR
-      | BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER
-      | BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR;
+    let builtin_endpoints = BuiltinEndpointSet::PARTICIPANT_ANNOUNCER
+      | BuiltinEndpointSet::PARTICIPANT_DETECTOR
+      | BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER
+      | BuiltinEndpointSet::PUBLICATIONS_DETECTOR
+      | BuiltinEndpointSet::SUBSCRIPTIONS_ANNOUNCER
+      | BuiltinEndpointSet::SUBSCRIPTIONS_DETECTOR
+      | BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_WRITER
+      | BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_READER
+      | BuiltinEndpointSet::TOPICS_ANNOUNCER
+      | BuiltinEndpointSet::TOPICS_DETECTOR;
 
     Self {
       updated_time: Utc::now(),
@@ -165,6 +182,12 @@ impl SpdpDiscoveredParticipantData {
       manual_liveliness_count: 0,
       builtin_endpoint_qos: None,
       entity_name: None,
+
+      // DDS Security
+      identity_token: None, // TODO: Generate(?) one
+      permissions_token: None, // TODO
+      property: None,
+      security_info: None,
     }
   }
 }

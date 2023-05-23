@@ -26,7 +26,7 @@ impl Authentication for AuthenticationBuiltIn {
     *local_indentity_handle = IdentityHandle::MOCK;
     *adjusted_participant_guid = candidate_participant_guid;
 
-    Ok(ValidationOutcome::ValidationOk)
+    Ok(ValidationOutcome::Ok)
   }
 
   // Currently only mocked
@@ -72,7 +72,7 @@ impl Authentication for AuthenticationBuiltIn {
     *remote_identity_handle = IdentityHandle::MOCK;
     *local_auth_request_token = AuthRequestMessageToken::MOCK;
 
-    Ok(ValidationOutcome::ValidationOk)
+    Ok(ValidationOutcome::Ok)
   }
 
   fn begin_handshake_request(

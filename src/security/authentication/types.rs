@@ -1,17 +1,19 @@
+use serde::{Deserialize, Serialize};
+
 // ValidationOutcome is like ValidationResult_t in the the Security
 // specification v.1.1 (section 8.3.2.11.1), but does not contain
 // VALIDATION_FAILED. Failure is handled as an error in the result type
 // ValidationResult
-#[allow(clippy::enum_variant_names)] // We are using variant names from the spec
 pub enum ValidationOutcome {
-  ValidationOk,
-  ValidationPendingRetry,
-  ValidationPendingHandshakeRequest,
-  ValidationPendingHandshakeMessage,
-  ValidationOkFinalMessage,
+  Ok,
+  PendingRetry,
+  PendingHandshakeRequest,
+  PendingHandshakeMessage,
+  OkFinalMessage,
 }
 
 // TODO: IdentityToken: section 8.3.2.1 of the Security specification (v. 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IdentityToken {}
 
 impl IdentityToken {
@@ -21,6 +23,7 @@ impl IdentityToken {
 
 // TODO: IdentityStatusToken: section 8.3.2.2 of the Security specification (v.
 // 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IdentityStatusToken {}
 
 impl IdentityStatusToken {
@@ -29,6 +32,7 @@ impl IdentityStatusToken {
 }
 
 // TODO: IdentityHandle: section 8.3.2.3 of the Security specification (v. 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IdentityHandle {}
 
 impl IdentityHandle {
@@ -37,6 +41,7 @@ impl IdentityHandle {
 }
 
 // TODO: HandshakeHandle: section 8.3.2.4 of the Security specification (v. 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HandshakeHandle {}
 
 impl HandshakeHandle {
@@ -46,6 +51,7 @@ impl HandshakeHandle {
 
 // TODO: AuthRequestMessageToken: section 8.3.2.5 of the Security specification
 // (v. 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthRequestMessageToken {}
 
 impl AuthRequestMessageToken {
@@ -55,6 +61,7 @@ impl AuthRequestMessageToken {
 
 // TODO: HandshakeMessageToken: section 8.3.2.6 of the Security specification
 // (v. 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HandshakeMessageToken {}
 
 impl HandshakeMessageToken {
@@ -64,6 +71,7 @@ impl HandshakeMessageToken {
 
 // TODO: AuthenticatedPeerCredentialToken: section 8.3.2.7 of the Security
 // specification (v. 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthenticatedPeerCredentialToken {}
 
 impl AuthenticatedPeerCredentialToken {
@@ -73,6 +81,7 @@ impl AuthenticatedPeerCredentialToken {
 
 // TODO: SharedSecretHandle: section 8.3.2.8 of the Security specification (v.
 // 1.1)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SharedSecretHandle {}
 
 impl SharedSecretHandle {

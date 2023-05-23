@@ -1,9 +1,10 @@
 use std::time::Instant;
 
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 use chrono::Utc;
+
+#[allow(unused_imports)]
+use log::{error, warn, info, debug, trace};
 
 use crate::{
   dds::{
@@ -32,7 +33,13 @@ use crate::{
     submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
     vendor_id::VendorId,
   },
-  security::EndpointSecurityInfo,
+  security::{
+    authentication::IdentityToken, 
+    access_control::PermissionsToken, 
+    Property,
+    ParticipantSecurityInfo,
+    EndpointSecurityInfo,
+  },
   serialization::error::Error,
   structure::{
     builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
@@ -97,7 +104,11 @@ pub struct BuiltinDataDeserializer {
   pub topic_aliases: Option<Vec<String>>,
 
   // DDS Security
-  pub security_info: Option<EndpointSecurityInfo>,
+  pub endpoint_security_info: Option<EndpointSecurityInfo>,
+  pub participant_security_info: Option<ParticipantSecurityInfo>,
+  pub identity_token: Option<IdentityToken>,
+  pub permissions_token: Option<PermissionsToken>,
+  pub property: Option<Property>,
 }
 
 impl BuiltinDataDeserializer {
@@ -141,6 +152,12 @@ impl BuiltinDataDeserializer {
       manual_liveliness_count: self.manual_liveliness_count.unwrap_or(0),
       builtin_endpoint_qos: self.builtin_endpoint_qos,
       entity_name: self.entity_name.clone(),
+
+      // DDS Security:
+      security_info: self.participant_security_info.clone(),
+      identity_token: self.identity_token.clone(),
+      permissions_token: self.permissions_token.clone(),
+      property: self.property.clone(),
     })
   }
 
@@ -259,7 +276,7 @@ impl BuiltinDataDeserializer {
       topic_name,
       type_name,
       &qos,
-      self.security_info.clone(),
+      self.endpoint_security_info.clone(),
     ))
   }
 
@@ -292,7 +309,7 @@ impl BuiltinDataDeserializer {
       service_instance_name: self.service_instance_name.clone(),
       related_datareader_key: self.related_datareader_key,
       topic_aliases: self.topic_aliases.clone(),
-      security_info: self.security_info.clone(),
+      security_info: self.endpoint_security_info.clone(),
     })
   }
 
@@ -360,7 +377,9 @@ impl BuiltinDataDeserializer {
     self
   }
 
-  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) -> Self {
+  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) 
+    -> Self
+  {
     let parameter_id = Self::read_parameter_id(buffer, rep).unwrap();
     let mut parameter_length: usize = Self::read_parameter_length(buffer, rep).unwrap() as usize;
 
@@ -689,15 +708,11 @@ impl BuiltinDataDeserializer {
           Ok(ls) => {
             self.lifespan = Some(ls);
             buffer.drain(..4 + parameter_length);
-            return self;
+            return self
           }
           Err(e) => {
-            error!(
-              "Lifespan parse failure {:?} from {:x?}",
-              e,
-              &buffer[4..4 + parameter_length]
-            );
-          }
+            error!("Lifespan parse failure {:?} from {:x?}", e, &buffer[4..4 + parameter_length]);
+          }  
         }
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
@@ -787,7 +802,7 @@ impl BuiltinDataDeserializer {
         let sec_info: Result<EndpointSecurityInfo, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
         if let Ok(security_info) = sec_info {
-          self.security_info = Some(security_info);
+          self.endpoint_security_info = Some(security_info);
           buffer.drain(..4 + parameter_length);
           return self;
         }
@@ -803,14 +818,11 @@ impl BuiltinDataDeserializer {
         return self;
       }
       _ => {
-        // This is not very seriaous error, because there may
+        // This is not a serious error, because there may 
         // be ParameterIds we just do not know.
-        info!(
-          "Unknown {:?} length={} in ParameterList: {:x?} ",
-          parameter_id,
-          parameter_length,
-          &buffer[4..4 + parameter_length]
-        );
+        info!("Unknown {:?} length={} in ParameterList.", 
+          parameter_id, parameter_length);
+        debug!("Parameter data was {:x?}",  &buffer[4..4 + parameter_length] );
       }
     }
 
