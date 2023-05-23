@@ -129,7 +129,7 @@ impl<C: Context> Writable<C> for Data {
     //This version of the protocol (2.3) should set all the bits in the extraFlags
     // to zero
     writer.write_u16(0)?;
-    //The octetsToInlineQos field contains the number of octets starting from the
+    // The octetsToInlineQos field contains the number of octets starting from the
     // first octet immediately following this field until the first octet of the
     // inlineQos SubmessageElement. If the inlineQos SubmessageElement is not
     // present (i.e., the InlineQosFlag is not set), then octetsToInlineQos contains

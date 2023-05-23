@@ -7,8 +7,6 @@ pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Deserialize, Serialize};
 
-use super::parameter_id::ParameterId;
-
 mod kind {
   pub const INVALID: i32 = -1;
   pub const RESERVED: i32 = 0;
@@ -78,23 +76,6 @@ impl<C: Context> Writable<C> for Locator {
   }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Data {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  locator: Locator,
-}
-
-impl Data {
-  pub fn from(locator: Locator, parameter_id: ParameterId) -> Self {
-    Self {
-      parameter_id,
-      parameter_length: 24,
-      locator,
-    }
-  }
-}
-
 impl From<repr::Locator> for Locator {
   fn from(repr: repr::Locator) -> Self {
     match repr.kind {
@@ -158,7 +139,7 @@ impl From<Locator> for repr::Locator {
   }
 }
 
-mod repr {
+pub(crate) mod repr {
   use serde::{Deserialize, Serialize};
   use speedy::{Readable, Writable};
 

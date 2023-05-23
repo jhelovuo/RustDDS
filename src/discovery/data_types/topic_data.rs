@@ -1,7 +1,10 @@
 use std::time::Instant;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
-use serde::{ser::Error, Deserialize, Serialize};
+use speedy::{Readable, Writable};
 use chrono::{DateTime, Utc};
 use cdr_encoding_size::*;
 
@@ -25,25 +28,51 @@ use crate::{
     with_key::datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
-  messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+  messages::submessages::submessage_elements::{
+    parameter::Parameter, parameter_list::ParameterList,
+    serialized_payload::RepresentationIdentifier,
+  },
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
   serialization::{
-    builtin_data_deserializer::BuiltinDataDeserializer,
-    builtin_data_serializer::BuiltinDataSerializer, error as ser,
-    pl_cdr_deserializer::PlCdrDeserialize, pl_cdr_serializer::PlCdrSerialize,
+    error as ser, pl_cdr_deserializer::PlCdrDeserialize, pl_cdr_serializer::PlCdrSerialize,
+    speedy_pl_cdr_helpers::*,
   },
   structure::{
     entity::RTPSEntity,
     guid::{GuidPrefix, GUID},
+    locator,
     locator::Locator,
+    parameter_id::ParameterId,
   },
 };
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
 
+macro_rules! fake_implement_serialize_and_deserialize {
+  ($t:ty) => {
+    impl Serialize for $t {
+      fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+      where
+        S: Serializer,
+      {
+        unimplemented!()
+      }
+    }
+    impl<'de> Deserialize<'de> for $t {
+      fn deserialize<D>(_deserializer: D) -> Result<$t, D::Error>
+      where
+        D: Deserializer<'de>,
+      {
+        unimplemented!()
+      }
+    }
+  };
+}
+
 // We need a wrapper to distinguish between Participant and Endpoint GUIDs.
 // They need to be distinguished, because the PL_CDR serialization is different:
 // ParameterId is different.
+
 #[allow(non_camel_case_types)]
 #[derive(
   PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Serialize, Deserialize, CdrEncodingSize, Hash,
@@ -57,21 +86,36 @@ impl PlCdrDeserialize for Endpoint_GUID {
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
   ) -> ser::Result<Self> {
-    BuiltinDataDeserializer::new()
-      .parse_data(input_bytes, encoding)
-      .generate_endpoint_guid()
-      .map_err(|e| {
-        ser::Error::custom(format!(
-          "deserialize Endpoint_GUID - {:?} - data was {:?}",
-          e, &input_bytes,
-        ))
-      })
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+
+    let guid: GUID = get_first_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_ENDPOINT_GUID,
+      "Endpoint GUID",
+    )?;
+
+    Ok(Endpoint_GUID(guid))
   }
 }
 
 impl PlCdrSerialize for Endpoint_GUID {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
-    BuiltinDataSerializer::from_endpoint_guid(*self).serialize_pl_cdr_to_Bytes(encoding)
+    let mut pl = ParameterList::new();
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    emit!(PID_ENDPOINT_GUID, &self.0, GUID);
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
@@ -91,12 +135,13 @@ pub struct ReaderProxy {
 impl ReaderProxy {
   pub fn new(
     guid: GUID,
+    expects_inline_qos: bool,
     unicast_locator_list: Vec<Locator>,
     multicast_locator_list: Vec<Locator>,
   ) -> Self {
     Self {
       remote_reader_guid: guid,
-      expects_inline_qos: false,
+      expects_inline_qos,
       unicast_locator_list,
       multicast_locator_list,
     }
@@ -120,7 +165,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
 
 /// DDS SubscriptionBuiltinTopicData
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubscriptionBuiltinTopicData {
   key: GUID,
   participant_key: Option<GUID>,
@@ -162,6 +207,7 @@ impl SubscriptionBuiltinTopicData {
       participant_key,
       topic_name,
       type_name,
+
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -172,9 +218,10 @@ impl SubscriptionBuiltinTopicData {
       time_based_filter: None,
       presentation: None,
       lifespan: None,
-      service_instance_name: None,
-      related_datawriter_key: None,
-      topic_aliases: None,
+
+      service_instance_name: None,  // Note: Not implemented
+      related_datawriter_key: None, // Note: Not implemented
+      topic_aliases: None,          // Note: Not implemented
     };
 
     sbtd.set_qos(qos);
@@ -208,6 +255,8 @@ impl SubscriptionBuiltinTopicData {
     self.time_based_filter = qos.time_based_filter;
     self.presentation = qos.presentation;
     self.lifespan = qos.lifespan;
+    // history does not exist
+    // resource_limits does not exist
   }
 
   pub fn qos(&self) -> QosPolicies {
@@ -243,19 +292,21 @@ impl SubscriptionBuiltinTopicData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
   pub content_filter: Option<ContentFilterProperty>,
 }
 
+fake_implement_serialize_and_deserialize! {DiscoveredReaderData}
+
 impl DiscoveredReaderData {
   // This is for generating test data only
   #[cfg(test)]
   pub fn default(topic_name: String, type_name: String) -> Self {
     let rguid = GUID::dummy_test_guid(EntityKind::READER_WITH_KEY_BUILT_IN);
-    let reader_proxy = ReaderProxy::new(rguid, vec![], vec![]);
+    let reader_proxy = ReaderProxy::new(rguid, false, vec![], vec![]);
     let subscription_topic_data = SubscriptionBuiltinTopicData::new(
       rguid,
       None,
@@ -283,21 +334,178 @@ impl PlCdrDeserialize for DiscoveredReaderData {
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
   ) -> ser::Result<Self> {
-    BuiltinDataDeserializer::new()
-      .parse_data(input_bytes, encoding)
-      .generate_discovered_reader_data()
-      .map_err(|e| {
-        ser::Error::custom(format!(
-          "DiscoveredReaderData::deserialize - {:?} - data was {:?}",
-          e, &input_bytes,
-        ))
-      })
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+
+    let guid: GUID = get_first_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_ENDPOINT_GUID,
+      "Endpoint GUID",
+    )?;
+    let participant_guid: Option<GUID> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PARTICIPANT_GUID,
+      "Participant GUID",
+    )?;
+
+    let expects_inline_qos : bool = // This one has default value false
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_EXPECTS_INLINE_QOS, "Expects inline Qos")?
+      .unwrap_or(false);
+
+    let unicast_locator_list: Vec<Locator> = get_all_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
+      "unicast locators",
+    )?;
+    let multicast_locator_list: Vec<Locator> = get_all_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
+      "multicast locators",
+    )?;
+
+    let topic_name : String = // Note the serialized type is StringWithNul
+      get_first_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_TOPIC_NAME, "topic name")?
+      .into();
+    let type_name : String = // Note the serialized type is StringWithNul
+      get_first_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_TYPE_NAME, "type name")?
+      .into();
+
+    let content_filter : Option<ContentFilterProperty> =
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_CONTENT_FILTER_PROPERTY, "content filter" )?;
+
+    let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
+
+    Ok(DiscoveredReaderData {
+      reader_proxy: ReaderProxy::new(
+        guid,
+        expects_inline_qos,
+        unicast_locator_list,
+        multicast_locator_list,
+      ),
+      subscription_topic_data: SubscriptionBuiltinTopicData::new(
+        guid,
+        participant_guid,
+        topic_name,
+        type_name,
+        &qos,
+      ),
+      content_filter,
+    })
   }
 }
 
 impl PlCdrSerialize for DiscoveredReaderData {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
-    BuiltinDataSerializer::from_discovered_reader_data(self).serialize_pl_cdr_to_Bytes(encoding)
+    let DiscoveredReaderData {
+      reader_proxy:
+        ReaderProxy {
+          remote_reader_guid,
+          expects_inline_qos,
+          unicast_locator_list,
+          multicast_locator_list,
+        },
+      subscription_topic_data:
+        sbtd @ SubscriptionBuiltinTopicData {
+          key,
+          participant_key,
+          topic_name,
+          type_name,
+
+          // QoS handled separately
+          durability: _,
+          deadline: _,
+          latency_budget: _,
+          liveliness: _,
+          reliability: _,
+          ownership: _,
+          destination_order: _,
+          time_based_filter: _,
+          presentation: _,
+          lifespan: _,
+
+          service_instance_name,
+          related_datawriter_key,
+          topic_aliases,
+        },
+      content_filter, 
+    } = self;
+
+    let mut pl = ParameterList::new();
+    let qos = sbtd.qos();
+
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    macro_rules! emit_option {
+      ($pid:ident, $member:expr, $type:ty) => {
+        if let Some(m) = $member {
+          emit!($pid, m, $type)
+        }
+      };
+    }
+
+    // ReaderProxy
+    emit!(PID_EXPECTS_INLINE_QOS, expects_inline_qos, bool);
+
+    // Note that this GUID can be in two places
+    emit!(PID_ENDPOINT_GUID, remote_reader_guid, GUID);
+    if remote_reader_guid != key {
+      // sanity check
+      warn!("DiscoveredReaderData: Inconsistent GUID: {remote_reader_guid:?} vs {key:?}");
+    }
+
+    for loc in unicast_locator_list {
+      emit!(
+        PID_DEFAULT_UNICAST_LOCATOR,
+        &locator::repr::Locator::from(*loc),
+        locator::repr::Locator
+      );
+    }
+    for loc in multicast_locator_list {
+      emit!(
+        PID_DEFAULT_MULTICAST_LOCATOR,
+        &locator::repr::Locator::from(*loc),
+        locator::repr::Locator
+      );
+    }
+
+    // SubscriptionBuiltinTopicData
+    emit_option!(PID_PARTICIPANT_GUID, participant_key, GUID);
+    emit!(PID_TOPIC_NAME, &topic_name.clone().into(), StringWithNul);
+    emit!(PID_TYPE_NAME, &type_name.clone().into(), StringWithNul);
+    pl.parameters.append(&mut qos.to_parameter_list(ctx)?);
+    emit_option!(
+      PID_SERVICE_INSTANCE_NAME,
+      &service_instance_name.clone().map(|e| e.into()),
+      StringWithNul
+    );
+    emit_option!(PID_RELATED_ENTITY_GUID, related_datawriter_key, GUID);
+    // TODO: Shoudl topic alaes be on paramter with vector or multiple
+    // parameters with one alias name each?
+    for topic_alias in topic_aliases.as_ref().unwrap_or(&Vec::new()) {
+      emit!(
+        PID_TOPIC_ALIASES,
+        &topic_alias.clone().into(),
+        StringWithNul
+      );
+    }
+    emit_option!(PID_CONTENT_FILTER_PROPERTY, content_filter, ContentFilterProperty);
+
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
@@ -306,7 +514,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WriterProxy {
   pub remote_writer_guid: GUID,
   pub unicast_locator_list: Vec<Locator>,
@@ -345,7 +553,7 @@ impl From<RtpsWriterProxy> for WriterProxy {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PublicationBuiltinTopicData {
   pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
@@ -370,10 +578,15 @@ pub struct PublicationBuiltinTopicData {
 }
 
 impl PublicationBuiltinTopicData {
-  pub fn new(guid: GUID, participant_guid: GUID, topic_name: String, type_name: String) -> Self {
+  pub fn new(
+    guid: GUID,
+    participant_guid: Option<GUID>,
+    topic_name: String,
+    type_name: String,
+  ) -> Self {
     Self {
       key: guid,
-      participant_key: Some(participant_guid),
+      participant_key: participant_guid,
       topic_name,
       type_name,
       durability: None,
@@ -387,9 +600,9 @@ impl PublicationBuiltinTopicData {
       destination_order: None,
       presentation: None,
 
-      service_instance_name: None,
-      related_datareader_key: None,
-      topic_aliases: None,
+      service_instance_name: None,  // TODO: These are not supported/used
+      related_datareader_key: None, // TODO
+      topic_aliases: None,          // TODO
     }
   }
 
@@ -441,14 +654,15 @@ impl PublicationBuiltinTopicData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DiscoveredWriterData {
-  #[serde(skip, default = "Instant::now")]
   pub last_updated: Instant, // last_updated is not serialized
 
   pub writer_proxy: WriterProxy,
   pub publication_topic_data: PublicationBuiltinTopicData,
 }
+
+fake_implement_serialize_and_deserialize! {DiscoveredWriterData}
 
 impl Keyed for DiscoveredWriterData {
   type K = Endpoint_GUID;
@@ -466,11 +680,11 @@ impl DiscoveredWriterData {
   ) -> Self {
     let unicast_port = user_traffic_unicast_port(dp.domain_id(), dp.participant_id());
     let unicast_addresses = get_local_unicast_locators(unicast_port);
-
+    // TODO: Why empty vector below? No multicast?
     let writer_proxy = WriterProxy::new(writer.guid(), vec![], unicast_addresses);
     let mut publication_topic_data = PublicationBuiltinTopicData::new(
       writer.guid(),
-      dp.guid(),
+      Some(dp.guid()),
       topic.name(),
       topic.get_type().name().to_string(),
     );
@@ -490,21 +704,174 @@ impl PlCdrDeserialize for DiscoveredWriterData {
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
   ) -> ser::Result<Self> {
-    BuiltinDataDeserializer::new()
-      .parse_data(input_bytes, encoding)
-      .generate_discovered_writer_data()
-      .map_err(|e| {
-        ser::Error::custom(format!(
-          "DiscoveredWriterData::deserialize - {:?} - data was {:?}",
-          e, &input_bytes,
-        ))
-      })
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+
+    let guid: GUID = get_first_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_ENDPOINT_GUID,
+      "Endpoint GUID",
+    )?;
+    let participant_guid: Option<GUID> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PARTICIPANT_GUID,
+      "Participant GUID",
+    )?;
+
+    let unicast_locator_list: Vec<Locator> = get_all_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
+      "unicast locators",
+    )?;
+    let multicast_locator_list: Vec<Locator> = get_all_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
+      "multicast locators",
+    )?;
+
+    let topic_name : String = // Note the serialized type is StringWithNul
+      get_first_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_TOPIC_NAME, "topic name")?
+      .into();
+    let type_name : String = // Note the serialized type is StringWithNul
+      get_first_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_TYPE_NAME, "type name")?
+      .into();
+
+    let data_max_size_serialized: Option<u32> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED,
+      "Max size serialized",
+    )?;
+
+    let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
+
+    let mut publication_topic_data =
+      PublicationBuiltinTopicData::new(guid, participant_guid, topic_name, type_name);
+    publication_topic_data.set_qos(&qos);
+
+    Ok(DiscoveredWriterData {
+      last_updated: Instant::now(),
+      writer_proxy: WriterProxy {
+        remote_writer_guid: guid,
+        unicast_locator_list,
+        multicast_locator_list,
+        data_max_size_serialized,
+      },
+      publication_topic_data,
+    })
   }
 }
 
 impl PlCdrSerialize for DiscoveredWriterData {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
-    BuiltinDataSerializer::from_discovered_writer_data(self).serialize_pl_cdr_to_Bytes(encoding)
+    let DiscoveredWriterData {
+      last_updated: _, // This is never serialized
+      writer_proxy:
+        WriterProxy {
+          remote_writer_guid,
+          unicast_locator_list,
+          multicast_locator_list,
+          data_max_size_serialized,
+        },
+      publication_topic_data:
+        pbtd @ PublicationBuiltinTopicData {
+          key,
+          participant_key,
+          topic_name,
+          type_name,
+
+          // QoS handled separately
+          durability: _,
+          deadline: _,
+          latency_budget: _,
+          liveliness: _,
+          reliability: _,
+          ownership: _,
+          destination_order: _,
+          time_based_filter: _,
+          presentation: _,
+          lifespan: _,
+
+          service_instance_name,
+          related_datareader_key,
+          topic_aliases,
+        },
+    } = self;
+
+    let mut pl = ParameterList::new();
+    let qos = pbtd.qos();
+
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    macro_rules! emit_option {
+      ($pid:ident, $member:expr, $type:ty) => {
+        if let Some(m) = $member {
+          emit!($pid, m, $type)
+        }
+      };
+    }
+
+    // ReaderProxy
+    emit_option!(PID_TYPE_MAX_SIZE_SERIALIZED, data_max_size_serialized, u32);
+
+    // Note that this GUID can be in two places
+    emit!(PID_ENDPOINT_GUID, remote_writer_guid, GUID);
+    if remote_writer_guid != key {
+      // sanity check
+      warn!("DiscoveredWriterData: Inconsistent GUID: {remote_writer_guid:?} vs {key:?}");
+    }
+
+    for loc in unicast_locator_list {
+      emit!(
+        PID_DEFAULT_UNICAST_LOCATOR,
+        &locator::repr::Locator::from(*loc),
+        locator::repr::Locator
+      );
+    }
+    for loc in multicast_locator_list {
+      emit!(
+        PID_DEFAULT_MULTICAST_LOCATOR,
+        &locator::repr::Locator::from(*loc),
+        locator::repr::Locator
+      );
+    }
+
+    // SubscriptionBuiltinTopicData
+    emit_option!(PID_PARTICIPANT_GUID, participant_key, GUID);
+    emit!(PID_TOPIC_NAME, &topic_name.clone().into(), StringWithNul);
+    emit!(PID_TYPE_NAME, &type_name.clone().into(), StringWithNul);
+    pl.parameters.append(&mut qos.to_parameter_list(ctx)?);
+    emit_option!(
+      PID_SERVICE_INSTANCE_NAME,
+      &service_instance_name.clone().map(|e| e.into()),
+      StringWithNul
+    );
+    emit_option!(PID_RELATED_ENTITY_GUID, related_datareader_key, GUID);
+    // TODO: Shoudl topic alaes be on paramter with vector or multiple
+    // parameters with one alias name each?
+    for topic_alias in topic_aliases.as_ref().unwrap_or(&Vec::new()) {
+      emit!(
+        PID_TOPIC_ALIASES,
+        &topic_alias.clone().into(),
+        StringWithNul
+      );
+    }
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
@@ -513,7 +880,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TopicBuiltinTopicData {
   pub key: Option<GUID>,
   pub name: String,
@@ -579,11 +946,13 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
 /// Practically this is gotten from
 /// [DomainParticipant](../participant/struct.DomainParticipant.html) during
 /// runtime Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DiscoveredTopicData {
   updated_time: DateTime<Utc>,
   pub topic_data: TopicBuiltinTopicData,
 }
+
+fake_implement_serialize_and_deserialize! {DiscoveredTopicData}
 
 impl DiscoveredTopicData {
   pub fn new(updated_time: DateTime<Utc>, topic_data: TopicBuiltinTopicData) -> Self {
@@ -606,8 +975,6 @@ impl Keyed for DiscoveredTopicData {
   type K = Endpoint_GUID;
 
   fn key(&self) -> Self::K {
-    // topic should always have a name, if this crashes the problem is in the
-    // overall logic (or message parsing)
     Endpoint_GUID(match self.topic_data.key {
       Some(k) => k,
       None => GUID::GUID_UNKNOWN,
@@ -620,22 +987,97 @@ impl PlCdrDeserialize for DiscoveredTopicData {
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
   ) -> ser::Result<Self> {
-    BuiltinDataDeserializer::new()
-      .parse_data(input_bytes, encoding)
-      .generate_topic_data()
-      .map_err(|e| {
-        ser::Error::custom(format!(
-          "DiscoveredTopicData::deserialize - {:?} - data was {:?}",
-          e, &input_bytes,
-        ))
-      })
-      .map(|td| Self::new(Utc::now(), td))
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+
+    let key: Option<GUID> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_ENDPOINT_GUID,
+      "Endpoint GUID",
+    )?;
+
+    let name : String = // Note the serialized type is StringWithNul
+      get_first_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_TOPIC_NAME, "topic name")?
+      .into();
+    let type_name : String = // Note the serialized type is StringWithNul
+      get_first_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_TYPE_NAME, "type name")?
+      .into();
+
+    let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
+
+    let topic_data = TopicBuiltinTopicData::new(key, name, type_name, &qos);
+
+    Ok(DiscoveredTopicData {
+      updated_time: Utc::now(),
+      topic_data,
+    })
   }
 }
 
 impl PlCdrSerialize for DiscoveredTopicData {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
-    BuiltinDataSerializer::from_topic_data(&self.topic_data).serialize_pl_cdr_to_Bytes(encoding)
+    let DiscoveredTopicData {
+      updated_time: _, // This is never serialized
+      topic_data:
+        td @ TopicBuiltinTopicData {
+          key,
+          name,
+          type_name,
+
+          // QoS handled separately
+          durability: _,
+          deadline: _,
+          history: _,
+          latency_budget: _,
+          liveliness: _,
+          reliability: _,
+          ownership: _,
+          destination_order: _,
+          presentation: _,
+          lifespan: _,
+          resource_limits: _,
+        },
+    } = self;
+
+    let mut pl = ParameterList::new();
+    let qos = td.qos();
+
+    let ctx = match encoding {
+      RepresentationIdentifier::PL_CDR_LE => speedy::Endianness::LittleEndian,
+      RepresentationIdentifier::PL_CDR_BE => speedy::Endianness::BigEndian,
+      _ => {
+        return Err(crate::serialization::error::Error::Message(
+          "DiscoveredReaderData: Unknown encoding, expected PL_CDR".to_string(),
+        ))
+      }
+    };
+
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    macro_rules! emit_option {
+      ($pid:ident, $member:expr, $type:ty) => {
+        if let Some(m) = $member {
+          emit!($pid, m, $type)
+        }
+      };
+    }
+
+    // Also Topics have GUIDs, but apparently not mandatory?
+    emit_option!(PID_ENDPOINT_GUID, key, GUID);
+    emit!(PID_TOPIC_NAME, &name.clone().into(), StringWithNul);
+    emit!(PID_TYPE_NAME, &type_name.clone().into(), StringWithNul);
+    pl.parameters.append(&mut qos.to_parameter_list(ctx)?);
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 

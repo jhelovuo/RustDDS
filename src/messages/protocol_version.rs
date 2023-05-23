@@ -1,10 +1,8 @@
 use speedy::{Readable, Writable};
-use serde::{Deserialize, Serialize};
 
-use crate::structure::parameter_id::ParameterId;
 
 #[derive(
-  Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Serialize, Deserialize, Clone, Copy,
+  Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Clone, Copy,
 )]
 pub struct ProtocolVersion {
   pub major: u8,
@@ -32,23 +30,6 @@ impl ProtocolVersion {
 impl Default for ProtocolVersion {
   fn default() -> Self {
     Self::THIS_IMPLEMENTATION
-  }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ProtocolVersionData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  protocol_version: ProtocolVersion,
-}
-
-impl ProtocolVersionData {
-  pub fn from(protocol_version: ProtocolVersion) -> Self {
-    Self {
-      parameter_id: ParameterId::PID_PROTOCOL_VERSION,
-      parameter_length: 4,
-      protocol_version,
-    }
   }
 }
 

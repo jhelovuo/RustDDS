@@ -140,6 +140,8 @@ pub(crate) fn spdp_publication_msg() -> Message {
 }
 
 pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
+  use crate::serialization::pl_cdr_serializer::PlCdrSerialize;
+
   let mut tdata: Message = spdp_participant_msg();
   let mut data;
   for submsg in &mut tdata.submessages {
@@ -160,10 +162,12 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
           participant_data.default_multicast_locators.clear();
 
           let datalen = d.serialized_payload.as_ref().unwrap().value.len() as u16;
-          data = Bytes::from(
-            to_bytes::<SpdpDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
-              .unwrap(),
-          );
+          data = participant_data.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+            .unwrap();
+          // data = Bytes::from(
+          //   to_bytes::<SpdpDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
+          //     .unwrap(),
+          // );
           d.serialized_payload.as_mut().unwrap().value = data.clone();
           submsglen =
             submsglen + d.serialized_payload.as_ref().unwrap().value.len() as u16 - datalen;
@@ -367,6 +371,57 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
   writer_id: EntityId,
 ) -> Message {
   let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
+
+  let mut rtps_message = Message::default();
+  let guid = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
+  let rtps_message_header = Header::new(guid.prefix);
+  rtps_message.set_header(rtps_message_header);
+
+  let serialized_payload = SerializedPayload {
+    representation_identifier: RepresentationIdentifier::PL_CDR_LE,
+    representation_options: [0; 2],
+    value: tdata,
+  };
+  let data_message = Data {
+    reader_id,
+    writer_id,
+    writer_sn: SequenceNumber::default(),
+    inline_qos: None,
+    serialized_payload: Some(serialized_payload),
+  };
+
+  let data_size = data_message
+    .write_to_vec_with_ctx(Endianness::LittleEndian)
+    .unwrap()
+    .len();
+
+  let sub_flags = BitFlags::<DATA_Flags>::from_endianness(Endianness::LittleEndian)
+    | BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
+
+  let submessage_header: SubmessageHeader = SubmessageHeader {
+    kind: SubmessageKind::DATA,
+    flags: sub_flags.bits(),
+    content_length: data_size as u16,
+  };
+
+  let submessage: SubMessage = SubMessage {
+    header: submessage_header,
+    body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, sub_flags)),
+  };
+  rtps_message.add_submessage(submessage);
+
+  rtps_message
+}
+
+use crate::serialization::pl_cdr_serializer::PlCdrSerialize;
+
+pub(crate) fn create_cdr_pl_rtps_data_message<D: PlCdrSerialize>(
+  data: D,
+  reader_id: EntityId,
+  writer_id: EntityId,
+) -> Message {
+
+  let tdata = data.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE).unwrap();
 
   let mut rtps_message = Message::default();
   let guid = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);

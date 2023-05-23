@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+
+use bytes::Bytes;
 use speedy::{Context, Readable, Writable, Writer};
 
 use crate::{
@@ -30,6 +33,22 @@ impl ParameterList {
       .map(|p| p.len_serialized())
       .sum::<usize>()
       + SENTINEL.len_serialized()
+  }
+
+  pub fn push(&mut self, p: Parameter) {
+    self.parameters.push(p);
+  }
+
+  pub fn serialize_to_bytes(&self, endianness: speedy::Endianness) -> Result<Bytes, speedy::Error> {
+    let b = self.write_to_vec_with_ctx(endianness)?;
+    Ok(Bytes::from(b))
+  }
+
+  pub fn to_map(&self) -> BTreeMap<ParameterId, Vec<&Parameter>> {
+    self.parameters.iter().fold(BTreeMap::new(), |mut m, p| {
+      m.entry(p.parameter_id).or_insert(Vec::new()).push(p);
+      m
+    })
   }
 }
 

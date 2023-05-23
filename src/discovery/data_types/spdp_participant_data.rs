@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 use mio_06::Token;
-use serde::{de::Error, Deserialize, Serialize};
+use speedy::{Readable, Writable};
 use chrono::Utc;
 use bytes::Bytes;
 use cdr_encoding_size::CdrEncodingSize;
@@ -16,25 +19,28 @@ use crate::{
   },
   messages::{
     protocol_version::ProtocolVersion,
-    submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+    submessages::submessage_elements::{
+      parameter::Parameter, parameter_list::ParameterList,
+      serialized_payload::RepresentationIdentifier,
+    },
     vendor_id::VendorId,
   },
   network::constant::*,
   serialization::{
-    builtin_data_deserializer::BuiltinDataDeserializer,
-    builtin_data_serializer::BuiltinDataSerializer, error::Result, pl_cdr_deserializer::*,
-    pl_cdr_serializer::*,
+    error::Result, pl_cdr_deserializer::*, pl_cdr_serializer::*, speedy_pl_cdr_helpers::*,
   },
   structure::{
     builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
+    locator,
     locator::Locator,
+    parameter_id::ParameterId,
   },
-};
+}; // Helper functions and types
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpdpDiscoveredParticipantData {
   pub updated_time: chrono::DateTime<Utc>,
   pub protocol_version: ProtocolVersion,
@@ -169,23 +175,216 @@ impl SpdpDiscoveredParticipantData {
   }
 }
 
+// fake implemenatations. Real serialization is done using PlCdrSerialize
+impl Serialize for SpdpDiscoveredParticipantData {
+  fn serialize<S>(&self, _serializer: S) -> std::result::Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    unimplemented!()
+  }
+}
+impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantData {
+  fn deserialize<D>(
+    _deserializer: D,
+  ) -> std::result::Result<SpdpDiscoveredParticipantData, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    unimplemented!()
+  }
+}
+
 impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
   fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<Self> {
-    BuiltinDataDeserializer::new()
-      .parse_data(input_bytes, encoding)
-      .generate_spdp_participant_data()
-      .map_err(|e| {
-        Error::custom(format!(
-          "SpdpDiscoveredParticipantData::deserialize - {:?} - data was {:?}",
-          e, &input_bytes,
-        ))
-      })
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+    let protocol_version: ProtocolVersion = get_first_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PROTOCOL_VERSION,
+      "Protocol Version",
+    )?;
+    let vendor_id: VendorId =
+      get_first_from_pl_map(&pl_map, ctx, ParameterId::PID_VENDOR_ID, "Vendor Id")?;
+    let expects_inline_qos : bool = // This one has default value false
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_EXPECTS_INLINE_QOS, "Expects inline Qos")?
+      .unwrap_or(false);
+    let participant_guid: GUID = get_first_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PARTICIPANT_GUID,
+      "Participant GUID",
+    )?;
+
+    let metatraffic_unicast_locators: Vec<Locator> = get_all_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR,
+      "Metatraffic unicast locators",
+    )?;
+    let metatraffic_multicast_locators: Vec<Locator> = get_all_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR,
+      "Metatraffic multicast locators",
+    )?;
+    let default_unicast_locators: Vec<Locator> = get_all_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
+      "Default unicast locators",
+    )?;
+    let default_multicast_locators: Vec<Locator> = get_all_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
+      "Default multicast locators",
+    )?;
+
+    let lease_duration: Option<Duration> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PARTICIPANT_LEASE_DURATION,
+      "participant lease duration",
+    )?;
+    let manual_liveliness_count : i32 =  // Default value is 0. TODO: What is the meaning of this?
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT, "Manual liveness count")?
+      .unwrap_or(0);
+    let available_builtin_endpoints: BuiltinEndpointSet = get_first_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_BUILTIN_ENDPOINT_SET,
+      "Available builtin endpoints",
+    )?;
+    let builtin_endpoint_qos: Option<BuiltinEndpointQos> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_BUILTIN_ENDPOINT_QOS,
+      "Builtin Endpoint Qos",
+    )?;
+
+    let entity_name : Option<String> = // Note the serialized type is StringWithNul
+      get_option_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_ENTITY_NAME, "entity name")?
+      .map( String::from );
+
+    Ok(Self {
+      updated_time: Utc::now(),
+      protocol_version,
+      vendor_id,
+      expects_inline_qos,
+      participant_guid,
+      metatraffic_unicast_locators,
+      metatraffic_multicast_locators,
+      default_unicast_locators,
+      default_multicast_locators,
+      available_builtin_endpoints,
+      lease_duration,
+      manual_liveliness_count,
+      builtin_endpoint_qos,
+      entity_name,
+    })
   }
 }
 
 impl PlCdrSerialize for SpdpDiscoveredParticipantData {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes> {
-    BuiltinDataSerializer::from_participant_data(self).serialize_pl_cdr_to_Bytes(encoding)
+    // This "unnecessary" binding is to trigger a warning if we forget to
+    // serialize any fields.
+    let Self {
+      updated_time: _, // except this field. It is not serialized.
+      protocol_version,
+      vendor_id,
+      expects_inline_qos,
+      participant_guid,
+      metatraffic_unicast_locators,
+      metatraffic_multicast_locators,
+      default_unicast_locators,
+      default_multicast_locators,
+      available_builtin_endpoints,
+      lease_duration,
+      manual_liveliness_count,
+      builtin_endpoint_qos,
+      entity_name,
+    } = self;
+
+    let mut pl = ParameterList::new();
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    macro_rules! emit_option {
+      ($pid:ident, $member:expr, $type:ty) => {
+        if let Some(m) = $member {
+          emit!($pid, m, $type)
+        }
+      };
+    }
+
+    emit!(PID_PROTOCOL_VERSION, protocol_version, ProtocolVersion);
+    emit!(PID_VENDOR_ID, vendor_id, VendorId);
+    emit!(PID_EXPECTS_INLINE_QOS, expects_inline_qos, bool);
+    emit!(PID_PARTICIPANT_GUID, participant_guid, GUID);
+    for loc in metatraffic_unicast_locators {
+      emit!(
+        PID_METATRAFFIC_UNICAST_LOCATOR,
+        &locator::repr::Locator::from(*loc),
+        locator::repr::Locator
+      );
+    }
+    for loc in metatraffic_multicast_locators {
+      emit!(
+        PID_METATRAFFIC_MULTICAST_LOCATOR,
+        &locator::repr::Locator::from(*loc),
+        locator::repr::Locator
+      );
+    }
+    for loc in default_unicast_locators {
+      emit!(
+        PID_DEFAULT_UNICAST_LOCATOR,
+        &locator::repr::Locator::from(*loc),
+        locator::repr::Locator
+      );
+    }
+    for loc in default_multicast_locators {
+      emit!(
+        PID_DEFAULT_MULTICAST_LOCATOR,
+        &locator::repr::Locator::from(*loc),
+        locator::repr::Locator
+      );
+    }
+    emit!(
+      PID_BUILTIN_ENDPOINT_SET,
+      available_builtin_endpoints,
+      BuiltinEndpointSet
+    );
+    emit_option!(PID_PARTICIPANT_LEASE_DURATION, lease_duration, Duration);
+    emit!(
+      PID_PARTICIPANT_MANUAL_LIVELINESS_COUNT,
+      manual_liveliness_count,
+      i32
+    );
+    emit_option!(
+      PID_BUILTIN_ENDPOINT_QOS,
+      builtin_endpoint_qos,
+      BuiltinEndpointQos
+    );
+
+    // Here we need to serialize as StringWithNul, as String is Speedy built-in,
+    // and does not follow CDR encoding.
+    let entity_name_n: Option<StringWithNul> = entity_name.clone().map(|e| e.into());
+    emit_option!(PID_ENTITY_NAME, &entity_name_n, StringWithNul);
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+
+    Ok(bytes)
   }
 }
 
@@ -207,28 +406,41 @@ impl Keyed for SpdpDiscoveredParticipantData {
 
 impl PlCdrDeserialize for Participant_GUID {
   fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<Self> {
-    BuiltinDataDeserializer::new()
-      .parse_data(input_bytes, encoding)
-      .generate_participant_guid()
-      .map_err(|e| {
-        Error::custom(format!(
-          "deserialize Participant_GUID - {:?} - data was {:?}",
-          e, &input_bytes,
-        ))
-      })
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+
+    let guid: GUID = get_first_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PARTICIPANT_GUID,
+      "Participant GUID",
+    )?;
+
+    Ok(Participant_GUID(guid))
   }
 }
 
 impl PlCdrSerialize for Participant_GUID {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes> {
-    BuiltinDataSerializer::from_participant_guid(*self).serialize_pl_cdr_to_Bytes(encoding)
+    let mut pl = ParameterList::new();
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    emit!(PID_PARTICIPANT_GUID, &self.0, GUID);
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use byteorder::LittleEndian;
-
   use super::*;
   use crate::{
     dds::traits::serde_adapters::no_key::DeserializerAdapter,
@@ -237,7 +449,7 @@ mod tests {
       submessages::EntitySubmessage,
     },
     serialization::{
-      cdr_serializer::to_bytes, message::Message, pl_cdr_deserializer::PlCdrDeserializerAdapter,
+      message::Message, pl_cdr_deserializer::PlCdrDeserializerAdapter,
       pl_cdr_serializer::PlCdrSerialize, submessage::*,
     },
     test::test_data::*,
@@ -284,8 +496,9 @@ mod tests {
             participant_data_2.updated_time = participant_data.updated_time;
 
             eprintln!("again deserialized = {:?}", &participant_data_2);
-            let _sdata_2 =
-              to_bytes::<SpdpDiscoveredParticipantData, LittleEndian>(&participant_data_2).unwrap();
+            let _sdata_2 = participant_data
+              .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+              .unwrap();
             // now the order of bytes should be the same
             assert_eq!(&participant_data_2, &participant_data);
           }

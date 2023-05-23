@@ -3,8 +3,6 @@ use std::{convert::TryFrom, ops::Div};
 use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
 
-use super::parameter_id::ParameterId;
-
 #[derive(
   Debug,
   PartialEq,
@@ -147,23 +145,6 @@ impl std::ops::Mul<Duration> for f64 {
   type Output = Duration;
   fn mul(self, rhs: Duration) -> Duration {
     Duration::from_ticks((self * (rhs.to_ticks() as Self)) as i64)
-  }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct DurationData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  duration: Duration,
-}
-
-impl DurationData {
-  pub fn from(duration: Duration) -> Self {
-    Self {
-      parameter_id: ParameterId::PID_PARTICIPANT_LEASE_DURATION,
-      parameter_length: 8,
-      duration,
-    }
   }
 }
 

@@ -9,10 +9,18 @@ pub struct Parameter {
   pub parameter_id: ParameterId,
   /// Contains the CDR encapsulation of the Parameter type
   /// that corresponds to the specified parameterId
-  pub value: Vec<u8>,
+  pub value: Vec<u8>, /* TODO: bad field naming. E.g. "bytes" or something else that described
+                       * serialized blob */
 }
 
 impl Parameter {
+  pub fn new(parameter_id: ParameterId, serialized_parameter: Vec<u8>) -> Self {
+    Parameter {
+      parameter_id,
+      value: serialized_parameter,
+    }
+  }
+
   /// Creates new paramer of type PID_STATUS_INFO.
   /// Sets flag bits to parameter : is_disposed=1 indicates that the DDS
   /// DataWriter has disposed the instance of the data-object whose Key appears

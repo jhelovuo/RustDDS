@@ -7,7 +7,6 @@ use mio_06::Token;
 use log::warn;
 use static_assertions as sa;
 
-use super::parameter_id::ParameterId;
 use crate::dds::traits::key::Key;
 
 /// DDS/RTPS Participant GuidPrefix
@@ -564,23 +563,6 @@ impl fmt::Debug for GUID {
       "GUID {{{:?} {:?}}}",
       self.prefix, self.entity_id
     ))
-  }
-}
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct GUIDData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  guid: GUID,
-}
-
-impl GUIDData {
-  pub fn from(guid: GUID, parameter_id: ParameterId) -> Self {
-    Self {
-      parameter_id,
-      parameter_length: 16,
-      guid,
-    }
   }
 }
 
