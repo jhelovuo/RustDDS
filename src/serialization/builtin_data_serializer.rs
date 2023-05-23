@@ -27,7 +27,11 @@ use crate::{
     vendor_id::{VendorId, VendorIdData},
   },
   security::{EndpointSecurityInfo, EndpointSecurityInfoData},
-  serialization::{cdr_serializer::CdrSerializer, error as ser, error::Result},
+  serialization::{
+    cdr_serializer::{AligningSerializer, CdrSerializer},
+    error as ser,
+    error::Result,
+  },
   structure::{
     builtin_endpoint::{
       BuiltinEndpointQos, BuiltinEndpointQosData, BuiltinEndpointSet, BuiltinEndpointSetData,
@@ -383,51 +387,83 @@ impl<'a> BuiltinDataSerializer<'a> {
   // This needs a CDR serializer (not PL_CDR) to work with.
   // It will then output PL_CDR via the CDR serializer.
   // Someone could argue that this design is crazy and they would have a point.
-  pub fn serialize<S: Serializer<Error = ser::Error>>(
-    &self,
-    serializer: S,
-    add_sentinel: bool,
-  ) -> Result<S::Ok> {
+  pub fn serialize<S>(&self, serializer: S, add_sentinel: bool) -> Result<S::Ok>
+  where
+    S: Serializer<Error = ser::Error>,
+    S::SerializeStruct: AligningSerializer,
+  {
     let mut s = serializer
       .serialize_struct("SPDPParticipantData", self.fields_amount())
       .unwrap();
 
     self.add_protocol_version::<S>(&mut s);
+    s.align(4)?;
     self.add_vendor_id::<S>(&mut s);
+    s.align(4)?;
     self.add_expects_inline_qos::<S>(&mut s);
+    s.align(4)?;
     self.add_participant_guid::<S>(&mut s);
+    s.align(4)?;
     self.add_metatraffic_unicast_locators::<S>(&mut s);
+    s.align(4)?;
     self.add_metatraffic_multicast_locators::<S>(&mut s);
+    s.align(4)?;
     self.add_default_unicast_locators::<S>(&mut s);
+    s.align(4)?;
     self.add_default_multicast_locators::<S>(&mut s);
+    s.align(4)?;
     self.add_available_builtin_endpoint_set::<S>(&mut s);
+    s.align(4)?;
     self.add_lease_duration::<S>(&mut s);
+    s.align(4)?;
     self.add_manual_liveliness_count::<S>(&mut s);
+    s.align(4)?;
     self.add_builtin_endpoint_qos::<S>(&mut s);
+    s.align(4)?;
     self.add_entity_name::<S>(&mut s);
+    s.align(4)?;
 
     self.add_endpoint_guid::<S>(&mut s);
+    s.align(4)?;
     self.add_unicast_locator_list::<S>(&mut s);
+    s.align(4)?;
     self.add_multicast_locator_list::<S>(&mut s);
+    s.align(4)?;
 
     self.add_data_max_size_serialized::<S>(&mut s);
+    s.align(4)?;
 
     self.add_topic_name::<S>(&mut s);
+    s.align(4)?;
     self.add_type_name::<S>(&mut s);
+    s.align(4)?;
     self.add_durability::<S>(&mut s);
+    s.align(4)?;
     self.add_deadline::<S>(&mut s);
+    s.align(4)?;
     self.add_latency_budget::<S>(&mut s);
+    s.align(4)?;
     self.add_liveliness::<S>(&mut s);
+    s.align(4)?;
     self.add_reliability::<S>(&mut s);
+    s.align(4)?;
     self.add_ownership::<S>(&mut s);
+    s.align(4)?;
     self.add_destination_order::<S>(&mut s);
+    s.align(4)?;
     self.add_time_based_filter::<S>(&mut s);
+    s.align(4)?;
     self.add_presentation::<S>(&mut s);
+    s.align(4)?;
     self.add_lifespan::<S>(&mut s);
+    s.align(4)?;
     self.add_history::<S>(&mut s);
+    s.align(4)?;
     self.add_resource_limits::<S>(&mut s);
+    s.align(4)?;
 
     self.add_content_filter_property::<S>(&mut s);
+    s.align(4)?;
 
     self.add_security_info::<S>(&mut s);
 

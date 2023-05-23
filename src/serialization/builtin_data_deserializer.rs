@@ -685,10 +685,19 @@ impl BuiltinDataDeserializer {
       ParameterId::PID_LIFESPAN => {
         let lifespan: Result<Lifespan, Error> =
           CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
-        if let Ok(ls) = lifespan {
-          self.lifespan = Some(ls);
-          buffer.drain(..4 + parameter_length);
-          return self;
+        match lifespan {
+          Ok(ls) => {
+            self.lifespan = Some(ls);
+            buffer.drain(..4 + parameter_length);
+            return self;
+          }
+          Err(e) => {
+            error!(
+              "Lifespan parse failure {:?} from {:x?}",
+              e,
+              &buffer[4..4 + parameter_length]
+            );
+          }
         }
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
@@ -793,10 +802,14 @@ impl BuiltinDataDeserializer {
         buffer.drain(..4 + parameter_length);
         return self;
       }
-      pid => {
+      _ => {
+        // This is not very seriaous error, because there may
+        // be ParameterIds we just do not know.
         info!(
-          "ParameterList deserialization: Unknown {:?} , skipping.",
-          pid
+          "Unknown {:?} length={} in ParameterList: {:x?} ",
+          parameter_id,
+          parameter_length,
+          &buffer[4..4 + parameter_length]
         );
       }
     }

@@ -588,10 +588,15 @@ mod tests {
   use log::info;
   use serde::{Deserialize, Serialize};
   use test_case::test_case;
+  use serde_repr::{Deserialize_repr, Serialize_repr};
 
-  use crate::serialization::{
-    cdr_deserializer::{deserialize_from_big_endian, deserialize_from_little_endian},
-    cdr_serializer::to_bytes,
+  use crate::{
+    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+    serialization::{
+      cdr_deserializer::{deserialize_from_big_endian, deserialize_from_little_endian},
+      cdr_serializer::to_bytes,
+      deserialize_from_cdr,
+    },
   };
 
   #[test]
@@ -962,6 +967,24 @@ mod tests {
     C(i32, i32),
   }
 
+  #[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug)]
+  #[repr(i8)]
+  pub enum GoalStatusEnum {
+    Unknown = 0, // Let's use this also for "New"
+    Accepted = 1,
+    Executing = 2,
+    Canceling = 3,
+    Succeeded = 4,
+    Canceled = 5,
+    Aborted = 6,
+  }
+
+  #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+  struct AlignMe {
+    some_bytes: [u8; 4],
+    status: i8,
+  }
+
   #[test_case(35_u8 ; "u8")]
   #[test_case(35_u16 ; "u16")]
   #[test_case(352323_u32 ; "u32")]
@@ -1009,14 +1032,20 @@ mod tests {
   #[test_case( MixedEnum::A(123) ; "MixedEnum::A")]
   #[test_case( MixedEnum::B{ value:1234 } ; "MixedEnum::B")]
   #[test_case( MixedEnum::C(42,43) ; "MixedEnum::C")]
+  #[test_case( GoalStatusEnum::Accepted ; "GoalStatusEnum::Accepted")]
+  #[test_case( [AlignMe{some_bytes: [1,2,3,4], status:10 } ,
+                AlignMe{some_bytes: [5,6,7,8], status:11 } ]  ; "AlignMeArray")]
   fn cdr_serde_round_trip<T>(input: T)
   where
     T: PartialEq + std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,
   {
     let serialized = to_bytes::<_, LittleEndian>(&input).unwrap();
     println!("Serialized data: {:x?}", &serialized);
-    let deserialized = deserialize_from_little_endian(&serialized).unwrap();
+    let (deserialized, bytes_consumed): (T, usize) =
+      deserialize_from_cdr(&serialized, RepresentationIdentifier::CDR_LE).unwrap();
+    //let deserialized = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(input, deserialized);
+    assert_eq!(serialized.len(), bytes_consumed);
   }
 
   /*

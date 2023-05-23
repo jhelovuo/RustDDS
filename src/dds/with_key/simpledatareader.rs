@@ -307,6 +307,8 @@ where
     } // match
   }
 
+  /// Note: Always remember to call .drain_read_notifications() just before
+  /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one(&self) -> Result<Option<DeserializedCacheChange<D>>> {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
