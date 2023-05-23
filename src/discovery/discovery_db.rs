@@ -521,7 +521,7 @@ impl DiscoveryDB {
         .try_send(())
         // It is quite normal for this to fail due to channel full,
         // because usually there is no-one at the other end receiving.
-        .unwrap_or_else(|e| trace!("update_topic_data: Notification send failed: {:?}", e));
+        .unwrap_or_else(|e| trace!("update_topic_data: Notification send failed: {e:?}"));
     }
   }
 
@@ -885,7 +885,7 @@ mod tests {
       notification_sender: notification_sender2,
       status_sender: status_sender2,
       topic_name: topic.name(),
-      topic_cache_handle: topic_cache.clone(),
+      topic_cache_handle: topic_cache,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
       data_reader_waker: data_reader_waker2,

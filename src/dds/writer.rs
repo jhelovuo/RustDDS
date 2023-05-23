@@ -1110,7 +1110,7 @@ impl Writer {
           debug!("send_status - status receiver is disconnected");
         }
         TrySendError::Io(e) => {
-          warn!("send_status - io error {:?}", e);
+          warn!("send_status - io error {e:?}");
         }
       });
   }

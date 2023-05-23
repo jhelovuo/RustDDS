@@ -132,9 +132,9 @@ impl DomainParticipant {
       }
       Ok(Err(e)) => {
         std::mem::drop(dp);
-        log_and_err_internal!("Failed to start discovery thread: {:?}", e)
+        log_and_err_internal!("Failed to start discovery thread: {e:?}")
       }
-      Err(e) => log_and_err_internal!("Discovery thread channel error: {:?}", e),
+      Err(e) => log_and_err_internal!("Discovery thread channel error: {e:?}"),
     }
   }
 
@@ -531,7 +531,7 @@ impl DomainParticipantDisc {
       .discovery_command_sender
       .send(DiscoveryCommand::ManualAssertLiveliness)
       .or_else(|e| {
-        log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {:?}", e)
+        log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {e:?}")
       })
   }
 
@@ -602,7 +602,7 @@ impl Drop for DomainParticipantInner {
       Some(join_handle) => {
         join_handle
           .join()
-          .unwrap_or_else(|e| warn!("Failed to join dp_event_loop: {:?}", e));
+          .unwrap_or_else(|e| warn!("Failed to join dp_event_loop: {e:?}"));
       }
       None => {
         error!("Someone managed to steal dp_event_loop join handle from DomainParticipantInner.");
@@ -629,7 +629,7 @@ impl DomainParticipantInner {
       Ok(l) => {
         listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, l);
       }
-      Err(e) => warn!("Cannot get multicast discovery listener: {:?}", e),
+      Err(e) => warn!("Cannot get multicast discovery listener: {e:?}"),
     }
 
     let mut participant_id = 0;
@@ -668,7 +668,7 @@ impl DomainParticipantInner {
       Ok(l) => {
         listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l);
       }
-      Err(e) => warn!("Cannot get multicast user traffic listener: {:?}", e),
+      Err(e) => warn!("Cannot get multicast user traffic listener: {e:?}"),
     }
 
     let user_traffic_listener = UDPListener::new_unicast(
@@ -686,7 +686,7 @@ impl DomainParticipantInner {
           )
         })
       } else {
-        log_and_err_internal!("Could not open unicast user traffic listener: {:?}", e)
+        log_and_err_internal!("Could not open unicast user traffic listener: {e:?}")
       }
     })?;
 
@@ -971,7 +971,7 @@ impl DomainParticipantInner {
     let db = self
       .discovery_db
       .read()
-      .unwrap_or_else(|e| panic!("DiscoveryDB is poisoned. {:?}", e));
+      .unwrap_or_else(|e| panic!("DiscoveryDB is poisoned. {e:?}"));
 
     db.all_user_topics().cloned().collect()
   }

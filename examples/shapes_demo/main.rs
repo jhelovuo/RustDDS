@@ -66,7 +66,7 @@ fn main() {
     .unwrap_or("BLUE".to_owned());
 
   let domain_participant = DomainParticipant::new(*domain_id)
-    .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {:?}", e));
+    .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {e:?}"));
 
   let mut qos_b = QosPolicyBuilder::new()
     .reliability(if matches.get_flag("reliable") {
@@ -77,7 +77,7 @@ fn main() {
       Reliability::BestEffort
     })
     .durability(
-      match matches.get_one::<String>("durability").map(|s| s.as_str()) {
+      match matches.get_one::<String>("durability").map(String::as_str) {
         Some("l") => Durability::TransientLocal,
         Some("t") => Durability::Transient,
         Some("p") => Durability::Persistent,
@@ -126,12 +126,12 @@ fn main() {
 
   let topic = domain_participant
     .create_topic(
-      topic_name.to_string(),
+      topic_name,
       "ShapeType".to_string(),
       &qos,
       TopicKind::WithKey,
     )
-    .unwrap_or_else(|e| panic!("create_topic failed: {:?}", e));
+    .unwrap_or_else(|e| panic!("create_topic failed: {e:?}"));
   println!(
     "Topic name is {}. Type is {}.",
     topic.name(),
@@ -250,10 +250,10 @@ fn main() {
                       sample.y,
                       sample.shapesize,
                     ),
-                    Sample::Dispose(key) => println!("Disposed key {:?}", key),
+                    Sample::Dispose(key) => println!("Disposed key {key:?}"),
                   },
                   Ok(None) => break, // no more data
-                  Err(e) => println!("DataReader error {:?}", e),
+                  Err(e) => println!("DataReader error {e:?}"),
                 } // match
               }
             }
@@ -265,7 +265,7 @@ fn main() {
         READER_STATUS_READY => match reader_opt {
           Some(ref mut reader) => {
             while let Some(status) = reader.try_recv_status() {
-              println!("DataReader status: {:?}", status);
+              println!("DataReader status: {status:?}");
             }
           }
           None => {
@@ -276,7 +276,7 @@ fn main() {
         WRITER_STATUS_READY => match writer_opt {
           Some(ref mut writer) => {
             while let Some(status) = writer.try_recv_status() {
-              println!("DataWriter status: {:?}", status);
+              println!("DataWriter status: {status:?}");
             }
           }
           None => {
@@ -284,7 +284,7 @@ fn main() {
           }
         },
         other_token => {
-          println!("Polled event is {:?}. WTF?", other_token);
+          println!("Polled event is {other_token:?}. WTF?");
         }
       }
     }
@@ -336,7 +336,7 @@ fn configure_logging() {
         log4rs::init_config(conf).unwrap();
       }
       // Give up.
-      other_error => panic!("Config problem: {:?}", other_error),
+      other_error => panic!("Config problem: {other_error:?}"),
     }
   });
 }

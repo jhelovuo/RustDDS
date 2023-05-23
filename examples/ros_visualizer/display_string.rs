@@ -72,11 +72,11 @@ pub fn get_node_view_strings(node_info: &NodeInfo) -> Vec<String> {
   strings.push(format!("namespace: {:?}", node_info.namespace()));
   strings.push("readers: ".to_string());
   for reader_gid in node_info.get_reader_gid() {
-    strings.push(format!("  {:?}", reader_gid));
+    strings.push(format!("  {reader_gid:?}"));
   }
   strings.push("writers: ".to_string());
   for writer_gid in node_info.get_reader_gid() {
-    strings.push(format!("  {:?}", writer_gid));
+    strings.push(format!("  {writer_gid:?}"));
   }
   strings
 }

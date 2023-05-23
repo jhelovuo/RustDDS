@@ -139,21 +139,6 @@ impl MessageReceiver {
     )
   }
 
-  // // use for test and debugging only
-  // #[cfg(test)]
-  // fn get_reader_and_history_cache_change_object(
-  //   &self,
-  //   reader_id: EntityId,
-  //   sequence_number: SequenceNumber,
-  // ) -> CacheChange {
-  //   self
-  //     .available_readers
-  //     .get(&reader_id)
-  //     .unwrap()
-  //     .history_cache_change(sequence_number)
-  //     .unwrap()
-  // }
-
   #[cfg(test)]
   fn get_reader_history_cache_start_and_end_seq_num(
     &self,

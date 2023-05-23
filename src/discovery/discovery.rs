@@ -597,7 +597,7 @@ impl Discovery {
       match self.poll.poll(&mut events, None) {
         Ok(_) => (),
         Err(e) => {
-          error!("Failed in waiting of poll in discovery. {:?}", e);
+          error!("Failed in waiting of poll in discovery. {e:?}");
           return;
         }
       }
@@ -644,7 +644,7 @@ impl Discovery {
                   match self.discovery_db.write() {
                     Ok(mut db) => db.remove_local_topic_writer(guid),
                     Err(e) => {
-                      error!("DiscoveryDB is poisoned. {:?}", e);
+                      error!("DiscoveryDB is poisoned. {e:?}");
                       return;
                     }
                   }
@@ -662,7 +662,7 @@ impl Discovery {
                   match self.discovery_db.write() {
                     Ok(mut db) => db.remove_local_topic_reader(guid),
                     Err(e) => {
-                      error!("DiscoveryDB is poisoned. {:?}", e);
+                      error!("DiscoveryDB is poisoned. {e:?}");
                       return;
                     }
                   }
@@ -768,7 +768,7 @@ impl Discovery {
               match self.discovery_db.write() {
                 Ok(mut db) => db.participant_is_alive(guid_prefix),
                 Err(e) => {
-                  error!("DiscoveryDB is poisoned. {:?}", e);
+                  error!("DiscoveryDB is poisoned. {e:?}");
                   return;
                 }
               }
@@ -933,7 +933,7 @@ impl Discovery {
           //debug!("handle_participant_reader: no more data");
           return;
         } // no more data
-        Err(e) => error!("{:?}", e),
+        Err(e) => error!("{e:?}"),
       }
     } // loop
   }
@@ -955,7 +955,7 @@ impl Discovery {
               })
           .collect(),
         Err(e) => {
-          error!("handle_subscription_reader: {:?}", e);
+          error!("handle_subscription_reader: {e:?}");
           return;
         }
       };
@@ -1010,7 +1010,7 @@ impl Discovery {
           })
           .collect(),
         Err(e) => {
-          error!("handle_publication_reader: {:?}", e);
+          error!("handle_publication_reader: {e:?}");
           return;
         }
       };
@@ -1056,7 +1056,7 @@ impl Discovery {
         })
         .collect(),
       Err(e) => {
-        error!("handle_topic_reader: {:?}", e);
+        error!("handle_topic_reader: {e:?}");
         return;
       }
     };
@@ -1187,7 +1187,7 @@ impl Discovery {
           match self.dcps_participant_message_writer.write(pp, None) {
             Ok(_) => (),
             Err(e) => {
-              error!("Failed to write ParticipantMessageData auto. {:?}", e);
+              error!("Failed to write ParticipantMessageData auto. {e:?}");
               return;
             }
           }
@@ -1218,7 +1218,7 @@ impl Discovery {
           match self.dcps_participant_message_writer.write(pp, None) {
             Ok(_) => (),
             Err(e) => {
-              error!("Failed to writer ParticipantMessageData manual. {:?}", e);
+              error!("Failed to writer ParticipantMessageData manual. {e:?}");
             }
           }
         }
@@ -1253,7 +1253,7 @@ impl Discovery {
         Ok(_) => {
           count += 1;
         }
-        Err(e) => error!("Unable to write new readers info. {:?}", e),
+        Err(e) => error!("Unable to write new readers info. {e:?}"),
       }
     }
     debug!("Announced {} readers", count);
@@ -1288,7 +1288,7 @@ impl Discovery {
     let datas = db.local_user_topics();
     for data in datas {
       if let Err(e) = self.dcps_topic_writer.write(data.clone(), None) {
-        error!("Unable to write new topic info: {:?}", e);
+        error!("Unable to write new topic info: {e:?}");
       }
     }
   }
@@ -1376,7 +1376,7 @@ impl Discovery {
   fn send_discovery_notification(&self, dntype: DiscoveryNotificationType) {
     match self.discovery_updated_sender.send(dntype) {
       Ok(_) => (),
-      Err(e) => error!("Failed to send DiscoveryNotification {:?}", e),
+      Err(e) => error!("Failed to send DiscoveryNotification {e:?}"),
     }
   }
 }

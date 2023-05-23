@@ -9,7 +9,7 @@ macro_rules! serialization_test {
             fn serialize_little_endian() {
                 let original: $type = $original;
                 let serialized = original.write_to_vec_with_ctx(Endianness::LittleEndian)
-                    .expect(&format!("serialize failed from {:?}",original));
+                    .expect(&format!("serialize failed from {original:?}"));
                 assert_eq!(serialized, $le);
             }
 

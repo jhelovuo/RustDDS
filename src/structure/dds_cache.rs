@@ -385,7 +385,7 @@ mod tests {
 
     // Add the new topic to DDS cache
     let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
-      topic_name.clone(),
+      topic_name,
       TypeDesc::new("IDontKnowIfThisIsNecessary".to_string()),
       &qos,
     );

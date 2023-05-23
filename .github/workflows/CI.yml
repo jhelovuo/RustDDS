@@ -36,3 +36,10 @@ jobs:
         with:
           clippy_flags: --all --all-targets
           filter_mode: nofilter
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@1.66.1
+      - run: cargo check

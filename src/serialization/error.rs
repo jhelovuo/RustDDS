@@ -63,7 +63,7 @@ impl de::Error for Error {
 impl From<Error> for DDSError {
   fn from(ser_error: Error) -> Self {
     Self::Serialization {
-      reason: format!("{:?}", ser_error),
+      reason: format!("{ser_error:?}"),
     }
   }
 }

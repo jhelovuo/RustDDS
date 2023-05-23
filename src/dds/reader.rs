@@ -213,7 +213,7 @@ impl Reader {
         info!("send_status_change - cannot send status, DataReader Disconnected.");
       }
       Err(mio_channel::TrySendError::Io(e)) => {
-        error!("send_status_change - cannot send status: {:?}", e);
+        error!("send_status_change - cannot send status: {e:?}");
       }
     }
   }
@@ -317,19 +317,6 @@ impl Reader {
 
     cc.map(|cc| cc.data_value.clone())
   }
-
-  // // Used for test/debugging purposes
-  // #[cfg(test)]
-  // pub fn history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
-  //   debug!("{:?}", sequence_number);
-  //   let topic_cache = self.acquire_the_topic_cache_guard();
-  //   let cc = self
-  //     .seqnum_instant_map
-  //     .get(&sequence_number)
-  //     .and_then(|i| topic_cache.get_change(i));
-  //   debug!("history cache !!!! {:?}", cc);
-  //   cc.cloned()
-  // }
 
   // TODO Used for test/debugging purposes
   #[cfg(test)]
@@ -1219,13 +1206,13 @@ mod tests {
     let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
-      notification_sender: notification_sender,
+      notification_sender,
       status_sender,
       topic_name: topic_name.to_string(),
-      topic_cache_handle: topic_cache_handle.clone(),
+      topic_cache_handle,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
-      data_reader_waker: data_reader_waker.clone(),
+      data_reader_waker,
       poll_event_sender: notification_event_sender,
     };
     let mut reader = Reader::new(
@@ -1299,13 +1286,13 @@ mod tests {
     let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
-      notification_sender: notification_sender,
+      notification_sender,
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle: topic_cache_handle.clone(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
-      data_reader_waker: data_reader_waker.clone(),
+      data_reader_waker,
       poll_event_sender: notification_event_sender,
     };
     let mut reader = Reader::new(
@@ -1400,13 +1387,13 @@ mod tests {
     let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
-      notification_sender: notification_sender,
+      notification_sender,
       status_sender,
       topic_name: topic_name.to_string(),
-      topic_cache_handle: topic_cache_handle.clone(),
+      topic_cache_handle,
       qos_policy: reliable_qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
-      data_reader_waker: data_reader_waker.clone(),
+      data_reader_waker,
       poll_event_sender: notification_event_sender,
     };
     let mut reader = Reader::new(
@@ -1465,7 +1452,7 @@ mod tests {
       last_sn: SequenceNumber::new(3),  // writer has written 3 samples
       count: 3,
     };
-    assert!(reader.handle_heartbeat_msg(&hb_2, false, mr_state.clone())); // Should send an ack_nack
+    assert!(reader.handle_heartbeat_msg(&hb_2, false, mr_state)); // Should send an ack_nack
 
     // 7. Count of acknack sent should be 2
     // The count is verified from the writer proxy
@@ -1504,13 +1491,13 @@ mod tests {
     let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
-      notification_sender: notification_sender,
+      notification_sender,
       status_sender,
       topic_name: topic_name.to_string(),
-      topic_cache_handle: topic_cache_handle.clone(),
+      topic_cache_handle,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
-      data_reader_waker: data_reader_waker.clone(),
+      data_reader_waker,
       poll_event_sender: notification_event_sender,
     };
     let mut reader = Reader::new(

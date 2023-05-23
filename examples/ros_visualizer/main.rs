@@ -193,7 +193,7 @@ fn configure_logging() {
         log4rs::init_config(conf).unwrap();
       }
       // Give up.
-      other_error => panic!("Config problem: {:?}", other_error),
+      other_error => panic!("Config problem: {other_error:?}"),
     }
   });
 }
