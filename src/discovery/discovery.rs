@@ -1391,7 +1391,7 @@ mod tests {
   use std::net::SocketAddr;
 
   use chrono::Utc;
-  use bytes::Bytes;
+  //use bytes::Bytes;
   use mio_06::Token;
   use speedy::{Endianness, Writable};
 
@@ -1405,7 +1405,8 @@ mod tests {
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
     serialization::{
-      cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes, submessage::*,
+      cdr_deserializer::CDRDeserializerAdapter, submessage::*,
+      pl_cdr_serializer::PlCdrSerialize,
     },
     structure::{entity::RTPSEntity, locator::Locator},
     test::{
@@ -1518,8 +1519,8 @@ mod tests {
               )));
             drd.reader_proxy.multicast_locator_list.clear();
 
-            data =
-              Bytes::from(to_bytes::<DiscoveredReaderData, byteorder::LittleEndian>(&drd).unwrap());
+            data = drd.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+              .unwrap();
             d.serialized_payload.as_mut().unwrap().value = data.clone();
           }
           _ => continue,

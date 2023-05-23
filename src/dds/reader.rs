@@ -318,18 +318,18 @@ impl Reader {
     cc.map(|cc| cc.data_value.clone())
   }
 
-  // Used for test/debugging purposes
-  #[cfg(test)]
-  pub fn history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
-    debug!("{:?}", sequence_number);
-    let topic_cache = self.acquire_the_topic_cache_guard();
-    let cc = self
-      .seqnum_instant_map
-      .get(&sequence_number)
-      .and_then(|i| topic_cache.get_change(i));
-    debug!("history cache !!!! {:?}", cc);
-    cc.cloned()
-  }
+  // // Used for test/debugging purposes
+  // #[cfg(test)]
+  // pub fn history_cache_change(&self, sequence_number: SequenceNumber) -> Option<CacheChange> {
+  //   debug!("{:?}", sequence_number);
+  //   let topic_cache = self.acquire_the_topic_cache_guard();
+  //   let cc = self
+  //     .seqnum_instant_map
+  //     .get(&sequence_number)
+  //     .and_then(|i| topic_cache.get_change(i));
+  //   debug!("history cache !!!! {:?}", cc);
+  //   cc.cloned()
+  // }
 
   // TODO Used for test/debugging purposes
   #[cfg(test)]

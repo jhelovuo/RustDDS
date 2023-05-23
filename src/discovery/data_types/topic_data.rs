@@ -275,6 +275,7 @@ impl DiscoveredReaderData {
       topic_name,
       type_name,
       &QosPolicies::builder().build(),
+      None,
     );
     Self {
       reader_proxy,

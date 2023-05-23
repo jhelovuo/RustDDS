@@ -386,7 +386,7 @@ mod tests {
   },
   {
       pid_builtin_endpoint_set,
-      ParameterId::PID_SET,
+      ParameterId::PID_BUILTIN_ENDPOINT_SET,
       le = [0x58, 0x00],
       be = [0x00, 0x58]
   },

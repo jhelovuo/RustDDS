@@ -76,8 +76,8 @@ use std::{net::SocketAddr, time::Duration as StdDuration};
 
 use bytes::Bytes;
 use speedy::{Endianness, Writable};
-use serde::Serialize;
-use byteorder::LittleEndian;
+//use serde::Serialize;
+//use byteorder::LittleEndian;
 use enumflags2::BitFlags;
 
 use crate::{
@@ -110,7 +110,10 @@ use crate::{
     },
   },
   serialization::{
-    cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, Message, Submessage,
+    cdr_serializer::to_bytes, 
+    pl_cdr_deserializer::PlCdrDeserializerAdapter, 
+    pl_cdr_serializer::PlCdrSerialize,
+    Message, Submessage,
     SubmessageBody,
   },
   structure::{
@@ -275,6 +278,7 @@ pub(crate) fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTop
     "some topic name".to_string(),
     "RandomData".to_string(),
     &qos,
+    None,
   );
 
   Some(sub_topic_data)
@@ -311,6 +315,7 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
     related_datareader_key: None,
     service_instance_name: None,
     topic_aliases: None,
+    security_info: None,
   };
 
   Some(pub_topic_data)
@@ -363,12 +368,13 @@ pub(crate) fn content_filter_data() -> Option<ContentFilterProperty> {
   Some(content_filter)
 }
 
-pub(crate) fn create_rtps_data_message<D: Serialize>(
+pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
   data: D,
   reader_id: EntityId,
   writer_id: EntityId,
 ) -> Message {
-  let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
+  //let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
+  let tdata = data.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE).unwrap();
 
   let mut rtps_message = Message::default();
   let guid = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
