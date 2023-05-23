@@ -34,7 +34,7 @@ use crate::{
     vendor_id::VendorId,
   },
   security::{
-    authentication::IdentityToken, 
+    authentication::{IdentityToken, IdentityStatusToken}, 
     access_control::PermissionsToken, 
     Property,
     ParticipantSecurityInfo,
@@ -107,6 +107,7 @@ pub struct BuiltinDataDeserializer {
   pub endpoint_security_info: Option<EndpointSecurityInfo>,
   pub participant_security_info: Option<ParticipantSecurityInfo>,
   pub identity_token: Option<IdentityToken>,
+  pub identity_status_token: Option<IdentityStatusToken>,
   pub permissions_token: Option<PermissionsToken>,
   pub property: Option<Property>,
 }
@@ -806,6 +807,50 @@ impl BuiltinDataDeserializer {
           buffer.drain(..4 + parameter_length);
           return self;
         }
+      }
+
+      ParameterId::PID_PARTICIPANT_SECURITY_INFO => {
+        let sec_info: Result<ParticipantSecurityInfo, Error> =
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+        if let Ok(security_info) = sec_info {
+          self.participant_security_info = Some(security_info);
+          buffer.drain(..4 + parameter_length);
+          return self;
+        }
+      }
+
+      ParameterId::PID_IDENTITY_TOKEN => {
+        let opt_param: Result<IdentityToken, Error> =
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+        if let Ok(param) = opt_param {
+          self.identity_token = Some(param);
+          buffer.drain(..4 + parameter_length);
+          return self;
+        }        
+      }
+
+      ParameterId::PID_PERMISSIONS_TOKEN => {
+        let opt_param: Result<PermissionsToken, Error> =
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+        if let Ok(param) = opt_param {
+          self.permissions_token = Some(param);
+          buffer.drain(..4 + parameter_length);
+          return self;
+        }        
+      }
+
+      ParameterId::PID_IDENTITY_STATUS_TOKEN => {
+        let opt_param: Result<IdentityStatusToken, Error> =
+          CDRDeserializerAdapter::from_bytes(&buffer[4..4 + parameter_length], rep);
+        if let Ok(param) = opt_param {
+          self.identity_status_token = Some(param);
+          buffer.drain(..4 + parameter_length);
+          return self;
+        }        
+      }
+
+      ParameterId::PID_DATA_TAGS => {
+        error!("Unhandled DataTags") // TODO: Implement this.
       }
 
       ParameterId::PID_SENTINEL => {

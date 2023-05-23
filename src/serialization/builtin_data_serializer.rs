@@ -26,7 +26,15 @@ use crate::{
     submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
     vendor_id::{VendorId, VendorIdData},
   },
-  security::{EndpointSecurityInfo, EndpointSecurityInfoData},
+  security::{
+    authentication::{IdentityToken, IdentityStatusToken}, 
+    access_control::PermissionsToken, 
+    Property,
+    EndpointSecurityInfo,
+    ParticipantSecurityInfo,
+    EndpointSecurityInfoData,
+    ParticipantSecurityInfoData,
+  },
   serialization::{
     cdr_serializer::{AligningSerializer, CdrSerializer},
     error as ser,
@@ -163,7 +171,12 @@ pub struct BuiltinDataSerializer<'a> {
   pub content_filter_property: Option<&'a ContentFilterProperty>,
 
   // DDS Security
-  pub security_info: Option<&'a EndpointSecurityInfo>,
+  pub endpoint_security_info: Option<&'a EndpointSecurityInfo>,
+  pub participant_security_info: Option<&'a ParticipantSecurityInfo>,
+  pub identity_token: Option<&'a IdentityToken>,
+  pub identity_status_token: Option<&'a IdentityStatusToken>,
+  pub permissions_token: Option<&'a PermissionsToken>,
+  pub property: Option<&'a Property>,  
 }
 
 impl<'a> BuiltinDataSerializer<'a> {
@@ -205,8 +218,13 @@ impl<'a> BuiltinDataSerializer<'a> {
     merge_field!(history);
     merge_field!(resource_limits);
     merge_field!(content_filter_property);
-    merge_field!(security_info);
 
+    merge_field!(endpoint_security_info);
+    merge_field!(participant_security_info);
+    merge_field!(identity_token);
+    merge_field!(identity_status_token);
+    merge_field!(permissions_token);
+    merge_field!(property);
     self
   }
 
@@ -227,6 +245,13 @@ impl<'a> BuiltinDataSerializer<'a> {
       manual_liveliness_count: Some(participant_data.manual_liveliness_count),
       builtin_endpoint_qos: participant_data.builtin_endpoint_qos,
       entity_name: participant_data.entity_name.as_ref(),
+
+      // participant has no endpoint_security_info
+      participant_security_info: participant_data.security_info.as_ref(),
+      identity_token: participant_data.identity_token.as_ref(),
+      permissions_token: participant_data.permissions_token.as_ref(),
+      property: participant_data.property.as_ref(),
+
       ..BuiltinDataSerializer::default()
     }
   }
@@ -285,7 +310,8 @@ impl<'a> BuiltinDataSerializer<'a> {
       presentation: qos.presentation(),
       lifespan: qos.lifespan(),
 
-      security_info: subscription_topic_data.security_info().as_ref(),
+      endpoint_security_info: subscription_topic_data.security_info().as_ref(),
+
       ..BuiltinDataSerializer::default()
     }
   }
@@ -309,7 +335,8 @@ impl<'a> BuiltinDataSerializer<'a> {
       presentation: publication_topic_data.presentation,
       lifespan: publication_topic_data.lifespan,
 
-      security_info: publication_topic_data.security_info.as_ref(),
+      endpoint_security_info: publication_topic_data.security_info.as_ref(),
+
       ..BuiltinDataSerializer::default()
     }
   }
@@ -465,7 +492,19 @@ impl<'a> BuiltinDataSerializer<'a> {
     self.add_content_filter_property::<S>(&mut s);
     s.align(4)?;
 
-    self.add_security_info::<S>(&mut s);
+    self.add_endpoint_security_info::<S>(&mut s);
+    s.align(4)?;
+    self.add_participant_security_info::<S>(&mut s);
+    s.align(4)?;
+
+    self.add_identity_token::<S>(&mut s);
+    s.align(4)?;
+    self.add_identity_status_token::<S>(&mut s);
+    s.align(4)?;
+    self.add_permissions_token::<S>(&mut s);
+    s.align(4)?;
+    self.add_property::<S>(&mut s);
+    s.align(4)?;
 
     if add_sentinel {
       s.serialize_field("sentinel", &1_u32).unwrap();
@@ -518,7 +557,12 @@ impl<'a> BuiltinDataSerializer<'a> {
 
     count += usize::from(self.content_filter_property.is_some());
 
-    count += usize::from(self.security_info.is_some());
+    count += usize::from(self.endpoint_security_info.is_some());
+    count += usize::from(self.participant_security_info.is_some());
+    count += usize::from(self.identity_token.is_some());
+    count += usize::from(self.identity_status_token.is_some());
+    count += usize::from(self.permissions_token.is_some());
+    count += usize::from(self.property.is_some());
 
     count
   }
@@ -971,12 +1015,6 @@ impl<'a> BuiltinDataSerializer<'a> {
     }
   }
 
-  fn add_security_info<S: Serializer>(&self, s: &mut S::SerializeStruct) {
-    if let Some(si) = self.security_info {
-      s.serialize_field("security_info", &EndpointSecurityInfoData::new(si.clone()))
-        .unwrap();
-    }
-  }
 
   fn add_data_max_size_serialized<S: Serializer>(&self, s: &mut S::SerializeStruct) {
     if let Some(dmss) = self.data_max_size_serialized {
@@ -987,4 +1025,34 @@ impl<'a> BuiltinDataSerializer<'a> {
       .unwrap();
     }
   }
+
+  fn add_endpoint_security_info<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    if let Some(si) = self.endpoint_security_info {
+      s.serialize_field("security_info", &EndpointSecurityInfoData::new(si.clone()))
+        .unwrap();
+    }
+  }
+
+  fn add_participant_security_info<S: Serializer>(&self, s: &mut S::SerializeStruct) {
+    if let Some(si) = self.participant_security_info {
+      s.serialize_field("security_info", &ParticipantSecurityInfoData::new(si.clone()))
+        .unwrap();
+    }
+  }
+
+  fn add_identity_token<S: Serializer>(&self, _s: &mut S::SerializeStruct) {
+    error!("missing serialization implementation")
+  }
+  fn add_identity_status_token<S: Serializer>(&self, _s: &mut S::SerializeStruct) {
+    error!("missing serialization implementation")
+  }
+  fn add_permissions_token<S: Serializer>(&self, _s: &mut S::SerializeStruct) {
+    error!("missing serialization implementation")
+  }
+  fn add_property<S: Serializer>(&self, _s: &mut S::SerializeStruct) {
+    error!("missing serialization implementation")
+  }
+
+
+
 }
