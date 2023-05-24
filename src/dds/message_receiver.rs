@@ -151,13 +151,6 @@ impl MessageReceiver {
       .history_cache_sequence_start_and_end_numbers()
   }
 
-  // pub fn handle_discovery_msg(&mut self, msg: Bytes) {
-  //   // 9.6.2.2
-  //   // The discovery message is just a data message. No need for the
-  //   // messageReceiver to handle it any differently here?
-  //   self.handle_user_msg(msg);
-  // }
-
   pub fn handle_received_packet(&mut self, msg_bytes: &Bytes) {
     // Check for RTPS ping message. At least RTI implementation sends these.
     // What should we do with them? The spec does not say.
