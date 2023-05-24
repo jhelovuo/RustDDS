@@ -1,29 +1,35 @@
+use byteorder::BigEndian;
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+
 use crate::{
   messages::submessages::submessage_elements::{
     crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
   },
-  security::SecurityError,
+  security::{BinaryProperty, DataHolder, SecurityError},
+  serialization::cdr_serializer::to_bytes,
+  CdrDeserializer,
 };
 use super::types::{
   CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind,
 };
 
-//TODO: Change to a useful type
+const CRYPTO_TOKEN_CLASS_ID: &str = "DDS:Crypto:AES_GCM_GMAC";
+const CRYPTO_TOKEN_KEYMAT_NAME: &str = "dds.cryp.keymat";
+
 /// DDS:Crypto:AES-GCM-GMAC CryptoToken type from section 9.5.2.1 of the
 /// Security specification (v. 1.1)
 pub struct BuiltinCryptoToken {
-  pub crypto_token: CryptoToken,
+  pub key_material: KeyMaterial_AES_GCM_GMAC,
 }
 impl TryFrom<CryptoToken> for BuiltinCryptoToken {
   type Error = SecurityError;
   fn try_from(value: CryptoToken) -> Result<Self, Self::Error> {
-    const CORRECT_CLASS_ID: &str = "DDS:Crypto:AES_GCM_GMAC";
-    const CORRECT_KEYMAT_NAME: &str = "dds.cryp.keymat";
-    if value.data_holder.class_id.ne(CORRECT_CLASS_ID) {
+    if value.data_holder.class_id.ne(CRYPTO_TOKEN_CLASS_ID) {
       return Err(Self::Error {
         msg: format!(
           "CryptoToken has wrong class_id. Expected {}",
-          CORRECT_CLASS_ID
+          CRYPTO_TOKEN_CLASS_ID
         ),
       });
     }
@@ -32,19 +38,35 @@ impl TryFrom<CryptoToken> for BuiltinCryptoToken {
         msg: String::from("CryptoToken has wrong properties. Expected properties to be empty."),
       });
     }
-    if value.data_holder.binary_properties.len() != 1 // There should be exactly one binary property and it should contain the key material
-      || value.data_holder.binary_properties[0]
+    let binary_properties = value.data_holder.binary_properties;
+    if binary_properties.len() != 1 // There should be exactly one binary property and it should contain the key material
+      || binary_properties[0]
         .name
-        .ne(CORRECT_KEYMAT_NAME)
+        .ne(CRYPTO_TOKEN_KEYMAT_NAME)
     {
       return Err(Self::Error {
-            msg: format!("CryptoToken has wrong binary_properties. Expected exactly 1 binary property with name {}.",CORRECT_KEYMAT_NAME),
+            msg: format!("CryptoToken has wrong binary_properties. Expected exactly 1 binary property with name {}.",CRYPTO_TOKEN_KEYMAT_NAME),
           });
     }
-    // TODO: check that the key material deserializes properly
-
     Ok(Self {
-      crypto_token: value,
+      key_material: KeyMaterial_AES_GCM_GMAC::try_from(binary_properties[0].value.clone())?,
+    })
+  }
+}
+
+impl TryFrom<BuiltinCryptoToken> for CryptoToken {
+  type Error = SecurityError;
+  fn try_from(value: BuiltinCryptoToken) -> Result<Self, Self::Error> {
+    Ok(CryptoToken {
+      data_holder: DataHolder {
+        class_id: String::from(CRYPTO_TOKEN_CLASS_ID),
+        properties: Vec::new(),
+        binary_properties: Vec::from([BinaryProperty {
+          name: String::from(CRYPTO_TOKEN_KEYMAT_NAME),
+          value: value.key_material.try_into()?,
+          propagate: true,
+        }]),
+      },
     })
   }
 }
@@ -54,6 +76,83 @@ impl TryFrom<CryptoToken> for BuiltinCryptoToken {
 #[allow(non_camel_case_types)] // We use the name from the spec
 pub struct KeyMaterial_AES_GCM_GMAC {
   pub transformation_kind: BuiltinCryptoTransformationKind,
+  pub master_salt: Vec<u8>,
+  pub sender_key_id: CryptoTransformKeyId,
+  pub master_sender_key: Vec<u8>,
+  pub receiver_specific_key_id: CryptoTransformKeyId,
+  pub master_receiver_specific_key: Vec<u8>,
+}
+impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC {
+  type Error = SecurityError;
+  fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+    Serialized_KeyMaterial_AES_GCM_GMAC::deserialize(&mut CdrDeserializer::<
+      BigEndian, /* What's the point of this constructor if we need to specify the byte order
+                  * anyway */
+    >::new_big_endian(value.as_ref()))
+    .map_err(
+      // Map deserialization error to SecurityError
+      |e| Self::Error {
+        msg: format!("Error deserializing KeyMaterial_AES_GCM_GMAC: {}", e),
+      },
+    )
+    .and_then(
+      //map transformation_kind to builtin
+      |Serialized_KeyMaterial_AES_GCM_GMAC {
+         transformation_kind,
+         master_salt,
+         sender_key_id,
+         master_sender_key,
+         receiver_specific_key_id,
+         master_receiver_specific_key,
+       }| {
+        BuiltinCryptoTransformationKind::try_from(transformation_kind).map(|transformation_kind| {
+          Self {
+            transformation_kind,
+            master_salt,
+            sender_key_id,
+            master_sender_key,
+            receiver_specific_key_id,
+            master_receiver_specific_key,
+          }
+        })
+      },
+    )
+  }
+}
+impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
+  type Error = SecurityError;
+  fn try_from(
+    KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    }: KeyMaterial_AES_GCM_GMAC,
+  ) -> Result<Self, Self::Error> {
+    let transformation_kind = transformation_kind.into();
+    let keymat = Serialized_KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    };
+    to_bytes::<Serialized_KeyMaterial_AES_GCM_GMAC, BigEndian>(&keymat)
+      .map(Bytes::from)
+      .map_err(|e| Self::Error {
+        msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC: {}", e),
+      })
+  }
+}
+
+//For (de)serialization
+#[allow(non_camel_case_types)] // We use the name from the spec
+#[derive(Deserialize, Serialize, PartialEq)]
+struct Serialized_KeyMaterial_AES_GCM_GMAC {
+  pub transformation_kind: CryptoTransformKind,
   pub master_salt: Vec<u8>,
   pub sender_key_id: CryptoTransformKeyId,
   pub master_sender_key: Vec<u8>,
@@ -83,6 +182,17 @@ impl TryFrom<CryptoTransformKind> for BuiltinCryptoTransformationKind {
       _ => Err(Self::Error {
         msg: String::from("Invalid CryptoTransformKind"),
       }),
+    }
+  }
+}
+impl From<BuiltinCryptoTransformationKind> for CryptoTransformKind {
+  fn from(builtin: BuiltinCryptoTransformationKind) -> CryptoTransformKind {
+    match builtin {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => [0, 0, 0, 0],
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => [0, 0, 0, 1],
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => [0, 0, 0, 2],
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => [0, 0, 0, 3],
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => [0, 0, 0, 4],
     }
   }
 }
