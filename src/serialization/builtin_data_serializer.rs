@@ -27,13 +27,10 @@ use crate::{
     vendor_id::{VendorId, VendorIdData},
   },
   security::{
-    authentication::{IdentityToken, IdentityStatusToken}, 
-    access_control::PermissionsToken, 
-    Property,
-    EndpointSecurityInfo,
-    ParticipantSecurityInfo,
-    EndpointSecurityInfoData,
-    ParticipantSecurityInfoData,
+    access_control::PermissionsToken,
+    authentication::{IdentityStatusToken, IdentityToken},
+    EndpointSecurityInfo, EndpointSecurityInfoData, ParticipantSecurityInfo,
+    ParticipantSecurityInfoData, Property,
   },
   serialization::{
     cdr_serializer::{AligningSerializer, CdrSerializer},
@@ -176,7 +173,7 @@ pub struct BuiltinDataSerializer<'a> {
   pub identity_token: Option<&'a IdentityToken>,
   pub identity_status_token: Option<&'a IdentityStatusToken>,
   pub permissions_token: Option<&'a PermissionsToken>,
-  pub property: Option<&'a Property>,  
+  pub property: Option<&'a Property>,
 }
 
 impl<'a> BuiltinDataSerializer<'a> {
@@ -1015,7 +1012,6 @@ impl<'a> BuiltinDataSerializer<'a> {
     }
   }
 
-
   fn add_data_max_size_serialized<S: Serializer>(&self, s: &mut S::SerializeStruct) {
     if let Some(dmss) = self.data_max_size_serialized {
       s.serialize_field(
@@ -1035,24 +1031,24 @@ impl<'a> BuiltinDataSerializer<'a> {
 
   fn add_participant_security_info<S: Serializer>(&self, s: &mut S::SerializeStruct) {
     if let Some(si) = self.participant_security_info {
-      s.serialize_field("security_info", &ParticipantSecurityInfoData::new(si.clone()))
-        .unwrap();
+      s.serialize_field(
+        "security_info",
+        &ParticipantSecurityInfoData::new(si.clone()),
+      )
+      .unwrap();
     }
   }
 
   fn add_identity_token<S: Serializer>(&self, _s: &mut S::SerializeStruct) {
-    error!("missing serialization implementation")
+    error!("missing serialization implementation");
   }
   fn add_identity_status_token<S: Serializer>(&self, _s: &mut S::SerializeStruct) {
-    error!("missing serialization implementation")
+    error!("missing serialization implementation");
   }
   fn add_permissions_token<S: Serializer>(&self, _s: &mut S::SerializeStruct) {
-    error!("missing serialization implementation")
+    error!("missing serialization implementation");
   }
   fn add_property<S: Serializer>(&self, _s: &mut S::SerializeStruct) {
-    error!("missing serialization implementation")
+    error!("missing serialization implementation");
   }
-
-
-
 }

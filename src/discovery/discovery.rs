@@ -1405,8 +1405,7 @@ mod tests {
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
     serialization::{
-      cdr_deserializer::CDRDeserializerAdapter, submessage::*,
-      pl_cdr_serializer::PlCdrSerialize,
+      cdr_deserializer::CDRDeserializerAdapter, pl_cdr_serializer::PlCdrSerialize, submessage::*,
     },
     structure::{entity::RTPSEntity, locator::Locator},
     test::{
@@ -1519,7 +1518,8 @@ mod tests {
               )));
             drd.reader_proxy.multicast_locator_list.clear();
 
-            data = drd.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+            data = drd
+              .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
               .unwrap();
             d.serialized_payload.as_mut().unwrap().value = data.clone();
           }

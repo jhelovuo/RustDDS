@@ -83,9 +83,8 @@ impl ParameterId {
 
   // Section 7.4.1.4 Extension to RTPS Standard DCPSParticipants Builtin Topic
   // Table 10
-  pub const PID_IDENTITY_TOKEN : Self = Self { value: 0x1001 };
-  pub const PID_PERMISSIONS_TOKEN : Self = Self { value: 0x1002 };
-
+  pub const PID_IDENTITY_TOKEN: Self = Self { value: 0x1001 };
+  pub const PID_PERMISSIONS_TOKEN: Self = Self { value: 0x1002 };
 
   // Section 7.4.1.7 New DCPSPublicationsSecure Builtin Topic
   // Table 14 & 15
@@ -96,7 +95,7 @@ impl ParameterId {
   pub const PID_ENDPOINT_SECURITY_INFO: Self = Self { value: 0x1004 };
 
   // Table 10:
-  pub const PID_PARTICIPANT_SECURITY_INFO : Self = Self { value: 0x1005 };
+  pub const PID_PARTICIPANT_SECURITY_INFO: Self = Self { value: 0x1005 };
 
   // Section 7.4.1.6 "New DCPSParticipantSecure Builtin Topic"
   // Table 13

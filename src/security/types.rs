@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use speedy::Readable;
 use enumflags2::bitflags;
 use serde::{Deserialize, Serialize};
@@ -16,8 +17,8 @@ pub struct Property {
 // 1.1)
 pub struct BinaryProperty {
   pub(crate) name: String, // public because of serialization
-  value: Vec<u8>,
-  propagate: bool, // propagate field is not serialized
+  pub(crate) value: Bytes,
+  pub(crate) propagate: bool, // propagate field is not serialized
 }
 
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
@@ -50,9 +51,8 @@ pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
 #[derive(Debug, thiserror::Error)]
 #[error("Security exception: {msg}")]
 pub struct SecurityError {
-  pub(crate) msg: String, 
+  pub(crate) msg: String,
 }
-
 
 // DDS Security spec v1.1 Section 7.2.7 ParticipantSecurityInfo
 // This is communicated over Discovery
@@ -99,7 +99,6 @@ pub enum PluginParticipantSecurityAttributesMask {
   IsLivelinessOriginAuthenticated = 0b0010_0000,
 }
 
-
 // serialization helper struct
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ParticipantSecurityInfoData {
@@ -117,8 +116,6 @@ impl ParticipantSecurityInfoData {
     }
   }
 }
-
-
 
 // DDS Security spec v1.1 Section 7.2.8 EndpointSecurityInfo
 // This is communicated over Discovery

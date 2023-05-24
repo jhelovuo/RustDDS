@@ -110,11 +110,8 @@ use crate::{
     },
   },
   serialization::{
-    cdr_serializer::to_bytes, 
-    pl_cdr_deserializer::PlCdrDeserializerAdapter, 
-    pl_cdr_serializer::PlCdrSerialize,
-    Message, Submessage,
-    SubmessageBody,
+    cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter,
+    pl_cdr_serializer::PlCdrSerialize, Message, Submessage, SubmessageBody,
   },
   structure::{
     duration::Duration,
@@ -374,7 +371,9 @@ pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
   writer_id: EntityId,
 ) -> Message {
   //let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
-  let tdata = data.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE).unwrap();
+  let tdata = data
+    .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+    .unwrap();
 
   let mut rtps_message = Message::default();
   let guid = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);

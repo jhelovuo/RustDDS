@@ -20,17 +20,14 @@ use crate::{
     vendor_id::VendorId,
   },
   network::constant::*,
+  security::{
+    access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
+    Property,
+  },
   serialization::{
     builtin_data_deserializer::BuiltinDataDeserializer,
     builtin_data_serializer::BuiltinDataSerializer, error::Result, pl_cdr_deserializer::*,
     pl_cdr_serializer::*,
-  },
-  security::{
-    authentication::IdentityToken, 
-    access_control::PermissionsToken, 
-    Property,
-    ParticipantSecurityInfo,
-
   },
   structure::{
     builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
@@ -43,7 +40,8 @@ use crate::{
 
 // This type is used by Discovery to communicate the presence and properties
 // of DomainParticipants. It is sent over topic "DCPSParticipant".
-// The type is called "ParticipantBuiltinTopicData" in DDS-Security Spec, e.g. Section 7.4.1.4.
+// The type is called "ParticipantBuiltinTopicData" in DDS-Security Spec, e.g.
+// Section 7.4.1.4.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpdpDiscoveredParticipantData {
   pub updated_time: chrono::DateTime<Utc>,
@@ -66,7 +64,6 @@ pub struct SpdpDiscoveredParticipantData {
   pub permissions_token: Option<PermissionsToken>,
   pub property: Option<Property>,
   pub security_info: Option<ParticipantSecurityInfo>,
-
 }
 
 impl SpdpDiscoveredParticipantData {
@@ -184,7 +181,7 @@ impl SpdpDiscoveredParticipantData {
       entity_name: None,
 
       // DDS Security
-      identity_token: None, // TODO: Generate(?) one
+      identity_token: None,    // TODO: Generate(?) one
       permissions_token: None, // TODO
       property: None,
       security_info: None,

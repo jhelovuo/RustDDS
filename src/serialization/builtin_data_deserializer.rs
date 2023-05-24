@@ -2,9 +2,8 @@ use std::time::Instant;
 
 use serde::Deserialize;
 use chrono::Utc;
-
 #[allow(unused_imports)]
-use log::{error, warn, info, debug, trace};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{
@@ -34,11 +33,9 @@ use crate::{
     vendor_id::VendorId,
   },
   security::{
-    authentication::{IdentityToken, IdentityStatusToken}, 
-    access_control::PermissionsToken, 
-    Property,
-    ParticipantSecurityInfo,
-    EndpointSecurityInfo,
+    access_control::PermissionsToken,
+    authentication::{IdentityStatusToken, IdentityToken},
+    EndpointSecurityInfo, ParticipantSecurityInfo, Property,
   },
   serialization::error::Error,
   structure::{
@@ -378,9 +375,7 @@ impl BuiltinDataDeserializer {
     self
   }
 
-  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) 
-    -> Self
-  {
+  pub fn read_next(mut self, buffer: &mut Vec<u8>, rep: RepresentationIdentifier) -> Self {
     let parameter_id = Self::read_parameter_id(buffer, rep).unwrap();
     let mut parameter_length: usize = Self::read_parameter_length(buffer, rep).unwrap() as usize;
 
@@ -709,11 +704,15 @@ impl BuiltinDataDeserializer {
           Ok(ls) => {
             self.lifespan = Some(ls);
             buffer.drain(..4 + parameter_length);
-            return self
+            return self;
           }
           Err(e) => {
-            error!("Lifespan parse failure {:?} from {:x?}", e, &buffer[4..4 + parameter_length]);
-          }  
+            error!(
+              "Lifespan parse failure {:?} from {:x?}",
+              e,
+              &buffer[4..4 + parameter_length]
+            );
+          }
         }
       }
       ParameterId::PID_CONTENT_FILTER_PROPERTY => {
@@ -826,7 +825,7 @@ impl BuiltinDataDeserializer {
           self.identity_token = Some(param);
           buffer.drain(..4 + parameter_length);
           return self;
-        }        
+        }
       }
 
       ParameterId::PID_PERMISSIONS_TOKEN => {
@@ -836,7 +835,7 @@ impl BuiltinDataDeserializer {
           self.permissions_token = Some(param);
           buffer.drain(..4 + parameter_length);
           return self;
-        }        
+        }
       }
 
       ParameterId::PID_IDENTITY_STATUS_TOKEN => {
@@ -846,11 +845,11 @@ impl BuiltinDataDeserializer {
           self.identity_status_token = Some(param);
           buffer.drain(..4 + parameter_length);
           return self;
-        }        
+        }
       }
 
       ParameterId::PID_DATA_TAGS => {
-        error!("Unhandled DataTags") // TODO: Implement this.
+        error!("Unhandled DataTags"); // TODO: Implement this.
       }
 
       ParameterId::PID_SENTINEL => {
@@ -863,11 +862,13 @@ impl BuiltinDataDeserializer {
         return self;
       }
       _ => {
-        // This is not a serious error, because there may 
+        // This is not a serious error, because there may
         // be ParameterIds we just do not know.
-        info!("Unknown {:?} length={} in ParameterList.", 
-          parameter_id, parameter_length);
-        debug!("Parameter data was {:x?}",  &buffer[4..4 + parameter_length] );
+        info!(
+          "Unknown {:?} length={} in ParameterList.",
+          parameter_id, parameter_length
+        );
+        debug!("Parameter data was {:x?}", &buffer[4..4 + parameter_length]);
       }
     }
 
