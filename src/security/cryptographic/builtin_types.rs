@@ -43,8 +43,8 @@ impl TryFrom<CryptoToken> for BuiltinCryptoToken {
 
       (cid,_,_)  => 
         Err(Self::Error 
-          { msg: format!("CryptoToken has wrong class_id. Expected {}",
-                CRYPTO_TOKEN_CLASS_ID ) 
+          { msg: format!("CryptoToken has wrong class_id. Expected {}, got {}",
+                CRYPTO_TOKEN_CLASS_ID , cid) 
           } ),
 
     }
