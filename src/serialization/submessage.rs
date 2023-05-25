@@ -12,6 +12,7 @@ pub struct Submessage {
   pub body: SubmessageBody,
 }
 
+/// See section 7.3.1 of the Security specification (v. 1.1)
 // TODO: Submessages should implement some Length trait that returns the length
 // of Submessage in bytes. This is needed for Submessage construction.
 #[derive(Debug, PartialEq, Eq, Clone)]

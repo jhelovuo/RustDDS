@@ -189,6 +189,7 @@ pub enum INFOREPLYIP4_Flags {
 }
 submessageflag_impls!(INFOREPLYIP4_Flags);
 
+/// Section 7.3.7.5.3 of the Security specification (v. 1.1)
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
 #[bitflags]
@@ -197,6 +198,7 @@ pub enum SECUREBODY_Flags {
 }
 submessageflag_impls!(SECUREBODY_Flags);
 
+/// Section 7.3.7.6.3 of the Security specification (v. 1.1)
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
 #[bitflags]
@@ -205,6 +207,7 @@ pub enum SECUREPREFIX_Flags {
 }
 submessageflag_impls!(SECUREPREFIX_Flags);
 
+/// Section 7.3.7.7.3 of the Security specification (v. 1.1)
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
 #[bitflags]
@@ -213,6 +216,7 @@ pub enum SECUREPOSTFIX_Flags {
 }
 submessageflag_impls!(SECUREPOSTFIX_Flags);
 
+/// Section 7.3.7.8.3 of the Security specification (v. 1.1)
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
 #[bitflags]
@@ -221,6 +225,7 @@ pub enum SECURERTPSPREFIX_Flags {
 }
 submessageflag_impls!(SECURERTPSPREFIX_Flags);
 
+/// Section 7.3.7.9.3 of the Security specification (v. 1.1)
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy)]
 #[repr(u8)]
 #[bitflags]

@@ -63,6 +63,7 @@ impl<C: Context> Writable<C> for ReaderSubmessage {
   }
 }
 
+/// New submessage types: section 7.3.6 of the Security specification (v. 1.1)
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::enum_variant_names)] // We are using variant names from the spec
 pub enum SecuritySubmessage {
