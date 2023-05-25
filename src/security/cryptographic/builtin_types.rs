@@ -25,32 +25,56 @@ pub struct BuiltinCryptoToken {
 impl TryFrom<CryptoToken> for BuiltinCryptoToken {
   type Error = SecurityError;
   fn try_from(value: CryptoToken) -> Result<Self, Self::Error> {
-    if value.data_holder.class_id.ne(CRYPTO_TOKEN_CLASS_ID) {
-      return Err(Self::Error {
-        msg: format!(
-          "CryptoToken has wrong class_id. Expected {}",
-          CRYPTO_TOKEN_CLASS_ID
-        ),
-      });
+    let dh = value.data_holder;
+    match (dh.class_id.as_str(), dh.properties.as_slice(), dh.binary_properties.as_slice() ) {
+
+      (CRYPTO_TOKEN_CLASS_ID, [], [bp0]) => 
+        Ok(Self { key_material: KeyMaterial_AES_GCM_GMAC::try_from(bp0.value.clone())? }),
+
+      (CRYPTO_TOKEN_CLASS_ID, [], bps) =>
+        Err(Self::Error 
+          { msg: format!("CryptoToken has wrong binary_properties. Expected exactly 1 binary property with name {}.", 
+              CRYPTO_TOKEN_KEYMAT_NAME), 
+          }),
+      (CRYPTO_TOKEN_CLASS_ID, ps, _) =>
+        Err(Self::Error 
+        { msg: String::from("CryptoToken has wrong properties. Expected properties to be empty."),
+        }),
+
+      (cid,_,_)  => 
+        Err(Self::Error 
+          { msg: format!("CryptoToken has wrong class_id. Expected {}",
+                CRYPTO_TOKEN_CLASS_ID ) 
+          } ),
+
     }
-    if !value.data_holder.properties.is_empty() {
-      return Err(Self::Error {
-        msg: String::from("CryptoToken has wrong properties. Expected properties to be empty."),
-      });
-    }
-    let binary_properties = value.data_holder.binary_properties;
-    if binary_properties.len() != 1 // There should be exactly one binary property and it should contain the key material
-      || binary_properties[0]
-        .name
-        .ne(CRYPTO_TOKEN_KEYMAT_NAME)
-    {
-      return Err(Self::Error {
-            msg: format!("CryptoToken has wrong binary_properties. Expected exactly 1 binary property with name {}.",CRYPTO_TOKEN_KEYMAT_NAME),
-          });
-    }
-    Ok(Self {
-      key_material: KeyMaterial_AES_GCM_GMAC::try_from(binary_properties[0].value.clone())?,
-    })
+
+  //   if value.data_holder.class_id.ne(CRYPTO_TOKEN_CLASS_ID) {
+  //     return Err(Self::Error {
+  //       msg: format!(
+  //         "CryptoToken has wrong class_id. Expected {}",
+  //         CRYPTO_TOKEN_CLASS_ID
+  //       ),
+  //     });
+  //   }
+  //   if !value.data_holder.properties.is_empty() {
+  //     return Err(Self::Error {
+  //       msg: String::from("CryptoToken has wrong properties. Expected properties to be empty."),
+  //     });
+  //   }
+  //   let binary_properties = value.data_holder.binary_properties;
+  //   if binary_properties.len() != 1 // There should be exactly one binary property and it should contain the key material
+  //     || binary_properties[0]
+  //       .name
+  //       .ne(CRYPTO_TOKEN_KEYMAT_NAME)
+  //   {
+  //     return Err(Self::Error {
+  //           msg: format!("CryptoToken has wrong binary_properties. Expected exactly 1 binary property with name {}.",CRYPTO_TOKEN_KEYMAT_NAME),
+  //         });
+  //   }
+  //   Ok(Self {
+  //     key_material: KeyMaterial_AES_GCM_GMAC::try_from(binary_properties[0].value.clone())?,
+  //   })
   }
 }
 
