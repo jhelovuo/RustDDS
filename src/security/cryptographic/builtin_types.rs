@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
   messages::submessages::submessage_elements::{
-    crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
+    crypto_content::CryptoContent, crypto_header::CryptoHeader,
   },
   security::{BinaryProperty, DataHolder, SecurityError},
   serialization::cdr_serializer::to_bytes,
@@ -230,6 +230,19 @@ impl TryFrom<CryptoTransformIdentifier> for BuiltinCryptoTransformIdentifier {
     }
   }
 }
+impl From<BuiltinCryptoTransformIdentifier> for CryptoTransformIdentifier {
+  fn from(
+    BuiltinCryptoTransformIdentifier {
+      transformation_kind,
+      transformation_key_id,
+    }: BuiltinCryptoTransformIdentifier,
+  ) -> Self {
+    CryptoTransformIdentifier {
+      transformation_kind: transformation_kind.into(),
+      transformation_key_id,
+    }
+  }
+}
 
 /// CryptoHeader type from section 9.5.2.3 of the Security specification (v.
 /// 1.1)
@@ -240,22 +253,27 @@ pub struct BuiltinCryptoHeader {
 }
 impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
   type Error = SecurityError;
-  fn try_from(value: CryptoHeader) -> Result<Self, Self::Error> {
-    let crypto_header_extra = value.plugin_crypto_header_extra.data;
+  fn try_from(
+    CryptoHeader {
+      transformation_id,
+      plugin_crypto_header_extra,
+    }: CryptoHeader,
+  ) -> Result<Self, Self::Error> {
+    let crypto_header_extra = plugin_crypto_header_extra.data;
     //Try to cast [CryptoTransformIdentifier] to [BuiltinCryptoTransformIdentifier]
     // and read 'session_id' and 'initialization_vector_suffix' from
     // 'crypto_header_extra'
     match (
-      BuiltinCryptoTransformIdentifier::try_from(value.transformation_id),
+      BuiltinCryptoTransformIdentifier::try_from(transformation_id),
       <[u8; 4]>::try_from(&crypto_header_extra[..4]),
       <[u8; 8]>::try_from(&crypto_header_extra[4..]),
     ) {
-      (Err(e), _, _) => Err(e),
       (Ok(transform_identifier), Ok(session_id), Ok(initialization_vector_suffix)) => Ok(Self {
         transform_identifier,
         session_id,
         initialization_vector_suffix,
       }),
+      (Err(e), _, _) => Err(e),
       _ => Err(Self::Error {
         msg: format!(
           "plugin_crypto_header_extra was of length {}. Expected 12.",
@@ -265,34 +283,70 @@ impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
     }
   }
 }
-
-/// CryptoContent type from section 9.5.2.4 of the Security specification (v.
-/// 1.1)
-pub struct BuiltinCryptoContent {
-  pub crypto_content: Vec<u8>,
-}
-impl TryFrom<CryptoContent> for BuiltinCryptoContent {
-  type Error = SecurityError;
-  fn try_from(value: CryptoContent) -> Result<Self, Self::Error> {
-    todo!();
+impl From<BuiltinCryptoHeader> for CryptoHeader {
+  fn from(
+    BuiltinCryptoHeader {
+      transform_identifier,
+      session_id,
+      initialization_vector_suffix,
+    }: BuiltinCryptoHeader,
+  ) -> Self {
+    CryptoHeader {
+      transformation_id: transform_identifier.into(),
+      plugin_crypto_header_extra: [
+        Vec::from(session_id),
+        Vec::from(initialization_vector_suffix),
+      ]
+      .concat()
+      .into(),
+    }
   }
 }
 
+/// CryptoContent type from section 9.5.2.4 of the Security specification (v.
+/// 1.1)
+pub type BuiltinCryptoContent = CryptoContent;
+
 /// CryptoFooter type from section 9.5.2.5 of the Security specification (v.
 /// 1.1)
+#[derive(Deserialize, Serialize, PartialEq)]
 pub struct BuiltinCryptoFooter {
   pub common_mac: [u8; 16],
   pub receiver_specific_macs: Vec<ReceiverSpecificMAC>,
 }
-impl TryFrom<CryptoFooter> for BuiltinCryptoFooter {
+// Vec<u8> already has From<CryptoFooter> so BuiltinCryptoFooter gets
+// TryFrom<CryptoFooter> by transitivity
+impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
   type Error = SecurityError;
-  fn try_from(value: CryptoFooter) -> Result<Self, Self::Error> {
-    todo!();
+  fn try_from(data: Vec<u8>) -> Result<Self, Self::Error> {
+    // Deserialize the data
+    BuiltinCryptoFooter::deserialize(&mut CdrDeserializer::<
+      BigEndian, /* TODO: What's the point of this constructor if we need to specify the byte
+                  * order anyway */
+    >::new_big_endian(data.as_ref()))
+    .map_err(
+      // Map deserialization error to SecurityError
+      |e| Self::Error {
+        msg: format!("Error deserializing BuiltinCryptoFooter: {}", e),
+      },
+    )
+  }
+}
+// CryptoFooter already has From<Vec<u8>> so it gets
+// TryFrom<BuiltinCryptoFooter> by transitivity
+impl TryFrom<BuiltinCryptoFooter> for Vec<u8> {
+  type Error = SecurityError;
+  fn try_from(value: BuiltinCryptoFooter) -> Result<Self, Self::Error> {
+    // Serialize
+    to_bytes::<BuiltinCryptoFooter, BigEndian>(&value).map_err(|e| Self::Error {
+      msg: format!("Error serializing BuiltinCryptoFooter: {}", e),
+    })
   }
 }
 
 /// ReceiverSpecificMAC type from section 9.5.2.5 of the Security specification
 /// (v. 1.1)
+#[derive(Deserialize, Serialize, PartialEq)]
 pub struct ReceiverSpecificMAC {
   pub receiver_mac_key_id: CryptoTransformKeyId,
   pub receiver_mac: [u8; 16],

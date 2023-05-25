@@ -16,3 +16,8 @@ pub struct CryptoHeader {
 pub struct PluginCryptoHeaderExtra {
   pub data: Vec<u8>,
 }
+impl From<Vec<u8>> for PluginCryptoHeaderExtra {
+  fn from(data: Vec<u8>) -> Self {
+    Self { data }
+  }
+}

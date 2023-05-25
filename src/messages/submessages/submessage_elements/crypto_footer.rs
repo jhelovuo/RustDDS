@@ -7,3 +7,13 @@ use speedy::{Readable, Writable};
 pub struct CryptoFooter {
   pub data: Vec<u8>,
 }
+impl From<Vec<u8>> for CryptoFooter {
+  fn from(data: Vec<u8>) -> Self {
+    Self { data }
+  }
+}
+impl From<CryptoFooter> for Vec<u8> {
+  fn from(CryptoFooter { data }: CryptoFooter) -> Self {
+    data
+  }
+}
