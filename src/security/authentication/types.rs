@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use speedy::{Readable, Writable};
 
 // ValidationOutcome is like ValidationResult_t in the the Security
 // specification v.1.1 (section 8.3.2.11.1), but does not contain
@@ -13,8 +14,13 @@ pub enum ValidationOutcome {
 }
 
 // TODO: IdentityToken: section 8.3.2.1 of the Security specification (v. 1.1)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IdentityToken {}
+#[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
+pub struct IdentityToken {
+  // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
+  // Readable and Writable are needed to (de)serialize to(from) ParameterList.
+  // Note: The implementation has to observe CDR alignment rules.
+  // Automatic derive does not do so, but does not matter al long as the item is empty.  
+}
 
 impl IdentityToken {
   // Mock value used for development
@@ -24,7 +30,11 @@ impl IdentityToken {
 // TODO: IdentityStatusToken: section 8.3.2.2 of the Security specification (v.
 // 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IdentityStatusToken {}
+pub struct IdentityStatusToken {
+  // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
+  // Note: The implementation has to observe CDR alignment rules.
+  // Automatic derive does not do so, but does not matter al long as the item is empty.    
+}
 
 impl IdentityStatusToken {
   // Mock value used for development

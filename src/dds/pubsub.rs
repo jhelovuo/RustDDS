@@ -548,7 +548,8 @@ impl InnerPublisher {
 
     // notify Discovery DB
     let mut db = self.discovery_db.write()?;
-    let dwd = DiscoveredWriterData::new(&data_writer, topic, &dp);
+    // TODO: "None" below hardwires security_info to None. So we do not publish any.
+    let dwd = DiscoveredWriterData::new(&data_writer, topic, &dp, None);
     db.update_local_topic_writer(dwd);
     db.update_topic_data_p(topic);
 

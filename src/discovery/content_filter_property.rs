@@ -42,17 +42,6 @@ pub struct ContentFilterProperty {
 
 
 
-// These are for PL_CDR (de)serialization
-fn read_pad<'a, C: Context, R: Reader<'a, C>>(reader: &mut R, read_length: usize, align:usize)
-  -> Result<(), C::Error>
-{
-  let m = read_length % align;
-  if m > 0 {
-    reader.skip_bytes(align - m)?;
-  }
-  Ok(())
-}
-
 // TODO: This is patchy hack. 
 // Speedy reader/writer implementations do not respect
 // alignment. A string starts with 4-byte character count, so
@@ -85,7 +74,6 @@ impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
       prev_len = s.len();
       eps.push( s.into() );
     }
-    //let eps: Vec<StringWithNul> = reader.read_value()?;
 
     Ok(ContentFilterProperty{
       content_filtered_topic_name: cftn.into(),
@@ -98,18 +86,6 @@ impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
 
 }
 
-
-fn write_pad<C: Context, T: ?Sized + Writer<C>>(writer: &mut T, previous_length: usize, align:usize)
-  -> Result<(), C::Error>
-{
-  let m = previous_length % align;
-  if m > 0 {
-    for _ in 0..m {
-      writer.write_u8(0)?;
-    }
-  }
-  Ok(())
-}
 
 // Writing several strings is a bit complicated, because
 // we have to keep track of alignment.
