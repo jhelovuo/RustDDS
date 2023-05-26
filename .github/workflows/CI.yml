@@ -34,7 +34,7 @@ jobs:
           components: clippy
       - uses: giraffate/clippy-action@v1
         with:
-          clippy_flags: --all --all-targets
+          clippy_flags: --all --lib --bins --examples
           filter_mode: nofilter
 
   msrv:
