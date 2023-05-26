@@ -29,7 +29,6 @@ use crate::{
   network::constant::*,
   security::{
     access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
-    Property,
   },
   serialization::{
     error::Result, pl_cdr_deserializer::*, pl_cdr_serializer::*, speedy_pl_cdr_helpers::*,
@@ -43,7 +42,7 @@ use crate::{
     locator::Locator,
     parameter_id::ParameterId,
   },
-}; // Helper functions and types
+}; 
 
 // This type is used by Discovery to communicate the presence and properties
 // of DomainParticipants. It is sent over topic "DCPSParticipant".

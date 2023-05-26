@@ -608,7 +608,7 @@ pub mod policy {
   use std::cmp::Ordering;
 
   use serde::{Deserialize, Serialize};
-  use speedy::{Endianness, Readable, Writable, Context, Reader, Writer};
+  use speedy::{IsEof, Readable, Writable, Context, Reader, Writer};
   #[allow(unused_imports)]
   use log::{debug, error, info, trace, warn};
 
@@ -873,15 +873,28 @@ pub mod policy {
         value.push( s );
       }
 
+      // Depending on the RTPS version used by writer, PropertyQoSPolicy may end here,
+      // i.e. there is no "binary_value". Pad should still always exist.
       read_pad(reader, prev_len, 4)?;
-      let count = reader.read_u32()?;
       let mut binary_value = Vec::new();
-      prev_len = 0;
-      for _ in 0..count {
-        read_pad(reader, prev_len, 4)?;
-        let s : security::types::BinaryProperty = reader.read_value()?;
-        prev_len = s.serialized_len();
-        binary_value.push( s );
+
+      match reader.read_u32() {
+        Ok(count) => {
+          prev_len = 0;
+          for _ in 0..count {
+            read_pad(reader, prev_len, 4)?;
+            let s : security::types::BinaryProperty = reader.read_value()?;
+            prev_len = s.serialized_len();
+            binary_value.push( s );
+          }
+        }
+        Err(e) => {
+          if e.is_eof() { 
+            // This is ok. Only String properties, no binary.
+            debug!("Non-security PropertyQosPolicy");
+          }
+          else { return Err(e) }
+        }
       }
       
       Ok(Property {
@@ -896,7 +909,27 @@ pub mod policy {
   // Again, alignment comes BEFORE string length, or vector item count, not after string.
   impl<C: Context> Writable<C> for Property {
     fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-      error!("Not implemented");
+      // value vector length
+      writer.write_u32(self.value.len() as u32 )?;
+
+      let mut prev_len = 0;
+      for prop in &self.value {
+        write_pad(writer, prev_len, 4)?;
+        writer.write_value(prop)?;
+        prev_len = prop.serialized_len();
+      }
+
+      // now the length of "binary.value"
+      write_pad(writer, prev_len, 4)?;
+      writer.write_u32(self.binary_value.len() as u32 )?;
+      // and the elements
+      let mut prev_len = 0;
+      for prop in &self.binary_value {
+        write_pad(writer, prev_len, 4)?;
+        writer.write_value(prop)?;
+        prev_len = prop.serialized_len();
+      }
+
       Ok(())
     }
   }
