@@ -1,30 +1,36 @@
 use speedy::{Context, Writable, Writer};
 
 use crate::messages::submessages::{
-  submessage::EntitySubmessage, submessage_header::SubmessageHeader,
+  submessage::{ReaderSubmessage, SecuritySubmessage, WriterSubmessage},
+  submessage_header::SubmessageHeader,
   submessages::InterpreterSubmessage,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct SubMessage {
+pub struct Submessage {
   pub header: SubmessageHeader,
   pub body: SubmessageBody,
 }
 
+/// See section 7.3.1 of the Security specification (v. 1.1)
 // TODO: Submessages should implement some Length trait that returns the length
 // of Submessage in bytes. This is needed for Submessage construction.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SubmessageBody {
-  Entity(EntitySubmessage),
+  Writer(WriterSubmessage),
+  Reader(ReaderSubmessage),
+  Security(SecuritySubmessage),
   Interpreter(InterpreterSubmessage),
 }
 
-impl<C: Context> Writable<C> for SubMessage {
+impl<C: Context> Writable<C> for Submessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_value(&self.header)?;
     match &self.body {
-      SubmessageBody::Entity(e) => writer.write_value(&e),
-      SubmessageBody::Interpreter(i) => writer.write_value(&i),
+      SubmessageBody::Writer(m) => writer.write_value(&m),
+      SubmessageBody::Reader(m) => writer.write_value(&m),
+      SubmessageBody::Interpreter(m) => writer.write_value(&m),
+      SubmessageBody::Security(m) => writer.write_value(&m),
     }
   }
 }
@@ -36,7 +42,7 @@ mod tests {
   use log::info;
   use speedy::{Readable, Writable};
 
-  use super::SubMessage;
+  use super::Submessage;
   use crate::{messages::submessages::submessages::*, serialization::submessage::*};
 
   #[test]
@@ -54,9 +60,9 @@ mod tests {
     let flags = BitFlags::<DATA_Flags>::from_bits_truncate(header.flags);
     let suba = Data::deserialize_data(&serialized_data_submessage.slice(4..), flags)
       .expect("DATA deserialization failed.");
-    let sub = SubMessage {
+    let sub = Submessage {
       header,
-      body: SubmessageBody::Entity(EntitySubmessage::Data(suba, flags)),
+      body: SubmessageBody::Writer(WriterSubmessage::Data(suba, flags)),
     };
     info!("{:?}", sub);
 
@@ -79,9 +85,9 @@ mod tests {
     let e = endianness_flag(header.flags);
     let suba = Heartbeat::read_from_buffer_with_ctx(e, &serialized_heartbeat_message[4..])
       .expect("deserialization failed.");
-    let sub = SubMessage {
+    let sub = Submessage {
       header,
-      body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(suba, flags)),
+      body: SubmessageBody::Writer(WriterSubmessage::Heartbeat(suba, flags)),
     };
     info!("{:?}", sub);
 
@@ -103,7 +109,7 @@ mod tests {
     let e = endianness_flag(header.flags);
     let suba = InfoDestination::read_from_buffer_with_ctx(e, &serialized_info_dst_message[4..])
       .expect("deserialization failed.");
-    let sub = SubMessage {
+    let sub = Submessage {
       header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(suba, flags)),
     };

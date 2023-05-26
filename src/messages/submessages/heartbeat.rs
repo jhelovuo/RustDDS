@@ -4,11 +4,11 @@ use speedy::{Readable, Writable};
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{SubMessage, SubmessageBody},
+  serialization::{Submessage, SubmessageBody},
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
 use super::{
-  submessage::EntitySubmessage, submessage_flag::HEARTBEAT_Flags, submessage_kind::SubmessageKind,
+  submessage::WriterSubmessage, submessage_flag::HEARTBEAT_Flags, submessage_kind::SubmessageKind,
 };
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
@@ -47,7 +47,7 @@ pub struct Heartbeat {
 }
 
 impl Heartbeat {
-  pub fn create_submessage(self, flags: BitFlags<HEARTBEAT_Flags>) -> Option<SubMessage> {
+  pub fn create_submessage(self, flags: BitFlags<HEARTBEAT_Flags>) -> Option<Submessage> {
     let submessage_len = match self.write_to_vec() {
       Ok(bytes) => bytes.len() as u16,
       Err(e) => {
@@ -56,13 +56,13 @@ impl Heartbeat {
       }
     };
 
-    Some(SubMessage {
+    Some(Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::HEARTBEAT,
         flags: flags.bits(),
         content_length: submessage_len,
       },
-      body: SubmessageBody::Entity(EntitySubmessage::Heartbeat(self, flags)),
+      body: SubmessageBody::Writer(WriterSubmessage::Heartbeat(self, flags)),
     })
   }
 }

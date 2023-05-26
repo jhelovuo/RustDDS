@@ -608,9 +608,11 @@ pub mod policy {
   use std::cmp::Ordering;
 
   use serde::{Deserialize, Serialize};
-  use speedy::{Readable, Writable};
+  use speedy::{Context, IsEof, Readable, Reader, Writable, Writer};
+  #[allow(unused_imports)]
+  use log::{debug, error, info, trace, warn};
 
-  use crate::structure::duration::Duration;
+  use crate::{serialization::speedy_pl_cdr_helpers::*, structure::duration::Duration};
 
   /*
   pub struct UserData {
@@ -846,6 +848,92 @@ pub mod policy {
     pub max_samples: i32,
     pub max_instances: i32,
     pub max_samples_per_instance: i32,
+  }
+
+  use crate::security;
+  // DDS Security spec v1.1
+  // Section 7.2.5 PropertyQosPolicy, DomainParticipantQos, DataWriterQos, and
+  // DataReaderQos
+  #[derive(Clone, Debug, PartialEq, Eq)]
+  pub struct Property {
+    pub value: Vec<security::types::Property>,
+    pub binary_value: Vec<security::types::BinaryProperty>,
+  }
+
+  impl<'a, C: Context> Readable<'a, C> for Property {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+      let count = reader.read_u32()?;
+      let mut value = Vec::new();
+
+      let mut prev_len = 0;
+      for _ in 0..count {
+        read_pad(reader, prev_len, 4)?;
+        let s: security::types::Property = reader.read_value()?;
+        prev_len = s.serialized_len();
+        value.push(s);
+      }
+
+      // Depending on the RTPS version used by writer, PropertyQoSPolicy may end here,
+      // i.e. there is no "binary_value". Pad should still always exist.
+      read_pad(reader, prev_len, 4)?;
+      let mut binary_value = Vec::new();
+
+      match reader.read_u32() {
+        Ok(count) => {
+          prev_len = 0;
+          for _ in 0..count {
+            read_pad(reader, prev_len, 4)?;
+            let s: security::types::BinaryProperty = reader.read_value()?;
+            prev_len = s.serialized_len();
+            binary_value.push(s);
+          }
+        }
+        Err(e) => {
+          if e.is_eof() {
+            // This is ok. Only String properties, no binary.
+            debug!("Non-security PropertyQosPolicy");
+          } else {
+            return Err(e);
+          }
+        }
+      }
+
+      Ok(Property {
+        value,
+        binary_value,
+      })
+    }
+  }
+
+  // Writing several strings is a bit complicated, because
+  // we have to keep track of alignment.
+  // Again, alignment comes BEFORE string length, or vector item count, not after
+  // string.
+  impl<C: Context> Writable<C> for Property {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+      // value vector length
+      writer.write_u32(self.value.len() as u32)?;
+
+      let mut prev_len = 0;
+      for prop in &self.value {
+        write_pad(writer, prev_len, 4)?;
+        writer.write_value(prop)?;
+        prev_len = prop.serialized_len();
+      }
+
+      // now the length of "binary.value"
+      write_pad(writer, prev_len, 4)?;
+      writer.write_u32(self.binary_value.len() as u32)?;
+      // and the elements
+      let mut prev_len = 0;
+      for prop in &self.binary_value {
+        write_pad(writer, prev_len, 4)?;
+        writer.write_value(prop)?;
+        prev_len = prop.serialized_len();
+      }
+
+      Ok(())
+    }
   }
 } // mod policy
 

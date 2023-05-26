@@ -76,8 +76,8 @@ use std::{net::SocketAddr, time::Duration as StdDuration};
 
 use bytes::Bytes;
 use speedy::{Endianness, Writable};
-use serde::Serialize;
-use byteorder::LittleEndian;
+//use serde::Serialize;
+//use byteorder::LittleEndian;
 use enumflags2::BitFlags;
 
 use crate::{
@@ -106,12 +106,12 @@ use crate::{
     header::Header,
     submessages::{
       submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload},
-      submessages::{Data, EntitySubmessage, SubmessageHeader, SubmessageKind, *},
+      submessages::{Data, SubmessageHeader, SubmessageKind, WriterSubmessage, *},
     },
   },
   serialization::{
-    cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter, Message, SubMessage,
-    SubmessageBody,
+    pl_cdr_deserializer::PlCdrDeserializerAdapter, pl_cdr_serializer::PlCdrSerialize, Message,
+    Submessage, SubmessageBody,
   },
   structure::{
     duration::Duration,
@@ -140,15 +140,13 @@ pub(crate) fn spdp_publication_msg() -> Message {
 }
 
 pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
-  use crate::serialization::pl_cdr_serializer::PlCdrSerialize;
-
   let mut tdata: Message = spdp_participant_msg();
   let mut data;
   for submsg in &mut tdata.submessages {
     let mut submsglen = submsg.header.content_length;
     match &mut submsg.body {
-      SubmessageBody::Entity(v) => match v {
-        EntitySubmessage::Data(d, _) => {
+      SubmessageBody::Writer(v) => match v {
+        WriterSubmessage::Data(d, _) => {
           let mut participant_data: SpdpDiscoveredParticipantData =
             PlCdrDeserializerAdapter::<SpdpDiscoveredParticipantData>::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
@@ -162,11 +160,12 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
           participant_data.default_multicast_locators.clear();
 
           let datalen = d.serialized_payload.as_ref().unwrap().value.len() as u16;
-          data = participant_data.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+          data = participant_data
+            .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
             .unwrap();
           // data = Bytes::from(
-          //   to_bytes::<SpdpDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
-          //     .unwrap(),
+          //   to_bytes::<SpdpDiscoveredParticipantData,
+          // byteorder::LittleEndian>(&participant_data)     .unwrap(),
           // );
           d.serialized_payload.as_mut().unwrap().value = data.clone();
           submsglen =
@@ -175,6 +174,7 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
         _ => continue,
       },
       SubmessageBody::Interpreter(_) => (),
+      _ => continue,
     }
     submsg.header.content_length = submsglen;
   }
@@ -190,8 +190,8 @@ pub(crate) fn spdp_participant_data() -> Option<SpdpDiscoveredParticipantData> {
 
   for submsg in &submsgs {
     match &submsg.body {
-      SubmessageBody::Entity(v) => match v {
-        EntitySubmessage::Data(d, _) => {
+      SubmessageBody::Writer(v) => match v {
+        WriterSubmessage::Data(d, _) => {
           let particiapant_data: SpdpDiscoveredParticipantData =
             PlCdrDeserializerAdapter::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
@@ -204,6 +204,7 @@ pub(crate) fn spdp_participant_data() -> Option<SpdpDiscoveredParticipantData> {
         _ => continue,
       },
       SubmessageBody::Interpreter(_) => (),
+      _ => continue,
     }
   }
   None
@@ -277,6 +278,7 @@ pub(crate) fn subscription_builtin_topic_data() -> Option<SubscriptionBuiltinTop
     "some topic name".to_string(),
     "RandomData".to_string(),
     &qos,
+    None,
   );
 
   Some(sub_topic_data)
@@ -313,6 +315,7 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
     related_datareader_key: None,
     service_instance_name: None,
     topic_aliases: None,
+    security_info: None,
   };
 
   Some(pub_topic_data)
@@ -365,12 +368,16 @@ pub(crate) fn content_filter_data() -> Option<ContentFilterProperty> {
   Some(content_filter)
 }
 
-pub(crate) fn create_rtps_data_message<D: Serialize>(
+#[allow(dead_code)]
+pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
   data: D,
   reader_id: EntityId,
   writer_id: EntityId,
 ) -> Message {
-  let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
+  //let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
+  let tdata = data
+    .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+    .unwrap();
 
   let mut rtps_message = Message::default();
   let guid = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
@@ -404,24 +411,23 @@ pub(crate) fn create_rtps_data_message<D: Serialize>(
     content_length: data_size as u16,
   };
 
-  let submessage: SubMessage = SubMessage {
+  let submessage: Submessage = Submessage {
     header: submessage_header,
-    body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, sub_flags)),
+    body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, sub_flags)),
   };
   rtps_message.add_submessage(submessage);
 
   rtps_message
 }
 
-use crate::serialization::pl_cdr_serializer::PlCdrSerialize;
-
 pub(crate) fn create_cdr_pl_rtps_data_message<D: PlCdrSerialize>(
   data: D,
   reader_id: EntityId,
   writer_id: EntityId,
 ) -> Message {
-
-  let tdata = data.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE).unwrap();
+  let tdata = data
+    .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+    .unwrap();
 
   let mut rtps_message = Message::default();
   let guid = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
@@ -455,9 +461,9 @@ pub(crate) fn create_cdr_pl_rtps_data_message<D: PlCdrSerialize>(
     content_length: data_size as u16,
   };
 
-  let submessage: SubMessage = SubMessage {
+  let submessage: Submessage = Submessage {
     header: submessage_header,
-    body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, sub_flags)),
+    body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, sub_flags)),
   };
   rtps_message.add_submessage(submessage);
 

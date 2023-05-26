@@ -489,7 +489,7 @@ impl DiscoveryDB {
             *old_dtd = (discovered_via, dtd.clone()); // update QoS
             notify = true;
           } else {
-            info!(
+            debug!(
               "Topic {:?} update ignored from {:?}. Already have this.",
               &topic_name, &updater
             );
@@ -542,6 +542,7 @@ impl DiscoveryDB {
       topic.name(),
       topic.get_type().name().to_string(),
       &topic.qos(),
+      None, // <<---------------TODO: None here means we have no EndpointSecurityInfo
     );
 
     // TODO: possibly change content filter to dynamic value
@@ -760,7 +761,7 @@ mod tests {
       .create_datawriter::<RandomData, CDRSerializerAdapter<RandomData, LittleEndian>>(&topic, None)
       .unwrap();
 
-    let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant);
+    let writer_data = DiscoveredWriterData::new(&dw, &topic, &domain_participant, None);
 
     discovery_db.update_local_topic_writer(writer_data);
     assert_eq!(discovery_db.local_topic_writers.len(), 1);
@@ -773,7 +774,7 @@ mod tests {
         &topic2, None,
       )
       .unwrap();
-    let writer_data2 = DiscoveredWriterData::new(&dw2, &topic2, &domain_participant);
+    let writer_data2 = DiscoveredWriterData::new(&dw2, &topic2, &domain_participant, None);
     discovery_db.update_local_topic_writer(writer_data2);
     assert_eq!(discovery_db.local_topic_writers.len(), 2);
 

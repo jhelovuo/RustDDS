@@ -33,6 +33,7 @@ use crate::{
     serialized_payload::RepresentationIdentifier,
   },
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
+  security::EndpointSecurityInfo,
   serialization::{
     error as ser, pl_cdr_deserializer::PlCdrDeserialize, pl_cdr_serializer::PlCdrSerialize,
     speedy_pl_cdr_helpers::*,
@@ -124,7 +125,7 @@ impl PlCdrSerialize for Endpoint_GUID {
 // deserialization)
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReaderProxy {
   pub remote_reader_guid: GUID,
   pub expects_inline_qos: bool,
@@ -165,7 +166,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
 
 /// DDS SubscriptionBuiltinTopicData
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubscriptionBuiltinTopicData {
   key: GUID,
   participant_key: Option<GUID>,
@@ -192,6 +193,8 @@ pub struct SubscriptionBuiltinTopicData {
   related_datawriter_key: Option<GUID>,
   topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates if the
                                        * parameter was present or not */
+  // DDS Security:
+  security_info: Option<EndpointSecurityInfo>,
 }
 
 impl SubscriptionBuiltinTopicData {
@@ -201,13 +204,14 @@ impl SubscriptionBuiltinTopicData {
     topic_name: String,
     type_name: String,
     qos: &QosPolicies,
+    security_info: Option<EndpointSecurityInfo>,
   ) -> Self {
     let mut sbtd = Self {
       key,
       participant_key,
       topic_name,
       type_name,
-
+      //QoS
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -218,10 +222,13 @@ impl SubscriptionBuiltinTopicData {
       time_based_filter: None,
       presentation: None,
       lifespan: None,
-
+      // DDS-RPC
+      // TODO: these are not implemented
       service_instance_name: None,  // Note: Not implemented
       related_datawriter_key: None, // Note: Not implemented
       topic_aliases: None,          // Note: Not implemented
+      // DDS Security
+      security_info,
     };
 
     sbtd.set_qos(qos);
@@ -242,6 +249,10 @@ impl SubscriptionBuiltinTopicData {
 
   pub fn type_name(&self) -> &String {
     &self.type_name
+  }
+
+  pub fn security_info(&self) -> &Option<EndpointSecurityInfo> {
+    &self.security_info
   }
 
   pub fn set_qos(&mut self, qos: &QosPolicies) {
@@ -292,7 +303,7 @@ impl SubscriptionBuiltinTopicData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveredReaderData {
   pub reader_proxy: ReaderProxy,
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
@@ -313,6 +324,7 @@ impl DiscoveredReaderData {
       topic_name,
       type_name,
       &QosPolicies::builder().build(),
+      None,
     );
     Self {
       reader_proxy,
@@ -375,8 +387,26 @@ impl PlCdrDeserialize for DiscoveredReaderData {
       get_first_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_TYPE_NAME, "type name")?
       .into();
 
-    let content_filter : Option<ContentFilterProperty> =
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_CONTENT_FILTER_PROPERTY, "content filter" )?;
+    let content_filter: Option<ContentFilterProperty> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_CONTENT_FILTER_PROPERTY,
+      "content filter",
+    )
+    .map_err(|e| {
+      warn!(
+        "Content filter was: {:?}",
+        pl_map.get(&ParameterId::PID_CONTENT_FILTER_PROPERTY)
+      );
+      e
+    })?;
+
+    let security_info: Option<EndpointSecurityInfo> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_ENDPOINT_SECURITY_INFO,
+      "endpoint security info",
+    )?;
 
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
 
@@ -393,6 +423,7 @@ impl PlCdrDeserialize for DiscoveredReaderData {
         topic_name,
         type_name,
         &qos,
+        security_info,
       ),
       content_filter,
     })
@@ -431,8 +462,9 @@ impl PlCdrSerialize for DiscoveredReaderData {
           service_instance_name,
           related_datawriter_key,
           topic_aliases,
+          security_info, //TODO: Imissing implementation
         },
-      content_filter, 
+      content_filter,
     } = self;
 
     let mut pl = ParameterList::new();
@@ -501,8 +533,17 @@ impl PlCdrSerialize for DiscoveredReaderData {
         StringWithNul
       );
     }
-    emit_option!(PID_CONTENT_FILTER_PROPERTY, content_filter, ContentFilterProperty);
+    emit_option!(
+      PID_CONTENT_FILTER_PROPERTY,
+      content_filter,
+      ContentFilterProperty
+    );
 
+    emit_option!(
+      PID_ENDPOINT_SECURITY_INFO,
+      security_info,
+      EndpointSecurityInfo
+    );
 
     let bytes = pl.serialize_to_bytes(ctx)?;
     Ok(bytes)
@@ -514,7 +555,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WriterProxy {
   pub remote_writer_guid: GUID,
   pub unicast_locator_list: Vec<Locator>,
@@ -553,7 +594,7 @@ impl From<RtpsWriterProxy> for WriterProxy {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicationBuiltinTopicData {
   pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
@@ -575,6 +616,8 @@ pub struct PublicationBuiltinTopicData {
   pub related_datareader_key: Option<GUID>,
   pub topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates
                                            * if the parameter was present or not */
+  // DDS Security:
+  pub security_info: Option<EndpointSecurityInfo>,
 }
 
 impl PublicationBuiltinTopicData {
@@ -583,12 +626,14 @@ impl PublicationBuiltinTopicData {
     participant_guid: Option<GUID>,
     topic_name: String,
     type_name: String,
+    security_info: Option<EndpointSecurityInfo>,
   ) -> Self {
     Self {
       key: guid,
       participant_key: participant_guid,
       topic_name,
       type_name,
+
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -603,7 +648,22 @@ impl PublicationBuiltinTopicData {
       service_instance_name: None,  // TODO: These are not supported/used
       related_datareader_key: None, // TODO
       topic_aliases: None,          // TODO
+
+      security_info,
     }
+  }
+
+  pub fn new_with_qos(
+    guid: GUID,
+    participant_guid: Option<GUID>,
+    topic_name: String,
+    type_name: String,
+    qos: &QosPolicies,
+    security_info: Option<EndpointSecurityInfo>,
+  ) -> Self {
+    let mut s = Self::new(guid, participant_guid, topic_name, type_name, security_info);
+    s.set_qos(qos);
+    s
   }
 
   pub fn set_qos(&mut self, qos: &QosPolicies) {
@@ -654,7 +714,7 @@ impl PublicationBuiltinTopicData {
 // =======================================================================
 
 /// Type specified in RTPS v2.3 spec Figure 8.30
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveredWriterData {
   pub last_updated: Instant, // last_updated is not serialized
 
@@ -677,19 +737,20 @@ impl DiscoveredWriterData {
     writer: &DataWriter<D, SA>,
     topic: &Topic,
     dp: &DomainParticipant,
+    security_info: Option<EndpointSecurityInfo>,
   ) -> Self {
     let unicast_port = user_traffic_unicast_port(dp.domain_id(), dp.participant_id());
     let unicast_addresses = get_local_unicast_locators(unicast_port);
     // TODO: Why empty vector below? No multicast?
     let writer_proxy = WriterProxy::new(writer.guid(), vec![], unicast_addresses);
-    let mut publication_topic_data = PublicationBuiltinTopicData::new(
+    let publication_topic_data = PublicationBuiltinTopicData::new_with_qos(
       writer.guid(),
       Some(dp.guid()),
       topic.name(),
       topic.get_type().name().to_string(),
+      &writer.qos(),
+      security_info,
     );
-
-    publication_topic_data.set_qos(&writer.qos());
 
     Self {
       last_updated: Instant::now(),
@@ -747,12 +808,14 @@ impl PlCdrDeserialize for DiscoveredWriterData {
       ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED,
       "Max size serialized",
     )?;
+    let security_info: Option<EndpointSecurityInfo> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_ENDPOINT_SECURITY_INFO,
+      "endpoint security info",
+    )?;
 
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
-
-    let mut publication_topic_data =
-      PublicationBuiltinTopicData::new(guid, participant_guid, topic_name, type_name);
-    publication_topic_data.set_qos(&qos);
 
     Ok(DiscoveredWriterData {
       last_updated: Instant::now(),
@@ -762,7 +825,14 @@ impl PlCdrDeserialize for DiscoveredWriterData {
         multicast_locator_list,
         data_max_size_serialized,
       },
-      publication_topic_data,
+      publication_topic_data: PublicationBuiltinTopicData::new_with_qos(
+        guid,
+        participant_guid,
+        topic_name,
+        type_name,
+        &qos,
+        security_info,
+      ),
     })
   }
 }
@@ -800,6 +870,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
           service_instance_name,
           related_datareader_key,
           topic_aliases,
+          security_info,
         },
     } = self;
 
@@ -860,7 +931,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
       StringWithNul
     );
     emit_option!(PID_RELATED_ENTITY_GUID, related_datareader_key, GUID);
-    // TODO: Shoudl topic alaes be on paramter with vector or multiple
+    // TODO: Should topic aliaes be on paramter with vector or multiple
     // parameters with one alias name each?
     for topic_alias in topic_aliases.as_ref().unwrap_or(&Vec::new()) {
       emit!(
@@ -869,6 +940,11 @@ impl PlCdrSerialize for DiscoveredWriterData {
         StringWithNul
       );
     }
+    emit_option!(
+      PID_ENDPOINT_SECURITY_INFO,
+      security_info,
+      EndpointSecurityInfo
+    );
 
     let bytes = pl.serialize_to_bytes(ctx)?;
     Ok(bytes)
@@ -1044,15 +1120,7 @@ impl PlCdrSerialize for DiscoveredTopicData {
     let mut pl = ParameterList::new();
     let qos = td.qos();
 
-    let ctx = match encoding {
-      RepresentationIdentifier::PL_CDR_LE => speedy::Endianness::LittleEndian,
-      RepresentationIdentifier::PL_CDR_BE => speedy::Endianness::BigEndian,
-      _ => {
-        return Err(crate::serialization::error::Error::Message(
-          "DiscoveredReaderData: Unknown encoding, expected PL_CDR".to_string(),
-        ))
-      }
-    };
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
 
     macro_rules! emit {
       ($pid:ident, $member:expr, $type:ty) => {
@@ -1229,7 +1297,11 @@ mod tests {
     );
     // deserialize back
     let drd2: DiscoveredReaderData =
-      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
+      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)
+        .unwrap_or_else(|e| {
+          println!("DiscoveredReaderData deserialize fail: {e:?}");
+          panic!();
+        });
 
     // check objects are equal
     assert_eq!(drd, drd2);

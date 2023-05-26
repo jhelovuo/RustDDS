@@ -4,14 +4,14 @@ use speedy::{Readable, Writable};
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{SubMessage, SubmessageBody},
+  serialization::{Submessage, SubmessageBody},
   structure::{
     guid::EntityId,
     sequence_number::{SequenceNumber, SequenceNumberSet},
   },
 };
 use super::{
-  submessage::EntitySubmessage, submessage_flag::GAP_Flags, submessage_kind::SubmessageKind,
+  submessage::WriterSubmessage, submessage_flag::GAP_Flags, submessage_kind::SubmessageKind,
 };
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
 /// indicates to the RTPS Reader that a range of sequence numbers
@@ -40,7 +40,7 @@ pub struct Gap {
 }
 
 impl Gap {
-  pub fn create_submessage(self, flags: BitFlags<GAP_Flags>) -> Option<SubMessage> {
+  pub fn create_submessage(self, flags: BitFlags<GAP_Flags>) -> Option<Submessage> {
     let submessage_len = match self.write_to_vec() {
       Ok(bytes) => bytes.len() as u16,
       Err(e) => {
@@ -49,13 +49,13 @@ impl Gap {
       }
     };
 
-    Some(SubMessage {
+    Some(Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::GAP,
         flags: flags.bits(),
         content_length: submessage_len,
       },
-      body: SubmessageBody::Entity(EntitySubmessage::Gap(self, flags)),
+      body: SubmessageBody::Writer(WriterSubmessage::Gap(self, flags)),
     })
   }
 }

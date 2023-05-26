@@ -718,7 +718,7 @@ impl Discovery {
               .dcps_participant_writer
               .write(data, None)
               .unwrap_or_else(|e| {
-                error!("Discovery: Publishing to DCPS participant topic failed: {e:?}")
+                error!("Discovery: Publishing to DCPS participant topic failed: {e:?}");
               });
             // reschedule timer
             self
@@ -850,6 +850,7 @@ impl Discovery {
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
       &Self::create_spdp_patricipant_qos(),
+      None, // <<---------------TODO: None here means we advertise no EndpointSecurityInfo
     );
     let drd = DiscoveredReaderData {
       reader_proxy,
@@ -878,6 +879,7 @@ impl Discovery {
       Some(dp.guid()),
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
+      None, // TODO: EndpointSecurityInfo is missing from here.
     );
     let dwd = DiscoveredWriterData {
       last_updated: Instant::now(),
@@ -1402,7 +1404,7 @@ mod tests {
   use std::net::SocketAddr;
 
   use chrono::Utc;
-  use bytes::Bytes;
+  //use bytes::Bytes;
   use mio_06::Token;
   use speedy::{Endianness, Writable};
 
@@ -1412,18 +1414,15 @@ mod tests {
     discovery::data_types::topic_data::TopicBuiltinTopicData,
     messages::submessages::{
       submessage_elements::serialized_payload::RepresentationIdentifier,
-      submessages::{EntitySubmessage, InterpreterSubmessage},
+      submessages::{InterpreterSubmessage, WriterSubmessage},
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
-    serialization::{
-      cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes, submessage::*,
-    },
+    serialization::{cdr_deserializer::CDRDeserializerAdapter, submessage::*},
     structure::{entity::RTPSEntity, locator::Locator},
     test::{
       shape_type::ShapeType,
       test_data::{
-        create_rtps_data_message, create_cdr_pl_rtps_data_message,
-        spdp_participant_msg_mod, spdp_publication_msg,
+        create_cdr_pl_rtps_data_message, spdp_participant_msg_mod, spdp_publication_msg,
         spdp_subscription_msg,
       },
     },
@@ -1515,8 +1514,8 @@ mod tests {
     let mut data;
     for submsg in &mut tdata.submessages {
       match &mut submsg.body {
-        SubmessageBody::Entity(v) => match v {
-          EntitySubmessage::Data(d, _) => {
+        SubmessageBody::Writer(v) => match v {
+          WriterSubmessage::Data(d, _) => {
             let mut drd: DiscoveredReaderData = PlCdrDeserializerAdapter::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
               RepresentationIdentifier::PL_CDR_LE,
@@ -1531,15 +1530,16 @@ mod tests {
                 11001,
               )));
             drd.reader_proxy.multicast_locator_list.clear();
-            data = drd.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+
+            data = drd
+              .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
               .unwrap();
-            // data =
-            //   Bytes::from(to_bytes::<DiscoveredReaderData, byteorder::LittleEndian>(&drd).unwrap());
             d.serialized_payload.as_mut().unwrap().value = data.clone();
           }
           _ => continue,
         },
         SubmessageBody::Interpreter(_) => (),
+        _ => continue,
       }
     }
 
@@ -1609,7 +1609,9 @@ mod tests {
           }
           _ => continue,
         },
-        SubmessageBody::Entity(_) => (),
+        SubmessageBody::Writer(_) => (),
+        SubmessageBody::Reader(_) => (),
+        SubmessageBody::Security(_) => (),
       }
     }
 

@@ -7,14 +7,14 @@ use speedy::{Readable, Writable};
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{SubMessage, SubmessageBody},
+  serialization::{Submessage, SubmessageBody},
   structure::{
     guid::EntityId,
     sequence_number::{FragmentNumberSet, SequenceNumber},
   },
 };
 use super::{
-  submessage::EntitySubmessage, submessage_flag::NACKFRAG_Flags, submessage_kind::SubmessageKind,
+  submessage::ReaderSubmessage, submessage_flag::NACKFRAG_Flags, submessage_kind::SubmessageKind,
 };
 
 /// The NackFrag Submessage is used to communicate the state of a Reader to a
@@ -51,14 +51,14 @@ pub struct NackFrag {
 }
 
 impl NackFrag {
-  pub fn create_submessage(self, flags: BitFlags<NACKFRAG_Flags>) -> SubMessage {
-    SubMessage {
+  pub fn create_submessage(self, flags: BitFlags<NACKFRAG_Flags>) -> Submessage {
+    Submessage {
       header: SubmessageHeader {
         kind: SubmessageKind::NACK_FRAG,
         flags: flags.bits(),
         content_length: self.len_serialized() as u16,
       },
-      body: SubmessageBody::Entity(EntitySubmessage::NackFrag(self, flags)),
+      body: SubmessageBody::Reader(ReaderSubmessage::NackFrag(self, flags)),
     }
   }
 

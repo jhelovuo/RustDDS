@@ -12,6 +12,7 @@ use cdr_encoding_size::CdrEncodingSize;
 use crate::{
   dds::{
     participant::DomainParticipant,
+    qos,
     qos::QosPolicies,
     rtps_reader_proxy::RtpsReaderProxy,
     rtps_writer_proxy::RtpsWriterProxy,
@@ -26,6 +27,9 @@ use crate::{
     vendor_id::VendorId,
   },
   network::constant::*,
+  security::{
+    access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
+  },
   serialization::{
     error::Result, pl_cdr_deserializer::*, pl_cdr_serializer::*, speedy_pl_cdr_helpers::*,
   },
@@ -38,8 +42,12 @@ use crate::{
     locator::Locator,
     parameter_id::ParameterId,
   },
-}; // Helper functions and types
+};
 
+// This type is used by Discovery to communicate the presence and properties
+// of DomainParticipants. It is sent over topic "DCPSParticipant".
+// The type is called "ParticipantBuiltinTopicData" in DDS-Security Spec, e.g.
+// Section 7.4.1.4.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpdpDiscoveredParticipantData {
   pub updated_time: chrono::DateTime<Utc>,
@@ -56,6 +64,12 @@ pub struct SpdpDiscoveredParticipantData {
   pub manual_liveliness_count: i32,
   pub builtin_endpoint_qos: Option<BuiltinEndpointQos>,
   pub entity_name: Option<String>,
+
+  // security
+  pub identity_token: Option<IdentityToken>,
+  pub permissions_token: Option<PermissionsToken>,
+  pub property: Option<qos::policy::Property>,
+  pub security_info: Option<ParticipantSecurityInfo>,
 }
 
 impl SpdpDiscoveredParticipantData {
@@ -145,16 +159,16 @@ impl SpdpDiscoveredParticipantData {
       .cloned()
       .unwrap_or_default();
 
-    let builtin_endpoints = BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_ANNOUNCER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR
-      | BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER
-      | BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER
-      | BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR;
+    let builtin_endpoints = BuiltinEndpointSet::PARTICIPANT_ANNOUNCER
+      | BuiltinEndpointSet::PARTICIPANT_DETECTOR
+      | BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER
+      | BuiltinEndpointSet::PUBLICATIONS_DETECTOR
+      | BuiltinEndpointSet::SUBSCRIPTIONS_ANNOUNCER
+      | BuiltinEndpointSet::SUBSCRIPTIONS_DETECTOR
+      | BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_WRITER
+      | BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_READER
+      | BuiltinEndpointSet::TOPICS_ANNOUNCER
+      | BuiltinEndpointSet::TOPICS_DETECTOR;
 
     Self {
       updated_time: Utc::now(),
@@ -171,6 +185,12 @@ impl SpdpDiscoveredParticipantData {
       manual_liveliness_count: 0,
       builtin_endpoint_qos: None,
       entity_name: None,
+
+      // DDS Security
+      identity_token: None,    // TODO: Generate(?) one
+      permissions_token: None, // TODO
+      property: None,
+      security_info: None,
     }
   }
 }
@@ -269,6 +289,32 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       get_option_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_ENTITY_NAME, "entity name")?
       .map( String::from );
 
+    // DDS security
+    let identity_token: Option<IdentityToken> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_IDENTITY_TOKEN,
+      "identity token",
+    )?;
+    let permissions_token: Option<PermissionsToken> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PERMISSIONS_TOKEN,
+      "permissions token",
+    )?;
+    let property: Option<qos::policy::Property> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PROPERTY_LIST,
+      "property list",
+    )?;
+    let security_info: Option<ParticipantSecurityInfo> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PARTICIPANT_SECURITY_INFO,
+      "participant security info",
+    )?;
+
     Ok(Self {
       updated_time: Utc::now(),
       protocol_version,
@@ -284,6 +330,11 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       manual_liveliness_count,
       builtin_endpoint_qos,
       entity_name,
+
+      identity_token,
+      permissions_token,
+      property,
+      security_info,
     })
   }
 }
@@ -307,6 +358,12 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
       manual_liveliness_count,
       builtin_endpoint_qos,
       entity_name,
+
+      // DDS security
+      identity_token,    // TODO
+      permissions_token, // TODO
+      property,          // TODO
+      security_info,     // TODO
     } = self;
 
     let mut pl = ParameterList::new();
@@ -382,6 +439,16 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
     let entity_name_n: Option<StringWithNul> = entity_name.clone().map(|e| e.into());
     emit_option!(PID_ENTITY_NAME, &entity_name_n, StringWithNul);
 
+    // DDS security
+    emit_option!(PID_IDENTITY_TOKEN, identity_token, IdentityToken);
+    emit_option!(PID_PERMISSIONS_TOKEN, permissions_token, PermissionsToken);
+    emit_option!(PID_PROPERTY_LIST, property, qos::policy::Property);
+    emit_option!(
+      PID_PARTICIPANT_SECURITY_INFO,
+      security_info,
+      ParticipantSecurityInfo
+    );
+
     let bytes = pl.serialize_to_bytes(ctx)?;
 
     Ok(bytes)
@@ -446,7 +513,7 @@ mod tests {
     dds::traits::serde_adapters::no_key::DeserializerAdapter,
     messages::submessages::{
       submessage_elements::serialized_payload::RepresentationIdentifier,
-      submessages::EntitySubmessage,
+      submessages::WriterSubmessage,
     },
     serialization::{
       message::Message, pl_cdr_deserializer::PlCdrDeserializerAdapter,
@@ -464,8 +531,8 @@ mod tests {
 
     for submsg in &submsgs {
       match &submsg.body {
-        SubmessageBody::Entity(v) => match v {
-          EntitySubmessage::Data(d, _) => {
+        SubmessageBody::Writer(v) => match v {
+          WriterSubmessage::Data(d, _) => {
             let participant_data: SpdpDiscoveredParticipantData =
               PlCdrDeserializerAdapter::from_bytes(
                 &d.serialized_payload.as_ref().unwrap().value,
@@ -506,6 +573,7 @@ mod tests {
           _ => continue,
         },
         SubmessageBody::Interpreter(_) => (),
+        _ => continue,
       }
     }
   }

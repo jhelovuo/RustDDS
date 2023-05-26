@@ -170,6 +170,7 @@ mod checked_impl;
 mod discovery;
 mod messages;
 mod network;
+mod security;
 pub(crate) mod structure;
 
 #[cfg(test)]

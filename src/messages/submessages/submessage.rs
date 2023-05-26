@@ -10,19 +10,43 @@ use crate::{
     submessage_flag::*,
   },
 };
+use super::{
+  secure_body::SecureBody, secure_postfix::SecurePostfix, secure_prefix::SecurePrefix,
+  secure_rtps_postfix::SecureRTPSPostfix, secure_rtps_prefix::SecureRTPSPrefix,
+};
 
 //TODO: These messages are structured a bit oddly. Why is flags separate from
 // the submessage proper?
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum EntitySubmessage {
-  AckNack(AckNack, BitFlags<ACKNACK_Flags>),
+pub enum WriterSubmessage {
   Data(Data, BitFlags<DATA_Flags>),
   DataFrag(DataFrag, BitFlags<DATAFRAG_Flags>),
   Gap(Gap, BitFlags<GAP_Flags>),
   Heartbeat(Heartbeat, BitFlags<HEARTBEAT_Flags>),
   #[allow(dead_code)] // Functinality not yet implemented
   HeartbeatFrag(HeartbeatFrag, BitFlags<HEARTBEATFRAG_Flags>),
+}
+
+// we must write this manually, because
+// 1) we cannot implement Writable for *Flags defined using enumflags2, as they
+// are foreign types (coherence rules) 2) Writer should not use any enum variant
+// tag in this type, as we have SubmessageHeader already.
+impl<C: Context> Writable<C> for WriterSubmessage {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    match self {
+      WriterSubmessage::Data(s, _f) => writer.write_value(s),
+      WriterSubmessage::DataFrag(s, _f) => writer.write_value(s),
+      WriterSubmessage::Gap(s, _f) => writer.write_value(s),
+      WriterSubmessage::Heartbeat(s, _f) => writer.write_value(s),
+      WriterSubmessage::HeartbeatFrag(s, _f) => writer.write_value(s),
+    }
+  }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ReaderSubmessage {
+  AckNack(AckNack, BitFlags<ACKNACK_Flags>),
   NackFrag(NackFrag, BitFlags<NACKFRAG_Flags>),
 }
 
@@ -30,16 +54,38 @@ pub enum EntitySubmessage {
 // 1) we cannot implement Writable for *Flags defined using enumflags2, as they
 // are foreign types (coherence rules) 2) Writer should not use any enum variant
 // tag in this type, as we have SubmessageHeader already.
-impl<C: Context> Writable<C> for EntitySubmessage {
+impl<C: Context> Writable<C> for ReaderSubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
-      EntitySubmessage::AckNack(s, _f) => writer.write_value(s),
-      EntitySubmessage::Data(s, _f) => writer.write_value(s),
-      EntitySubmessage::DataFrag(s, _f) => writer.write_value(s),
-      EntitySubmessage::Gap(s, _f) => writer.write_value(s),
-      EntitySubmessage::Heartbeat(s, _f) => writer.write_value(s),
-      EntitySubmessage::HeartbeatFrag(s, _f) => writer.write_value(s),
-      EntitySubmessage::NackFrag(s, _f) => writer.write_value(s),
+      ReaderSubmessage::AckNack(s, _f) => writer.write_value(s),
+      ReaderSubmessage::NackFrag(s, _f) => writer.write_value(s),
+    }
+  }
+}
+
+/// New submessage types: section 7.3.6 of the Security specification (v. 1.1)
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[allow(clippy::enum_variant_names)] // We are using variant names from the spec
+pub enum SecuritySubmessage {
+  SecureBody(SecureBody, BitFlags<SECUREBODY_Flags>),
+  SecurePrefix(SecurePrefix, BitFlags<SECUREPREFIX_Flags>),
+  SecurePostfix(SecurePostfix, BitFlags<SECUREPOSTFIX_Flags>),
+  SecureRTPSPrefix(SecureRTPSPrefix, BitFlags<SECURERTPSPREFIX_Flags>),
+  SecureRTPSPostfix(SecureRTPSPostfix, BitFlags<SECURERTPSPOSTFIX_Flags>),
+}
+
+// we must write this manually, because
+// 1) we cannot implement Writable for *Flags defined using enumflags2, as they
+// are foreign types (coherence rules) 2) Writer should not use any enum variant
+// tag in this type, as we have SubmessageHeader already.
+impl<C: Context> Writable<C> for SecuritySubmessage {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    match self {
+      SecuritySubmessage::SecureBody(s, _f) => writer.write_value(s),
+      SecuritySubmessage::SecurePrefix(s, _f) => writer.write_value(s),
+      SecuritySubmessage::SecurePostfix(s, _f) => writer.write_value(s),
+      SecuritySubmessage::SecureRTPSPrefix(s, _f) => writer.write_value(s),
+      SecuritySubmessage::SecureRTPSPostfix(s, _f) => writer.write_value(s),
     }
   }
 }

@@ -2,7 +2,7 @@ use speedy::{Readable, Writable};
 
 // TODO: Why is this module here? Can we move this to QoS?
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Readable, Writable, )]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Readable, Writable)]
 #[repr(u32)]
 pub enum ReliabilityKind {
   BestEffort = 1,

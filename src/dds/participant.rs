@@ -1021,11 +1021,11 @@ mod tests {
       header::Header,
       protocol_id::ProtocolId,
       protocol_version::ProtocolVersion,
-      submessages::submessages::{AckNack, EntitySubmessage, SubmessageHeader, SubmessageKind, *},
+      submessages::submessages::{AckNack, SubmessageHeader, SubmessageKind, *},
       vendor_id::VendorId,
     },
     network::{constant::user_traffic_unicast_port, udp_sender::UDPSender},
-    serialization::{cdr_serializer::CDRSerializerAdapter, submessage::*, Message, SubMessage},
+    serialization::{cdr_serializer::CDRSerializerAdapter, submessage::*, Message, Submessage},
     structure::{
       guid::{EntityId, GUID},
       locator::Locator,
@@ -1116,9 +1116,9 @@ mod tests {
       content_length: 24,
     };
 
-    let s: SubMessage = SubMessage {
+    let s: Submessage = Submessage {
       header: sub_header,
-      body: SubmessageBody::Entity(EntitySubmessage::AckNack(a, flags)),
+      body: SubmessageBody::Reader(ReaderSubmessage::AckNack(a, flags)),
     };
     let h = Header {
       protocol_id: ProtocolId::default(),

@@ -526,27 +526,27 @@ impl DPEventLoop {
         (
           EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
           EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-          BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_DETECTOR,
+          BuiltinEndpointSet::PARTICIPANT_DETECTOR,
         ),
         (
           EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
           EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-          BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_SUBSCRIPTIONS_DETECTOR,
+          BuiltinEndpointSet::SUBSCRIPTIONS_DETECTOR,
         ),
         (
           EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
           EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-          BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_DETECTOR,
+          BuiltinEndpointSet::PUBLICATIONS_DETECTOR,
         ),
         (
           EntityId::SEDP_BUILTIN_TOPIC_WRITER,
           EntityId::SEDP_BUILTIN_TOPIC_READER,
-          BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_DETECTOR,
+          BuiltinEndpointSet::TOPICS_DETECTOR,
         ),
         (
           EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
           EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-          BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_READER,
+          BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_READER,
         ),
       ] {
         if let Some(writer) = self.writers.get_mut(writer_eid) {
@@ -602,27 +602,27 @@ impl DPEventLoop {
         (
           EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
           EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-          BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PARTICIPANT_ANNOUNCER,
+          BuiltinEndpointSet::PARTICIPANT_ANNOUNCER,
         ),
         (
           EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
           EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-          BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
+          BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
         ),
         (
           EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
           EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-          BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_PUBLICATIONS_ANNOUNCER,
+          BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
         ),
         (
           EntityId::SEDP_BUILTIN_TOPIC_WRITER,
           EntityId::SEDP_BUILTIN_TOPIC_READER,
-          BuiltinEndpointSet::DISC_BUILTIN_ENDPOINT_TOPICS_ANNOUNCER,
+          BuiltinEndpointSet::TOPICS_ANNOUNCER,
         ),
         (
           EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
           EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-          BuiltinEndpointSet::BUILTIN_ENDPOINT_PARTICIPANT_MESSAGE_DATA_WRITER,
+          BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_WRITER,
         ),
       ] {
         if let Some(reader) = self.message_receiver.available_readers.get_mut(reader_eid) {

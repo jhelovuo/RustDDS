@@ -8,7 +8,7 @@ use crate::{
   dds::reader::Reader,
   messages::{
     protocol_version::ProtocolVersion,
-    submessages::submessages::{EntitySubmessage, *},
+    submessages::submessages::{WriterSubmessage, *},
     vendor_id::VendorId,
   },
   serialization::{submessage::SubmessageBody, Message},
@@ -151,13 +151,6 @@ impl MessageReceiver {
       .history_cache_sequence_start_and_end_numbers()
   }
 
-  // pub fn handle_discovery_msg(&mut self, msg: Bytes) {
-  //   // 9.6.2.2
-  //   // The discovery message is just a data message. No need for the
-  //   // messageReceiver to handle it any differently here?
-  //   self.handle_user_msg(msg);
-  // }
-
   pub fn handle_received_packet(&mut self, msg_bytes: &Bytes) {
     // Check for RTPS ping message. At least RTI implementation sends these.
     // What should we do with them? The spec does not say.
@@ -199,14 +192,16 @@ impl MessageReceiver {
 
     for submessage in rtps_message.submessages {
       match submessage.body {
-        SubmessageBody::Interpreter(i) => self.handle_interpreter_submessage(i),
-        SubmessageBody::Entity(e) => self.handle_entity_submessage(e),
+        SubmessageBody::Interpreter(m) => self.handle_interpreter_submessage(m),
+        SubmessageBody::Writer(m) => self.handle_writer_submessage(m),
+        SubmessageBody::Reader(m) => self.handle_reader_submessage(m),
+        SubmessageBody::Security(m) => self.handle_security_submessage(m),
       }
       self.submessage_count += 1;
     } // submessage loop
   }
 
-  fn handle_entity_submessage(&mut self, submessage: EntitySubmessage) {
+  fn handle_writer_submessage(&mut self, submessage: WriterSubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
     {
       debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
@@ -216,7 +211,7 @@ impl MessageReceiver {
 
     let mr_state = self.give_message_receiver_info();
     match submessage {
-      EntitySubmessage::Data(data, data_flags) => {
+      WriterSubmessage::Data(data, data_flags) => {
         let writer_entity_id = data.writer_id;
         let source_guid_prefix = mr_state.source_guid_prefix;
         // If reader_id == UNKNOWN, message should be sent to all matched
@@ -260,7 +255,7 @@ impl MessageReceiver {
             });
         }
       }
-      EntitySubmessage::Heartbeat(heartbeat, flags) => {
+      WriterSubmessage::Heartbeat(heartbeat, flags) => {
         // If reader_id == UNKNOWN, message should be sent to all matched
         // readers
         if heartbeat.reader_id == EntityId::UNKNOWN {
@@ -283,26 +278,13 @@ impl MessageReceiver {
           );
         }
       }
-      EntitySubmessage::Gap(gap, _flags) => {
+      WriterSubmessage::Gap(gap, _flags) => {
         if let Some(target_reader) = self.reader_mut(gap.reader_id) {
           target_reader.handle_gap_msg(&gap, &mr_state);
         }
       }
-      EntitySubmessage::AckNack(acknack, _) => {
-        // Note: This must not block, because the receiving end is the same thread,
-        // i.e. blocking here is an instant deadlock.
-        match self
-          .acknack_sender
-          .try_send((self.source_guid_prefix, AckSubmessage::AckNack(acknack)))
-        {
-          Ok(_) => (),
-          Err(TrySendError::Full(_)) => {
-            info!("AckNack pipe full. Looks like I am very busy. Discarding submessage.");
-          }
-          Err(e) => warn!("AckNack pipe fail: {e:?}"),
-        }
-      }
-      EntitySubmessage::DataFrag(datafrag, flags) => {
+
+      WriterSubmessage::DataFrag(datafrag, flags) => {
         // If reader_id == UNKNOWN, message should be sent to all matched readers
         if datafrag.reader_id == EntityId::UNKNOWN {
           trace!(
@@ -331,7 +313,7 @@ impl MessageReceiver {
           target_reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
         }
       }
-      EntitySubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
+      WriterSubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
         // If reader_id == UNKNOWN, message should be sent to all matched
         // readers
         if heartbeatfrag.reader_id == EntityId::UNKNOWN {
@@ -346,7 +328,63 @@ impl MessageReceiver {
           target_reader.handle_heartbeatfrag_msg(&heartbeatfrag, &mr_state);
         }
       }
-      EntitySubmessage::NackFrag(_, _) => {}
+    }
+  }
+
+  fn handle_reader_submessage(&mut self, submessage: ReaderSubmessage) {
+    if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
+    {
+      debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
+        self.dest_guid_prefix, self.own_guid_prefix);
+      return;
+    }
+
+    //let _mr_state = self.give_message_receiver_info();
+    match submessage {
+      ReaderSubmessage::AckNack(acknack, _) => {
+        // Note: This must not block, because the receiving end is the same thread,
+        // i.e. blocking here is an instant deadlock.
+        match self
+          .acknack_sender
+          .try_send((self.source_guid_prefix, AckSubmessage::AckNack(acknack)))
+        {
+          Ok(_) => (),
+          Err(TrySendError::Full(_)) => {
+            info!("AckNack pipe full. Looks like I am very busy. Discarding submessage.");
+          }
+          Err(e) => warn!("AckNack pipe fail: {:?}", e),
+        }
+      }
+
+      ReaderSubmessage::NackFrag(_, _) => {}
+    }
+  }
+
+  fn handle_security_submessage(&mut self, submessage: SecuritySubmessage) {
+    if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
+    {
+      debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
+        self.dest_guid_prefix, self.own_guid_prefix);
+      return;
+    }
+
+    let _mr_state = self.give_message_receiver_info();
+    match submessage {
+      SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
+        todo!()
+      }
+      SecuritySubmessage::SecurePrefix(_sec_prefix, _sec_prefix_flags) => {
+        todo!()
+      }
+      SecuritySubmessage::SecurePostfix(_sec_postfix, _sec_postfix_flags) => {
+        todo!()
+      }
+      SecuritySubmessage::SecureRTPSPrefix(_sec_rtps_prefix, _sec_rtps_prefix_flags) => {
+        todo!()
+      }
+      SecuritySubmessage::SecureRTPSPostfix(_sec_rtps_postfix, _sec_rtps_postfix_flags) => {
+        todo!()
+      }
     }
   }
 
@@ -518,10 +556,10 @@ mod tests {
       notification_sender,
       status_sender,
       topic_name: "test".to_string(),
-      topic_cache_handle,
+      topic_cache_handle: topic_cache_handle.clone(),
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
-      data_reader_waker,
+      data_reader_waker: data_reader_waker.clone(),
       poll_event_sender: notification_event_sender,
     };
 

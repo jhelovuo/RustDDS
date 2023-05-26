@@ -5,12 +5,17 @@ pub mod gap;
 pub mod heartbeat;
 pub mod heartbeat_frag;
 pub mod nack_frag;
+pub mod secure_body;
 
 pub mod info_destination;
 pub mod info_reply;
 pub mod info_source;
 pub mod info_timestamp;
 
+pub mod secure_postfix;
+pub mod secure_prefix;
+pub mod secure_rtps_postfix;
+pub mod secure_rtps_prefix;
 pub mod submessage;
 pub mod submessage_elements;
 pub mod submessage_flag;
