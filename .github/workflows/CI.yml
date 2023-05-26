@@ -42,4 +42,4 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@1.66.1
-      - run: cargo check -- --test-threads=1
+      - run: cargo check
