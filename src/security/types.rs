@@ -1,8 +1,7 @@
 use bytes::Bytes;
 use enumflags2::bitflags;
-
 //use serde::{Deserialize, Serialize};
-use speedy::{Readable, Writable, Context, Writer, Reader};
+use speedy::{Context, Readable, Reader, Writable, Writer};
 
 //use crate::structure::parameter_id::ParameterId;
 use crate::serialization::speedy_pl_cdr_helpers::*;
@@ -21,8 +20,8 @@ impl<'a, C: Context> Readable<'a, C> for Property {
 
     read_pad(reader, name.len(), 4)?; // pad according to previous read
     let value: StringWithNul = reader.read_value()?;
-    
-    Ok(Property{
+
+    Ok(Property {
       name: name.into(),
       value: value.into(),
       propagate: true, // since we read this from thw wire, it was propagated
@@ -32,7 +31,8 @@ impl<'a, C: Context> Readable<'a, C> for Property {
 
 // Writing several strings is a bit complicated, because
 // we have to keep track of alignment.
-// Again, alignment comes BEFORE string length, or vector item count, not after string.
+// Again, alignment comes BEFORE string length, or vector item count, not after
+// string.
 impl<C: Context> Writable<C> for Property {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     let name = StringWithNul::from(self.name.clone());
@@ -51,7 +51,7 @@ impl Property {
   pub fn serialized_len(&self) -> usize {
     let first = 4 + self.name.len() + 1;
     let misalign = first % 4;
-    let align = if misalign > 0 { 4 - misalign } else {0};
+    let align = if misalign > 0 { 4 - misalign } else { 0 };
     let second = 4 + self.value.len() + 1;
     first + align + second
   }
@@ -70,7 +70,7 @@ impl BinaryProperty {
   pub fn serialized_len(&self) -> usize {
     let first = 4 + self.name.len() + 1;
     let misalign = first % 4;
-    let align = if misalign > 0 { 4 - misalign } else {0};
+    let align = if misalign > 0 { 4 - misalign } else { 0 };
     let second = 4 + self.value.len(); // no nul terminator byte here
     first + align + second
   }
@@ -82,8 +82,8 @@ impl<'a, C: Context> Readable<'a, C> for BinaryProperty {
 
     read_pad(reader, name.len(), 4)?; // pad according to previous read
     let value: Vec<u8> = reader.read_value()?;
-    
-    Ok(BinaryProperty{
+
+    Ok(BinaryProperty {
       name: name.into(),
       value: value.into(),
       propagate: true, // since we read this from thw wire, it was propagated
@@ -93,19 +93,19 @@ impl<'a, C: Context> Readable<'a, C> for BinaryProperty {
 
 // Writing several strings is a bit complicated, because
 // we have to keep track of alignment.
-// Again, alignment comes BEFORE string length, or vector item count, not after string.
+// Again, alignment comes BEFORE string length, or vector item count, not after
+// string.
 impl<C: Context> Writable<C> for BinaryProperty {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     let name = StringWithNul::from(self.name.clone());
     writer.write_value(&name)?;
 
     write_pad(writer, name.len(), 4)?;
-    writer.write_value( &<Vec<u8>>::from(self.value.clone()) )?;
+    writer.write_value(&<Vec<u8>>::from(self.value.clone()))?;
 
     Ok(())
   }
 }
-
 
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
 // fields need to be public to make (de)serializable
@@ -149,7 +149,7 @@ pub struct ParticipantSecurityInfo {
   plugin_participant_security_attributes: PluginParticipantSecurityAttributesMask,
 }
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq,  Clone, Copy, Readable, Writable)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
 #[bitflags]
 #[repr(u32)]
 #[allow(clippy::enum_variant_names)]

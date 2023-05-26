@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use speedy::{Context, Readable, Writable, Writer, Reader};
+use speedy::{Context, Readable, Reader, Writable, Writer};
 
 use crate::{
   messages::submessages::submessage_elements::parameter::Parameter, serialization,
@@ -31,7 +31,7 @@ pub struct StringWithNul {
 impl StringWithNul {
   // length including null termintaor
   pub fn len(&self) -> usize {
-    self.string.len() + 1 
+    self.string.len() + 1
   }
 }
 
@@ -43,7 +43,9 @@ impl From<String> for StringWithNul {
 
 impl From<&String> for StringWithNul {
   fn from(string: &String) -> Self {
-    StringWithNul { string: string.clone() }
+    StringWithNul {
+      string: string.clone(),
+    }
   }
 }
 
@@ -74,9 +76,11 @@ impl<'a, C: Context> Readable<'a, C> for StringWithNul {
     let mut raw_str: String = reader.read_value()?;
     let assumed_nul = raw_str.pop(); //
     match assumed_nul {
-      Some('\0') => { /*fine*/ }
+      Some('\0') => { /* fine */ }
       Some(other) => error!("StringWithNul deserialize: Expected NUL character, decoded {other:?}"),
-      None => error!("StringWithNul deserialize: Expected NUL character, but end of input reached.")
+      None => {
+        error!("StringWithNul deserialize: Expected NUL character, but end of input reached.");
+      }
     }
     Ok(StringWithNul { string: raw_str })
   }
@@ -85,9 +89,11 @@ impl<'a, C: Context> Readable<'a, C> for StringWithNul {
 // Helpers for Readable/Writable padding
 
 // These are for PL_CDR (de)serialization
-pub(crate) fn read_pad<'a, C: Context, R: Reader<'a, C>>(reader: &mut R, read_length: usize, align:usize)
-  -> std::result::Result<(), C::Error>
-{
+pub(crate) fn read_pad<'a, C: Context, R: Reader<'a, C>>(
+  reader: &mut R,
+  read_length: usize,
+  align: usize,
+) -> std::result::Result<(), C::Error> {
   let m = read_length % align;
   if m > 0 {
     reader.skip_bytes(align - m)?;
@@ -95,10 +101,11 @@ pub(crate) fn read_pad<'a, C: Context, R: Reader<'a, C>>(reader: &mut R, read_le
   Ok(())
 }
 
-
-pub(crate) fn write_pad<C: Context, T: ?Sized + Writer<C>>(writer: &mut T, previous_length: usize, align:usize)
-  -> std::result::Result<(), C::Error>
-{
+pub(crate) fn write_pad<C: Context, T: ?Sized + Writer<C>>(
+  writer: &mut T,
+  previous_length: usize,
+  align: usize,
+) -> std::result::Result<(), C::Error> {
   let m = previous_length % align;
   if m > 0 {
     for _ in 0..m {
@@ -107,7 +114,6 @@ pub(crate) fn write_pad<C: Context, T: ?Sized + Writer<C>>(writer: &mut T, previ
   }
   Ok(())
 }
-
 
 // Helper functions for ParmeterList deserialization:
 //
@@ -129,8 +135,12 @@ where
     .ok_or(serialization::error::Error::Message(
       "Missing ".to_string() + name,
     ))
-    .and_then(|p| D::read_from_buffer_with_ctx(ctx, &p.value)
-    .map_err(|e| {error!("PL_CDR Deserializing {name}"); e.into()}))
+    .and_then(|p| {
+      D::read_from_buffer_with_ctx(ctx, &p.value).map_err(|e| {
+        error!("PL_CDR Deserializing {name}");
+        e.into()
+      })
+    })
 }
 
 // same, but gets all occurences
@@ -150,8 +160,12 @@ where
     .get(&pid)
     .unwrap_or(&Vec::new())
     .iter()
-    .map(|p| D::read_from_buffer_with_ctx(ctx.clone(), &p.value)
-      .map_err(|e| {error!("PL_CDR Deserializing {name}"); e.into()}))
+    .map(|p| {
+      D::read_from_buffer_with_ctx(ctx.clone(), &p.value).map_err(|e| {
+        error!("PL_CDR Deserializing {name}");
+        e.into()
+      })
+    })
     .collect()
 }
 
@@ -170,7 +184,12 @@ where
   pl_map
     .get(&pid)
     .and_then(|v| v.first()) // Option<Parameter> here
-    .map(|p| D::read_from_buffer_with_ctx(ctx, &p.value)
-      .map_err(|e| {error!("PL_CDR Deserializing {name}"); info!("Parameter payload was {:x?}", p.value); e.into()} ))
+    .map(|p| {
+      D::read_from_buffer_with_ctx(ctx, &p.value).map_err(|e| {
+        error!("PL_CDR Deserializing {name}");
+        info!("Parameter payload was {:x?}", p.value);
+        e.into()
+      })
+    })
     .transpose()
 }

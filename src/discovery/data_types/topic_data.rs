@@ -224,7 +224,6 @@ impl SubscriptionBuiltinTopicData {
       lifespan: None,
       // DDS-RPC
       // TODO: these are not implemented
-
       service_instance_name: None,  // Note: Not implemented
       related_datawriter_key: None, // Note: Not implemented
       topic_aliases: None,          // Note: Not implemented
@@ -342,7 +341,6 @@ impl Keyed for DiscoveredReaderData {
   }
 }
 
-
 impl PlCdrDeserialize for DiscoveredReaderData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
@@ -389,13 +387,26 @@ impl PlCdrDeserialize for DiscoveredReaderData {
       get_first_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_TYPE_NAME, "type name")?
       .into();
 
-    let content_filter : Option<ContentFilterProperty> =
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_CONTENT_FILTER_PROPERTY, "content filter" )
-      .map_err(|e| {warn!("Content filter was: {:?}", 
-        pl_map.get(&ParameterId::PID_CONTENT_FILTER_PROPERTY)); e} )?;
+    let content_filter: Option<ContentFilterProperty> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_CONTENT_FILTER_PROPERTY,
+      "content filter",
+    )
+    .map_err(|e| {
+      warn!(
+        "Content filter was: {:?}",
+        pl_map.get(&ParameterId::PID_CONTENT_FILTER_PROPERTY)
+      );
+      e
+    })?;
 
-    let security_info: Option<EndpointSecurityInfo> = 
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_ENDPOINT_SECURITY_INFO, "endpoint security info")?;
+    let security_info: Option<EndpointSecurityInfo> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_ENDPOINT_SECURITY_INFO,
+      "endpoint security info",
+    )?;
 
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
 
@@ -453,7 +464,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
           topic_aliases,
           security_info, //TODO: Imissing implementation
         },
-      content_filter, 
+      content_filter,
     } = self;
 
     let mut pl = ParameterList::new();
@@ -522,10 +533,17 @@ impl PlCdrSerialize for DiscoveredReaderData {
         StringWithNul
       );
     }
-    emit_option!(PID_CONTENT_FILTER_PROPERTY, content_filter, ContentFilterProperty);
+    emit_option!(
+      PID_CONTENT_FILTER_PROPERTY,
+      content_filter,
+      ContentFilterProperty
+    );
 
-    emit_option!(PID_ENDPOINT_SECURITY_INFO, security_info, EndpointSecurityInfo);
-
+    emit_option!(
+      PID_ENDPOINT_SECURITY_INFO,
+      security_info,
+      EndpointSecurityInfo
+    );
 
     let bytes = pl.serialize_to_bytes(ctx)?;
     Ok(bytes)
@@ -648,7 +666,6 @@ impl PublicationBuiltinTopicData {
     s
   }
 
-
   pub fn set_qos(&mut self, qos: &QosPolicies) {
     self.durability = qos.durability;
     self.deadline = qos.deadline;
@@ -743,7 +760,6 @@ impl DiscoveredWriterData {
   }
 }
 
-
 impl PlCdrDeserialize for DiscoveredWriterData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
@@ -792,8 +808,12 @@ impl PlCdrDeserialize for DiscoveredWriterData {
       ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED,
       "Max size serialized",
     )?;
-    let security_info: Option<EndpointSecurityInfo> = 
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_ENDPOINT_SECURITY_INFO, "endpoint security info")?;
+    let security_info: Option<EndpointSecurityInfo> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_ENDPOINT_SECURITY_INFO,
+      "endpoint security info",
+    )?;
 
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
 
@@ -805,9 +825,14 @@ impl PlCdrDeserialize for DiscoveredWriterData {
         multicast_locator_list,
         data_max_size_serialized,
       },
-      publication_topic_data:
-        PublicationBuiltinTopicData::new_with_qos(
-          guid, participant_guid, topic_name, type_name, &qos, security_info),
+      publication_topic_data: PublicationBuiltinTopicData::new_with_qos(
+        guid,
+        participant_guid,
+        topic_name,
+        type_name,
+        &qos,
+        security_info,
+      ),
     })
   }
 }
@@ -845,7 +870,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
           service_instance_name,
           related_datareader_key,
           topic_aliases,
-          security_info, 
+          security_info,
         },
     } = self;
 
@@ -915,7 +940,11 @@ impl PlCdrSerialize for DiscoveredWriterData {
         StringWithNul
       );
     }
-    emit_option!(PID_ENDPOINT_SECURITY_INFO, security_info, EndpointSecurityInfo);
+    emit_option!(
+      PID_ENDPOINT_SECURITY_INFO,
+      security_info,
+      EndpointSecurityInfo
+    );
 
     let bytes = pl.serialize_to_bytes(ctx)?;
     Ok(bytes)

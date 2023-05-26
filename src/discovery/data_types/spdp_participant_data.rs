@@ -42,7 +42,7 @@ use crate::{
     locator::Locator,
     parameter_id::ParameterId,
   },
-}; 
+};
 
 // This type is used by Discovery to communicate the presence and properties
 // of DomainParticipants. It is sent over topic "DCPSParticipant".
@@ -290,14 +290,30 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       .map( String::from );
 
     // DDS security
-    let identity_token: Option<IdentityToken> = 
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_IDENTITY_TOKEN, "identity token")?;
-    let permissions_token: Option<PermissionsToken> = 
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_PERMISSIONS_TOKEN, "permissions token")?;
-    let property: Option<qos::policy::Property> = 
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_PROPERTY_LIST, "property list")?;
-    let security_info: Option<ParticipantSecurityInfo> = 
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_PARTICIPANT_SECURITY_INFO, "participant security info")?;
+    let identity_token: Option<IdentityToken> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_IDENTITY_TOKEN,
+      "identity token",
+    )?;
+    let permissions_token: Option<PermissionsToken> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PERMISSIONS_TOKEN,
+      "permissions token",
+    )?;
+    let property: Option<qos::policy::Property> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PROPERTY_LIST,
+      "property list",
+    )?;
+    let security_info: Option<ParticipantSecurityInfo> = get_option_from_pl_map(
+      &pl_map,
+      ctx,
+      ParameterId::PID_PARTICIPANT_SECURITY_INFO,
+      "participant security info",
+    )?;
 
     Ok(Self {
       updated_time: Utc::now(),
@@ -315,7 +331,7 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       builtin_endpoint_qos,
       entity_name,
 
-      identity_token,    
+      identity_token,
       permissions_token,
       property,
       security_info,
@@ -342,12 +358,12 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
       manual_liveliness_count,
       builtin_endpoint_qos,
       entity_name,
-      
+
       // DDS security
       identity_token,    // TODO
       permissions_token, // TODO
-      property, // TODO
-      security_info, // TODO
+      property,          // TODO
+      security_info,     // TODO
     } = self;
 
     let mut pl = ParameterList::new();
@@ -427,7 +443,11 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
     emit_option!(PID_IDENTITY_TOKEN, identity_token, IdentityToken);
     emit_option!(PID_PERMISSIONS_TOKEN, permissions_token, PermissionsToken);
     emit_option!(PID_PROPERTY_LIST, property, qos::policy::Property);
-    emit_option!(PID_PARTICIPANT_SECURITY_INFO, security_info, ParticipantSecurityInfo);
+    emit_option!(
+      PID_PARTICIPANT_SECURITY_INFO,
+      security_info,
+      ParticipantSecurityInfo
+    );
 
     let bytes = pl.serialize_to_bytes(ctx)?;
 

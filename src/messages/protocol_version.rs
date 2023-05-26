@@ -2,10 +2,7 @@ use speedy::{Readable, Writable};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace};
 
-
-#[derive(
-  Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Clone, Copy,
-)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Clone, Copy)]
 pub struct ProtocolVersion {
   pub major: u8,
   pub minor: u8,

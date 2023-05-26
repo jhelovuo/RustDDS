@@ -19,7 +19,7 @@ pub struct IdentityToken {
   // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
   // Readable and Writable are needed to (de)serialize to(from) ParameterList.
   // Note: The implementation has to observe CDR alignment rules.
-  // Automatic derive does not do so, but does not matter al long as the item is empty.  
+  // Automatic derive does not do so, but does not matter al long as the item is empty.
 }
 
 impl IdentityToken {
@@ -33,7 +33,7 @@ impl IdentityToken {
 pub struct IdentityStatusToken {
   // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
   // Note: The implementation has to observe CDR alignment rules.
-  // Automatic derive does not do so, but does not matter al long as the item is empty.    
+  // Automatic derive does not do so, but does not matter al long as the item is empty.
 }
 
 impl IdentityStatusToken {

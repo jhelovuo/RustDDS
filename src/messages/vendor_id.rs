@@ -1,6 +1,5 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct VendorId {
   pub vendor_id: [u8; 2],

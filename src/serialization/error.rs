@@ -70,4 +70,3 @@ impl From<Error> for DDSError {
     }
   }
 }
-

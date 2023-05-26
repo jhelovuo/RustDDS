@@ -40,9 +40,7 @@ pub struct ContentFilterProperty {
   pub expression_parameters: Vec<String>,
 }
 
-
-
-// TODO: This is patchy hack. 
+// TODO: This is patchy hack.
 // Speedy reader/writer implementations do not respect
 // alignment. A string starts with 4-byte character count, so
 // we align to 4 bytes BEFORE each string reading operation, by the
@@ -62,7 +60,7 @@ impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
     read_pad(reader, fcn.len(), 4)?;
     let fe: StringWithNul = reader.read_value()?;
 
-    let mut eps : Vec<String> = Vec::with_capacity(2);
+    let mut eps: Vec<String> = Vec::with_capacity(2);
 
     read_pad(reader, fe.len(), 4)?;
     let count = reader.read_u32()?;
@@ -70,12 +68,12 @@ impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
     let mut prev_len = 0;
     for _ in 0..count {
       read_pad(reader, prev_len, 4)?;
-      let s : StringWithNul = reader.read_value()?;
+      let s: StringWithNul = reader.read_value()?;
       prev_len = s.len();
-      eps.push( s.into() );
+      eps.push(s.into());
     }
 
-    Ok(ContentFilterProperty{
+    Ok(ContentFilterProperty {
       content_filtered_topic_name: cftn.into(),
       related_topic_name: rtn.into(),
       filter_class_name: fcn.into(),
@@ -83,13 +81,12 @@ impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
       expression_parameters: eps,
     })
   }
-
 }
-
 
 // Writing several strings is a bit complicated, because
 // we have to keep track of alignment.
-// Again, alignment comes BEFORE string length, or vector item count, not after string.
+// Again, alignment comes BEFORE string length, or vector item count, not after
+// string.
 impl<C: Context> Writable<C> for ContentFilterProperty {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     let s1 = StringWithNul::from(self.content_filtered_topic_name.clone());
@@ -110,7 +107,7 @@ impl<C: Context> Writable<C> for ContentFilterProperty {
 
     // write vector length
     write_pad(writer, s4.len(), 4)?;
-    writer.write_u32(self.expression_parameters.len() as u32 )?;
+    writer.write_u32(self.expression_parameters.len() as u32)?;
 
     let mut prev_len = 0;
     for ep in self.expression_parameters.iter().cloned() {

@@ -162,11 +162,12 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
           participant_data.default_multicast_locators.clear();
 
           let datalen = d.serialized_payload.as_ref().unwrap().value.len() as u16;
-          data = participant_data.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+          data = participant_data
+            .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
             .unwrap();
           // data = Bytes::from(
-          //   to_bytes::<SpdpDiscoveredParticipantData, byteorder::LittleEndian>(&participant_data)
-          //     .unwrap(),
+          //   to_bytes::<SpdpDiscoveredParticipantData,
+          // byteorder::LittleEndian>(&participant_data)     .unwrap(),
           // );
           d.serialized_payload.as_mut().unwrap().value = data.clone();
           submsglen =
@@ -427,8 +428,9 @@ pub(crate) fn create_cdr_pl_rtps_data_message<D: PlCdrSerialize>(
   reader_id: EntityId,
   writer_id: EntityId,
 ) -> Message {
-
-  let tdata = data.to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE).unwrap();
+  let tdata = data
+    .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+    .unwrap();
 
   let mut rtps_message = Message::default();
   let guid = GUID::dummy_test_guid(EntityKind::UNKNOWN_BUILT_IN);
