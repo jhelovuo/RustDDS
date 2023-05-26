@@ -1417,15 +1417,13 @@ mod tests {
       submessages::{InterpreterSubmessage, WriterSubmessage},
     },
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
-    serialization::{
-      cdr_deserializer::CDRDeserializerAdapter, pl_cdr_serializer::PlCdrSerialize, submessage::*,
-    },
+    serialization::{cdr_deserializer::CDRDeserializerAdapter, submessage::*},
     structure::{entity::RTPSEntity, locator::Locator},
     test::{
       shape_type::ShapeType,
       test_data::{
-        create_cdr_pl_rtps_data_message, create_rtps_data_message, spdp_participant_msg_mod,
-        spdp_publication_msg, spdp_subscription_msg,
+        create_cdr_pl_rtps_data_message, spdp_participant_msg_mod, spdp_publication_msg,
+        spdp_subscription_msg,
       },
     },
   };

@@ -1297,7 +1297,11 @@ mod tests {
     );
     // deserialize back
     let drd2: DiscoveredReaderData =
-      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE).unwrap();
+      PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)
+        .unwrap_or_else(|e| {
+          println!("DiscoveredReaderData deserialize fail: {e:?}");
+          panic!();
+        });
 
     // check objects are equal
     assert_eq!(drd, drd2);

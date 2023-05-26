@@ -108,7 +108,7 @@ pub(crate) fn write_pad<C: Context, T: ?Sized + Writer<C>>(
 ) -> std::result::Result<(), C::Error> {
   let m = previous_length % align;
   if m > 0 {
-    for _ in 0..m {
+    for _ in 0..(align - m) {
       writer.write_u8(0)?;
     }
   }

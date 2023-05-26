@@ -110,8 +110,8 @@ use crate::{
     },
   },
   serialization::{
-    cdr_serializer::to_bytes, pl_cdr_deserializer::PlCdrDeserializerAdapter,
-    pl_cdr_serializer::PlCdrSerialize, Message, Submessage, SubmessageBody,
+    pl_cdr_deserializer::PlCdrDeserializerAdapter, pl_cdr_serializer::PlCdrSerialize, Message,
+    Submessage, SubmessageBody,
   },
   structure::{
     duration::Duration,
@@ -140,8 +140,6 @@ pub(crate) fn spdp_publication_msg() -> Message {
 }
 
 pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
-  use crate::serialization::pl_cdr_serializer::PlCdrSerialize;
-
   let mut tdata: Message = spdp_participant_msg();
   let mut data;
   for submsg in &mut tdata.submessages {
@@ -370,6 +368,7 @@ pub(crate) fn content_filter_data() -> Option<ContentFilterProperty> {
   Some(content_filter)
 }
 
+#[allow(dead_code)]
 pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
   data: D,
   reader_id: EntityId,
@@ -421,8 +420,6 @@ pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
   rtps_message
 }
 
-use crate::serialization::pl_cdr_serializer::PlCdrSerialize;
-
 pub(crate) fn create_cdr_pl_rtps_data_message<D: PlCdrSerialize>(
   data: D,
   reader_id: EntityId,
@@ -464,9 +461,9 @@ pub(crate) fn create_cdr_pl_rtps_data_message<D: PlCdrSerialize>(
     content_length: data_size as u16,
   };
 
-  let submessage: SubMessage = SubMessage {
+  let submessage: Submessage = Submessage {
     header: submessage_header,
-    body: SubmessageBody::Entity(EntitySubmessage::Data(data_message, sub_flags)),
+    body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, sub_flags)),
   };
   rtps_message.add_submessage(submessage);
 
