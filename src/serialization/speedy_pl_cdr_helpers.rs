@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use speedy::{Context, Readable, Writable, Writer};
+use speedy::{Context, Readable, Writable, Writer, Reader};
 
 use crate::{
   messages::submessages::submessage_elements::parameter::Parameter, serialization,
@@ -80,6 +80,33 @@ impl<'a, C: Context> Readable<'a, C> for StringWithNul {
     Ok(StringWithNul { string: raw_str })
   }
 }
+
+// Helpers for Readable/Writable padding
+
+// These are for PL_CDR (de)serialization
+pub(crate) fn read_pad<'a, C: Context, R: Reader<'a, C>>(reader: &mut R, read_length: usize, align:usize)
+  -> std::result::Result<(), C::Error>
+{
+  let m = read_length % align;
+  if m > 0 {
+    reader.skip_bytes(align - m)?;
+  }
+  Ok(())
+}
+
+
+pub(crate) fn write_pad<C: Context, T: ?Sized + Writer<C>>(writer: &mut T, previous_length: usize, align:usize)
+  -> std::result::Result<(), C::Error>
+{
+  let m = previous_length % align;
+  if m > 0 {
+    for _ in 0..m {
+      writer.write_u8(0)?;
+    }
+  }
+  Ok(())
+}
+
 
 // Helper functions for ParmeterList deserialization:
 //

@@ -1,17 +1,55 @@
 use bytes::Bytes;
-use speedy::Readable;
 use enumflags2::bitflags;
-use serde::{Deserialize, Serialize};
 
-use crate::structure::parameter_id::ParameterId;
+//use serde::{Deserialize, Serialize};
+use speedy::{Readable, Writable, Context, Writer, Reader};
+
+//use crate::structure::parameter_id::ParameterId;
+use crate::serialization::speedy_pl_cdr_helpers::*;
 
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Property {
   name: String,
   value: String,
   propagate: bool,
 }
+
+impl<'a, C: Context> Readable<'a, C> for Property {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+    let name: StringWithNul = reader.read_value()?;
+
+    read_pad(reader, name.len(), 4)?; // pad according to previous read
+    let value: StringWithNul = reader.read_value()?;
+    
+    let propagate = reader.read_u8()? != 0;
+
+    Ok(Property{
+      name: name.into(),
+      value: value.into(),
+      propagate,
+    })
+  }
+}
+
+// Writing several strings is a bit complicated, because
+// we have to keep track of alignment.
+// Again, alignment comes BEFORE string length, or vector item count, not after string.
+impl<C: Context> Writable<C> for Property {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    let name = StringWithNul::from(self.name.clone());
+    // nothing yet to pad
+    writer.write_value(&name)?;
+
+    let value = StringWithNul::from(self.value.clone());
+    write_pad(writer, name.len(), 4)?;
+    writer.write_value(&value)?;
+
+    writer.write_u8(self.propagate as u8)?;
+    Ok(())
+  }
+}
+
 
 // BinaryProperty_t type from section 7.2.2 of the Security specification (v.
 // 1.1)
@@ -57,13 +95,13 @@ pub struct SecurityError {
 // DDS Security spec v1.1 Section 7.2.7 ParticipantSecurityInfo
 // This is communicated over Discovery
 
-#[derive(Debug, Readable, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct ParticipantSecurityInfo {
   participant_security_attributes: ParticipantSecurityAttributesMask,
   plugin_participant_security_attributes: PluginParticipantSecurityAttributesMask,
 }
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq,  Clone, Copy, Readable, Writable)]
 #[bitflags]
 #[repr(u32)]
 #[allow(clippy::enum_variant_names)]
@@ -80,7 +118,7 @@ pub enum ParticipantSecurityAttributesMask {
   IsLivelinessProtected = 0b000_0100,
 }
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
 #[bitflags]
 #[repr(u32)]
 #[allow(clippy::enum_variant_names)]
@@ -99,34 +137,34 @@ pub enum PluginParticipantSecurityAttributesMask {
   IsLivelinessOriginAuthenticated = 0b0010_0000,
 }
 
-// serialization helper struct
-#[derive(Serialize, Deserialize)]
-pub(crate) struct ParticipantSecurityInfoData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  security_info: ParticipantSecurityInfo,
-}
+// // serialization helper struct
+// #[derive(Serialize, Deserialize)]
+// pub(crate) struct ParticipantSecurityInfoData {
+//   parameter_id: ParameterId,
+//   parameter_length: u16,
+//   security_info: ParticipantSecurityInfo,
+// }
 
-impl ParticipantSecurityInfoData {
-  pub fn new(security_info: ParticipantSecurityInfo) -> Self {
-    Self {
-      parameter_id: ParameterId::PID_PARTICIPANT_SECURITY_INFO,
-      parameter_length: 8, // 2x u32
-      security_info,
-    }
-  }
-}
+// impl ParticipantSecurityInfoData {
+//   pub fn new(security_info: ParticipantSecurityInfo) -> Self {
+//     Self {
+//       parameter_id: ParameterId::PID_PARTICIPANT_SECURITY_INFO,
+//       parameter_length: 8, // 2x u32
+//       security_info,
+//     }
+//   }
+// }
 
 // DDS Security spec v1.1 Section 7.2.8 EndpointSecurityInfo
 // This is communicated over Discovery
 
-#[derive(Debug, Readable, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct EndpointSecurityInfo {
   endpoint_security_attributes: EndpointSecurityAttributesMask,
   plugin_endpoint_security_attributes: PluginEndpointSecurityAttributesMask,
 }
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
 #[bitflags]
 #[repr(u32)]
 #[allow(clippy::enum_variant_names)]
@@ -147,7 +185,7 @@ pub enum EndpointSecurityAttributesMask {
   IsLivelinessProtected = 0b0100_0000,
 }
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
 #[bitflags]
 #[repr(u32)]
 #[allow(clippy::enum_variant_names)]
@@ -163,20 +201,20 @@ pub enum PluginEndpointSecurityAttributesMask {
   IsSubmessageOriginAuthenticated = 0b0000_0100,
 }
 
-// serialization helper struct
-#[derive(Serialize, Deserialize)]
-pub(crate) struct EndpointSecurityInfoData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  security_info: EndpointSecurityInfo,
-}
+// // serialization helper struct
+// #[derive(Serialize, Deserialize)]
+// pub(crate) struct EndpointSecurityInfoData {
+//   parameter_id: ParameterId,
+//   parameter_length: u16,
+//   security_info: EndpointSecurityInfo,
+// }
 
-impl EndpointSecurityInfoData {
-  pub fn new(security_info: EndpointSecurityInfo) -> Self {
-    Self {
-      parameter_id: ParameterId::PID_ENDPOINT_SECURITY_INFO,
-      parameter_length: 8, // 2x u32
-      security_info,
-    }
-  }
-}
+// impl EndpointSecurityInfoData {
+//   pub fn new(security_info: EndpointSecurityInfo) -> Self {
+//     Self {
+//       parameter_id: ParameterId::PID_ENDPOINT_SECURITY_INFO,
+//       parameter_length: 8, // 2x u32
+//       security_info,
+//     }
+//   }
+// }

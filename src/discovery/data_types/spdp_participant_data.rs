@@ -289,6 +289,16 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       get_option_from_pl_map::< _ , StringWithNul>(&pl_map, ctx, ParameterId::PID_ENTITY_NAME, "entity name")?
       .map( String::from );
 
+    // DDS security
+    let identity_token: Option<IdentityToken> = 
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_IDENTITY_TOKEN, "identity token")?;
+    let permissions_token: Option<PermissionsToken> = 
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_PERMISSIONS_TOKEN, "permissions token")?;
+    let property: Option<Property> = 
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_PROPERTY_LIST, "property")?;
+    let security_info: Option<ParticipantSecurityInfo> = 
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_PARTICIPANT_SECURITY_INFO, "participant security info")?;
+
     Ok(Self {
       updated_time: Utc::now(),
       protocol_version,
@@ -305,10 +315,10 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       builtin_endpoint_qos,
       entity_name,
 
-      identity_token: None,    // TODO: Generate one
-      permissions_token: None, // TODO
-      property: None, // TODO
-      security_info: None, // TODO
+      identity_token,    
+      permissions_token,
+      property,
+      security_info,
     })
   }
 }
@@ -412,6 +422,12 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
     // and does not follow CDR encoding.
     let entity_name_n: Option<StringWithNul> = entity_name.clone().map(|e| e.into());
     emit_option!(PID_ENTITY_NAME, &entity_name_n, StringWithNul);
+
+    // DDS security
+    emit_option!(PID_IDENTITY_TOKEN, identity_token, IdentityToken);
+    emit_option!(PID_PERMISSIONS_TOKEN, permissions_token, PermissionsToken);
+    emit_option!(PID_PROPERTY_LIST, property, Property);
+    emit_option!(PID_PARTICIPANT_SECURITY_INFO, security_info, ParticipantSecurityInfo);
 
     let bytes = pl.serialize_to_bytes(ctx)?;
 
