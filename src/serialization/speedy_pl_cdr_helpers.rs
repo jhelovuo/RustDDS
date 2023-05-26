@@ -1,0 +1,135 @@
+use std::collections::BTreeMap;
+
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+use speedy::{Context, Readable, Writable, Writer};
+
+use crate::{
+  messages::submessages::submessage_elements::parameter::Parameter, serialization,
+  serialization::error::Result, structure::parameter_id::ParameterId, RepresentationIdentifier,
+};
+
+pub fn pl_cdr_rep_id_to_speedy(encoding: RepresentationIdentifier) -> Result<speedy::Endianness> {
+  match encoding {
+    RepresentationIdentifier::PL_CDR_LE => Ok(speedy::Endianness::LittleEndian),
+    RepresentationIdentifier::PL_CDR_BE => Ok(speedy::Endianness::BigEndian),
+    _ => Err(serialization::error::Error::Message(
+      "Unknown encoding, expected PL_CDR".to_string(),
+    )),
+  }
+}
+
+// This is a helper type for serializaton.
+// CDR (and therefore PL_CDR) mandates that strings are nul-terminated.
+// Our CDR serializer does that, but Speedy Readable and Writable need this
+// wrapper.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StringWithNul {
+  string: String,
+}
+
+impl From<String> for StringWithNul {
+  fn from(string: String) -> Self {
+    StringWithNul { string }
+  }
+}
+
+impl From<&String> for StringWithNul {
+  fn from(string: &String) -> Self {
+    StringWithNul { string: string.clone() }
+  }
+}
+
+impl From<StringWithNul> for String {
+  fn from(value: StringWithNul) -> String {
+    value.string
+  }
+}
+
+impl<C: Context> Writable<C> for StringWithNul {
+  #[inline]
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> std::result::Result<(), C::Error> {
+    // TODO: How should we fail if someone tries to serialize string longer than 4
+    // GBytes? RTPS does not support that.
+    writer.write_u32((self.string.len() + 1).try_into().unwrap())?; // +1 for NUL character
+    writer.write_slice(self.string.as_bytes())?;
+    writer.write_u8(0)?; // NUL character
+    Ok(())
+  }
+}
+
+impl<'a, C: Context> Readable<'a, C> for StringWithNul {
+  #[inline]
+  fn read_from<R: speedy::Reader<'a, C>>(reader: &mut R) -> std::result::Result<Self, C::Error> {
+    let mut raw_str: String = reader.read_value()?;
+    let assumed_nul = raw_str.pop(); //
+    match assumed_nul {
+      Some('\0') => { /*fine*/ }
+      other => error!("StringWithNul deserialize: Expected NUL character, decoded {other:?}"),
+    }
+    Ok(StringWithNul { string: raw_str })
+  }
+}
+
+// Helper functions for ParmeterList deserialization:
+//
+// Get and deserialize first occurence of ParamterId in map
+pub(crate) fn get_first_from_pl_map<'a, C, D>(
+  pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
+  ctx: C,
+  pid: ParameterId,
+  name: &str,
+) -> Result<D>
+where
+  C: speedy::Context,
+  D: Readable<'a, C>,
+  serialization::error::Error: From<<C as speedy::Context>::Error>,
+{
+  pl_map
+    .get(&pid)
+    .and_then(|v| v.first())
+    .ok_or(serialization::error::Error::Message(
+      "Missing ".to_string() + name,
+    ))
+    .and_then(|p| D::read_from_buffer_with_ctx(ctx, &p.value).map_err(|e| e.into()))
+}
+
+// same, but gets all occurences
+#[allow(clippy::needless_pass_by_value)]
+pub(crate) fn get_all_from_pl_map<'a, C, D>(
+  pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
+  ctx: C,
+  pid: ParameterId,
+  _name: &str,
+) -> Result<Vec<D>>
+where
+  C: speedy::Context + Clone,
+  D: Readable<'a, C>,
+  serialization::error::Error: From<<C as speedy::Context>::Error>,
+{
+  pl_map
+    .get(&pid)
+    .unwrap_or(&Vec::new())
+    .iter()
+    .map(|p| D::read_from_buffer_with_ctx(ctx.clone(), &p.value).map_err(|e| e.into()))
+    .collect()
+}
+
+// same, but either gets the occurence or not. Getting nothing is not an Error.
+pub(crate) fn get_option_from_pl_map<'a, C, D>(
+  pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
+  ctx: C,
+  pid: ParameterId,
+  _name: &str,
+) -> Result<Option<D>>
+where
+  C: speedy::Context + Clone,
+  D: Readable<'a, C>,
+  serialization::error::Error: From<<C as speedy::Context>::Error>,
+{
+  pl_map
+    .get(&pid)
+    .and_then(|v| v.first()) // Option<Parameter> here
+    .map(|p| D::read_from_buffer_with_ctx(ctx, &p.value).map_err(|e| e.into()))
+    .transpose()
+}

@@ -639,7 +639,7 @@ impl Discovery {
                   self
                     .dcps_publication_writer
                     .dispose(&Endpoint_GUID(guid), None)
-                    .unwrap_or(());
+                    .unwrap_or_else(|e| error!("Disposing local Writer: {e:?}"));
 
                   match self.discovery_db.write() {
                     Ok(mut db) => db.remove_local_topic_writer(guid),
@@ -657,7 +657,7 @@ impl Discovery {
                   self
                     .dcps_subscription_writer
                     .dispose(&Endpoint_GUID(guid), None)
-                    .unwrap_or(());
+                    .unwrap_or_else(|e| error!("Disposing local Reader: {e:?}"));
 
                   match self.discovery_db.write() {
                     Ok(mut db) => db.remove_local_topic_reader(guid),
@@ -714,7 +714,12 @@ impl Discovery {
               5.0 * Duration::from(Self::SEND_PARTICIPANT_INFO_PERIOD),
             );
 
-            self.dcps_participant_writer.write(data, None).unwrap_or(());
+            self
+              .dcps_participant_writer
+              .write(data, None)
+              .unwrap_or_else(|e| {
+                error!("Discovery: Publishing to DCPS participant topic failed: {e:?}")
+              });
             // reschedule timer
             self
               .participant_send_info_timer
@@ -821,8 +826,12 @@ impl Discovery {
       EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
     );
 
+    // Do we expect inlineQos in every incoming DATA message?
+    let rustdds_expects_inline_qos = false;
+
     let reader_proxy = ReaderProxy::new(
       reader_guid,
+      rustdds_expects_inline_qos,
       self
         .self_locators
         .get(&DISCOVERY_LISTENER_TOKEN)
@@ -867,7 +876,7 @@ impl Discovery {
 
     let pub_topic_data = PublicationBuiltinTopicData::new(
       writer_guid,
-      dp.guid(),
+      Some(dp.guid()),
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
     );
@@ -930,10 +939,13 @@ impl Discovery {
           }
         },
         Ok(None) => {
-          //debug!("handle_participant_reader: no more data");
+          trace!("handle_participant_reader: no more data");
           return;
         } // no more data
-        Err(e) => error!("{e:?}"),
+        Err(e) => {
+          error!(" !!! handle_participant_reader: {e:?}");
+          return;
+        }
       }
     } // loop
   }
@@ -1411,7 +1423,8 @@ mod tests {
     test::{
       shape_type::ShapeType,
       test_data::{
-        create_rtps_data_message, spdp_participant_msg_mod, spdp_publication_msg,
+        create_rtps_data_message, create_cdr_pl_rtps_data_message,
+        spdp_participant_msg_mod, spdp_publication_msg,
         spdp_subscription_msg,
       },
     },
@@ -1456,6 +1469,8 @@ mod tests {
 
   #[test]
   fn discovery_reader_data_test() {
+    use crate::serialization::pl_cdr_serializer::PlCdrSerialize;
+
     let participant = DomainParticipant::new(0).expect("participant creation");
 
     let topic = participant
@@ -1647,7 +1662,7 @@ mod tests {
       },
     );
 
-    let rtps_message = create_rtps_data_message(
+    let rtps_message = create_cdr_pl_rtps_data_message(
       topic_data,
       EntityId::SEDP_BUILTIN_TOPIC_READER,
       EntityId::SEDP_BUILTIN_TOPIC_WRITER,

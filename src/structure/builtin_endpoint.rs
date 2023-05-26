@@ -1,7 +1,6 @@
-use serde::{Deserialize, Serialize};
+use speedy::{Readable, Writable};
 
-use super::parameter_id::ParameterId;
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Readable, Writable)]
 pub struct BuiltinEndpointSet {
   value: u32,
 }
@@ -66,24 +65,7 @@ impl BuiltinEndpointSet {
   }
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize)]
-pub struct BuiltinEndpointSetData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  builtin_endpoint_set: BuiltinEndpointSet,
-}
-
-impl BuiltinEndpointSetData {
-  pub fn from(builtin_endpoint_set: BuiltinEndpointSet, parameter_id: ParameterId) -> Self {
-    Self {
-      parameter_id,
-      parameter_length: 4,
-      builtin_endpoint_set,
-    }
-  }
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Readable, Writable)]
 pub struct BuiltinEndpointQos {
   value: u32,
 }
@@ -93,22 +75,5 @@ impl BuiltinEndpointQos {
 
   pub fn is_best_effort(&self) -> bool {
     self.value == Self::BEST_EFFORT_PARTICIPANT_MESSAGE_DATA_READER
-  }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct BuiltinEndpointQosData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  builtin_endpoint_qos: BuiltinEndpointQos,
-}
-
-impl BuiltinEndpointQosData {
-  pub fn from(builtin_endpoint_qos: BuiltinEndpointQos) -> Self {
-    Self {
-      parameter_id: ParameterId::PID_BUILTIN_ENDPOINT_QOS,
-      parameter_length: 4,
-      builtin_endpoint_qos,
-    }
   }
 }

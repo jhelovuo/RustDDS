@@ -1,15 +1,19 @@
-use std::io;
+use std::{collections::BTreeMap, io};
 
-use speedy::{Endianness, Readable};
-use log::trace;
+use speedy::{Endianness, Readable, Writable};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{traits::key::KeyHash, values::result::Result},
   messages::submessages::submessage_elements::{
-    parameter_list::ParameterList, RepresentationIdentifier,
+    parameter::Parameter, parameter_list::ParameterList, RepresentationIdentifier,
   },
+  serialization,
+  serialization::speedy_pl_cdr_helpers::*,
   structure::{
-    duration::Duration, inline_qos::StatusInfo, parameter_id::ParameterId, rpc::SampleIdentity,
+    duration::Duration, endpoint::ReliabilityKind, inline_qos::StatusInfo,
+    parameter_id::ParameterId, rpc::SampleIdentity,
   },
 };
 
@@ -380,6 +384,215 @@ impl QosPolicies {
     // default value. no incompatibility detected.
     None
   }
+
+  // serialization
+  pub fn to_parameter_list(
+    &self,
+    ctx: speedy::Endianness,
+  ) -> std::result::Result<Vec<Parameter>, speedy::Error> {
+    let mut pl = Vec::with_capacity(8);
+
+    let QosPolicies {
+      // bind self to (a) destructure, and (b) ensure all fields are handled
+      durability,
+      presentation,
+      deadline,
+      latency_budget,
+      ownership,
+      liveliness,
+      time_based_filter,
+      reliability,
+      destination_order,
+      history,
+      resource_limits,
+      lifespan,
+    } = self;
+
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    macro_rules! emit_option {
+      ($pid:ident, $member:expr, $type:ty) => {
+        if let Some(m) = $member {
+          emit!($pid, m, $type)
+        }
+      };
+    }
+
+    use policy::*;
+
+    emit_option!(PID_DURABILITY, durability, Durability);
+    emit_option!(PID_PRESENTATION, presentation, Presentation);
+    emit_option!(PID_DEADLINE, deadline, Deadline);
+    emit_option!(PID_LATENCY_BUDGET, latency_budget, LatencyBudget);
+
+    // Ownership serializes to (maybe) two separate Parameters
+    match ownership {
+      Some(Ownership::Exclusive { strength }) => {
+        emit!(PID_OWNERSHIP, &OwnershipKind::Exclusive, OwnershipKind);
+        emit!(PID_OWNERSHIP_STRENGTH, strength, i32);
+      }
+      Some(Ownership::Shared) => {
+        emit!(PID_OWNERSHIP, &OwnershipKind::Shared, OwnershipKind);
+      }
+      None => (),
+    }
+    // This should serialize as is
+    emit_option!(PID_LIVELINESS, liveliness, policy::Liveliness);
+    emit_option!(
+      PID_TIME_BASED_FILTER,
+      time_based_filter,
+      policy::TimeBasedFilter
+    );
+
+    if let Some(rel) = reliability.as_ref() {
+      let reliability_ser = match rel {
+        Reliability::BestEffort => ReliabilitySerialization {
+          reliability_kind: ReliabilityKind::BestEffort,
+          max_blocking_time: Duration::DURATION_ZERO, // dummy value for serialization
+        },
+        Reliability::Reliable { max_blocking_time } => ReliabilitySerialization {
+          reliability_kind: ReliabilityKind::Reliable,
+          max_blocking_time: *max_blocking_time,
+        },
+      };
+      emit!(PID_RELIABILITY, &reliability_ser, ReliabilitySerialization);
+    }
+
+    emit_option!(
+      PID_DESTINATION_ORDER,
+      destination_order,
+      policy::DestinationOrder
+    );
+
+    if let Some(history) = history.as_ref() {
+      let history_ser = match history {
+        History::KeepLast { depth } => HistorySerialization {
+          kind: HistoryKind::KeepLast,
+          depth: *depth,
+        },
+        History::KeepAll => HistorySerialization {
+          kind: HistoryKind::KeepAll,
+          depth: 0,
+        },
+      };
+      emit!(PID_HISTORY, &history_ser, HistorySerialization);
+    }
+    emit_option!(PID_RESOURCE_LIMITS, resource_limits, policy::ResourceLimits);
+    emit_option!(PID_LIFESPAN, lifespan, policy::Lifespan);
+
+    Ok(pl)
+  }
+
+  pub fn from_parameter_list(
+    ctx: speedy::Endianness,
+    pl_map: &BTreeMap<ParameterId, Vec<&Parameter>>,
+  ) -> std::result::Result<QosPolicies, serialization::error::Error> {
+    macro_rules! get_option {
+      ($pid:ident) => {
+        get_option_from_pl_map(pl_map, ctx, ParameterId::$pid, "<not_used>")?
+      };
+    }
+
+    let durability: Option<policy::Durability> = get_option!(PID_DURABILITY);
+    let presentation: Option<policy::Presentation> = get_option!(PID_PRESENTATION);
+    let deadline: Option<policy::Deadline> = get_option!(PID_DEADLINE);
+    let latency_budget: Option<policy::LatencyBudget> = get_option!(PID_LATENCY_BUDGET);
+
+    // Ownership is in 2 parts
+    let ownership_kind: Option<OwnershipKind> = get_option!(PID_OWNERSHIP);
+    let ownership_strength: Option<i32> = get_option!(PID_OWNERSHIP_STRENGTH);
+    let ownership = match (ownership_kind, ownership_strength) {
+      (Some(OwnershipKind::Shared), None) => Some(policy::Ownership::Shared),
+      (Some(OwnershipKind::Shared), Some(_strength)) => {
+        warn!("QosPolicies deserializer: Received OwnershipKind::Shared and a strength value.");
+        None
+      }
+      (Some(OwnershipKind::Exclusive), Some(strength)) => {
+        Some(policy::Ownership::Exclusive { strength })
+      }
+      (Some(OwnershipKind::Exclusive), None) => {
+        warn!("QosPolicies deserializer: Received OwnershipKind::Exclusive but no stregth value.");
+        None
+      }
+      (None, Some(_strength)) => {
+        warn!(
+          "QosPolicies deserializer: Received ownership strength value, but no kind parameter."
+        );
+        None
+      }
+      (None, None) => None,
+    };
+
+    let reliability_ser: Option<ReliabilitySerialization> = get_option!(PID_RELIABILITY);
+    let reliability = reliability_ser.map(|rs| match rs.reliability_kind {
+      ReliabilityKind::BestEffort => policy::Reliability::BestEffort,
+      ReliabilityKind::Reliable => policy::Reliability::Reliable {
+        max_blocking_time: rs.max_blocking_time,
+      },
+    });
+    let destination_order: Option<policy::DestinationOrder> = get_option!(PID_DESTINATION_ORDER);
+
+    let history_ser: Option<HistorySerialization> = get_option!(PID_HISTORY);
+    let history = history_ser.map(|h| match h.kind {
+      HistoryKind::KeepAll => policy::History::KeepAll,
+      HistoryKind::KeepLast => policy::History::KeepLast { depth: h.depth },
+    });
+
+    let liveliness: Option<policy::Liveliness> = get_option!(PID_LIVELINESS);
+    let time_based_filter: Option<policy::TimeBasedFilter> = get_option!(PID_TIME_BASED_FILTER);
+
+    let resource_limits: Option<policy::ResourceLimits> = get_option!(PID_RESOURCE_LIMITS);
+    let lifespan: Option<policy::Lifespan> = get_option!(PID_LIFESPAN);
+
+    // We construct using the struct syntax directly rather than the builder,
+    // so we cannot forget any field.
+    Ok(QosPolicies {
+      durability,
+      presentation,
+      deadline,
+      latency_budget,
+      ownership,
+      liveliness,
+      time_based_filter,
+      reliability,
+      destination_order,
+      history,
+      resource_limits,
+      lifespan,
+    })
+  }
+}
+
+#[derive(Writable, Readable, Clone)]
+//#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum HistoryKind {
+  KeepLast,
+  KeepAll,
+}
+
+#[derive(Writable, Readable, Clone)]
+struct HistorySerialization {
+  pub kind: HistoryKind,
+  pub depth: i32,
+}
+
+#[derive(Writable, Readable)]
+//#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum OwnershipKind {
+  Shared,
+  Exclusive,
+}
+
+#[derive(Writable, Readable, Clone)]
+struct ReliabilitySerialization {
+  pub reliability_kind: ReliabilityKind,
+  pub max_blocking_time: Duration,
 }
 
 // DDS spec v1.4 p.139
@@ -395,8 +608,9 @@ pub mod policy {
   use std::cmp::Ordering;
 
   use serde::{Deserialize, Serialize};
+  use speedy::{Readable, Writable};
 
-  use crate::structure::{duration::Duration, parameter_id::ParameterId};
+  use crate::structure::duration::Duration;
 
   /*
   pub struct UserData {
@@ -417,13 +631,26 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.16 LIFESPAN
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
   pub struct Lifespan {
     pub duration: Duration,
   }
 
   /// DDS 2.2.3.4 DURABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    Readable,
+    Writable,
+  )]
   pub enum Durability {
     Volatile,
     TransientLocal,
@@ -432,7 +659,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.6 PRESENTATION
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
   pub struct Presentation {
     pub access_scope: PresentationAccessScope,
     pub coherent_access: bool,
@@ -440,7 +667,20 @@ pub mod policy {
   }
 
   /// Access scope that is part of DDS 2.2.3.6 PRESENTATION
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    Readable,
+    Writable,
+  )]
   pub enum PresentationAccessScope {
     Instance,
     Topic,
@@ -448,11 +688,24 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.7 DEADLINE
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+    Readable,
+    Writable,
+  )]
   pub struct Deadline(pub Duration);
 
   /// DDS 2.2.3.8 LATENCY_BUDGET
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
   pub struct LatencyBudget {
     pub duration: Duration,
   }
@@ -465,7 +718,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.11 LIVELINESS
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
   pub enum Liveliness {
     Automatic { lease_duration: Duration },
     ManualByParticipant { lease_duration: Duration },
@@ -508,7 +761,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.12 TIME_BASED_FILTER
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
   pub struct TimeBasedFilter {
     pub minimum_separation: Duration,
   }
@@ -550,7 +803,20 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.17 DESTINATION_ORDER
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+    Readable,
+    Writable,
+  )]
   pub enum DestinationOrder {
     ByReceptionTimestamp,
     BySourceTimeStamp,
@@ -575,67 +841,13 @@ pub mod policy {
   ///
   /// Negative values are needed, because DDS spec defines the special value
   /// const long LENGTH_UNLIMITED = -1;
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Writable, Readable)]
   pub struct ResourceLimits {
     pub max_samples: i32,
     pub max_instances: i32,
     pub max_samples_per_instance: i32,
   }
-
-  // This is a serialization helper struct
-  #[derive(Serialize, Deserialize)]
-  pub(crate) struct QosData<D>
-  where
-    D: Serialize,
-  {
-    parameter_id: ParameterId,
-    parameter_length: u16,
-    qos_param: D,
-  }
-
-  impl<D> QosData<D>
-  where
-    D: Serialize + Copy + Clone,
-  {
-    // TODO: This design is just horribly wrong.
-    // It is true that declared length of Parameter in RTPS
-    // must have length aligned to multiple of 4, and contents tail
-    // padded to match declared length.
-    // But now nothing ensures that declared length given here
-    // matches the serialized length of "qos_param".
-    pub fn new(parameter_id: ParameterId, qosparam: D) -> Self {
-      match parameter_id {
-        ParameterId::PID_DURABILITY => Self {
-          parameter_id,
-          parameter_length: 4,
-          qos_param: qosparam,
-        },
-        ParameterId::PID_DEADLINE
-        | ParameterId::PID_LATENCY_BUDGET
-        | ParameterId::PID_TIME_BASED_FILTER
-        | ParameterId::PID_PRESENTATION
-        | ParameterId::PID_LIFESPAN
-        | ParameterId::PID_HISTORY => Self {
-          parameter_id,
-          parameter_length: 8,
-          qos_param: qosparam,
-        },
-        ParameterId::PID_LIVELINESS
-        | ParameterId::PID_RELIABILITY
-        | ParameterId::PID_RESOURCE_LIMITS => Self {
-          parameter_id,
-          parameter_length: 12,
-          qos_param: qosparam,
-        },
-        _ => Self {
-          parameter_id,
-          parameter_length: 4,
-          qos_param: qosparam,
-        },
-      }
-    }
-  }
-}
+} // mod policy
 
 // Utility for parsing RTPS inlineQoS parameters
 // TODO: This does not need to be a struct, since is has no contents.

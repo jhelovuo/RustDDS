@@ -101,20 +101,22 @@ where
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
-  fn fill_and_lock_local_datasample_cache(&mut self) {
-    loop {
-      match self.simple_data_reader.try_take_one() {
-        Ok(None) => break,
-        Ok(Some(dcc)) => self
-          .datasample_cache
-          .fill_from_deserialized_cache_change(dcc),
-        Err(_e) => {
-          // error is logged already at lower level.
-          // Should we try to continue or stop here?
-          // Or maybe report an error?
-        }
-      }
+  fn fill_and_lock_local_datasample_cache(&mut self) -> Result<()> {
+    while let Some(dcc) = self.simple_data_reader.try_take_one()? {
+      self
+        .datasample_cache
+        .fill_from_deserialized_cache_change(dcc);
     }
+    Ok(())
+    // loop {
+    //   match  {
+    //     Ok(None) => break,
+    //     Ok(Some(dcc)) => ,
+    //     Err(e) => {
+    //       error!("!!!")
+    //     }
+    //   }
+    // }
   }
 
   fn drain_read_notifications(&self) {
@@ -197,7 +199,7 @@ where
   ) -> Result<Vec<DataSample<&D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
-    self.fill_and_lock_local_datasample_cache();
+    self.fill_and_lock_local_datasample_cache()?;
 
     let mut selected = self.select_keys_for_access(read_condition);
     selected.truncate(max_samples);
@@ -261,7 +263,7 @@ where
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
 
-    self.fill_and_lock_local_datasample_cache();
+    self.fill_and_lock_local_datasample_cache()?;
     let mut selected = self.select_keys_for_access(read_condition);
     trace!("take selected count = {}", selected.len());
     selected.truncate(max_samples);
@@ -364,7 +366,7 @@ where
     read_condition: ReadCondition,
   ) -> Result<Vec<Sample<&D, D::K>>> {
     self.drain_read_notifications();
-    self.fill_and_lock_local_datasample_cache();
+    self.fill_and_lock_local_datasample_cache()?;
 
     let mut selected = self.select_keys_for_access(read_condition);
     selected.truncate(max_samples);
@@ -381,7 +383,7 @@ where
   ) -> Result<Vec<Sample<D, D::K>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
-    self.fill_and_lock_local_datasample_cache();
+    self.fill_and_lock_local_datasample_cache()?;
 
     let mut selected = self.select_keys_for_access(read_condition);
     trace!("take bare selected count = {}", selected.len());
@@ -669,7 +671,7 @@ where
     this_or_next: SelectByKey,
   ) -> Result<Vec<DataSample<&D>>> {
     self.drain_read_notifications();
-    self.fill_and_lock_local_datasample_cache();
+    self.fill_and_lock_local_datasample_cache()?;
 
     let key = match Self::infer_key(self, instance_key, this_or_next) {
       Some(k) => k,
@@ -742,7 +744,7 @@ where
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
 
-    self.fill_and_lock_local_datasample_cache();
+    self.fill_and_lock_local_datasample_cache()?;
 
     let key = match self.infer_key(instance_key, this_or_next) {
       Some(k) => k,

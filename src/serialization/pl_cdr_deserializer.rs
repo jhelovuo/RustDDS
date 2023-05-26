@@ -14,11 +14,9 @@ use crate::{
 
 // This is to be implemented by all Discovery message types.
 // .. likely it is not useful for others.
-pub trait PlCdrDeserialize {
+pub trait PlCdrDeserialize: Sized {
   // encoding must be either PL_CDR_LE or PL_CDR_BE
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<Self>
-  where
-    Self: Sized;
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<Self>;
 }
 
 pub struct PlCdrDeserializerAdapter<D> {

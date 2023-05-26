@@ -46,6 +46,9 @@ pub enum Error {
 
   #[error("Trailing garbage, {:?} bytes", .0.len())]
   TrailingCharacters(Vec<u8>),
+
+  #[error("speedy::Error: {0}")]
+  Speedy(#[from] speedy::Error),
 }
 
 impl ser::Error for Error {

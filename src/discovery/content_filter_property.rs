@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use speedy::{Context, Readable, Reader, Writable, Writer};
 
-use crate::structure::parameter_id::ParameterId;
+use crate::serialization::speedy_pl_cdr_helpers::*;
 
 /// The ContentFilterProperty field provides all the required information to
 /// enable content filtering on the Writer side. For example, for the default
@@ -11,7 +11,7 @@ use crate::structure::parameter_id::ParameterId;
 /// filter class. If not, the Writer will simply ignore the filter information
 /// and not filter any data samples.
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ContentFilterProperty {
   /// Name of the Content-filtered Topic associated with the Reader.
   /// Must have non-zero length.
@@ -40,37 +40,39 @@ pub struct ContentFilterProperty {
   pub expression_parameters: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct ContentFilterPropertyData {
-  parameter_id: ParameterId,
-  parameter_length: u16,
-  content_filter_property: ContentFilterProperty,
+// These are for PL_CD (de)serialization
+
+impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+
+    let cftn: StringWithNul = reader.read_value()?;
+    let rtn: StringWithNul = reader.read_value()?;
+    let fcn: StringWithNul = reader.read_value()?;
+    let fe: StringWithNul = reader.read_value()?;
+    let eps: Vec<StringWithNul> = reader.read_value()?;
+
+    Ok(ContentFilterProperty{
+      content_filtered_topic_name: cftn.into(),
+      related_topic_name: rtn.into(),
+      filter_class_name: fcn.into(),
+      filter_expression: fe.into(),
+      expression_parameters: eps.into_iter().map( String::from ).collect(),
+    })
+  }
+
 }
 
-impl ContentFilterPropertyData {
-  pub fn new(content_filter_property: &ContentFilterProperty) -> Self {
-    let len_cftn = content_filter_property.content_filtered_topic_name.len();
-    let len_cftn = len_cftn + (4 - len_cftn % 4) + 4;
-    let len_rtn = content_filter_property.related_topic_name.len();
-    let len_rtn = len_rtn + (4 - len_rtn % 4) + 4;
-    let len_fcn = content_filter_property.filter_class_name.len();
-    let len_fcn = len_fcn + (4 - len_fcn % 4) + 4;
-    let len_fe = content_filter_property.filter_expression.len();
-    let len_fe = len_fe + (4 - len_fe % 4) + 4;
+impl<C: Context> Writable<C> for ContentFilterProperty {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    writer.write_value(&StringWithNul::from(self.content_filtered_topic_name.clone()))?;
+    writer.write_value(&StringWithNul::from(self.related_topic_name.clone()))?;
+    writer.write_value(&StringWithNul::from(self.filter_class_name.clone()))?;
+    writer.write_value(&StringWithNul::from(self.filter_expression.clone()))?;
 
-    let mut parameter_length = len_cftn + len_rtn + len_fcn + len_fe;
-    for param in &content_filter_property.expression_parameters {
-      let len_temp = param.len();
-      let len_temp = len_temp + (4 - len_temp % 4) + 4;
-      parameter_length += len_temp;
-    }
-
-    parameter_length = parameter_length + (4 - parameter_length % 4) + 4;
-
-    Self {
-      parameter_id: ParameterId::PID_CONTENT_FILTER_PROPERTY,
-      parameter_length: parameter_length as u16,
-      content_filter_property: content_filter_property.clone(),
-    }
+    writer.write_value(
+      &self.expression_parameters.iter().cloned()
+      .map(StringWithNul::from).collect::<Vec<StringWithNul>>()
+    )?;
+    Ok(())
   }
 }
