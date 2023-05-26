@@ -40,8 +40,9 @@ pub struct ContentFilterProperty {
   pub expression_parameters: Vec<String>,
 }
 
-// These are for PL_CD (de)serialization
 
+
+// These are for PL_CDR (de)serialization
 fn read_pad<'a, C: Context, R: Reader<'a, C>>(reader: &mut R, read_length: usize, align:usize)
   -> Result<(), C::Error>
 {
@@ -61,24 +62,27 @@ fn read_pad<'a, C: Context, R: Reader<'a, C>>(reader: &mut R, read_length: usize
 // If string were followed by e.g. "u8", that would not have alignment applied.
 impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
-
     let cftn: StringWithNul = reader.read_value()?;
-    read_pad(reader, cftn.len(), 4)?;
 
+    read_pad(reader, cftn.len(), 4)?; // pad according to previous read
     let rtn: StringWithNul = reader.read_value()?;
+
     read_pad(reader, rtn.len(), 4)?;
-
     let fcn: StringWithNul = reader.read_value()?;
-    read_pad(reader, fcn.len(), 4)?;
 
+    read_pad(reader, fcn.len(), 4)?;
     let fe: StringWithNul = reader.read_value()?;
-    read_pad(reader, fe.len(), 4)?;
 
     let mut eps : Vec<String> = Vec::with_capacity(2);
+
+    read_pad(reader, fe.len(), 4)?;
     let count = reader.read_u32()?;
+
+    let mut prev_len = 0;
     for _ in 0..count {
+      read_pad(reader, prev_len, 4)?;
       let s : StringWithNul = reader.read_value()?;
-      read_pad(reader, s.len(), 4)?;
+      prev_len = s.len();
       eps.push( s.into() );
     }
     //let eps: Vec<StringWithNul> = reader.read_value()?;
@@ -94,18 +98,52 @@ impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
 
 }
 
-// TODO: Write alignment missing.
+
+fn write_pad<C: Context, T: ?Sized + Writer<C>>(writer: &mut T, previous_length: usize, align:usize)
+  -> Result<(), C::Error>
+{
+  let m = previous_length % align;
+  if m > 0 {
+    for _ in 0..m {
+      writer.write_u8(0)?;
+    }
+  }
+  Ok(())
+}
+
+// Writing several strings is a bit complicated, because
+// we have to keep track of alignment.
+// Again, alignment comes BEFORE string length, or vector item count, not after string.
 impl<C: Context> Writable<C> for ContentFilterProperty {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    writer.write_value(&StringWithNul::from(self.content_filtered_topic_name.clone()))?;
-    writer.write_value(&StringWithNul::from(self.related_topic_name.clone()))?;
-    writer.write_value(&StringWithNul::from(self.filter_class_name.clone()))?;
-    writer.write_value(&StringWithNul::from(self.filter_expression.clone()))?;
+    let s1 = StringWithNul::from(self.content_filtered_topic_name.clone());
+    // nothing yet to pad
+    writer.write_value(&s1)?;
 
-    writer.write_value(
-      &self.expression_parameters.iter().cloned()
-      .map(StringWithNul::from).collect::<Vec<StringWithNul>>()
-    )?;
+    let s2 = StringWithNul::from(self.related_topic_name.clone());
+    write_pad(writer, s1.len(), 4)?;
+    writer.write_value(&s2)?;
+
+    let s3 = StringWithNul::from(self.filter_class_name.clone());
+    write_pad(writer, s2.len(), 4)?;
+    writer.write_value(&s3)?;
+
+    let s4 = StringWithNul::from(self.filter_expression.clone());
+    write_pad(writer, s3.len(), 4)?;
+    writer.write_value(&s4)?;
+
+    // write vector length
+    write_pad(writer, s4.len(), 4)?;
+    writer.write_u32(self.expression_parameters.len() as u32 )?;
+
+    let mut prev_len = 0;
+    for ep in self.expression_parameters.iter().cloned() {
+      write_pad(writer, prev_len, 4)?;
+      let sn = StringWithNul::from(ep);
+      writer.write_value(&sn)?;
+      prev_len = sn.len();
+    }
+
     Ok(())
   }
 }
