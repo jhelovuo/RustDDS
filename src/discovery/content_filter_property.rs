@@ -42,26 +42,59 @@ pub struct ContentFilterProperty {
 
 // These are for PL_CD (de)serialization
 
+fn read_pad<'a, C: Context, R: Reader<'a, C>>(reader: &mut R, read_length: usize, align:usize)
+  -> Result<(), C::Error>
+{
+  let m = read_length % align;
+  if m > 0 {
+    reader.skip_bytes(align - m)?;
+  }
+  Ok(())
+}
+
+// TODO: This is patchy hack. 
+// Speedy reader/writer implementations do not respect
+// alignment. A string starts with 4-byte character count, so
+// we align to 4 bytes BEFORE each string reading operation, by the
+// misalignment caused previously.
+// Note: we must align BEFORE string read, not after.
+// If string were followed by e.g. "u8", that would not have alignment applied.
 impl<'a, C: Context> Readable<'a, C> for ContentFilterProperty {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
 
     let cftn: StringWithNul = reader.read_value()?;
+    read_pad(reader, cftn.len(), 4)?;
+
     let rtn: StringWithNul = reader.read_value()?;
+    read_pad(reader, rtn.len(), 4)?;
+
     let fcn: StringWithNul = reader.read_value()?;
+    read_pad(reader, fcn.len(), 4)?;
+
     let fe: StringWithNul = reader.read_value()?;
-    let eps: Vec<StringWithNul> = reader.read_value()?;
+    read_pad(reader, fe.len(), 4)?;
+
+    let mut eps : Vec<String> = Vec::with_capacity(2);
+    let count = reader.read_u32()?;
+    for _ in 0..count {
+      let s : StringWithNul = reader.read_value()?;
+      read_pad(reader, s.len(), 4)?;
+      eps.push( s.into() );
+    }
+    //let eps: Vec<StringWithNul> = reader.read_value()?;
 
     Ok(ContentFilterProperty{
       content_filtered_topic_name: cftn.into(),
       related_topic_name: rtn.into(),
       filter_class_name: fcn.into(),
       filter_expression: fe.into(),
-      expression_parameters: eps.into_iter().map( String::from ).collect(),
+      expression_parameters: eps,
     })
   }
 
 }
 
+// TODO: Write alignment missing.
 impl<C: Context> Writable<C> for ContentFilterProperty {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     writer.write_value(&StringWithNul::from(self.content_filtered_topic_name.clone()))?;

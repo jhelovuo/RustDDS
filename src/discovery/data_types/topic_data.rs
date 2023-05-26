@@ -390,7 +390,9 @@ impl PlCdrDeserialize for DiscoveredReaderData {
       .into();
 
     let content_filter : Option<ContentFilterProperty> =
-      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_CONTENT_FILTER_PROPERTY, "content filter" )?;
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_CONTENT_FILTER_PROPERTY, "content filter" )
+      .map_err(|e| {warn!("Content filter was: {:?}", 
+        pl_map.get(&ParameterId::PID_CONTENT_FILTER_PROPERTY)); e} )?;
 
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
 

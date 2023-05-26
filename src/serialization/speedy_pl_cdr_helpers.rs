@@ -28,6 +28,13 @@ pub struct StringWithNul {
   string: String,
 }
 
+impl StringWithNul {
+  // length including null termintaor
+  pub fn len(&self) -> usize {
+    self.string.len() + 1 
+  }
+}
+
 impl From<String> for StringWithNul {
   fn from(string: String) -> Self {
     StringWithNul { string }
@@ -51,6 +58,8 @@ impl<C: Context> Writable<C> for StringWithNul {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> std::result::Result<(), C::Error> {
     // TODO: How should we fail if someone tries to serialize string longer than 4
     // GBytes? RTPS does not support that.
+
+    // TODO: Should align to 4 before writing
     writer.write_u32((self.string.len() + 1).try_into().unwrap())?; // +1 for NUL character
     writer.write_slice(self.string.as_bytes())?;
     writer.write_u8(0)?; // NUL character
@@ -61,6 +70,7 @@ impl<C: Context> Writable<C> for StringWithNul {
 impl<'a, C: Context> Readable<'a, C> for StringWithNul {
   #[inline]
   fn read_from<R: speedy::Reader<'a, C>>(reader: &mut R) -> std::result::Result<Self, C::Error> {
+    // TODO: Should align to 4 before reading string length
     let mut raw_str: String = reader.read_value()?;
     let assumed_nul = raw_str.pop(); //
     match assumed_nul {
