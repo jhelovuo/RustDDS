@@ -12,7 +12,7 @@ use crate::serialization::speedy_pl_cdr_helpers::*;
 pub struct Property {
   name: String,
   value: String,
-  propagate: bool,
+  propagate: bool, // NOT SERIALIZED
 }
 
 impl<'a, C: Context> Readable<'a, C> for Property {
@@ -22,12 +22,10 @@ impl<'a, C: Context> Readable<'a, C> for Property {
     read_pad(reader, name.len(), 4)?; // pad according to previous read
     let value: StringWithNul = reader.read_value()?;
     
-    let propagate = reader.read_u8()? != 0;
-
     Ok(Property{
       name: name.into(),
       value: value.into(),
-      propagate,
+      propagate: true, // since we read this from thw wire, it was propagated
     })
   }
 }
@@ -41,23 +39,73 @@ impl<C: Context> Writable<C> for Property {
     // nothing yet to pad
     writer.write_value(&name)?;
 
-    let value = StringWithNul::from(self.value.clone());
     write_pad(writer, name.len(), 4)?;
+    let value = StringWithNul::from(self.value.clone());
     writer.write_value(&value)?;
 
-    writer.write_u8(self.propagate as u8)?;
     Ok(())
   }
 }
 
+impl Property {
+  pub fn serialized_len(&self) -> usize {
+    let first = 4 + self.name.len() + 1;
+    let misalign = first % 4;
+    let align = if misalign > 0 { 4 - misalign } else {0};
+    let second = 4 + self.value.len() + 1;
+    first + align + second
+  }
+}
 
 // BinaryProperty_t type from section 7.2.2 of the Security specification (v.
 // 1.1)
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryProperty {
   pub(crate) name: String, // public because of serialization
   pub(crate) value: Bytes,
   pub(crate) propagate: bool, // propagate field is not serialized
 }
+
+impl BinaryProperty {
+  pub fn serialized_len(&self) -> usize {
+    let first = 4 + self.name.len() + 1;
+    let misalign = first % 4;
+    let align = if misalign > 0 { 4 - misalign } else {0};
+    let second = 4 + self.value.len(); // no nul terminator byte here
+    first + align + second
+  }
+}
+
+impl<'a, C: Context> Readable<'a, C> for BinaryProperty {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+    let name: StringWithNul = reader.read_value()?;
+
+    read_pad(reader, name.len(), 4)?; // pad according to previous read
+    let value: Vec<u8> = reader.read_value()?;
+    
+    Ok(BinaryProperty{
+      name: name.into(),
+      value: value.into(),
+      propagate: true, // since we read this from thw wire, it was propagated
+    })
+  }
+}
+
+// Writing several strings is a bit complicated, because
+// we have to keep track of alignment.
+// Again, alignment comes BEFORE string length, or vector item count, not after string.
+impl<C: Context> Writable<C> for BinaryProperty {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    let name = StringWithNul::from(self.name.clone());
+    writer.write_value(&name)?;
+
+    write_pad(writer, name.len(), 4)?;
+    writer.write_value( &<Vec<u8>>::from(self.value.clone()) )?;
+
+    Ok(())
+  }
+}
+
 
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
 // fields need to be public to make (de)serializable

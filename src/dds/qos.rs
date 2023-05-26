@@ -608,9 +608,12 @@ pub mod policy {
   use std::cmp::Ordering;
 
   use serde::{Deserialize, Serialize};
-  use speedy::{Readable, Writable};
+  use speedy::{Endianness, Readable, Writable, Context, Reader, Writer};
+  #[allow(unused_imports)]
+  use log::{debug, error, info, trace, warn};
 
   use crate::structure::duration::Duration;
+  use crate::serialization::speedy_pl_cdr_helpers::*;
 
   /*
   pub struct UserData {
@@ -847,6 +850,59 @@ pub mod policy {
     pub max_instances: i32,
     pub max_samples_per_instance: i32,
   }
+
+  use crate::security;
+  // DDS Security spec v1.1
+  // Section 7.2.5 PropertyQosPolicy, DomainParticipantQos, DataWriterQos, and DataReaderQos
+  #[derive(Clone, Debug, PartialEq, Eq)]
+  pub struct Property {
+    pub value: Vec<security::types::Property>,
+    pub binary_value: Vec<security::types::BinaryProperty>,
+  }
+
+  impl<'a, C: Context> Readable<'a, C> for Property {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+      let count = reader.read_u32()?;
+      let mut value = Vec::new();
+
+      let mut prev_len = 0;
+      for _ in 0..count {
+        read_pad(reader, prev_len, 4)?;
+        let s : security::types::Property = reader.read_value()?;
+        prev_len = s.serialized_len();
+        value.push( s );
+      }
+
+      read_pad(reader, prev_len, 4)?;
+      let count = reader.read_u32()?;
+      let mut binary_value = Vec::new();
+      prev_len = 0;
+      for _ in 0..count {
+        read_pad(reader, prev_len, 4)?;
+        let s : security::types::BinaryProperty = reader.read_value()?;
+        prev_len = s.serialized_len();
+        binary_value.push( s );
+      }
+      
+      Ok(Property {
+        value,
+        binary_value,
+      })
+    }
+  }
+
+  // Writing several strings is a bit complicated, because
+  // we have to keep track of alignment.
+  // Again, alignment comes BEFORE string length, or vector item count, not after string.
+  impl<C: Context> Writable<C> for Property {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+      error!("Not implemented");
+      Ok(())
+    }
+  }
+
+
+
 } // mod policy
 
 // Utility for parsing RTPS inlineQoS parameters

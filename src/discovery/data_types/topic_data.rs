@@ -394,6 +394,9 @@ impl PlCdrDeserialize for DiscoveredReaderData {
       .map_err(|e| {warn!("Content filter was: {:?}", 
         pl_map.get(&ParameterId::PID_CONTENT_FILTER_PROPERTY)); e} )?;
 
+    let security_info: Option<EndpointSecurityInfo> = 
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_ENDPOINT_SECURITY_INFO, "endpoint security info")?;
+
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
 
     Ok(DiscoveredReaderData {
@@ -409,7 +412,7 @@ impl PlCdrDeserialize for DiscoveredReaderData {
         topic_name,
         type_name,
         &qos,
-        None, // TODO: Mising security_info
+        security_info,
       ),
       content_filter,
     })
@@ -521,6 +524,8 @@ impl PlCdrSerialize for DiscoveredReaderData {
     }
     emit_option!(PID_CONTENT_FILTER_PROPERTY, content_filter, ContentFilterProperty);
 
+    emit_option!(PID_ENDPOINT_SECURITY_INFO, security_info, EndpointSecurityInfo);
+
 
     let bytes = pl.serialize_to_bytes(ctx)?;
     Ok(bytes)
@@ -603,12 +608,14 @@ impl PublicationBuiltinTopicData {
     participant_guid: Option<GUID>,
     topic_name: String,
     type_name: String,
+    security_info: Option<EndpointSecurityInfo>,
   ) -> Self {
     Self {
       key: guid,
       participant_key: participant_guid,
       topic_name,
       type_name,
+
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -624,9 +631,23 @@ impl PublicationBuiltinTopicData {
       related_datareader_key: None, // TODO
       topic_aliases: None,          // TODO
 
-      security_info: None,
+      security_info,
     }
   }
+
+  pub fn new_with_qos(
+    guid: GUID,
+    participant_guid: Option<GUID>,
+    topic_name: String,
+    type_name: String,
+    qos: &QosPolicies,
+    security_info: Option<EndpointSecurityInfo>,
+  ) -> Self {
+    let mut s = Self::new(guid, participant_guid, topic_name, type_name, security_info);
+    s.set_qos(qos);
+    s
+  }
+
 
   pub fn set_qos(&mut self, qos: &QosPolicies) {
     self.durability = qos.durability;
@@ -699,19 +720,20 @@ impl DiscoveredWriterData {
     writer: &DataWriter<D, SA>,
     topic: &Topic,
     dp: &DomainParticipant,
+    security_info: Option<EndpointSecurityInfo>,
   ) -> Self {
     let unicast_port = user_traffic_unicast_port(dp.domain_id(), dp.participant_id());
     let unicast_addresses = get_local_unicast_locators(unicast_port);
     // TODO: Why empty vector below? No multicast?
     let writer_proxy = WriterProxy::new(writer.guid(), vec![], unicast_addresses);
-    let mut publication_topic_data = PublicationBuiltinTopicData::new(
+    let publication_topic_data = PublicationBuiltinTopicData::new_with_qos(
       writer.guid(),
       Some(dp.guid()),
       topic.name(),
       topic.get_type().name().to_string(),
+      &writer.qos(),
+      security_info,
     );
-
-    publication_topic_data.set_qos(&writer.qos());
 
     Self {
       last_updated: Instant::now(),
@@ -770,12 +792,10 @@ impl PlCdrDeserialize for DiscoveredWriterData {
       ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED,
       "Max size serialized",
     )?;
+    let security_info: Option<EndpointSecurityInfo> = 
+      get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_ENDPOINT_SECURITY_INFO, "endpoint security info")?;
 
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
-
-    let mut publication_topic_data =
-      PublicationBuiltinTopicData::new(guid, participant_guid, topic_name, type_name);
-    publication_topic_data.set_qos(&qos);
 
     Ok(DiscoveredWriterData {
       last_updated: Instant::now(),
@@ -785,7 +805,9 @@ impl PlCdrDeserialize for DiscoveredWriterData {
         multicast_locator_list,
         data_max_size_serialized,
       },
-      publication_topic_data,
+      publication_topic_data:
+        PublicationBuiltinTopicData::new_with_qos(
+          guid, participant_guid, topic_name, type_name, &qos, security_info),
     })
   }
 }
@@ -823,7 +845,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
           service_instance_name,
           related_datareader_key,
           topic_aliases,
-          security_info, // TODO: implement this
+          security_info, 
         },
     } = self;
 
@@ -884,7 +906,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
       StringWithNul
     );
     emit_option!(PID_RELATED_ENTITY_GUID, related_datareader_key, GUID);
-    // TODO: Shoudl topic alaes be on paramter with vector or multiple
+    // TODO: Should topic aliaes be on paramter with vector or multiple
     // parameters with one alias name each?
     for topic_alias in topic_aliases.as_ref().unwrap_or(&Vec::new()) {
       emit!(
@@ -893,6 +915,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
         StringWithNul
       );
     }
+    emit_option!(PID_ENDPOINT_SECURITY_INFO, security_info, EndpointSecurityInfo);
 
     let bytes = pl.serialize_to_bytes(ctx)?;
     Ok(bytes)

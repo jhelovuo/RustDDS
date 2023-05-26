@@ -75,7 +75,8 @@ impl<'a, C: Context> Readable<'a, C> for StringWithNul {
     let assumed_nul = raw_str.pop(); //
     match assumed_nul {
       Some('\0') => { /*fine*/ }
-      other => error!("StringWithNul deserialize: Expected NUL character, decoded {other:?}"),
+      Some(other) => error!("StringWithNul deserialize: Expected NUL character, decoded {other:?}"),
+      None => error!("StringWithNul deserialize: Expected NUL character, but end of input reached.")
     }
     Ok(StringWithNul { string: raw_str })
   }
@@ -128,7 +129,8 @@ where
     .ok_or(serialization::error::Error::Message(
       "Missing ".to_string() + name,
     ))
-    .and_then(|p| D::read_from_buffer_with_ctx(ctx, &p.value).map_err(|e| e.into()))
+    .and_then(|p| D::read_from_buffer_with_ctx(ctx, &p.value)
+    .map_err(|e| {error!("PL_CDR Deserializing {name}"); e.into()}))
 }
 
 // same, but gets all occurences
@@ -137,7 +139,7 @@ pub(crate) fn get_all_from_pl_map<'a, C, D>(
   pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
   ctx: C,
   pid: ParameterId,
-  _name: &str,
+  name: &str,
 ) -> Result<Vec<D>>
 where
   C: speedy::Context + Clone,
@@ -148,7 +150,8 @@ where
     .get(&pid)
     .unwrap_or(&Vec::new())
     .iter()
-    .map(|p| D::read_from_buffer_with_ctx(ctx.clone(), &p.value).map_err(|e| e.into()))
+    .map(|p| D::read_from_buffer_with_ctx(ctx.clone(), &p.value)
+      .map_err(|e| {error!("PL_CDR Deserializing {name}"); e.into()}))
     .collect()
 }
 
@@ -157,7 +160,7 @@ pub(crate) fn get_option_from_pl_map<'a, C, D>(
   pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
   ctx: C,
   pid: ParameterId,
-  _name: &str,
+  name: &str,
 ) -> Result<Option<D>>
 where
   C: speedy::Context + Clone,
@@ -167,6 +170,7 @@ where
   pl_map
     .get(&pid)
     .and_then(|v| v.first()) // Option<Parameter> here
-    .map(|p| D::read_from_buffer_with_ctx(ctx, &p.value).map_err(|e| e.into()))
+    .map(|p| D::read_from_buffer_with_ctx(ctx, &p.value)
+      .map_err(|e| {error!("PL_CDR Deserializing {name}"); info!("Parameter payload was {:x?}", p.value); e.into()} ))
     .transpose()
 }

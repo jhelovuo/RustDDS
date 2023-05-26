@@ -879,6 +879,7 @@ impl Discovery {
       Some(dp.guid()),
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
+      None, // TODO: EndpointSecurityInfo is missing from here.
     );
     let dwd = DiscoveredWriterData {
       last_updated: Instant::now(),
