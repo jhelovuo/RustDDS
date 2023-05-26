@@ -489,7 +489,7 @@ impl DiscoveryDB {
             *old_dtd = (discovered_via, dtd.clone()); // update QoS
             notify = true;
           } else {
-            info!(
+            debug!(
               "Topic {:?} update ignored from {:?}. Already have this.",
               &topic_name, &updater
             );
