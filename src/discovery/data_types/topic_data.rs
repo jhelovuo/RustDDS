@@ -342,24 +342,6 @@ impl Keyed for DiscoveredReaderData {
   }
 }
 
-// Fake implementation so that DiscoveredreaderData is a valid thing to
-// put into a DataWriter. But the actual serialization is done by
-// PlCdrDeserialize below. We do not just derive Serialize in order
-// not to force it on all the fields and their types.
-impl Serialize for DiscoveredReaderData {
-  fn serialize<S: Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-    unimplemented!()
-  }
-}
-// As Serialize above.
-impl<'de> Deserialize<'de> for DiscoveredReaderData {
-  fn deserialize<D>(_deserializer: D) -> Result<DiscoveredReaderData, D::Error>
-  where
-    D: Deserializer<'de>,
-  {
-    unimplemented!()
-  }
-}
 
 impl PlCdrDeserialize for DiscoveredReaderData {
   fn from_pl_cdr_bytes(
@@ -425,6 +407,7 @@ impl PlCdrDeserialize for DiscoveredReaderData {
         topic_name,
         type_name,
         &qos,
+        None, // TODO: Mising security_info
       ),
       content_filter,
     })
@@ -463,6 +446,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
           service_instance_name,
           related_datawriter_key,
           topic_aliases,
+          security_info, //TODO: Imissing implementation
         },
       content_filter, 
     } = self;
@@ -735,24 +719,6 @@ impl DiscoveredWriterData {
   }
 }
 
-// Fake implementation so that DiscoveredWriterData is a valid thing to
-// put into a DataWriter. But the actual serialization is done by
-// PlCdrDeserialize below. We do not just derive Serialize in order
-// not to force it on all the fields and their types.
-impl Serialize for DiscoveredWriterData {
-  fn serialize<S: Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-    unimplemented!()
-  }
-}
-// As Serialize above.
-impl<'de> Deserialize<'de> for DiscoveredWriterData {
-  fn deserialize<D>(_deserializer: D) -> Result<DiscoveredWriterData, D::Error>
-  where
-    D: Deserializer<'de>,
-  {
-    unimplemented!()
-  }
-}
 
 impl PlCdrDeserialize for DiscoveredWriterData {
   fn from_pl_cdr_bytes(
@@ -855,6 +821,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
           service_instance_name,
           related_datareader_key,
           topic_aliases,
+          security_info, // TODO: implement this
         },
     } = self;
 
@@ -1099,15 +1066,7 @@ impl PlCdrSerialize for DiscoveredTopicData {
     let mut pl = ParameterList::new();
     let qos = td.qos();
 
-    let ctx = match encoding {
-      RepresentationIdentifier::PL_CDR_LE => speedy::Endianness::LittleEndian,
-      RepresentationIdentifier::PL_CDR_BE => speedy::Endianness::BigEndian,
-      _ => {
-        return Err(crate::serialization::error::Error::Message(
-          "DiscoveredReaderData: Unknown encoding, expected PL_CDR".to_string(),
-        ))
-      }
-    };
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
 
     macro_rules! emit {
       ($pid:ident, $member:expr, $type:ty) => {

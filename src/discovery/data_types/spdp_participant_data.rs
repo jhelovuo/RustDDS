@@ -304,6 +304,11 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       manual_liveliness_count,
       builtin_endpoint_qos,
       entity_name,
+
+      identity_token: None,    // TODO: Generate one
+      permissions_token: None, // TODO
+      property: None, // TODO
+      security_info: None, // TODO
     })
   }
 }
@@ -327,6 +332,12 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
       manual_liveliness_count,
       builtin_endpoint_qos,
       entity_name,
+      
+      // DDS security
+      identity_token,    // TODO
+      permissions_token, // TODO
+      property, // TODO
+      security_info, // TODO
     } = self;
 
     let mut pl = ParameterList::new();
