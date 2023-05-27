@@ -11,7 +11,7 @@ use crate::{
     vendor_id::VendorId,
   },
   rtps::reader::Reader,
-  serialization::{submessage::SubmessageBody, Message},
+  rtps::{SubmessageBody, Message},
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},

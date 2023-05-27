@@ -371,7 +371,7 @@ mod tests {
     dds::{
       ddsdata::DDSData, qos::QosPolicies, typedesc::TypeDesc, with_key::datawriter::WriteOptions,
     },
-    messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+    messages::submessages::elements::serialized_payload::SerializedPayload,
     structure::{cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber},
   };
 

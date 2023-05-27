@@ -1,12 +1,12 @@
 use crate::{
-  messages::submessages::submessage_elements::{
+  messages::submessages::elements::{
     crypto_content::CryptoContent, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
   security::{
     access_control::types::*, authentication::types::*, cryptographic::types::*, types::*,
   },
-  serialization::{Message, Submessage},
+  rtps::{Message, Submessage},
 };
 // Imports for doc references
 #[cfg(doc)]

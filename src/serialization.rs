@@ -7,12 +7,7 @@ pub mod representation_identifier;
 
 pub(crate) mod pl_cdr_adapters;
 
-pub(crate) mod message;
-pub(crate) mod submessage;
 
-// crate exports
-pub(crate) use message::*;
-pub(crate) use submessage::*;
 // public exports
 pub use cdr_serializer::{to_writer_endian, CDRSerializerAdapter, CdrSerializer};
 pub use cdr_deserializer::{deserialize_from_cdr, CDRDeserializerAdapter, CdrDeserializer};

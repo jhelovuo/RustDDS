@@ -7,7 +7,7 @@ use enumflags2::BitFlags;
 use bytes::Bytes;
 
 use crate::{
-  messages::submessages::{submessage_elements::parameter_list::ParameterList, submessages::*},
+  messages::submessages::{elements::parameter_list::ParameterList, submessages::*},
   structure::{
     guid::EntityId,
     sequence_number::{FragmentNumber, SequenceNumber},

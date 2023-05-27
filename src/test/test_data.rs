@@ -103,11 +103,12 @@ use crate::{
   messages::{
     header::Header,
     submessages::{
-      submessage_elements::serialized_payload::SerializedPayload,
+      elements::serialized_payload::SerializedPayload,
       submessages::{Data, SubmessageHeader, SubmessageKind, WriterSubmessage, *},
     },
   },
-  serialization::{pl_cdr_adapters::*, Message, Submessage, SubmessageBody},
+  rtps::{Message, Submessage, SubmessageBody},
+  serialization::{pl_cdr_adapters::*, },
   structure::{
     duration::Duration,
     guid::{EntityId, EntityKind, GUID},

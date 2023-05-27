@@ -4,7 +4,7 @@ use bytes::Bytes;
 
 use crate::{
   dds::key::KeyHash,
-  messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+  messages::submessages::elements::serialized_payload::SerializedPayload,
   structure::cache_change::ChangeKind,
 };
 

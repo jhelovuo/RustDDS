@@ -1019,7 +1019,7 @@ mod tests {
       topic::{TopicDescription, TopicKind},
     },
     messages::submessages::{
-      data::Data, submessage_elements::serialized_payload::SerializedPayload, submessage_flag::*,
+      data::Data, elements::serialized_payload::SerializedPayload, submessage_flag::*,
     },
     mio_source,
     network::udp_sender::UDPSender,

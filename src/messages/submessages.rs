@@ -17,7 +17,7 @@ pub mod secure_prefix;
 pub mod secure_rtps_postfix;
 pub mod secure_rtps_prefix;
 pub mod submessage;
-pub mod submessage_elements;
+pub mod elements;
 pub mod submessage_flag;
 pub mod submessage_header;
 pub mod submessage_kind;
@@ -27,7 +27,7 @@ pub mod submessages {
   pub use super::{
     ack_nack::*, data::*, data_frag::*, gap::*, heartbeat::*, heartbeat_frag::*,
     info_destination::*, info_reply::*, info_source::*, info_timestamp::*, nack_frag::*,
-    submessage::*, submessage_elements::RepresentationIdentifier, submessage_flag::*,
+    submessage::*, elements::RepresentationIdentifier, submessage_flag::*,
     submessage_header::*, submessage_kind::*,
   };
 }

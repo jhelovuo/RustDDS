@@ -9,7 +9,7 @@ use log::{debug, error, info, trace, warn};
 use crate::{
   dds::ddsdata::DDSData,
   messages::submessages::{
-    submessage_elements::serialized_payload::SerializedPayload,
+    elements::serialized_payload::SerializedPayload,
     submessages::{DATAFRAG_Flags, DataFrag},
   },
   structure::{

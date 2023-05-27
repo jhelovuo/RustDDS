@@ -4,7 +4,7 @@ use bytes::Bytes;
 use speedy::{Context, Readable, Writable, Writer};
 
 use crate::{
-  messages::submessages::submessage_elements::parameter::Parameter,
+  messages::submessages::elements::parameter::Parameter,
   structure::parameter_id::ParameterId,
 };
 

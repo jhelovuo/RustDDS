@@ -6,7 +6,7 @@ use enumflags2::BitFlags;
 
 use crate::{
   messages::submessages::{
-    submessage_elements::{parameter_list::ParameterList, serialized_payload::SerializedPayload},
+    elements::{parameter_list::ParameterList, serialized_payload::SerializedPayload},
     submessages::*,
   },
   structure::{guid::EntityId, sequence_number::SequenceNumber},

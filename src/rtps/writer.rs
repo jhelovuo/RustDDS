@@ -31,10 +31,10 @@ use crate::{
   messages::submessages::submessages::AckSubmessage,
   network::udp_sender::UDPSender,
   rtps::{
+    Message, MessageBuilder,
     dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
     rtps_reader_proxy::RtpsReaderProxy,
   },
-  serialization::{Message, MessageBuilder},
   structure::{
     cache_change::CacheChange,
     dds_cache::TopicCache,

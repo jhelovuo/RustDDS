@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-use super::submessage_elements::crypto_header::CryptoHeader;
+use super::elements::crypto_header::CryptoHeader;
 
 /// SecurePrefixSubMsg: section 7.3.6.4 of the Security specification (v. 1.1)
 /// See sections 7.3.7.3 and 7.3.7.6.1

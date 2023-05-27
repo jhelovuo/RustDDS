@@ -1407,7 +1407,8 @@ mod tests {
     discovery::sedp_messages::TopicBuiltinTopicData,
     messages::submessages::submessages::{InterpreterSubmessage, WriterSubmessage},
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
-    serialization::{cdr_deserializer::CDRDeserializerAdapter, submessage::*},
+    rtps::submessage::*,
+    serialization::{cdr_deserializer::CDRDeserializerAdapter, },
     structure::{entity::RTPSEntity, locator::Locator},
     test::{
       shape_type::ShapeType,

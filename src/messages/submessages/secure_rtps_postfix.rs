@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-use super::submessage_elements::crypto_footer::CryptoFooter;
+use super::elements::crypto_footer::CryptoFooter;
 
 /// SecureRTPSPostfixSubMsg: section 7.3.6.7 of the Security specification (v.
 /// 1.1) See section 7.3.7.9

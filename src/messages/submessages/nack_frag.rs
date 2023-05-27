@@ -7,7 +7,7 @@ use speedy::{Readable, Writable};
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{Submessage, SubmessageBody},
+  rtps::{Submessage, SubmessageBody},
   structure::{
     guid::EntityId,
     sequence_number::{FragmentNumberSet, SequenceNumber},

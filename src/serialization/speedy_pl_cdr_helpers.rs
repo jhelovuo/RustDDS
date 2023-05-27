@@ -5,7 +5,7 @@ use log::{debug, error, info, trace, warn};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
 use crate::{
-  messages::submessages::submessage_elements::parameter::Parameter, serialization,
+  messages::submessages::elements::parameter::Parameter, serialization,
   serialization::error::Result, structure::parameter_id::ParameterId, RepresentationIdentifier,
 };
 

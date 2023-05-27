@@ -1,5 +1,5 @@
 use crate::{
-  messages::submessages::submessage_elements::{
+  messages::submessages::elements::{
     crypto_content::CryptoContent, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
@@ -9,7 +9,7 @@ use crate::{
     cryptographic::{cryptographic_plugin::*, types::*},
     types::*,
   },
-  serialization::{Message, Submessage},
+  rtps::{Message, Submessage},
 };
 
 // A struct implementing the built-in Cryptographic plugin

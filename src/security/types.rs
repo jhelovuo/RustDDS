@@ -1,9 +1,7 @@
 use bytes::Bytes;
 use enumflags2::bitflags;
-//use serde::{Deserialize, Serialize};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
-//use crate::structure::parameter_id::ParameterId;
 use crate::serialization::speedy_pl_cdr_helpers::*;
 
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)

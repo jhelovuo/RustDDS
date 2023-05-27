@@ -6,7 +6,7 @@ use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{key::KeyHash, result::Result},
-  messages::submessages::submessage_elements::{
+  messages::submessages::elements::{
     parameter::Parameter, parameter_list::ParameterList, RepresentationIdentifier,
   },
   serialization,

@@ -33,7 +33,7 @@ use crate::{
   },
   discovery::{discovery::DiscoveryCommand, sedp_messages::SubscriptionBuiltinTopicData},
   log_and_err_internal,
-  messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+  messages::submessages::elements::serialized_payload::SerializedPayload,
   rtps::writer::WriterCommand,
   serialization::CDRSerializerAdapter,
   structure::{

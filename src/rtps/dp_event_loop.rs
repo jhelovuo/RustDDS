@@ -15,6 +15,7 @@ use crate::{
     discovery::Discovery,
     discovery_db::DiscoveryDB,
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
+    builtin_endpoint::BuiltinEndpointSet,
   },
   messages::submessages::submessages::AckSubmessage,
   network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},
@@ -26,7 +27,6 @@ use crate::{
     writer::{Writer, WriterIngredients},
   },
   structure::{
-    builtin_endpoint::BuiltinEndpointSet,
     dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},

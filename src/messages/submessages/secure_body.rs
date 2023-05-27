@@ -1,6 +1,6 @@
 use speedy::{Readable, Writable};
 
-use super::submessage_elements::crypto_content::CryptoContent;
+use super::elements::crypto_content::CryptoContent;
 
 /// SecureBodySubMsg: section 7.3.6.3 of the Security specification (v. 1.1)
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]

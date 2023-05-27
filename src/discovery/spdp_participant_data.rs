@@ -13,7 +13,7 @@ use crate::{
   dds::{participant::DomainParticipant, qos, qos::QosPolicies},
   messages::{
     protocol_version::ProtocolVersion,
-    submessages::submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
+    submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
     vendor_id::VendorId,
   },
   network::constant::*,
@@ -23,7 +23,7 @@ use crate::{
   },
   serialization::{error::Result, pl_cdr_adapters::*, speedy_pl_cdr_helpers::*},
   structure::{
-    builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
+    
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
@@ -33,6 +33,8 @@ use crate::{
   },
   Key, Keyed, RepresentationIdentifier,
 };
+
+use super::builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet};
 
 // This type is used by Discovery to communicate the presence and properties
 // of DomainParticipants. It is sent over topic "DCPSParticipant".
@@ -502,7 +504,7 @@ mod tests {
   use crate::{
     dds::adapters::no_key::DeserializerAdapter,
     messages::submessages::submessages::WriterSubmessage,
-    serialization::{message::Message, submessage::*},
+    rtps::{Message, submessage::*},
     test::test_data::*,
     RepresentationIdentifier,
   };

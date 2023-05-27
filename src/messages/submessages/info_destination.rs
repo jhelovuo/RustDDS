@@ -5,7 +5,7 @@ use log::error;
 
 use crate::{
   messages::submessages::submessages::SubmessageHeader,
-  serialization::{Submessage, SubmessageBody},
+  rtps::{Submessage, SubmessageBody},
   structure::guid::GuidPrefix,
 };
 use super::{
