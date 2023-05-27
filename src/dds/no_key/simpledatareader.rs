@@ -1,7 +1,7 @@
 use std::{io, task::Waker};
 
 use futures::stream::{Stream, StreamExt, FusedStream};
-use serde::de::DeserializeOwned;
+
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
@@ -12,7 +12,7 @@ use crate::{
     no_key::datasample::DeserializedCacheChange,
     qos::*,
     statusevents::*,
-    traits::{key::*, serde_adapters::no_key::*},
+    traits::{serde_adapters::no_key::*},
     values::result::*,
     with_key,
   },
@@ -24,7 +24,7 @@ use super::wrappers::{DAWrapper, NoKeyWrapper};
 /// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
 pub struct SimpleDataReader<
-  D: DeserializeOwned,
+  D,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > {
   keyed_simpledatareader: with_key::SimpleDataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
@@ -35,7 +35,6 @@ pub type SimpleDataReaderCdr<D> = SimpleDataReader<D, CDRDeserializerAdapter<D>>
 
 impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
-  D: DeserializeOwned,
   DA: DeserializerAdapter<D> + 'static,
 {
   // TODO: Make it possible to construct SimpleDataReader (particualrly, no_key
@@ -109,7 +108,6 @@ where
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for SimpleDataReader<D, DA>
 where
-  D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it
@@ -145,8 +143,6 @@ where
 
 impl<D, DA> mio_08::event::Source for SimpleDataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn register(
@@ -177,8 +173,6 @@ where
 
 impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -196,8 +190,7 @@ where
 
 impl<D, DA> RTPSEntity for SimpleDataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned + 'static,
-  <D as Keyed>::K: Key,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {

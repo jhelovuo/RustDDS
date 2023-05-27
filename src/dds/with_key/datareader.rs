@@ -5,7 +5,6 @@ use std::{
   task::{Context, Poll},
 };
 
-use serde::de::DeserializeOwned;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
@@ -792,7 +791,7 @@ where
 
 impl<D, DA> Evented for DataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -829,7 +828,7 @@ where
 
 impl<D, DA> mio_08::event::Source for DataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed ,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -873,7 +872,7 @@ where
 
 impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {

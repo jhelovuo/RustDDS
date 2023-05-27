@@ -4,7 +4,7 @@ use std::{
   task::{Context, Poll},
 };
 
-use serde::de::DeserializeOwned;
+
 use mio_06::{self, Evented};
 use futures::stream::{FusedStream, Stream};
 
@@ -58,7 +58,7 @@ pub type DataReaderCdr<D> = DataReader<D, CDRDeserializerAdapter<D>>;
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
 /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
 /// ```
-pub struct DataReader<D: DeserializeOwned, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
+pub struct DataReader<D, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
   keyed_datareader: datareader_with_key::DataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
 }
 
@@ -66,7 +66,6 @@ pub struct DataReader<D: DeserializeOwned, DA: DeserializerAdapter<D> = CDRDeser
 // datasamples instead of current data)
 impl<D: 'static, DA> DataReader<D, DA>
 where
-  D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
   pub(crate) fn from_keyed(
@@ -457,7 +456,6 @@ where
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for DataReader<D, DA>
 where
-  D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it alrady
@@ -493,7 +491,6 @@ where
 //  TODO: test
 impl<D, DA> mio_08::event::Source for DataReader<D, DA>
 where
-  D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
   fn register(
@@ -538,7 +535,6 @@ where
 //  TODO: test
 impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
 where
-  D: DeserializeOwned,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -556,7 +552,7 @@ where
 
 impl<D, DA> HasQoSPolicy for DataReader<D, DA>
 where
-  D: DeserializeOwned + 'static,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   fn qos(&self) -> QosPolicies {
@@ -566,7 +562,7 @@ where
 
 impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
-  D: DeserializeOwned + 'static,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
@@ -583,7 +579,7 @@ where
 /// unwraps [`Sample`](crate::with_key::Sample) and `NoKeyWrapper` on
 /// `poll_next`.
 pub struct DataReaderStream<
-  D: DeserializeOwned + 'static,
+  D: 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
   keyed_stream: WithKeyDataReaderStream<NoKeyWrapper<D>, DAWrapper<DA>>,
@@ -591,7 +587,7 @@ pub struct DataReaderStream<
 
 impl<D, DA> DataReaderStream<D, DA>
 where
-  D: DeserializeOwned + 'static,
+  D:'static,
   DA: DeserializerAdapter<D>,
 {
   pub fn async_event_stream(&self) -> DataReaderEventStream<D, DA> {
@@ -604,14 +600,14 @@ where
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
 impl<D, DA> Unpin for DataReaderStream<D, DA>
 where
-  D: DeserializeOwned + 'static,
+  D:'static,
   DA: DeserializerAdapter<D>,
 {
 }
 
 impl<D, DA> Stream for DataReaderStream<D, DA>
 where
-  D: DeserializeOwned + 'static,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   type Item = Result<D>;
@@ -630,7 +626,7 @@ where
 
 impl<D, DA> FusedStream for DataReaderStream<D, DA>
 where
-  D: DeserializeOwned + 'static,
+  D:  'static,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
@@ -643,7 +639,7 @@ where
 
 /// Wraps [`with_key::DataReaderEventStream`](crate::with_key::DataReaderEventStream).
 pub struct DataReaderEventStream<
-  D: DeserializeOwned + 'static,
+  D:  'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
   keyed_stream: WithKeyDataReaderEventStream<NoKeyWrapper<D>, DAWrapper<DA>>,
@@ -651,7 +647,7 @@ pub struct DataReaderEventStream<
 
 impl<D, DA> Stream for DataReaderEventStream<D, DA>
 where
-  D: DeserializeOwned + 'static,
+  D:  'static,
   DA: DeserializerAdapter<D>,
 {
   type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
@@ -663,7 +659,7 @@ where
 
 impl<D, DA> FusedStream for DataReaderEventStream<D, DA>
 where
-  D: DeserializeOwned + 'static,
+  D:  'static,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {

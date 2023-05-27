@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::Deref};
 
 use bytes::Bytes;
-use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
   dds::traits::{key::Keyed, serde_adapters::*},
@@ -17,12 +17,6 @@ use crate::{
 pub(crate) struct NoKeyWrapper<D> {
   pub(crate) d: D,
 }
-
-// impl<D> NoKeyWrapper<D> {
-//   pub fn unwrap(self) -> D {
-//     self.d
-//   }
-// }
 
 impl<D> From<D> for NoKeyWrapper<D> {
   fn from(d: D) -> Self {
@@ -111,7 +105,6 @@ pub struct DAWrapper<DA> {
 // first, implement no_key DA
 impl<D, DA> no_key::DeserializerAdapter<NoKeyWrapper<D>> for DAWrapper<DA>
 where
-  D: DeserializeOwned,
   DA: no_key::DeserializerAdapter<D>,
 {
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
@@ -126,7 +119,6 @@ where
 // then, implement with_key DA
 impl<D, DA> with_key::DeserializerAdapter<NoKeyWrapper<D>> for DAWrapper<DA>
 where
-  D: DeserializeOwned,
   DA: no_key::DeserializerAdapter<D>,
 {
   fn key_from_bytes(
