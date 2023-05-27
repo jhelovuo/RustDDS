@@ -1,19 +1,19 @@
-use std::{collections::BTreeMap, io};
+use std::{collections::BTreeMap};
 
-use speedy::{Endianness, Readable, Writable};
+use speedy::{Readable, Writable};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::{key::KeyHash, result::Result},
+  dds::{result::Result},
   messages::submessages::elements::{
-    parameter::Parameter, parameter_list::ParameterList, RepresentationIdentifier,
+    parameter::Parameter,
   },
   serialization,
   serialization::speedy_pl_cdr_helpers::*,
   structure::{
-    duration::Duration, endpoint::ReliabilityKind, inline_qos::StatusInfo,
-    parameter_id::ParameterId, rpc::SampleIdentity,
+    duration::Duration, endpoint::ReliabilityKind,
+    parameter_id::ParameterId,
   },
 };
 
@@ -937,66 +937,3 @@ pub mod policy {
   }
 } // mod policy
 
-// Utility for parsing RTPS inlineQoS parameters
-// TODO: This does not need to be a struct, since is has no contents.
-// Maybe someone has had an overdose of object-orientation?
-// Two standalone functions should suffice.
-// TODO: Move this to module inline_qos, so someone may find it.
-pub(crate) struct InlineQos {}
-
-impl InlineQos {
-  pub fn status_info(
-    params: &ParameterList,
-    rep_id: RepresentationIdentifier,
-  ) -> std::result::Result<StatusInfo, crate::serialization::error::Error> {
-    let status_info = params
-      .parameters
-      .iter()
-      .find(|p| p.parameter_id == ParameterId::PID_STATUS_INFO);
-    let status_info = match status_info {
-      Some(p) => StatusInfo::from_cdr_bytes(&p.value, rep_id)?,
-      None => StatusInfo::empty(),
-    };
-
-    Ok(status_info)
-  }
-
-  pub fn key_hash(
-    params: &ParameterList,
-  ) -> std::result::Result<Option<KeyHash>, crate::serialization::error::Error> {
-    let key_hash = params
-      .parameters
-      .iter()
-      .find(|p| p.parameter_id == ParameterId::PID_KEY_HASH);
-    Ok(match key_hash {
-      Some(p) => Some(KeyHash::from_cdr_bytes(p.value.clone())?),
-      None => None,
-    })
-  }
-
-  pub fn related_sample_identity(
-    params: &ParameterList,
-    representation_id: RepresentationIdentifier,
-  ) -> std::result::Result<Option<SampleIdentity>, crate::serialization::error::Error> {
-    let rsi = params
-      .parameters
-      .iter()
-      .find(|p| p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY);
-
-    let endianness = if representation_id == RepresentationIdentifier::CDR_BE
-      || representation_id == RepresentationIdentifier::PL_CDR_BE
-    {
-      Endianness::BigEndian
-    } else {
-      Endianness::LittleEndian
-    };
-
-    Ok(match rsi {
-      Some(p) => Some(
-        SampleIdentity::read_from_buffer_with_ctx(endianness, &p.value)
-          .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
-      ),
-      None => None,
-    })
-  }
-}

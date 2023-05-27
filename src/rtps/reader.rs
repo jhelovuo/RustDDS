@@ -16,7 +16,7 @@ use speedy::{Endianness, Writable};
 use crate::{
   dds::{
     ddsdata::DDSData,
-    qos::{policy, HasQoSPolicy, InlineQos, QosPolicies},
+    qos::{policy, HasQoSPolicy, QosPolicies},
     statusevents::{CountWithChange, DataReaderStatus, StatusChannelSender},
     with_key::{
       datawriter::{WriteOptions, WriteOptionsBuilder},
@@ -27,7 +27,7 @@ use crate::{
     header::Header,
     protocol_id::ProtocolId,
     protocol_version::ProtocolVersion,
-    submessages::{elements::parameter_list::ParameterList, submessages::*},
+    submessages::{elements::{parameter_list::ParameterList, inline_qos::InlineQos}, submessages::*},
     vendor_id::VendorId,
   },
   mio_source,
