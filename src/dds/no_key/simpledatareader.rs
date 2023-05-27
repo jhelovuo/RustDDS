@@ -1,6 +1,6 @@
 use std::{io, task::Waker};
 
-use futures::stream::{Stream, StreamExt};
+use futures::stream::{Stream, StreamExt, FusedStream};
 use serde::de::DeserializeOwned;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -76,7 +76,7 @@ where
     self.keyed_simpledatareader.guid()
   }
 
-  pub fn as_async_stream(&self) -> impl Stream<Item = Result<DeserializedCacheChange<D>>> + '_ {
+  pub fn as_async_stream(&self) -> impl Stream<Item = Result<DeserializedCacheChange<D>>> + FusedStream + '_ {
     self
       .keyed_simpledatareader
       .as_async_stream()
