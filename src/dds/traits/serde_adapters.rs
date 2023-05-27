@@ -7,7 +7,6 @@
 /// for WITH_KEY topics, we need to be able to (de)serailize the key in addition
 /// to data.
 pub mod no_key {
-  use serde::{de::DeserializeOwned, ser::Serialize};
   use bytes::Bytes;
 
   use crate::{
@@ -18,8 +17,6 @@ pub mod no_key {
   /// trait for connecting Serde Deserializer implementation and DataReader
   /// together - no_key version.
   pub trait DeserializerAdapter<D>
-  where
-    D: DeserializeOwned,
   {
     /// Which data representations can the DeserializerAdapter read?
     /// See RTPS specification Section 10 and Table 10.3
@@ -43,8 +40,6 @@ pub mod no_key {
   /// trait for connecting Serde Serializer implementation and DataWriter
   /// together - no_key version.
   pub trait SerializerAdapter<D>
-  where
-    D: Serialize,
   {
     // what encoding do we produce?
     fn output_encoding() -> RepresentationIdentifier;
@@ -54,7 +49,6 @@ pub mod no_key {
 }
 
 pub mod with_key {
-  use serde::{de::DeserializeOwned, Serialize};
   use bytes::Bytes;
 
   use crate::{
@@ -68,7 +62,7 @@ pub mod with_key {
   /// together - with_key version.
   pub trait DeserializerAdapter<D>: no_key::DeserializerAdapter<D>
   where
-    D: Keyed + DeserializeOwned,
+    D: Keyed
   {
     fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K>;
   }
@@ -77,7 +71,7 @@ pub mod with_key {
   /// together - with_key version.
   pub trait SerializerAdapter<D>: no_key::SerializerAdapter<D>
   where
-    D: Keyed + Serialize,
+    D: Keyed 
   {
     fn key_to_bytes(value: &D::K) -> Result<Bytes>;
   }
