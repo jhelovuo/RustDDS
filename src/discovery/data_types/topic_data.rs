@@ -733,7 +733,7 @@ impl Keyed for DiscoveredWriterData {
 }
 
 impl DiscoveredWriterData {
-  pub fn new<D: Keyed + Serialize, SA: SerializerAdapter<D>>(
+  pub fn new<D: Keyed, SA: SerializerAdapter<D>>(
     writer: &DataWriter<D, SA>,
     topic: &Topic,
     dp: &DomainParticipant,

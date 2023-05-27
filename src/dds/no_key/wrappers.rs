@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, ops::Deref};
 
 use bytes::Bytes;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
   dds::traits::{key::Keyed, serde_adapters::*},
@@ -37,29 +36,6 @@ impl<D> Keyed for NoKeyWrapper<D> {
   fn key(&self) {}
 }
 
-impl<'de, D> Deserialize<'de> for NoKeyWrapper<D>
-where
-  D: Deserialize<'de>,
-{
-  fn deserialize<R>(deserializer: R) -> std::result::Result<Self, R::Error>
-  where
-    R: Deserializer<'de>,
-  {
-    D::deserialize(deserializer).map(|d| Self { d })
-  }
-}
-
-impl<D> Serialize for NoKeyWrapper<D>
-where
-  D: Serialize,
-{
-  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    self.d.serialize(serializer)
-  }
-}
 
 // wrapper for SerializerAdapter
 // * inside is NO_KEY
@@ -71,7 +47,6 @@ pub struct SAWrapper<SA> {
 // have to implement base trait first, just trivial passthrough
 impl<D, SA> no_key::SerializerAdapter<NoKeyWrapper<D>> for SAWrapper<SA>
 where
-  D: Serialize,
   SA: no_key::SerializerAdapter<D>,
 {
   fn output_encoding() -> RepresentationIdentifier {
@@ -87,7 +62,6 @@ where
 // Of course, this is never supposed to be actually called.
 impl<D, SA> with_key::SerializerAdapter<NoKeyWrapper<D>> for SAWrapper<SA>
 where
-  D: Serialize,
   SA: no_key::SerializerAdapter<D>,
 {
   fn key_to_bytes(_value: &()) -> Result<Bytes> {
