@@ -89,7 +89,7 @@ impl<K: Key> ReadState<K> {
 /// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
 pub struct SimpleDataReader<
-  D: Keyed + DeserializeOwned,
+  D: Keyed,
   DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
 > where
   <D as Keyed>::K: Key,
@@ -124,7 +124,7 @@ pub struct SimpleDataReader<
 
 impl<D, DA> Drop for SimpleDataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -151,7 +151,7 @@ where
 
 impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
-  D: DeserializeOwned + Keyed,
+  D: Keyed,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -388,7 +388,7 @@ where
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for SimpleDataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -425,7 +425,7 @@ where
 
 impl<D, DA> mio_08::event::Source for SimpleDataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed ,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -454,7 +454,7 @@ where
 
 impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
 where
-  D: Keyed + DeserializeOwned,
+  D: Keyed ,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -489,7 +489,7 @@ where
 
 pub struct SimpleDataReaderStream<
   'a,
-  D: Keyed + DeserializeOwned + 'static,
+  D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > where
   <D as Keyed>::K: Key,
@@ -503,7 +503,7 @@ pub struct SimpleDataReaderStream<
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
 impl<'a, D, DA> Unpin for SimpleDataReaderStream<'a, D, DA>
 where
-  D: Keyed + DeserializeOwned + 'static,
+  D: Keyed + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -511,7 +511,7 @@ where
 
 impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
-  D: Keyed + DeserializeOwned + 'static,
+  D: Keyed  + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -556,7 +556,7 @@ where
 
 impl<'a, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
 where
-  D: Keyed + DeserializeOwned + 'static,
+  D: Keyed + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -570,7 +570,7 @@ where
 
 pub struct SimpleDataReaderEventStream<
   'a,
-  D: Keyed + DeserializeOwned + 'static,
+  D: Keyed  + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > where
   <D as Keyed>::K: Key,
@@ -580,7 +580,7 @@ pub struct SimpleDataReaderEventStream<
 
 impl<'a, D, DA> Stream for SimpleDataReaderEventStream<'a, D, DA>
 where
-  D: Keyed + DeserializeOwned + 'static,
+  D: Keyed +  'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
