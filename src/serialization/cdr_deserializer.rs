@@ -178,7 +178,7 @@ macro_rules! deserialize_multibyte_number {
         V: Visitor<'de>,
       {
         const SIZE :usize = std::mem::size_of::<$num_type>();
-        assert!(SIZE > 1, "multibyte means size must be > 1");
+        static_assertions::const_assert!(SIZE > 1); // "multibyte means size must be > 1"
         self.calculate_padding_count_from_written_bytes_and_remove(SIZE)?;
         visitor.[<visit_ $num_type>](
           self.next_bytes(SIZE)?.[<read_ $num_type>]::<BO>().unwrap() )

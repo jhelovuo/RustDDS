@@ -13,10 +13,37 @@ use crate::{
   serialization::error::{Error, Result},
 };
 
-// This is a wrapper object for a Write object. The wrapper keeps count of bytes
-// written. Such a wrapper seemed easier implementation strategy than capturing
-// the return values of all write and write_* calls in serializer
-// implementation.
+/// Note: In CDR encoding, alignment padding bytes are inserted *before* a multibyte primitive, 
+/// but not after.
+///
+///  e.g. `struct Example {
+///   a: u8,
+///   b: i32,
+///   c: u16,
+/// }`
+///
+/// Would be serialized as
+/// ```
+/// |aa|PP|PP|PP|
+/// |bb|bb|bb|bb|
+/// |cc|cc|
+/// ```
+/// which is 10 bytes. `PP` means a byte of padding data.
+///
+/// Tuple (Example,Example) would be serialized as
+/// ```
+/// |aa|PP|PP|PP|
+/// |bb|bb|bb|bb|
+/// |cc|cc|aa|PP|
+/// |bb|bb|bb|bb|
+/// |cc|cc|
+/// ```
+/// Note that this is only 18 bytes, not 20, and the layout of the second
+/// struct is different due to different padding.
+
+// CountingWrite is a wrapper for a Write object. The wrapper keeps count of bytes
+// written. CDR needs to count bytes, because multibyte primitive types '
+// (such as integers and floats) must be aligned to their size, i.e. 2, 4, or 8 bytes.
 struct CountingWrite<W: io::Write> {
   writer: W,
   bytes_written: usize,
@@ -104,15 +131,6 @@ where
   }
 }
 
-pub trait AligningSerializer {
-  fn align(&mut self, alignment: usize) -> Result<()>;
-}
-
-impl<S: AligningSerializer> AligningSerializer for &mut S {
-  fn align(&mut self, alignment: usize) -> Result<()> {
-    (*self).align(alignment)
-  }
-}
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
@@ -153,15 +171,6 @@ where
   }
 } // impl
 
-impl<W, BO> AligningSerializer for CdrSerializer<W, BO>
-where
-  BO: ByteOrder,
-  W: io::Write,
-{
-  fn align(&mut self, alignment: usize) -> Result<()> {
-    self.calculate_padding_need_and_write_padding(alignment)
-  }
-}
 
 pub fn to_writer<T, BO, W>(writer: W, value: &T) -> Result<()>
 where
