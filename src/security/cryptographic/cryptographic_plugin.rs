@@ -11,7 +11,7 @@ use crate::{
 // Imports for doc references
 #[cfg(doc)]
 use crate::{
-  messages::submessages::submessage::SecuritySubmessage, serialization::submessage::SubmessageBody,
+  messages::submessages::submessage::SecuritySubmessage, rtps::SubmessageBody,
 };
 
 /// CryptoKeyFactory: section 8.5.1.7 of the Security specification (v. 1.1)
