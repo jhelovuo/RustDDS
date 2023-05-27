@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use mio_06::Evented;
-use serde::Serialize;
 
 use crate::{
   dds::{
@@ -47,13 +46,12 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
 /// let data_writer = publisher.create_datawriter_no_key::<SomeType, CDRSerializerAdapter<_>>(&topic, None);
 /// ```
-pub struct DataWriter<D: Serialize, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
+pub struct DataWriter<D, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
   keyed_datawriter: datawriter_with_key::DataWriter<NoKeyWrapper<D>, SAWrapper<SA>>,
 }
 
 impl<D, SA> DataWriter<D, SA>
 where
-  D: Serialize,
   SA: SerializerAdapter<D>,
 {
   pub(crate) fn from_keyed(
@@ -425,7 +423,6 @@ where
 //  TODO: test
 impl<D, SA> StatusEvented<DataWriterStatus> for DataWriter<D, SA>
 where
-  D: Serialize,
   SA: SerializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -441,23 +438,19 @@ where
   }
 }
 
-impl<D: Serialize, SA: SerializerAdapter<D>> RTPSEntity for DataWriter<D, SA> {
+impl<D, SA: SerializerAdapter<D>> RTPSEntity for DataWriter<D, SA> {
   fn guid(&self) -> GUID {
     self.keyed_datawriter.guid()
   }
 }
 
-impl<D: Serialize, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<D, SA> {
-  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-  //   self.keyed_datawriter.set_qos(policy)
-  // }
-
+impl<D, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<D, SA> {
   fn qos(&self) -> QosPolicies {
     self.keyed_datawriter.qos()
   }
 }
 
-impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<D, SA> {}
+impl<D, SA: SerializerAdapter<D>> DDSEntity for DataWriter<D, SA> {}
 
 //-------------------------------------------------------------------------------
 // async writing implementation
@@ -465,7 +458,6 @@ impl<D: Serialize, SA: SerializerAdapter<D>> DDSEntity for DataWriter<D, SA> {}
 
 impl<D, SA> DataWriter<D, SA>
 where
-  D: Serialize,
   SA: SerializerAdapter<D>,
 {
   pub async fn async_write(&self, data: D, source_timestamp: Option<Timestamp>) -> Result<()> {

@@ -5,7 +5,6 @@ use std::{
 };
 
 use mio_extras::channel as mio_channel;
-use serde::{de::DeserializeOwned, Serialize};
 use byteorder::LittleEndian;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -159,7 +158,7 @@ impl Publisher {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
   where
-    D: Keyed + Serialize,
+    D: Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::SerializerAdapter<D>,
   {
@@ -174,7 +173,7 @@ impl Publisher {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
-    D: Keyed + Serialize,
+    D: Keyed + serde::Serialize,
     <D as Keyed>::K: Key,
   {
     self.create_datawriter::<D, CDRSerializerAdapter<D, LittleEndian>>(topic, qos)
@@ -189,7 +188,7 @@ impl Publisher {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
   where
-    D: Keyed + Serialize,
+    D: Keyed ,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::SerializerAdapter<D>,
   {
@@ -205,7 +204,7 @@ impl Publisher {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
-    D: Keyed + Serialize,
+    D: Keyed + serde::Serialize,
     <D as Keyed>::K: Key,
   {
     self.create_datawriter_with_entityid::<D, CDRSerializerAdapter<D, LittleEndian>>(
@@ -248,7 +247,6 @@ impl Publisher {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
-    D: Serialize,
     SA: serde_adapters::no_key::SerializerAdapter<D>,
   {
     self
@@ -262,7 +260,7 @@ impl Publisher {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
-    D: Serialize,
+    D: serde::Serialize,
   {
     self.create_datawriter_no_key::<D, CDRSerializerAdapter<D, LittleEndian>>(topic, qos)
   }
@@ -483,7 +481,7 @@ impl InnerPublisher {
     optional_qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
   where
-    D: Keyed + Serialize,
+    D: Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::SerializerAdapter<D>,
   {
@@ -564,7 +562,6 @@ impl InnerPublisher {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
-    D: Serialize,
     SA: serde_adapters::no_key::SerializerAdapter<D>,
   {
     let entity_id =
@@ -722,7 +719,7 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
-    D: DeserializeOwned + Keyed,
+    D: Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
@@ -735,7 +732,7 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
-    D: DeserializeOwned + Keyed,
+    D: serde::de::DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
   {
     self.create_datareader::<D, CDRDeserializerAdapter<D>>(topic, qos)
@@ -750,7 +747,7 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
-    D: DeserializeOwned + Keyed,
+    D: Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
@@ -766,7 +763,7 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
-    D: DeserializeOwned + Keyed,
+    D: serde::de::DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
   {
     self.create_datareader_with_entityid::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
@@ -810,7 +807,6 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>
   where
-    D: DeserializeOwned,
     SA: serde_adapters::no_key::DeserializerAdapter<D>,
   {
     self.inner.create_datareader_no_key(self, topic, None, qos)
@@ -822,7 +818,6 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<no_key::SimpleDataReader<D, SA>>
   where
-    D: DeserializeOwned,
     SA: serde_adapters::no_key::DeserializerAdapter<D>,
   {
     self
@@ -836,7 +831,7 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
-    D: DeserializeOwned,
+    D: serde::de::DeserializeOwned,
   {
     self.create_datareader_no_key::<D, CDRDeserializerAdapter<D>>(topic, qos)
   }
@@ -953,7 +948,7 @@ impl InnerSubscriber {
     optional_qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
-    D: DeserializeOwned + Keyed,
+    D: Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
@@ -972,7 +967,7 @@ impl InnerSubscriber {
     optional_qos: Option<QosPolicies>,
   ) -> Result<with_key::SimpleDataReader<D, SA>>
   where
-    D: DeserializeOwned + Keyed,
+    D: Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
@@ -1068,7 +1063,7 @@ impl InnerSubscriber {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
-    D: DeserializeOwned + Keyed,
+    D:  Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {
@@ -1088,7 +1083,6 @@ impl InnerSubscriber {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>
   where
-    D: DeserializeOwned,
     SA: serde_adapters::no_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::NoKey {
@@ -1118,7 +1112,6 @@ impl InnerSubscriber {
     qos: Option<QosPolicies>,
   ) -> Result<no_key::SimpleDataReader<D, SA>>
   where
-    D: DeserializeOwned,
     SA: serde_adapters::no_key::DeserializerAdapter<D> + 'static,
   {
     if topic.kind() != TopicKind::NoKey {
