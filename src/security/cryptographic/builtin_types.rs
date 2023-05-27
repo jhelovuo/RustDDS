@@ -3,9 +3,7 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  messages::submessages::elements::{
-    crypto_content::CryptoContent, crypto_header::CryptoHeader,
-  },
+  messages::submessages::elements::{crypto_content::CryptoContent, crypto_header::CryptoHeader},
   security::{BinaryProperty, DataHolder, SecurityError},
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,

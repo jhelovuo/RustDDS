@@ -171,9 +171,9 @@ mod checked_impl;
 pub mod discovery; // to access some Discovered data in e.g. ros2-client crate
 mod messages;
 mod network;
+mod rtps;
 mod security;
 pub(crate) mod structure;
-mod rtps;
 
 #[cfg(test)]
 mod test;
@@ -189,6 +189,7 @@ pub mod serialization;
 // Re-exports from crate root to simplify usage
 #[doc(inline)]
 pub use dds::{
+  key::{Key, Keyed},
   participant::DomainParticipant,
   pubsub::{Publisher, Subscriber},
   qos,
@@ -197,22 +198,19 @@ pub use dds::{
   sampleinfo::{InstanceState, NotAliveGenerationCounts, SampleInfo, SampleState, ViewState},
   statusevents::StatusEvented,
   topic::{Topic, TopicDescription, TopicKind},
-  key::{Key, Keyed},
   typedesc::TypeDesc,
-  with_key::{WriteOptions, WriteOptionsBuilder, datareader::SelectByKey},
+  with_key::{datareader::SelectByKey, WriteOptions, WriteOptionsBuilder},
 };
-
 /// Needed to specify serialized data representation in case it is other than
 /// CDR.
 pub use serialization::representation_identifier::RepresentationIdentifier;
-
 #[doc(inline)]
 pub use serialization::{
   CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer,
 };
 pub use structure::{
-  duration::Duration, guid::GUID, sequence_number::SequenceNumber, time::Timestamp,
-  entity::RTPSEntity
+  duration::Duration, entity::RTPSEntity, guid::GUID, sequence_number::SequenceNumber,
+  time::Timestamp,
 };
 // re-export from a helper crate
 /// Helper trait to compute the CDR-serialized size of data
@@ -220,12 +218,12 @@ pub use cdr_encoding_size::CdrEncodingSize;
 
 /// Components used to access NO_KEY Topics
 pub mod no_key {
-  pub use crate::dds::{no_key::*, adapters::no_key::*};
+  pub use crate::dds::{adapters::no_key::*, no_key::*};
 }
 
 /// Components used to access WITH_KEY Topics
 pub mod with_key {
-  pub use crate::dds::{with_key::*, adapters::with_key::*, };
+  pub use crate::dds::{adapters::with_key::*, with_key::*};
 }
 
 pub mod rpc {

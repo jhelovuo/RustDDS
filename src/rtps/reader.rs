@@ -32,8 +32,7 @@ use crate::{
   },
   mio_source,
   network::udp_sender::UDPSender,
-  rtps::{message_receiver::MessageReceiverState, rtps_writer_proxy::RtpsWriterProxy},
-  rtps::Message,
+  rtps::{message_receiver::MessageReceiverState, rtps_writer_proxy::RtpsWriterProxy, Message},
   structure::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::TopicCache,

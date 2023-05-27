@@ -3,8 +3,7 @@ use std::cmp::min;
 use bytes::Bytes;
 
 use crate::{
-  dds::key::KeyHash,
-  messages::submessages::elements::serialized_payload::SerializedPayload,
+  dds::key::KeyHash, messages::submessages::elements::serialized_payload::SerializedPayload,
   structure::cache_change::ChangeKind,
 };
 

@@ -23,9 +23,7 @@ use crate::{
     with_key::datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
-  messages::submessages::elements::{
-    parameter::Parameter, parameter_list::ParameterList,
-  },
+  messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
   rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
   security::EndpointSecurityInfo,
@@ -1216,7 +1214,7 @@ mod tests {
   use crate::{
     dds::adapters::no_key::DeserializerAdapter,
     rtps::Message,
-    serialization::{pl_cdr_adapters::*, },
+    serialization::pl_cdr_adapters::*,
     test::test_data::{
       content_filter_data, publication_builtin_topic_data, reader_proxy_data,
       subscription_builtin_topic_data, topic_data, writer_proxy_data,

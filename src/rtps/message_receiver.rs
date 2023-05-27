@@ -10,8 +10,7 @@ use crate::{
     submessages::submessages::{WriterSubmessage, *},
     vendor_id::VendorId,
   },
-  rtps::reader::Reader,
-  rtps::{SubmessageBody, Message},
+  rtps::{reader::Reader, Message, SubmessageBody},
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},

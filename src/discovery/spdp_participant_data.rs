@@ -23,7 +23,6 @@ use crate::{
   },
   serialization::{error::Result, pl_cdr_adapters::*, speedy_pl_cdr_helpers::*},
   structure::{
-    
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GUID},
@@ -33,7 +32,6 @@ use crate::{
   },
   Key, Keyed, RepresentationIdentifier,
 };
-
 use super::builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet};
 
 // This type is used by Discovery to communicate the presence and properties
@@ -504,7 +502,7 @@ mod tests {
   use crate::{
     dds::adapters::no_key::DeserializerAdapter,
     messages::submessages::submessages::WriterSubmessage,
-    rtps::{Message, submessage::*},
+    rtps::{submessage::*, Message},
     test::test_data::*,
     RepresentationIdentifier,
   };

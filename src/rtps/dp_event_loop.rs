@@ -12,10 +12,10 @@ use mio_extras::channel as mio_channel;
 use crate::{
   dds::{qos::policy, typedesc::TypeDesc},
   discovery::{
+    builtin_endpoint::BuiltinEndpointSet,
     discovery::Discovery,
     discovery_db::DiscoveryDB,
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
-    builtin_endpoint::BuiltinEndpointSet,
   },
   messages::submessages::submessages::AckSubmessage,
   network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},

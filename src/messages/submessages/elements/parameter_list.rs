@@ -4,8 +4,7 @@ use bytes::Bytes;
 use speedy::{Context, Readable, Writable, Writer};
 
 use crate::{
-  messages::submessages::elements::parameter::Parameter,
-  structure::parameter_id::ParameterId,
+  messages::submessages::elements::parameter::Parameter, structure::parameter_id::ParameterId,
 };
 
 /// ParameterList is used as part of several messages to encapsulate

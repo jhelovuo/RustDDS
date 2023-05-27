@@ -108,7 +108,7 @@ use crate::{
     },
   },
   rtps::{Message, Submessage, SubmessageBody},
-  serialization::{pl_cdr_adapters::*, },
+  serialization::pl_cdr_adapters::*,
   structure::{
     duration::Duration,
     guid::{EntityId, EntityKind, GUID},

@@ -3,10 +3,10 @@ use crate::{
     crypto_content::CryptoContent, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
+  rtps::{Message, Submessage},
   security::{
     access_control::types::*, authentication::types::*, cryptographic::types::*, types::*,
   },
-  rtps::{Message, Submessage},
 };
 // Imports for doc references
 #[cfg(doc)]

@@ -2,7 +2,7 @@ use std::convert::From;
 
 use speedy::{Readable, Writable};
 
-use crate::{security::types::DataHolder, rtps::Submessage};
+use crate::{rtps::Submessage, security::types::DataHolder};
 /// CryptoToken: sections 7.2.4.2 and 8.5.1.1 of the Security specification (v.
 /// 1.1)
 pub struct CryptoToken {
