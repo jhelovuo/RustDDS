@@ -14,13 +14,16 @@ pub mod no_key {
     serialization::error::Result,
   };
 
-  /// trait for connecting Serde Deserializer implementation and DataReader
+  /// trait for connecting a Deserializer implementation and DataReader
   /// together - no_key version.
   pub trait DeserializerAdapter<D> {
     /// Which data representations can the DeserializerAdapter read?
     /// See RTPS specification Section 10 and Table 10.3
     fn supported_encodings() -> &'static [RepresentationIdentifier];
 
+    /// Deserialize data from bytes to an object.
+    /// `encoding` must be something given by `supported_encodings()`, or
+    /// implementation may fail with Err or `panic!()`.
     fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D>;
 
     /// This method has a default implementation, but the default will make a
@@ -36,7 +39,7 @@ pub mod no_key {
     }
   }
 
-  /// trait for connecting Serde Serializer implementation and DataWriter
+  /// trait for connecting a Serializer implementation and DataWriter
   /// together - no_key version.
   pub trait SerializerAdapter<D> {
     // what encoding do we produce?
@@ -56,21 +59,23 @@ pub mod with_key {
   };
   use super::no_key;
 
-  /// trait for connecting Serde Desrializer implementation and DataReader
+  /// trait for connecting a Desrializer implementation and DataReader
   /// together - with_key version.
   pub trait DeserializerAdapter<D>: no_key::DeserializerAdapter<D>
   where
     D: Keyed,
   {
+    /// Deserialize a key `D::K` from bytes.
     fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K>;
   }
 
-  /// trait for connecting Serde Serializer implementation and DataWriter
+  /// trait for connecting a Serializer implementation and DataWriter
   /// together - with_key version.
   pub trait SerializerAdapter<D>: no_key::SerializerAdapter<D>
   where
     D: Keyed,
   {
+    /// serialize a key `D::K` to Bytes.
     fn key_to_bytes(value: &D::K) -> Result<Bytes>;
   }
 }
