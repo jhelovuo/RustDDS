@@ -15,20 +15,21 @@ use mio_06::Token;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::{
-    dp_event_loop::DPEventLoop, pubsub::*, qos::*, reader::*, topic::*, typedesc::TypeDesc,
-    values::result::*, writer::WriterIngredients,
-  },
+  dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
   discovery::{
-    data_types::topic_data::DiscoveredTopicData,
     discovery::{Discovery, DiscoveryCommand},
     discovery_db::DiscoveryDB,
+    sedp_messages::DiscoveredTopicData,
   },
   log_and_err_internal,
   network::{constant::*, udp_listener::UDPListener},
+  rtps::{
+    dp_event_loop::{DPEventLoop, DomainInfo},
+    reader::*,
+    writer::WriterIngredients,
+  },
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
 };
-use super::dp_event_loop::DomainInfo;
 
 /// DDS DomainParticipant
 ///

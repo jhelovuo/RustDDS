@@ -82,6 +82,7 @@ use enumflags2::BitFlags;
 
 use crate::{
   dds::{
+    adapters::no_key::DeserializerAdapter,
     qos::{
       policy::{
         Deadline, DestinationOrder, Durability, History, LatencyBudget, Lifespan, Liveliness,
@@ -90,35 +91,30 @@ use crate::{
       },
       QosPolicyBuilder,
     },
-    traits::serde_adapters::no_key::DeserializerAdapter,
   },
   discovery::{
     content_filter_property::ContentFilterProperty,
-    data_types::{
-      spdp_participant_data::SpdpDiscoveredParticipantData,
-      topic_data::{
-        PublicationBuiltinTopicData, ReaderProxy, SubscriptionBuiltinTopicData,
-        TopicBuiltinTopicData, WriterProxy,
-      },
+    sedp_messages::{
+      PublicationBuiltinTopicData, ReaderProxy, SubscriptionBuiltinTopicData,
+      TopicBuiltinTopicData, WriterProxy,
     },
+    spdp_participant_data::SpdpDiscoveredParticipantData,
   },
   messages::{
     header::Header,
     submessages::{
-      submessage_elements::serialized_payload::{RepresentationIdentifier, SerializedPayload},
+      submessage_elements::serialized_payload::SerializedPayload,
       submessages::{Data, SubmessageHeader, SubmessageKind, WriterSubmessage, *},
     },
   },
-  serialization::{
-    pl_cdr_deserializer::PlCdrDeserializerAdapter, pl_cdr_serializer::PlCdrSerialize, Message,
-    Submessage, SubmessageBody,
-  },
+  serialization::{pl_cdr_adapters::*, Message, Submessage, SubmessageBody},
   structure::{
     duration::Duration,
     guid::{EntityId, EntityKind, GUID},
     locator::Locator,
     sequence_number::SequenceNumber,
   },
+  RepresentationIdentifier,
 };
 
 pub(crate) fn spdp_participant_msg() -> Message {

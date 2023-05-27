@@ -10,6 +10,7 @@ use cdr_encoding_size::*;
 
 use crate::{
   dds::{
+    adapters::with_key::SerializerAdapter,
     participant::DomainParticipant,
     qos::{
       policy::{
@@ -18,24 +19,20 @@ use crate::{
       },
       HasQoSPolicy, QosPolicies,
     },
-    rtps_reader_proxy::RtpsReaderProxy,
-    rtps_writer_proxy::RtpsWriterProxy,
     topic::{Topic, TopicDescription},
-    traits::{
-      key::{Key, Keyed},
-      serde_adapters::with_key::SerializerAdapter,
-    },
     with_key::datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
   messages::submessages::submessage_elements::{
     parameter::Parameter, parameter_list::ParameterList,
-    serialized_payload::RepresentationIdentifier,
   },
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
+  rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
   security::EndpointSecurityInfo,
   serialization::{
-    error as ser, pl_cdr_deserializer::PlCdrDeserialize, pl_cdr_serializer::PlCdrSerialize,
+    error as ser,
+    pl_cdr_adapters::{PlCdrDeserialize, PlCdrSerialize},
+    representation_identifier::RepresentationIdentifier,
     speedy_pl_cdr_helpers::*,
   },
   structure::{
@@ -45,6 +42,7 @@ use crate::{
     locator::Locator,
     parameter_id::ParameterId,
   },
+  Key, Keyed,
 };
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
@@ -1212,17 +1210,17 @@ mod tests {
   use log::info;
   use test_log::test; // to capture logigng macros run by test cases
 
-  use crate::dds::traits::serde_adapters::no_key::SerializerAdapter;
+  use crate::dds::adapters::no_key::SerializerAdapter;
   use super::*;
   // use crate::serialization::cdr_serializer::to_little_endian_binary;
   use crate::{
-    dds::traits::serde_adapters::no_key::DeserializerAdapter,
-    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
-    serialization::{pl_cdr_deserializer::PlCdrDeserializerAdapter, pl_cdr_serializer::*, Message},
+    dds::adapters::no_key::DeserializerAdapter,
+    serialization::{pl_cdr_adapters::*, Message},
     test::test_data::{
       content_filter_data, publication_builtin_topic_data, reader_proxy_data,
       subscription_builtin_topic_data, topic_data, writer_proxy_data,
     },
+    RepresentationIdentifier,
   };
 
   /* do not test separate ser/deser of components, as these are never seen on wire individually

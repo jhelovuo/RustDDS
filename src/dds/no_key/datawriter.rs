@@ -4,19 +4,19 @@ use mio_06::Evented;
 
 use crate::{
   dds::{
-    data_types::GUID,
+    adapters::no_key::SerializerAdapter,
+    dds_entity::DDSEntity,
     pubsub::Publisher,
     qos::{HasQoSPolicy, QosPolicies},
     statusevents::{DataWriterStatus, StatusReceiverStream},
     topic::Topic,
-    traits::{dds_entity::DDSEntity, serde_adapters::no_key::SerializerAdapter},
-    values::result::Result,
     with_key::datawriter as datawriter_with_key,
+    Result,
   },
-  discovery::data_types::topic_data::SubscriptionBuiltinTopicData,
+  discovery::sedp_messages::SubscriptionBuiltinTopicData,
   serialization::CDRSerializerAdapter,
   structure::{entity::RTPSEntity, rpc::SampleIdentity, time::Timestamp},
-  StatusEvented,
+  StatusEvented, GUID,
 };
 use super::wrappers::{NoKeyWrapper, SAWrapper};
 
@@ -29,9 +29,7 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 ///
 /// ```
 /// use serde::{Serialize, Deserialize};
-/// use rustdds::dds::DomainParticipant;
-/// use rustdds::dds::qos::QosPolicyBuilder;
-/// use rustdds::dds::data_types::TopicKind;
+/// use rustdds::*;
 /// use rustdds::no_key::DataWriter;
 /// use rustdds::serialization::CDRSerializerAdapter;
 ///
@@ -68,9 +66,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -111,9 +107,7 @@ where
   /// ```
   /// # use serde::{Serialize, Deserialize};
   /// # use std::time::Duration;
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -142,9 +136,7 @@ where
   // TODO: enable run when implemented
   /// ```no_run
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -174,9 +166,7 @@ where
   /// ```
   /// # use serde::{Serialize, Deserialize};
   /// # use std::time::Duration;
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -206,9 +196,7 @@ where
   // TODO: enable run when implemented
   /// ```no_run
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -238,9 +226,7 @@ where
   // TODO: enable run when implemented
   /// ```no_run
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -269,9 +255,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -298,9 +282,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -327,9 +309,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -356,9 +336,7 @@ where
   // TODO: enable run when implemented
   /// ```no_run ignore
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
@@ -387,9 +365,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataWriter;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #

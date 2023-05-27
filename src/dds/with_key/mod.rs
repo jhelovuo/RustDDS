@@ -1,5 +1,6 @@
 pub(crate) mod datareader;
 pub(crate) mod datasample;
+pub(crate) mod datasample_cache;
 pub(crate) mod datawriter;
 pub(crate) mod simpledatareader;
 

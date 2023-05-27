@@ -11,43 +11,40 @@ use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{
-    data_types::EntityKind,
+    adapters,
+    key::{Key, Keyed},
     no_key,
     no_key::{
       datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
     },
     participant::*,
     qos::*,
-    reader::ReaderIngredients,
+    result::{Error, Result},
     statusevents::{sync_status_channel, DataReaderStatus},
     topic::*,
-    traits::{
-      key::{Key, Keyed},
-      serde_adapters,
-    },
-    values::result::{Error, Result},
     with_key,
     with_key::{
       datareader::DataReader as WithKeyDataReader, datawriter::DataWriter as WithKeyDataWriter,
     },
-    writer::WriterIngredients,
   },
   discovery::{
-    data_types::topic_data::DiscoveredWriterData, discovery::DiscoveryCommand,
-    discovery_db::DiscoveryDB,
+    discovery::DiscoveryCommand, discovery_db::DiscoveryDB, sedp_messages::DiscoveredWriterData,
   },
   log_and_err_internal, log_and_err_precondition_not_met, mio_source,
+  rtps::{
+    reader::ReaderIngredients,
+    writer::{WriterCommand, WriterIngredients},
+  },
   serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter},
   structure::{
     entity::RTPSEntity,
-    guid::{EntityId, GUID},
+    guid::{EntityId, EntityKind, GUID},
     topic_kind::TopicKind,
   },
 };
 use super::{
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
   with_key::simpledatareader::ReaderCommand,
-  writer::WriterCommand,
 };
 
 // -------------------------------------------------------------------
@@ -71,9 +68,9 @@ use super::{
 /// # Examples
 ///
 /// ```
-/// # use rustdds::dds::DomainParticipant;
-/// # use rustdds::dds::qos::QosPolicyBuilder;
-/// use rustdds::dds::Publisher;
+/// # use rustdds::DomainParticipant;
+/// # use rustdds::qos::QosPolicyBuilder;
+/// use rustdds::Publisher;
 ///
 /// let domain_participant = DomainParticipant::new(0).unwrap();
 /// let qos = QosPolicyBuilder::new().build();
@@ -126,11 +123,7 @@ impl Publisher {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Publisher;
-  /// # use rustdds::dds::data_types::TopicKind;
-  /// use rustdds::dds::traits::Keyed;
+  /// # use rustdds::*;
   /// use rustdds::serialization::CDRSerializerAdapter;
   /// use serde::Serialize;
   ///
@@ -160,7 +153,7 @@ impl Publisher {
   where
     D: Keyed,
     <D as Keyed>::K: Key,
-    SA: serde_adapters::with_key::SerializerAdapter<D>,
+    SA: adapters::with_key::SerializerAdapter<D>,
   {
     self.inner_lock().create_datawriter(self, None, topic, qos)
   }
@@ -190,7 +183,7 @@ impl Publisher {
   where
     D: Keyed,
     <D as Keyed>::K: Key,
-    SA: serde_adapters::with_key::SerializerAdapter<D>,
+    SA: adapters::with_key::SerializerAdapter<D>,
   {
     self
       .inner_lock()
@@ -223,10 +216,7 @@ impl Publisher {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Publisher;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// use rustdds::serialization::CDRSerializerAdapter;
   /// use serde::Serialize;
   ///
@@ -247,7 +237,7 @@ impl Publisher {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
-    SA: serde_adapters::no_key::SerializerAdapter<D>,
+    SA: adapters::no_key::SerializerAdapter<D>,
   {
     self
       .inner_lock()
@@ -351,9 +341,7 @@ impl Publisher {
   /// # Example
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Publisher;
+  /// # use rustdds::*;
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
@@ -373,9 +361,7 @@ impl Publisher {
   /// # Example
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// use rustdds::dds::qos::{QosPolicyBuilder};
-  /// # use rustdds::dds::Publisher;
+  /// # use rustdds::*;
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
@@ -392,16 +378,14 @@ impl Publisher {
   /// # Example
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::{QosPolicyBuilder, policy::Durability};
-  /// # use rustdds::dds::Publisher;
+  /// # use rustdds::*;
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
   ///
   /// let mut publisher = domain_participant.create_publisher(&qos).unwrap();
   /// let qos2 =
-  /// QosPolicyBuilder::new().durability(Durability::Transient).build();
+  /// QosPolicyBuilder::new().durability(policy::Durability::Transient).build();
   /// publisher.set_default_datawriter_qos(&qos2);
   ///
   /// assert_ne!(qos, publisher.get_default_datawriter_qos());
@@ -483,7 +467,7 @@ impl InnerPublisher {
   where
     D: Keyed,
     <D as Keyed>::K: Key,
-    SA: serde_adapters::with_key::SerializerAdapter<D>,
+    SA: adapters::with_key::SerializerAdapter<D>,
   {
     // Data samples from DataWriter to HistoryCache
     let (dwcc_upload, hccc_download) = mio_channel::sync_channel::<WriterCommand>(16);
@@ -562,7 +546,7 @@ impl InnerPublisher {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataWriter<D, SA>>
   where
-    SA: serde_adapters::no_key::SerializerAdapter<D>,
+    SA: adapters::no_key::SerializerAdapter<D>,
   {
     let entity_id =
       self.unwrap_or_new_entity_id(entity_id_opt, EntityKind::WRITER_NO_KEY_USER_DEFINED);
@@ -638,9 +622,7 @@ impl Debug for InnerPublisher {
 /// # Examples
 ///
 /// ```
-/// # use rustdds::dds::DomainParticipant;
-/// # use rustdds::dds::qos::QosPolicyBuilder;
-/// use rustdds::dds::Subscriber;
+/// # use rustdds::*;
 ///
 /// let domain_participant = DomainParticipant::new(0).unwrap();
 /// let qos = QosPolicyBuilder::new().build();
@@ -686,13 +668,9 @@ impl Subscriber {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Subscriber;
+  /// # use rustdds::*;
   /// use serde::Deserialize;
   /// use rustdds::serialization::CDRDeserializerAdapter;
-  /// use rustdds::dds::data_types::TopicKind;
-  /// use rustdds::dds::traits::Keyed;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
@@ -721,7 +699,7 @@ impl Subscriber {
   where
     D: Keyed,
     <D as Keyed>::K: Key,
-    SA: serde_adapters::with_key::DeserializerAdapter<D>,
+    SA: adapters::with_key::DeserializerAdapter<D>,
   {
     self.inner.create_datareader(self, topic, None, qos)
   }
@@ -749,7 +727,7 @@ impl Subscriber {
   where
     D: Keyed,
     <D as Keyed>::K: Key,
-    SA: serde_adapters::with_key::DeserializerAdapter<D>,
+    SA: adapters::with_key::DeserializerAdapter<D>,
   {
     self
       .inner
@@ -782,12 +760,9 @@ impl Subscriber {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Subscriber;
+  /// # use rustdds::*;
   /// use serde::Deserialize;
   /// use rustdds::serialization::CDRDeserializerAdapter;
-  /// use rustdds::dds::data_types::TopicKind;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
@@ -807,7 +782,7 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>
   where
-    SA: serde_adapters::no_key::DeserializerAdapter<D>,
+    SA: adapters::no_key::DeserializerAdapter<D>,
   {
     self.inner.create_datareader_no_key(self, topic, None, qos)
   }
@@ -818,7 +793,7 @@ impl Subscriber {
     qos: Option<QosPolicies>,
   ) -> Result<no_key::SimpleDataReader<D, SA>>
   where
-    SA: serde_adapters::no_key::DeserializerAdapter<D>,
+    SA: adapters::no_key::DeserializerAdapter<D>,
   {
     self
       .inner
@@ -892,9 +867,7 @@ impl Subscriber {
   /// # Example
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Subscriber;
+  /// # use rustdds::*;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
@@ -950,7 +923,7 @@ impl InnerSubscriber {
   where
     D: Keyed,
     <D as Keyed>::K: Key,
-    SA: serde_adapters::with_key::DeserializerAdapter<D>,
+    SA: adapters::with_key::DeserializerAdapter<D>,
   {
     let simple_dr =
       self.create_simple_datareader_internal(outer, entity_id_opt, topic, optional_qos)?;
@@ -969,7 +942,7 @@ impl InnerSubscriber {
   where
     D: Keyed,
     <D as Keyed>::K: Key,
-    SA: serde_adapters::with_key::DeserializerAdapter<D>,
+    SA: adapters::with_key::DeserializerAdapter<D>,
   {
     // incoming data notification channel from Reader to DataReader
     let (send, rec) = mio_channel::sync_channel::<()>(4);
@@ -1065,7 +1038,7 @@ impl InnerSubscriber {
   where
     D: Keyed,
     <D as Keyed>::K: Key,
-    SA: serde_adapters::with_key::DeserializerAdapter<D>,
+    SA: adapters::with_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::WithKey {
       return Error::precondition_not_met(
@@ -1083,7 +1056,7 @@ impl InnerSubscriber {
     qos: Option<QosPolicies>,
   ) -> Result<NoKeyDataReader<D, SA>>
   where
-    SA: serde_adapters::no_key::DeserializerAdapter<D>,
+    SA: adapters::no_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::NoKey {
       return Error::precondition_not_met(
@@ -1112,7 +1085,7 @@ impl InnerSubscriber {
     qos: Option<QosPolicies>,
   ) -> Result<no_key::SimpleDataReader<D, SA>>
   where
-    SA: serde_adapters::no_key::DeserializerAdapter<D> + 'static,
+    SA: adapters::no_key::DeserializerAdapter<D> + 'static,
   {
     if topic.kind() != TopicKind::NoKey {
       return Error::precondition_not_met(

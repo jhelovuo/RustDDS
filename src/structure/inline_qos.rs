@@ -5,8 +5,7 @@ use byteorder::ByteOrder;
 
 use super::cache_change::ChangeKind;
 use crate::{
-  dds::traits::serde_adapters::no_key::*,
-  messages::submessages::submessage_elements::RepresentationIdentifier,
+  dds::adapters::no_key::*, messages::submessages::submessage_elements::RepresentationIdentifier,
   serialization::CDRDeserializerAdapter,
 };
 #[cfg(test)]

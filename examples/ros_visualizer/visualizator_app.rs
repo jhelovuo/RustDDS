@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use mio_extras::channel as mio_channel;
 use rustdds::{
-  dds::data_types::DiscoveredTopicData,
+  discovery::DiscoveredTopicData,
   ros2::builtin_datatypes::{NodeInfo, ROSParticipantInfo},
 };
 use crossterm::event::{self, Event, KeyCode};

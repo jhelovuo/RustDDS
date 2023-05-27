@@ -2,9 +2,8 @@ use mio_06::Token;
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::data_types::GuidPrefix,
-  discovery::data_types::topic_data::{DiscoveredReaderData, DiscoveredWriterData},
-  structure::guid::{EntityKind, GUID},
+  discovery::sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
+  structure::guid::{EntityKind, GuidPrefix, GUID},
 };
 
 const PTB: usize = EntityKind::POLL_TOKEN_BASE;

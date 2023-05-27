@@ -5,12 +5,12 @@ use log::{debug, info, trace, warn};
 use bytes::Bytes;
 
 use crate::{
-  dds::reader::Reader,
   messages::{
     protocol_version::ProtocolVersion,
     submessages::submessages::{WriterSubmessage, *},
     vendor_id::VendorId,
   },
+  rtps::reader::Reader,
   serialization::{submessage::SubmessageBody, Message},
   structure::{
     entity::RTPSEntity,
@@ -476,7 +476,6 @@ mod tests {
   use crate::{
     dds::{
       qos::QosPolicies,
-      reader::ReaderIngredients,
       statusevents::{sync_status_channel, DataReaderStatus},
       typedesc::TypeDesc,
       with_key::simpledatareader::ReaderCommand,
@@ -484,6 +483,7 @@ mod tests {
     messages::header::Header,
     mio_source,
     network::udp_sender::UDPSender,
+    rtps::reader::ReaderIngredients,
     serialization::cdr_deserializer::deserialize_from_little_endian,
     structure::{dds_cache::DDSCache, guid::EntityKind},
   };

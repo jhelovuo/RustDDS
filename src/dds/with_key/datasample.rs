@@ -1,5 +1,5 @@
 use crate::{
-  dds::{sampleinfo::*, traits::key::*, with_key::datawriter::WriteOptions},
+  dds::{key::*, sampleinfo::*, with_key::datawriter::WriteOptions},
   structure::{
     cache_change::CacheChange, guid::GUID, sequence_number::SequenceNumber, time::Timestamp,
   },

@@ -18,13 +18,14 @@ use mio_08;
 
 use crate::{
   dds::{
+    adapters::with_key::*,
     ddsdata::*,
+    key::*,
     pubsub::Subscriber,
     qos::*,
+    result::*,
     statusevents::*,
     topic::{Topic, TopicDescription},
-    traits::{key::*, serde_adapters::with_key::*},
-    values::result::*,
     with_key::datasample::{DeserializedCacheChange, Sample},
   },
   discovery::discovery::DiscoveryCommand,

@@ -1,6 +1,6 @@
 use crate::{
   dds::qos::QosPolicies,
-  discovery::data_types::topic_data::TopicBuiltinTopicData,
+  discovery::sedp_messages::TopicBuiltinTopicData,
   security::{authentication::*, *},
 };
 use super::*;

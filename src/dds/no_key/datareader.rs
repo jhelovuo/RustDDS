@@ -9,13 +9,12 @@ use futures::stream::{FusedStream, Stream};
 
 use crate::{
   dds::{
-    data_types::GUID,
+    adapters::no_key::DeserializerAdapter,
     no_key::datasample::DataSample,
     qos::{HasQoSPolicy, QosPolicies},
     readcondition::ReadCondition,
+    result::Result,
     statusevents::DataReaderStatus,
-    traits::serde_adapters::no_key::DeserializerAdapter,
-    values::result::Result,
     with_key::{
       datareader as datareader_with_key,
       datasample::{DataSample as WithKeyDataSample, Sample},
@@ -25,7 +24,7 @@ use crate::{
   },
   serialization::CDRDeserializerAdapter,
   structure::entity::RTPSEntity,
-  StatusEvented,
+  StatusEvented, GUID,
 };
 use super::wrappers::{DAWrapper, NoKeyWrapper};
 
@@ -40,9 +39,7 @@ pub type DataReaderCdr<D> = DataReader<D, CDRDeserializerAdapter<D>>;
 ///
 /// ```
 /// use serde::{Serialize, Deserialize};
-/// use rustdds::dds::DomainParticipant;
-/// use rustdds::dds::qos::QosPolicyBuilder;
-/// use rustdds::dds::data_types::TopicKind;
+/// use rustdds::*;
 /// use rustdds::no_key::DataReader;
 /// use rustdds::serialization::CDRDeserializerAdapter;
 ///
@@ -87,12 +84,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::no_key::DataReader;
+  /// # use rustdds::*;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
-  /// use rustdds::dds::data_types::ReadCondition;
   ///
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
@@ -135,12 +128,9 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
-  /// # use rustdds::dds::data_types::ReadCondition;
   /// #
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
@@ -177,9 +167,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
@@ -209,9 +197,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
@@ -245,9 +231,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
@@ -284,9 +268,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::{TopicKind, ReadCondition};
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
@@ -329,9 +311,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::{TopicKind, ReadCondition};
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
@@ -370,9 +350,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::{TopicKind, ReadCondition};
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #
@@ -411,9 +389,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::{TopicKind, ReadCondition};
+  /// # use rustdds::*;
   /// # use rustdds::no_key::DataReader;
   /// # use rustdds::serialization::CDRDeserializerAdapter;
   /// #

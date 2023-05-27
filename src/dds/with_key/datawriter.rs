@@ -17,34 +17,32 @@ use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{
+    adapters::with_key::SerializerAdapter,
+    dds_entity::DDSEntity,
     ddsdata::DDSData,
     helpers::*,
+    key,
     pubsub::Publisher,
     qos::{
       policy::{Liveliness, Reliability},
       HasQoSPolicy, QosPolicies,
     },
+    result::{Error, Result},
     statusevents::*,
     topic::Topic,
-    traits::{
-      dds_entity::DDSEntity, key, key::*, serde_adapters::with_key::SerializerAdapter,
-      TopicDescription,
-    },
-    values::result::{Error, Result},
   },
-  discovery::{data_types::topic_data::SubscriptionBuiltinTopicData, discovery::DiscoveryCommand},
+  discovery::{discovery::DiscoveryCommand, sedp_messages::SubscriptionBuiltinTopicData},
   log_and_err_internal,
   messages::submessages::submessage_elements::serialized_payload::SerializedPayload,
+  rtps::writer::WriterCommand,
   serialization::CDRSerializerAdapter,
   structure::{
     cache_change::ChangeKind, duration, entity::RTPSEntity, guid::GUID, rpc::SampleIdentity,
     sequence_number::SequenceNumber, time::Timestamp,
   },
+  Key, Keyed, TopicDescription,
 };
-use super::super::writer::WriterCommand;
 
-// It is a bit overkill to use a builder for such a simple struct, but
-// it may be expanded in future versions of RustDDS or even the spec.
 // TODO: Move the write options and the builder type to some lower-level module
 // to avoid circular dependencies.
 #[derive(Debug, Default)]
@@ -124,11 +122,8 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 ///
 /// ```
 /// use serde::{Serialize, Deserialize};
-/// use rustdds::dds::DomainParticipant;
-/// use rustdds::dds::qos::QosPolicyBuilder;
-/// use rustdds::dds::data_types::TopicKind;
+/// use rustdds::*;
 /// use rustdds::with_key::DataWriter;
-/// use rustdds::dds::traits::Keyed;
 /// use rustdds::serialization::CDRSerializerAdapter;
 ///
 /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -259,11 +254,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -310,11 +302,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -399,12 +388,7 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
-  /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
-  /// # use rustdds::serialization::CDRSerializerAdapter;
+  /// # use rustdds::*;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// let qos = QosPolicyBuilder::new().build();
@@ -468,11 +452,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -518,11 +499,8 @@ where
   /// ```no_run
   // TODO: enable when functional
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -559,11 +537,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -619,11 +594,8 @@ where
   /// ```no_run
   // TODO: enable when functional
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -661,11 +633,8 @@ where
   /// ```no_run
   // TODO: enable when functional
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -704,11 +673,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -741,11 +707,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -777,11 +740,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -833,11 +793,8 @@ where
   /// ```no_run
   // TODO: enable when available
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -879,11 +836,8 @@ where
   ///
   /// ```
   /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::dds::traits::Keyed;
   /// # use rustdds::serialization::CDRSerializerAdapter;
   /// #
   /// let domain_participant = DomainParticipant::new(0).unwrap();
@@ -979,12 +933,6 @@ where
   D: Keyed,
   SA: SerializerAdapter<D>,
 {
-  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-  //   // TODO: check liveliness of qos_policy
-  //   self.qos_policy = policy.clone();
-  //   Ok(())
-  // }
-
   fn qos(&self) -> QosPolicies {
     self.qos_policy.clone()
   }
@@ -1260,7 +1208,7 @@ mod tests {
 
   use super::*;
   use crate::{
-    dds::{participant::DomainParticipant, traits::key::Keyed},
+    dds::{key::Keyed, participant::DomainParticipant},
     serialization::cdr_serializer::CDRSerializerAdapter,
     structure::topic_kind::TopicKind,
     test::random_data::*,

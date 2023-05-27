@@ -10,29 +10,27 @@ use mio_06::{Event, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{
-    message_receiver::MessageReceiver,
-    qos::policy,
-    reader::{Reader, ReaderIngredients},
-    writer::{Writer, WriterIngredients},
-  },
+  dds::{qos::policy, typedesc::TypeDesc},
   discovery::{
-    data_types::topic_data::{DiscoveredReaderData, DiscoveredWriterData},
+    discovery::Discovery,
     discovery_db::DiscoveryDB,
+    sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
   messages::submessages::submessages::AckSubmessage,
   network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},
+  rtps::{
+    message_receiver::MessageReceiver,
+    reader::{Reader, ReaderIngredients},
+    rtps_reader_proxy::RtpsReaderProxy,
+    rtps_writer_proxy::RtpsWriterProxy,
+    writer::{Writer, WriterIngredients},
+  },
   structure::{
     builtin_endpoint::BuiltinEndpointSet,
     dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
   },
-};
-//use crate::discovery::data_types::spdp_participant_data::SpdpDiscoveredParticipantData;
-use crate::discovery::discovery::Discovery;
-use super::{
-  rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy, typedesc::TypeDesc,
 };
 
 pub struct DomainInfo {

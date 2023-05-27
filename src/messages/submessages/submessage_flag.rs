@@ -3,7 +3,7 @@
 use speedy::{Endianness, Readable};
 use enumflags2::{bitflags, BitFlags};
 
-use crate::messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier;
+use crate::RepresentationIdentifier;
 
 pub trait FromEndianness {
   fn from_endianness(end: speedy::Endianness) -> Self;

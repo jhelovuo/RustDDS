@@ -9,10 +9,7 @@
 pub mod no_key {
   use bytes::Bytes;
 
-  use crate::{
-    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
-    serialization::error::Result,
-  };
+  use crate::{serialization::error::Result, RepresentationIdentifier};
 
   /// trait for connecting a Deserializer implementation and DataReader
   /// together - no_key version.
@@ -52,11 +49,7 @@ pub mod no_key {
 pub mod with_key {
   use bytes::Bytes;
 
-  use crate::{
-    dds::traits::key::Keyed,
-    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
-    serialization::error::Result,
-  };
+  use crate::{serialization::Result, Keyed, RepresentationIdentifier};
   use super::no_key;
 
   /// trait for connecting a Desrializer implementation and DataReader

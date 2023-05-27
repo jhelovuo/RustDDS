@@ -2,13 +2,13 @@ use speedy::{Context, Writable, Writer};
 use enumflags2::BitFlags;
 
 use crate::{
-  dds::data_types::EntityId,
   messages::submessages::{
     ack_nack::AckNack, data::Data, data_frag::DataFrag, gap::Gap, heartbeat::Heartbeat,
     heartbeat_frag::HeartbeatFrag, info_destination::InfoDestination, info_reply::InfoReply,
     info_source::InfoSource, info_timestamp::InfoTimestamp, nack_frag::NackFrag,
     submessage_flag::*,
   },
+  structure::guid::EntityId,
 };
 use super::{
   secure_body::SecureBody, secure_postfix::SecurePostfix, secure_prefix::SecurePrefix,

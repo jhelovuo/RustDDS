@@ -7,7 +7,7 @@ use mio_06::Token;
 use log::warn;
 use static_assertions as sa;
 
-use crate::dds::traits::key::Key;
+use crate::dds::key::Key;
 
 /// DDS/RTPS Participant GuidPrefix
 #[derive(
@@ -361,7 +361,7 @@ impl EntityId {
     self.entity_kind = entity_kind;
   }
 
-  pub fn to_slice(&self) -> [u8; 4] {
+  pub fn to_slice(self) -> [u8; 4] {
     let mut slice = [0; 4];
     slice[0] = self.entity_key[0];
     slice[1] = self.entity_key[1];

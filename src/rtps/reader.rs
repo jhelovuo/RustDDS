@@ -16,11 +16,12 @@ use speedy::{Endianness, Writable};
 use crate::{
   dds::{
     ddsdata::DDSData,
-    message_receiver::MessageReceiverState,
-    qos::{policy, HasQoSPolicy, QosPolicies},
-    rtps_writer_proxy::RtpsWriterProxy,
+    qos::{policy, HasQoSPolicy, InlineQos, QosPolicies},
     statusevents::{CountWithChange, DataReaderStatus, StatusChannelSender},
-    with_key::datawriter::{WriteOptions, WriteOptionsBuilder},
+    with_key::{
+      datawriter::{WriteOptions, WriteOptionsBuilder},
+      simpledatareader::ReaderCommand,
+    },
   },
   messages::{
     header::Header,
@@ -31,6 +32,7 @@ use crate::{
   },
   mio_source,
   network::udp_sender::UDPSender,
+  rtps::{message_receiver::MessageReceiverState, rtps_writer_proxy::RtpsWriterProxy},
   serialization::message::Message,
   structure::{
     cache_change::{CacheChange, ChangeKind},
@@ -42,7 +44,6 @@ use crate::{
     time::Timestamp,
   },
 };
-use super::{qos::InlineQos, with_key::simpledatareader::ReaderCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {

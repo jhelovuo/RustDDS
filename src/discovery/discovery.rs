@@ -20,29 +20,25 @@ use crate::{
       QosPolicies, QosPolicyBuilder,
     },
     readcondition::ReadCondition,
+    result::{Error, Result},
     topic::*,
-    values::result::{Error, Result},
     with_key::{
       datareader::{DataReader, DataReaderCdr},
       datasample::Sample,
       datawriter::{DataWriter, DataWriterCdr},
     },
-    SubscriptionBuiltinTopicData,
   },
   discovery::{
-    data_types::{
-      spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
-      topic_data::{
-        DiscoveredReaderData, DiscoveredWriterData, Endpoint_GUID, PublicationBuiltinTopicData,
-        ReaderProxy, WriterProxy,
-      },
-    },
     discovery_db::{DiscoveredVia, DiscoveryDB},
+    sedp_messages::{
+      DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, Endpoint_GUID,
+      ParticipantMessageData, ParticipantMessageDataKind, PublicationBuiltinTopicData, ReaderProxy,
+      SubscriptionBuiltinTopicData, WriterProxy,
+    },
+    spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
   network::constant::*,
-  serialization::{
-    pl_cdr_deserializer::PlCdrDeserializerAdapter, pl_cdr_serializer::PlCdrSerializerAdapter,
-  },
+  serialization::pl_cdr_adapters::{PlCdrDeserializerAdapter, PlCdrSerializerAdapter},
   structure::{
     duration::Duration,
     entity::RTPSEntity,
@@ -50,9 +46,6 @@ use crate::{
     locator::Locator,
     time::Timestamp,
   },
-};
-use super::data_types::topic_data::{
-  DiscoveredTopicData, ParticipantMessageData, ParticipantMessageDataKind,
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -1410,12 +1403,9 @@ mod tests {
 
   use super::*;
   use crate::{
-    dds::{participant::DomainParticipant, traits::serde_adapters::no_key::DeserializerAdapter},
-    discovery::data_types::topic_data::TopicBuiltinTopicData,
-    messages::submessages::{
-      submessage_elements::serialized_payload::RepresentationIdentifier,
-      submessages::{InterpreterSubmessage, WriterSubmessage},
-    },
+    dds::{adapters::no_key::DeserializerAdapter, participant::DomainParticipant},
+    discovery::sedp_messages::TopicBuiltinTopicData,
+    messages::submessages::submessages::{InterpreterSubmessage, WriterSubmessage},
     network::{udp_listener::UDPListener, udp_sender::UDPSender},
     serialization::{cdr_deserializer::CDRDeserializerAdapter, submessage::*},
     structure::{entity::RTPSEntity, locator::Locator},
@@ -1426,6 +1416,7 @@ mod tests {
         spdp_subscription_msg,
       },
     },
+    RepresentationIdentifier,
   };
 
   #[test]
@@ -1467,7 +1458,7 @@ mod tests {
 
   #[test]
   fn discovery_reader_data_test() {
-    use crate::serialization::pl_cdr_serializer::PlCdrSerialize;
+    use crate::serialization::pl_cdr_adapters::PlCdrSerialize;
 
     let participant = DomainParticipant::new(0).expect("participant creation");
 

@@ -6,7 +6,7 @@ use log::{debug, error, trace, warn};
 
 use crate::{
   dds::{participant::DomainParticipant, qos::QosPolicies},
-  discovery::data_types::topic_data::DiscoveredReaderData,
+  discovery::sedp_messages::DiscoveredReaderData,
   messages::submessages::submessage::AckSubmessage,
   network::constant::*,
   structure::{

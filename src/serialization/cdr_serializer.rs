@@ -5,16 +5,16 @@ use bytes::Bytes;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
 
 use crate::{
-  dds::traits::{
+  dds::{
+    adapters::{no_key, with_key},
     key::Keyed,
-    serde_adapters::{no_key, with_key},
   },
-  messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
   serialization::error::{Error, Result},
+  RepresentationIdentifier,
 };
 
-/// Note: In CDR encoding, alignment padding bytes are inserted *before* a multibyte primitive, 
-/// but not after.
+/// Note: In CDR encoding, alignment padding bytes are inserted *before* a
+/// multibyte primitive, but not after.
 ///
 ///  e.g. `struct Example {
 ///   a: u8,
@@ -23,27 +23,28 @@ use crate::{
 /// }`
 ///
 /// Would be serialized as
-/// ```
+/// `
 /// |aa|PP|PP|PP|
 /// |bb|bb|bb|bb|
 /// |cc|cc|
-/// ```
+/// `
 /// which is 10 bytes. `PP` means a byte of padding data.
 ///
-/// Tuple (Example,Example) would be serialized as
-/// ```
+/// Tuple type  `(Example,Example)` would be serialized as
+/// `
 /// |aa|PP|PP|PP|
 /// |bb|bb|bb|bb|
 /// |cc|cc|aa|PP|
 /// |bb|bb|bb|bb|
 /// |cc|cc|
-/// ```
+/// `
 /// Note that this is only 18 bytes, not 20, and the layout of the second
 /// struct is different due to different padding.
 
-// CountingWrite is a wrapper for a Write object. The wrapper keeps count of bytes
-// written. CDR needs to count bytes, because multibyte primitive types '
-// (such as integers and floats) must be aligned to their size, i.e. 2, 4, or 8 bytes.
+// CountingWrite is a wrapper for a Write object. The wrapper keeps count of
+// bytes written. CDR needs to count bytes, because multibyte primitive types '
+// (such as integers and floats) must be aligned to their size, i.e. 2, 4, or 8
+// bytes.
 struct CountingWrite<W: io::Write> {
   writer: W,
   bytes_written: usize,
@@ -170,7 +171,6 @@ where
     Ok(())
   }
 } // impl
-
 
 pub fn to_writer<T, BO, W>(writer: W, value: &T) -> Result<()>
 where

@@ -16,17 +16,24 @@ use mio_extras::{
   timer::Timer,
 };
 use mio_06::Token;
-use policy::{History, Reliability};
 
 use crate::{
   dds::{
     ddsdata::DDSData,
-    dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
-    qos::HasQoSPolicy,
+    qos::{
+      policy,
+      policy::{History, Reliability},
+      HasQoSPolicy, QosPolicies,
+    },
+    statusevents::{CountWithChange, DataWriterStatus, StatusChannelSender},
     with_key::datawriter::WriteOptions,
   },
   messages::submessages::submessages::AckSubmessage,
   network::udp_sender::UDPSender,
+  rtps::{
+    dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
+    rtps_reader_proxy::RtpsReaderProxy,
+  },
   serialization::{Message, MessageBuilder},
   structure::{
     cache_change::CacheChange,
@@ -38,11 +45,6 @@ use crate::{
     sequence_number::{FragmentNumber, SequenceNumber},
     time::Timestamp,
   },
-};
-use super::{
-  qos::{policy, QosPolicies},
-  rtps_reader_proxy::RtpsReaderProxy,
-  statusevents::{CountWithChange, DataWriterStatus, StatusChannelSender},
 };
 
 #[derive(PartialEq, Eq, Clone, Copy)]

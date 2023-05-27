@@ -3,8 +3,9 @@ pub(crate) mod speedy_pl_cdr_helpers;
 pub(crate) mod cdr_deserializer;
 pub(crate) mod cdr_serializer;
 pub mod error;
-pub(crate) mod pl_cdr_deserializer;
-pub(crate) mod pl_cdr_serializer;
+pub mod representation_identifier;
+
+pub(crate) mod pl_cdr_adapters;
 
 pub(crate) mod message;
 pub(crate) mod submessage;
@@ -16,5 +17,6 @@ pub(crate) use submessage::*;
 pub use cdr_serializer::{to_writer_endian, CDRSerializerAdapter, CdrSerializer};
 pub use cdr_deserializer::{deserialize_from_cdr, CDRDeserializerAdapter, CdrDeserializer};
 pub use byteorder::{BigEndian, LittleEndian};
+pub use error::{Error, Result};
 
-pub use crate::dds::traits::serde_adapters::{no_key, with_key};
+pub use crate::dds::adapters::{no_key, with_key};

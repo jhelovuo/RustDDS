@@ -10,29 +10,18 @@ use bytes::Bytes;
 use cdr_encoding_size::CdrEncodingSize;
 
 use crate::{
-  dds::{
-    participant::DomainParticipant,
-    qos,
-    qos::QosPolicies,
-    rtps_reader_proxy::RtpsReaderProxy,
-    rtps_writer_proxy::RtpsWriterProxy,
-    traits::key::{Key, Keyed},
-  },
+  dds::{participant::DomainParticipant, qos, qos::QosPolicies},
   messages::{
     protocol_version::ProtocolVersion,
-    submessages::submessage_elements::{
-      parameter::Parameter, parameter_list::ParameterList,
-      serialized_payload::RepresentationIdentifier,
-    },
+    submessages::submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
     vendor_id::VendorId,
   },
   network::constant::*,
+  rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
   security::{
     access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
   },
-  serialization::{
-    error::Result, pl_cdr_deserializer::*, pl_cdr_serializer::*, speedy_pl_cdr_helpers::*,
-  },
+  serialization::{error::Result, pl_cdr_adapters::*, speedy_pl_cdr_helpers::*},
   structure::{
     builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
     duration::Duration,
@@ -42,6 +31,7 @@ use crate::{
     locator::Locator,
     parameter_id::ParameterId,
   },
+  Key, Keyed, RepresentationIdentifier,
 };
 
 // This type is used by Discovery to communicate the presence and properties
@@ -510,16 +500,11 @@ impl PlCdrSerialize for Participant_GUID {
 mod tests {
   use super::*;
   use crate::{
-    dds::traits::serde_adapters::no_key::DeserializerAdapter,
-    messages::submessages::{
-      submessage_elements::serialized_payload::RepresentationIdentifier,
-      submessages::WriterSubmessage,
-    },
-    serialization::{
-      message::Message, pl_cdr_deserializer::PlCdrDeserializerAdapter,
-      pl_cdr_serializer::PlCdrSerialize, submessage::*,
-    },
+    dds::adapters::no_key::DeserializerAdapter,
+    messages::submessages::submessages::WriterSubmessage,
+    serialization::{message::Message, submessage::*},
     test::test_data::*,
+    RepresentationIdentifier,
   };
 
   #[test]

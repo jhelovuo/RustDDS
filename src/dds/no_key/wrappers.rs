@@ -3,9 +3,8 @@ use std::{marker::PhantomData, ops::Deref};
 use bytes::Bytes;
 
 use crate::{
-  dds::traits::{key::Keyed, serde_adapters::*},
-  messages::submessages::submessages::RepresentationIdentifier,
-  serialization::error::Result,
+  dds::adapters::*, messages::submessages::submessages::RepresentationIdentifier,
+  serialization::error::Result, Keyed,
 };
 
 // This wrapper is used to convert NO_KEY types to WITH_KEY

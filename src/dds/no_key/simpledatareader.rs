@@ -8,11 +8,12 @@ use mio_08;
 
 use crate::{
   dds::{
-    no_key::datasample::DeserializedCacheChange, qos::*, statusevents::*,
-    traits::serde_adapters::no_key::*, values::result::*, with_key,
+    adapters::no_key::*, no_key::datasample::DeserializedCacheChange, qos::*, statusevents::*,
+    with_key, Result,
   },
   serialization::CDRDeserializerAdapter,
-  structure::{entity::RTPSEntity, guid::GUID},
+  structure::entity::RTPSEntity,
+  GUID,
 };
 use super::wrappers::{DAWrapper, NoKeyWrapper};
 

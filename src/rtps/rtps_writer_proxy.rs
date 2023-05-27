@@ -6,9 +6,10 @@ use enumflags2::BitFlags;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::{ddsdata::DDSData, fragment_assembler::FragmentAssembler},
-  discovery::data_types::topic_data::DiscoveredWriterData,
+  dds::ddsdata::DDSData,
+  discovery::sedp_messages::DiscoveredWriterData,
   messages::submessages::submessages::{DATAFRAG_Flags, DataFrag},
+  rtps::fragment_assembler::FragmentAssembler,
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,

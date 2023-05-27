@@ -6,9 +6,13 @@ use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{
-    participant::DomainParticipant, qos::HasQoSPolicy, reader::ReaderIngredients,
-    rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy, topic::Topic,
-    traits::TopicDescription,
+    participant::DomainParticipant,
+    qos::HasQoSPolicy,
+    topic::{Topic, TopicDescription},
+  },
+  rtps::{
+    reader::ReaderIngredients, rtps_reader_proxy::RtpsReaderProxy,
+    rtps_writer_proxy::RtpsWriterProxy,
   },
   structure::{
     duration::Duration,
@@ -16,12 +20,12 @@ use crate::{
     guid::{EntityId, GuidPrefix, GUID},
   },
 };
-use super::data_types::{
-  spdp_participant_data::SpdpDiscoveredParticipantData,
-  topic_data::{
+use super::{
+  sedp_messages::{
     DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
     ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
   },
+  spdp_participant_data::SpdpDiscoveredParticipantData,
 };
 
 // If remote participant does not specifiy lease duration, how long silence

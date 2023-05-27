@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::dds::traits::key::Keyed;
+use crate::Keyed;
 
 #[derive(Serialize, Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ShapeType {

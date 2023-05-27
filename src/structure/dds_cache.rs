@@ -10,7 +10,6 @@ use log::{debug, error, info, trace};
 
 use crate::{
   dds::{
-    data_types::GUID,
     qos::{
       policy::{History, ResourceLimits},
       QosPolicies,
@@ -18,6 +17,7 @@ use crate::{
     typedesc::TypeDesc,
   },
   structure::{sequence_number::SequenceNumber, time::Timestamp},
+  GUID,
 };
 use super::cache_change::CacheChange;
 

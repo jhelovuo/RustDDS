@@ -1,4 +1,3 @@
-//use crate::structure::guid::{GUID, /*EntityId, GuidPrefix*/ };
 use std::{collections::BTreeMap, convert::TryInto, fmt, iter};
 
 use bit_vec::BitVec;

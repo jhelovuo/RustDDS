@@ -3,14 +3,11 @@
 //! # Examples
 //!
 //! ```
-//! use rustdds::dds::DomainParticipant;
-//! use rustdds::dds::data_types::TopicKind;
-//! use rustdds::dds::traits::RTPSEntity;
+//! use rustdds::*;
 //! use rustdds::ros2::RosParticipant;
 //! use rustdds::ros2::NodeOptions;
 //! use rustdds::ros2::RosNode;
 //! use rustdds::ros2::builtin_datatypes::NodeInfo;
-//! use rustdds::dds::qos::QosPolicies;
 //! use rustdds::serialization::CDRSerializerAdapter;
 //!
 //!

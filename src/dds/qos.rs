@@ -5,7 +5,7 @@ use speedy::{Endianness, Readable, Writable};
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::{traits::key::KeyHash, values::result::Result},
+  dds::{key::KeyHash, result::Result},
   messages::submessages::submessage_elements::{
     parameter::Parameter, parameter_list::ParameterList, RepresentationIdentifier,
   },

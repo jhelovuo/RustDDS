@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use cdr_encoding_size::CdrEncodingSize;
 
 use crate::{
-  dds::traits::key::Key,
+  dds::key::Key,
   structure::{guid::GUID, time::Timestamp},
 };
 

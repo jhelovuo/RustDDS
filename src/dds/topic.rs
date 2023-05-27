@@ -1,9 +1,9 @@
 use std::{fmt::Debug, sync::Arc};
 
 use crate::dds::{
+  dds_entity::DDSEntity,
   participant::{DomainParticipant, DomainParticipantWeak},
   qos::{HasQoSPolicy, QosPolicies},
-  traits::dds_entity::DDSEntity,
   typedesc::TypeDesc,
 };
 pub use crate::structure::topic_kind::TopicKind;
@@ -32,10 +32,7 @@ pub trait TopicDescription {
 /// # Examples
 ///
 /// ```
-/// use rustdds::dds::DomainParticipant;
-/// use rustdds::dds::qos::QosPolicyBuilder;
-/// use rustdds::dds::Topic;
-/// use rustdds::dds::data_types::TopicKind;
+/// use rustdds::*;
 ///
 /// let domain_participant = DomainParticipant::new(0).unwrap();
 /// let qos = QosPolicyBuilder::new().build();
@@ -89,10 +86,7 @@ impl Topic {
   /// # Examples
   ///
   /// ```
-  /// # use rustdds::dds::DomainParticipant;
-  /// # use rustdds::dds::qos::QosPolicyBuilder;
-  /// # use rustdds::dds::Topic;
-  /// use rustdds::dds::data_types::TopicKind;
+  /// # use rustdds::*;
   ///
   /// # let domain_participant = DomainParticipant::new(0).unwrap();
   /// # let qos = QosPolicyBuilder::new().build();
@@ -243,12 +237,6 @@ impl TopicDescription for InnerTopic {
 }
 
 impl HasQoSPolicy for InnerTopic {
-  // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
-  //   // TODO: check liveliness of qos_polic
-  //   self.my_qos_policies = policy.clone();
-  //   Ok(())
-  // }
-
   fn qos(&self) -> QosPolicies {
     self.my_qos_policies.clone()
   }

@@ -1,5 +1,5 @@
 use rustdds::{
-  dds::data_types::DiscoveredTopicData,
+  discovery::DiscoveredTopicData,
   ros2::builtin_datatypes::{NodeInfo, ROSParticipantInfo},
 };
 

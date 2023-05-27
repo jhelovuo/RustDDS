@@ -10,12 +10,9 @@ use serde::de::{
 use paste::paste;
 
 use crate::{
-  dds::traits::{
-    key::Keyed,
-    serde_adapters::{no_key, with_key},
-  },
-  messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
+  dds::adapters::{no_key, with_key},
   serialization::error::{Error, Result},
+  Keyed, RepresentationIdentifier,
 };
 
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
@@ -27,7 +24,6 @@ use crate::{
 /// and the adapter needs to be bi-endian.
 pub struct CDRDeserializerAdapter<D> {
   phantom: PhantomData<D>,
-  // no-one home
 }
 
 const REPR_IDS: [RepresentationIdentifier; 3] = [
@@ -591,12 +587,12 @@ mod tests {
   use serde_repr::{Deserialize_repr, Serialize_repr};
 
   use crate::{
-    messages::submessages::submessage_elements::serialized_payload::RepresentationIdentifier,
     serialization::{
       cdr_deserializer::{deserialize_from_big_endian, deserialize_from_little_endian},
       cdr_serializer::to_bytes,
       deserialize_from_cdr,
     },
+    RepresentationIdentifier,
   };
 
   #[test]

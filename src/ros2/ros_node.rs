@@ -9,21 +9,17 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
   dds::{
-    data_types::DiscoveredTopicData,
-    no_key::{
-      datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
-    },
+    adapters::{no_key, with_key},
+    key::{Key, Keyed},
     pubsub::{Publisher, Subscriber},
     qos::QosPolicies,
+    result::Error,
     topic::{Topic, TopicKind},
-    traits::{
-      key::{Key, Keyed},
-      serde_adapters::{no_key, with_key},
-    },
-    values::result::Error,
-    DomainParticipant,
   },
+  discovery::sedp_messages::DiscoveredTopicData,
+  no_key::{datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter},
   structure::{entity::RTPSEntity, guid::GUID},
+  DomainParticipant,
 };
 use super::{
   builtin_datatypes::{Gid, Log, NodeInfo, ParameterEvents, ROSParticipantInfo},

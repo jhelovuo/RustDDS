@@ -7,7 +7,7 @@ use enumflags2::BitFlags;
 use bytes::Bytes;
 
 use crate::{
-  dds::{ddsdata::DDSData, writer::Writer as RtpsWriter},
+  dds::ddsdata::DDSData,
   messages::{
     header::Header,
     protocol_id::ProtocolId,
@@ -19,14 +19,12 @@ use crate::{
       secure_rtps_postfix::SecureRTPSPostfix,
       secure_rtps_prefix::SecureRTPSPrefix,
       submessage::WriterSubmessage,
-      submessage_elements::{
-        parameter::Parameter, parameter_list::ParameterList,
-        serialized_payload::RepresentationIdentifier,
-      },
+      submessage_elements::{parameter::Parameter, parameter_list::ParameterList},
       submessages::{SubmessageKind, *},
     },
     vendor_id::VendorId,
   },
+  rtps::writer::Writer as RtpsWriter,
   serialization::submessage::{Submessage, SubmessageBody},
   structure::{
     cache_change::CacheChange,
@@ -36,6 +34,7 @@ use crate::{
     sequence_number::{FragmentNumber, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
+  RepresentationIdentifier,
 };
 
 #[derive(Debug, Clone)]

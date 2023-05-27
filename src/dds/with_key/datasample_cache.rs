@@ -8,10 +8,10 @@ use log::{debug, error, info, warn};
 
 use crate::{
   dds::{
+    key::{Key, Keyed},
     qos::{policy, QosPolicies},
     readcondition::ReadCondition,
     sampleinfo::*,
-    traits::key::{Key, Keyed},
     with_key::datasample::{DataSample, DeserializedCacheChange, Sample},
   },
   structure::{guid::GUID, sequence_number::SequenceNumber, time::Timestamp},
