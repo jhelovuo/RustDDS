@@ -188,7 +188,7 @@ impl Publisher {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataWriter<D, SA>>
   where
-    D: Keyed ,
+    D: Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::SerializerAdapter<D>,
   {
@@ -1063,7 +1063,7 @@ impl InnerSubscriber {
     qos: Option<QosPolicies>,
   ) -> Result<WithKeyDataReader<D, SA>>
   where
-    D:  Keyed,
+    D: Keyed,
     <D as Keyed>::K: Key,
     SA: serde_adapters::with_key::DeserializerAdapter<D>,
   {

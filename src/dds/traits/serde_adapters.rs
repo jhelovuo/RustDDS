@@ -16,8 +16,7 @@ pub mod no_key {
 
   /// trait for connecting Serde Deserializer implementation and DataReader
   /// together - no_key version.
-  pub trait DeserializerAdapter<D>
-  {
+  pub trait DeserializerAdapter<D> {
     /// Which data representations can the DeserializerAdapter read?
     /// See RTPS specification Section 10 and Table 10.3
     fn supported_encodings() -> &'static [RepresentationIdentifier];
@@ -39,8 +38,7 @@ pub mod no_key {
 
   /// trait for connecting Serde Serializer implementation and DataWriter
   /// together - no_key version.
-  pub trait SerializerAdapter<D>
-  {
+  pub trait SerializerAdapter<D> {
     // what encoding do we produce?
     fn output_encoding() -> RepresentationIdentifier;
 
@@ -62,7 +60,7 @@ pub mod with_key {
   /// together - with_key version.
   pub trait DeserializerAdapter<D>: no_key::DeserializerAdapter<D>
   where
-    D: Keyed
+    D: Keyed,
   {
     fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K>;
   }
@@ -71,7 +69,7 @@ pub mod with_key {
   /// together - with_key version.
   pub trait SerializerAdapter<D>: no_key::SerializerAdapter<D>
   where
-    D: Keyed 
+    D: Keyed,
   {
     fn key_to_bytes(value: &D::K) -> Result<Bytes>;
   }

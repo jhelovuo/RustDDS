@@ -4,7 +4,6 @@ use std::{
   task::{Context, Poll},
 };
 
-
 use mio_06::{self, Evented};
 use futures::stream::{FusedStream, Stream};
 
@@ -587,7 +586,7 @@ pub struct DataReaderStream<
 
 impl<D, DA> DataReaderStream<D, DA>
 where
-  D:'static,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   pub fn async_event_stream(&self) -> DataReaderEventStream<D, DA> {
@@ -600,7 +599,7 @@ where
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
 impl<D, DA> Unpin for DataReaderStream<D, DA>
 where
-  D:'static,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
 }
@@ -626,7 +625,7 @@ where
 
 impl<D, DA> FusedStream for DataReaderStream<D, DA>
 where
-  D:  'static,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
@@ -639,7 +638,7 @@ where
 
 /// Wraps [`with_key::DataReaderEventStream`](crate::with_key::DataReaderEventStream).
 pub struct DataReaderEventStream<
-  D:  'static,
+  D: 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
   keyed_stream: WithKeyDataReaderEventStream<NoKeyWrapper<D>, DAWrapper<DA>>,
@@ -647,7 +646,7 @@ pub struct DataReaderEventStream<
 
 impl<D, DA> Stream for DataReaderEventStream<D, DA>
 where
-  D:  'static,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
@@ -659,7 +658,7 @@ where
 
 impl<D, DA> FusedStream for DataReaderEventStream<D, DA>
 where
-  D:  'static,
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {

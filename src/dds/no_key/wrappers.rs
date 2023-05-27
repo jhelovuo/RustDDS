@@ -36,7 +36,6 @@ impl<D> Keyed for NoKeyWrapper<D> {
   fn key(&self) {}
 }
 
-
 // wrapper for SerializerAdapter
 // * inside is NO_KEY
 // * outside of wrapper is WITH_KEY

@@ -88,10 +88,8 @@ impl<K: Key> ReadState<K> {
 
 /// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
-pub struct SimpleDataReader<
-  D: Keyed,
-  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> where
+pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>>
+where
   <D as Keyed>::K: Key,
 {
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
@@ -425,7 +423,7 @@ where
 
 impl<D, DA> mio_08::event::Source for SimpleDataReader<D, DA>
 where
-  D: Keyed ,
+  D: Keyed,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -454,7 +452,7 @@ where
 
 impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
 where
-  D: Keyed ,
+  D: Keyed,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -511,7 +509,7 @@ where
 
 impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
-  D: Keyed  + 'static,
+  D: Keyed + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
@@ -570,7 +568,7 @@ where
 
 pub struct SimpleDataReaderEventStream<
   'a,
-  D: Keyed  + 'static,
+  D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > where
   <D as Keyed>::K: Key,
@@ -580,7 +578,7 @@ pub struct SimpleDataReaderEventStream<
 
 impl<'a, D, DA> Stream for SimpleDataReaderEventStream<'a, D, DA>
 where
-  D: Keyed +  'static,
+  D: Keyed + 'static,
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {

@@ -12,7 +12,6 @@ use std::{
 use futures::{Future, Stream};
 use mio_06::{self, Evented, Events, PollOpt, Ready, Token};
 use mio_extras::channel::{self as mio_channel, SendError, TrySendError};
-
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
@@ -150,7 +149,7 @@ pub type DataWriterCdr<D> = DataWriter<D, CDRSerializerAdapter<D>>;
 /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
 /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None);
 /// ```
-pub struct DataWriter<D: Keyed , SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
+pub struct DataWriter<D: Keyed, SA: SerializerAdapter<D> = CDRSerializerAdapter<D>> {
   data_phantom: PhantomData<D>,
   ser_phantom: PhantomData<SA>,
   my_publisher: Publisher,
@@ -166,7 +165,7 @@ pub struct DataWriter<D: Keyed , SA: SerializerAdapter<D> = CDRSerializerAdapter
 
 impl<D, SA> Drop for DataWriter<D, SA>
 where
-  D: Keyed ,
+  D: Keyed,
   SA: SerializerAdapter<D>,
 {
   fn drop(&mut self) {
@@ -195,7 +194,7 @@ where
 
 impl<D, SA> DataWriter<D, SA>
 where
-  D: Keyed ,
+  D: Keyed,
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
@@ -949,7 +948,7 @@ where
 
 impl<D, SA> StatusEvented<DataWriterStatus> for DataWriter<D, SA>
 where
-  D: Keyed ,
+  D: Keyed,
   SA: SerializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -967,7 +966,7 @@ where
 
 impl<D, SA> RTPSEntity for DataWriter<D, SA>
 where
-  D: Keyed ,
+  D: Keyed,
   SA: SerializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
@@ -977,7 +976,7 @@ where
 
 impl<D, SA> HasQoSPolicy for DataWriter<D, SA>
 where
-  D: Keyed ,
+  D: Keyed,
   SA: SerializerAdapter<D>,
 {
   // fn set_qos(&mut self, policy: &QosPolicies) -> Result<()> {
@@ -993,7 +992,7 @@ where
 
 impl<D, SA> DDSEntity for DataWriter<D, SA>
 where
-  D: Keyed ,
+  D: Keyed,
   SA: SerializerAdapter<D>,
 {
 }
@@ -1005,8 +1004,8 @@ where
 // A future for an asynchronous write operation
 pub struct AsyncWrite<'a, D, SA>
 where
-  D: Keyed ,
-  <D as key::Keyed>::K: Key ,
+  D: Keyed,
+  <D as key::Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   writer: &'a DataWriter<D, SA>,
@@ -1018,8 +1017,8 @@ where
 
 impl<'a, D, SA> Future for AsyncWrite<'a, D, SA>
 where
-  D: Keyed ,
-  <D as key::Keyed>::K: Key ,
+  D: Keyed,
+  <D as key::Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   type Output = Result<SampleIdentity>;
@@ -1077,7 +1076,7 @@ where
 // the waiting for the acknowledgements.
 pub enum AsyncWaitForAcknowledgments<'a, D, SA>
 where
-  D: Keyed ,
+  D: Keyed,
   SA: SerializerAdapter<D>,
 {
   Waiting {
@@ -1094,8 +1093,8 @@ where
 
 impl<'a, D, SA> Future for AsyncWaitForAcknowledgments<'a, D, SA>
 where
-  D: Keyed ,
-  <D as key::Keyed>::K: Key ,
+  D: Keyed,
+  <D as key::Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   type Output = Result<bool>;
@@ -1177,7 +1176,7 @@ where
 
 impl<D, SA> DataWriter<D, SA>
 where
-  D: Keyed ,
+  D: Keyed,
   <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {

@@ -1,7 +1,6 @@
 use std::{io, task::Waker};
 
-use futures::stream::{Stream, StreamExt, FusedStream};
-
+use futures::stream::{FusedStream, Stream, StreamExt};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
@@ -9,12 +8,8 @@ use mio_08;
 
 use crate::{
   dds::{
-    no_key::datasample::DeserializedCacheChange,
-    qos::*,
-    statusevents::*,
-    traits::{serde_adapters::no_key::*},
-    values::result::*,
-    with_key,
+    no_key::datasample::DeserializedCacheChange, qos::*, statusevents::*,
+    traits::serde_adapters::no_key::*, values::result::*, with_key,
   },
   serialization::CDRDeserializerAdapter,
   structure::{entity::RTPSEntity, guid::GUID},
@@ -23,10 +18,7 @@ use super::wrappers::{DAWrapper, NoKeyWrapper};
 
 /// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
-pub struct SimpleDataReader<
-  D,
-  DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>,
-> {
+pub struct SimpleDataReader<D, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
   keyed_simpledatareader: with_key::SimpleDataReader<NoKeyWrapper<D>, DAWrapper<DA>>,
 }
 
@@ -75,7 +67,9 @@ where
     self.keyed_simpledatareader.guid()
   }
 
-  pub fn as_async_stream(&self) -> impl Stream<Item = Result<DeserializedCacheChange<D>>> + FusedStream + '_ {
+  pub fn as_async_stream(
+    &self,
+  ) -> impl Stream<Item = Result<DeserializedCacheChange<D>>> + FusedStream + '_ {
     self
       .keyed_simpledatareader
       .as_async_stream()
