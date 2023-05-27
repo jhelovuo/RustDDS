@@ -1,8 +1,5 @@
 use std::marker::PhantomData;
 
-use serde::de::DeserializeOwned;
-
-//use byteorder::{ByteOrder, LittleEndian, BigEndian};
 use crate::{
   dds::traits::{
     serde_adapters::{no_key, with_key},
@@ -31,7 +28,7 @@ const REPR_IDS: [RepresentationIdentifier; 2] = [
 
 impl<D> no_key::DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>
 where
-  D: DeserializeOwned + PlCdrDeserialize,
+  D: PlCdrDeserialize,
 {
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
@@ -52,8 +49,8 @@ where
 
 impl<D> with_key::DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>
 where
-  D: Keyed + DeserializeOwned + PlCdrDeserialize,
-  <D as Keyed>::K: DeserializeOwned + PlCdrDeserialize,
+  D: Keyed + PlCdrDeserialize,
+  <D as Keyed>::K: PlCdrDeserialize,
 {
   fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K> {
     match encoding {
