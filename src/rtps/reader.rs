@@ -27,7 +27,10 @@ use crate::{
     header::Header,
     protocol_id::ProtocolId,
     protocol_version::ProtocolVersion,
-    submessages::{elements::{parameter_list::ParameterList, inline_qos::InlineQos}, submessages::*},
+    submessages::{
+      elements::{inline_qos::InlineQos, parameter_list::ParameterList},
+      submessages::*,
+    },
     vendor_id::VendorId,
   },
   mio_source,

@@ -1,20 +1,15 @@
-use std::{collections::BTreeMap};
+use std::collections::BTreeMap;
 
 use speedy::{Readable, Writable};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::{result::Result},
-  messages::submessages::elements::{
-    parameter::Parameter,
-  },
+  dds::result::Result,
+  messages::submessages::elements::parameter::Parameter,
   serialization,
   serialization::speedy_pl_cdr_helpers::*,
-  structure::{
-    duration::Duration, endpoint::ReliabilityKind,
-    parameter_id::ParameterId,
-  },
+  structure::{duration::Duration, endpoint::ReliabilityKind, parameter_id::ParameterId},
 };
 
 // This is to be implemented by all DomanParticipant, Publisher, Subscriber,
@@ -936,4 +931,3 @@ pub mod policy {
     }
   }
 } // mod policy
-

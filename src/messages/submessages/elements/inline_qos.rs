@@ -1,29 +1,20 @@
-use std::{io};
+use std::io;
+
 use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
-
 #[cfg(test)]
 use byteorder::ByteOrder;
 use speedy::{Endianness, Readable};
-
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::{key::KeyHash},
-  messages::submessages::elements::{
-    parameter_list::ParameterList, RepresentationIdentifier,
-  },
-  structure::{
-    parameter_id::ParameterId, rpc::SampleIdentity, cache_change::ChangeKind,
-  },
-};
-use crate::{
-  dds::adapters::no_key::*, 
+  dds::{adapters::no_key::*, key::KeyHash},
+  messages::submessages::elements::{parameter_list::ParameterList, RepresentationIdentifier},
   serialization,
   serialization::CDRDeserializerAdapter,
+  structure::{cache_change::ChangeKind, parameter_id::ParameterId, rpc::SampleIdentity},
 };
-
 #[cfg(test)]
 use crate::serialization::cdr_serializer::to_bytes;
 
@@ -50,9 +41,7 @@ impl InlineQos {
     Ok(status_info)
   }
 
-  pub fn key_hash(
-    params: &ParameterList,
-  ) -> Result<Option<KeyHash>, serialization::Error> {
+  pub fn key_hash(params: &ParameterList) -> Result<Option<KeyHash>, serialization::Error> {
     let key_hash = params
       .parameters
       .iter()
@@ -89,8 +78,6 @@ impl InlineQos {
     })
   }
 }
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
@@ -158,9 +145,7 @@ impl StatusInfo {
   }
 
   #[cfg(test)]
-  pub fn into_cdr_bytes<BO: ByteOrder>(
-    self,
-  ) -> Result<Vec<u8>, serialization::Error> {
+  pub fn into_cdr_bytes<BO: ByteOrder>(self) -> Result<Vec<u8>, serialization::Error> {
     to_bytes::<Self, BO>(&self)
   }
 

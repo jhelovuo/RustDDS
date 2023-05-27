@@ -1026,8 +1026,8 @@ mod tests {
       vendor_id::VendorId,
     },
     network::{constant::user_traffic_unicast_port, udp_sender::UDPSender},
-    rtps::{ submessage::*, Message, Submessage},
-    serialization::{cdr_serializer::CDRSerializerAdapter,},
+    rtps::{submessage::*, Message, Submessage},
+    serialization::cdr_serializer::CDRSerializerAdapter,
     structure::{
       guid::{EntityId, GUID},
       locator::Locator,

@@ -43,8 +43,7 @@ mod tests {
   use speedy::{Readable, Writable};
 
   use super::Submessage;
-  use crate::{messages::submessages::submessages::*};
-  use crate::rtps::submessage::*;
+  use crate::{messages::submessages::submessages::*, rtps::submessage::*};
 
   #[test]
   fn submessage_data_submessage_deserialization() {
