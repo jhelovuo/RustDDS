@@ -5,7 +5,7 @@ use std::{convert::TryFrom, hash::Hash};
 use byteorder::BigEndian;
 use rand::Rng;
 use log::error;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 pub use cdr_encoding_size::*;
 
 use crate::serialization::{cdr_serializer::to_bytes, error::Error};
@@ -106,7 +106,7 @@ impl KeyHash {
 /// impl Key for MyKey {}
 /// ```
 pub trait Key:
-  Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + DeserializeOwned + CdrEncodingSize
+  Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Serialize + CdrEncodingSize
 {
   // no methods required
 

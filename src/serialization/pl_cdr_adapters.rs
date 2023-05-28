@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 
-use serde::Serialize;
 use bytes::Bytes;
 use byteorder::{ByteOrder, LittleEndian};
 
@@ -27,7 +26,7 @@ where
 
 impl<D, BO> no_key::SerializerAdapter<D> for PlCdrSerializerAdapter<D, BO>
 where
-  D: Serialize + PlCdrSerialize,
+  D: PlCdrSerialize,
   BO: ByteOrder,
 {
   fn output_encoding() -> RepresentationIdentifier {
@@ -43,8 +42,8 @@ where
 
 impl<D, BO> with_key::SerializerAdapter<D> for PlCdrSerializerAdapter<D, BO>
 where
-  D: Keyed + Serialize + PlCdrSerialize,
-  <D as Keyed>::K: Serialize + PlCdrSerialize,
+  D: Keyed + PlCdrSerialize,
+  <D as Keyed>::K: PlCdrSerialize,
   BO: ByteOrder,
 {
   fn key_to_bytes(value: &D::K) -> Result<Bytes> {

@@ -71,9 +71,7 @@ macro_rules! fake_implement_serialize_and_deserialize {
 // ParameterId is different.
 
 #[allow(non_camel_case_types)]
-#[derive(
-  PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Serialize, Deserialize, CdrEncodingSize, Hash,
-)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, CdrEncodingSize, Hash, Serialize)]
 pub struct Endpoint_GUID(pub GUID);
 
 impl Key for Endpoint_GUID {}
@@ -1173,13 +1171,13 @@ impl ParticipantMessageDataKind {
 // =======================================================================
 // =======================================================================
 
+// This will be sent using ordinary CDR, not PL_CDR, so derive Serialize &
+// Deserialize
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct ParticipantMessageData {
   pub guid: GuidPrefix,
   pub kind: ParticipantMessageDataKind,
-  // normally this should be empty
-  // pub length: u32, // encoding the length is implicit in the CDR encoding of Vec
-  pub data: Vec<u8>,
+  pub data: Vec<u8>, // normally this should be empty
 }
 
 impl Keyed for ParticipantMessageData {

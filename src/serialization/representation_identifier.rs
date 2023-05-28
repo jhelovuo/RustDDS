@@ -1,11 +1,10 @@
 use std::io;
 
 use speedy::{Readable, Writable};
-use serde::{Deserialize, Serialize};
 use byteorder::ReadBytesExt;
 
 /// Used to identify serialization format of payload data over RTPS.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
 pub struct RepresentationIdentifier {
   pub(crate) bytes: [u8; 2], // semi-public for serialization elsewhere
 }

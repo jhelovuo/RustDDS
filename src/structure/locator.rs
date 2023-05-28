@@ -5,7 +5,6 @@ use std::{
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use serde::{Deserialize, Serialize};
 
 mod kind {
   pub const INVALID: i32 = -1;
@@ -17,8 +16,7 @@ mod kind {
 const INVALID_PORT: u16 = 0;
 const INVALID_ADDRESS: [u8; 16] = [0; 16];
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[serde(into = "repr::Locator", from = "repr::Locator")]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Locator {
   Invalid,
   Reserved,
@@ -61,6 +59,8 @@ impl From<SocketAddr> for Locator {
     }
   }
 }
+
+// use repr::Locator to serialize
 
 impl<'a, C: Context> Readable<'a, C> for Locator {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
@@ -140,10 +140,10 @@ impl From<Locator> for repr::Locator {
 }
 
 pub(crate) mod repr {
-  use serde::{Deserialize, Serialize};
+
   use speedy::{Readable, Writable};
 
-  #[derive(Writable, Readable, Serialize, Deserialize)]
+  #[derive(Writable, Readable)]
   pub struct Locator {
     pub kind: i32,
     pub port: u32,

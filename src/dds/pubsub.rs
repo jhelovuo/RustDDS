@@ -4,6 +4,7 @@ use std::{
   time::Duration,
 };
 
+use serde::{Deserialize, Serialize};
 use mio_extras::channel as mio_channel;
 use byteorder::LittleEndian;
 #[allow(unused_imports)]
@@ -168,6 +169,7 @@ impl Publisher {
   where
     D: Keyed + serde::Serialize,
     <D as Keyed>::K: Key,
+    <D as Keyed>::K: Serialize,
   {
     self.create_datawriter::<D, CDRSerializerAdapter<D, LittleEndian>>(topic, qos)
   }
@@ -199,6 +201,7 @@ impl Publisher {
   where
     D: Keyed + serde::Serialize,
     <D as Keyed>::K: Key,
+    <D as Keyed>::K: Serialize,
   {
     self.create_datawriter_with_entityid::<D, CDRSerializerAdapter<D, LittleEndian>>(
       entity_id, topic, qos,
@@ -712,6 +715,7 @@ impl Subscriber {
   where
     D: serde::de::DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
+    for<'de> <D as Keyed>::K: Deserialize<'de>,
   {
     self.create_datareader::<D, CDRDeserializerAdapter<D>>(topic, qos)
   }
@@ -743,6 +747,7 @@ impl Subscriber {
   where
     D: serde::de::DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
+    for<'de> <D as Keyed>::K: Deserialize<'de>,
   {
     self.create_datareader_with_entityid::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
   }

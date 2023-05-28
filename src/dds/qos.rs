@@ -602,7 +602,6 @@ pub const LENGTH_UNLIMITED: i32 = -1;
 pub mod policy {
   use std::cmp::Ordering;
 
-  use serde::{Deserialize, Serialize};
   use speedy::{Context, IsEof, Readable, Reader, Writable, Writer};
   #[allow(unused_imports)]
   use log::{debug, error, info, trace, warn};
@@ -628,26 +627,13 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.16 LIFESPAN
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
   pub struct Lifespan {
     pub duration: Duration,
   }
 
   /// DDS 2.2.3.4 DURABILITY
-  #[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    Readable,
-    Writable,
-  )]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Readable, Writable)]
   pub enum Durability {
     Volatile,
     TransientLocal,
@@ -656,7 +642,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.6 PRESENTATION
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
   pub struct Presentation {
     pub access_scope: PresentationAccessScope,
     pub coherent_access: bool,
@@ -664,20 +650,7 @@ pub mod policy {
   }
 
   /// Access scope that is part of DDS 2.2.3.6 PRESENTATION
-  #[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    Readable,
-    Writable,
-  )]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Readable, Writable)]
   pub enum PresentationAccessScope {
     Instance,
     Topic,
@@ -685,37 +658,24 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.7 DEADLINE
-  #[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Ord,
-    PartialOrd,
-    Hash,
-    Serialize,
-    Deserialize,
-    Readable,
-    Writable,
-  )]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Readable, Writable)]
   pub struct Deadline(pub Duration);
 
   /// DDS 2.2.3.8 LATENCY_BUDGET
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
   pub struct LatencyBudget {
     pub duration: Duration,
   }
 
   /// DDS 2.2.3.9 OWNERSHIP
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
   pub enum Ownership {
     Shared,
     Exclusive { strength: i32 }, // This also implements OwnershipStrength
   }
 
   /// DDS 2.2.3.11 LIVELINESS
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
   pub enum Liveliness {
     Automatic { lease_duration: Duration },
     ManualByParticipant { lease_duration: Duration },
@@ -758,7 +718,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.12 TIME_BASED_FILTER
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
   pub struct TimeBasedFilter {
     pub minimum_separation: Duration,
   }
@@ -770,7 +730,7 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.14 RELIABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
@@ -800,27 +760,14 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.17 DESTINATION_ORDER
-  #[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Ord,
-    PartialOrd,
-    Hash,
-    Serialize,
-    Deserialize,
-    Readable,
-    Writable,
-  )]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Readable, Writable)]
   pub enum DestinationOrder {
     ByReceptionTimestamp,
     BySourceTimeStamp,
   }
 
   /// DDS 2.2.3.18 HISTORY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
   pub enum History {
     // Variants must be in this order ot derive Ord correctly.
     KeepLast { depth: i32 },
@@ -838,7 +785,7 @@ pub mod policy {
   ///
   /// Negative values are needed, because DDS spec defines the special value
   /// const long LENGTH_UNLIMITED = -1;
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Writable, Readable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Writable, Readable)]
   pub struct ResourceLimits {
     pub max_samples: i32,
     pub max_instances: i32,
