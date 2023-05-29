@@ -3,14 +3,14 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  messages::submessages::elements::{crypto_content::CryptoContent, crypto_header::CryptoHeader},
+  messages::submessages::elements::{
+    crypto_content::CryptoContent, crypto_header::CryptoHeader, crypto_footer::CryptoFooter,
+  },
   security::{BinaryProperty, DataHolder, SecurityError},
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
-use super::types::{
-  CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind,
-};
+use super::types::{CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind, CryptoHandle};
 
 const CRYPTO_TOKEN_CLASS_ID: &str = "DDS:Crypto:AES_GCM_GMAC";
 const CRYPTO_TOKEN_KEYMAT_NAME: &str = "dds.cryp.keymat";
@@ -129,6 +129,12 @@ impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC {
     )
   }
 }
+impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC{
+  type Error = SecurityError;
+  fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
+      <Bytes>::from(value).try_into()
+  }
+}
 impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
   type Error = SecurityError;
   fn try_from(
@@ -158,6 +164,12 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
       .map_err(|e| Self::Error {
         msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC: {}", e),
       })
+  }
+}
+impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoHandle{
+  type Error = SecurityError;
+  fn try_from(value: KeyMaterial_AES_GCM_GMAC) -> Result<Self, Self::Error> {
+      <Bytes>::try_from(value).map(<CryptoHandle>::from)
   }
 }
 
@@ -312,8 +324,6 @@ pub struct BuiltinCryptoFooter {
   pub common_mac: [u8; 16],
   pub receiver_specific_macs: Vec<ReceiverSpecificMAC>,
 }
-// Vec<u8> already has From<CryptoFooter> so BuiltinCryptoFooter gets
-// TryFrom<CryptoFooter> by transitivity
 impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
   type Error = SecurityError;
   fn try_from(data: Vec<u8>) -> Result<Self, Self::Error> {
@@ -330,8 +340,12 @@ impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
     )
   }
 }
-// CryptoFooter already has From<Vec<u8>> so it gets
-// TryFrom<BuiltinCryptoFooter> by transitivity
+impl TryFrom<CryptoFooter> for BuiltinCryptoFooter {
+  type Error = SecurityError;
+  fn try_from(value: CryptoFooter) -> Result<Self, Self::Error> {
+    <Vec<u8>>::from(value).try_into()
+  }
+}
 impl TryFrom<BuiltinCryptoFooter> for Vec<u8> {
   type Error = SecurityError;
   fn try_from(value: BuiltinCryptoFooter) -> Result<Self, Self::Error> {
@@ -339,6 +353,12 @@ impl TryFrom<BuiltinCryptoFooter> for Vec<u8> {
     to_bytes::<BuiltinCryptoFooter, BigEndian>(&value).map_err(|e| Self::Error {
       msg: format!("Error serializing BuiltinCryptoFooter: {}", e),
     })
+  }
+}
+impl TryFrom<BuiltinCryptoFooter> for CryptoFooter {
+  type Error = SecurityError;
+  fn try_from(value: BuiltinCryptoFooter) -> Result<Self, Self::Error> {
+    <Vec<u8>>::try_from(value).map(Self::from)
   }
 }
 
