@@ -1,5 +1,6 @@
-use std::convert::From;
+use std::{convert::From, sync::Arc};
 
+use bytes::Bytes;
 use speedy::{Readable, Writable};
 
 use crate::{rtps::Submessage, security::types::DataHolder};
@@ -17,17 +18,36 @@ pub type ParticipantCryptoToken = CryptoToken;
 pub type DatawriterCryptoToken = CryptoToken;
 pub type DatareaderCryptoToken = CryptoToken;
 
-/// TODO: ParticipantCryptoHandle: section 8.5.1.2 of the Security specification
-/// (v. 1.1)
-pub struct ParticipantCryptoHandle {}
+/// CryptoHandles are supposed to be opaque references to key material that can
+/// only be interpreted inside the plugin implementation (8.5.1.2–4).
+pub struct CryptoHandle {
+  pub reference: Arc<Bytes>,
+}
 
-/// TODO: DatawriterCryptoHandle: section 8.5.1.3 of the Security specification
-/// (v. 1.1)
-pub struct DatawriterCryptoHandle {}
+impl From<Bytes> for CryptoHandle {
+  fn from(value: Bytes) -> Self {
+    Self {
+      reference: Arc::new(value),
+    }
+  }
+}
+impl From<CryptoHandle> for Bytes {
+  fn from(value: CryptoHandle) -> Self {
+    (*value.reference).clone()
+  }
+}
 
-/// TODO: DatareaderCryptoHandle: section 8.5.1.4 of the Security specification
+/// ParticipantCryptoHandle: section 8.5.1.2 of the Security specification
 /// (v. 1.1)
-pub struct DatareaderCryptoHandle {}
+pub type ParticipantCryptoHandle = CryptoHandle;
+
+/// DatawriterCryptoHandle: section 8.5.1.3 of the Security specification
+/// (v. 1.1)
+pub type DatawriterCryptoHandle = CryptoHandle;
+
+/// DatareaderCryptoHandle: section 8.5.1.4 of the Security specification
+/// (v. 1.1)
+pub type DatareaderCryptoHandle = CryptoHandle;
 
 /// CryptoTransformIdentifier: section 8.5.1.5 of the Security specification (v.
 /// 1.1)
