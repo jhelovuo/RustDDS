@@ -4,13 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
   messages::submessages::elements::{
-    crypto_content::CryptoContent, crypto_header::CryptoHeader, crypto_footer::CryptoFooter,
+    crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
   },
   security::{BinaryProperty, DataHolder, SecurityError},
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
-use super::types::{CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind, CryptoHandle};
+use super::types::{
+  CryptoHandle, CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind,
+};
 
 const CRYPTO_TOKEN_CLASS_ID: &str = "DDS:Crypto:AES_GCM_GMAC";
 const CRYPTO_TOKEN_KEYMAT_NAME: &str = "dds.cryp.keymat";
@@ -129,10 +131,10 @@ impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC {
     )
   }
 }
-impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC{
+impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
   fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
-      <Bytes>::from(value).try_into()
+    <Bytes>::from(value).try_into()
   }
 }
 impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
@@ -166,10 +168,10 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
       })
   }
 }
-impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoHandle{
+impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoHandle {
   type Error = SecurityError;
   fn try_from(value: KeyMaterial_AES_GCM_GMAC) -> Result<Self, Self::Error> {
-      <Bytes>::try_from(value).map(<CryptoHandle>::from)
+    <Bytes>::try_from(value).map(<CryptoHandle>::from)
   }
 }
 
