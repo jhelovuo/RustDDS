@@ -877,4 +877,50 @@ pub mod policy {
       Ok(())
     }
   }
+
+  // DDS Security spec v1.1
+  // Section 7.2.5 PropertyQosPolicy, DomainParticipantQos, DataWriterQos, and
+  // DataReaderQos
+  //
+  // so this is DataTagQosPolicy, which is an alias for "DataTags"
+  // We call it qos::policy::DataTag
+  #[derive(Clone, Debug, PartialEq, Eq)]
+  pub struct DataTag { 
+    pub tags: Vec<security::types::Tag>,
+  }
+
+  impl<'a, C: Context> Readable<'a, C> for DataTag {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+      let count = reader.read_u32()?;
+      let mut tags = Vec::new();
+
+      let mut prev_len = 0;
+      for _ in 0..count {
+        read_pad(reader, prev_len, 4)?;
+        let s: security::types::Tag = reader.read_value()?;
+        prev_len = s.serialized_len();
+        tags.push(s);
+      }
+      Ok(DataTag { tags })
+    }
+  }
+
+  // Writing several strings is a bit complicated, because
+  // we have to keep track of alignment.
+  // Again, alignment comes BEFORE string length, or vector item count, not after
+  // string.
+  impl<C: Context> Writable<C> for DataTag {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+      writer.write_u32(self.tags.len() as u32)?;
+
+      let mut prev_len = 0;
+      for tag in &self.tags {
+        write_pad(writer, prev_len, 4)?;
+        writer.write_value(tag)?;
+        prev_len = tag.serialized_len();
+      }
+      Ok(())
+    }
+  }
+
 } // mod policy

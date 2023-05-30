@@ -38,6 +38,7 @@ use crate::{
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
   network::constant::*,
+  security::types::*,
   serialization::pl_cdr_adapters::{PlCdrDeserializerAdapter, PlCdrSerializerAdapter},
   structure::{
     duration::Duration,
@@ -77,6 +78,12 @@ impl LivelinessState {
     }
   }
 }
+
+// TODO: Refactor this. Maybe the repeating groups of "topic", "reader", "writer", "timer"
+// below could be abstracted to a common struct:
+
+pub type DataReaderPlCdr<D> = DataReader<D, PlCdrDeserializerAdapter<D>>;
+pub type DataWriterPlCdr<D> = DataWriter<D, PlCdrSerializerAdapter<D>>;
 
 pub(crate) struct Discovery {
   poll: Poll,
@@ -146,6 +153,56 @@ pub(crate) struct Discovery {
   dcps_participant_message_reader: DataReaderCdr<ParticipantMessageData>,
   dcps_participant_message_writer: DataWriterCdr<ParticipantMessageData>,
   dcps_participant_message_timer: Timer<()>,
+
+  // Following topics from DDS Security spec v1.1
+
+  // DCPSParticipantSecure - 7.4.1.6 New DCPSParticipantSecure Builtin Topic
+  #[allow(dead_code)] 
+  dcps_participant_secure_topic: Topic,
+  dcps_participant_secure_reader: DataReaderPlCdr<ParticipantBuiltinTopicDataSecure>,
+  dcps_participant_secure_writer: DataWriterPlCdr<ParticipantBuiltinTopicDataSecure>,
+  dcps_participant_secure_timer: Timer<()>,
+
+  // DCPSPublicationsSecure - 7.4.1.7 New DCPSPublicationsSecure Builtin Topic
+  #[allow(dead_code)] 
+  dcps_publications_secure_topic: Topic,
+  dcps_publications_secure_reader: DataReaderPlCdr<PublicationBuiltinTopicDataSecure>,
+  dcps_publications_secure_writer: DataWriterPlCdr<PublicationBuiltinTopicDataSecure>,
+  dcps_publications_secure_timer: Timer<()>,
+
+  // DCPSSubscriptionsSecure - 7.4.1.8 New DCPSSubscriptionsSecure Builtin Topic
+  #[allow(dead_code)] 
+  dcps_subscriptions_secure_topic: Topic,
+  dcps_subscriptions_secure_reader: DataReaderPlCdr<SubscriptionBuiltinTopicDataSecure>,
+  dcps_subscriptions_secure_writer: DataWriterPlCdr<SubscriptionBuiltinTopicDataSecure>,
+  dcps_subscriptions_secure_timer: Timer<()>,
+
+  // DCPSParticipantMessageSecure - used by participants to communicate secure liveness
+  // 7.4.2 New DCPSParticipantMessageSecure builtin Topic
+  #[allow(dead_code)] 
+  dcps_participant_message_secure_topic: Topic,
+  dcps_participant_message_secure_reader: DataReaderCdr<ParticipantMessageData>, // CDR, not PL_CDR
+  dcps_participant_message_secure_writer: DataWriterCdr<ParticipantMessageData>,
+  dcps_participant_message_secure_timer: Timer<()>,
+
+  // DCPSParticipantStatelessMessageSecure 
+  // 77.4.3 New DCPSParticipantStatelessMessage builtin Topic
+  // !!! TODO: By the spec, this topic must use _stateless_ reader and writer, which are
+  // insensitive to sequence number attacks.
+  #[allow(dead_code)] 
+  dcps_participant_stateless_message_topic: Topic,
+  dcps_participant_stateless_message_reader: DataReaderCdr<ParticipantStatelessMessage>, // CDR?
+  dcps_participant_stateless_message_writer: DataWriterCdr<ParticipantStatelessMessage>,
+  dcps_participant_stateless_message_timer: Timer<()>,
+
+  // DCPSParticipantVolatileMessageSecure 
+  // 7.4.4 New DCPSParticipantVolatileMessageSecure builtin Topic
+  #[allow(dead_code)] 
+  dcps_participant_volatile_message_secure_topic: Topic,
+  dcps_participant_volatile_message_secure_reader: DataReaderCdr<ParticipantVolatileMessageSecure>, // CDR?
+  dcps_participant_volatile_message_secure_writer: DataWriterCdr<ParticipantVolatileMessageSecure>,
+  dcps_participant_volatile_message_secure_timer: Timer<()>,
+
 }
 
 impl Discovery {
@@ -570,6 +627,38 @@ impl Discovery {
       dcps_participant_message_reader,
       dcps_participant_message_writer,
       dcps_participant_message_timer,
+
+      dcps_participant_secure_topic: todo!(),
+      dcps_participant_secure_reader: todo!(),
+      dcps_participant_secure_writer: todo!(),
+      dcps_participant_secure_timer: todo!(),
+
+      dcps_publications_secure_topic: todo!(),
+      dcps_publications_secure_reader: todo!(),
+      dcps_publications_secure_writer: todo!(),
+      dcps_publications_secure_timer: todo!(),
+
+      dcps_subscriptions_secure_topic: todo!(),
+      dcps_subscriptions_secure_reader: todo!(),
+      dcps_subscriptions_secure_writer: todo!(),
+      dcps_subscriptions_secure_timer: todo!(),
+
+      dcps_participant_message_secure_topic: todo!(),
+      dcps_participant_message_secure_reader: todo!(),
+      dcps_participant_message_secure_writer: todo!(),
+      dcps_participant_message_secure_timer: todo!(),
+
+      dcps_participant_stateless_message_topic: todo!(),
+      dcps_participant_stateless_message_reader: todo!(),
+      dcps_participant_stateless_message_writer: todo!(),
+      dcps_participant_stateless_message_timer: todo!(),
+
+      dcps_participant_volatile_message_secure_topic: todo!(),
+      dcps_participant_volatile_message_secure_reader: todo!(),
+      dcps_participant_volatile_message_secure_writer: todo!(),
+      dcps_participant_volatile_message_secure_timer: todo!(),
+
+
     })
   }
 
