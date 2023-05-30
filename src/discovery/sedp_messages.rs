@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize,};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
@@ -45,26 +45,6 @@ use crate::{
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
 
-macro_rules! fake_implement_serialize_and_deserialize {
-  ($t:ty) => {
-    impl Serialize for $t {
-      fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-      where
-        S: Serializer,
-      {
-        unimplemented!()
-      }
-    }
-    impl<'de> Deserialize<'de> for $t {
-      fn deserialize<D>(_deserializer: D) -> Result<$t, D::Error>
-      where
-        D: Deserializer<'de>,
-      {
-        unimplemented!()
-      }
-    }
-  };
-}
 
 // We need a wrapper to distinguish between Participant and Endpoint GUIDs.
 // They need to be distinguished, because the PL_CDR serialization is different:
@@ -304,7 +284,6 @@ pub struct DiscoveredReaderData {
   pub content_filter: Option<ContentFilterProperty>,
 }
 
-fake_implement_serialize_and_deserialize! {DiscoveredReaderData}
 
 impl DiscoveredReaderData {
   // This is for generating test data only
@@ -716,7 +695,6 @@ pub struct DiscoveredWriterData {
   pub publication_topic_data: PublicationBuiltinTopicData,
 }
 
-fake_implement_serialize_and_deserialize! {DiscoveredWriterData}
 
 impl Keyed for DiscoveredWriterData {
   type K = Endpoint_GUID;
@@ -1022,7 +1000,6 @@ pub struct DiscoveredTopicData {
   pub topic_data: TopicBuiltinTopicData,
 }
 
-fake_implement_serialize_and_deserialize! {DiscoveredTopicData}
 
 impl DiscoveredTopicData {
   pub fn new(updated_time: DateTime<Utc>, topic_data: TopicBuiltinTopicData) -> Self {
