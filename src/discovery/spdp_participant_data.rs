@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::Token;
@@ -182,26 +182,6 @@ impl SpdpDiscoveredParticipantData {
       property: None,
       security_info: None,
     }
-  }
-}
-
-// fake implemenatations. Real serialization is done using PlCdrSerialize
-impl Serialize for SpdpDiscoveredParticipantData {
-  fn serialize<S>(&self, _serializer: S) -> std::result::Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    unimplemented!()
-  }
-}
-impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantData {
-  fn deserialize<D>(
-    _deserializer: D,
-  ) -> std::result::Result<SpdpDiscoveredParticipantData, D::Error>
-  where
-    D: Deserializer<'de>,
-  {
-    unimplemented!()
   }
 }
 
