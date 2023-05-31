@@ -1,4 +1,4 @@
-use std::{convert::From, sync::Arc};
+use std::convert::From;
 
 use bytes::Bytes;
 use speedy::{Readable, Writable};
@@ -21,19 +21,17 @@ pub type DatareaderCryptoToken = CryptoToken;
 /// CryptoHandles are supposed to be opaque references to key material that can
 /// only be interpreted inside the plugin implementation (8.5.1.2–4).
 pub struct CryptoHandle {
-  pub reference: Arc<Bytes>,
+  pub key_material: Bytes,
 }
 
 impl From<Bytes> for CryptoHandle {
-  fn from(value: Bytes) -> Self {
-    Self {
-      reference: Arc::new(value),
-    }
+  fn from(key_material: Bytes) -> Self {
+    Self { key_material }
   }
 }
 impl From<CryptoHandle> for Bytes {
-  fn from(value: CryptoHandle) -> Self {
-    (*value.reference).clone()
+  fn from(CryptoHandle { key_material }: CryptoHandle) -> Self {
+    key_material
   }
 }
 

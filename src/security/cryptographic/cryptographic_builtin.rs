@@ -7,7 +7,7 @@ use crate::{
   security::{
     access_control::types::*,
     authentication::types::*,
-    cryptographic::{cryptographic_plugin::*, types::*},
+    cryptographic::{builtin_types::*, cryptographic_plugin::*, types::*},
     types::*,
   },
 };
@@ -16,6 +16,8 @@ use crate::{
 // See sections 8.5 and 9.5 of the Security specification (v. 1.1)
 pub struct CryptographicBuiltIn {}
 
+/// Builtin CryptoKeyFactory implementation from section 9.5.3.1 of the Security
+/// specification (v. 1.1)
 impl CryptoKeyFactory for CryptographicBuiltIn {
   fn register_local_participant(
     participant_identity: IdentityHandle,
@@ -23,7 +25,16 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     participant_properties: Vec<Property>,
     participant_security_attributes: ParticipantSecurityAttributes,
   ) -> SecurityResult<ParticipantCryptoHandle> {
-    todo!();
+    //TODO: this is only a mock implementation
+    KeyMaterial_AES_GCM_GMAC {
+      transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+      master_salt: Vec::new(),
+      sender_key_id: [0, 0, 0, 0],
+      master_sender_key: Vec::new(),
+      receiver_specific_key_id: [0, 0, 0, 0],
+      master_receiver_specific_key: Vec::new(),
+    }
+    .try_into()
   }
 
   fn register_matched_remote_participant(
@@ -32,7 +43,24 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     remote_participant_permissions: PermissionsHandle,
     shared_secret: SharedSecretHandle,
   ) -> SecurityResult<ParticipantCryptoHandle> {
-    todo!();
+    //TODO: this is only a mock implementation
+    let KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    }: KeyMaterial_AES_GCM_GMAC = local_participant_crypto_handle.try_into()?;
+    KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id: [0, 0, 0, 0],
+      master_receiver_specific_key: Vec::new(),
+    }
+    .try_into()
   }
 
   fn register_local_datawriter(
@@ -40,7 +68,16 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     datawriter_properties: Vec<Property>,
     datawriter_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<DatawriterCryptoHandle> {
-    todo!();
+    //TODO: this is only a mock implementation
+    KeyMaterial_AES_GCM_GMAC_seq(vec![KeyMaterial_AES_GCM_GMAC {
+      transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+      master_salt: Vec::new(),
+      sender_key_id: [0, 0, 0, 0],
+      master_sender_key: Vec::new(),
+      receiver_specific_key_id: [0, 0, 0, 0],
+      master_receiver_specific_key: Vec::new(),
+    }])
+    .try_into()
   }
 
   fn register_matched_remote_datareader(
@@ -49,7 +86,12 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     shared_secret: SharedSecretHandle,
     relay_only: bool,
   ) -> SecurityResult<DatareaderCryptoHandle> {
-    todo!();
+    //TODO: this is only a mock implementation
+    let writer_key_material_seq =
+      KeyMaterial_AES_GCM_GMAC_seq::try_from(local_datawriter_crypto_handle)?;
+    // ??? append something ???
+
+    writer_key_material_seq.try_into()
   }
 
   fn register_local_datareader(
@@ -57,29 +99,58 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     datareader_properties: Vec<Property>,
     datareader_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<DatareaderCryptoHandle> {
-    todo!();
+    //TODO: this is only a mock implementation
+    KeyMaterial_AES_GCM_GMAC_seq(vec![KeyMaterial_AES_GCM_GMAC {
+      transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+      master_salt: Vec::new(),
+      sender_key_id: [0, 0, 0, 0],
+      master_sender_key: Vec::new(),
+      receiver_specific_key_id: [0, 0, 0, 0],
+      master_receiver_specific_key: Vec::new(),
+    }])
+    .try_into()
   }
 
   fn register_matched_remote_datawriter(
     local_datareader_crypto_handle: DatareaderCryptoHandle,
     remote_participant_crypt: ParticipantCryptoHandle,
     shared_secret: SharedSecretHandle,
-  ) -> SecurityResult<DatareaderCryptoHandle> {
-    todo!();
+  ) -> SecurityResult<DatawriterCryptoHandle> {
+    //TODO: this is only a mock implementation
+    let KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    }: KeyMaterial_AES_GCM_GMAC = local_datareader_crypto_handle.try_into()?;
+    KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id: [0, 0, 0, 0],
+      master_receiver_specific_key: Vec::new(),
+    }
+    .try_into()
   }
 
   fn unregister_participant(
     participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<()> {
-    todo!();
+    //TODO: this is only a mock implementation
+    Ok(())
   }
 
   fn unregister_datawriter(datawriter_crypto_handle: DatawriterCryptoHandle) -> SecurityResult<()> {
-    todo!();
+    //TODO: this is only a mock implementation
+    Ok(())
   }
 
   fn unregister_datareader(datareader_crypto_handle: DatareaderCryptoHandle) -> SecurityResult<()> {
-    todo!();
+    //TODO: this is only a mock implementation
+    Ok(())
   }
 }
 

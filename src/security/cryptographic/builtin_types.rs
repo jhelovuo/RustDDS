@@ -85,6 +85,7 @@ impl TryFrom<BuiltinCryptoToken> for CryptoToken {
 /// KeyMaterial_AES_GCM_GMAC type from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the name from the spec
+#[derive(Clone)]
 pub struct KeyMaterial_AES_GCM_GMAC {
   pub transformation_kind: BuiltinCryptoTransformationKind,
   pub master_salt: Vec<u8>,
@@ -93,6 +94,8 @@ pub struct KeyMaterial_AES_GCM_GMAC {
   pub receiver_specific_key_id: CryptoTransformKeyId,
   pub master_receiver_specific_key: Vec<u8>,
 }
+
+// Conversions to and from Bytes
 impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
   fn try_from(value: Bytes) -> Result<Self, Self::Error> {
@@ -107,65 +110,28 @@ impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC {
         msg: format!("Error deserializing KeyMaterial_AES_GCM_GMAC: {}", e),
       },
     )
-    .and_then(
-      //map transformation_kind to builtin
-      |Serializable_KeyMaterial_AES_GCM_GMAC {
-         transformation_kind,
-         master_salt,
-         sender_key_id,
-         master_sender_key,
-         receiver_specific_key_id,
-         master_receiver_specific_key,
-       }| {
-        BuiltinCryptoTransformationKind::try_from(transformation_kind).map(|transformation_kind| {
-          Self {
-            transformation_kind,
-            master_salt,
-            sender_key_id,
-            master_sender_key,
-            receiver_specific_key_id,
-            master_receiver_specific_key,
-          }
-        })
-      },
-    )
-  }
-}
-impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC {
-  type Error = SecurityError;
-  fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
-    <Bytes>::from(value).try_into()
+    .and_then(KeyMaterial_AES_GCM_GMAC::try_from)
   }
 }
 impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
   type Error = SecurityError;
-  fn try_from(
-    KeyMaterial_AES_GCM_GMAC {
-      transformation_kind,
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      receiver_specific_key_id,
-      master_receiver_specific_key,
-    }: KeyMaterial_AES_GCM_GMAC,
-  ) -> Result<Self, Self::Error> {
-    // Serialize transformation_kind
-    let transformation_kind = transformation_kind.into();
+  fn try_from(keymat: KeyMaterial_AES_GCM_GMAC) -> Result<Self, Self::Error> {
     // Convert the key material to the serializable structure
-    let keymat = Serializable_KeyMaterial_AES_GCM_GMAC {
-      transformation_kind,
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      receiver_specific_key_id,
-      master_receiver_specific_key,
-    };
+    let serializable_keymat = Serializable_KeyMaterial_AES_GCM_GMAC::from(keymat);
     // Serialize
-    to_bytes::<Serializable_KeyMaterial_AES_GCM_GMAC, BigEndian>(&keymat)
+    to_bytes::<Serializable_KeyMaterial_AES_GCM_GMAC, BigEndian>(&serializable_keymat)
       .map(Bytes::from)
       .map_err(|e| Self::Error {
         msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC: {}", e),
       })
+  }
+}
+
+//Conversions to and from CryptoHandle
+impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC {
+  type Error = SecurityError;
+  fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
+    <Bytes>::from(value).try_into()
   }
 }
 impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoHandle {
@@ -175,9 +141,78 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoHandle {
   }
 }
 
+/// We need to refer to a sequence of key material structures for example in
+/// register_local_datawriter.
+// Create a wrapper to avoid error E0117
+#[allow(non_camel_case_types)] // We use the name from the spec
+pub struct KeyMaterial_AES_GCM_GMAC_seq(pub Vec<KeyMaterial_AES_GCM_GMAC>);
+// Conversions to and from Bytes for KeyMaterial_AES_GCM_GMAC_seq
+impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC_seq {
+  type Error = SecurityError;
+  fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+    // Deserialize CDR-formatted key material
+    let serializable_keymat_seq =
+      Vec::<Serializable_KeyMaterial_AES_GCM_GMAC>::deserialize(&mut CdrDeserializer::<
+        BigEndian, /* TODO: What's the point of this constructor if we need to specify the byte
+                    * order anyway */
+      >::new_big_endian(
+        value.as_ref()
+      ))
+      .map_err(
+        // Map deserialization error to SecurityError
+        |e| Self::Error {
+          msg: format!("Error deserializing Vec<KeyMaterial_AES_GCM_GMAC>: {}", e),
+        },
+      )?;
+
+    serializable_keymat_seq
+      // Map transformation_kind to builtin for each keymat
+      .iter()
+      .map(|serializable_keymat| KeyMaterial_AES_GCM_GMAC::try_from(serializable_keymat.clone()))
+      // Convert to Vec and dig out the Result
+      .collect::<Result<Vec<KeyMaterial_AES_GCM_GMAC>, Self::Error>>()
+      // Wrap the Vec
+      .map(Self)
+  }
+}
+
+impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Bytes {
+  type Error = SecurityError;
+  fn try_from(
+    KeyMaterial_AES_GCM_GMAC_seq(keymat_seq): KeyMaterial_AES_GCM_GMAC_seq,
+  ) -> Result<Self, Self::Error> {
+    // Convert the key material to the serializable structure
+    let serializable_keymat_seq = keymat_seq
+      .iter()
+      .map(|keymat| Serializable_KeyMaterial_AES_GCM_GMAC::from(keymat.clone()))
+      .collect();
+
+    // Serialize
+    to_bytes::<Vec<Serializable_KeyMaterial_AES_GCM_GMAC>, BigEndian>(&serializable_keymat_seq)
+      .map(Bytes::from)
+      .map_err(|e| Self::Error {
+        msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC_seq: {}", e),
+      })
+  }
+}
+
+//Conversions to and from CryptoHandle for KeyMaterial_AES_GCM_GMAC_seq
+impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC_seq {
+  type Error = SecurityError;
+  fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
+    <Bytes>::from(value).try_into()
+  }
+}
+impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for CryptoHandle {
+  type Error = SecurityError;
+  fn try_from(value: KeyMaterial_AES_GCM_GMAC_seq) -> Result<Self, Self::Error> {
+    <Bytes>::try_from(value).map(<CryptoHandle>::from)
+  }
+}
+
 //For (de)serialization
 #[allow(non_camel_case_types)] // We use the name from the spec
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 struct Serializable_KeyMaterial_AES_GCM_GMAC {
   transformation_kind: CryptoTransformKind,
   master_salt: Vec<u8>,
@@ -186,10 +221,58 @@ struct Serializable_KeyMaterial_AES_GCM_GMAC {
   receiver_specific_key_id: CryptoTransformKeyId,
   master_receiver_specific_key: Vec<u8>,
 }
+impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC {
+  type Error = SecurityError;
+  fn try_from(
+    Serializable_KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    }: Serializable_KeyMaterial_AES_GCM_GMAC,
+  ) -> Result<Self, Self::Error> {
+    // Map transformation_kind to builtin
+    BuiltinCryptoTransformationKind::try_from(transformation_kind)
+      // Construct a keymat
+      .map(|transformation_kind| Self {
+        transformation_kind,
+        master_salt,
+        sender_key_id,
+        master_sender_key,
+        receiver_specific_key_id,
+        master_receiver_specific_key,
+      })
+  }
+}
+impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
+  fn from(
+    KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    }: KeyMaterial_AES_GCM_GMAC,
+  ) -> Self {
+    Serializable_KeyMaterial_AES_GCM_GMAC {
+      // Serialize transformation_kind
+      transformation_kind: transformation_kind.into(),
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    }
+  }
+}
 
 /// Valid values for CryptoTransformKind from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the names from the spec
+#[derive(Clone)]
 pub enum BuiltinCryptoTransformationKind {
   CRYPTO_TRANSFORMATION_KIND_NONE,
   CRYPTO_TRANSFORMATION_KIND_AES128_GMAC,

@@ -63,7 +63,7 @@ pub trait CryptoKeyFactory {
     local_datareader_crypto_handle: DatareaderCryptoHandle,
     remote_participant_crypt: ParticipantCryptoHandle,
     shared_secret: SharedSecretHandle,
-  ) -> SecurityResult<DatareaderCryptoHandle>;
+  ) -> SecurityResult<DatawriterCryptoHandle>;
 
   /// unregister_participant: section 8.5.1.7.7 of the Security specification
   /// (v. 1.1)
