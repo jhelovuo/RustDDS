@@ -1035,7 +1035,15 @@ impl Writer {
         .acquire_the_topic_cache_guard()
         .remove_changes_before(keep_instant);
     } else {
-      warn!("{:?} missing from instant map", first_keeper);
+      // if we end up with SequenceNumber(1), it may be due to "max()" above,
+      // and may mean that no messages have ever been received, so it is
+      // normal that we did not find anything.
+      if first_keeper > SequenceNumber::new(1) {
+        warn!("DDCache garbage collect: {:?} missing from instant map", first_keeper);
+      } else {
+        debug!("DDCache garbage collect: {:?} missing from instant map. But it is normal for number 1.", 
+          first_keeper);
+      }
     }
     self.first_change_sequence_number = first_keeper;
     self.sequence_number_to_instant = self.sequence_number_to_instant.split_off(&first_keeper);
