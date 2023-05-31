@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use serde::{Deserialize, Serialize,};
+use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
@@ -44,7 +44,6 @@ use crate::{
 };
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
-
 
 // We need a wrapper to distinguish between Participant and Endpoint GUIDs.
 // They need to be distinguished, because the PL_CDR serialization is different:
@@ -283,7 +282,6 @@ pub struct DiscoveredReaderData {
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
   pub content_filter: Option<ContentFilterProperty>,
 }
-
 
 impl DiscoveredReaderData {
   // This is for generating test data only
@@ -695,7 +693,6 @@ pub struct DiscoveredWriterData {
   pub publication_topic_data: PublicationBuiltinTopicData,
 }
 
-
 impl Keyed for DiscoveredWriterData {
   type K = Endpoint_GUID;
 
@@ -999,7 +996,6 @@ pub struct DiscoveredTopicData {
   updated_time: DateTime<Utc>,
   pub topic_data: TopicBuiltinTopicData,
 }
-
 
 impl DiscoveredTopicData {
   pub fn new(updated_time: DateTime<Utc>, topic_data: TopicBuiltinTopicData) -> Self {
