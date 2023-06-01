@@ -192,21 +192,21 @@ impl Publisher {
       .create_datawriter(self, Some(entity_id), topic, qos)
   }
 
-  pub(crate) fn create_datawriter_cdr_with_entityid<D>(
-    &self,
-    entity_id: EntityId,
-    topic: &Topic,
-    qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
-  where
-    D: Keyed + serde::Serialize,
-    <D as Keyed>::K: Key,
-    <D as Keyed>::K: Serialize,
-  {
-    self.create_datawriter_with_entityid::<D, CDRSerializerAdapter<D, LittleEndian>>(
-      entity_id, topic, qos,
-    )
-  }
+  // pub(crate) fn create_datawriter_cdr_with_entityid<D>(
+  //   &self,
+  //   entity_id: EntityId,
+  //   topic: &Topic,
+  //   qos: Option<QosPolicies>,
+  // ) -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
+  // where
+  //   D: Keyed + serde::Serialize,
+  //   <D as Keyed>::K: Key,
+  //   <D as Keyed>::K: Serialize,
+  // {
+  //   self.create_datawriter_with_entityid::<D, CDRSerializerAdapter<D, LittleEndian>>(
+  //     entity_id, topic, qos,
+  //   )
+  // }
 
   /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
   ///
@@ -738,19 +738,19 @@ impl Subscriber {
       .create_datareader(self, topic, Some(entity_id), qos)
   }
 
-  pub(crate) fn create_datareader_cdr_with_entityid<D: 'static>(
-    &self,
-    topic: &Topic,
-    entity_id: EntityId,
-    qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
-  where
-    D: serde::de::DeserializeOwned + Keyed,
-    <D as Keyed>::K: Key,
-    for<'de> <D as Keyed>::K: Deserialize<'de>,
-  {
-    self.create_datareader_with_entityid::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
-  }
+  // pub(crate) fn create_datareader_cdr_with_entityid<D: 'static>(
+  //   &self,
+  //   topic: &Topic,
+  //   entity_id: EntityId,
+  //   qos: Option<QosPolicies>,
+  // ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  // where
+  //   D: serde::de::DeserializeOwned + Keyed,
+  //   <D as Keyed>::K: Key,
+  //   for<'de> <D as Keyed>::K: Deserialize<'de>,
+  // {
+  //   self.create_datareader_with_entityid::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
+  // }
 
   /// Create DDS DataReader for non keyed Topics
   ///
@@ -816,37 +816,19 @@ impl Subscriber {
     self.create_datareader_no_key::<D, CDRDeserializerAdapter<D>>(topic, qos)
   }
 
-  // Exists for symmetry, but not really neeeded,
-  // as the only user is Discovery.
-  // pub(crate) fn create_datareader_no_key_with_entityid<D: 'static, SA>(
-  //   &self,
-  //   topic: &Topic,
-  //   entity_id: EntityId,
-  //   qos: Option<QosPolicies>,
-  // ) -> Result<NoKeyDataReader<D, SA>>
-  // where
-  //   D: DeserializeOwned,
-  //   SA: no_key::DeserializerAdapter<D>,
-  // {
-  //   self
-  //     .inner
-  //     .create_datareader_no_key(self, topic, Some(entity_id), qos)
-  // }
-
-  // Exists for symmetry, but not really neeeded,
-  // as the only user is Discovery.
-  // pub(crate) fn create_datareader_no_key_cdr_with_entityid<D: 'static>(
-  //   &self,
-  //   topic: &Topic,
-  //   entity_id: EntityId,
-  //   qos: Option<QosPolicies>,
-  // ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
-  // where
-  //   D: DeserializeOwned,
-  // {
-  //   self
-  //     .create_datareader_no_key_with_entityid::<D,
-  // CDRDeserializerAdapter<D>>(topic, entity_id, qos) }
+  pub(crate) fn create_datareader_no_key_with_entityid<D: 'static, SA>(
+    &self,
+    topic: &Topic,
+    entity_id: EntityId,
+    qos: Option<QosPolicies>,
+  ) -> Result<NoKeyDataReader<D, SA>>
+  where
+    SA: adapters::no_key::DeserializerAdapter<D>,
+  {
+    self
+      .inner
+      .create_datareader_no_key(self, topic, Some(entity_id), qos)
+  }
 
   // Retrieves a previously created DataReader belonging to the Subscriber.
   // TODO: Is this even possible. Whould probably need to return reference and
