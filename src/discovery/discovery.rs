@@ -9,7 +9,10 @@ use log::{debug, error, info, trace, warn};
 use mio_06::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{channel as mio_channel, timer::Timer};
 
+use paste::paste; // token pasting macro
+
 use crate::{
+  with_key::{ DataReader, Sample, DataWriter},
   dds::{
     participant::DomainParticipantWeak,
     qos::{
@@ -22,11 +25,6 @@ use crate::{
     readcondition::ReadCondition,
     result::{Error, Result},
     topic::*,
-    with_key::{
-      datareader::{DataReader, DataReaderCdr},
-      datasample::Sample,
-      datawriter::{DataWriter, DataWriterCdr},
-    },
   },
   discovery::{
     discovery_db::{DiscoveredVia, DiscoveryDB},
@@ -38,7 +36,10 @@ use crate::{
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
   network::constant::*,
-  serialization::pl_cdr_adapters::{PlCdrDeserializerAdapter, PlCdrSerializerAdapter},
+  security::types::*,
+  serialization::pl_cdr_adapters::*,
+  serialization::cdr_serializer::CDRSerializerAdapter,
+  serialization::cdr_deserializer::CDRDeserializerAdapter,
   structure::{
     duration::Duration,
     entity::RTPSEntity,
@@ -78,6 +79,62 @@ impl LivelinessState {
   }
 }
 
+// TODO: Refactor this. Maybe the repeating groups of "topic", "reader", "writer", "timer"
+// below could be abstracted to a common struct:
+
+type DataReaderPlCdr<D> = DataReader<D, PlCdrDeserializerAdapter<D>>;
+type DataWriterPlCdr<D> = DataWriter<D, PlCdrSerializerAdapter<D>>;
+
+mod with_key {
+  use super::{DataReaderPlCdr, DataWriterPlCdr};
+  use crate::{Key,Keyed, Topic};
+  use crate::serialization::pl_cdr_adapters::*;
+  use serde::{Serialize, de::DeserializeOwned};
+  use mio_extras::timer::Timer;
+
+  pub(super) struct DiscoveryTopicPlCdr<D> 
+  where
+    D: Keyed + PlCdrSerialize + PlCdrDeserialize,
+    <D as Keyed>::K: Key + PlCdrSerialize + PlCdrDeserialize,
+  {
+    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    pub topic: Topic,
+    pub reader: DataReaderPlCdr<D>,
+    pub writer: DataWriterPlCdr<D>,
+    pub timer: Timer<()>,
+  }
+
+  pub(super) struct DiscoveryTopicCDR<D> 
+  where
+    D: Keyed + Serialize + DeserializeOwned,
+    <D as Keyed>::K: Key + Serialize + DeserializeOwned,
+  {
+    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    pub topic: Topic,
+    pub reader: crate::with_key::DataReaderCdr<D>,
+    pub writer: crate::with_key::DataWriterCdr<D>,
+    pub timer: Timer<()>,
+  }
+}
+
+mod no_key {
+  use crate::Topic;
+  use serde::{Serialize, de::DeserializeOwned};
+  use mio_extras::timer::Timer;
+
+  pub(super) struct DiscoveryTopicCDR<D> 
+  where
+    D: Serialize + DeserializeOwned,
+  {
+    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    pub topic: Topic,
+    pub reader: crate::no_key::DataReader<D, crate::CDRDeserializerAdapter<D>>,
+    pub writer: crate::no_key::DataWriter<D, crate::CDRSerializerAdapter<D>>,
+    pub timer: Timer<()>,
+  }
+}
+
+
 pub(crate) struct Discovery {
   poll: Poll,
   domain_participant: DomainParticipantWeak,
@@ -92,6 +149,8 @@ pub(crate) struct Discovery {
   spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
 
   liveliness_state: LivelinessState,
+
+  // TODO: Why is this a HashMap? Are there ever more than 2?
   self_locators: HashMap<Token, Vec<Locator>>,
 
   // DDS Subsciber and Publisher for Discovery
@@ -101,51 +160,56 @@ pub(crate) struct Discovery {
 
   // Handling of "DCPSParticipant" topic. This is the mother of all topics
   // where participants announce their presence and built-in readers and writers.
-  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
-  dcps_participant_topic: Topic,
-  dcps_participant_reader: DataReader<
-    SpdpDiscoveredParticipantData,
-    PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>,
-  >,
-  dcps_participant_writer: DataWriter<
-    SpdpDiscoveredParticipantData,
-    PlCdrSerializerAdapter<SpdpDiscoveredParticipantData>,
-  >,
+  // and
+  // timer to periodically announce our presence
+  dcps_participant: with_key::DiscoveryTopicPlCdr<SpdpDiscoveredParticipantData>,
   participant_cleanup_timer: Timer<()>, // garbage collection timer for dead remote particiapnts
-  participant_send_info_timer: Timer<()>, // timer to periodically announce our presence
 
   // Topic "DCPSSubscription" - announcing and detecting Readers
-  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
-  dcps_subscription_topic: Topic,
-  dcps_subscription_reader:
-    DataReader<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>,
-  dcps_subscription_writer:
-    DataWriter<DiscoveredReaderData, PlCdrSerializerAdapter<DiscoveredReaderData>>,
-  readers_send_info_timer: Timer<()>,
+  dcps_subscription: with_key::DiscoveryTopicPlCdr<DiscoveredReaderData>,
 
   // Topic "DCPSPublication" - announcing and detecting Writers
-  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
-  dcps_publication_topic: Topic,
-  dcps_publication_reader:
-    DataReader<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>,
-  dcps_publication_writer:
-    DataWriter<DiscoveredWriterData, PlCdrSerializerAdapter<DiscoveredWriterData>>,
-  writers_send_info_timer: Timer<()>,
+  dcps_publication: with_key::DiscoveryTopicPlCdr<DiscoveredWriterData>,
 
+  
   // Topic "DCPSTopic" - annoncing and detecting topics
   #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
-  dcps_topic_topic: Topic,
-  dcps_topic_reader: DataReader<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>,
-  dcps_topic_writer: DataWriter<DiscoveredTopicData, PlCdrSerializerAdapter<DiscoveredTopicData>>,
-  topic_info_send_timer: Timer<()>,
+  dcps_topic: with_key::DiscoveryTopicPlCdr<DiscoveredTopicData>,  
   topic_cleanup_timer: Timer<()>,
 
   // DCPSParticipantMessage - used by participants to communicate liveness
-  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
-  participant_message_topic: Topic,
-  dcps_participant_message_reader: DataReaderCdr<ParticipantMessageData>,
-  dcps_participant_message_writer: DataWriterCdr<ParticipantMessageData>,
-  dcps_participant_message_timer: Timer<()>,
+  dcps_participant_message: with_key::DiscoveryTopicCDR<ParticipantMessageData>,
+
+  // Following topics from DDS Security spec v1.1
+
+  // DCPSParticipantSecure - 7.4.1.6 New DCPSParticipantSecure Builtin Topic
+  #[allow(dead_code)] // TODO: Remove when handlers implemented
+  dcps_participant_secure: with_key::DiscoveryTopicPlCdr<ParticipantBuiltinTopicDataSecure>,
+
+  // DCPSPublicationsSecure - 7.4.1.7 New DCPSPublicationsSecure Builtin Topic
+  #[allow(dead_code)] // TODO: Remove when handlers implemented
+  dcps_publications_secure: with_key::DiscoveryTopicPlCdr<PublicationBuiltinTopicDataSecure>,
+
+  // DCPSSubscriptionsSecure - 7.4.1.8 New DCPSSubscriptionsSecure Builtin Topic
+  #[allow(dead_code)] // TODO: Remove when handlers implemented
+  dcps_subscriptions_secure: with_key::DiscoveryTopicPlCdr<SubscriptionBuiltinTopicDataSecure>,
+
+  // DCPSParticipantMessageSecure - used by participants to communicate secure liveness
+  // 7.4.2 New DCPSParticipantMessageSecure builtin Topic
+  #[allow(dead_code)] // TODO: Remove when handlers implemented
+  dcps_participant_message_secure: with_key::DiscoveryTopicCDR<ParticipantMessageData>, // CDR, not PL_CDR
+
+  // DCPSParticipantStatelessMessageSecure 
+  // 77.4.3 New DCPSParticipantStatelessMessage builtin Topic
+  // !!! TODO: By the spec, this topic must use _stateless_ reader and writer, which are
+  // insensitive to sequence number attacks. 
+  #[allow(dead_code)] // TODO: Remove when handlers implemented
+  dcps_participant_stateless_message: no_key::DiscoveryTopicCDR<ParticipantStatelessMessage>, 
+
+  // DCPSParticipantVolatileMessageSecure 
+  // 7.4.4 New DCPSParticipantVolatileMessageSecure builtin Topic
+  #[allow(dead_code)] // TODO: Remove when handlers implemented
+  dcps_participant_volatile_message_secure: no_key::DiscoveryTopicCDR<ParticipantVolatileMessageSecure>, // CDR?
 }
 
 impl Discovery {
@@ -183,7 +247,6 @@ impl Discovery {
     spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
     self_locators: HashMap<Token, Vec<Locator>>,
   ) -> Result<Self> {
-    // helper macro to handle initialization failures.
     macro_rules! try_construct {
       ($constructor:expr, $msg:literal) => {
         match $constructor {
@@ -203,6 +266,74 @@ impl Discovery {
       mio_06::Poll::new(),
       "Failed to allocate discovery poll. {:?}"
     );
+    let discovery_subscriber_qos = Self::subscriber_qos();
+    let discovery_publisher_qos = Self::publisher_qos();
+
+    // Create DDS Publisher and Subscriber for Discovery.
+    // These are needed to create DataWriter and DataReader objects
+    let discovery_subscriber = try_construct!(
+      domain_participant.create_subscriber(&discovery_subscriber_qos),
+      "Unable to create Discovery Subscriber. {:?}"
+    );
+    let discovery_publisher = try_construct!(
+      domain_participant.create_publisher(&discovery_publisher_qos),
+      "Unable to create Discovery Publisher. {:?}"
+    );
+
+    //TODO: secure SPDP participant topic is Reliable
+    //TODO: support also no_key topics
+    macro_rules! construct_topic_and_poll {
+      ( $repr:ident, $has_key:ident,
+        $topic_name:expr, $topic_type_name:expr, $message_type:ty,
+        $qos:expr,
+        $reader_entity_id:expr, $reader_token:expr,
+        $writer_entity_id:expr,
+        $timeout:expr, $timer_token:expr, ) => {
+        { let topic =  domain_participant.create_topic(
+                $topic_name .to_string(),
+                $topic_type_name .to_string(),
+                &discovery_subscriber_qos,
+                TopicKind::WithKey,
+              ).expect("Unable to create topic. ");
+          paste!{
+            let reader = 
+              discovery_subscriber
+              . [< create_datareader_with_entityid_ $has_key >]
+                ::<$message_type, [<$repr DeserializerAdapter>] <$message_type>>(
+                &topic,
+                $reader_entity_id,
+                $qos,
+              ).expect("Unable to create DataReader. ");
+
+            let writer = 
+                discovery_publisher.[< create_datawriter_with_entityid_ $has_key >]
+                  ::<$message_type, [<$repr SerializerAdapter>] <$message_type>>(
+                  $writer_entity_id,
+                  &topic,
+                  $qos,
+                ).expect("Unable to create DataWriter .");
+          }
+          poll.register(
+              &reader,
+              $reader_token,
+              Ready::readable(),
+              PollOpt::edge(),
+            ).expect("Failed to register a discovery reader to poll.");
+
+          let mut timer: Timer<()> = Timer::default();
+          timer.set_timeout($timeout, ());
+          poll.register(
+              &timer,
+              $timer_token,
+              Ready::readable(),
+              PollOpt::edge(),
+            ).expect("Unable to register timer token. ");
+
+          paste!{ $has_key ::[<DiscoveryTopic $repr>] { topic, reader, writer, timer } }
+        }
+      } // macro
+    }
+
 
     try_construct!(
       poll.register(
@@ -224,58 +355,17 @@ impl Discovery {
       "Failed to register Discovery poll. {:?}"
     );
 
-    let discovery_subscriber_qos = Self::subscriber_qos();
-    let discovery_publisher_qos = Self::publisher_qos();
-
-    // Create DDS Publisher and Subscriber for Discovery.
-    // These are needed to create DataWriter and DataReader objects
-    let discovery_subscriber = try_construct!(
-      domain_participant.create_subscriber(&discovery_subscriber_qos),
-      "Unable to create Discovery Subscriber. {:?}"
-    );
-    let discovery_publisher = try_construct!(
-      domain_participant.create_publisher(&discovery_publisher_qos),
-      "Unable to create Discovery Publisher. {:?}"
-    );
 
     // Participant
-    let dcps_participant_topic = try_construct!(
-      domain_participant.create_topic(
-        "DCPSParticipant".to_string(),
-        "SPDPDiscoveredParticipantData".to_string(),
-        &Self::create_spdp_patricipant_qos(),
-        TopicKind::WithKey,
-      ),
-      "Unable to create DCPSParticipant topic. {:?}"
-    );
-
-    let dcps_participant_reader = try_construct!( discovery_subscriber
-      .create_datareader_with_entityid
-        ::<SpdpDiscoveredParticipantData,PlCdrDeserializerAdapter<SpdpDiscoveredParticipantData>>(
-        &dcps_participant_topic,
-        EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-        None,
-      ) ,"Unable to create DataReader for DCPSParticipant. {:?}");
-
-    let dcps_participant_writer = try_construct!(
-      discovery_publisher.create_datawriter_with_entityid
-        ::<SpdpDiscoveredParticipantData,PlCdrSerializerAdapter<SpdpDiscoveredParticipantData>>(
-        EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
-        &dcps_participant_topic,
-        None,
-      ),
-      "Unable to create DataWriter for DCPSParticipant. {:?}"
-    );
-
-    // register participant reader
-    try_construct!(
-      poll.register(
-        &dcps_participant_reader,
-        DISCOVERY_PARTICIPANT_DATA_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Failed to register participant reader to poll. {:?}"
+    let dcps_participant = construct_topic_and_poll!(
+      PlCdr, with_key,
+      "DCPSParticipant", // topic name
+      "SPDPDiscoveredParticipantData", // topic type name over RTPS
+      SpdpDiscoveredParticipantData,
+      None, // QoS
+      EntityId::SPDP_BUILTIN_PARTICIPANT_READER, DISCOVERY_PARTICIPANT_DATA_TOKEN,
+      EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
+      Self::SEND_PARTICIPANT_INFO_PERIOD, DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
     );
 
     // create lease duration check timer
@@ -291,178 +381,41 @@ impl Discovery {
       "Unable to create participant cleanup timer. {:?}"
     );
 
-    // creating timer for sending out own participant data
-    let mut participant_send_info_timer: Timer<()> = Timer::default();
-    participant_send_info_timer.set_timeout(Self::SEND_PARTICIPANT_INFO_PERIOD, ());
-
-    try_construct!(
-      poll.register(
-        &participant_send_info_timer,
-        DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register participant info sender. {:?}"
-    );
-
     // Subscriptions: What are the Readers on the network and what are they
     // subscribing to?
-
-    let dcps_subscription_topic = try_construct!(
-      domain_participant.create_topic(
-        "DCPSSubscription".to_string(),
-        "DiscoveredReaderData".to_string(),
-        &discovery_subscriber_qos,
-        TopicKind::WithKey,
-      ),
-      "Unable to create DCPSSubscription topic. {:?}"
-    );
-
-    let dcps_subscription_reader = try_construct!( discovery_subscriber
-      .create_datareader_with_entityid::<DiscoveredReaderData, PlCdrDeserializerAdapter<DiscoveredReaderData>>(
-        &dcps_subscription_topic,
-        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-        None,
-      ) ,"Unable to create DataReader for DCPSSubscription. {:?}");
-
-    try_construct!(
-      poll.register(
-        &dcps_subscription_reader,
-        DISCOVERY_READER_DATA_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register subscription reader. {:?}"
-    );
-
-    let dcps_subscription_writer = try_construct!(
-      discovery_publisher.create_datawriter_with_entityid
-        ::<DiscoveredReaderData,PlCdrSerializerAdapter<DiscoveredReaderData>>(
-        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
-        &dcps_subscription_topic,
-        None,
-      ),
-      "Unable to create DataWriter for DCPSSubscription. {:?}"
-    );
-
-    let mut readers_send_info_timer: Timer<()> = Timer::default();
-
-    readers_send_info_timer.set_timeout(Self::SEND_READERS_INFO_PERIOD, ());
-
-    try_construct!(
-      poll.register(
-        &readers_send_info_timer,
-        DISCOVERY_SEND_READERS_INFO_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register readers info sender. {:?}"
+    let dcps_subscription = construct_topic_and_poll!(
+      PlCdr, with_key,
+      "DCPSSubscription", // topic name
+      "DiscoveredReaderData", // topic type name over RTPS
+      DiscoveredReaderData,
+      None, // QoS
+      EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER, DISCOVERY_READER_DATA_TOKEN,
+      EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
+      Self::SEND_READERS_INFO_PERIOD, DISCOVERY_SEND_READERS_INFO_TOKEN,
     );
 
     // Publication : Who are the Writers here and elsewhere
-
-    let dcps_publication_topic = try_construct!(
-      domain_participant.create_topic(
-        "DCPSPublication".to_string(),
-        "DiscoveredWriterData".to_string(),
-        &discovery_publisher_qos,
-        TopicKind::WithKey,
-      ),
-      "Unable to create DCPSPublication topic. {:?}"
-    );
-
-    let dcps_publication_reader = try_construct!( discovery_subscriber
-      .create_datareader_with_entityid
-        ::<DiscoveredWriterData, PlCdrDeserializerAdapter<DiscoveredWriterData>>(
-        &dcps_publication_topic,
-        EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-        None,
-      ) ,"Unable to create DataReader for DCPSPublication. {:?}");
-
-    try_construct!(
-      poll.register(
-        &dcps_publication_reader,
-        DISCOVERY_WRITER_DATA_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register writers info sender. {:?}"
-    );
-
-    let dcps_publication_writer = try_construct!(
-      discovery_publisher.create_datawriter_with_entityid
-        ::<DiscoveredWriterData,PlCdrSerializerAdapter<DiscoveredWriterData>>(
-        EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-        &dcps_publication_topic,
-        None,
-      ),
-      "Unable to create DataWriter for DCPSPublication. {:?}"
-    );
-
-    let mut writers_send_info_timer: Timer<()> = Timer::default();
-
-    writers_send_info_timer.set_timeout(Self::SEND_WRITERS_INFO_PERIOD, ());
-
-    try_construct!(
-      poll.register(
-        &writers_send_info_timer,
-        DISCOVERY_SEND_WRITERS_INFO_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register readers info sender. {:?}"
+    let dcps_publication = construct_topic_and_poll!(
+      PlCdr, with_key,
+      "DCPSPublication", // topic name
+      "DiscoveredReaderData", // topic type name over RTPS
+      DiscoveredWriterData,
+      None, // QoS
+      EntityId::SEDP_BUILTIN_PUBLICATIONS_READER, DISCOVERY_WRITER_DATA_TOKEN,
+      EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
+      Self::SEND_WRITERS_INFO_PERIOD, DISCOVERY_SEND_WRITERS_INFO_TOKEN,
     );
 
     // Topic topic (not a typo)
-
-    let dcps_topic_topic = try_construct!(
-      domain_participant.create_topic(
-        "DCPSTopic".to_string(),
-        "DiscoveredTopicData".to_string(),
-        &QosPolicyBuilder::new().build(), //TODO: check what this should be
-        TopicKind::WithKey,
-      ),
-      "Unable to create DCPSTopic topic. {:?}"
-    );
-
-    let dcps_topic_reader = try_construct!( discovery_subscriber
-      .create_datareader_with_entityid
-        ::<DiscoveredTopicData, PlCdrDeserializerAdapter<DiscoveredTopicData>>(
-        &dcps_topic_topic,
-        EntityId::SEDP_BUILTIN_TOPIC_READER,
-        None,
-      ) ,"Unable to create DataReader for DCPSTopic. {:?}");
-
-    try_construct!(
-      poll.register(
-        &dcps_topic_reader,
-        DISCOVERY_TOPIC_DATA_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register topic reader. {:?}"
-    );
-
-    let dcps_topic_writer = try_construct!(
-      discovery_publisher.create_datawriter_with_entityid
-        ::<DiscoveredTopicData,PlCdrSerializerAdapter<DiscoveredTopicData>>(
-        EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-        &dcps_topic_topic,
-        None,
-      ),
-      "Unable to create DataWriter for DCPSTopic. {:?}"
-    );
-
-    let mut topic_info_send_timer: Timer<()> = Timer::default();
-    topic_info_send_timer.set_timeout(Self::SEND_TOPIC_INFO_PERIOD, ());
-    try_construct!(
-      poll.register(
-        &topic_info_send_timer,
-        DISCOVERY_SEND_TOPIC_INFO_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register topic info sender. {:?}"
+    let dcps_topic = construct_topic_and_poll!(
+      PlCdr, with_key,
+      "DCPSTopic", // topic name
+      "DiscoveredTopicData", // topic type name over RTPS
+      DiscoveredTopicData,
+      None, // QoS
+      EntityId::SEDP_BUILTIN_TOPIC_READER, DISCOVERY_TOPIC_DATA_TOKEN,
+      EntityId::SEDP_BUILTIN_TOPIC_WRITER,
+      Self::SEND_TOPIC_INFO_PERIOD, DISCOVERY_SEND_TOPIC_INFO_TOKEN,
     );
 
     // create lease duration check timer
@@ -479,55 +432,88 @@ impl Discovery {
     );
 
     // Participant Message Data 8.4.13
-
-    let participant_message_topic = try_construct!(
-      domain_participant.create_topic(
-        "DCPSParticipantMessage".to_string(),
-        "ParticipantMessageData".to_string(),
-        &Self::PARTICIPANT_MESSAGE_QOS,
-        TopicKind::WithKey,
-      ),
-      "Unable to create DCPSParticipantMessage topic. {:?}"
+    let dcps_participant_message = construct_topic_and_poll!(
+      CDR, with_key,
+      "DCPSParticipantMessage", // topic name
+      "ParticipantMessageData", // topic type name over RTPS
+      ParticipantMessageData,
+      Some(Self::PARTICIPANT_MESSAGE_QOS),
+      EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER, DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
+      EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+      Self::CHECK_PARTICIPANT_MESSAGES, DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
     );
 
-    let dcps_participant_message_reader = try_construct!(
-      discovery_subscriber.create_datareader_cdr_with_entityid::<ParticipantMessageData>(
-        &participant_message_topic,
-        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-        None,
-      ),
-      "Unable to create DCPSParticipantMessage reader. {:?}"
+    // DDS Security
+
+    // Participant
+    let dcps_participant_secure = construct_topic_and_poll!(
+      PlCdr, with_key,
+      "DCPSParticipantsSecure", // topic name
+      "ParticipantBuiltinTopicDataSecure", // topic type name over RTPS (use the same data type)
+      ParticipantBuiltinTopicDataSecure, 
+      None, // QoS
+      EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_READER, SECURE_DISCOVERY_PARTICIPANT_DATA_TOKEN,
+      EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER,
+      Self::SEND_PARTICIPANT_INFO_PERIOD, SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
     );
 
-    try_construct!(
-      poll.register(
-        &dcps_participant_message_reader,
-        DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register DCPSParticipantMessage reader. {:?}"
+    // Subscriptions: What are the Readers on the network and what are they
+    // subscribing to?
+    let dcps_subscriptions_secure = construct_topic_and_poll!(
+      PlCdr, with_key,
+      "DCPSSubscriptionsSecure", // topic name
+      "SubscriptionBuiltinTopicDataSecure", // topic type name over RTPS
+      SubscriptionBuiltinTopicDataSecure,
+      None, // QoS
+      EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_READER, SECURE_DISCOVERY_READER_DATA_TOKEN,
+      EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_WRITER,
+      Self::SEND_READERS_INFO_PERIOD, SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN,
     );
 
-    let dcps_participant_message_writer = try_construct!(
-      discovery_publisher.create_datawriter_cdr_with_entityid::<ParticipantMessageData>(
-        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-        &participant_message_topic,
-        None,
-      ),
-      "Unable to create DCPSParticipantMessage writer. {:?}"
+    // Publication : Who are the Writers here and elsewhere
+    let dcps_publications_secure = construct_topic_and_poll!(
+      PlCdr, with_key,
+      "DCPSPublicationsSecure", // topic name
+      "PublicationBuiltinTopicDataSecure,", // topic type name over RTPS
+      PublicationBuiltinTopicDataSecure,
+      None, // QoS
+      EntityId::SEDP_BUILTIN_PUBLICATIONS_READER, SECURE_DISCOVERY_WRITER_DATA_TOKEN,
+      EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
+      Self::SEND_WRITERS_INFO_PERIOD, SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN,
     );
 
-    let mut dcps_participant_message_timer = Timer::default();
-    dcps_participant_message_timer.set_timeout(Self::CHECK_PARTICIPANT_MESSAGES, ());
-    try_construct!(
-      poll.register(
-        &dcps_participant_message_timer,
-        DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      ),
-      "Unable to register DCPSParticipantMessage timer. {:?}"
+    // p2p Participant message secure
+    let dcps_participant_message_secure = construct_topic_and_poll!(
+      CDR, with_key,
+      "DCPSParticipantMessageSecure", // topic name
+      "ParticipantMessageData", // topic type name over RTPS (use the same data type)
+      ParticipantMessageData, // actually reuse the non-secure data type
+      None, // QoS
+      EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_READER, P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
+      EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_WRITER,
+      Self::CHECK_PARTICIPANT_MESSAGES, P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
+    );
+    //TODO: NO_KEY topic
+    let dcps_participant_stateless_message = construct_topic_and_poll!(
+      CDR, no_key,
+      "DCPSParticipantStatelessMessage", // topic name
+      "ParticipantStatelessMessage", 
+      ParticipantStatelessMessage, 
+      None, // QoS
+      EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER, P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN,
+      EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
+      Self::CHECK_PARTICIPANT_MESSAGES, P2P_PARTICIPANT_STATELESS_MESSAGE_TIMER_TOKEN,
+    );
+    //TODO: NO_KEY topic
+    let dcps_participant_volatile_message_secure = construct_topic_and_poll!(
+      CDR, no_key,
+      "ParticipantVolatileMessageSecure", // topic name
+      "ParticipantVolatileMessageSecure", 
+      ParticipantVolatileMessageSecure, // actually reuse the non-secure data type
+      None, // QoS
+      EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER, P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN,
+      EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
+      Self::CHECK_PARTICIPANT_MESSAGES, P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN,
     );
 
     Ok(Self {
@@ -544,32 +530,17 @@ impl Discovery {
 
       // discovery_subscriber,
       // discovery_publisher,
-      dcps_participant_topic,
-      dcps_participant_reader,
-      dcps_participant_writer,
-      participant_cleanup_timer,
-      participant_send_info_timer,
+      dcps_participant, participant_cleanup_timer, // SPDP
+      dcps_subscription, dcps_publication, // SEDP
+      dcps_topic, topic_cleanup_timer, // SEDP
+      dcps_participant_message,  // liveliness messages
 
-      dcps_subscription_topic,
-      dcps_subscription_reader,
-      dcps_subscription_writer,
-      readers_send_info_timer,
-
-      dcps_publication_topic,
-      dcps_publication_reader,
-      dcps_publication_writer,
-      writers_send_info_timer,
-
-      dcps_topic_topic,
-      dcps_topic_reader,
-      dcps_topic_writer,
-      topic_info_send_timer,
-      topic_cleanup_timer,
-
-      participant_message_topic,
-      dcps_participant_message_reader,
-      dcps_participant_message_writer,
-      dcps_participant_message_timer,
+      dcps_participant_secure,
+      dcps_publications_secure,
+      dcps_subscriptions_secure,
+      dcps_participant_message_secure,
+      dcps_participant_stateless_message,
+      dcps_participant_volatile_message_secure,
     })
   }
 
@@ -606,31 +577,31 @@ impl Discovery {
                   let db = self.discovery_db_read();
                   for reader in db.get_all_local_topic_readers() {
                     self
-                      .dcps_subscription_writer
+                      .dcps_subscription.writer
                       .dispose(&Endpoint_GUID(reader.reader_proxy.remote_reader_guid), None)
                       .unwrap_or(());
                   }
 
                   for writer in db.get_all_local_topic_writers() {
                     self
-                      .dcps_publication_writer
+                      .dcps_publication.writer
                       .dispose(&Endpoint_GUID(writer.writer_proxy.remote_writer_guid), None)
                       .unwrap_or(());
                   }
                   // finally disposing the participant we have
                   self
-                    .dcps_participant_writer
+                    .dcps_participant.writer
                     .dispose(&Participant_GUID(self.domain_participant.guid()), None)
                     .unwrap_or(());
                   info!("Stopped Discovery");
                   return; // terminate event loop
                 }
                 DiscoveryCommand::RemoveLocalWriter { guid } => {
-                  if guid == self.dcps_publication_writer.guid() {
+                  if guid == self.dcps_publication.writer.guid() {
                     continue;
                   }
                   self
-                    .dcps_publication_writer
+                    .dcps_publication.writer
                     .dispose(&Endpoint_GUID(guid), None)
                     .unwrap_or_else(|e| error!("Disposing local Writer: {e:?}"));
 
@@ -643,12 +614,12 @@ impl Discovery {
                   }
                 }
                 DiscoveryCommand::RemoveLocalReader { guid } => {
-                  if guid == self.dcps_subscription_writer.guid() {
+                  if guid == self.dcps_subscription.writer.guid() {
                     continue;
                   }
 
                   self
-                    .dcps_subscription_writer
+                    .dcps_subscription.writer
                     .dispose(&Endpoint_GUID(guid), None)
                     .unwrap_or_else(|e| error!("Disposing local Reader: {e:?}"));
 
@@ -708,14 +679,14 @@ impl Discovery {
             );
 
             self
-              .dcps_participant_writer
+              .dcps_participant.writer
               .write(data, None)
               .unwrap_or_else(|e| {
                 error!("Discovery: Publishing to DCPS participant topic failed: {e:?}");
               });
             // reschedule timer
             self
-              .participant_send_info_timer
+              .dcps_participant.timer
               .set_timeout(Self::SEND_PARTICIPANT_INFO_PERIOD, ());
           }
           DISCOVERY_READER_DATA_TOKEN => {
@@ -724,7 +695,7 @@ impl Discovery {
           DISCOVERY_SEND_READERS_INFO_TOKEN => {
             self.write_readers_info();
             self
-              .readers_send_info_timer
+              .dcps_subscription.timer
               .set_timeout(Self::SEND_READERS_INFO_PERIOD, ());
           }
           DISCOVERY_WRITER_DATA_TOKEN => {
@@ -733,7 +704,8 @@ impl Discovery {
           DISCOVERY_SEND_WRITERS_INFO_TOKEN => {
             self.write_writers_info();
             self
-              .writers_send_info_timer
+              .dcps_publication.timer
+//              .writers_send_info_timer
               .set_timeout(Self::SEND_WRITERS_INFO_PERIOD, ());
           }
           DISCOVERY_TOPIC_DATA_TOKEN => {
@@ -749,7 +721,8 @@ impl Discovery {
           DISCOVERY_SEND_TOPIC_INFO_TOKEN => {
             self.write_topic_info();
             self
-              .topic_info_send_timer
+              .dcps_topic.timer
+              //.topic_info_send_timer
               .set_timeout(Self::SEND_TOPIC_INFO_PERIOD, ());
           }
           DISCOVERY_PARTICIPANT_MESSAGE_TOKEN => {
@@ -758,7 +731,7 @@ impl Discovery {
           DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN => {
             self.write_participant_message();
             self
-              .dcps_participant_message_timer
+              .dcps_participant_message.timer
               .set_timeout(Self::CHECK_PARTICIPANT_MESSAGES, ());
           }
           SPDP_LIVENESS_TOKEN => {
@@ -895,7 +868,7 @@ impl Discovery {
 
   pub fn handle_participant_reader(&mut self) {
     loop {
-      let s = self.dcps_participant_reader.take_next_sample();
+      let s = self.dcps_participant.reader.take_next_sample();
       debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(d)) => match d.value {
@@ -947,7 +920,7 @@ impl Discovery {
   // Check if there are messages about new Readers
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let drds: Vec<Sample<DiscoveredReaderData, GUID>> =
-      match self.dcps_subscription_reader.into_iterator() {
+      match self.dcps_subscription.reader.into_iterator() {
         Ok(ds) => ds
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           .filter(|d|
@@ -998,7 +971,7 @@ impl Discovery {
 
   pub fn handle_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
     let dwds: Vec<Sample<DiscoveredWriterData, GUID>> =
-      match self.dcps_publication_reader.into_iterator() {
+      match self.dcps_publication.reader.into_iterator() {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
@@ -1049,7 +1022,7 @@ impl Discovery {
   // supposed to help in recovering from that.
   pub fn handle_topic_reader(&mut self, _read_history: Option<GuidPrefix>) {
     let ts: Vec<Sample<(DiscoveredTopicData, GUID), GUID>> = match self
-      .dcps_topic_reader
+      .dcps_topic.reader
       .take(usize::MAX, ReadCondition::any())
     {
       Ok(ds) => ds
@@ -1113,7 +1086,7 @@ impl Discovery {
   // TODO: rewrite this function according to the pattern above
   pub fn handle_participant_message_reader(&mut self) {
     let participant_messages: Option<Vec<ParticipantMessageData>> = match self
-      .dcps_participant_message_reader
+      .dcps_participant_message.reader
       .take(100, ReadCondition::any())
     {
       Ok(msgs) => Some(
@@ -1190,7 +1163,7 @@ impl Discovery {
             kind: ParticipantMessageDataKind::AUTOMATIC_LIVELINESS_UPDATE,
             data: Vec::new(),
           };
-          match self.dcps_participant_message_writer.write(pp, None) {
+          match self.dcps_participant_message.writer.write(pp, None) {
             Ok(_) => (),
             Err(e) => {
               error!("Failed to write ParticipantMessageData auto. {e:?}");
@@ -1221,7 +1194,7 @@ impl Discovery {
             kind: ParticipantMessageDataKind::MANUAL_LIVELINESS_UPDATE,
             data: Vec::new(),
           };
-          match self.dcps_participant_message_writer.write(pp, None) {
+          match self.dcps_participant_message.writer.write(pp, None) {
             Ok(_) => (),
             Err(e) => {
               error!("Failed to writer ParticipantMessageData manual. {e:?}");
@@ -1255,7 +1228,7 @@ impl Discovery {
     });
     let mut count = 0;
     for data in local_user_readers {
-      match self.dcps_subscription_writer.write(data.clone(), None) {
+      match self.dcps_subscription.writer.write(data.clone(), None) {
         Ok(_) => {
           count += 1;
         }
@@ -1277,7 +1250,7 @@ impl Discovery {
     let mut count = 0;
     for data in local_user_writers {
       if self
-        .dcps_publication_writer
+        .dcps_publication.writer
         .write(data.clone(), None)
         .is_err()
       {
@@ -1293,7 +1266,7 @@ impl Discovery {
     let db = self.discovery_db_read();
     let datas = db.local_user_topics();
     for data in datas {
-      if let Err(e) = self.dcps_topic_writer.write(data.clone(), None) {
+      if let Err(e) = self.dcps_topic.writer.write(data.clone(), None) {
         error!("Unable to write new topic info: {e:?}");
       }
     }

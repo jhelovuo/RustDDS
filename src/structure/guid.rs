@@ -273,6 +273,60 @@ impl EntityId {
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
 
+  // DDS SEcurity spec v1.1
+  // Section "7.3.7 Mapping to UDP/IP PSM"
+  // Table 9 – EntityId values for secure builtin data writers and data readers
+  //
+  pub const SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x00, 0x03],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN, // 0xc2
+  };
+  pub const SEDP_BUILTIN_PUBLICATIONS_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x00, 0x03],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+  pub const SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x00, 0x04],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+  };
+  pub const SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x00, 0x04],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x02, 0x00],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x02, 0x00],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER: Self = Self {
+    entity_key: [0x00, 0x02, 0x01],
+    entity_kind: EntityKind::WRITER_NO_KEY_BUILT_IN, //0xc3
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_STATELESS_READER: Self = Self {
+    entity_key: [0x00, 0x02, 0x01],
+    entity_kind: EntityKind::READER_NO_KEY_BUILT_IN, // 0xc4
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x02, 0x02],
+    entity_kind: EntityKind::WRITER_NO_KEY_BUILT_IN,
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x02, 0x02],
+    entity_kind: EntityKind::READER_NO_KEY_BUILT_IN,
+  };
+  pub const SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x01, 0x01],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+  };
+  pub const SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x01, 0x01],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+
+
   pub const MIN: Self = Self {
     entity_key: [0x00; 3],
     entity_kind: EntityKind::MIN,
