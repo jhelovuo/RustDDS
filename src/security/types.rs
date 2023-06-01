@@ -1,11 +1,17 @@
 use bytes::Bytes;
 use enumflags2::bitflags;
 use speedy::{Context, Readable, Reader, Writable, Writer};
+use serde::{Serialize, Deserialize};
 
 use crate::serialization::speedy_pl_cdr_helpers::*;
+use crate::{discovery, security, dds::qos, serialization, Keyed, GUID};
+use crate::RepresentationIdentifier;
+use crate::serialization::pl_cdr_adapters::{PlCdrSerialize, PlCdrDeserialize};
+
 
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize)] // for CDR in Discovery
 pub struct Property {
   name: String,
   value: String,
@@ -58,10 +64,43 @@ impl Property {
 // BinaryProperty_t type from section 7.2.2 of the Security specification (v.
 // 1.1)
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize)] // for CDR in Discovery
+#[serde(into = "repr::BinaryProperty", from = "repr::BinaryProperty")]
 pub struct BinaryProperty {
   pub(crate) name: String, // public because of serialization
-  pub(crate) value: Bytes,
+  pub(crate) value: Bytes, // Serde cannot derive for Bytes, therefore use repr::
   pub(crate) propagate: bool, // propagate field is not serialized
+}
+
+mod repr {
+  use serde::{Serialize, Deserialize};
+
+  #[derive(Serialize, Deserialize)]
+  pub struct BinaryProperty {
+    pub(crate) name: String, 
+    pub(crate) value: Vec<u8>,
+    pub(crate) propagate: bool, 
+  }
+
+  impl From<BinaryProperty> for super::BinaryProperty {
+    fn from(bp: BinaryProperty) -> super::BinaryProperty {
+      super::BinaryProperty {
+        name: bp.name,
+        value: bp.value.into(),
+        propagate: bp.propagate,
+      }
+    }
+  }
+
+  impl From<super::BinaryProperty> for BinaryProperty {
+    fn from(bp: super::BinaryProperty) -> BinaryProperty {
+      BinaryProperty {
+        name: bp.name,
+        value: bp.value.into(),
+        propagate: bp.propagate,
+      }      
+    }
+  }
 }
 
 impl BinaryProperty {
@@ -105,9 +144,60 @@ impl<C: Context> Writable<C> for BinaryProperty {
   }
 }
 
+
+// Tag type from section 7.2.5 of the DDS Security specification (v. 1.1)
+// The silly thing is almost the same as "Property"
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tag {
+  pub(crate) name: String,
+  pub(crate) value: String,
+}
+
+impl<'a, C: Context> Readable<'a, C> for Tag {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+    let name: StringWithNul = reader.read_value()?;
+
+    read_pad(reader, name.len(), 4)?; // pad according to previous read
+    let value: StringWithNul = reader.read_value()?;
+
+    Ok(Tag {
+      name: name.into(),
+      value: value.into(),
+    })
+  }
+}
+
+// See alignment comment in "Property"
+impl<C: Context> Writable<C> for Tag {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    let name = StringWithNul::from(self.name.clone());
+    writer.write_value(&name)?;
+
+    write_pad(writer, name.len(), 4)?;
+    writer.write_value(&StringWithNul::from(self.value.clone()))?;
+
+    Ok(())
+  }
+}
+
+impl Tag {
+  pub fn serialized_len(&self) -> usize {
+    let first = 4 + self.name.len() + 1;
+    let misalign = first % 4;
+    let align = if misalign > 0 { 4 - misalign } else { 0 };
+    let second = 4 + self.value.len() + 1;
+    first + align + second
+  }
+}
+
+
+
+
+
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
 // fields need to be public to make (de)serializable
 #[derive(Clone)]
+#[derive(Serialize, Deserialize)] // for CDR in Discovery
 pub struct DataHolder {
   pub(crate) class_id: String,
   pub(crate) properties: Vec<Property>,
@@ -117,17 +207,6 @@ pub struct DataHolder {
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
 pub type Token = DataHolder;
 
-// ParticipantBuiltinTopicDataSecure from section 7.4.1.6 of the Security
-// specification
-pub struct ParticipantBuiltinTopicDataSecure {}
-
-// PublicationBuiltinTopicDataSecure from section 7.4.1.7 of the Security
-// specification
-pub struct PublicationBuiltinTopicDataSecure {}
-
-// SubscriptionBuiltinTopicDataSecure from section 7.4.1.8 of the Security
-// specification
-pub struct SubscriptionBuiltinTopicDataSecure {}
 
 // Result type with generic OK type. Error type is SecurityError.
 pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
@@ -184,24 +263,6 @@ pub enum PluginParticipantSecurityAttributesMask {
   IsLivelinessOriginAuthenticated = 0b0010_0000,
 }
 
-// // serialization helper struct
-// #[derive(Serialize, Deserialize)]
-// pub(crate) struct ParticipantSecurityInfoData {
-//   parameter_id: ParameterId,
-//   parameter_length: u16,
-//   security_info: ParticipantSecurityInfo,
-// }
-
-// impl ParticipantSecurityInfoData {
-//   pub fn new(security_info: ParticipantSecurityInfo) -> Self {
-//     Self {
-//       parameter_id: ParameterId::PID_PARTICIPANT_SECURITY_INFO,
-//       parameter_length: 8, // 2x u32
-//       security_info,
-//     }
-//   }
-// }
-
 // DDS Security spec v1.1 Section 7.2.8 EndpointSecurityInfo
 // This is communicated over Discovery
 
@@ -248,20 +309,147 @@ pub enum PluginEndpointSecurityAttributesMask {
   IsSubmessageOriginAuthenticated = 0b0000_0100,
 }
 
-// // serialization helper struct
-// #[derive(Serialize, Deserialize)]
-// pub(crate) struct EndpointSecurityInfoData {
-//   parameter_id: ParameterId,
-//   parameter_length: u16,
-//   security_info: EndpointSecurityInfo,
-// }
 
-// impl EndpointSecurityInfoData {
-//   pub fn new(security_info: EndpointSecurityInfo) -> Self {
-//     Self {
-//       parameter_id: ParameterId::PID_ENDPOINT_SECURITY_INFO,
-//       parameter_length: 8, // 2x u32
-//       security_info,
-//     }
-//   }
-// }
+// ParticipantBuiltinTopicDataSecure from section 7.4.1.6 of the Security
+// specification
+pub struct ParticipantBuiltinTopicDataSecure {
+  pub participant_data: discovery::spdp_participant_data::SpdpDiscoveredParticipantData,
+  pub identity_status_token: security::authentication::IdentityStatusToken,
+}
+impl Keyed for ParticipantBuiltinTopicDataSecure {
+  type K = Participant_GUID;
+  fn key(&self) -> Self::K {
+    self.participant_data.key()
+  }
+}
+impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
+    todo!()
+  }
+}
+
+impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
+    todo!()
+  }
+}
+
+// PublicationBuiltinTopicDataSecure from section 7.4.1.7 of the Security
+// specification
+pub struct PublicationBuiltinTopicDataSecure {
+  pub discovered_writer_data: discovery::sedp_messages::DiscoveredWriterData,
+  pub data_tags: qos::policy::DataTag,
+}
+
+impl Keyed for PublicationBuiltinTopicDataSecure {
+  type K = Endpoint_GUID;
+  fn key(&self) -> Self::K {
+    self.discovered_writer_data.key()
+  }
+}
+impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
+    todo!()
+  }
+}
+
+impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
+    todo!()
+  }
+}
+
+
+// SubscriptionBuiltinTopicDataSecure from section 7.4.1.8 of the Security
+// specification
+pub struct SubscriptionBuiltinTopicDataSecure {
+  pub discovered_reader_data: discovery::sedp_messages::DiscoveredReaderData,
+  pub data_tags: qos::policy::DataTag,
+}
+impl Keyed for SubscriptionBuiltinTopicDataSecure {
+  type K = Endpoint_GUID;
+  fn key(&self) -> Self::K {
+    self.discovered_reader_data.key()
+  }
+}
+impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
+  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
+    todo!()
+  }
+}
+
+impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
+  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
+    todo!()
+  }
+}
+
+// ParticipantStatelessMessage from section 7.4.3.3 of the Security
+// specification
+#[derive(Serialize, Deserialize)]
+pub struct ParticipantStatelessMessage {
+  generic: ParticipantGenericMessage,
+}
+// The specification defines and uses the following specific values for the GenericMessageClassId:
+// #define GMCLASSID_SECURITY_AUTH_REQUEST “dds.sec.auth_request”
+// #define GMCLASSID_SECURITY_AUTH_HANDSHAKE “dds.sec.auth”
+
+impl Keyed for ParticipantStatelessMessage {
+  type K = GUID;
+
+  fn key(&self) -> Self::K {
+    self.generic.key()
+  }
+}
+
+
+
+// ParticipantVolatileMessageSecure from section 7.4.4.3 of the Security
+// specification
+//
+// spec: typedef ParticipantVolatileMessageSecure ParticipantGenericMessage;
+#[derive(Serialize, Deserialize)]
+pub struct ParticipantVolatileMessageSecure {
+  generic: ParticipantGenericMessage,
+}
+// The specification defines and uses the following specific values for the GenericMessageClassId:
+// #define GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS ”dds.sec.participant_crypto_tokens”
+// #define GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS ”dds.sec.datawriter_crypto_tokens”
+// #define GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS ”dds.sec.datareader_crypto_tokens”
+
+impl Keyed for ParticipantVolatileMessageSecure {
+  type K = GUID;
+
+  fn key(&self) -> Self::K {
+    self.generic.key()
+  }
+}
+
+
+use crate::structure::rpc;
+use crate::discovery::spdp_participant_data::Participant_GUID;
+use crate::discovery::sedp_messages::Endpoint_GUID;
+
+// This is the transport (message) type for specialized versions above.
+// DDS Security Spec v1.1
+// Section 7.2.6 ParticipantGenericMessage
+#[derive(Serialize, Deserialize)]
+pub struct ParticipantGenericMessage {
+  pub message_identity: rpc::SampleIdentity,
+  pub related_message_identity: rpc::SampleIdentity,
+  // GUIDs here need not be typed Endpoint_GUID or Participant_GUID,
+  // because CDR serialization does not need the distiction, unlike PL_CDR.
+  pub destination_participant_guid: GUID, //target for the request. Can be GUID_UNKNOWN 
+  pub destination_endpoint_guid: GUID,
+  pub source_endpoint_guid: GUID,
+  pub message_class_id: String,
+  pub message_data: Vec<DataHolder>,
+}
+
+impl Keyed for ParticipantGenericMessage {
+  type K = GUID;
+
+  fn key(&self) -> Self::K {
+    self.source_endpoint_guid
+  }
+}
