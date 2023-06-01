@@ -1,12 +1,13 @@
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use enumflags2::bitflags;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Serialize, Deserialize};
 
-use crate::serialization::speedy_pl_cdr_helpers::*;
-use crate::{discovery, security, dds::qos, serialization, Keyed, GUID};
-use crate::RepresentationIdentifier;
+use crate::{discovery, security, dds::qos, serialization, Keyed, GUID, RepresentationIdentifier};
+use crate::messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList};
 use crate::serialization::pl_cdr_adapters::{PlCdrSerialize, PlCdrDeserialize};
+use crate::serialization::speedy_pl_cdr_helpers::*;
+use crate::structure::parameter_id::ParameterId;
 
 
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
@@ -196,13 +197,58 @@ impl Tag {
 
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
 // fields need to be public to make (de)serializable
-#[derive(Clone)]
-#[derive(Serialize, Deserialize)] // for CDR in Discovery
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)] // for CDR in Discovery
 pub struct DataHolder {
   pub(crate) class_id: String,
   pub(crate) properties: Vec<Property>,
   pub(crate) binary_properties: Vec<BinaryProperty>,
 }
+
+impl DataHolder {
+  pub fn dummy() -> Self {
+    Self {
+      class_id: "dummy".to_string(),
+      properties: vec![],
+      binary_properties: vec![]
+    }
+  }
+}
+
+impl<'a, C: Context> Readable<'a, C> for DataHolder {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+    let class_id: StringWithNul = reader.read_value()?;
+
+    read_pad(reader, class_id.len(), 4)?; // pad according to previous read
+    // We can use this Qos reader, becaues it has identical structure.
+    let qos::policy::Property{ value, binary_value} =
+      reader.read_value()?;
+
+    Ok(DataHolder {
+      class_id: class_id.into(),
+      properties: value,
+      binary_properties: binary_value ,
+    })
+  }
+}
+
+// See alignment comment in "Property"
+impl<C: Context> Writable<C> for DataHolder {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    let class_id = StringWithNul::from(self.class_id.clone());
+    writer.write_value(&class_id)?;
+
+    write_pad(writer, class_id.len(), 4)?;
+    // Use same structure equality as in Readable impl
+    let q = qos::policy::Property {
+      value: self.properties.clone(),
+      binary_value: self.binary_properties.clone(),
+    };
+    writer.write_value(&q)?;
+
+    Ok(())
+  }
+}
+
 
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
 pub type Token = DataHolder;
@@ -324,13 +370,45 @@ impl Keyed for ParticipantBuiltinTopicDataSecure {
 }
 impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
-    todo!()
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+
+    let identity_status_token = get_first_from_pl_map(      
+      &pl_map,
+      ctx,
+      ParameterId::PID_IDENTITY_STATUS_TOKEN,
+      "Identity status token",
+    )?;
+
+    let participant_data = discovery::spdp_participant_data::SpdpDiscoveredParticipantData
+      ::from_pl_cdr_bytes(input_bytes, encoding)?;
+
+    Ok( Self{ participant_data, identity_status_token } )
   }
 }
 
 impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
-    todo!()
+    let mut pl = ParameterList::new();
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    emit!(PID_IDENTITY_STATUS_TOKEN, &self.identity_status_token, 
+        security::authentication::IdentityStatusToken);
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    
+    let part_data_bytes = self.participant_data.to_pl_cdr_bytes(encoding)?;
+    let mut result = BytesMut::new();
+    result.extend_from_slice(&part_data_bytes);
+    result.extend_from_slice(&bytes);
+    Ok(result.freeze())
   }
 }
 
@@ -349,13 +427,44 @@ impl Keyed for PublicationBuiltinTopicDataSecure {
 }
 impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
-    todo!()
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+
+    let data_tags = get_first_from_pl_map(      
+      &pl_map,
+      ctx,
+      ParameterId::PID_DATA_TAGS,
+      "Data tags",
+    )?;
+
+    let discovered_writer_data = discovery::sedp_messages::DiscoveredWriterData
+      ::from_pl_cdr_bytes(input_bytes, encoding)?;
+
+    Ok( Self{ discovered_writer_data, data_tags } )
   }
 }
 
 impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
-    todo!()
+    let mut pl = ParameterList::new();
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    
+    let part_data_bytes = self.discovered_writer_data.to_pl_cdr_bytes(encoding)?;
+    let mut result = BytesMut::new();
+    result.extend_from_slice(&part_data_bytes);
+    result.extend_from_slice(&bytes);
+    Ok(result.freeze())
   }
 }
 
@@ -374,13 +483,44 @@ impl Keyed for SubscriptionBuiltinTopicDataSecure {
 }
 impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
-    todo!()
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
+    let pl_map = pl.to_map();
+
+    let data_tags = get_first_from_pl_map(      
+      &pl_map,
+      ctx,
+      ParameterId::PID_DATA_TAGS,
+      "Data tags",
+    )?;
+
+    let discovered_reader_data = discovery::sedp_messages::DiscoveredReaderData
+      ::from_pl_cdr_bytes(input_bytes, encoding)?;
+
+    Ok( Self{ discovered_reader_data, data_tags } )
   }
 }
 
 impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
   fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
-    todo!()
+    let mut pl = ParameterList::new();
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    macro_rules! emit {
+      ($pid:ident, $member:expr, $type:ty) => {
+        pl.push(Parameter::new(ParameterId::$pid, {
+          let m: &$type = $member;
+          m.write_to_vec_with_ctx(ctx)?
+        }))
+      };
+    }
+    emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    
+    let part_data_bytes = self.discovered_reader_data.to_pl_cdr_bytes(encoding)?;
+    let mut result = BytesMut::new();
+    result.extend_from_slice(&part_data_bytes);
+    result.extend_from_slice(&bytes);
+    Ok(result.freeze())
   }
 }
 
