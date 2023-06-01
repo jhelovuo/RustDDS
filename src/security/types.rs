@@ -107,6 +107,7 @@ impl<C: Context> Writable<C> for BinaryProperty {
 
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
 // fields need to be public to make (de)serializable
+#[derive(Clone)]
 pub struct DataHolder {
   pub(crate) class_id: String,
   pub(crate) properties: Vec<Property>,

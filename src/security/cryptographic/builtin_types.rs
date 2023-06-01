@@ -82,6 +82,17 @@ impl TryFrom<BuiltinCryptoToken> for CryptoToken {
   }
 }
 
+impl From<KeyMaterial_AES_GCM_GMAC> for BuiltinCryptoToken {
+  fn from(key_material: KeyMaterial_AES_GCM_GMAC) -> Self {
+    Self { key_material }
+  }
+}
+impl From<BuiltinCryptoToken> for KeyMaterial_AES_GCM_GMAC {
+  fn from(BuiltinCryptoToken { key_material }: BuiltinCryptoToken) -> Self {
+    key_material
+  }
+}
+
 /// KeyMaterial_AES_GCM_GMAC type from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the name from the spec
@@ -95,7 +106,7 @@ pub struct KeyMaterial_AES_GCM_GMAC {
   pub master_receiver_specific_key: Vec<u8>,
 }
 
-// Conversions to and from Bytes
+// Conversions from and into Bytes
 impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
   fn try_from(value: Bytes) -> Result<Self, Self::Error> {
@@ -127,7 +138,7 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
   }
 }
 
-//Conversions to and from CryptoHandle
+//Conversions from and into CryptoHandle
 impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
   fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
@@ -141,12 +152,26 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoHandle {
   }
 }
 
+// Conversions from and into CryptoToken
+impl TryFrom<CryptoToken> for KeyMaterial_AES_GCM_GMAC {
+  type Error = SecurityError;
+  fn try_from(token: CryptoToken) -> Result<Self, Self::Error> {
+    BuiltinCryptoToken::try_from(token).map(KeyMaterial_AES_GCM_GMAC::from)
+  }
+}
+impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoToken {
+  type Error = SecurityError;
+  fn try_from(key_material: KeyMaterial_AES_GCM_GMAC) -> Result<Self, Self::Error> {
+    BuiltinCryptoToken::from(key_material).try_into()
+  }
+}
+
 /// We need to refer to a sequence of key material structures for example in
 /// register_local_datawriter.
 // Create a wrapper to avoid error E0117
 #[allow(non_camel_case_types)] // We use the name from the spec
 pub struct KeyMaterial_AES_GCM_GMAC_seq(pub Vec<KeyMaterial_AES_GCM_GMAC>);
-// Conversions to and from Bytes for KeyMaterial_AES_GCM_GMAC_seq
+// Conversions from and into Bytes for KeyMaterial_AES_GCM_GMAC_seq
 impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC_seq {
   type Error = SecurityError;
   fn try_from(value: Bytes) -> Result<Self, Self::Error> {
@@ -196,7 +221,7 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Bytes {
   }
 }
 
-//Conversions to and from CryptoHandle for KeyMaterial_AES_GCM_GMAC_seq
+// Conversions from and into CryptoHandle for KeyMaterial_AES_GCM_GMAC_seq
 impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC_seq {
   type Error = SecurityError;
   fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
@@ -210,6 +235,28 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for CryptoHandle {
   }
 }
 
+// Conversions from and into Vec<CryptoToken> for KeyMaterial_AES_GCM_GMAC_seq
+impl TryFrom<Vec<CryptoToken>> for KeyMaterial_AES_GCM_GMAC_seq {
+  type Error = SecurityError;
+  fn try_from(tokens: Vec<CryptoToken>) -> Result<Self, Self::Error> {
+    tokens
+      .iter()
+      .map(|token| KeyMaterial_AES_GCM_GMAC::try_from(token.clone()))
+      .collect::<Result<Vec<KeyMaterial_AES_GCM_GMAC>, Self::Error>>()
+      .map(Self)
+  }
+}
+impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Vec<CryptoToken> {
+  type Error = SecurityError;
+  fn try_from(
+    KeyMaterial_AES_GCM_GMAC_seq(keymat_seq): KeyMaterial_AES_GCM_GMAC_seq,
+  ) -> Result<Self, Self::Error> {
+    keymat_seq
+      .iter()
+      .map(|keymat| CryptoToken::try_from(keymat.clone()))
+      .collect()
+  }
+}
 //For (de)serialization
 #[allow(non_camel_case_types)] // We use the name from the spec
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

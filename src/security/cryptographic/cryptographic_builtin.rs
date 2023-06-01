@@ -159,7 +159,12 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     local_participant_crypto: ParticipantCryptoHandle,
     remote_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
-    todo!();
+    //TODO: this is only a mock implementation (or is it?)
+
+    // Convert to key material
+    KeyMaterial_AES_GCM_GMAC::try_from(remote_participant_crypto)
+      // Convert to CryptoToken and wrap in a Vec
+      .and_then(|keymat| Ok(vec![keymat.try_into()?]))
   }
 
   fn set_remote_participant_crypto_tokens(
@@ -167,14 +172,20 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     remote_participant_crypto: ParticipantCryptoHandle,
     remote_participant_tokens: Vec<ParticipantCryptoToken>,
   ) -> SecurityResult<()> {
-    todo!();
+    //TODO: this is only a mock implementation
+    Ok(())
   }
 
   fn create_local_datawriter_crypto_tokens(
     local_datawriter_crypto: DatawriterCryptoHandle,
     remote_datareader_crypto: DatareaderCryptoHandle,
   ) -> SecurityResult<Vec<DatawriterCryptoToken>> {
-    todo!();
+    //TODO: this is only a mock implementation (or is it?)
+
+    // Convert to key material seq
+    KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_datareader_crypto)
+      // Convert to Vec<CryptoToken>
+      .and_then(Vec::<DatawriterCryptoToken>::try_from)
   }
 
   fn set_remote_datawriter_crypto_tokens(
@@ -182,14 +193,20 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     remote_datawriter_crypto: DatawriterCryptoHandle,
     remote_datawriter_tokens: Vec<DatawriterCryptoToken>,
   ) -> SecurityResult<()> {
-    todo!();
+    //TODO: this is only a mock implementation
+    Ok(())
   }
 
   fn create_local_datareader_crypto_tokens(
     local_datareader_crypto: DatareaderCryptoHandle,
     remote_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<Vec<DatareaderCryptoToken>> {
-    todo!();
+    //TODO: this is only a mock implementation (or is it?)
+
+    // Convert to key material
+    KeyMaterial_AES_GCM_GMAC::try_from(remote_datawriter_crypto)
+      // Convert to CryptoToken and wrap in a Vec
+      .and_then(|keymat| Ok(vec![DatareaderCryptoToken::try_from(keymat)?]))
   }
 
   fn set_remote_datareader_crypto_tokens(
@@ -197,11 +214,13 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     remote_datareader_crypto: DatareaderCryptoHandle,
     remote_datareader_tokens: Vec<DatareaderCryptoToken>,
   ) -> SecurityResult<()> {
-    todo!();
+    //TODO: this is only a mock implementation
+    Ok(())
   }
 
   fn return_crypto_tokens(crypto_tokens: Vec<CryptoToken>) -> SecurityResult<()> {
-    todo!();
+    //TODO: this is only a mock implementation
+    Ok(())
   }
 }
 
