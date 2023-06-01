@@ -6,6 +6,11 @@ use crate::{
   structure::guid::{EntityKind, GuidPrefix, GUID},
 };
 
+// TODO: These TOKEN_ constants shold be somewhere else. 
+// They do not belong to "network". Most are just polling tokens for
+// discovery and dp_event_loop threads.
+// Note: Check that there are no other uses before moving or renaming.
+
 const PTB: usize = EntityKind::POLL_TOKEN_BASE;
 
 pub const STOP_POLL_TOKEN: Token = Token(PTB);
@@ -54,7 +59,26 @@ pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(39 + PTB);
 pub const DISCOVERY_PARTICIPANT_MESSAGE_TOKEN: Token = Token(40 + PTB);
 pub const DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(41 + PTB);
 
-pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(50 + PTB);
+pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(45 + PTB);
+
+pub const SECURE_DISCOVERY_PARTICIPANT_DATA_TOKEN: Token = Token(50 + PTB);
+// pub const DISCOVERY_PARTICIPANT_CLEANUP_TOKEN: Token = Token(51 + PTB);
+pub const SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN: Token = Token(52 + PTB);
+pub const SECURE_DISCOVERY_READER_DATA_TOKEN: Token = Token(53 + PTB);
+pub const SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN: Token = Token(54 + PTB);
+pub const SECURE_DISCOVERY_WRITER_DATA_TOKEN: Token = Token(55 + PTB);
+pub const SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN: Token = Token(56 + PTB);
+// pub const DISCOVERY_TOPIC_DATA_TOKEN: Token = Token(57 + PTB);
+// pub const DISCOVERY_TOPIC_CLEANUP_TOKEN: Token = Token(58 + PTB);
+// pub const DISCOVERY_SEND_TOPIC_INFO_TOKEN: Token = Token(59 + PTB);
+pub const P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TOKEN: Token = Token(60 + PTB);
+pub const P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(61 + PTB);
+
+pub const P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN: Token = Token(62 + PTB);
+pub const P2P_PARTICIPANT_STATELESS_MESSAGE_TIMER_TOKEN: Token = Token(63 + PTB);
+pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN: Token = Token(64 + PTB);
+pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN: Token = Token(65 + PTB);
+
 
 pub struct TokenReceiverPair<T> {
   pub token: Token,
