@@ -1,6 +1,8 @@
+use speedy::Writable;
+
 use crate::{
   messages::submessages::elements::{
-    crypto_content::CryptoContent, parameter_list::ParameterList,
+    crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
   rtps::{Message, Submessage},
@@ -229,7 +231,47 @@ impl CryptoTransform for CryptographicBuiltIn {
     plain_buffer: SerializedPayload,
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<(CryptoContent, ParameterList)> {
-    todo!();
+    //TODO: this is only a mock implementation
+    let plaintext = plain_buffer.write_to_vec().map_err(|err| SecurityError {
+      msg: format!("Error converting SerializedPayload to byte vector: {}", err),
+    })?;
+    let KeyMaterial_AES_GCM_GMAC_seq(keymat_seq) =
+      KeyMaterial_AES_GCM_GMAC_seq::try_from(sending_datawriter_crypto)?;
+
+    match keymat_seq.as_slice() {
+      [keymat_0] => {
+        let header = BuiltinCryptoHeader {
+          transform_identifier: BuiltinCryptoTransformIdentifier {
+            transformation_kind: keymat_0.transformation_kind,
+            transformation_key_id: [0, 0, 0, 0],
+          },
+          session_id: [0, 0, 0, 0],
+          initialization_vector_suffix: [0; 8],
+        };
+        match keymat_0.transformation_kind {
+          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+            let footer = BuiltinCryptoFooter {
+              common_mac: [0; 16],
+              receiver_specific_macs: Vec::new(),
+            };
+
+            let header_vec =
+              CryptoHeader::from(header)
+                .write_to_vec()
+                .map_err(|err| SecurityError {
+                  msg: format!("Error converting CryptoHeader to byte vector: {}", err),
+                })?;
+            let footer_vec = Vec::<u8>::try_from(footer)?;
+            Ok((
+              CryptoContent::from([header_vec, plaintext, footer_vec].concat()),
+              ParameterList::new(),
+            ))
+          }
+          _ => todo!(),
+        }
+      }
+      _ => todo!(),
+    }
   }
 
   fn encode_datawriter_submessage(
@@ -237,7 +279,19 @@ impl CryptoTransform for CryptographicBuiltIn {
     sending_datawriter_crypto: DatawriterCryptoHandle,
     receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
   ) -> SecurityResult<EncodeResult<EncodedSubmessage>> {
-    todo!();
+    //TODO: this is only a mock implementation
+    let KeyMaterial_AES_GCM_GMAC_seq(keymat_seq) =
+      KeyMaterial_AES_GCM_GMAC_seq::try_from(sending_datawriter_crypto)?;
+
+    match keymat_seq.as_slice() {
+      [keymat_0] => match keymat_0.transformation_kind {
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Ok(EncodeResult::One(
+          EncodedSubmessage::Unencoded(plain_rtps_submessage),
+        )),
+        _ => todo!(),
+      },
+      _ => todo!(),
+    }
   }
 
   fn encode_datareader_submessage(
@@ -245,7 +299,16 @@ impl CryptoTransform for CryptographicBuiltIn {
     sending_datareader_crypto: DatareaderCryptoHandle,
     receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
   ) -> SecurityResult<EncodeResult<EncodedSubmessage>> {
-    todo!();
+    //TODO: this is only a mock implementation
+
+    let keymat = KeyMaterial_AES_GCM_GMAC::try_from(sending_datareader_crypto)?;
+
+    match keymat.transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Ok(EncodeResult::One(
+        EncodedSubmessage::Unencoded(plain_rtps_submessage),
+      )),
+      _ => todo!(),
+    }
   }
 
   fn encode_rtps_message(
@@ -253,7 +316,16 @@ impl CryptoTransform for CryptographicBuiltIn {
     sending_participant_crypto: ParticipantCryptoHandle,
     receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
   ) -> SecurityResult<EncodeResult<Message>> {
-    todo!();
+    //TODO: this is only a mock implementation
+
+    let keymat = KeyMaterial_AES_GCM_GMAC::try_from(sending_participant_crypto)?;
+
+    match keymat.transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+        Ok(EncodeResult::One(plain_rtps_message))
+      }
+      _ => todo!(),
+    }
   }
 
   fn decode_rtps_message(
