@@ -9,12 +9,10 @@ use log::{debug, error, info, trace, warn};
 use mio_06::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{channel as mio_channel, timer::Timer};
 
-use serde::{Serialize, de::DeserializeOwned};
-
 use paste::paste; // token pasting macro
 
 use crate::{
-  Keyed, Key,
+  with_key::{ DataReader, Sample, DataWriter},
   dds::{
     participant::DomainParticipantWeak,
     qos::{
@@ -27,11 +25,6 @@ use crate::{
     readcondition::ReadCondition,
     result::{Error, Result},
     topic::*,
-    with_key::{
-      datareader::{DataReader, DataReaderCdr},
-      datasample::Sample,
-      datawriter::{DataWriter, DataWriterCdr},
-    },
   },
   discovery::{
     discovery_db::{DiscoveredVia, DiscoveryDB},
@@ -92,28 +85,53 @@ impl LivelinessState {
 type DataReaderPlCdr<D> = DataReader<D, PlCdrDeserializerAdapter<D>>;
 type DataWriterPlCdr<D> = DataWriter<D, PlCdrSerializerAdapter<D>>;
 
-struct DiscoveryTopicPlCdr<D> 
-where
-  D: Keyed + PlCdrSerialize + PlCdrDeserialize,
-  <D as Keyed>::K: Key + PlCdrSerialize + PlCdrDeserialize,
-{
-  #[allow(dead_code)] // The topic may not be accesssed after initialization
-  topic: Topic,
-  reader: DataReaderPlCdr<D>,
-  writer: DataWriterPlCdr<D>,
-  timer: Timer<()>,
+mod with_key {
+  use super::{DataReaderPlCdr, DataWriterPlCdr};
+  use crate::{Key,Keyed, Topic};
+  use crate::serialization::pl_cdr_adapters::*;
+  use serde::{Serialize, de::DeserializeOwned};
+  use mio_extras::timer::Timer;
+
+  pub(super) struct DiscoveryTopicPlCdr<D> 
+  where
+    D: Keyed + PlCdrSerialize + PlCdrDeserialize,
+    <D as Keyed>::K: Key + PlCdrSerialize + PlCdrDeserialize,
+  {
+    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    pub topic: Topic,
+    pub reader: DataReaderPlCdr<D>,
+    pub writer: DataWriterPlCdr<D>,
+    pub timer: Timer<()>,
+  }
+
+  pub(super) struct DiscoveryTopicCDR<D> 
+  where
+    D: Keyed + Serialize + DeserializeOwned,
+    <D as Keyed>::K: Key + Serialize + DeserializeOwned,
+  {
+    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    pub topic: Topic,
+    pub reader: crate::with_key::DataReaderCdr<D>,
+    pub writer: crate::with_key::DataWriterCdr<D>,
+    pub timer: Timer<()>,
+  }
 }
 
-struct DiscoveryTopicCDR<D> 
-where
-  D: Keyed + Serialize + DeserializeOwned,
-  <D as Keyed>::K: Key + Serialize + DeserializeOwned,
-{
-  #[allow(dead_code)] // The topic may not be accesssed after initialization
-  topic: Topic,
-  reader: DataReaderCdr<D>,
-  writer: DataWriterCdr<D>,
-  timer: Timer<()>,
+mod no_key {
+  use crate::Topic;
+  use serde::{Serialize, de::DeserializeOwned};
+  use mio_extras::timer::Timer;
+
+  pub(super) struct DiscoveryTopicCDR<D> 
+  where
+    D: Serialize + DeserializeOwned,
+  {
+    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    pub topic: Topic,
+    pub reader: crate::no_key::DataReader<D, crate::CDRDeserializerAdapter<D>>,
+    pub writer: crate::no_key::DataWriter<D, crate::CDRSerializerAdapter<D>>,
+    pub timer: Timer<()>,
+  }
 }
 
 
@@ -144,54 +162,54 @@ pub(crate) struct Discovery {
   // where participants announce their presence and built-in readers and writers.
   // and
   // timer to periodically announce our presence
-  dcps_participant: DiscoveryTopicPlCdr<SpdpDiscoveredParticipantData>,
+  dcps_participant: with_key::DiscoveryTopicPlCdr<SpdpDiscoveredParticipantData>,
   participant_cleanup_timer: Timer<()>, // garbage collection timer for dead remote particiapnts
 
   // Topic "DCPSSubscription" - announcing and detecting Readers
-  dcps_subscription: DiscoveryTopicPlCdr<DiscoveredReaderData>,
+  dcps_subscription: with_key::DiscoveryTopicPlCdr<DiscoveredReaderData>,
 
   // Topic "DCPSPublication" - announcing and detecting Writers
-  dcps_publication: DiscoveryTopicPlCdr<DiscoveredWriterData>,
+  dcps_publication: with_key::DiscoveryTopicPlCdr<DiscoveredWriterData>,
 
   
   // Topic "DCPSTopic" - annoncing and detecting topics
   #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
-  dcps_topic: DiscoveryTopicPlCdr<DiscoveredTopicData>,  
+  dcps_topic: with_key::DiscoveryTopicPlCdr<DiscoveredTopicData>,  
   topic_cleanup_timer: Timer<()>,
 
   // DCPSParticipantMessage - used by participants to communicate liveness
-  dcps_participant_message: DiscoveryTopicCDR<ParticipantMessageData>,
+  dcps_participant_message: with_key::DiscoveryTopicCDR<ParticipantMessageData>,
 
   // Following topics from DDS Security spec v1.1
 
   // DCPSParticipantSecure - 7.4.1.6 New DCPSParticipantSecure Builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
-  dcps_participant_secure: DiscoveryTopicPlCdr<ParticipantBuiltinTopicDataSecure>,
+  dcps_participant_secure: with_key::DiscoveryTopicPlCdr<ParticipantBuiltinTopicDataSecure>,
 
   // DCPSPublicationsSecure - 7.4.1.7 New DCPSPublicationsSecure Builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
-  dcps_publications_secure: DiscoveryTopicPlCdr<PublicationBuiltinTopicDataSecure>,
+  dcps_publications_secure: with_key::DiscoveryTopicPlCdr<PublicationBuiltinTopicDataSecure>,
 
   // DCPSSubscriptionsSecure - 7.4.1.8 New DCPSSubscriptionsSecure Builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
-  dcps_subscriptions_secure: DiscoveryTopicPlCdr<SubscriptionBuiltinTopicDataSecure>,
+  dcps_subscriptions_secure: with_key::DiscoveryTopicPlCdr<SubscriptionBuiltinTopicDataSecure>,
 
   // DCPSParticipantMessageSecure - used by participants to communicate secure liveness
   // 7.4.2 New DCPSParticipantMessageSecure builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
-  dcps_participant_message_secure: DiscoveryTopicCDR<ParticipantMessageData>, // CDR, not PL_CDR
+  dcps_participant_message_secure: with_key::DiscoveryTopicCDR<ParticipantMessageData>, // CDR, not PL_CDR
 
   // DCPSParticipantStatelessMessageSecure 
   // 77.4.3 New DCPSParticipantStatelessMessage builtin Topic
   // !!! TODO: By the spec, this topic must use _stateless_ reader and writer, which are
   // insensitive to sequence number attacks. 
   #[allow(dead_code)] // TODO: Remove when handlers implemented
-  dcps_participant_stateless_message: DiscoveryTopicCDR<ParticipantStatelessMessage>, // CDR?
+  dcps_participant_stateless_message: no_key::DiscoveryTopicCDR<ParticipantStatelessMessage>, 
 
   // DCPSParticipantVolatileMessageSecure 
   // 7.4.4 New DCPSParticipantVolatileMessageSecure builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
-  dcps_participant_volatile_message_secure: DiscoveryTopicCDR<ParticipantVolatileMessageSecure>, // CDR?
+  dcps_participant_volatile_message_secure: no_key::DiscoveryTopicCDR<ParticipantVolatileMessageSecure>, // CDR?
 }
 
 impl Discovery {
@@ -265,7 +283,7 @@ impl Discovery {
     //TODO: secure SPDP participant topic is Reliable
     //TODO: support also no_key topics
     macro_rules! construct_topic_and_poll {
-      ( $repr:ident, 
+      ( $repr:ident, $has_key:ident,
         $topic_name:expr, $topic_type_name:expr, $message_type:ty,
         $qos:expr,
         $reader_entity_id:expr, $reader_token:expr,
@@ -280,16 +298,16 @@ impl Discovery {
           paste!{
             let reader = 
               discovery_subscriber
-              .create_datareader_with_entityid
-                ::<$message_type, [< $repr DeserializerAdapter>] <$message_type>>(
+              . [< create_datareader_with_entityid_ $has_key >]
+                ::<$message_type, [<$repr DeserializerAdapter>] <$message_type>>(
                 &topic,
                 $reader_entity_id,
                 $qos,
               ).expect("Unable to create DataReader. ");
 
             let writer = 
-                discovery_publisher.create_datawriter_with_entityid
-                  ::<$message_type,[< $repr SerializerAdapter>] <$message_type>>(
+                discovery_publisher.[< create_datawriter_with_entityid_ $has_key >]
+                  ::<$message_type, [<$repr SerializerAdapter>] <$message_type>>(
                   $writer_entity_id,
                   &topic,
                   $qos,
@@ -311,7 +329,7 @@ impl Discovery {
               PollOpt::edge(),
             ).expect("Unable to register timer token. ");
 
-          paste!{ [<DiscoveryTopic $repr>] { topic, reader, writer, timer } }
+          paste!{ $has_key ::[<DiscoveryTopic $repr>] { topic, reader, writer, timer } }
         }
       } // macro
     }
@@ -340,7 +358,7 @@ impl Discovery {
 
     // Participant
     let dcps_participant = construct_topic_and_poll!(
-      PlCdr,
+      PlCdr, with_key,
       "DCPSParticipant", // topic name
       "SPDPDiscoveredParticipantData", // topic type name over RTPS
       SpdpDiscoveredParticipantData,
@@ -366,7 +384,7 @@ impl Discovery {
     // Subscriptions: What are the Readers on the network and what are they
     // subscribing to?
     let dcps_subscription = construct_topic_and_poll!(
-      PlCdr,
+      PlCdr, with_key,
       "DCPSSubscription", // topic name
       "DiscoveredReaderData", // topic type name over RTPS
       DiscoveredReaderData,
@@ -378,7 +396,7 @@ impl Discovery {
 
     // Publication : Who are the Writers here and elsewhere
     let dcps_publication = construct_topic_and_poll!(
-      PlCdr,
+      PlCdr, with_key,
       "DCPSPublication", // topic name
       "DiscoveredReaderData", // topic type name over RTPS
       DiscoveredWriterData,
@@ -390,7 +408,7 @@ impl Discovery {
 
     // Topic topic (not a typo)
     let dcps_topic = construct_topic_and_poll!(
-      PlCdr,
+      PlCdr, with_key,
       "DCPSTopic", // topic name
       "DiscoveredTopicData", // topic type name over RTPS
       DiscoveredTopicData,
@@ -415,7 +433,7 @@ impl Discovery {
 
     // Participant Message Data 8.4.13
     let dcps_participant_message = construct_topic_and_poll!(
-      CDR,
+      CDR, with_key,
       "DCPSParticipantMessage", // topic name
       "ParticipantMessageData", // topic type name over RTPS
       ParticipantMessageData,
@@ -429,7 +447,7 @@ impl Discovery {
 
     // Participant
     let dcps_participant_secure = construct_topic_and_poll!(
-      PlCdr,
+      PlCdr, with_key,
       "DCPSParticipantsSecure", // topic name
       "ParticipantBuiltinTopicDataSecure", // topic type name over RTPS (use the same data type)
       ParticipantBuiltinTopicDataSecure, 
@@ -442,7 +460,7 @@ impl Discovery {
     // Subscriptions: What are the Readers on the network and what are they
     // subscribing to?
     let dcps_subscriptions_secure = construct_topic_and_poll!(
-      PlCdr,
+      PlCdr, with_key,
       "DCPSSubscriptionsSecure", // topic name
       "SubscriptionBuiltinTopicDataSecure", // topic type name over RTPS
       SubscriptionBuiltinTopicDataSecure,
@@ -454,7 +472,7 @@ impl Discovery {
 
     // Publication : Who are the Writers here and elsewhere
     let dcps_publications_secure = construct_topic_and_poll!(
-      PlCdr,
+      PlCdr, with_key,
       "DCPSPublicationsSecure", // topic name
       "PublicationBuiltinTopicDataSecure,", // topic type name over RTPS
       PublicationBuiltinTopicDataSecure,
@@ -466,7 +484,7 @@ impl Discovery {
 
     // p2p Participant message secure
     let dcps_participant_message_secure = construct_topic_and_poll!(
-      CDR,
+      CDR, with_key,
       "DCPSParticipantMessageSecure", // topic name
       "ParticipantMessageData", // topic type name over RTPS (use the same data type)
       ParticipantMessageData, // actually reuse the non-secure data type
@@ -477,7 +495,7 @@ impl Discovery {
     );
     //TODO: NO_KEY topic
     let dcps_participant_stateless_message = construct_topic_and_poll!(
-      CDR,
+      CDR, no_key,
       "DCPSParticipantStatelessMessage", // topic name
       "ParticipantStatelessMessage", 
       ParticipantStatelessMessage, 
@@ -488,7 +506,7 @@ impl Discovery {
     );
     //TODO: NO_KEY topic
     let dcps_participant_volatile_message_secure = construct_topic_and_poll!(
-      CDR,
+      CDR, no_key,
       "ParticipantVolatileMessageSecure", // topic name
       "ParticipantVolatileMessageSecure", 
       ParticipantVolatileMessageSecure, // actually reuse the non-secure data type
