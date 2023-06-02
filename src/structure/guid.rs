@@ -470,6 +470,8 @@ impl fmt::Debug for EntityId {
       Self::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
         f.write_str("EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER")
       }
+      // TODO: This list is missing multiple entries.
+      // Can can we somehow autogenerate this?
       _ => {
         f.write_str("EntityId {")?;
         self.entity_key.fmt(f)?;

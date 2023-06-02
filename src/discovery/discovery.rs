@@ -24,7 +24,6 @@ use crate::{
     },
     readcondition::ReadCondition,
     result::{Error, Result},
-    topic::*,
   },
   discovery::{
     discovery_db::{DiscoveredVia, DiscoveryDB},
@@ -87,10 +86,12 @@ type DataWriterPlCdr<D> = DataWriter<D, PlCdrSerializerAdapter<D>>;
 
 mod with_key {
   use super::{DataReaderPlCdr, DataWriterPlCdr};
-  use crate::{Key,Keyed, Topic};
+  use crate::{Key,Keyed, Topic, TopicKind, };
   use crate::serialization::pl_cdr_adapters::*;
   use serde::{Serialize, de::DeserializeOwned};
   use mio_extras::timer::Timer;
+
+  pub const TOPIC_KIND : TopicKind = TopicKind::WithKey;
 
   pub(super) struct DiscoveryTopicPlCdr<D> 
   where
@@ -118,9 +119,11 @@ mod with_key {
 }
 
 mod no_key {
-  use crate::Topic;
+  use crate::{Topic, TopicKind};
   use serde::{Serialize, de::DeserializeOwned};
   use mio_extras::timer::Timer;
+
+  pub const TOPIC_KIND : TopicKind = TopicKind::NoKey;
 
   pub(super) struct DiscoveryTopicCDR<D> 
   where
@@ -293,7 +296,7 @@ impl Discovery {
                 $topic_name .to_string(),
                 $topic_type_name .to_string(),
                 &discovery_subscriber_qos,
-                TopicKind::WithKey,
+                $has_key::TOPIC_KIND,
               ).expect("Unable to create topic. ");
           paste!{
             let reader = 
@@ -362,7 +365,7 @@ impl Discovery {
       "DCPSParticipant", // topic name
       "SPDPDiscoveredParticipantData", // topic type name over RTPS
       SpdpDiscoveredParticipantData,
-      None, // QoS
+      Some(Self::create_spdp_patricipant_qos()),
       EntityId::SPDP_BUILTIN_PARTICIPANT_READER, DISCOVERY_PARTICIPANT_DATA_TOKEN,
       EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
       Self::SEND_PARTICIPANT_INFO_PERIOD, DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
@@ -477,8 +480,8 @@ impl Discovery {
       "PublicationBuiltinTopicDataSecure,", // topic type name over RTPS
       PublicationBuiltinTopicDataSecure,
       None, // QoS
-      EntityId::SEDP_BUILTIN_PUBLICATIONS_READER, SECURE_DISCOVERY_WRITER_DATA_TOKEN,
-      EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
+      EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_READER, SECURE_DISCOVERY_WRITER_DATA_TOKEN,
+      EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER,
       Self::SEND_WRITERS_INFO_PERIOD, SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN,
     );
 
@@ -1433,6 +1436,7 @@ mod tests {
   #[test]
   fn discovery_reader_data_test() {
     use crate::serialization::pl_cdr_adapters::PlCdrSerialize;
+    use crate::TopicKind;
 
     let participant = DomainParticipant::new(0).expect("participant creation");
 
@@ -1524,6 +1528,7 @@ mod tests {
 
   #[test]
   fn discovery_writer_data_test() {
+    use crate::TopicKind;
     let participant = DomainParticipant::new(0).expect("Failed to create participant");
 
     let topic = participant
