@@ -39,6 +39,12 @@ pub struct DomainInfo {
   pub participant_id: u16,
 }
 
+pub(crate) enum EventLoopCommand {
+  Stop,
+  PrepareStop,
+}
+
+
 pub const PREEMPTIVE_ACKNACK_PERIOD: Duration = Duration::from_secs(5);
 
 // RTPS spec Section 8.4.7.1.1  "Default Timing-Related Values"
@@ -60,7 +66,7 @@ pub struct DPEventLoop {
   // Writers
   add_writer_receiver: TokenReceiverPair<WriterIngredients>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
-  stop_poll_receiver: mio_channel::Receiver<()>,
+  stop_poll_receiver: mio_channel::Receiver<EventLoopCommand>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this
   // to locate RTPSReaderProxy if negative acknack.
   ack_nack_receiver: mio_channel::Receiver<(GuidPrefix, AckSubmessage)>,
@@ -84,7 +90,7 @@ impl DPEventLoop {
     remove_reader_receiver: TokenReceiverPair<GUID>,
     add_writer_receiver: TokenReceiverPair<WriterIngredients>,
     remove_writer_receiver: TokenReceiverPair<GUID>,
-    stop_poll_receiver: mio_channel::Receiver<()>,
+    stop_poll_receiver: mio_channel::Receiver<EventLoopCommand>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
   ) -> Self {
@@ -207,6 +213,9 @@ impl DPEventLoop {
       .unwrap();
     let mut poll_alive = Instant::now();
     let mut ev_wrapper = self;
+    let mut preparing_to_stop = false;
+
+    // loop starts here
     loop {
       ev_wrapper
         .poll
@@ -227,10 +236,23 @@ impl DPEventLoop {
           match EntityId::from_token(event.token()) {
             TokenDecode::FixedToken(fixed_token) => match fixed_token {
               STOP_POLL_TOKEN => {
-                let _ = ev_wrapper.stop_poll_receiver.try_recv();
-                // we are not really interested in the content
-                info!("Stopping dp_event_loop");
-                return;
+                use std::sync::mpsc::TryRecvError;
+                match ev_wrapper.stop_poll_receiver.try_recv() {
+                  Ok(EventLoopCommand::Stop) => {
+                    info!("Stopping dp_event_loop");
+                    return
+                  }
+                  Ok(EventLoopCommand::PrepareStop) => {
+                    info!("dp_event_loop preparing to stop.");
+                    preparing_to_stop = true;
+                  }
+                  Err(TryRecvError::Empty) => {
+                    warn!("Spurious wakeup from dp_event_loop command channel. Very fishy.");
+                  }
+                  Err(TryRecvError::Disconnected) => {
+                    error!("Application thread has exited abnormally. Stopping RustDDS event loop.")
+                  }
+                }
               }
               DISCOVERY_LISTENER_TOKEN
               | DISCOVERY_MUL_LISTENER_TOKEN
@@ -314,13 +336,13 @@ impl DPEventLoop {
             TokenDecode::Entity(eid) => {
               if eid.kind().is_reader() {
                 ev_wrapper.message_receiver.reader_mut(eid).map_or_else(
-                  || error!("Event for unknown reader {eid:?}"),
+                  || if ! preparing_to_stop { error!("Event for unknown reader {eid:?}"); },
                   Reader::process_command,
                 );
               } else if eid.kind().is_writer() {
                 let local_readers = match ev_wrapper.writers.get_mut(&eid) {
                   None => {
-                    error!("Event for unknown writer {eid:?}");
+                    if ! preparing_to_stop { error!("Event for unknown writer {eid:?}"); };
                     vec![]
                   }
                   Some(writer) => {

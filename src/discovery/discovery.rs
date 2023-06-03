@@ -283,8 +283,6 @@ impl Discovery {
       "Unable to create Discovery Publisher. {:?}"
     );
 
-    //TODO: secure SPDP participant topic is Reliable
-    //TODO: support also no_key topics
     macro_rules! construct_topic_and_poll {
       ( $repr:ident, $has_key:ident,
         $topic_name:expr, $topic_type_name:expr, $message_type:ty,

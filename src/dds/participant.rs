@@ -24,7 +24,7 @@ use crate::{
   log_and_err_internal,
   network::{constant::*, udp_listener::UDPListener},
   rtps::{
-    dp_event_loop::{DPEventLoop, DomainInfo},
+    dp_event_loop::{DPEventLoop, DomainInfo, EventLoopCommand},
     reader::*,
     writer::WriterIngredients,
   },
@@ -544,6 +544,13 @@ impl DomainParticipantDisc {
 impl Drop for DomainParticipantDisc {
   fn drop(&mut self) {
     info!("===== RustDDS shutting down ===== .drop() DomainParticipantDisc");
+
+    debug!("Wan dp_event_loop about stop.");
+    if self.dpi.lock().unwrap()
+        .stop_poll_sender.send(EventLoopCommand::PrepareStop).is_err() {
+      error!("dp_event_loop not responding to prepare stop discovery_command");
+    }
+
     debug!("Sending Discovery Stop signal.");
     if self
       .discovery_command_sender
@@ -574,7 +581,7 @@ pub(crate) struct DomainParticipantInner {
   sender_remove_reader: mio_channel::SyncSender<GUID>,
 
   // dp_event_loop control
-  stop_poll_sender: mio_channel::Sender<()>,
+  stop_poll_sender: mio_channel::Sender<EventLoopCommand>,
   ev_loop_handle: Option<JoinHandle<()>>, // this is Option, because it needs to be extracted
   // out of the struct (take) in order to .join() on the handle.
 
@@ -594,7 +601,8 @@ impl Drop for DomainParticipantInner {
   fn drop(&mut self) {
     // if send has an error simply leave as we have lost control of the
     // ev_loop_thread anyways
-    if self.stop_poll_sender.send(()).is_err() {
+    if self.stop_poll_sender.send(EventLoopCommand::Stop).is_err() {
+      error!("dp_event_loop not responding to stop discovery_command");
       return;
     }
 
@@ -708,12 +716,12 @@ impl DomainParticipantInner {
     // Adding readers
     let (sender_add_reader, receiver_add_reader) =
       mio_channel::sync_channel::<ReaderIngredients>(100);
-    let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(10);
+    let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(4);
 
     // Writers
     let (add_writer_sender, add_writer_receiver) =
       mio_channel::sync_channel::<WriterIngredients>(10);
-    let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
+    let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(4);
 
     let new_guid = GUID::new_participant_guid();
     let domain_info = DomainInfo {
@@ -731,7 +739,7 @@ impl DomainParticipantInner {
       discovery_db_event_sender,
     )));
 
-    let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
+    let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
 
     // Launch the background thread for DomainParticipant
     let dds_cache_clone = dds_cache.clone();

@@ -4,39 +4,39 @@ use mio_extras::channel::{SyncSender, TrySendError};
 
 use crate::structure::duration::Duration;
 
-const TIMEOUT_EPSILON: Duration = Duration::from_nanos(1000);
+const TIMEOUT_EPSILON_NS: i64 = 1000; // 1µs
 
-// Always give background thread 1 ms to react
-pub const TIMEOUT_FALLBACK: Duration = Duration::from_nanos(1_000_000);
+// By default, give background thread 20 ms to react
+pub const TIMEOUT_FALLBACK :Duration = Duration::from_nanos(20_000_000); // 20 ms
 
 pub fn try_send_timeout<T>(
   sender: &SyncSender<T>,
   t: T,
   timeout_opt: Option<Duration>,
 ) -> Result<(), TrySendError<T>> {
-  // TODO: Write a more optimized fast path, where send succeeds on first try.
 
-  let timeout = timeout_opt.unwrap_or(TIMEOUT_FALLBACK);
-  let mut delays = Vec::with_capacity(20);
-  if timeout <= TIMEOUT_EPSILON {
-    delays.push(TIMEOUT_EPSILON);
-  } else {
-    let mut to = timeout;
-    while to > TIMEOUT_EPSILON {
-      to = to / 2;
-      delays.push(to);
-    }
-  }
-  let mut mt = t;
-  while let Some(delay) = delays.pop() {
-    match sender.try_send(mt) {
-      Ok(()) => return Ok(()),
-      Err(TrySendError::Full(tt)) => {
-        thread::sleep(std::time::Duration::from(delay)); // and try again
-        mt = tt;
+  match sender.try_send(t) {
+    Ok(()) => Ok(()), // This is expected to be the common case
+
+    Err(TrySendError::Full(tt)) => {
+      let mut mt = tt;
+      let timeout = timeout_opt.unwrap_or(TIMEOUT_FALLBACK).to_nanoseconds();      
+      let mut time_left = timeout;
+      let mut delay = TIMEOUT_EPSILON_NS;
+      while time_left > TIMEOUT_EPSILON_NS {
+        match sender.try_send(mt) {
+          Ok(()) => return Ok(()),
+          Err(TrySendError::Full(tt)) => {
+            thread::sleep(std::time::Duration::from_nanos(delay as u64)); // and try again
+            mt = tt;
+            time_left -= delay;
+            delay *= 2;
+          }
+          Err(other) => return Err(other),
+        }
       }
-      Err(other) => return Err(other),
+      Err(TrySendError::Full(mt))        
     }
+    Err(other) => Err(other),
   }
-  Err(TrySendError::Full(mt))
 }

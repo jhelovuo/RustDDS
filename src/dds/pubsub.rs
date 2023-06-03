@@ -46,6 +46,7 @@ use crate::{
 use super::{
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
   with_key::simpledatareader::ReaderCommand,
+  helpers::try_send_timeout,
 };
 
 // -------------------------------------------------------------------
@@ -555,9 +556,7 @@ impl InnerPublisher {
   }
 
   pub(crate) fn remove_writer(&self, guid: GUID) {
-    self
-      .remove_writer_sender
-      .try_send(guid)
+    try_send_timeout( &self.remove_writer_sender, guid, None)
       .unwrap_or_else(|e| error!("Cannot remove Writer {:?} : {:?}", guid, e));
   }
 
@@ -977,9 +976,7 @@ impl InnerSubscriber {
     )?;
 
     // Return the DataReader Reader pairs to where they are used
-    self
-      .sender_add_reader
-      .try_send(new_reader)
+    try_send_timeout(&self.sender_add_reader, new_reader, None)
       .or_else(|e| log_and_err_internal!("Cannot add DataReader. Error: {}", e))?;
 
     Ok(datareader)
@@ -1068,9 +1065,7 @@ impl InnerSubscriber {
   }
 
   pub(crate) fn remove_reader(&self, guid: GUID) {
-    self
-      .sender_remove_reader
-      .try_send(guid)
+    try_send_timeout(&self.sender_remove_reader, guid, None)
       .unwrap_or_else(|e| error!("Cannot remove Reader {:?} : {:?}", guid, e));
   }
 
