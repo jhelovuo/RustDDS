@@ -111,7 +111,7 @@ pub trait Key:
   // no methods required
 
   // provided method:
-  fn hash_key(&self) -> KeyHash {
+  fn hash_key(&self, force_md5: bool) -> KeyHash {
     // See RTPS Spec v2.3 Section 9.6.3.8 KeyHash
 
     /* The KeyHash_t is computed from the Data as follows using one of two algorithms depending on whether
@@ -135,6 +135,23 @@ pub trait Key:
     // (Does it include CDR-specified alignment padding too?)
     //
 
+    /*
+      DDS Security specification v1.1, Section 7.3.4 Mandatory use of the KeyHash for encrypted
+      messages:
+
+      [...] For this reason the DDS Security specification imposes additional constraints in the use
+      of the key hash. These constraints apply only to the Data or DataFrag RTPS SubMessages where
+      the SerializedPayload SubmessageElement is encrypted by the operation
+      encode_serialized_payload of the CryptoTransform plugin:
+
+      (1) The KeyHash shall be included in the Inline Qos.
+
+      (2) The KeyHash shall be computed as the 128 bit MD5 Digest (IETF RFC 1321) applied to the CDR
+      Big- Endian encapsulation of all the Key fields in sequence. Unlike the rule stated in sub
+      clause 9.6.3.3 of the DDS specification, the MD5 hash shall be used regardless of the
+      maximum-size of the serialized key.
+    */
+
     let mut cdr_bytes = to_bytes::<Self, BigEndian>(self).unwrap_or_else(|e| {
       error!("Hashing key {:?} failed!", e);
       // This would cause a lot of hash collisions, but wht else we could do
@@ -144,7 +161,7 @@ pub trait Key:
     });
 
     KeyHash(
-      if Self::cdr_encoding_max_size() > CdrEncodingMaxSize::Bytes(16) {
+      if force_md5 || Self::cdr_encoding_max_size() > CdrEncodingMaxSize::Bytes(16) {
         // use MD5 hash to get the hash. The MD5 hash is always exactly
         // 16 bytes, so just deref it to [u8;16]
         *md5::compute(&cdr_bytes)
@@ -158,7 +175,7 @@ pub trait Key:
 }
 
 impl Key for () {
-  fn hash_key(&self) -> KeyHash {
+  fn hash_key(&self, _force_md5:bool) -> KeyHash {
     KeyHash::zero()
   }
 }

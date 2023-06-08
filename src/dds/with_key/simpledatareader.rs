@@ -236,7 +236,7 @@ where
       Sample::Value(d) => d.key(),
       Sample::Dispose(k) => k.clone(),
     };
-    hash_to_key_map.insert(instance_key.hash_key(), instance_key);
+    hash_to_key_map.insert(instance_key.hash_key(false), instance_key);
   }
 
   fn deserialize(
