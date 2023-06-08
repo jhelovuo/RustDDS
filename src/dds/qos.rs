@@ -42,6 +42,11 @@ pub enum QosPolicyId {
   Liveliness,
   TimeBasedFilter, // 9
   //Partition,
+
+  // Note: If "Partition" is ever implemented, observe also DDS Security spec v1.1
+  // Section "7.3.5 Immutability of Publisher Partition Qos in combination with non-volatile Durability kind"
+  // when implementing.
+
   Reliability, // 11
   DestinationOrder,
   History, // 13
