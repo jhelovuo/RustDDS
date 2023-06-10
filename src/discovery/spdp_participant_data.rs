@@ -601,5 +601,43 @@ mod tests {
       }
     }
   }
+#[test]
+  fn deserialize_evil_spdp_2() {
+    // https://github.com/jhelovuo/RustDDS/issues/279
+    use hex_literal::hex;
+    let data = Bytes::copy_from_slice(&hex!("
+      52 54 50 53
+      02 02 ff ff 01 0f 45 d2 b3 f5 58 b9 01 00 00 00
+      15 05 19 00 00 00 10 00 00 00 00 00 00 01 00 c2
+      00 00 00 00 02 00 00 00 00 03 90 fe c7
+    "));
+
+    let rtpsmsg = Message::read_from_buffer(&data).unwrap();
+    let submsgs = rtpsmsg.submessages();
+
+    for submsg in &submsgs {
+      match &submsg.body {
+        SubmessageBody::Writer(v) => match v {
+          WriterSubmessage::Data(d, _) => {
+            let participant_data: Result<SpdpDiscoveredParticipantData> =
+              PlCdrDeserializerAdapter::from_bytes(
+                &d.serialized_payload.as_ref().unwrap().value,
+                RepresentationIdentifier::PL_CDR_LE,
+              );
+            eprintln!("message data = {:?}", &data);
+            eprintln!(
+              "payload    = {:?}",
+              &d.serialized_payload.as_ref().unwrap().value.to_vec()
+            );
+            eprintln!("deserialized  = {:?}", &participant_data);
+          }
+
+          _ => continue,
+        },
+        SubmessageBody::Interpreter(_) => (),
+        _ => continue,
+      }
+    }
+  }
 
 }
