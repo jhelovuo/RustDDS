@@ -98,7 +98,17 @@ impl Data {
 
       // Nevertheless, skip over that extra data, if we are told such exists.
       cursor.set_position(cursor.position() + u64::from(extra_octets));
+      
+      if cursor.position() > buffer.len().try_into().unwrap() {
+        // octets_to_inline_qos told us to skip past the end of the message.
+        // This is a malformed message.
+        return Err(io::Error::new(
+          io::ErrorKind::InvalidData,
+          format!("DATA submessage octets_to_inline_qos points to byte {}, but message len={}.",
+            cursor.position(), buffer.len()) ));      
+      }
     }
+
 
     // read the inline Qos
     let parameter_list = if expect_qos {
