@@ -164,9 +164,11 @@ impl DataFrag {
         ),
       ));
     }
-    let extra_octets = octets_to_inline_qos - rtps_v25_header_size;
-    cursor.set_position(cursor.position() + u64::from(extra_octets));
-
+    // condition to avoid subtract overflow
+    if octets_to_inline_qos > rtps_v25_header_size {
+      let extra_octets = octets_to_inline_qos - rtps_v25_header_size;
+      cursor.set_position(cursor.position() + u64::from(extra_octets));
+    }
     let inline_qos = if expect_qos {
       Some(
         ParameterList::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor)
