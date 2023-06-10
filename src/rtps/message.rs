@@ -73,7 +73,7 @@ impl Message {
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
       // Try to figure out how large this submessage is.
       let sub_header_length = 4; // 4 bytes
-      let sub_content_length = if sub_header.content_length == 0 {
+      let proposed_sub_content_length = if sub_header.content_length == 0 {
         // RTPS spec 2.3, section 9.4.5.1.3:
         //           In case octetsToNextHeader==0 and the kind of Submessage is
         // NOT PAD or INFO_TS, the Submessage is the last Submessage in the Message
@@ -91,13 +91,17 @@ impl Message {
       } else {
         sub_header.content_length as usize
       };
+      // check if the declared content length makes sense
+      let sub_content_length = if sub_header_length + proposed_sub_content_length
+        <= submessages_left.len()
+      {
+        proposed_sub_content_length
+      } else {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput,
+            format!("Submessage header declares length larger than remaining message size: {sub_header_length} + {proposed_sub_content_length} <= {}", submessages_left.len())));
+      };
 
-      // we have to use temporary variable new_submessages_left to avoid creating
-      // another submessages_left
-      // let (sub_buffer, new_submessages_left) =
-      //   submessages_left.split_at(sub_header_length + sub_content_length);
-      // submessages_left = new_submessages_left;
-      // split fisrt buters to new buffer
+      // split first submessage to new buffer
       let mut sub_buffer = submessages_left.split_to(sub_header_length + sub_content_length);
       // split tail part (content) to new buffer
       let sub_content_buffer = sub_buffer.split_off(sub_header_length);
@@ -875,6 +879,22 @@ mod tests {
     assert_eq!(bits1, serialized);
   }
 
-  // removed case test_RTPS_submessage_flags_helper , as it was cut-and-paste
-  // from submessage_flag module - and obsoleted there.
+  #[test]
+  fn fuzz_rtps() {
+    // https://github.com/jhelovuo/RustDDS/issues/280
+    use hex_literal::hex;
+
+    let bits = Bytes::copy_from_slice(&hex!(
+      "
+      52 54 50 53
+      02 02 ff ff 01 0f 45 d2 b3 f5 58 b9 01 00 00 00
+      15 0b 18 00 00 00 00 00 00 00 02 c2 00 00 00 00
+      7d 00 00 00 00 01 00 00
+    "
+    ));
+    info!("bytes = {bits:?}");
+    let rtps = Message::read_from_buffer(&bits);
+    info!("read_from_buffer() --> {rtps:?}");
+    // if we get here without panic, the test passes
+  }
 }

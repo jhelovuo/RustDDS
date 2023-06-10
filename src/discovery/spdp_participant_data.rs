@@ -566,13 +566,15 @@ mod tests {
   #[test]
   fn deserialize_evil_spdp() {
     use hex_literal::hex;
-    let data = Bytes::copy_from_slice(&hex!("
+    let data = Bytes::copy_from_slice(&hex!(
+      "
     52 54 50 53
     02 02 ff ff 01 0f 45 d2 b3 f5 58 b9 01 00 00 00
     15 07 1e 00 00 00 10 00 00 00 00 00 00 01 00 c2
     00 00 00 00 00 00 00 00 01 00 00 00 00 02 44 d5
     cf 7a
-    "));
+    "
+    ));
 
     let rtpsmsg = Message::read_from_buffer(&data).unwrap();
     let submsgs = rtpsmsg.submessages();
@@ -601,16 +603,18 @@ mod tests {
       }
     }
   }
-#[test]
+  #[test]
   fn deserialize_evil_spdp_2() {
     // https://github.com/jhelovuo/RustDDS/issues/279
     use hex_literal::hex;
-    let data = Bytes::copy_from_slice(&hex!("
+    let data = Bytes::copy_from_slice(&hex!(
+      "
       52 54 50 53
       02 02 ff ff 01 0f 45 d2 b3 f5 58 b9 01 00 00 00
       15 05 19 00 00 00 10 00 00 00 00 00 00 01 00 c2
       00 00 00 00 02 00 00 00 00 03 90 fe c7
-    "));
+    "
+    ));
 
     let rtpsmsg = Message::read_from_buffer(&data).unwrap();
     let submsgs = rtpsmsg.submessages();
@@ -639,5 +643,4 @@ mod tests {
       }
     }
   }
-
 }

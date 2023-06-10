@@ -77,17 +77,20 @@ impl Data {
     // writerSN (8) = 20 bytes
     // of which 16 bytes is after octetsToInlineQos field.
     let rtps_v23_data_header_size: u16 = 16;
-    // ... and octets_to_inline_qos must be at least this much, or otherwise inline Qos 
-    // (or in case it is absent, the following SerializedPayload) would overlap
-    // with the rtps_v23_data_header fields (readerId, writerId, and writerSN).
+    // ... and octets_to_inline_qos must be at least this much, or otherwise inline
+    // Qos (or in case it is absent, the following SerializedPayload) would
+    // overlap with the rtps_v23_data_header fields (readerId, writerId, and
+    // writerSN).
     if octets_to_inline_qos < rtps_v23_data_header_size {
-      return Err(io::Error::new(io::ErrorKind::InvalidData, 
-                  format!("DATA submessage has invalid octets_to_inline_qos={octets_to_inline_qos}.")))
+      return Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("DATA submessage has invalid octets_to_inline_qos={octets_to_inline_qos}."),
+      ));
     }
-    
+
     // We need to check to avoid subtract overflow
     // https://github.com/jhelovuo/RustDDS/issues/277
-    if octets_to_inline_qos > rtps_v23_data_header_size { 
+    if octets_to_inline_qos > rtps_v23_data_header_size {
       let extra_octets = octets_to_inline_qos - rtps_v23_data_header_size;
       // There may be some extra data between writerSN and inlineQos, if the header is
       // extended in future versions. But as of RTPS v2.3 , extra_octets should be
@@ -96,7 +99,7 @@ impl Data {
       // Nevertheless, skip over that extra data, if we are told such exists.
       cursor.set_position(cursor.position() + u64::from(extra_octets));
     }
-    
+
     // read the inline Qos
     let parameter_list = if expect_qos {
       Some(
