@@ -661,8 +661,8 @@ mod tests {
     let rtpsmsg = match Message::read_from_buffer(&data) {
       Ok(m) => m,
       Err(e) => {
-        eprintln!("{e}"); 
-        return
+        eprintln!("{e}");
+        return;
       }
     };
     let submsgs = rtpsmsg.submessages();
@@ -691,5 +691,4 @@ mod tests {
       }
     }
   }
-
 }
