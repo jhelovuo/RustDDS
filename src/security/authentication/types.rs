@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
-use crate::security::types::Token;
+use crate::security::types::{DataHolder, Token};
 
 // ValidationOutcome is like ValidationResult_t in the the Security
 // specification v.1.1 (section 8.3.2.11.1), but does not contain
@@ -22,11 +22,22 @@ pub struct IdentityToken {
   // Readable and Writable are needed to (de)serialize to(from) ParameterList.
   // Note: The implementation has to observe CDR alignment rules.
   // Automatic derive does not do so, but does not matter al long as the item is empty.
+  pub data_holder: DataHolder,
+}
+
+impl From<DataHolder> for IdentityToken {
+  fn from(value: DataHolder) -> Self {
+    Self { data_holder: value }
+  }
 }
 
 impl IdentityToken {
   // Mock value used for development
-  pub const MOCK: Self = Self {};
+  pub fn dummy() -> Self {
+    Self {
+      data_holder: DataHolder::dummy(),
+    }
+  }
 }
 
 // TODO: IdentityStatusToken: section 8.3.2.2 of the Security specification (v.
@@ -41,7 +52,7 @@ pub struct IdentityStatusToken {
 
 impl IdentityStatusToken {
   // Mock value used for development
-  pub fn MOCK() -> Self {
+  pub fn dummy() -> Self {
     Self {
       token: Token::dummy(),
     }
