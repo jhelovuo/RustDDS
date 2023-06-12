@@ -44,9 +44,8 @@ pub enum QosPolicyId {
   //Partition,
 
   // Note: If "Partition" is ever implemented, observe also DDS Security spec v1.1
-  // Section "7.3.5 Immutability of Publisher Partition Qos in combination with non-volatile Durability kind"
-  // when implementing.
-
+  // Section "7.3.5 Immutability of Publisher Partition Qos in combination with non-volatile
+  // Durability kind" when implementing.
   Reliability, // 11
   DestinationOrder,
   History, // 13
@@ -890,7 +889,7 @@ pub mod policy {
   // so this is DataTagQosPolicy, which is an alias for "DataTags"
   // We call it qos::policy::DataTag
   #[derive(Clone, Debug, PartialEq, Eq)]
-  pub struct DataTag { 
+  pub struct DataTag {
     pub tags: Vec<security::types::Tag>,
   }
 
@@ -927,5 +926,4 @@ pub mod policy {
       Ok(())
     }
   }
-
 } // mod policy

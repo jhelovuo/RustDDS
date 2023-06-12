@@ -546,8 +546,14 @@ impl Drop for DomainParticipantDisc {
     info!("===== RustDDS shutting down ===== .drop() DomainParticipantDisc");
 
     debug!("Wan dp_event_loop about stop.");
-    if self.dpi.lock().unwrap()
-        .stop_poll_sender.send(EventLoopCommand::PrepareStop).is_err() {
+    if self
+      .dpi
+      .lock()
+      .unwrap()
+      .stop_poll_sender
+      .send(EventLoopCommand::PrepareStop)
+      .is_err()
+    {
       error!("dp_event_loop not responding to prepare stop discovery_command");
     }
 

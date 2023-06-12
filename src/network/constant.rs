@@ -6,7 +6,7 @@ use crate::{
   structure::guid::{EntityKind, GuidPrefix, GUID},
 };
 
-// TODO: These TOKEN_ constants shold be somewhere else. 
+// TODO: These TOKEN_ constants shold be somewhere else.
 // They do not belong to "network". Most are just polling tokens for
 // discovery and dp_event_loop threads.
 // Note: Check that there are no other uses before moving or renaming.
@@ -78,7 +78,6 @@ pub const P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN: Token = Token(62 + PTB);
 pub const P2P_PARTICIPANT_STATELESS_MESSAGE_TIMER_TOKEN: Token = Token(63 + PTB);
 pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN: Token = Token(64 + PTB);
 pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN: Token = Token(65 + PTB);
-
 
 pub struct TokenReceiverPair<T> {
   pub token: Token,

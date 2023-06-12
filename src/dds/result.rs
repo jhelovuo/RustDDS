@@ -66,7 +66,6 @@ pub enum Error {
   #[error("Not allowed by security: {reason}")]
   Security { reason: String },
 
-
   // Our own additions to the DDS spec below:
   /// Synchronization with another thread failed because the [other thread
   /// has exited while holding a lock.](https://doc.rust-lang.org/std/sync/struct.PoisonError.html)

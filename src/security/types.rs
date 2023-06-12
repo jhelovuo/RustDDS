@@ -1,18 +1,23 @@
 use bytes::{Bytes, BytesMut};
 use enumflags2::bitflags;
 use speedy::{Context, Readable, Reader, Writable, Writer};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::{discovery, security, dds::qos, serialization, Keyed, GUID, RepresentationIdentifier};
-use crate::messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList};
-use crate::serialization::pl_cdr_adapters::{PlCdrSerialize, PlCdrDeserialize};
-use crate::serialization::speedy_pl_cdr_helpers::*;
-use crate::structure::parameter_id::ParameterId;
-
+use crate::{
+  dds::qos,
+  discovery,
+  messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
+  security, serialization,
+  serialization::{
+    pl_cdr_adapters::{PlCdrDeserialize, PlCdrSerialize},
+    speedy_pl_cdr_helpers::*,
+  },
+  structure::parameter_id::ParameterId,
+  Keyed, RepresentationIdentifier, GUID,
+};
 
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Serialize, Deserialize)] // for CDR in Discovery
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)] // for CDR in Discovery
 pub struct Property {
   name: String,
   value: String,
@@ -64,23 +69,23 @@ impl Property {
 
 // BinaryProperty_t type from section 7.2.2 of the Security specification (v.
 // 1.1)
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Serialize, Deserialize)] // for CDR in Discovery
+// // Serialize, Deserialize for CDR in Discovery
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(into = "repr::BinaryProperty", from = "repr::BinaryProperty")]
 pub struct BinaryProperty {
-  pub(crate) name: String, // public because of serialization
-  pub(crate) value: Bytes, // Serde cannot derive for Bytes, therefore use repr::
+  pub(crate) name: String,    // public because of serialization
+  pub(crate) value: Bytes,    // Serde cannot derive for Bytes, therefore use repr::
   pub(crate) propagate: bool, // propagate field is not serialized
 }
 
 mod repr {
-  use serde::{Serialize, Deserialize};
+  use serde::{Deserialize, Serialize};
 
   #[derive(Serialize, Deserialize)]
   pub struct BinaryProperty {
-    pub(crate) name: String, 
+    pub(crate) name: String,
     pub(crate) value: Vec<u8>,
-    pub(crate) propagate: bool, 
+    pub(crate) propagate: bool,
   }
 
   impl From<BinaryProperty> for super::BinaryProperty {
@@ -99,7 +104,7 @@ mod repr {
         name: bp.name,
         value: bp.value.into(),
         propagate: bp.propagate,
-      }      
+      }
     }
   }
 }
@@ -144,7 +149,6 @@ impl<C: Context> Writable<C> for BinaryProperty {
     Ok(())
   }
 }
-
 
 // Tag type from section 7.2.5 of the DDS Security specification (v. 1.1)
 // The silly thing is almost the same as "Property"
@@ -191,10 +195,6 @@ impl Tag {
   }
 }
 
-
-
-
-
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
 // fields need to be public to make (de)serializable
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)] // for CDR in Discovery
@@ -209,7 +209,7 @@ impl DataHolder {
     Self {
       class_id: "dummy".to_string(),
       properties: vec![],
-      binary_properties: vec![]
+      binary_properties: vec![],
     }
   }
 }
@@ -219,14 +219,16 @@ impl<'a, C: Context> Readable<'a, C> for DataHolder {
     let class_id: StringWithNul = reader.read_value()?;
 
     read_pad(reader, class_id.len(), 4)?; // pad according to previous read
-    // We can use this Qos reader, becaues it has identical structure.
-    let qos::policy::Property{ value, binary_value} =
-      reader.read_value()?;
+                                          // We can use this Qos reader, becaues it has identical structure.
+    let qos::policy::Property {
+      value,
+      binary_value,
+    } = reader.read_value()?;
 
     Ok(DataHolder {
       class_id: class_id.into(),
       properties: value,
-      binary_properties: binary_value ,
+      binary_properties: binary_value,
     })
   }
 }
@@ -249,10 +251,8 @@ impl<C: Context> Writable<C> for DataHolder {
   }
 }
 
-
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
 pub type Token = DataHolder;
-
 
 // Result type with generic OK type. Error type is SecurityError.
 pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
@@ -355,7 +355,6 @@ pub enum PluginEndpointSecurityAttributesMask {
   IsSubmessageOriginAuthenticated = 0b0000_0100,
 }
 
-
 // ParticipantBuiltinTopicDataSecure from section 7.4.1.6 of the Security
 // specification
 pub struct ParticipantBuiltinTopicDataSecure {
@@ -369,22 +368,31 @@ impl Keyed for ParticipantBuiltinTopicDataSecure {
   }
 }
 impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> serialization::Result<Self> {
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
-    let identity_status_token = get_first_from_pl_map(      
+    let identity_status_token = get_first_from_pl_map(
       &pl_map,
       ctx,
       ParameterId::PID_IDENTITY_STATUS_TOKEN,
       "Identity status token",
     )?;
 
-    let participant_data = discovery::spdp_participant_data::SpdpDiscoveredParticipantData
-      ::from_pl_cdr_bytes(input_bytes, encoding)?;
+    let participant_data =
+      discovery::spdp_participant_data::SpdpDiscoveredParticipantData::from_pl_cdr_bytes(
+        input_bytes,
+        encoding,
+      )?;
 
-    Ok( Self{ participant_data, identity_status_token } )
+    Ok(Self {
+      participant_data,
+      identity_status_token,
+    })
   }
 }
 
@@ -400,10 +408,13 @@ impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
         }))
       };
     }
-    emit!(PID_IDENTITY_STATUS_TOKEN, &self.identity_status_token, 
-        security::authentication::IdentityStatusToken);
+    emit!(
+      PID_IDENTITY_STATUS_TOKEN,
+      &self.identity_status_token,
+      security::authentication::IdentityStatusToken
+    );
     let bytes = pl.serialize_to_bytes(ctx)?;
-    
+
     let part_data_bytes = self.participant_data.to_pl_cdr_bytes(encoding)?;
     let mut result = BytesMut::new();
     result.extend_from_slice(&part_data_bytes);
@@ -426,22 +437,23 @@ impl Keyed for PublicationBuiltinTopicDataSecure {
   }
 }
 impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> serialization::Result<Self> {
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
-    let data_tags = get_first_from_pl_map(      
-      &pl_map,
-      ctx,
-      ParameterId::PID_DATA_TAGS,
-      "Data tags",
-    )?;
+    let data_tags = get_first_from_pl_map(&pl_map, ctx, ParameterId::PID_DATA_TAGS, "Data tags")?;
 
-    let discovered_writer_data = discovery::sedp_messages::DiscoveredWriterData
-      ::from_pl_cdr_bytes(input_bytes, encoding)?;
+    let discovered_writer_data =
+      discovery::sedp_messages::DiscoveredWriterData::from_pl_cdr_bytes(input_bytes, encoding)?;
 
-    Ok( Self{ discovered_writer_data, data_tags } )
+    Ok(Self {
+      discovered_writer_data,
+      data_tags,
+    })
   }
 }
 
@@ -459,7 +471,7 @@ impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
     }
     emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
     let bytes = pl.serialize_to_bytes(ctx)?;
-    
+
     let part_data_bytes = self.discovered_writer_data.to_pl_cdr_bytes(encoding)?;
     let mut result = BytesMut::new();
     result.extend_from_slice(&part_data_bytes);
@@ -467,7 +479,6 @@ impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
     Ok(result.freeze())
   }
 }
-
 
 // SubscriptionBuiltinTopicDataSecure from section 7.4.1.8 of the Security
 // specification
@@ -482,22 +493,23 @@ impl Keyed for SubscriptionBuiltinTopicDataSecure {
   }
 }
 impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> serialization::Result<Self> {
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> serialization::Result<Self> {
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
-    let data_tags = get_first_from_pl_map(      
-      &pl_map,
-      ctx,
-      ParameterId::PID_DATA_TAGS,
-      "Data tags",
-    )?;
+    let data_tags = get_first_from_pl_map(&pl_map, ctx, ParameterId::PID_DATA_TAGS, "Data tags")?;
 
-    let discovered_reader_data = discovery::sedp_messages::DiscoveredReaderData
-      ::from_pl_cdr_bytes(input_bytes, encoding)?;
+    let discovered_reader_data =
+      discovery::sedp_messages::DiscoveredReaderData::from_pl_cdr_bytes(input_bytes, encoding)?;
 
-    Ok( Self{ discovered_reader_data, data_tags } )
+    Ok(Self {
+      discovered_reader_data,
+      data_tags,
+    })
   }
 }
 
@@ -515,7 +527,7 @@ impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
     }
     emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
     let bytes = pl.serialize_to_bytes(ctx)?;
-    
+
     let part_data_bytes = self.discovered_reader_data.to_pl_cdr_bytes(encoding)?;
     let mut result = BytesMut::new();
     result.extend_from_slice(&part_data_bytes);
@@ -530,7 +542,8 @@ impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
 pub struct ParticipantStatelessMessage {
   generic: ParticipantGenericMessage,
 }
-// The specification defines and uses the following specific values for the GenericMessageClassId:
+// The specification defines and uses the following specific values for the
+// GenericMessageClassId:
 // #define GMCLASSID_SECURITY_AUTH_REQUEST “dds.sec.auth_request”
 // #define GMCLASSID_SECURITY_AUTH_HANDSHAKE “dds.sec.auth”
 
@@ -542,8 +555,6 @@ impl Keyed for ParticipantStatelessMessage {
   }
 }
 
-
-
 // ParticipantVolatileMessageSecure from section 7.4.4.3 of the Security
 // specification
 //
@@ -552,10 +563,14 @@ impl Keyed for ParticipantStatelessMessage {
 pub struct ParticipantVolatileMessageSecure {
   generic: ParticipantGenericMessage,
 }
-// The specification defines and uses the following specific values for the GenericMessageClassId:
-// #define GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS ”dds.sec.participant_crypto_tokens”
-// #define GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS ”dds.sec.datawriter_crypto_tokens”
-// #define GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS ”dds.sec.datareader_crypto_tokens”
+// The specification defines and uses the following specific values for the
+// GenericMessageClassId:
+// #define GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS
+//    ”dds.sec.participant_crypto_tokens”
+// #define GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS
+//    ”dds.sec.datawriter_crypto_tokens”
+// #define GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS
+//    ”dds.sec.datareader_crypto_tokens”
 
 impl Keyed for ParticipantVolatileMessageSecure {
   type K = GUID;
@@ -565,10 +580,10 @@ impl Keyed for ParticipantVolatileMessageSecure {
   }
 }
 
-
-use crate::structure::rpc;
-use crate::discovery::spdp_participant_data::Participant_GUID;
-use crate::discovery::sedp_messages::Endpoint_GUID;
+use crate::{
+  discovery::{sedp_messages::Endpoint_GUID, spdp_participant_data::Participant_GUID},
+  structure::rpc,
+};
 
 // This is the transport (message) type for specialized versions above.
 // DDS Security Spec v1.1
@@ -579,7 +594,7 @@ pub struct ParticipantGenericMessage {
   pub related_message_identity: rpc::SampleIdentity,
   // GUIDs here need not be typed Endpoint_GUID or Participant_GUID,
   // because CDR serialization does not need the distiction, unlike PL_CDR.
-  pub destination_participant_guid: GUID, //target for the request. Can be GUID_UNKNOWN 
+  pub destination_participant_guid: GUID, //target for the request. Can be GUID_UNKNOWN
   pub destination_endpoint_guid: GUID,
   pub source_endpoint_guid: GUID,
   pub message_class_id: String,

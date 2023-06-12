@@ -46,7 +46,8 @@ impl Parameter {
     // literal ‘D.’ UnregisteredFlag is represented with the literal ‘U.’
     // FilteredFlag is represented with the literal ‘F.’
 
-    // TODO: This serialization logic is duplicated in inline_qos module. Deduplicate.
+    // TODO: This serialization logic is duplicated in inline_qos module.
+    // Deduplicate.
 
     let mut bit_vec = BitVec::from_bytes(&[0b0000_0000]);
     bit_vec.set(7, is_disposed); // bit_vec uses MSB-to-LSM bit numbering

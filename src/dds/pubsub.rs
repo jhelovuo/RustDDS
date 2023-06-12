@@ -44,9 +44,9 @@ use crate::{
   },
 };
 use super::{
+  helpers::try_send_timeout,
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
   with_key::simpledatareader::ReaderCommand,
-  helpers::try_send_timeout,
 };
 
 // -------------------------------------------------------------------
@@ -193,7 +193,6 @@ impl Publisher {
       .create_datawriter(self, Some(entity_id), topic, qos)
   }
 
-
   /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
   ///
   /// # Arguments
@@ -259,7 +258,6 @@ impl Publisher {
       .inner_lock()
       .create_datawriter_no_key(self, Some(entity_id), topic, qos)
   }
-
 
   // delete_datawriter should not be needed. The DataWriter object itself should
   // be deleted to accomplish this.
@@ -556,7 +554,7 @@ impl InnerPublisher {
   }
 
   pub(crate) fn remove_writer(&self, guid: GUID) {
-    try_send_timeout( &self.remove_writer_sender, guid, None)
+    try_send_timeout(&self.remove_writer_sender, guid, None)
       .unwrap_or_else(|e| error!("Cannot remove Writer {:?} : {:?}", guid, e));
   }
 
@@ -718,8 +716,8 @@ impl Subscriber {
   //   <D as Keyed>::K: Key,
   //   for<'de> <D as Keyed>::K: Deserialize<'de>,
   // {
-  //   self.create_datareader_with_entityid::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
-  // }
+  //   self.create_datareader_with_entityid::<D, CDRDeserializerAdapter<D>>(topic,
+  // entity_id, qos) }
 
   /// Create DDS DataReader for non keyed Topics
   ///

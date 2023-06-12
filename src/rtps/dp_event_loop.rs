@@ -44,7 +44,6 @@ pub(crate) enum EventLoopCommand {
   PrepareStop,
 }
 
-
 pub const PREEMPTIVE_ACKNACK_PERIOD: Duration = Duration::from_secs(5);
 
 // RTPS spec Section 8.4.7.1.1  "Default Timing-Related Values"
@@ -240,7 +239,7 @@ impl DPEventLoop {
                 match ev_wrapper.stop_poll_receiver.try_recv() {
                   Ok(EventLoopCommand::Stop) => {
                     info!("Stopping dp_event_loop");
-                    return
+                    return;
                   }
                   Ok(EventLoopCommand::PrepareStop) => {
                     info!("dp_event_loop preparing to stop.");
@@ -336,13 +335,19 @@ impl DPEventLoop {
             TokenDecode::Entity(eid) => {
               if eid.kind().is_reader() {
                 ev_wrapper.message_receiver.reader_mut(eid).map_or_else(
-                  || if ! preparing_to_stop { error!("Event for unknown reader {eid:?}"); },
+                  || {
+                    if !preparing_to_stop {
+                      error!("Event for unknown reader {eid:?}");
+                    }
+                  },
                   Reader::process_command,
                 );
               } else if eid.kind().is_writer() {
                 let local_readers = match ev_wrapper.writers.get_mut(&eid) {
                   None => {
-                    if ! preparing_to_stop { error!("Event for unknown writer {eid:?}"); };
+                    if !preparing_to_stop {
+                      error!("Event for unknown writer {eid:?}");
+                    };
                     vec![]
                   }
                   Some(writer) => {

@@ -326,7 +326,6 @@ impl EntityId {
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
 
-
   pub const MIN: Self = Self {
     entity_key: [0x00; 3],
     entity_kind: EntityKind::MIN,

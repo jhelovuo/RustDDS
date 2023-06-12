@@ -1039,10 +1039,15 @@ impl Writer {
       // and may mean that no messages have ever been received, so it is
       // normal that we did not find anything.
       if first_keeper > SequenceNumber::new(1) {
-        warn!("DDCache garbage collect: {:?} missing from instant map", first_keeper);
+        warn!(
+          "DDCache garbage collect: {:?} missing from instant map",
+          first_keeper
+        );
       } else {
-        debug!("DDCache garbage collect: {:?} missing from instant map. But it is normal for number 1.", 
-          first_keeper);
+        debug!(
+          "DDCache garbage collect: {:?} missing from instant map. But it is normal for number 1.",
+          first_keeper
+        );
       }
     }
     self.first_change_sequence_number = first_keeper;

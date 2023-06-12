@@ -175,7 +175,7 @@ pub trait Key:
 }
 
 impl Key for () {
-  fn hash_key(&self, _force_md5:bool) -> KeyHash {
+  fn hash_key(&self, _force_md5: bool) -> KeyHash {
     KeyHash::zero()
   }
 }

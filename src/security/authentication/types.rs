@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
+
 use crate::security::types::Token;
 
 // ValidationOutcome is like ValidationResult_t in the the Security
@@ -25,7 +26,7 @@ pub struct IdentityToken {
 
 impl IdentityToken {
   // Mock value used for development
-  pub const MOCK: Self = Self {  };
+  pub const MOCK: Self = Self {};
 }
 
 // TODO: IdentityStatusToken: section 8.3.2.2 of the Security specification (v.
@@ -41,7 +42,9 @@ pub struct IdentityStatusToken {
 impl IdentityStatusToken {
   // Mock value used for development
   pub fn MOCK() -> Self {
-    Self { token: Token::dummy() }
+    Self {
+      token: Token::dummy(),
+    }
   }
 }
 

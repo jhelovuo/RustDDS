@@ -43,7 +43,7 @@ impl Authentication for AuthenticationBuiltIn {
   ) -> SecurityResult<IdentityStatusToken> {
     // TODO: actual implementation
 
-    Ok(IdentityStatusToken::MOCK() )
+    Ok(IdentityStatusToken::MOCK())
   }
 
   // Currently only mocked
