@@ -5,7 +5,7 @@ use crate::{
     crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
-  rtps::{Message, Submessage},
+  rtps::{Message, Submessage, SubmessageBody},
   security::{
     access_control::types::*,
     authentication::types::*,
@@ -333,7 +333,15 @@ impl CryptoTransform for CryptographicBuiltIn {
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<Message> {
-    todo!();
+    //TODO: this is only a mock implementation
+    match encoded_buffer
+      .submessages
+      .first()
+      .map(|submessage| submessage.body.clone())
+    {
+      Some(SubmessageBody::Security(_)) => todo!(),
+      _ => Ok(encoded_buffer),
+    }
   }
 
   fn preprocess_secure_submsg(
@@ -341,7 +349,7 @@ impl CryptoTransform for CryptographicBuiltIn {
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<SecureSubmessageCategory> {
-    todo!();
+    todo!(); // 9.5.3.3.5  Compare key ID to figure out which is which?
   }
 
   fn decode_datawriter_submessage(
