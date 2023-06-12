@@ -666,7 +666,7 @@ mod tests {
   fn keyhash_test() {
     let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     let test_guid = GUID::from_bytes(test_bytes);
-    let key_hash = test_guid.hash_key(); // from trait Key
+    let key_hash = test_guid.hash_key(false); // from trait Key
     assert_eq!(key_hash.to_vec(), test_bytes.to_vec());
   }
 

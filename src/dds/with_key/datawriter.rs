@@ -1281,7 +1281,7 @@ mod tests {
       b: "Fobar".to_string(),
     };
 
-    let key = &data.key().hash_key();
+    let key = &data.key().hash_key(false);
     info!("key: {:?}", key);
 
     data_writer
