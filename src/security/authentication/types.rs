@@ -60,7 +60,7 @@ impl IdentityStatusToken {
 }
 
 // TODO: IdentityHandle: section 8.3.2.3 of the Security specification (v. 1.1)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IdentityHandle {}
 
 impl IdentityHandle {

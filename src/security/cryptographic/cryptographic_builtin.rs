@@ -22,6 +22,7 @@ pub struct CryptographicBuiltIn {}
 /// specification (v. 1.1)
 impl CryptoKeyFactory for CryptographicBuiltIn {
   fn register_local_participant(
+    &self,
     participant_identity: IdentityHandle,
     participant_permissions: PermissionsHandle,
     participant_properties: Vec<Property>,
@@ -40,6 +41,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   }
 
   fn register_matched_remote_participant(
+    &self,
     local_participant_crypto_handle: ParticipantCryptoHandle,
     remote_participant_identity: IdentityHandle,
     remote_participant_permissions: PermissionsHandle,
@@ -66,6 +68,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   }
 
   fn register_local_datawriter(
+    &self,
     participant_crypto: ParticipantCryptoHandle,
     datawriter_properties: Vec<Property>,
     datawriter_security_attributes: EndpointSecurityAttributes,
@@ -83,6 +86,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   }
 
   fn register_matched_remote_datareader(
+    &self,
     local_datawriter_crypto_handle: DatawriterCryptoHandle,
     remote_participant_crypto: ParticipantCryptoHandle,
     shared_secret: SharedSecretHandle,
@@ -97,6 +101,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   }
 
   fn register_local_datareader(
+    &self,
     participant_crypto: ParticipantCryptoHandle,
     datareader_properties: Vec<Property>,
     datareader_security_attributes: EndpointSecurityAttributes,
@@ -114,6 +119,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   }
 
   fn register_matched_remote_datawriter(
+    &self,
     local_datareader_crypto_handle: DatareaderCryptoHandle,
     remote_participant_crypt: ParticipantCryptoHandle,
     shared_secret: SharedSecretHandle,
@@ -139,18 +145,21 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   }
 
   fn unregister_participant(
+    &self,
     participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
     Ok(())
   }
 
-  fn unregister_datawriter(datawriter_crypto_handle: DatawriterCryptoHandle) -> SecurityResult<()> {
+  fn unregister_datawriter(&self,
+    datawriter_crypto_handle: DatawriterCryptoHandle) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
     Ok(())
   }
 
-  fn unregister_datareader(datareader_crypto_handle: DatareaderCryptoHandle) -> SecurityResult<()> {
+  fn unregister_datareader(&self,
+    datareader_crypto_handle: DatareaderCryptoHandle) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
     Ok(())
   }
@@ -158,6 +167,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
 
 impl CryptoKeyExchange for CryptographicBuiltIn {
   fn create_local_participant_crypto_tokens(
+    &self,
     local_participant_crypto: ParticipantCryptoHandle,
     remote_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
@@ -170,6 +180,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
   }
 
   fn set_remote_participant_crypto_tokens(
+    &self,
     local_participant_crypto: ParticipantCryptoHandle,
     remote_participant_crypto: ParticipantCryptoHandle,
     remote_participant_tokens: Vec<ParticipantCryptoToken>,
@@ -179,6 +190,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
   }
 
   fn create_local_datawriter_crypto_tokens(
+    &self,
     local_datawriter_crypto: DatawriterCryptoHandle,
     remote_datareader_crypto: DatareaderCryptoHandle,
   ) -> SecurityResult<Vec<DatawriterCryptoToken>> {
@@ -191,6 +203,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
   }
 
   fn set_remote_datawriter_crypto_tokens(
+    &self,
     local_datareader_crypto: DatareaderCryptoHandle,
     remote_datawriter_crypto: DatawriterCryptoHandle,
     remote_datawriter_tokens: Vec<DatawriterCryptoToken>,
@@ -200,6 +213,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
   }
 
   fn create_local_datareader_crypto_tokens(
+    &self,
     local_datareader_crypto: DatareaderCryptoHandle,
     remote_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<Vec<DatareaderCryptoToken>> {
@@ -212,6 +226,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
   }
 
   fn set_remote_datareader_crypto_tokens(
+    &self,
     local_datawriter_crypto: DatawriterCryptoHandle,
     remote_datareader_crypto: DatareaderCryptoHandle,
     remote_datareader_tokens: Vec<DatareaderCryptoToken>,
@@ -220,7 +235,9 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     Ok(())
   }
 
-  fn return_crypto_tokens(crypto_tokens: Vec<CryptoToken>) -> SecurityResult<()> {
+  fn return_crypto_tokens(
+    &self,
+    crypto_tokens: Vec<CryptoToken>) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
     Ok(())
   }
@@ -228,6 +245,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
 
 impl CryptoTransform for CryptographicBuiltIn {
   fn encode_serialized_payload(
+    &self,
     plain_buffer: SerializedPayload,
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<(CryptoContent, ParameterList)> {
@@ -275,6 +293,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn encode_datawriter_submessage(
+    &self,
     plain_rtps_submessage: Submessage,
     sending_datawriter_crypto: DatawriterCryptoHandle,
     receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
@@ -295,6 +314,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn encode_datareader_submessage(
+    &self,
     plain_rtps_submessage: Submessage,
     sending_datareader_crypto: DatareaderCryptoHandle,
     receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
@@ -312,6 +332,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn encode_rtps_message(
+    &self,
     plain_rtps_message: Message,
     sending_participant_crypto: ParticipantCryptoHandle,
     receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
@@ -329,6 +350,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn decode_rtps_message(
+    &self,
     encoded_buffer: Message,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
@@ -345,6 +367,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn preprocess_secure_submsg(
+    &self,
     encoded_rtps_submessage: Submessage,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
@@ -353,6 +376,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn decode_datawriter_submessage(
+    &self,
     encoded_rtps_submessage: (Submessage, Submessage, Submessage),
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
@@ -361,6 +385,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn decode_datareader_submessage(
+    &self,
     encoded_rtps_submessage: (Submessage, Submessage, Submessage),
     receiving_datawriter_crypto: DatawriterCryptoHandle,
     sending_datareader_crypto: DatareaderCryptoHandle,
@@ -369,6 +394,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn decode_serialized_payload(
+    &self,
     encoded_buffer: CryptoContent,
     inline_qos: ParameterList,
     receiving_datareader_crypto: DatareaderCryptoHandle,

@@ -7,6 +7,7 @@ use std::{
   thread,
   thread::JoinHandle,
   time::{Duration, Instant},
+  rc::Rc,
 };
 
 use mio_extras::channel as mio_channel;
@@ -28,37 +29,124 @@ use crate::{
     reader::*,
     writer::WriterIngredients,
   },
+  security::{
+    Authentication, AccessControl, CryptoKeyFactory, 
+    CryptoKeyExchange, CryptoTransform,
+    access_control::PermissionsToken,
+    authentication::{IdentityToken, IdentityStatusToken,},
+  },
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
 };
 
-/// DDS DomainParticipant
-///
-/// It is recommended that only one DomainParticipant per OS process is created,
-/// as it allocates network sockets, creates background threads, and allocates
-/// some memory for object caches.
-///
-/// If you need to communicate to many DDS domains,
-/// then you must create a separate DomainParticipant for each of them.
-/// See DDS Spec v1.4 Section "2.2.1.2.2 Overall Conceptual Model" and
-/// "2.2.2.2.1 DomainParticipant Class" for a definition of a (DDS) domain.
-/// Domains are identified by a domain identifier, which is, in Rust terms, a
-/// `u16`. Domain identifier values are application-specific, but `0` is usually
-/// the default.
-#[derive(Clone)]
-// This is a smart pointer for DomainParticipantInner for easier manipulation.
-pub struct DomainParticipant {
-  dpi: Arc<Mutex<DomainParticipantDisc>>,
+pub(crate) struct SecurityPlugins {
+  pub auth: Box<dyn Authentication>, 
+  pub access: Box<dyn AccessControl>, 
+  pub crypto_key_factory: Rc<dyn CryptoKeyFactory>,
+  pub crypto_key_exchange: Rc<dyn CryptoKeyExchange>,
+  pub crypto_transform: Rc<dyn CryptoTransform>,
 }
 
-#[allow(clippy::new_without_default)]
-impl DomainParticipant {
-  /// # Examples
-  /// ```
-  /// # use rustdds::DomainParticipant;
-  ///
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// ```
-  pub fn new(domain_id: u16) -> Result<Self> {
+pub struct DomainParticipantBuilder {
+  domain_id: u16,
+
+  #[allow(dead_code)] // only_networks is a placeholder for a feture to limit
+  // to which interfaces the DomainParticiapnt will talk to.
+  only_networks: Option<Vec<String>>, // if specified, run RTPS only over these interfaces
+
+  security_plugins: Option<SecurityPlugins>,
+}
+
+impl DomainParticipantBuilder {
+  pub fn new(domain_id: u16) -> DomainParticipantBuilder {
+    DomainParticipantBuilder { 
+      domain_id,
+      only_networks: None,
+      security_plugins: None,
+    }
+  }
+
+  #[allow(dead_code)] // TODO: Remove when have a test case
+  pub fn security<'a>(&'a mut self, 
+    auth: Box<impl Authentication + 'static>, 
+    access: Box<impl AccessControl + 'static>, 
+    crypto_key_factory: Rc<impl CryptoKeyFactory + 'static>,
+    crypto_key_exchange: Rc<impl CryptoKeyExchange + 'static>,
+    crypto_transform: Rc<impl CryptoTransform + 'static>,
+  ) -> &'a mut DomainParticipantBuilder {
+    self.security_plugins = Some(SecurityPlugins{
+      auth, access, crypto_key_factory, crypto_key_exchange, crypto_transform
+    });
+    self
+  }
+
+  pub fn build(self) -> Result<DomainParticipant> {
+    let mut participant_guid = GUID::new_participant_guid();
+
+    let participant_qos = QosPolicies::default(); // Maybe something else?
+
+    // configure security
+    #[allow(unused_variables)] // TODO: actaully distribute these to particiapnt, discovery, etc.
+    let security_tokens_opt 
+      :Option<(IdentityToken, IdentityStatusToken, PermissionsToken)>= 
+      if let Some(mut security_plugins) = self.security_plugins {
+        trace!("DomainParticipant security construction start");
+        // Now we initialize security according to DDS Security spec v1.1
+        // Section "8.8.1 Authentication and AccessControl behavior with local DomainParticipant"
+        // TODO: handle errors
+
+        let (_outcome, identity_handle, sec_guid) = security_plugins.auth.validate_local_identity(
+          self.domain_id, 
+          &participant_qos, 
+          participant_guid, // this is now candidate
+        ).unwrap(); 
+
+        participant_guid = sec_guid; // just overwrite to update
+
+        let permissions_handle = 
+          security_plugins.access.validate_local_permissions(
+            &security_plugins.auth,
+            identity_handle, 
+            self.domain_id,
+            &participant_qos,
+          ).unwrap();
+
+        let may_create_participant =
+          security_plugins.access.check_create_participant(
+            permissions_handle,
+            self.domain_id,
+            &participant_qos,
+          ).unwrap();
+        if ! may_create_participant {
+            return Err(Error::Security{ reason: "Not allowed to create participant".to_string() })
+        }
+        
+        let identity_token = 
+          security_plugins.auth.get_identity_token(identity_handle).unwrap();
+
+        let identity_status_token =
+          security_plugins.auth.get_identity_status_token(identity_handle).unwrap();
+
+        let permissions_token =
+          security_plugins.access.get_permissions_token(permissions_handle).unwrap();
+
+        let permissions_credential_token =
+          security_plugins.access.get_permissions_credential_token(permissions_handle)
+            .unwrap();          
+
+        security_plugins.auth.set_permissions_credential_and_token(
+          identity_handle,
+          permissions_credential_token,
+          permissions_token.clone(),
+        ).unwrap();
+
+        let participant_security_attributes =
+          security_plugins.access.get_participant_sec_attributes(permissions_handle).unwrap();
+
+        Some( (identity_token, identity_status_token, permissions_token) )
+      } else { 
+        None // no security configured
+      };
+
     trace!("DomainParticipant construct start");
 
     // Discovery join channel is used to just send a join handle into the inner
@@ -87,7 +175,8 @@ impl DomainParticipant {
 
     // intermediate DP wrapper
     let dp = DomainParticipantDisc::new(
-      domain_id,
+      self.domain_id,
+      participant_guid,
       djh_receiver,
       discovery_update_notification_receiver,
       discovery_command_sender,
@@ -96,7 +185,7 @@ impl DomainParticipant {
     let self_locators = dp.self_locators();
 
     // outer DP wrapper
-    let dp = Self {
+    let dp = DomainParticipant {
       dpi: Arc::new(Mutex::new(dp)),
     };
 
@@ -137,6 +226,40 @@ impl DomainParticipant {
       }
       Err(e) => log_and_err_internal!("Discovery thread channel error: {e:?}"),
     }
+  }
+
+}
+
+
+/// DDS DomainParticipant
+///
+/// It is recommended that only one DomainParticipant per OS process is created,
+/// as it allocates network sockets, creates background threads, and allocates
+/// some memory for object caches.
+///
+/// If you need to communicate to many DDS domains,
+/// then you must create a separate DomainParticipant for each of them.
+/// See DDS Spec v1.4 Section "2.2.1.2.2 Overall Conceptual Model" and
+/// "2.2.2.2.1 DomainParticipant Class" for a definition of a (DDS) domain.
+/// Domains are identified by a domain identifier, which is, in Rust terms, a
+/// `u16`. Domain identifier values are application-specific, but `0` is usually
+/// the default.
+#[derive(Clone)]
+// This is a smart pointer for DomainParticipantInner for easier manipulation.
+pub struct DomainParticipant {
+  dpi: Arc<Mutex<DomainParticipantDisc>>,
+}
+
+#[allow(clippy::new_without_default)]
+impl DomainParticipant {
+  /// # Examples
+  /// ```
+  /// # use rustdds::DomainParticipant;
+  ///
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
+  /// ```
+  pub fn new(domain_id: u16) -> Result<Self> {
+    DomainParticipantBuilder::new(domain_id).build()
   }
 
   /// Creates DDS Publisher
@@ -426,6 +549,7 @@ pub(crate) struct DomainParticipantDisc {
 impl DomainParticipantDisc {
   pub fn new(
     domain_id: u16,
+    participant_guid: GUID,
     discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
@@ -433,6 +557,7 @@ impl DomainParticipantDisc {
   ) -> Result<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
+      participant_guid,
       discovery_update_notification_receiver,
       spdp_liveness_sender,
     )?;
@@ -631,6 +756,7 @@ impl Drop for DomainParticipantInner {
 impl DomainParticipantInner {
   fn new(
     domain_id: u16,
+    participant_guid: GUID,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
   ) -> Result<Self> {
@@ -729,9 +855,8 @@ impl DomainParticipantInner {
       mio_channel::sync_channel::<WriterIngredients>(10);
     let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(4);
 
-    let new_guid = GUID::new_participant_guid();
     let domain_info = DomainInfo {
-      domain_participant_guid: new_guid,
+      domain_participant_guid: participant_guid,
       domain_id,
       participant_id,
     };
@@ -741,7 +866,7 @@ impl DomainParticipantInner {
     let (discovery_db_event_sender, discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(1);
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
-      new_guid,
+      participant_guid,
       discovery_db_event_sender,
     )));
 
@@ -758,7 +883,7 @@ impl DomainParticipantInner {
           listeners,
           dds_cache_clone,
           disc_db_clone,
-          new_guid.prefix,
+          participant_guid.prefix,
           TokenReceiverPair {
             token: ADD_READER_TOKEN,
             receiver: receiver_add_reader,
@@ -784,12 +909,12 @@ impl DomainParticipantInner {
 
     info!(
       "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
-      domain_id, participant_id, new_guid
+      domain_id, participant_id, participant_guid
     );
     Ok(Self {
       domain_id,
       participant_id,
-      my_guid: new_guid,
+      my_guid: participant_guid,
       sender_add_reader,
       sender_remove_reader,
       stop_poll_sender,
@@ -807,14 +932,6 @@ impl DomainParticipantInner {
     self.dds_cache.clone()
   }
 
-  // pub fn add_reader(&self, reader: ReaderIngredients) {
-  //   self.sender_add_reader.send(reader).unwrap();
-  // }
-
-  // pub fn remove_reader(&self, guid: GUID) {
-  //   let reader_guid = guid; // How to identify reader to be removed?
-  //   self.sender_remove_reader.send(reader_guid).unwrap();
-  // }
 
   // Publisher and subscriber creation
   //
