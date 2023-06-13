@@ -21,7 +21,11 @@ impl Authentication for AuthenticationBuiltIn {
   ) -> SecurityResult<(ValidationOutcome, IdentityHandle, GUID)> {
     // TODO: actual implementation
 
-    Ok((ValidationOutcome::Ok, IdentityHandle::MOCK, candidate_participant_guid))
+    Ok((
+      ValidationOutcome::Ok,
+      IdentityHandle::MOCK,
+      candidate_participant_guid,
+    ))
   }
 
   // Currently only mocked
@@ -63,7 +67,11 @@ impl Authentication for AuthenticationBuiltIn {
   ) -> SecurityResult<(ValidationOutcome, IdentityHandle, AuthRequestMessageToken)> {
     // TODO: actual implementation
 
-    Ok((ValidationOutcome::Ok, IdentityHandle::MOCK, AuthRequestMessageToken::MOCK))
+    Ok((
+      ValidationOutcome::Ok,
+      IdentityHandle::MOCK,
+      AuthRequestMessageToken::MOCK,
+    ))
   }
 
   fn begin_handshake_request(

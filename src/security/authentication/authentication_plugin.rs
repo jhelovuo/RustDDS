@@ -20,9 +20,10 @@ use super::*;
 pub trait Authentication {
   /// validate_local_identity: section 8.3.2.11.2 of the Security
   /// specification
-  /// 
-  /// The return values `local_identity_handle` and `adjusted_participant_guid` are also contained
-  /// inside the Ok-variant, in addition to the validation outcome.
+  ///
+  /// The return values `local_identity_handle` and `adjusted_participant_guid`
+  /// are also contained inside the Ok-variant, in addition to the validation
+  /// outcome.
   fn validate_local_identity(
     &mut self,
     domain_id: u16,
@@ -32,9 +33,10 @@ pub trait Authentication {
 
   /// validate_remote_identity: section 8.3.2.11.3 of the Security
   /// specification
-  /// 
-  /// The return values `remote_identity_handle` and `local_auth_request_token` are also contained
-  /// inside the Ok-variant, in addition to the validation outcome.
+  ///
+  /// The return values `remote_identity_handle` and `local_auth_request_token`
+  /// are also contained inside the Ok-variant, in addition to the validation
+  /// outcome.
   fn validate_remote_identity(
     &self,
     remote_auth_request_token: AuthRequestMessageToken,
@@ -45,9 +47,9 @@ pub trait Authentication {
 
   /// begin_handshake_request: section 8.3.2.11.4 of the Security
   /// specification
-  /// 
-  /// The return values `handshake_handle` and `handshake_message` are also contained
-  /// inside the Ok-variant, in addition to the validation outcome.
+  ///
+  /// The return values `handshake_handle` and `handshake_message` are also
+  /// contained inside the Ok-variant, in addition to the validation outcome.
   fn begin_handshake_request(
     &self,
     initiator_identity_handle: IdentityHandle,
@@ -57,9 +59,9 @@ pub trait Authentication {
 
   /// begin_handshake_reply: section 8.3.2.11.5 of the Security
   /// specification
-  /// 
-  /// The return values `handshake_handle` and `handshake_message_out` are also contained
-  /// inside the Ok-variant, in addition to the validation outcome.
+  ///
+  /// The return values `handshake_handle` and `handshake_message_out` are also
+  /// contained inside the Ok-variant, in addition to the validation outcome.
   fn begin_handshake_reply(
     &self,
     handshake_message_in: HandshakeMessageToken,
@@ -70,7 +72,7 @@ pub trait Authentication {
 
   /// process_handshake: section 8.3.2.11.6 of the Security
   /// specification
-  /// 
+  ///
   /// The return value `handshake_message_out` is also contained
   /// inside the Ok-variant, in addition to the validation outcome.
   fn process_handshake(
