@@ -70,7 +70,7 @@ impl Authentication for AuthenticationBuiltIn {
     Ok((
       ValidationOutcome::Ok,
       IdentityHandle::MOCK,
-      AuthRequestMessageToken::MOCK,
+      AuthRequestMessageToken::dummy(),
     ))
   }
 

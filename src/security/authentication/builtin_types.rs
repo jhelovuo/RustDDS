@@ -1,7 +1,8 @@
+use bytes::Bytes;
 use log::debug;
 
 use crate::security::DataHolderBuilder;
-use super::types::IdentityToken;
+use super::{types::{IdentityToken, IdentityStatusToken}, AuthRequestMessageToken};
 
 const IDENTITY_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
 
@@ -138,5 +139,127 @@ impl From<BuiltinIdentityToken> for IdentityToken {
 
     // Build the DataHolder and create the IdentityToken from it
     IdentityToken::from(dh_builder.build())
+  }
+}
+
+
+const IDENTITY_STATUS_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
+
+const OCSP_STATUS_PROPERTY_NAME: &str = "ocsp_status";
+
+/// DDS:Auth:PKI-DH IdentityStatusToken type from section 9.3.2.2 of the
+/// Security specification (v. 1.1)
+pub struct BuiltinIdentityStatusToken {
+  ocsp_status: Option<String>,  // Optional according to spec
+}
+
+impl TryFrom<IdentityStatusToken> for BuiltinIdentityStatusToken {
+  type Error = String;
+
+  fn try_from(token: IdentityStatusToken) -> Result<Self, Self::Error> {
+    let dh = token.data_holder;
+    // Verify class id
+    if dh.class_id != IDENTITY_STATUS_TOKEN_CLASS_ID {
+      return Err(format!(
+        "Invalid class ID. Got {}, expected {}",
+        dh.class_id, IDENTITY_STATUS_TOKEN_CLASS_ID
+      ));
+    }
+
+    // Extract OCSP status property if present
+    let properties_map = dh.properties_as_map();
+
+    let ocsp_status = if let Some(prop) = properties_map.get(OCSP_STATUS_PROPERTY_NAME) {
+      Some(prop.value())
+    } else {
+      debug!("IdentityStatusToken did not contain OCSP status");
+      None
+    };
+
+    let builtin_token = Self {
+      ocsp_status
+    };
+    Ok(builtin_token)
+  }
+}
+
+impl From<BuiltinIdentityStatusToken> for IdentityStatusToken {
+  fn from(builtin_token: BuiltinIdentityStatusToken) -> Self {
+    // First create the DataHolder
+    let mut dh_builder = DataHolderBuilder::new();
+
+    // Set class id
+    dh_builder.set_class_id(IDENTITY_STATUS_TOKEN_CLASS_ID);
+
+    // Add OCSP status if present
+    if let Some(val) = builtin_token.ocsp_status {
+      dh_builder.add_property(OCSP_STATUS_PROPERTY_NAME, val, true);
+    }
+
+    IdentityStatusToken::from(dh_builder.build())
+  }
+}
+
+const AUTH_REQUEST_MESSAGE_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+AuthReq";
+
+const FUTURE_CHALLENGE_PROPERTY_NAME: &str = "future_challenge";
+
+/// DDS:Auth:PKI-DH AuthRequestMessageToken type from section 9.3.2.4 of the
+/// Security specification (v. 1.1)
+pub struct BuiltinAuthRequestMessageToken {
+  // In spec future_challenge is a property (string value), but it probably needs to be a binary property
+  future_challenge: Bytes // In spec this is 
+}
+
+impl TryFrom<AuthRequestMessageToken> for BuiltinAuthRequestMessageToken {
+  type Error = String;
+
+  fn try_from(token: AuthRequestMessageToken) -> Result<Self, Self::Error> {
+    let dh = token.data_holder;
+    // Verify class id
+    if dh.class_id != AUTH_REQUEST_MESSAGE_TOKEN_CLASS_ID {
+      return Err(format!(
+        "Invalid class ID. Got {}, expected {}",
+        dh.class_id, AUTH_REQUEST_MESSAGE_TOKEN_CLASS_ID
+      ));
+    }
+
+    // Extract future challenge property
+    let bin_properties_map = dh.binary_properties_as_map();
+
+    let future_challenge = if let Some(prop) = bin_properties_map.get(FUTURE_CHALLENGE_PROPERTY_NAME) {
+      let bytes = prop.value();
+      // Check NONCE length is 256 bits / 32 bytes
+      if bytes.len() != 32 {
+        return Err(format!(
+          "Invalid NONCE length. Got {} bytes, expected 32",
+          bytes.len()
+        ));
+      }
+      bytes
+    
+    } else {
+      return Err("AuthRequestMessageToken did not contain future_challenge".to_string());
+    };
+
+    let builtin_token = Self {
+      future_challenge
+    };
+    Ok(builtin_token)
+  }
+}
+
+impl From<BuiltinAuthRequestMessageToken> for AuthRequestMessageToken {
+  fn from(builtin_token: BuiltinAuthRequestMessageToken) -> Self {
+    // First create the DataHolder
+    let mut dh_builder = DataHolderBuilder::new();
+
+    // Set class id
+    dh_builder.set_class_id(AUTH_REQUEST_MESSAGE_TOKEN_CLASS_ID);
+
+    // Add future status property
+    dh_builder.add_binary_property(FUTURE_CHALLENGE_PROPERTY_NAME, builtin_token.future_challenge, true);
+
+    AuthRequestMessageToken::from(dh_builder.build())
   }
 }

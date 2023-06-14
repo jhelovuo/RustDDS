@@ -84,6 +84,12 @@ pub struct BinaryProperty {
   pub(crate) propagate: bool, // propagate field is not serialized
 }
 
+impl BinaryProperty {
+  pub fn value(&self) -> Bytes {
+    self.value.clone()
+  }
+}
+
 mod repr {
   use serde::{Deserialize, Serialize};
 
