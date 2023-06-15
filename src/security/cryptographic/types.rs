@@ -1,6 +1,5 @@
 use std::convert::From;
 
-use bytes::Bytes;
 use speedy::{Readable, Writable};
 
 use crate::{rtps::Submessage, security::types::DataHolder};
@@ -21,20 +20,7 @@ pub type DatareaderCryptoToken = CryptoToken;
 
 /// CryptoHandles are supposed to be opaque references to key material that can
 /// only be interpreted inside the plugin implementation (8.5.1.2–4).
-pub struct CryptoHandle {
-  pub key_material: Bytes,
-}
-
-impl From<Bytes> for CryptoHandle {
-  fn from(key_material: Bytes) -> Self {
-    Self { key_material }
-  }
-}
-impl From<CryptoHandle> for Bytes {
-  fn from(CryptoHandle { key_material }: CryptoHandle) -> Self {
-    key_material
-  }
-}
+pub type CryptoHandle = u32;
 
 /// ParticipantCryptoHandle: section 8.5.1.2 of the Security specification
 /// (v. 1.1)
@@ -60,7 +46,7 @@ pub struct CryptoTransformIdentifier {
 pub type CryptoTransformKind = [u8; 4];
 /// transformation_key_id: section 8.5.1.5.2 of the Security specification (v.
 /// 1.1)
-pub type CryptoTransformKeyId = [u8; 4];
+pub type CryptoTransformKeyId = u32;
 
 /// SecureSubmessageCategory_t: section 8.5.1.6 of the Security specification
 /// (v. 1.1)

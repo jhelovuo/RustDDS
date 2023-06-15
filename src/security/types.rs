@@ -19,8 +19,8 @@ use crate::{
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)] // for CDR in Discovery
 pub struct Property {
-  name: String,
-  value: String,
+  pub(crate) name: String,
+  pub(crate) value: String,
   propagate: bool, // NOT SERIALIZED
 }
 

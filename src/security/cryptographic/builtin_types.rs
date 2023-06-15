@@ -138,20 +138,6 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
   }
 }
 
-//Conversions from and into CryptoHandle
-impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC {
-  type Error = SecurityError;
-  fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
-    <Bytes>::from(value).try_into()
-  }
-}
-impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoHandle {
-  type Error = SecurityError;
-  fn try_from(value: KeyMaterial_AES_GCM_GMAC) -> Result<Self, Self::Error> {
-    <Bytes>::try_from(value).map(<CryptoHandle>::from)
-  }
-}
-
 // Conversions from and into CryptoToken
 impl TryFrom<CryptoToken> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
@@ -218,20 +204,6 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Bytes {
       .map_err(|e| Self::Error {
         msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC_seq: {}", e),
       })
-  }
-}
-
-// Conversions from and into CryptoHandle for KeyMaterial_AES_GCM_GMAC_seq
-impl TryFrom<CryptoHandle> for KeyMaterial_AES_GCM_GMAC_seq {
-  type Error = SecurityError;
-  fn try_from(value: CryptoHandle) -> Result<Self, Self::Error> {
-    <Bytes>::from(value).try_into()
-  }
-}
-impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for CryptoHandle {
-  type Error = SecurityError;
-  fn try_from(value: KeyMaterial_AES_GCM_GMAC_seq) -> Result<Self, Self::Error> {
-    <Bytes>::try_from(value).map(<CryptoHandle>::from)
   }
 }
 
@@ -500,4 +472,14 @@ impl TryFrom<BuiltinCryptoFooter> for CryptoFooter {
 pub struct ReceiverSpecificMAC {
   pub receiver_mac_key_id: CryptoTransformKeyId,
   pub receiver_mac: [u8; 16],
+}
+
+pub(super) enum EntityCategory {
+  DataReader,
+  DataWriter,
+}
+
+pub(super) struct EntityInfo {
+  pub handle: CryptoHandle,
+  pub category: EntityCategory,
 }

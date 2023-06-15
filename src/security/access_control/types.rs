@@ -53,6 +53,7 @@ impl TopicSecurityAttributes {
 
 // TODO: EndpointSecurityAttributes: section 8.4.2.7 of the Security
 // specification (v. 1.1)
+#[derive(Copy, Clone)]
 pub struct EndpointSecurityAttributes {}
 
 impl EndpointSecurityAttributes {
