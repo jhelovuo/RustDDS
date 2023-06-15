@@ -51,7 +51,6 @@ pub(crate) struct MessageReceiver {
   pub multicast_reply_locator_list: Vec<Locator>,
   pub source_timestamp: Option<Timestamp>,
 
-  pos: usize,
   pub submessage_count: usize,
 }
 
@@ -75,7 +74,6 @@ impl MessageReceiver {
       multicast_reply_locator_list: vec![Locator::Invalid],
       source_timestamp: None,
 
-      pos: 0,
       submessage_count: 0,
     }
   }
@@ -89,7 +87,6 @@ impl MessageReceiver {
     self.multicast_reply_locator_list.clear();
     self.source_timestamp = None;
 
-    self.pos = 0;
     self.submessage_count = 0;
   }
 
@@ -162,7 +159,7 @@ impl MessageReceiver {
         info!("Received RTPS PING. Do not know how to respond.");
         debug!("Data was {:?}", &msg_bytes);
       } else {
-        warn!("Message is shorter than header. Cannot deserialize.");
+        warn!("Message is shorter than RTPS header. Cannot deserialize.");
         debug!("Data was {:?}", &msg_bytes);
       }
       return;
