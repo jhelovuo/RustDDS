@@ -193,7 +193,8 @@ pub struct QosPolicies {
 }
 
 impl QosPolicies {
-  // #[cfg(test)]
+  // TODO: rename this to "none", as this is already member of QosPolicies, so
+  // context in implied
   pub fn qos_none() -> Self {
     Self::default()
   }

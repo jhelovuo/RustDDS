@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bytes::{Bytes, BytesMut};
 use enumflags2::bitflags;
 use speedy::{Context, Readable, Reader, Writable, Writer};
@@ -65,6 +67,10 @@ impl Property {
     let second = 4 + self.value.len() + 1;
     first + align + second
   }
+
+  pub fn value(&self) -> String {
+    self.value.clone()
+  }
 }
 
 // BinaryProperty_t type from section 7.2.2 of the Security specification (v.
@@ -76,6 +82,12 @@ pub struct BinaryProperty {
   pub(crate) name: String,    // public because of serialization
   pub(crate) value: Bytes,    // Serde cannot derive for Bytes, therefore use repr::
   pub(crate) propagate: bool, // propagate field is not serialized
+}
+
+impl BinaryProperty {
+  pub fn value(&self) -> Bytes {
+    self.value.clone()
+  }
 }
 
 mod repr {
@@ -195,6 +207,54 @@ impl Tag {
   }
 }
 
+/// Utility for building [DataHolder]
+#[derive(Default)]
+pub struct DataHolderBuilder {
+  class_id: String,
+  properties: Vec<Property>,
+  binary_properties: Vec<BinaryProperty>,
+}
+
+impl DataHolderBuilder {
+  pub fn new() -> Self {
+    Self {
+      class_id: String::new(),
+      properties: vec![],
+      binary_properties: vec![],
+    }
+  }
+
+  pub fn set_class_id(&mut self, id: &str) {
+    self.class_id = id.to_string();
+  }
+
+  pub fn add_property(&mut self, name: &str, value: String, propagate: bool) {
+    let property = Property {
+      name: name.to_string(),
+      value,
+      propagate,
+    };
+    self.properties.push(property);
+  }
+
+  pub fn add_binary_property(&mut self, name: &str, value: Bytes, propagate: bool) {
+    let bin_property = BinaryProperty {
+      name: name.to_string(),
+      value,
+      propagate,
+    };
+    self.binary_properties.push(bin_property);
+  }
+
+  pub fn build(self) -> DataHolder {
+    DataHolder {
+      class_id: self.class_id,
+      properties: self.properties,
+      binary_properties: self.binary_properties,
+    }
+  }
+}
+
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
 // fields need to be public to make (de)serializable
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)] // for CDR in Discovery
@@ -211,6 +271,26 @@ impl DataHolder {
       properties: vec![],
       binary_properties: vec![],
     }
+  }
+
+  pub fn properties_as_map(&self) -> HashMap<String, &Property> {
+    // Return a HashMap where keys are property names and values are
+    // references to properties
+    let mut map = HashMap::new();
+    for prop in &self.properties {
+      map.insert(prop.name.clone(), prop);
+    }
+    map
+  }
+
+  pub fn binary_properties_as_map(&self) -> HashMap<String, &BinaryProperty> {
+    // Return a HashMap where keys are binary property names and values are
+    // references to binary properties
+    let mut map = HashMap::new();
+    for bin_prop in &self.binary_properties {
+      map.insert(bin_prop.name.clone(), bin_prop);
+    }
+    map
   }
 }
 

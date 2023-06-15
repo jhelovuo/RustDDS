@@ -22,7 +22,7 @@ pub trait AccessControl {
   /// specification
   fn validate_local_permissions(
     &self,
-    auth_plugin: &impl Authentication,
+    auth_plugin: &Box<dyn Authentication>,
     identity: IdentityHandle,
     domain_id: u16,
     participant_qos: &QosPolicies,
@@ -32,7 +32,7 @@ pub trait AccessControl {
   /// specification
   fn validate_remote_permissions(
     &self,
-    auth_plugin: &impl Authentication,
+    auth_plugin: &Box<dyn Authentication>,
     local_identity_handle: IdentityHandle,
     remote_identity_handle: IdentityHandle,
     remote_permissions_token: PermissionsToken,
@@ -46,7 +46,7 @@ pub trait AccessControl {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     qos: &QosPolicies,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /// check_create_datawriter: section 8.4.2.9.4 of the Security
   /// specification. The parameters partition and data_tag have been left out,

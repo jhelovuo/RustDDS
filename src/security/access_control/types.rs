@@ -26,6 +26,7 @@ impl PermissionsCredentialToken {
 
 // TODO: PermissionsHandle: section 8.4.2.3 of the Security specification (v.
 // 1.1)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PermissionsHandle {}
 
 impl PermissionsHandle {

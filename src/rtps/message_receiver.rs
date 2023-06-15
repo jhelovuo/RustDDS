@@ -370,19 +370,19 @@ impl MessageReceiver {
     let _mr_state = self.give_message_receiver_info();
     match submessage {
       SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
-        todo!()
+        warn!("SecureBody submessage not implemented");
       }
       SecuritySubmessage::SecurePrefix(_sec_prefix, _sec_prefix_flags) => {
-        todo!()
+        warn!("SecurePrefix submessage not implemented");
       }
       SecuritySubmessage::SecurePostfix(_sec_postfix, _sec_postfix_flags) => {
-        todo!()
+        warn!("SecurePostfix submessage not implemented");
       }
       SecuritySubmessage::SecureRTPSPrefix(_sec_rtps_prefix, _sec_rtps_prefix_flags) => {
-        todo!()
+        warn!("SecureRTPSPrefix submessage not implemented");
       }
       SecuritySubmessage::SecureRTPSPostfix(_sec_rtps_postfix, _sec_rtps_postfix_flags) => {
-        todo!()
+        warn!("SecureRTPSPostfix submessage not implemented");
       }
     }
   }

@@ -190,7 +190,7 @@ pub mod serialization;
 #[doc(inline)]
 pub use dds::{
   key::{Key, Keyed},
-  participant::DomainParticipant,
+  participant::{DomainParticipant, DomainParticipantBuilder},
   pubsub::{Publisher, Subscriber},
   qos,
   qos::{policy, QosPolicies, QosPolicyBuilder},

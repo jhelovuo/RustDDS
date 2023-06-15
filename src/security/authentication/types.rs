@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
-use crate::security::types::{DataHolder, Token};
+use crate::security::types::DataHolder;
 
 // ValidationOutcome is like ValidationResult_t in the the Security
 // specification v.1.1 (section 8.3.2.11.1), but does not contain
 // VALIDATION_FAILED. Failure is handled as an error in the result type
-// ValidationResult
+// SecurityResult
 pub enum ValidationOutcome {
   Ok,
   PendingRetry,
@@ -21,7 +21,6 @@ pub struct IdentityToken {
   // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
   // Readable and Writable are needed to (de)serialize to(from) ParameterList.
   // Note: The implementation has to observe CDR alignment rules.
-  // Automatic derive does not do so, but does not matter al long as the item is empty.
   pub data_holder: DataHolder,
 }
 
@@ -46,21 +45,26 @@ impl IdentityToken {
 pub struct IdentityStatusToken {
   // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
   // Note: The implementation has to observe CDR alignment rules.
-  // Automatic derive does not do so, but does not matter al long as the item is empty.
-  pub token: Token,
+  pub data_holder: DataHolder,
+}
+
+impl From<DataHolder> for IdentityStatusToken {
+  fn from(value: DataHolder) -> Self {
+    Self { data_holder: value }
+  }
 }
 
 impl IdentityStatusToken {
   // Mock value used for development
   pub fn dummy() -> Self {
     Self {
-      token: Token::dummy(),
+      data_holder: DataHolder::dummy(),
     }
   }
 }
 
 // TODO: IdentityHandle: section 8.3.2.3 of the Security specification (v. 1.1)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IdentityHandle {}
 
 impl IdentityHandle {
@@ -80,11 +84,26 @@ impl HandshakeHandle {
 // TODO: AuthRequestMessageToken: section 8.3.2.5 of the Security specification
 // (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AuthRequestMessageToken {}
+pub struct AuthRequestMessageToken {
+  // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
+  // Readable and Writable are needed to (de)serialize to(from) ParameterList.
+  // Note: The implementation has to observe CDR alignment rules.
+  pub data_holder: DataHolder,
+}
+
+impl From<DataHolder> for AuthRequestMessageToken {
+  fn from(value: DataHolder) -> Self {
+    Self { data_holder: value }
+  }
+}
 
 impl AuthRequestMessageToken {
   // Mock value used for development
-  pub const MOCK: Self = Self {};
+  pub fn dummy() -> Self {
+    Self {
+      data_holder: DataHolder::dummy(),
+    }
+  }
 }
 
 // TODO: HandshakeMessageToken: section 8.3.2.6 of the Security specification

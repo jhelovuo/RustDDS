@@ -249,7 +249,9 @@ impl DPEventLoop {
                     warn!("Spurious wakeup from dp_event_loop command channel. Very fishy.");
                   }
                   Err(TryRecvError::Disconnected) => {
-                    error!("Application thread has exited abnormally. Stopping RustDDS event loop.")
+                    error!(
+                      "Application thread has exited abnormally. Stopping RustDDS event loop."
+                    );
                   }
                 }
               }
