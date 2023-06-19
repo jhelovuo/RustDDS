@@ -190,9 +190,13 @@ impl RtpsReaderProxy {
 
   pub fn mark_all_frags_requested(&mut self, seq_num: SequenceNumber, frag_count: u32) {
     // Insert all ones set with frag_count bits
-    self.frags_requested
+    self
+      .frags_requested
       // TODO: expain why unwrap below succeeds
-      .insert(seq_num, BitVec::from_elem(frag_count.try_into().unwrap(), true));
+      .insert(
+        seq_num,
+        BitVec::from_elem(frag_count.try_into().unwrap(), true),
+      );
   }
 
   pub fn mark_frags_requested(&mut self, seq_num: SequenceNumber, frag_nums: &FragmentNumberSet) {

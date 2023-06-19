@@ -438,17 +438,15 @@ impl Writer {
   // --------------------------------------------------------------
   // --------------------------------------------------------------
   // --------------------------------------------------------------
-  fn num_frags_and_frag_size(&self, payload_size: usize) -> (u32,u16) {
+  fn num_frags_and_frag_size(&self, payload_size: usize) -> (u32, u16) {
     let fragment_size = self.data_max_size_serialized as u32; //TODO: overflow check
     let data_size = payload_size as u32; //TODO: overflow check
-    // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
-    let num_frags =
-      (data_size / fragment_size) + u32::from(data_size % fragment_size != 0); // rounding up
+                                         // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
+    let num_frags = (data_size / fragment_size) + u32::from(data_size % fragment_size != 0); // rounding up
     debug!("Fragmenting {data_size} to {num_frags} x {fragment_size}");
     // TODO: Check fragment_size overflow
     (num_frags, fragment_size as u16)
   }
-
 
   // Receive new data samples from the DDS DataWriter
   pub fn process_writer_command(&mut self) {
@@ -912,7 +910,8 @@ impl Writer {
             sending_data = true;
           } else {
             // Large data: arrange DATAFRAGs to be sent
-            let (num_frags, _frag_size) = self.num_frags_and_frag_size(cache_change.data_value.payload_size());
+            let (num_frags, _frag_size) =
+              self.num_frags_and_frag_size(cache_change.data_value.payload_size());
             reader_proxy.mark_all_frags_requested(unsent_sn, num_frags);
             // We cannot set up a repair timer right here, because self is already borrowed
             // So just set a flag.
@@ -955,7 +954,7 @@ impl Writer {
     if !no_longer_relevant.is_empty() {
       partial_message =
         partial_message.gap_msg(&BTreeSet::from_iter(no_longer_relevant), self, reader_guid);
-        sending_gap = true;
+      sending_gap = true;
     }
 
     // if we have DATA or GAP to send, then build message and send
@@ -970,7 +969,9 @@ impl Writer {
     if trigger_send_repair_frags {
       self.timed_event_timer.set_timeout(
         EPSILON_DELAY.into(),
-        TimedEvent::SendRepairFrags { to_reader: reader_guid },
+        TimedEvent::SendRepairFrags {
+          to_reader: reader_guid,
+        },
       );
     }
     // Update repair_mode flag
