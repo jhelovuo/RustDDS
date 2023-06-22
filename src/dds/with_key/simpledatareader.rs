@@ -29,7 +29,6 @@ use crate::{
     with_key::datasample::{DeserializedCacheChange, Sample},
   },
   discovery::discovery::DiscoveryCommand,
-  log_and_err_internal, log_and_err_precondition_not_met,
   mio_source::PollEventSource,
   serialization::CDRDeserializerAdapter,
   structure::{
@@ -168,13 +167,13 @@ where
     reader_command: mio_channel::SyncSender<ReaderCommand>,
     data_reader_waker: Arc<Mutex<Option<Waker>>>,
     event_source: PollEventSource,
-  ) -> Result<Self> {
+  ) -> CreateResult<Self> {
     let dp = match subscriber.participant() {
       Some(dp) => dp,
       None => {
-        return log_and_err_precondition_not_met!(
-          "Cannot create new DataReader, DomainParticipant doesn't exist."
-        )
+        return Err(CreateError::ResourceDropped {
+          reason: "Cannot create new DataReader, DomainParticipant doesn't exist.".to_string(),
+        })
       }
     };
 
@@ -183,11 +182,13 @@ where
     // Verify that the topic cache corresponds to the topic of the Reader
     let topic_cache_name = topic_cache.lock().unwrap().topic_name();
     if topic.name() != topic_cache_name {
-      return log_and_err_internal!(
-        "Topic name = {} and topic cache name = {} not equal when creating a SimpleDataReader",
-        topic.name(),
-        topic_cache_name
-      );
+      return Err(CreateError::Internal {
+        reason: format!(
+          "Topic name = {} and topic cache name = {} not equal when creating a SimpleDataReader",
+          topic.name(),
+          topic_cache_name
+        ),
+      });
     }
 
     Ok(Self {
@@ -243,7 +244,7 @@ where
     timestamp: Timestamp,
     cc: &CacheChange,
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
-  ) -> std::result::Result<DeserializedCacheChange<D>, String> {
+  ) -> ReadResult<DeserializedCacheChange<D>> {
     match cc.data_value {
       DDSData::Data {
         ref serialized_payload,
@@ -260,13 +261,17 @@ where
               Self::update_hash_to_key_map(hash_to_key_map, &p);
               Ok(DeserializedCacheChange::new(timestamp, cc, p))
             }
-            Err(e) => Err(format!("Failed to deserialize sample bytes: {e}, ")),
+            Err(e) => Err(ReadError::Deserialization {
+              reason: format!("Failed to deserialize sample bytes: {e}, "),
+            }),
           }
         } else {
-          Err(format!(
-            "Unknown representation id {:?}.",
-            serialized_payload.representation_identifier
-          ))
+          Err(ReadError::Deserialization {
+            reason: format!(
+              "Unknown representation id {:?}.",
+              serialized_payload.representation_identifier
+            ),
+          })
         }
       }
 
@@ -283,7 +288,9 @@ where
             Self::update_hash_to_key_map(hash_to_key_map, &k);
             Ok(DeserializedCacheChange::new(timestamp, cc, k))
           }
-          Err(e) => Err(format!("Failed to deserialize key {}", e)),
+          Err(e) => Err(ReadError::Deserialization {
+            reason: format!("Failed to deserialize key {}", e),
+          }),
         }
       }
 
@@ -297,10 +304,9 @@ where
             Sample::Dispose(key.clone()),
           ))
         } else {
-          Err(format!(
-            "Tried to dispose with unknown key hash: {:x?}",
-            key_hash
-          ))
+          Err(ReadError::Deserialization {
+            reason: format!("Tried to dispose with unknown key hash: {:x?}", key_hash),
+          })
         }
       }
     } // match
@@ -308,7 +314,7 @@ where
 
   /// Note: Always remember to call .drain_read_notifications() just before
   /// calling this one. Otherwise, new notifications may not appear.
-  pub fn try_take_one(&self) -> Result<Option<DeserializedCacheChange<D>>> {
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
       Some(policy::Reliability::Reliable { .. })
@@ -339,12 +345,14 @@ where
           .insert(dcc.writer_guid, dcc.sequence_number);
         Ok(Some(dcc))
       }
-      Err(string) => Error::serialization_error(format!(
-        "{} Topic = {}, Type = {:?}",
-        string,
-        self.my_topic.name(),
-        self.my_topic.get_type()
-      )),
+      Err(ser_err) => Err(ReadError::Deserialization {
+        reason: format!(
+          "{}, Topic = {}, Type = {:?}",
+          ser_err,
+          self.my_topic.name(),
+          self.my_topic.get_type()
+        ),
+      }),
     }
   }
 
@@ -514,7 +522,7 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = Result<DeserializedCacheChange<D>>;
+  type Item = ReadResult<DeserializedCacheChange<D>>;
 
   // The full return type is now
   // Poll<Option<Result<DeserializedCacheChange<D>>>
@@ -583,7 +591,7 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
+  type Item = ReadResult<DataReaderStatus>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     Pin::new(&mut self.simple_datareader.status_receiver.as_async_stream()).poll_next(cx)

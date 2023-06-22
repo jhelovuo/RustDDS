@@ -23,7 +23,7 @@ use rand::prelude::*;
 use smol::Timer;
 use futures::{stream::StreamExt, FutureExt, TryFutureExt};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct Shape {
   color: String,
   x: i32,

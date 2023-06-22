@@ -3,8 +3,7 @@ use std::{marker::PhantomData, ops::Deref};
 use bytes::Bytes;
 
 use crate::{
-  dds::adapters::*, messages::submessages::submessages::RepresentationIdentifier,
-  serialization::error::Result, Keyed,
+  dds::adapters::*, messages::submessages::submessages::RepresentationIdentifier, Keyed,
 };
 
 // This wrapper is used to convert NO_KEY types to WITH_KEY
@@ -47,11 +46,13 @@ impl<D, SA> no_key::SerializerAdapter<NoKeyWrapper<D>> for SAWrapper<SA>
 where
   SA: no_key::SerializerAdapter<D>,
 {
+  type Error = SA::Error;
+
   fn output_encoding() -> RepresentationIdentifier {
     SA::output_encoding()
   }
 
-  fn to_bytes(value: &NoKeyWrapper<D>) -> Result<Bytes> {
+  fn to_bytes(value: &NoKeyWrapper<D>) -> Result<Bytes, SA::Error> {
     SA::to_bytes(&value.d)
   }
 }
@@ -62,7 +63,7 @@ impl<D, SA> with_key::SerializerAdapter<NoKeyWrapper<D>> for SAWrapper<SA>
 where
   SA: no_key::SerializerAdapter<D>,
 {
-  fn key_to_bytes(_value: &()) -> Result<Bytes> {
+  fn key_to_bytes(_value: &()) -> Result<Bytes, SA::Error> {
     Ok(Bytes::new())
   }
 }
@@ -79,11 +80,16 @@ impl<D, DA> no_key::DeserializerAdapter<NoKeyWrapper<D>> for DAWrapper<DA>
 where
   DA: no_key::DeserializerAdapter<D>,
 {
+  type Error = DA::Error;
+
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     DA::supported_encodings()
   }
 
-  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<NoKeyWrapper<D>> {
+  fn from_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> Result<NoKeyWrapper<D>, DA::Error> {
     DA::from_bytes(input_bytes, encoding).map(|d| NoKeyWrapper::<D> { d })
   }
 }
@@ -96,7 +102,7 @@ where
   fn key_from_bytes(
     _input_bytes: &[u8],
     _encoding: RepresentationIdentifier,
-  ) -> Result<<NoKeyWrapper<D> as Keyed>::K> {
+  ) -> Result<<NoKeyWrapper<D> as Keyed>::K, DA::Error> {
     // also unreachable!() should work here, as this is not supposed to be used
     Ok(())
   }

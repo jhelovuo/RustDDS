@@ -13,7 +13,7 @@ use crate::{
     key::{Key, Keyed},
     pubsub::{Publisher, Subscriber},
     qos::QosPolicies,
-    result::Error,
+    result::CreateError,
     topic::{Topic, TopicKind},
   },
   discovery::sedp_messages::DiscoveredTopicData,
@@ -40,11 +40,13 @@ pub struct RosParticipant {
 }
 
 impl RosParticipant {
-  pub fn new() -> Result<Self, Error> {
+  pub fn new() -> Result<Self, CreateError> {
     Self::from_domain_participant(DomainParticipant::new(0)?)
   }
 
-  pub fn from_domain_participant(domain_participant: DomainParticipant) -> Result<Self, Error> {
+  pub fn from_domain_participant(
+    domain_participant: DomainParticipant,
+  ) -> Result<Self, CreateError> {
     let i = RosParticipantInner::from_domain_participant(domain_participant)?;
     Ok(Self {
       inner: Arc::new(Mutex::new(i)),
@@ -56,7 +58,7 @@ impl RosParticipant {
     name: &str,
     namespace: &str,
     options: NodeOptions,
-  ) -> Result<RosNode, Error> {
+  ) -> Result<RosNode, CreateError> {
     RosNode::new(name, namespace, options, self.clone())
   }
   pub fn handle_node_read(&mut self) -> Vec<ROSParticipantInfo> {
@@ -140,7 +142,9 @@ struct RosParticipantInner {
 
 impl RosParticipantInner {
   // "new"
-  pub fn from_domain_participant(domain_participant: DomainParticipant) -> Result<Self, Error> {
+  pub fn from_domain_participant(
+    domain_participant: DomainParticipant,
+  ) -> Result<Self, CreateError> {
     let ros_discovery_topic = domain_participant.create_topic(
       ROSDiscoveryTopic::topic_name().to_string(),
       ROSDiscoveryTopic::type_name().to_string(),
@@ -346,7 +350,7 @@ impl RosNode {
     namespace: &str,
     options: NodeOptions,
     ros_participant: RosParticipant,
-  ) -> Result<Self, Error> {
+  ) -> Result<Self, CreateError> {
     let paramtopic = ros_participant.get_parameter_events_topic();
     let rosout_topic = ros_participant.get_rosout_topic();
 
@@ -492,9 +496,11 @@ impl RosNode {
     type_name: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic, Error> {
+  ) -> Result<Topic, CreateError> {
     if name.is_empty() {
-      return Error::bad_parameter("Topic name must not be empty.");
+      return Err(CreateError::BadParameter {
+        reason: "Topic name must not be empty.".to_string(),
+      });
     }
     // TODO: Implement the rest of the rules.
 
@@ -524,7 +530,7 @@ impl RosNode {
     &mut self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<RosSubscriber<D, DA>, Error> {
+  ) -> Result<RosSubscriber<D, DA>, CreateError> {
     let sub = self
       .ros_participant
       .get_ros_discovery_subscriber()
@@ -545,7 +551,7 @@ impl RosNode {
     &mut self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<KeyedRosSubscriber<D, DA>, Error>
+  ) -> Result<KeyedRosSubscriber<D, DA>, CreateError>
   where
     D: Keyed + DeserializeOwned + 'static,
     D::K: Key,
@@ -570,7 +576,7 @@ impl RosNode {
     &mut self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<RosPublisher<D, SA>, Error> {
+  ) -> Result<RosPublisher<D, SA>, CreateError> {
     let p = self
       .ros_participant
       .get_ros_discovery_publisher()
@@ -591,7 +597,7 @@ impl RosNode {
     &mut self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<KeyedRosPublisher<D, SA>, Error>
+  ) -> Result<KeyedRosPublisher<D, SA>, CreateError>
   where
     D: Keyed + Serialize,
     D::K: Key,

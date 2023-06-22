@@ -21,7 +21,7 @@ use crate::{
   security::{
     access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
   },
-  serialization::{error::Result, pl_cdr_adapters::*, speedy_pl_cdr_helpers::*},
+  serialization::{pl_cdr_adapters::*, speedy_pl_cdr_helpers::*},
   structure::{
     duration::Duration,
     entity::RTPSEntity,
@@ -206,8 +206,11 @@ impl<'de> Deserialize<'de> for SpdpDiscoveredParticipantData {
 }
 
 impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
     let protocol_version: ProtocolVersion = get_first_from_pl_map(
@@ -330,7 +333,10 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
 }
 
 impl PlCdrSerialize for SpdpDiscoveredParticipantData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     // This "unnecessary" binding is to trigger a warning if we forget to
     // serialize any fields.
     let Self {
@@ -462,8 +468,11 @@ impl Keyed for SpdpDiscoveredParticipantData {
 }
 
 impl PlCdrDeserialize for Participant_GUID {
-  fn from_pl_cdr_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  fn from_pl_cdr_bytes(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -479,7 +488,10 @@ impl PlCdrDeserialize for Participant_GUID {
 }
 
 impl PlCdrSerialize for Participant_GUID {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let mut pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {

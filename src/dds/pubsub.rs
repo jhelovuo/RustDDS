@@ -11,6 +11,7 @@ use byteorder::LittleEndian;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
+  create_error_dropped, create_error_poisoned,
   dds::{
     adapters,
     key::{Key, Keyed},
@@ -20,7 +21,7 @@ use crate::{
     },
     participant::*,
     qos::*,
-    result::{Error, Result},
+    result::{CreateError, CreateResult, WaitResult},
     statusevents::{sync_status_channel, DataReaderStatus},
     topic::*,
     with_key,
@@ -31,7 +32,7 @@ use crate::{
   discovery::{
     discovery::DiscoveryCommand, discovery_db::DiscoveryDB, sedp_messages::DiscoveredWriterData,
   },
-  log_and_err_internal, log_and_err_precondition_not_met, mio_source,
+  mio_source,
   rtps::{
     reader::ReaderIngredients,
     writer::{WriterCommand, WriterIngredients},
@@ -150,7 +151,7 @@ impl Publisher {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataWriter<D, SA>>
+  ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
     <D as Keyed>::K: Key,
@@ -165,7 +166,7 @@ impl Publisher {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
+  ) -> CreateResult<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
     D: Keyed + serde::Serialize,
     <D as Keyed>::K: Key,
@@ -181,7 +182,7 @@ impl Publisher {
     entity_id: EntityId,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataWriter<D, SA>>
+  ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
     <D as Keyed>::K: Key,
@@ -197,7 +198,7 @@ impl Publisher {
     entity_id: EntityId,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
+  ) -> CreateResult<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
     D: Keyed + serde::Serialize,
     <D as Keyed>::K: Key,
@@ -238,7 +239,7 @@ impl Publisher {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataWriter<D, SA>>
+  ) -> CreateResult<NoKeyDataWriter<D, SA>>
   where
     SA: adapters::no_key::SerializerAdapter<D>,
   {
@@ -251,7 +252,7 @@ impl Publisher {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
+  ) -> CreateResult<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
     D: serde::Serialize,
   {
@@ -266,7 +267,7 @@ impl Publisher {
   //   entity_id: EntityId,
   //   topic: &Topic,
   //   qos: Option<QosPolicies>,
-  // ) -> Result<NoKeyDataWriter<D, SA>>
+  // ) -> CreateResult<NoKeyDataWriter<D, SA>>
   // where
   //   D: Serialize,
   //   SA: no_key::SerializerAdapter<D>,
@@ -281,7 +282,7 @@ impl Publisher {
   //   entity_id: EntityId,
   //   topic: &Topic,
   //   qos: Option<QosPolicies>,
-  // ) -> Result<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
+  // ) -> CreateResult<NoKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   // where
   //   D: Serialize,
   // {
@@ -301,13 +302,13 @@ impl Publisher {
   // and .9
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
-  pub fn suspend_publications(&self) -> Result<()> {
+  pub fn suspend_publications(&self) {
     unimplemented!();
   }
 
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
-  pub fn resume_publications(&self) -> Result<()> {
+  pub fn resume_publications(&self) {
     unimplemented!();
   }
 
@@ -317,22 +318,18 @@ impl Publisher {
   // Coherent set not implemented and currently does nothing
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
-  pub fn begin_coherent_changes(&self) -> Result<()> {
-    unimplemented!();
-  }
+  pub fn begin_coherent_changes(&self) {}
 
   // Coherent set not implemented and currently does nothing
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
-  pub fn end_coherent_changes(&self) -> Result<()> {
-    unimplemented!();
-  }
+  pub fn end_coherent_changes(&self) {}
 
   // Wait for all matched reliable DataReaders acknowledge data written so far,
   // or timeout.
   /// **NOT IMPLEMENTED. DO NOT USE**
   #[deprecated(note = "unimplemented")]
-  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> Result<()> {
+  pub fn wait_for_acknowledgments(&self, _max_wait: Duration) -> WaitResult<()> {
     unimplemented!();
   }
 
@@ -466,7 +463,7 @@ impl InnerPublisher {
     entity_id_opt: Option<EntityId>,
     topic: &Topic,
     optional_qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataWriter<D, SA>>
+  ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
     <D as Keyed>::K: Key,
@@ -495,12 +492,12 @@ impl InnerPublisher {
     let dp = self
       .participant()
       .ok_or("upgrade fail")
-      .or_else(|e| log_and_err_internal!("Where is my DomainParticipant? {}", e))?;
+      .or_else(|e| create_error_dropped!("Where is my DomainParticipant? {}", e))?;
 
     // Create a new topic to DDScache if it doesn't exist and get a handle to it
     let topic_cache_handle = match dp.dds_cache().write() {
       Ok(mut dds_cache) => dds_cache.add_new_topic(topic.name(), topic.get_type(), &writer_qos),
-      Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
+      Err(e) => return create_error_poisoned!("Cannot lock DDScache. Error: {}", e),
     };
 
     let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
@@ -518,7 +515,7 @@ impl InnerPublisher {
     self
       .add_writer_sender
       .send(new_writer)
-      .or_else(|e| log_and_err_internal!("Adding a new writer failed: {}", e))?;
+      .or_else(|e| create_error_poisoned!("Adding a new writer failed: {}", e))?;
 
     let data_writer = WithKeyDataWriter::<D, SA>::new(
       outer.clone(),
@@ -532,7 +529,12 @@ impl InnerPublisher {
     )?;
 
     // notify Discovery DB
-    let mut db = self.discovery_db.write()?;
+    let mut db = self
+      .discovery_db
+      .write()
+      .map_err(|e| CreateError::Poisoned {
+        reason: format!("Discovery DB: {e}"),
+      })?;
     // TODO: "None" below hardwires security_info to None. So we do not publish any.
     let dwd = DiscoveredWriterData::new(&data_writer, topic, &dp, None);
     db.update_local_topic_writer(dwd);
@@ -547,7 +549,7 @@ impl InnerPublisher {
     entity_id_opt: Option<EntityId>,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataWriter<D, SA>>
+  ) -> CreateResult<NoKeyDataWriter<D, SA>>
   where
     SA: adapters::no_key::SerializerAdapter<D>,
   {
@@ -698,7 +700,7 @@ impl Subscriber {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<D, SA>>
+  ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
     <D as Keyed>::K: Key,
@@ -711,7 +713,7 @@ impl Subscriber {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  ) -> CreateResult<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
     D: serde::de::DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
@@ -727,7 +729,7 @@ impl Subscriber {
     topic: &Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<D, SA>>
+  ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
     <D as Keyed>::K: Key,
@@ -743,7 +745,7 @@ impl Subscriber {
     topic: &Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  ) -> CreateResult<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
     D: serde::de::DeserializeOwned + Keyed,
     <D as Keyed>::K: Key,
@@ -785,7 +787,7 @@ impl Subscriber {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataReader<D, SA>>
+  ) -> CreateResult<NoKeyDataReader<D, SA>>
   where
     SA: adapters::no_key::DeserializerAdapter<D>,
   {
@@ -796,7 +798,7 @@ impl Subscriber {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<no_key::SimpleDataReader<D, SA>>
+  ) -> CreateResult<no_key::SimpleDataReader<D, SA>>
   where
     SA: adapters::no_key::DeserializerAdapter<D>,
   {
@@ -809,7 +811,7 @@ impl Subscriber {
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  ) -> CreateResult<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
     D: serde::de::DeserializeOwned,
   {
@@ -823,7 +825,7 @@ impl Subscriber {
   //   topic: &Topic,
   //   entity_id: EntityId,
   //   qos: Option<QosPolicies>,
-  // ) -> Result<NoKeyDataReader<D, SA>>
+  // ) -> CreateResult<NoKeyDataReader<D, SA>>
   // where
   //   D: DeserializeOwned,
   //   SA: no_key::DeserializerAdapter<D>,
@@ -840,7 +842,7 @@ impl Subscriber {
   //   topic: &Topic,
   //   entity_id: EntityId,
   //   qos: Option<QosPolicies>,
-  // ) -> Result<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
+  // ) -> CreateResult<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
   // where
   //   D: DeserializeOwned,
   // {
@@ -924,7 +926,7 @@ impl InnerSubscriber {
     entity_id_opt: Option<EntityId>,
     topic: &Topic,
     optional_qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<D, SA>>
+  ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
     <D as Keyed>::K: Key,
@@ -943,7 +945,7 @@ impl InnerSubscriber {
     entity_id_opt: Option<EntityId>,
     topic: &Topic,
     optional_qos: Option<QosPolicies>,
-  ) -> Result<with_key::SimpleDataReader<D, SA>>
+  ) -> CreateResult<with_key::SimpleDataReader<D, SA>>
   where
     D: Keyed,
     <D as Keyed>::K: Key,
@@ -974,13 +976,13 @@ impl InnerSubscriber {
 
     let dp = match self.participant() {
       Some(dp) => dp,
-      None => return log_and_err_precondition_not_met!("DomainParticipant doesn't exist anymore."),
+      None => return create_error_dropped!("DomainParticipant doesn't exist anymore."),
     };
 
     // Create a new topic to DDScache if it doesn't exist and get a handle to it
     let topic_cache_handle = match dp.dds_cache().write() {
       Ok(mut dds_cache) => dds_cache.add_new_topic(topic.name(), topic.get_type(), &qos),
-      Err(e) => return log_and_err_internal!("Cannot lock DDScache. Error: {}", e),
+      Err(e) => return create_error_poisoned!("Cannot lock DDScache. Error: {}", e),
     };
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
@@ -1005,7 +1007,7 @@ impl InnerSubscriber {
       let mut db = self
         .discovery_db
         .write()
-        .or_else(|e| log_and_err_internal!("Cannot lock discovery_db. {}", e))?;
+        .or_else(|e| create_error_poisoned!("Cannot lock discovery_db. {}", e))?;
       db.update_local_topic_reader(&dp, topic, &new_reader);
       db.update_topic_data_p(topic);
     }
@@ -1028,7 +1030,7 @@ impl InnerSubscriber {
     self
       .sender_add_reader
       .try_send(new_reader)
-      .or_else(|e| log_and_err_internal!("Cannot add DataReader. Error: {}", e))?;
+      .or_else(|e| create_error_poisoned!("Cannot add DataReader. Error: {}", e))?;
 
     Ok(datareader)
   }
@@ -1039,16 +1041,14 @@ impl InnerSubscriber {
     topic: &Topic,
     entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
-  ) -> Result<WithKeyDataReader<D, SA>>
+  ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
     <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::WithKey {
-      return Error::precondition_not_met(
-        "Topic is NO_KEY, but attempted to create WITH_KEY Datareader",
-      );
+      return Err(CreateError::TopicKind(TopicKind::WithKey));
     }
     self.create_datareader_internal(outer, entity_id, topic, qos)
   }
@@ -1059,14 +1059,12 @@ impl InnerSubscriber {
     topic: &Topic,
     entity_id_opt: Option<EntityId>,
     qos: Option<QosPolicies>,
-  ) -> Result<NoKeyDataReader<D, SA>>
+  ) -> CreateResult<NoKeyDataReader<D, SA>>
   where
     SA: adapters::no_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::NoKey {
-      return Error::precondition_not_met(
-        "Topic is WITH_KEY, but attempted to create NO_KEY Datareader",
-      );
+      return Err(CreateError::TopicKind(TopicKind::NoKey));
     }
 
     let entity_id =
@@ -1088,14 +1086,12 @@ impl InnerSubscriber {
     topic: &Topic,
     entity_id_opt: Option<EntityId>,
     qos: Option<QosPolicies>,
-  ) -> Result<no_key::SimpleDataReader<D, SA>>
+  ) -> CreateResult<no_key::SimpleDataReader<D, SA>>
   where
     SA: adapters::no_key::DeserializerAdapter<D> + 'static,
   {
     if topic.kind() != TopicKind::NoKey {
-      return Error::precondition_not_met(
-        "Topic is WITH_KEY, but attempted to create NO_KEY Datareader",
-      );
+      return Err(CreateError::TopicKind(TopicKind::NoKey));
     }
 
     let entity_id =

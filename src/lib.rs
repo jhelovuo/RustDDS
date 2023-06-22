@@ -116,7 +116,7 @@
 //! let some_topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
 //!
 //! // Used type needs Serialize for writers and Deserialize for readers
-//! #[derive(Serialize, Deserialize)]
+//! #[derive(Serialize, Deserialize, Debug)]
 //! struct SomeType {
 //!   a: i32
 //! }

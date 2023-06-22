@@ -20,7 +20,7 @@ use crate::{
       QosPolicies, QosPolicyBuilder,
     },
     readcondition::ReadCondition,
-    result::{Error, Result},
+    result::{CreateError, CreateResult},
     topic::*,
     with_key::{
       datareader::{DataReader, DataReaderCdr},
@@ -84,7 +84,7 @@ pub(crate) struct Discovery {
   discovery_db: Arc<RwLock<DiscoveryDB>>,
 
   // Discovery started sender confirms to application thread that we are running
-  discovery_started_sender: std::sync::mpsc::Sender<Result<()>>,
+  discovery_started_sender: std::sync::mpsc::Sender<CreateResult<()>>,
   // notification sender goes to dp_event_loop thread
   discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
   // Discovery gets commands from dp_event_loop from this channel
@@ -177,12 +177,12 @@ impl Discovery {
   pub fn new(
     domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
-    discovery_started_sender: std::sync::mpsc::Sender<Result<()>>,
+    discovery_started_sender: std::sync::mpsc::Sender<CreateResult<()>>,
     discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
     spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
     self_locators: HashMap<Token, Vec<Locator>>,
-  ) -> Result<Self> {
+  ) -> CreateResult<Self> {
     // helper macro to handle initialization failures.
     macro_rules! try_construct {
       ($constructor:expr, $msg:literal) => {
@@ -191,9 +191,13 @@ impl Discovery {
           Err(e) => {
             error!($msg, e);
             discovery_started_sender
-              .send(Err(Error::OutOfResources))
+              .send(Err(CreateError::OutOfResources {
+                reason: $msg.to_string(),
+              }))
               .unwrap_or(()); // We are trying to quit. If send fails, just ignore it.
-            return Err(Error::OutOfResources);
+            return Err(CreateError::OutOfResources {
+              reason: $msg.to_string(),
+            });
           }
         }
       };

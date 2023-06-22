@@ -1,22 +1,22 @@
-use std::io;
-
 use enumflags2::{bitflags, BitFlags};
-use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use byteorder::ByteOrder;
-use speedy::{Endianness, Readable};
+use speedy::{Context, Readable, Writable, Writer};
+use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::{adapters::no_key::*, key::KeyHash},
+  dds::key::KeyHash,
   messages::submessages::elements::{parameter_list::ParameterList, RepresentationIdentifier},
-  serialization,
-  serialization::CDRDeserializerAdapter,
+  serialization::{pl_cdr_adapters::PlCdrDeserializeError, speedy_pl_cdr_helpers::*},
   structure::{cache_change::ChangeKind, parameter_id::ParameterId, rpc::SampleIdentity},
 };
 #[cfg(test)]
-use crate::serialization::cdr_serializer::to_bytes;
+use crate::{
+  dds::adapters::no_key::*, serialization, serialization::cdr_serializer::to_bytes,
+  serialization::CDRDeserializerAdapter,
+};
 
 // Utility for parsing RTPS inlineQoS parameters
 // TODO: This does not need to be a struct, since is has no contents.
@@ -28,26 +28,28 @@ impl InlineQos {
   pub fn status_info(
     params: &ParameterList,
     rep_id: RepresentationIdentifier,
-  ) -> std::result::Result<StatusInfo, serialization::Error> {
+  ) -> std::result::Result<StatusInfo, PlCdrDeserializeError> {
     let status_info = params
       .parameters
       .iter()
       .find(|p| p.parameter_id == ParameterId::PID_STATUS_INFO);
+    let ctx = pl_cdr_rep_id_to_speedy_d(rep_id)?;
+
     let status_info = match status_info {
-      Some(p) => StatusInfo::from_cdr_bytes(&p.value, rep_id)?,
+      Some(p) => StatusInfo::read_from_buffer_with_ctx(ctx, &p.value)?,
       None => StatusInfo::empty(),
     };
 
     Ok(status_info)
   }
 
-  pub fn key_hash(params: &ParameterList) -> Result<Option<KeyHash>, serialization::Error> {
+  pub fn key_hash(params: &ParameterList) -> Result<Option<KeyHash>, PlCdrDeserializeError> {
     let key_hash = params
       .parameters
       .iter()
       .find(|p| p.parameter_id == ParameterId::PID_KEY_HASH);
     Ok(match key_hash {
-      Some(p) => Some(KeyHash::from_cdr_bytes(p.value.clone())?),
+      Some(p) => Some(KeyHash::from_pl_cdr_bytes(p.value.clone())?),
       None => None,
     })
   }
@@ -55,24 +57,17 @@ impl InlineQos {
   pub fn related_sample_identity(
     params: &ParameterList,
     representation_id: RepresentationIdentifier,
-  ) -> Result<Option<SampleIdentity>, serialization::Error> {
+  ) -> Result<Option<SampleIdentity>, PlCdrDeserializeError> {
     let rsi = params
       .parameters
       .iter()
       .find(|p| p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY);
-
-    let endianness = if representation_id == RepresentationIdentifier::CDR_BE
-      || representation_id == RepresentationIdentifier::PL_CDR_BE
-    {
-      Endianness::BigEndian
-    } else {
-      Endianness::LittleEndian
-    };
+    let ctx = pl_cdr_rep_id_to_speedy_d(representation_id)?;
 
     Ok(match rsi {
       Some(p) => Some(
-        SampleIdentity::read_from_buffer_with_ctx(endianness, &p.value)
-          .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
+        SampleIdentity::read_from_buffer_with_ctx(ctx, &p.value)?,
+        //.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
       ),
       None => None,
     })
@@ -119,6 +114,28 @@ pub struct StatusInfo {
                                  * Disposed & Unregistered & Filtered: ??? */
 }
 
+impl<C: Context> Writable<C> for StatusInfo {
+  #[inline]
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> std::result::Result<(), C::Error> {
+    writer.write_u8(0x00)?;
+    writer.write_u8(0x00)?;
+    writer.write_u8(0x00)?;
+    writer.write_u8(self.si.bits())?;
+    Ok(())
+  }
+}
+
+impl<'a, C: Context> Readable<'a, C> for StatusInfo {
+  #[inline]
+  fn read_from<R: speedy::Reader<'a, C>>(reader: &mut R) -> std::result::Result<Self, C::Error> {
+    reader.read_u8()?;
+    reader.read_u8()?;
+    reader.read_u8()?;
+    let si = BitFlags::<StatusInfoEnum>::from_bits_truncate(reader.read_u8()?);
+    Ok(Self { em: [0; 3], si })
+  }
+}
+
 impl StatusInfo {
   pub fn empty() -> Self {
     Self {
@@ -145,14 +162,17 @@ impl StatusInfo {
   }
 
   #[cfg(test)]
-  pub fn into_cdr_bytes<BO: ByteOrder>(self) -> Result<Vec<u8>, serialization::Error> {
+  pub fn into_cdr_bytes<BO: ByteOrder>(
+    self,
+  ) -> Result<Vec<u8>, serialization::cdr_serializer::Error> {
     to_bytes::<Self, BO>(&self)
   }
 
+  #[cfg(test)]
   pub fn from_cdr_bytes(
     bytes: &[u8],
     representation_id: RepresentationIdentifier,
-  ) -> Result<Self, serialization::Error> {
+  ) -> Result<Self, serialization::cdr_deserializer::Error> {
     CDRDeserializerAdapter::from_bytes(bytes, representation_id)
   }
 }

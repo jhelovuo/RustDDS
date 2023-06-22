@@ -5,10 +5,12 @@ use speedy::{Readable, Writable};
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::result::Result,
+  dds::result::QosError,
   messages::submessages::elements::parameter::Parameter,
-  serialization,
-  serialization::speedy_pl_cdr_helpers::*,
+  serialization::{
+    pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError},
+    speedy_pl_cdr_helpers::*,
+  },
   structure::{duration::Duration, endpoint::ReliabilityKind, parameter_id::ParameterId},
 };
 
@@ -23,7 +25,7 @@ pub trait HasQoSPolicy {
 /// Trait that is implemented by all necessary DDS Entities that are required to
 /// have a mutable QosPolicies.
 pub trait MutQosPolicy {
-  fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<()>;
+  fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<(), QosError>;
 }
 
 /// DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.
@@ -384,7 +386,7 @@ impl QosPolicies {
   pub fn to_parameter_list(
     &self,
     ctx: speedy::Endianness,
-  ) -> std::result::Result<Vec<Parameter>, speedy::Error> {
+  ) -> Result<Vec<Parameter>, PlCdrSerializeError> {
     let mut pl = Vec::with_capacity(8);
 
     let QosPolicies {
@@ -487,7 +489,7 @@ impl QosPolicies {
   pub fn from_parameter_list(
     ctx: speedy::Endianness,
     pl_map: &BTreeMap<ParameterId, Vec<&Parameter>>,
-  ) -> std::result::Result<QosPolicies, serialization::error::Error> {
+  ) -> Result<QosPolicies, PlCdrDeserializeError> {
     macro_rules! get_option {
       ($pid:ident) => {
         get_option_from_pl_map(pl_map, ctx, ParameterId::$pid, "<not_used>")?

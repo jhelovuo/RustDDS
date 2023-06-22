@@ -18,7 +18,7 @@ use crate::{
     key::*,
     qos::*,
     readcondition::*,
-    result::*,
+    result::ReadResult,
     statusevents::*,
     with_key::{datasample::*, simpledatareader::*},
   },
@@ -96,7 +96,7 @@ where
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
-  fn fill_and_lock_local_datasample_cache(&mut self) -> Result<()> {
+  fn fill_and_lock_local_datasample_cache(&mut self) -> ReadResult<()> {
     while let Some(dcc) = self.simple_data_reader.try_take_one()? {
       self
         .datasample_cache
@@ -178,7 +178,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<&D>>> {
+  ) -> ReadResult<Vec<DataSample<&D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache()?;
@@ -237,7 +237,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<D>>> {
+  ) -> ReadResult<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
 
@@ -286,7 +286,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
+  pub fn read_next_sample(&mut self) -> ReadResult<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
@@ -325,7 +325,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
+  pub fn take_next_sample(&mut self) -> ReadResult<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
@@ -336,7 +336,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<Sample<&D, D::K>>> {
+  ) -> ReadResult<Vec<Sample<&D, D::K>>> {
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache()?;
 
@@ -352,7 +352,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<Sample<D, D::K>>> {
+  ) -> ReadResult<Vec<Sample<D, D::K>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache()?;
@@ -403,7 +403,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn iterator(&mut self) -> Result<impl Iterator<Item = Sample<&D, D::K>>> {
+  pub fn iterator(&mut self) -> ReadResult<impl Iterator<Item = Sample<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(
@@ -451,7 +451,7 @@ where
   pub fn conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
-  ) -> Result<impl Iterator<Item = Sample<&D, D::K>>> {
+  ) -> ReadResult<impl Iterator<Item = Sample<&D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
@@ -496,7 +496,7 @@ where
   /// }
   /// ```
 
-  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = Sample<D, D::K>>> {
+  pub fn into_iterator(&mut self) -> ReadResult<impl Iterator<Item = Sample<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // take call
     Ok(
@@ -546,7 +546,7 @@ where
   pub fn into_conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
-  ) -> Result<impl Iterator<Item = Sample<D, D::K>>> {
+  ) -> ReadResult<impl Iterator<Item = Sample<D, D::K>>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // take call
     Ok(self.take_bare(std::usize::MAX, read_condition)?.into_iter())
@@ -623,7 +623,7 @@ where
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
-  ) -> Result<Vec<DataSample<&D>>> {
+  ) -> ReadResult<Vec<DataSample<&D>>> {
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache()?;
 
@@ -690,7 +690,7 @@ where
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
-  ) -> Result<Vec<DataSample<D>>> {
+  ) -> ReadResult<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
 
@@ -905,7 +905,7 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = Result<Sample<D, D::K>>;
+  type Item = ReadResult<Sample<D, D::K>>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
@@ -972,7 +972,7 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
+  type Item = ReadResult<DataReaderStatus>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     let datareader = self.datareader.lock().unwrap();

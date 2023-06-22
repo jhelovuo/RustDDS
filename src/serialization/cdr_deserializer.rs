@@ -11,7 +11,6 @@ use paste::paste;
 
 use crate::{
   dds::adapters::{no_key, with_key},
-  serialization::error::{Error, Result},
   Keyed, RepresentationIdentifier,
 };
 
@@ -36,6 +35,8 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
 where
   D: DeserializeOwned,
 {
+  type Error = Error;
+
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
   }
@@ -52,6 +53,45 @@ where
 {
   fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K> {
     deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
+  }
+}
+
+// Error handling
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+// cdr_deserializer::Error
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+  #[error("Deserializer does not support this operation: {0}")]
+  NotSupported(String),
+
+  #[error("unexpected end of input")]
+  Eof,
+
+  #[error("Expected 0 or 1 as Boolean, got: {0}")]
+  BadBoolean(u8),
+
+  // was not valid UTF-8
+  #[error("UTF-8 error: {0}")]
+  BadUTF8(std::str::Utf8Error),
+
+  #[error("Bad Unicode character code: {0}")]
+  BadChar(u32), // invalid Unicode codepoint
+
+  #[error("Option value must have discriminant 0 or 1, read: {0}")]
+  BadOption(u32), // Option variant tag (discriminant) is not 0 or 1
+
+  #[error("Trailing garbage, {:?} bytes", .0.len())]
+  TrailingCharacters(Vec<u8>),
+
+  #[error("Serde says: {0}")]
+  Serde(String),
+}
+
+impl de::Error for Error {
+  fn custom<T: std::fmt::Display>(msg: T) -> Self {
+    Self::Serde(msg.to_string())
   }
 }
 
@@ -139,8 +179,8 @@ where
       Ok((t, deserializer.serialized_data_count))
     }
 
-    repr_id => Err(Error::Message(format!(
-      "Unknown representaiton identifier {:?}.",
+    repr_id => Err(Error::NotSupported(format!(
+      "Unknown serialization format. requested={:?}.",
       repr_id
     ))),
   }
@@ -190,13 +230,14 @@ where
   type Error = Error;
 
   /// CDR serialization is not a self-describing data format, so we cannot
-  /// implement this.
+  /// implement this. Serialized CDR data has no clue to what each bit means,
+  /// so we have to know the structure beforehand.
   fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    Err(Error::Message(
-      "cdr_desrializer: Cannot deserialize \"any\" type. ".to_string(),
+    Err(Error::NotSupported(
+      "CDR cannot deserialize \"any\" type. ".to_string(),
     ))
   }
 
@@ -284,10 +325,15 @@ where
       }
     };
 
-    match std::str::from_utf8(bytes_without_null) {
-      Ok(s) => visitor.visit_str(s),
-      Err(utf8_err) => Err(Error::BadString(utf8_err)),
-    }
+    // convert contents without NUL to String and apply visitor
+    std::str::from_utf8(bytes_without_null)
+      .map_err(Error::BadUTF8)
+      .and_then(|s| visitor.visit_str(s))
+
+    // match  {
+    //   Ok(s) => visitor.visit_str(s),
+    //   Err(utf8_err) => Err(Error::BadUTF8(utf8_err)),
+    // }
   }
 
   fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>

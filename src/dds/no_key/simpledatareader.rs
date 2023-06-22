@@ -8,8 +8,8 @@ use mio_08;
 
 use crate::{
   dds::{
-    adapters::no_key::*, no_key::datasample::DeserializedCacheChange, qos::*, statusevents::*,
-    with_key, Result,
+    adapters::no_key::*, no_key::datasample::DeserializedCacheChange, qos::*, result::ReadResult,
+    statusevents::*, with_key,
   },
   serialization::CDRDeserializerAdapter,
   structure::entity::RTPSEntity,
@@ -49,7 +49,7 @@ where
     self.keyed_simpledatareader.drain_read_notifications();
   }
 
-  pub fn try_take_one(&self) -> Result<Option<DeserializedCacheChange<D>>> {
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
     match self.keyed_simpledatareader.try_take_one() {
       Err(e) => Err(e),
       Ok(None) => Ok(None),
@@ -70,7 +70,7 @@ where
 
   pub fn as_async_stream(
     &self,
-  ) -> impl Stream<Item = Result<DeserializedCacheChange<D>>> + FusedStream + '_ {
+  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_ {
     self
       .keyed_simpledatareader
       .as_async_stream()
@@ -91,8 +91,7 @@ where
 
   pub fn as_simple_data_reader_event_stream(
     &self,
-  ) -> impl Stream<Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>> + '_
-  {
+  ) -> impl Stream<Item = ReadResult<DataReaderStatus>> + '_ {
     self
       .keyed_simpledatareader
       .as_simple_data_reader_event_stream()

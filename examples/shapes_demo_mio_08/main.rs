@@ -30,7 +30,7 @@ use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use mio_08::{Events, Interest, Poll, Token}; // non-blocking i/o polling
 use rand::prelude::*;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct Shape {
   color: String,
   x: i32,

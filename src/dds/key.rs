@@ -8,7 +8,9 @@ use log::error;
 use serde::{Deserialize, Serialize};
 pub use cdr_encoding_size::*;
 
-use crate::serialization::{cdr_serializer::to_bytes, error::Error};
+use crate::serialization::cdr_serializer::to_bytes;
+//use crate::serialization::{cdr_serializer::to_bytes, };
+use crate::serialization::pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError};
 
 /// Data sample must implement [`Keyed`] to be used in a WITH_KEY topic.
 ///
@@ -51,13 +53,14 @@ impl KeyHash {
     Vec::from(self.0)
   }
 
-  pub fn into_cdr_bytes(self) -> Result<Vec<u8>, Error> {
+  pub fn into_pl_cdr_bytes(self) -> Result<Vec<u8>, PlCdrSerializeError> {
     Ok(self.to_vec())
   }
 
-  pub fn from_cdr_bytes(bytes: Vec<u8>) -> Result<Self, Error> {
-    let a = <[u8; 16]>::try_from(bytes).map_err(|_e| Error::Eof)?;
-    Ok(Self(a))
+  pub fn from_pl_cdr_bytes(bytes: Vec<u8>) -> Result<Self, PlCdrDeserializeError> {
+    <[u8; 16]>::try_from(bytes)
+      .map(Self)
+      .map_err(|_e| speedy::Error::custom("expected 16 bytes for KeyHash").into())
   }
 }
 
