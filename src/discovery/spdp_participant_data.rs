@@ -595,7 +595,7 @@ mod tests {
       match &submsg.body {
         SubmessageBody::Writer(v) => match v {
           WriterSubmessage::Data(d, _) => {
-            let participant_data: Result<SpdpDiscoveredParticipantData> =
+            let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
               PlCdrDeserializerAdapter::from_bytes(
                 &d.serialized_payload.as_ref().unwrap().value,
                 RepresentationIdentifier::PL_CDR_LE,
@@ -635,7 +635,7 @@ mod tests {
       match &submsg.body {
         SubmessageBody::Writer(v) => match v {
           WriterSubmessage::Data(d, _) => {
-            let participant_data: Result<SpdpDiscoveredParticipantData> =
+            let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
               PlCdrDeserializerAdapter::from_bytes(
                 &d.serialized_payload.as_ref().unwrap().value,
                 RepresentationIdentifier::PL_CDR_LE,
@@ -683,7 +683,7 @@ mod tests {
       match &submsg.body {
         SubmessageBody::Writer(v) => match v {
           WriterSubmessage::Data(d, _) => {
-            let participant_data: Result<SpdpDiscoveredParticipantData> =
+            let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
               PlCdrDeserializerAdapter::from_bytes(
                 &d.serialized_payload.as_ref().unwrap().value,
                 RepresentationIdentifier::PL_CDR_LE,
