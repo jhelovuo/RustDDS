@@ -1,4 +1,5 @@
 use std::{
+  collections::BTreeMap,
   fmt::Debug,
   sync::{Arc, Mutex, MutexGuard, RwLock},
   time::Duration,
@@ -43,6 +44,7 @@ use crate::{
     guid::{EntityId, EntityKind, GUID},
     topic_kind::TopicKind,
   },
+  SequenceNumber,
 };
 use super::{
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
@@ -984,6 +986,8 @@ impl InnerSubscriber {
       Ok(mut dds_cache) => dds_cache.add_new_topic(topic.name(), topic.get_type(), &qos),
       Err(e) => return create_error_poisoned!("Cannot lock DDScache. Error: {}", e),
     };
+    let last_read_sequence_number_ref =
+      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
 
@@ -997,6 +1001,7 @@ impl InnerSubscriber {
       status_sender,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache_handle.clone(),
+      last_read_sequence_number_ref: last_read_sequence_number_ref.clone(),
       qos_policy: qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
@@ -1012,13 +1017,14 @@ impl InnerSubscriber {
       db.update_topic_data_p(topic);
     }
 
-    let datareader = with_key::SimpleDataReader::<D, SA>::new(
+    let datareader = with_key::SimpleDataReader::new(
       outer.clone(),
       entity_id,
       topic.clone(),
       qos,
       rec,
       topic_cache_handle,
+      last_read_sequence_number_ref,
       self.discovery_command.clone(),
       status_receiver,
       reader_command_sender,

@@ -110,17 +110,17 @@ fn main() {
   }
 
   assert!(
-    !matches.get_flag("partition"),
+    !matches.contains_id("partition"),
     "QoS policy Partition is not yet implemented."
   );
 
   assert!(
-    !matches.get_flag("interval"),
+    !matches.contains_id("interval"),
     "QoS policy Time Based Filter is not yet implemented."
   );
 
   assert!(
-    !matches.get_flag("ownership_strength"),
+    !matches.contains_id("ownership_strength"),
     "QoS policy Ownership Strength is not yet implemented."
   );
 

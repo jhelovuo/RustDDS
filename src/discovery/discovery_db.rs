@@ -696,6 +696,7 @@ mod tests {
       random_data::RandomData,
       test_data::{reader_proxy_data, spdp_participant_data, subscription_builtin_topic_data},
     },
+    SequenceNumber,
   };
 
   #[test]
@@ -849,12 +850,16 @@ mod tests {
         .unwrap()
         .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
 
+    let last_read_sequence_number_ref =
+      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
+
     let reader1_ing = ReaderIngredients {
       guid: GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED),
       notification_sender: notification_sender1,
       status_sender: status_sender1,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache.clone(),
+      last_read_sequence_number_ref: last_read_sequence_number_ref.clone(),
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver1,
       data_reader_waker: data_reader_waker1,
@@ -890,6 +895,7 @@ mod tests {
       status_sender: status_sender2,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache,
+      last_read_sequence_number_ref,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver2,
       data_reader_waker: data_reader_waker2,
