@@ -34,7 +34,7 @@ use crate::structure::sequence_number::SequenceNumber;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 
-// Secure submessage receivnig state machine:
+// Secure submessage receiving state machine:
 // 
 // [None] ---SecurePrefix--> [Prefix] ---some Submessage--> [SecureSubmessage] ---SecurePostfix--> [None]
 //
@@ -52,6 +52,13 @@ enum SecureReceiverState {
   RTPSBody(SecureRTPSPrefix, BitFlags<SECURERTPSPREFIX_Flags>, SecureBody), // SecureRTPS prefix and body submessages received
 }
 
+// This type identifies what kind of security wrapper was unwrapped from a resulting submessage.
+// There may be several layers, such as entire RTPS message was secured, or individual
+// submessage was secured, or both. The purpose is to communicate the wrapping to Readers and Writers.
+#[derive(Clone, Debug)]
+pub struct SecureWrapping {
+  // TODO
+}
 // This is partial receiver state to be sent to Reader or Writer
 #[derive(Debug, Clone)]
 pub struct MessageReceiverState {
@@ -59,6 +66,7 @@ pub struct MessageReceiverState {
   pub unicast_reply_locator_list: Vec<Locator>,
   pub multicast_reply_locator_list: Vec<Locator>,
   pub source_timestamp: Option<Timestamp>,
+  pub secure_rtps_wrapped: Option<SecureWrapping>,
 }
 
 impl Default for MessageReceiverState {
@@ -68,6 +76,7 @@ impl Default for MessageReceiverState {
       unicast_reply_locator_list: Vec::default(),
       multicast_reply_locator_list: Vec::default(),
       source_timestamp: Some(Timestamp::INVALID),
+      secure_rtps_wrapped: None,
     }
   }
 }
@@ -100,6 +109,7 @@ pub(crate) struct MessageReceiver {
 
   submessage_count: usize, // Used in tests only?
   secure_receiver_state: Option<SecureReceiverState>,
+  secure_rtps_wrapped: Option<SecureWrapping>,
 }
 
 impl MessageReceiver {
@@ -124,6 +134,7 @@ impl MessageReceiver {
 
       submessage_count: 0,
       secure_receiver_state: None,
+      secure_rtps_wrapped: None,
     }
   }
 
@@ -138,6 +149,7 @@ impl MessageReceiver {
 
     self.submessage_count = 0;
     self.secure_receiver_state = None;
+    self.secure_rtps_wrapped = None;
   }
 
   fn clone_partial_message_receiver_state(&self) -> MessageReceiverState {
@@ -146,6 +158,7 @@ impl MessageReceiver {
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
       source_timestamp: self.source_timestamp,
+      secure_rtps_wrapped: self.secure_rtps_wrapped.clone(),
     }
   }
 
@@ -167,35 +180,7 @@ impl MessageReceiver {
     self.available_readers.get_mut(&reader_id)
   }
 
-  // use for test and debugging only
-  #[cfg(test)]
-  fn get_reader_and_history_cache_change(
-    &self,
-    reader_id: EntityId,
-    sequence_number: SequenceNumber,
-  ) -> Option<DDSData> {
-    Some(
-      self
-        .available_readers
-        .get(&reader_id)
-        .unwrap()
-        .history_cache_change_data(sequence_number)
-        .unwrap(),
-    )
-  }
-
-  #[cfg(test)]
-  fn get_reader_history_cache_start_and_end_seq_num(
-    &self,
-    reader_id: EntityId,
-  ) -> Vec<SequenceNumber> {
-    self
-      .available_readers
-      .get(&reader_id)
-      .unwrap()
-      .history_cache_sequence_start_and_end_numbers()
-  }
-
+  
   pub fn handle_received_packet(&mut self, msg_bytes: &Bytes) {
     // Check for RTPS ping message. At least RTI implementation sends these.
     // What should we do with them? The spec does not say.
@@ -501,10 +486,26 @@ impl MessageReceiver {
     _sec_prefix_flags: BitFlags<SECUREPREFIX_Flags>, _submessage:Submessage, 
     _sec_postfx: SecurePostfix, _sec_postfix_flags:BitFlags<SECUREPOSTFIX_Flags>) 
   {
+    warn!("Secure submessage processing not implemented");
+
     // TODO
     // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
     // the submessage contains and then proceed to decode and process accodringly.
-    warn!("Secure submessage processing not implemented");
+
+    /*
+    match self.crypto_transform_plugin.preprocess_secure_submsg(
+      encoded_submessage,
+      receiving_participant_crypto,
+      sending_participant_crypto) {
+      Err(e) => {}
+      Ok(InfoSubmessage) => {
+
+      }
+      Ok(DatawriterSubmessage(datawriterCryptoHandle, datareaderCryptoHandle)) => {
+      }
+      Ok(DatareaderSubmessage(datareaderCryptoHandle, datawriterCryptoHandle)) => {}
+    }
+    */
   }
 
   fn handle_secure_rtps_message(&mut self, _sec_prefix: SecureRTPSPrefix, 
@@ -512,6 +513,22 @@ impl MessageReceiver {
     _sec_postfx: SecureRTPSPostfix, _sec_postfix_flags:BitFlags<SECURERTPSPOSTFIX_Flags>) 
   {
     warn!("Secure RTPS message processing not implemented");
+    /*
+    match self.crypto_transform_plugin
+      .decode_rtps_message(encoded_rtps_message, receiving_participant_crypto, sending_participant_crypto) 
+    {
+      Err(e) => warn!("Secure RTPS message decoding failed: {e:?}"),
+
+      Ok(m) => {
+        let prev_wrapping = self.secure_rtps_wrapped;
+        self.secure_rtps_wrapped = Some(SecureWrapping{/* TODO */});
+        self.handle_parsed_message(m); // recursion here
+        self.secure_rtps_wrapped = prev_wrapping;
+        // TODO: This forms a stack of values for secure_rtps_wrapped.
+        // Should we implement a stack for others fields too?
+      }
+    }
+    */
   }
 
 
@@ -574,7 +591,45 @@ impl MessageReceiver {
       reader.send_preemptive_acknacks();
     }
   }
+
+  // use for test and debugging only
+  #[cfg(test)]
+  fn get_reader_and_history_cache_change(
+    &self,
+    reader_id: EntityId,
+    sequence_number: SequenceNumber,
+  ) -> Option<DDSData> {
+    Some(
+      self
+        .available_readers
+        .get(&reader_id)
+        .unwrap()
+        .history_cache_change_data(sequence_number)
+        .unwrap(),
+    )
+  }
+
+  #[cfg(test)]
+  fn get_reader_history_cache_start_and_end_seq_num(
+    &self,
+    reader_id: EntityId,
+  ) -> Vec<SequenceNumber> {
+    self
+      .available_readers
+      .get(&reader_id)
+      .unwrap()
+      .history_cache_sequence_start_and_end_numbers()
+  }
+
 } // impl messageReceiver
+
+
+// ------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
+
 
 
 #[cfg(test)]
