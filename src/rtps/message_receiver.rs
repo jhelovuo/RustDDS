@@ -52,6 +52,26 @@ enum SecureReceiverState {
   RTPSBody(SecureRTPSPrefix, BitFlags<SECURERTPSPREFIX_Flags>, SecureBody), // SecureRTPS prefix and body submessages received
 }
 
+// This is partial receiver state to be sent to Reader or Writer
+#[derive(Debug, Clone)]
+pub struct MessageReceiverState {
+  pub source_guid_prefix: GuidPrefix,
+  pub unicast_reply_locator_list: Vec<Locator>,
+  pub multicast_reply_locator_list: Vec<Locator>,
+  pub source_timestamp: Option<Timestamp>,
+}
+
+impl Default for MessageReceiverState {
+  fn default() -> Self {
+    Self {
+      source_guid_prefix: GuidPrefix::default(),
+      unicast_reply_locator_list: Vec::default(),
+      multicast_reply_locator_list: Vec::default(),
+      source_timestamp: Some(Timestamp::INVALID),
+    }
+  }
+}
+
 /// [`MessageReceiver`] is the submessage sequence interpreter described in
 /// RTPS spec v2.3 Section 8.3.4 "The RTPS Message Receiver".
 /// It calls the message/submessage deserializers to parse the sequence of
@@ -120,9 +140,8 @@ impl MessageReceiver {
     self.secure_receiver_state = None;
   }
 
-  fn give_message_receiver_info(&self) -> MessageReceiverState {
+  fn clone_partial_message_receiver_state(&self) -> MessageReceiverState {
     MessageReceiverState {
-      //own_guid_prefix: self.own_guid_prefix,
       source_guid_prefix: self.source_guid_prefix,
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
@@ -215,9 +234,14 @@ impl MessageReceiver {
     self.reset();
     self.dest_guid_prefix = self.own_guid_prefix;
     self.source_guid_prefix = rtps_message.header.guid_prefix;
+    self.source_version = rtps_message.header.protocol_version;
+    self.source_vendor_id = rtps_message.header.vendor_id;
 
     for submessage in rtps_message.submessages {
       match self.secure_receiver_state.take() {
+        // Note that .take() always resets the state to "None", so we must
+        // set it in every branch where it should remain in some other value.
+
         None => { 
           // Just normal, non-security processing
           match submessage.body {
@@ -242,6 +266,13 @@ impl MessageReceiver {
                     warn!("SecurePostfix submessage out of sequence. Discarding.");
                   }
                   SecuritySubmessage::SecureRTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags) => {
+                    // DDS Security spec Section "7.3.6.6.3 Validity" requires that this is the first
+                    // submessage in a message.
+                    if self.submessage_count > 0 {
+                      warn!("SecureRTPSPrefix is only allowed at submessage count=0, now received at count={}.", 
+                        self.submessage_count);
+                      // But we accept the message anyway. A stricter message receiver would discard at this point.
+                    }
                     // store secure prefix
                     self.secure_receiver_state = Some(SecureReceiverState::RTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags));
                   }
@@ -264,12 +295,10 @@ impl MessageReceiver {
           match submessage.body {
             SubmessageBody::Security(SecuritySubmessage::SecurePostfix(sec_postfx, sec_postfix_flags)) => {
               self.handle_secure_submessage(sec_prefix, sec_prefix_flags, sec_submessage, sec_postfx, sec_postfix_flags);
-              self.secure_receiver_state = None; // prepare for next
             }
             other => {
               warn!("Expected SecurePostfix submessage after SecurePrefix and payload submsg. Discarding.");
               debug!("Unexpected submessage instead: {other:?}");
-              self.secure_receiver_state = None;
             }
           }
         } // state SecureSubmessage
@@ -286,22 +315,19 @@ impl MessageReceiver {
             other => {
               warn!("Expected SecureBody submessage after SecureRTPSPrefix.");
               debug!("Unexpected submessage instead: {other:?}");
-              self.secure_receiver_state = None;
             }
           }
         } // state RTPSPrefix
 
         Some(SecureReceiverState::RTPSBody(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body)) => {
-          // expect SecureRTPSPostfix
+          // expect SecureRTPSPostfix, and only that
           match submessage.body {
             SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(sec_postfx, sec_postfix_flags)) => {
               self.handle_secure_rtps_message(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body, sec_postfx, sec_postfix_flags);
-              self.secure_receiver_state = None; // prepare for next
             }
             other => {
               warn!("Expected SecureRTPSPostfix submessage after SecureRTPSPrefix and RTPSBody submsg.");
               debug!("Unexpected submessage instead: {other:?}");
-              self.secure_receiver_state = None;
             }
           }
         } // state RTPSBody
@@ -319,7 +345,7 @@ impl MessageReceiver {
       return;
     }
 
-    let mr_state = self.give_message_receiver_info();
+    let mr_state = self.clone_partial_message_receiver_state();
     match submessage {
       WriterSubmessage::Data(data, data_flags) => {
         let writer_entity_id = data.writer_id;
@@ -449,7 +475,6 @@ impl MessageReceiver {
       return;
     }
 
-    //let _mr_state = self.give_message_receiver_info();
     match submessage {
       ReaderSubmessage::AckNack(acknack, _) => {
         // Note: This must not block, because the receiving end is the same thread,
@@ -551,24 +576,6 @@ impl MessageReceiver {
   }
 } // impl messageReceiver
 
-#[derive(Debug, Clone)]
-pub struct MessageReceiverState {
-  pub source_guid_prefix: GuidPrefix,
-  pub unicast_reply_locator_list: Vec<Locator>,
-  pub multicast_reply_locator_list: Vec<Locator>,
-  pub source_timestamp: Option<Timestamp>,
-}
-
-impl Default for MessageReceiverState {
-  fn default() -> Self {
-    Self {
-      source_guid_prefix: GuidPrefix::default(),
-      unicast_reply_locator_list: Vec::default(),
-      multicast_reply_locator_list: Vec::default(),
-      source_timestamp: Some(Timestamp::INVALID),
-    }
-  }
-}
 
 #[cfg(test)]
 mod tests {
