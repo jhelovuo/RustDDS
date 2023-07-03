@@ -476,12 +476,12 @@ impl Reader {
     }
     // Check if the message specifies a related_sample_identity
     let ri = DATA_Flags::cdr_representation_identifier(data_flags);
-    if let Some(related_sample_identity) = data
-      .inline_qos
-      .as_ref()
-      .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
-      .flatten()
-    {
+    if let Some(related_sample_identity) = data.inline_qos.as_ref().and_then(|iqos| {
+      InlineQos::related_sample_identity(iqos, ri).unwrap_or_else(|e| {
+        error!("Deserializing related_sample_identity: {:?}", &e);
+        None
+      })
+    }) {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
 
@@ -535,12 +535,12 @@ impl Reader {
     }
     // Check if the message specifies a related_sample_identity
     let ri = DATAFRAG_Flags::cdr_representation_identifier(datafrag_flags);
-    if let Some(related_sample_identity) = datafrag
-      .inline_qos
-      .as_ref()
-      .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
-      .flatten()
-    {
+    if let Some(related_sample_identity) = datafrag.inline_qos.as_ref().and_then(|iqos| {
+      InlineQos::related_sample_identity(iqos, ri).unwrap_or_else(|e| {
+        error!("Deserializing related_sample_identity: {:?}", &e);
+        None
+      })
+    }) {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
 
@@ -664,12 +664,12 @@ impl Reader {
         // no data, no key. Maybe there is inline QoS?
         // At least we should find key hash, or we do not know WTF the writer is talking
         // about
-        let key_hash = if let Some(h) = data
-          .inline_qos
-          .as_ref()
-          .and_then(|iqos| InlineQos::key_hash(iqos).ok())
-          .flatten()
-        {
+        let key_hash = if let Some(h) = data.inline_qos.as_ref().and_then(|iqos| {
+          InlineQos::key_hash(iqos).unwrap_or_else(|e| {
+            error!("Deserializing key_hash: {:?}", &e);
+            None
+          })
+        }) {
           Ok(h)
         } else {
           info!("Received DATA that has no payload and no key_hash inline QoS - discarding");
@@ -983,10 +983,15 @@ impl Reader {
     no_writers: bool,
     ri: RepresentationIdentifier,
   ) -> ChangeKind {
-    match inline_qos
-      .as_ref()
-      .and_then(|iqos| InlineQos::status_info(iqos, ri).ok())
-    {
+    match inline_qos.as_ref().and_then(|iqos| {
+      InlineQos::status_info(iqos, ri).map_or_else(
+        |e| {
+          error!("Deserializing status_info: {:?}", &e);
+          None
+        },
+        Some,
+      )
+    }) {
       Some(si) => si.change_kind(), // get from inline QoS
       // TODO: What if si.change_kind() gives ALIVE ??
       None => {

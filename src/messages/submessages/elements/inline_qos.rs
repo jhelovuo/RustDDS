@@ -1,7 +1,7 @@
 use enumflags2::{bitflags, BitFlags};
 #[cfg(test)]
 use byteorder::ByteOrder;
-use speedy::{Context, Readable, Writable, Writer};
+use speedy::{Context, Endianness, Readable, Writable, Writer};
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -62,11 +62,20 @@ impl InlineQos {
       .parameters
       .iter()
       .find(|p| p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY);
-    let ctx = pl_cdr_rep_id_to_speedy_d(representation_id)?;
+
+    let endianness = match representation_id {
+      RepresentationIdentifier::PL_CDR_LE => Endianness::LittleEndian,
+      RepresentationIdentifier::CDR_LE => Endianness::LittleEndian,
+      RepresentationIdentifier::PL_CDR_BE => Endianness::BigEndian,
+      RepresentationIdentifier::CDR_BE => Endianness::BigEndian,
+      _ => Err(PlCdrDeserializeError::NotSupported(
+        "Unknown encoding, expected PL_CDR".to_string(),
+      ))?,
+    };
 
     Ok(match rsi {
       Some(p) => Some(
-        SampleIdentity::read_from_buffer_with_ctx(ctx, &p.value)?,
+        SampleIdentity::read_from_buffer_with_ctx(endianness, &p.value)?,
         //.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
       ),
       None => None,

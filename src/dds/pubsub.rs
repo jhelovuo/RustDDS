@@ -796,13 +796,13 @@ impl Subscriber {
     self.inner.create_datareader_no_key(self, topic, None, qos)
   }
 
-  pub fn create_simple_datareader_no_key<D: 'static, SA: 'static>(
+  pub fn create_simple_datareader_no_key<D: 'static, DA: 'static>(
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
-  ) -> CreateResult<no_key::SimpleDataReader<D, SA>>
+  ) -> CreateResult<no_key::SimpleDataReader<D, DA>>
   where
-    SA: adapters::no_key::DeserializerAdapter<D>,
+    DA: adapters::no_key::DeserializerAdapter<D>,
   {
     self
       .inner
