@@ -28,6 +28,8 @@ pub struct CryptographicBuiltIn {
   handle_counter_: u32,
 }
 
+impl super::Cryptographic for CryptographicBuiltIn {}
+
 impl CryptographicBuiltIn {
   pub fn new() -> Self {
     CryptographicBuiltIn {

@@ -14,3 +14,4 @@ pub use authentication::authentication_plugin::Authentication;
 pub use cryptographic::cryptographic_plugin::{
   CryptoKeyExchange, CryptoKeyFactory, CryptoTransform,
 };
+pub use cryptographic::Cryptographic;

@@ -13,7 +13,7 @@ use crate::{
 use crate::{messages::submessages::submessage::SecuritySubmessage, rtps::SubmessageBody};
 
 /// CryptoKeyFactory: section 8.5.1.7 of the Security specification (v. 1.1)
-pub trait CryptoKeyFactory {
+pub trait CryptoKeyFactory : Send {
   /// register_local_participant: section 8.5.1.7.1 of the Security
   /// specification (v. 1.1)
   fn register_local_participant(
@@ -162,7 +162,7 @@ pub trait CryptoKeyExchange {
 ///
 /// Differs from the specification by returning the results instead of writing
 /// them to provided buffers.
-pub trait CryptoTransform {
+pub trait CryptoTransform : Send  {
   /// encode_serialized_payload: section 8.5.1.9.1 of the Security specification
   /// (v. 1.1)
   ///

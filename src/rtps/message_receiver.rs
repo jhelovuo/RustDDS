@@ -1,11 +1,12 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use mio_extras::{channel as mio_channel, channel::TrySendError};
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace, warn, error};
 use bytes::Bytes;
 use enumflags2::BitFlags;
 
 use crate::{
+  dds::participant::SecurityPluginsHandle,
   messages::{
     protocol_version::ProtocolVersion,
     submessages::submessages::{WriterSubmessage, *},
@@ -19,6 +20,7 @@ use crate::{
     vendor_id::VendorId,
   },
   rtps::{reader::Reader, Message, SubmessageBody,Submessage,},
+  security::cryptographic::types::SecureSubmessageCategory,
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
@@ -97,6 +99,7 @@ pub(crate) struct MessageReceiver {
   // bypass Reader. DDSCache, DatasampleCache, and DataReader, because thse will drop
   // reperated messages with duplicate SequenceNumbers, but Discovery needs to see them.
   spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+  security_plugins: Option<SecurityPluginsHandle>,
 
   own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
@@ -117,11 +120,13 @@ impl MessageReceiver {
     participant_guid_prefix: GuidPrefix,
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    security_plugins: Option<SecurityPluginsHandle>,
   ) -> Self {
     Self {
       available_readers: BTreeMap::new(),
       acknack_sender,
       spdp_liveness_sender,
+      security_plugins,
       own_guid_prefix: participant_guid_prefix,
 
       source_version: ProtocolVersion::THIS_IMPLEMENTATION,
@@ -483,29 +488,49 @@ impl MessageReceiver {
   }
 
   fn handle_secure_submessage(&mut self, _sec_prefix: SecurePrefix, 
-    _sec_prefix_flags: BitFlags<SECUREPREFIX_Flags>, _submessage:Submessage, 
+    _sec_prefix_flags: BitFlags<SECUREPREFIX_Flags>, encoded_submessage:Submessage, 
     _sec_postfx: SecurePostfix, _sec_postfix_flags:BitFlags<SECUREPOSTFIX_Flags>) 
   {
     warn!("Secure submessage processing not implemented");
-
+    let mut sec_plugins = match self.security_plugins {
+      None => {
+        warn!("Cannot handle secure submessage: No security plugins configured.");
+        return;
+      }
+      Some(ref s) => match s.lock() {
+        Ok(g) => g,
+        Err(e) => {
+          error!("SecurityPluginHandle poisoned! {e:?}");
+          // TODO: Send signal to exit RTPS thread, as there is no way to recover.
+          return;
+        }
+      },
+    };
     // TODO
     // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
     // the submessage contains and then proceed to decode and process accodringly.
 
-    /*
-    match self.crypto_transform_plugin.preprocess_secure_submsg(
-      encoded_submessage,
-      receiving_participant_crypto,
-      sending_participant_crypto) {
-      Err(e) => {}
-      Ok(InfoSubmessage) => {
+    let receiving_participant_crypto_handle = 0; // TODO: get real value 
+    let sending_participant_crypto_handle = 0; // TODO: get real value
 
+    match sec_plugins.crypto.preprocess_secure_submsg(
+      encoded_submessage,
+      receiving_participant_crypto_handle,
+      sending_participant_crypto_handle) {
+      Err(_e) => {
+        // TODO
       }
-      Ok(DatawriterSubmessage(datawriterCryptoHandle, datareaderCryptoHandle)) => {
+      Ok(SecureSubmessageCategory::InfoSubmessage) => {
+        // TODO
       }
-      Ok(DatareaderSubmessage(datareaderCryptoHandle, datawriterCryptoHandle)) => {}
+      Ok(SecureSubmessageCategory::DatawriterSubmessage(_datawriter_crypto_handle, _datareader_crypto_handle)) => {
+        //TODO
+      }
+      Ok(SecureSubmessageCategory::DatareaderSubmessage(_datareader_crypto_handle, _datawriter_crypto_handle)) => {
+        //TODO
+      }
     }
-    */
+    
   }
 
   fn handle_secure_rtps_message(&mut self, _sec_prefix: SecureRTPSPrefix, 
