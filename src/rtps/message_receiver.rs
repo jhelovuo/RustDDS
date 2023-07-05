@@ -228,104 +228,107 @@ impl MessageReceiver {
     self.source_vendor_id = rtps_message.header.vendor_id;
 
     for submessage in rtps_message.submessages {
-      match self.secure_receiver_state.take() {
-        // Note that .take() always resets the state to "None", so we must
-        // set it in every branch where it should remain in some other value.
-
-        None => { 
-          // Just normal, non-security processing
-          match submessage.body {
-            SubmessageBody::Interpreter(m) => self.handle_interpreter_submessage(m),
-            SubmessageBody::Writer(m) => self.handle_writer_submessage(m),
-            SubmessageBody::Reader(m) => self.handle_reader_submessage(m),
-            SubmessageBody::Security(m) => {
-              if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
-              {
-                trace!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
-                  self.dest_guid_prefix, self.own_guid_prefix);
-              } else {
-                match m {
-                  SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
-                    warn!("SecureBody submessage without SecurePrefix. Discarding.");
-                  }
-                  SecuritySubmessage::SecurePrefix(sec_prefix, sec_prefix_flags) => {
-                    // just store secure prefix
-                    self.secure_receiver_state = Some(SecureReceiverState::Prefix(sec_prefix, sec_prefix_flags));
-                  }
-                  SecuritySubmessage::SecurePostfix(_sec_postfix, _sec_postfix_flags) => {
-                    warn!("SecurePostfix submessage out of sequence. Discarding.");
-                  }
-                  SecuritySubmessage::SecureRTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags) => {
-                    // DDS Security spec Section "7.3.6.6.3 Validity" requires that this is the first
-                    // submessage in a message.
-                    if self.submessage_count > 0 {
-                      warn!("SecureRTPSPrefix is only allowed at submessage count=0, now received at count={}.", 
-                        self.submessage_count);
-                      // But we accept the message anyway. A stricter message receiver would discard at this point.
-                    }
-                    // store secure prefix
-                    self.secure_receiver_state = Some(SecureReceiverState::RTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags));
-                  }
-                  SecuritySubmessage::SecureRTPSPostfix(_sec_rtps_postfix, _sec_rtps_postfix_flags) => {
-                    warn!("SecureRTPSPostfix submessage out of sequence. Discarding.");
-                  }
-                } // match
-              } // if
-            }
-          } // match submessage kind 
-        } // state None
-
-        Some(SecureReceiverState::Prefix(sec_prefix, sec_prefix_flags)) => {
-          self.secure_receiver_state = Some(SecureReceiverState::SecureSubmessage(sec_prefix, sec_prefix_flags, submessage));
-        } // state Prefix
-
-        Some(SecureReceiverState::SecureSubmessage(sec_prefix, sec_prefix_flags, sec_submessage)) => {
-          // Secure prefix and a single other submnessage received.
-          // Now expecting postfix, and only that.
-          match submessage.body {
-            SubmessageBody::Security(SecuritySubmessage::SecurePostfix(sec_postfx, sec_postfix_flags)) => {
-              self.handle_secure_submessage(sec_prefix, sec_prefix_flags, sec_submessage, sec_postfx, sec_postfix_flags);
-            }
-            other => {
-              warn!("Expected SecurePostfix submessage after SecurePrefix and payload submsg. Discarding.");
-              debug!("Unexpected submessage instead: {other:?}");
-            }
-          }
-        } // state SecureSubmessage
-
-        Some(SecureReceiverState::RTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags)) => {
-          // expect securebody (and only that)
-          match submessage.body {
-            SubmessageBody::Security(SecuritySubmessage::SecureBody(sec_body, _sec_body_flags)) => {
-              // TODO: Here we are discarding secure body flags, but it only contains
-              // endianness, which should be irrelevant wrt. encrypted content. So does it even matter?
-              self.secure_receiver_state = 
-                Some(SecureReceiverState::RTPSBody(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body)); 
-            }
-            other => {
-              warn!("Expected SecureBody submessage after SecureRTPSPrefix.");
-              debug!("Unexpected submessage instead: {other:?}");
-            }
-          }
-        } // state RTPSPrefix
-
-        Some(SecureReceiverState::RTPSBody(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body)) => {
-          // expect SecureRTPSPostfix, and only that
-          match submessage.body {
-            SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(sec_postfx, sec_postfix_flags)) => {
-              self.handle_secure_rtps_message(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body, sec_postfx, sec_postfix_flags);
-            }
-            other => {
-              warn!("Expected SecureRTPSPostfix submessage after SecureRTPSPrefix and RTPSBody submsg.");
-              debug!("Unexpected submessage instead: {other:?}");
-            }
-          }
-        } // state RTPSBody
-      } // match secure_submessage_state
-
+      self.handle_submessage(submessage);
       self.submessage_count += 1;
-    } // submessage loop
+    } 
   }
+
+  fn handle_submessage(&mut self, submessage: Submessage) {
+    match self.secure_receiver_state.take() {
+      // Note that .take() always resets the state to "None", so we must
+      // set it in every branch where it should remain in some other value.
+
+      None => { 
+        // Just normal, non-security processing
+        match submessage.body {
+          SubmessageBody::Interpreter(m) => self.handle_interpreter_submessage(m),
+          SubmessageBody::Writer(m) => self.handle_writer_submessage(m),
+          SubmessageBody::Reader(m) => self.handle_reader_submessage(m),
+          SubmessageBody::Security(m) => {
+            if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
+            {
+              trace!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
+                self.dest_guid_prefix, self.own_guid_prefix);
+            } else {
+              match m {
+                SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
+                  warn!("SecureBody submessage without SecurePrefix. Discarding.");
+                }
+                SecuritySubmessage::SecurePrefix(sec_prefix, sec_prefix_flags) => {
+                  // just store secure prefix
+                  self.secure_receiver_state = Some(SecureReceiverState::Prefix(sec_prefix, sec_prefix_flags));
+                }
+                SecuritySubmessage::SecurePostfix(_sec_postfix, _sec_postfix_flags) => {
+                  warn!("SecurePostfix submessage out of sequence. Discarding.");
+                }
+                SecuritySubmessage::SecureRTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags) => {
+                  // DDS Security spec Section "7.3.6.6.3 Validity" requires that this is the first
+                  // submessage in a message.
+                  if self.submessage_count > 0 {
+                    warn!("SecureRTPSPrefix is only allowed at submessage count=0, now received at count={}.", 
+                      self.submessage_count);
+                    // But we accept the message anyway. A stricter message receiver would discard at this point.
+                  }
+                  // store secure prefix
+                  self.secure_receiver_state = Some(SecureReceiverState::RTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags));
+                }
+                SecuritySubmessage::SecureRTPSPostfix(_sec_rtps_postfix, _sec_rtps_postfix_flags) => {
+                  warn!("SecureRTPSPostfix submessage out of sequence. Discarding.");
+                }
+              } // match
+            } // if
+          }
+        } // match submessage kind 
+      } // state None
+
+      Some(SecureReceiverState::Prefix(sec_prefix, sec_prefix_flags)) => {
+        self.secure_receiver_state = Some(SecureReceiverState::SecureSubmessage(sec_prefix, sec_prefix_flags, submessage));
+      } // state Prefix
+
+      Some(SecureReceiverState::SecureSubmessage(sec_prefix, sec_prefix_flags, sec_submessage)) => {
+        // Secure prefix and a single other submnessage received.
+        // Now expecting postfix, and only that.
+        match submessage.body {
+          SubmessageBody::Security(SecuritySubmessage::SecurePostfix(sec_postfx, sec_postfix_flags)) => {
+            self.handle_secure_submessage(sec_prefix, sec_prefix_flags, sec_submessage, sec_postfx, sec_postfix_flags);
+          }
+          other => {
+            warn!("Expected SecurePostfix submessage after SecurePrefix and payload submsg. Discarding.");
+            debug!("Unexpected submessage instead: {other:?}");
+          }
+        }
+      } // state SecureSubmessage
+
+      Some(SecureReceiverState::RTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags)) => {
+        // expect securebody (and only that)
+        match submessage.body {
+          SubmessageBody::Security(SecuritySubmessage::SecureBody(sec_body, _sec_body_flags)) => {
+            // TODO: Here we are discarding secure body flags, but it only contains
+            // endianness, which should be irrelevant wrt. encrypted content. So does it even matter?
+            self.secure_receiver_state = 
+              Some(SecureReceiverState::RTPSBody(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body)); 
+          }
+          other => {
+            warn!("Expected SecureBody submessage after SecureRTPSPrefix.");
+            debug!("Unexpected submessage instead: {other:?}");
+          }
+        }
+      } // state RTPSPrefix
+
+      Some(SecureReceiverState::RTPSBody(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body)) => {
+        // expect SecureRTPSPostfix, and only that
+        match submessage.body {
+          SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(sec_postfx, sec_postfix_flags)) => {
+            self.handle_secure_rtps_message(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body, sec_postfx, sec_postfix_flags);
+          }
+          other => {
+            warn!("Expected SecureRTPSPostfix submessage after SecureRTPSPrefix and RTPSBody submsg.");
+            debug!("Unexpected submessage instead: {other:?}");
+          }
+        }
+      } // state RTPSBody
+    } // match secure_submessage_state
+  } // fn 
 
   fn handle_writer_submessage(&mut self, submessage: WriterSubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
@@ -487,9 +490,9 @@ impl MessageReceiver {
     }
   }
 
-  fn handle_secure_submessage(&mut self, _sec_prefix: SecurePrefix, 
+  fn handle_secure_submessage(&mut self, sec_prefix: SecurePrefix, 
     _sec_prefix_flags: BitFlags<SECUREPREFIX_Flags>, encoded_submessage:Submessage, 
-    _sec_postfx: SecurePostfix, _sec_postfix_flags:BitFlags<SECUREPOSTFIX_Flags>) 
+    sec_postfx: SecurePostfix, _sec_postfix_flags:BitFlags<SECUREPOSTFIX_Flags>) 
   {
     warn!("Secure submessage processing not implemented");
     let mut sec_plugins = match self.security_plugins {
@@ -514,20 +517,50 @@ impl MessageReceiver {
     let sending_participant_crypto_handle = 0; // TODO: get real value
 
     match sec_plugins.crypto.preprocess_secure_submsg(
-      encoded_submessage,
+      &encoded_submessage,
       receiving_participant_crypto_handle,
       sending_participant_crypto_handle) {
       Err(_e) => {
         // TODO
       }
       Ok(SecureSubmessageCategory::InfoSubmessage) => {
-        // TODO
+        // DDS Security spec v1.1 Section "8.5.1.9.6 Operation: preprocess_secure_submsg":
+        // decoding does not apply to info submessages.
+        // (But what if someone fakes them? Or must we secure whole RTPS message then?)
+        drop(sec_plugins);
+        self.handle_submessage(encoded_submessage);
       }
-      Ok(SecureSubmessageCategory::DatawriterSubmessage(_datawriter_crypto_handle, _datareader_crypto_handle)) => {
-        //TODO
+      Ok(SecureSubmessageCategory::DatawriterSubmessage(sending_datawriter_crypto, receiving_datareader_crypto)) => {
+        match sec_plugins.crypto.decode_datawriter_submessage(
+                (sec_prefix, encoded_submessage, sec_postfx),
+                receiving_datareader_crypto,
+                sending_datawriter_crypto )
+        {
+          Ok(submessage) => {
+            drop(sec_plugins);
+            self.handle_writer_submessage(submessage)
+          }
+          Err(sec_err) => {
+            //TODO: Write to security log?
+            warn!("Secured DatawriterSubmessage decode failed: {sec_err:?}");
+          }
+        }
       }
-      Ok(SecureSubmessageCategory::DatareaderSubmessage(_datareader_crypto_handle, _datawriter_crypto_handle)) => {
-        //TODO
+      Ok(SecureSubmessageCategory::DatareaderSubmessage(sending_datawreader_crypto, receiving_datawriter_crypto)) => {
+        match sec_plugins.crypto.decode_datareader_submessage(
+                (sec_prefix, encoded_submessage, sec_postfx),
+                receiving_datawriter_crypto,
+                sending_datawreader_crypto )
+        {
+          Ok(submessage) => {
+            drop(sec_plugins);
+            self.handle_reader_submessage(submessage)
+          }
+          Err(sec_err) => {
+            //TODO: Write to security log?
+            warn!("Secured DatareaderSubmessage decode failed: {sec_err:?}");
+          }
+        }
       }
     }
     

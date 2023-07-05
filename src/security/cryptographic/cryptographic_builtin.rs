@@ -7,6 +7,13 @@ use crate::{
     crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
+  messages::submessages::submessages::{
+    ReaderSubmessage, WriterSubmessage,
+  },
+  messages::submessages::{
+    secure_prefix::SecurePrefix,
+    secure_postfix::SecurePostfix,
+  },
   rtps::{Message, Submessage, SubmessageBody},
   security::{
     access_control::types::*,
@@ -673,7 +680,7 @@ impl CryptoTransform for CryptographicBuiltIn {
 
   fn preprocess_secure_submsg(
     &mut self,
-    encoded_rtps_submessage: Submessage,
+    encoded_rtps_submessage: &Submessage,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<SecureSubmessageCategory> {
@@ -682,19 +689,19 @@ impl CryptoTransform for CryptographicBuiltIn {
 
   fn decode_datawriter_submessage(
     &mut self,
-    encoded_rtps_submessage: (Submessage, Submessage, Submessage),
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<Submessage> {
+  ) -> SecurityResult<WriterSubmessage> {
     todo!();
   }
 
   fn decode_datareader_submessage(
     &mut self,
-    encoded_rtps_submessage: (Submessage, Submessage, Submessage),
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datawriter_crypto: DatawriterCryptoHandle,
     sending_datareader_crypto: DatareaderCryptoHandle,
-  ) -> SecurityResult<Submessage> {
+  ) -> SecurityResult<ReaderSubmessage> {
     todo!();
   }
 

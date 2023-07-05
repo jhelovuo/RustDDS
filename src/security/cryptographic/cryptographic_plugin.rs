@@ -3,6 +3,13 @@ use crate::{
     crypto_content::CryptoContent, parameter_list::ParameterList,
     serialized_payload::SerializedPayload,
   },
+  messages::submessages::submessages::{
+    ReaderSubmessage, WriterSubmessage,
+  },
+  messages::submessages::{
+    secure_prefix::SecurePrefix,
+    secure_postfix::SecurePostfix,
+  },
   rtps::{Message, Submessage},
   security::{
     access_control::types::*, authentication::types::*, cryptographic::types::*, types::*,
@@ -260,7 +267,7 @@ pub trait CryptoTransform : Send  {
   /// [SubmessageBody::Security] wrapping [SecuritySubmessage::SecurePrefix].
   fn preprocess_secure_submsg(
     &mut self,
-    encoded_rtps_submessage: Submessage,
+    encoded_rtps_submessage: &Submessage,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<SecureSubmessageCategory>;
@@ -271,17 +278,12 @@ pub trait CryptoTransform : Send  {
   /// Return the writer submessage that would be written in
   /// `plain_rtps_submessage`.
   ///
-  /// # Panics
-  /// The function will panic if `encoded_rtps_submessage.0.body` and
-  /// `encoded_rtps_submessage.2.body`  are not [SubmessageBody::Security]
-  /// wrapping [SecuritySubmessage::SecurePrefix] and
-  /// [SecuritySubmessage::SecurePostfix] respectively.
   fn decode_datawriter_submessage(
     &mut self,
-    encoded_rtps_submessage: (Submessage, Submessage, Submessage),
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<Submessage>;
+  ) -> SecurityResult<WriterSubmessage>;
 
   /// decode_datareader_submessage: section 8.5.1.9.8 of the Security
   /// specification (v. 1.1)
@@ -289,17 +291,12 @@ pub trait CryptoTransform : Send  {
   /// Return the reader submessage that would be written in
   /// `plain_rtps_submessage`.
   ///
-  /// # Panics
-  /// The function will panic if `encoded_rtps_submessage.0.body` and
-  /// `encoded_rtps_submessage.2.body`  are not [SubmessageBody::Security]
-  /// wrapping [SecuritySubmessage::SecurePrefix] and
-  /// [SecuritySubmessage::SecurePostfix] respectively.
   fn decode_datareader_submessage(
     &mut self,
-    encoded_rtps_submessage: (Submessage, Submessage, Submessage),
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datawriter_crypto: DatawriterCryptoHandle,
     sending_datareader_crypto: DatareaderCryptoHandle,
-  ) -> SecurityResult<Submessage>;
+  ) -> SecurityResult<ReaderSubmessage>;
 
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
   /// (v. 1.1)
