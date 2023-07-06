@@ -1,7 +1,12 @@
 use crate::{
-  messages::submessages::elements::{
-    crypto_content::CryptoContent, parameter_list::ParameterList,
-    serialized_payload::SerializedPayload,
+  messages::submessages::{
+    elements::{
+      crypto_content::CryptoContent, parameter_list::ParameterList,
+      serialized_payload::SerializedPayload,
+    },
+    secure_postfix::SecurePostfix,
+    secure_prefix::SecurePrefix,
+    submessages::{ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage},
   security::{
@@ -13,7 +18,7 @@ use crate::{
 use crate::{messages::submessages::submessage::SecuritySubmessage, rtps::SubmessageBody};
 
 /// CryptoKeyFactory: section 8.5.1.7 of the Security specification (v. 1.1)
-pub trait CryptoKeyFactory {
+pub trait CryptoKeyFactory: Send {
   /// register_local_participant: section 8.5.1.7.1 of the Security
   /// specification (v. 1.1)
   fn register_local_participant(
@@ -162,7 +167,7 @@ pub trait CryptoKeyExchange {
 ///
 /// Differs from the specification by returning the results instead of writing
 /// them to provided buffers.
-pub trait CryptoTransform {
+pub trait CryptoTransform: Send {
   /// encode_serialized_payload: section 8.5.1.9.1 of the Security specification
   /// (v. 1.1)
   ///
@@ -260,7 +265,7 @@ pub trait CryptoTransform {
   /// [SubmessageBody::Security] wrapping [SecuritySubmessage::SecurePrefix].
   fn preprocess_secure_submsg(
     &mut self,
-    encoded_rtps_submessage: Submessage,
+    encoded_rtps_submessage: &Submessage,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<SecureSubmessageCategory>;
@@ -270,36 +275,24 @@ pub trait CryptoTransform {
   ///
   /// Return the writer submessage that would be written in
   /// `plain_rtps_submessage`.
-  ///
-  /// # Panics
-  /// The function will panic if `encoded_rtps_submessage.0.body` and
-  /// `encoded_rtps_submessage.2.body`  are not [SubmessageBody::Security]
-  /// wrapping [SecuritySubmessage::SecurePrefix] and
-  /// [SecuritySubmessage::SecurePostfix] respectively.
   fn decode_datawriter_submessage(
     &mut self,
-    encoded_rtps_submessage: (Submessage, Submessage, Submessage),
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<Submessage>;
+  ) -> SecurityResult<WriterSubmessage>;
 
   /// decode_datareader_submessage: section 8.5.1.9.8 of the Security
   /// specification (v. 1.1)
   ///
   /// Return the reader submessage that would be written in
   /// `plain_rtps_submessage`.
-  ///
-  /// # Panics
-  /// The function will panic if `encoded_rtps_submessage.0.body` and
-  /// `encoded_rtps_submessage.2.body`  are not [SubmessageBody::Security]
-  /// wrapping [SecuritySubmessage::SecurePrefix] and
-  /// [SecuritySubmessage::SecurePostfix] respectively.
   fn decode_datareader_submessage(
     &mut self,
-    encoded_rtps_submessage: (Submessage, Submessage, Submessage),
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datawriter_crypto: DatawriterCryptoHandle,
     sending_datareader_crypto: DatareaderCryptoHandle,
-  ) -> SecurityResult<Submessage>;
+  ) -> SecurityResult<ReaderSubmessage>;
 
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
   /// (v. 1.1)

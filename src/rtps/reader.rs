@@ -756,6 +756,12 @@ impl Reader {
     };
 
     let mut mr_state = mr_state;
+
+    // TODO: This is likely a bug. If mr_state.unicast_reply_locator_list contains
+    // something useful (other than a single invalid locator),
+    // it came from INFO_REPLY submessage preceeding HEARTBEAT, and should be used
+    // to send the reply to. Only if mr_state has no unicast locators, use locators
+    // from writer_proxy.
     mr_state.unicast_reply_locator_list = writer_proxy.unicast_locator_list.clone();
 
     if heartbeat.count <= writer_proxy.received_heartbeat_count {

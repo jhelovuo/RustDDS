@@ -10,7 +10,7 @@ use mio_06::{Event, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{qos::policy, typedesc::TypeDesc},
+  dds::{participant::SecurityPluginsHandle, qos::policy, typedesc::TypeDesc},
   discovery::{
     builtin_endpoint::BuiltinEndpointSet,
     discovery::Discovery,
@@ -92,6 +92,7 @@ impl DPEventLoop {
     stop_poll_receiver: mio_channel::Receiver<EventLoopCommand>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    security_plugins: Option<SecurityPluginsHandle>,
   ) -> Self {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_receiver) =
@@ -184,6 +185,7 @@ impl DPEventLoop {
         participant_guid_prefix,
         acknack_sender,
         spdp_liveness_sender,
+        security_plugins,
       ),
       add_reader_receiver,
       remove_reader_receiver,
@@ -864,6 +866,7 @@ mod tests {
         stop_poll_receiver,
         discovery_update_notification_receiver,
         spdp_liveness_sender,
+        None,
       );
       dp_event_loop
         .poll

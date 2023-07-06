@@ -1,16 +1,26 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use mio_extras::{channel as mio_channel, channel::TrySendError};
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
+use enumflags2::BitFlags;
 
 use crate::{
+  dds::participant::SecurityPluginsHandle,
   messages::{
     protocol_version::ProtocolVersion,
-    submessages::submessages::{WriterSubmessage, *},
+    submessages::{
+      secure_body::SecureBody,
+      secure_postfix::SecurePostfix,
+      secure_prefix::SecurePrefix,
+      secure_rtps_postfix::SecureRTPSPostfix,
+      secure_rtps_prefix::SecureRTPSPrefix,
+      submessages::{WriterSubmessage, *},
+    },
     vendor_id::VendorId,
   },
-  rtps::{reader::Reader, Message, SubmessageBody},
+  rtps::{reader::Reader, Message, Submessage, SubmessageBody},
+  security::cryptographic::types::SecureSubmessageCategory,
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
@@ -24,6 +34,63 @@ use crate::dds::ddsdata::DDSData;
 use crate::structure::sequence_number::SequenceNumber;
 
 const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
+
+// Secure submessage receiving state machine:
+//
+// [None] ---SecurePrefix--> [Prefix] ---some Submessage--> [SecureSubmessage]
+// ---SecurePostfix--> [None]
+//
+// [None] ---SecureRTPSPrefix--> [RTPSPrefix] ---SecureBody--> [RTPSBody]
+// ---SecureRTPSProstfix--> [None]
+//
+// [None] ---other submessage--> [None]
+//
+// If the submessage sequence does not follow any of these, we fail and reset to
+// [None].
+//
+#[derive(Clone, Eq, PartialEq, Debug)]
+enum SecureReceiverState {
+  Prefix(SecurePrefix, BitFlags<SECUREPREFIX_Flags>), // SecurePrefix received
+  SecureSubmessage(SecurePrefix, BitFlags<SECUREPREFIX_Flags>, Submessage), /* Submessage after
+                                                       * SecurePrefix */
+  RTPSPrefix(SecureRTPSPrefix, BitFlags<SECURERTPSPREFIX_Flags>), // SecureRTPS prefix received
+  RTPSBody(
+    SecureRTPSPrefix,
+    BitFlags<SECURERTPSPREFIX_Flags>,
+    SecureBody,
+  ), /* SecureRTPS prefix and body
+                                                                   * submessages received */
+}
+
+// This type identifies what kind of security wrapper was unwrapped from a
+// resulting submessage. There may be several layers, such as entire RTPS
+// message was secured, or individual submessage was secured, or both. The
+// purpose is to communicate the wrapping to Readers and Writers.
+#[derive(Clone, Debug)]
+pub struct SecureWrapping {
+  // TODO
+}
+// This is partial receiver state to be sent to Reader or Writer
+#[derive(Debug, Clone)]
+pub struct MessageReceiverState {
+  pub source_guid_prefix: GuidPrefix,
+  pub unicast_reply_locator_list: Vec<Locator>,
+  pub multicast_reply_locator_list: Vec<Locator>,
+  pub source_timestamp: Option<Timestamp>,
+  pub secure_rtps_wrapped: Option<SecureWrapping>,
+}
+
+impl Default for MessageReceiverState {
+  fn default() -> Self {
+    Self {
+      source_guid_prefix: GuidPrefix::default(),
+      unicast_reply_locator_list: Vec::default(),
+      multicast_reply_locator_list: Vec::default(),
+      source_timestamp: Some(Timestamp::INVALID),
+      secure_rtps_wrapped: None,
+    }
+  }
+}
 
 /// [`MessageReceiver`] is the submessage sequence interpreter described in
 /// RTPS spec v2.3 Section 8.3.4 "The RTPS Message Receiver".
@@ -41,6 +108,7 @@ pub(crate) struct MessageReceiver {
   // bypass Reader. DDSCache, DatasampleCache, and DataReader, because thse will drop
   // reperated messages with duplicate SequenceNumbers, but Discovery needs to see them.
   spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+  security_plugins: Option<SecurityPluginsHandle>,
 
   own_guid_prefix: GuidPrefix,
   pub source_version: ProtocolVersion,
@@ -51,7 +119,9 @@ pub(crate) struct MessageReceiver {
   pub multicast_reply_locator_list: Vec<Locator>,
   pub source_timestamp: Option<Timestamp>,
 
-  pub submessage_count: usize,
+  submessage_count: usize, // Used in tests only?
+  secure_receiver_state: Option<SecureReceiverState>,
+  secure_rtps_wrapped: Option<SecureWrapping>,
 }
 
 impl MessageReceiver {
@@ -59,11 +129,13 @@ impl MessageReceiver {
     participant_guid_prefix: GuidPrefix,
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    security_plugins: Option<SecurityPluginsHandle>,
   ) -> Self {
     Self {
       available_readers: BTreeMap::new(),
       acknack_sender,
       spdp_liveness_sender,
+      security_plugins,
       own_guid_prefix: participant_guid_prefix,
 
       source_version: ProtocolVersion::THIS_IMPLEMENTATION,
@@ -75,6 +147,8 @@ impl MessageReceiver {
       source_timestamp: None,
 
       submessage_count: 0,
+      secure_receiver_state: None,
+      secure_rtps_wrapped: None,
     }
   }
 
@@ -88,15 +162,17 @@ impl MessageReceiver {
     self.source_timestamp = None;
 
     self.submessage_count = 0;
+    self.secure_receiver_state = None;
+    self.secure_rtps_wrapped = None;
   }
 
-  fn give_message_receiver_info(&self) -> MessageReceiverState {
+  fn clone_partial_message_receiver_state(&self) -> MessageReceiverState {
     MessageReceiverState {
-      //own_guid_prefix: self.own_guid_prefix,
       source_guid_prefix: self.source_guid_prefix,
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
       source_timestamp: self.source_timestamp,
+      secure_rtps_wrapped: self.secure_rtps_wrapped.clone(),
     }
   }
 
@@ -116,35 +192,6 @@ impl MessageReceiver {
 
   pub fn reader_mut(&mut self, reader_id: EntityId) -> Option<&mut Reader> {
     self.available_readers.get_mut(&reader_id)
-  }
-
-  // use for test and debugging only
-  #[cfg(test)]
-  fn get_reader_and_history_cache_change(
-    &self,
-    reader_id: EntityId,
-    sequence_number: SequenceNumber,
-  ) -> Option<DDSData> {
-    Some(
-      self
-        .available_readers
-        .get(&reader_id)
-        .unwrap()
-        .history_cache_change_data(sequence_number)
-        .unwrap(),
-    )
-  }
-
-  #[cfg(test)]
-  fn get_reader_history_cache_start_and_end_seq_num(
-    &self,
-    reader_id: EntityId,
-  ) -> Vec<SequenceNumber> {
-    self
-      .available_readers
-      .get(&reader_id)
-      .unwrap()
-      .history_cache_sequence_start_and_end_numbers()
   }
 
   pub fn handle_received_packet(&mut self, msg_bytes: &Bytes) {
@@ -185,17 +232,147 @@ impl MessageReceiver {
     self.reset();
     self.dest_guid_prefix = self.own_guid_prefix;
     self.source_guid_prefix = rtps_message.header.guid_prefix;
+    self.source_version = rtps_message.header.protocol_version;
+    self.source_vendor_id = rtps_message.header.vendor_id;
 
     for submessage in rtps_message.submessages {
-      match submessage.body {
-        SubmessageBody::Interpreter(m) => self.handle_interpreter_submessage(m),
-        SubmessageBody::Writer(m) => self.handle_writer_submessage(m),
-        SubmessageBody::Reader(m) => self.handle_reader_submessage(m),
-        SubmessageBody::Security(m) => self.handle_security_submessage(m),
-      }
+      self.handle_submessage(submessage);
       self.submessage_count += 1;
-    } // submessage loop
+    }
   }
+
+  fn handle_submessage(&mut self, submessage: Submessage) {
+    match self.secure_receiver_state.take() {
+      // Note that .take() always resets the state to "None", so we must
+      // set it in every branch where it should remain in some other value.
+      None => {
+        // Just normal, non-security processing
+        match submessage.body {
+          SubmessageBody::Interpreter(m) => self.handle_interpreter_submessage(m),
+          SubmessageBody::Writer(m) => self.handle_writer_submessage(m),
+          SubmessageBody::Reader(m) => self.handle_reader_submessage(m),
+          SubmessageBody::Security(m) => {
+            if self.dest_guid_prefix != self.own_guid_prefix
+              && self.dest_guid_prefix != GuidPrefix::UNKNOWN
+            {
+              trace!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
+                self.dest_guid_prefix, self.own_guid_prefix);
+            } else {
+              match m {
+                SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
+                  warn!("SecureBody submessage without SecurePrefix. Discarding.");
+                }
+                SecuritySubmessage::SecurePrefix(sec_prefix, sec_prefix_flags) => {
+                  // just store secure prefix
+                  self.secure_receiver_state =
+                    Some(SecureReceiverState::Prefix(sec_prefix, sec_prefix_flags));
+                }
+                SecuritySubmessage::SecurePostfix(_sec_postfix, _sec_postfix_flags) => {
+                  warn!("SecurePostfix submessage out of sequence. Discarding.");
+                }
+                SecuritySubmessage::SecureRTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags) => {
+                  // DDS Security spec Section "7.3.6.6.3 Validity" requires that this is the
+                  // first submessage in a message.
+                  if self.submessage_count > 0 {
+                    warn!("SecureRTPSPrefix is only allowed at submessage count=0, now received at count={}.", 
+                      self.submessage_count);
+                    // But we accept the message anyway. A stricter message
+                    // receiver would discard at this point.
+                  }
+                  // store secure prefix
+                  self.secure_receiver_state = Some(SecureReceiverState::RTPSPrefix(
+                    sec_rtps_prefix,
+                    sec_rtps_prefix_flags,
+                  ));
+                }
+                SecuritySubmessage::SecureRTPSPostfix(
+                  _sec_rtps_postfix,
+                  _sec_rtps_postfix_flags,
+                ) => {
+                  warn!("SecureRTPSPostfix submessage out of sequence. Discarding.");
+                }
+              } // match
+            } // if
+          }
+        } // match submessage kind
+      } // state None
+
+      Some(SecureReceiverState::Prefix(sec_prefix, sec_prefix_flags)) => {
+        self.secure_receiver_state = Some(SecureReceiverState::SecureSubmessage(
+          sec_prefix,
+          sec_prefix_flags,
+          submessage,
+        ));
+      } // state Prefix
+
+      Some(SecureReceiverState::SecureSubmessage(sec_prefix, sec_prefix_flags, sec_submessage)) => {
+        // Secure prefix and a single other submnessage received.
+        // Now expecting postfix, and only that.
+        match submessage.body {
+          SubmessageBody::Security(SecuritySubmessage::SecurePostfix(
+            sec_postfx,
+            sec_postfix_flags,
+          )) => {
+            self.handle_secure_submessage(
+              sec_prefix,
+              sec_prefix_flags,
+              sec_submessage,
+              sec_postfx,
+              sec_postfix_flags,
+            );
+          }
+          other => {
+            warn!("Expected SecurePostfix submessage after SecurePrefix and payload submsg. Discarding.");
+            debug!("Unexpected submessage instead: {other:?}");
+          }
+        }
+      } // state SecureSubmessage
+
+      Some(SecureReceiverState::RTPSPrefix(sec_rtps_prefix, sec_rtps_prefix_flags)) => {
+        // expect securebody (and only that)
+        match submessage.body {
+          SubmessageBody::Security(SecuritySubmessage::SecureBody(sec_body, _sec_body_flags)) => {
+            // TODO: Here we are discarding secure body flags, but it only contains
+            // endianness, which should be irrelevant wrt. encrypted content. So does it
+            // even matter?
+            self.secure_receiver_state = Some(SecureReceiverState::RTPSBody(
+              sec_rtps_prefix,
+              sec_rtps_prefix_flags,
+              sec_body,
+            ));
+          }
+          other => {
+            warn!("Expected SecureBody submessage after SecureRTPSPrefix.");
+            debug!("Unexpected submessage instead: {other:?}");
+          }
+        }
+      } // state RTPSPrefix
+
+      Some(SecureReceiverState::RTPSBody(sec_rtps_prefix, sec_rtps_prefix_flags, sec_body)) => {
+        // expect SecureRTPSPostfix, and only that
+        match submessage.body {
+          SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(
+            sec_postfx,
+            sec_postfix_flags,
+          )) => {
+            self.handle_secure_rtps_message(
+              sec_rtps_prefix,
+              sec_rtps_prefix_flags,
+              sec_body,
+              sec_postfx,
+              sec_postfix_flags,
+            );
+          }
+          other => {
+            warn!(
+              "Expected SecureRTPSPostfix submessage after SecureRTPSPrefix and RTPSBody submsg."
+            );
+            debug!("Unexpected submessage instead: {other:?}");
+          }
+        }
+      } // state RTPSBody
+    } // match secure_submessage_state
+  } // fn
 
   fn handle_writer_submessage(&mut self, submessage: WriterSubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
@@ -205,7 +382,7 @@ impl MessageReceiver {
       return;
     }
 
-    let mr_state = self.give_message_receiver_info();
+    let mr_state = self.clone_partial_message_receiver_state();
     match submessage {
       WriterSubmessage::Data(data, data_flags) => {
         let writer_entity_id = data.writer_id;
@@ -335,7 +512,6 @@ impl MessageReceiver {
       return;
     }
 
-    //let _mr_state = self.give_message_receiver_info();
     match submessage {
       ReaderSubmessage::AckNack(acknack, _) => {
         // Note: This must not block, because the receiving end is the same thread,
@@ -352,36 +528,124 @@ impl MessageReceiver {
         }
       }
 
-      ReaderSubmessage::NackFrag(_, _) => {}
+      ReaderSubmessage::NackFrag(_, _) => {
+        // TODO: Implement NackFrag handling
+      }
     }
   }
 
-  fn handle_security_submessage(&mut self, submessage: SecuritySubmessage) {
-    if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
-    {
-      debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
-        self.dest_guid_prefix, self.own_guid_prefix);
-      return;
-    }
+  fn handle_secure_submessage(
+    &mut self,
+    sec_prefix: SecurePrefix,
+    _sec_prefix_flags: BitFlags<SECUREPREFIX_Flags>,
+    encoded_submessage: Submessage,
+    sec_postfx: SecurePostfix,
+    _sec_postfix_flags: BitFlags<SECUREPOSTFIX_Flags>,
+  ) {
+    warn!("Secure submessage processing not implemented");
+    let mut sec_plugins = match self.security_plugins {
+      None => {
+        warn!("Cannot handle secure submessage: No security plugins configured.");
+        return;
+      }
+      Some(ref s) => match s.lock() {
+        Ok(g) => g,
+        Err(e) => {
+          error!("SecurityPluginHandle poisoned! {e:?}");
+          // TODO: Send signal to exit RTPS thread, as there is no way to recover.
+          return;
+        }
+      },
+    };
+    // TODO
+    // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
+    // the submessage contains and then proceed to decode and process accodringly.
 
-    let _mr_state = self.give_message_receiver_info();
-    match submessage {
-      SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
-        warn!("SecureBody submessage not implemented");
+    let receiving_participant_crypto_handle = 0; // TODO: get real value
+    let sending_participant_crypto_handle = 0; // TODO: get real value
+
+    match sec_plugins.crypto.preprocess_secure_submsg(
+      &encoded_submessage,
+      receiving_participant_crypto_handle,
+      sending_participant_crypto_handle,
+    ) {
+      Err(_e) => {
+        // TODO
       }
-      SecuritySubmessage::SecurePrefix(_sec_prefix, _sec_prefix_flags) => {
-        warn!("SecurePrefix submessage not implemented");
+      Ok(SecureSubmessageCategory::InfoSubmessage) => {
+        // DDS Security spec v1.1 Section "8.5.1.9.6 Operation:
+        // preprocess_secure_submsg": decoding does not apply to info
+        // submessages. (But what if someone fakes them? Or must we secure whole
+        // RTPS message then?)
+        drop(sec_plugins);
+        self.handle_submessage(encoded_submessage);
       }
-      SecuritySubmessage::SecurePostfix(_sec_postfix, _sec_postfix_flags) => {
-        warn!("SecurePostfix submessage not implemented");
+      Ok(SecureSubmessageCategory::DatawriterSubmessage(
+        sending_datawriter_crypto,
+        receiving_datareader_crypto,
+      )) => {
+        match sec_plugins.crypto.decode_datawriter_submessage(
+          (sec_prefix, encoded_submessage, sec_postfx),
+          receiving_datareader_crypto,
+          sending_datawriter_crypto,
+        ) {
+          Ok(submessage) => {
+            drop(sec_plugins);
+            self.handle_writer_submessage(submessage);
+          }
+          Err(sec_err) => {
+            //TODO: Write to security log?
+            warn!("Secured DatawriterSubmessage decode failed: {sec_err:?}");
+          }
+        }
       }
-      SecuritySubmessage::SecureRTPSPrefix(_sec_rtps_prefix, _sec_rtps_prefix_flags) => {
-        warn!("SecureRTPSPrefix submessage not implemented");
-      }
-      SecuritySubmessage::SecureRTPSPostfix(_sec_rtps_postfix, _sec_rtps_postfix_flags) => {
-        warn!("SecureRTPSPostfix submessage not implemented");
+      Ok(SecureSubmessageCategory::DatareaderSubmessage(
+        sending_datawreader_crypto,
+        receiving_datawriter_crypto,
+      )) => {
+        match sec_plugins.crypto.decode_datareader_submessage(
+          (sec_prefix, encoded_submessage, sec_postfx),
+          receiving_datawriter_crypto,
+          sending_datawreader_crypto,
+        ) {
+          Ok(submessage) => {
+            drop(sec_plugins);
+            self.handle_reader_submessage(submessage);
+          }
+          Err(sec_err) => {
+            //TODO: Write to security log?
+            warn!("Secured DatareaderSubmessage decode failed: {sec_err:?}");
+          }
+        }
       }
     }
+  }
+
+  fn handle_secure_rtps_message(
+    &mut self,
+    _sec_prefix: SecureRTPSPrefix,
+    _sec_prefix_flags: BitFlags<SECURERTPSPREFIX_Flags>,
+    _secure_body: SecureBody,
+    _sec_postfx: SecureRTPSPostfix,
+    _sec_postfix_flags: BitFlags<SECURERTPSPOSTFIX_Flags>,
+  ) {
+    warn!("Secure RTPS message processing not implemented");
+    /*
+    match self.crypto_transform_plugin
+      .decode_rtps_message(encoded_rtps_message, receiving_participant_crypto, sending_participant_crypto)
+    {
+      Err(e) => warn!("Secure RTPS message decoding failed: {e:?}"),
+
+      Ok(m) => {
+        let prev_wrapping = self.secure_rtps_wrapped;
+        self.secure_rtps_wrapped = Some(SecureWrapping{/* TODO */});
+        self.handle_parsed_message(m); // recursion here
+        self.secure_rtps_wrapped = prev_wrapping;
+        // TODO: This forms a stack of values for secure_rtps_wrapped.
+        // Should we implement a stack for others fields too?
+      }
+    }
+    */
   }
 
   fn handle_interpreter_submessage(&mut self, interp_subm: InterpreterSubmessage)
@@ -396,20 +660,32 @@ impl MessageReceiver {
         self.source_guid_prefix = info_src.guid_prefix;
         self.source_version = info_src.protocol_version;
         self.source_vendor_id = info_src.vendor_id;
+
+        // TODO: Whay are the following set on InfoSource?
         self.unicast_reply_locator_list.clear(); // Or invalid?
         self.multicast_reply_locator_list.clear(); // Or invalid?
-        self.source_timestamp = None;
+        self.source_timestamp = None; // TODO: Why does InfoSource set timetamp
+                                      // to None?
       }
       InterpreterSubmessage::InfoReply(info_reply, flags) => {
         self.unicast_reply_locator_list = info_reply.unicast_locator_list;
-        if flags.contains(INFOREPLY_Flags::Multicast) {
-          self.multicast_reply_locator_list = info_reply
-            .multicast_locator_list
-            .expect("InfoReply flag indicates multicast locator is present but none found.");
-        // TODO: Convert the above error to warning only.
-        } else {
-          self.multicast_reply_locator_list.clear();
-        }
+        self.multicast_reply_locator_list = match (
+          flags.contains(INFOREPLY_Flags::Multicast),
+          info_reply.multicast_locator_list,
+        ) {
+          (true, Some(ll)) => ll, // expected case
+          (true, None) => {
+            warn!(
+              "InfoReply submessage flag indicates multicast_reply_locator_list, but none found."
+            );
+            vec![]
+          }
+          (false, None) => vec![], // This one is normal again
+          (false, Some(_)) => {
+            warn!("InfoReply submessage has unexpected multicast_reply_locator_list, ignoring.");
+            vec![]
+          }
+        };
       }
       InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
         if info_dest.guid_prefix == GUID::GUID_UNKNOWN.prefix {
@@ -436,26 +712,42 @@ impl MessageReceiver {
       reader.send_preemptive_acknacks();
     }
   }
+
+  // use for test and debugging only
+  #[cfg(test)]
+  fn get_reader_and_history_cache_change(
+    &self,
+    reader_id: EntityId,
+    sequence_number: SequenceNumber,
+  ) -> Option<DDSData> {
+    Some(
+      self
+        .available_readers
+        .get(&reader_id)
+        .unwrap()
+        .history_cache_change_data(sequence_number)
+        .unwrap(),
+    )
+  }
+
+  #[cfg(test)]
+  fn get_reader_history_cache_start_and_end_seq_num(
+    &self,
+    reader_id: EntityId,
+  ) -> Vec<SequenceNumber> {
+    self
+      .available_readers
+      .get(&reader_id)
+      .unwrap()
+      .history_cache_sequence_start_and_end_numbers()
+  }
 } // impl messageReceiver
 
-#[derive(Debug, Clone)]
-pub struct MessageReceiverState {
-  pub source_guid_prefix: GuidPrefix,
-  pub unicast_reply_locator_list: Vec<Locator>,
-  pub multicast_reply_locator_list: Vec<Locator>,
-  pub source_timestamp: Option<Timestamp>,
-}
-
-impl Default for MessageReceiverState {
-  fn default() -> Self {
-    Self {
-      source_guid_prefix: GuidPrefix::default(),
-      unicast_reply_locator_list: Vec::default(),
-      multicast_reply_locator_list: Vec::default(),
-      source_timestamp: Some(Timestamp::INVALID),
-    }
-  }
-}
+// ------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -520,8 +812,12 @@ mod tests {
     let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
-    let mut message_receiver =
-      MessageReceiver::new(target_gui_prefix, acknack_sender, spdp_liveness_sender);
+    let mut message_receiver = MessageReceiver::new(
+      target_gui_prefix,
+      acknack_sender,
+      spdp_liveness_sender,
+      None,
+    );
 
     // Create a reader to process the message
     let entity =
@@ -647,7 +943,7 @@ mod tests {
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
     let mut message_receiver =
-      MessageReceiver::new(guid_new.prefix, acknack_sender, spdp_liveness_sender);
+      MessageReceiver::new(guid_new.prefix, acknack_sender, spdp_liveness_sender, None);
 
     message_receiver.handle_received_packet(&udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);

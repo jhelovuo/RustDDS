@@ -1,9 +1,9 @@
 //use mio::Token;
 use std::{
   collections::HashMap,
+  fmt,
   io::ErrorKind,
   net::Ipv4Addr,
-  rc::Rc,
   sync::{atomic, Arc, Mutex, RwLock, Weak},
   thread,
   thread::JoinHandle,
@@ -32,7 +32,7 @@ use crate::{
   security::{
     access_control::PermissionsToken,
     authentication::{IdentityStatusToken, IdentityToken},
-    AccessControl, Authentication, CryptoKeyExchange, CryptoKeyFactory, CryptoTransform,
+    AccessControl, Authentication, Cryptographic,
   },
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
 };
@@ -40,9 +40,33 @@ use crate::{
 pub(crate) struct SecurityPlugins {
   pub auth: Box<dyn Authentication>,
   pub access: Box<dyn AccessControl>,
-  pub crypto_key_factory: Rc<dyn CryptoKeyFactory>,
-  pub crypto_key_exchange: Rc<dyn CryptoKeyExchange>,
-  pub crypto_transform: Rc<dyn CryptoTransform>,
+  pub crypto: Box<dyn Cryptographic>,
+}
+
+#[derive(Clone)]
+pub(crate) struct SecurityPluginsHandle {
+  inner: Arc<Mutex<SecurityPlugins>>,
+}
+
+impl SecurityPluginsHandle {
+  pub(crate) fn new(s: SecurityPlugins) -> Self {
+    Self {
+      inner: Arc::new(Mutex::new(s)),
+    }
+  }
+}
+
+impl fmt::Debug for SecurityPluginsHandle {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_str("SecurityPluginsHandle")
+  }
+}
+
+impl std::ops::Deref for SecurityPluginsHandle {
+  type Target = Mutex<SecurityPlugins>;
+  fn deref(&self) -> &Self::Target {
+    &self.inner
+  }
 }
 
 pub struct DomainParticipantBuilder {
@@ -69,21 +93,17 @@ impl DomainParticipantBuilder {
     &mut self,
     auth: Box<impl Authentication + 'static>,
     access: Box<impl AccessControl + 'static>,
-    crypto_key_factory: Rc<impl CryptoKeyFactory + 'static>,
-    crypto_key_exchange: Rc<impl CryptoKeyExchange + 'static>,
-    crypto_transform: Rc<impl CryptoTransform + 'static>,
+    crypto: Box<impl Cryptographic + 'static>,
   ) -> &mut DomainParticipantBuilder {
     self.security_plugins = Some(SecurityPlugins {
       auth,
       access,
-      crypto_key_factory,
-      crypto_key_exchange,
-      crypto_transform,
+      crypto,
     });
     self
   }
 
-  pub fn build(self) -> CreateResult<DomainParticipant> {
+  pub fn build(mut self) -> CreateResult<DomainParticipant> {
     let mut participant_guid = GUID::new_participant_guid();
 
     let participant_qos = QosPolicies::default(); // Maybe something else?
@@ -91,7 +111,7 @@ impl DomainParticipantBuilder {
     // configure security
     #[allow(unused_variables)] // TODO: actually distribute these to participant, discovery, etc.
     let security_tokens_opt: Option<(IdentityToken, IdentityStatusToken, PermissionsToken)> =
-      if let Some(mut security_plugins) = self.security_plugins {
+      if let Some(ref mut security_plugins) = self.security_plugins.as_mut() {
         trace!("DomainParticipant security construction start");
         // Now we initialize security according to DDS Security spec v1.1
         // Section "8.8.1 Authentication and AccessControl behavior with local
@@ -175,6 +195,8 @@ impl DomainParticipantBuilder {
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(64);
 
+    let security_plugins_handle = self.security_plugins.map(SecurityPluginsHandle::new);
+
     // intermediate DP wrapper
     let dp = DomainParticipantDisc::new(
       self.domain_id,
@@ -183,6 +205,7 @@ impl DomainParticipantBuilder {
       discovery_update_notification_receiver,
       discovery_command_sender,
       spdp_liveness_sender,
+      security_plugins_handle,
     )?;
     let self_locators = dp.self_locators();
 
@@ -557,12 +580,14 @@ impl DomainParticipantDisc {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
       participant_guid,
       discovery_update_notification_receiver,
       spdp_liveness_sender,
+      security_plugins_handle,
     )?;
 
     Ok(Self {
@@ -725,6 +750,8 @@ pub(crate) struct DomainParticipantInner {
 
   // RTPS locators describing how to reach this DP
   self_locators: HashMap<Token, Vec<Locator>>,
+  #[allow(dead_code)] // TODO: use or remove
+  security_plugins_handle: Option<SecurityPluginsHandle>,
 }
 
 impl Drop for DomainParticipantInner {
@@ -758,6 +785,7 @@ impl DomainParticipantInner {
     participant_guid: GUID,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
     let mut listeners = HashMap::new();
 
@@ -874,6 +902,7 @@ impl DomainParticipantInner {
     // Launch the background thread for DomainParticipant
     let dds_cache_clone = dds_cache.clone();
     let disc_db_clone = discovery_db.clone();
+    let security_plugins_clone = security_plugins_handle.clone();
     let ev_loop_handle = thread::Builder::new()
       .name(format!("RustDDS Participant {} event loop", participant_id))
       .spawn(move || {
@@ -902,6 +931,7 @@ impl DomainParticipantInner {
           stop_poll_receiver,
           discovery_update_notification_receiver,
           spdp_liveness_sender,
+          security_plugins_clone,
         );
         dp_event_loop.event_loop();
       })?;
@@ -924,6 +954,7 @@ impl DomainParticipantInner {
       discovery_db,
       discovery_db_event_receiver,
       self_locators,
+      security_plugins_handle,
     })
   }
 
