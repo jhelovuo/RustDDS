@@ -128,7 +128,7 @@ mod sequence_number_checked {
 //
 // RTPS Spec v2.3 Section 9.4.2.5:
 // SequenceNumber is serialized 32 bit high word first, then low 32 bits,
-// regardless of endianness. Then within those 32 bit words, ecncoding
+// regardless of endianness. Then within those 32 bit words, encoding
 // endianness is followed.
 // E.g. SequenceNumber(1) is encoded in 8 little-endian bytes as:
 // 00 00 00 00 01 00 00 00
@@ -308,7 +308,7 @@ where
   N: Clone + Copy + Debug + Hash + PartialEq + Eq + NumOps + From<i64> + Ord + PartialOrd,
   i64: From<N>,
 {
-  // Construct an empy set from given base number
+  // Construct an empty set from given base number
   pub fn new(bitmap_base: N, num_bits: u32) -> Self {
     let word_count = (num_bits + 31) / 32;
     Self {
@@ -326,7 +326,7 @@ where
     Self::new(bitmap_base, 0)
   }
 
-  #[allow(dead_code)] // Is this really unneccessary?
+  #[allow(dead_code)] // Is this really unnecessary?
   pub fn is_empty(&self) -> bool {
     self.num_bits == 0 || self.iter().next().is_none()
   }
@@ -356,7 +356,7 @@ where
     }
   }
 
-  /// Construct a new Numberset from base and set
+  /// Construct a new NumberSet from base and set
   /// base is the index of the first element of the bitmap
   /// set is the set if Numbers that will be contained in the set.
   /// Highest possible number in set is base+255.
@@ -605,7 +605,7 @@ mod tests {
       // The last 32-25 = 7 bits are undefined. Our implementation sets them to zero,
       // but others may set to ones.
       // 0xffc0_00YZ, where  YZ & 0x80 = 0x00, but otherwise undefined
-      // So e.g. 0x7f is valid least siginifanct byte, as is 0x00, or 0x0f.
+      // So e.g. 0x7f is valid least significant byte, as is 0x00, or 0x0f.
       be = [0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x01,
             0x00, 0x00, 0x00, 0x01,
@@ -629,7 +629,7 @@ mod tests {
       // The last 32-25 = 7 bits are undefined. Our implementation sets them to zero,
       // but others may set to ones.
       // 0xffc0_00YZ, where  YZ & 0x80 = 0x00, but otherwise undefined
-      // So e.g. 0x7f is valid least siginifanct byte, as is 0x00, or 0x0f.
+      // So e.g. 0x7f is valid least significant byte, as is 0x00, or 0x0f.
       be = [0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x01,
             0x00, 0x00, 0x00, 0x19,

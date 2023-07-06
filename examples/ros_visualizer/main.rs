@@ -79,7 +79,7 @@ fn run_app<B: Backend>(
   }
 }
 
-// This loop runs in separate thead
+// This loop runs in separate thread
 // Polls ROS events and sends data via mio_channel to main thread.
 fn ros2_loop(
   sender: mio_channel::SyncSender<DataUpdate>,

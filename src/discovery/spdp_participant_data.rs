@@ -185,7 +185,7 @@ impl SpdpDiscoveredParticipantData {
   }
 }
 
-// fake implemenatations. Real serialization is done using PlCdrSerialize
+// fake implementations. Real serialization is done using PlCdrSerialize
 impl Serialize for SpdpDiscoveredParticipantData {
   fn serialize<S>(&self, _serializer: S) -> std::result::Result<S::Ok, S::Error>
   where

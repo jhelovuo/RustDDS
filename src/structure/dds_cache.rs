@@ -24,7 +24,7 @@ use super::cache_change::CacheChange;
 /// DDSCache contains all cacheChanges that are produced by participant or
 /// received by participant. Each topic that has been published or subscribed to
 /// is contained in a separate TopicCache. One TopicCache contains
-/// only DDSCacheChanges of one serialized IDL datatype. -> all cachechanges in
+/// only DDSCacheChanges of one serialized IDL datatype. -> all cache changes in
 /// same TopicCache can be serialized/deserialized same way. Topic/TopicCache is
 /// identified by its name, which must be unique in the whole Domain.
 ///
@@ -105,7 +105,7 @@ pub(crate) struct TopicCache {
   //TODO: Change this to Option<u32>, where None means "no limit".
 
   // Tha main content of the cache is in this map.
-  // Timestamp is assumed to be unique id over all the ChacheChanges.
+  // Timestamp is assumed to be unique id over all the CacheChanges.
   changes: BTreeMap<Timestamp, CacheChange>,
 
   // sequence_numbers is an index to "changes" by GUID and SN
@@ -147,7 +147,7 @@ impl TopicCache {
 
     // Look up some Topic-specific resource limit
     // and remove earliest samples until we are within limit.
-    // This prevents cache from groving indefinetly.
+    // This prevents cache from growing indefinitely.
     let max_keep_samples = qos
       .resource_limits()
       .unwrap_or(ResourceLimits {
@@ -159,7 +159,7 @@ impl TopicCache {
     // TODO: We cannot currently keep track of instance counts, because TopicCache
     // or DDSCache below do not know about instances.
 
-    // If a definite minimum is apecified, increase resource limit to at least that.
+    // If a definite minimum is specified, increase resource limit to at least that.
     let max_keep_samples = match min_keep_samples {
       History::KeepLast { depth: n } if n > max_keep_samples => n,
       _ => max_keep_samples,
@@ -195,7 +195,7 @@ impl TopicCache {
     cache_change: CacheChange,
   ) -> Option<CacheChange> {
     // First, do garbage collection.
-    // But not at everey insert, just to save time and effort.
+    // But not at every insert, just to save time and effort.
     // Some heuristic to decide if we should collect now.
     let payload_size = max(1, cache_change.data_value.payload_size());
     let semi_random_number = i64::from(cache_change.sequence_number) as usize;
@@ -344,7 +344,7 @@ impl TopicCache {
     let to_retain = self.changes.split_off(&split_key);
     let to_remove = std::mem::replace(&mut self.changes, to_retain);
 
-    // update also SequeceNumber map
+    // update also SequenceNumber map
     for r in to_remove.values() {
       self.remove_sn(r);
     }

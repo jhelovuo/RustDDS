@@ -214,7 +214,7 @@ pub struct SampleInfo {
 
   /// The absolute_generation_rank indicates the difference in "generations"
   /// between sample S and the Most Recent Sample of the instance that the
-  /// middlware has received (MRS). It counts the number of times the instance
+  /// middleware has received (MRS). It counts the number of times the instance
   /// transitioned from not-alive to alive in the time from the reception of the
   /// S to the time when the read or take was called. absolute_generation_rank =
   /// (MRS.disposed_generation_count + MRS.no_writers_generation_count)

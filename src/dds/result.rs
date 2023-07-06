@@ -3,7 +3,7 @@
 //! In particular, a uniform error type is not used for all DDS calls, because
 //! most calls can only return a subset of errors.
 //! Using specialized error types makes the description of possible failures
-//! more preceise.
+//! more precise.
 
 use crate::{
   no_key::wrappers::NoKeyWrapper,
@@ -33,7 +33,7 @@ pub enum ReadError {
   /// thread fails. This is most likely because either thread has panicked or
   /// gotten stuck somewhere, neither of which is supposed to happen. This is
   /// typically not recoverable, except by starting a new DomainParticipant.
-  #[error("Cannot communicate with background thread. It may have paniced. Details: {reason}")]
+  #[error("Cannot communicate with background thread. It may have panicked. Details: {reason}")]
   Poisoned { reason: String },
 
   /// Something that should not go wrong went wrong anyway.
@@ -99,7 +99,7 @@ pub type ReadResult<T> = std::result::Result<T, ReadError>;
 /// implements `Debug` only if `D` does.
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError<D> {
-  /// Data serializer (`SerializerAdapter`) erpoted an error when called.
+  /// Data serializer (`SerializerAdapter`) reported an error when called.
   /// Reason field gives more details on what went wrong.
   #[error("Serialization error: {reason}")]
   Serialization { reason: String, data: D },
@@ -108,7 +108,7 @@ pub enum WriteError<D> {
   /// thread fails. This is most likely because either thread has panicked or
   /// gotten stuck somewhere, neither of which is supposed to happen. This is
   /// typically not recoverable, except by starting a new DomainParticipant.
-  #[error("Cannot communicate. Background thread may have paniced: {reason}")]
+  #[error("Cannot communicate. Background thread may have panicked: {reason}")]
   Poisoned { reason: String, data: D },
 
   /// a [`std::io::Error`] occurred within RustDDS.
@@ -154,8 +154,10 @@ impl<D> WriteError<D> {
 /// This is a specialized Result, similar to [`std::io::Result`].
 pub type WriteResult<T, D> = std::result::Result<T, WriteError<D>>;
 
-pub(crate) fn unwrap_nokey<D>(nokey: WriteError<NoKeyWrapper<D>>) -> WriteError<D> {
-  match nokey {
+pub(crate) fn unwrap_no_key_write_error<D>(
+  no_key_write_error: WriteError<NoKeyWrapper<D>>,
+) -> WriteError<D> {
+  match no_key_write_error {
     WriteError::Serialization { reason, data } => WriteError::Serialization {
       reason,
       data: data.d,
@@ -170,13 +172,13 @@ pub(crate) fn unwrap_nokey<D>(nokey: WriteError<NoKeyWrapper<D>>) -> WriteError<
   }
 }
 
-/// Error type for object cration operations.
+/// Error type for object creation operations.
 #[derive(Debug, thiserror::Error)]
 pub enum CreateError {
   #[error("Object creation failed, because necessary resource has been dropped: {reason}")]
   ResourceDropped { reason: String },
 
-  #[error("Cannot communicate. Background thread may have paniced: {reason}")]
+  #[error("Cannot communicate. Background thread may have panicked: {reason}")]
   Poisoned { reason: String },
 
   #[error("std:io:Error {0}")]

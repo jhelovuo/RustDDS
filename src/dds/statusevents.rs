@@ -1,10 +1,10 @@
 //
-// Describe the commnucation status changes as events.
+// Describe the communication status changes as events.
 //
 // These implement a mechanism equivalent to what is described in
 // Section 2.2.4 Listeners, Conditions, and Wait-sets
 //
-// Communcation statues are detailed in Figure 2.13 and tables in Section
+// Communication statues are detailed in Figure 2.13 and tables in Section
 // 2.2.4.1 in DDS Specification v1.4
 use std::{
   io,
@@ -248,7 +248,7 @@ pub enum TopicStatus {
 
 #[derive(Debug, Clone)]
 pub enum DataReaderStatus {
-  /// Sample was rejected, because resource limits would have been exeeded.
+  /// Sample was rejected, because resource limits would have been exceeded.
   SampleRejected {
     count: CountWithChange,
     last_reason: SampleRejectedStatusKind,
@@ -265,7 +265,7 @@ pub enum DataReaderStatus {
     count: CountWithChange,
     //last_instance_key:
   },
-  /// This DataReader has requested a QoS policy that is incompatibel with what
+  /// This DataReader has requested a QoS policy that is incompatible with what
   /// is offered.
   RequestedIncompatibleQos {
     count: CountWithChange,
@@ -280,7 +280,7 @@ pub enum DataReaderStatus {
   /// * Check that the following interpretation is correct:
   /// * For a BEST_EFFORT reader: Whenever we skip ahead in SequenceNumber,
   ///   possibly because a message is lost, or messages arrive out of order.
-  /// * For a RELIABLE reader: Whenever we skip ahead in SequenceNumbers taht
+  /// * For a RELIABLE reader: Whenever we skip ahead in SequenceNumbers that
   ///   are delivered via DataReader. The reason may be that we receive a
   ///   HEARTBEAT or GAP submessage indicating that some samples we are
   ///   expecting are not available.

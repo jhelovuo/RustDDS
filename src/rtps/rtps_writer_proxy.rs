@@ -18,7 +18,7 @@ use crate::{
   },
 };
 
-#[derive(Debug)] // these are not cloneable, because contined data may be large
+#[derive(Debug)] // these are not cloneable, because contained data may be large
 pub(crate) struct RtpsWriterProxy {
   /// Identifies the remote matched Writer
   pub remote_writer_guid: GUID,
@@ -138,7 +138,7 @@ impl RtpsWriterProxy {
     self.ack_base == SequenceNumber::new(0) && self.changes.is_empty()
   }
 
-  // Given an availabilty range from a HEARTBEAT, find out what we are missing.
+  // Given an availability range from a HEARTBEAT, find out what we are missing.
   //
   // Note: Heartbeat gives bounds only. Some samples within that range may
   // have been received already, or not really available, i.e. there may be GAPs

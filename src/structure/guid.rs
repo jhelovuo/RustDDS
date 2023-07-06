@@ -60,7 +60,7 @@ impl AsRef<[u8]> for GuidPrefix {
 }
 
 impl fmt::Debug for GuidPrefix {
-  // This is so common that we skip all the inroductions and just print the data.
+  // This is so common that we skip all the introductions and just print the data.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     self.bytes.fmt(f)
   }
@@ -295,7 +295,7 @@ impl EntityId {
   }
 
   fn as_usize(self) -> usize {
-    // usize is generated like this beacause there needs to be
+    // usize is generated like this because there needs to be
     // a way to tell entity kind from the result
     let u1 = u32::from(self.entity_key[0]);
     let u2 = u32::from(self.entity_key[1]);

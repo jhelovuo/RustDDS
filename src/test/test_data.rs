@@ -189,14 +189,14 @@ pub(crate) fn spdp_participant_data() -> Option<SpdpDiscoveredParticipantData> {
     match &submsg.body {
       SubmessageBody::Writer(v) => match v {
         WriterSubmessage::Data(d, _) => {
-          let particiapant_data: SpdpDiscoveredParticipantData =
+          let participant_data: SpdpDiscoveredParticipantData =
             PlCdrDeserializerAdapter::from_bytes(
               &d.serialized_payload.as_ref().unwrap().value,
               RepresentationIdentifier::PL_CDR_LE,
             )
             .unwrap();
 
-          return Some(particiapant_data);
+          return Some(participant_data);
         }
         _ => continue,
       },
@@ -285,7 +285,7 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
   let pub_topic_data = PublicationBuiltinTopicData {
     key: GUID::dummy_test_guid(EntityKind::WRITER_WITH_KEY_BUILT_IN),
     participant_key: Some(GUID::dummy_test_guid(EntityKind::PARTICIPANT_BUILT_IN)),
-    topic_name: "rand topic namm".to_string(),
+    topic_name: "rand topic name".to_string(),
     type_name: "RandomData".to_string(),
     durability: Some(Durability::Volatile),
     deadline: Some(Deadline(Duration::from_secs(30))),

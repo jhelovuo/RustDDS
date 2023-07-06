@@ -83,7 +83,7 @@ impl DataFrag {
     2 + // fragmentsInSubmessage
     2 + // fragmentSize
     4 + // sampleSize
-    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
+    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParameterList
     self.serialized_payload.len()
   }
 
@@ -238,7 +238,7 @@ impl DataFrag {
     if fragment_starting_num < FragmentNumber::new(1) || fragment_starting_num > expected_total {
       return Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("DataFrag fragmentStartingNum={:?} expected_total={:?}.  Expected 1 <= fragmentStartingNum <= expeceted_total.  Discarding as invalid.",
+        format!("DataFrag fragmentStartingNum={:?} expected_total={:?}.  Expected 1 <= fragmentStartingNum <= expected_total.  Discarding as invalid.",
           fragment_starting_num,expected_total)
       ));
     }

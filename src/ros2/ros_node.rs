@@ -312,7 +312,7 @@ pub struct NodeOptions {
 impl NodeOptions {
   /// # Arguments
   ///
-  /// * `enable_rosout` -  Wheter or not ros logging is enabled (rosout writer)
+  /// * `enable_rosout` -  Whether or not ros logging is enabled (rosout writer)
   pub fn new(/* domain_id: u16, */ enable_rosout: bool) -> Self {
     Self { enable_rosout }
   }
@@ -523,7 +523,7 @@ impl RosNode {
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if
   ///   it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  pub fn create_ros_nokey_subscriber<
+  pub fn create_ros_no_key_subscriber<
     D: DeserializeOwned + 'static,
     DA: no_key::DeserializerAdapter<D>,
   >(
@@ -572,7 +572,7 @@ impl RosNode {
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it
   ///   if it's compatible with topics QOS. `None` indicates the use of Topics
   ///   QOS.
-  pub fn create_ros_nokey_publisher<D: Serialize, SA: no_key::SerializerAdapter<D>>(
+  pub fn create_ros_no_key_publisher<D: Serialize, SA: no_key::SerializerAdapter<D>>(
     &mut self,
     topic: &Topic,
     qos: Option<QosPolicies>,

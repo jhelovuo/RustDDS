@@ -179,7 +179,7 @@ where
         /* None: ok */ || (),
         /* Some: key was there already! */
         // TODO: We should not outright panic here, but rather raise a serious error.
-        // This is a symption that the receive timestamps are not unique identifiers like they are
+        // This is a symptom that the receive timestamps are not unique identifiers like they are
         // supposed to be.
         |_already_existed| {
           panic!(
@@ -361,7 +361,7 @@ where
   // vectors obtained from select_*_for_access -methods above, or their
   // subvectors.
   //
-  // Therea are two versions of both read and take: Return DataSample<D> (incl.
+  // There are two versions of both read and take: Return DataSample<D> (incl.
   // metadata) and "bare" versions without metadata.
 
   pub fn read_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<&D>> {
@@ -407,7 +407,7 @@ where
     self.mark_instances_viewed(&instance_generations);
 
     // We need to do SampleInfo construction and final result construction as
-    // separate passes. This is becaue SampleInfo construction needs to mark
+    // separate passes. This is because SampleInfo construction needs to mark
     // items as read and generations as viewed, i.e. needs mutable reference to
     // data_samples. Result construction (in read, not take) needs to hand out
     // multiple references into data_samples, therefore it needs immutable

@@ -4,7 +4,7 @@
 /// DataReader cannot assume a specific serialization
 /// format, so it needs to be given as a parameter.
 ///
-/// for WITH_KEY topics, we need to be able to (de)serailize the key in addition
+/// for WITH_KEY topics, we need to be able to (de)serialize the key in addition
 /// to data.
 pub mod no_key {
   use bytes::Bytes;

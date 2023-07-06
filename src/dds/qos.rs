@@ -14,7 +14,7 @@ use crate::{
   structure::{duration::Duration, endpoint::ReliabilityKind, parameter_id::ParameterId},
 };
 
-// This is to be implemented by all DomanParticipant, Publisher, Subscriber,
+// This is to be implemented by all DomainParticipant, Publisher, Subscriber,
 // DataWriter, DataReader, Topic
 /// Trait that is implemented by all necessary DDS Entities that are required to
 /// provide QosPolicies.
@@ -175,7 +175,7 @@ impl QosPolicyBuilder {
 /// QosPolicies are constructed using a [`QosPolicyBuilder`]
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct QosPolicies {
-  // pub(crate) beacuse as we want to have some builtin QoS Policies as constant.
+  // pub(crate) because as we want to have some builtin QoS Policies as constant.
   pub(crate) durability: Option<policy::Durability>,
   pub(crate) presentation: Option<policy::Presentation>,
   pub(crate) deadline: Option<policy::Deadline>,
@@ -278,7 +278,7 @@ impl QosPolicies {
     }
   }
 
-  /// Check if policy commplies to another policy.
+  /// Check if policy complies to another policy.
   ///
   /// `self` is the "offered" (publisher) QoS
   /// `other` is the "requested" (subscriber) QoS
@@ -313,7 +313,7 @@ impl QosPolicies {
     }
 
     // check Presentation:
-    // * If coherent_access is requsted, it must be offered also. AND
+    // * If coherent_access is requested, it must be offered also. AND
     // * Same for ordered_access. AND
     // * Offered access scope is broader than requested.
     if let (Some(off), Some(req)) = (self.presentation, other.presentation) {
@@ -514,7 +514,7 @@ impl QosPolicies {
         Some(policy::Ownership::Exclusive { strength })
       }
       (Some(OwnershipKind::Exclusive), None) => {
-        warn!("QosPolicies deserializer: Received OwnershipKind::Exclusive but no stregth value.");
+        warn!("QosPolicies deserializer: Received OwnershipKind::Exclusive but no strength value.");
         None
       }
       (None, Some(_strength)) => {
@@ -619,7 +619,7 @@ pub mod policy {
     pub value: Vec<u8>,
   }
 
-  pub struct GropupData {
+  pub struct GroupData {
     pub value: Vec<u8>,
   }
 

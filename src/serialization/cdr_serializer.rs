@@ -278,7 +278,7 @@ where
   type SerializeStruct = Self;
   type SerializeStructVariant = Self;
 
-  //Little-Endian endcoding least significant bit is first.
+  //Little-Endian encoding least significant bit is first.
 
   //15.3.1.5 Boolean
   //  Boolean values are encoded as single octets, where TRUE is the value 1, and
@@ -670,14 +670,14 @@ mod tests {
 
   #[test]
 
-  fn cdr_serialize_and_deserializesequence_of_structs() {
+  fn cdr_serialize_and_deserialize_sequence_of_structs() {
     // this length is not dividable by 4 so paddings are necessary???
     #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
-    pub struct OmaTyyppi {
+    pub struct MyType {
       first_value: i16,
       second: u8,
     }
-    impl OmaTyyppi {
+    impl MyType {
       pub fn new(first_value: i16, second: u8) -> Self {
         Self {
           first_value,
@@ -686,13 +686,10 @@ mod tests {
       }
     }
 
-    let sequence_of_structs: Vec<OmaTyyppi> = vec![
-      OmaTyyppi::new(1, 23),
-      OmaTyyppi::new(2, 34),
-      OmaTyyppi::new(-3, 45),
-    ];
+    let sequence_of_structs: Vec<MyType> =
+      vec![MyType::new(1, 23), MyType::new(2, 34), MyType::new(-3, 45)];
     let serialized = to_little_endian_binary(&sequence_of_structs).unwrap();
-    let deserialized: Vec<OmaTyyppi> = deserialize_from_little_endian(&serialized).unwrap();
+    let deserialized: Vec<MyType> = deserialize_from_little_endian(&serialized).unwrap();
     info!("deserialized    {:?}", deserialized);
     info!("serialized    {:?}", serialized);
     assert_eq!(deserialized, sequence_of_structs);
@@ -706,11 +703,11 @@ mod tests {
     // value zero (0). Successive enum identifiers are take ascending numeric
     // values, in order of declaration from left to right. -> Only C type
     // "classic enumerations" are possible to be serialized. use Serialize_repr
-    // and Deserialize_repr when enum member has value taht is not same as unit
-    // variant index (when specified explicitly in code with assing)
+    // and Deserialize_repr when enum member has value that is not same as unit
+    // variant index (when specified explicitly in code with assign)
     #[derive(Debug, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
     #[repr(u32)]
-    pub enum OmaEnumeration {
+    pub enum MyEnumeration {
       First,
       Second,
       Third,
@@ -718,28 +715,27 @@ mod tests {
       //fifth(u8,u8,u16),
       //sixth(i16,i16),
       SevenHundredth = 700,
-      /*eigth(u32),
+      /*eighth(u32),
        *this_should_not_be_valid(u64,u8,u8,u16,String),
        *similar_to_fourth(u8,u8,u8,u8), */
     }
 
-    let enum_object_1 = OmaEnumeration::First;
-    let enum_object_2 = OmaEnumeration::Second;
-    let enum_object_3 = OmaEnumeration::Third;
-    //let enum_object_4 = OmaEnumeration::fourth(1,2,3,4);
-    //let enum_object_5 = OmaEnumeration::fifth(5,6,7);
-    //let enum_object_6 = OmaEnumeration::sixth(-8,9);
-    let enum_object_7 = OmaEnumeration::SevenHundredth;
-    //let enum_object_8 = OmaEnumeration::eigth(1000);
+    let enum_object_1 = MyEnumeration::First;
+    let enum_object_2 = MyEnumeration::Second;
+    let enum_object_3 = MyEnumeration::Third;
+    //let enum_object_4 = MyEnumeration::fourth(1,2,3,4);
+    //let enum_object_5 = MyEnumeration::fifth(5,6,7);
+    //let enum_object_6 = MyEnumeration::sixth(-8,9);
+    let enum_object_7 = MyEnumeration::SevenHundredth;
+    //let enum_object_8 = MyEnumeration::eighth(1000);
     //let enum_object_9 =
-    // OmaEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hejssan
-    // allihoppa!")); let enum_object_10 =
-    // OmaEnumeration::similar_to_fourth(5,6,7,8);
+    // MyEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hey all!"));
+    // let enum_object_10 =MyEnumeration::similar_to_fourth(5,6,7,8);
 
     let serialized_1 = to_little_endian_binary(&enum_object_1).unwrap();
     info!("{:?}", serialized_1);
     let u32_value_1: u32 = deserialize_from_little_endian(&serialized_1).unwrap();
-    let deserialized_1: OmaEnumeration = deserialize_from_little_endian(&serialized_1).unwrap();
+    let deserialized_1: MyEnumeration = deserialize_from_little_endian(&serialized_1).unwrap();
     info!("Deserialized 1: {:?}", deserialized_1);
     assert_eq!(deserialized_1, enum_object_1);
     assert_eq!(u32_value_1, 0);
@@ -747,14 +743,14 @@ mod tests {
     let serialized_2 = to_little_endian_binary(&enum_object_2).unwrap();
     info!("{:?}", serialized_2);
     let u32_value_2: u32 = deserialize_from_little_endian(&serialized_2).unwrap();
-    let deserialized_2: OmaEnumeration = deserialize_from_little_endian(&serialized_2).unwrap();
+    let deserialized_2: MyEnumeration = deserialize_from_little_endian(&serialized_2).unwrap();
     info!("Deserialized 2: {:?}", deserialized_2);
     assert_eq!(deserialized_2, enum_object_2);
     assert_eq!(u32_value_2, 1);
 
     let serialized_3 = to_little_endian_binary(&enum_object_3).unwrap();
     info!("{:?}", serialized_3);
-    let deserialized_3: OmaEnumeration = deserialize_from_little_endian(&serialized_3).unwrap();
+    let deserialized_3: MyEnumeration = deserialize_from_little_endian(&serialized_3).unwrap();
     let u32_value_3: u32 = deserialize_from_little_endian(&serialized_3).unwrap();
     info!("Deserialized 3: {:?}", deserialized_3);
     assert_eq!(deserialized_3, enum_object_3);
@@ -762,12 +758,12 @@ mod tests {
 
     /*
     let serialized_4 = to_little_endian_binary(&enum_object_4).unwrap();
-    let deserialized_4 : OmaEnumeration = deserialize_from_little_endian(serialized_4).unwrap();
+    let deserialized_4 : MyEnumeration = deserialize_from_little_endian(serialized_4).unwrap();
     */
 
     let serialized_7 = to_little_endian_binary(&enum_object_7).unwrap();
     info!("{:?}", serialized_7);
-    let deserialized_7: OmaEnumeration = deserialize_from_little_endian(&serialized_7).unwrap();
+    let deserialized_7: MyEnumeration = deserialize_from_little_endian(&serialized_7).unwrap();
     let u32_value_7: u32 = deserialize_from_little_endian(&serialized_7).unwrap();
     info!("Deserialized 7: {:?}", deserialized_7);
     assert_eq!(deserialized_7, enum_object_7);
@@ -811,7 +807,7 @@ mod tests {
   #[test]
   fn cdr_serialization_test() {
     #[derive(Serialize)]
-    struct OmaTyyppi {
+    struct MyType {
       first_value: u8,
       second_value: i8,
       third_value: i32,
@@ -819,7 +815,7 @@ mod tests {
       fifth: bool,
     }
 
-    let mikki_hiiri = OmaTyyppi {
+    let micky_mouse = MyType {
       first_value: 1,
       second_value: -1,
       third_value: 23,
@@ -827,45 +823,45 @@ mod tests {
       fifth: true,
     };
 
-    let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();
+    let serialized = to_little_endian_binary(&micky_mouse).unwrap();
     let expected: Vec<u8> = vec![
       0x01, 0xff, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x67, 0x67, 0x34, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x01,
     ];
-    assert_eq!(expected, sarjallistettu);
+    assert_eq!(expected, serialized);
   }
 
   #[test]
   fn cdr_serialization_char() {
     #[derive(Serialize)]
-    struct OmaTyyppi {
+    struct MyType {
       first_value: u8,
       second: u8,
       third: u8,
     }
-    let mikki_hiiri = OmaTyyppi {
+    let micky_mouse = MyType {
       first_value: b'a',
       second: b'b',
       third: b'\xE4', // 'ä'
     };
 
-    let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();
+    let serialized = to_little_endian_binary(&micky_mouse).unwrap();
     let expected: Vec<u8> = vec![0x61, 0x62, 0xe4];
-    assert_eq!(expected, sarjallistettu);
+    assert_eq!(expected, serialized);
   }
 
   #[test]
   fn cdr_serialization_string() {
     #[derive(Serialize)]
-    struct OmaTyyppi<'a> {
+    struct MyType<'a> {
       first_value: &'a str,
     }
-    let mikki_hiiri = OmaTyyppi {
+    let micky_mouse = MyType {
       first_value: "BLUE",
     };
-    let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();
+    let serialized = to_little_endian_binary(&micky_mouse).unwrap();
     let expected: Vec<u8> = vec![0x05, 0x00, 0x00, 0x00, 0x42, 0x4c, 0x55, 0x45, 0x00];
-    assert_eq!(expected, sarjallistettu);
+    assert_eq!(expected, serialized);
   }
 
   #[test]
@@ -880,19 +876,19 @@ mod tests {
   #[test]
   fn cdr_serialize_seq() {
     #[derive(Serialize)]
-    struct OmaTyyppi {
+    struct MyType {
       first_value: Vec<i32>,
     }
-    let mikki_hiiri = OmaTyyppi {
+    let micky_mouse = MyType {
       first_value: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 123123],
     };
-    let sarjallistettu = to_little_endian_binary(&mikki_hiiri).unwrap();
+    let serialized = to_little_endian_binary(&micky_mouse).unwrap();
     let expected: Vec<u8> = vec![
       0x0b, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
       0x00, 0x04, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x07, 0x00,
       0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xf3,
       0xe0, 0x01, 0x00,
     ];
-    assert_eq!(expected, sarjallistettu);
+    assert_eq!(expected, serialized);
   }
 }

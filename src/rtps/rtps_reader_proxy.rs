@@ -172,7 +172,7 @@ impl RtpsReaderProxy {
     }
   }
 
-  /// this should be called everytime a new CacheChange is set to RTPS writer
+  /// this should be called every time a new CacheChange is set to RTPS writer
   /// HistoryCache
   pub fn notify_new_cache_change(&mut self, sequence_number: SequenceNumber) {
     if sequence_number == SequenceNumber::from(0) {
@@ -192,7 +192,7 @@ impl RtpsReaderProxy {
     // Insert all ones set with frag_count bits
     self
       .frags_requested
-      // TODO: expain why unwrap below succeeds
+      // TODO: explain why unwrap below succeeds
       .insert(
         seq_num,
         BitVec::from_elem(frag_count.try_into().unwrap(), true),

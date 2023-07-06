@@ -24,7 +24,7 @@ pub enum WriterSubmessage {
   DataFrag(DataFrag, BitFlags<DATAFRAG_Flags>),
   Gap(Gap, BitFlags<GAP_Flags>),
   Heartbeat(Heartbeat, BitFlags<HEARTBEAT_Flags>),
-  #[allow(dead_code)] // Functinality not yet implemented
+  #[allow(dead_code)] // Functionality not yet implemented
   HeartbeatFrag(HeartbeatFrag, BitFlags<HEARTBEATFRAG_Flags>),
 }
 
@@ -120,7 +120,7 @@ impl<C: Context> Writable<C> for InterpreterSubmessage {
 #[derive(Debug)]
 pub enum AckSubmessage {
   AckNack(AckNack),
-  #[allow(dead_code)] // Functinality not yet implemented
+  #[allow(dead_code)] // Functionality not yet implemented
   NackFrag(NackFrag),
 }
 

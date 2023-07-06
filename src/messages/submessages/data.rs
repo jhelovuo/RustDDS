@@ -149,7 +149,7 @@ impl Data {
     4 + // readerId
     4 + // writerId
     8 + // writerSN
-    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
+    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParameterList
     self.serialized_payload.as_ref().map(|q| q.len_serialized()).unwrap_or(0)
   }
 }

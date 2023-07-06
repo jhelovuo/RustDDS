@@ -28,12 +28,12 @@ use super::{
   spdp_participant_data::SpdpDiscoveredParticipantData,
 };
 
-// If remote participant does not specifiy lease duration, how long silence
+// If remote participant does not specify lease duration, how long silence
 // until we pronounce it dead.
 const DEFAULT_PARTICIPANT_LEASE_DURATION: Duration = Duration::from_secs(60);
 
 // How much longer to wait than lease duration before pronouncing lost.
-const PARTICIPANT_LEASE_DURATION_TOLREANCE: Duration = Duration::from_secs(0);
+const PARTICIPANT_LEASE_DURATION_TOLERANCE: Duration = Duration::from_secs(0);
 
 // TODO: Let DiscoveryDB itself become thread-safe and support smaller-scope
 // lock
@@ -68,7 +68,7 @@ pub(crate) struct DiscoveryDB {
 // How did we discover this topic
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum DiscoveredVia {
-  Topic,        // excplicitly, via the topic topic (does this actually occur?)
+  Topic,        // explicitly, via the topic topic (does this actually occur?)
   Publication,  // we discovered there is a writer on this topic
   Subscription, // we discovered a reader on this topic
 }
@@ -101,7 +101,7 @@ impl DiscoveryDB {
     }
   }
 
-  // Returns if particiapnt was previously unkonwn
+  // Returns if participant was previously unknown
   pub fn update_participant(&mut self, data: &SpdpDiscoveredParticipantData) -> bool {
     debug!("update_participant: {:?}", &data);
     let guid = data.participant_guid;
@@ -256,10 +256,10 @@ impl DiscoveryDB {
       //let lease_duration = lease_duration + lease_duration; // double it
       match self.participant_last_life_signs.get(&guid) {
         Some(&last_life) => {
-          // keep, if duration not exeeded
+          // keep, if duration not exceeded
           let elapsed = Duration::from_std(inow.duration_since(last_life));
-          if elapsed <= lease_duration + PARTICIPANT_LEASE_DURATION_TOLREANCE {
-            // No timeout yet, we keep this, so do nothng.
+          if elapsed <= lease_duration + PARTICIPANT_LEASE_DURATION_TOLERANCE {
+            // No timeout yet, we keep this, so do nothing.
           } else {
             info!("participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} elapsed = {:?}",
                   guid, lease_duration, elapsed);
@@ -338,7 +338,7 @@ impl DiscoveryDB {
     self.local_topic_writers.remove(&guid);
   }
 
-  // TODO: This is silly. Returns one of the paramters cloned, or None
+  // TODO: This is silly. Returns one of the parameters cloned, or None
   // TODO: Why are we here checking if discovery db already has this? What about
   // reader proxies in writers?
 
@@ -403,7 +403,7 @@ impl DiscoveryDB {
     }
   }
 
-  // TODO: This is silly. Returns one of the paramters cloned, or None
+  // TODO: This is silly. Returns one of the parameters cloned, or None
   pub fn update_publication(&mut self, data: &DiscoveredWriterData) -> DiscoveredWriterData {
     let guid = data.writer_proxy.remote_writer_guid;
 
@@ -577,7 +577,7 @@ impl DiscoveryDB {
 
   // Note:
   // If multiple participants announce the same topic, this will
-  // return duplicates, one per announcing particiapnt.
+  // return duplicates, one per announcing participant.
   // The duplicates are not necessarily identical, but may have different QoS.
   pub fn all_user_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
     self
@@ -618,15 +618,15 @@ impl DiscoveryDB {
     topic_name: &str,
     participant: GuidPrefix,
   ) -> Vec<DiscoveredWriterData> {
-    let on_particiapnt = self
+    let on_participant = self
       .external_topic_writers
       .range(participant.range())
       .map(|(_guid, dwd)| dwd);
     info!(
       "Writers on participant {:?} are {:?}",
-      participant, on_particiapnt
+      participant, on_participant
     );
-    on_particiapnt
+    on_participant
       .filter(|dwd| dwd.publication_topic_data.topic_name == topic_name)
       .cloned()
       .collect()

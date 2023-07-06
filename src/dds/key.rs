@@ -1,4 +1,4 @@
-// This module defines traits to specifiy a key as defined in DDS specification.
+// This module defines traits to specify a key as defined in DDS specification.
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
 use std::{convert::TryFrom, hash::Hash};
 
@@ -18,7 +18,7 @@ use crate::serialization::pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializ
 /// sample. In its simplest form, the key may be just a part of the sample data,
 /// but it can be anything computable from an immutable sample by an
 /// application-defined function. It is recommended that this function be
-/// lightwieght to compute.
+/// lightweight to compute.
 ///
 /// The key is used to distinguish between different Instances of the data in a
 /// DDS Topic.
@@ -142,7 +142,7 @@ pub trait Key:
       error!("Hashing key {:?} failed!", e);
       // This would cause a lot of hash collisions, but wht else we could do
       // if the key cannot be serialized? Are there any realistic conditions
-      // this could even ocur?
+      // this could even occur?
       vec![0; 16]
     });
 
@@ -198,7 +198,7 @@ impl Key for String {}
 #[derive(
   Debug, Default, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, CdrEncodingSize,
 )]
-/// Key type to identicy data instances in builtin topics
+/// Key type to identify data instances in builtin topics
 pub struct BuiltInTopicKey {
   /// IDL PSM (2.3.3, pg 138) uses array of 3x long to implement this
   value: [i32; 3],

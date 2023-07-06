@@ -141,7 +141,7 @@ impl fmt::Debug for FragmentAssembler {
 
 impl FragmentAssembler {
   pub fn new(fragment_size: u16) -> Self {
-    debug!("new FragmentAssember. frag_size = {}", fragment_size);
+    debug!("new FragmentAssembler. frag_size = {}", fragment_size);
     Self {
       fragment_size,
       assembly_buffers: BTreeMap::new(),
@@ -171,7 +171,7 @@ impl FragmentAssembler {
         let ser_data_or_key = SerializedPayload::from_bytes(&abuf.buffer_bytes.freeze())
           .map_or_else(
             |e| {
-              error!("Deserializing SeralizedPayload from DATAFRAG: {:?}", &e);
+              error!("Deserializing SerializedPayload from DATAFRAG: {:?}", &e);
               None
             },
             Some,

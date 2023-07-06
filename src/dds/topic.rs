@@ -49,7 +49,7 @@ pub struct Topic {
 
 impl Topic {
   pub(crate) fn new(
-    my_domainparticipant: &DomainParticipantWeak,
+    my_domain_participant: &DomainParticipantWeak,
     my_name: String,
     my_typedesc: TypeDesc,
     my_qos_policies: &QosPolicies,
@@ -57,7 +57,7 @@ impl Topic {
   ) -> Self {
     Self {
       inner: Arc::new(InnerTopic::new(
-        my_domainparticipant,
+        my_domain_participant,
         my_name,
         my_typedesc,
         my_qos_policies,
@@ -151,7 +151,7 @@ impl HasQoSPolicy for Topic {
 
 #[derive(Clone)]
 pub struct InnerTopic {
-  my_domainparticipant: DomainParticipantWeak,
+  my_domain_participant: DomainParticipantWeak,
   my_name: String,
   my_typedesc: TypeDesc,
   my_qos_policies: QosPolicies,
@@ -162,14 +162,14 @@ impl InnerTopic {
   // visibility pub(crate), because only DomainParticipant should be able to
   // create new Topic objects from an application point of view.
   fn new(
-    my_domainparticipant: &DomainParticipantWeak,
+    my_domain_participant: &DomainParticipantWeak,
     my_name: String,
     my_typedesc: TypeDesc,
     my_qos_policies: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Self {
     Self {
-      my_domainparticipant: my_domainparticipant.clone(),
+      my_domain_participant: my_domain_participant.clone(),
       my_name,
       my_typedesc,
       my_qos_policies: my_qos_policies.clone(),
@@ -178,7 +178,7 @@ impl InnerTopic {
   }
 
   fn participant(&self) -> Option<DomainParticipant> {
-    self.my_domainparticipant.clone().upgrade()
+    self.my_domain_participant.clone().upgrade()
   }
 
   fn get_type(&self) -> TypeDesc {

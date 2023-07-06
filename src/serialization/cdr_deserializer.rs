@@ -146,13 +146,13 @@ where
 
   fn calculate_padding_count_from_written_bytes_and_remove(
     &mut self,
-    type_octet_aligment: usize,
+    type_octet_alignment: usize,
   ) -> Result<()> {
-    let modulo = self.serialized_data_count % type_octet_aligment;
+    let modulo = self.serialized_data_count % type_octet_alignment;
     if modulo == 0 {
       Ok(())
     } else {
-      let padding = type_octet_aligment - modulo;
+      let padding = type_octet_alignment - modulo;
       self.remove_bytes_from_input(padding)
     }
   }
@@ -514,7 +514,7 @@ where
   where
     V: DeserializeSeed<'de>,
   {
-    // preceeding deserialize_enum aligned to 4
+    // preceding deserialize_enum aligned to 4
     let enum_tag = self.de.next_bytes(4)?.read_u32::<BO>().unwrap();
     let val: Result<_> = seed.deserialize(enum_tag.into_deserializer());
     Ok((val?, self))
@@ -645,7 +645,7 @@ mod tests {
   fn cdr_deserialization_struct() {
     //IDL
     /*
-    struct OmaTyyppi
+    struct MyType
     {
      octet first;
     octet second;
@@ -654,11 +654,11 @@ mod tests {
     boolean fifth;
     float sixth;
     boolean seventh;
-    sequence<long> eigth;
+    sequence<long> eighth;
     sequence<octet> ninth;
     sequence<short> tenth;
     sequence<long long> eleventh;
-    unsigned short twelwe [3];
+    unsigned short twelve [3];
     string thirteen;
     };
     */
@@ -672,16 +672,16 @@ mod tests {
     ser_var.fifth(true);
     ser_var.sixth(-6.6);
     ser_var.seventh(true);
-    ser_var.eigth({1,2});
+    ser_var.eighth({1,2});
     ser_var.ninth({1});
     ser_var.tenth({5,-4,3,-2,1});
     ser_var.eleventh({});
-    ser_var.twelwe({3,2,1});
+    ser_var.twelve({3,2,1});
     ser_var.thirteen("abc");
 
       */
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct OmaTyyppi {
+    struct MyType {
       first_value: u8,
       second_value: i8,
       third_value: i32,
@@ -689,15 +689,15 @@ mod tests {
       fifth: bool,
       sixth: f32,
       seventh: bool,
-      eigth: Vec<i32>,
+      eighth: Vec<i32>,
       ninth: Vec<u8>,
       tenth: Vec<i16>,
       eleventh: Vec<i64>,
-      twelwe: [u16; 3],
+      twelve: [u16; 3],
       thirteen: String,
     }
 
-    let mikki_hiiri = OmaTyyppi {
+    let micky_mouse = MyType {
       first_value: 1,
       second_value: -3,
       third_value: -5000,
@@ -705,11 +705,11 @@ mod tests {
       fifth: true,
       sixth: -6.6f32,
       seventh: true,
-      eigth: vec![1, 2],
+      eighth: vec![1, 2],
       ninth: vec![1],
       tenth: vec![5, -4, 3, -2, 1],
       eleventh: vec![],
-      twelwe: [3, 2, 1],
+      twelve: [3, 2, 1],
       thirteen: "abc".to_string(),
     };
 
@@ -722,20 +722,19 @@ mod tests {
       0x00, 0x04, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x00,
     ];
 
-    let sarjallistettu = to_bytes::<OmaTyyppi, LittleEndian>(&mikki_hiiri).unwrap();
+    let serialized = to_bytes::<MyType, LittleEndian>(&micky_mouse).unwrap();
 
     for x in 0..expected_serialized_result.len() {
-      if expected_serialized_result[x] != sarjallistettu[x] {
+      if expected_serialized_result[x] != serialized[x] {
         info!("index: {}", x);
       }
     }
-    assert_eq!(sarjallistettu, expected_serialized_result);
-    info!("serialization successfull!");
+    assert_eq!(serialized, expected_serialized_result);
+    info!("serialization successful!");
 
-    let rakennettu: OmaTyyppi =
-      deserialize_from_little_endian(&expected_serialized_result).unwrap();
-    assert_eq!(rakennettu, mikki_hiiri);
-    info!("deserialized: {:?}", rakennettu);
+    let built: MyType = deserialize_from_little_endian(&expected_serialized_result).unwrap();
+    assert_eq!(built, micky_mouse);
+    info!("deserialized: {:?}", built);
   }
 
   #[test]
@@ -836,7 +835,7 @@ mod tests {
 
     assert_eq!(deserialized_le, o);
     assert_eq!(deserialized_be, o);
-    info!("deserialition success");
+    info!("deserialization success");
   }
 
   #[test]
@@ -851,7 +850,7 @@ mod tests {
       y: i32,
       size: i32,
     }
-    // this message is DataMessages serialized data withoutt encapsulation kind and
+    // this message is DataMessages serialized data without encapsulation kind and
     // encapsulation options
     let received_message: Vec<u8> = vec![
       0x04, 0x00, 0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x61, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00,
@@ -875,7 +874,7 @@ mod tests {
   #[test]
 
   fn cdr_deserialization_custom_data_message_from_ros_and_wireshark() {
-    // IDL of messsage
+    // IDL of message
     //float64 x
     //float64 y
     //float64 heading
@@ -905,7 +904,7 @@ mod tests {
 
     let value: MessageType = deserialize_from_little_endian(&received_message_le).unwrap();
     info!("{:?}", value);
-    assert_eq!(value.test, "Toimiiko?");
+    assert_eq!(value.test, "working?");
   }
 
   #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -913,13 +912,13 @@ mod tests {
     unbounded_string: String,
     x: i32,
     y: i32,
-    shapesize: i32,
-    liuku: f32,
-    tuplaliuku: f64,
-    kolme_lyhytta: [u16; 3],
-    nelja_lyhytta: [i16; 4],
-    totuusarvoja: Vec<bool>,
-    kolm_tavua: Vec<u8>,
+    shape_size: i32,
+    slide: f32,
+    double_slide: f64,
+    three_short: [u16; 3],
+    four_short: [i16; 4],
+    booleans: Vec<bool>,
+    three_bytes: Vec<u8>,
   }
 
   #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -937,44 +936,44 @@ mod tests {
     string unbounded_string;
       long x;
       long y;
-      long shapesize;
-      float liuku;
-      double tuplaliuku;
-      unsigned short kolme_lyhytta [3];
-      short nelja_lyhytta [4];
-      sequence<boolean> totuusarvoja;
-      sequence<octet,3> kolm_tavua;
+      long shape_size;
+      float slide;
+      double double_slide;
+      unsigned short three_short [3];
+      short four_short [4];
+      sequence<boolean> booleans;
+      sequence<octet,3> three_bytes;
     };
     */
 
-    // values put to serilization message with eprosima fastbuffers
+    // values put to serialization message with eprosima fastbuffers
     /*
-      ser_var.unbounded_string("tassa on aika pitka teksti");
+      ser_var.unbounded_string("Here is a fairly long text");
       ser_var.x(1);
       ser_var.x(2);
       ser_var.y(-3);
-      ser_var.shapesize(-4);
-      ser_var.liuku(5.5);
-      ser_var.tuplaliuku(-6.6);
+      ser_var.shape_size(-4);
+      ser_var.slide(5.5);
+      ser_var.double_slide(-6.6);
       std::array<uint16_t, 3> foo  = {1,2,3};
-      ser_var.kolme_lyhytta(foo);
+      ser_var.three_short(foo);
       std::array<int16_t, 4>  faa = {1,-2,-3,4};
-      ser_var.nelja_lyhytta(faa);
-      ser_var.totuusarvoja({true,false,true});
-      ser_var.kolm_tavua({23,0,2});
+      ser_var.four_short(faa);
+      ser_var.booleans({true,false,true});
+      ser_var.three_bytes({23,0,2});
     */
 
     let value = InterestingMessage {
-      unbounded_string: "Tassa on aika pitka teksti".to_string(),
+      unbounded_string: "Here is a fairly long text".to_string(),
       x: 2,
       y: -3,
-      shapesize: -4,
-      liuku: 5.5,
-      tuplaliuku: -6.6,
-      kolme_lyhytta: [1, 2, 3],
-      nelja_lyhytta: [1, -2, -3, 4],
-      totuusarvoja: vec![true, false, true],
-      kolm_tavua: [23, 0, 2].to_vec(),
+      shape_size: -4,
+      slide: 5.5,
+      double_slide: -6.6,
+      three_short: [1, 2, 3],
+      four_short: [1, -2, -3, 4],
+      booleans: vec![true, false, true],
+      three_bytes: [23, 0, 2].to_vec(),
     };
 
     const DATA: &[u8] = &[
@@ -1043,29 +1042,29 @@ mod tests {
   #[test_case("BLUE".to_string() ; "string")]
   #[test_case(vec![1_i32, -2_i32, 3_i32] ; "Vec<i32>")]
   #[test_case(InterestingMessage {
-      unbounded_string: "Tässä on aika pitkä teksti".to_string(),
+      unbounded_string: "Here is a fairly long text".to_string(),
       x: 2,
       y: -3,
-      shapesize: -4,
-      liuku: 5.5,
-      tuplaliuku: -6.6,
-      kolme_lyhytta: [1, 2, 3],
-      nelja_lyhytta: [1, -2, -3, 4],
-      totuusarvoja: vec![true, false, true],
-      kolm_tavua: [23, 0, 2].to_vec(),
+      shape_size: -4,
+      slide: 5.5,
+      double_slide: -6.6,
+      three_short: [1, 2, 3],
+      four_short: [1, -2, -3, 4],
+      booleans: vec![true, false, true],
+      three_bytes: [23, 0, 2].to_vec(),
     } ; "InterestingMessage")]
   #[test_case( BigEnum::Boring ; "BigEnum::Boring")]
   #[test_case( BigEnum::Interesting(InterestingMessage {
-      unbounded_string: "Tässä on aika pitkä teksti".to_string(),
+      unbounded_string: "Here is a fairly long text".to_string(),
       x: 2,
       y: -3,
-      shapesize: -4,
-      liuku: 5.5,
-      tuplaliuku: -6.6,
-      kolme_lyhytta: [1, 2, 3],
-      nelja_lyhytta: [1, -2, -3, 4],
-      totuusarvoja: vec![true, false, true],
-      kolm_tavua: [23, 0, 2].to_vec(),
+      shape_size: -4,
+      slide: 5.5,
+      double_slide: -6.6,
+      three_short: [1, 2, 3],
+      four_short: [1, -2, -3, 4],
+      booleans: vec![true, false, true],
+      three_bytes: [23, 0, 2].to_vec(),
     }) ; "BigEnum::Interesting")]
   #[test_case( BigEnum::Something{ x:123.0, y:-0.1 } ; "BigEnum::Something")]
   #[test_case( SomeTupleEnum::A(123) ; "SomeTupleEnum::A")]
