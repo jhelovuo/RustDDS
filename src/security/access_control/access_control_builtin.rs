@@ -15,7 +15,7 @@ impl AccessControl for AccessControlBuiltIn {
   // Currently only mocked
   fn validate_local_permissions(
     &self,
-    auth_plugin: &Box<dyn Authentication>,
+    auth_plugin: &dyn Authentication,
     identity: IdentityHandle,
     domain_id: u16,
     participant_qos: &QosPolicies,
@@ -28,7 +28,7 @@ impl AccessControl for AccessControlBuiltIn {
   // Currently only mocked
   fn validate_remote_permissions(
     &self,
-    auth_plugin: &Box<dyn Authentication>,
+    auth_plugin: &dyn Authentication,
     local_identity_handle: IdentityHandle,
     remote_identity_handle: IdentityHandle,
     remote_permissions_token: PermissionsToken,

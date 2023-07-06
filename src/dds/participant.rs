@@ -65,14 +65,14 @@ impl DomainParticipantBuilder {
   }
 
   #[allow(dead_code)] // TODO: Remove when have a test case
-  pub fn security<'a>(
-    &'a mut self,
+  pub fn security(
+    &mut self,
     auth: Box<impl Authentication + 'static>,
     access: Box<impl AccessControl + 'static>,
     crypto_key_factory: Rc<impl CryptoKeyFactory + 'static>,
     crypto_key_exchange: Rc<impl CryptoKeyExchange + 'static>,
     crypto_transform: Rc<impl CryptoTransform + 'static>,
-  ) -> &'a mut DomainParticipantBuilder {
+  ) -> &mut DomainParticipantBuilder {
     self.security_plugins = Some(SecurityPlugins {
       auth,
       access,
@@ -106,7 +106,7 @@ impl DomainParticipantBuilder {
         participant_guid = sec_guid; // just overwrite to update
 
         let permissions_handle = security_plugins.access.validate_local_permissions(
-          &security_plugins.auth,
+          &*security_plugins.auth,
           identity_handle,
           self.domain_id,
           &participant_qos,
