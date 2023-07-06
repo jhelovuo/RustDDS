@@ -140,7 +140,7 @@ impl DataFrag {
       u32::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
 
     let expect_qos = flags.contains(DATAFRAG_Flags::InlineQos);
-    //let expect_key = flags.contains(DATAFRAG_Flags::Key);
+    // let expect_key = flags.contains(DATAFRAG_Flags::Key);
 
     // Size of header after "octets_to_inline_qos" field:
     // reader_id: 4

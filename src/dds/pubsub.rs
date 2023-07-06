@@ -445,7 +445,7 @@ impl InnerPublisher {
     // We generate an arbitrary but unique id to distinguish Publishers from each
     // other. EntityKind is just some value, since we do not show it to anyone.
     let id = EntityId::MAX;
-    //dp.clone().upgrade().unwrap().new_entity_id(EntityKind::UNKNOWN_BUILT_IN);
+    // dp.clone().upgrade().unwrap().new_entity_id(EntityKind::UNKNOWN_BUILT_IN);
 
     Self {
       id,
@@ -865,7 +865,7 @@ impl Subscriber {
     SA: DeserializerAdapter<D>,
   {
     todo!()
-    // TO think: Is this really necessary? Because the caller would have to know
+  // TO think: Is this really necessary? Because the caller would have to know
     // types D and SA. Should we just trust whoever creates DataReaders to also remember them?
   }
   */

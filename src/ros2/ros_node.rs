@@ -250,8 +250,8 @@ impl RosParticipantInner {
     pts
   }
 
-  //rustdds::ros2::ros_node::RosParticipantInner
-  //external_nodes: HashMap<Gid, Vec<NodeInfo, Global>, RandomState>
+  // rustdds::ros2::ros_node::RosParticipantInner
+  // external_nodes: HashMap<Gid, Vec<NodeInfo, Global>, RandomState>
 
   /*
   pub fn get_all_discovered_ros_node_infos(&self) -> HashMap<Gid, Vec<NodeInfo>> {
@@ -340,7 +340,7 @@ pub struct RosNode {
 
   // builtin writers and readers
   rosout_writer: Option<NoKeyDataWriter<Log>>,
-  //rosout_reader: Option<NoKeyDataReader<Log>>, // TODO
+  // rosout_reader: Option<NoKeyDataReader<Log>>, // TODO
   parameter_events_writer: NoKeyDataWriter<ParameterEvents>,
 }
 
@@ -376,7 +376,7 @@ impl RosNode {
       readers: HashSet::new(),
       writers: HashSet::new(),
       rosout_writer,
-      //rosout_reader: None, // TODO
+      // rosout_reader: None, // TODO
       parameter_events_writer,
     })
   }

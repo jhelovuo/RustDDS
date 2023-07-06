@@ -95,7 +95,7 @@ impl MessageReceiver {
 
   fn give_message_receiver_info(&self) -> MessageReceiverState {
     MessageReceiverState {
-      //own_guid_prefix: self.own_guid_prefix,
+      // own_guid_prefix: self.own_guid_prefix,
       source_guid_prefix: self.source_guid_prefix,
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
@@ -338,7 +338,7 @@ impl MessageReceiver {
       return;
     }
 
-    //let _mr_state = self.give_message_receiver_info();
+    // let _mr_state = self.give_message_receiver_info();
     match submessage {
       ReaderSubmessage::AckNack(acknack, _) => {
         // Note: This must not block, because the receiving end is the same thread,

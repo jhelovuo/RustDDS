@@ -290,7 +290,7 @@ impl Reader {
       match self.data_reader_command_receiver.try_recv() {
         Ok(ReaderCommand::ResetRequestedDeadlineStatus) => {
           warn!("RESET_REQUESTED_DEADLINE_STATUS not implemented!");
-          //TODO: This should be implemented.
+          // TODO: This should be implemented.
         }
         // Disconnected is normal when terminating
         Err(TryRecvError::Disconnected) => {
@@ -465,7 +465,7 @@ impl Reader {
     data_flags: BitFlags<DATA_Flags>,
     mr_state: &MessageReceiverState,
   ) {
-    //trace!("handle_data_msg entry");
+    // trace!("handle_data_msg entry");
     let receive_timestamp = Timestamp::now();
 
     // parse write_options out of the message
@@ -767,7 +767,7 @@ impl Reader {
     // remove fragmented changes until first_sn.
     writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
-    //let received_before = writer_proxy.all_ackable_before();
+    // let received_before = writer_proxy.all_ackable_before();
     let reader_id = self.entity_id();
     // this is duplicate code from above, but needed, because we need another
     // mutable borrow. TODO: Maybe could be written in some sensible way.
@@ -1033,7 +1033,7 @@ impl Reader {
       .lock()
       .unwrap() // TODO: unwrap
       .take() // Take to nullify the reference
-      .map(|w| w.wake_by_ref()); //If Some, call wake_by_ref
+      .map(|w| w.wake_by_ref()); // If Some, call wake_by_ref
 
     // mio-0.8 notify
     self.poll_event_sender.send();

@@ -1,4 +1,3 @@
-//
 // Describe the communication status changes as events.
 //
 // These implement a mechanism equivalent to what is described in
@@ -34,7 +33,7 @@ use crate::{
 pub trait StatusEvented<E> {
   fn as_status_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source; // This is for polling with mio-0.8.x
-                                                                    //fn as_async_receiver(&self) -> dyn Stream<E>;
+                                                                    // fn as_async_receiver(&self) -> dyn Stream<E>;
 
   fn try_recv_status(&self) -> Option<E>;
 }
@@ -188,7 +187,7 @@ impl<T> event::Source for StatusChannelReceiver<T> {
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 
-//TODO: try to make private
+// TODO: try to make private
 pub struct StatusReceiverStream<'a, T> {
   sync_receiver: &'a StatusChannelReceiver<T>,
 }
@@ -197,7 +196,7 @@ impl<'a, T> Stream for StatusReceiverStream<'a, T> {
   type Item = ReadResult<T>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    //debug!("poll_next");
+    // debug!("poll_next");
     let mut w = self.sync_receiver.waker.lock().unwrap();
     // lock already at the beginning, before try_recv
     match self.sync_receiver.try_recv() {
@@ -252,18 +251,18 @@ pub enum DataReaderStatus {
   SampleRejected {
     count: CountWithChange,
     last_reason: SampleRejectedStatusKind,
-    //last_instance_key:
+    // last_instance_key:
   },
   /// Remote Writer has become active or inactive.
   LivelinessChanged {
     alive_total: CountWithChange,
     not_alive_total: CountWithChange,
-    //last_publication_key:
+    // last_publication_key:
   },
   /// Deadline requested by this DataReader was missed.
   RequestedDeadlineMissed {
     count: CountWithChange,
-    //last_instance_key:
+    // last_instance_key:
   },
   /// This DataReader has requested a QoS policy that is incompatible with what
   /// is offered.
@@ -292,7 +291,7 @@ pub enum DataReaderStatus {
   SubscriptionMatched {
     total: CountWithChange,
     current: CountWithChange,
-    //last_publication_key:
+    // last_publication_key:
   },
 }
 
@@ -303,7 +302,7 @@ pub enum DataWriterStatus {
   },
   OfferedDeadlineMissed {
     count: CountWithChange,
-    //last_instance_key:
+    // last_instance_key:
   },
   OfferedIncompatibleQos {
     count: CountWithChange,
@@ -313,7 +312,7 @@ pub enum DataWriterStatus {
   PublicationMatched {
     total: CountWithChange,
     current: CountWithChange,
-    //last_subscription_key:
+    // last_subscription_key:
   },
 }
 

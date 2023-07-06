@@ -309,7 +309,7 @@ fn main() {
       None => {
         if is_publisher {
           error!("Where is my writer?");
-        } else { /* never mind */
+        } else { // never mind
         }
       }
     }

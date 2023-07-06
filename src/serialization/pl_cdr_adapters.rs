@@ -44,7 +44,7 @@ where
   type Error = PlCdrSerializeError;
 
   fn output_encoding() -> RepresentationIdentifier {
-    //TODO: This works only for BO=LittleEndian
+    // TODO: This works only for BO=LittleEndian
     RepresentationIdentifier::PL_CDR_LE
   }
 

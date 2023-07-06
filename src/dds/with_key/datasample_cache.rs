@@ -18,7 +18,7 @@ use crate::{
   with_key::WriteOptions,
 };
 
-//use std::num::Zero; unstable
+// use std::num::Zero; unstable
 
 // DataSampleCache is a structure local to DataReader and DataWriter. It acts as
 // a buffer between e.g. RTPS Reader and the application-facing DataReader. It
@@ -176,8 +176,9 @@ where
         },
       )
       .map_or_else(
-        /* None: ok */ || (),
-        /* Some: key was there already! */
+        // None: ok
+        || (),
+        // Some: key was there already!
         // TODO: We should not outright panic here, but rather raise a serious error.
         // This is a symptom that the receive timestamps are not unique identifiers like they are
         // supposed to be.
@@ -454,7 +455,7 @@ where
       let dswm = self.datasamples.remove(ts).unwrap();
       let imd = self.instance_map.get(key).unwrap();
       let sample_info = Self::make_sample_info(&dswm, imd, len - index - 1, mrs_total, mrsic_total);
-      //dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is
+      // dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is
       // about to be destroyed
       Self::record_instance_generation_viewed(
         &mut instance_generations,
@@ -515,7 +516,7 @@ where
 
     for (ts, key) in keys.iter() {
       let dswm = self.datasamples.remove(ts).unwrap();
-      //dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is
+      // dwsm.sample_has_been_read = true; // no need to mark read, as the dswm is
       // about to be destroyed
       Self::record_instance_generation_viewed(
         &mut instance_generations,

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub use cdr_encoding_size::*;
 
 use crate::serialization::cdr_serializer::to_bytes;
-//use crate::serialization::{cdr_serializer::to_bytes, };
+// use crate::serialization::{cdr_serializer::to_bytes, };
 use crate::serialization::pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError};
 
 /// Data sample must implement [`Keyed`] to be used in a WITH_KEY topic.
@@ -31,7 +31,7 @@ use crate::serialization::pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializ
 /// [`Key`]: trait.Key.html
 
 pub trait Keyed {
-  //type K: Key;  // This does not work yet is stable Rust, 2020-08-11
+  // type K: Key;  // This does not work yet is stable Rust, 2020-08-11
   // Instead, where D:Keyed we do anything with D::K, we must specify bound:
   // where <D as Keyed>::K : Key,
   type K;
@@ -183,14 +183,14 @@ impl Key for i16 {}
 impl Key for i32 {}
 impl Key for i64 {}
 impl Key for i128 {}
-//impl Key for isize {} // should not be used in serializable data, as size is
+// impl Key for isize {} // should not be used in serializable data, as size is
 // platform-dependent
 impl Key for u8 {}
 impl Key for u16 {}
 impl Key for u32 {}
 impl Key for u64 {}
 impl Key for u128 {}
-//impl Key for usize {} // should not be used in serializable data, as size is
+// impl Key for usize {} // should not be used in serializable data, as size is
 // platform-dependent
 
 impl Key for String {}

@@ -278,9 +278,9 @@ where
   type SerializeStruct = Self;
   type SerializeStructVariant = Self;
 
-  //Little-Endian encoding least significant bit is first.
+  // Little-Endian encoding least significant bit is first.
 
-  //15.3.1.5 Boolean
+  // 15.3.1.5 Boolean
   //  Boolean values are encoded as single octets, where TRUE is the value 1, and
   // FALSE as 0.
   fn serialize_bool(self, v: bool) -> Result<()> {
@@ -292,14 +292,14 @@ where
     Ok(())
   }
 
-  //Figure 15-1 on page 15-7 illustrates the representations for OMG IDL integer
+  // Figure 15-1 on page 15-7 illustrates the representations for OMG IDL integer
   // data types, including the following data types:
-  //short
-  //unsigned short
-  //long
-  //unsigned long
-  //long long
-  //unsigned long long
+  // short
+  // unsigned short
+  // long
+  // unsigned long
+  // long long
+  // unsigned long long
 
   fn serialize_u8(self, v: u8) -> Result<()> {
     self.writer.write_u8(v)?;
@@ -364,7 +364,7 @@ where
     Ok(())
   }
 
-  //An IDL character is represented as a single octet; the code set used for
+  // An IDL character is represented as a single octet; the code set used for
   // transmission of character data (e.g., TCS-C) between a particular client
   // and server ORBs is determined via the process described in Section 13.10,
   // “Code Set Conversion,”
@@ -377,7 +377,7 @@ where
     Ok(())
   }
 
-  //A string is encoded as an unsigned long indicating the length of the string
+  // A string is encoded as an unsigned long indicating the length of the string
   // in octets, followed by the string value in single- or multi-byte form
   // represented as a sequence of octets. The string contents include a single
   // terminating null character. The string length includes the null character,
@@ -458,7 +458,7 @@ where
     value.serialize(self)
   }
 
-  //Sequences are encoded as an unsigned long value, followed by the elements of
+  // Sequences are encoded as an unsigned long value, followed by the elements of
   // the sequence. The initial unsigned long contains the number of elements in
   // the sequence. The elements of the sequence are encoded as specified for
   // their type.
@@ -517,7 +517,7 @@ where
 
   // Similar to tuple. No need to mark the beginning.
   fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-    //self.calculate_padding_need_and_write_padding(4)?;
+    // self.calculate_padding_need_and_write_padding(4)?;
     // No! There is no "align to 4 before struct"-rule in CDR!
 
     // nothing to be done.
@@ -697,7 +697,7 @@ mod tests {
 
   #[test]
   fn cdr_serialize_enum() {
-    //Enum values are encoded as unsigned longs. The numeric values associated with
+    // Enum values are encoded as unsigned longs. The numeric values associated with
     // enum identifiers are determined by the order in which the identifiers
     // appear in the enum declaration. The first enum identifier has the numeric
     // value zero (0). Successive enum identifiers are take ascending numeric
@@ -711,9 +711,9 @@ mod tests {
       First,
       Second,
       Third,
-      //fourth(u8,u8,u8,u8),
-      //fifth(u8,u8,u16),
-      //sixth(i16,i16),
+      // fourth(u8,u8,u8,u8),
+      // fifth(u8,u8,u16),
+      // sixth(i16,i16),
       SevenHundredth = 700,
       /*eighth(u32),
        *this_should_not_be_valid(u64,u8,u8,u16,String),
@@ -723,12 +723,12 @@ mod tests {
     let enum_object_1 = MyEnumeration::First;
     let enum_object_2 = MyEnumeration::Second;
     let enum_object_3 = MyEnumeration::Third;
-    //let enum_object_4 = MyEnumeration::fourth(1,2,3,4);
-    //let enum_object_5 = MyEnumeration::fifth(5,6,7);
-    //let enum_object_6 = MyEnumeration::sixth(-8,9);
+    // let enum_object_4 = MyEnumeration::fourth(1,2,3,4);
+    // let enum_object_5 = MyEnumeration::fifth(5,6,7);
+    // let enum_object_6 = MyEnumeration::sixth(-8,9);
     let enum_object_7 = MyEnumeration::SevenHundredth;
-    //let enum_object_8 = MyEnumeration::eighth(1000);
-    //let enum_object_9 =
+    // let enum_object_8 = MyEnumeration::eighth(1000);
+    // let enum_object_9 =
     // MyEnumeration::this_should_not_be_valid(1000,1,2,3,String::from("Hey all!"));
     // let enum_object_10 =MyEnumeration::similar_to_fourth(5,6,7,8);
 
@@ -756,10 +756,9 @@ mod tests {
     assert_eq!(deserialized_3, enum_object_3);
     assert_eq!(u32_value_3, 2);
 
-    /*
-    let serialized_4 = to_little_endian_binary(&enum_object_4).unwrap();
-    let deserialized_4 : MyEnumeration = deserialize_from_little_endian(serialized_4).unwrap();
-    */
+    // let serialized_4 = to_little_endian_binary(&enum_object_4).unwrap();
+    // let deserialized_4 : MyEnumeration =
+    // deserialize_from_little_endian(serialized_4).unwrap();
 
     let serialized_7 = to_little_endian_binary(&enum_object_7).unwrap();
     info!("{:?}", serialized_7);

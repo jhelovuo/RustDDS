@@ -241,7 +241,7 @@ where
     ))
   }
 
-  //15.3.1.5 Boolean
+  // 15.3.1.5 Boolean
   //  Boolean values are encoded as single octets, where TRUE is the value 1, and
   // FALSE as 0.
   fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
@@ -395,9 +395,9 @@ where
     visitor.visit_newtype_struct(self)
   }
 
-  ///Sequences are encoded as an unsigned long value, followed by the elements
+  /// Sequences are encoded as an unsigned long value, followed by the elements
   /// of the
-  //sequence. The initial unsigned long contains the number of elements in the
+  // sequence. The initial unsigned long contains the number of elements in the
   // sequence. The elements of the sequence are encoded as specified for their
   // type.
   fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
@@ -450,7 +450,7 @@ where
     visitor.visit_seq(SequenceHelper::new(self, fields.len()))
   }
 
-  ///Enum values are encoded as unsigned longs. (u32)
+  /// Enum values are encoded as unsigned longs. (u32)
   /// The numeric values associated with enum identifiers are determined by the
   /// order in which the identifiers appear in the enum declaration. The first
   /// enum identifier has the numeric value zero (0). Successive enum
@@ -741,7 +741,7 @@ mod tests {
 
   fn cdr_deserialization_user_defined_data() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
-    //10.7 Example for User-defined Topic Data
+    // 10.7 Example for User-defined Topic Data
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct ShapeType {
       color: String,
@@ -772,12 +772,12 @@ mod tests {
 
   fn cdr_deserialization_serialization_topic_name() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
-    //10.6 Example for Built-in Endpoint Data
+    // 10.6 Example for Built-in Endpoint Data
     // this is just CRD topic name strings
 
     // TODO what about padding??
     let received_cdr_string: Vec<u8> = vec![
-      0x07, 0x00, 0x00, 0x00, 0x053, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, /* 0x00, */
+      0x07, 0x00, 0x00, 0x00, 0x053, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, // 0x00,
     ];
 
     let deserialized_message: String =
@@ -787,7 +787,7 @@ mod tests {
 
     let received_cdr_string2: Vec<u8> = vec![
       0x0A, 0x00, 0x00, 0x00, 0x53, 0x68, 0x61, 0x70, 0x65, 0x54, 0x79, 0x70, 0x65,
-      0x00, /* 0x00, 0x00, */
+      0x00, // 0x00, 0x00,
     ];
 
     let deserialized_message2: String =
@@ -868,20 +868,20 @@ mod tests {
     let serialized_message = to_bytes::<ShapeType, LittleEndian>(&deserialized_message).unwrap();
 
     assert_eq!(serialized_message, received_message2);
-    //assert_eq!(deserialized_message,received_message)
+    // assert_eq!(deserialized_message,received_message)
   }
 
   #[test]
 
   fn cdr_deserialization_custom_data_message_from_ros_and_wireshark() {
     // IDL of message
-    //float64 x
-    //float64 y
-    //float64 heading
-    //float64 v_x
-    //float64 v_y
-    //float64 kappa
-    //string test
+    // float64 x
+    // float64 y
+    // float64 heading
+    // float64 v_x
+    // float64 v_y
+    // float64 kappa
+    // string test
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct MessageType {
@@ -894,17 +894,18 @@ mod tests {
       test: String,
     }
 
+    // The serialized form of the message "Toimiiko?" (?) (Finnish for "Working?")
     let received_message_le: Vec<u8> = vec![
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x85, 0xeb, 0x51, 0xb8,
       0x1e, 0xd5, 0x3f, 0x0a, 0x00, 0x00, 0x00, 0x54, 0x6f, 0x69, 0x6d, 0x69, 0x69, 0x6b, 0x6f,
-      0x3f, 0x00, //0x00, 0x00,
+      0x3f, 0x00, // 0x00, 0x00,
     ];
 
     let value: MessageType = deserialize_from_little_endian(&received_message_le).unwrap();
     info!("{:?}", value);
-    assert_eq!(value.test, "working?");
+    assert_eq!(value.test, "Toimiiko?");
   }
 
   #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -964,7 +965,8 @@ mod tests {
     */
 
     let value = InterestingMessage {
-      unbounded_string: "Here is a fairly long text".to_string(),
+      unbounded_string: "Tassa on aika pitka teksti".to_string(), /* Finnish for "Here us a
+                                                                   * fairly long text" */
       x: 2,
       y: -3,
       shape_size: -4,
@@ -1084,7 +1086,7 @@ mod tests {
     println!("Serialized data: {:x?}", &serialized);
     let (deserialized, bytes_consumed): (T, usize) =
       deserialize_from_cdr(&serialized, RepresentationIdentifier::CDR_LE).unwrap();
-    //let deserialized = deserialize_from_little_endian(&serialized).unwrap();
+    // let deserialized = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(input, deserialized);
     assert_eq!(serialized.len(), bytes_consumed);
   }

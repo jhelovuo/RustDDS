@@ -209,7 +209,7 @@ impl SubscriptionBuiltinTopicData {
       participant_key,
       topic_name,
       type_name,
-      //QoS
+      // QoS
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -463,7 +463,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
           service_instance_name,
           related_datawriter_key,
           topic_aliases,
-          security_info, //TODO: missing implementation
+          security_info, // TODO: missing implementation
         },
       content_filter,
     } = self;

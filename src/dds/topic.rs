@@ -42,7 +42,7 @@ pub trait TopicDescription {
 /// ```
 #[derive(Clone)]
 pub struct Topic {
-  //TODO: Do we really need set_qos operation?
+  // TODO: Do we really need set_qos operation?
   // Maybe not. Let's make Topic immutable.
   inner: Arc<InnerTopic>,
 }
@@ -145,7 +145,7 @@ impl HasQoSPolicy for Topic {
   }
 }
 
-//impl DDSEntity for Topic {}
+// impl DDSEntity for Topic {}
 
 // -------------------------------- InnerTopic -----------------------------
 

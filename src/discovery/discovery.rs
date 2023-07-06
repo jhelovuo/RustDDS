@@ -96,8 +96,8 @@ pub(crate) struct Discovery {
 
   // DDS Subscriber and Publisher for Discovery
   // ...but these are not actually used after initialization
-  //discovery_subscriber: Subscriber,
-  //discovery_publisher: Publisher,
+  // discovery_subscriber: Subscriber,
+  // discovery_publisher: Publisher,
 
   // Handling of "DCPSParticipant" topic. This is the mother of all topics
   // where participants announce their presence and built-in readers and writers.
@@ -423,7 +423,7 @@ impl Discovery {
       domain_participant.create_topic(
         "DCPSTopic".to_string(),
         "DiscoveredTopicData".to_string(),
-        &QosPolicyBuilder::new().build(), //TODO: check what this should be
+        &QosPolicyBuilder::new().build(), // TODO: check what this should be
         TopicKind::WithKey,
       ),
       "Unable to create DCPSTopic topic. {:?}"
@@ -1401,7 +1401,7 @@ mod tests {
   use std::net::SocketAddr;
 
   use chrono::Utc;
-  //use bytes::Bytes;
+  // use bytes::Bytes;
   use mio_06::Token;
   use speedy::{Endianness, Writable};
 

@@ -21,7 +21,7 @@ use super::reader::ReaderIngredients;
 /// ReaderProxy class represents the information an RTPS StatefulWriter
 /// maintains on each matched RTPS Reader
 pub(crate) struct RtpsReaderProxy {
-  ///Identifies the remote matched RTPS Reader that is represented by the
+  /// Identifies the remote matched RTPS Reader that is represented by the
   /// ReaderProxy
   pub remote_reader_guid: GUID,
   /// Identifies the group to which the matched Reader belongs
@@ -87,7 +87,7 @@ impl RtpsReaderProxy {
 
     Self {
       remote_reader_guid: reader.guid,
-      remote_group_entity_id: EntityId::UNKNOWN, //TODO
+      remote_group_entity_id: EntityId::UNKNOWN, // TODO
       unicast_locator_list,
       multicast_locator_list,
       expects_in_line_qos: false,
@@ -124,7 +124,7 @@ impl RtpsReaderProxy {
 
     Self {
       remote_reader_guid: discovered_reader_data.reader_proxy.remote_reader_guid,
-      remote_group_entity_id: EntityId::UNKNOWN, //TODO
+      remote_group_entity_id: EntityId::UNKNOWN, // TODO
       unicast_locator_list,
       multicast_locator_list,
       expects_in_line_qos: discovered_reader_data.reader_proxy.expects_inline_qos,

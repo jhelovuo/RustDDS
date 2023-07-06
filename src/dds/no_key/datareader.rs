@@ -591,8 +591,8 @@ where
     match Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx) {
       Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
       Poll::Ready(Some(Ok(Sample::Value(d)))) => Poll::Ready(Some(Ok(d.d))), /* Unwraps Sample and NoKeyWrapper */
-      Poll::Ready(Some(Ok(Sample::Dispose(_)))) => Poll::Pending,            /* Disposed data is */
-      // ignored
+      // Disposed data is ignored
+      Poll::Ready(Some(Ok(Sample::Dispose(_)))) => Poll::Pending,
       Poll::Ready(None) => Poll::Ready(None), // This should never happen
       Poll::Pending => Poll::Pending,
     }

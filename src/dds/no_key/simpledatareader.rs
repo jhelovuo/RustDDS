@@ -146,7 +146,7 @@ where
     interests: mio_08::Interest,
   ) -> io::Result<()> {
     mio_08::event::Source::register(&mut self.keyed_simpledatareader, registry, token, interests)
-    //self.keyed_simpledatareader.register(registry, token, interests)
+    // self.keyed_simpledatareader.register(registry, token, interests)
   }
 
   fn reregister(
@@ -156,12 +156,12 @@ where
     interests: mio_08::Interest,
   ) -> io::Result<()> {
     mio_08::event::Source::reregister(&mut self.keyed_simpledatareader, registry, token, interests)
-    //self.keyed_simpledatareader.reregister(registry, token, interests)
+    // self.keyed_simpledatareader.reregister(registry, token, interests)
   }
 
   fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()> {
     mio_08::event::Source::deregister(&mut self.keyed_simpledatareader, registry)
-    //self.keyed_simpledatareader.deregister(registry)
+    // self.keyed_simpledatareader.deregister(registry)
   }
 }
 

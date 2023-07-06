@@ -1,4 +1,4 @@
-//use mio::Token;
+// use mio::Token;
 use std::{
   collections::HashMap,
   io::ErrorKind,
@@ -536,7 +536,7 @@ impl DomainParticipantDisc {
     self
       .discovery_command_sender
       .send(DiscoveryCommand::ManualAssertLiveliness)
-      //TODO: Are there more severe reasons than channel full? Is WouldBlock correct?
+      // TODO: Are there more severe reasons than channel full? Is WouldBlock correct?
       .map_err(|_e| WriteError::WouldBlock { data: () })
   }
 

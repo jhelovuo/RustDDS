@@ -5,7 +5,7 @@ use crate::{
   structure::{guid::GUID, rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp},
 };
 
-//use std::num::Zero; // unstable
+// use std::num::Zero; // unstable
 
 /// indicates whether or not the corresponding data sample has already
 /// been read by this `DataReader`.

@@ -46,7 +46,7 @@ impl AssemblyBuffer {
                                 // Note: Technically RTPS spec allows fragment_size == 0.
 
     let mut buffer_bytes = BytesMut::with_capacity(data_size);
-    buffer_bytes.resize(data_size, 0); //TODO: Can we replace this with faster (and unsafer) .set_len and live with
+    buffer_bytes.resize(data_size, 0); // TODO: Can we replace this with faster (and unsafer) .set_len and live with
                                        // uninitialized data?
 
     let fragment_count = usize::from(datafrag.total_number_of_fragments());

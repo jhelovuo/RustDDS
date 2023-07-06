@@ -106,7 +106,7 @@ pub struct EntityKind(u8);
 impl EntityKind {
   // constants from RTPS spec Table 9.1
   pub const UNKNOWN_USER_DEFINED: Self = Self(0x00);
-  //pub const PARTICIPANT_USER_DEFINED : Self = Self(0x01);
+  // pub const PARTICIPANT_USER_DEFINED : Self = Self(0x01);
   // User-defined participants do not exist by definition.
   pub const WRITER_WITH_KEY_USER_DEFINED: Self = Self(0x02);
   pub const WRITER_NO_KEY_USER_DEFINED: Self = Self(0x03);

@@ -327,7 +327,7 @@ impl MessageBuilder {
       kind: SubmessageKind::INFO_DST,
       flags: flags.bits(),
       content_length: 12u16,
-      //InfoDST length is always 12 because message contains only GuidPrefix
+      // InfoDST length is always 12 because message contains only GuidPrefix
     };
     let dst_submessage = Submessage {
       header: submessage_header,
@@ -571,7 +571,7 @@ impl MessageBuilder {
       header: SubmessageHeader {
         kind: SubmessageKind::DATA_FRAG,
         flags: flags.bits(),
-        content_length: data_message.len_serialized() as u16, //TODO: Handle overflow
+        content_length: data_message.len_serialized() as u16, // TODO: Handle overflow
       },
       body: SubmessageBody::Writer(WriterSubmessage::DataFrag(data_message, flags)),
     });

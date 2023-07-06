@@ -725,7 +725,7 @@ where
   // we got.
 
   pub fn get_matched_publications(&self) -> impl Iterator<Item = PublicationBuiltinTopicData> {
-    //TODO: Obviously not implemented
+    // TODO: Obviously not implemented
     vec![].into_iter()
   }
 

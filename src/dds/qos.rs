@@ -33,29 +33,29 @@ pub trait MutQosPolicy {
 /// application interface
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum QosPolicyId {
-  //Invalid  // We should represent this using Option<QosPolicyId> where needed
-  //UserData,  // 1
+  // Invalid  // We should represent this using Option<QosPolicyId> where needed
+  // UserData,  // 1
   Durability,   // 2
   Presentation, // 3
   Deadline,
   LatencyBudget, // 5
   Ownership,
-  //OwnershipStrength, // 7
+  // OwnershipStrength, // 7
   Liveliness,
   TimeBasedFilter, // 9
-  //Partition,
+  // Partition,
   Reliability, // 11
   DestinationOrder,
   History, // 13
   ResourceLimits,
-  //EntityFactory, // 15
-  //WriterDataLifeCycle,
-  //ReaderDataLifeCycle, // 17
-  //TopicData, // 18
-  //GroupData,
-  //TransportPriority, // 20
+  // EntityFactory, // 15
+  // WriterDataLifeCycle,
+  // ReaderDataLifeCycle, // 17
+  // TopicData, // 18
+  // GroupData,
+  // TransportPriority, // 20
   Lifespan,
-  //DurabilityService, // 22
+  // DurabilityService, // 22
 }
 
 /// Utility for building [QosPolicies]

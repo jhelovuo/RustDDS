@@ -116,47 +116,47 @@ pub(crate) struct Writer {
   pub endianness: Endianness,
   pub heartbeat_message_counter: i32,
   /// Configures the mode in which the
-  ///Writer operates. If
-  ///pushMode==true, then the Writer
+  /// Writer operates. If
+  /// pushMode==true, then the Writer
   /// will push changes to the reader. If
   /// pushMode==false, changes will
   /// only be announced via heartbeats
-  ///and only be sent as response to the
-  ///request of a reader
+  /// and only be sent as response to the
+  /// request of a reader
   pub push_mode: bool,
-  ///Protocol tuning parameter that
-  ///allows the RTPS Writer to
-  ///repeatedly announce the
-  ///availability of data by sending a
-  ///Heartbeat Message.
+  /// Protocol tuning parameter that
+  /// allows the RTPS Writer to
+  /// repeatedly announce the
+  /// availability of data by sending a
+  /// Heartbeat Message.
   pub heartbeat_period: Option<Duration>,
   /// duration to launch cache change remove from DDSCache
   pub cache_cleaning_period: Duration,
-  ///Protocol tuning parameter that
-  ///allows the RTPS Writer to delay
-  ///the response to a request for data
-  ///from a negative acknowledgment.
+  /// Protocol tuning parameter that
+  /// allows the RTPS Writer to delay
+  /// the response to a request for data
+  /// from a negative acknowledgment.
   pub nack_response_delay: std::time::Duration,
   pub nackfrag_response_delay: std::time::Duration,
   pub repairfrags_continue_delay: std::time::Duration,
 
-  ///Protocol tuning parameter that
-  ///allows the RTPS Writer to ignore
-  ///requests for data from negative
-  ///acknowledgments that arrive ‘too
-  ///soon’ after the corresponding
-  ///change is sent.
+  /// Protocol tuning parameter that
+  /// allows the RTPS Writer to ignore
+  /// requests for data from negative
+  /// acknowledgments that arrive ‘too
+  /// soon’ after the corresponding
+  /// change is sent.
   // TODO: use this
   #[allow(dead_code)]
   pub nack_suppression_duration: std::time::Duration,
-  ///Internal counter used to assign
-  ///increasing sequence number to
-  ///each change made by the Writer
+  /// Internal counter used to assign
+  /// increasing sequence number to
+  /// each change made by the Writer
   pub last_change_sequence_number: SequenceNumber,
-  ///If samples are available in the Writer, identifies the first (lowest)
-  ///sequence number that is available in the Writer.
-  ///If no samples are available in the Writer, identifies the lowest
-  ///sequence number that is yet to be written by the Writer
+  /// If samples are available in the Writer, identifies the first (lowest)
+  /// sequence number that is available in the Writer.
+  /// If no samples are available in the Writer, identifies the lowest
+  /// sequence number that is yet to be written by the Writer
   pub first_change_sequence_number: SequenceNumber,
 
   /// The maximum size of any
@@ -172,12 +172,12 @@ pub(crate) struct Writer {
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   writer_command_receiver_waker: Arc<Mutex<Option<Waker>>>,
-  ///The RTPS ReaderProxy class represents the information an RTPS
+  /// The RTPS ReaderProxy class represents the information an RTPS
   /// StatefulWriter maintains on each matched RTPS Reader
   readers: BTreeMap<GUID, RtpsReaderProxy>, // TODO: Convert to BTreeMap for faster finds.
   matched_readers_count_total: i32, // all matches, never decremented
   requested_incompatible_qos_count: i32, // how many times a Reader requested incompatible QoS
-  //message: Option<Message>,
+  // message: Option<Message>,
   udp_sender: Rc<UDPSender>,
 
   // Writer can read/write to one topic only, and it stores a pointer to a mutex on the topic cache
@@ -191,19 +191,19 @@ pub(crate) struct Writer {
 
   /// Maps this writers local sequence numbers to DDSHistoryCache instants.
   /// Useful when datawriter dispose is received.
-  //key_to_instant: HashMap<u128, Timestamp>,  // unused?
+  // key_to_instant: HashMap<u128, Timestamp>,  // unused?
 
   /// Set of disposed samples.
   /// Useful when reader requires some sample with acknack.
   // TODO: Apparently, this is never updated.
   disposed_sequence_numbers: HashSet<SequenceNumber>,
 
-  //When dataWriter sends cacheChange message with cacheKind is NotAliveDisposed
-  //this is set true. If Datawriter after disposing sends new cacheChanges this flag is then
-  //turned true.
-  //When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with
+  // When dataWriter sends cacheChange message with cacheKind is NotAliveDisposed
+  // this is set true. If Datawriter after disposing sends new cacheChanges this flag is then
+  // turned true.
+  // When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with
   // DisposedFlag pub writer_is_disposed: bool,
-  ///Contains timer that needs to be set to timeout with duration of
+  /// Contains timer that needs to be set to timeout with duration of
   /// self.heartbeat_period timed_event_handler sends notification when timer
   /// is up via mio channel to poll in Dp_eventWrapper this also handles
   /// writers cache cleaning timeouts.
@@ -213,12 +213,12 @@ pub(crate) struct Writer {
 
   // Used for sending status info about messages sent
   status_sender: StatusChannelSender<DataWriterStatus>,
-  //offered_deadline_status: OfferedDeadlineMissedStatus,
+  // offered_deadline_status: OfferedDeadlineMissedStatus,
   ack_waiter: Option<AckWaiter>,
 }
 //#[derive(Clone)]
 pub enum WriterCommand {
-  //TODO: try to make this more private, like pub(crate)
+  // TODO: try to make this more private, like pub(crate)
   DDSData {
     ddsdata: DDSData,
     write_options: WriteOptions,
@@ -227,7 +227,7 @@ pub enum WriterCommand {
   WaitForAcknowledgments {
     all_acked: StatusChannelSender<()>,
   },
-  //ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
+  // ResetOfferedDeadlineMissedStatus { writer_guid: GUID },
 }
 
 impl Writer {
@@ -309,7 +309,7 @@ impl Writer {
       timed_event_timer,
       qos_policies: i.qos_policies,
       status_sender: i.status_sender,
-      //offered_deadline_status: OfferedDeadlineMissedStatus::new(),
+      // offered_deadline_status: OfferedDeadlineMissedStatus::new(),
       ack_waiter: None,
     }
   }
@@ -439,8 +439,8 @@ impl Writer {
   // --------------------------------------------------------------
   // --------------------------------------------------------------
   fn num_frags_and_frag_size(&self, payload_size: usize) -> (u32, u16) {
-    let fragment_size = self.data_max_size_serialized as u32; //TODO: overflow check
-    let data_size = payload_size as u32; //TODO: overflow check
+    let fragment_size = self.data_max_size_serialized as u32; // TODO: overflow check
+    let data_size = payload_size as u32; // TODO: overflow check
                                          // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
     let num_frags = (data_size / fragment_size) + u32::from(data_size % fragment_size != 0); // rounding up
     debug!("Fragmenting {data_size} to {num_frags} x {fragment_size}");
@@ -469,10 +469,9 @@ impl Writer {
 
           // We have a new sample here. Things to do:
           // 1. Insert it to history cache and get it sequence numbered
-          // 2. Send out data.
-          //    If we are pushing data, send the DATA submessage and HEARTBEAT.
-          //    If we are not pushing, send out HEARTBEAT only. Readers will then ask for
-          // the DATA with ACKNACK, if they are interested.
+          // 2. Send out data. If we are pushing data, send the DATA submessage and
+          // HEARTBEAT. If we are not pushing, send out HEARTBEAT only. Readers will then
+          // ask for the DATA with ACKNACK, if they are interested.
           let fragmentation_needed = ddsdata.payload_size() > self.data_max_size_serialized;
           let timestamp =
             self.insert_to_history_cache(ddsdata, write_options.clone(), sequence_number);
@@ -665,7 +664,7 @@ impl Writer {
       .insert(new_sequence_number, timestamp);
 
     // update key to timestamp mapping
-    //self.key_to_instant.insert(data_key, timestamp);
+    // self.key_to_instant.insert(data_key, timestamp);
 
     // Notify reader proxies that there is a new sample
     for reader in &mut self.readers.values_mut() {
@@ -992,7 +991,7 @@ impl Writer {
     let max_send_count = 8;
 
     // Get (an iterator to) frags requested but not yet sent
-    //reader_proxy.
+    // reader_proxy.
     // Iterate over frags to be sent
     for (seq_num, frag_num) in reader_proxy.frags_requested_iterator().take(max_send_count) {
       // Sanity check request
@@ -1007,8 +1006,8 @@ impl Writer {
             message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
           }
 
-          let fragment_size: u32 = self.data_max_size_serialized as u32; //TODO: overflow check
-          let data_size: u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
+          let fragment_size: u32 = self.data_max_size_serialized as u32; // TODO: overflow check
+          let data_size: u32 = cache_change.data_value.payload_size() as u32; // TODO: overflow check
 
           message_builder = message_builder.data_frag_msg(
             cache_change,
@@ -1253,7 +1252,7 @@ impl Writer {
         &guid
       );
       self.matched_reader_remove(guid);
-      //self.matched_readers_count_total -= 1; // this never decreases
+      // self.matched_readers_count_total -= 1; // this never decreases
       self.send_status(DataWriterStatus::PublicationMatched {
         total: CountWithChange::new(self.matched_readers_count_total, 0),
         current: CountWithChange::new(self.readers.len() as i32, -1),

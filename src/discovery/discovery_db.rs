@@ -253,7 +253,7 @@ impl DiscoveryDB {
       let lease_duration = sp
         .lease_duration
         .unwrap_or(DEFAULT_PARTICIPANT_LEASE_DURATION);
-      //let lease_duration = lease_duration + lease_duration; // double it
+      // let lease_duration = lease_duration + lease_duration; // double it
       match self.participant_last_life_signs.get(&guid) {
         Some(&last_life) => {
           // keep, if duration not exceeded
@@ -786,8 +786,8 @@ mod tests {
     // creating data
     let reader1 = reader_proxy_data().unwrap();
     let reader1sub = subscription_builtin_topic_data().unwrap();
-    //reader1sub.set_key(reader1.remote_reader_guid);
-    //reader1sub.set_topic_name(&topic.name());
+    // reader1sub.set_key(reader1.remote_reader_guid);
+    // reader1sub.set_topic_name(&topic.name());
     let dreader1 = DiscoveredReaderData {
       reader_proxy: reader1.clone(),
       subscription_topic_data: reader1sub.clone(),
@@ -797,8 +797,8 @@ mod tests {
 
     let reader2 = reader_proxy_data().unwrap();
     let reader2sub = subscription_builtin_topic_data().unwrap();
-    //reader2sub.set_key(reader2.remote_reader_guid);
-    //reader2sub.set_topic_name(&topic2.name());
+    // reader2sub.set_key(reader2.remote_reader_guid);
+    // reader2sub.set_topic_name(&topic2.name());
     let dreader2 = DiscoveredReaderData {
       reader_proxy: reader2,
       subscription_topic_data: reader2sub,

@@ -102,7 +102,7 @@ pub(crate) struct TopicCache {
   topic_qos: QosPolicies,
   min_keep_samples: History,
   max_keep_samples: i32, // from QoS, for quick, repeated access
-  //TODO: Change this to Option<u32>, where None means "no limit".
+  // TODO: Change this to Option<u32>, where None means "no limit".
 
   // Tha main content of the cache is in this map.
   // Timestamp is assumed to be unique id over all the CacheChanges.

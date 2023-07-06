@@ -5,7 +5,7 @@ use std::{
   mem::size_of,
   ops::{Bound, RangeBounds},
 };
-//use crate::messages::fragment_number::FragmentNumber;
+// use crate::messages::fragment_number::FragmentNumber;
 use std::collections::BTreeSet;
 
 use num_traits::NumOps;
@@ -394,7 +394,7 @@ where
           end
         };
         // sanity ok. Now do the actual work.
-        //let num_bits = i64::from( end - base + N::from(1) );
+        // let num_bits = i64::from( end - base + N::from(1) );
         let mut sns = Self::new(base, i64::from(end) as u32);
         for s in set.iter().filter(|s| base <= **s && **s <= end) {
           sns.insert(*s);
@@ -466,7 +466,7 @@ where
         word_count
       );
     }
-    //TODO: If the sanity check above fails, we may write the wrong number of
+    // TODO: If the sanity check above fails, we may write the wrong number of
     // words. This is highly suspicious.
     for i in 0..min(word_count, bitmap_len) {
       writer.write_u32(self.bitmap[i as usize])?;
@@ -492,7 +492,7 @@ where
   type Item = N;
 
   fn next(&mut self) -> Option<Self::Item> {
-    //TODO: This probably could made faster with the std function
+    // TODO: This probably could made faster with the std function
     // .leading_zeroes() in type u32 to do several iterations of the loop in
     // one step, given that we have clz as a machine instruction or short sequence.
     while self.at_bit < self.rev_at_bit {

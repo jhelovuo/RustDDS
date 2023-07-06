@@ -76,8 +76,8 @@ use std::{net::SocketAddr, time::Duration as StdDuration};
 
 use bytes::Bytes;
 use speedy::{Endianness, Writable};
-//use serde::Serialize;
-//use byteorder::LittleEndian;
+// use serde::Serialize;
+// use byteorder::LittleEndian;
 use enumflags2::BitFlags;
 
 use crate::{
@@ -371,7 +371,7 @@ pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
   reader_id: EntityId,
   writer_id: EntityId,
 ) -> Message {
-  //let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
+  // let tdata = Bytes::from(to_bytes::<D, LittleEndian>(&data).unwrap());
   let tdata = data
     .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
     .unwrap();
